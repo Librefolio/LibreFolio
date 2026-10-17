@@ -30,13 +30,14 @@ Late interest (from FALateInterestConfig):
 - interest_type: configurable per-event (default: COMPOUND — penalties grow on accumulated value)
 
 For detailed parameter structure documentation, see:
-- backend.app.schemas.assets.FAScheduledInvestmentSchedule
-- backend.app.schemas.assets.FAInterestRatePeriod
+- backend.app.schemas.assets.scheduled_investment.FAScheduledInvestmentSchedule
+- backend.app.schemas.assets.scheduled_investment.FAInterestRatePeriod
 """
 
-import calendar
 import hashlib
 import json
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -46,142 +47,27 @@ from backend.app.db.models import (
     ProviderInputType,
 )
 from backend.app.logging_config import get_logger
-from backend.app.schemas.assets import (
+from backend.app.schemas.assets.events import FAAssetEventPoint
+from backend.app.schemas.assets.scheduled_investment import (
+    SCHEDULE_MAX_DATE,
     DayCountConvention,
-    FACurrentValue,
-    FAHistoricalData,
     FAInterestRatePeriod,
-    FAPricePoint,
     FAScheduledInvestmentSchedule,
     InterestType,
     MaturationFrequency,
 )
 from backend.app.schemas.common import Currency
-from backend.app.schemas.prices import FAAssetEventPoint
+from backend.app.schemas.prices import (
+    FACurrentValue,
+    FAHistoricalData,
+    FAPricePoint,
+)
 from backend.app.schemas.provider import FAProviderKind
-from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
-from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
+from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.financial_math.interest import calculate_day_count_fraction, calculate_simple_interest, compound_growth
+from backend.app.services.provider_registry import register_provider
 from backend.app.utils.runtime.cache import get_ttl_cache
-
-# ============================================================================
-# FINANCIAL MATH — Day count conventions & simple interest
-# ============================================================================
-
-
-def calculate_day_count_fraction(
-    start_date: date_type,
-    end_date: date_type,
-    convention: DayCountConvention = DayCountConvention.ACT_365,
-) -> Decimal:
-    """
-    Calculate day fraction using specified day count convention.
-
-    Supports multiple conventions:
-    - ACT/365: Actual days / 365
-    - ACT/360: Actual days / 360
-    - ACT/ACT: Actual days / actual days in year (365 or 366 if leap year)
-    - 30/360: Assumes 30 days per month, 360 days per year
-
-    Args:
-        start_date: Start date (inclusive)
-        end_date: End date (inclusive)
-        convention: Day count convention to use
-
-    Returns:
-        Decimal fraction representing the time period
-    """
-    if convention == DayCountConvention.ACT_365:
-        return _calculate_act_fixed(start_date, end_date, 365)
-    elif convention == DayCountConvention.ACT_360:
-        return _calculate_act_fixed(start_date, end_date, 360)
-    elif convention == DayCountConvention.ACT_ACT:
-        return _calculate_act_act(start_date, end_date)
-    elif convention == DayCountConvention.THIRTY_360:
-        return _calculate_30_360(start_date, end_date)
-    else:
-        raise ValueError(f"Unsupported day count convention: {convention}")
-
-
-def _calculate_act_fixed(start_date: date_type, end_date: date_type, denominator: int) -> Decimal:
-    """ACT/N: Actual days / fixed denominator (365 or 360)."""
-    days = (end_date - start_date).days
-    return Decimal(days) / Decimal(denominator)
-
-
-def _calculate_act_act(start_date: date_type, end_date: date_type) -> Decimal:
-    """
-    ACT/ACT: Actual days / actual days in year.
-
-    Handles leap years correctly by calculating the fraction for each year separately.
-    """
-    if start_date.year == end_date.year:
-        days = (end_date - start_date).days
-        days_in_year = 366 if calendar.isleap(start_date.year) else 365
-        return Decimal(days) / Decimal(days_in_year)
-
-    total_fraction = Decimal("0")
-    current_year = start_date.year
-
-    last_year = end_date.year
-    if end_date.month == 1 and end_date.day == 1:
-        last_year -= 1
-
-    while current_year <= last_year:
-        if current_year == start_date.year:
-            period_start = start_date
-            if current_year == last_year:
-                period_end = end_date
-            else:
-                period_end = date_type(current_year, 12, 31)
-        elif current_year == last_year:
-            period_start = date_type(current_year, 1, 1)
-            period_end = end_date
-        else:
-            period_start = date_type(current_year, 1, 1)
-            period_end = date_type(current_year, 12, 31)
-
-        days = (period_end - period_start).days
-        days_in_year = 366 if calendar.isleap(current_year) else 365
-        total_fraction += Decimal(days) / Decimal(days_in_year)
-        current_year += 1
-
-    return total_fraction
-
-
-def _calculate_30_360(start_date: date_type, end_date: date_type) -> Decimal:
-    """
-    30/360: Assumes 30 days per month, 360 days per year (US NASD convention).
-    """
-    d1 = start_date.day
-    d2 = end_date.day
-    m1 = start_date.month
-    m2 = end_date.month
-    y1 = start_date.year
-    y2 = end_date.year
-
-    if d1 == 31:
-        d1 = 30
-    if d2 == 31 and d1 >= 30:
-        d2 = 30
-
-    days = (y2 - y1) * 360 + (m2 - m1) * 30 + (d2 - d1)
-    return Decimal(days) / Decimal(360)
-
-
-def calculate_simple_interest(principal: Decimal, annual_rate: Decimal, time_fraction: Decimal) -> Decimal:
-    """
-    Calculate simple interest: I = P * r * t.
-
-    Args:
-        principal: Principal amount
-        annual_rate: Annual interest rate (e.g., 0.05 for 5%)
-        time_fraction: Time period as fraction of year
-
-    Returns:
-        Interest earned
-    """
-    return principal * annual_rate * time_fraction
-
 
 # ============================================================================
 # MATURATION DATES HELPER
@@ -222,6 +108,9 @@ logger = get_logger(__name__)
 
 # Cache: hash(params) → dict[date, Decimal] — all scheduled values at maturation dates
 _CACHE = get_ttl_cache("scheduled_investment", maxsize=256, ttl=172800)  # 48h
+# A result with more points is computed on every call, never stored: ten years of DAILY points (~1 MB), so the 256
+# entries stay bounded (R13-SEC7-2, N73).
+_CACHE_MAX_POINTS = 3_660
 
 
 def _cache_key(schedule: FAScheduledInvestmentSchedule) -> str:
@@ -230,20 +119,135 @@ def _cache_key(schedule: FAScheduledInvestmentSchedule) -> str:
     return hashlib.md5(canonical.encode()).hexdigest()
 
 
-def _generate_schedule_values(  # noqa: C901 — TODO(P2-refactor): day-by-day accrual engine, extract per-day step helpers
+@dataclass(frozen=True)
+class _AccrualDay:
+    """One day of a schedule's accrual walk.
+
+    ``value`` is the value at the end of the day: after the day's interest and manual events, before an auto-coupon.
+    ``coupon`` is the day's auto-generated payout, if any — everything above the principal, paid at a maturation date
+    of a ``generate_interest`` period, after which the accrual restarts from the principal.
+    """
+
+    day: date_type
+    value: Decimal
+    is_maturation: bool
+    coupon: Decimal | None
+
+
+def _schedule_maturation_dates(schedule: FAScheduledInvestmentSchedule) -> set[date_type]:
+    """The maturation dates of every period of the schedule (each period's start and end included)."""
+    dates: set[date_type] = set()
+    for period in schedule.schedule:
+        dates |= _compute_maturation_dates(period.start_date, period.end_date, period.maturation_frequency)
+    return dates
+
+
+def _manual_events_by_date(schedule: FAScheduledInvestmentSchedule) -> dict[date_type, list[FAAssetEventPoint]]:
+    """The schedule's manual events by date, in their given order."""
+    events_by_date: dict[date_type, list[FAAssetEventPoint]] = {}
+    for event in schedule.asset_events:
+        events_by_date.setdefault(event.date, []).append(event)
+    return events_by_date
+
+
+def _active_period(periods: list[FAInterestRatePeriod], day: date_type, start_index: int) -> tuple[FAInterestRatePeriod | None, int]:
+    """The period covering ``day``, searched from ``start_index`` on, and its index (``start_index`` when none does)."""
+    for index in range(start_index, len(periods)):
+        period = periods[index]
+        if period.start_date <= day <= period.end_date:
+            return period, index
+    return None, start_index
+
+
+def _apply_manual_events(event_adjustment: Decimal, events: Iterable[FAAssetEventPoint]) -> Decimal:
+    """The running adjustment after a day's manual events: an INTEREST payout lowers it, a PRICE_ADJUSTMENT moves it."""
+    for event in events:
+        if event.type == "INTEREST":
+            event_adjustment -= event.value.amount
+        elif event.type == "PRICE_ADJUSTMENT":
+            event_adjustment += event.value.amount
+    return event_adjustment
+
+
+def _accrual_days(schedule: FAScheduledInvestmentSchedule, until: date_type) -> Iterator[_AccrualDay]:
+    """Walk a non-empty schedule day by day, from its first start to ``until`` included.
+
+    The provider's one accrual walk: the history curve (``_generate_schedule_values``) and the value on one day
+    (``_compute_value_at``) both read it. Each day, in order:
+
+    1. the interest of the day at the active period's rate — SIMPLE: I = P₀ · r · Δt, on the principal; COMPOUND:
+       I = (P₀ + accrued interest) · r · Δt — none on the first day, nor on a day no period covers;
+    2. the manual events of the day (``_apply_manual_events``);
+    3. the day's value, yielded with its coupon;
+    4. a paid coupon resets the accrued interest and the manual adjustments: the next day restarts from the principal.
+    """
+    principal = schedule.initial_value.amount
+    is_compound = schedule.interest_type == InterestType.COMPOUND
+    first_start = schedule.schedule[0].start_date
+    maturation_dates = _schedule_maturation_dates(schedule)
+    events_by_date = _manual_events_by_date(schedule)
+
+    total_interest = Decimal("0")
+    event_adjustment = Decimal("0")
+    current_date = first_start
+    period_index = 0
+    while current_date <= until:
+        period, period_index = _active_period(schedule.schedule, current_date, period_index)
+        if period is not None and current_date > first_start:
+            day_fraction = calculate_day_count_fraction(
+                start_date=current_date - timedelta(days=1),
+                end_date=current_date,
+                convention=schedule.day_count,
+            )
+            if day_fraction > 0:
+                base = principal + total_interest if is_compound else principal
+                total_interest += calculate_simple_interest(principal=base, annual_rate=period.annual_rate, time_fraction=day_fraction)
+        event_adjustment = _apply_manual_events(event_adjustment, events_by_date.get(current_date, ()))
+
+        value = principal + total_interest + event_adjustment
+        is_maturation = current_date in maturation_dates
+        coupon = value - principal if is_maturation and period is not None and period.generate_interest and value - principal > 0 else None
+        yield _AccrualDay(day=current_date, value=value, is_maturation=is_maturation, coupon=coupon)
+
+        if coupon is not None:
+            total_interest = Decimal("0")
+            event_adjustment = Decimal("0")
+        current_date += timedelta(days=1)
+
+
+def _log_cache_lookup(key: str, schedule: FAScheduledInvestmentSchedule, *, hit: bool) -> None:
+    first = schedule.schedule[0] if schedule.schedule else None
+    logger.debug(
+        "scheduled_investment cache %s key=%s periods=%d first_freq=%s first_gen_int=%s",
+        "HIT" if hit else "MISS",
+        key[:8],
+        len(schedule.schedule),
+        first.maturation_frequency if first else "-",
+        first.generate_interest if first else "-",
+    )
+
+
+def _generate_schedule_values(
     schedule: FAScheduledInvestmentSchedule,
 ) -> tuple[dict[date_type, Decimal], list[FAAssetEventPoint]]:
     """
     Generate values for the entire schedule range at maturation dates.
 
-    The engine computes day-by-day internally (for correctness), but emits
+    The engine computes day-by-day internally (``_accrual_days``, for correctness), but emits
     price points only at maturation dates defined by each period's
     maturation_frequency. Start and end dates of each period are always
     included as anchors.
 
+    A maturation date's value is the accrued one, before its coupon (I-bis #26: emitted after the
+    reset, a generate_interest + DAILY schedule drew a flat ``initial_value`` line).
+
     When generate_interest=True on a period, at each maturation date the engine
-    auto-generates an INTEREST event (coupon). After the coupon, the value resets
-    to initial_value and compound interest restarts from there.
+    auto-generates an INTEREST event (coupon), dated on the maturation date where the chart shows
+    the peak. After the coupon, the value resets to initial_value and the accrual restarts from there.
+
+    Without late interest, the last period closes the asset with a MATURITY_SETTLEMENT on its end date, worth
+    what is left after that day's coupon: the principal when the final coupon is paid (it resets the value), the
+    day's value when no coupon is paid. The final coupon is the INTEREST event of that day, never counted twice (J-39).
 
     Returns:
         Tuple of (values dict, auto_events list).
@@ -255,137 +259,42 @@ def _generate_schedule_values(  # noqa: C901 — TODO(P2-refactor): day-by-day a
     # Check cache first — theine handles TTL expiration via timer wheel
     cached, ok = _CACHE.get(key)
     if ok:
-        logger.debug(
-            "scheduled_investment cache HIT key=%s periods=%d first_freq=%s first_gen_int=%s",
-            key[:8],
-            len(schedule.schedule),
-            schedule.schedule[0].maturation_frequency if schedule.schedule else "-",
-            schedule.schedule[0].generate_interest if schedule.schedule else "-",
-        )
+        _log_cache_lookup(key, schedule, hit=True)
         return cached
-    logger.debug(
-        "scheduled_investment cache MISS key=%s periods=%d first_freq=%s first_gen_int=%s",
-        key[:8],
-        len(schedule.schedule),
-        schedule.schedule[0].maturation_frequency if schedule.schedule else "-",
-        schedule.schedule[0].generate_interest if schedule.schedule else "-",
-    )
-
-    principal = schedule.initial_value.amount
-    currency_code = schedule.initial_value.code
-    is_compound = schedule.interest_type == InterestType.COMPOUND
-    convention = schedule.day_count
+    _log_cache_lookup(key, schedule, hit=False)
 
     if not schedule.schedule:
         empty = ({}, [])
         _CACHE.set(key, empty)
         return empty
 
-    first_start = schedule.schedule[0].start_date
+    principal = schedule.initial_value.amount
+    currency_code = schedule.initial_value.code
     last_end = schedule.schedule[-1].end_date
-
-    # Pre-compute all maturation dates across all periods
-    all_maturation_dates: set[date_type] = set()
-    for p in schedule.schedule:
-        all_maturation_dates |= _compute_maturation_dates(p.start_date, p.end_date, p.maturation_frequency)
 
     values: dict[date_type, Decimal] = {}
     auto_events: list[FAAssetEventPoint] = []
-    total_interest = Decimal("0")
-
-    # Pre-index manual events by date for O(1) lookup
-    events_by_date: dict[date_type, list] = {}
-    for e in schedule.asset_events:
-        events_by_date.setdefault(e.date, []).append(e)
-
-    # Track event adjustments cumulatively
-    event_adjustment = Decimal("0")
-
-    current_date = first_start
-    current_period_idx = 0
-
-    while current_date <= last_end:
-        # Find active period for this date
-        period = None
-        for i in range(current_period_idx, len(schedule.schedule)):
-            p = schedule.schedule[i]
-            if p.start_date <= current_date <= p.end_date:
-                period = p
-                current_period_idx = i
-                break
-
-        # === D8 Step 1: Calculate daily interest increment ===
-        if period is not None and current_date > first_start:
-            day_fraction = calculate_day_count_fraction(
-                start_date=current_date - timedelta(days=1),
-                end_date=current_date,
-                convention=convention,
-            )
-            if day_fraction > 0:
-                if is_compound:
-                    # COMPOUND interest formula: I = V_{t-1} * r * Δt
-                    base = principal + total_interest
-                    total_interest += calculate_simple_interest(
-                        principal=base,
-                        annual_rate=period.annual_rate,
-                        time_fraction=day_fraction,
-                    )
-                else:
-                    # Simple interest formula: I = P₀ * r * Δt
-                    total_interest += calculate_simple_interest(
-                        principal=principal,
-                        annual_rate=period.annual_rate,
-                        time_fraction=day_fraction,
-                    )
-
-        # === D8 Step 2: Apply manual events on this date ===
-        # (formerly Step 3; moved up so Step 3 below can emit the pre-reset value)
-        if current_date in events_by_date:
-            for evt in events_by_date[current_date]:
-                if evt.type == "INTEREST":
-                    event_adjustment -= evt.value.amount
-                elif evt.type == "PRICE_ADJUSTMENT":
-                    event_adjustment += evt.value.amount
-
-        # === D8 Step 3: Emit value at maturation dates (I-bis #26 — pre-reset) ===
-        # Previously this step ran AFTER the auto-coupon reset (old Step 4 after
-        # Step 2), which meant every maturation date emitted the post-reset
-        # ``principal`` value. With generate_interest=True + DAILY frequency
-        # this produced a flat ``initial_value`` series ("retta piatta" bug).
-        # Now we emit the accrued value FIRST, so the chart shows the real
-        # growth up to the coupon payout; the reset in Step 4 below then
-        # restarts the accrual for the next cycle.
-        if current_date in all_maturation_dates:
-            values[current_date] = principal + total_interest + event_adjustment
-
-        # === D8 Step 4: Auto-coupon at maturation date (generate_interest) ===
-        # (formerly Step 2; moved down so the emitted value in Step 3 above
-        # is the pre-reset accrued one. The INTEREST auto-event date is still
-        # the maturation date, matching the point where the spike is visible
-        # in the chart.)
-        if current_date in all_maturation_dates and period and period.generate_interest:
-            current_value = principal + total_interest + event_adjustment
-            interest_amount = current_value - principal
-            if interest_amount > 0:
-                auto_events.append(
-                    FAAssetEventPoint(
-                        date=current_date,
-                        type="INTEREST",
-                        value=Currency(code=currency_code, amount=interest_amount),
-                        notes="Auto-generated interest payout",
-                    )
+    last_coupon_day: date_type | None = None
+    for day in _accrual_days(schedule, last_end):
+        if day.is_maturation:
+            values[day.day] = day.value
+        if day.coupon is not None:
+            last_coupon_day = day.day
+            # Reset: value returns to initial_value (D1/D2); the coupon includes both accrued interest and any price adjustments.
+            auto_events.append(
+                FAAssetEventPoint(
+                    date=day.day,
+                    type="INTEREST",
+                    value=Currency(code=currency_code, amount=day.coupon),
+                    notes="Auto-generated interest payout",
                 )
-                # Reset: value returns to initial_value (D1/D2)
-                # Coupon includes both accrued interest + any price adjustments
-                total_interest = Decimal("0")
-                event_adjustment = Decimal("0")
-
-        current_date += timedelta(days=1)
+            )
 
     # === D6: MATURITY_SETTLEMENT at end of schedule (if no late interest) ===
     last_period = schedule.schedule[-1]
     if last_period.generate_interest and not schedule.late_interest:
-        settlement_value = values.get(last_end, principal)
+        # values[last_end] is the pre-coupon peak the chart draws: after a final coupon only the principal is left.
+        settlement_value = principal if last_coupon_day == last_end else values.get(last_end, principal)
         auto_events.append(
             FAAssetEventPoint(
                 date=last_end,
@@ -396,11 +305,12 @@ def _generate_schedule_values(  # noqa: C901 — TODO(P2-refactor): day-by-day a
         )
 
     result = (values, auto_events)
-    _CACHE.set(key, result)
+    if len(values) <= _CACHE_MAX_POINTS:
+        _CACHE.set(key, result)
     return result
 
 
-def _compute_value_at(  # noqa: C901 — TODO(P2-refactor): duplicate day-walk, share walker with _generate_schedule_values
+def _compute_value_at(
     schedule: FAScheduledInvestmentSchedule,
     target_date: date_type,
 ) -> Decimal | None:
@@ -423,10 +333,11 @@ def _compute_value_at(  # noqa: C901 — TODO(P2-refactor): duplicate day-walk, 
       - Today = Oct 15 → the correct value is ``initial_value + 3.5mo
         interest``, *not* cached[Jul 1].
 
-    This function re-walks the schedule day-by-day up to ``target_date``
-    and returns the running value at that exact day, correctly applying
-    manual subtractive events (INTEREST coupons, PRICE_ADJUSTMENT) AND
-    auto-coupon resets along the way.
+    It reads the same walk as the history curve (``_accrual_days``) up to
+    ``target_date``, so manual events (INTEREST coupons, PRICE_ADJUSTMENT)
+    and auto-coupon resets apply on the way, and returns the value of that
+    day: after its manual events, before an auto-coupon reset it would pay —
+    the chart peak ``_generate_schedule_values`` emits.
 
     The walk is bounded by ``target_date`` (not ``last_end``) so cost is
     O(days-since-start); no caching is needed because this is called
@@ -446,84 +357,26 @@ def _compute_value_at(  # noqa: C901 — TODO(P2-refactor): duplicate day-walk, 
     if target_date < first_start or target_date > last_end:
         return None
 
-    principal = schedule.initial_value.amount
-    is_compound = schedule.interest_type == InterestType.COMPOUND
-    convention = schedule.day_count
+    value = schedule.initial_value.amount
+    for day in _accrual_days(schedule, target_date):
+        value = day.value
+    return value
 
-    # Pre-compute all maturation dates (identical to _generate_schedule_values).
-    all_maturation_dates: set[date_type] = set()
-    for p in schedule.schedule:
-        all_maturation_dates |= _compute_maturation_dates(p.start_date, p.end_date, p.maturation_frequency)
 
-    # Pre-index manual events by date.
-    events_by_date: dict[date_type, list] = {}
-    for e in schedule.asset_events:
-        events_by_date.setdefault(e.date, []).append(e)
+def _late_compound_growth(schedule: FAScheduledInvestmentSchedule, start: date_type, end: date_type, maturity_date: date_type) -> Decimal:
+    """The COMPOUND late-interest growth from ``start`` to ``end``: a day up to the end of the grace period accrues at the
+    last period's rate, a day after it at the late rate."""
+    li = schedule.late_interest
+    grace_end = maturity_date + timedelta(days=li.grace_period_days)
+    last_rate = schedule.schedule[-1].annual_rate
+    growth = compound_growth(start, min(end, grace_end), last_rate, schedule.day_count)
+    return growth * compound_growth(max(start, grace_end), end, li.annual_rate, schedule.day_count)
 
-    total_interest = Decimal("0")
-    event_adjustment = Decimal("0")
-    current_date = first_start
-    current_period_idx = 0
 
-    while current_date <= target_date:
-        # Find active period for this date
-        period = None
-        for i in range(current_period_idx, len(schedule.schedule)):
-            p = schedule.schedule[i]
-            if p.start_date <= current_date <= p.end_date:
-                period = p
-                current_period_idx = i
-                break
-
-        # Step 1: daily interest increment
-        if period is not None and current_date > first_start:
-            day_fraction = calculate_day_count_fraction(
-                start_date=current_date - timedelta(days=1),
-                end_date=current_date,
-                convention=convention,
-            )
-            if day_fraction > 0:
-                if is_compound:
-                    base = principal + total_interest
-                    total_interest += calculate_simple_interest(
-                        principal=base,
-                        annual_rate=period.annual_rate,
-                        time_fraction=day_fraction,
-                    )
-                else:
-                    total_interest += calculate_simple_interest(
-                        principal=principal,
-                        annual_rate=period.annual_rate,
-                        time_fraction=day_fraction,
-                    )
-
-        # Step 2: manual events on this date (subtractive INTEREST, additive PRICE_ADJUSTMENT)
-        if current_date in events_by_date:
-            for evt in events_by_date[current_date]:
-                if evt.type == "INTEREST":
-                    event_adjustment -= evt.value.amount
-                elif evt.type == "PRICE_ADJUSTMENT":
-                    event_adjustment += evt.value.amount
-
-        # If this is the target date, capture the pre-reset value and stop.
-        # We return the value AFTER manual events of the day were applied
-        # but BEFORE the auto-coupon reset would fire, matching the chart
-        # peak emitted by ``_generate_schedule_values``.
-        if current_date == target_date:
-            return principal + total_interest + event_adjustment
-
-        # Step 4: auto-coupon reset at maturation date (generate_interest=True).
-        if current_date in all_maturation_dates and period and period.generate_interest:
-            current_value = principal + total_interest + event_adjustment
-            interest_amount = current_value - principal
-            if interest_amount > 0:
-                total_interest = Decimal("0")
-                event_adjustment = Decimal("0")
-
-        current_date += timedelta(days=1)
-
-    # Safe fallback; unreachable given the early return when current_date==target_date.
-    return principal + total_interest + event_adjustment
+def _late_interest_values(schedule: FAScheduledInvestmentSchedule, dates: list[date_type], last_scheduled_value: Decimal, maturity_date: date_type) -> dict[date_type, Decimal]:
+    """The late-interest value on each of ``dates``: the closed form of each date, in constant time (``compound_growth``),
+    so the history, the current value and the settlement read the same digits for a day, whatever window is read."""
+    return {day: _compute_late_interest_value(schedule, day, last_scheduled_value, maturity_date) for day in dates}
 
 
 def _compute_late_interest_value(
@@ -535,9 +388,11 @@ def _compute_late_interest_value(
     """
     Compute value for a date after schedule ends (grace + late interest).
 
+    The grace period runs at the last period's rate, then late interest at its own rate.
     Uses skip formula (D9) for efficiency:
-    - SIMPLE: closed-form V = V_maturity + P * r * Δt
-    - COMPOUND: day-by-day only for the requested sub-range
+    - SIMPLE: closed-form V = V_maturity + P * r * Δt, one segment per rate
+    - COMPOUND: closed-form V = V_maturity · Π (1 + r · f) (``compound_growth``), one segment per rate (R13-SEC7-2: the
+      day-by-day loop made the late history quadratic)
 
     Args:
         schedule: Full schedule config (provides day_count, late_interest)
@@ -549,87 +404,37 @@ def _compute_late_interest_value(
         return last_scheduled_value
 
     li = schedule.late_interest
-    is_compound = li.interest_type == InterestType.COMPOUND
     principal = schedule.initial_value.amount
     convention = schedule.day_count
     grace_end = maturity_date + timedelta(days=li.grace_period_days)
-    last_period = schedule.schedule[-1]
+    last_rate = schedule.schedule[-1].annual_rate
 
-    if target_date <= grace_end:
-        # During grace period: use last scheduled rate
-        if is_compound:
-            value = last_scheduled_value
-            current = maturity_date + timedelta(days=1)
-            while current <= target_date:
-                frac = calculate_day_count_fraction(
-                    start_date=current - timedelta(days=1),
-                    end_date=current,
-                    convention=convention,
-                )
-                value += calculate_simple_interest(
-                    principal=value,
-                    annual_rate=last_period.annual_rate,
-                    time_fraction=frac,
-                )
-                current += timedelta(days=1)
-            return value
-        else:
-            # SIMPLE skip formula: V = V_maturity + P * r * Δt
-            grace_fraction = calculate_day_count_fraction(
-                start_date=maturity_date,
-                end_date=target_date,
-                convention=convention,
-            )
-            return last_scheduled_value + calculate_simple_interest(
-                principal=principal,
-                annual_rate=last_period.annual_rate,
-                time_fraction=grace_fraction,
-            )
+    if li.interest_type == InterestType.COMPOUND:
+        return last_scheduled_value * _late_compound_growth(schedule, maturity_date, target_date, maturity_date)
 
-    # After grace: grace interest + late interest
-    if is_compound:
-        # Day-by-day compound: grace period at last rate, then late rate
-        value = last_scheduled_value
-        current = maturity_date + timedelta(days=1)
-        while current <= target_date:
-            rate = last_period.annual_rate if current <= grace_end else li.annual_rate
-            frac = calculate_day_count_fraction(
-                start_date=current - timedelta(days=1),
-                end_date=current,
-                convention=convention,
-            )
-            value += calculate_simple_interest(
-                principal=value,
-                annual_rate=rate,
-                time_fraction=frac,
-            )
-            current += timedelta(days=1)
-        return value
-    else:
-        # SIMPLE skip formula for both grace + late segments
-        grace_fraction = calculate_day_count_fraction(
-            start_date=maturity_date,
-            end_date=grace_end,
-            convention=convention,
-        )
-        grace_interest = calculate_simple_interest(
-            principal=principal,
-            annual_rate=last_period.annual_rate,
-            time_fraction=grace_fraction,
-        )
-
+    # SIMPLE skip formula: the grace segment, then the late segment once the grace period is over.
+    grace_fraction = calculate_day_count_fraction(
+        start_date=maturity_date,
+        end_date=min(target_date, grace_end),
+        convention=convention,
+    )
+    value = last_scheduled_value + calculate_simple_interest(
+        principal=principal,
+        annual_rate=last_rate,
+        time_fraction=grace_fraction,
+    )
+    if target_date > grace_end:
         late_fraction = calculate_day_count_fraction(
             start_date=grace_end,
             end_date=target_date,
             convention=convention,
         )
-        late_interest = calculate_simple_interest(
+        value += calculate_simple_interest(
             principal=principal,
             annual_rate=li.annual_rate,
             time_fraction=late_fraction,
         )
-
-        return last_scheduled_value + grace_interest + late_interest
+    return value
 
 
 @register_provider(AssetProviderRegistry)
@@ -815,7 +620,12 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             # Destructure cached tuple (values, auto_events)
             cached, cached_auto_events = _generate_schedule_values(schedule)
             maturity_date = max(cached.keys()) if cached else None
-            effective_start = min(cached.keys()) if start_date == "min" and cached else start_date
+            # "min" is the earliest available point: the schedule's first value or its first manual event, whichever comes
+            # first (a refresh reads "min" once, on the first sync, so an earlier event would never be read again); with
+            # neither, end_date (MF-SI1).
+            effective_start = start_date
+            if start_date == "min":
+                effective_start = min([*cached.keys(), *(event.date for event in schedule.asset_events)], default=end_date)
 
             # Check for MATURITY_SETTLEMENT in cached events
             settlement_evt = next((e for e in cached_auto_events if e.type == "MATURITY_SETTLEMENT"), None)
@@ -830,41 +640,43 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
             # Handle post-maturity range with late interest maturation dates
             late_auto_events: list[FAAssetEventPoint] = []
-            if maturity_date and end_date > maturity_date and schedule.late_interest:
+            # Late interest is valued up to SCHEDULE_MAX_DATE at most (R13-SEC7-2, N73): no point is emitted after it.
+            late_end = min(end_date, SCHEDULE_MAX_DATE)
+            if maturity_date and late_end > maturity_date and schedule.late_interest:
                 li = schedule.late_interest
                 late_start = max(maturity_date + timedelta(days=1), effective_start)
                 late_mat_dates = _compute_maturation_dates(
                     maturity_date + timedelta(days=1),
-                    end_date,
+                    late_end,
                     li.maturation_frequency,
                 )
                 sorted_late_dates = sorted(late_mat_dates)
                 last_late_date = sorted_late_dates[-1] if sorted_late_dates else None
+                valued_dates = [d for d in sorted_late_dates if not (settlement_date and d > settlement_date)]
+                emitted_dates = [d for d in valued_dates if late_start <= d <= late_end]
+                late_values = _late_interest_values(schedule, sorted({*emitted_dates, *valued_dates[-1:]}), cached[maturity_date], maturity_date)
 
-                for d in sorted_late_dates:
-                    if late_start <= d <= end_date:
-                        # Skip if past settlement
-                        if settlement_date and d > settlement_date:
-                            break
-                        value = _compute_late_interest_value(schedule, d, cached[maturity_date], maturity_date)
-                        prices.append(FAPricePoint(date=d, close=value, currency=currency))
+                for d in emitted_dates:
+                    value = late_values[d]
+                    prices.append(FAPricePoint(date=d, close=value, currency=currency))
 
-                        # Auto-generate late INTEREST events if generate_interest=True
-                        if li.generate_interest:
-                            interest_amount = value - principal
-                            if interest_amount > 0:
-                                late_auto_events.append(
-                                    FAAssetEventPoint(
-                                        date=d,
-                                        type="INTEREST",
-                                        value=Currency(code=currency, amount=interest_amount),
-                                        notes="Auto-generated late interest payout",
-                                    )
+                    # Auto-generate late INTEREST events if generate_interest=True
+                    if li.generate_interest:
+                        interest_amount = value - principal
+                        if interest_amount > 0:
+                            late_auto_events.append(
+                                FAAssetEventPoint(
+                                    date=d,
+                                    type="INTEREST",
+                                    value=Currency(code=currency, amount=interest_amount),
+                                    notes="Auto-generated late interest payout",
                                 )
+                            )
 
                 # Late interest MATURITY_SETTLEMENT at last maturation date
                 if li.generate_interest and last_late_date and not settlement_date:
-                    settle_value = _compute_late_interest_value(schedule, last_late_date, cached[maturity_date], maturity_date)
+                    # The last late price itself, so the settlement equals the chart's last point.
+                    settle_value = late_values[last_late_date]
                     late_auto_events.append(
                         FAAssetEventPoint(
                             date=last_late_date,
@@ -874,8 +686,9 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                         )
                     )
 
-            elif maturity_date and end_date > maturity_date:
-                # No late interest config — emit maturity value as flat line at end_date
+            elif maturity_date and end_date > maturity_date and not schedule.late_interest:
+                # No late interest config — emit maturity value as flat line at end_date (with late interest, a maturity
+                # on the horizon itself emits nothing after it)
                 if end_date not in cached:
                     if not settlement_date or end_date <= settlement_date:
                         prices.append(FAPricePoint(date=end_date, close=cached[maturity_date], currency=currency))
@@ -888,16 +701,16 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                     prices.append(FAPricePoint(date=end_date, close=settlement_evt.value.amount, currency=currency))
 
             # If start_date is before schedule, emit initial_value as anchor
-            if cached and start_date < min(cached.keys()):
-                prices.insert(0, FAPricePoint(date=start_date, close=principal, currency=currency))
+            if cached and effective_start < min(cached.keys()):
+                prices.insert(0, FAPricePoint(date=effective_start, close=principal, currency=currency))
 
             # Sort by date (in case late interest dates interleave)
             prices.sort(key=lambda p: p.date)
 
             # Merge cached auto-events + late auto-events + manual events, filtered to range
-            all_events = [e for e in cached_auto_events if start_date <= e.date <= end_date]
-            all_events += [e for e in late_auto_events if start_date <= e.date <= end_date]
-            all_events += [e for e in schedule.asset_events if start_date <= e.date <= end_date]
+            all_events = [e for e in cached_auto_events if effective_start <= e.date <= end_date]
+            all_events += [e for e in late_auto_events if effective_start <= e.date <= end_date]
+            all_events += [e for e in schedule.asset_events if effective_start <= e.date <= end_date]
             all_events.sort(key=lambda e: e.date)
 
             return FAHistoricalData(

@@ -12,15 +12,14 @@
      *
      * Uses Svelte 5 runes. Reference: fx/[pair]/+page.svelte
      */
-    import {onDestroy, onMount, tick} from 'svelte';
+    import {onDestroy, onMount, tick, untrack} from 'svelte';
     import {page} from '$app/stores';
     import {goto} from '$app/navigation';
     import {debug, isDebugEnabled} from '$lib/debug';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
-    import {axiosInstance, schemas, zodiosApi} from '$lib/api';
-    import {goBack} from '$lib/stores/app/navigationStore';
-    import {ArrowLeft, ChartLine, ChevronDown, ExternalLink, Info, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, Shield, TrendingUp, X} from 'lucide-svelte';
+    import {axiosInstance, zodiosApi} from '$lib/api';
+    import {ChartLine, Pencil, RefreshCw, Ruler, Settings, Shield, X} from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
@@ -29,31 +28,33 @@
     import ChartSignalsSection from '$lib/components/charts/ChartSignalsSection.svelte';
     import type {SignalDataSummary} from '$lib/components/charts/ChartSignalsSection.svelte';
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
-    import AllocationPieChart from '$lib/components/charts/AllocationPieChart.svelte';
-    import {getSectorEmoji} from '$lib/stores/reference/sectorStore';
-    import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
-    import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
-    import AssetBrowseNav from '$lib/components/assets/AssetBrowseNav.svelte';
     import AssetPriceSummary from '$lib/components/assets/AssetPriceSummary.svelte';
+    import {fetchSeriesRangeDelta, summaryRangeDelta} from '$lib/components/assets/detail/assetDetailRangeChange';
+    import type {RangeDelta} from '$lib/utils/rangeChange';
+    import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/components/assets/detail/AssetChartModeToggle.svelte';
+    import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
+    import AssetDetailSignalsPanel from '$lib/components/assets/detail/AssetDetailSignalsPanel.svelte';
+    import AssetDetailMeasuresSection from '$lib/components/assets/detail/AssetDetailMeasuresSection.svelte';
+    import AssetDetailHeader from '$lib/components/assets/detail/AssetDetailHeader.svelte';
+    import AssetDetailMetadataPanel from '$lib/components/assets/detail/AssetDetailMetadataPanel.svelte';
+    import AssetDetailToolbarActions from '$lib/components/assets/detail/AssetDetailToolbarActions.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
-    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
-    import AssetRiskScenariosView from '$lib/components/risk/AssetRiskScenariosView.svelte';
+    import AssetRiskScenariosView from '$lib/features/risk/AssetRiskScenariosView.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
-    import CompactDurationBadge from '$lib/components/ui/date/CompactDurationBadge.svelte';
-    import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
-        backendSignalSchemas,
         buildBackendSignalRequestPlan,
         getSignalProblem,
         getSignalProblemSeverity,
         getLocalSignalDefinitions,
         mapSignalInstanceResults,
         renderBackendSignalResult,
+        renderedSignalPointCount,
         signalFromConfig,
         SignalResultState,
         type BackendSignalResult,
@@ -72,47 +73,40 @@
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
-    import {getAssetTypeIconUrl, buildIdentifiersList} from '$lib/utils/assetTypes';
+    import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
+    import {buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
+    import {todayIso} from '$lib/utils/dateOnly';
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
-    import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, getComparisonEventFxDependency, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {comparisonAssetIds as comparisonPeerAssetIds, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/charts/chartPageSignals';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
-    import {fetchCurrentPrices, computeDirection} from '$lib/services/livePriceService';
-    import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
     import {collectConfigurableSecondaryAxes} from '$lib/components/charts/chartCoreHelpers';
     import {percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from '$lib/components/charts/axisLabelHelpers';
     import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
-    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
-    import {
-        CALENDAR_RETURN_PRESETS,
-        CALENDAR_RETURN_UNIT_LABEL_KEYS,
-        DEFAULT_CALENDAR_RETURN_WINDOW,
-        calendarReturnRangeDays,
-        calendarReturnWindowDays,
-        type CalendarReturnPresetKey,
-        type CalendarReturnWindowSelection,
-        type CalendarReturnWindowUnit,
-    } from '$lib/components/charts/calendarReturnWindow';
-    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
-    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
-    import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
+    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
+    import {calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable} from '$lib/components/assets/detail/assetDetailPriceQuery';
+    import {mergeChartPointsIncremental} from '$lib/components/assets/detail/assetDetailChartPoints';
+    import {AssetDetailLive} from '$lib/components/assets/detail/assetDetailLive.svelte';
+    import {buildAssetDetailIssues, buildRequiredFxPairs, type AssetDetailIssuesInput, type RequiredFxPairInfo, type RequiredFxPairsInput} from '$lib/components/assets/detail/assetDetailFxRequirements';
+    import {displayCurrencyAfterFxPairCreated, fxPairCreateDefaults} from '$lib/components/assets/detail/assetDetailFxPair';
+    import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
     import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
-    import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
+    import {buildAiExportMenuLabels, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import type {FxPairCreatedDetail, FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
     import {buildTransactionsFiltersUrl} from '../../transactions/filterState';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
-    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -209,7 +203,6 @@
     let viewMode: ViewMode = $state('percentage');
     let chartType: ChartType = $state('line');
     let displayCurrency = $state('');
-    type AssetChartPrimaryMode = 'price' | 'calendar-return';
     let primaryMode = $state<AssetChartPrimaryMode>('price');
     let calendarWindowSelection: CalendarReturnWindowSelection = $state({
         ...DEFAULT_CALENDAR_RETURN_WINDOW,
@@ -272,21 +265,6 @@
         calendarCustomUnit = settings.calendarReturnWindow.customUnit;
         calendarWindowHydratedScope = scope;
     });
-    let calendarDurationOptions = $derived([
-        {
-            value: 'weeks',
-            label: $t('datePicker.granularity.weeksShort').toUpperCase(),
-        },
-        {
-            value: 'months',
-            label: $t('datePicker.granularity.monthsShort').toUpperCase(),
-        },
-        {
-            value: 'years',
-            label: $t('datePicker.granularity.yearsShort').toUpperCase(),
-        },
-    ]);
-
     // Measure panel
     let measureMode = $state(false);
     let measureSignals: RenderedSignal[] = $state([]);
@@ -341,35 +319,13 @@
     /** Pre-filled slug for FxPairAddModal (e.g. "EUR-RON" from banner) */
     let fxPairCreateSlug = $state('');
 
-    // Live current price (from provider, only when dateEnd = today)
-    let currentLivePrice = $state<number | null>(null);
-    /** True when live price conversion to displayCurrency failed (pair exists but rate unavailable) */
-    let livePriceConversionFailed = $state(false);
-
-    // --- Live price direction flash --------------------------------------------
-    // Tracks whether the latest polled tick moved the price up/down vs the
-    // PREVIOUS poll (not vs the day's open) so AssetPriceSummary can flash the
-    // price text. Mirrors the assets list page's use of computeDirection, but
-    // compares the asset's NATIVE-currency value (not the possibly FX-converted
-    // display value) so switching displayCurrency never fabricates a fake
-    // up/down tick on its own.
-    /** Direction of the latest live-price tick — drives the transient flash animation. Resets to 'neutral' once the flash decays. */
-    let livePriceDirection = $state<LivePriceDirection>('neutral');
-    /** Increments on every non-neutral tick so the flash element can be re-keyed (forces the CSS animation to restart even for two consecutive same-direction ticks). */
-    let livePriceFlashToken = $state(0);
-    /** Previous poll's native-currency value — plain (non-reactive) bookkeeping var, not rendered directly. */
-    let previousNativeLivePrice: number | null = null;
-    /** Pending "decay back to neutral" timer for the current flash. */
-    let livePriceFlashTimeoutId: ReturnType<typeof setTimeout> | null = null;
-    /** How long the flash stays lit before decaying to the resting colour — kept in sync with the CSS animation duration in app.css (.lf-price-flash-*). */
-    const LIVE_PRICE_FLASH_DECAY_MS = 1300;
-
     // =========================================================================
     // Derived
     // =========================================================================
 
-    /** True when the chart end date is today (or later) → show live price from provider */
-    let isHeadToday = $derived(dateEnd >= new Date().toISOString().slice(0, 10));
+    /** True when the chart end date is today (or later) → show live price from provider. Today on the user's calendar,
+     *  like `dateEnd`: the UTC date is already tomorrow in the evening west of Greenwich (Z-3). */
+    let isHeadToday = $derived(dateEnd >= todayIso());
 
     let lineData: LineDataPoint[] = $derived(
         chartData.map((p: any) => ({
@@ -419,10 +375,6 @@
         return lineData.length > 0 ? 'ready' : error ? 'error' : 'unavailable';
     });
 
-    function emptyCalendarReturnView(state: CalendarReturnViewState = 'idle'): CalendarReturnView {
-        return {state, points: [], contextByDate: new Map(), problem: null};
-    }
-
     function translateCalendarProblem(key: string, values?: Record<string, string | number>): string {
         return values ? $t(key, {values}) : $t(key);
     }
@@ -439,12 +391,12 @@
         }
         primaryMode = mode;
         if (mode === 'calendar-return') {
-            void loadChartData(false);
+            void pageBusy.track('asset-mode', () => loadChartData(false));
         } else {
             calendarCustomEditing = false;
-            void maybeLoadComparison();
+            void pageBusy.track('asset-mode', () => maybeLoadComparison());
             const hasBackendSignals = signals.some((config) => signalDefinitionsByType.get(config.signalType)?.source === 'backend');
-            if (hasBackendSignals) void loadChartData(false);
+            if (hasBackendSignals) void pageBusy.track('asset-mode', () => loadChartData(false));
         }
     }
 
@@ -467,7 +419,7 @@
             preset,
         });
         if (primaryMode === 'calendar-return') {
-            void loadChartData(false);
+            void pageBusy.track('asset-calendar-window', () => loadChartData(false));
         }
     }
 
@@ -482,7 +434,7 @@
         const changed = calendarWindowSelection.kind !== 'custom' || calendarWindowSelection.customAmount !== customAmount || calendarWindowSelection.customUnit !== customUnit;
         persistCalendarWindow(selection);
         if (changed && primaryMode === 'calendar-return') {
-            void loadChartData(false);
+            void pageBusy.track('asset-calendar-window', () => loadChartData(false));
         }
     }
 
@@ -492,6 +444,16 @@
     let isParametric = $derived.by(() => {
         void $assetProvidersVersion;
         return isParametricProvider(providerAssignment?.provider_code);
+    });
+    // The providers' names come from the same cache, which may land after the asset (both load in parallel): read in the
+    // template alone, a name read before it kept the raw code (`yfinance`) for good.
+    let assetProviderName = $derived.by(() => {
+        void $assetProvidersVersion;
+        return assetInfo?.provider_code ? getAssetProviderName(assetInfo.provider_code) : '';
+    });
+    let assignmentProviderName = $derived.by(() => {
+        void $assetProvidersVersion;
+        return providerAssignment?.provider_code ? getAssetProviderName(providerAssignment.provider_code) : '';
     });
     let isManualOnly = $derived(providerAssignmentLoaded && !providerAssignment);
     let isInactive = $derived(assetInfo?.active === false);
@@ -532,26 +494,56 @@
         return !fxFirstConvertedDate;
     });
 
+    /** The summary shows the live quote: the range ends today and a live price is there. */
+    let liveShown = $derived.by(() => isHeadToday && live.currentPrice != null);
+
     /** Effective last price: live from provider when head = today, otherwise last chart close */
     let lastPrice = $derived.by(() => {
-        if (isHeadToday && currentLivePrice != null) return currentLivePrice;
+        if (liveShown) return live.currentPrice;
         if (chartData.length === 0) return null;
         const last = chartData[chartData.length - 1];
         return last?.close != null ? Number(last.close) : null;
     });
 
-    let deltaPercent = $derived.by(() => {
-        if (chartData.length < 2 || lastPrice == null) return null;
-        const first = Number(chartData[0].close ?? 0);
-        if (first === 0) return null;
-        return ((lastPrice - first) / first) * 100;
-    });
+    // The Δ over the range is the backend's (X-R59): the live quote's comes with each poll (`live.rangeDelta`), the stored
+    // series' is asked here — when the asset, the range or the display currency changes, and after a reload
+    // (`seriesRangeDeltaRefresh`). A Δ of another context is cleared at once: never one beside another range's price.
+    // It completes what the page is doing, so it joins the page's token (N55): the Refresh button waits for it after the
+    // user's request, and stays still through the reload that follows a sync, which `handleRefresh()` runs without one (P3).
+    let seriesRangeDelta = $state<RangeDelta | null>(null);
+    let seriesRangeDeltaRefresh = $state(0);
+    let seriesRangeDeltaVersion = 0;
+    let seriesRangeDeltaKey: string | null = null;
 
-    let deltaAbs = $derived.by(() => {
-        if (chartData.length < 2 || lastPrice == null) return null;
-        const first = Number(chartData[0].close ?? 0);
-        if (first === 0) return null;
-        return lastPrice - first;
+    let summaryDelta = $derived.by(() => summaryRangeDelta(liveShown, live.rangeDelta, seriesRangeDelta));
+    let deltaPercent = $derived(summaryDelta.pct);
+    let deltaAbs = $derived(summaryDelta.abs);
+
+    async function loadSeriesRangeDelta(assetId: number, start: string, end: string, targetCurrency: string | null): Promise<void> {
+        const version = ++seriesRangeDeltaVersion;
+        const sessionGeneration = getClientSessionGeneration();
+        const key = `${assetId} ${start}…${end} ${targetCurrency ?? ''}`;
+        if (key !== seriesRangeDeltaKey) seriesRangeDelta = null;
+        try {
+            const delta = await fetchSeriesRangeDelta({assetId, asOf: end, dateStart: start, targetCurrency});
+            if (version !== seriesRangeDeltaVersion || !isClientSessionCurrent(sessionGeneration)) return;
+            seriesRangeDelta = delta;
+            seriesRangeDeltaKey = key;
+        } catch (requestError) {
+            if (version !== seriesRangeDeltaVersion) return;
+            console.error('Failed to fetch the change of the asset over the range:', requestError);
+        }
+    }
+
+    $effect(() => {
+        const assetId = assetInfo?.id;
+        const nativeCurrency = assetInfo?.currency;
+        const [start, end] = [dateStart, dateEnd];
+        // In the display currency only when the chart is really converted: with the pair missing the summary shows native prices.
+        const targetCurrency = displayCurrency && nativeCurrency && displayCurrency !== nativeCurrency && !fxConversionMissing ? displayCurrency : null;
+        void seriesRangeDeltaRefresh;
+        if (!assetId) return;
+        untrack(() => void pageBusy.join('asset-detail-range-delta', () => loadSeriesRangeDelta(assetId, start, end, targetCurrency)));
     });
 
     let currencyFlag = $derived.by(() => {
@@ -592,215 +584,84 @@
         return `/fx/${fxPairSlug}?start=${urlDateStart}&end=${urlDateEnd}`;
     });
 
-    /**
-     * All FX pairs required by the page (main + comparison signals).
-     * Each entry has slug, label, forAsset, and status.
-     */
-    interface RequiredFxPairInfo {
-        slug: string;
-        label: string;
-        forAsset: string;
-        forAssetIconUrl?: string | null;
-        forAssetType?: string | null;
-        status: 'ok' | 'missing' | 'no-data' | 'partial-gap';
-        firstDate?: string;
-    }
+    /** The page state the required FX pairs and the banner issues read, through getters: the same reads, in the same order, as the former derived blocks. */
+    const fxRequirementsState: RequiredFxPairsInput = {
+        get displayCurrency() {
+            return displayCurrency;
+        },
+        get asset() {
+            return assetInfo;
+        },
+        get pageAssetId() {
+            return data.assetId;
+        },
+        get configuredFxSlugs() {
+            return allConfiguredFxSlugs;
+        },
+        get fxFirstConvertedDate() {
+            return fxFirstConvertedDate;
+        },
+        get hasChartData() {
+            return chartData.length > 0;
+        },
+        get hasFxDataGap() {
+            return hasFxDataGap;
+        },
+        get signals() {
+            return signals;
+        },
+        get assets() {
+            return allAssets;
+        },
+        get primaryMode() {
+            return primaryMode;
+        },
+        get calendarSnapshotIsCurrent() {
+            return calendarSnapshotIsCurrent;
+        },
+        get calendarComparisonFxFailures() {
+            return calendarComparisonFxFailures;
+        },
+        get calendarComparisonProblems() {
+            return calendarComparisonProblems;
+        },
+        get events() {
+            return events;
+        },
+        get comparisonEvents() {
+            return comparisonEvents;
+        },
+        get eventsLabel() {
+            return $t('events.fxBannerContext') ?? 'for dividend/cash events';
+        },
+        assetFallbackLabel: (assetId) => $t('chartSettings.signals.assetFallback', {values: {id: String(assetId)}}),
+    };
 
-    let requiredFxPairs: RequiredFxPairInfo[] = $derived.by(() => {
-        if (!displayCurrency) return [];
-        const pairs: RequiredFxPairInfo[] = [];
-        const seenSlugs = new Set<string>();
+    let requiredFxPairs: RequiredFxPairInfo[] = $derived(buildRequiredFxPairs(fxRequirementsState));
 
-        // Helper to compute canonical slug
-        const toSlug = (a: string, b: string) => {
-            const [lo, hi] = a < b ? [a, b] : [b, a];
-            return `${lo}-${hi}`;
-        };
-
-        // Main asset FX pair
-        if (assetInfo && displayCurrency !== assetInfo.currency) {
-            const slug = toSlug(assetInfo.currency, displayCurrency);
-            const missing = !allConfiguredFxSlugs.includes(slug);
-            let status: RequiredFxPairInfo['status'];
-            if (missing) {
-                status = 'missing';
-            } else if (!fxFirstConvertedDate && chartData.length > 0) {
-                status = 'no-data';
-            } else if (hasFxDataGap && fxFirstConvertedDate) {
-                status = 'partial-gap';
-            } else {
-                status = 'ok';
-            }
-            pairs.push({
-                slug,
-                label: slug.replace('-', '/'),
-                forAsset: assetInfo.display_name,
-                forAssetIconUrl: assetInfo.icon_url,
-                forAssetType: assetInfo.asset_type,
-                status,
-                firstDate: fxFirstConvertedDate ?? undefined,
-            });
-            seenSlugs.add(slug);
-        }
-
-        // Comparison signal FX pairs
-        for (const cfg of signals) {
-            if (cfg.signalType !== 'asset-comparison') continue;
-            const targetId = Number(cfg.params.assetId);
-            if (!targetId || targetId === data.assetId) continue;
-            const targetAsset = allAssets.find((a) => a.id === targetId);
-            if (!targetAsset?.currency || targetAsset.currency === displayCurrency) continue;
-            const slug = toSlug(targetAsset.currency, displayCurrency);
-            if (seenSlugs.has(slug)) continue;
-            seenSlugs.add(slug);
-
-            const missing = !allConfiguredFxSlugs.includes(slug);
-            let status: RequiredFxPairInfo['status'];
-            if (missing) {
-                status = 'missing';
-            } else if (primaryMode === 'calendar-return' && calendarSnapshotIsCurrent) {
-                status = calendarComparisonFxFailures.has(targetId) || calendarComparisonProblems.get(targetId)?.code === 'fx_conversion_unavailable' ? 'no-data' : 'ok';
-            } else {
-                const convFailed = Boolean(cfg.params._conversionFailed);
-                const hasData = Boolean(cfg.params._resolvedData);
-                status = convFailed || !hasData ? 'no-data' : 'ok';
-            }
-            pairs.push({
-                slug,
-                label: slug.replace('-', '/'),
-                forAsset: targetAsset.display_name,
-                forAssetIconUrl: targetAsset.icon_url,
-                forAssetType: targetAsset.asset_type,
-                status,
-            });
-        }
-
-        // E.8 — Event currencies: if any event is in a currency ≠ displayCurrency,
-        // add its pair to the required list. This surfaces the same banner + CTA
-        // already used for prices (asset native + comparison signals), without
-        // duplicating detection code. `forAsset` uses an i18n-aware "for events"
-        // label so the user understands the context.
-        if (displayCurrency) {
-            const eventSources: Array<{
-                values: any[];
-                forAsset: string;
-                forAssetIconUrl?: string | null;
-                forAssetType?: string | null;
-            }> = [
-                {
-                    values: events,
-                    forAsset: $t('events.fxBannerContext') ?? 'for dividend/cash events',
-                },
-                ...[...comparisonEvents].map(([assetId, values]) => {
-                    const asset = allAssets.find((candidate) => candidate.id === assetId);
-                    return {
-                        values,
-                        forAsset: asset?.display_name ?? $t('chartSettings.signals.assetFallback', {values: {id: String(assetId)}}),
-                        forAssetIconUrl: asset?.icon_url,
-                        forAssetType: asset?.asset_type,
-                    };
-                }),
-            ];
-            for (const source of eventSources) {
-                for (const event of source.values) {
-                    const dependency = getComparisonEventFxDependency(event, displayCurrency);
-                    if (!dependency) continue;
-                    const slug = toSlug(dependency.sourceCurrency, displayCurrency);
-                    const missing = !allConfiguredFxSlugs.includes(slug);
-                    const existing = pairs.find((pair) => pair.slug === slug);
-                    if (existing) {
-                        if (missing) existing.status = 'missing';
-                        else if (dependency.failed && existing.status === 'ok') existing.status = 'no-data';
-                        continue;
-                    }
-                    seenSlugs.add(slug);
-                    pairs.push({
-                        slug,
-                        label: slug.replace('-', '/'),
-                        forAsset: source.forAsset,
-                        forAssetIconUrl: source.forAssetIconUrl,
-                        forAssetType: source.forAssetType,
-                        status: missing ? 'missing' : dependency.failed ? 'no-data' : 'ok',
-                    });
-                }
-            }
-        }
-
-        return pairs;
-    });
+    const assetDetailIssuesState: AssetDetailIssuesInput = {
+        get asset() {
+            return assetInfo;
+        },
+        get rangeStartsBeforeData() {
+            return rangeStartsBeforeData;
+        },
+        get loading() {
+            return loading;
+        },
+        get error() {
+            return error;
+        },
+        get firstDataDate() {
+            return firstDataDate;
+        },
+        get requiredFxPairs() {
+            return requiredFxPairs;
+        },
+    };
 
     /** Build DataQualityIssue[] from page state for unified banner rendering */
-    let assetDetailIssues: DataQualityIssue[] = $derived.by(() => {
-        const issues: DataQualityIssue[] = [];
-
-        // Archived banner
-        if (assetInfo && assetInfo.active === false) {
-            issues.push({
-                domain: 'asset',
-                code: 'ASSET_ARCHIVED',
-                severity: 'warning',
-                message_i18n_key: 'dataQuality.archivedAsset',
-            });
-        }
-
-        // Range starts before first data
-        if (rangeStartsBeforeData && !loading && !error && assetInfo) {
-            issues.push({
-                domain: 'asset',
-                code: 'RANGE_BEFORE_FIRST_DATA',
-                severity: 'info',
-                message_i18n_key: 'dataQuality.rangeBeforeData',
-                message_params: {date: firstDataDate ?? ''},
-            });
-        }
-
-        // FX pair issues
-        if (!loading && !error) {
-            for (const pair of requiredFxPairs.filter((p) => p.status !== 'ok')) {
-                const parts = pair.slug.split('-');
-                if (pair.status === 'missing') {
-                    issues.push({
-                        domain: 'forex',
-                        code: 'FX_PAIR_MISSING',
-                        severity: 'warning',
-                        group_key: pair.slug,
-                        message_i18n_key: 'dataQuality.fxPairMissing',
-                        affected_fx_pairs: [pair.slug],
-                        affected_asset_names: [pair.forAsset],
-                        cta_action: 'add_fx_pair',
-                        cta_target: pair.slug,
-                    });
-                } else if (pair.status === 'no-data') {
-                    issues.push({
-                        domain: 'forex',
-                        code: 'FX_PAIR_NO_DATA',
-                        severity: 'warning',
-                        group_key: pair.slug,
-                        message_i18n_key: 'dataQuality.fxPairNoData',
-                        affected_fx_pairs: [pair.slug],
-                        affected_asset_names: [pair.forAsset],
-                        cta_action: 'navigate_fx',
-                        cta_target: pair.slug,
-                    });
-                } else if (pair.status === 'partial-gap') {
-                    issues.push({
-                        domain: 'forex',
-                        code: 'FX_PAIR_PARTIAL_GAP',
-                        severity: 'info',
-                        group_key: pair.slug,
-                        message_i18n_key: 'dataQuality.fxPairPartialGap',
-                        message_params: {date: pair.firstDate ?? ''},
-                        affected_fx_pairs: [pair.slug],
-                        affected_asset_names: [pair.forAsset],
-                        cta_action: 'navigate_fx',
-                        cta_target: pair.slug,
-                    });
-                }
-            }
-        }
-
-        return issues;
-    });
+    let assetDetailIssues: DataQualityIssue[] = $derived(buildAssetDetailIssues(assetDetailIssuesState));
 
     function handleBannerAction(action: string, target: string | null, _issue: DataQualityIssue) {
         if (action === 'add_fx_pair' && target) {
@@ -1052,7 +913,7 @@
                 const rendered = backendOverlaySignals.filter((signal) => signal.id === cfg.id || signal.id.startsWith(`${cfg.id}:`));
                 const dates = rendered.flatMap((signal) => signal.data.map((point) => point.date)).sort();
                 result.set(cfg.id, {
-                    pointCount: rendered.reduce((maximum, signal) => Math.max(maximum, signal.data.length), 0),
+                    pointCount: renderedSignalPointCount(rendered),
                     eventCounts: {},
                     firstDate: dates[0] ?? null,
                     problem: getSignalProblem(instanceById.get(cfg.id)) ?? undefined,
@@ -1118,160 +979,11 @@
         }
     }
 
-    function parseBackendSignalResults(value: unknown): BackendSignalResult[] {
-        if (!Array.isArray(value)) return [];
-        return value.map((item) => backendSignalSchemas.result.parse(item));
-    }
-
     type AssetPriceBulkQueryBody = Parameters<typeof zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post>[0];
 
     async function queryAssetPricesBulkWithSignalIsolation(body: AssetPriceBulkQueryBody): Promise<{items: Record<string, unknown>[]}> {
         const response = await axiosInstance.post<unknown>('/api/v1/assets/prices/query', body);
-        if (!isRecord(response.data)) {
-            throw new Error('Invalid Asset price query response');
-        }
-        if (response.data.items === undefined) return {items: []};
-        if (!Array.isArray(response.data.items)) {
-            throw new Error('Invalid Asset price query items');
-        }
-
-        return {
-            items: response.data.items.map((rawItem, index) => {
-                if (!isRecord(rawItem)) {
-                    throw new Error(`Invalid Asset price query item at index ${index}`);
-                }
-                const rawSignals = rawItem.signals;
-                if (rawSignals !== undefined && !Array.isArray(rawSignals)) {
-                    throw new Error(`Invalid Asset signal collection at item index ${index}`);
-                }
-                const validSignals = (rawSignals ?? []).flatMap((signal) => {
-                    const parsed = backendSignalSchemas.result.safeParse(signal);
-                    return parsed.success ? [parsed.data] : [];
-                });
-                const parsedItem = schemas.FAPriceQueryResult.safeParse({
-                    ...rawItem,
-                    signals: validSignals,
-                });
-                if (!parsedItem.success) {
-                    throw new Error(`Invalid Asset price query item at index ${index}`);
-                }
-                return {
-                    ...parsedItem.data,
-                    signals: rawSignals ?? [],
-                };
-            }),
-        };
-    }
-
-    function isRecord(value: unknown): value is Record<string, unknown> {
-        return typeof value === 'object' && value !== null && !Array.isArray(value);
-    }
-
-    function priceConversionErrorFromItem(item: Record<string, unknown> | undefined): string | undefined {
-        const errors = item && Array.isArray(item.errors) ? item.errors.filter((error): error is string => typeof error === 'string') : [];
-        const firstError = errors[0];
-        return firstError && !/\bfor event on\b/i.test(firstError) && /\b(?:fx|conversion|currenc)/i.test(firstError) ? firstError : undefined;
-    }
-
-    function calendarComparisonProblemsFromResponse(responseItems: unknown[], configs: SignalConfig[], assetIds: number[], views: Map<number, CalendarReturnView>): Map<number, SignalProblem> {
-        const configByAssetId = new Map<number, SignalConfig>();
-        for (const config of configs) {
-            if (config.signalType !== 'asset-comparison') continue;
-            const assetId = Number(config.params.assetId);
-            if (Number.isSafeInteger(assetId) && assetId > 0) configByAssetId.set(assetId, config);
-        }
-        const problems = new Map<number, SignalProblem>();
-
-        for (const assetId of assetIds) {
-            const config = configByAssetId.get(assetId);
-            if (!config) continue;
-            const item = responseItems.find((candidate): candidate is Record<string, unknown> => isRecord(candidate) && candidate.asset_id === assetId);
-            const rawResults: unknown[] = item && Array.isArray(item.signals) ? item.signals : [];
-            const rawResult = rawResults.find((candidate) => isCalendarReturnSignalResult(candidate, CALENDAR_RETURN_INSTANCE_ID));
-            let instance: SignalInstanceResult;
-
-            if (!rawResult) {
-                instance = {
-                    config,
-                    source: 'backend',
-                    status: 'missing',
-                    result: null,
-                    error: `Calendar Return result for asset ${assetId} is missing`,
-                };
-            } else {
-                const parsed = backendSignalSchemas.result.safeParse(rawResult);
-                if (!parsed.success) {
-                    instance = {
-                        config,
-                        source: 'backend',
-                        status: 'missing',
-                        result: null,
-                        error: `Calendar Return result for asset ${assetId} is invalid`,
-                    };
-                } else {
-                    const result = parsed.data;
-                    const strictView = views.get(assetId);
-                    if (strictView?.state === 'error' && result.status !== 'failed') {
-                        instance = {
-                            config,
-                            source: 'backend',
-                            status: 'missing',
-                            result: null,
-                            error: `Calendar Return result for asset ${assetId} is invalid`,
-                        };
-                    } else {
-                        const resultError = Array.isArray(result.error) ? result.error.find((error) => error !== null)?.message : result.error?.message;
-                        instance = {
-                            config,
-                            source: 'backend',
-                            status: result.status,
-                            result,
-                            error: resultError ?? null,
-                        };
-                    }
-                }
-            }
-
-            let problem = getSignalProblem(instance);
-            const priceConversionError = priceConversionErrorFromItem(item);
-            const targetAsset = allAssets.find((asset) => asset.id === assetId);
-            if (problem?.code === 'missing_input_fields' && priceConversionError && targetAsset?.currency && displayCurrency && targetAsset.currency !== displayCurrency) {
-                problem = {
-                    ...problem,
-                    code: 'fx_conversion_unavailable',
-                    message: priceConversionError,
-                };
-            }
-            if (problem) problems.set(assetId, problem);
-        }
-        return problems;
-    }
-
-    function calendarComparisonFxFailuresFromResponse(responseItems: unknown[], assetIds: number[], previousFailures: ReadonlySet<number>): Set<number> {
-        const failedAssetIds = new Set<number>();
-        for (const assetId of assetIds) {
-            const item = responseItems.find((candidate): candidate is Record<string, unknown> => isRecord(candidate) && candidate.asset_id === assetId);
-            if (!item) {
-                if (previousFailures.has(assetId)) failedAssetIds.add(assetId);
-                continue;
-            }
-            if (priceConversionErrorFromItem(item)) failedAssetIds.add(assetId);
-        }
-        return failedAssetIds;
-    }
-
-    function preserveFactualCalendarPeersForCurrentUnavailable(previousViews: ReadonlyMap<number, CalendarReturnView>, nextViews: ReadonlyMap<number, CalendarReturnView>, responseItems: unknown[], assetIds: number[]): Map<number, CalendarReturnView> {
-        const merged = new Map(nextViews);
-        for (const assetId of assetIds) {
-            const itemPresent = responseItems.some((candidate) => isRecord(candidate) && candidate.asset_id === assetId);
-            const next = nextViews.get(assetId);
-            const previous = previousViews.get(assetId);
-            const previousHasFacts = previous && ['ready', 'partial'].includes(previous.state) && previous.points.some((point) => !point.missing);
-            if (itemPresent && next?.state === 'unavailable' && previousHasFacts) {
-                merged.set(assetId, previous);
-            }
-        }
-        return merged;
+        return parseAssetPriceQueryWithSignalIsolation(response.data);
     }
 
     function applyBackendSignalResults(configs: SignalConfig[], requestVersion: number, results: BackendSignalResult[]) {
@@ -1319,33 +1031,9 @@
         );
     }
 
-    const comparisonRuntimeParamKeys = new Set<string>(COMPARISON_ASSET_RUNTIME_PARAM_KEYS);
-
-    function signalDataContextFingerprint(configs: SignalConfig[]): string {
-        return JSON.stringify(
-            configs
-                .map((config) => ({
-                    id: config.id,
-                    signalType: config.signalType,
-                    params: Object.fromEntries(
-                        Object.entries(config.params)
-                            .filter(([key]) => !comparisonRuntimeParamKeys.has(key))
-                            .sort(([left], [right]) => left.localeCompare(right)),
-                    ),
-                }))
-                .sort((left, right) => left.id.localeCompare(right.id)),
-        );
-    }
-
+    /** The comparison peers of `configs`, without the asset this page shows. */
     function comparisonAssetIds(configs: SignalConfig[]): number[] {
-        return [
-            ...new Set(
-                configs
-                    .filter((config) => config.signalType === 'asset-comparison')
-                    .map((config) => Number(config.params.assetId))
-                    .filter((assetId) => Number.isSafeInteger(assetId) && assetId > 0 && assetId !== data.assetId),
-            ),
-        ].sort((left, right) => left - right);
+        return comparisonPeerAssetIds(configs, data.assetId);
     }
 
     function calendarComparisonFingerprint(configs: SignalConfig[]): string {
@@ -1387,8 +1075,10 @@
     }
 
     async function retryBackendSignals() {
-        await loadAssetSignalDefinitions(true);
-        await loadChartData(false);
+        await pageBusy.track('asset-signals-retry', async () => {
+            await loadAssetSignalDefinitions(true);
+            await loadChartData(false);
+        });
     }
 
     /** Full page reload: fetches all data for the current assetId */
@@ -1422,8 +1112,8 @@
         calendarComparisonFxFailures = new Set();
         calendarSnapshotFingerprint = null;
         comparisonEvents = new Map();
-        currentLivePrice = null;
-        livePriceConversionFailed = false;
+        live.resetPrice();
+        seriesRangeDeltaRefresh++;
         sectorDistribution = null;
         geographicDistribution = null;
         shortDescription = null;
@@ -1452,7 +1142,8 @@
 
     onMount(async () => {
         _prevAssetId = data.assetId;
-        await reloadPage();
+        // The first load holds the page's Refresh button (Y11).
+        await pageBusy.track('asset-first-load', () => reloadPage());
         void loadAssetAiExportCompatibility();
         if (assetInfo) onboardingGuide.maybeStartContextual('asset_detail_guide');
     });
@@ -1462,104 +1153,56 @@
         const newId = data.assetId;
         if (_prevAssetId !== undefined && newId !== _prevAssetId) {
             _prevAssetId = newId;
-            void reloadPage().then(() => {
-                if (assetInfo) onboardingGuide.maybeStartContextual('asset_detail_guide');
-            });
+            void pageBusy
+                .track('asset-change', () => reloadPage())
+                .then(() => {
+                    if (assetInfo) onboardingGuide.maybeStartContextual('asset_detail_guide');
+                });
         }
     });
 
-    // Live current price polling — only when chart head date includes today
-    // Re-runs when displayCurrency or assetInfo changes (to reconvert)
-    $effect(() => {
-        const id = assetInfo?.id;
-        const nativeCurrency = assetInfo?.currency;
-        const targetCurrency = displayCurrency;
-        const fxMissing = fxConversionMissing;
-        if (!isHeadToday || !id) {
-            currentLivePrice = null;
-            livePriceConversionFailed = false;
-            // Polling context changed (asset switched, or range no longer heads
-            // "today") — drop the direction/flash state so it can't carry over
-            // and compare against a stale/unrelated previous value.
-            previousNativeLivePrice = null;
-            livePriceDirection = 'neutral';
-            if (livePriceFlashTimeoutId) {
-                clearTimeout(livePriceFlashTimeoutId);
-                livePriceFlashTimeoutId = null;
-            }
-            return;
-        }
-        // Fetch immediately, then poll every 30s
-        _fetchLivePrice(id, nativeCurrency ?? '', targetCurrency, fxMissing);
-        const timer = setInterval(() => _fetchLivePrice(id, nativeCurrency ?? '', targetCurrency, fxMissing), 30_000);
-        return () => {
-            clearInterval(timer);
-            if (livePriceFlashTimeoutId) {
-                clearTimeout(livePriceFlashTimeoutId);
-                livePriceFlashTimeoutId = null;
-            }
-        };
+    // Live current price — one poll feeds the price summary and the chart's last point (F26, decision 31): every 30 s
+    // while the chart reaches today, paused while the tab is hidden or nobody uses the page. Created here, during the
+    // page's initialisation, so its polling effect keeps its place among the page's effects.
+    const live = new AssetDetailLive({
+        get assetInfo() {
+            return assetInfo;
+        },
+        get pageAssetId() {
+            return data.assetId;
+        },
+        get displayCurrency() {
+            return displayCurrency;
+        },
+        get fxConversionMissing() {
+            return fxConversionMissing;
+        },
+        get isHeadToday() {
+            return isHeadToday;
+        },
+        get rangeStart() {
+            return dateStart;
+        },
+        get providerAssignment() {
+            return providerAssignment;
+        },
+        get loading() {
+            return loading;
+        },
+        get primaryMode() {
+            return primaryMode;
+        },
+        get calendarReturnView() {
+            return calendarReturnView;
+        },
+        get chartData() {
+            return chartData;
+        },
+        set chartData(points) {
+            chartData = points;
+        },
+        loadChartData: (force) => loadChartData(force),
     });
-
-    async function _fetchLivePrice(assetId: number, nativeCurrency: string, targetCurrency: string, fxMissing: boolean) {
-        try {
-            const results = await fetchCurrentPrices([assetId]);
-            if (results.length === 0 || results[0].value == null) return;
-            const nativeValue = results[0].value;
-
-            // Direction compares this tick's NATIVE value to the previous poll's
-            // NATIVE value (never the day's open, never the display-converted
-            // value) — reuses computeDirection from livePriceService.ts (same
-            // helper the assets list page uses) so a displayCurrency switch can
-            // never fabricate a false up/down tick. First poll after (re)mount
-            // has no previous value → computeDirection returns 'neutral'.
-            const direction = computeDirection(nativeValue, previousNativeLivePrice);
-            previousNativeLivePrice = nativeValue;
-            if (direction !== 'neutral') {
-                livePriceDirection = direction;
-                livePriceFlashToken++;
-                if (livePriceFlashTimeoutId) clearTimeout(livePriceFlashTimeoutId);
-                livePriceFlashTimeoutId = setTimeout(() => {
-                    livePriceDirection = 'neutral';
-                    livePriceFlashTimeoutId = null;
-                }, LIVE_PRICE_FLASH_DECAY_MS);
-            }
-
-            // No conversion needed
-            if (!targetCurrency || !nativeCurrency || targetCurrency === nativeCurrency || fxMissing) {
-                currentLivePrice = nativeValue;
-                livePriceConversionFailed = false;
-                return;
-            }
-
-            // Convert via FX API
-            try {
-                const today = new Date().toISOString().slice(0, 10);
-                const convResponse = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([
-                    {
-                        from_amount: {code: nativeCurrency, amount: String(nativeValue)},
-                        to: targetCurrency,
-                        date_range: {start: today, end: today},
-                    },
-                ]);
-                const convResults = (convResponse as any)?.results ?? [];
-                if (convResults.length > 0 && convResults[0].to_amount?.amount != null) {
-                    currentLivePrice = parseFloat(convResults[0].to_amount.amount);
-                    livePriceConversionFailed = false;
-                } else {
-                    // Conversion returned no results — fallback to native
-                    currentLivePrice = nativeValue;
-                    livePriceConversionFailed = true;
-                }
-            } catch {
-                // FX conversion failed — fallback to native price
-                currentLivePrice = nativeValue;
-                livePriceConversionFailed = true;
-            }
-        } catch (e: any) {
-            // Non-blocking: keep last known value or chart fallback
-        }
-    }
 
     // Reload chart data when displayCurrency changes (currency conversion)
     let prevDisplayCurrency = $state('');
@@ -1572,7 +1215,7 @@
         }
         if (cur !== prevDisplayCurrency) {
             prevDisplayCurrency = cur;
-            loadChartData().then(() => maybeLoadComparison());
+            void pageBusy.track('asset-currency', () => loadChartData().then(() => maybeLoadComparison()));
         }
     });
 
@@ -1785,7 +1428,7 @@
                     if (calendarComparisonsAreCurrent()) {
                         const nextComparisonViews = extractCalendarReturnViewsByAsset(responseItems, calendarComparisonAssetIds, CALENDAR_RETURN_INSTANCE_ID);
                         calendarComparisonViews = retainCurrentCalendarDiagnostics ? preserveFactualCalendarPeersForCurrentUnavailable(calendarComparisonViews, nextComparisonViews, responseItems, calendarComparisonAssetIds) : nextComparisonViews;
-                        calendarComparisonProblems = calendarComparisonProblemsFromResponse(responseItems, requestedSignalConfigs, calendarComparisonAssetIds, calendarComparisonViews);
+                        calendarComparisonProblems = calendarComparisonProblemsFromResponse(responseItems, requestedSignalConfigs, calendarComparisonAssetIds, calendarComparisonViews, {assets: allAssets, displayCurrency});
                         calendarComparisonFxFailures = calendarComparisonFxFailuresFromResponse(responseItems, calendarComparisonAssetIds, calendarComparisonFxFailures);
                         comparisonEvents = new Map(
                             calendarComparisonAssetIds.map((assetId) => {
@@ -1964,117 +1607,6 @@
     }
 
     // =========================================================================
-    // I-bis #24 — Live current-price polling (contextual auto-refresh)
-    // =========================================================================
-    //
-    // Why: clicking Sync already does a targeted merge (decision matrix in
-    // handleSyncAsset), but the user wants updates to appear *without* any
-    // manual click. This effect polls ``/assets/prices/current`` once per
-    // minute and, when the polled close differs from the in-memory chart,
-    // merges today's point in-place — zero flicker, signals auto-recompute.
-    //
-    // IMPORTANT (why we do NOT fall back to a silent ``/sync`` call):
-    // the ``/current`` endpoint is NOT read-only — its F.2/F.3 side-effect
-    // already persists today's OHLC to the DB. If we chained a silent
-    // ``/sync`` after ``/current``, the sync's ``_count_actual_price_changes``
-    // would see the DB already up-to-date and return ``changed_points=None``,
-    // forcing the FE into the full-reload fallback (flicker) — exactly the
-    // UX regression reported during retest. The polled item carries all we
-    // need (close + currency + as_of_date) to update today's point.
-    //
-    // Constraints:
-    // • Only polls when the asset has a provider assigned (otherwise the
-    //   endpoint would just echo back the DB's last known value — useless).
-    // • Skips polling when the browser tab is hidden (saves provider quota
-    //   and rate limit budget).
-    // • No polling during a full chart reload (``loading === true``) to
-    //   avoid interleaving fetches on the same chartData array.
-    // • Point merge is idempotent: if close == last known close for the
-    //   same as_of_date, we skip the state update (no render, no network).
-    // • Converted-currency chart (displayCurrency ≠ asset currency): the
-    //   polled close is in the asset's native currency and would flash
-    //   wrong values inside the FX-converted series — in that case we do
-    //   a silent full reload (single loadChartData) as the fallback.
-    // =========================================================================
-
-    const CURRENT_PRICE_POLL_INTERVAL_MS = 60_000; // 1 minute — conservative
-    let livePollTimerId: ReturnType<typeof setInterval> | null = null;
-
-    async function pollCurrentPriceOnce() {
-        // Guards: skip if tab hidden, no provider, or a full reload is in
-        // progress. Also skip if the asset changed between schedule and
-        // tick (route navigation races).
-        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-        if (!providerAssignment?.provider_code) return;
-        if (loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading')) return;
-        const assetIdAtTick = data.assetId;
-
-        try {
-            const response = await zodiosApi.get_current_prices_bulk_api_v1_assets_prices_current_post([assetIdAtTick]);
-            // Route changed mid-request: drop the result.
-            if (assetIdAtTick !== data.assetId) return;
-
-            const item: any = (response as any)?.results?.[0];
-            if (!item || item.error || item.value == null || !item.as_of_date) return;
-
-            const newClose = Number(item.value);
-            if (!Number.isFinite(newClose)) return;
-
-            // Idempotent guard: compare with the point for the same date.
-            const existingIdx = chartData.findIndex((p: any) => p.date === item.as_of_date);
-            if (existingIdx >= 0) {
-                const existingClose = Number((chartData[existingIdx] as any).close);
-                if (Number.isFinite(existingClose) && Math.abs(existingClose - newClose) < 1e-9) return;
-            }
-
-            // Converted-currency chart: the polled close is in the asset's
-            // native currency and would flash wrong numbers mid-series. A
-            // single silent full reload is the pragmatic fallback here.
-            const isConvertedChart = !!(displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency);
-            if (isConvertedChart || primaryMode === 'calendar-return') {
-                invalidateAssetPriceStore(data.assetId);
-                await loadChartData(true);
-                return;
-            }
-
-            // Point-level merge: update today's close + currency + as_of_date
-            // via mergeChartPointsIncremental. Enriched fields on the existing
-            // point (original_close, backward_fill_info, …) are preserved by
-            // the shallow-merge rule (the polled item does not carry them,
-            // so they are not overwritten). Signal derivatives ($derived
-            // from chartData) recompute automatically.
-            const polledPoint: any = {
-                date: item.as_of_date,
-                close: newClose,
-                currency: item.currency,
-            };
-            chartData = mergeChartPointsIncremental(chartData, [polledPoint]);
-        } catch {
-            // Silent: polling is best-effort. Next tick will retry.
-        }
-    }
-
-    $effect(() => {
-        // Track provider assignment + asset id so the timer restarts on
-        // route change or when a provider is (un)assigned.
-        const hasProvider = !!providerAssignment?.provider_code;
-        const assetId = data.assetId;
-        if (!hasProvider || !assetId) return;
-
-        livePollTimerId = setInterval(pollCurrentPriceOnce, CURRENT_PRICE_POLL_INTERVAL_MS);
-        // Kick an initial poll after a short delay so the first tick feels
-        // contextual (but not simultaneous with the page's own initial
-        // loadChartData).
-        const warmupId = setTimeout(pollCurrentPriceOnce, 5_000);
-
-        return () => {
-            if (livePollTimerId) clearInterval(livePollTimerId);
-            clearTimeout(warmupId);
-            livePollTimerId = null;
-        };
-    });
-
-    // =========================================================================
     // Actions
     // =========================================================================
 
@@ -2136,6 +1668,7 @@
             displayCurrency === requestedCurrency &&
             signalDataContextFingerprint(signals) === requestedSignalDataFingerprint;
         if (!current()) return;
+        seriesRangeDeltaRefresh++;
         await loadChartData(true, requestedSignals, propagateError);
         if (!current()) return;
         // Invalidate FX overlay stores so they refetch updated rates
@@ -2197,6 +1730,11 @@
 
     let syncAllFxPairs = $derived(requiredFxPairs.filter((p) => p.status !== 'missing').map((p) => p.slug));
 
+    /** The sync dialog's targets whose shown data holds a stored row in its range (C-66), for its warning: this asset
+     * from its chart, a pair from its rate store; a comparison asset is not counted. */
+    let syncAssetsWithData = $derived(showPageSyncModal && hasStoredPointInRange(chartData, syncDateStart, dateEnd) ? [data.assetId] : []);
+    let syncFxPairsWithData = $derived(showPageSyncModal ? syncAllFxPairs.filter((slug) => hasStoredPointInRange(getFxStore(slug).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)) : []);
+
     function handleSync() {
         showPageSyncModal = true;
     }
@@ -2211,6 +1749,7 @@
             comparisonEvents = clearComparisonAssetsData(signals.filter((signal) => signal.signalType === 'asset-comparison'));
             overlayDataVersion++;
         }
+        // No pageBusy token: the sync has its own indicator, and this reload is not one the user asked for (P3, Y11).
         await handleRefresh();
         await reloadMetadata();
         overlayDataVersion++;
@@ -2225,9 +1764,9 @@
         invalidateFxRoutes();
         // Only update display currency when creating the main asset's FX pair
         if (!wasForComparison) {
-            const newQuote = assetCurrency === base ? quote : base;
-            if (newQuote !== assetCurrency) {
-                displayCurrency = newQuote;
+            const nextDisplayCurrency = displayCurrencyAfterFxPairCreated({base, quote}, assetCurrency);
+            if (nextDisplayCurrency !== null) {
+                displayCurrency = nextDisplayCurrency;
             }
         }
         await loadFxPairSlugs(true);
@@ -2238,12 +1777,13 @@
         const current = () => pageAlive && data.assetId === assetIdAtCreation && isClientSessionCurrent(detail.sessionGeneration);
         if (!current()) return;
         await loadFxPairSlugs(true);
+        // After the new pair's sync: no pageBusy token (P3, Y11).
         if (current()) await handleRefresh(true);
     }
 
     function createFxPairCallbacks(assetIdAtCreation: number, wasForComparison: boolean, assetCurrency: string) {
         return {
-            oncreated: (detail: FxPairCreatedDetail) => handleFxPairCreated(detail, assetIdAtCreation, wasForComparison, assetCurrency),
+            oncreated: (detail: FxPairCreatedDetail) => pageBusy.track('asset-reload', () => handleFxPairCreated(detail, assetIdAtCreation, wasForComparison, assetCurrency)),
             onsynced: (detail: FxPairSyncCompleteDetail) => handleFxPairCreationSynced(detail, assetIdAtCreation),
             onclose: () => {
                 if (!pageAlive || data.assetId !== assetIdAtCreation) return;
@@ -2264,8 +1804,10 @@
         // stays meaningful across reloads/shares and the "All" badge doesn't
         // look stuck on a specific historical date.
         replaceHistoryDateRange(newStart, newEnd);
-        await loadChartData();
-        await maybeLoadComparison();
+        await pageBusy.track('asset-period', async () => {
+            await loadChartData();
+            await maybeLoadComparison();
+        });
     }
 
     function handleMeasureClick(date: string, value: number) {
@@ -2331,10 +1873,10 @@
         const shouldReloadPriceComparisons = priceComparisonLoadFingerprint(signals) !== priceComparisonLoadFingerprint(newSignals);
         setPairSettings(`asset-${data.assetId}`, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
         if (primaryMode === 'price' && shouldReloadPriceComparisons) {
-            void maybeLoadComparison(false, newSignals);
+            void pageBusy.track('asset-comparison', () => maybeLoadComparison(false, newSignals));
         }
         if ((primaryMode === 'calendar-return' && shouldReloadCalendarComparisons) || (primaryMode === 'price' && shouldReloadBackend)) {
-            void loadChartData(false, newSignals);
+            void pageBusy.track('asset-signals', () => loadChartData(false, newSignals));
         }
     }
 
@@ -2529,26 +2071,6 @@
         overlayDataVersion++;
     }
 
-    /**
-     * I-bis #24 helper — merge ``changed_points`` from a sync response into
-     * the current ``chartData`` array by date. New points are appended,
-     * existing points by date are shallow-merged (so OHLC fields update
-     * without losing enriched fields like ``original_close`` that may have
-     * been set by ``loadChartData``). Result is sorted by date ascending.
-     *
-     * NOTE: the merge only runs when the chart is showing the asset's native
-     * currency (no target_currency conversion), because the delta from the
-     * sync endpoint carries raw DB values without FX applied.
-     */
-    function mergeChartPointsIncremental<T extends {date: string}>(existing: T[], delta: T[]): T[] {
-        const byDate = new Map<string, T>(existing.map((p) => [p.date, p]));
-        for (const np of delta) {
-            const prev = byDate.get(np.date);
-            byDate.set(np.date, prev ? ({...prev, ...np} as T) : np);
-        }
-        return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
-    }
-
     function handleDetailAsset(assetId: number) {
         goto(`/assets/${assetId}?start=${urlDateStart}&end=${urlDateEnd}`);
     }
@@ -2698,71 +2220,23 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="asset-detail-page" aria-busy={loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading')} data-busy={loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading') ? 'true' : 'false'}>
+<div
+    class="space-y-4 text-lf-primary"
+    data-testid="asset-detail-page"
+    data-live-updates={live.updatesState}
+    aria-busy={loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading')}
+    data-busy={loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading') ? 'true' : 'false'}
+>
     <!-- ======================================================================= -->
     <!-- Header: asset info + back button -->
     <!-- ======================================================================= -->
-    <div class="flex items-center gap-3" data-testid="asset-detail-header" use:guideAnchor={'asset.detail.header'}>
-        <button class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors" data-testid="asset-detail-back-btn" onclick={() => goBack('/assets')} title={$t('assetDetail.backToList')}>
-            <ArrowLeft size={20} />
-        </button>
-
-        {#if assetInfo}
-            <!-- min-w-0 on both wrappers: without it their minimum width is the whole title on one
-                 line, so a long name widened the page (below ~341 px, and just above 1024 px where
-                 the title loses its max width); the title itself scrolls (scrollOnOverflow). -->
-            <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0" data-testid="asset-detail-info">
-                <div class="flex items-center gap-3 min-w-0">
-                    <AssetIcon iconUrl={assetInfo.icon_url} assetType={assetInfo.asset_type} altText={assetInfo.display_name} size="md" />
-                    <span class="w-2.5 h-2.5 rounded-full shrink-0 {assetInfo.active !== false ? 'bg-green-500' : 'bg-red-400'}" data-testid="asset-status-dot" title={assetInfo.active !== false ? $t('common.active') : $t('assets.status.archived')}></span>
-                    <h2 use:scrollOnOverflow class="{overflowScrollTextClass} text-xl font-bold text-gray-800 dark:text-gray-100 max-w-[15ch] sm:max-w-[30ch] lg:max-w-none" title={assetInfo.display_name}>{assetInfo.display_name}</h2>
-                </div>
-
-                <div class="flex items-center gap-2 flex-wrap ml-0 sm:ml-0">
-                    {#if assetInfo.asset_type}
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300">
-                            <img src={getAssetTypeIconUrl(assetInfo.asset_type)} alt="" class="w-3.5 h-3.5" />
-                            {$t(`assets.types.${assetInfo.asset_type}`)}
-                        </span>
-                    {/if}
-
-                    <span class="text-lg emoji-flag">{currencyFlag}</span>
-                    <span class="text-sm font-mono text-gray-500 dark:text-gray-400">{assetInfo.currency}</span>
-                    {#if (assetInfo.tx_count ?? 0) > 0}
-                        <a href={buildTransactionsFiltersUrl({asset_id: assetInfo.id})} data-testid="asset-detail-transactions-link" class="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400">
-                            {$t('transactions.title')} ({assetInfo.tx_count})
-                        </a>
-                    {/if}
-
-                    {#if assetInfo.provider_code}
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
-                            {#if providerIconUrl}
-                                <img src={providerIconUrl} alt="" class="w-3.5 h-3.5 rounded-sm object-contain" />
-                            {/if}
-                            {getAssetProviderName(assetInfo.provider_code)}
-                        </span>
-                    {:else}
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"> ✏️ Manual </span>
-                    {/if}
-
-                    {#if userUrl || providerExternalUrl}
-                        <a href={userUrl || providerExternalUrl} target="_blank" rel="noopener noreferrer" class="inline-flex items-center p-1 rounded text-gray-400 hover:text-libre-green transition-colors" title={userUrl || providerExternalUrl}>
-                            <ExternalLink size={14} />
-                        </a>
-                    {/if}
-                </div>
-            </div>
-        {:else if loading}
-            <div class="h-8 w-48 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
-        {/if}
-        <AssetBrowseNav assetId={data.assetId} />
-    </div>
+    <AssetDetailHeader assetId={data.assetId} {assetInfo} {loading} {currencyFlag} {providerIconUrl} {assetProviderName} {userUrl} {providerExternalUrl} transactionsHref={assetInfo ? buildTransactionsFiltersUrl({asset_id: assetInfo.id}) : ''} liveUpdatesState={live.updatesState} />
 
     <!-- Error banner (not data-quality — dismissible runtime error) -->
     {#if error}
-        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+        <div class="bg-lf-warning-soft border border-lf-warning-line rounded-xl p-4 text-sm text-lf-warning-on-soft flex items-center gap-2">
             <span>⚠️</span> <span>{errorMessage}</span>
-            <button class="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/40 rounded hover:bg-amber-200" onclick={() => (error = null)}>{$t('common.close')}</button>
+            <button class="ml-auto text-xs px-2 py-1 bg-lf-warning-line/50 rounded hover:bg-lf-warning-line" onclick={() => (error = null)}>{$t('common.close')}</button>
         </div>
     {/if}
 
@@ -2810,9 +2284,9 @@
                     {layoutMode}
                     {filtersStacked}
                     maxWidth={pickerMaxWidth}
-                    {livePriceConversionFailed}
-                    {livePriceDirection}
-                    {livePriceFlashToken}
+                    livePriceConversionFailed={live.conversionFailed}
+                    livePriceDirection={live.direction}
+                    livePriceFlashToken={live.flashToken}
                     fxPairUrl={mainFxPairUrl}
                     onCreateForex={() => (showFxPairAddModal = true)}
                 />
@@ -2820,62 +2294,28 @@
         {/snippet}
 
         {#snippet actions({showActionLabels})}
-            <AiExportMenu
-                domain="asset"
-                compatibility={assetAiExportCompatibility}
-                memoryKey={`asset:${data.assetId}`}
-                defaultSelectionId="asset.market_analysis"
-                disabled={assetAiExportCatalogLoading || assetAiExportCatalogFailed || !assetInfo}
-                labels={assetAiExportLabels}
-                showLabel={showActionLabels}
-                onprepare={handleAssetAiExport}
-                oncopied={handleAssetAiExportCopied}
-                onerror={(error) => toasts.error(getAiExportErrorMessage($t, error))}
-            />
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                data-testid="asset-detail-edit-btn"
-                disabled={!assetInfo || !classificationLoaded}
-                onclick={() => {
+            <AssetDetailToolbarActions
+                {showActionLabels}
+                assetId={data.assetId}
+                aiExportCompatibility={assetAiExportCompatibility}
+                aiExportLabels={assetAiExportLabels}
+                aiExportDisabled={assetAiExportCatalogLoading || assetAiExportCatalogFailed || !assetInfo}
+                onaiexportprepare={handleAssetAiExport}
+                onaiexportcopied={handleAssetAiExportCopied}
+                editDisabled={!assetInfo || !classificationLoaded}
+                onedit={() => {
                     editDataForModal = buildEditData();
                     editModalOpen = true;
                 }}
-            >
-                <Pencil size={14} />
-                {#if showActionLabels}<span>{$t('common.edit')}</span>{/if}
-            </button>
-            {#if syncBlocked}
-                <Tooltip text={syncDisabledReason} position="top" maxWidth="320px" interactiveChild>
-                    <button
-                        class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors opacity-50 cursor-not-allowed"
-                        data-testid="asset-detail-sync-btn"
-                        disabled={syncing || syncBlocked}
-                        onclick={handleSync}
-                    >
-                        <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
-                        {#if showActionLabels}<span class="line-through">{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
-                    </button>
-                </Tooltip>
-            {:else}
-                <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    data-testid="asset-detail-sync-btn"
-                    disabled={syncing || syncBlocked || !providerAssignmentLoaded}
-                    onclick={handleSync}
-                >
-                    <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
-                    {#if showActionLabels}<span>{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
-                </button>
-            {/if}
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                data-testid="asset-detail-refresh-btn"
-                disabled={loading}
-                onclick={() => handleRefresh()}
-            >
-                <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
-                {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
-            </button>
+                {syncBlocked}
+                {syncDisabledReason}
+                {syncing}
+                {isParametric}
+                {providerAssignmentLoaded}
+                onsync={handleSync}
+                busy={pageBusy.busy}
+                onrefresh={() => void pageBusy.track('asset-refresh', () => handleRefresh())}
+            />
         {/snippet}
     </PageToolbar>
 
@@ -2888,57 +2328,40 @@
         <!-- ======================================================================= -->
         <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
         <!-- ======================================================================= -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-            <div class="relative">
-                <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="asset-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
-                <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="asset-detail-signals-header">
-                    <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
-                        <TrendingUp class="text-blue-500" size={15} />
-                        {$t('common.signals')}
-                    </span>
-                    <div class="flex-1"></div>
-                    <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="asset-detail-signals-chevron">
-                        <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
-                    </span>
-                </div>
-            </div>
-            {#if showSignals}
-                <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
-                    <ChartSignalsSection
-                        signals={signalPanelConfigs}
-                        definitions={signalDefinitions}
-                        allowedSignalTypes={primaryMode === 'calendar-return' ? ['asset-comparison'] : undefined}
-                        backendError={primaryMode === 'price' ? signalBackendError : null}
-                        {signalsLoading}
-                        onretrybackend={retryBackendSignals}
-                        availablePairs={allConfiguredFxSlugs}
-                        availableAssets={allAssets.filter((a) => a.id !== data.assetId)}
-                        mainPairSlug={`asset-${data.assetId}`}
-                        onchange={handleSignalsChange}
-                        onsyncpair={handleSyncPair}
-                        ondetailpair={handleDetailPair}
-                        onsyncasset={handleSyncAsset}
-                        syncingAssetIds={syncingComparisonAssetIds}
-                        ondetailasset={handleDetailAsset}
-                        {signalSummaries}
-                        {dateStart}
-                        {displayCurrency}
-                        configuredFxSlugs={allConfiguredFxSlugs}
-                        oncreatefxpair={(slug) => {
-                            fxPairCreateSlug = slug;
-                            showFxPairAddModal = true;
-                        }}
-                        onsyncfxpair={handleSyncPair}
-                    />
-                </div>
-            {/if}
-        </div>
+        <AssetDetailSignalsPanel bind:open={showSignals}>
+            <ChartSignalsSection
+                signals={signalPanelConfigs}
+                definitions={signalDefinitions}
+                allowedSignalTypes={primaryMode === 'calendar-return' ? ['asset-comparison'] : undefined}
+                backendError={primaryMode === 'price' ? signalBackendError : null}
+                {signalsLoading}
+                onretrybackend={retryBackendSignals}
+                availablePairs={allConfiguredFxSlugs}
+                availableAssets={allAssets.filter((a) => a.id !== data.assetId)}
+                mainPairSlug={`asset-${data.assetId}`}
+                onchange={handleSignalsChange}
+                onsyncpair={handleSyncPair}
+                ondetailpair={handleDetailPair}
+                onsyncasset={handleSyncAsset}
+                syncingAssetIds={syncingComparisonAssetIds}
+                ondetailasset={handleDetailAsset}
+                {signalSummaries}
+                {dateStart}
+                {displayCurrency}
+                configuredFxSlugs={allConfiguredFxSlugs}
+                oncreatefxpair={(slug) => {
+                    fxPairCreateSlug = slug;
+                    showFxPairAddModal = true;
+                }}
+                onsyncfxpair={handleSyncPair}
+            />
+        </AssetDetailSignalsPanel>
 
         <!-- ======================================================================= -->
         <!-- Chart with left toolbar -->
         <!-- ======================================================================= -->
         <div
-            class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4"
+            class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4"
             data-testid="asset-detail-chart"
             data-view-mode={viewMode}
             data-primary-mode={primaryMode}
@@ -2959,84 +2382,22 @@
             {#if primaryMode === 'price' && loading && lineData.length === 0}
                 <div class="h-96 flex items-center justify-center">
                     <div class="text-center">
-                        <RefreshCw size={24} class="animate-spin text-libre-green mx-auto mb-2" />
-                        <p class="text-sm text-gray-500 dark:text-gray-400">{$t('assetDetail.loadingPrices')}</p>
+                        <RefreshCw size={24} class="animate-spin text-lf-link mx-auto mb-2" />
+                        <p class="text-sm text-lf-muted">{$t('assetDetail.loadingPrices')}</p>
                     </div>
                 </div>
             {:else if (primaryMode === 'price' && lineData.length > 0) || primaryMode === 'calendar-return'}
                 <div class="mb-3 flex flex-wrap items-center justify-between gap-2" data-testid="asset-chart-primary-controls">
-                    <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
-                        <button
-                            class="inline-flex items-center gap-1.5 px-3 py-1 transition-colors {primaryMode === 'price' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                            data-testid="asset-chart-primary-price"
-                            aria-pressed={primaryMode === 'price'}
-                            onclick={() => setPrimaryMode('price')}
-                        >
-                            <ChartLine size={14} data-testid="asset-chart-primary-price-icon" />
-                            {$t('assetDetail.pricesTab')}
-                        </button>
-                        <button
-                            class="inline-flex items-center gap-1.5 px-3 py-1 border-l border-gray-200 dark:border-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed {primaryMode === 'calendar-return'
-                                ? 'bg-libre-green text-white'
-                                : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                            data-testid="asset-chart-primary-calendar-return"
-                            aria-pressed={primaryMode === 'calendar-return'}
-                            onclick={() => setPrimaryMode('calendar-return')}
-                        >
-                            <Percent size={14} data-testid="asset-chart-primary-calendar-return-icon" />
-                            {$t('signals.riskRollingReturn.name')}
-                        </button>
-                    </div>
+                    <AssetChartModeToggle {primaryMode} onselect={setPrimaryMode} />
                     {#if primaryMode === 'calendar-return'}
-                        <div class="flex flex-wrap items-center gap-1.5" data-testid="asset-calendar-window-controls">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.params.window')}</span>
-                            {#each CALENDAR_RETURN_PRESETS as preset}
-                                <button
-                                    class="min-w-10 px-2 py-1 rounded-md border text-xs font-medium transition-colors {calendarWindowSelection.kind === 'preset' && calendarWindowSelection.preset === preset.key
-                                        ? 'border-libre-green bg-libre-green text-white'
-                                        : 'border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                                    data-testid={`asset-calendar-window-${preset.key}`}
-                                    aria-pressed={calendarWindowSelection.kind === 'preset' && calendarWindowSelection.preset === preset.key}
-                                    title={`${$t('chartSettings.params.window')}: ${preset.windowDays} ${$t('chartSettings.units.days')}`}
-                                    onclick={() => setCalendarPreset(preset.key)}
-                                >
-                                    {$t(CALENDAR_RETURN_UNIT_LABEL_KEYS[preset.unit], {values: {n: preset.count}})}
-                                </button>
-                            {/each}
-                            <CompactDurationBadge
-                                bind:amount={calendarCustomAmount}
-                                bind:unit={calendarCustomUnit}
-                                bind:editing={calendarCustomEditing}
-                                active={calendarWindowSelection.kind === 'custom'}
-                                options={calendarDurationOptions}
-                                customLabel={$t('common.custom')}
-                                min={1}
-                                buttonTestId="asset-calendar-window-custom"
-                                amountTestId="asset-calendar-custom-amount"
-                                unitTestId="asset-calendar-custom-unit"
-                                isAllowed={(amount, unit) =>
-                                    unit !== 'days' &&
-                                    calendarReturnWindowDays({
-                                        ...calendarWindowSelection,
-                                        kind: 'custom',
-                                        customAmount: amount,
-                                        customUnit: unit,
-                                    }) !== null}
-                                onapply={(amount, unit) => {
-                                    if (unit !== 'days') {
-                                        setCalendarCustom(amount, unit);
-                                    }
-                                }}
-                            />
-                            <DocsLink path="user/assets/detail/chart/#rolling-return" label={$t('signals.riskRollingReturn.description')} size={14} testId="asset-calendar-return-docs" />
-                        </div>
+                        <AssetCalendarWindowControls selection={calendarWindowSelection} bind:customAmount={calendarCustomAmount} bind:customUnit={calendarCustomUnit} bind:customEditing={calendarCustomEditing} onpreset={setCalendarPreset} oncustom={setCalendarCustom} />
                     {/if}
                 </div>
 
                 <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
                 {#if showAesthetics}
-                    <div data-testid="asset-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700 relative">
-                        <button class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
+                    <div data-testid="asset-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-lf-subtle relative">
+                        <button class="absolute top-0 right-0 p-1 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
                             <X size={16} />
                         </button>
                         <ChartAestheticsSection
@@ -3054,16 +2415,16 @@
 
                 {#if primaryMode === 'calendar-return' && calendarChartState === 'loading'}
                     <div class="h-96 flex items-center justify-center" data-testid="asset-calendar-return-loading">
-                        <RefreshCw size={24} class="animate-spin text-libre-green" />
+                        <RefreshCw size={24} class="animate-spin text-lf-link" />
                     </div>
                 {:else if primaryMode === 'calendar-return' && calendarChartState === 'unavailable'}
-                    <div class="h-96 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400" data-testid="asset-calendar-return-unavailable">
+                    <div class="h-96 flex items-center justify-center text-sm text-lf-muted" data-testid="asset-calendar-return-unavailable">
                         <span data-testid="asset-calendar-primary-problem" data-problem-code={calendarReturnView.problem?.code} data-problem-status={calendarReturnView.problem?.status}>
                             {calendarPrimaryProblemMessage ?? $t('chartSettings.signalProblems.unavailable')}
                         </span>
                     </div>
                 {:else if primaryMode === 'calendar-return' && calendarChartState === 'error'}
-                    <div class="h-96 flex items-center justify-center text-sm text-red-600 dark:text-red-400" data-testid="asset-calendar-return-error">
+                    <div class="h-96 flex items-center justify-center text-sm text-lf-danger" data-testid="asset-calendar-return-error">
                         <span data-testid="asset-calendar-primary-problem" data-problem-code={calendarReturnView.problem?.code} data-problem-status={calendarReturnView.problem?.status}>
                             {calendarPrimaryProblemMessage ?? $t('chartSettings.signalResultsUnavailable')}
                         </span>
@@ -3187,45 +2548,26 @@
                         />
                     </div>
                     {#if primaryMode === 'calendar-return' && calendarReturnView.problem}
-                        <p
-                            class="mt-2 text-center text-xs {calendarPrimaryProblemSeverity === 'error' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}"
-                            data-testid="asset-calendar-primary-problem"
-                            data-problem-code={calendarReturnView.problem.code}
-                            data-problem-status={calendarReturnView.problem.status}
-                        >
+                        <p class="mt-2 text-center text-xs {calendarPrimaryProblemSeverity === 'error' ? 'text-lf-danger' : 'text-lf-warning'}" data-testid="asset-calendar-primary-problem" data-problem-code={calendarReturnView.problem.code} data-problem-status={calendarReturnView.problem.status}>
                             {calendarPrimaryProblemMessage}
                         </p>
                     {:else if primaryMode === 'calendar-return' && calendarReturnView.state === 'partial'}
-                        <p class="mt-2 text-center text-xs text-amber-600 dark:text-amber-400" data-testid="asset-calendar-return-partial">
+                        <p class="mt-2 text-center text-xs text-lf-warning" data-testid="asset-calendar-return-partial">
                             {$t('chartSettings.signalProblems.partialResult')}
                         </p>
                     {/if}
                 {/if}
             {:else}
                 <div class="mb-3 flex flex-wrap items-center justify-between gap-2" data-testid="asset-chart-primary-controls">
-                    <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
-                        <button class="inline-flex items-center gap-1.5 px-3 py-1 transition-colors bg-libre-green text-white" data-testid="asset-chart-primary-price" aria-pressed="true" onclick={() => setPrimaryMode('price')}>
-                            <ChartLine size={14} data-testid="asset-chart-primary-price-icon" />
-                            {$t('assetDetail.pricesTab')}
-                        </button>
-                        <button
-                            class="inline-flex items-center gap-1.5 px-3 py-1 border-l border-gray-200 dark:border-slate-600 transition-colors bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700"
-                            data-testid="asset-chart-primary-calendar-return"
-                            aria-pressed="false"
-                            onclick={() => setPrimaryMode('calendar-return')}
-                        >
-                            <Percent size={14} data-testid="asset-chart-primary-calendar-return-icon" />
-                            {$t('signals.riskRollingReturn.name')}
-                        </button>
-                    </div>
+                    <AssetChartModeToggle {primaryMode} onselect={setPrimaryMode} />
                 </div>
                 <div class="h-96 flex items-center justify-center">
                     <div class="text-center">
                         {#if isManualOnly}
-                            <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataManual')}</p>
+                            <p class="text-lf-muted mb-3">{$t('assetDetail.noDataManual')}</p>
                             <div class="flex items-center gap-2 justify-center">
                                 <button
-                                    class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                                    class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors"
                                     onclick={() => {
                                         savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
                                         showAesthetics = false;
@@ -3238,7 +2580,7 @@
                                     {$t('fxDetail.insertManually')}
                                 </button>
                                 <button
-                                    class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    class="px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     disabled={!assetInfo}
                                     onclick={() => {
                                         editDataForModal = buildEditData();
@@ -3249,9 +2591,9 @@
                                 </button>
                             </div>
                         {:else if isParametric}
-                            <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataScheduled')}</p>
+                            <p class="text-lf-muted mb-3">{$t('assetDetail.noDataScheduled')}</p>
                             <button
-                                class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={!assetInfo}
                                 onclick={() => {
                                     editDataForModal = buildEditData();
@@ -3259,12 +2601,12 @@
                                 }}>{$t('common.edit')}</button
                             >
                         {:else}
-                            <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noData')}</p>
+                            <p class="text-lf-muted mb-3">{$t('assetDetail.noData')}</p>
                             <div class="flex items-center gap-2 justify-center">
-                                <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSync} disabled={syncing}>{syncing ? $t('common.syncing') : $t('assetDetail.syncPrices')}</button>
+                                <button class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors" onclick={handleSync} disabled={syncing}>{syncing ? $t('common.syncing') : $t('assetDetail.syncPrices')}</button>
                                 <!-- I-bis #6 — Add manually: open data editor pre-filtered on Prices tab -->
                                 <button
-                                    class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
+                                    class="px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors"
                                     data-testid="asset-detail-add-prices-manually"
                                     onclick={() => {
                                         savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
@@ -3288,14 +2630,14 @@
         <!-- Data Editor Placeholder -->
         <!-- ======================================================================= -->
         {#if showDataEditor}
-            <div data-testid="asset-detail-editor-panel" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800 {primaryMode === 'price' ? '' : 'hidden'}" aria-hidden={primaryMode !== 'price'} inert={primaryMode !== 'price'}>
-                <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-yellow-900/30 rounded-t-xl">
-                    <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+            <div data-testid="asset-detail-editor-panel" class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-warning-line {primaryMode === 'price' ? '' : 'hidden'}" aria-hidden={primaryMode !== 'price'} inert={primaryMode !== 'price'}>
+                <div class="flex items-center justify-between px-4 py-3 border-b border-lf-warning-line bg-lf-warning-soft rounded-t-xl">
+                    <span class="flex items-center gap-2 text-sm font-medium text-lf-warning-on-soft">
                         <Pencil size={15} />
                         {$t('assetDetail.editData')}
                     </span>
                     <button
-                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                        class="text-lf-muted hover:text-lf-secondary transition-colors"
                         onclick={() => {
                             showDataEditor = false;
                             pendingPreviewSignal = null;
@@ -3306,10 +2648,11 @@
                                 savedPanelStates = null;
                             }
                         }}
-                        title={$t('common.closeEditor')}>✕</button
+                        title={$t('common.closeEditor')}
+                        data-testid="asset-detail-editor-close">✕</button
                     >
                 </div>
-                <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
+                <p class="px-4 pt-2 text-xs text-lf-warning-on-soft/70">
                     💡 {pageLayoutMode === 'oneColumn' ? $t('dataEditor.editorTipMobile') : $t('dataEditor.editorTipDesktop')}
                 </p>
                 <div class="px-4 py-4">
@@ -3335,7 +2678,7 @@
                                 dateEnd = expandedRange.end;
                                 displayDateStart = isMaxPending ? 'min' : dateStart;
                             }
-                            await handleRefresh();
+                            await pageBusy.track('asset-reload', () => handleRefresh());
                         }}
                         oncancel={() => {
                             showDataEditor = false;
@@ -3356,50 +2699,18 @@
         <!-- ======================================================================= -->
         <!-- Foldable Panel: Measures -->
         <!-- ======================================================================= -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700" data-testid="asset-detail-measures-section" data-mode={primaryMode}>
-            <div
-                class="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-slate-750 transition-colors rounded-t-xl"
-                role="button"
-                tabindex="0"
-                data-testid="asset-detail-measures-toggle"
-                onclick={() => setActiveMeasuresOpen(!activeMeasuresOpen())}
-                onkeydown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        setActiveMeasuresOpen(!activeMeasuresOpen());
-                    }
-                }}
-            >
-                <div class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-                    <Ruler class="text-violet-500" size={15} />
-                    {$t('common.measures')}
-                    {#if activeMeasureMode()}
-                        <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
-                    {/if}
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <button
-                        type="button"
-                        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md
-                                   bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
-                                   hover:bg-violet-100 dark:hover:bg-violet-900/50
-                                   transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={activeChartData.filter((point) => !point.missing).length < 2}
-                        data-testid="asset-detail-add-measure-btn"
-                        onclick={(e) => {
-                            e.stopPropagation();
-                            setActiveMeasuresOpen(true);
-                            activeMeasurePanel()?.addMeasureFromChartData();
-                        }}
-                        title={$t('common.addMeasure')}
-                    >
-                        <span class="text-sm leading-none">+</span>
-                        <span class="hidden sm:inline">{$t('common.addMeasure')}</span>
-                    </button>
-                    <ChevronDown class="transition-transform text-gray-400 {activeMeasuresOpen() ? 'rotate-180' : ''}" size={15} />
-                </div>
-            </div>
-            <div class={primaryMode === 'price' && showMeasures ? 'px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3' : 'hidden'} data-testid="asset-detail-measures-panel" aria-hidden={primaryMode !== 'price' || !showMeasures} inert={primaryMode !== 'price' || !showMeasures}>
+        <AssetDetailMeasuresSection
+            mode={primaryMode}
+            open={activeMeasuresOpen()}
+            measureModeActive={activeMeasureMode()}
+            canAddMeasure={activeChartData.filter((point) => !point.missing).length >= 2}
+            ontoggle={() => setActiveMeasuresOpen(!activeMeasuresOpen())}
+            onaddmeasure={() => {
+                setActiveMeasuresOpen(true);
+                activeMeasurePanel()?.addMeasureFromChartData();
+            }}
+        >
+            <div class={primaryMode === 'price' && showMeasures ? 'px-4 pb-4 border-t border-lf-subtle pt-3' : 'hidden'} data-testid="asset-detail-measures-panel" aria-hidden={primaryMode !== 'price' || !showMeasures} inert={primaryMode !== 'price' || !showMeasures}>
                 <MeasurePanel
                     bind:this={measurePanel}
                     chartData={lineData}
@@ -3416,7 +2727,7 @@
                 />
             </div>
             <div
-                class={primaryMode === 'calendar-return' && showCalendarMeasures ? 'px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3' : 'hidden'}
+                class={primaryMode === 'calendar-return' && showCalendarMeasures ? 'px-4 pb-4 border-t border-lf-subtle pt-3' : 'hidden'}
                 data-testid="asset-detail-calendar-measures-panel"
                 aria-hidden={primaryMode !== 'calendar-return' || !showCalendarMeasures}
                 inert={primaryMode !== 'calendar-return' || !showCalendarMeasures}
@@ -3434,125 +2745,28 @@
                     storageKeyPrefix="asset-calendar-measure-summary"
                 />
             </div>
-        </div>
+        </AssetDetailMeasuresSection>
 
         <!-- ======================================================================= -->
         <!-- Foldable Panel: Metadata & Classification -->
         <!-- ======================================================================= -->
         {#if assetInfo}
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-                <button
-                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-                    data-testid="asset-detail-metadata-toggle"
-                    use:guideAnchor={'asset.detail.metadata'}
-                    onclick={() => (showMetadata = !showMetadata)}
-                >
-                    <span class="flex items-center gap-2">
-                        <Info class="text-sky-500" size={15} />
-                        {$t('assetDetail.metadata')}
-                    </span>
-                    <ChevronDown class="transition-transform {showMetadata ? 'rotate-180' : ''}" size={15} />
-                </button>
-                {#if showMetadata}
-                    <div data-testid="asset-detail-metadata-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3 space-y-4">
-                        <!-- Description (from classification_params.short_description) — always first if set -->
-                        {#if shortDescription}
-                            <div>
-                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('common.description')}</h4>
-                                <p class="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{shortDescription}</p>
-                            </div>
-                        {/if}
-
-                        <!-- External URLs (provider URL only — user URL is in header) -->
-                        {#if providerExternalUrl}
-                            <div>
-                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('assets.provider.providerUrl')}</h4>
-                                <a href={providerExternalUrl} target="_blank" rel="noopener noreferrer" class="text-sm text-libre-green hover:underline break-all">{providerExternalUrl}</a>
-                            </div>
-                        {/if}
-
-                        <!-- Classification Charts -->
-                        {#if classificationLoaded && (sectorDistribution || geographicDistribution)}
-                            <div class="space-y-3">
-                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">{$t('common.classification')}</h4>
-
-                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    {#if geographicDistribution && Object.keys(geographicDistribution).length > 0}
-                                        <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
-                                            <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.geoDistribution')}</h5>
-                                            <GeographyMap data={geographicDistribution} height="280px" language={$currentLanguage} />
-                                        </div>
-                                    {/if}
-
-                                    {#if sectorDistribution && Object.keys(sectorDistribution).length > 0}
-                                        <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
-                                            <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.sectorDistribution')}</h5>
-                                            <AllocationPieChart data={Object.entries(sectorDistribution).map(([name, w]) => ({name, value: w * 100, amount: 0, emoji: getSectorEmoji(name)}))} height="280px" />
-                                        </div>
-                                    {/if}
-                                </div>
-                            </div>
-                        {:else if !classificationLoaded}
-                            <div class="text-sm text-gray-500 dark:text-gray-400 italic">
-                                {$t('common.classification')} — {$t('common.loading')}...
-                            </div>
-                        {:else}
-                            <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noClassification')}</p>
-                        {/if}
-
-                        <!-- Identifiers -->
-                        {#if identifiersList.length > 0}
-                            <div>
-                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('common.identifiers')}</h4>
-                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                    {#each identifiersList as [label, value]}
-                                        <div class="bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2">
-                                            <span class="text-[10px] uppercase text-gray-400 dark:text-gray-500">{label}</span>
-                                            <p class="text-sm font-mono text-gray-700 dark:text-gray-200">{value}</p>
-                                        </div>
-                                    {/each}
-                                </div>
-                            </div>
-                        {:else}
-                            <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noIdentifiers')}</p>
-                        {/if}
-
-                        {#if providerAssignment}
-                            <div>
-                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Provider</h4>
-                                <div class="flex items-center gap-3 text-sm flex-wrap">
-                                    <span class="inline-flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-200">
-                                        {#if providerIconUrl}
-                                            <img src={providerIconUrl} alt="" class="w-4 h-4 rounded-sm object-contain" />
-                                        {/if}
-                                        {getAssetProviderName(providerAssignment.provider_code)}
-                                    </span>
-                                    <span class="text-gray-400">→</span>
-                                    <span class="font-mono text-gray-500 dark:text-gray-400">{providerAssignment.identifier} ({providerAssignment.identifier_type})</span>
-                                    {#if providerAssignment.last_fetch_at}
-                                        <span class="text-xs text-gray-400 dark:text-gray-500">
-                                            {$t('assets.provider.lastFetch')}: {new Date(String(providerAssignment.last_fetch_at)).toLocaleDateString(uiLocale())}
-                                        </span>
-                                    {:else}
-                                        <span class="text-xs text-gray-400 dark:text-gray-500">{$t('assets.provider.neverFetched')}</span>
-                                    {/if}
-                                </div>
-                            </div>
-                        {/if}
-
-                        <button
-                            class="text-xs text-libre-green hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                            disabled={!assetInfo}
-                            onclick={() => {
-                                editDataForModal = buildEditData();
-                                editModalOpen = true;
-                            }}
-                        >
-                            {$t('assetDetail.editViaModal')} →
-                        </button>
-                    </div>
-                {/if}
-            </div>
+            <AssetDetailMetadataPanel
+                bind:open={showMetadata}
+                {shortDescription}
+                {providerExternalUrl}
+                {classificationLoaded}
+                {sectorDistribution}
+                {geographicDistribution}
+                {identifiersList}
+                {providerAssignment}
+                {providerIconUrl}
+                {assignmentProviderName}
+                onedit={() => {
+                    editDataForModal = buildEditData();
+                    editModalOpen = true;
+                }}
+            />
         {/if}
     {:else if assetInfo && displayCurrency}
         <div data-testid="asset-detail-risk-panel">
@@ -3572,7 +2786,7 @@
         </div>
     {:else}
         <div class="flex min-h-48 items-center justify-center" data-testid="asset-detail-risk-loading">
-            <RefreshCw size={24} class="animate-spin text-libre-green" />
+            <RefreshCw size={24} class="animate-spin text-lf-link" />
         </div>
     {/if}
 
@@ -3580,18 +2794,26 @@
     <!-- AssetModal for editing -->
     <!-- ======================================================================= -->
     {#if assetInfo}
-        <AssetModal bind:open={editModalOpen} editMode={true} editData={editDataForModal} onupdated={handleAssetUpdated} onclose={() => (editModalOpen = false)} />
+        <AssetModal bind:open={editModalOpen} editMode={true} editData={editDataForModal} onupdated={() => void pageBusy.track('asset-reload', () => handleAssetUpdated())} onclose={() => (editModalOpen = false)} />
 
         <!-- FX Pair Add Modal (opened from FX warning or banner) -->
-        {@const createParts = fxPairCreateSlug ? fxPairCreateSlug.split('-') : []}
-        {@const createBase = createParts.length === 2 ? createParts[0] : assetInfo.currency}
-        {@const createQuote = createParts.length === 2 ? createParts[1] : displayCurrency !== assetInfo.currency ? displayCurrency : ''}
+        {@const fxCreateDefaults = fxPairCreateDefaults(fxPairCreateSlug, assetInfo.currency, displayCurrency)}
         {@const fxCreationCallbacks = createFxPairCallbacks(data.assetId, !!fxPairCreateSlug, assetInfo.currency)}
-        <FxPairAddModal bind:open={showFxPairAddModal} readonlyBase={!fxPairCreateSlug} initialBase={createBase} initialQuote={createQuote} oncreated={fxCreationCallbacks.oncreated} onsynced={fxCreationCallbacks.onsynced} onclose={fxCreationCallbacks.onclose} />
+        <FxPairAddModal bind:open={showFxPairAddModal} readonlyBase={!fxPairCreateSlug} initialBase={fxCreateDefaults.base} initialQuote={fxCreateDefaults.quote} oncreated={fxCreationCallbacks.oncreated} onsynced={fxCreationCallbacks.onsynced} onclose={fxCreationCallbacks.onclose} />
     {/if}
 
     <!-- Page Sync Modal (sync all assets + FX pairs) -->
     {#if assetInfo}
-        <PageSyncModal bind:open={showPageSyncModal} dateStart={syncDateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
+        <PageSyncModal
+            bind:open={showPageSyncModal}
+            dateStart={syncDateStart}
+            {dateEnd}
+            assets={syncAllAssets}
+            fxPairs={syncAllFxPairs}
+            assetsWithDataInRange={syncAssetsWithData}
+            fxPairsWithDataInRange={syncFxPairsWithData}
+            onsynced={handlePageSyncComplete}
+            onclose={() => (showPageSyncModal = false)}
+        />
     {/if}
 </div>

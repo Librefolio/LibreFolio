@@ -3,18 +3,15 @@
     import {browser} from '$app/environment';
     import {goto} from '$app/navigation';
     import AnimatedBackground from '$lib/components/ui/AnimatedBackground.svelte';
-    import LoginCard from '$lib/components/auth/LoginCard.svelte';
-    import RegisterCard from '$lib/components/auth/RegisterCard.svelte';
-    import ForgotPasswordCard from '$lib/components/auth/ForgotPasswordCard.svelte';
-    import LanguageSelector from '$lib/components/layout/LanguageSelector.svelte';
-    import HelpMenu from '$lib/components/layout/HelpMenu.svelte';
-    import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
+    import AuthPageFrame from '$lib/features/auth/AuthPageFrame.svelte';
+    import LoginCard from '$lib/features/auth/LoginCard.svelte';
+    import RegisterCard from '$lib/features/auth/RegisterCard.svelte';
+    import ForgotPasswordCard from '$lib/features/auth/ForgotPasswordCard.svelte';
+    import {takeAuthFlash} from '$lib/features/auth/authFlash';
     import {auth} from '$lib/stores/app/auth';
     import {isAuthenticated} from '$lib/stores/app/auth';
     import {appBootstrap} from '$lib/features/onboarding/appBootstrap.svelte';
     import OnboardingBootstrapBlock from '$lib/features/onboarding/components/OnboardingBootstrapBlock.svelte';
-    import {_} from '$lib/i18n';
-    import {Coffee} from 'lucide-svelte';
     import {page} from '$app/stores';
     import {safeInternalPath} from '$lib/utils/internalPath';
 
@@ -22,8 +19,8 @@
     type AuthView = 'login' | 'register' | 'forgot-password';
     let currentView: AuthView = 'login';
 
-    // Success message (from registration)
-    let successMessage = '';
+    // Success message: from the registration card, or left by a link page (invitation, password reset)
+    let successMessage = takeAuthFlash();
 
     // Loading state while checking auth
     let checkingAuth = true;
@@ -105,24 +102,13 @@
 {#if checkingAuth}
     <!-- Loading while checking authentication -->
     <div class="min-h-screen flex items-center justify-center" data-testid="auth-loading">
-        <div class="text-libre-green text-xl">Loading...</div>
+        <div class="text-lf-link text-xl">Loading...</div>
     </div>
 {:else if $isAuthenticated && appBootstrap.state === 'blocked'}
     <OnboardingBootstrapBlock error={appBootstrap.error} onretry={retryBootstrap} onlogout={logout} />
 {:else}
-    <div class="min-h-screen flex items-center justify-center p-4" data-testid="login-page">
-        <!-- Language & Theme Selector (top right) -->
-        <div class="fixed right-4 z-50 flex items-center space-x-2 safe-top-offset">
-            <a href="https://www.buymeacoffee.com/librefolio" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-colors text-amber-600 dark:text-amber-400" title={$_('help.buyMeACoffee')}>
-                <span class="hidden sm:inline text-sm font-medium leading-5">{$_('help.buyMeACoffee')}</span>
-                <Coffee size={20} class="flex-shrink-0" />
-            </a>
-            <ThemeToggle />
-            <LanguageSelector />
-            <HelpMenu />
-        </div>
-
-        <!-- Card Container - Cambio istantaneo senza transizione -->
+    <AuthPageFrame testId="login-page">
+        <!-- Card Container - instant swap, no transition -->
         {#if currentView === 'login'}
             <LoginCard {redirectTo} {successMessage} onAuthenticated={routeAuthenticated} on:gotoRegister={handleGotoRegister} on:gotoForgot={handleGotoForgot} />
         {:else if currentView === 'register'}
@@ -130,5 +116,5 @@
         {:else if currentView === 'forgot-password'}
             <ForgotPasswordCard on:gotoLogin={handleGotoLoginSimple} />
         {/if}
-    </div>
+    </AuthPageFrame>
 {/if}

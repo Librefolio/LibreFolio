@@ -72,6 +72,6 @@ P then finished, and its chat was archived on 2026-10-11.
 |------|------|
 | Plan 42 | `LibreFolio_developer_journal/Release_2/Phase_0/42_promotePairChecks/plan-phase00PromotePairChecks.prompt.md` |
 | Post-1.2 backlog, section P (P-12…P-15) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
-| The pair and promote rules | `backend/app/services/transaction_service.py`, `backend/app/services/transaction_batch_stages.py` |
-| The editor's rule | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
+| The pair and promote rules | `backend/app/services/transactions/transaction_service.py`, `backend/app/services/transactions/transaction_batch_stages.py` |
+| The editor's rule | `frontend/src/lib/features/transactions/transactionTypeStore.ts` |
 | The suggest endpoint (`tolerance_days`) | `backend/app/api/v1/transactions.py` |

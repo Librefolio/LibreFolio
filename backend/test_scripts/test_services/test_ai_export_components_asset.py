@@ -39,7 +39,7 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from backend.app.schemas.assets import FAClassificationParams
+from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
     AssetPeriodContribution,
@@ -452,6 +452,7 @@ class TestPositionUnitPrice:
 
     @pytest.mark.asyncio
     async def test_no_provider_assignment_yields_provenance_without_provider(self, monkeypatch):
+        """Before J-17: three valuation-source semantics (no ESTIMATED_AT_COST)."""
         scope = _scope()
         _patch_metadata(monkeypatch, _metadata(provider_code=None))
         context = _make_context(scope, _make_async_session())
@@ -459,7 +460,85 @@ class TestPositionUnitPrice:
         envelope = await context.resolve("asset.provenance", required=True)
 
         assert envelope.payload["provider"] is None
-        assert len(envelope.payload["valuation_source_semantics"]) == 3
+        assert len(envelope.payload["valuation_source_semantics"]) == 4
+
+
+# =============================================================================
+# J-17 — ESTIMATED_AT_COST: a holding with no price observation, valued at its book cost
+# =============================================================================
+
+
+class TestValuedAtCostVocabulary:
+    """J-17 (developer's P2 and option A, 16/10): an ADJUSTMENT is never a price observation, and a
+    holding with no observation at all is valued at its book cost as a declared estimate,
+    ``valuation_source == "ESTIMATED_AT_COST"``, with no price. ``asset.provenance`` documents the new
+    code and stops calling a priced ADJUSTMENT a trade price; ``asset.positions_by_broker`` accepts the
+    code and exports no unit_price for it. Both components move to version 2, the real spec and its
+    catalog placeholder together.
+    """
+
+    @pytest.mark.asyncio
+    async def test_provenance_documents_estimated_at_cost_and_no_adjustment_price(self, monkeypatch):
+        """The four codes, each described; LAST_TRADE_PRICE names its trades, BUY and SELL, and no longer
+        counts a «priced ADJUSTMENT» among them. The new text may still name an ADJUSTMENT to say it is
+        never a price, so the check reads the phrase that made it one, not the bare word.
+
+        Before J-17: three semantics (MARKET_PRICE, LAST_TRADE_PRICE, MISSING), and LAST_TRADE_PRICE
+        read «the last observed transaction price (BUY, SELL or priced ADJUSTMENT)»."""
+        scope = _scope()
+        _patch_metadata(monkeypatch, _metadata())
+        context = _make_context(scope, _make_async_session())
+
+        envelope = await context.resolve("asset.provenance", required=True)
+
+        semantics = {item["code"]: item["description"] for item in envelope.payload["valuation_source_semantics"]}
+        assert set(semantics) == {"MARKET_PRICE", "LAST_TRADE_PRICE", "ESTIMATED_AT_COST", "MISSING"}
+        last_trade = semantics["LAST_TRADE_PRICE"]
+        assert "priced ADJUSTMENT" not in last_trade, last_trade
+        assert "BUY" in last_trade and "SELL" in last_trade, f"guard: the trades that do price an asset are still named: {last_trade}"
+        assert semantics["ESTIMATED_AT_COST"].strip(), "ESTIMATED_AT_COST needs a description"
+
+    @pytest.mark.asyncio
+    async def test_positions_by_broker_carries_an_at_cost_holding_without_a_unit_price(self, monkeypatch):
+        """An at-cost holding (no price, value = its 300 cost, gain 0) is exported with its code and no
+        unit_price: its value per unit would be its unit cost, not a price. The holdings priced at the
+        market or at a trade keep their unit_price (value / quantity). Rows are read by broker.
+
+        Before J-17: ValidationError — PortfolioHolding.valuation_source and the payload's
+        AssetPositionValuationSource accepted MARKET_PRICE, LAST_TRADE_PRICE and MISSING only. (J-17's
+        first version exported the at-cost row's unit cost, 30, as its unit_price.)
+        """
+        scope = _scope()
+        _patch_metadata(monkeypatch, _metadata())
+        holdings = (
+            _holding(1, quantity=10, wac_per_unit=30, current_price=None, current_value=300, gain_loss=0, gain_loss_percent=0, valuation_source="ESTIMATED_AT_COST"),
+            _holding(2, quantity=10, current_price=50, current_value=500, valuation_source="MARKET_PRICE"),
+            _holding(3, quantity=4, current_price=110, current_value=440, valuation_source="LAST_TRADE_PRICE"),
+        )
+        _patch_report(monkeypatch, _report(scope, holdings=holdings))
+        context = _make_context(scope, _make_async_session())
+
+        envelope = await context.resolve("asset.positions_by_broker", required=True)
+
+        rows = {position["broker_id"]: position for position in envelope.payload["positions"]}
+        assert {broker_id: (row["valuation_source"], row["unit_price"]) for broker_id, row in rows.items()} == {
+            1: ("ESTIMATED_AT_COST", None),
+            2: ("MARKET_PRICE", "50"),
+            3: ("LAST_TRADE_PRICE", "110"),
+        }
+        assert (Decimal(rows[1]["current_value"]), Decimal(rows[1]["unrealized_gain_loss"])) == (Decimal("300"), Decimal("0"))
+
+    def test_provenance_and_positions_by_broker_are_versioned_v2_in_registry_and_placeholder(self):
+        """Before J-17: version 1 on both sides for both components. The catalog is imported here rather
+        than at module level, so a real/placeholder parity failure on import reds this test only."""
+        from backend.app.services.ai_export.components import catalog  # noqa: PLC0415 — test-local: a real/placeholder parity failure on import must red this test only
+
+        versions = {}
+        for component_id in ("asset.provenance", "asset.positions_by_broker"):
+            real = next(spec for spec in asset_core.ASSET_CORE_COMPONENTS if spec.component_id == component_id)
+            placeholder = next(spec for spec in catalog.ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
+            versions[component_id] = (real.version, placeholder.version)
+        assert versions == {"asset.provenance": (2, 2), "asset.positions_by_broker": (2, 2)}
 
 
 # =============================================================================
@@ -1020,8 +1099,10 @@ class TestLotDetail:
             AssetLotDetailPayload.model_validate({**payload, "unavailable_amount_lot_count": -1})
 
     @pytest.mark.asyncio
-    async def test_lot_detail_component_is_versioned_v3_in_registry_and_placeholder(self):
+    async def test_lot_detail_component_is_versioned_v4_in_registry_and_placeholder(self):
         """B3b bumped asset.lot_detail to version 3 (F6 had made it 2): seven of its money fields became nullable.
+        J-12 (N81) bumps it to 4: it states `lot_reconstruction_status` and `failure_codes`, and a FAILED
+        reconstruction exports no lot (before J-12: 3).
         The real spec and the frozen catalog placeholder must move together -- the catalog checks their parity on
         import; this pins the number itself on both sides, so a revert, or a bump on one side only, cannot stay
         green. The catalog is imported here rather than at module level, so a parity failure on import reds this
@@ -1030,7 +1111,7 @@ class TestLotDetail:
 
         real = next(spec for spec in asset_core.ASSET_CORE_COMPONENTS if spec.component_id == "asset.lot_detail")
         placeholder = next(spec for spec in catalog.ALL_FOUNDATION_COMPONENTS if spec.component_id == "asset.lot_detail")
-        assert (real.version, placeholder.version) == (3, 3)
+        assert (real.version, placeholder.version) == (4, 4)
 
 
 # =============================================================================

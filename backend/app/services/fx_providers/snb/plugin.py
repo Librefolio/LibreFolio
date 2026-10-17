@@ -40,8 +40,9 @@ from decimal import Decimal
 import httpx
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError
-from backend.app.services.provider_registry import FXProviderRegistry, register_provider
+from backend.app.services.fx.base import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError, raise_if_fx_rate_limited
+from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 logger = get_logger(__name__)
 
@@ -147,6 +148,7 @@ class SNBProvider(FXRateProvider):
                 r.raise_for_status()
                 data = r.json()
         except Exception as e:
+            raise_if_fx_rate_limited(e, self.provider_code)
             logger.exception(f"Failed to fetch SNB dimensions: {e}")
             raise FXServiceError(f"Cannot load SNB currency list: {e}") from e
 
@@ -272,6 +274,7 @@ class SNBProvider(FXRateProvider):
                 response.raise_for_status()
                 data = response.json()
         except httpx.HTTPError as e:
+            raise_if_fx_rate_limited(e, self.provider_code)
             logger.exception(f"Failed to fetch FX rates from SNB: {e}")
             raise FXServiceError(f"SNB API error: {e}") from e
         except Exception as e:
@@ -340,7 +343,7 @@ class SNBProvider(FXRateProvider):
                     rate_per_unit = raw_rate / Decimal(str(multiplier))
                     rates.append((rate_date, iso_code, "CHF", rate_per_unit))
 
-                except (ValueError, ZeroDivisionError) as e:
+                except (ValueError, ArithmeticError) as e:  # ArithmeticError: a value that is no number, a quotient past the context, a zero multiplier: the point only (X-R50)
                     logger.debug(f"SNB: skipping invalid value {raw_value} for {date_str}: {e}")
                     continue
 

@@ -1,0 +1,151 @@
+{
+  "email": {
+    "tab": {
+      "label": "E-mail",
+      "title": "E-mail",
+      "intro": "LibreFolio peut envoyer des e-mails par un serveur SMTP, configuré par la personne qui gère l'instance. L'e-mail est facultatif : sans lui, tout le reste fonctionne."
+    },
+    "state": {
+      "off": "Désactivé",
+      "ready": "Prêt",
+      "invalid": "Ne fonctionne pas"
+    },
+    "off": {
+      "explanation": "Aucun serveur SMTP n'est configuré (LIBREFOLIO_SMTP_HOST), donc rien n'est envoyé : les liens d'invitation et de réinitialisation du mot de passe se copient à la main. Le guide explique comment en configurer un."
+    },
+    "invalid": {
+      "explanation": "L'e-mail reste désactivé tant que la configuration n'est pas corrigée : corrigez la variable, puis redémarrez LibreFolio."
+    },
+    "problems": {
+      "SMTP_HOST_INVALID": "{variable} n'est pas un nom de serveur valide : écrivez seulement le nom d'hôte ou l'adresse IP, sans schéma, port ni chemin.",
+      "SMTP_TLS_INVALID": "{variable} doit valoir starttls, tls ou none.",
+      "SMTP_PORT_INVALID": "{variable} doit être un nombre entier de 1 à 65535.",
+      "SMTP_FROM_MISSING": "Il manque {variable} : l'adresse de l'expéditeur est obligatoire.",
+      "SMTP_FROM_INVALID": "{variable} doit être une seule adresse, par exemple noreply@example.com, éventuellement après un nom, l'adresse étant alors entre chevrons.",
+      "SMTP_REPLY_TO_INVALID": "{variable} doit être une seule adresse.",
+      "SMTP_MAX_PER_HOUR_INVALID": "{variable} doit être un nombre entier d'au moins 1.",
+      "SMTP_PASSWORD_UNREADABLE": "Le fichier du mot de passe indiqué par {variable} ne peut pas être lu.",
+      "SMTP_CREDENTIALS_INCOMPLETE": "{variable} est définie seule : définissez à la fois l'utilisateur SMTP et son mot de passe, ou aucun des deux.",
+      "unknown": "{variable} ne peut pas être utilisée."
+    },
+    "checks": {
+      "smtp": {
+        "off": "L'e-mail est désactivé : aucun serveur SMTP n'est configuré.",
+        "ok": "La configuration SMTP peut être utilisée.",
+        "invalid": "{variable} ne peut pas être utilisée ({problem}) : l'e-mail reste désactivé tant qu'elle n'est pas corrigée."
+      },
+      "smtpEncryption": {
+        "ok": "Les e-mails circulent chiffrés, ou l'e-mail est désactivé.",
+        "localPlain": "Les e-mails partent en clair vers un serveur du réseau local.",
+        "plain": "Les e-mails, leurs liens et le mot de passe SMTP circulent en clair vers un serveur hors du réseau local : réglez LIBREFOLIO_SMTP_TLS sur starttls ou tls."
+      },
+      "links": {
+        "ok": "Les e-mails peuvent contenir des liens : LIBREFOLIO_PUBLIC_URL est définie, ou l'e-mail est désactivé.",
+        "missing": "LIBREFOLIO_PUBLIC_URL n'est pas définie : les e-mails fonctionnent, mais aucun avec un lien (mot de passe oublié, invitation, réinitialisation) ne peut partir.",
+        "invalid": "LIBREFOLIO_PUBLIC_URL ne peut pas commencer un lien : il faut http:// ou https:// et un nom d'hôte, sans nom d'utilisateur, mot de passe, ? ni #. Aucun e-mail avec un lien ne peut partir."
+      }
+    },
+    "links": {
+      "base": "Les liens des e-mails commencent par {base}.",
+      "probe": {
+        "checking": "Vérification depuis cet appareil que cette instance répond à cette adresse…",
+        "match": "Cette instance répond à cette adresse, depuis cet appareil.",
+        "otherInstance": "Depuis cet appareil, un autre serveur répond à cette adresse, pas cette instance. Cette vérification ne vaut que pour cet appareil : la cause peut être son DNS ou son réseau. Si d'autres appareils voient la même chose, les liens des e-mails mènent ailleurs : vérifiez LIBREFOLIO_PUBLIC_URL.",
+        "unreachable": "Cet appareil ne parvient pas à joindre cette instance à cette adresse. Cette vérification ne vaut que pour cet appareil : la cause peut être son DNS ou son réseau. Si les autres appareils n'y parviennent pas non plus, les liens des e-mails ne s'ouvriront pas : vérifiez LIBREFOLIO_PUBLIC_URL.",
+        "insecure": "Cette page utilise https:// alors que LIBREFOLIO_PUBLIC_URL commence par http:// : ce navigateur ne peut pas la vérifier, et les liens des e-mails circuleraient en clair. Indiquez l'adresse https://.",
+        "invalid": "Ce navigateur ne parvient pas à lire LIBREFOLIO_PUBLIC_URL comme une adresse : les liens des e-mails risquent de ne pas s'ouvrir. Vérifiez sa valeur."
+      },
+      "recheck": "Vérifier à nouveau"
+    },
+    "budget": {
+      "remaining": "Il reste {remaining} e-mails sur {max} pour cette heure.",
+      "spent": "La limite de {max} e-mails par heure est atteinte : le prochain pourra partir dans {minutes} min."
+    },
+    "test": {
+      "hint": "Envoyez un e-mail de test à votre adresse pour vérifier la configuration.",
+      "button": "Envoyer un e-mail de test",
+      "sending": "Envoi…",
+      "sent": "E-mail de test envoyé à votre adresse : vérifiez votre boîte de réception, et aussi les spams.",
+      "errors": {
+        "EMAIL_UNAVAILABLE": "L'e-mail est désactivé ou ne fonctionne pas sur cette instance.",
+        "EMAIL_RATE_LIMITED": "La limite d'e-mails par heure est atteinte : réessayez dans {minutes} min.",
+        "EMAIL_RECIPIENT_INVALID": "L'adresse de votre compte n'est pas une adresse e-mail valide.",
+        "generic": "L'e-mail de test n'a pas pu être envoyé."
+      }
+    },
+    "smtpErrors": {
+      "CONNECTION_FAILED": "LibreFolio n'arrive pas à joindre le serveur SMTP : vérifiez l'hôte et le port.",
+      "TLS_FAILED": "La connexion sécurisée a échoué : vérifiez LIBREFOLIO_SMTP_TLS et le certificat du serveur.",
+      "AUTH_FAILED": "Le serveur SMTP a refusé la connexion : vérifiez l'utilisateur et le mot de passe.",
+      "SENDER_REFUSED": "Le serveur SMTP a refusé l'adresse de l'expéditeur (LIBREFOLIO_SMTP_FROM).",
+      "RECIPIENT_REFUSED": "Le serveur SMTP a refusé votre adresse.",
+      "TIMEOUT": "Le serveur SMTP n'a pas répondu à temps.",
+      "SEND_FAILED": "Le serveur SMTP n'a pas accepté le message."
+    },
+    "loadError": "L'état de l'e-mail n'a pas pu être lu.",
+    "verification": {
+      "page": {
+        "checking": "Vérification de votre adresse e-mail…",
+        "expired": "Ce lien a expiré. Connectez-vous avec votre nom d'utilisateur et votre mot de passe : un nouveau lien vous sera proposé.",
+        "consumed": "Ce lien a déjà été utilisé. Si votre compte est actif, connectez-vous.",
+        "revoked": "Ce lien ne fonctionne plus : connectez-vous pour en demander un nouveau.",
+        "unknown": "Ce lien n'est pas valide : rouvrez-le en entier depuis l'e-mail. S'il échoue encore, connectez-vous pour en demander un nouveau.",
+        "blocked": "Cette instance est bloquée par son hébergeur : le lien ne peut pas être vérifié pour le moment. Rouvrez-le une fois l'instance débloquée ; si le lien a expiré entre-temps, connectez-vous pour en obtenir un nouveau.",
+        "missing": "Ce lien est incomplet : rouvrez-le depuis l'e-mail.",
+        "error": "Le lien n'a pas pu être vérifié : réessayez."
+      },
+      "verified": "Votre adresse e-mail est vérifiée, {username} : vous pouvez vous connecter.",
+      "loginRequired": "Votre adresse e-mail n'est pas encore vérifiée : ouvrez le lien de l'e-mail que nous vous avons envoyé, puis connectez-vous.",
+      "resend": "Renvoyer le lien",
+      "resending": "Envoi…",
+      "resent": "Un nouveau lien est en route : vérifiez votre boîte de réception, et les spams. Les liens précédents ne fonctionnent plus.",
+      "resendErrors": {
+        "INVALID_CREDENTIALS": "Le nom d'utilisateur ou le mot de passe n'est pas correct : vérifiez-les dans le formulaire ci-dessus.",
+        "EMAIL_RATE_LIMITED": "Trop de demandes pour le moment : réessayez dans {minutes} min.",
+        "EMAIL_VERIFICATION_NOT_NEEDED": "Votre compte est déjà actif : connectez-vous.",
+        "USER_LIMIT_REACHED": "Votre lien a expiré, et cette instance est complète maintenant : demandez à son administrateur.",
+        "ACCOUNT_DISABLED": "Ce compte est désactivé : demandez à l'administrateur de cette instance.",
+        "unavailable": "L'e-mail ne peut pas partir pour le moment : réessayez plus tard, ou demandez à l'administrateur de cette instance.",
+        "generic": "Le lien n'a pas pu être envoyé : réessayez."
+      },
+      "registered": "Compte créé. Nous vous avons envoyé un e-mail avec un lien pour l'activer : ouvrez-le dans les 24 heures, puis connectez-vous.",
+      "signUpUnavailable": "L'inscription n'est pas possible pour le moment : cette instance ne peut pas envoyer l'e-mail de vérification. Réessayez plus tard, ou demandez à son administrateur.",
+      "settingNeedsEmail": "Il faut qu'un e-mail avec un lien puisse partir : configurez d'abord SMTP et LIBREFOLIO_PUBLIC_URL (Paramètres › Administration › E-mail).",
+      "settingUnavailable": "La vérification de l'e-mail demande qu'un e-mail avec un lien puisse partir, et aucun ne peut partir maintenant : vérifiez Paramètres › Administration › E-mail."
+    },
+    "sendLink": {
+      "button": "Envoyer par e-mail",
+      "sending": "Envoi…",
+      "toLabel": "Envoyer à",
+      "toPlaceholder": "nom@exemple.fr",
+      "resetTarget": "Le lien part vers l'adresse e-mail du compte.",
+      "publicUrlHint": "Le lien de l'e-mail commence par l'adresse définie dans LIBREFOLIO_PUBLIC_URL, qui peut différer de celle ci-dessus.",
+      "sent": "Envoyé à {to}. Langue : {language}.",
+      "errors": {
+        "EMAIL_UNAVAILABLE": "L'e-mail est désactivé ou ne fonctionne pas sur cette instance.",
+        "EMAIL_LINKS_UNAVAILABLE": "Les e-mails ne peuvent pas contenir de lien : LIBREFOLIO_PUBLIC_URL n'est pas définie, ou ne peut pas commencer un lien.",
+        "EMAIL_LINK_INVALID": "Ce lien ne fonctionne plus : créez-en un nouveau.",
+        "EMAIL_ACCOUNT_INACTIVE": "Le compte n'est pas actif : activez-le avant de lui envoyer un lien de réinitialisation.",
+        "EMAIL_RECIPIENT_REQUIRED": "Indiquez l'adresse à laquelle envoyer l'invitation.",
+        "EMAIL_RECIPIENT_NOT_ALLOWED": "Un lien de réinitialisation part seulement vers l'adresse de son compte.",
+        "EMAIL_RECIPIENT_INVALID": "Ce n'est pas une seule adresse e-mail valide.",
+        "EMAIL_RATE_LIMITED": "La limite horaire d'e-mails est atteinte : réessayez dans {minutes} min.",
+        "RECIPIENT_REFUSED": "Le serveur SMTP a refusé l'adresse du destinataire.",
+        "generic": "L'e-mail n'a pas pu être envoyé."
+      },
+      "languageLabel": "Langue de l'e-mail",
+      "languageInstance": "La langue de l'instance"
+    },
+    "forgot": {
+      "label": "Nom d'utilisateur ou adresse e-mail",
+      "submit": "M'envoyer un lien de réinitialisation",
+      "sending": "Envoi…",
+      "accepted": "Si un compte actif correspond, son propriétaire reçoit un e-mail avec un lien pour choisir un nouveau mot de passe. Vérifiez la boîte de réception et les spams : le lien fonctionne pendant 30 minutes.",
+      "errors": {
+        "unavailable": "Cette instance ne peut pas envoyer d'e-mails pour le moment : demandez à son administrateur.",
+        "EMAIL_RATE_LIMITED": "Trop de demandes pour le moment : réessayez dans {minutes} min.",
+        "generic": "La demande n'a pas pu être envoyée : réessayez."
+      }
+    }
+  }
+}

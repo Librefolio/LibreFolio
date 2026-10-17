@@ -9,11 +9,12 @@ The **Domain & Feature State** houses the heavy computational stores that implem
 | Store | Location | Purpose |
 |:------|:---------|:--------|
 | **`portfolioStore`** | `portfolio/portfolioStore.svelte.ts` | Session cache of the unified portfolio report (`POST /api/v1/portfolio/report`). The backend engine computes holdings, performance, and allocations; the store keeps one answer per question, shares the requests in flight, and refreshes stale answers in background (stale-while-revalidate). |
-| **`portfolioMutation`** | `portfolio/portfolioMutation.ts` | The signal bus: tells the portfolio caches that a write changed what they show, or that the user asked for a refresh. |
-| **`lotsAnalysisStore`** | `portfolio/lotsAnalysisStore.svelte.ts` | Session cache of `POST /api/v1/portfolio/lots/analysis` (the FIFO lots panel), under the same stale-while-revalidate rule. |
-| **`dashboardViewStore`** | `portfolio/dashboardViewStore.ts` | The Dashboard's target currency and broker filter, per user, in `sessionStorage`. |
-| **`riskStore`** | `risk/riskStore.svelte.ts` | Session cache of the risk catalogs, of `POST /api/v1/risk/query`, and of the `POST /api/v1/risk/eligibility` verdicts. |
-| **`txStore`** | `transactions/txStore.svelte.ts` | The master ledger of user transactions. Supports infinite scrolling, complex filtering, and bulk operations. |
+| **`portfolioMutation`** | `portfolio/portfolioMutation.ts` | The signal bus: tells the portfolio caches that a write changed what they show, that the user asked for a refresh, or that the server caught up on prices. |
+| **`lazyReportRetry`** | `portfolio/lazyReportRetry.svelte.ts` | When a page may ask again for a lazy section of the report — the P&L candles, the contribution — after a failure: 2, 4 and 8 s later, then not until the scope changes or the user's Refresh. One per section and page, from `createLazyReportRetry()`: see [Lazy sections after a failure](#lazy-report-retry). |
+| **`lotsAnalysisStore`** | `$lib/features/brokers/lots/lotsAnalysisStore.svelte.ts` | Session cache of `POST /api/v1/portfolio/lots/analysis` (the FIFO lots panel), under the same stale-while-revalidate rule. |
+| **`dashboardViewStore`** | `$lib/features/dashboard/dashboardViewStore.ts` | The Dashboard's target currency and broker filter, per user, in `sessionStorage`. |
+| **`riskStore`** | `$lib/features/risk/riskStore.svelte.ts` | Session cache of the risk catalogs, of `POST /api/v1/risk/query`, and of the `POST /api/v1/risk/eligibility` verdicts. |
+| **`txStore`** | `$lib/features/transactions/txStore.svelte.ts` | The master ledger of user transactions. Supports infinite scrolling, complex filtering, and bulk operations. |
 | **`currencyGraphStore`** | `currencyGraphStore.ts` | Caches the multi-directed currency graph used by the DFS algorithm to find conversion routes (FX Chain Algorithm). |
 | **`fxCardInversionStore`** | `fx/fxCardInversionStore.ts` | UI-specific domain state tracking which FX pairs the user has "flipped" visually (e.g., viewing USD/EUR instead of EUR/USD). |
 
@@ -30,6 +31,7 @@ graph TD
     subgraph Signals ["Signals"]
         Axios["🌐 axios response interceptor (zodios-client.ts)"]
         Refresh["🔄 Refresh button (requestPortfolioRefresh)"]
+        Prices["⏳ End of a price catch-up (notifyPricesCaughtUp)"]
     end
 
     Bus["📣 portfolioMutation.ts (isPortfolioAffectingMutation, dispatch)"]
@@ -38,6 +40,7 @@ graph TD
         Report["🧠 portfolioStore (invalidate)"]
         Risk["🛡️ riskStore (markRiskStale)"]
         Lots["📦 lotsAnalysisStore (own mark)"]
+        PriceStores["🏭 asset price and FX registries (markStale on every store)"]
     end
 
     subgraph Page ["Dashboard page"]
@@ -51,9 +54,12 @@ graph TD
 
     Axios -->|"method, URL, response body"| Bus
     Refresh -->|"kind: refresh"| Bus
+    Prices -->|"kind: prices"| Bus
     Bus --> Report
     Bus --> Risk
     Bus --> Lots
+    Bus -->|"kind: prices only"| PriceStores
+    Bus -->|"kind: prices, after the dispatch"| Fetch
     Report -.->|"report + stale flag"| Peek
     Peek --> Render
     Render --> Fetch
@@ -77,7 +83,8 @@ graph TD
 
 ### 📣 `portfolioMutation`: the signal bus
 
-The axios response interceptor (`frontend/src/lib/api/zodios-client.ts`) passes the method, the URL, and the response body of every **successful** response to `notifyPortfolioMutation()`. `isPortfolioAffectingMutation()` keeps the writes that change what a portfolio view shows, and the bus dispatches `{kind: 'mutation', method, path}` to every listener registered with `registerPortfolioMutationListener()`. The **Refresh** button goes through the same bus: `requestPortfolioRefresh()` dispatches `{kind: 'refresh'}`.
+The axios response interceptor (`frontend/src/lib/api/zodios-client.ts`) passes the method, the URL, and the response body of every **successful** response to `notifyPortfolioMutation()`. `isPortfolioAffectingMutation()` keeps the writes that change what a portfolio view shows, and the bus dispatches `{kind: 'mutation', method, path}` to every listener registered with `registerPortfolioMutationListener()`. The **Refresh** button goes through the same bus: `requestPortfolioRefresh()` dispatches `{kind: 'refresh'}`. So does the end of a price catch-up, with a signal of its own: `notifyPricesCaughtUp()` dispatches `{kind: 'prices'}`. The **Updating prices…** tracker (`frontend/src/lib/features/price-refresh/priceRefresh.ts`) sends it when a catch-up is over, if it saw one of the catch-up's jobs running and the catch-up brought something up to date (`last_refreshed`): see [Updating prices…](../components/features/live-ticker.md#price-refresh). The report, risk and lots caches mark their answers stale on any kind; the asset price and FX registries mark their stores stale on `prices` alone ([The other listeners](#the-other-listeners)); the Dashboard and the broker detail page, while on screen, also reload on `prices` ([How a page uses the cache](#how-a-page-uses-the-cache)).
+The bus never spins the **Refresh** button: it waits only for the requests its page tracks in `pageBusy`, and a reload on `prices` tracks none ([Page busy](app-state.md#page-busy)).
 
 | Write (under `/api/v1`) | Counts as a change |
 |:------------------------|:-------------------|
@@ -86,7 +93,7 @@ The axios response interceptor (`frontend/src/lib/api/zodios-client.ts`) passes 
 | `POST`/`PATCH`/`DELETE /assets`, `POST /assets/{id}/market-data/wipe` | Always |
 | `POST /assets/merge` | Unless the answer says `dry_run: true` |
 | `POST /assets/prices/sync` | When a result has `points_changed > 0` or `events_changed > 0` |
-| `POST`/`DELETE` on the other `/assets/prices…` paths, `/prices/current` included | Always, except `/prices/query` (a read) |
+| `POST`/`DELETE` on the other `/assets/prices…` paths, `/prices/current` included | Always, except `/prices/query` and `/prices/period-changes` (reads) |
 | `POST`/`DELETE` on `/assets/events…` | Always, except `/events/query` |
 | `POST`/`DELETE` on `/assets/provider…` | Always, except `/provider/probe` |
 | `POST /fx/currencies/sync` | When `total_points_changed > 0`; without a total, when a result has `points_changed > 0` |
@@ -96,12 +103,16 @@ Reads and failed requests count as nothing. An answer the rules cannot read (a s
 
 ### 👂 The other listeners
 
-| Store | On a mutation or a refresh | On a session change |
+| Store | On any signal: a mutation, a refresh, a price catch-up | On a session change |
 |:------|:---------------------------|:--------------------|
 | `riskStore.svelte.ts` | `markRiskStale()`: query and eligibility answers are marked stale and kept, a remembered failure is dropped, nothing in flight is discarded. The catalogs describe the engine, not the portfolio, and are left alone. | `invalidateRisk()`, the hard reset: forgets everything, catalogs included, and discards every answer in flight. |
 | `lotsAnalysisStore.svelte.ts` | Moves its own mark: every lots analysis is stale and kept, so `peekLotsAnalysis()` still returns it while `fetchLotsAnalysis()` asks again. | `resetLotsAnalysisCache()` |
 
 Both follow the report's rules — one request per key, an answer stored under the mark it was asked in and never over a newer one — with two differences. `queryRisk()` and `fetchLotsAnalysis()` **reject** on failure, leaving the previous answer cached. And a lots key is the user plus the request with its object keys sorted and its `broker_ids`, `requested_analyses`, and `selected_lot_ids` lists sorted, so the same question in any order shares one entry. `getRiskQuerySnapshot()` is the risk counterpart of `peekReport()`: `{key, status, response, error, stale}`.
+
+The two price registries listen on `prices` alone. `assetPriceStoreRegistry.ts` and `fxStoreRegistry.ts` register when they are imported, under their own names, and on `{kind: 'prices'}` call `markStale()` on every `TimeSeriesStore` they hold: the points stay readable, and the next read of a range asks the server again, once, so a price or FX page loaded after the catch-up shows the prices and rates it brought. A `mutation` or a `refresh` leaves them alone: the live-price poll writes today's candle, a mutation, every 30 s on an asset's page, and would otherwise turn every cached series stale each time. See [Registries & Caches](registries.md#how-it-works).
+
+One component listens too. `AssetEventPicker.svelte`, the **Linked Event** field of the [transaction form](../components/features/transaction-form.md), registers with `registerPortfolioMutationListener()` under a key of its own instance (`asset-event-picker:<uid>`, the uid random per picker, so two pickers never replace each other's listener) and unregisters in `onDestroy`. It reacts only to a `mutation` on `/api/v1/assets/events…` — a new event or **Edit this** from the form's mini modal, a data editor save — and ignores `refresh` and `prices`. It then clears its fetch key and reads the events around the transaction date again: `fetchEvents()` returns early on the same asset, date and range, so without this the field would keep showing an edited event's old values.
 
 `dashboardViewStore.ts` is not on the bus. It keeps the Dashboard's `targetCurrency` and `brokerIds` per user in `sessionStorage` (`librefolio_dashboardView:<userId>`) through `readDashboardView()` and `writeDashboardView()`, so a return asks the key it left and the cache can serve it; `resetDashboardView()` forgets every user's view on logout or account change. The period already lasts the session in `dateRangeStore`.
 
@@ -113,6 +124,7 @@ The Dashboard (`frontend/src/routes/(app)/dashboard/+page.svelte`) is the refere
 2. **Owned brokers first.** On a cold load the broker list arrives in `onMount` (`ensureBrokersLoaded()`), and nothing is asked before `brokersReady`: a request without `broker_ids` is widened by the backend to every broker the user can see, Editor and Viewer ones included. When the user owns at least one broker, the report, contribution, and lots requests then carry the owned set from `getOwnedBrokers()` (role `OWNER`, share unset or above 0), or the filter's subset of it; with none, `loadAll()` never runs and the overview stays empty.
 3. **`loadAll()`** peeks again, applies the cached report if it is not the one on screen, and calls `fetchReport()` only when the entry is missing, stale, or forced. The answer replaces the figures and the tweens move from the old values to the new ones. When the refresh fails with a cached report on screen, the figures stay and a toast reports the error. `loadContribution()` follows the same rule for the Period view: `contributionRefreshing` keeps the rows on screen instead of the skeleton of `contributionLoading`.
 4. **Refresh** (`handleSync`, `data-testid="sync-button"`) calls `requestPortfolioRefresh()` — every cache marks its answers stale — bumps `refreshVersion`, which makes the risk and lots panels ask again with `force`, and runs `loadAll(true)`.
+5. **After a price catch-up** the page reloads by itself ([Updating prices…](../components/features/live-ticker.md#price-refresh)). It registers the bus listener `dashboard:prices` in `onMount` and removes it on destroy. On `{kind: 'prices'}` alone, the listener queues `reloadAfterPriceCatchUp()` with `queueMicrotask()`, so the reload runs after the dispatch, once every cache has marked its answers stale. The reload runs `loadAll(false, false, {background: true})`: without `force`, it asks again for the report the mark made stale, while the figures stay on screen. It touches neither `refreshVersion` nor `requestPortfolioRefresh()`, the signals of the user's **Refresh**, so the risk and lots panels keep their stale answers until they next load. Nor is it tracked by `pageBusy` (`frontend/src/lib/stores/app/pageBusy.svelte.ts`), whose `busy` the **Refresh** button follows (Y11), so the button neither waits nor spins for it. And with `background` the page does not say it is busy (Z-18): `reportLoading` does not turn on, and a stale cached contribution is asked again under `contributionInBackground`, a flag the root does not read, instead of `contributionRefreshing`, so the reload turns on neither `aria-busy` nor `data-busy` on the page's root (`data-testid="dashboard-page"`); a load the user asks for still does.
 
 The panels and the broker detail page reuse the same pieces:
 
@@ -121,6 +133,18 @@ The panels and the broker detail page reuse the same pieces:
     - **Failed refresh.** `RiskLevelsPanel` wires `onrefreshfailed` to `toasts.error($t('risk.states.loadFailed'))`. The controller calls it, and leaves the figures on screen, only when they answer the very question whose refresh failed: `shownQuestion` holds the request keys of the two base waves whose answer — fresh or from the cache — is on screen. When the inputs moved (another period or currency) and the new question fails before any answer to it is on screen, the controller sets `loadError` instead, which replaces the levels with the error message: a failure never leaves the figures of the old question under the new inputs. A host that passes no `onrefreshfailed` gets `loadError` in both cases.
     - **Scope.** The Dashboard passes `scope={{kind: 'portfolio', broker_ids: ownedBrokerIds}}`: every owned broker, never narrowed by the broker filter (the `risk.dashboardFullPortfolio` subtitle says so when a filter is on). It mounts the panel only under `{#if canAsk}`, so no risk request leaves without `broker_ids` — the backend would widen it to every broker the user can see, Editor and Viewer ones included. Once the brokers are known, a user who owns none gets `common.noData` and nothing is asked.
 - **Lots** — `LotsAnalysisPanel.svelte` shows `peekLotsAnalysis()` at once and calls `fetchLotsAnalysis()` only when the answer is stale, missing, or forced; a failed refresh keeps the lots on screen with a toast. Its `ready` prop holds every request until the host knows the broker scope (the Dashboard passes `canAsk`: the owned brokers are known and there is at least one), and `refreshVersion` forces both analyses again.
-- **Broker detail page** — `frontend/src/routes/(app)/brokers/[id]/+page.svelte` does the same for its single-broker report: `peekReport()` then `fetchReport()` in `loadOverview()`, `setTweenHydration()`, and `requestPortfolioRefresh()` plus `refreshVersion` for its own refresh.
+- **Broker detail page** — `frontend/src/routes/(app)/brokers/[id]/+page.svelte` does the same for its single-broker report: `peekReport()` then `fetchReport()` in `loadOverview()`, `setTweenHydration()`, and `requestPortfolioRefresh()` plus `refreshVersion` for its own refresh. After a price catch-up it reloads like the Dashboard's step 5, under the listener `broker-page:<id>:prices`: `loadOverview()` without `force`, and nothing else.
 
 `TweenedValue.svelte` exports the hydration hook from its module script: `setTweenHydration(isHydrated)` sets `TWEEN_HYDRATION_CONTEXT` during a component's init, and every `TweenedValue` below it that mounts while `isHydrated()` is true starts at its value; later changes still tween.
+
+### 🔁 Lazy sections after a failure {: #lazy-report-retry }
+
+Two sections of the report are left out of the page's main request and asked apart: the P&L candles of the growth chart (`includePnlCandles`, the expensive OHLC work) and the contribution of the Period view. While its view is on screen without the section, an `$effect` of the panel — `GrowthChart.svelte:981-985` or `PositionsPanel.svelte:112-116`, both in `frontend/src/lib/features/dashboard/` — calls `onRequestPnlCandles` or `onRequestContribution`, which the page wires to its loader, `loadPnlCandles()` or `loadContribution()`, through `pageBusy.join()` ([Page busy](app-state.md#page-busy-triggers)). Before Y-24, a failed report started that loop again at once: `fetchReport()` resolved `null`, the loader's `finally` set its loading flag back to false, and the effect, which had read the flag, asked again — an endless stream of full report requests. `createLazyReportRetry()` (`frontend/src/lib/stores/portfolio/lazyReportRetry.svelte.ts`) bounds it, one instance per section and per page:
+
+- **Four requests at most per scope.** The delays are `LAZY_REPORT_RETRY_DELAYS_MS`, `[2_000, 4_000, 8_000]`, each counted from the failure before it: a scope may be asked again 2 s after its first failure, 4 s after the second, 8 s after the third, and after the fourth no more, until the scope changes or `reset()`. The scope is the string the page builds in `reportScope()`. One scope is recorded at a time: `canAsk(scope)` lets any other scope ask, a failure of another scope starts over, and `succeeded()` forgets.
+- **A reactive read, no clock.** `canAsk` reads a `$state` tick that moves only when a retry falls due and on `reset()`, so the effect that called the loader runs again by itself, and the page needs no timer of its own. No clock is read: only the timer says that a retry is due. `reset()` also cancels the pending timer; `dispose()` cancels it and wakes no reader afterwards.
+- **The loader's side.** Its guard reads `canAsk(reportScope())` before the first `await`, which makes it a dependency of the panel's effect. An answer that lands after the scope changed is dropped, neither applied nor counted; otherwise the loader records `failed()` or `succeeded()` before its `finally` lets the loading flag go, so the effect that the flag wakes already sees the failure.
+- **Dashboard** (`frontend/src/routes/(app)/dashboard/+page.svelte`): `candlesRetry` and `contributionRetry`, disposed in `onDestroy`; the scope is the broker ids, start, end and currency of the request. `loadContribution()` checks it whoever calls it, `loadAll()` refreshing a stale cached contribution included. The Refresh, `handleSync()`, calls `reset()` on both.
+- **Broker detail** (`frontend/src/routes/(app)/brokers/[id]/+page.svelte`, legacy mode): the same two, disposed in `onDestroy`, with the broker id, `dateFrom`, `dateTo` and the currency as scope; `handleRefresh()` resets both. Before Y-24 the contribution looped there as on the Dashboard, but the failed candles were never asked again: `pnlCandlesLoading` is a plain `let` that nothing reactive reads, so nothing ran the chart's effect again. The retry's tick is what wakes it now.
+
+The retry adds nothing on screen (an indicator and an error state for the candles are backlog Y-18). Its tests: `frontend/src/lib/stores/portfolio/lazyReportRetry.svelte.test.ts` (Vitest in `jsdom`, `./dev.py test front-portfolio store-unit`) pins the schedule, the scope, `succeeded`, `reset`, `dispose`, an effect woken when a retry falls due, and that no clock is read; `frontend/e2e/portfolio/lazy-report-retry.spec.ts` (`./dev.py test front-portfolio lazy-report-retry`) drives Playwright's page clock while the section under test is answered 500: on both pages the candles and the contribution are asked four times at most, a retry that succeeds draws its candles, and a period change or the Refresh asks again.

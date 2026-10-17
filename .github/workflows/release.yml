@@ -133,11 +133,13 @@ jobs:
 
       - name: Freeze the app version for the frontend builds
         # The sidebar's version is not read from VERSION: frontend/vite.config.ts computes
-        # it at every frontend build of this job — the build below, the gallery
-        # webServer's debug rebuild, the production rebuild for the images — each after
-        # steps that may write tracked files, so `git describe --dirty` there read
-        # "-dirty" (the 1.1 screenshots, the nightlies). LF_APP_VERSION, frozen from
-        # VERSION here, takes precedence over git describe in vite.config.ts.
+        # it at every frontend build of this job — the build below, the debug rebuild in
+        # the gallery's build step (`dev.py server --test --build-only`), the production
+        # rebuild for the images — each after steps that may write tracked files, so
+        # `git describe --dirty` there read "-dirty" (the 1.1 screenshots, the nightlies).
+        # LF_APP_VERSION, frozen from VERSION here, takes precedence over git describe in
+        # vite.config.ts, and in the backend's get_git_version() too: the gallery's servers
+        # report the same version.
         run: echo "LF_APP_VERSION=$(cat VERSION)" >> "$GITHUB_ENV"
 
       - name: "[INFO] Environment summary before install"
@@ -192,12 +194,13 @@ jobs:
 
       - name: Build MkDocs Documentation
         id: build-mkdocs
-        # BEFORE the gallery: the Playwright webServer (`dev.py server --test`)
-        # serves /mkdocs and builds the 4-language site on startup when site/ is
-        # missing — ~40s+ of the webServer start-up budget (120 s then, 300 s since
-        # 2026-10-06), which is what made the gallery time out on 2026-09-04 after
-        # the docs growth (57 new translated files). With site/ already built, the
-        # server starts in seconds.
+        # BEFORE the gallery. Its test server serves /mkdocs, and the gallery's build
+        # step (`dev.py server --test --build-only`, run before Playwright starts the
+        # webServer) builds the 4-language site when site/ is missing or stale: built
+        # here, it is already up to date there. Until 2026-10-15 that build ran inside
+        # the webServer's start-up budget (~40s+ of it; 120 s then, 300 s since
+        # 2026-10-06), which is what made the gallery time out on 2026-09-04 after the
+        # docs growth (57 new translated files).
         continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs build
 
@@ -226,17 +229,18 @@ jobs:
         run: sh scripts/ci/warn_if_tree_changed.sh "the gallery"
 
       - name: Rebuild SvelteKit Frontend (production, for the images)
-        # The gallery's Playwright webServer is `dev.py server --test`, which
-        # rebuilds frontend/build/ in DEBUG mode (no minification, sourcemaps).
+        # The gallery's build step (`dev.py server --test --build-only`, before its
+        # Playwright webServer `dev.py server --test` starts) rebuilds frontend/build/
+        # in DEBUG mode (no minification, sourcemaps), the kind the test server serves.
         # The images copy frontend/build/, so it is rebuilt for production here;
         # the Dockerfile's frontend stage refuses a debug build.
         run: pipenv run ./dev.py front build
 
       - name: Rebuild MkDocs Documentation (with the gallery screenshots)
         id: rebuild-mkdocs
-        # The site was built before the gallery (fast webServer start), so it has
-        # no screenshots yet. Rebuilt here, the full image ships them; the light
-        # image's docs stage strips them again.
+        # The site was built before the gallery, so it has no screenshots yet.
+        # Rebuilt here, the full image ships them; the light image's docs stage
+        # strips them again.
         continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs build
 

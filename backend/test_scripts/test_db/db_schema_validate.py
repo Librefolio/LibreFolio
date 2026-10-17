@@ -7,7 +7,8 @@ Verifies:
 - Foreign keys enforced
 - Unique constraints present
 - Indexes created
-- Decimal columns use Numeric(18, 6)
+- Decimal columns: RealDecimal everywhere a decimal is read back exactly — amounts and event values (18, 6) (W-B60),
+  quantities (22, 10), prices and the per-unit cost basis (24, 12) (C-97)
 - Daily-point policy constraints
 
 Usage:
@@ -140,9 +141,14 @@ def test_indexes():
 
     Dynamically reads indexes from SQLModel metadata and verifies they exist
     in the database.
-    """
-    inspector = inspect(get_sync_engine())
 
+    The database side is read from SQLite's own catalogue (sqlite_master), not
+    from the SQLAlchemy inspector: its SQLite get_indexes() skips every
+    expression-based index with a warning ("Skipped unsupported reflection of
+    expression-based index ..."), so an index such as
+    ux_users_email_lower ON users (lower(email)) would be reported missing
+    while the database holds it.
+    """
     # Get tables with indexes from models (dynamically discovered)
     tables_with_indexes = []
     for table_name, table in SQLModel.metadata.tables.items():
@@ -153,17 +159,19 @@ def test_indexes():
 
     # Verify indexes exist in database
     missing_indexes = []
-    for table_name, _expected_count, expected_names in sorted(tables_with_indexes):
-        db_indexes = inspector.get_indexes(table_name)
-        db_index_names = [idx["name"] for idx in db_indexes if idx.get("name")]
+    with get_sync_engine().connect() as conn:
+        for table_name, _expected_count, expected_names in sorted(tables_with_indexes):
+            # Every index created on the table, expression-based ones included. `sql IS NOT NULL` leaves out the
+            # automatic indexes of PRIMARY KEY / UNIQUE constraints (sqlite_autoindex_*), as the inspector did.
+            db_index_names = conn.execute(text("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = :table_name AND sql IS NOT NULL"), {"table_name": table_name}).scalars().all()
 
-        print(f"  {table_name}: {len(db_indexes)} index(es)")
+            print(f"  {table_name}: {len(db_index_names)} index(es)")
 
-        # Check if expected indexes are present
-        for expected_name in expected_names:
-            if expected_name and expected_name not in db_index_names:
-                missing_indexes.append(f"{table_name}.{expected_name}")
-                print(f"    ⚠️  Missing: {expected_name}")
+            # Check if expected indexes are present
+            for expected_name in expected_names:
+                if expected_name and expected_name not in db_index_names:
+                    missing_indexes.append(f"{table_name}.{expected_name}")
+                    print(f"    ⚠️  Missing: {expected_name}")
 
     assert not missing_indexes, f"Missing indexes: {', '.join(missing_indexes)}"
 
@@ -283,7 +291,7 @@ def test_identifier_columns_match_enum():
     If this test fails, see IdentifierType docstring for full update checklist.
     """
     from backend.app.db.models import Asset, IdentifierType  # noqa: PLC0415 — test setup — imports after sys.path/db config
-    from backend.app.schemas.assets import (  # noqa: PLC0415 — test setup — imports after sys.path/db config
+    from backend.app.schemas.assets.assets import (  # noqa: PLC0415 — test setup — imports after sys.path/db config
         FAAinfoFiltersRequest,
         FAAssetCreateItem,
         FAAssetPatchItem,
@@ -530,25 +538,35 @@ def onboarding_migration_db(tmp_path):
     return db_path, cfg
 
 
-def test_onboarding_migration_chain_has_exactly_one_head_at_004(tmp_path):
-    """The migration chain is linear and ends at a single head, 004_release_1_2_0_schema.
+def test_migration_chain_has_exactly_one_head_and_004_keeps_its_parent(tmp_path):
+    """The migration chain ends at exactly one head, and 004_release_1_2_0_schema still sits on 5b1333fa6b07.
 
     The single-head assertion is the point of this test. The chain once forked
     into two sibling 003 revisions and needed an empty merge node to become
     upgradable again; a fork is cheap to see here and expensive to see on an
-    install, where Alembic simply refuses to upgrade.
+    install, where Alembic simply refuses to upgrade — and where the startup
+    check (`readiness.alembic_head_revision`, `get_current_head()`) raises on
+    two heads, swallows it, and lets the server boot without migrating.
+
+    Which revision is the head is deliberately not pinned. This test used to
+    assert that the head *was* 004, so it turned red the moment the next
+    migration landed (005_accounts_invites in 1.3, then 006 and 007): red for a
+    change that is correct, which teaches nothing. What the next migration
+    cannot legitimately change is pinned instead: one head, and 004 — a
+    released revision, stamped in users' `alembic_version` — still in the
+    chain on its released parent. With one head, every revision is one of its
+    ancestors, so 004 stays on the upgrade path of every install.
     """
     from alembic.script import ScriptDirectory  # noqa: PLC0415 — test-only migration inspection
 
     cfg = _onboarding_migration_config(tmp_path / "onboarding_revision_contract.db")
     scripts = ScriptDirectory.from_config(cfg)
     heads = scripts.get_heads()
-    revision = scripts.get_revision(_ONBOARDING_REVISION)
+    revisions = {script.revision: script for script in scripts.walk_revisions()}
 
     assert len(heads) == 1, f"Migration chain must not fork; found {len(heads)} heads: {heads}"
-    assert heads[0] == _ONBOARDING_REVISION, f"Expected head {_ONBOARDING_REVISION}, got {heads[0]}"
-    assert revision is not None
-    assert revision.down_revision == _PRE_ONBOARDING_REVISION
+    assert _ONBOARDING_REVISION in revisions, f"{_ONBOARDING_REVISION} shipped in v1.2.0 and must stay in the chain; found {sorted(revisions)}"
+    assert revisions[_ONBOARDING_REVISION].down_revision == _PRE_ONBOARDING_REVISION
 
 
 def test_onboarding_migration_backfills_existing_users_by_flow_and_step_policy(onboarding_migration_db):

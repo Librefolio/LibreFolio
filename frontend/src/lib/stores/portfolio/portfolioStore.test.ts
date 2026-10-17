@@ -18,6 +18,11 @@ let invalidate: typeof import('./portfolioStore.svelte').invalidate;
  * import, and the type check of this file does not depend on the export landing first.
  */
 let store: Record<string, unknown>;
+/**
+ * The portfolio bus, the same module instance the store registered its listener on, read by name
+ * for the price catch-up signal of lot Z-13 (`notifyPricesCaughtUp`) for the same reason.
+ */
+let mutation: Record<string, unknown>;
 
 type ReportOptions = {includeBrokerPnlHistory?: boolean; includePnlCandles?: boolean; includeIncomeHistory?: boolean; includeCostHistory?: boolean; includeDepositHistory?: boolean; includeAcquisitionFunding?: boolean};
 /** `fetchReport`'s arguments without `force`: the same key, read synchronously. */
@@ -31,6 +36,12 @@ function resetPortfolioCache(): void {
 function peekReport(...args: Parameters<PeekReport>): ReturnType<PeekReport> {
     expect(typeof store.peekReport, 'portfolioStore exports no peekReport(...): a page cannot read the cached report synchronously, so it can only show a skeleton while it asks again').toBe('function');
     return (store.peekReport as PeekReport)(...args);
+}
+
+/** The price catch-up signal of the portfolio bus (Z-13): `{kind: 'prices'}` to every listener, the store's included. */
+function notifyPricesCaughtUp(): void {
+    expect(typeof mutation.notifyPricesCaughtUp, 'portfolioMutation exports no notifyPricesCaughtUp(): the end of a price catch-up has no signal of its own, so no page on screen can reload on it').toBe('function');
+    (mutation.notifyPricesCaughtUp as () => void)();
 }
 
 function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void} {
@@ -49,6 +60,7 @@ beforeAll(async () => {
     const module = await import('./portfolioStore.svelte');
     ({fetchReport, invalidate} = module);
     store = module as unknown as Record<string, unknown>;
+    mutation = (await import('./portfolioMutation')) as unknown as Record<string, unknown>;
 });
 
 describe('portfolioStore account isolation', () => {
@@ -169,6 +181,31 @@ describe('portfolioStore — stale-while-revalidate (page cache, phase 1)', () =
         expect(peekReport(OWNED, FROM, TO, 'EUR'), 'invalidate() threw the report away: the page has nothing to show while it asks again').toMatchObject({report: main, stale: true});
         expect(peekReport(OWNED, FROM, TO, 'EUR', true, false, false, false)).toMatchObject({report: contribution, stale: true});
         expect(reportApi, 'invalidate() itself must not ask: the page that shows the report decides when').toHaveBeenCalledTimes(2);
+    });
+
+    it('marks every cached report stale on the price catch-up signal (Z-13), keeps it, asks nothing; the next fetch without force asks the stale one again', async () => {
+        // The store needs no change for Z-13: its listener marks stale on any signal of the bus. This pins
+        // it for the new kind, through the public API, because the Dashboard and the broker page rely on
+        // it — on `{kind: 'prices'}` they call their loader WITHOUT force, and only a stale report is
+        // asked again.
+        const main = report('main', '100');
+        const contribution = report('contribution', '100');
+        reportApi.mockResolvedValueOnce(main).mockResolvedValueOnce(contribution);
+        await fetchReport(OWNED, FROM, TO, 'EUR', false, undefined, undefined, undefined, undefined, DASHBOARD_OPTIONS);
+        await fetchReport(OWNED, FROM, TO, 'EUR', false, true, false, false, false);
+        expect(peekReport(OWNED, FROM, TO, 'EUR', false, false, true, true, DASHBOARD_OPTIONS), 'precondition: the Dashboard report is cached and fresh').toMatchObject({report: main, stale: false});
+
+        notifyPricesCaughtUp();
+
+        expect(peekReport(OWNED, FROM, TO, 'EUR', false, false, true, true, DASHBOARD_OPTIONS), 'the price catch-up left the cached report fresh: the open Dashboard, reloading without force, would serve the figures of before the catch-up').toMatchObject({report: main, stale: true});
+        expect(peekReport(OWNED, FROM, TO, 'EUR', true, false, false, false), 'every key is marked, the contribution too').toMatchObject({report: contribution, stale: true});
+        expect(reportApi, 'the signal itself must not ask: the page on screen decides').toHaveBeenCalledTimes(2);
+
+        const fresh = report('fresh', '125');
+        reportApi.mockResolvedValueOnce(fresh);
+        expect(await fetchReport(OWNED, FROM, TO, 'EUR', false, undefined, undefined, undefined, undefined, DASHBOARD_OPTIONS), 'without force, the stale report is asked again and the fresh answer returned').toMatchObject(fresh);
+        expect(reportApi).toHaveBeenCalledTimes(3);
+        expect(peekReport(OWNED, FROM, TO, 'EUR', false, false, true, true, DASHBOARD_OPTIONS)).toMatchObject({report: fresh, stale: false});
     });
 
     it('asks once for a stale report however many callers ask, keeps the old one readable meanwhile, then stores the fresh one', async () => {

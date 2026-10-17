@@ -1,12 +1,7 @@
 import type {SignalColorRole, SignalStyle, SignalVisualStyle} from './ChartSignal';
+import {SIGNAL_COLORS} from '$lib/theme/chartTheme';
 
-const ROLE_COLORS: Record<Exclude<SignalColorRole, 'primary'>, string> = {
-    secondary: '#f59e0b',
-    positive: '#16a34a',
-    negative: '#dc2626',
-    neutral: '#64748b',
-    accent: '#8b5cf6',
-};
+const ROLE_COLORS: Record<Exclude<SignalColorRole, 'primary'>, string> = SIGNAL_COLORS.roles;
 
 export function resolveSignalColor(baseColor: string, role: SignalColorRole): string {
     return role === 'primary' ? baseColor : ROLE_COLORS[role];

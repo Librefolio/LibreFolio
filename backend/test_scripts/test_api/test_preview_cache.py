@@ -1,12 +1,33 @@
 """Tests for PreviewCache in uploads.py API module."""
 
 import time
+from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 import backend.app.config as app_config
 from backend.app.api.v1.uploads import PreviewCache
+from backend.app.schemas.uploads import UploadFileInfo, UploadScope
+
+#: The caller of the direct serve_file() calls: the uploader of the file, whom the visibility step (decision 36) always
+#: lets through, whatever the file's scope.
+UPLOADER = SimpleNamespace(id=7, is_superuser=False)
+
+
+def _png_info(file_id: str, source: Path) -> UploadFileInfo:
+    """The info serve_file() reads first for ``file_id``: a PNG of UPLOADER stored at ``source``."""
+    return UploadFileInfo(
+        id=file_id,
+        original_name=source.name,
+        mime_type="image/png",
+        size_bytes=source.stat().st_size,
+        uploaded_at=datetime.now(UTC),
+        uploaded_by_user_id=UPLOADER.id,
+        scope=UploadScope.PERSONAL,
+        url=f"/api/v1/uploads/file/{file_id}",
+    )
 
 
 class TestPreviewCache:
@@ -174,10 +195,10 @@ class TestServeFileOffEventLoop:
         source = tmp_path / "big.png"
         Image.new("RGB", (800, 600), (10, 20, 30)).save(source)
 
-        # The endpoint resolves file_id → path/mime through module-level helpers
-        # imported into uploads' namespace — patch them there.
+        # The endpoint resolves file_id → info (visibility, MIME type) and path through
+        # module-level helpers imported into uploads' namespace — patch them there.
+        monkeypatch.setattr(uploads_module, "get_upload_info", lambda file_id: _png_info(file_id, source))
         monkeypatch.setattr(uploads_module, "get_upload_path", lambda file_id: source)
-        monkeypatch.setattr(uploads_module, "get_upload_mime_type", lambda file_id: "image/png")
 
         calls: list = []
         real_to_thread = asyncio.to_thread
@@ -190,7 +211,7 @@ class TestServeFileOffEventLoop:
 
         from fastapi.responses import StreamingResponse  # noqa: PLC0415 — test-local
 
-        response = await uploads_module.serve_file("p04-file", img_preview="200x150", _current_user=None)
+        response = await uploads_module.serve_file("p04-file", img_preview="200x150", current_user=UPLOADER)
 
         assert uploads_module._resize_image in calls, "the resize must go through asyncio.to_thread (off the event loop)"
         assert isinstance(response, StreamingResponse)
@@ -205,8 +226,8 @@ class TestServeFileOffEventLoop:
         source = tmp_path / "small.png"
         Image.new("RGB", (100, 100), (200, 100, 50)).save(source)
 
+        monkeypatch.setattr(uploads_module, "get_upload_info", lambda file_id: _png_info(file_id, source))
         monkeypatch.setattr(uploads_module, "get_upload_path", lambda file_id: source)
-        monkeypatch.setattr(uploads_module, "get_upload_mime_type", lambda file_id: "image/png")
 
         calls: list = []
         real_to_thread = asyncio.to_thread
@@ -221,7 +242,7 @@ class TestServeFileOffEventLoop:
 
         # Requested box LARGER than the source → _resize_image answers None →
         # the unchanged ratio>=1 branch serves the file directly.
-        response = await uploads_module.serve_file("p04-file-small", img_preview="4000x3000", _current_user=None)
+        response = await uploads_module.serve_file("p04-file-small", img_preview="4000x3000", current_user=UPLOADER)
 
         assert uploads_module._resize_image in calls
         assert isinstance(response, FileResponse)

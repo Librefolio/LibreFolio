@@ -40,20 +40,22 @@ What do you own on the end date, and how is each position doing? **Portfolio** l
 | **YOC** | The last year's dividends and interest per unit, against its average price → [Yield on Cost](#yield-on-cost-yoc) |
 | **Value** / **Weight** | What the position is worth, and its share of your Net Worth, cash included |
 | **Qty** | Shares, units or coins held |
-| **Price** *(hidden)* | The unit price used: the market price, or the last trade price when there is no quote → [Price Resolution](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md) |
+| **Price** *(hidden)* | The unit price used: the market price, or the price of your last purchase or sale when there is no quote; `—` for an asset valued at what it cost you, which has no price at all → [Price Resolution](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md) |
 | **Avg. Cost** *(hidden)* | Average purchase price per unit, each purchase at its own date's exchange rate → [Weighted Average Cost](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md) |
-| **Oldest open lot** *(hidden)* | Opening date of the oldest lot still open |
+| **Oldest open lot** *(hidden)* | Opening date of the oldest lot still open at this broker; a stock split keeps the dates |
 | **Brokers** | The broker holding the position |
 
 **How to read it**
 
 - **Weight counts cash**, so the rows add up to less than 100% when you hold cash.
+- **Weight shows `—` when your Net Worth is zero or below**, for example when you have borrowed more cash than your holdings are worth: a share of it would mean nothing.
 - **Avg. Cost keeps each purchase's exchange rate**, while Value uses the end date's: the Unrealized P&L includes what the rate did since.
 - **In the Map**, tiles are grouped by broker and asset type; size is the value, colour the P&L %. Scroll to zoom, drag to move, and **Reset zoom** (↺) shows everything again.
 
 ??? info "➖ Empty cells — when a value is missing"
 
-    - **`—` in Unrealized P&L, P&L % or Avg. Cost**: the asset has no price at all, or part of what you paid is unknown — an exchange rate missing on a purchase date, or a transfer or adjustment without a cost basis. The [Data Quality banner](index.md#data-quality-banner) names what to fix.
+    - **`—` in Unrealized P&L, P&L % or Avg. Cost**: part of what you paid is unknown — an exchange rate missing on a purchase date, or a transfer or adjustment without a cost basis —, or, for Unrealized P&L and P&L % only, the price cannot be converted because the end date's exchange rate is missing. The [Data Quality banner](index.md#data-quality-banner) names what to fix.
+    - **`—` in Price, with an Unrealized P&L of `0`**: the asset has no price at all — no market price and no purchase or sale, as when you received it through an adjustment or a transfer — so its Value is what it cost you.
     - **Δ1** and **Δ1%** need a market price; **Annualized** needs a position old enough for a yearly rate to mean anything.
 
 ### 💸 Yield on Cost (YOC) {: #yield-on-cost-yoc }
@@ -65,13 +67,13 @@ How much income does each unit pay you, compared with what it cost? **YOC** comp
 - **One value per asset and broker**, over the year that ends on the end date: moving the start date does not change it.
 - **Gross, not after tax**: separate tax and fee transactions are not subtracted.
 - **Hover a value** for the income per unit, the period and the exchange rates used — each payment at its own date's rate.
-- **`0.00%`** means income recorded at zero; a plain **`-`** means no income in the last year.
+- **`0.00%`** means income recorded at zero, or corrections that exactly cancel it; a plain **`-`** means no income in the last year.
 
 🔗 **Theory**: [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) — the exact rules, and how YOC differs from dividend yield or CAGR
 
 ??? info "🚦 A dash with an ⓘ icon — when YOC is unavailable"
 
-    LibreFolio shows no partial YOC. When an input fails, hover the amber ⓘ for the reason: less than a year of history at this broker and no income yet, a payment with no units held the day before, a purchase, sale, transfer or split history that does not add up, a missing exchange rate, or an unknown average price. Once that is fixed, YOC is computed again.
+    LibreFolio shows no partial YOC. When an input fails, hover the amber ⓘ for the reason: less than a year of history at this broker and no income yet, a payment with no units held the day before, a purchase, sale, transfer or split history that does not add up, a missing exchange rate, or an unknown average price. Once that is fixed, YOC is computed again. A dash also appears when corrections recorded in the last year — older negative dividend or interest rows — add up to more than the income itself: the ⓘ then reads *Corrections exceed the income of the last year.*
 
 ---
 
@@ -91,6 +93,8 @@ Which positions made or lost money in the period, and how? **Period** lists ever
 - **Closed positions** are in italics, or carry a **Closed** badge in the chart; to list one kind only, show **Status** and filter it.
 - **In the Map**, gains stack right of zero and losses left, the net result closing the row; each percentage compares with the position's start value.
 - **A position's Period P&L** can differ from its lifetime gain: only the period counts.
+- **Start Value** and **End Value** are worked out as the **Value** in **Portfolio** — same prices, an asset with no price at what it cost you, each day's exchange rate — so the rows plus the **Other Period Effects** add up to the [Period P&L card](kpi-cards.md#card-1-period-pl). A **`—`** in **Unrealized change** means a value could not be computed, such as a missing exchange rate or purchase cost: it is not a zero.
+- **Securities moved between two of your brokers** during the period split their result: the sending broker's row keeps what they did until they arrived, the receiving broker's what they did after; the total does not change.
 
 ??? tip "🙈 Hide amounts — what the chart still shows"
 
@@ -179,7 +183,8 @@ What are the selected lots worth, and what have they earned since opening? With 
 **How to read it**
 
 - **Comprehensive value above Opening value**: the lots gained, sales and income included.
-- **A dashed line** in **Value** is a value estimated at cost, without a market price.
+- **A dashed line** in **Value** means a lot's current value is estimated at cost: its asset has no price at all — no market price, and no purchase or sale up to the end date.
+- **A flat start**: until the asset's first price — market price, purchase or sale — a lot, for example one you received through an adjustment, is valued at what it cost you, with no gain or loss. A day whose price has no exchange rate is left out instead.
 
 ### 🧾 5. Lot Detail
 
@@ -194,13 +199,14 @@ The whole story of one lot. Open it with **View lot detail** (⋮) or by clickin
 **How to read it**
 
 - **Quantities are the broker's full holdings**, as the ⓘ beside them says.
+- **A transfer with a broker outside the panel** counts as units coming in or going out. Units received open a new lot on the day they arrive, at the cost the transfer carries. Units sent close their lots on the day they leave, at that day's market price, so the gain they made at this broker counts as realized here. The lot's History shows these moves as adjustments. To follow the original lots through the move, open the panel with both brokers (no broker filter on the Dashboard). A transfer still on its way on the panel's last day shows its units as in transit.
 - **Go to transaction** opens the transaction of the History row you picked — by default, the opening one.
 
 ??? warning "⚠️ When the panel warns you"
 
-    - **A folded banner** lists what is missing — a rate, a price, a purchase cost — with a chip per affected lot that finds its bubble. Fix it as for the [Data Quality banner](index.md#data-quality-banner).
-    - **A red message** means quantities or transfers do not add up: the figures may be incomplete, so check the asset's transactions.
-    - **A lot valued at cost** has no market price: dashed bubble border, no market gain or loss.
+    - **A folded banner** lists what is missing — a rate, a price, a purchase cost — with a chip per affected lot that finds its bubble. Fix it as for the [Data Quality banner](index.md#data-quality-banner). The folded banner also lists income and costs that no lot could take — a dividend paid after every lot was sold, for example — each with its own amount and date.
+    - **A red message** means the quantities or transfers of some of the asset's transactions do not add up, so its lots cannot be rebuilt. It lists each transaction to fix with its day, its broker, what is wrong and a **Go to transaction** button. Meanwhile the panel hides the lots, their timeline and the comparison, and the first chart keeps only its **Avg. Cost** lines. Fix those transactions and the lots come back.
+    - **Valued at cost**: on the days before the asset's first price — no market price, no purchase or sale — its lots are valued at what they cost, with no market gain or loss, and the banner names those days. With no price at all up to the end date, the lot's bubble has a dashed border.
 
 ---
 

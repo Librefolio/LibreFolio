@@ -3,7 +3,6 @@
     "profile": "Perfil",
     "preferences": "Preferencias",
     "about": "Acerca de",
-    "admin": "Administración",
     "profileInfo": "Información del Perfil",
     "profileDescription": "Gestiona los detalles de tu cuenta",
     "enableEditing": "Habilitar edición",
@@ -24,13 +23,14 @@
     "deleteAccountWarning": "Esta acción no se puede deshacer. Los brókers de los que eres el único propietario se eliminan con todas sus transacciones e informes importados, aunque los hayas compartido con lectores o editores. Un bróker que tiene otro propietario sigue siendo suyo: solo se elimina tu acceso. Tu configuración se elimina.",
     "typeUsernameToConfirm": "Escribe \"{username}\" para confirmar",
     "deleteAccountPermanently": "Eliminar Permanentemente",
-    "deleteAccountFailed": "Error al eliminar la cuenta",
     "currentPassword": "Contraseña Actual",
     "newPassword": "Nueva Contraseña",
     "confirmNewPassword": "Confirmar Nueva Contraseña",
     "passwordChanged": "Contraseña cambiada con éxito",
     "passwordChangeFailed": "Error al cambiar la contraseña",
     "currentPasswordIncorrect": "La contraseña actual es incorrecta",
+    "currentPasswordRequired": "Introduce tu contraseña actual para cambiar el correo electrónico",
+    "emailPasswordHint": "Para cambiar el correo electrónico, introduce tu contraseña actual. Se cerrará la sesión en tus otros dispositivos.",
     "passwordsMustMatch": "Las contraseñas deben coincidir",
     "passwordMustBeDifferent": "La nueva contraseña debe ser diferente de la actual",
     "language": "Idioma",
@@ -80,7 +80,6 @@
     },
     "globalSettingNames": {
       "session_ttl_hours": "Duración de Sesión",
-      "enable_registration": "Habilitar Registro",
       "require_email_verification": "Verificación Email Requerida",
       "max_file_upload_mb": "Tamaño Máx. Subida",
       "default_language": "Idioma Predeterminado",
@@ -89,11 +88,11 @@
       "scheduler_history_sync_times": "Horarios de Sincronización Histórica",
       "scheduler_history_sync_days": "Días de Sincronización Histórica",
       "scheduler_history_sync_horizon_days": "Horizonte de Recuperación",
-      "scheduler_enabled": "Planificador Activado"
+      "scheduler_enabled": "Planificador Activado",
+      "registration_mode": "Registro"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "Tiempo de validez de una sesión de usuario antes de requerir nuevo login",
-      "enable_registration": "Permitir que nuevos usuarios creen cuentas",
       "require_email_verification": "Requerir verificación de email para nuevas cuentas",
       "max_file_upload_mb": "Tamaño máximo de archivo permitido para subidas",
       "default_currency": "Divisa predeterminada para nuevos usuarios",
@@ -103,7 +102,8 @@
       "scheduler_current_price_frequency_minutes": "Frecuencia de actualización de precios actuales (en minutos)",
       "scheduler_history_sync_times": "Horas del día en que se sincronizan los datos históricos (en la zona horaria del planificador)",
       "scheduler_history_sync_days": "Días de la semana en que se sincronizan los datos históricos",
-      "scheduler_history_sync_horizon_days": "Cuántos días atrás buscar datos históricos faltantes"
+      "scheduler_history_sync_horizon_days": "Cuántos días atrás buscar datos históricos faltantes",
+      "registration_mode": "Quién puede crear una cuenta: cualquiera (abierto), solo quien tenga un enlace de invitación (por invitación) o nadie (cerrado)."
     },
     "globalSettingUnits": {
       "session_ttl_hours": "horas",
@@ -161,7 +161,9 @@
           "last6h": "Últimas 6 horas",
           "last24h": "Últimas 24 horas",
           "last7d": "Últimos 7 días",
-          "last30d": "Últimos 30 días"
+          "last30d": "Últimos 30 días",
+          "deferred": "Aplazado: proveedor en pausa",
+          "retryAt": "Reintento a las {time}"
         },
         "status": {
           "title": "Estado del Planificador",
@@ -169,7 +171,9 @@
           "neverRun": "Nunca ejecutado",
           "details": "Detalles…",
           "configure": "Configurar…",
-          "configSummary": "Cada {freq}min · {times} · {days}"
+          "configSummary": "Cada {freq}min · {times} · {days}",
+          "retryAt": "Elementos en pausa reintentados a las {time}",
+          "nextAttemptAt": "Fallido: nuevo intento a las {time}"
         },
         "timezone": "Zona horaria",
         "timezoneChangeWarning": "Cambiar la zona horaria mantiene iguales estas horas y días, pero cambia el instante real de ejecución en UTC.",
@@ -216,6 +220,192 @@
       "confirmClearTitle": "¿Vaciar la caché {name}?",
       "confirmClearAllTitle": "¿Vaciar todas las cachés?",
       "confirmWarning": "Después de vaciar, la próxima recuperación de estos datos sufrirá ralentizaciones comparables a un reinicio del servidor."
+    },
+    "registrationModes": {
+      "open": "Abierto",
+      "invite": "Por invitación",
+      "disabled": "Cerrado"
+    },
+    "lockedByEnv": "Lo define {variable} en el servidor: cámbialo allí.",
+    "users": "Usuarios",
+    "usersTab": {
+      "title": "Usuarios",
+      "usage": "{used} / {max} cuentas",
+      "usageUnlimited": "{used} cuentas",
+      "usageHint": "Ocupan plaza las cuentas activas y las invitaciones abiertas; las cuentas desactivadas no.",
+      "billing": "Gestionar suscripción",
+      "limitBanner": "La instancia está llena: no hay nuevas invitaciones hasta que desactives o elimines una cuenta, o revoques una invitación.",
+      "createdOn": "Creada el {date}",
+      "selfHint": "Esta es tu cuenta. Gestiónala desde:",
+      "done": "Hecho",
+      "accounts": {
+        "title": "Cuentas"
+      },
+      "badges": {
+        "you": "Tú",
+        "admin": "Admin",
+        "inactive": "Desactivada",
+        "protected": "Protegida",
+        "pendingSetup": "Pendiente de configuración"
+      },
+      "actions": {
+        "deactivate": "Desactivar",
+        "reactivate": "Reactivar",
+        "promote": "Hacer administrador",
+        "demote": "Quitar administrador",
+        "resetLink": "Enlace de restablecimiento",
+        "signOut": "Cerrar sesión en todas partes",
+        "restartGuides": "Reiniciar las guías",
+        "delete": "Eliminar",
+        "cancelSetup": "Cancelar el enlace de configuración"
+      },
+      "reasons": {
+        "protected": "Esta cuenta está protegida: nadie puede desactivarla, degradarla ni eliminarla.",
+        "lastAdmin": "Es el único administrador activo: no se puede desactivar ni degradar.",
+        "limit": "La instancia está llena: libera una plaza para reactivarla.",
+        "demoteFirst": "Un administrador debe ser degradado antes de poder eliminarlo.",
+        "pendingSetup": "Espera su configuración: mantiene su rol hasta entonces."
+      },
+      "confirm": {
+        "deactivate": {
+          "title": "¿Desactivar a {username}?",
+          "message": "La cuenta ya no puede iniciar sesión y todas sus sesiones se cierran. Sus brókers y transacciones se mantienen: podrás reactivarla.",
+          "confirm": "Desactivar"
+        },
+        "promote": {
+          "title": "¿Hacer administrador a {username}?",
+          "message": "Los administradores gestionan la instancia: su configuración, sus usuarios y sus invitaciones.",
+          "confirm": "Hacer administrador"
+        },
+        "demote": {
+          "title": "¿Quitar los derechos de administrador a {username}?",
+          "message": "La cuenta se mantiene, como usuario normal, y sus sesiones se cierran.",
+          "confirm": "Quitar"
+        },
+        "signOut": {
+          "title": "¿Cerrar todas las sesiones de {username}?",
+          "message": "Todas las sesiones de la cuenta se cierran: tendrá que volver a iniciar sesión en cada dispositivo.",
+          "confirm": "Cerrar sesiones"
+        },
+        "restartGuides": {
+          "title": "¿Reiniciar las guías de {username}?",
+          "message": "La introducción y las guías de las páginas vuelven a mostrarse, como para una cuenta nueva.",
+          "confirm": "Reiniciar"
+        },
+        "revokeInvite": {
+          "title": "¿Revocar la invitación para {email}?",
+          "message": "El enlace deja de funcionar de inmediato.",
+          "confirm": "Revocar"
+        },
+        "cancelSetup": {
+          "title": "¿Cancelar el enlace de configuración de {username}?",
+          "message": "El enlace ya entregado deja de funcionar. La cuenta sigue esperando su configuración: un enlace nuevo se obtiene con «dev.py user setup-link» en el servidor o de tu proveedor.",
+          "confirm": "Cancelar el enlace"
+        }
+      },
+      "errors": {
+        "LAST_ADMIN": "El último administrador activo no se puede desactivar ni degradar.",
+        "USER_LIMIT_REACHED": "La instancia está llena: primero libera una plaza (desactiva o elimina una cuenta, o revoca una invitación).",
+        "REGISTRATION_DISABLED": "El registro está cerrado: no se pueden crear invitaciones.",
+        "ACCOUNT_PROTECTED": "Esta cuenta está protegida: nadie puede desactivarla, degradarla ni eliminarla.",
+        "SELF_DELETION": "Elimina tu propia cuenta desde la pestaña Perfil.",
+        "DEMOTE_FIRST": "Un administrador debe ser degradado antes de poder eliminarlo.",
+        "NOT_FOUND": "Esta cuenta ya no existe: la lista se vuelve a cargar.",
+        "DELETION_FAILED": "La eliminación ha fallado: no se ha eliminado nada.",
+        "INVALID_INPUT": "Revisa lo que has introducido: puede que la dirección de correo no sea válida.",
+        "generic": "La acción ha fallado. Inténtalo de nuevo.",
+        "load": "No se han podido cargar las cuentas.",
+        "PENDING_SETUP": "Este administrador espera su configuración: no se puede reactivar ni degradar desde aquí.",
+        "SETUP_COMPLETED": "Este administrador completó su configuración mientras tanto: no se ha cambiado nada.",
+        "LAST_ADMIN_DELETION": "Eres el último administrador activo: haz administrador a otra cuenta antes de eliminar la tuya."
+      },
+      "invite": {
+        "button": "Invitar",
+        "blocked": "El registro está cerrado, y con él las invitaciones: cámbialo en la configuración global.",
+        "blockedLocked": "El registro está cerrado en el servidor por {variable}, y con él las invitaciones.",
+        "title": "Invitar a alguien",
+        "emailLabel": "Correo (opcional)",
+        "emailHint": "Solo como referencia: el enlace funciona para quien lo abra.",
+        "adminLabel": "Administrador",
+        "adminHint": "La cuenta que crea gestiona la instancia.",
+        "create": "Crear el enlace",
+        "ready": "Comparte este enlace: funciona una sola vez, durante 7 días."
+      },
+      "invites": {
+        "title": "Invitaciones abiertas",
+        "empty": "No hay invitaciones abiertas.",
+        "noEmail": "Sin correo",
+        "dates": "Creada el {created} · caduca el {expires}",
+        "revoke": "Revocar"
+      },
+      "reset": {
+        "title": "Enlace para restablecer la contraseña de {username}",
+        "message": "Un enlace de un solo uso para establecer una nueva contraseña, válido 30 minutos. Los enlaces creados antes para esta cuenta dejan de funcionar.",
+        "create": "Crear el enlace",
+        "ready": "Comparte este enlace con {username}: funciona una sola vez."
+      },
+      "toasts": {
+        "signedOut": "Se han cerrado todas las sesiones de {username}.",
+        "guidesRestarted": "Las guías de {username} empiezan de nuevo.",
+        "resetLinkCreated": "Enlace de restablecimiento creado para {username}.",
+        "setupCancelled": "El enlace de configuración de {username} ya no funciona."
+      },
+      "pendingSetupHint": "Esta cuenta de administrador se activa con su enlace de configuración. Si el enlace se ha perdido, ejecuta «dev.py user setup-link» en el servidor o pídelo a tu proveedor."
+    },
+    "linkShare": {
+      "addressLabel": "Dirección del servidor",
+      "addressHint": "Cámbiala si tus usuarios acceden a LibreFolio desde otra dirección.",
+      "linkLabel": "Enlace",
+      "copy": "Copiar",
+      "copied": "Enlace copiado.",
+      "expires": "Válido hasta el {date}.",
+      "probe": {
+        "checking": "Comprobando que este LibreFolio responde en esta dirección…",
+        "match": "Esta instancia responde en esta dirección.",
+        "mismatch": "Algo responde en esta dirección, pero no esta instancia: compruébala antes de compartir.",
+        "unverifiable": "No se ha podido comprobar esta dirección desde este navegador: aun así puedes compartir el enlace.",
+        "invalid": "Introduce una dirección que empiece por http:// o https://, sin ? ni #."
+      }
+    },
+    "accountDeletion": {
+      "titleAdmin": "Eliminar a {username}",
+      "warningAdmin": "No se puede deshacer. Los brókers de los que esta cuenta es la única propietaria se eliminan con todas sus transacciones y archivos; de los compartidos solo desaparece su acceso.",
+      "deactivateTitle": "¿Desactivar en su lugar?",
+      "deactivateText": "Desactivar conserva todos los brókers y transacciones y se puede deshacer: la cuenta simplemente ya no puede iniciar sesión.",
+      "deactivateAction": "Desactivar",
+      "loading": "Comprobando qué se llevaría la eliminación…",
+      "brokersDeleted": "Eliminados, con todas sus transacciones y archivos:",
+      "noBrokersDeleted": "No se elimina ningún bróker.",
+      "brokersLeft": "Brókers compartidos que se mantienen (solo desaparece el acceso):",
+      "transactions": "{count, plural, =0 {ninguna transacción} one {# transacción} other {# transacciones}}",
+      "unpaired": "{count, plural, one {# transacción en otro bróker es la mitad de una transferencia con estos brókers} other {# transacciones en otros brókers son mitades de transferencias con estos brókers}}. {count, plural, one {Se mantiene} other {Se mantienen}}, sin la otra mitad: los activos recibidos de estos brókers pasan a ser una posición de apertura a su coste de transferencia, y las transferencias de efectivo pasan a ser depósitos o retiradas.",
+      "irreversible": "No se puede deshacer.",
+      "previewFailed": "No se ha podido cargar qué se llevaría la eliminación.",
+      "deletedSelf": "Tu cuenta se ha eliminado.",
+      "deletedAdmin": "{username} eliminado, con {count, plural, =0 {ningún bróker} one {# bróker} other {# brókers}}.",
+      "roles": {
+        "OWNER": "Propietario",
+        "EDITOR": "Editor",
+        "VIEWER": "Lector"
+      }
+    },
+    "administration": "Administración",
+    "tooManyPasswordAttempts": "Demasiadas contraseñas incorrectas: espera unos minutos y vuelve a intentarlo.",
+    "securityTab": {
+      "title": "Comprobaciones de seguridad",
+      "description": "La configuración de esta instancia, comprobada al abrir los Ajustes: primero lo que requiere tu atención. «Comprobar de nuevo» la vuelve a leer.",
+      "allClear": "Nada requiere tu atención.",
+      "passed": "{count, plural, one {# comprobación superada} other {# comprobaciones superadas}}",
+      "loadError": "No se han podido cargar las comprobaciones de seguridad.",
+      "retry": "Reintentar",
+      "refresh": "Comprobar de nuevo",
+      "openEmail": "Abrir la pestaña Correo",
+      "openPlugins": "Abrir los ajustes de los plugins",
+      "severity": {
+        "error": "Error",
+        "warning": "Advertencia",
+        "info": "Información"
+      }
     }
   }
 }

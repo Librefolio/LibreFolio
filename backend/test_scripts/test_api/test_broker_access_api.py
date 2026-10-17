@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.config import get_settings
 from backend.app.db.models import Broker, BrokerUserAccess, Transaction, User, UserRole
 from backend.app.db.session import get_async_engine
-from backend.app.services import user_service
+from backend.app.services.accounts import user_service
 from backend.test_scripts.test_db_config import get_test_db_path, verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
@@ -34,7 +34,7 @@ from backend.test_scripts.test_utils import print_section, print_success
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
-SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
+SOLE_ADMIN_DELETE_DETAIL = {"error_code": "LAST_ADMIN", "message": "Cannot delete account: you are the last active administrator"}
 
 
 def unique_name(prefix: str) -> str:

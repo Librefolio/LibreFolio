@@ -19,16 +19,18 @@ This module contains Pydantic models used by multiple services
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date as date_type
 from decimal import Decimal
 from functools import lru_cache
 from typing import Annotated, Any, List, Literal, Optional, Union
 
 import pycountry
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 from pydantic.functional_serializers import PlainSerializer
 
-from backend.app.utils.datetime_utils import parse_ISO_date
+from backend.app.utils.date_range_limits import MAX_BULK_ITEMS, bulk_too_many_items_detail
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, parse_ISO_date
 
 # =============================================================================
 # SAFE DECIMAL — no scientific notation in JSON output
@@ -64,6 +66,30 @@ Usage::
         amount: SafeDecimal
         quantity: Optional[SafeDecimal] = None
 """
+
+# =============================================================================
+# DECIMAL EXPONENT BOUND — an input never expanded (R13-SEC7-3)
+# =============================================================================
+
+MAX_DECIMAL_EXPONENT = 100
+"""The largest power of ten, either way, an input amount or quantity may carry (R13-SEC7-3).
+
+No column comes near it — 24 digits before the decimal point at most, 12 after — and the columns' own limits still
+decide (``db/precision.decimal_limit_issue``). The bound only keeps a finite value such as ``1E+999999999``, which
+pydantic accepts, from reaching a fixed-point format (a billion digits on the event loop) or the context's arithmetic.
+"""
+
+
+def check_decimal_exponent(value: Decimal) -> Decimal:
+    """``value``, or a ``ValueError`` (a 422 at the boundary) when its exponent is past ±``MAX_DECIMAL_EXPONENT``.
+
+    ``adjusted()`` is the exponent of the leading digit — the exponent itself for a zero, so ``0E-999999999`` is refused
+    too — and costs nothing whatever the value. NaN and the infinities are left to pydantic, which refuses them.
+    """
+    if value.is_finite() and abs(value.adjusted()) > MAX_DECIMAL_EXPONENT:
+        raise ValueError(f"Value out of range: its exponent must be within ±{MAX_DECIMAL_EXPONENT}")
+    return value
+
 
 # =============================================================================
 # CACHED CURRENCY VALIDATION
@@ -207,14 +233,15 @@ class Currency(BaseModel):
     @field_validator("amount", mode="before")
     @classmethod
     def validate_amount(cls, v: Any) -> Decimal:
-        """Convert amount to Decimal if needed."""
+        """Convert amount to Decimal if needed; refuse an exponent past ±100 (``check_decimal_exponent``, R13-SEC7-3)."""
         if isinstance(v, Decimal):
-            return v
+            return check_decimal_exponent(v)
         if isinstance(v, (int, float, str)):
             try:
-                return Decimal(str(v))
+                amount = Decimal(str(v))
             except Exception:
                 raise ValueError(f"Cannot convert '{v}' to Decimal") from None
+            return check_decimal_exponent(amount)
         raise ValueError(f"Amount must be numeric, got {type(v)}")
 
     def __add__(self, other: Currency) -> Currency:
@@ -329,14 +356,14 @@ def is_fiat_currency(value: Any) -> bool:
 
 
 CurrencyCode = Annotated[str, BeforeValidator(Currency.validate_code)]
-"""Use instead of a bare ``str`` for a currency-**code** field that must be a valid
-ISO 4217 code.
+"""Use instead of a bare ``str`` for a currency-**code** field that a model **reads back** — a stored value, a
+computed payload. A field a request **stores** uses ``IsoCurrencyCode`` instead (E-18, below).
 
-``Currency.validate_code`` already normalises (``upper().strip()``) and checks the
-code against the ISO 4217 registry (via pycountry), raising ``ValueError`` on
-anything else -- a crypto ticker like ``BTC``, an internal placeholder, an empty
-string. This annotated type carries that one rule so a field opts in *by type*
-instead of every class repeating its own ``@field_validator`` (nineteen payloads
+``Currency.validate_code`` normalises (``upper().strip()``) and checks the code against the ISO 4217 registry (via
+pycountry), raising ``ValueError`` on a crypto ticker like ``BTC``, an internal placeholder, an empty string. It is
+lenient on purpose: ``pycountry.currencies.lookup`` also takes a currency name or a numeric code (``"Euro"``,
+``"978"``) and they come back as given, so a value stored before E-18 still loads. This annotated type carries that one
+rule so a field opts in *by type* instead of every class repeating its own ``@field_validator`` (nineteen payloads
 did, fifteen forgot).
 
 It does **not** change the wire shape: the field stays a JSON string. A value that
@@ -362,12 +389,133 @@ Usage::
 """
 
 
+# =============================================================================
+# STRICT CURRENCY CODES FOR THE WRITE PATHS (E-18, MF-SEC9b)
+# =============================================================================
+
+#: How many characters of a refused currency text the error quotes (E-18): enough to recognise it, never a long input.
+_REFUSED_CURRENCY_SHOWN = 16
+#: The longest text ``suggested_iso_currency`` looks up (E-19a): above every ISO 4217 currency name (XXX's, 65).
+_SUGGESTION_MAX_LENGTH = 80
+#: Codes that look like currencies but count a subunit (E-19a): the pence of London (``GBX``), the cents of Johannesburg
+#: (``ZAC``) and the agorot of Tel Aviv (``ILA``), as market-data services write them. An amount in one is a hundredth of
+#: the unit, so no ISO code is ever suggested for them: relabelling would make every amount 100 times too large.
+NEVER_RELABELLED_CURRENCY_CODES = frozenset({"GBX", "ZAC", "ILA"})
+
+
+def shown_currency_text(text: str) -> str:
+    """At most 16 characters of a currency text, with ``…`` past them (E-18): what an error, a log or a list quotes."""
+    return text if len(text) <= _REFUSED_CURRENCY_SHOWN else text[:_REFUSED_CURRENCY_SHOWN] + "…"
+
+
+def _is_iso_alpha_3(code: str) -> bool:
+    """``code``, already stripped and upper-cased, is three ASCII letters ISO 4217 lists as an alphabetic code."""
+    return len(code) == 3 and code.isascii() and code.isalpha() and pycountry.currencies.get(alpha_3=code) is not None
+
+
+def is_canonical_iso_currency(value: Any) -> bool:
+    """``value`` is stored as ``iso_currency_code`` stores it (E-19a): an ISO 4217 code, upper case, nothing around it.
+
+    ``"EUR"`` is; ``"eur"`` and ``" EUR"`` are not (an exact comparison misses them), nor ``"978"`` or ``"EURO"``.
+    """
+    return isinstance(value, str) and value == value.strip().upper() and _is_iso_alpha_3(value)
+
+
+@lru_cache(maxsize=256)
+def _iso_currency_candidates(code: str) -> tuple[str, ...]:
+    """The ISO 4217 alphabetic codes whose numeric code or name is ``code`` (stripped, upper case), sorted (E-19a).
+
+    One for a numeric code and most names (``"978"``, ``"EURO"``: EUR), two for a name ISO 4217 gives two currencies
+    (``"BOLÍVAR SOBERANO"``: VED and VES), none for anything else, a subunit code or a text past 80 characters included.
+    """
+    if not code or len(code) > _SUGGESTION_MAX_LENGTH or code in NEVER_RELABELLED_CURRENCY_CODES:
+        return ()
+    return tuple(sorted({currency.alpha_3 for currency in pycountry.currencies if code in (getattr(currency, "numeric", None), currency.name.upper())}))
+
+
+def iso_currency_candidates(value: Any) -> tuple[str, ...]:
+    """The ISO 4217 alphabetic codes a currency value may stand for, sorted (E-19b1).
+
+    The text is stripped (NBSP included) and upper-cased. A valid code gives itself (``"eur"``: EUR); a numeric code or
+    a currency name gives the codes whose numeric code or name it is — one for most (``"978"``, ``"EURO"``: EUR), two
+    for a name ISO 4217 gives two currencies (``"Bolívar Soberano"``: VED and VES). None (an empty tuple) for anything
+    else: not a text, empty, past 80 characters, or a subunit code of ``NEVER_RELABELLED_CURRENCY_CODES``.
+    """
+    if not isinstance(value, str):
+        return ()
+    code = value.strip().upper()
+    if code in NEVER_RELABELLED_CURRENCY_CODES:
+        return ()
+    if _is_iso_alpha_3(code):
+        return (code,)
+    return _iso_currency_candidates(code)
+
+
+def suggested_iso_currency(value: Any) -> Optional[str]:
+    """The ISO 4217 alphabetic code a currency value stands for, or None (E-19a): ``iso_currency_candidates`` when it
+    names exactly one.
+
+    The text is stripped (NBSP included) and upper-cased. A valid code comes back as such — ``"eur"`` gives ``"EUR"``,
+    ``"GBp"`` gives ``"GBP"``, as ``iso_currency_code`` stores them. A value the old lenient validation stored, a numeric
+    code or a currency name (``"978"``, ``"Euro"``), gives the one code whose numeric code or name it is. None: not a
+    text, empty, past 80 characters, standing for no code or for two (``"Bolívar Soberano"``: VED and VES), or one of
+    ``NEVER_RELABELLED_CURRENCY_CODES``.
+    """
+    candidates = iso_currency_candidates(value)
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def iso_currency_code(value: Any) -> str:
+    """The currency code a write path stores (E-18, MF-SEC9b): an ISO 4217 alphabetic code, in upper case.
+
+    ``Currency.validate_code`` asks ``pycountry.currencies.lookup``, which also takes a currency name or a numeric code
+    (``"Euro"``, ``"978"``) and returns it as given: a request could store ``"EURO"`` or ``"978"`` as a currency. Here
+    the whitespace around the text is stripped (NBSP included) and the case is free — ``" eur "`` and ``"GBp"`` give
+    ``"EUR"`` and ``"GBP"`` —, and what is left must be three ASCII letters ISO 4217 lists as an alphabetic code
+    (``XXX``, ``XTS`` and the metals included). Anything else raises ``ValueError``, quoting at most 16 characters of
+    the text and naming the code it stands for when there is one (E-19a: ``'840'``: USD; a name two currencies share:
+    both). The read paths keep ``Currency.validate_code``: a value stored before stays readable and deletable.
+    """
+    if not isinstance(value, str):
+        raise ValueError(f"Currency code must be a string, got {type(value).__name__}")
+    code = value.strip().upper()
+    if _is_iso_alpha_3(code):
+        return code
+    shown = shown_currency_text(code)
+    candidates = _iso_currency_candidates(code)
+    if candidates:
+        raise ValueError(f"Invalid currency code {shown!r}: the ISO 4217 alphabetic code is {' or '.join(candidates)}")
+    raise ValueError(f"Invalid currency code {shown!r}: expected an ISO 4217 alphabetic code, such as EUR or USD")
+
+
+IsoCurrencyCode = Annotated[str, BeforeValidator(iso_currency_code)]
+"""``CurrencyCode`` for a field a write path stores (E-18): an ISO 4217 alphabetic code only, never a name or a number.
+
+A read model keeps ``CurrencyCode``: what was stored before E-18 must still load.
+"""
+
+
+def _iso_currency_amount(value: Currency) -> Currency:
+    """An amount a write path stores: its code must pass ``iso_currency_code`` (E-18). The object is unchanged."""
+    iso_currency_code(value.code)
+    return value
+
+
+IsoCurrencyAmount = Annotated[Currency, AfterValidator(_iso_currency_amount)]
+"""A ``Currency`` a write path stores (E-18): the same class and wire shape, its code an ISO 4217 alphabetic code.
+
+An after-validator, not a subclass: the services and the BRIM plugins build these fields with ``Currency`` objects, which
+a subclass would refuse. ``Currency`` itself stays lenient, for the amounts read back from what was stored.
+"""
+
+
 class BackwardFillInfo(BaseModel):
     """
     Backward-fill information when requested date has no data.
 
-    Used by both FX (fx.py) and Asset pricing (asset_source.py) systems
-    to indicate when historical data was used instead of exact date match.
+    Used by both FX (services/fx/conversion.py) and Asset pricing
+    (services/assets/price_query.py) systems to indicate when historical data
+    was used instead of exact date match.
 
     Attributes:
         actual_rate_date: stored as a `date` (accepts ISO string, `date` or `datetime` on input)
@@ -558,6 +706,55 @@ class PeriodBoundedModel(StrictModel):
         if self.period_end < self.period_start:
             raise ValueError(f"period_end ({self.period_end}) must be >= period_start ({self.period_start})")
         return self
+
+
+# =============================================================================
+# FIXED-PERIOD CHANGES REQUESTS (MF-P2b, R13-SEC8)
+# =============================================================================
+
+#: The distinct ``as_of`` days one fixed-period changes request may value, and as many distinct ``range_start`` days. Each
+#: ``as_of`` costs ten valued days — the anchor and one reference per period, a grouped price query each for the assets —,
+#: each ``range_start`` one more, so the cost of a request follows its distinct days, not its length. The Assets and FX
+#: tables send one of each.
+PERIOD_CHANGES_MAX_AS_OF_DAYS = 5
+
+
+def period_changes_request_refusal(items: Sequence[Any]) -> dict | None:
+    """The 422 ``detail`` that refuses a fixed-period changes request, or None when it is within the limits (MF-P2b).
+
+    The limits of the bulk requests the same pages send (Z-25, ``utils/date_range_limits.py``): at most
+    ``MAX_BULK_ITEMS`` items (``bulk_too_many_items``); and at most ``PERIOD_CHANGES_MAX_AS_OF_DAYS`` distinct ``as_of``
+    days, and as many distinct ``range_start`` days (``period_changes_too_many_days``), in the same shape: a code, a
+    message and the numbers. Both checked before any read.
+    """
+    if len(items) > MAX_BULK_ITEMS:
+        return bulk_too_many_items_detail(len(items), MAX_BULK_ITEMS)
+    for field in ("as_of", "range_start"):
+        days = len({day for item in items if (day := getattr(item, field, None)) is not None})
+        if days > PERIOD_CHANGES_MAX_AS_OF_DAYS:
+            return {
+                "code": "period_changes_too_many_days",
+                "message": f"A fixed-period changes request may value at most {PERIOD_CHANGES_MAX_AS_OF_DAYS} distinct {field} days, not {days}",
+                "field": field,
+                "max_days": PERIOD_CHANGES_MAX_AS_OF_DAYS,
+                "days": days,
+            }
+    return None
+
+
+def period_changes_as_of(value: date_type, info: ValidationInfo) -> date_type:
+    """A day of a fixed-period changes item (``as_of``, ``range_start``): on or after ``EARLIEST_RANGE_START`` (1900-01-01).
+
+    Nothing is valued before it, and up to 0005-12-30 the five-year reference day (1 825 days back) would fall before
+    year 1: ``date`` would overflow, a 500.
+    """
+    if value < EARLIEST_RANGE_START:
+        raise ValueError(f"{info.field_name or 'as_of'} ({value}) must be on or after {EARLIEST_RANGE_START}")
+    return value
+
+
+#: The ``as_of`` field of a fixed-period changes item (see :func:`period_changes_as_of`).
+PeriodChangesAsOf = Annotated[date_type, AfterValidator(period_changes_as_of)]
 
 
 class BaseDeleteResult(BaseModel):

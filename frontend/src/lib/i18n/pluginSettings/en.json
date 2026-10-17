@@ -1,0 +1,71 @@
+{
+  "pluginSettings": {
+    "tab": {
+      "label": "Plugins",
+      "title": "Plugin settings",
+      "intro": "What the price and exchange-rate sources ask for. Personal settings are yours alone; instance settings apply to everyone, and only an administrator changes them.",
+      "empty": "No installed plugin asks for settings."
+    },
+    "loadError": "The plugin settings could not be loaded.",
+    "families": {
+      "asset": "Prices",
+      "fx": "Exchange rates"
+    },
+    "status": {
+      "configured": "Configured",
+      "notConfigured": "To configure"
+    },
+    "scope": {
+      "user": "Personal",
+      "system": "Whole instance"
+    },
+    "configure": "Configure",
+    "modal": {
+      "title": "Configure {plugin}",
+      "none": "This plugin has no settings."
+    },
+    "secret": {
+      "set": "Set",
+      "setOn": "Set on {date}",
+      "unset": "Not set",
+      "unreadable": "Saved, but this instance's key cannot read it. If an administrator can put the old key back, that comes first; otherwise enter it again.",
+      "replace": "Replace",
+      "clear": "Clear",
+      "willClear": "It will be deleted when you save.",
+      "placeholder": "Enter the value",
+      "writeOnly": "Once saved, it is never shown again."
+    },
+    "field": {
+      "locked": "Set by the server",
+      "lockedBy": "Set by the server variable {variable}",
+      "adminOnly": "Only an administrator can change it.",
+      "invalidEnv": "The server variable that sets it is invalid: the plugin stays unconfigured until it is fixed.",
+      "invalidEnvBy": "The server variable {variable} is invalid: the plugin stays unconfigured until it is fixed.",
+      "invalidStored": "The saved value is no longer valid: the default applies.",
+      "useDefault": "Use the default",
+      "willUseDefault": "The saved value will be deleted when you save: the default applies."
+    },
+    "problems": {
+      "required": "Enter a value",
+      "number": "Enter a number",
+      "integer": "Enter a whole number",
+      "below": "At least {limit}",
+      "above": "At most {limit}",
+      "tooShort": "At least {limit} characters",
+      "tooLong": "At most {limit} characters",
+      "option": "Choose one of the options"
+    },
+    "refusals": {
+      "UNKNOWN_FIELD": "This setting no longer exists: reload the page.",
+      "FORBIDDEN_SCOPE": "Only an administrator can change this setting.",
+      "LOCKED_BY_ENV": "A server variable sets it: it cannot be changed here.",
+      "INVALID_VALUE": "The value is not valid for this setting."
+    },
+    "form": {
+      "refused": "Nothing was saved: check the settings below.",
+      "conflict": "These settings changed meanwhile: they have been reloaded, save again.",
+      "keyUnavailable": "Secrets cannot be saved: this instance's key cannot be used (see the configuration checks).",
+      "saveFailed": "The settings could not be saved."
+    }
+  }
+}

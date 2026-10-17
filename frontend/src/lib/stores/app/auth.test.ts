@@ -380,36 +380,46 @@ describe('isSignOutRequested — a sign-out the user asked for is not a session 
 });
 
 /**
- * Login errors — a catalogue key, or the transport's own words (O, step 21, finding 5).
+ * Login errors — a catalogue key for every failure, never the transport's words (O, step 21, finding 5;
+ * backlog 38, item O-15; plan A3).
  *
- * `auth.login()` stored an English sentence in `state.error` — 'Invalid username or password' for every
- * 401, 'Invalid input' for a 422, 'Login failed' for a failure that is not an axios error, the axios
- * `error.message` for any other axios error — and `LoginCard` printed it as it was: the sign-in error was
- * English in every language. No store of the app translates on its own, and `authError` has one reader,
- * `LoginCard`. The approved contract: `AuthState.error` is an `AuthError` (`$lib/types`), which is
- *   - `{key: AuthErrorKey}`, a catalogue key the card translates when it draws, so the error also follows a
- *     language change:
- *       - an HTTP 401 → `auth.invalidCredentials`, whatever the body says. The server answers an unknown
- *         user and a wrong password with "Invalid credentials" but a disabled account with "Account is
- *         disabled" (`api/v1/auth.py`): one message for all of them keeps a stranger from learning which
- *         accounts exist (`community/faq.en.md`);
- *         (Plan 36 takes the disabled account out of the 401: after a wrong password the server answers it
- *         "Invalid credentials" like the others, and only the right password learns that it is disabled, as a
- *         403 carrying `ACCOUNT_DISABLED` — the cases at the end of this block. A 401 body naming a disabled
- *         account is legacy, and still the generic key.)
- *       - an HTTP 422 → `auth.invalidInput`;
- *       - a failure that is not an axios error → `auth.loginFailed`: its own message (a response that did
- *         not match the schema, a bug) is no sentence for a user;
- *   - `{message}`, the axios `error.message` verbatim, for any other axios error: another status, or no
- *     answer at all;
+ * `auth.login()` stored an English sentence in `state.error` and `LoginCard` printed it as it was: the
+ * sign-in error read English in every language. Step 21 turned the known failures into catalogue keys the
+ * card translates when it draws, so the error also follows a language change, but it kept the axios
+ * `error.message` verbatim for any other axios error: a server that was down still greeted an Italian user
+ * with "Network Error", and a 500 with "Request failed with status code 500" (O-15, «Errori di rete al
+ * login in inglese»). The approved contract (plan A3): `AuthState.error` is an `AuthError` (`$lib/types`),
+ * now `{key: AuthErrorKey}` and nothing else — the `{message}` variant is gone, as nothing produces it any
+ * more — and the key follows the failure:
+ *   - an HTTP 401 → `auth.invalidCredentials`, whatever the body says. The server answers an unknown
+ *     user and a wrong password with "Invalid credentials" but a disabled account with "Account is
+ *     disabled" (`api/v1/auth.py`): one message for all of them keeps a stranger from learning which
+ *     accounts exist (`community/faq.en.md`);
+ *     (Plan 36 takes the disabled account out of the 401: after a wrong password the server answers it
+ *     "Invalid credentials" like the others, and only the right password learns that it is disabled, as a
+ *     403 carrying `ACCOUNT_DISABLED` — the cases at the end of this block. A 401 body naming a disabled
+ *     account is legacy, and still the generic key.)
+ *   - an HTTP 422 → `auth.invalidInput`;
+ *   - no answer at all — an axios error without a response: `ERR_NETWORK`, the client's own timeout
+ *     (`ECONNABORTED`), `ETIMEDOUT` — or a 502, 503 or 504, a gateway saying that the server behind it is
+ *     down or too slow → `auth.loginServerUnreachable`. Not `auth.serverUnreachable`: that one is the
+ *     {title, body} pair of the session check, telling a signed-in user "you have not been signed out",
+ *     which a login cannot say;
+ *   - a 429 → `auth.tooManyAttempts`: a throttling proxy today, the server's own limit later (§4.11; A8
+ *     adds it);
+ *   - any other 5xx (500, 501, 505, …) → `auth.loginServerError`: the server did answer, with an error of
+ *     its own, and that is not "unreachable";
+ *   - any other status (400, a 403 without the code, 404, 405, 409, 413, …) → `auth.loginFailed`;
+ *   - a failure that is not an axios error → `auth.loginFailed`: its own message (a response that did
+ *     not match the schema, a bug) is no sentence for a user;
  *   - `null` from the moment a new login starts, after a successful login, after `auth.clearError()`.
  *
- * Read through `authError`, the derived store the card subscribes to. The two lifecycle cases are green
- * today on purpose: they pin that the error still goes away where it went away before, whatever its shape.
+ * Read through `authError`, the derived store the card subscribes to. Every failure is built as the error
+ * axios raises (`httpError` above: a response only when the server answered). The 401, 422,
+ * `ACCOUNT_DISABLED`, not-axios and lifecycle cases are green today on purpose: they pin what A3 keeps.
  */
-describe('login errors — a catalogue key, or the transport’s own words', () => {
+describe('login errors — a catalogue key for every failure, never the transport’s words', () => {
     const keyed = (key: AuthErrorKey): AuthError => ({key});
-    const worded = (message: string): AuthError => ({message});
 
     /** Plan 36 (§2.5): the body of the 403 that only the right password on a disabled account meets. */
     const ACCOUNT_DISABLED = {detail: {error_code: 'ACCOUNT_DISABLED', message: 'Account is disabled'}};
@@ -424,12 +434,44 @@ describe('login errors — a catalogue key, or the transport’s own words', () 
         ['a body carrying the ACCOUNT_DISABLED code of the 403', ACCOUNT_DISABLED],
     ];
 
-    /** Every axios failure that is neither a 401 nor a 422, as [label, error]: the user reads its own message. */
-    const TRANSPORT: [string, () => AxiosError][] = [
-        ['a 500', () => httpError(500)],
+    /** Nothing came back: axios rejects without a response, with one of these codes. */
+    const NO_ANSWER: [string, () => AxiosError][] = [
+        ['a network error (ERR_NETWORK, no response)', () => new AxiosError('Network Error', AxiosError.ERR_NETWORK, REQUEST, {})],
+        ['the client’s own timeout (ECONNABORTED, no response)', () => new AxiosError('timeout of 30000ms exceeded', AxiosError.ECONNABORTED, REQUEST, {})],
+        ['a timeout reported as ETIMEDOUT (no response)', () => new AxiosError('timeout of 30000ms exceeded', AxiosError.ETIMEDOUT, REQUEST, {})],
+    ];
+
+    /** Every failure the user is told as "the server is not responding", as [label, error]. */
+    const UNREACHABLE: [string, () => AxiosError][] = [
+        ...NO_ANSWER,
+        ['a 502 from the gateway in front of the server', () => httpError(502, '<html>502 Bad Gateway</html>')],
+        ['a 503', () => httpError(503)],
+        ['a 504 from the gateway in front of the server', () => httpError(504, '<html>504 Gateway Time-out</html>')],
+    ];
+
+    /** A 429, from a throttling proxy or from the server's own limit. */
+    const TOO_MANY_ATTEMPTS: [string, () => AxiosError][] = [
         ['a 429 from a throttling proxy', () => httpError(429, '<html>Too Many Requests</html>')],
-        ['a network error (no response)', () => new AxiosError('Network Error', AxiosError.ERR_NETWORK, REQUEST, {})],
-        ['an axios timeout (ECONNABORTED)', () => new AxiosError('timeout of 30000ms exceeded', AxiosError.ECONNABORTED, REQUEST, {})],
+        ['a 429 from the server, with a JSON detail', () => httpError(429, {detail: 'Too many login attempts'})],
+    ];
+
+    /** Every 5xx that is not a gateway's: the server answered, with an error of its own. */
+    const SERVER_ERROR: [string, () => AxiosError][] = [
+        ['a 500', () => httpError(500)],
+        ['a 501', () => httpError(501)],
+        ['a 505', () => httpError(505)],
+        ['a 507', () => httpError(507)],
+        ['a 511', () => httpError(511)],
+        ['a 599, the top of the 5xx class', () => httpError(599)],
+    ];
+
+    /** Every other status but the 403s, which have a section of their own below, as [label, error]. */
+    const OTHER_STATUS: [string, () => AxiosError][] = [
+        ['a 400', () => httpError(400)],
+        ['a 404', () => httpError(404)],
+        ['a 405', () => httpError(405)],
+        ['a 409', () => httpError(409)],
+        ['a 413', () => httpError(413, '<html>413 Request Entity Too Large</html>')],
     ];
 
     /** Failures that are not axios errors, as [label, thrown value]. */
@@ -452,9 +494,19 @@ describe('login errors — a catalogue key, or the transport’s own words', () 
         meApi.mockReset();
     });
 
-    it('premise: every fixture is an axios error with the status it names, and the others are not axios errors', () => {
+    it('premise: every fixture is an axios error with the status it names, or with no response where nothing answered, and the others are not axios errors', () => {
         for (const [label, body] of UNAUTHORIZED) expect(httpError(401, body).response, label).toMatchObject({status: 401, data: body});
-        for (const [label, make] of TRANSPORT) expect(isAxiosError(make()), label).toBe(true);
+        for (const [label, make] of NO_ANSWER) {
+            const failure = make();
+            expect(isAxiosError(failure), label).toBe(true);
+            expect(failure.response, `${label}: nothing answered`).toBeUndefined();
+        }
+        for (const [label, make] of [...UNREACHABLE, ...TOO_MANY_ATTEMPTS, ...SERVER_ERROR, ...OTHER_STATUS]) {
+            const failure = make();
+            expect(isAxiosError(failure), label).toBe(true);
+            const status = failure.response?.status;
+            expect(status === undefined || label.includes(String(status)), `${label}: the fixture answers the status its label names (${status})`).toBe(true);
+        }
         for (const [label, make] of NOT_AXIOS) expect(isAxiosError(make()), label).toBe(false);
     });
 
@@ -468,10 +520,20 @@ describe('login errors — a catalogue key, or the transport’s own words', () 
         expect(await failedSignIn(failure), 'a 422 is the invalid-input catalogue key').toEqual(keyed('auth.invalidInput'));
     });
 
-    it.each(TRANSPORT)('%s → {message: the axios message, verbatim}', async (_label, make) => {
-        const failure = make();
+    it.each(UNREACHABLE)('%s → {key: auth.loginServerUnreachable}, never the axios message', async (_label, make) => {
+        expect(await failedSignIn(make()), 'no answer, or a gateway saying the server behind it is down or too slow: the server is not responding, in the language of the page').toEqual(keyed('auth.loginServerUnreachable'));
+    });
 
-        expect(await failedSignIn(failure), 'any other axios error keeps the transport’s own words, verbatim').toEqual(worded(failure.message));
+    it.each(TOO_MANY_ATTEMPTS)('%s → {key: auth.tooManyAttempts}, never the axios message', async (_label, make) => {
+        expect(await failedSignIn(make()), 'a 429 asks the user to wait, whoever sent it').toEqual(keyed('auth.tooManyAttempts'));
+    });
+
+    it.each(SERVER_ERROR)('%s → {key: auth.loginServerError}, never the axios message', async (_label, make) => {
+        expect(await failedSignIn(make()), 'a 5xx that is not a gateway’s is the server’s own error, not an unreachable server').toEqual(keyed('auth.loginServerError'));
+    });
+
+    it.each(OTHER_STATUS)('%s → {key: auth.loginFailed}, never the axios message', async (_label, make) => {
+        expect(await failedSignIn(make()), 'any other status is the login-failed catalogue key').toEqual(keyed('auth.loginFailed'));
     });
 
     it.each(NOT_AXIOS)('%s → {key: auth.loginFailed}, never its own message', async (_label, make) => {
@@ -509,8 +571,9 @@ describe('login errors — a catalogue key, or the transport’s own words', () 
      * disabled account "Account is disabled" before checking the password, so anyone could learn that it exists.
      * It now checks the password first: a wrong one is the 401 above, whatever the account, and only the right one
      * meets the disabled state, as a 403 whose `detail` carries `error_code: 'ACCOUNT_DISABLED'` (the `error_code`
-     * convention of `api/v1/assets.py`). The axios interceptor reacts to a 401 alone (`zodios-client.ts`), so the
-     * 403 reaches this catch untouched. The code decides: a 403 without it is still "another status".
+     * convention of `api/v1/assets/crud.py`). The axios interceptor reacts to a 401 alone (`zodios-client.ts`), so the
+     * 403 reaches this catch untouched. The code decides: a 403 without it is "any other status", the login-failed
+     * key (plan A3), and never the transport's words.
      */
 
     /** Every 403 that does not carry the ACCOUNT_DISABLED code, as [label, response body]. */
@@ -529,27 +592,25 @@ describe('login errors — a catalogue key, or the transport’s own words', () 
         expect(await failedSignIn(httpError(403, body)), 'the right password on a disabled account is told so, as a catalogue key the card translates').toEqual(keyed('auth.accountDisabled'));
     });
 
-    it.each(FORBIDDEN_OTHERWISE)('a 403 with %s → {message: the axios message, verbatim}, like any other status', async (_label, body) => {
-        const failure = httpError(403, body);
-
-        expect(await failedSignIn(failure), 'only the ACCOUNT_DISABLED code names a disabled account; any other 403 keeps the transport’s own words').toEqual(worded(failure.message));
+    it.each(FORBIDDEN_OTHERWISE)('a 403 with %s → {key: auth.loginFailed}, like any other status', async (_label, body) => {
+        expect(await failedSignIn(httpError(403, body)), 'only the ACCOUNT_DISABLED code names a disabled account; any other 403 is the login-failed key, never the transport’s words').toEqual(keyed('auth.loginFailed'));
     });
 });
 
 /**
- * The login error keys — a sentence in all four catalogues, the English one unchanged (O, step 21, finding 5).
+ * The login error keys — a sentence in all four catalogues (O, step 21, finding 5; plan 36; plan A3, O-15).
  *
- * The card draws a `{key}` error through the translator, and a key a catalogue lacks is drawn as the key
- * itself in that language: each key the store emits needs a sentence in en, it, fr and es. The English
- * sentences stay the ones the store composed until now — the FAQ quotes "Invalid username or password"
- * (`community/faq.en.md`) — so nothing changes for an English reader. The Italian, French and Spanish
+ * The card draws every error through the translator, and a key a catalogue lacks is drawn as the key itself
+ * in that language: each key the store emits needs a sentence in en, it, fr and es. The English sentences of
+ * the first three rows stay the ones the store composed until step 21 — the FAQ quotes "Invalid username or
+ * password" (`community/faq.en.md`) — so nothing changes for an English reader. The other rows are keys that
+ * came later, and pin the sentence their plan chose: `auth.accountDisabled` (plan 36, the one
+ * `community/faq.en.md` points a disabled account to), and the three of plan A3 for O-15 — a server that does
+ * not answer, a server that answers with its own error, too many attempts. The Italian, French and Spanish
  * wordings are the translator's: only their presence is asserted.
  *
  * `ENGLISH` is a `Record<AuthErrorKey, string>`: a key added to the union without a row here fails `front
  * check`, and with it the claim that these cases cover every key the store can emit.
- *
- * `auth.accountDisabled` (plan 36) is new, so there is no sentence of the store's to keep: its row pins the
- * catalogue sentence plan 36 chose, the one `community/faq.en.md` points a disabled account to.
  */
 describe('login error keys — a sentence in all four catalogues', () => {
     const ENGLISH: Record<AuthErrorKey, string> = {
@@ -557,6 +618,11 @@ describe('login error keys — a sentence in all four catalogues', () => {
         'auth.invalidInput': 'Invalid input',
         'auth.loginFailed': 'Login failed',
         'auth.accountDisabled': 'This account is disabled: ask an administrator to enable it again.',
+        'auth.loginServerUnreachable': 'The server is not responding: check your connection and try again in a moment.',
+        'auth.loginServerError': 'The server ran into an error: try again in a moment, and if it happens again, tell an administrator.',
+        'auth.tooManyAttempts': 'Too many login attempts: wait a few minutes and try again.',
+        // Workstream E: an account waiting for its email verification (the sign-in card shows «send the link again»)
+        'email.verification.loginRequired': 'Your email address is not verified yet: open the link in the email we sent you, then sign in.',
     };
     const CATALOGUES: Record<SupportedLocale, unknown> = {en, it: itCatalogue, fr, es};
 
@@ -576,7 +642,7 @@ describe('login error keys — a sentence in all four catalogues', () => {
         expect(missing, `${key} is a sentence in every catalogue: a key one of them lacks is drawn as the key itself in that language`).toEqual([]);
     });
 
-    it.each(Object.entries(ENGLISH))('%s keeps the English sentence the store used to compose', (key, english) => {
-        expect(leaf(en, key), `the English catalogue words ${key} as the store did: nothing changes for an English reader, nor for the docs that quote it`).toBe(english);
+    it.each(Object.entries(ENGLISH))('%s is worded in English as "%s"', (key, english) => {
+        expect(leaf(en, key), `the English catalogue words ${key} as pinned here: the sentences the store composed stay as they were, for an English reader and for the docs that quote them, and the newer keys keep the sentence their plan chose`).toBe(english);
     });
 });

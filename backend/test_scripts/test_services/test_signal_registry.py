@@ -34,20 +34,18 @@ from backend.app.schemas.signals import (
     SignalWarmupRequirement,
 )
 from backend.app.services import provider_registry as registry_module
-from backend.app.services.provider_registry import (
-    DuplicatePluginCodeError,
-    PluginDiscoveryError,
-    SignalPluginRegistry,
-    register_plugin,
-)
-from backend.app.services.signal_plugins.base import SignalPlugin
+from backend.app.services.provider_registry import DuplicatePluginCodeError, PluginDiscoveryError, register_plugin
+from backend.app.services.signals.base import SignalPlugin
+from backend.app.services.signals.registry import SignalPluginRegistry
 
-# I10 — executable but catalog-hidden. The registry still resolves and runs it
-# (asset_source/SignalService go through get_plugin), while every public
-# catalog surface is built from list_definitions() and must not see it.
+# I10 added the calendar plugin as an executable, catalog-hidden entry. Developer's decision 29
+# (CP-10a, one Rolling Return measured in calendar days) makes it THE Rolling Return: catalog-visible,
+# while the observation-count RISK_ROLLING_RETURN is removed and answers as any unknown code does.
+# Every public catalog surface is built from list_definitions(); execution goes through get_plugin.
 CALENDAR_SIGNAL_CODE = "ASSET_CALENDAR_ROLLING_RETURN"
+REMOVED_SIGNAL_CODE = "RISK_ROLLING_RETURN"
 CALENDAR_REPRESENTATIVE_WINDOWS = (1, 7, 14, 30, 60, 90, 365, 1095)
-BASELINE_PUBLIC_SIGNAL_COUNT = 22
+PUBLIC_SIGNAL_COUNT = 22
 
 
 class DemoParams(BaseModel):
@@ -641,8 +639,8 @@ BrokenSignalRegistry.register(NestedSignal)
 
 
 def test_signal_base_and_registry_do_not_import_indicator_functions():
-    base_source = inspect.getsource(registry_module.SignalPlugin)
-    registry_source = inspect.getsource(registry_module.SignalPluginRegistry)
+    base_source = inspect.getsource(SignalPlugin)
+    registry_source = inspect.getsource(SignalPluginRegistry)
 
     for forbidden in ("pandas_ta_classic", "from talib import", "import talib"):
         assert forbidden not in base_source
@@ -651,58 +649,76 @@ def test_signal_base_and_registry_do_not_import_indicator_functions():
 
 
 # =============================================================================
-# I10 — catalog visibility: executable plugin, hidden catalog entry
+# Catalog visibility — I10 hid the calendar plugin; decision 29 (CP-10a) publishes it
 # =============================================================================
 
 
-def test_hidden_plugin_is_registered_and_executable_but_absent_from_public_catalog():
-    """`get_plugin` is the execution path, `list_definitions` the catalog one.
+def test_calendar_plugin_is_registered_executable_and_in_the_asset_catalog():
+    """`get_plugin` is the execution path, `list_definitions` the catalog one, and now they agree.
 
-    The whole point of the flag is that these two disagree for exactly this
-    plugin: SignalService can plan and run it, while /assets/prices/signals and
-    /currencies/signals never advertise it.
+    Decision 29: SignalService still plans and runs the calendar plugin, and /assets/prices/signals now
+    advertises it as the one Rolling Return. /fx/currencies/signals does not, because the plugin is
+    Asset-only, not because it is hidden.
     """
     plugin_class = SignalPluginRegistry.get_plugin(CALENDAR_SIGNAL_CODE)
 
     assert plugin_class is not None
     assert plugin_class.__module__ == "backend.app.services.signal_plugins.calendar_rolling_return.plugin"
     assert plugin_class.__name__ == "CalendarRollingReturnPlugin"
-    assert plugin_class.catalog_visible is False
     assert CALENDAR_SIGNAL_CODE in SignalPluginRegistry.list_plugin_codes()
     assert isinstance(
         SignalPluginRegistry.get_plugin_instance(CALENDAR_SIGNAL_CODE),
         plugin_class,
     )
-    # Lookup normalization still applies to a hidden code.
+    # Lookup normalization applies to it like to every code.
     assert SignalPluginRegistry.get_plugin(" asset_calendar_rolling_return ") is plugin_class
 
     definitions = SignalPluginRegistry.list_definitions()
-    assert CALENDAR_SIGNAL_CODE not in {definition.signal_code for definition in definitions}
-    for domain in (SignalDomain.ASSET, SignalDomain.FX):
-        # Exactly what the two catalog endpoints build from list_definitions().
-        public_codes = {definition.signal_code for definition in definitions if domain in definition.compatible_domains}
-        assert CALENDAR_SIGNAL_CODE not in public_codes
+    # Exactly what the two catalog endpoints build from list_definitions().
+    in_public_catalog = {domain: CALENDAR_SIGNAL_CODE in {definition.signal_code for definition in definitions if domain in definition.compatible_domains} for domain in (SignalDomain.ASSET, SignalDomain.FX)}
+    assert in_public_catalog == {SignalDomain.ASSET: True, SignalDomain.FX: False}
+    assert plugin_class.catalog_visible is True
 
 
-def test_catalog_visibility_partitions_the_registry_without_touching_visible_plugins():
+def test_catalog_visibility_partitions_the_registry_and_nothing_is_hidden_any_more():
     """Registry-wide invariant, not a magic total: the public catalog is
-    exactly the visible half of the registered plugins, and the hidden half is
-    exactly the I10 plugin. The baseline cardinality is deliberately pinned:
-    I10 must add an executable without changing the public overlay count."""
+    exactly the visible half of the registered plugins. Since decision 29 the
+    hidden half is empty: the calendar plugin, the one hidden executable, is
+    public, and the observation-count rolling return it replaces is no longer
+    registered — one plugin out, one in, so the 22-entry public overlay count
+    holds and the registry shrinks to it."""
     registered_codes = set(SignalPluginRegistry.list_plugin_codes())
     catalog_codes = {definition.signal_code for definition in SignalPluginRegistry.list_definitions()}
     visible_codes = {code for code in registered_codes if SignalPluginRegistry.get_plugin(code).catalog_visible}
 
     assert catalog_codes == visible_codes
-    assert registered_codes - catalog_codes == {CALENDAR_SIGNAL_CODE}
-    # Registry cardinality is the subject here: the hidden executable adds one
-    # registered plugin without changing the 22-entry public overlay catalog.
-    assert len(catalog_codes) == BASELINE_PUBLIC_SIGNAL_COUNT
-    assert len(registered_codes) == BASELINE_PUBLIC_SIGNAL_COUNT + 1
-    assert {"EMA", "SMA", "RISK_ROLLING_RETURN", "RISK_DRAWDOWN"} <= catalog_codes
+    assert registered_codes - catalog_codes == set()
+    # Registry cardinality is the subject here: one plugin out, one in.
+    assert len(catalog_codes) == PUBLIC_SIGNAL_COUNT
+    assert len(registered_codes) == PUBLIC_SIGNAL_COUNT
+    assert {"EMA", "SMA", CALENDAR_SIGNAL_CODE, "RISK_DRAWDOWN"} <= catalog_codes
+    assert REMOVED_SIGNAL_CODE not in registered_codes
     # Default is opt-in visibility: a plugin that declares nothing is public.
     assert SignalPlugin.catalog_visible is True
     assert DemoSignalPlugin.catalog_visible is True
+
+
+def test_the_removed_rolling_return_resolves_like_any_unknown_code():
+    """Decision 29: RISK_ROLLING_RETURN is no longer registered, so the registry
+    answers for it exactly what it answers for a code that never existed — no
+    class, no instance, no catalog entry — however it is spelled. What
+    SignalService then makes of it (a FAILED result with ``unknown_signal``) is
+    pinned in ``test_risk_signal_plugins.py``."""
+    never_existed = "DOES_NOT_EXIST"
+    # Premise: what the registry answers for a code that never existed.
+    assert SignalPluginRegistry.get_plugin(never_existed) is None
+    assert SignalPluginRegistry.get_plugin_instance(never_existed) is None
+
+    lookups = (REMOVED_SIGNAL_CODE, " risk_rolling_return ", "Risk_Rolling_Return")
+    assert {lookup: SignalPluginRegistry.get_plugin(lookup) for lookup in lookups} == dict.fromkeys(lookups)
+    assert {lookup: SignalPluginRegistry.get_plugin_instance(lookup) for lookup in lookups} == dict.fromkeys(lookups)
+    assert REMOVED_SIGNAL_CODE not in SignalPluginRegistry.list_plugin_codes()
+    assert REMOVED_SIGNAL_CODE not in {definition.signal_code for definition in SignalPluginRegistry.list_definitions()}
 
 
 def test_catalog_visible_flag_is_honored_by_an_isolated_registry():
@@ -740,7 +756,10 @@ def test_calendar_window_days_defaults_to_thirty():
     window_schema = plugin_class.params_model.model_json_schema()["properties"]["window_days"]
     assert window_schema["default"] == 30
     assert window_schema["type"] == "integer"
-    assert window_schema["exclusiveMinimum"] == 0
+    # Decision 29: an inclusive floor of one day (`ge=1`, no longer `gt=0`) and no ceiling at all —
+    # the asset page sends long custom windows.
+    bounds = {key: window_schema[key] for key in ("minimum", "exclusiveMinimum", "maximum", "exclusiveMaximum") if key in window_schema}
+    assert bounds == {"minimum": 1}
     assert "enum" not in window_schema
 
 
@@ -773,8 +792,8 @@ def test_calendar_params_reject_unknown_and_legacy_window_key():
     assert plugin_class is not None
     with pytest.raises(ValueError):
         plugin_class.validate_params({"window_days": 30, "unknown": True})
-    # `window` belongs to RISK_ROLLING_RETURN; the calendar plugin must not
-    # silently accept it and fall back to its own default.
+    # `window` was the key of RISK_ROLLING_RETURN, removed by decision 29; the
+    # calendar plugin must not silently accept it and fall back to its own default.
     with pytest.raises(ValueError):
         plugin_class.validate_params({"window": 30})
 

@@ -2,8 +2,9 @@
  * assetPayload — pure unit tests for the shared save-path builders.
  */
 import {describe, expect, it} from 'vitest';
-import {normalizeQuoteBaseQuantity, buildClassificationParams, buildClassificationPatch, normalizeDistribution, sameDistribution} from './assetPayload';
-import type {ClassificationParams} from './assetPayload';
+import {normalizeQuoteBaseQuantity, buildClassificationParams, buildClassificationPatch, normalizeDistribution, sameDistribution, buildCreateItem, buildPatchItem, buildProviderAssignItem} from './assetPayload';
+import type {AssetFormFields, ClassificationParams, ProviderAssignment} from './assetPayload';
+import type {IdentifierRow} from './assetIdentifiers';
 
 describe('normalizeQuoteBaseQuantity', () => {
     it('passes a positive quantity through unchanged', () => {
@@ -55,7 +56,7 @@ describe('buildClassificationParams', () => {
 // classification_params subfields on the wire. buildClassificationPatch is the
 // frontend half of that fix — it must diff previous vs. current per subfield
 // (omit unchanged, null only what actually cleared) so the backend's own
-// per-field shallow merge (see backend/app/services/asset_source.py
+// per-field shallow merge (see backend/app/services/assets/crud.py
 // patch_assets_bulk) receives exactly the intended keys.
 describe('buildClassificationPatch', () => {
     const full: ClassificationParams = {
@@ -158,5 +159,166 @@ describe('normalizeDistribution', () => {
         ['blank/whitespace string', '   '],
     ])('throws on a non-finite weight (%s)', (_label, value) => {
         expect(() => normalizeDistribution({Tech: value as string | number})).toThrow('Invalid distribution weight.');
+    });
+});
+
+// The request items of the AssetModal save paths, built from a plain copy of the form.
+const idRow = (type: string, value: string): IdentifierRow => ({id: `id-${type}-${value}`, type, value});
+
+/** A minimal form: a named USD stock, nothing optional set. Each test overrides what it reads. */
+function form(overrides: Partial<AssetFormFields> = {}): AssetFormFields {
+    return {
+        displayName: 'Apple Inc.',
+        currency: 'USD',
+        assetType: 'STOCK',
+        iconUrl: null,
+        quoteBaseQuantity: 1,
+        active: true,
+        isBenchmark: false,
+        userUrl: '',
+        shortDescription: '',
+        sectorDistribution: {},
+        geographicDistribution: {},
+        identifierRows: [],
+        ...overrides,
+    };
+}
+
+/** Every optional field set, untrimmed name and ISIN, two OTHER identifiers. */
+const FILLED: Partial<AssetFormFields> = {
+    displayName: '  Apple Inc.  ',
+    iconUrl: 'https://example.test/aapl.png',
+    quoteBaseQuantity: 10,
+    active: false,
+    isBenchmark: true,
+    userUrl: 'https://example.test/quote/AAPL',
+    shortDescription: 'Consumer electronics',
+    sectorDistribution: {Technology: 1},
+    geographicDistribution: {USA: 1},
+    identifierRows: [idRow('ISIN', ' US0378331005 '), idRow('OTHER', 'APC.DE'), idRow('OTHER', 'AAPL.MI')],
+};
+
+describe('buildCreateItem', () => {
+    it('builds the create item from a filled form, identifier columns from the rows', () => {
+        expect(buildCreateItem(form(FILLED))).toStrictEqual({
+            display_name: 'Apple Inc.',
+            currency: 'USD',
+            asset_type: 'STOCK',
+            icon_url: 'https://example.test/aapl.png',
+            quote_base_quantity: 10,
+            active: false,
+            is_benchmark: true,
+            user_url: 'https://example.test/quote/AAPL',
+            classification_params: {
+                short_description: 'Consumer electronics',
+                sector_area: {distribution: {Technology: 1}},
+                geographic_area: {distribution: {USA: 1}},
+            },
+            identifier_isin: 'US0378331005',
+            identifier_ticker: undefined,
+            identifier_cusip: undefined,
+            identifier_sedol: undefined,
+            identifier_figi: undefined,
+            identifier_uuid: undefined,
+            identifier_other: ['APC.DE', 'AAPL.MI'],
+        });
+    });
+
+    it.each<[string, string | null]>([
+        ['an empty', ''],
+        ['a null', null],
+    ])('leaves out %s icon', (_label, iconUrl) => {
+        expect(buildCreateItem(form({iconUrl})).icon_url).toBeUndefined();
+    });
+
+    it('leaves out an empty user URL, an empty classification and every unset identifier column', () => {
+        const item = buildCreateItem(form());
+        expect(item.user_url).toBeUndefined();
+        expect(item.classification_params).toBeUndefined();
+        // The inferred item type drops the index signature of the spread identifier columns: read them through a string-keyed view.
+        const columns: Record<string, unknown> = item;
+        expect([columns.identifier_isin, columns.identifier_ticker, columns.identifier_cusip, columns.identifier_sedol, columns.identifier_figi, columns.identifier_uuid, columns.identifier_other]).toEqual(Array(7).fill(undefined));
+    });
+
+    it.each([[0], [-2], [NaN]])('floors a quote base quantity of %s to 1', (quoteBaseQuantity) => {
+        expect(buildCreateItem(form({quoteBaseQuantity})).quote_base_quantity).toBe(1);
+    });
+});
+
+describe('buildPatchItem', () => {
+    it('builds the patch item from a filled form', () => {
+        expect(buildPatchItem(42, form(FILLED), undefined)).toStrictEqual({
+            asset_id: 42,
+            display_name: 'Apple Inc.',
+            currency: 'USD',
+            asset_type: 'STOCK',
+            icon_url: 'https://example.test/aapl.png',
+            quote_base_quantity: 10,
+            active: false,
+            is_benchmark: true,
+            user_url: 'https://example.test/quote/AAPL',
+            classification_params: {
+                short_description: 'Consumer electronics',
+                sector_area: {distribution: {Technology: 1}},
+                geographic_area: {distribution: {USA: 1}},
+            },
+            identifier_isin: 'US0378331005',
+            identifier_ticker: null,
+            identifier_cusip: null,
+            identifier_sedol: null,
+            identifier_figi: null,
+            identifier_uuid: null,
+            identifier_other: ['APC.DE', 'AAPL.MI'],
+        });
+    });
+
+    it('passes the icon as it is, null and empty included', () => {
+        expect(buildPatchItem(1, form({iconUrl: null}), undefined).icon_url).toBeNull();
+        expect(buildPatchItem(1, form({iconUrl: ''}), undefined).icon_url).toBe('');
+    });
+
+    it('trims the name and floors the quote base quantity, like the create item', () => {
+        const item = buildPatchItem(1, form({displayName: '  Apple Inc.  ', quoteBaseQuantity: 0}), undefined);
+        expect(item.display_name).toBe('Apple Inc.');
+        expect(item.quote_base_quantity).toBe(1);
+    });
+
+    it('clears, with null, the user URL and the identifier columns the create item would leave out', () => {
+        const item = buildPatchItem(1, form({userUrl: ''}), undefined);
+        expect(item.user_url).toBeNull();
+        expect([item.identifier_isin, item.identifier_ticker, item.identifier_cusip, item.identifier_sedol, item.identifier_figi, item.identifier_uuid, item.identifier_other]).toEqual(Array(7).fill(null));
+    });
+
+    describe('classification_params', () => {
+        const initial: ClassificationParams = {short_description: 'Consumer electronics', sector_area: {distribution: {Technology: 1}}};
+
+        it('is absent when the classification is the one the modal opened with', () => {
+            expect(buildPatchItem(1, form({shortDescription: 'Consumer electronics', sectorDistribution: {Technology: 1}}), initial)).not.toHaveProperty('classification_params');
+        });
+
+        it('is absent when there was none and there is none', () => {
+            expect(buildPatchItem(1, form(), undefined)).not.toHaveProperty('classification_params');
+        });
+
+        it('is null when everything was cleared', () => {
+            expect(buildPatchItem(1, form(), initial)).toHaveProperty('classification_params', null);
+        });
+
+        it('carries only the parts that changed', () => {
+            const item = buildPatchItem(1, form({shortDescription: 'Phones and computers', sectorDistribution: {Technology: 1}, geographicDistribution: {USA: 1}}), initial);
+            expect(item).toHaveProperty('classification_params', {short_description: 'Phones and computers', geographic_area: {distribution: {USA: 1}}});
+        });
+    });
+});
+
+describe('buildProviderAssignItem', () => {
+    it('maps the provider onto the assignment request item', () => {
+        const provider: ProviderAssignment = {code: 'yfinance', identifier: 'AAPL', identifierType: 'TICKER', params: {currency: 'USD'}};
+        expect(buildProviderAssignItem(7, provider)).toStrictEqual({asset_id: 7, provider_code: 'yfinance', identifier: 'AAPL', identifier_type: 'TICKER', provider_params: {currency: 'USD'}});
+    });
+
+    it('keeps null provider params as null', () => {
+        const provider: ProviderAssignment = {code: 'justetf', identifier: 'IE00B4L5Y983', identifierType: 'ISIN', params: null};
+        expect(buildProviderAssignItem(7, provider)).toStrictEqual({asset_id: 7, provider_code: 'justetf', identifier: 'IE00B4L5Y983', identifier_type: 'ISIN', provider_params: null});
     });
 });

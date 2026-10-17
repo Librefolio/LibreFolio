@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextvars
 import hashlib
 import json
+import threading
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -13,8 +17,9 @@ from typing import Optional
 import structlog
 from sqlalchemy import and_, func, or_, select
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType
+from backend.app.db.models import Asset, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency as CurrencySchema
+from backend.app.services.accounts.settings_service import get_effective_base_currency
 from backend.app.services.financial_math.average_cost import (
     compute_average_costs,
 )
@@ -22,10 +27,11 @@ from backend.app.services.financial_math.native_cash import cash_movement_from_t
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import build_cost_positions
-from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, PortfolioCalculationResult, SplitHistory, SplitRecord
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, InvalidSplitEvent, PortfolioCalculationResult, RowsBeforeFloor, SplitHistory, SplitRecord
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
-from backend.app.services.fx import convert_bulk
-from backend.app.services.settings_service import get_effective_base_currency
+from backend.app.services.financial_math.splits import is_valid_split_ratio, load_split_links
+from backend.app.services.fx.conversion import convert_bulk
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 logger = structlog.get_logger(__name__)
@@ -35,13 +41,52 @@ logger = structlog.get_logger(__name__)
 # (user, brokers, currency, fingerprints). Range-aware: can be sliced or extended.
 _portfolio_blob_cache = get_ttl_cache("portfolio_blob", maxsize=30, ttl=86400)  # 24h
 
+# J-45 (R13-SEC7-1b): the daily replay is pure CPU and long on a wide range, so it runs here, off the event loop, and
+# never in the default executor the asyncio.to_thread callers share. Two workers bound how many replays run at once;
+# the GIL still serializes them, but the loop keeps answering other requests in between. Created on first use and shut
+# down by the app's shutdown (MF-J45a), so a later start (a test app, a restart in the same process) makes a new one.
+_ENGINE_EXECUTOR: ThreadPoolExecutor | None = None
+_ENGINE_EXECUTOR_LOCK = threading.Lock()
+
+
+def _engine_executor() -> ThreadPoolExecutor:
+    """The engine's executor, created on first use (after a shutdown, a new one)."""
+    global _ENGINE_EXECUTOR
+    with _ENGINE_EXECUTOR_LOCK:
+        if _ENGINE_EXECUTOR is None:
+            _ENGINE_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")
+        return _ENGINE_EXECUTOR
+
+
+def shutdown_engine_executor() -> None:
+    """The ``portfolio-engine`` shutdown step (MF-J45a): a replay still queued is cancelled, nothing new is accepted.
+
+    A replay already running cannot be stopped (a thread cannot be cancelled): it ends in its thread, and its result is
+    dropped with its request. Never waits; the shutdown budget (``shutdown_budget.py``) still bounds the process.
+    """
+    global _ENGINE_EXECUTOR
+    with _ENGINE_EXECUTOR_LOCK:
+        executor, _ENGINE_EXECUTOR = _ENGINE_EXECUTOR, None
+    if executor is not None:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
+class _LeaderGone(Exception):
+    """The build a request was waiting for was cancelled with its request: the waiting request builds for itself
+    (MF-J45b). A build that fails hands its own error to every request waiting on it instead (MF-J45d)."""
+
+
+#: MF-J45b: the builds in flight in this process, by blob key and range. An identical request waits for the one running
+#: instead of rebuilding; each entry is settled, then removed, when its build ends however it ends (``calculate``).
+_IN_FLIGHT: dict[tuple, asyncio.Future] = {}
+
 
 # =============================================================================
 # PORTFOLIO CALCULATION ENGINE — Async orchestrator
 # =============================================================================
 
 
-def _compute_tx_fingerprint(transactions: list[Transaction]) -> str:
+def compute_tx_fingerprint(transactions: list[Transaction]) -> str:
     """Compute a hash fingerprint over transaction IDs and updated_at timestamps.
 
     Any transaction insert, update, or delete changes this fingerprint,
@@ -150,6 +195,7 @@ class PortfolioCalculationEngine:
         target_currency: str | None = None,
         include_candles: bool = False,
         include_acquisition_funding: bool = False,
+        period_start: date_type | None = None,
     ) -> PortfolioCalculationResult:
         """Run the full portfolio calculation pipeline.
 
@@ -165,6 +211,11 @@ class PortfolioCalculationEngine:
         the engine's existing per-BUY K/R-pool draw as a daily new-vs-reinvested output
         (see AcquisitionFundingContribution) — kept opt-in for consistency, though the
         extra cost is negligible (pure bookkeeping capture, no new data resolution).
+
+        ``period_start`` (MF-A) names the day whose end ``position_states_start`` is taken at — the start of the
+        caller's period while the states run from ``date_from`` (t=0 for the Dashboard). Without it the snapshot is
+        ``date_from``'s. It is part of the blob-cache key, so a cached run never answers with another day's
+        snapshot.
         """
         # ── 1. Resolve target currency ──
         if target_currency is None:
@@ -213,16 +264,17 @@ class PortfolioCalculationEngine:
         # ── 3b. Load ADJUSTMENT rows linked to unique SPLIT AssetEvents ──
         # A split rescales the average-cost pool instead of adding or reducing it: it
         # redistributes existing cost over a new quantity, it never adds/removes cost.
-        split_event_tx_ids = {tx.id for tx in all_txs if tx.id is not None and tx.asset_event_id is not None}
+        # MF-D4: a stored ratio the layer cannot use counts as missing — the linked rows stay the rescale, no ratio
+        # restates the trade prices before it, and the event is reported — never an exception (the report answered 500).
         split_linked_tx_ids: set[int] = set()
         split_records_by_event_id: dict[int, SplitRecord] = {}
-        if split_event_tx_ids:
-            split_asset_event_stmt = select(Transaction.id, AssetEvent.id, AssetEvent.asset_id, AssetEvent.date, AssetEvent.value).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_event_tx_ids)).where(AssetEvent.type == AssetEventType.SPLIT)
-            for tx_id, event_id, asset_id, split_date, split_ratio in (await self.db.execute(split_asset_event_stmt)).all():
-                if split_ratio is None or not split_ratio.is_finite() or split_ratio <= 0:
-                    raise ValueError(f"SPLIT AssetEvent {event_id} must have a positive finite ratio")
-                split_linked_tx_ids.add(tx_id)
-                split_records_by_event_id[event_id] = SplitRecord(event_id=event_id, asset_id=asset_id, date=split_date, ratio=split_ratio)
+        invalid_split_events: dict[int, InvalidSplitEvent] = {}
+        for link in await load_split_links(self.db, all_txs):
+            split_linked_tx_ids.add(link.transaction_id)
+            if not is_valid_split_ratio(link.ratio):
+                invalid_split_events.setdefault(link.event_id, InvalidSplitEvent(event_id=link.event_id, asset_id=link.event_asset_id, date=link.event_date))
+                continue
+            split_records_by_event_id[link.event_id] = SplitRecord(event_id=link.event_id, asset_id=link.event_asset_id, date=link.event_date, ratio=link.ratio)
 
         split_history_lists: dict[int, list[SplitRecord]] = defaultdict(list)
         for split in split_records_by_event_id.values():
@@ -242,12 +294,25 @@ class PortfolioCalculationEngine:
         classification = classifier.classify(external_paired)
 
         # ── 5. Determine date range ──
+        # R13-SEC7-1: the replay walks every day of the range, so neither end runs free. It starts no earlier than the
+        # first transaction (before it there is nothing to replay, and a period starting earlier already starts empty)
+        # and ends no later than latest_range_end(), tomorrow. A range that ends before the first transaction has no day.
+        # R13-SEC8: nor earlier than EARLIEST_RANGE_START (1900-01-01): a row stored before it is still replayed, on its
+        # own date, but no state is emitted, nor a per-day rate asked, for a day before it.
         first_tx_date = min(tx.date for tx in all_txs)
-        actual_from = date_from or first_tx_date
-        actual_to = date_to or date_type.today()
+        actual_from = max(date_from, first_tx_date, EARLIEST_RANGE_START) if date_from else max(first_tx_date, EARLIEST_RANGE_START)
+        actual_to = min(date_to or date_type.today(), latest_range_end())
+        if actual_from > actual_to:
+            return PortfolioCalculationResult(
+                daily_states=[],
+                scope_broker_ids=list(scope_broker_ids),
+                target_currency=target_currency,
+                date_from=actual_to,
+                date_to=actual_to,
+            )
 
         # ── 5b. Blob cache check (range-aware) ──
-        tx_fingerprint = _compute_tx_fingerprint(all_txs)
+        tx_fingerprint = compute_tx_fingerprint(all_txs)
         held_asset_ids = {tx.asset_id for tx in all_txs if tx.asset_id and tx.quantity and tx.quantity != 0}
         price_fingerprint = await self._compute_price_fingerprint(held_asset_ids, actual_to)
         fx_fingerprint = await compute_portfolio_fx_cache_identity(
@@ -280,6 +345,9 @@ class PortfolioCalculationEngine:
             split_fingerprint,
             include_candles,
             include_acquisition_funding,
+            # The day of position_states_start: the named period start, else the requested start (the first replayed
+            # day); a run from t=0 never answers for a later date_from with its own first day's snapshot.
+            period_start or date_from,
         )
 
         cached_blob, blob_hit = _portfolio_blob_cache.get(blob_key)
@@ -295,15 +363,78 @@ class PortfolioCalculationEngine:
             if blob_from <= actual_from and blob_to == actual_to:
                 logger.debug("Portfolio blob cache hit (exact match)", user_id=user_id)
                 return cached_blob
-            # Forward extension: blob covers from start but needs more days at end
-            if blob_from <= actual_from and blob_to < actual_to and cached_blob.end_state is not None:
-                logger.debug("Portfolio blob cache forward extension", user_id=user_id, extending=f"{blob_to}..{actual_to}")
-                # Will proceed to full compute but with frame_start = blob_to + 1
-                # and initial accumulators from end_state
-                # (full extension with state resume deferred — for now recompute)
-            else:
-                logger.debug("Portfolio blob cache miss (range mismatch)", user_id=user_id, blob_range=f"{blob_from}..{blob_to}", requested=f"{actual_from}..{actual_to}")
+            # A blob that ends earlier is not resumed (EngineEndState is kept for that): the range is recomputed.
+            logger.debug("Portfolio blob cache miss (range mismatch)", user_id=user_id, blob_range=f"{blob_from}..{blob_to}", requested=f"{actual_from}..{actual_to}")
 
+        # MF-J45b: one build per key and range at a time in this process. An identical request that arrives while one
+        # runs waits for it and gets the same result (the object the cache holds, read-only like a cache hit), instead
+        # of paying the reads and an executor worker again. If that build fails, every request waiting on it fails at once
+        # with the same error (MF-J45d: the same data fails the same way, and retrying it one request after another made
+        # the k-th wait k builds); if it is cancelled with its request, a waiting request builds for itself (the first one
+        # to resume leads the others). None ever waits on a build nobody will finish.
+        flight_key = (blob_key, actual_from, actual_to)
+        loop = asyncio.get_running_loop()
+        while (flight := _IN_FLIGHT.get(flight_key)) is not None and flight.get_loop() is loop:
+            try:
+                return await asyncio.shield(flight)
+            except _LeaderGone:
+                logger.debug("Portfolio build awaited was cancelled; building", user_id=user_id)
+        flight = loop.create_future()
+        _IN_FLIGHT[flight_key] = flight
+        try:
+            result = await self._compute_uncached(
+                user_id=user_id,
+                blob_key=blob_key,
+                held_asset_ids=held_asset_ids,
+                actual_from=actual_from,
+                actual_to=actual_to,
+                target_currency=target_currency,
+                include_candles=include_candles,
+                include_acquisition_funding=include_acquisition_funding,
+                period_start=period_start,
+                classification=classification,
+                split_linked_tx_ids=split_linked_tx_ids,
+                split_history=split_history,
+                all_txs=all_txs,
+                invalid_split_events=invalid_split_events,
+            )
+        except Exception as error:
+            # MF-J45d: the waiting requests get the build's own error, at once
+            flight.set_exception(error)
+            flight.exception()  # retrieved: no «never retrieved» warning when nobody was waiting
+            raise
+        else:
+            flight.set_result(result)
+            return result
+        finally:
+            # Settled before the key goes: a waiting request never sees an orphaned build. Still pending here only when
+            # the build was cancelled (a BaseException): the waiting requests build for themselves
+            if not flight.done():
+                flight.set_exception(_LeaderGone())
+                flight.exception()  # retrieved: no «never retrieved» warning when nobody was waiting
+            if _IN_FLIGHT.get(flight_key) is flight:
+                del _IN_FLIGHT[flight_key]
+
+    async def _compute_uncached(  # noqa: C901 — steps 6–12 of calculate, moved unchanged (MF-J45b)
+        self,
+        *,
+        user_id: int,
+        blob_key: tuple,
+        held_asset_ids: set[int],
+        actual_from: date_type,
+        actual_to: date_type,
+        target_currency: str,
+        include_candles: bool,
+        include_acquisition_funding: bool,
+        period_start: date_type | None,
+        classification,
+        split_linked_tx_ids: set[int],
+        split_history: dict[int, SplitHistory],
+        all_txs: list[Transaction],
+        invalid_split_events: dict[int, InvalidSplitEvent],
+    ) -> PortfolioCalculationResult:
+        """Steps 6–12 of :meth:`calculate` on a cache miss: preload, replay, store in the blob cache (MF-J45b moved them here,
+        unchanged, so ``calculate`` can let one build serve identical concurrent requests)."""
         # ── 6. Preload prices (bulk) ──
         price_map: dict[int, list[tuple[date_type, Decimal, str]]] = {}
         # G1b: per-asset OHLC keyed by date, from the same already-loaded rows — no extra query.
@@ -418,8 +549,18 @@ class PortfolioCalculationEngine:
             mark_series=mark_series,
             compute_candles=include_candles,
             compute_acquisition_funding=include_acquisition_funding,
+            period_start=period_start,
         )
-        result = builder.build()
+        # The builder reads only loaded column attributes of the transactions (no relationship, no deferred column) and no
+        # session, and calculate() never commits or expires: nothing it touches loads lazily from the worker thread.
+        # run_in_executor does not copy contextvars (to_thread does): the copied context keeps them, the secret mask included.
+        result = await asyncio.get_running_loop().run_in_executor(_engine_executor(), contextvars.copy_context().run, builder.build)
+        # J-43: the pairs between brokers owned at different shares, for the data-quality report (the cache key holds the shares).
+        result.share_mismatches = classification.share_mismatches
+        result.invalid_split_events = sorted(invalid_split_events.values(), key=lambda event: event.event_id)
+        # MF-SEC8-2a: the rows replayed before the floor the histories start on, for the data-quality report.
+        before_floor = [tx.date for tx in all_txs if tx.date < EARLIEST_RANGE_START]
+        result.rows_before_floor = RowsBeforeFloor(count=len(before_floor), earliest=min(before_floor)) if before_floor else None
 
         # ── 12. Store in blob cache ──
         _portfolio_blob_cache.set(blob_key, result)
@@ -467,6 +608,8 @@ class PortfolioCalculationEngine:
 
         Includes rates for:
         - Transaction amounts → target_currency (all tx dates)
+        - Priced outgoing ADJUSTMENTs → their cost basis (or asset) currency at their date (J-24: the
+          value they hand over leaves the capital at that day's rate)
         - External cash flows → target_currency
         - Price currencies → target_currency (every day in range)
         - Asset currencies (resolver marks, unrealized split) → target_currency (every day in range)
@@ -484,6 +627,16 @@ class PortfolioCalculationEngine:
             tx = ctxn.tx
             if tx.amount and tx.amount != 0 and tx.currency and tx.currency != target_currency:
                 fx_needs.add((tx.currency, tx.date))
+
+        # From priced outgoing ADJUSTMENTs (J-24): the value they hand over, at the rate of their date, also before
+        # the range, in the cost basis currency or the asset's
+        for ctxn in classified_txs:
+            tx = ctxn.tx
+            if tx.type != TransactionType.ADJUSTMENT or tx.cost_basis_override is None or not tx.quantity or tx.quantity > 0:
+                continue
+            handover_ccy = tx.cost_basis_currency or asset_currencies.get(tx.asset_id)
+            if handover_ccy and handover_ccy != target_currency:
+                fx_needs.add((handover_ccy, tx.date))
 
         # From external cash flows
         for dt, _, _, ccy in external_cash_flows:
@@ -529,7 +682,7 @@ class PortfolioCalculationEngine:
         for interval in in_transit_intervals:
             dep = interval.departure_leg
             if interval.tx_type == "cash" and dep.currency and dep.currency != target_currency:
-                current = interval.start_date
+                current = max(interval.start_date, EARLIEST_RANGE_START)  # R13-SEC8: no rate is asked before the floor
                 while current <= interval.end_date:
                     fx_needs.add((dep.currency, current))
                     current += timedelta(days=1)

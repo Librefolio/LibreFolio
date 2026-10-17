@@ -4,19 +4,31 @@ Test: Scheduler due-check functions — due_current_price() and due_history_sync
 Tests all edge cases: never-run, overdue, already-run, wrong day, multi-slot,
 midnight crossing, corrupt timestamps.
 
-Test IDs: SD-001..SD-010
+Decision D-Z3-1 (lot Z3, plan phase01SleepWake): with a readable last run,
+history sync is due when the most recent slot occurrence at or before now —
+today and the MISSED_SLOT_LOOKBACK_DAYS (7) days before, configured days only,
+in the scheduler's timezone — falls after the last run, so a slot missed while
+the machine slept is caught up, even on a day that is not configured. Without a
+last run (None or unreadable) only today's slots count, as before: SD-001..013
+stay valid as they are. SD-014..022 pin the decision.
+
+Test IDs: SD-001..SD-022
 """
 
 import sys
 from datetime import UTC, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+import pytest
 
 from backend.app.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.services.scheduler.scheduler import due_current_price, due_history_sync
-from backend.app.services.scheduler.settings import SchedulerSettings
-from backend.app.services.scheduler.state import JobState, SchedulerState
+from backend.app.services.platform.scheduler import scheduler as scheduler_module
+from backend.app.services.platform.scheduler.scheduler import due_current_price, due_history_sync
+from backend.app.services.platform.scheduler.settings import SchedulerSettings
+from backend.app.services.platform.scheduler.state import JobState, SchedulerState
 from backend.test_scripts.test_utils import print_section, print_success
 
 # Timezone offset +02:00 (CEST) used as reference
@@ -233,3 +245,109 @@ class TestDueHistorySync:
         assert due_history_sync(summer_before, settings, state) is False
         assert due_history_sync(summer_due, settings, state) is True
         print_success("09:00 Europe/Rome is due at 08:00 UTC in winter and 07:00 UTC in summer")
+
+
+# ============================================================================
+# due_history_sync — missed slots (D-Z3-1)
+# ============================================================================
+
+ALL_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+ROME = ZoneInfo("Europe/Rome")
+TOKYO = ZoneInfo("Asia/Tokyo")
+
+
+class TestDueHistorySyncMissedSlot:
+    """D-Z3-1. In June 2026 Europe/Rome is at +02:00, the offset of _now() and _iso(); 2026-06-08 is a Monday."""
+
+    def test_missed_saturday_slot_is_due_on_an_unconfigured_sunday(self):
+        """SD-014: days Mon–Sat, slots 06:00 and 23:00; last run Sat 06:05, now Sun 10:00 → True.
+
+        Sunday is not a configured day: the rule of the day alone would wait for Monday 06:00. The Saturday 23:00 slot,
+        missed, is the most recent one, and it falls after the last run.
+        """
+        print_section("SD-014: due_history_sync — Saturday 23:00 missed, Sunday not configured")
+        now = _now(10, 0, day=14)  # Sunday
+        state = _make_state(history_last=_iso(6, 5, day=13))  # Saturday 06:05
+        assert due_history_sync(now, _make_settings(), state) is True
+        print_success("Saturday 23:00 missed → due on Sunday 10:00")
+
+    def test_saturday_slot_already_run_is_not_due_on_sunday(self):
+        """SD-015: the same Sunday 10:00, last run Sat 23:05 → False: the most recent slot is covered."""
+        print_section("SD-015: due_history_sync — Saturday 23:00 already run")
+        now = _now(10, 0, day=14)
+        state = _make_state(history_last=_iso(23, 5, day=13))
+        assert due_history_sync(now, _make_settings(), state) is False
+        print_success("Saturday 23:00 covered → not due on Sunday")
+
+    def test_yesterday_late_slot_missed_before_today_first_slot(self):
+        """SD-016: every day, slots 06:00 and 23:00, now Tue 05:00 — today's 06:00 not yet reached: last run Mon 07:00 → True (Mon 23:00 missed); last run Mon 23:05 → False."""
+        print_section("SD-016: due_history_sync — yesterday's 23:00 missed, today's 06:00 not yet")
+        settings = _make_settings(days=ALL_DAYS)
+        now = _now(5, 0, day=9)  # Tuesday 05:00
+        assert due_history_sync(now, settings, _make_state(history_last=_iso(7, 0, day=8))) is True
+        assert due_history_sync(now, settings, _make_state(history_last=_iso(23, 5, day=8))) is False
+        print_success("yesterday 23:00 missed → due; covered → not due")
+
+    def test_weekly_slot_six_days_back(self):
+        """SD-017: a weekly slot, Sunday 06:00 only; now the following Saturday 10:00: last run the Sunday before at 05:00 → True; at 07:00 → False."""
+        print_section("SD-017: due_history_sync — weekly Sunday slot, checked on Saturday")
+        settings = _make_settings(times=[time(6, 0)], days=["sun"])
+        now = _now(10, 0, day=13)  # Saturday; the Sunday before is 2026-06-07
+        assert due_history_sync(now, settings, _make_state(history_last=_iso(5, 0, day=7))) is True
+        assert due_history_sync(now, settings, _make_state(history_last=_iso(7, 0, day=7))) is False
+        print_success("Sunday 06:00 missed → due on Saturday; covered → not due")
+
+    def test_previous_day_slot_in_another_time_zone(self):
+        """SD-018: Asia/Tokyo, a slot Monday 08:00; now Tuesday 09:00 in Tokyo (Tuesday 00:00 UTC): last run Monday 07:00 in Tokyo → True; Monday 08:30 → False."""
+        print_section("SD-018: due_history_sync — Tokyo, Monday's slot checked on Tuesday")
+        settings = _make_settings(times=[time(8, 0)], days=["mon"], scheduler_timezone="Asia/Tokyo")
+        now = datetime(2026, 6, 9, 9, 0, tzinfo=TOKYO)
+        missed = _make_state(history_last=datetime(2026, 6, 8, 7, 0, tzinfo=TOKYO).isoformat())
+        covered = _make_state(history_last=datetime(2026, 6, 8, 8, 30, tzinfo=TOKYO).isoformat())
+        assert due_history_sync(now, settings, missed) is True
+        assert due_history_sync(now, settings, covered) is False
+        print_success("Monday 08:00 Tokyo missed → due on Tuesday; covered → not due")
+
+    def test_slot_at_a_local_time_that_does_not_exist_on_the_dst_day(self):
+        """SD-019: Europe/Rome, 2026-03-29, clocks jump from 02:00 to 03:00; a slot at 02:30, every day; now that day 10:00, last run 2026-03-28 03:00 → True, and no exception.
+
+        Whichever instant the missing 02:30 is read as, it falls after the last run and before now.
+        """
+        print_section("SD-019: due_history_sync — slot 02:30 on the spring-forward day")
+        settings = _make_settings(times=[time(2, 30)], days=ALL_DAYS, scheduler_timezone="Europe/Rome")
+        state = _make_state(history_last=datetime(2026, 3, 28, 3, 0, tzinfo=ROME).isoformat())
+        assert due_history_sync(datetime(2026, 3, 29, 10, 0, tzinfo=ROME), settings, state) is True
+        assert due_history_sync(datetime(2026, 3, 29, 8, 0, tzinfo=UTC), settings, state) is True
+        print_success("a slot in the DST gap → due, no exception")
+
+    def test_same_weekday_seven_days_back(self):
+        """SD-020: a weekly slot, Monday 23:00; now Monday 10:00 — today's slot not yet reached —: the slot seven days back still counts. Last run that Monday 22:00 → True; 23:05 → False."""
+        print_section("SD-020: due_history_sync — the slot seven days back")
+        settings = _make_settings(times=[time(23, 0)], days=["mon"])
+        now = _now(10, 0, day=15)  # Monday; the Monday before is 2026-06-08
+        assert due_history_sync(now, settings, _make_state(history_last=_iso(22, 0, day=8))) is True
+        assert due_history_sync(now, settings, _make_state(history_last=_iso(23, 5, day=8))) is False
+        print_success("last Monday 23:00 missed → due; covered → not due")
+
+    def test_lookback_days_are_read_at_call_time(self, monkeypatch: pytest.MonkeyPatch):
+        """SD-021: SD-017's weekly Sunday slot, six days back: ``MISSED_SLOT_LOOKBACK_DAYS`` 5 keeps it out of the window → False; 6 takes it in → True."""
+        print_section("SD-021: due_history_sync — MISSED_SLOT_LOOKBACK_DAYS read at call time")
+        settings = _make_settings(times=[time(6, 0)], days=["sun"])
+        now = _now(10, 0, day=13)
+        state = _make_state(history_last=_iso(5, 0, day=7))
+
+        monkeypatch.setattr(scheduler_module, "MISSED_SLOT_LOOKBACK_DAYS", 5)
+        assert due_history_sync(now, settings, state) is False
+        monkeypatch.setattr(scheduler_module, "MISSED_SLOT_LOOKBACK_DAYS", 6)
+        assert due_history_sync(now, settings, state) is True
+        print_success("5 days: out of the window; 6 days: in it")
+
+    @pytest.mark.parametrize("history_last", [None, "NOT_A_VALID_ISO_DATETIME"], ids=["never-run", "unreadable"])
+    def test_without_a_readable_last_run_only_today_counts(self, history_last: str | None):
+        """SD-022: no last run, or an unreadable one: today's slots alone, unchanged. Sunday 10:00, days Mon–Sat → False; Tuesday 05:00, every day — yesterday's 23:00 passed — → False; Monday 08:00, slot 06:00 → True."""
+        print_section(f"SD-022: due_history_sync — last run {history_last!r}: today's rule")
+        state = _make_state(history_last=history_last)
+        assert due_history_sync(_now(10, 0, day=14), _make_settings(), state) is False
+        assert due_history_sync(_now(5, 0, day=9), _make_settings(days=ALL_DAYS), state) is False
+        assert due_history_sync(_now(8, 0, day=8), _make_settings(times=[time(6, 0)], days=["mon"]), state) is True
+        print_success("only today's slots")

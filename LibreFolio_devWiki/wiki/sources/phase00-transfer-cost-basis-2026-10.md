@@ -42,5 +42,5 @@ step B found it never ingested.
 | Role | Path |
 |------|------|
 | Plan 40 | `LibreFolio_developer_journal/Release_2/phases/40_transferCostBasis/plan-phase00TransferCostBasis.prompt.md` |
-| The fixes | `backend/app/services/transaction_service.py`, `backend/app/services/transaction_batch_stages.py` |
+| The fixes | `backend/app/services/transactions/transaction_service.py`, `backend/app/services/transactions/transaction_batch_stages.py` |
 | The tests | `backend/test_scripts/test_api/test_wac_inline.py`, `backend/test_scripts/test_api/test_transactions_batch_split_promote.py` |

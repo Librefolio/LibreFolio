@@ -118,12 +118,21 @@ Origine: [29_i18nAudit](../../phases/29_i18nAudit/plan-phase00I18nAudit.prompt.m
   non esiste `assets.providerParams.justetf.*`, quindi il form mostra le chiavi e il tooltip resta in inglese. Lo
   stesso vale per CSS Scraper: `frontend/src/lib/i18n/en.json:362-376` ha solo `borsa_italiana` (Q, 08/10).
   Origine: 29, S20.
+  - ✅ **Chiusa il 16/10** da X (1.3, lotto K-16/O-9).
+    - justETF e CSS scraper hanno un `label` inglese per ogni campo di `params_schema`, e i frammenti
+      `assets.providerParams.<codice>.{label,description}` in 4 lingue (`css_scraper/i18n/` è nuovo).
+    - Allineate anche le 4 traduzioni della descrizione di `codice_fondo` di Borsa Italiana, rimaste indietro rispetto
+      al backend.
+    - Guardia in `test_provider_contracts.py`: le traduzioni coprono esattamente i campi del modulo, in ogni lingua.
+    - Dettagli: piano 03 della fase 01, sezione «K-16 e O-9».
 - **O-10 · `provider-contracts` registrato senza classe d'isolamento** — minimo. `scripts/test_runner/_backend_services.py:1031`
   non ha `isolation=`, benché il test sia offline. Origine: 29, S20.
 - **O-11 · Titolo di U1: "block Continue"** — minimo. `frontend/e2e/transactions/tx-import-report-set.spec.ts:2863`:
   il test controlla `import-wizard-parse`. Origine: 29, S20.
 - **O-12 · `importWizard.assetsCount` senza plurale** — basso. `ImportWizardModal.svelte:4678` e il catalogo («{n}
   unique assets, {m} need resolution»). Origine: 29, S21.
+  - ✅ **Chiusa il 15/10** con `fix(ui): translate data editor, plural counts, FX hint` (W, lotto K1 della 1.3; in
+    `dev_release2` con `d915c869f`): plurale ICU in `importWizard.assetsCount`.
 - **O-13 · IWR-001 cerca il badge per classe CSS** — minimo. `frontend/e2e/transactions/tx-import-resolution.spec.ts:331`
   usa `[class*="amber"]`, mentre l'aggancio `import-wizard-unresolved-count` esiste. Origine: 29, S21.
 - **O-14 · Riga booleana `scheduler_enabled` senza `data-testid`** — minimo.
@@ -131,6 +140,12 @@ Origine: [29_i18nAudit](../../phases/29_i18nAudit/plan-phase00I18nAudit.prompt.m
   `:626`). Origine: 29, S21.
 - **O-15 · Errori di rete al login in inglese** — basso. `auth.ts:143` mostra il messaggio di axios, mentre
   `auth.serverUnreachable` esiste già. Origine: 29, S21.
+  - ✅ **Chiusa il 15/10** con `feat(accounts): tab registry, O-15, K-17, L12` (A, lotto A3 della 1.3). Ogni errore del
+    login è una chiave di catalogo:
+    - nessuna risposta o 502/503/504 → `auth.loginServerUnreachable`;
+    - altri 5xx → `auth.loginServerError`;
+    - 429 → `auth.tooManyAttempts`;
+    - non `auth.serverUnreachable`, che dice a chi è già dentro «non sei stato disconnesso».
 - **O-16 · Plurale scritto a mano nel tooltip del Gantt dei lotti** — basso. `LotGanttChart.svelte:701`. Origine: 29, §6.
 - **O-17 · Debito Prettier in `DistributionDialog.svelte`** — minimo, dominio del PAC (D): `DistributionDialog.svelte:74-126`,
   già alla base; anche i piani della 13 lo citano. Origine: 29, §8.
@@ -143,7 +158,7 @@ Origine: [29_i18nAudit](../../phases/29_i18nAudit/plan-phase00I18nAudit.prompt.m
 - **O-19 · Catene FX: chiave `leg_rates` senza provider ed estremi invertiti** — da misurare.
   `backend/app/services/fx.py:820`, `:893`, `:680-716`: la chiave non ha il provider e gli estremi possono essere
   invertiti; serve un test di caratterizzazione. Origine: 11, §9.
-- **O-20 · Doppia sync alla creazione di un asset dalla pagina Asset** — basso. `AssetModal.svelte:1451-1462` più
+- ✅ **O-20 · Doppia sync alla creazione di un asset dalla pagina Asset** (chiusa 16/10: X `2b0be1d05`, entrata `967ddbda4`) — basso. `AssetModal.svelte:1451-1462` più
   `assets/+page.svelte:1828-1833`. Origine: 11, Round 1 §2.
 
 ## L · Import e upload
@@ -166,8 +181,14 @@ Origine: [26_brimDanskeBank](../../phases/26_brimDanskeBank/plan-phase00BrimDans
   gli upload BRIM il developer la vuole risolta «per un futuro in cui generalizziamo generic csv» (06/10 22:50).
 - **L5 · `get_file_path` sull'event loop** — basso. `backend/app/api/v1/brokers.py:693`, `:765`: solo `:863` usa
   `asyncio.to_thread`.
+  - ✅ **Chiusa il 15/10** con `fix: per-row access refusals, BRIM storage cleanup` (W, lotto I1 della 1.3; in
+    `dev_release2` con `dc7e4e48e`).
+    - Anteprima e download risolvono il percorso del file BRIM in un thread (`asyncio.to_thread`).
+    - Cancello puro `utils gate-event-loop-io`.
 - **L6 · Il nome salvato nel rifiuto del plugin** — basso. `brim_provider.py:1169` mostra il nome salvato, non
   quello originale.
+  - ✅ **Chiusa il 15/10** con `fix(brim): coded DEGIRO/Generic CSV refusals` (W, lotto K2a della 1.3; in
+    `dev_release2` con `62c964242`): il 400 del parse nomina il plugin col suo nome e il file col nome caricato.
 - **L7 · Un plugin di set scelto a mano per un file che non legge** — basso. `importReportSets.ts:131-139` contro
   `brim_report_sets.py:134`.
 - **L8 · Il ripiego `auto` → CSV generico** — basso. `brokers.py:861-875`. La doc dice ora che il Generic CSV non è
@@ -179,6 +200,11 @@ Origine: [26_brimDanskeBank](../../phases/26_brimDanskeBank/plan-phase00BrimDans
   CAC-009/010, T1–T8, CAC-001/006/007/011/012, `tx-brim-import` seriale: il dettaglio è nel §7 del piano 33.
 - **L12 · Gli utenti E2E alice…eve creati amministratori** — basso. `scripts/test_runner/_frontend_common.py:192` li
   crea con `create-superuser`; dovrebbero essere utenti normali, salvo `e2e_test_admin`.
+  - ✅ **Chiusa il 15/10** con `feat(accounts): tab registry, O-15, K-17, L12` (A, lotto A3 della 1.3).
+    - Nuovo comando interno `user_cli.py create-user` e `dev.py user create … [--role admin|user]` (admin di default,
+      come prima).
+    - Il runner e `e2e/global-setup.ts` creano gli utenti normali con `create-user`.
+    - Test IMG-011 e IMG-012 in `test_dev_cli_image.py`.
 
 ## K · Bulk delle transazioni
 
@@ -186,11 +212,13 @@ Origine: [25_taxonomySelect](../../phases/25_taxonomySelect/README.md), archivia
 dallo [step 23](../../phases/25_taxonomySelect/plan-phase00TaxonomySelectStep23BulkCloneAndDiscardGuard.prompt.md),
 K-5…K-26 dalla verifica d'archivio di K su `586a4f0ea`; i percorsi senza prefisso sono sotto `frontend/src`.
 
-- **K-1 · Riparazione delle coppie di tipi non di coppia** — basso, solo se servisse. Il Bulk mostrava due cloni
+- ✅ **K-1 · Riparazione delle coppie di tipi non di coppia** — basso, solo se servisse. Il Bulk mostrava due cloni
   dello stesso tipo come una coppia, ma il payload scarta il `link_uuid` dei tipi non di coppia
   (`txPayloadHelpers.ts:256`), e la copia del DB del developer ha 0 coppie sbagliate. Un'altra installazione potrebbe
   averne, e lo Split non le ripara (`TYPE_CANNOT_SPLIT`): servirebbe una riparazione dedicata, con la query di
   rilevamento scritta nel piano.
+  - ✅ **Chiusa il 15/10 senza codice** (decisione 24 del developer: «si sono daccordo, niente codice, parliamo
+    comunque di un caso limite»). La query di rilevamento resta nel piano di W (04, §12).
 - **K-2 · Nel percorso lento, form o wizard aperti da soli si riaprono** — basso. Se l'utente chiude il form o il
   wizard prima che il caricamento finisca, il Bulk lo riapre a caricamento finito; i test B6 aspettano la fine.
 - **K-3 · Il crash di *Reset all* su una coppia con un capo inaccessibile** — basso, oggi non raggiungibile dalla UI.
@@ -240,9 +268,21 @@ K-5…K-26 dalla verifica d'archivio di K su `586a4f0ea`; i percorsi senza prefi
 - **K-16 · Borsa Italiana: ETC/ETN classificati come `ETF` generico** — basso. `borsa_italiana.py:82`
   (`"etc/etn": AssetType.ETF`), benché esista `ETF_COMMODITY`; per gli ETN serve una scelta. La verifica sul server con
   l'ETC sull'oro `IE00B579F325` (17.7) non è stata fatta. Origine: step 13 e step 17.
+  - ✅ **Chiusa il 16/10** da X (1.3, lotto K-16/O-9, D-X7).
+    - `etc/etn` ora dà `ETF_COMMODITY`, anche nella ricerca e nei metadati.
+    - La scelta per gli ETN: anche quelli su un indice o su una valuta diventano `ETF_COMMODITY`, perché Borsa usa
+      un'etichetta sola. È un'approssimazione accettata.
+    - Un ETC già salvato come `ETF` cambia tipo solo con «Aggiorna metadati», un'azione dell'utente che mostra il
+      vecchio e il nuovo valore. Lo scheduler non aggiorna i metadati.
+    - La verifica sul server con `IE00B579F325` resta da fare.
+    - Test in `test_borsa_italiana_errors.py::test_map_asset_type`. Dettagli: piano 03, sezione «K-16 e O-9».
 - **K-17 · `PasswordInput`: pulsante «occhio» con `title` inglese fisso e `tabindex="-1"`** — basso.
   `lib/components/ui/input/PasswordInput.svelte:47` («Hide password», «Show password»): servono due chiavi di
   catalogo, e il pulsante è fuori dall'ordine di tabulazione. Origine: step 13.
+  - ✅ **Chiusa il 15/10** con `feat(accounts): tab registry, O-15, K-17, L12` (A, lotto A3 della 1.3).
+    - `aria-label` e `title` = `$_('auth.showPassword' | 'auth.hidePassword')`, e il pulsante è nell'ordine di
+      tabulazione.
+    - Niente `aria-pressed`, di proposito: il nome dice già l'azione (WAI-ARIA APG).
 - **K-18 · Dashboard: nei 2 s di debounce il filtro nomina già il broker** — basso. `routes/(app)/dashboard/+page.svelte:686-691`
   (`scheduleReload`): la pagina mostra ancora i totali di tutti i broker, e niente dice che un ricaricamento è in arrivo.
   Origine: step 15 (15.5).
@@ -382,10 +422,18 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
   salvato (`DataEditor.svelte:521-530`); le modifiche partono prima delle cancellazioni, quindi spostare un evento
   sulla chiave di uno appena eliminato dà `EVENT_KEY_CONFLICT` (`price_store.py:277`); il toast d'errore mostra il
   messaggio generico di axios (`AssetDataEditorSection.svelte:463-467`). Origine: AssetEvents.
+  - ✅ **S3 chiusa senza codice il 15/10** (decisione del coordinatore, reperto non confermato): il contratto
+    documentato permette di cancellare un evento automatico, che il fornitore ricrea al sync successivo (tooltip
+    `dataEditor.autoEvent.tooltip`, `user/assets/detail/data-editor.en.md:37`, `events.en.md:39`); il menu della riga
+    fa lo stesso e il backend blocca solo gli eventi in uso. Prove nel piano 04, §12, K1. S4 e il resto restano per
+    il lotto E1 di W.
 - **I-11 · limiti del round-trip CSV degli eventi** — basso. `CsvEditor.svelte:416-436` scarta le righe con una data
   ripetuta; l'import ignora `source` (le righe dei provider tornano manuali e poi raddoppiano) e `currency` (un
   backup preso prima di un cambio di valuta torna rietichettato); il selettore della data disabilita le date già
   usate (`DataEditor.svelte:151-161`). Origine: AssetEvents.
+  - 15/10, nella 1.3 (W, E0, `d226bc69e`): ✅ **a** (due righe sono doppioni solo con la stessa data e lo stesso tipo) e
+    ✅ **d** (il selettore blocca solo i giorni con un evento dello stesso tipo). La **b** (`source`) è la W-B16 del
+    backlog post-1.2, la **c** (`currency`) va nel lotto E1b, dopo le decisioni 20–23.
 - **I-12 · guardie server degli eventi** — basso-medio. `DELETE /assets/events?ids=…` non è limitato all'asset
   (`backend/app/api/v1/assets.py:1070-1072`, `price_store.py:954`); `bulk_upsert_events` salva un elemento alla volta
   (`price_store.py:629`). Origine: AssetEvents.
@@ -406,6 +454,9 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
 - **C-3 · Cartelle `broker_<id>` vuote dopo la cancellazione di un broker** — minimo. `delete_files_for_brokers`
   (`brim_provider.py:1203-1222`) cancella i file ma lascia le cartelle in uploaded, parsed e failed; con
   `AUTOINCREMENT` gli id non tornano, quindi le cartelle vuote si accumulano, innocue (I, 08/10).
+  - ✅ **Chiusa il 15/10** con `fix: per-row access refusals, BRIM storage cleanup` (W, lotto I1 della 1.3; in
+    `dev_release2` con `dc7e4e48e`): la cancellazione del broker toglie le cartelle di stato vuote e il suo lock (C-79
+    nel backlog post 1.2).
 - **C-4 · Stato dei plugin BRIM (Stable/Beta/Alpha) solo nella doc** — basso. Sta in `providers_list.md` (per esempio
   `:9`, `:29`), nelle card dell'indice e nell'avviso della pagina utente; nessun attributo nel codice lo tiene
   allineato (Q, 08/10).
@@ -521,7 +572,7 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   `portfolio_service.py:1139-1146`, `:1184-1191`; `schemas/portfolio.py:165`; `test_data_quality_report.py:3`; nel runner
   `_archive.py:7`, `_run_cache.py:7-10`, `_cli.py:470`, `:568-572`, `__init__.py:15-31`, `_consolidate.py:69-71`,
   `_frontend_ai_export.py:69-71`; `EditBuffer.ts:10`.
-- **C-33 · Costo medio dei trasferimenti e del promote: tre possibili difetti** — **confermati da P il 09/10** con test
+- ✅ **C-33 · Costo medio dei trasferimenti e del promote: tre possibili difetti** — **confermati da P il 09/10** con test
   rossi, tutti già nella v1.1.0; ✅ **corretti il 09/10 (treno 28)** per decisione del developer («Correggere 1 e 2 nel
   backend con una sola cura, e 3 facendo chiedere il costo anche col promote»; data d'uscita: «Alla data in cui le quote
   escono dal broker d'origine»), piano `phases/40_transferCostBasis/`. Erano, letti da Q: (1) un transfer in Auto di un'intera posizione riceverebbe costo 0, perché la gamba in uscita

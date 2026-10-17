@@ -109,7 +109,8 @@ barra lateral cerrada.
 
 👉 **Qué hacer:** evita esta dirección. Si gestionas el servidor, asigna a LibreFolio una
 [dirección HTTPS](#https-address) y deja de exponer HTTP sin cifrar. Después cambia tu contraseña:
-**Configuración** → [**Perfil**](settings/profile.md) → **Cambiar contraseña**.
+**Configuración** → [**Perfil**](settings/profile.md) → **Cambiar contraseña**. Así también se desconectan todos
+los demás dispositivos conectados a tu cuenta.
 
 ??? info "🔍 Cuándo una conexión no es segura"
 

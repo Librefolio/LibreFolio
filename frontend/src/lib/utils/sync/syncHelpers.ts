@@ -1,5 +1,5 @@
 /**
- * Shared sync helpers — used by SyncModalBase, FxSyncModal, AssetSyncModal, PageSyncAllModal.
+ * Shared sync helpers — used by SyncModalBase, FxSyncModal, AssetSyncModal, PageSyncModal.
  *
  * Centralises:
  *  - SyncResult interface (common fields for FX and Asset sync results)
@@ -13,12 +13,23 @@ import type {Component, Snippet} from 'svelte';
 import {AlertCircle, AlertTriangle, Check, SkipForward} from 'lucide-svelte';
 import type {LegDetail} from '$lib/utils/providerHelpers';
 import {formatFixed} from '$lib/utils/core/formatFixed';
+import {extractDaysBack, type RawPricePoint} from '$lib/utils/assetPriceDerived';
 
 // =========================================================================
 // Sync status type and result interface
 // =========================================================================
 
 export type SyncStatus = 'ok' | 'partial' | 'failed' | 'skipped';
+
+/** One asset's answer from `POST /assets/prices/sync`, as the creation of an asset reports it (`AssetModal`'s
+ * `onsynced`, O-20): the fields a toast reads. */
+export interface AssetCreateSyncResult {
+    status?: string;
+    points_fetched?: number;
+    inserted_count?: number;
+    updated_count?: number;
+    errors?: string[];
+}
 
 export interface SyncResult {
     id: string; // pair slug for FX, asset_id.toString() for Asset
@@ -81,10 +92,22 @@ export interface SyncSection {
     resultRow: Snippet<[SyncResult, boolean]>;
     /** Count label for summary footer (e.g. 'assets', 'pairs') */
     countLabel: string;
+    /** The targets whose shown data already holds a stored row in the range (C-66): before the sync starts, the dialog
+     * warns that it replaces those rows with the data provider's values, manual edits included. */
+    existingIds?: string[];
+}
+
+/** A point a page shows: its date, and whether it was filled backward from an earlier stored row. */
+export type ShownPoint = {date: string} & Pick<RawPricePoint, 'backward_fill_info' | 'backwardFillInfo'>;
+
+/** Whether `points` hold a stored row dated between `start` and `end`, the dates of a sync (`start` may be `'min'`):
+ * a point filled backward from an earlier date is not one. Such a row is what a sync replaces (C-66). */
+export function hasStoredPointInRange(points: readonly ShownPoint[], start: string, end: string): boolean {
+    return points.some((point) => (start === 'min' || point.date >= start) && point.date <= end && extractDaysBack(point) === 0);
 }
 
 // =========================================================================
-// Status icons and colors
+// Status icons (their colours: STATUS_TONES.syncIcon in $lib/theme/toneClasses)
 // =========================================================================
 
 export const STATUS_ICONS: Record<SyncStatus, Component> = {
@@ -92,13 +115,6 @@ export const STATUS_ICONS: Record<SyncStatus, Component> = {
     partial: AlertTriangle as unknown as Component,
     failed: AlertCircle as unknown as Component,
     skipped: SkipForward as unknown as Component,
-};
-
-export const STATUS_COLORS: Record<SyncStatus, string> = {
-    ok: 'text-emerald-500',
-    partial: 'text-amber-500',
-    failed: 'text-red-500',
-    skipped: 'text-gray-400',
 };
 
 // =========================================================================

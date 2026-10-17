@@ -8,6 +8,7 @@ Reference: backend/app/services/portfolio_service.py
 """
 
 import json
+import re
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
@@ -28,6 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
+import backend.app.services.financial_math.portfolio.models as portfolio_models_module
 import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
@@ -36,22 +38,37 @@ from backend.app.schemas.portfolio import (
     AssetPeriodContribution,
     DataQualityStatus,
     IssueCode,
+    IssueDomain,
     IssueSeverity,
     PortfolioReportQuery,
     StalePriceAsset,
 )
-from backend.app.services.broker_service import BrokerService
+from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.valuation import compute_holding_value
+from backend.app.services.platform.data_quality_thresholds import TRANSACTION_IMPLIED_GRACE_DAYS
 from backend.app.services.portfolio_service import (
     PortfolioService,
     _portfolio_l2_cache,
 )
 from backend.app.utils.datetime_utils import utcnow
+from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
+
+@pytest.fixture(scope="module", autouse=True)
+def range_bound_lifted():
+    """R13-SEC7-1: the FX-in-transit, cache-identity and L2-key scenarios here live in 2032–2038, after tomorrow, so the
+    range bound is lifted for the whole module, before any fixture builds data (see ``lift_range_bound``). Every other
+    scenario is the same lifted or not: J-43's 2025 pair and the today-relative rows end by tomorrow, and the 2026–2027
+    income/cost/deposit histories are read through the standalone getters, which do not apply the bound."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        lift_range_bound(monkeypatch)
+        yield
 
 
 @pytest.fixture(scope="module")
@@ -1485,6 +1502,572 @@ class TestTransactionImpliedDataQuality:
 
 
 # =============================================================================
+# TestTransactionImpliedGraceFromLastQuote — V-11 (decision 30, D-J15)
+# =============================================================================
+
+
+class TestTransactionImpliedGraceFromLastQuote:
+    """V-11: the 14-day grace of TRANSACTION_IMPLIED («valued at cost») counts from the last market quote.
+
+    Developer decision 30 (D-J15, 15/10), «si mi pare ottima!», on the proposal: the two weeks of
+    ``TRANSACTION_IMPLIED_GRACE_DAYS`` count from the asset's LAST MARKET QUOTE on or before the
+    valuation date; an asset that was never quoted counts from its first BUY/SELL, as today.
+
+    Why the anchor moves: ``AssetPriceSeries.resolve`` (``financial_math/price_marks.py``) lets a
+    trade of the day beat yesterday's quote, so an asset quoted every day and bought again on the
+    valuation date is valued at that trade's price, transaction-implied, on that day. Today the
+    grace counts from the first BUY/SELL (``PortfolioService.get_summary``, section «6. Data quality
+    report»), so that asset is reported without a market price as soon as its first purchase is
+    more than 14 days old.
+
+    R1 and R2 are red until the fix, R2 as a declared change; G1, G2 and G3 are guards, green
+    before and after it. Each test owns its user, broker, asset and quotes (flushed, then rolled
+    back by ``session``). The valuation date ``V`` is fixed: the grace is measured from
+    ``date_to``, not from the calendar. Before its verdict each case proves that on ``V`` the asset
+    is valued at a trade price (the engine's transaction-implied state), through its holding row,
+    and where its last market quote is: through the holding row of an earlier day when the asset
+    was already held (R1, G1), otherwise from the quotes the test seeded (R2, G2, G3). So the
+    verdict can only come from the grace. The list is read by asset id, from the
+    TRANSACTION_IMPLIED issue.
+    """
+
+    V = date(2025, 6, 30)
+
+    def _day(self, days_before_v: int) -> date:
+        return self.V - timedelta(days=days_before_v)
+
+    async def _seed_buy(self, session, broker: Broker, asset: Asset, *, days_before_v: int, quantity: str, unit_price: str) -> None:
+        """Fund ``broker`` and BUY ``quantity`` units of ``asset`` at ``unit_price`` EUR, on V − ``days_before_v``."""
+        day = self._day(days_before_v)
+        cost = Decimal(quantity) * Decimal(unit_price)
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=day, amount=cost, currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=day, quantity=Decimal(quantity), amount=-cost, currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+    async def _seed_quotes(self, session, asset: Asset, *, oldest: int, newest: int) -> None:
+        """One EUR market quote (close 100) per day, from V − ``oldest`` to V − ``newest``, both included."""
+        for days_before_v in range(newest, oldest + 1):
+            session.add(PriceHistory(asset_id=asset.id, date=self._day(days_before_v), open=Decimal("100"), high=Decimal("100"), low=Decimal("100"), close=Decimal("100"), volume=Decimal("1"), currency="EUR", source_plugin_key="manual_test"))
+        await session.flush()
+
+    async def _summary(self, session, user: User, date_to: date | None = None):
+        return await PortfolioService(session).get_summary(user_id=user.id, date_to=date_to or self.V)
+
+    @staticmethod
+    def _listed_ids(summary) -> set[int]:
+        """The summary's transaction-implied list: the asset ids of its TRANSACTION_IMPLIED issue (none without the issue)."""
+        issue = next((issue for issue in summary.data_quality.issues if issue.code == IssueCode.TRANSACTION_IMPLIED), None)
+        return set(issue.affected_asset_ids) if issue is not None else set()
+
+    @staticmethod
+    def _valuation(summary, asset_id: int) -> tuple[str | None, date | None]:
+        """(valuation source, reference date) of the asset's one open holding."""
+        rows = [holding for holding in summary.holdings if holding.asset_id == asset_id]
+        assert len(rows) == 1, f"expected exactly one open holding of asset {asset_id}, got {rows}"
+        return rows[0].valuation_source, rows[0].valuation_reference_date
+
+    @staticmethod
+    async def _assert_never_quoted(session, asset: Asset) -> None:
+        quotes = (await session.execute(select(PriceHistory.id).where(PriceHistory.asset_id == asset.id))).all()
+        assert quotes == [], f"precondition: asset {asset.id} must have no market quote, found {len(quotes)}"
+
+    async def _last_quote_date(self, session, asset: Asset) -> date | None:
+        """Date of the asset's last market quote on or before ``V``, from the quotes in the session (None without any)."""
+        days = (await session.execute(select(PriceHistory.date).where(PriceHistory.asset_id == asset.id, PriceHistory.date <= self.V))).scalars().all()
+        return max(days, default=None)
+
+    @pytest.mark.asyncio
+    async def test_r1_quoted_until_the_day_before_and_bought_again_is_not_listed(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """R1 — red until V-11. First BUY on V−30, a market quote every day up to V−1, another BUY on V.
+
+        On V the trade of the day beats the quote of V−1, so the asset is valued at cost on V. Today
+        the grace counts from the first BUY: 30 days > 14, listed. After the fix it counts from the
+        last quote, V−1: 1 day <= 14, not listed.
+        """
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_buy(session, broker, asset, days_before_v=30, quantity="10", unit_price="100")
+        await self._seed_quotes(session, asset, oldest=30, newest=1)
+        await self._seed_buy(session, broker, asset, days_before_v=0, quantity="5", unit_price="102")
+
+        day_before = await self._summary(session, test_user, date_to=self._day(1))
+        summary = await self._summary(session, test_user)
+
+        assert self._valuation(day_before, asset.id) == ("MARKET_PRICE", self._day(1)), "barrier: on V−1 the asset is valued at its quote of that day"
+        assert self._valuation(summary, asset.id) == ("LAST_TRADE_PRICE", self.V), "barrier: on V the trade of the day makes the asset transaction-implied"
+        assert asset.id not in self._listed_ids(summary), f"asset {asset.id} is listed as valued at cost on {self.V}, but its last market quote is from {self._day(1)}: the 14-day grace counts from the last quote (decision 30)"
+
+    @pytest.mark.asyncio
+    async def test_r2_feed_stopped_before_the_first_buy_is_listed_at_once(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """R2 — red until V-11, a DECLARED CHANGE. The asset has market quotes, the last one on V−100,
+        before its first BUY on V−5; on V it is valued at that trade's price, its most recent
+        observation.
+
+        Today the grace counts from the first BUY: 5 days <= 14, not listed. After the fix it counts
+        from the last quote, V−100: 100 days > 14, listed. This is the declared corner of the rule
+        (D-J15: «la grazia parte dall'ultima quotazione di mercato; senza quotazioni dal primo
+        BUY/SELL, come oggi»): an asset that has quotes is measured from its last quote, never from
+        its purchases. The declared change: a stopped feed is reported at once, instead of only 14
+        days after the asset's first purchase.
+
+        The asset is held only from V−5, so no holding row can show its last quote: that one is read
+        from the quotes the test seeded.
+        """
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_quotes(session, asset, oldest=110, newest=100)
+        await self._seed_buy(session, broker, asset, days_before_v=5, quantity="10", unit_price="100")
+        assert await self._last_quote_date(session, asset) == self._day(100), "precondition: the asset's last market quote on or before V is the one of V−100"
+
+        summary = await self._summary(session, test_user)
+
+        assert self._valuation(summary, asset.id) == ("LAST_TRADE_PRICE", self._day(5)), "barrier: on V the trade of V−5, more recent than the last quote, makes the asset transaction-implied"
+        assert asset.id in self._listed_ids(summary), f"asset {asset.id} is not listed as valued at cost on {self.V}, but its last market quote is from {self._day(100)}, 100 days before: the 14-day grace counts from the last quote, not from the first BUY of {self._day(5)} (decision 30)"
+
+    @pytest.mark.asyncio
+    async def test_g1_last_quote_twenty_days_before_is_listed(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """G1 — guard, listed before and after V-11. R1's history, but the quotes stop on V−20.
+
+        Before: 30 days from the first BUY > 14. After: 20 days from the last quote > 14.
+        """
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_buy(session, broker, asset, days_before_v=30, quantity="10", unit_price="100")
+        await self._seed_quotes(session, asset, oldest=30, newest=20)
+        await self._seed_buy(session, broker, asset, days_before_v=0, quantity="5", unit_price="102")
+
+        day_before = await self._summary(session, test_user, date_to=self._day(1))
+        summary = await self._summary(session, test_user)
+
+        assert self._valuation(day_before, asset.id) == ("MARKET_PRICE", self._day(20)), "barrier: on V−1 the last market quote is the one of V−20"
+        assert self._valuation(summary, asset.id) == ("LAST_TRADE_PRICE", self.V), "barrier: on V the trade of the day makes the asset transaction-implied"
+        assert asset.id in self._listed_ids(summary), f"asset {asset.id} is not listed as valued at cost on {self.V}, but its last market quote is from {self._day(20)}, 20 days before"
+
+    @pytest.mark.asyncio
+    async def test_g2_never_quoted_and_bought_ten_days_before_is_not_listed(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """G2 — guard, not listed before and after V-11. Never quoted: the grace counts from the
+        first BUY, on V−10, so 10 days <= 14."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_buy(session, broker, asset, days_before_v=10, quantity="10", unit_price="100")
+        await self._assert_never_quoted(session, asset)
+
+        summary = await self._summary(session, test_user)
+
+        assert self._valuation(summary, asset.id) == ("LAST_TRADE_PRICE", self._day(10)), "barrier: on V the asset is valued at the price of its only trade"
+        assert asset.id not in self._listed_ids(summary), f"asset {asset.id}, never quoted and first bought on {self._day(10)}, is listed as valued at cost within the 14-day grace"
+
+    @pytest.mark.asyncio
+    async def test_g3_never_quoted_and_bought_twenty_days_before_is_listed(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """G3 — guard, listed before and after V-11. Never quoted: the grace counts from the first
+        BUY, on V−20, so 20 days > 14."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_buy(session, broker, asset, days_before_v=20, quantity="10", unit_price="100")
+        await self._assert_never_quoted(session, asset)
+
+        summary = await self._summary(session, test_user)
+
+        assert self._valuation(summary, asset.id) == ("LAST_TRADE_PRICE", self._day(20)), "barrier: on V the asset is valued at the price of its only trade"
+        assert asset.id in self._listed_ids(summary), f"asset {asset.id}, never quoted and first bought on {self._day(20)}, is not listed as valued at cost past the 14-day grace"
+
+
+# =============================================================================
+# J-17 — a holding with no price observation is valued at its book cost
+# =============================================================================
+
+
+class TestValuedAtCostHoldings:
+    """J-17 (developer's P2 and option A, 16/10): an ADJUSTMENT is never a price, and a holding with
+    no observation at all (no quote, BUY or SELL on or before the day) is valued at its book cost,
+    as a declared estimate: ``valuation_source`` ESTIMATED_AT_COST, ``current_value`` = the historical
+    cost in the report currency (each acquisition at its own date's rate), ``current_price`` None,
+    ``gain_loss`` 0, not a missing price.
+
+    FX rows: EUR/LKR, a pair no other test stores (checked as a precondition, never committed: the
+    ``session`` fixture rolls back). Stored EUR/LKR means 1 EUR = rate LKR, so LKR→EUR divides.
+    """
+
+    ADJ_DAY = date(2019, 3, 1)
+    REPORT_DAY = date(2019, 6, 28)
+
+    @pytest.mark.asyncio
+    async def test_foreign_adjustment_only_holding_is_valued_at_its_historical_cost(self, session, test_user, broker_with_access):
+        """An LKR asset received by an ADJUSTMENT-in of 10 units at 3000 LKR on 2019-03-01, when 1 EUR
+        was 150 LKR: its cost is 30000 / 150 = 200 EUR. On 2019-06-28 (1 EUR = 120 LKR) it is still
+        worth its 200 EUR cost: ESTIMATED_AT_COST, no price, gain 0, no missing pair.
+
+        Before J-17: LAST_TRADE_PRICE at the adjustment's 3000 LKR converted at the report day's rate —
+        current price 25 EUR, current value 250, gain 50 (an exchange-rate "gain" on an asset that was
+        never priced).
+        """
+        broker, _ = broker_with_access
+        stored = (await session.execute(select(FxRate.id).where(FxRate.base == "EUR", FxRate.quote == "LKR"))).all()
+        assert stored == [], f"precondition broken: {len(stored)} EUR/LKR rate(s) stored by someone else — this case needs a pair nobody stores"
+        asset = Asset(display_name=f"AtCost LKR {uuid4().hex[:12]}", currency="LKR", asset_type=AssetType.STOCK)
+        session.add(asset)
+        await session.flush()
+        session.add_all(
+            [
+                FxRate(date=self.ADJ_DAY, base="EUR", quote="LKR", rate=Decimal("150"), source="TEST_J17"),
+                FxRate(date=self.REPORT_DAY, base="EUR", quote="LKR", rate=Decimal("120"), source="TEST_J17"),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=asset.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=self.ADJ_DAY,
+                    quantity=Decimal("10"),
+                    amount=Decimal("0"),
+                    currency=None,
+                    cost_basis_override=Decimal("3000"),
+                    cost_basis_currency="LKR",
+                ),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, target_currency_override="EUR", date_to=self.REPORT_DAY)
+
+        rows = [holding for holding in summary.holdings if holding.asset_id == asset.id]
+        assert len(rows) == 1, f"expected one holding of asset {asset.id}, got {rows}"
+        holding = rows[0]
+        observed = {
+            "valuation_source": holding.valuation_source,
+            "current_value": holding.current_value,
+            "current_price": holding.current_price,
+            "gain_loss": holding.gain_loss,
+            "valuation_effective_unit_price": holding.valuation_effective_unit_price,
+            "valuation_reference_date": holding.valuation_reference_date,
+            "missing_fx_pair": holding.missing_fx_pair,
+        }
+        assert observed == {
+            "valuation_source": "ESTIMATED_AT_COST",
+            "current_value": Decimal("200"),
+            "current_price": None,
+            "gain_loss": Decimal("0"),
+            "valuation_effective_unit_price": None,
+            "valuation_reference_date": None,
+            "missing_fx_pair": None,
+        }
+        assert summary.net_worth.amount == Decimal("200")
+        assert asset.id not in {item.asset_id for item in summary.missing_price_assets}
+
+
+class TestValuedAtCostDataQuality:
+    """J-17: the data-quality report lists the holdings valued at cost on the report's last day under
+    a new warning, ``VALUED_AT_COST`` (``dataQuality.valuedAtCost``, params ``count`` and
+    ``as_of_date``, group ``valued_at_cost``, CTA ``navigate_asset`` like TRANSACTION_IMPLIED).
+
+    Same grace as TRANSACTION_IMPLIED (``TRANSACTION_IMPLIED_GRACE_DAYS``), counted from the asset's
+    first acquisition — here its only one, an ADJUSTMENT: an asset at cost has no BUY or SELL, so the
+    BUY/SELL first position date cannot anchor it. Same rule for manual assets: an asset without a
+    provider assignment is not listed (its cost is its intended value); an asset with one is listed
+    once the grace has passed. A holding at cost is in neither TRANSACTION_IMPLIED nor MISSING_PRICE.
+
+    Each test owns its user, broker and asset (flushed, rolled back by ``session``), and proves through
+    the holding row that on ``V`` the asset is valued at cost before reading any verdict, so an absent
+    listing can only come from the rule. ``V`` is fixed: the grace is measured from ``date_to``.
+    """
+
+    V = date(2025, 6, 30)
+
+    def _day(self, days_before_v: int) -> date:
+        return self.V - timedelta(days=days_before_v)
+
+    async def _seed_adjustment(self, session, broker: Broker, asset: Asset, *, days_before_v: int) -> None:
+        """ADJUSTMENT-in of 10 units of ``asset`` at 20 EUR on V − ``days_before_v``: no cash, no quote, no BUY/SELL."""
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=self._day(days_before_v),
+                quantity=Decimal("10"),
+                amount=Decimal("0"),
+                currency="EUR",
+                cost_basis_override=Decimal("20"),
+                cost_basis_currency="EUR",
+            )
+        )
+        await session.flush()
+
+    async def _summary(self, session, user: User):
+        return await PortfolioService(session).get_summary(user_id=user.id, date_to=self.V)
+
+    @staticmethod
+    def _listed_ids(summary, code: str) -> set[int]:
+        issue = next((issue for issue in summary.data_quality.issues if issue.code == code), None)
+        return set(issue.affected_asset_ids) if issue is not None else set()
+
+    @staticmethod
+    def _assert_at_cost_on_v(summary, asset_id: int) -> None:
+        rows = [holding for holding in summary.holdings if holding.asset_id == asset_id]
+        assert len(rows) == 1, f"expected exactly one open holding of asset {asset_id}, got {rows}"
+        assert (rows[0].valuation_source, rows[0].current_value) == ("ESTIMATED_AT_COST", Decimal("200")), f"barrier: on V the asset must be valued at its 200 EUR cost, got {(rows[0].valuation_source, rows[0].current_value)}"
+
+    @staticmethod
+    def _record_valued_at_cost_entries(monkeypatch) -> list:
+        """The VALUED_AT_COST entries ``get_summary`` hands the data-quality report, one item per call (None: none).
+
+        The entries are not in the summary (only the issue's ids and names are), so they are read where they are
+        handed over; the real report is still built from them.
+        """
+        calls: list = []
+        build = DerivedViewsBuilder.build_data_quality_report
+
+        def recording(self, **kwargs):
+            calls.append(kwargs.get("valued_at_cost_assets_dto"))
+            return build(self, **kwargs)
+
+        monkeypatch.setattr(DerivedViewsBuilder, "build_data_quality_report", recording)
+        return calls
+
+    @pytest.mark.asyncio
+    async def test_provider_asset_at_cost_past_the_grace_is_listed_as_valued_at_cost(self, session, test_user, broker_with_access, test_asset_with_provider, monkeypatch):
+        """Provider asset at cost since V−20 (> 14 days): one VALUED_AT_COST warning listing it, with
+        the issue's full shape; not in TRANSACTION_IMPLIED, not in MISSING_PRICE. Its entry dates the
+        position from its first acquisition, the ADJUSTMENT of V−20.
+
+        Before J-17: no VALUED_AT_COST code; the asset was LAST_TRADE_PRICE (its ADJUSTMENT was a price)
+        and listed under TRANSACTION_IMPLIED. (J-17's first version dated the entry None: its first
+        position date counted BUY/SELL only.)
+        """
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_adjustment(session, broker, asset, days_before_v=20)
+        handed_over = self._record_valued_at_cost_entries(monkeypatch)
+
+        summary = await self._summary(session, test_user)
+
+        self._assert_at_cost_on_v(summary, asset.id)
+        issue = next((issue for issue in summary.data_quality.issues if issue.code == "VALUED_AT_COST"), None)
+        assert issue is not None, f"no VALUED_AT_COST issue among {[i.code for i in summary.data_quality.issues]}"
+        assert {
+            "domain": issue.domain,
+            "severity": issue.severity,
+            "message_i18n_key": issue.message_i18n_key,
+            "message_params": issue.message_params,
+            "count": issue.count,
+            "affected_asset_ids": issue.affected_asset_ids,
+            "affected_asset_names": issue.affected_asset_names,
+            "cta_action": issue.cta_action,
+            "cta_target": issue.cta_target,
+            "group_key": issue.group_key,
+        } == {
+            "domain": IssueDomain.PORTFOLIO,
+            "severity": IssueSeverity.WARNING,
+            "message_i18n_key": "dataQuality.valuedAtCost",
+            "message_params": {"count": 1, "as_of_date": self.V.isoformat()},
+            "count": 1,
+            "affected_asset_ids": [asset.id],
+            "affected_asset_names": [asset.display_name],
+            "cta_action": "navigate_asset",
+            "cta_target": str(asset.id),
+            "group_key": "valued_at_cost",
+        }
+        assert handed_over, "get_summary built no data-quality report"
+        entries = handed_over[-1] or []
+        assert [(entry.asset_id, entry.broker_id, entry.first_position_date) for entry in entries] == [(asset.id, broker.id, self._day(20))]
+        assert asset.id not in self._listed_ids(summary, "TRANSACTION_IMPLIED")
+        assert asset.id not in self._listed_ids(summary, "MISSING_PRICE")
+        assert asset.id not in {item.asset_id for item in summary.missing_price_assets}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("days_before_v", "listed"),
+        [
+            pytest.param(5, False, id="within-grace"),
+            pytest.param(TRANSACTION_IMPLIED_GRACE_DAYS, False, id="last-day-of-grace"),
+            pytest.param(TRANSACTION_IMPLIED_GRACE_DAYS + 1, True, id="first-day-past-grace"),
+        ],
+    )
+    async def test_provider_asset_at_cost_follows_the_transaction_implied_grace(self, session, test_user, broker_with_access, test_asset_with_provider, days_before_v, listed):
+        """The grace of TRANSACTION_IMPLIED, counted from the asset's first acquisition — here its only
+        one, the ADJUSTMENT (an asset at cost has no BUY or SELL by definition): listed only past
+        ``TRANSACTION_IMPLIED_GRACE_DAYS`` days. Never in TRANSACTION_IMPLIED.
+
+        Before J-17: LAST_TRADE_PRICE (the barrier fails), and listed under TRANSACTION_IMPLIED whatever
+        its age — that grace counted from the first BUY/SELL, which an adjustment-only asset does not
+        have. (J-17's first version counted the at-cost grace from the BUY/SELL date too, so it listed
+        the asset at once: ``within-grace`` and ``last-day-of-grace`` were red there.)
+        """
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_adjustment(session, broker, asset, days_before_v=days_before_v)
+
+        summary = await self._summary(session, test_user)
+
+        self._assert_at_cost_on_v(summary, asset.id)
+        listed_now = asset.id in self._listed_ids(summary, "VALUED_AT_COST")
+        assert listed_now is listed, f"asset {asset.id}, at cost since {self._day(days_before_v)} (its only acquisition): listed={listed_now} under VALUED_AT_COST on {self.V}, expected {listed} (grace {TRANSACTION_IMPLIED_GRACE_DAYS} days from the first acquisition)"
+        assert asset.id not in self._listed_ids(summary, "TRANSACTION_IMPLIED")
+        assert asset.id not in self._listed_ids(summary, "MISSING_PRICE")
+
+    @pytest.mark.asyncio
+    async def test_manual_asset_at_cost_is_not_listed(self, session, test_user, broker_with_access, test_asset):
+        """An asset without a provider assignment, at cost since V−20: its cost is its intended value,
+        so nothing is listed — no VALUED_AT_COST, no TRANSACTION_IMPLIED, no MISSING_PRICE.
+
+        Before J-17: LAST_TRADE_PRICE (the barrier fails); nothing listed either (manual assets were
+        already suppressed from TRANSACTION_IMPLIED).
+        """
+        broker, _ = broker_with_access
+        await self._seed_adjustment(session, broker, test_asset, days_before_v=20)
+        assigned = (await session.execute(select(AssetProviderAssignment.id).where(AssetProviderAssignment.asset_id == test_asset.id))).all()
+        assert assigned == [], "precondition: the asset has no provider assignment"
+
+        summary = await self._summary(session, test_user)
+
+        self._assert_at_cost_on_v(summary, test_asset.id)
+        for code in ("VALUED_AT_COST", "TRANSACTION_IMPLIED", "MISSING_PRICE"):
+            assert test_asset.id not in self._listed_ids(summary, code), f"manual asset {test_asset.id} listed under {code}"
+
+
+# =============================================================================
+# TestTransferShareMismatchDataQuality (J-43)
+# =============================================================================
+
+
+class TestTransferShareMismatchDataQuality:
+    """J-43 — a linked internal pair between two brokers the user owns at different shares, end to end.
+
+    Each leg counts at its own broker's share, so moving 1000 EUR from a broker owned at 1 to one owned at 0.5 turns 500
+    of the user's money into a loss (D-MF4 = a: the gap is a result, never capital). The data-quality report is the
+    user's only explanation of it: one INFO issue ``TRANSFER_SHARE_MISMATCH`` counting the pairs and one string per pair
+    in ``share_mismatch_warnings`` naming both legs — from both report builders of ``portfolio_service``
+    (``get_summary``'s, and ``get_report``'s own when the summary is not requested) — and the engine's result carries
+    the pair as a ``ShareMismatch``. At equal shares nothing is reported.
+
+    The pair is same-day on purpose: on HEAD 252835dce the classifier does not even warn for it (J-43a), and no warning
+    of any date leaves the classifier (J-43b). Each test owns its user and its two brokers (flushed, rolled back by
+    ``session``), so the counts are the counts of what it wrote; a barrier first proves the pair is in the scope at the
+    shares the case claims. ``ShareMismatch`` is read from ``models`` when the test runs.
+    """
+
+    D = date(2025, 3, 10)  # the deposit and both legs of the transfer
+    V = date(2025, 3, 20)  # the valuation day
+
+    async def _owned_broker(self, session, user: User, share: str) -> Broker:
+        broker = Broker(name=f"PfBroker_J43_{uuid4().hex[:12]}")
+        session.add(broker)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=broker.id, user_id=user.id, role=UserRole.OWNER, share_percentage=Decimal(share)))
+        await session.flush()
+        return broker
+
+    async def _same_day_transfer(self, session, user: User, *, sender_share: str, receiver_share: str) -> tuple[Transaction, Transaction]:
+        """5000 EUR deposited on D at a sender owned at ``sender_share``, then 1000 EUR moved the same day to a receiver
+        owned at ``receiver_share``: a CASH_TRANSFER pair linked both ways (both legs flushed first: the foreign key of
+        ``related_transaction_id`` is deferred). Returns the two legs, the one sent first."""
+        sender = await self._owned_broker(session, user, sender_share)
+        receiver = await self._owned_broker(session, user, receiver_share)
+        session.add(Transaction(broker_id=sender.id, type=TransactionType.DEPOSIT, date=self.D, amount=Decimal("5000"), currency="EUR"))
+        sent = Transaction(broker_id=sender.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=self.D, quantity=Decimal("0"), amount=Decimal("-1000"), currency="EUR")
+        received = Transaction(broker_id=receiver.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=self.D, quantity=Decimal("0"), amount=Decimal("1000"), currency="EUR")
+        session.add_all([sent, received])
+        await session.flush()
+        sent.related_transaction_id = received.id
+        received.related_transaction_id = sent.id
+        await session.flush()
+        return sent, received
+
+    @staticmethod
+    def _mismatch_problems(where: str, data_quality, legs: tuple[Transaction, Transaction]) -> list[str]:
+        """What keeps ``data_quality`` from reporting exactly the one pair ``legs``: one INFO TRANSFER_SHARE_MISMATCH
+        issue counting 1, and one string naming both legs (the rest of its text is not pinned)."""
+        if data_quality is None:
+            return [f"{where}: no data quality"]
+        problems: list[str] = []
+        issues = [(issue.severity, issue.count, issue.message_params) for issue in data_quality.issues if issue.code == "TRANSFER_SHARE_MISMATCH"]
+        if issues != [(IssueSeverity.INFO, 1, {"count": 1})]:
+            problems.append(f"{where}: TRANSFER_SHARE_MISMATCH issues {issues}, expected one INFO counting 1; the report carries {[issue.code for issue in data_quality.issues]}")
+        leg_ids = {leg.id for leg in legs}
+        strings = data_quality.share_mismatch_warnings
+        if len(strings) != 1 or not leg_ids <= {int(number) for number in re.findall(r"\d+", strings[0])}:
+            problems.append(f"{where}: share_mismatch_warnings {strings}, expected one string naming both legs {sorted(leg_ids)}")
+        return problems
+
+    @pytest.mark.asyncio
+    async def test_summary_reports_a_same_day_transfer_between_different_shares(self, session, test_user):
+        """Red (J-43a + J-43b). Sender at 1, receiver at 0.5: the net worth is 4000 + 1000 x 0.5 = 4500 (barrier), and the
+        summary's data quality carries one TRANSFER_SHARE_MISMATCH issue counting 1 and one string naming both legs.
+
+        HEAD: neither — no issue, ``share_mismatch_warnings == []``: the classifier does not warn for a same-day pair,
+        and nothing takes its warnings out of the engine."""
+        legs = await self._same_day_transfer(session, test_user, sender_share="1", receiver_share="0.5")
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, target_currency_override="EUR", date_to=self.V)
+
+        assert summary.net_worth.amount == Decimal("4500"), f"barrier: each leg at its broker's share, got {summary.net_worth.amount}"
+        problems = self._mismatch_problems("get_summary", summary.data_quality, legs)
+        assert not problems, "\n".join(problems)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("include_summary", [True, False], ids=["summary_builds_it", "report_builds_it"])
+    async def test_report_reports_it_from_either_builder(self, session, test_user, include_summary):
+        """Red (J-43a + J-43b). The same pair through ``get_report`` over D..V: with the summary, the report's data quality
+        is the summary's; without it, ``get_report`` builds its own (the second ``build_data_quality_report`` call of
+        portfolio_service.py). Either way one issue counting 1 and one string naming both legs. Barrier: the engine's
+        states start on D, so it replayed these rows.
+
+        HEAD: neither, from either builder."""
+        legs = await self._same_day_transfer(session, test_user, sender_share="1", receiver_share="0.5")
+        _portfolio_l2_cache.clear()
+
+        report = await PortfolioService(session).get_report(
+            user_id=test_user.id,
+            query=PortfolioReportQuery(
+                target_currency="EUR",
+                include_summary=include_summary,
+                include_history=False,
+                include_allocation_history=False,
+                include_positions_contribution=False,
+                date_range={"start": self.D.isoformat(), "end": self.V.isoformat()},
+            ),
+        )
+
+        assert report.metadata.computed_date_from == self.D, f"barrier: the engine replayed this user's rows from D, got {report.metadata.computed_date_from}"
+        problems = self._mismatch_problems(f"get_report(include_summary={include_summary})", report.data_quality, legs)
+        assert not problems, "\n".join(problems)
+
+    @pytest.mark.asyncio
+    async def test_engine_result_carries_the_pair_as_a_share_mismatch(self, session, test_user):
+        """Red (J-43b). ``PortfolioCalculationEngine.calculate`` returns the pair as one ShareMismatch: the legs' ids lower
+        first, their brokers and shares (the engine's ``broker_shares``: 1 for the sender, 0.5 for the receiver) in that
+        order, dated D.
+
+        HEAD: AttributeError — ``models`` has no ShareMismatch, PortfolioCalculationResult no ``share_mismatches``."""
+        sent, received = await self._same_day_transfer(session, test_user, sender_share="1", receiver_share="0.5")
+        share_of = {sent.broker_id: Decimal("1"), received.broker_id: Decimal("0.5")}
+        first, second = sorted((sent, received), key=lambda leg: leg.id)
+
+        result = await portfolio_engine_module.PortfolioCalculationEngine(session).calculate(user_id=test_user.id, date_to=self.V, target_currency="EUR")
+
+        expected = portfolio_models_module.ShareMismatch(tx_ids=(first.id, second.id), broker_ids=(first.broker_id, second.broker_id), shares=(share_of[first.broker_id], share_of[second.broker_id]), date=self.D)
+        assert result.share_mismatches == [expected]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("share", "net_worth"), [("1", "5000"), ("0.5", "2500")], ids=["both_whole", "both_half"])
+    async def test_equal_shares_report_nothing(self, session, test_user, share, net_worth):
+        """Guard (green on HEAD and after J-43). The same transfer between two brokers owned at the same share — whole,
+        or half each — is no mismatch: no TRANSFER_SHARE_MISMATCH issue and no string. Barrier first: the net worth is
+        the 5000 deposited, at that share."""
+        await self._same_day_transfer(session, test_user, sender_share=share, receiver_share=share)
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, target_currency_override="EUR", date_to=self.V)
+
+        assert summary.net_worth.amount == Decimal(net_worth), f"barrier: the pair is in the scope at share {share}, got {summary.net_worth.amount}"
+        data_quality = summary.data_quality
+        assert data_quality is not None
+        assert [issue.code for issue in data_quality.issues if issue.code == "TRANSFER_SHARE_MISMATCH"] == []
+        assert data_quality.share_mismatch_warnings == []
+
+
+# =============================================================================
 # TestStalePriceDataQuality
 # =============================================================================
 
@@ -2170,7 +2753,14 @@ class TestPortfolioServiceDateAwareDashboardData:
         assert holding.nav_weight_percent == Decimal("10.89")
 
     @pytest.mark.asyncio
-    async def test_summary_maps_seed_cost_valuation_reference(self, session, test_user, broker_with_access, test_asset):
+    async def test_summary_maps_adjustment_only_holding_at_cost(self, session, test_user, broker_with_access, test_asset):
+        """J-17: a holding whose only acquisition is a priced ADJUSTMENT (5 at 20 EUR, then a 2:1 split)
+        and that has no quote, BUY or SELL is valued at its book cost: ESTIMATED_AT_COST, value 100,
+        no price at all (current, effective and reference empty), gain 0, not a missing price.
+
+        Before J-17: LAST_TRADE_PRICE at the adjustment's 20 EUR restated through the split — current
+        price 10, effective 10 EUR, reference 2025-01-02 at 20 EUR, split_adjusted True (same value 100).
+        """
         broker, _ = broker_with_access
         split_event = AssetEvent(
             asset_id=test_asset.id,
@@ -2217,17 +2807,18 @@ class TestPortfolioServiceDateAwareDashboardData:
         assert len(summary.holdings) == 1
         holding = summary.holdings[0]
         assert holding.quantity == Decimal("10")
-        assert holding.current_price == Decimal("10")
+        assert holding.valuation_source == "ESTIMATED_AT_COST"
+        assert holding.current_price is None
         assert holding.current_value == Decimal("100")
         assert holding.gain_loss == Decimal("0")
-        assert holding.valuation_source == "LAST_TRADE_PRICE"
-        assert holding.valuation_effective_unit_price == Decimal("10")
-        assert holding.valuation_effective_currency == "EUR"
-        assert holding.valuation_reference_date == date(2025, 1, 2)
-        assert holding.valuation_reference_unit_price == Decimal("20")
-        assert holding.valuation_reference_currency == "EUR"
-        assert holding.valuation_split_adjusted is True
+        assert holding.valuation_effective_unit_price is None
+        assert holding.valuation_effective_currency is None
+        assert holding.valuation_reference_date is None
+        assert holding.valuation_reference_unit_price is None
+        assert holding.valuation_reference_currency is None
         assert holding.missing_fx_pair is None
+        assert test_asset.id not in {asset.asset_id for asset in summary.missing_price_assets}
+        assert IssueCode.MISSING_PRICE not in {issue.code for issue in summary.data_quality.issues}
 
     @pytest.mark.asyncio
     async def test_summary_deduplicates_shared_split_event_and_maps_effective_price(self, session, test_user, broker_with_access, test_asset):

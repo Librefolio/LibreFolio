@@ -92,11 +92,11 @@ from backend.app.services.ai_export.temporal.policy import (
     EventSelectionPolicy,
     indicator_history_row_limit,
 )
-from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.services.provider_registry import SignalPluginRegistry
 from backend.app.services.signal_plugins.drawdown.plugin import DrawdownParams, DrawdownPlugin
-from backend.app.services.signal_service import SignalService
+from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.service import SignalService
 
 #: Frozen 20-instance Asset technical universe.
 ASSET_BUNDLE_INSTANCE_IDS = frozenset(
@@ -357,7 +357,7 @@ def _make_fake_get_prices_bulk(*, source_plugin_key: str | None = "yfinance", wi
     the real `AssetSourceManager.derive_signal_source_capability`, computes
     real signals over the full (warm-up-inclusive) series, then slices
     `result.prices` to the visible period only - exactly mirroring the
-    production `get_prices_bulk` contract (see `asset_source.py`'s own
+    production `get_prices_bulk` contract (see `assets/price_query.py`'s own
     "Signal computation and response slicing" section).
     """
     calls: list[int] = []

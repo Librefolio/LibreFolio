@@ -38,14 +38,9 @@ from random import Random
 
 import pytest
 
-from backend.app.schemas.pac_allocator import (
-    _PLANNER_FIXED_DECIMAL,
-    ExactMoney,
-    ExactPrice,
-    FiniteDecimal,
-    _exact_fraction,
-)
-from backend.app.schemas.pac_allocator import ExactRatio as WireExactRatio
+from backend.app.schemas.pac_allocator.base import _PLANNER_FIXED_DECIMAL
+from backend.app.schemas.pac_allocator.exact import ExactMoney, ExactPrice, FiniteDecimal, exact_fraction
+from backend.app.schemas.pac_allocator.exact import ExactRatio as WireExactRatio
 from backend.app.services.pac_allocator.numeric import ExactRatio as R
 from backend.app.services.pac_allocator.numeric import post_half_up
 from backend.app.services.pac_allocator.wire_numbers import (
@@ -85,7 +80,7 @@ def test_round_trip_wire_value_equals_exact_input_for_random_rationals() -> None
     """Every projection is value-preserving, whichever branch it takes.
 
     Property (never lossy): for a large seeded sample of rationals spanning
-    both branches, reading the wire number back out with ``_exact_fraction``
+    both branches, reading the wire number back out with ``exact_fraction``
     reproduces the exact input. Whenever the ``finite_decimal`` branch is
     taken, its text is additionally a string the wire pattern admits and fits
     the 96-character envelope — so the round-trip is exact *and* publishable.
@@ -98,7 +93,7 @@ def test_round_trip_wire_value_equals_exact_input_for_random_rationals() -> None
 
         wire = ratio_to_exact_number(ratio)
 
-        assert _exact_fraction(wire) == _fraction_of(ratio)
+        assert exact_fraction(wire) == _fraction_of(ratio)
         if isinstance(wire, FiniteDecimal):
             assert _FIXED_DECIMAL_RE.match(wire.value), repr(wire.value)
             assert len(wire.value) <= MAX_FIXED_DECIMAL_CHARS
@@ -209,7 +204,7 @@ def test_non_terminating_falls_back_to_exact_ratio(ratio: R) -> None:
     wire = ratio_to_exact_number(ratio)
     assert isinstance(wire, WireExactRatio)
     assert wire.kind == "exact_ratio"
-    assert _exact_fraction(wire) == _fraction_of(ratio)
+    assert exact_fraction(wire) == _fraction_of(ratio)
     assert int(wire.numerator) == ratio.numerator
     assert int(wire.denominator) == ratio.denominator
 
@@ -242,7 +237,7 @@ def test_exact_ratio_display_projection_is_non_authoritative_and_exact_underneat
     assert wire.display_authority == "non_authoritative"
 
     # Authoritative value is exact, whatever the display shows.
-    assert _exact_fraction(wire) == _fraction_of(ratio)
+    assert exact_fraction(wire) == _fraction_of(ratio)
 
     # display_scale is exactly the number of fractional digits emitted.
     fractional_digits = wire.display_decimal.split(".")[1] if "." in wire.display_decimal else ""
@@ -308,7 +303,7 @@ def test_huge_terminating_value_falls_back_losslessly_but_fixed_decimal_raises()
     wire = ratio_to_exact_number(huge)
     assert isinstance(wire, WireExactRatio)
     assert wire.kind == "exact_ratio"
-    assert _exact_fraction(wire) == Fraction(1, 2**400)
+    assert exact_fraction(wire) == Fraction(1, 2**400)
 
     with pytest.raises(WireNumberTooLargeError):
         ratio_to_fixed_decimal(huge)
@@ -354,7 +349,7 @@ def test_ratio_to_money_carries_currency_and_exact_value() -> None:
     assert money.currency == "EUR"
     assert isinstance(money.value, FiniteDecimal)
     assert money.value.value == "0.5"
-    assert _exact_fraction(money.value) == Fraction(1, 2)
+    assert exact_fraction(money.value) == Fraction(1, 2)
 
 
 def test_ratio_to_money_uses_exact_ratio_branch_for_non_terminating() -> None:
@@ -364,7 +359,7 @@ def test_ratio_to_money_uses_exact_ratio_branch_for_non_terminating() -> None:
     money = ratio_to_money(R(1, 3), "USD")
     assert money.currency == "USD"
     assert isinstance(money.value, WireExactRatio)
-    assert _exact_fraction(money.value) == Fraction(1, 3)
+    assert exact_fraction(money.value) == Fraction(1, 3)
 
 
 def test_ratio_to_price_projects_value_and_quote_base() -> None:
@@ -378,7 +373,7 @@ def test_ratio_to_price_projects_value_and_quote_base() -> None:
     assert price.currency == "USD"
     assert price.quantity_unit == "asset_unit"
     assert price.quote_base_quantity == "1"
-    assert _exact_fraction(price.value) == Fraction(3, 2)
+    assert exact_fraction(price.value) == Fraction(3, 2)
 
 
 def test_ratio_to_price_rejects_non_terminating_quote_base() -> None:

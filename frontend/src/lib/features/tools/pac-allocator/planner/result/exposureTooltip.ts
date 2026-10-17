@@ -39,7 +39,10 @@ export function exposureTooltipText(tr: PlannerTranslate): ExposureTooltipText {
     };
 }
 
-/** `dots`: the series colours, when the chart draws the two weights in two colours (the bars). */
+/**
+ * `dots`: the colours of the row's two weights, when the chart draws them in two colours (the bars, TD-1): the ideal's
+ * neutral role and the category colour of the actual weight.
+ */
 export function exposureTooltipHtml(row: WeightRow, text: ExposureTooltipText, theme: TooltipTheme, dots?: {target: string; final: string}): string {
     const final = row.final.kind === 'available' ? escapeHtml(formatExactPercent(row.final.value)) : `— <span style="font-weight:400;color:${theme.mutedColor}">${escapeHtml(text.unavailable[row.final.reason])}</span>`;
     const lines = [`<div style="font-weight:600;margin-bottom:4px">${escapeHtml(row.label)}</div>`, buildTooltipRow(escapeHtml(text.target), escapeHtml(formatExactPercent(row.target)), dots?.target), buildTooltipRow(escapeHtml(text.final), final, dots?.final)];

@@ -39,7 +39,7 @@ Backend issue: { code: "balanceCashNegative", params: { brokerId: 3, currency: "
 
 | Role | Path |
 |------|------|
-| Resolver helper | `frontend/src/lib/utils/transactions/resolveValidationMessage.ts` |
+| Resolver helper | `frontend/src/lib/features/transactions/resolveValidationMessage.ts` |
 | SaveWithRetry integration | `frontend/src/lib/utils/trySave.ts` (renamed from saveWithRetry.ts on 2026-05-21; the helper is now `trySave`) |
 | i18n keys | `frontend/src/lib/i18n/base/{en,it,fr,es}.json` (`transactions.errors.*`, `.pydantic.*`, `.fields.*`, `.fieldErrors.*`) |
 

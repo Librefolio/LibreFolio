@@ -16,10 +16,12 @@
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {fxProviderBadgeHtml} from '$lib/utils/providerHelpers';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {displayFxDelta, displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import type {RangeDelta} from '$lib/utils/rangeChange';
     import {fxProvidersVersion} from '$lib/stores/currencyGraphStore';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     // =========================================================================
     // Types
@@ -33,6 +35,8 @@
         manualOnly: boolean;
         providers: Array<{providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}>;
         deltas?: Record<string, number | null>;
+        /** The pair's Δ over the range on screen, both ways, from the backend (X-R59): the Δ Abs and Δ % columns. */
+        rangeDeltas?: {direct: RangeDelta; inverse: RangeDelta} | null;
     }
 
     interface Props {
@@ -106,15 +110,17 @@
         return displayFxRate(last.rate, isCardInverted(row.slug));
     }
 
-    function getDelta(row: FxRow): {abs: number | null; pct: number | null} {
+    /** The backend's Δ over the range (X-R59), the way the row shows the pair. */
+    function getDelta(row: FxRow): RangeDelta {
         void inversionVersion;
-        if (row.data.length < 2) return {abs: null, pct: null};
-        return displayFxDelta(row.data[0].rate, row.data[row.data.length - 1].rate, isCardInverted(row.slug)) ?? {abs: null, pct: null};
+        const deltas = row.rangeDeltas;
+        if (!deltas) return {abs: null, pct: null};
+        return isCardInverted(row.slug) ? deltas.inverse : deltas.direct;
     }
 
     function formatDelta(val: number | null, suffix: string = ''): string {
         if (val === null) return '—';
-        return `${formatFixed(val, 4, {signed: true})}${suffix}`;
+        return `${formatPrice(val, {minDecimals: 4, signed: true})}${suffix}`;
     }
 
     function formatDeltaPct(val: number | null): string {
@@ -123,8 +129,8 @@
     }
 
     function deltaColorClass(val: number | null): string {
-        if (val === null) return 'text-gray-400 dark:text-gray-500';
-        return val >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400';
+        if (val === null) return SIGN_TEXT.market.none;
+        return val >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss;
     }
 
     // Provider chain rendering — constants & helpers from $lib/utils/fxSync
@@ -143,9 +149,9 @@
                 if (i === 0) {
                     parts.push(`<span class="emoji-flag text-[10px]">${fromFlag}</span>`);
                 }
-                parts.push(`<span class="text-gray-400 text-[8px]">⇆</span>`);
+                parts.push(`<span class="text-lf-muted text-[8px]">⇆</span>`);
                 parts.push(fxProviderBadgeHtml(step.provider));
-                parts.push(`<span class="text-gray-400 text-[8px]">⇆</span>`);
+                parts.push(`<span class="text-lf-muted text-[8px]">⇆</span>`);
                 parts.push(`<span class="emoji-flag text-[10px]">${toFlag}</span>`);
             }
             return `<div class="flex items-center gap-0.5 flex-wrap">${parts.join('')}</div>`;
@@ -169,10 +175,10 @@
                     const dq = getDisplayQuote(row);
                     const bFlag = getCurrencyInfo(db).flag_emoji;
                     const qFlag = getCurrencyInfo(dq).flag_emoji;
-                    const manualBadge = row.manualOnly ? ' <span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 ml-1">✏️</span>' : '';
+                    const manualBadge = row.manualOnly ? ' <span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded bg-lf-warning-soft text-lf-warning-on-soft ml-1">✏️</span>' : '';
                     return {
                         type: 'html',
-                        html: `<span class="emoji-flag">${bFlag}</span> <span class="font-semibold">${db}</span> <span class="text-gray-400">→</span> <span class="emoji-flag">${qFlag}</span> <span class="font-semibold">${dq}</span>${manualBadge}`,
+                        html: `<span class="emoji-flag">${bFlag}</span> <span class="font-semibold">${db}</span> <span class="text-lf-muted">→</span> <span class="emoji-flag">${qFlag}</span> <span class="font-semibold">${dq}</span>${manualBadge}`,
                     };
                 },
                 type: 'text',
@@ -185,7 +191,7 @@
                 header: $t('fx.rate'),
                 cell: (row) => {
                     const r = getRate(row);
-                    return r !== null ? {type: 'html', html: `<span class="font-mono font-bold">${formatFixed(r, 4)}</span>`} : {type: 'html', html: `<span data-fx-rate-state="missing" class="text-gray-400 dark:text-gray-500">${$t('fx.rateNotAvailable')}</span>`};
+                    return r !== null ? {type: 'html', html: `<span class="font-mono font-bold">${formatPrice(r, {minDecimals: 4})}</span>`} : {type: 'html', html: `<span data-fx-rate-state="missing" class="text-lf-muted">${$t('fx.rateNotAvailable')}</span>`};
                 },
                 type: 'number',
                 getValue: (row) => getRate(row),

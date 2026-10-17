@@ -4,7 +4,7 @@
   progress bar with countdown, per-section result lists via snippets,
   retry logic (single item + all-failed), and aggregated summary.
 
-  Specializations (FxSyncModal, AssetSyncModal, PageSyncAllModal) build
+  Specializations (FxSyncModal, AssetSyncModal, PageSyncModal) build
   SyncSection[] and pass them here. Each section has its own doSyncFn
   and resultRow snippet. Sections with empty targetIds are hidden.
   All sections are synced in parallel with a unified countdown.
@@ -45,22 +45,7 @@
         maxWidth?: string;
     }
 
-    let {
-        open = $bindable(),
-        dateStart,
-        dateEnd,
-        title,
-        description,
-        testId,
-        headerIcon: HeaderIcon = RefreshCw,
-        headerIconBg = 'bg-amber-100 dark:bg-amber-900/30',
-        headerIconColor = 'text-amber-600 dark:text-amber-400',
-        sections,
-        onsynced,
-        onclose,
-        zIndex = 50,
-        maxWidth = 'max-w-md',
-    }: Props = $props();
+    let {open = $bindable(), dateStart, dateEnd, title, description, testId, headerIcon: HeaderIcon = RefreshCw, headerIconBg = 'bg-lf-warning-soft', headerIconColor = 'text-lf-warning', sections, onsynced, onclose, zIndex = 50, maxWidth = 'max-w-md'}: Props = $props();
 
     // =========================================================================
     // State
@@ -90,6 +75,14 @@
 
     /** Count label combining all section labels */
     let countLabel = $derived(activeSections.map((s) => `${s.targetIds.length} ${s.countLabel}`).join(' · '));
+
+    /** Per active section, how many of its targets already hold stored data in the range (C-66): warned before the start. */
+    let overwriteWarnings = $derived(
+        activeSections.flatMap((section) => {
+            const existing = section.existingIds?.length ? section.targetIds.filter((id) => section.existingIds!.includes(id)).length : 0;
+            return existing > 0 ? [{id: section.id, title: section.title, existing, total: section.targetIds.length}] : [];
+        }),
+    );
 
     /** All results flattened */
     let allResults = $derived(Array.from(sectionResults.values()).flat());
@@ -355,16 +348,16 @@
 
 <ModalBase {maxWidth} onRequestClose={onclose} {open} {testId} {zIndex}>
     <!-- Header -->
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-lf-subtle">
         <div class="flex items-center gap-2.5">
             <div class="flex items-center justify-center w-9 h-9 rounded-lg {headerIconBg}">
                 <HeaderIcon class={headerIconColor} size={18} />
             </div>
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
+            <h2 class="text-lg font-semibold text-lf-primary">
                 {title}
             </h2>
         </div>
-        <button class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" data-testid="sync-modal-dismiss" onclick={onclose}>
+        <button class="p-1.5 rounded-lg hover:bg-lf-hover text-lf-muted hover:text-lf-secondary transition-colors" data-testid="sync-modal-dismiss" onclick={onclose}>
             <X size={18} />
         </button>
     </div>
@@ -373,24 +366,36 @@
          only legible as a translated footer label ("Close" instead of "Cancel"):
          the last attempt died on a timeout rather than on an ordinary failure. -->
     <div class="px-6 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto" data-busy={syncing ? 'true' : 'false'} data-testid="sync-modal-body" data-timeout={isTimeout ? 'true' : 'false'}>
-        <p class="text-sm text-gray-600 dark:text-gray-400">
+        <p class="text-sm text-lf-secondary">
             {description}
         </p>
         <!-- Date range + count info. The visible tally is `countLabel`, which is
              assembled from translated nouns ("2 pairs · 3 assets"); the two
              counts are republished here as numbers so the scope of the sync is
              machine-readable in every language. -->
-        <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 rounded-lg px-3 py-2" data-item-count={itemCount} data-section-count={activeSections.length} data-testid="sync-modal-count">
-            <span class="font-medium text-gray-700 dark:text-gray-300">{dateStart}</span>
+        <div class="flex items-center gap-2 text-xs text-lf-muted bg-lf-panel rounded-lg px-3 py-2" data-item-count={itemCount} data-section-count={activeSections.length} data-testid="sync-modal-count">
+            <span class="font-medium text-lf-secondary">{dateStart}</span>
             <span>→</span>
-            <span class="font-medium text-gray-700 dark:text-gray-300">{dateEnd}</span>
+            <span class="font-medium text-lf-secondary">{dateEnd}</span>
             <span class="mx-1">·</span>
             <span>{countLabel}</span>
         </div>
 
+        <!-- C-66: the range already holds stored data, which the sync replaces (manual edits included). Shown before the
+             start only; the counts are republished as numbers, the sentence is translated. -->
+        {#if !hasResults && !syncing}
+            {#each overwriteWarnings as warning (warning.id)}
+                <div data-existing={warning.existing} data-section={warning.id} data-testid="{testId}-overwrite-warning" data-total={warning.total}>
+                    <InfoBanner variant="warning">
+                        <span class="text-xs">{activeSections.length > 1 ? `${warning.title}: ` : ''}{$t('fx.sync.overwriteWarning', {values: {existing: warning.existing, total: warning.total}})}</span>
+                    </InfoBanner>
+                </div>
+            {/each}
+        {/if}
+
         <!-- Timeout setting -->
         {#if !hasResults || failedItems.length > 0 || isTimeout}
-            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <div class="flex items-center gap-2 text-xs text-lf-muted">
                 <Timer size={13} class="shrink-0" />
                 <span>{$t('fx.sync.timeout') ?? 'Timeout'}:</span>
                 <input
@@ -402,7 +407,7 @@
                     bind:value={timeoutSec}
                     disabled={syncing}
                     data-testid="sync-modal-timeout"
-                    class="w-16 px-1.5 py-0.5 text-xs text-center rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 disabled:opacity-50"
+                    class="w-16 px-1.5 py-0.5 text-xs text-center rounded border border-lf-input hover:border-lf-input-hover focus:border-lf-focus bg-lf-field text-lf-primary disabled:opacity-50"
                 />
                 <span>sec</span>
             </div>
@@ -413,15 +418,15 @@
              format, not a number a test can compare against. -->
         {#if syncing}
             <div class="space-y-1.5" data-remaining={remainingSec} data-testid="sync-modal-progress">
-                <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                <div class="flex items-center justify-between text-xs text-lf-muted">
                     <span class="flex items-center gap-1.5">
                         <Clock size={13} class="animate-pulse" />
                         {$t('common.syncing') ?? 'Syncing...'}
                     </span>
                     <span class="font-mono tabular-nums">{formatTime(remainingSec)}</span>
                 </div>
-                <div class="h-1.5 w-full bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                    <div class="h-full bg-amber-500 rounded-full transition-all duration-100" style="width: {progressPct}%"></div>
+                <div class="h-1.5 w-full bg-lf-neutral rounded-full overflow-hidden">
+                    <div class="h-full bg-lf-warning rounded-full transition-all duration-100" style="width: {progressPct}%"></div>
                 </div>
             </div>
         {/if}
@@ -435,7 +440,7 @@
             {#if failedItems.length > 1 && !syncing}
                 <button
                     class="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors
-                        {allFailuresPartial ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'}"
+                        {allFailuresPartial ? 'bg-lf-warning-soft text-lf-warning-on-soft hover:bg-lf-warning-line' : 'bg-lf-danger-soft text-lf-danger-on-soft hover:bg-lf-danger-line'}"
                     data-testid="sync-modal-retry-failed"
                     onclick={handleRetryFailed}
                 >
@@ -448,7 +453,7 @@
             {#each activeSections as section (section.id)}
                 {@const sResults = sectionResults.get(section.id) ?? []}
                 {#if activeSections.length > 1}
-                    <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-2">
+                    <h4 class="text-xs font-semibold text-lf-muted uppercase tracking-wider mt-2">
                         {section.title} ({sResults.length}/{section.targetIds.length})
                     </h4>
                 {/if}
@@ -462,7 +467,7 @@
                         {@render section.resultRow(item, syncing)}
                     {/each}
                     {#if syncing && sResults.length === 0}
-                        <div class="flex items-center gap-2 text-xs text-gray-400" data-testid="sync-section-pending">
+                        <div class="flex items-center gap-2 text-xs text-lf-muted" data-testid="sync-section-pending">
                             <RefreshCw size={12} class="animate-spin" />
                             {$t('common.syncing') ?? 'Syncing'}…
                         </div>
@@ -485,11 +490,11 @@
                         ·
                         <span>{totalPointsFetched}↓</span>
                         <Tooltip text={$t('fx.sync.tooltipFetched')} position="top">
-                            <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+                            <Info size={12} class="text-lf-muted hover:text-lf-link cursor-help transition-colors" />
                         </Tooltip>
                         <span>{totalPointsChanged}Δ</span>
                         <Tooltip text={$t('fx.sync.tooltipChanged')} position="top">
-                            <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+                            <Info size={12} class="text-lf-muted hover:text-lf-link cursor-help transition-colors" />
                         </Tooltip>
                     </span>
                 </InfoBanner>
@@ -498,13 +503,13 @@
     </div>
 
     <!-- Footer -->
-    <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-slate-700">
-        <button class="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" data-testid="sync-modal-close" onclick={onclose}>
+    <div class="flex justify-end gap-2 px-6 py-4 border-t border-lf-subtle">
+        <button class="px-4 py-2 text-sm font-medium bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" data-testid="sync-modal-close" onclick={onclose}>
             {hasResults || isTimeout ? ($t('common.close') ?? 'Close') : ($t('common.cancel') ?? 'Cancel')}
         </button>
         {#if !hasResults || failedItems.length > 0}
             <button
-                class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50"
                 data-busy={syncing}
                 data-testid="sync-modal-start"
                 onclick={hasResults && failedItems.length > 0 ? handleRetryFailed : handleSyncAll}

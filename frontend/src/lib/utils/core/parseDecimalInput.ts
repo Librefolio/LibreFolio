@@ -17,8 +17,75 @@
 
 import {ArrowHold} from './arrowHold';
 
-/** Canonical form: optional sign, digits, at most one dot. */
-const CANONICAL = /^-?(?:\d+\.?\d*|\.\d+)$/;
+/** Canonical form: optional sign, digits, at most one dot. Linear: the digits after the dot are reachable only
+ *  through it (W-B66: `\d+\.?\d*` backtracked quadratically on a long text that does not match, at every keystroke). */
+const CANONICAL = /^-?(?:\d+(?:\.\d*)?|\.\d+)$/;
+
+/** The widest exponent a number pasted in scientific notation may carry: the backend's bound on a decimal (R13-SEC7-3). */
+export const MAX_DECIMAL_EXPONENT = 100;
+
+/** A text wholly in scientific notation, its decimal mark a dot or a comma: sign, integer digits, fraction digits,
+ *  exponent sign, exponent digits. Linear: each digit run is closed by a literal. */
+const SCIENTIFIC = /^(-?)(\d*)(?:[.,](\d*))?[eE]([+-]?)(\d+)$/;
+
+interface ScientificParts {
+    negative: boolean;
+    digits: string;
+    point: number;
+    exponent: number;
+}
+
+function scientificParts(value: string): ScientificParts | null {
+    const match = SCIENTIFIC.exec(value.trim());
+    if (!match) return null;
+    const [, sign, integer, fraction = '', exponentSign, exponentDigits] = match;
+    if (integer === '' && fraction === '') return null;
+    // A long run of exponent digits reads Infinity: out of range, never expanded.
+    const magnitude = Number(exponentDigits);
+    return {negative: sign === '-', digits: `${integer}${fraction}`, point: integer.length, exponent: exponentSign === '-' ? -magnitude : magnitude};
+}
+
+/**
+ * The exact plain decimal of a text pasted wholly in scientific notation (W-B66): `1e-8` → `0.00000001`, `1,5E+3` →
+ * `1500`, `1.00E-08` → `0.00000001`. Null when the text is not one, or when its exponent is past ±MAX_DECIMAL_EXPONENT:
+ * the expansion would be as long as the exponent (`exponentNotReadable` then keeps the text).
+ */
+export function expandScientificNotation(value: string): string | null {
+    const parts = scientificParts(value);
+    if (!parts || !(Math.abs(parts.exponent) <= MAX_DECIMAL_EXPONENT)) return null;
+    const point = parts.point + parts.exponent;
+    let integer: string;
+    let fraction: string;
+    if (point <= 0) {
+        integer = '';
+        fraction = `${'0'.repeat(-point)}${parts.digits}`;
+    } else if (point >= parts.digits.length) {
+        integer = `${parts.digits}${'0'.repeat(point - parts.digits.length)}`;
+        fraction = '';
+    } else {
+        integer = parts.digits.slice(0, point);
+        fraction = parts.digits.slice(point);
+    }
+    let start = 0;
+    while (start < integer.length && integer[start] === '0') start++;
+    let end = fraction.length;
+    while (end > 0 && fraction[end - 1] === '0') end--;
+    const whole = integer.slice(start) || '0';
+    const unsigned = end > 0 ? `${whole}.${fraction.slice(0, end)}` : whole;
+    return parts.negative && unsigned !== '0' ? `-${unsigned}` : unsigned;
+}
+
+/** An exponent marker: a digit, an optional decimal mark, `e` or `E`, an optional sign, a digit. Unanchored and linear. */
+const EXPONENT_MARKER = /\d[.,]?[eE][+-]?\d/;
+
+/**
+ * Whether a text holds an exponent the field cannot read exactly: past ±MAX_DECIMAL_EXPONENT (`3E+150`), or not wholly a
+ * number (`1e5x`, `1e-200x`, `1.234,5e2`). Such a text is kept as typed and refused with its message, never stripped of
+ * its `e` into another number (W-B66). A text without a marker — a typed lone `e`, `EUR 12,34` — filters as before.
+ */
+export function exponentNotReadable(value: string): boolean {
+    return EXPONENT_MARKER.test(value) && expandScientificNotation(value) === null;
+}
 
 /**
  * Removes characters that can never belong to a decimal draft.
@@ -26,8 +93,15 @@ const CANONICAL = /^-?(?:\d+\.?\d*|\.\d+)$/;
  * This is intentionally weaker than normalization: grouping separators and
  * half-typed values remain visible while letters and misplaced signs never
  * enter the edit buffer.
+ *
+ * A text wholly in scientific notation — only a paste brings one: a typed `e` never enters — is read exactly
+ * (`expandScientificNotation`) instead of losing its `e`, which turned `1e-8` into `18` (W-B66). A text with an exponent
+ * it cannot read (`exponentNotReadable`) stays as typed, for the field to refuse it with its message.
  */
 export function filterDecimalInput(value: string, allowNegative = false): string {
+    const expanded = expandScientificNotation(value);
+    if (expanded !== null) return allowNegative || !expanded.startsWith('-') ? expanded : expanded.slice(1);
+    if (exponentNotReadable(value)) return value.trim();
     const hasLeadingMinus = allowNegative && value.trimStart().startsWith('-');
     const body = value.replace(/[^\d.,-]/g, '').replace(/-/g, '');
     return `${hasLeadingMinus ? '-' : ''}${body}`;
@@ -56,10 +130,17 @@ function firstSeparatorWins(body: string): string {
  *
  * Returns the input untouched when it cannot be read as a number at all, so a
  * value still being typed is never destroyed by the field it is typed into.
+ *
+ * A text wholly in scientific notation is read exactly (`expandScientificNotation`); one with an exponent it cannot read
+ * (`exponentNotReadable`) is returned untouched: stripping its `e` turned `1e-8` into `18` in every field that reads
+ * through here (W-B66).
  */
 export function normalizeDecimalInput(value: string): string {
     const trimmed = value.trim();
     if (trimmed === '') return '';
+    const expanded = expandScientificNotation(trimmed);
+    if (expanded !== null) return expanded;
+    if (exponentNotReadable(trimmed)) return trimmed;
 
     const sign = trimmed.startsWith('-') ? '-' : '';
     const body = trimmed.slice(sign.length).replace(/[^\d.,]/g, '');
@@ -83,6 +164,39 @@ export function normalizeDecimalInput(value: string): string {
     }
 
     return CANONICAL.test(candidate) ? candidate : trimmed;
+}
+
+/** The digits of a decimal as the backend counts them (W-B64). */
+export interface DecimalDigitCounts {
+    /** Digits before the point, leading zeros not counted: `0.5` → 0, `007` → 1, `1000` → 4. */
+    integerDigits: number;
+    /** Digits after the point, trailing zeros not counted: `0.10000000000` → 1, `5.0` → 0. */
+    fractionDigits: number;
+    /** The same number without those zeros, its sign kept unless it is zero: `-0012.5000` → `-12.5`, `-0.0` → `0`. */
+    stripped: string;
+}
+
+/**
+ * The digits of a canonical decimal (the form `normalizeDecimalInput` returns) as the backend counts them
+ * (`backend/app/db/precision.py`, `_digit_counts`): leading integer zeros and trailing fraction zeros are no digits of the
+ * value, so `0.10000000000` keeps one decimal and `5.0` none (W-B64). Null for any other text. Linear: two loops, never
+ * `/0+$/`, which is quadratic on a long run of zeros that does not end the text (W-B66).
+ */
+export function decimalDigitCounts(value: string): DecimalDigitCounts | null {
+    if (!CANONICAL.test(value)) return null;
+    const negative = value.startsWith('-');
+    const unsigned = negative ? value.slice(1) : value;
+    const dot = unsigned.indexOf('.');
+    const integer = dot < 0 ? unsigned : unsigned.slice(0, dot);
+    const fraction = dot < 0 ? '' : unsigned.slice(dot + 1);
+    let start = 0;
+    while (start < integer.length && integer[start] === '0') start++;
+    let end = fraction.length;
+    while (end > 0 && fraction[end - 1] === '0') end--;
+    const integerDigits = integer.length - start;
+    const magnitude = `${integerDigits > 0 ? integer.slice(start) : '0'}${end > 0 ? `.${fraction.slice(0, end)}` : ''}`;
+    const zero = integerDigits === 0 && end === 0;
+    return {integerDigits, fractionDigits: end, stripped: negative && !zero ? `-${magnitude}` : magnitude};
 }
 
 /** Number of digits after the decimal point in a canonical string. */

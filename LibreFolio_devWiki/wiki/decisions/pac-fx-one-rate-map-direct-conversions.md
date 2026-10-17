@@ -72,7 +72,7 @@ ten-decimal storage error is tolerated and the conversion is planned at the tria
 
 | Role | Path |
 |------|------|
-| Rate map, spread, conversion mode, `PlannerConversion` | `backend/app/schemas/pac_allocator.py` |
+| Rate map, spread, conversion mode, `PlannerConversion` | `backend/app/schemas/pac_allocator/request.py`, `backend/app/schemas/pac_allocator/rows.py` |
 | Coherence check | `backend/app/services/pac_allocator/normalize.py` |
 | Planning rate at the triangle | `backend/app/services/pac_allocator/numeric.py` |
 | FX step of the planner | `frontend/src/lib/features/tools/pac-allocator/planner/steps/FxStep.svelte` |

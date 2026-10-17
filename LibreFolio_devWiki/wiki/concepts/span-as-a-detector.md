@@ -112,6 +112,6 @@ defect and proves it is handled). For R2-112's shape in selectors see
 | The measurement — passo 1e, *Fuori pista* 2 and 3 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/S5-esecuzione.md` |
 | Registry — R2-68, R2-73, R2-96, R2-97, R2-100, R2-101, R2-107, R2-112 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/REGISTRO.md` |
 | `PriceHistory.fetched_at`, default `utcnow` | `backend/app/db/models.py` |
-| Every price write stamps `fetched_at` | `backend/app/services/asset_sources/price_store.py` |
-| Intra-day extend re-stamps `fetched_at` | `backend/app/services/asset_sources/price_query.py` |
+| Every price write stamps `fetched_at` | `backend/app/services/assets/price_store.py` |
+| Intra-day extend re-stamps `fetched_at` | `backend/app/services/assets/price_query.py` |
 | The single act that writes the lane | `backend/test_scripts/test_db/populate_mock_data.py` |

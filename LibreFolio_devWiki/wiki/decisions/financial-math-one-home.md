@@ -137,7 +137,12 @@ take the common math from the layer.
   `"valuation_source": "portfolio_engine"`, `requires_lots_analysis_service` — and the historical test file names.
 - **After release 1.2**: T-R1, private names across the boundary (`risk/service.py` calls
   `PortfolioService._get_configured_fx_pair_sets()`; `portfolio_service` imports `_compute_tx_fingerprint` from the
-  engine); a further cut of `DailyStateBuilder` (`daily_state.py`, about 1 250 lines); the test tree mirror (T-TS1).
+  engine; *2026-10-16, CP-9a:* the risk half is closed, `risk/data_quality.py` reads the routes with
+  `load_configured_fx_pair_sets(db)` from the home); a further cut of `DailyStateBuilder` (`daily_state.py`, about 1 250 lines); the test tree mirror (T-TS1).
+- *2026-10-17, CP-14a (U10, D-8):* the day count conventions and simple interest of the Scheduled Investment provider
+  moved into the home, `financial_math/interest.py`; guard rule (e) of `test_layer_boundaries.py` keeps them defined
+  there once. P-10 (decision 27) added `costless_incoming_split_adjustments` to `splits.py`: the event store asks it
+  before letting a SPLIT change type, and never names the SPLIT type itself (guard (d)).
 - The same layering question for `utils/` was answered the next day: [[decisions/utils-leaf-functions-only]].
 
 ## Links
@@ -158,6 +163,7 @@ take the common math from the layer.
 | FIFO package | `backend/app/services/financial_math/fifo/engine.py` |
 | Lots math package | `backend/app/services/financial_math/lots/histories.py` |
 | Returns, valuation, price marks | `backend/app/services/financial_math/returns.py`, `backend/app/services/financial_math/valuation.py`, `backend/app/services/financial_math/price_marks.py` |
+| Day count and simple interest (U10) | `backend/app/services/financial_math/interest.py` |
 | The guard | `backend/test_scripts/test_services/test_financial_math/test_layer_boundaries.py` |
 | Rules of the layer (D-11) | `.github/instructions/financial-math.instructions.md` |
 | Map of where each calculation lives | `.github/instructions/backend.instructions.md` |

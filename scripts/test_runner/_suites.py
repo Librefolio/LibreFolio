@@ -20,7 +20,7 @@ from ._common import (
 from ._registry import TEST_REGISTRY
 
 _BACKEND_CATEGORIES = ("external", "db", "services", "utils", "schemas", "api", "e2e")
-_FRONTEND_CATEGORIES = ("front-utility", "front-broker", "front-user", "front-fx", "front-asset", "front-transaction", "front-portfolio", "front-ai-export")
+_FRONTEND_CATEGORIES = ("front-utility", "front-broker", "front-user", "front-fx", "front-asset", "front-transaction", "front-portfolio", "front-ai-export", "front-designer-lab")
 
 # Mapping of backend test categories to their test directories/files
 BACKEND_TEST_PATHS = {

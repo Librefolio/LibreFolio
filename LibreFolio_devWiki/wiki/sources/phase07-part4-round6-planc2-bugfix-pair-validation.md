@@ -69,17 +69,17 @@ These are outside Phase 07 scope but landed in the same commit batch:
 
 | Role | Path |
 |------|------|
-| Transaction service (pair validation) | `backend/app/services/transaction_service.py` |
+| Transaction service (pair validation) | `backend/app/services/transactions/transaction_service.py` |
 | Mock data | `backend/test_scripts/test_db/populate_mock_data.py` |
-| BulkModal (clone fix) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| FormModal (mismatched desc) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| TransactionsTable (hideActions) | `frontend/src/lib/components/transactions/TransactionsTable.svelte` |
-| PickerModal | `frontend/src/lib/components/transactions/modals/TransactionPickerModal.svelte` |
+| BulkModal (clone fix) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| FormModal (mismatched desc) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
+| TransactionsTable (hideActions) | `frontend/src/lib/features/transactions/TransactionsTable.svelte` |
+| PickerModal | `frontend/src/lib/features/transactions/bulk/TransactionPickerModal.svelte` |
 | Page (+toast) | `frontend/src/routes/(app)/transactions/+page.svelte` |
 | E2E clone | `frontend/e2e/transactions/tx-clone.spec.ts` |
 | E2E bulk ops | `frontend/e2e/transactions/tx-bulk-operations.spec.ts` |
-| FX sync (fallback) | `backend/app/services/fx.py` |
+| FX sync (fallback) | `backend/app/services/fx/sync.py` |
 | Dockerfile | `Dockerfile` |
 | update_js_cache | `scripts/update_js_cache.py` |
-| Asset source (race fix) | `backend/app/services/asset_source.py` |
+| Asset source (race fix) | `backend/app/services/assets/provider_management.py` |
 

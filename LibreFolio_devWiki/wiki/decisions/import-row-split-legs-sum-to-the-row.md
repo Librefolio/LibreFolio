@@ -51,7 +51,7 @@ deduced. The gap only decides when the question is asked.
 - The repair step (`FixFlaggedStep.svelte`) offers three kinds of charge — fee, tax, accrued interest — and books a tax
   as `TAX` and the other two as `FEE`.
 - **Accrued interest is a `FEE`, not an `INTEREST`**: an `INTEREST` row must carry positive cash
-  (`backend/app/schemas/transactions.py`), and accrued interest paid on a purchase is cash out. It is also not part of
+  (`backend/app/schemas/transactions/transactions.py`), and accrued interest paid on a purchase is cash out. It is also not part of
   the cost of the security, since it comes back with the first gross coupon, so it must stay out of the FIFO cost
   basis, which is where `FEE` keeps it.
 - Amounts are subtracted in **fixed point**: in floating point `50683.13 - 50018.11` is `665.0199999999968`, and a leg
@@ -75,10 +75,10 @@ deduced. The gap only decides when the question is asked.
 
 | Role | Path |
 |------|------|
-| Split arithmetic | `frontend/src/lib/utils/transactions/splitRowCharges.ts` |
-| Split tests | `frontend/src/lib/utils/transactions/splitRowCharges.test.ts` |
-| Repair step | `frontend/src/lib/components/transactions/import/FixFlaggedStep.svelte` |
+| Split arithmetic | `frontend/src/lib/features/transactions/import/splitRowCharges.ts` |
+| Split tests | `frontend/src/lib/features/transactions/import/splitRowCharges.test.ts` |
+| Repair step | `frontend/src/lib/features/transactions/import/FixFlaggedStep.svelte` |
 | Hints, Crédit Agricole | `backend/app/services/brim_providers/broker_credit_agricole/plugin.py` |
 | Hints, Danske Bank | `backend/app/services/brim_providers/broker_danske_bank/plugin.py` |
-| `INTEREST` cash rule | `backend/app/schemas/transactions.py` |
+| `INTEREST` cash rule | `backend/app/schemas/transactions/transactions.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00BrimCreditAgricoleTrades.prompt.md` |

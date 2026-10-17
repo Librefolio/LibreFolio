@@ -1,5 +1,6 @@
 """
-Gate of plugin translation ownership (workstream U, step U-3): a plugin's keys live in its own fragment.
+Gate of plugin translation ownership (workstream U, step U-3; the plugin settings, workstream X lot CP11a): a plugin's
+keys live in its own fragment.
 
 A plugin's fragment is ``backend/app/services/<family>/<plugin>/i18n/<lang>.json``, one of the sources
 ``scripts/i18n_catalog.py`` merges into the frontend catalogue (``utils gate-i18n-catalog``). A plugin is its folder,
@@ -9,19 +10,26 @@ publishes, never from its source text:
 
 - BRIM (``BRIMProviderRegistry``): ``brimPlugins.<code>``, the key the UI builds (``brimPlugins.${plugin.code}.name``);
   and the code is the folder;
-- asset (``AssetProviderRegistry``): ``assets.providerParams.<provider code>``;
+- asset (``AssetProviderRegistry``): ``assets.providerParams.<provider code>``, and ``pluginSettings.asset.<provider
+  code>``, the branch of its settings' keys;
+- FX (``FXProviderRegistry``): ``pluginSettings.fx.<provider code>``, the branch of its settings' keys, the code as the
+  registry has it (``pluginSettings.fx.ECB``, ``pluginSettings.fx.MOCKFX``);
 - signal (``SignalPluginRegistry``, every registered plugin, in the catalogue or not): the parent of
   ``display_name_key``;
 - risk (``RiskAnalyticRegistry``): the parent of ``name_i18n_key``;
 - tool (``ToolPluginRegistry``): exactly the keys ``name_i18n_key`` and ``description_i18n_key``, whose namespace a
-  subsystem shares;
-- FX (``FXProviderRegistry``): none.
+  subsystem shares.
+
+The family in a settings branch, ``asset`` or ``fx``, is the one the registry names (``settings_family()``).
 
 A space is **exclusive** when exactly one plugin has it: ``signals.riskRollingReturn``, the space of two signal
 plugins, is not. The keys a plugin **declares** are those its metadata names: the BRIM ``name`` and, when it has one,
 ``description`` it publishes (``brimPlugins.<code>.name`` and ``.description``), ``display_name_key``,
 ``description_key``, ``name_i18n_key``, ``description_i18n_key``, the outputs', reference levels' and value regions'
-``label_key`` and ``description_key``, and the params' ``x-i18n-key`` and ``x-tooltip-key``.
+``label_key`` and ``description_key``, the params' ``x-i18n-key`` and ``x-tooltip-key``, and, for an asset or FX
+plugin, its ``settings_fields``: each field's ``label_key`` and ``description_key`` and each option's ``label_key``.
+The settings are read like a definition: the frozen ``PluginSettingField`` and ``SettingOption`` dumped to plain data
+(a tuple a list, an enum its text), through the same walker; ``default`` holds a value, never a key.
 
 R1. Every key in a plugin's fragment lies in that plugin's space.
 R2. Every key a plugin declares in its exclusive space lives in its fragment.
@@ -33,7 +41,9 @@ or to ``base``, where its prefix says. Every message names the key, where it is,
 
 Each detector first proves on synthetic metadata and trees under ``tmp_path`` what it reports and what it leaves
 alone; then the repository: the metadata the six registries publish against the sources ``i18n_catalog`` reads, with a
-sentinel that fails on a published field named like a key that the collector does not read.
+sentinel that fails on a published field named like a key that the collector does not read — in the signal and risk
+definitions, in every asset and FX plugin's settings, and in the attributes of ``PluginSettingField`` and
+``SettingOption`` themselves, before any plugin sets a new one.
 
 PURE: importing the registries discovers and instantiates the plugins, and the gate reads what they publish; nothing
 runs a plugin. No database, no server, no network; the synthetic trees live under ``tmp_path``.
@@ -41,16 +51,23 @@ runs a plugin. No database, no server, no network; the synthetic trees live unde
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 import pytest
 
-from backend.app.services.provider_registry import AssetProviderRegistry, BRIMProviderRegistry, FXProviderRegistry, RiskAnalyticRegistry, SignalPluginRegistry
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
+from backend.app.services.risk.registry import RiskAnalyticRegistry
+from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.tools.registry import ToolPluginRegistry
 from scripts import i18n_catalog as catalog
 
@@ -62,10 +79,14 @@ FX_FAMILY = "fx_providers"
 SIGNAL_FAMILY = "signal_plugins"
 RISK_FAMILY = "risk_plugins"
 TOOL_FAMILY = "tool_plugins"
-# The families whose plugins have a space; FX plugins have none.
-SPACED_FAMILIES = (BRIM_FAMILY, ASSET_FAMILY, SIGNAL_FAMILY, RISK_FAMILY, TOOL_FAMILY)
+# The families whose plugins have a space: all six, FX plugins through their settings.
+SPACED_FAMILIES = (BRIM_FAMILY, ASSET_FAMILY, FX_FAMILY, SIGNAL_FAMILY, RISK_FAMILY, TOOL_FAMILY)
 BRIM_SPACE = "brimPlugins"
 ASSET_SPACE = "assets.providerParams"
+# The root of the settings branches: pluginSettings.<settings family>.<code>, an asset or FX plugin's.
+SETTINGS_SPACE = "pluginSettings"
+# The registries whose plugins declare settings, in the order the gate reads them.
+SETTINGS_REGISTRIES = (AssetProviderRegistry, FXProviderRegistry)
 
 # The module discovery loads a plugin folder's code from: backend.app.services.<family>.<folder>.plugin.
 SERVICES_PACKAGE = ("backend", "app", "services")
@@ -75,8 +96,9 @@ PLUGIN_MODULE = "plugin"
 # a field named like a key (``*_key``, ``x-*-key``) that is not listed.
 I18N_FIELDS = frozenset({"display_name_key", "description_key", "label_key", "name_i18n_key", "description_i18n_key", "x-i18n-key", "x-tooltip-key"})
 KEY_FIELD = re.compile(r"[_-]key$")
-# Values, not metadata: the parameters' defaults and the parameter matches of the AI Export rules.
-VALUE_FIELDS = frozenset({"default_params", "parameter_match"})
+# Values, not metadata: a setting's or a parameter's default, the parameters' defaults and the parameter matches of the
+# AI Export rules.
+VALUE_FIELDS = frozenset({"default", "default_params", "parameter_match"})
 
 BASE_PLACE = (catalog.I18N_RELATIVE / catalog.BASE_NAME).as_posix()
 
@@ -231,15 +253,13 @@ def r4_problems(own: Ownership) -> list[str]:
 
 
 def space_problems(plugins: Iterable[PluginI18n]) -> list[str]:
-    """Every plugin of a family with a space has one; an FX plugin has none; no plugin is of another family."""
+    """Every plugin is of a family this gate knows, and has a space: an FX plugin too, its settings' branch."""
     problems = []
     for plugin in plugins:
-        if plugin.family in SPACED_FAMILIES and not plugin.areas:
-            problems.append(f"{plugin.name}: publishes no i18n space")
-        elif plugin.family == FX_FAMILY and plugin.areas:
-            problems.append(f"{plugin.name}: an FX plugin has no i18n space, yet publishes {plugin.space}")
-        elif plugin.family not in (*SPACED_FAMILIES, FX_FAMILY):
+        if plugin.family not in SPACED_FAMILIES:
             problems.append(f"{plugin.name}: not a plugin family this gate knows")
+        elif not plugin.areas:
+            problems.append(f"{plugin.name}: publishes no i18n space")
     return problems
 
 
@@ -307,6 +327,54 @@ def from_definition(name: str, dump: Mapping[str, object], space_field: str) -> 
     return PluginI18n(name, (Area(space),) if space else (), keys)
 
 
+def plain(node: object) -> object:
+    """``node`` as JSON-like data, what ``published_keys`` walks: a dataclass a dict of every attribute it has, a tuple
+    a list, an enum its value as text. A frozen settings declaration holds tuples, which the walker would not enter."""
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        return {field.name: plain(getattr(node, field.name)) for field in dataclasses.fields(node)}
+    if isinstance(node, Mapping):
+        return {key: plain(value) for key, value in node.items()}
+    if isinstance(node, (list, tuple)):
+        return [plain(item) for item in node]
+    if isinstance(node, Enum):
+        return str(node.value)
+    return node
+
+
+def settings_dump(plugin_class: type) -> object:
+    """A plugin's ``settings_fields`` as plain data: every attribute of each ``PluginSettingField`` and of its options."""
+    return plain(getattr(plugin_class, "settings_fields", ()))
+
+
+def attribute_dump(*classes: type) -> list[dict[str, str]]:
+    """One dict per dataclass, each attribute holding a text of its own: what ``published_keys`` makes of a declaration
+    type whatever its plugins set, so an attribute named like a key shows before any plugin uses it."""
+    return [{field.name: f"{cls.__name__}.{field.name}" for field in dataclasses.fields(cls)} for cls in classes]
+
+
+def settings_space(registry: type, code: str) -> str:
+    """The branch of a plugin's settings keys: ``pluginSettings.<settings family>.<code>``, the code as its registry has
+    it (``pluginSettings.fx.ECB``)."""
+    return f"{SETTINGS_SPACE}.{registry.settings_family()}.{code}"
+
+
+def settings_plugin(registry: type, code: str, *areas: Area) -> PluginI18n:
+    """An asset or FX plugin: ``areas`` and its settings branch; the keys its settings declare, read like a definition."""
+    plugin_class = registry.get_plugin(code)
+    keys, _unread = published_keys(settings_dump(plugin_class))
+    return PluginI18n(plugin_folder(plugin_class.__module__), (*areas, Area(settings_space(registry, code))), keys)
+
+
+def settings_definitions() -> list[tuple[str, object]]:
+    """``(folder, settings dump)`` of every asset and FX plugin, with settings or not."""
+    found = []
+    for registry in SETTINGS_REGISTRIES:
+        for code in registry.list_plugin_codes():
+            plugin_class = registry.get_plugin(code)
+            found.append((plugin_folder(plugin_class.__module__), settings_dump(plugin_class)))
+    return found
+
+
 def signal_definitions() -> list[tuple[str, dict]]:
     """``(folder, published definition)`` of every registered signal plugin, in the catalogue or not."""
     found = []
@@ -332,11 +400,13 @@ def brim_plugins() -> list[PluginI18n]:
 
 
 def asset_plugins() -> list[PluginI18n]:
-    return [PluginI18n(plugin_folder(AssetProviderRegistry.get_plugin(code).__module__), (Area(f"{ASSET_SPACE}.{code}"),)) for code in AssetProviderRegistry.list_plugin_codes()]
+    """Every asset plugin: its params' branch and its settings' branch, the keys of its settings."""
+    return [settings_plugin(AssetProviderRegistry, code, Area(f"{ASSET_SPACE}.{code}")) for code in AssetProviderRegistry.list_plugin_codes()]
 
 
 def fx_plugins() -> list[PluginI18n]:
-    return [PluginI18n(plugin_folder(FXProviderRegistry.get_plugin(code).__module__)) for code in FXProviderRegistry.list_plugin_codes()]
+    """Every FX plugin: its settings' branch, the keys of its settings."""
+    return [settings_plugin(FXProviderRegistry, code) for code in FXProviderRegistry.list_plugin_codes()]
 
 
 def tool_plugins() -> list[PluginI18n]:
@@ -358,9 +428,24 @@ def registry_plugins() -> tuple[PluginI18n, ...]:
 # The synthetic plugins and tree
 # =============================================================================
 
+# The settings an asset and an FX plugin declare: their keys under pluginSettings.<family>.<code>; an option without one.
+SOURCE_SETTINGS = (
+    PluginSettingField(
+        key="region",
+        type=SettingType.SELECT,
+        scope=SettingScope.USER,
+        label="Region",
+        default="eu",
+        options=(SettingOption("eu", "Europe", label_key="pluginSettings.asset.probe_source.option.region.eu"), SettingOption("us", "🇺🇸 US")),
+        label_key="pluginSettings.asset.probe_source.label.region",
+        description_key="pluginSettings.asset.probe_source.description.region",
+    ),
+)
+RATES_SETTINGS = (PluginSettingField(key="decimals", type=SettingType.INTEGER, scope=SettingScope.SYSTEM, label="Decimals", default=6, label_key="pluginSettings.fx.PROBE_RATES.label.decimals"),)
+
 BROKER = PluginI18n("brim_providers/probe_broker", (Area("brimPlugins.probe_broker"),), ("brimPlugins.probe_broker.name", "brimPlugins.probe_broker.description"))
-SOURCE = PluginI18n("asset_source_providers/probe_source", (Area("assets.providerParams.probe_source"),))
-RATES = PluginI18n("fx_providers/probe_rates")
+SOURCE = PluginI18n("asset_source_providers/probe_source", (Area("assets.providerParams.probe_source"), Area("pluginSettings.asset.probe_source")), published_keys(plain(SOURCE_SETTINGS))[0])
+RATES = PluginI18n("fx_providers/probe_rates", (Area("pluginSettings.fx.PROBE_RATES"),), published_keys(plain(RATES_SETTINGS))[0])
 ALPHA = PluginI18n("signal_plugins/probe_alpha", (Area("signals.probeAlpha"),), ("signals.probeAlpha.name", "signals.probeAlpha.output", "signals.reference.zero", "chartSettings.params.period"))
 BETA = PluginI18n("signal_plugins/probe_beta", (Area("signals.probeBeta"),), ("signals.probeBeta.name", "signals.reference.zero"))
 # Two plugins sharing one space: neither has it alone, so its keys are a subsystem's.
@@ -372,6 +457,8 @@ PLUGINS = (BROKER, SOURCE, RATES, ALPHA, BETA, TWIN_A, TWIN_B, VAR, TOOL)
 
 # The subsystems and their prefixes; a subsystem without keys keeps its folder and prefixes.
 PREFIXES = {"charts": ("signals", "chartSettings"), "risk": ("risk",), "tools": ("tools",)}
+# The same, with a subsystem that claims the settings branches: the catalogue then accepts a settings key there.
+SETTINGS_SUBSYSTEM = {**PREFIXES, "settings": ("settings", SETTINGS_SPACE)}
 
 # The sources of a tree that keeps every rule, in English: base, the subsystems, the plugins' fragments.
 HEALTHY = {
@@ -380,7 +467,13 @@ HEALTHY = {
     "risk": {"risk.analytics.title": "Analytics", "risk.params.confidence": "Confidence"},
     "tools": {"tools.probeTool.ui.title": "Calculator"},
     BROKER.name: {"brimPlugins.probe_broker.name": "Probe Broker", "brimPlugins.probe_broker.description": "Reads probe statements"},
-    SOURCE.name: {"assets.providerParams.probe_source.label.region": "Region"},
+    SOURCE.name: {
+        "assets.providerParams.probe_source.label.region": "Region",
+        "pluginSettings.asset.probe_source.label.region": "Region",
+        "pluginSettings.asset.probe_source.description.region": "Where the prices come from",
+        "pluginSettings.asset.probe_source.option.region.eu": "Europe",
+    },
+    RATES.name: {"pluginSettings.fx.PROBE_RATES.label.decimals": "Decimals"},
     ALPHA.name: {"signals.probeAlpha.name": "Alpha", "signals.probeAlpha.output": "Alpha line", "signals.probeAlpha.hint": "Undeclared, in its space"},
     BETA.name: {"signals.probeBeta.name": "Beta"},
     VAR.name: {"risk.analytics.probeVar.name": "VaR", "risk.analytics.probeVar.description": "Value at risk"},
@@ -396,14 +489,14 @@ def write_json(path: Path, keys: Mapping[str, str]) -> None:
     path.write_text(json.dumps(nested, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def build_tree(root: Path, layout: Mapping[str, Mapping[str, str]]) -> Path:
-    """Write ``layout``'s sources under ``root``: ``base``, the subsystems of ``PREFIXES``, a plugin (``<family>/
+def build_tree(root: Path, layout: Mapping[str, Mapping[str, str]], prefixes: Mapping[str, tuple[str, ...]] = PREFIXES) -> Path:
+    """Write ``layout``'s sources under ``root``: ``base``, the subsystems of ``prefixes``, a plugin (``<family>/
     <folder>``, with its ``plugin.py``) and its fragment when it has keys."""
     write_json(root / catalog.I18N_RELATIVE / catalog.BASE_NAME / "en.json", layout.get(catalog.BASE_NAME, {}))
-    for name, prefixes in PREFIXES.items():
+    for name, subsystem_prefixes in prefixes.items():
         folder = root / catalog.I18N_RELATIVE / name
         folder.mkdir(parents=True, exist_ok=True)
-        (folder / catalog.PREFIXES_FILE).write_text("\n".join(prefixes) + "\n", encoding="utf-8")
+        (folder / catalog.PREFIXES_FILE).write_text("\n".join(subsystem_prefixes) + "\n", encoding="utf-8")
         if layout.get(name):
             write_json(folder / "en.json", layout[name])
     for name, keys in layout.items():
@@ -441,6 +534,7 @@ def without(*names: str) -> tuple[PluginI18n, ...]:
 
 CHARTS = (catalog.I18N_RELATIVE / "charts").as_posix()
 TOOLS = (catalog.I18N_RELATIVE / "tools").as_posix()
+SETTINGS = (catalog.I18N_RELATIVE / "settings").as_posix()
 
 
 # =============================================================================
@@ -560,6 +654,73 @@ def test_a_definition_gives_the_space_its_key_names(dump, space_field, expected)
     assert from_definition("probe_plugins/probe", dump, space_field) == expected
 
 
+def test_a_settings_declaration_dumps_to_json_like_data_with_every_attribute():
+    """Each field and option with all its attributes, a tuple a list, an enum its text: data the walker enters whole."""
+    (field_dump,) = plain(SOURCE_SETTINGS)
+
+    assert set(field_dump) == {field.name for field in dataclasses.fields(PluginSettingField)}
+    assert [set(option) for option in field_dump["options"]] == [{field.name for field in dataclasses.fields(SettingOption)}] * 2
+    assert (type(field_dump["type"]), field_dump["type"], type(field_dump["scope"]), field_dump["scope"]) == (str, "select", str, "user")
+    assert json.loads(json.dumps(field_dump)) == field_dump, "plain JSON data: a tuple left in would come back a list"
+
+
+def test_published_keys_reads_a_settings_declaration():
+    """Each field's ``label_key`` and ``description_key``, each option's ``label_key``; an option without one gives none."""
+    assert published_keys(plain(SOURCE_SETTINGS)) == (
+        ("pluginSettings.asset.probe_source.option.region.eu", "pluginSettings.asset.probe_source.label.region", "pluginSettings.asset.probe_source.description.region"),
+        frozenset(),
+    )
+    assert published_keys(plain(RATES_SETTINGS)) == (("pluginSettings.fx.PROBE_RATES.label.decimals",), frozenset())
+
+
+def test_a_settings_default_is_a_value_never_a_key():
+    """``default`` holds a value: a text shaped like a key, or a structure holding key fields, is never read as one."""
+    fields = (
+        PluginSettingField(key="note", type=SettingType.STRING, scope=SettingScope.USER, label="Note", default="pluginSettings.asset.probe.label.note"),
+        PluginSettingField(key="shape", type=SettingType.STRING, scope=SettingScope.USER, label="Shape", default={"label_key": "pluginSettings.asset.probe.label.shape", "hint_key": "probe.hint"}),
+    )
+
+    assert published_keys(plain(fields)) == ((), frozenset())
+
+
+@dataclass(frozen=True)
+class _PlaceholderField(PluginSettingField):
+    """A ``PluginSettingField`` grown a key attribute the collector does not read."""
+
+    placeholder_key: str | None = None
+
+
+@dataclass(frozen=True)
+class _HintedOption(SettingOption):
+    """A ``SettingOption`` grown a key attribute the collector does not read."""
+
+    hint_key: str | None = None
+
+
+def test_published_keys_names_a_key_attribute_a_settings_declaration_grows():
+    """The sentinel's proof for the settings: a new ``*_key`` attribute of a field or an option is named once a plugin
+    sets it, and in the dump of the types themselves before any plugin does."""
+    declared = (
+        _PlaceholderField(
+            key="region",
+            type=SettingType.SELECT,
+            scope=SettingScope.USER,
+            label="Region",
+            options=(_HintedOption("eu", "Europe", label_key="pluginSettings.asset.probe.option.region.eu", hint_key="pluginSettings.asset.probe.hint.eu"),),
+            label_key="pluginSettings.asset.probe.label.region",
+            placeholder_key="pluginSettings.asset.probe.placeholder.region",
+        ),
+    )
+
+    assert published_keys(plain(declared)) == (("pluginSettings.asset.probe.option.region.eu", "pluginSettings.asset.probe.label.region"), frozenset({"placeholder_key", "hint_key"}))
+    assert published_keys(attribute_dump(_PlaceholderField, _HintedOption))[1] == frozenset({"placeholder_key", "hint_key"})
+
+
+def test_a_settings_space_is_the_family_its_registry_names_and_the_code_as_it_is():
+    assert settings_space(AssetProviderRegistry, "probe_source") == "pluginSettings.asset.probe_source"
+    assert settings_space(FXProviderRegistry, "PROBE_RATES") == "pluginSettings.fx.PROBE_RATES"
+
+
 def test_a_space_is_exclusive_only_to_its_one_plugin(tmp_path):
     own = ownership(build_tree(tmp_path, HEALTHY))
 
@@ -568,6 +729,10 @@ def test_a_space_is_exclusive_only_to_its_one_plugin(tmp_path):
     assert own.exclusive_area(TWIN_A, "signals.probeTwin.name") is None
     assert own.exclusive_area(TOOL, "tools.probeTool.name") == Area("tools.probeTool.name", exact=True)
     assert own.exclusive_area(TOOL, "tools.probeTool.ui.title") is None
+    assert own.exclusive_area(SOURCE, "assets.providerParams.probe_source.label.region") == Area("assets.providerParams.probe_source")
+    assert own.exclusive_area(SOURCE, "pluginSettings.asset.probe_source.label.region") == Area("pluginSettings.asset.probe_source")
+    assert own.exclusive_area(RATES, "pluginSettings.fx.PROBE_RATES.label.decimals") == Area("pluginSettings.fx.PROBE_RATES")
+    assert own.exclusive_area(RATES, "pluginSettings.fx.probe_rates.label.decimals") is None, "the code as the registry has it, case included"
     assert ownership(tmp_path, without(TWIN_B.name)).exclusive_area(TWIN_A, "signals.probeTwin.name") == Area("signals.probeTwin")
 
 
@@ -578,10 +743,11 @@ def test_a_space_is_exclusive_only_to_its_one_plugin(tmp_path):
 
 def test_the_healthy_tree_keeps_every_rule(tmp_path):
     """Shared spaces and shared keys in a subsystem, an undeclared key inside its own space, a tool whose namespace a
-    subsystem holds, a plugin without a space and without a fragment: none is a breach."""
+    subsystem holds, an asset and an FX plugin with their settings keys in their fragments, plugins without a fragment:
+    none is a breach."""
     own = ownership(build_tree(tmp_path, HEALTHY))
 
-    assert [place(fragment) for fragment in own.fragments()] == [plugin.fragment for plugin in (SOURCE, BROKER, VAR, ALPHA, BETA, TOOL)]
+    assert [place(fragment) for fragment in own.fragments()] == [plugin.fragment for plugin in (SOURCE, BROKER, RATES, VAR, ALPHA, BETA, TOOL)]
     assert (r1_problems(own), r2_problems(own), r3_problems(own), r4_problems(own)) == ([], [], [], [])
 
 
@@ -593,12 +759,35 @@ def test_the_healthy_tree_keeps_every_rule(tmp_path):
         pytest.param(relocated("signals.probeBeta.name", ALPHA.name), f"signals.probeBeta.name: in {ALPHA.fragment}, outside the space of {ALPHA.name} (signals.probeAlpha.*); expected in {BETA.fragment}", id="a-key-of-another-plugin"),
         pytest.param(relocated("signals.probeAlphabet.name", ALPHA.name), f"signals.probeAlphabet.name: in {ALPHA.fragment}, outside the space of {ALPHA.name} (signals.probeAlpha.*); expected in {CHARTS}", id="whole-segments-only"),
         pytest.param(relocated("tools.probeTool.ui.title", TOOL.name), f"tools.probeTool.ui.title: in {TOOL.fragment}, outside the space of {TOOL.name} (tools.probeTool.name, tools.probeTool.description); expected in {TOOLS}", id="a-tool-key-beside-its-two"),
-        pytest.param(relocated("common.rates", RATES.name), f"common.rates: in {RATES.fragment}, outside the space of {RATES.name} (none); expected in {BASE_PLACE}", id="a-plugin-without-a-space"),
+        pytest.param(relocated("common.rates", RATES.name), f"common.rates: in {RATES.fragment}, outside the space of {RATES.name} (pluginSettings.fx.PROBE_RATES.*); expected in {BASE_PLACE}", id="an-fx-fragment-key-beside-its-settings"),
+        pytest.param(
+            relocated("pluginSettings.fx.probe_rates.label.decimals", RATES.name),
+            f"pluginSettings.fx.probe_rates.label.decimals: in {RATES.fragment}, outside the space of {RATES.name} (pluginSettings.fx.PROBE_RATES.*); expected in {BASE_PLACE}",
+            id="an-fx-settings-key-under-another-spelling-of-its-code",
+        ),
+        pytest.param(
+            relocated("pluginSettings.fx.PROBE_RATES.label.decimals", SOURCE.name),
+            f"pluginSettings.fx.PROBE_RATES.label.decimals: in {SOURCE.fragment}, outside the space of {SOURCE.name} (assets.providerParams.probe_source.*, pluginSettings.asset.probe_source.*); expected in {RATES.fragment}",
+            id="an-fx-settings-key-in-an-asset-fragment",
+        ),
+        pytest.param(
+            relocated("pluginSettings.asset.probe_source.option.region.eu", RATES.name),
+            f"pluginSettings.asset.probe_source.option.region.eu: in {RATES.fragment}, outside the space of {RATES.name} (pluginSettings.fx.PROBE_RATES.*); expected in {SOURCE.fragment}",
+            id="an-asset-settings-key-in-an-fx-fragment",
+        ),
         pytest.param(relocated("signals.probeGhost.name", "signal_plugins/probe_ghost"), f"signals.probeGhost.name: in {PluginI18n('signal_plugins/probe_ghost').fragment}, but no registered plugin is signal_plugins/probe_ghost; expected in {CHARTS}", id="a-folder-no-registry-knows"),
     ],
 )
 def test_r1_refuses_a_fragment_key_outside_its_plugin_space(tmp_path, layout, problem):
     assert r1_problems(ownership(build_tree(tmp_path, layout))) == [problem]
+
+
+def test_r1_refuses_every_key_in_the_fragment_of_a_plugin_without_a_space(tmp_path):
+    blank = PluginI18n("signal_plugins/probe_blank")
+
+    own = ownership(build_tree(tmp_path, relocated("common.blank", blank.name)), (*PLUGINS, blank))
+
+    assert r1_problems(own) == [f"common.blank: in {blank.fragment}, outside the space of {blank.name} (none); expected in {BASE_PLACE}"]
 
 
 @pytest.mark.parametrize(
@@ -609,6 +798,21 @@ def test_r1_refuses_a_fragment_key_outside_its_plugin_space(tmp_path, layout, pr
         pytest.param(relocated("risk.analytics.probeVar.name", ALPHA.name), f"risk.analytics.probeVar.name: declared by {VAR.name} in its space (risk.analytics.probeVar.*), but lives in {ALPHA.fragment}; expected in {VAR.fragment}", id="in-another-plugin-fragment"),
         pytest.param(relocated("brimPlugins.probe_broker.description", None), f"brimPlugins.probe_broker.description: declared by {BROKER.name} in its space (brimPlugins.probe_broker.*), but is in no catalogue; expected in {BROKER.fragment}", id="in-no-catalogue"),
         pytest.param(relocated("tools.probeTool.name", "tools"), f"tools.probeTool.name: declared by {TOOL.name} in its space (tools.probeTool.name), but lives in {TOOLS}; expected in {TOOL.fragment}", id="a-tool-key-in-its-subsystem"),
+        pytest.param(
+            relocated("pluginSettings.asset.probe_source.label.region", "base"),
+            f"pluginSettings.asset.probe_source.label.region: declared by {SOURCE.name} in its space (pluginSettings.asset.probe_source.*), but lives in {BASE_PLACE}; expected in {SOURCE.fragment}",
+            id="a-settings-label-in-base",
+        ),
+        pytest.param(
+            relocated("pluginSettings.asset.probe_source.option.region.eu", RATES.name),
+            f"pluginSettings.asset.probe_source.option.region.eu: declared by {SOURCE.name} in its space (pluginSettings.asset.probe_source.*), but lives in {RATES.fragment}; expected in {SOURCE.fragment}",
+            id="a-settings-option-in-another-plugin-fragment",
+        ),
+        pytest.param(
+            relocated("pluginSettings.fx.PROBE_RATES.label.decimals", None),
+            f"pluginSettings.fx.PROBE_RATES.label.decimals: declared by {RATES.name} in its space (pluginSettings.fx.PROBE_RATES.*), but is in no catalogue; expected in {RATES.fragment}",
+            id="an-fx-settings-label-in-no-catalogue",
+        ),
     ],
 )
 def test_r2_refuses_a_declared_key_of_an_exclusive_space_outside_its_fragment(tmp_path, layout, problem):
@@ -616,6 +820,8 @@ def test_r2_refuses_a_declared_key_of_an_exclusive_space_outside_its_fragment(tm
 
 
 ALPHA_OUTPUT_TOO = PluginI18n(BETA.name, BETA.areas, (*BETA.declared, "signals.probeAlpha.output"))
+# An FX plugin whose settings reuse a label key of an asset plugin's settings.
+RATES_BORROWING = PluginI18n(RATES.name, RATES.areas, (*RATES.declared, "pluginSettings.asset.probe_source.label.region"))
 
 
 @pytest.mark.parametrize(
@@ -625,6 +831,18 @@ ALPHA_OUTPUT_TOO = PluginI18n(BETA.name, BETA.areas, (*BETA.declared, "signals.p
         pytest.param(relocated("signals.probeTwin.name", TWIN_A.name), PLUGINS, f"signals.probeTwin.name: in {TWIN_A.fragment}, but it lies in the space of {TWIN_B.name} (signals.probeTwin.*); expected in {CHARTS}", id="a-shared-space"),
         pytest.param(relocated("tools.probeTool.name", ALPHA.name), PLUGINS, f"tools.probeTool.name: in {ALPHA.fragment}, but it lies in the space of {TOOL.name} (tools.probeTool.name); expected in {TOOL.fragment}", id="a-tool-key"),
         pytest.param(HEALTHY, (*without(BETA.name), ALPHA_OUTPUT_TOO), f"signals.probeAlpha.output: in {ALPHA.fragment}, but {BETA.name} declares it too; expected in {CHARTS}, renamed out of signals.probeAlpha.*", id="a-key-another-plugin-declares"),
+        pytest.param(
+            relocated("pluginSettings.fx.PROBE_RATES.label.decimals", SOURCE.name),
+            PLUGINS,
+            f"pluginSettings.fx.PROBE_RATES.label.decimals: in {SOURCE.fragment}, but it lies in the space of {RATES.name} (pluginSettings.fx.PROBE_RATES.*); expected in {RATES.fragment}",
+            id="an-fx-settings-key-in-an-asset-fragment",
+        ),
+        pytest.param(
+            HEALTHY,
+            (*without(RATES.name), RATES_BORROWING),
+            f"pluginSettings.asset.probe_source.label.region: in {SOURCE.fragment}, but {RATES.name} declares it too; expected in {BASE_PLACE}, renamed out of pluginSettings.asset.probe_source.*",
+            id="a-settings-key-another-plugin-declares",
+        ),
     ],
 )
 def test_r3_refuses_a_fragment_key_another_plugin_claims(tmp_path, layout, plugins, problem):
@@ -639,10 +857,32 @@ def test_r3_refuses_a_fragment_key_another_plugin_claims(tmp_path, layout, plugi
             relocated("assets.providerParams.probe_source.label.region", "base"), f"assets.providerParams.probe_source.label.region: under assets.providerParams.probe_source.*, the space of {SOURCE.name} alone, but lives in {BASE_PLACE}; expected in {SOURCE.fragment}", id="a-provider-param-in-base"
         ),
         pytest.param(relocated("risk.analytics.probeVar.description", ALPHA.name), f"risk.analytics.probeVar.description: under risk.analytics.probeVar.*, the space of {VAR.name} alone, but lives in {ALPHA.fragment}; expected in {VAR.fragment}", id="in-another-plugin-fragment"),
+        pytest.param(
+            relocated("pluginSettings.asset.probe_source.hint.region", "base"),
+            f"pluginSettings.asset.probe_source.hint.region: under pluginSettings.asset.probe_source.*, the space of {SOURCE.name} alone, but lives in {BASE_PLACE}; expected in {SOURCE.fragment}",
+            id="an-undeclared-settings-key-in-base",
+        ),
+        pytest.param(
+            relocated("pluginSettings.fx.PROBE_RATES.label.decimals", SOURCE.name),
+            f"pluginSettings.fx.PROBE_RATES.label.decimals: under pluginSettings.fx.PROBE_RATES.*, the space of {RATES.name} alone, but lives in {SOURCE.fragment}; expected in {RATES.fragment}",
+            id="an-fx-settings-key-in-an-asset-fragment",
+        ),
     ],
 )
 def test_r4_refuses_a_key_under_an_exclusive_space_outside_its_fragment(tmp_path, layout, problem):
     assert r4_problems(ownership(build_tree(tmp_path, layout))) == [problem]
+
+
+def test_a_settings_key_a_subsystem_holds_is_refused_unless_no_plugin_owns_it(tmp_path):
+    """With a subsystem claiming ``pluginSettings`` the catalogue accepts a settings key there: a plugin's own declared
+    key is still refused by R2 and R4, a key in no plugin's branch is the subsystem's."""
+    misplaced = ownership(build_tree(tmp_path / "misplaced", relocated("pluginSettings.asset.probe_source.description.region", "settings"), SETTINGS_SUBSYSTEM))
+    shared = ownership(build_tree(tmp_path / "shared", relocated("pluginSettings.common.reset", "settings"), SETTINGS_SUBSYSTEM))
+
+    assert (r1_problems(misplaced), r3_problems(misplaced)) == ([], [])
+    assert r2_problems(misplaced) == [f"pluginSettings.asset.probe_source.description.region: declared by {SOURCE.name} in its space (pluginSettings.asset.probe_source.*), but lives in {SETTINGS}; expected in {SOURCE.fragment}"]
+    assert r4_problems(misplaced) == [f"pluginSettings.asset.probe_source.description.region: under pluginSettings.asset.probe_source.*, the space of {SOURCE.name} alone, but lives in {SETTINGS}; expected in {SOURCE.fragment}"]
+    assert (r1_problems(shared), r2_problems(shared), r3_problems(shared), r4_problems(shared)) == ([], [], [], [])
 
 
 def test_r4_leaves_a_tool_key_to_r2(tmp_path):
@@ -660,13 +900,13 @@ def test_r2_and_r4_hold_a_space_once_no_other_plugin_shares_it(tmp_path):
     assert r4_problems(own) == [f"signals.probeTwin.{field}: under signals.probeTwin.*, the space of {TWIN_A.name} alone, but lives in {CHARTS}; expected in {TWIN_A.fragment}" for field in ("name", "output")]
 
 
-def test_the_space_check_flags_a_plugin_without_a_space_and_an_fx_plugin_with_one():
-    plugins = (*PLUGINS, PluginI18n("signal_plugins/probe_blank"), PluginI18n("fx_providers/probe_named", (Area("fx.probeNamed"),)), PluginI18n("probe_widgets/probe_odd"))
+def test_the_space_check_flags_a_plugin_without_a_space_an_fx_plugin_too():
+    plugins = (*PLUGINS, PluginI18n("signal_plugins/probe_blank"), PluginI18n("fx_providers/probe_blank"), PluginI18n("probe_widgets/probe_odd", (Area("widgets.probeOdd"),)))
 
     assert space_problems(PLUGINS) == []
     assert space_problems(plugins) == [
         "signal_plugins/probe_blank: publishes no i18n space",
-        "fx_providers/probe_named: an FX plugin has no i18n space, yet publishes fx.probeNamed.*",
+        "fx_providers/probe_blank: publishes no i18n space",
         "probe_widgets/probe_odd: not a plugin family this gate knows",
     ]
 
@@ -704,8 +944,35 @@ def report(problems: list[str]) -> str:
 def test_every_registry_publishes_its_plugins_each_with_a_space(published):
     families = {plugin.family for plugin in published}
 
-    assert families == {*SPACED_FAMILIES, FX_FAMILY}, "a registry published no plugin, or one of a family this gate does not know"
+    assert families == set(SPACED_FAMILIES), "a registry published no plugin, or one of a family this gate does not know"
     assert space_problems(published) == []
+
+
+def test_an_asset_or_fx_plugin_space_holds_its_settings_branch_under_its_registry_code(published):
+    """An asset plugin: its params' and its settings' branches; an FX plugin: its settings' branch, the code as the
+    registry has it; a folder of two FX classes: both branches."""
+    spaces = {plugin.name: plugin.areas for plugin in published}
+
+    assert spaces["asset_source_providers/justetf"] == (Area("assets.providerParams.justetf"), Area("pluginSettings.asset.justetf"))
+    assert spaces["asset_source_providers/yahoo_finance"] == (Area("assets.providerParams.yfinance"), Area("pluginSettings.asset.yfinance"))
+    assert spaces["fx_providers/ecb"] == (Area("pluginSettings.fx.ECB"),)
+    assert spaces["fx_providers/mockfx"] == (Area("pluginSettings.fx.MOCKFX"), Area("pluginSettings.fx.MOCKFX_FAIL"))
+
+
+def test_an_asset_or_fx_plugin_declares_exactly_the_keys_of_its_settings(published):
+    """Each field's ``label_key`` and ``description_key`` and each option's ``label_key``, read off the classes: the
+    keys the model has each asset and FX plugin declare, no more, no fewer."""
+    declared = {plugin.name: set(plugin.declared) for plugin in published}
+    expected: dict[str, set[str]] = {}
+    for registry in SETTINGS_REGISTRIES:
+        for code in registry.list_plugin_codes():
+            plugin_class = registry.get_plugin(code)
+            keys = expected.setdefault(plugin_folder(plugin_class.__module__), set())
+            for field in plugin_class.settings_fields:
+                keys.update(key for key in (field.label_key, field.description_key, *(option.label_key for option in field.options)) if key)
+
+    assert any(expected.values()), "no asset or FX plugin declares a settings key: nothing for the rules to read of the settings"
+    assert {folder: declared[folder] for folder in expected} == expected
 
 
 def test_every_brim_plugin_code_is_its_folder(published):
@@ -713,9 +980,14 @@ def test_every_brim_plugin_code_is_its_folder(published):
 
 
 def test_the_published_definitions_hold_no_key_field_the_gate_does_not_read():
-    unread = {name: sorted(published_keys(dump)[1]) for name, dump in (*signal_definitions(), *risk_definitions())}
+    """The signal and risk definitions, every asset and FX plugin's settings, and every attribute of the settings types
+    themselves: a key field the collector does not read is named, a new attribute even before a plugin sets it."""
+    unread: dict[str, set[str]] = defaultdict(set)
+    for name, dump in (*signal_definitions(), *risk_definitions(), *settings_definitions()):
+        unread[name] |= published_keys(dump)[1]
 
-    assert {name: fields for name, fields in unread.items() if fields} == {}
+    assert {name: sorted(fields) for name, fields in unread.items() if fields} == {}
+    assert published_keys(attribute_dump(PluginSettingField, SettingOption)) == (("PluginSettingField.label_key", "PluginSettingField.description_key", "SettingOption.label_key"), frozenset())
 
 
 def test_r1_every_fragment_key_lies_in_its_plugin_space(repository):

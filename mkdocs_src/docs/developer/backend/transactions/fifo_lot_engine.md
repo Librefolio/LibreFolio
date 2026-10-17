@@ -34,6 +34,7 @@ def run_fifo_lot_engine(
     reference_price_lookup: ReferencePriceLookup | None = None,
     economic_events: Sequence[EconomicEvent] = (),
     target_currency: str = "",
+    replay_until: date | None = None,
 ) -> FifoEngineResult:
 ```
 
@@ -45,9 +46,10 @@ def run_fifo_lot_engine(
 | `broker_shorting` | Per-broker flag controlling whether a `SELL` remainder may open a `SHORT` lot. |
 | `split_ratios_by_tx_id` | Split transaction ID → ratio used to synthesize `SPLIT` events. |
 | `split_event_ids_by_tx_id` | Split transaction ID → its `SPLIT` `AssetEvent` id, carried by the synthesized event as `asset_event_id`. Yield on Cost passes it; the lots analysis does not. |
-| `reference_price_lookup` | Optional pure lookup used by current implementation when `ADJUSTMENT_IN` opens a new LONG lot. |
+| `reference_price_lookup` | Optional pure lookup used by current implementation when `ADJUSTMENT_IN` opens a new LONG lot. The lots analysis passes one that reads the asset's daily marks (see [Reference Price](lots_analysis_service.md#reference-price)); without a lookup, or when it returns `None`, the lot gets `reference_price_source = "unavailable"`. |
 | `economic_events` | Asset-linked `DIVIDEND` / `INTEREST` / `FEE` / `TAX` as `EconomicEvent`s, each with its native amount and the target-currency amount its caller resolved; consumed by the [economic allocation stage](#economic-allocation-stage). |
-| `target_currency` | The caller's report currency; each `EconomicEvent` also carries its own `target_currency`. |
+| `target_currency` | The caller's report currency; each `EconomicEvent` also carries its own `target_currency`. `_close_position_piece()` also reads it: a lot or a closing price without a currency counts in it when a closure's currency is compared with its lot's (see [Closure currency](#closure-currency)). |
+| `replay_until` | The last day the replay reaches; `None` reaches every event. An event dated after it is neither applied nor returned in `classified_events`: a lots analysis passes its `date_to`, so a transfer whose arriving leg is dated later departs and stays `IN_TRANSIT` (see [Transfers In Transit at the End](lots_analysis_service.md#in-transit-at-date-to)). The pairing still reads both legs. |
 
 ### 📤 Output
 
@@ -83,15 +85,15 @@ One FIFO lot. Usually opened by a `BUY`, by the remainder of an `ADJUSTMENT_IN`,
 | `original_quantity` | Original lot quantity, adjusted later by splits. |
 | `opening_unit_price` | Per-unit opening cost currently attached to lot. |
 | `original_cost` | Original economic cost basis kept invariant across splits/transfers. |
-| `currency` | Transaction currency captured at open time. |
+| `currency` | Currency of the opening price, captured at open time: the opening row's `currency` for a `BUY` or a short-opening `SELL`; for an `ADJUSTMENT_IN` priced by its `cost_basis_override`, the cost basis's (`cost_basis_currency`, or the row's `currency` when that is empty — an adjustment moves no cash, so its own `currency` is often empty); for one without, the row's `currency`. |
 | `open_quantity` | Remaining open quantity after FIFO closures. |
 | `realized_quantity` | Quantity already closed. |
-| `realized_pnl` | Cumulative realized P&L from closures. |
-| `cumulative_proceeds` | Cumulative sale proceeds for LONG lots, or opening proceeds for SHORT lots. |
+| `realized_pnl` | Cumulative native realized P&L from closures, in the lot's currency; `None` from the first closure in another currency on (see [Closure currency](#closure-currency)). |
+| `cumulative_proceeds` | Native, in the lot's currency. LONG lots: cumulative closure `proceeds` — a `SELL`'s cash, plus the value an `ADJUSTMENT_OUT` with a cost basis hands over at that cost — `None` from the first closure in another currency on. SHORT lots: the opening proceeds, which closures never change. |
 | `reference_unit_price` | Optional reference price the engine resolves for a lot (e.g. when an `ADJUSTMENT_IN` opens a new LONG lot), consumed downstream by `LotsAnalysisService`. |
 | `reference_price_source` | `"exact"`, `"fallback"`, `"unavailable"`, or `None`. |
 
-`reference_unit_price` is stored on the market/`quote_base_quantity` axis when the resolver supplies one. If no opening quote is available, `opening_reference_price()` (`financial_math/lots/prices.py`) falls back to `lot.opening_unit_price * quote_base_quantity` before the lots analysis computes `relative_return`; the engine itself does not know `quote_base_quantity`.
+`reference_unit_price` is stored on the market/`quote_base_quantity` axis when the lookup supplies one — resolver marks already live on that axis. When the lot has none — opened by a `BUY` or a short-opening `SELL`, or by an `ADJUSTMENT_IN` with no observation on or before its opening date — `opening_reference_price()` (`financial_math/lots/prices.py`) falls back to `lot.opening_unit_price * quote_base_quantity` before the lots analysis computes `relative_return`; the engine itself does not know `quote_base_quantity`.
 
 ### 🧩 `FragmentInterval`
 
@@ -113,7 +115,7 @@ Custody fragment for one lot. This is what powers Gantt lanes and custody histor
 
 ### 🔚 `LotClosure`
 
-Single FIFO close operation against one fragment.
+Single FIFO close operation against one fragment, in native amounts: the lots analysis converts it, each leg at its own date (see [Closure currency](#closure-currency)).
 
 | Field | Meaning |
 |------|---------|
@@ -123,10 +125,11 @@ Single FIFO close operation against one fragment.
 | `close_date` | Closure date. |
 | `close_reason` | `"SELL"`, `"BUY"`, or `"ADJUSTMENT_OUT"`. |
 | `fragment_id` | Exact fragment consumed. |
-| `open_unit_price` | Cost carried by consumed fragment. |
-| `close_unit_price` | Sell/buy/adjustment close price. |
-| `realized_pnl` | Realized P&L for this matched piece. |
-| `proceeds` | Non-zero only for LONG `SELL` closures. |
+| `open_unit_price` | Cost carried by the consumed fragment, in the lot's currency. |
+| `close_unit_price` | Price the piece closed at, in `close_currency`: the `SELL` / `BUY` unit price; for an `ADJUSTMENT_IN` closing a SHORT, its `cost_basis_override` (0 without one); for an `ADJUSTMENT_OUT`, its `cost_basis_override` — the same for every fragment — or 0 without one. |
+| `realized_pnl` | Native realized P&L of the piece, in the lot's currency; `None` when `close_currency` is not the lot's. |
+| `proceeds` | `quantity × close_unit_price`, in `close_currency`, on LONG closures — a `SELL`'s cash, or the value an `ADJUSTMENT_OUT` hands over at cost (0 without a cost basis); 0 on every SHORT closure. |
+| `close_currency` | Currency of `close_unit_price` and `proceeds`, `None` counting as the report currency: a `SELL`'s or `BUY`'s `currency`; for an `ADJUSTMENT_IN` closing a SHORT, its cost basis's (`cost_basis_currency`, or the row's `currency` when empty) when it carries a `cost_basis_override`, else the row's `currency`; for an `ADJUSTMENT_OUT`, `_handover_currency()`: `cost_basis_currency` when it carries a cost basis, the lot's currency when that is empty or when it carries none. |
 
 ### 📊 `FifoEngineResult`
 
@@ -141,12 +144,12 @@ Returned snapshot of complete run.
 | `closures` | All FIFO closures sorted by close date. |
 | `issues` | Data-quality / unsupported-scenario issues. |
 | `economic_allocation_groups` | 3-level economic audit (income + FEE/TAX) with source tx, rule, weights, native+target amounts. |
-| `economic_accumulators_by_lot` | Per-lot `gross_income`, `allocated_fees`, `allocated_taxes` (target currency, positive magnitudes). |
+| `economic_accumulators_by_lot` | Per-lot `gross_income` (signed: a negative income correction lowers it), `allocated_fees`, `allocated_taxes` (positive magnitudes), all in the target currency. |
 | `asset_orphan_income` / `asset_orphan_fees` / `asset_orphan_taxes` | Amounts with no eligible lot, kept at asset level. |
 
 Useful helpers on result:
 
-- `analysis_status`: `"FAILED"` if any issue is a non-isolable quantitative-replay error (see `_QUANTITATIVE_FAILURE_CODES` in `models.py`), else `"DEGRADED"` if `issues` is non-empty, else `"COMPLETE"`
+- `analysis_status`: `"FAILED"` if any issue is a non-isolable quantitative-replay error (`fails_the_replay(code)`: a code of `_QUANTITATIVE_FAILURE_CODES` in `models.py`), else `"DEGRADED"` if `issues` is non-empty, else `"COMPLETE"`
 - `get_lot_states(lot_id)`: derives `LONG`/`SHORT`, `OPEN`/`PARTIALLY_CLOSED`/`CLOSED`, plus `IN_TRANSIT`, `DISTRIBUTED`, `DEGRADED`
 - `active_fragments(...)`: filter live custody fragments
 
@@ -196,9 +199,9 @@ EventKind = Literal[
 
 - `BUY` transaction → `BUY`
 - `SELL` transaction → `SELL`
-- positive `ADJUSTMENT` → `ADJUSTMENT_IN`
-- negative `ADJUSTMENT` → `ADJUSTMENT_OUT`
-- transaction ID found in `split_ratios_by_tx_id` → `SPLIT`
+- positive `ADJUSTMENT` → `ADJUSTMENT_IN`, its `unit_price` the row's `cost_basis_override` (0 without one)
+- negative `ADJUSTMENT` → `ADJUSTMENT_OUT`, its `unit_price` the row's `cost_basis_override` (0 without one): every fragment closes at that price, in a currency resolved per fragment when the event is applied (see [Hand-over at cost](#handover-at-cost))
+- transaction ID found in `split_ratios_by_tx_id` → `SPLIT`, when its ratio passes `is_valid_split_ratio()`; otherwise the row is skipped: never an `ADJUSTMENT_IN` / `ADJUSTMENT_OUT`, no rescale, no exception (lot MF-D4)
 - paired `TRANSFER` legs → synthesized `TRANSFER_DEPART` + `TRANSFER_ARRIVE`
 
 ### 📋 Inventory effects
@@ -207,8 +210,8 @@ EventKind = Literal[
 |-----------|---------------------|
 | `BUY` | First closes existing `SHORT` fragments on same broker (`close_reason="BUY"`). Any remainder opens new `LONG` lot. |
 | `SELL` | Closes `LONG` fragments FIFO on same broker. Any remainder opens new `SHORT` lot only if `broker_shorting[broker_id]` is true; otherwise emits `FIFO_SOURCE_QUANTITY_MISSING`. |
-| `ADJUSTMENT_IN` | First closes existing `SHORT` fragments with `close_unit_price = 0`. Any remainder opens zero-price `LONG` lot. |
-| `ADJUSTMENT_OUT` | Closes `LONG` fragments FIFO with `close_unit_price = 0`. If quantity still missing, engine emits issue; it never opens/consumes unsupported SHORT adjustment legs. |
+| `ADJUSTMENT_IN` | First closes existing `SHORT` fragments on same broker (`close_reason="BUY"`) at the event's `unit_price` — the row's `cost_basis_override`, 0 without one — in the cost basis's currency when the row carries one (`cost_basis_currency`, else the row's `currency`), else in the row's `currency`. Any remainder opens a new `LONG` lot at that price, in that currency, and resolves its reference price. |
+| `ADJUSTMENT_OUT` | Closes `LONG` fragments FIFO on same broker (`close_reason="ADJUSTMENT_OUT"`): with a `cost_basis_override`, every fragment at that per-unit cost, in `cost_basis_currency` (the lot's currency when empty) — the units are handed over at cost; without one, at `close_unit_price = 0` in the lot's currency — a write-off; flagged `hands_over_at_own_cost` (a transfer leg leaving the lots' scope on a day without a price, see [Transfers Across the Scope's Edge](lots_analysis_service.md#scope-edge-transfers)), every fragment at its own FIFO unit cost in the lot's currency — realized 0. If quantity still missing, engine emits issue; it never opens/consumes unsupported SHORT adjustment legs. |
 | `TRANSFER_DEPART` | Extracts `LONG` broker fragments FIFO from source broker, optionally opens `IN_TRANSIT` fragments, records pending transfer pieces, realizes **no P&L**. |
 | `TRANSFER_ARRIVE` | Closes matching transit fragments and reopens broker custody at destination with same quantity and unit price. |
 | `SPLIT` | Multiplies active fragment quantities by ratio, divides unit prices by ratio, then recomputes lot-level quantities/reference price while preserving cost. |
@@ -243,12 +246,31 @@ Then `_consume_broker_fragments()` walks oldest fragments first:
 4. Reduce fragment or close it entirely
 5. Continue until requested quantity is satisfied or inventory runs out
 
+Every fragment closes at the one `close_unit_price` the caller passes, in the `close_currency` it passes or in the one the optional per-fragment hook `close_currency_of(fragment)` gives it. `_apply_sell()` and `_apply_buy()` pass the row's `currency`, `_apply_adjustment_in()` the currency of its price; only `_apply_adjustment_out()` passes the hook, `_handover_currency()`, since a fragment it closes without a cost basis, or with one that has no currency, closes in its own lot's currency (see [Hand-over at cost](#handover-at-cost)).
+
 ### 🧮 Realized P&L math
 
 - **LONG close**: `matched_quantity * (close_unit_price - fragment.unit_price)`
 - **SHORT close**: `matched_quantity * (fragment.unit_price - close_unit_price)`
 
-`SELL` creates `proceeds` only when closing LONG inventory. `BUY` closes SHORT inventory but does not add proceeds.
+Both are native, in the lot's currency, and computed only when the closure is in that currency (see [Closure currency](#closure-currency)). `SELL` and `ADJUSTMENT_OUT` — the two closures of LONG inventory — create `proceeds = matched_quantity * close_unit_price`: a sale's cash, or the value an `ADJUSTMENT_OUT` hands over at cost. An `ADJUSTMENT_OUT` without a cost basis closes at 0, in the lot's currency: no proceeds, and it realizes `-matched_quantity * fragment.unit_price` (a write-off). `BUY` and `ADJUSTMENT_IN` close SHORT inventory but do not add proceeds.
+
+### 💱 Closure currency {: #closure-currency }
+
+A closure's two prices can be in two currencies: `open_unit_price` in the lot's (`FifoLot.currency`), `close_unit_price` and `proceeds` in `close_currency` (see the `LotClosure` table). A lot moved to a broker of another currency and sold there closes in the sale's currency; an `ADJUSTMENT_OUT` whose cost basis is in another currency than the lot's closes in the cost basis's.
+
+The engine has no rates, so `_close_position_piece()` computes the native realized P&L only when the two currencies are the same — `None` counts as `target_currency` on both sides, as the lots analysis reads an amount without a currency. Otherwise:
+
+- the closure's `realized_pnl` is `None`;
+- the lot's `realized_pnl` is `None` from that closure on, and so is a LONG lot's `cumulative_proceeds`.
+
+The figures in the report currency are the lots analysis's: `convert_closure()` converts each leg at its own date — the lot's side at the lot's opening date, the closing side at the closure date — and never reads the native `realized_pnl` (developer decision 26; see [Closures: each leg at its own date](lots_analysis_service.md#closure-conversion)).
+
+### 📤 Hand-over at cost {: #handover-at-cost }
+
+A negative `ADJUSTMENT` carrying a per-unit `cost_basis_override` hands its units over at that cost (developer decision 47: the principle of a priced `ADJUSTMENT_IN`, in the opposite direction). The Dashboard treats it so: the value handed over, converted at the row's date, leaves the capital baseline, and its difference from the average cost the pool gives up is realized (`DailyStateBuilder._handed_over_value()`, see [WAC & Cost Basis — Portfolio engine](wac.md#portfolio-engine)). The lots agree: every fragment closes at the row's `cost_basis_override` — the event's `unit_price`, **not** the fragment's own `unit_price` — so a fragment of a cheaper lot realizes the difference. Example, in one currency: 10 units bought at 10 and 10 at 20 (average 15); an `ADJUSTMENT_OUT` of 10 at cost 15 closes the first lot at 15 — `realized_pnl = +50`, `proceeds = 150` — and the lots total equals the Dashboard's P&L. With a single lot and a cost equal to the lot's, the realized part is 0.
+
+The cost applies to every fragment, whatever its lot's currency. `_handover_currency(tx, fragment)` gives each closure its `close_currency`: the cost basis's — `tx.cost_basis_currency`, or the lot's currency when empty — or, for a row without a cost basis, the lot's. A cost basis in another currency than the lot's leaves the closure's native `realized_pnl` `None` (see [Closure currency](#closure-currency)); the lots analysis realizes the value handed over, converted at the row's date, against the lot's cost converted at its opening date. With `cost_basis_currency` empty, the Dashboard reads the cost basis in the asset's currency instead (`_handed_over_value()`): the two agree when the lot was opened in the asset's currency.
 
 ---
 
@@ -298,9 +320,12 @@ Transfers are modeled as **custody moves**, not disposals.
 - absolute quantities match
 - both legs belong to same asset
 
-Otherwise engine records `TRANSFER_PAIR_MISSING` and skips pair.
+Otherwise engine records `TRANSFER_PAIR_MISSING` and skips pair. The engine sees only the rows it is given: a lots
+analysis reads a leg whose partner pairs back from a broker outside its scope before the replay, as an adjustment
+(see [Transfers Across the Scope's Edge](lots_analysis_service.md#scope-edge-transfers)), so that leg never reaches
+this rule.
 
-### 🛫 Depart
+### 🛫 Depart {: #depart }
 
 `TRANSFER_DEPART`:
 
@@ -309,6 +334,10 @@ Otherwise engine records `TRANSFER_PAIR_MISSING` and skips pair.
 3. shrinks/closes source broker fragments
 4. opens `IN_TRANSIT` fragment when `transit_start < transit_end`
 5. stores `_PendingTransferPiece` until arrival
+
+Both issues a departure can record (`SHORT_TRANSFER_NOT_SUPPORTED`, and `FIFO_SOURCE_QUANTITY_MISSING` when the source
+broker holds less than the leg moves) name the giving leg, the row to fix: `raw_transaction_ids[0]`, the out leg of the
+pair (J-12). The event's own `transaction_id` is the pair's, which may be the receiving leg.
 
 ### 🛬 Arrive
 
@@ -341,13 +370,17 @@ per-lot accumulators, an audit trail, and asset-level orphans.
   (`backend/app/services/financial_math/yield_on_cost.py`) counts eligible quantity with the same public function.
 - weight `w_i = EligibleQty_i / Σ EligibleQty_j`, distributed with a running remainder so the pool total is
   conserved exactly;
+- **signed amounts**: a pool sums its `native_amount` / `target_amount` values with their sign, as the Dashboard
+  does (`NativeCash.flows()` keeps income signed; developer decision D-MF3): a negative correction lowers the
+  income of the lots, and an orphan pool can be negative;
 - **no eligible lot** → the whole pool becomes `asset_orphan_income`, with an `ASSET_INCOME_NO_ELIGIBLE_LOTS`
   issue and an audit group tagged `ASSET_INCOME_HOLDINGS`.
 
 ### 💸 FEE / TAX
 
 `_allocate_cost_pools()` pools asset-linked cost and matches it to operations with a deterministic ladder
-(`_match_cost_operations`), weighting by `target_amount`:
+(`_match_cost_operations`), weighting by `target_amount`. Unlike income, a cost pool sums its amounts in
+absolute value, as the Dashboard counts fees and taxes:
 
 | Cost | Matching order (first non-empty wins) |
 |------|----------------------------------------|
@@ -379,7 +412,7 @@ numeric net breakdown).
 
 ### 📈 Net annualization handoff
 
-The engine returns realized P&L plus economic accumulators; `LotsAnalysisService._build_lot_summaries()` derives `total_pnl`, subtracts allocated FEE/TAX into `net_total_pnl`, computes `net_total_return`, and annualizes **that net figure** over `opening_date → closing_date` (closed lots) or `opening_date → analysis_end` (open lots). The shipped `LotSummarySchema.annualized_return` therefore annualizes `net_total_return`, not gross `total_return`.
+The engine returns realized P&L plus economic accumulators; `lot_summary_figures()` (`financial_math/lots/summary.py`), called by `LotsAnalysisService._build_lot_summaries()`, derives `total_pnl`, subtracts allocated FEE/TAX into `net_total_pnl`, computes `net_total_return`, and annualizes **that net figure** over `opening_date → closing_date` (closed lots) or `opening_date → analysis_end` (open lots). The shipped `LotSummarySchema.annualized_return` therefore annualizes `net_total_return`, not gross `total_return`.
 
 ---
 
@@ -395,7 +428,7 @@ The engine returns realized P&L plus economic accumulators; `LotsAnalysisService
 
 !!! note "Estimated valuation lives outside FIFO"
 
-    The engine has no `ESTIMATED_AT_COST` branch and does not emit `CURRENT_PRICE_ASSUMED_AT_COST`. When lots analysis has no usable mark for an open LONG lot on a price-less asset, the service values the open slice at cost and sets `market_pnl = 0`; when the unified resolver can derive a trade-origin mark, that mark is flagged `estimated=True` on the price-history line.
+    The engine has no `ESTIMATED_AT_COST` branch and does not emit `CURRENT_PRICE_ASSUMED_AT_COST`. On a day with no observation on or before it — no quote, no `BUY` or `SELL` — the lots analysis values the open slice of a LONG lot at cost, with no market P&L (see [Estimated-at-Cost Fallback](lots_analysis_service.md#estimated-at-cost-fallback)); a trade-origin mark is a price, flagged `estimated=True` on the price-history line.
 
 !!! info "Issues degrade result instead of aborting run"
 

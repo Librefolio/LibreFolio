@@ -64,18 +64,17 @@ from backend.app.services.risk.metrics import (
     summarize_drawdown,
     wealth_index,
 )
-from backend.app.services.risk.signal_helpers import (
-    rolling_annualized_sharpe_values,
-    rolling_annualized_volatility_values,
-    rolling_beta_values,
-    rolling_compounded_return_values,
-    rolling_pair_values,
-    rolling_single_values,
-    undefined_window_warnings,
-)
 from backend.app.services.risk_plugins.historical_var.plugin import (
     HistoricalVarAnalytic,
     HistoricalVarParams,
+)
+from backend.app.services.signals.risk_adapters import (
+    rolling_annualized_sharpe_values,
+    rolling_annualized_volatility_values,
+    rolling_beta_values,
+    rolling_pair_values,
+    rolling_single_values,
+    undefined_window_warnings,
 )
 
 # --------------------------------------------------------------------------- #
@@ -725,7 +724,7 @@ def test_riskfolio_numbins_is_not_the_freedman_diaconis_bin_count():
 #
 # Load-bearing, and written BEFORE the rolling helpers are vectorised because it is
 # the only thing that will catch a semantic regression there.
-# ``backend/app/services/signal_service.py:845`` derives ``has_undefined_window``
+# ``backend/app/services/signals/service.py:845`` derives ``has_undefined_window``
 # from this count and uses it to pick the RESULT STATUS (UNAVAILABLE / partial), not
 # merely to emit a warning. Losing or inflating the count silently changes the API.
 # --------------------------------------------------------------------------- #
@@ -1894,11 +1893,12 @@ def test_the_computed_freedman_diaconis_width_publishes_the_grid_the_built_one_d
 # vectorised pandas passes. The defining property of the migration is that NOTHING
 # about the published numbers changes, so ``rolling_single_values`` and
 # ``rolling_pair_values`` are kept in the source as the executable reference semantics
-# and every test below drives both paths over the same sample. The four call sites are
-# the differential contract:
+# and every test below drives both paths over the same sample. Three call sites remain
+# the differential contract (the fourth, ``rolling_return.py`` and its
+# ``rolling_compounded_return_values``, left the tree with developer's decision 29,
+# CP-10a: the one Rolling Return is the calendar plugin, which rolls no window of
+# returns):
 #
-#   rolling_return.py:122      rolling_single_values(r, W, lambda w: compounded_return(w) * 100)
-#                           -> rolling_compounded_return_values(r, W, scale=100.0)
 #   rolling_volatility.py:115  rolling_single_values(r, W, lambda w: annualized_volatility(w, f) * 100)
 #                           -> rolling_annualized_volatility_values(r, W, f, scale=100.0)
 #   rolling_sharpe.py:140      rolling_single_values(r, W, lambda w: annualized_sharpe(w, f, annual_risk_free_rate=rf))
@@ -1918,7 +1918,7 @@ def test_the_computed_freedman_diaconis_width_publishes_the_grid_the_built_one_d
 # so EVERY differential assertion below compares the ``None`` mask and the count as well
 # as the numbers.
 #
-# Windows: 30 is the shipped default of rolling_return/rolling_volatility and 90 of
+# Windows: 30 is the shipped default of rolling_volatility and 90 of
 # rolling_sharpe/rolling_beta, so both defaults are exercised, plus a short window that
 # leaves far more full windows per sample and moves the warm-up boundary somewhere else.
 # --------------------------------------------------------------------------- #
@@ -1930,13 +1930,16 @@ def test_the_computed_freedman_diaconis_width_publishes_the_grid_the_built_one_d
 # The two are NOT bit-identical and cannot be made so. The worst relative divergence
 # measured while the migration was being made is 6.9e-12, on
 # ``rolling_compounded_return_values`` — its ``expm1(log1p(x).rolling(W).sum())`` form
-# adds a log/exp round trip the scalar product does not have.
+# adds a log/exp round trip the scalar product does not have. That helper has since left
+# the tree (decision 29, CP-10a); the bound stays as it was, since the three helpers that
+# remain diverged less than it did.
 #
 # ``rel=1e-9`` leaves ~150x headroom over that worst case while staying 1000x tighter
 # than pytest's default ``rel=1e-6``, so it is still a real constraint: a semantic change
 # moves a rolling value by very much more than a part per billion. ``abs=1e-12`` is
-# REQUIRED rather than belt-and-braces, because rolling returns and rolling betas cross
-# zero and a purely relative tolerance is meaningless against an expected value of 1e-15.
+# REQUIRED rather than belt-and-braces, because rolling betas (and the rolling returns
+# that once lived here) cross zero and a purely relative tolerance is meaningless against
+# an expected value of 1e-15.
 # ``pytest.approx`` takes the LARGER of the two, so the absolute floor only ever applies
 # where the relative one has stopped meaning anything.
 #
@@ -2001,11 +2004,6 @@ def _windows_inside_a_flat_run(run_length: int, window: int) -> int:
     return max(0, run_length - window + 1)
 
 
-def _loop_compounded_return(returns: Sequence[float], window: int, *, scale: float = 1.0) -> tuple[list[float | None], int]:
-    """Return the pre-M1 rolling compounded return, exactly as ``rolling_return.py`` called it."""
-    return rolling_single_values(returns, window, lambda sample: compounded_return(sample) * scale)
-
-
 def _loop_annualized_volatility(returns: Sequence[float], window: int, factor: float, *, scale: float = 1.0) -> tuple[list[float | None], int]:
     """Return the pre-M1 rolling volatility, exactly as ``rolling_volatility.py`` called it."""
     return rolling_single_values(returns, window, lambda sample: annualized_volatility(sample, factor) * scale)
@@ -2062,16 +2060,15 @@ def _assert_rolling_paths_agree(
 
 
 def _migrated_signal_paths(returns: Sequence[float], window: int) -> list[tuple[str, tuple[list[float | None], int], tuple[list[float | None], int]]]:
-    """Return ``(label, vectorised, loop)`` for all four migrated signals on one sample.
+    """Return ``(label, vectorised, loop)`` for the three migrated signals on one sample.
 
-    Used by the edge-case tests, where the interesting behaviour is shared by all four
-    helpers and writing it out four times would hide the one that eventually differs.
+    Used by the edge-case tests, where the interesting behaviour is shared by all three
+    helpers and writing it out three times would hide the one that eventually differs.
     The comparison series is an affine transform of the primary, so its variance is
     non-zero whenever the primary's is and beta stays defined by construction.
     """
     comparison = [value * 0.7 + 0.0001 for value in returns]
     return [
-        ("compounded return", rolling_compounded_return_values(returns, window, scale=100.0), _loop_compounded_return(returns, window, scale=100.0)),
         ("annualized volatility", rolling_annualized_volatility_values(returns, window, _ANNUALIZATION, scale=100.0), _loop_annualized_volatility(returns, window, _ANNUALIZATION, scale=100.0)),
         ("annualized sharpe", rolling_annualized_sharpe_values(returns, window, _ANNUALIZATION), _loop_annualized_sharpe(returns, window, _ANNUALIZATION)),
         ("beta", rolling_beta_values(returns, comparison, window), _loop_beta(returns, comparison, window)),
@@ -2105,24 +2102,6 @@ def test_the_rolling_migration_samples_carry_exactly_the_flat_runs_the_expected_
         primary, comparison = _rolling_pair(seed)
         assert len(primary) == len(comparison) == _ROLLING_SAMPLE_SIZE
         assert len(set(comparison)) == _ROLLING_SAMPLE_SIZE
-
-
-@pytest.mark.parametrize("seed", _ROLLING_SEEDS)
-@pytest.mark.parametrize("window", _ROLLING_WINDOWS)
-def test_the_vectorised_rolling_compounded_return_reproduces_the_reference_loop(window, seed):
-    """``expm1(log1p(r).rolling(W).sum())`` must equal the running product, scale included.
-
-    This is the helper carrying the largest legitimate divergence, because it is the only
-    one that goes through a logarithm and back. It is also the only one that can never be
-    undefined: compounding is defined for every finite window, so the count is a constant
-    zero and any other answer means the undefined machinery has started firing on data
-    that is merely degenerate.
-    """
-    returns = _rolling_sample(seed)
-    vectorised = rolling_compounded_return_values(returns, window, scale=100.0)
-
-    _assert_rolling_paths_agree(vectorised, _loop_compounded_return(returns, window, scale=100.0), observations=len(returns), label=f"compounded return, window={window}, seed={seed}")
-    assert vectorised[1] == 0
 
 
 @pytest.mark.parametrize("seed", _ROLLING_SEEDS)
@@ -2248,21 +2227,18 @@ def test_a_wholly_flat_series_leaves_every_full_sharpe_and_beta_window_undefined
 
 @pytest.mark.parametrize("window", (5, 20))
 @pytest.mark.parametrize("constant", (0.0, _FLAT_RUN_VALUE))
-def test_a_wholly_flat_series_stays_perfectly_defined_for_the_compounded_return_and_the_volatility(constant, window):
+def test_a_wholly_flat_series_stays_perfectly_defined_for_the_volatility(constant, window):
     """Undefined-ness is a property of the STATISTIC, never of the data looking degenerate.
 
     The same series that makes the Sharpe and the beta undefined is completely ordinary
-    for the other two signals: a flat window compounds to a real number, and its
-    volatility is zero — which is an answer, not the absence of one. Only the ratios that
-    divide BY that zero lose their meaning. If the vectorised pass ever started flagging
-    flat windows generically, every quiet stretch of a price series would raise a warning
-    the user can neither act on nor get rid of.
+    for the volatility: a flat window has a volatility of zero — which is an answer, not
+    the absence of one. Only the ratios that divide BY that zero lose their meaning. If
+    the vectorised pass ever started flagging flat windows generically, every quiet
+    stretch of a price series would raise a warning the user can neither act on nor get
+    rid of. (The rolling compounded return, the other signal this test held, left the
+    tree with decision 29, CP-10a.)
     """
     returns = [constant] * _FLAT_SAMPLE_SIZE
-
-    compounded = rolling_compounded_return_values(returns, window, scale=100.0)
-    _assert_rolling_paths_agree(compounded, _loop_compounded_return(returns, window, scale=100.0), observations=len(returns), label=f"compounded return, wholly flat at {constant}, window={window}")
-    assert compounded[1] == 0
 
     volatility = rolling_annualized_volatility_values(returns, window, _ANNUALIZATION, scale=100.0)
     _assert_rolling_paths_agree(volatility, _loop_annualized_volatility(returns, window, _ANNUALIZATION, scale=100.0), observations=len(returns), label=f"volatility, wholly flat at {constant}, window={window}")
@@ -2422,7 +2398,7 @@ def test_a_series_shorter_than_its_window_publishes_only_the_baseline_and_warm_u
 
     ``signal_service`` reads the count to decide the result STATUS, so a helper that
     returned ``window - 1`` here would report a chart full of undefined windows for the
-    ordinary case of a young asset. All four helpers short-circuit, and the shape they
+    ordinary case of a young asset. All three helpers short-circuit, and the shape they
     return has to be the same shape the loop produces by simply never entering its body.
     """
     returns = _rolling_sample(5)[: window - 1]
@@ -2483,15 +2459,11 @@ def test_a_window_of_one_refuses_a_dispersion_statistic_on_both_paths():
     ``Optional[FiniteFloat]``, so it would have surfaced as a Pydantic failure during
     output construction — far from the cause, and unreadable.
 
-    ``rolling_return`` legitimately allows ``ge=1``, and the compounded return IS defined
-    on a single observation. That agreement is pinned here too, so closing the dispersion
-    case cannot accidentally close the one window of one that must keep working.
+    The window of one that had to keep working, the compounded return of ``rolling_return``
+    (``ge=1``), left the tree with decision 29 (CP-10a), and its agreement pin with it.
     """
     returns = _rolling_sample(5)[:12]
     comparison = [value * 0.7 + 0.0001 for value in returns]
-
-    # The one signal whose window may legitimately be 1, and the two paths agree on it.
-    _assert_rolling_paths_agree(rolling_compounded_return_values(returns, 1, scale=100.0), _loop_compounded_return(returns, 1, scale=100.0), observations=len(returns), label="compounded return, window=1")
 
     # The three dispersion signals refuse, with the same message, on both paths.
     for label, loop_call, vectorised_call in (
@@ -2523,36 +2495,6 @@ def test_a_window_of_one_refuses_a_dispersion_statistic_on_both_paths():
     _assert_rolling_paths_agree(rolling_annualized_sharpe_values([], 1, _ANNUALIZATION), _loop_annualized_sharpe([], 1, _ANNUALIZATION), observations=0, label="annualized sharpe, empty series, window=1")
 
 
-def test_the_vectorised_compounded_return_refuses_a_total_loss_the_scalar_metric_tolerates():
-    """A deliberate, documented narrowing — the one place the two paths part company.
-
-    ``compounded_return`` accepts a return of exactly ``-1`` and answers ``-1``: the
-    wealth factor reaches zero and the holding period is a total loss. The vectorised form
-    cannot follow it there. ``log1p(-1)`` is ``-inf``, and a rolling accumulator that adds
-    then removes ``-inf`` is left with ``NaN`` for every subsequent window — so a single
-    wipeout would corrupt values long after the window that contained it had passed.
-
-    Refusing is therefore strictly better than answering, and it costs nothing in
-    practice: ``AssetReturnPoint.value`` is declared ``FiniteFloat`` with ``gt=-1``, so a
-    prepared series cannot carry ``-1`` in the first place. The guard exists for direct
-    callers, and this test exists so that the asymmetry is recorded rather than
-    rediscovered.
-    """
-    wipeout = [0.01, -1.0, 0.02, 0.03]
-
-    # The scalar path compounds it to a total loss without complaint.
-    assert compounded_return(wipeout[:2]) == pytest.approx(-1.0)
-
-    with pytest.raises(ValueError, match="finite and greater than -1"):
-        rolling_compounded_return_values(wipeout, 2)
-
-    # Non-finite input is refused by both paths, with no disagreement to record.
-    with pytest.raises(ValueError):
-        rolling_compounded_return_values([0.01, float("nan"), 0.02], 2)
-    with pytest.raises(ValueError):
-        rolling_compounded_return_values([0.01, float("inf"), 0.02], 2)
-
-
 def test_the_vectorised_rolling_beta_rejects_series_that_are_not_on_one_joint_calendar():
     """Same guard and same message as ``rolling_pair_values``, and it fires first.
 
@@ -2572,29 +2514,26 @@ def test_the_vectorised_rolling_beta_rejects_series_that_are_not_on_one_joint_ca
 
 
 @pytest.mark.parametrize("window", (7, 30))
-def test_the_scale_factor_is_applied_inside_the_vectorised_pass_for_both_percent_valued_signals(window):
+def test_the_scale_factor_is_applied_inside_the_vectorised_pass_for_the_percent_valued_volatility(window):
     """``* 100`` is the entire reason ``scale`` exists, and it must not change anything else.
 
-    ``rolling_return`` and ``rolling_volatility`` publish PERCENT, and since M1 they get
-    there by handing the factor to the helper instead of multiplying the returned list.
-    Three claims: the scaled result is the unscaled one times a hundred; the default is
-    genuinely 1.0 rather than "whatever the plugins happen to pass"; and the factor
-    changes neither the ``None`` mask nor the count, which it would if it were applied
-    before the undefined test instead of to the result.
+    ``rolling_volatility`` publishes PERCENT, and since M1 it gets there by handing the
+    factor to the helper instead of multiplying the returned list (``rolling_return`` did
+    the same until it left the tree with decision 29, CP-10a). Three claims: the scaled
+    result is the unscaled one times a hundred; the default is genuinely 1.0 rather than
+    "whatever the plugins happen to pass"; and the factor changes neither the ``None``
+    mask nor the count, which it would if it were applied before the undefined test
+    instead of to the result.
     """
     returns = _rolling_sample(1301)
+    scaled_values, scaled_undefined = rolling_annualized_volatility_values(returns, window, _ANNUALIZATION, scale=100.0)
+    unscaled = rolling_annualized_volatility_values(returns, window, _ANNUALIZATION)
+    unscaled_values, unscaled_undefined = unscaled
 
-    for label, scaled, unscaled, loop in (
-        ("compounded return", rolling_compounded_return_values(returns, window, scale=100.0), rolling_compounded_return_values(returns, window), _loop_compounded_return(returns, window)),
-        ("annualized volatility", rolling_annualized_volatility_values(returns, window, _ANNUALIZATION, scale=100.0), rolling_annualized_volatility_values(returns, window, _ANNUALIZATION), _loop_annualized_volatility(returns, window, _ANNUALIZATION)),
-    ):
-        _assert_rolling_paths_agree(unscaled, loop, observations=len(returns), label=f"{label} at the default scale, window={window}")
-
-        scaled_values, scaled_undefined = scaled
-        unscaled_values, unscaled_undefined = unscaled
-        assert scaled_undefined == unscaled_undefined == 0
-        assert [value is None for value in scaled_values] == [value is None for value in unscaled_values]
-        assert [value for value in scaled_values if value is not None] == pytest.approx([value * 100.0 for value in unscaled_values if value is not None], rel=_ROLLING_REL_TOLERANCE, abs=_ROLLING_ABS_TOLERANCE)
+    _assert_rolling_paths_agree(unscaled, _loop_annualized_volatility(returns, window, _ANNUALIZATION), observations=len(returns), label=f"annualized volatility at the default scale, window={window}")
+    assert scaled_undefined == unscaled_undefined == 0
+    assert [value is None for value in scaled_values] == [value is None for value in unscaled_values]
+    assert [value for value in scaled_values if value is not None] == pytest.approx([value * 100.0 for value in unscaled_values if value is not None], rel=_ROLLING_REL_TOLERANCE, abs=_ROLLING_ABS_TOLERANCE)
 
 
 @pytest.mark.parametrize("annual_rate", (0.03, 0.0175))

@@ -28,8 +28,8 @@ How much money did your investments make in the selected period? The **Period P&
 
 - **Period P&L** — the big number: $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net flows}$, the net flows being the capital you moved in or out → [Period P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **The line under it** — for example `+91.31 € (+16.36%)`: how much your Total P&L moved since yesterday (panel below)
-- **Unrealized change** — how the unrealized gain or loss of your holdings moved over the period, exchange-rate effect included → [Book Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
-- **Sales** — the realized gain or loss of the period's sales, against the average cost of the units sold → [Weighted Average Cost](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
+- **Unrealized change** — how the unrealized gain or loss of your holdings moved over the period, exchange-rate effect included → [Period PnL](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
+- **Sales** — the realized gain or loss of the period's sales, against the average cost of the units sold. An adjustment that removes units at a cost basis counts as a sale at that cost → [Weighted Average Cost](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
 - **Dividends & interest** — dividends, coupons and P2P interest received → [Dividend & Interest](../../financial-theory/instruments/transaction-types/dividend-interest.md)
 - **Fees & taxes** — commissions and taxes recorded as transactions; hover the row for the split → [Fee & Tax](../../financial-theory/instruments/transaction-types/fee.md)
 
@@ -48,7 +48,7 @@ How much money did your investments make in the selected period? The **Period P&
     $$
 
     - **Sign and colour follow the change**, even while the Total P&L is a loss: from `-558.10 €` to `-466.79 €`, the line reads `+91.31 € (+16.36%)` — your loss shrank by 16.36%.
-    - **It needs two days of history**; the percentage is left out when yesterday's Total P&L is exactly zero, and a day without change shows `0.00%`.
+    - **It is missing only when the period ends on your portfolio's first day**, as there is no day before to compare with; the percentage is left out when yesterday's Total P&L is exactly zero, and a day without change shows `0.00%`. On a Monday the line covers the whole weekend, since a day without a market keeps the last trading day's prices.
 
 ### 💱 Unrealized change by currency {: #unrealized-change-by-currency }
 
@@ -58,9 +58,9 @@ Hover **Unrealized change** to split it by the currency your assets are priced i
 |-----|---------------|
 | 📈 **Assets in USD** | What your dollar assets did *in dollars* — their own price change — counted at the day's exchange rate |
 | 💱 **USD → EUR rate** | What the exchange rate did to what you paid for them |
-| ❔ **USD, not split** | Only when, on the first or last day, some of those assets had no price, no rate or an incomplete purchase cost: their change, in one piece |
+| ❔ **USD, not split** | Only when, on the first or last day, some of those assets had no rate or an incomplete purchase cost: their change, in one piece |
 
-There is a 📈 row for every currency, euro included, and a 💱 row for every currency other than your display currency; together the rows add up **exactly** to the Unrealized change.
+There is a 📈 row for every currency, euro included, and a 💱 row for every currency other than your display currency; together the rows add up **exactly** to the Unrealized change. On a day an asset is valued at what it cost you, because it has no price at all, it has no unrealized gain or loss and adds nothing to any row.
 
 ??? example "A US ETF on a euro dashboard"
 
@@ -105,7 +105,7 @@ How well did your money work, whatever the size of your portfolio? The **Returns
     \text{percentage} = \frac{\text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}}}{\left|\text{Net Worth}_{\text{yesterday}}\right|} \times 100
     $$
 
-    Its sign and colour follow the change, as on Card 1. It needs two days of history and is hidden when yesterday's net worth was exactly zero.
+    Its sign and colour follow the change, as on Card 1. It is missing when the period ends on your portfolio's first day and is hidden when yesterday's net worth was exactly zero.
 
 ---
 

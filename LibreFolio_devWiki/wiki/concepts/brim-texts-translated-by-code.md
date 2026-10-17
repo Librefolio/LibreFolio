@@ -25,7 +25,7 @@ falls back to the plugin's English text when the key is missing.
 | Plugin name and description | `brimPlugins.<code>.name`, `brimPlugins.<code>.description` — every plugin, 33 today, brands identical in every language | plan 37, step 12b (`2046b7419`, 2026-10-10) |
 | Notices | `importWizard.brimNotice.<code>` (`resolveBrimNotice.ts`) | before plan 37; Scalable added twelve codes |
 | Evidence captions | `importWizard.brimEvidence.<code>`; an empty caption in the plugin means «use the interface's» | step 12b |
-| Refusal reasons | `importWizard.parseRefusal.<code>` (`resolveParseRefusalMessage`) | step 10, with [[decisions/import-wizard-default-plugin-check]] |
+| Refusal reasons | `importWizard.parseRefusal.<code>` (`resolveParseRefusalMessage`) | step 10, with [[decisions/import-wizard-default-plugin-check]]; the Generic CSV's and DEGIRO's codes, five of them shared by any plugin, since release 1.3 (workstream W, lot K2a) |
 
 - `utils/brim/pluginText.ts`, on `translateOr`, serves the plugin select, the report-set card, the About tab and the
   import wizard. Brands get a key too, because svelte-i18n warns in the console for every missing key.
@@ -46,8 +46,8 @@ goes further: seventeen subsystem catalogues plus a `base`, and each plugin's tr
 | Role | Path |
 |------|------|
 | Plugin names and descriptions | `frontend/src/lib/utils/brim/pluginText.ts` |
-| Notices and evidence captions | `frontend/src/lib/utils/transactions/resolveBrimNotice.ts` |
-| Refusals | `frontend/src/lib/utils/brim/defaultPluginCheck.ts` |
+| Notices and evidence captions | `frontend/src/lib/features/transactions/resolveBrimNotice.ts` |
+| Refusals | `frontend/src/lib/features/transactions/import/defaultPluginCheck.ts` |
 | The catalogue | `frontend/src/lib/i18n/base/en.json` |
 | `TestPluginTextCatalogues` | `backend/test_scripts/test_external/test_brim_providers.py` |
 | `TestWhatTheWizardWords` | `backend/test_scripts/test_external/test_brim_scalable.py` |

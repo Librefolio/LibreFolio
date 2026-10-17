@@ -182,6 +182,37 @@ describe('PageSyncModal — the two sections', () => {
 });
 
 // =========================================================================
+// What the page already holds in the range (C-66)
+// =========================================================================
+
+/**
+ * A detail page knows which of its assets already have stored prices, and which of
+ * its pairs stored rates, in the range it is about to sync. It hands the two lists
+ * over apart — `assetsWithDataInRange` (asset ids) and `fxPairsWithDataInRange`
+ * (pairs as the dialog names them) — and this modal passes each to its own section
+ * as `existingIds`, asset ids as strings like their targets. SyncModalBase then warns
+ * before Start, once per section; what it says is SyncModalBase.test.ts's.
+ *
+ * Red today: the two props do not exist, and no warning is rendered.
+ */
+describe('PageSyncModal — what the page already holds in the range', () => {
+    it('hands each list to its own section: asset ids to assets, pairs to fx', async () => {
+        assetsRespond();
+        fxResponds();
+        mount({assets: [asset(1), asset(2)], fxPairs: ['EUR-USD', 'EUR-GBP', 'USD-CHF'], assetsWithDataInRange: [2], fxPairsWithDataInRange: ['EUR-USD', 'USD-CHF']});
+
+        // Read by section, never by position: one warning each, with its own counts.
+        const warned = [...document.querySelectorAll<HTMLElement>('[data-testid="page-sync-modal-overwrite-warning"]')]
+            .map((el) => ({section: el.getAttribute('data-section'), existing: num(el, 'data-existing'), total: num(el, 'data-total')}))
+            .sort((a, b) => String(a.section).localeCompare(String(b.section)));
+        expect(warned).toEqual([
+            {section: 'assets', existing: 1, total: 2},
+            {section: 'fx', existing: 2, total: 3},
+        ]);
+    });
+});
+
+// =========================================================================
 // Running both at once
 // =========================================================================
 

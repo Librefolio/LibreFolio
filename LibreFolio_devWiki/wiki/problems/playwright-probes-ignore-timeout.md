@@ -139,8 +139,8 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `d956853
 | `setBrowserLocale()`, `stampDocumentLocale()`, `expectDrawnUnder()` (M-14) | `frontend/e2e/fixtures/galleryLocale.ts` |
 | `waitForSettled()` | `frontend/e2e/fixtures/app-events.ts` |
 | The gallery scenarios | `frontend/e2e/gallery.spec.ts` |
-| The wizard (step `data-busy`, `loadBrokerFiles`; M-16: `trackBrokerLoad`, `loadBrokers`) | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| M-16 tests (unit, E2E) | `frontend/src/lib/components/transactions/modals/ImportWizardModal.test.ts`, `frontend/e2e/transactions/tx-import-upload.spec.ts` |
+| The wizard (`loadBrokerFiles`; M-16: `trackBrokerLoad`, `loadBrokers`; each step's `data-busy` in its component under `frontend/src/lib/features/transactions/import/`) | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
+| M-16 tests (unit, E2E) | `frontend/src/lib/features/transactions/import/ImportWizardModal.test.ts`, `frontend/e2e/transactions/tx-import-upload.spec.ts` |
 | M-16 plan (workstream I) | `LibreFolio_developer_journal/Release_2/Phase_0/44_importWizardBrokerGate/plan-phase00ImportWizardBrokerGate.prompt.md` |
 | Amount formatting by the browser's locale (M-14) | `frontend/src/lib/utils/currency/currencyFormat.ts` |
 | Same `isEnabled` defect outside the gallery (M-15) | `frontend/e2e/transactions/tx-picker-pagination.spec.ts` |

@@ -8,6 +8,7 @@
 import {test as base, expect} from './fixtures/playwright';
 import type {Locator, Page} from './fixtures/playwright';
 import {setLanguage} from './fixtures/auth-helpers';
+import {INSTANCE_CONFIG_PATH, plainInstanceConfig} from './fixtures/instance-config';
 import {t} from './fixtures/i18n-data';
 import {schemas} from '../src/lib/api/generated';
 import type {BrimFile, UploadedFile} from '../src/lib/types/files';
@@ -28,6 +29,7 @@ function staticFile(id: string, original_name: string, uploaded_by_user_id: numb
         id,
         original_name,
         uploaded_by_user_id,
+        scope: 'common',
         mime_type: 'text/plain',
         size_bytes: 128,
         uploaded_at: CREATED_AT,
@@ -60,15 +62,16 @@ function brimFile(file_id: string, filename: string, uploaded_by_user_id: number
 }
 
 const REPORTS = {
-    atlas: brimFile('b0000000-0000-4000-8000-000000000041', 'review-atlas.csv', 41),
-    unknown: brimFile('b0000000-0000-4000-8000-000000008080', 'review-unknown.csv', 8080),
+    // List items: the page's user is OWNER of the reports' broker (the brokers contract below), so each one is deletable.
+    atlas: {...brimFile('b0000000-0000-4000-8000-000000000041', 'review-atlas.csv', 41), can_delete: true},
+    unknown: {...brimFile('b0000000-0000-4000-8000-000000008080', 'review-unknown.csv', 8080), can_delete: true},
     // Null is a valid BRIM wire identity, but NOT a valid UploadFileInfo owner.
-    none: brimFile('b0000000-0000-4000-8000-000000000000', 'review-unattributed.csv', null),
+    none: {...brimFile('b0000000-0000-4000-8000-000000000000', 'review-unattributed.csv', null), can_delete: true},
 };
 
 /**
  * The server's step-managed onboarding flows and their steps (ONBOARDING_FLOW_STEPS,
- * backend/app/services/onboarding_service.py): their progress carries one row per step.
+ * backend/app/services/accounts/onboarding_service.py): their progress carries one row per step.
  * The app reads a step it finds no row for as not due, so a step added there and not
  * here could never start a guide over this page.
  */
@@ -154,6 +157,8 @@ const test = base.extend<{uploaderPage: Page}>({
             ['/api/v1/settings/global', {body: {items: []}}],
             ['/api/v1/settings/onboarding', {body: everyFlowCompleted()}],
             ['/api/v1/system/connection', {body: loopbackConnection()}],
+            // The instance configuration, read by the (app) layout on every page load (instanceConfig.load()): a plain one.
+            [INSTANCE_CONFIG_PATH, {body: plainInstanceConfig()}],
             // The Files page's contracts.
             ['/api/v1/brokers/import/plugins', {body: []}],
             [

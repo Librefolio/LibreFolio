@@ -55,5 +55,5 @@ change neither merges nor settles. A unit test pins "at most one request per bro
 | `merge` that bumps on identical data | `frontend/src/lib/stores/core/entityStore.ts` |
 | Badge (derived object per bump) | `frontend/src/lib/components/ui/display/BrokerBadge.svelte` |
 | Contract test | `frontend/src/lib/stores/reference/brokerStoreIconHydration.test.ts` |
-| Icon effect | `frontend/src/lib/components/brokers/BrokerIcon.svelte` |
+| Icon effect | `frontend/src/lib/components/ui/display/BrokerIcon.svelte` |
 | Plan (step 10) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep10BrokerRequestBurst.prompt.md` |

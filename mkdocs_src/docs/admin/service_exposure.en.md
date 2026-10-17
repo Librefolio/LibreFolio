@@ -195,7 +195,7 @@ A subnet router is part of your network's plumbing: if you skipped it, disable k
 
 !!! warning "🔐 Before you go public"
 
-    With Funnel, anyone on the internet can open your LibreFolio login page. Create your own account first: the first account registered becomes the administrator. Sign-ups stay open after that (**Enable Registration**, `enable_registration`, is on by default): turn it off in the **Global Settings** if you do not want strangers to register (see [Global Settings](settings.md)).
+    With Funnel, anyone on the internet can open your LibreFolio login page. Create your own account first: until an account exists, anyone can register, and the first account registered becomes the administrator. After that, a new instance lets people in only with an invitation link (**Registration** is **By invitation** by default): send one to each person you want to let in. An instance upgraded from an earlier version keeps its mode: if **Registration** in the **Global Settings** is **Open**, switch it to **By invitation**, or to **Closed** if nobody else should join (see [Who Can Sign Up](settings.md#registration)).
 
 1. Visit the [Access Controls](https://login.tailscale.com/admin/acls) page in the Tailscale admin console.
 2. Click the **Add node attribute** button.
@@ -462,6 +462,15 @@ Once the container has started, the one-time key is used up: it disappears from 
     | `STARTUP_TIMEOUT` | Seconds the script waits for the *Running* state (default `180`) before it exits and Docker restarts the container. Raise it only on a very slow server. |
     | `DEBUG` | Not in the example above. `DEBUG=1` prints every command the script runs to the container log, for troubleshooting. Off by default to keep the log readable. |
 
+??? tip "📈 Watching LibreFolio with a monitor (Uptime Kuma)"
+
+    The `librefolio` service has a health check of its own, on `GET /api/v1/system/health` (see the compose file below): it tells Docker that the server answers. To watch LibreFolio from another device, for example with **Uptime Kuma**, point the monitor at `/api/v1/system/ready` on the address you open LibreFolio with, such as `https://librefolio.your-tailnet.ts.net/api/v1/system/ready`. It needs no sign-in and answers:
+
+    * **`200`** when LibreFolio is ready to serve requests;
+    * **`503`** when it is not, with the check at fault in the answer: `database` (`unreachable`) or `migrations` (`mismatch`, `unknown`).
+
+    The [Advanced Docker Guide](docker_advanced.md), section «Service: `librefolio`», explains the codes.
+
 ??? example "📄 View the complete production Docker Compose file (LibreFolio + Tailscale)"
 
     A complete `docker-compose.yml`: the `librefolio` service of the official `docker-compose.prod.yml`, with the Tailscale sidecar next to it:
@@ -486,6 +495,7 @@ Once the container has started, the one-time key is used up: it disappears from 
         environment:
           - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
           - HOST=0.0.0.0
+          - PORT=6040
         healthcheck:
           test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
           interval: 30s

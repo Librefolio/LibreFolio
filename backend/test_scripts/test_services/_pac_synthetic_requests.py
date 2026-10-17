@@ -23,8 +23,8 @@ import json
 from decimal import Decimal
 from pathlib import Path
 
-from backend.app.schemas.pac_allocator import PacPlannerRequest
-from backend.app.services.pac_allocator.evaluator import build_exact_policy_view
+from backend.app.schemas.pac_allocator.request import PacPlannerRequest
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view
 from backend.app.services.pac_allocator.models import ExactPlannerScenario, ExactPolicyView
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 

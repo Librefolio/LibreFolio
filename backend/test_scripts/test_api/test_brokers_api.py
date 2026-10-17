@@ -18,7 +18,7 @@ Reference: backend/app/api/v1/brokers.py
 """
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
@@ -86,6 +86,98 @@ async def login_user(client: httpx.AsyncClient, username: str, password: str) ->
     if session_cookie:
         client.cookies.set("session", session_cookie)
     return session_cookie
+
+
+async def create_brokers(client: httpx.AsyncClient, *prefixes: str, allow_cash_overdraft: bool = False) -> list[int]:
+    """One broker per prefix, uniquely named, owned by the client's user: their ids, in the order of ``prefixes``."""
+    names = [unique_name(prefix) for prefix in prefixes]
+    resp = await client.post(f"{API_BASE}/brokers", json=[{"name": name, "allow_cash_overdraft": allow_cash_overdraft} for name in names], timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    results = {result["name"]: result for result in resp.json()["results"]}
+    assert all(results.get(name, {}).get("success") for name in names), resp.text
+    return [results[name]["broker_id"] for name in names]
+
+
+async def create_assets(client: httpx.AsyncClient, *prefixes: str, currency: str = "EUR") -> list[int]:
+    """One STOCK asset per prefix, uniquely named: their ids, in the order of ``prefixes``."""
+    names = [unique_name(prefix) for prefix in prefixes]
+    resp = await client.post(f"{API_BASE}/assets", json=[{"display_name": name, "asset_type": "STOCK", "currency": currency} for name in names], timeout=TIMEOUT)
+    assert resp.status_code in (200, 201), resp.text
+    results = {result["display_name"]: result for result in resp.json()["results"]}
+    assert all(results.get(name, {}).get("success") for name in names), resp.text
+    return [results[name]["asset_id"] for name in names]
+
+
+async def commit_creates(client: httpx.AsyncClient, creates: list[dict]) -> list[int]:
+    """Commit ``creates`` in one batch: the new transaction ids, in the order of ``creates``."""
+    resp = await client.post(f"{API_BASE}/transactions/commit", json={"creates": creates}, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["committed"] is True, f"Commit rejected: {body.get('issues')}"
+    ids = {result["index"]: result["ids"] for result in body["results"] if result["operation"] == "create"}
+    assert sorted(ids) == list(range(len(creates))) and all(len(tx_ids) == 1 for tx_ids in ids.values()), body
+    return [ids[index][0] for index in range(len(creates))]
+
+
+async def read_transactions(client: httpx.AsyncClient, tx_ids: list[int]) -> dict[int, dict]:
+    """The transactions among ``tx_ids`` that exist and the client's user can see, by id."""
+    resp = await client.get(f"{API_BASE}/transactions", params={"ids": tx_ids}, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return {transaction["id"]: transaction for transaction in resp.json()}
+
+
+async def get_summary(client: httpx.AsyncClient, broker_id: int, as_of: Optional[date] = None) -> dict:
+    """GET /brokers/{id}/summary as of ``as_of``; without it, as of the server's today."""
+    params = {} if as_of is None else {"as_of": as_of.isoformat()}
+    resp = await client.get(f"{API_BASE}/brokers/{broker_id}/summary", params=params, timeout=TIMEOUT)
+    assert resp.status_code == 200, f"Summary of broker {broker_id} as of {as_of}: {resp.status_code} {resp.text}"
+    summary = resp.json()
+    assert summary["id"] == broker_id, summary
+    return summary
+
+
+def money(value: Optional[dict]) -> Optional[tuple[str, Decimal]]:
+    """An API ``{code, amount}`` object as (code, Decimal amount), compared by value whatever its JSON form; None when absent."""
+    return None if value is None else (value["code"], Decimal(str(value["amount"])))
+
+
+def cash_by_currency(summary: dict) -> dict[str, Decimal]:
+    """A summary's cash lines, by currency."""
+    codes = [balance["code"] for balance in summary["cash_balances"]]
+    assert len(codes) == len(set(codes)), f"One cash line per currency: {summary['cash_balances']}"
+    return {balance["code"]: Decimal(str(balance["amount"])) for balance in summary["cash_balances"]}
+
+
+def holdings_by_asset(summary: dict) -> dict[int, dict]:
+    """A summary's holdings, by asset id: quantity, total cost and average cost per unit."""
+    asset_ids = [holding["asset_id"] for holding in summary["holdings"]]
+    assert len(asset_ids) == len(set(asset_ids)), f"One holding per asset: {summary['holdings']}"
+    return {
+        holding["asset_id"]: {
+            "quantity": Decimal(str(holding["quantity"])),
+            "total_cost": money(holding["total_cost"]),
+            "average_cost": None if holding["average_cost_per_unit"] is None else Decimal(str(holding["average_cost_per_unit"])),
+        }
+        for holding in summary["holdings"]
+    }
+
+
+async def remove_owned(client: httpx.AsyncClient, broker_ids: list[int], asset_ids: list[int]) -> list[str]:
+    """Whoever writes, cleans up: force-delete the test's brokers, their transactions with them, then its assets.
+
+    ``broker_ids`` lists the brokers still standing: a test that deletes one itself takes it off
+    the list. Returns what could not be removed: the caller fails on it, also after a red.
+    """
+    errors: list[str] = []
+    if broker_ids:
+        resp = await client.delete(f"{API_BASE}/brokers", params={"ids": broker_ids, "force": True}, timeout=TIMEOUT)
+        deleted = {result["id"] for result in resp.json()["results"] if result["success"]} if resp.status_code == 200 else set()
+        errors += [f"Broker {broker_id} not deleted: {resp.status_code} {resp.text}" for broker_id in broker_ids if broker_id not in deleted]
+    if asset_ids:
+        resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT)
+        deleted = {result["asset_id"] for result in resp.json()["results"] if result["success"]} if resp.status_code == 200 else set()
+        errors += [f"Asset {asset_id} not deleted: {resp.status_code} {resp.text}" for asset_id in asset_ids if asset_id not in deleted]
+    return errors
 
 
 # ============================================================================
@@ -221,6 +313,38 @@ class TestBrokerCreate:
             assert summary_response.json()["cash_balances"] == []
 
             print_success("✓ Created broker without deposit for zero initial balance")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("amount", ["1E+101", "1E+5000000"])
+    async def test_post_brokers_with_an_initial_balance_past_the_exponent_bound_answers_422_and_creates_nothing(self, test_server, amount):
+        """R13-SEC7-3 (E's R13-SEC7, finding 3): an initial balance is a ``Currency``, whose amount's exponent is bounded
+        at the boundary (``adjusted()`` within [-100, 100]).
+
+        Red today: 200 — the service expands the amount with ``format(amount, "f")`` (5 MB for 1E+5000000), the batch
+        refuses the deposit, and the route rolls the broker back.
+
+        Contract: 422 before any work, its error on ``initial_balances.0.amount``; no broker of that name exists.
+        """
+        print_section(f"Test BR-A-002C: POST /brokers - initial balance of {amount} EUR, past the exponent bound")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            name = unique_name("R13-SEC7-3 Exponent Bound Broker")
+
+            response = await client.post(f"{API_BASE}/brokers", json=[{"name": name, "initial_balances": [{"code": "EUR", "amount": amount}]}], timeout=TIMEOUT)
+
+            listed = await client.get(f"{API_BASE}/brokers", timeout=TIMEOUT)
+            assert listed.status_code == 200, listed.text
+            created = [broker["id"] for broker in listed.json()["items"] if broker["name"] == name]
+            # Whoever writes cleans up, also after a red.
+            leftovers = await remove_owned(client, created, [])
+
+            assert response.status_code == 422, f"R13-SEC7-3: POST /brokers with an initial balance of {amount} EUR must answer 422 at the boundary; it answered {response.status_code}: {response.text[:400]}"
+            locs = [tuple(error["loc"]) for error in response.json()["detail"]]
+            assert any(loc[-3:] == ("initial_balances", 0, "amount") for loc in locs), f"R13-SEC7-3: the 422 must name the balance's amount; its errors sit on {locs}"
+            assert created == [], f"R13-SEC7-3: the request was refused, yet the broker {name!r} exists: {created}"
+            assert leftovers == [], f"Cleanup failed: {leftovers}"
+            print_success(f"✓ Initial balance of {amount} EUR refused with 422, nothing created")
 
     @pytest.mark.asyncio
     async def test_post_brokers_duplicate(self, test_server):
@@ -738,8 +862,8 @@ class TestBrokerDelete:
 
     @pytest.mark.asyncio
     async def test_delete_brokers_with_cross_broker_link_force(self, test_server):
-        """BR-A-032C: Force delete broker clears external related_transaction_id links."""
-        print_section("Test BR-A-032C: DELETE /brokers - force clears cross-broker links")
+        """BR-A-032C: Force delete of the sending broker leaves the incoming half of a cross-broker TRANSFER as the ADJUSTMENT a split of the pair leaves: unlinked, same quantity and cost basis (V-3, D-J4)."""
+        print_section("Test BR-A-032C: DELETE /brokers - force turns the surviving TRANSFER half into an ADJUSTMENT")
 
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
@@ -786,6 +910,15 @@ class TestBrokerDelete:
             assert create_resp.status_code == 200, create_resp.text
             assert create_resp.json()["committed"] is True
             target_tx_id = create_resp.json()["results"][1]["ids"][0]
+            source_tx_id = next(result["ids"][0] for result in create_resp.json()["results"] if result["index"] == 0)
+
+            legs_before = await read_transactions(client, [source_tx_id, target_tx_id])
+            assert {tx_id: (tx["broker_id"], tx["type"], tx["related_transaction_id"]) for tx_id, tx in legs_before.items()} == {
+                source_tx_id: (broker1_id, "TRANSFER", target_tx_id),
+                target_tx_id: (broker2_id, "TRANSFER", source_tx_id),
+            }, f"Precondition: the two legs must be a linked cross-broker TRANSFER pair: {legs_before}"
+            target_before = legs_before[target_tx_id]
+            assert money(target_before["cost_basis_override"]) is not None, f"Precondition: cost_basis_mode=auto must give the incoming leg a cost basis: {target_before}"
 
             delete_resp = await client.delete(
                 f"{API_BASE}/brokers",
@@ -804,8 +937,85 @@ class TestBrokerDelete:
             assert txs[0]["broker_id"] == broker2_id
             assert txs[0]["related_transaction_id"] is None
             assert txs[0]["partner_broker_id"] is None
+            # V-3, D-J4: the sending broker is gone, so the incoming half becomes the ADJUSTMENT a split of the pair leaves, not an unpaired TRANSFER.
+            survivor = {"type": txs[0]["type"], "quantity": Decimal(str(txs[0]["quantity"])), "cost_basis": money(txs[0]["cost_basis_override"]), "asset_id": txs[0]["asset_id"], "date": txs[0]["date"]}
+            assert survivor == {
+                "type": "ADJUSTMENT",
+                "quantity": Decimal("5"),
+                "cost_basis": money(target_before["cost_basis_override"]),
+                "asset_id": asset_id,
+                "date": target_before["date"],
+            }, f"The surviving half must become the ADJUSTMENT a split of the pair leaves: {txs[0]}"
 
-            print_success("✓ Force delete cleared external related_transaction_id")
+            print_success("✓ Force delete left the surviving TRANSFER half as the unlinked ADJUSTMENT a split leaves, quantity and cost basis kept")
+
+    @pytest.mark.asyncio
+    async def test_delete_brokers_with_cross_broker_cash_transfer_force(self, test_server):
+        """BR-A-032D: Force delete of the receiving broker leaves the sender's half of a cross-broker CASH_TRANSFER as the WITHDRAWAL a split of the pair leaves: same negative amount and currency, date, description and tags, unlinked (V-3, D-J4)."""
+        print_section("Test BR-A-032D: DELETE /brokers - force turns the surviving CASH_TRANSFER half into a WITHDRAWAL")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_ids: list[int] = []
+            try:
+                broker_ids += await create_brokers(client, "Force Delete Cash Sender", "Force Delete Cash Receiver", allow_cash_overdraft=True)
+                sender_id, receiver_id = broker_ids
+                link_uuid = str(uuid.uuid4())
+                day = date.today().isoformat()
+                # A pair carries the same description and tags on both halves (TestPairDescriptionTagsValidation).
+                description = unique_name("Force Delete Cash Transfer")
+                tags = ["cash-pair", "force-delete"]
+                sender_leg, receiver_leg = await commit_creates(
+                    client,
+                    [
+                        {"broker_id": sender_id, "type": "CASH_TRANSFER", "date": day, "cash": {"code": "EUR", "amount": "-300"}, "link_uuid": link_uuid, "description": description, "tags": tags},
+                        {"broker_id": receiver_id, "type": "CASH_TRANSFER", "date": day, "cash": {"code": "EUR", "amount": "300"}, "link_uuid": link_uuid, "description": description, "tags": tags},
+                    ],
+                )
+                legs = await read_transactions(client, [sender_leg, receiver_leg])
+                assert {tx_id: (tx["type"], tx["related_transaction_id"], tx["partner_broker_id"]) for tx_id, tx in legs.items()} == {
+                    sender_leg: ("CASH_TRANSFER", receiver_leg, receiver_id),
+                    receiver_leg: ("CASH_TRANSFER", sender_leg, sender_id),
+                }, f"Precondition: the two legs must be a linked cross-broker CASH_TRANSFER pair: {legs}"
+
+                delete_resp = await client.delete(f"{API_BASE}/brokers", params={"ids": [receiver_id], "force": True}, timeout=TIMEOUT)
+                assert delete_resp.status_code == 200, delete_resp.text
+                deleted = next((result for result in delete_resp.json()["results"] if result["id"] == receiver_id), None)
+                assert deleted is not None and (deleted["success"], deleted["transactions_deleted"]) == (True, 1), delete_resp.text
+                broker_ids.remove(receiver_id)
+
+                after = await read_transactions(client, [sender_leg, receiver_leg])
+                assert set(after) == {sender_leg}, f"The receiver's half must go with its broker and the sender's stay: {after}"
+                leg = after[sender_leg]
+                survivor = {
+                    "type": leg["type"],
+                    "broker_id": leg["broker_id"],
+                    "asset_id": leg["asset_id"],
+                    "date": leg["date"],
+                    "quantity": Decimal(str(leg["quantity"])),
+                    "cash": money(leg["cash"]),
+                    "description": leg["description"],
+                    "tags": sorted(leg["tags"] or []),
+                    "related_transaction_id": leg["related_transaction_id"],
+                    "partner_broker_id": leg["partner_broker_id"],
+                }
+                assert survivor == {
+                    "type": "WITHDRAWAL",
+                    "broker_id": sender_id,
+                    "asset_id": None,
+                    "date": day,
+                    "quantity": Decimal("0"),
+                    "cash": ("EUR", Decimal("-300")),
+                    "description": description,
+                    "tags": sorted(tags),
+                    "related_transaction_id": None,
+                    "partner_broker_id": None,
+                }, f"The sender's half must become the WITHDRAWAL a split of the pair leaves (V-3, D-J4): {leg}"
+
+                print_success("✓ Force delete left the sender's CASH_TRANSFER half as the unlinked WITHDRAWAL a split leaves, same amount")
+            finally:
+                cleanup_errors = await remove_owned(client, broker_ids, [])
+                assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"
 
     @pytest.mark.asyncio
     async def test_delete_brokers_partial_success(self, test_server):
@@ -1249,3 +1459,167 @@ class TestBrokerImportEndpoints:
             assert last_parse_resp.json()["plugin_code"] == "broker_generic_csv"
 
             print_success("✓ BRIM parse auto fallback returned cached generic CSV result")
+
+
+# ============================================================================
+# BROKER API - SUMMARY AS OF A DAY (W-B5)
+# ============================================================================
+#
+# GET /brokers/{id}/summary describes the broker on one day: ``as_of`` (YYYY-MM-DD), the user's
+# today; the server's date when omitted. A transaction dated later counts in none of its figures:
+# cash per currency, holdings, their cost. The API accepts future-dated transactions, which is how
+# the broker page came to count them as today's cash (W-B5). Same semantics as the service tests
+# test_broker_service.py::TestGetSummaryAsOf (BR-U-090..093).
+#
+# Every row is dated from date.today(), read once per test. Only BR-A-070 reads the server's day
+# (no as_of), and it checks that the day did not change while it ran.
+
+# (day offset from today, type, currency, amount): EUR deposited two days ago and tomorrow; USD in
+# and out before today, so that its movements cancel out.
+AS_OF_CASH_ROWS = (
+    (-2, "DEPOSIT", "EUR", "1000"),
+    (-2, "DEPOSIT", "USD", "100"),
+    (-1, "WITHDRAWAL", "USD", "-100"),
+    (1, "DEPOSIT", "EUR", "250"),  # tomorrow: a future-dated row
+)
+# The broker's cash as of each day offset, counting the rows dated up to that day inclusive.
+AS_OF_CASH_VIEWS = {
+    -3: {},  # the day before every row: no currency has a line
+    -2: {"EUR": "1000", "USD": "100"},  # the first rows' own day: they count
+    0: {"EUR": "1000", "USD": "0"},  # today: not tomorrow's deposit; USD, whose movements cancel out, keeps its line at zero
+    1: {"EUR": "1250", "USD": "0"},  # tomorrow: every row
+}
+
+
+def as_of_cash_creates(broker_id: int, today: date) -> list[dict]:
+    """The AS_OF_CASH_ROWS of a broker, dated from ``today``."""
+    return [{"broker_id": broker_id, "type": tx_type, "date": (today + timedelta(days=offset)).isoformat(), "cash": {"code": code, "amount": amount}} for offset, tx_type, code, amount in AS_OF_CASH_ROWS]
+
+
+def as_of_cash_view(offset: int) -> dict[str, Decimal]:
+    """The cash AS_OF_CASH_VIEWS expects as of ``today + offset``."""
+    return {code: Decimal(amount) for code, amount in AS_OF_CASH_VIEWS[offset].items()}
+
+
+def eur_holding(quantity: str, total_cost: str, average_cost: str) -> dict:
+    """A holding of an EUR asset, as holdings_by_asset reads it."""
+    return {"quantity": Decimal(quantity), "total_cost": ("EUR", Decimal(total_cost)), "average_cost": Decimal(average_cost)}
+
+
+class TestBrokerSummaryAsOf:
+    """GET /brokers/{id}/summary as of a day: the caller's ``as_of``; without it, the server's today."""
+
+    @pytest.mark.asyncio
+    async def test_summary_without_as_of_reads_the_server_today(self, test_server):
+        """BR-A-070: Without as_of the summary is the server's today: the EUR deposit of two days ago counts, tomorrow's does not; it reads exactly as as_of=today."""
+        print_section("Test BR-A-070: GET /brokers/{id}/summary - without as_of, the server's today")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_ids: list[int] = []
+            try:
+                broker_ids += await create_brokers(client, "Summary AsOf Default")
+                (broker_id,) = broker_ids
+                today = date.today()
+                await commit_creates(client, as_of_cash_creates(broker_id, today))
+
+                omitted = await get_summary(client, broker_id)
+                assert date.today() == today, f"Precondition broken: the server's day moved from {today} to {date.today()} during the test — rerun it"
+                explicit = await get_summary(client, broker_id, as_of=today)
+
+                assert cash_by_currency(omitted) == as_of_cash_view(0), "Tomorrow's deposit must not count in today's cash (W-B5)"
+                assert omitted == explicit, "Without as_of the summary must read exactly as as_of=today"
+
+                print_success("✓ Without as_of, tomorrow's deposit is not in today's cash")
+            finally:
+                cleanup_errors = await remove_owned(client, broker_ids, [])
+                assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"
+
+    @pytest.mark.asyncio
+    async def test_summary_as_of_counts_the_rows_up_to_that_day_inclusive(self, test_server):
+        """BR-A-071: as_of decides, not the server's date: as of tomorrow both EUR deposits count; as of the first rows' day they count; as of the day before every row no currency has a line."""
+        print_section("Test BR-A-071: GET /brokers/{id}/summary?as_of - cash up to that day inclusive")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_ids: list[int] = []
+            try:
+                broker_ids += await create_brokers(client, "Summary AsOf Cash")
+                (broker_id,) = broker_ids
+                today = date.today()
+                await commit_creates(client, as_of_cash_creates(broker_id, today))
+
+                views = {offset: cash_by_currency(await get_summary(client, broker_id, as_of=today + timedelta(days=offset))) for offset in AS_OF_CASH_VIEWS}
+
+                assert views == {offset: as_of_cash_view(offset) for offset in AS_OF_CASH_VIEWS}
+
+                print_success("✓ as_of counts the rows up to that day inclusive, and none after")
+            finally:
+                cleanup_errors = await remove_owned(client, broker_ids, [])
+                assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"
+
+    @pytest.mark.asyncio
+    async def test_summary_as_of_leaves_out_a_future_purchase(self, test_server):
+        """BR-A-072: A BUY dated tomorrow is in no figure of today's summary (not its units, their cost, the cash paid) and in all of them as of its own day."""
+        print_section("Test BR-A-072: GET /brokers/{id}/summary?as_of - holdings")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_ids: list[int] = []
+            asset_ids: list[int] = []
+            try:
+                broker_ids += await create_brokers(client, "Summary AsOf Holdings", allow_cash_overdraft=True)
+                (broker_id,) = broker_ids
+                asset_ids += await create_assets(client, "Summary AsOf Held", "Summary AsOf Future")
+                held, future_only = asset_ids
+                today = date.today()
+                tomorrow = today + timedelta(days=1)
+                await commit_creates(
+                    client,
+                    [
+                        # 10 @ 100, two days ago
+                        {"broker_id": broker_id, "asset_id": held, "type": "BUY", "date": (today - timedelta(days=2)).isoformat(), "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                        # 10 more @ 300, tomorrow
+                        {"broker_id": broker_id, "asset_id": held, "type": "BUY", "date": tomorrow.isoformat(), "quantity": "10", "cash": {"code": "EUR", "amount": "-3000"}},
+                        # 4 @ 200, tomorrow: the only row of this asset
+                        {"broker_id": broker_id, "asset_id": future_only, "type": "BUY", "date": tomorrow.isoformat(), "quantity": "4", "cash": {"code": "EUR", "amount": "-800"}},
+                    ],
+                )
+
+                views = {}
+                for label, as_of in (("today", today), ("tomorrow", tomorrow)):
+                    summary = await get_summary(client, broker_id, as_of=as_of)
+                    views[label] = {"cash": cash_by_currency(summary), "holdings": holdings_by_asset(summary)}
+
+                assert views == {
+                    "today": {"cash": {"EUR": Decimal("-1000")}, "holdings": {held: eur_holding("10", "1000", "100")}},
+                    "tomorrow": {"cash": {"EUR": Decimal("-4800")}, "holdings": {held: eur_holding("20", "4000", "200"), future_only: eur_holding("4", "800", "200")}},
+                }
+
+                print_success("✓ Tomorrow's purchases are out of today's holdings, cost and cash, and in tomorrow's")
+            finally:
+                cleanup_errors = await remove_owned(client, broker_ids, asset_ids)
+                assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"
+
+    @pytest.mark.asyncio
+    async def test_summary_as_of_not_a_date_is_rejected(self, test_server):
+        """BR-A-073: as_of=not-a-date answers 422 on the as_of query parameter, where the same broker as of a real day answers 200."""
+        print_section("Test BR-A-073: GET /brokers/{id}/summary?as_of=not-a-date - 422")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_ids: list[int] = []
+            try:
+                broker_ids += await create_brokers(client, "Summary AsOf Invalid")
+                (broker_id,) = broker_ids
+                await get_summary(client, broker_id, as_of=date.today())
+
+                response = await client.get(f"{API_BASE}/brokers/{broker_id}/summary", params={"as_of": "not-a-date"}, timeout=TIMEOUT)
+
+                assert response.status_code == 422, response.text
+                assert [error["loc"] for error in response.json()["detail"]] == [["query", "as_of"]], response.text
+
+                print_success("✓ as_of=not-a-date rejected with 422 on as_of")
+            finally:
+                cleanup_errors = await remove_owned(client, broker_ids, [])
+                assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"

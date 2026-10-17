@@ -1,0 +1,71 @@
+{
+  "pluginSettings": {
+    "tab": {
+      "label": "Plugin",
+      "title": "Impostazioni dei plugin",
+      "intro": "Ciò che chiedono le fonti dei prezzi e dei tassi di cambio. Le impostazioni personali sono solo tue; quelle dell'istanza valgono per tutti, e solo un amministratore le cambia.",
+      "empty": "Nessun plugin installato chiede impostazioni."
+    },
+    "loadError": "Impossibile caricare le impostazioni dei plugin.",
+    "families": {
+      "asset": "Prezzi",
+      "fx": "Tassi di cambio"
+    },
+    "status": {
+      "configured": "Configurato",
+      "notConfigured": "Da configurare"
+    },
+    "scope": {
+      "user": "Personale",
+      "system": "Tutta l'istanza"
+    },
+    "configure": "Configura",
+    "modal": {
+      "title": "Configura {plugin}",
+      "none": "Questo plugin non ha impostazioni."
+    },
+    "secret": {
+      "set": "Impostato",
+      "setOn": "Impostato il {date}",
+      "unset": "Non impostato",
+      "unreadable": "Salvato, ma la chiave di questa istanza non riesce a leggerlo. Se un amministratore può rimettere la vecchia chiave, va fatto prima; altrimenti inseriscilo di nuovo.",
+      "replace": "Sostituisci",
+      "clear": "Cancella",
+      "willClear": "Sarà cancellato al salvataggio.",
+      "placeholder": "Inserisci il valore",
+      "writeOnly": "Una volta salvato, non viene più mostrato."
+    },
+    "field": {
+      "locked": "Impostato dal server",
+      "lockedBy": "Impostato dalla variabile del server {variable}",
+      "adminOnly": "Solo un amministratore può cambiarlo.",
+      "invalidEnv": "La variabile del server che lo imposta non è valida: il plugin resta da configurare finché non viene corretta.",
+      "invalidEnvBy": "La variabile del server {variable} non è valida: il plugin resta da configurare finché non viene corretta.",
+      "invalidStored": "Il valore salvato non è più valido: vale il predefinito.",
+      "useDefault": "Usa il predefinito",
+      "willUseDefault": "Il valore salvato sarà cancellato al salvataggio: varrà il predefinito."
+    },
+    "problems": {
+      "required": "Inserisci un valore",
+      "number": "Inserisci un numero",
+      "integer": "Inserisci un numero intero",
+      "below": "Almeno {limit}",
+      "above": "Al massimo {limit}",
+      "tooShort": "Almeno {limit} caratteri",
+      "tooLong": "Al massimo {limit} caratteri",
+      "option": "Scegli una delle opzioni"
+    },
+    "refusals": {
+      "UNKNOWN_FIELD": "Questa impostazione non esiste più: ricarica la pagina.",
+      "FORBIDDEN_SCOPE": "Solo un amministratore può cambiare questa impostazione.",
+      "LOCKED_BY_ENV": "Lo imposta una variabile del server: non si può cambiare qui.",
+      "INVALID_VALUE": "Il valore non è valido per questa impostazione."
+    },
+    "form": {
+      "refused": "Non è stato salvato nulla: controlla le impostazioni qui sotto.",
+      "conflict": "Queste impostazioni sono cambiate nel frattempo: sono state ricaricate, salva di nuovo.",
+      "keyUnavailable": "I segreti non si possono salvare: la chiave di questa istanza non è utilizzabile (vedi i controlli della configurazione).",
+      "saveFailed": "Impossibile salvare le impostazioni."
+    }
+  }
+}

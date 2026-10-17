@@ -1,0 +1,257 @@
+{
+  "backup": {
+    "tab": "Backup",
+    "intro": "I dati di questo LibreFolio in un solo archivio, da conservare al sicuro o da portare in un'altra installazione.",
+    "download": {
+      "title": "Backup dell'istanza",
+      "description": "Un archivio con il database, i file caricati, i report dei broker e gli scenari di rischio. I log non sono mai inclusi; la chiave dell'istanza solo in un backup sicuro.",
+      "privacy": "L'archivio contiene i dati di tutti gli utenti e non è cifrato: conservalo in un posto riservato.",
+      "mode": {
+        "legend": "Tipo di backup",
+        "clear": "In chiaro",
+        "clearDescription": "Un normale .zip: chi ha il file vede tutti i dati, e su un'altra istanza le chiavi dei fornitori di dati vanno reinserite.",
+        "secure": "Sicuro",
+        "secureDescription": "Un .lfbk cifrato con una password che scegli tu: solo quella password lo apre, e se la perdi non si recupera. Porta con sé anche le chiavi dei fornitori di dati."
+      },
+      "password": {
+        "label": "Password del backup",
+        "confirmLabel": "Ripeti la password",
+        "mismatch": "Le due password sono diverse."
+      },
+      "create": "Crea backup",
+      "createAgain": "Crea un nuovo backup",
+      "creating": "Creazione del backup…",
+      "checking": "Controllo del backup…",
+      "phase": {
+        "preparing": "Preparazione",
+        "database": "Copia del database",
+        "files": "Aggiunta dei file",
+        "finalizing": "Chiusura",
+        "encrypting": "Cifratura con la tua password"
+      },
+      "progress": "{done} di {total}",
+      "ready": "Backup pronto",
+      "readyDetails": "{name}, {size}, creato il {date}",
+      "readyEncrypted": "Cifrato con la tua password: conservala bene, LibreFolio non può recuperarla.",
+      "download": "Scarica",
+      "delete": "Elimina dal server",
+      "deleting": "Eliminazione del backup…",
+      "retention": "L'archivio resta sul server per un'ora, poi viene eliminato.",
+      "recheck": "Controlla di nuovo",
+      "retry": "Riprova",
+      "warningsTitle": "Backup completato, con avvisi",
+      "warnings": {
+        "database_integrity": "Il database non ha superato il controllo d'integrità: è stato archiviato così com'è.",
+        "foreign_key_violations": "Il database ha riferimenti non validi fra le tabelle: è stato archiviato così com'è.",
+        "files_skipped": "Alcuni file sono stati esclusi: collegamenti, file speciali, file o cartelle illeggibili, o file eliminati durante il backup.",
+        "instance_key_unusable": "La chiave dell'istanza non è utilizzabile: il backup è stato fatto senza, quindi dopo un ripristino le chiavi dei fornitori di dati vanno reinserite."
+      },
+      "errors": {
+        "backup_busy": "È già in corso un altro backup: riprova quando finisce.",
+        "backup_no_space": "Non c'è abbastanza spazio libero sul server per il backup.",
+        "backup_folder_unusable": "La cartella dei backup sul server è un collegamento o un file: LibreFolio crea i backup solo in una cartella vera della sua cartella dati.",
+        "backup_failed": "Il backup non è riuscito: i dettagli sono nel log del server.",
+        "backup_interrupted": "Il backup è stato interrotto, per esempio da un riavvio: creane uno nuovo.",
+        "backup_job_not_found": "Questo backup non è più sul server: creane uno nuovo.",
+        "network": "Il server non risponde.",
+        "unexpected": "Il server ha risposto con un errore: ricarica la pagina e riprova.",
+        "password_too_weak": "La password non rispetta le regole della password di un backup."
+      },
+      "toast": {
+        "warnings": "Backup pronto, con avvisi: controllali prima di farci affidamento."
+      }
+    },
+    "restore": {
+      "title": "Ripristina un archivio",
+      "description": "Sostituisci i dati di questo LibreFolio con un archivio creato da «Backup dell'istanza», qui o in un'altra installazione. L'archivio viene prima controllato su una copia: nulla cambia finché non confermi, e poi LibreFolio si riavvia per applicarlo.",
+      "replaceNotice": "Un ripristino sostituisce i dati di tutti gli utenti con quelli dell'archivio. Se potresti volere di nuovo i dati attuali, prima fai un backup dell'istanza.",
+      "loading": "Lettura dello stato del ripristino…",
+      "last": {
+        "rolledBack": "L'ultimo ripristino è stato annullato il {date} e i dati sono tornati come prima: {reason}."
+      },
+      "uploading": "Invio dell'archivio…",
+      "progress": "{done} di {total}",
+      "cancelUpload": "Interrompi l'invio",
+      "phase": {
+        "decrypting": "Decifratura del backup",
+        "checking": "Controllo dell'archivio",
+        "unpacking": "Estrazione su una copia",
+        "upgrading": "Aggiornamento del database della copia",
+        "verifying": "Verifica della copia"
+      },
+      "dropWhenDone": "Il controllo viene scartato appena finisce.",
+      "cancelCheck": "Interrompi il controllo",
+      "openReport": "Leggi il resoconto",
+      "confirming": "Conferma del ripristino…",
+      "cancelling": "Annullamento…",
+      "pending": {
+        "title": "Un ripristino attende il prossimo avvio di LibreFolio",
+        "details": "Backup creato da LibreFolio {version} il {backupDate}; confermato da {who} il {date}.",
+        "restartHint": "Il riavvio ferma LibreFolio per tutti; il suo prossimo avvio applica il ripristino e chiude tutte le sessioni.",
+        "restart": "Riavvia ora e ripristina",
+        "cancel": "Annulla il ripristino"
+      },
+      "inProgress": "Un avvio di LibreFolio sta applicando il ripristino.",
+      "choose": "Scegli un archivio…",
+      "retry": "Riprova",
+      "limit": "Archivi fino a {limit} MB.",
+      "reason": {
+        "first_start_failed": "il primo avvio successivo non è andato a buon fine",
+        "swap_interrupted": "l'avvio che lo applicava è stato interrotto",
+        "swap_failed": "le sue cartelle non hanno potuto essere messe al loro posto",
+        "stage_missing": "la sua copia controllata non c'era più",
+        "unknown": "il motivo è nel log del server"
+      },
+      "waiting": {
+        "backup_running": "All'ultimo avvio era in corso un backup: lo applica il prossimo avvio.",
+        "other_data_directory": "È stato confermato per un'altra cartella dei dati: questo LibreFolio non lo applica. Annullalo, poi ripristina di nuovo l'archivio.",
+        "server_running": "All'ultimo avvio un altro processo di LibreFolio serviva i dati: riavvia l'intero server per applicarlo.",
+        "unknown": "Un avvio non l'ha applicato.",
+        "instance_blocked": "Il fornitore di hosting ha bloccato questa istanza: il ripristino attende lo sblocco."
+      },
+      "blocker": {
+        "no_administrator": "Il backup non ha nessun amministratore attivo: dopo un ripristino nessuno potrebbe gestire LibreFolio. Non può essere ripristinato."
+      },
+      "report": {
+        "title": "Cosa farebbe questo ripristino",
+        "madeBy": "Archivio creato da LibreFolio {version} il {date}.",
+        "close": "Chiudi",
+        "same": "Il suo database è alla versione di questo LibreFolio: viene ripristinato così com'è.",
+        "upgrade": "Il suo database è stato portato alla versione di questo LibreFolio sulla copia, con {count, plural, one {# migrazione} other {# migrazioni}}:",
+        "fixes": "Correzioni applicate alla copia: {fixes}.",
+        "contents": "{files, plural, one {# file} other {# file}} ({filesSize}); database {databaseSize}.",
+        "tablesChanged": "Tabelle di cui l'aggiornamento ha cambiato le righe:",
+        "keyIncluded": "Il backup porta la chiave dell'istanza da cui viene: questo LibreFolio tiene la sua.",
+        "keyNotIncluded": "La chiave dell'istanza non è inclusa: questo LibreFolio tiene la sua.",
+        "secretsRekeyed": "{count, plural, one {# chiave salvata di un fornitore di dati viene ricifrata con la chiave di questa istanza.} other {# chiavi salvate di fornitori di dati vengono ricifrate con la chiave di questa istanza.}}",
+        "secretsUnreadable": "{count, plural, one {# chiave salvata di un fornitore di dati non è leggibile con la chiave di questa istanza: reinseriscila dopo il ripristino.} other {# chiavi salvate di fornitori di dati non sono leggibili con la chiave di questa istanza: reinseriscile dopo il ripristino.}}",
+        "totals": {
+          "same": "Totali del registro: uguali a quando è stato fatto il backup.",
+          "changed": "I totali del registro differiscono da quelli del backup su {count, plural, one {# riga} other {# righe}}:",
+          "absent": "Totali del registro: non registrati in questo archivio.",
+          "other_version": "Totali del registro: registrati con un'altra versione del metodo, non confrontati.",
+          "unreadable": "Totali del registro: non è stato possibile leggerli sulla copia.",
+          "cashLine": "Broker {broker}, liquidità in {currency}: {before} → {after}",
+          "quantityLine": "Broker {broker}, asset {asset}, quantità: {before} → {after}",
+          "more": "{count, plural, one {… e un'altra riga} other {… e altre # righe}}"
+        },
+        "admins": "Amministratori del backup: {names}.",
+        "signInAgain": "Dopo il ripristino si accede con uno di loro, con la password di allora; tutte le sessioni aperte ora si chiudono.",
+        "linksExpired": "Gli inviti e i link inviati prima del ripristino saranno scaduti: inviali di nuovo se serve.",
+        "warningsTitle": "Il ripristino può procedere, ma:",
+        "warning": {
+          "rows_changed": "L'aggiornamento ha cambiato le righe di alcune tabelle (elencate sopra).",
+          "foreign_key_violations": "Il database del backup ha riferimenti non validi: restano come sono.",
+          "foreign_key_violations_added": "L'aggiornamento ha aggiunto riferimenti non validi alla copia.",
+          "control_totals_changed": "I totali del registro differiscono da quelli registrati nel backup (elencati sopra).",
+          "control_totals_unreadable": "Non è stato possibile leggere i totali del registro sulla copia.",
+          "unknown": "Qualcosa nell'archivio merita uno sguardo: i dettagli sono nel log del server.",
+          "non_iso_currencies": "Alcuni codici valuta del backup non sono codici ISO (nomi o numeri salvati da una versione precedente): la modifica di quelle righe è rifiutata finché il codice non viene corretto."
+        },
+        "expires": "La copia controllata resta disponibile fino al {date}.",
+        "drop": "Scarta questo archivio"
+      },
+      "confirm": {
+        "word": "ripristina",
+        "instruction": "Per ripristinare questo archivio, scrivi questa parola. Poi LibreFolio si riavvia e il suo avvio applica il ripristino:",
+        "label": "Parola di conferma",
+        "button": "Ripristina e riavvia",
+        "words": "giardino finestra arancia pianeta argento matita candela foresta cucina scaletta mercato specchio mattina numero coniglio scuola primavera estate biglietto pomodoro viaggio villaggio inverno giallo cestino bottone castello girasole chitarra giacca lettera scimmia pappagallo tramonto temporale galleria violino borsetta montagna farfalla ombrello lampada quaderno tavolo cuscino battello stella cammino nuvola sorriso"
+      },
+      "restart": {
+        "waitingTitle": "LibreFolio si sta riavviando",
+        "waiting": "Il suo avvio applica il ripristino. Questa pagina aspetta che torni.",
+        "slow": "LibreFolio non è ancora tornato. Se niente lo riavvia da solo, avvialo tu: il ripristino si applica a quell'avvio.",
+        "notStopped": "LibreFolio non si è fermato. Se non si riavvia da solo, riavvialo tu: il ripristino si applica a quell'avvio.",
+        "rolledBack": "I dati sono come prima: {reason}.",
+        "stillPending": "LibreFolio si è riavviato, ma il ripristino non è stato applicato. {waiting}",
+        "back": "Torna al backup",
+        "failedTitle": "Il ripristino non è riuscito"
+      },
+      "errors": {
+        "backup_upload_empty": "Il file è vuoto.",
+        "backup_upload_incomplete": "L'archivio non è arrivato intero: invialo di nuovo.",
+        "backup_too_large": "L'archivio è più grande di quanto accetta questo LibreFolio ({limit} MB).",
+        "backup_no_space": "Sul server non c'è abbastanza spazio libero per questo archivio.",
+        "backup_upload_unavailable": "LibreFolio ora non riesce a leggere il suo limite di caricamento: riprova più tardi.",
+        "backup_restore_unavailable": "LibreFolio ora non riesce a leggere il suo limite di ripristino: riprova più tardi.",
+        "backup_upload_failed": "L'archivio non è stato salvato sul server: la causa è nel log del server.",
+        "backup_upload_not_found": "L'archivio caricato non c'è più: invialo di nuovo.",
+        "restore_folder_unusable": "La cartella del ripristino nella cartella dei dati non è una cartella normale: chi gestisce il server deve sistemarla.",
+        "restore_busy": "Un altro archivio è in controllo: riprova quando finisce.",
+        "restore_stage_running": "Il controllo è ancora in corso.",
+        "restore_stage_not_found": "Questo controllo non c'è più: controlla di nuovo l'archivio.",
+        "not_a_backup": "Questo file non è un backup di LibreFolio.",
+        "archive_unreadable": "L'archivio non si può leggere.",
+        "archive_damaged": "L'archivio è danneggiato.",
+        "manifest_newer_format": "L'archivio è stato creato da un LibreFolio più recente: aggiorna prima questo.",
+        "manifest_invalid": "La descrizione dell'archivio non è valida.",
+        "manifest_unreadable": "La descrizione dell'archivio non si può leggere.",
+        "manifest_too_large": "La descrizione dell'archivio è troppo grande.",
+        "too_many_entries": "L'archivio contiene troppi file.",
+        "unpacked_too_large": "Scompattato, l'archivio è più grande di quanto questo LibreFolio accetta per un ripristino.",
+        "duplicate_entry": "L'archivio contiene due volte lo stesso file.",
+        "unexpected_entry": "L'archivio contiene un file che la sua descrizione non elenca.",
+        "not_a_file": "L'archivio contiene qualcosa che non è un file normale.",
+        "encrypted_entry": "L'archivio contiene un file cifrato.",
+        "unsupported_entry": "L'archivio usa una compressione che LibreFolio non scrive.",
+        "checksum_mismatch": "Un file dell'archivio è diverso dalla sua descrizione: l'archivio è danneggiato o è stato modificato.",
+        "missing_entry": "Mancano dei file dell'archivio.",
+        "no_space": "Sul server non c'è abbastanza spazio libero per controllare l'archivio.",
+        "stage_failed": "La copia non è stata scritta: la causa è nel log del server.",
+        "database_damaged": "Il database del backup è danneggiato: non può essere ripristinato.",
+        "database_foreign_objects": "Il database del backup contiene trigger, viste o altri oggetti che LibreFolio non crea mai: non viene da LibreFolio, oppure è stato modificato, e non può essere ripristinato.",
+        "manifest_mismatch": "Il database del backup non è quello indicato dalla sua descrizione.",
+        "head_unknown": "Questo LibreFolio non riesce a leggere le sue migrazioni: la causa è nel log del server.",
+        "revision_missing": "Il database del backup non ha una versione.",
+        "revision_unknown": "L'archivio viene da un LibreFolio più recente, o non da questo: aggiorna prima LibreFolio, poi ripristinalo.",
+        "upgrade_failed": "L'aggiornamento della copia non è riuscito: la causa è nel log del server.",
+        "post_migration_failed": "Una correzione della copia non è riuscita: la causa è nel log del server.",
+        "restore_interrupted": "Il controllo è stato interrotto: controlla di nuovo l'archivio.",
+        "restore_stage_expired": "Il controllo è troppo vecchio: controlla di nuovo l'archivio.",
+        "restore_stage_outdated": "LibreFolio è stato aggiornato dopo il controllo: controlla di nuovo l'archivio.",
+        "restore_not_restorable": "Questo archivio non può essere ripristinato.",
+        "restore_already_pending": "Un altro ripristino attende già il prossimo avvio.",
+        "restore_not_pending": "Nessun ripristino attende il prossimo avvio.",
+        "restore_pending": "Un ripristino attende di applicare questa copia: annullalo prima.",
+        "restore_confirm_failed": "Il ripristino non è stato confermato: la causa è nel log del server. Non è cambiato nulla.",
+        "restore_cancel_failed": "Il ripristino non è stato annullato: la causa è nel log del server. Attende ancora il prossimo avvio.",
+        "restore_restart_failed": "LibreFolio non è stato riavviato: la causa è nel log del server. Il ripristino attende ancora il prossimo avvio.",
+        "restore_state_unreadable": "Lo stato del ripristino non si può leggere: la causa è nel log del server. Un ripristino potrebbe ancora attendere il prossimo avvio.",
+        "network": "Il server non risponde: controlla la connessione e riprova.",
+        "unexpected": "Il server ha risposto con un errore: la causa è nel log del server.",
+        "wrong_password": "Password sbagliata, oppure il file è stato modificato: riscrivi la password.",
+        "password_required": "È un backup sicuro: scrivi la sua password.",
+        "envelope_damaged": "Il backup sicuro è danneggiato o è stato modificato: non si può aprire.",
+        "envelope_unsupported": "Il backup sicuro viene da un LibreFolio più recente: aggiorna prima LibreFolio."
+      },
+      "password": {
+        "intro": "Un backup sicuro: scrivi la password con cui è stato fatto.",
+        "label": "Password del backup",
+        "submit": "Controlla il backup",
+        "cancel": "Annulla"
+      }
+    },
+    "checks": {
+      "panelToken": {
+        "ok": "Il token di backup del pannello del fornitore è impostato e si può usare.",
+        "off": "Nessun token di backup è impostato per un pannello del fornitore: le rotte di backup del pannello sono spente.",
+        "notVisibleAscii": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN contiene caratteri che un'intestazione di richiesta non porta così come sono (spazi, tabulazioni o caratteri fuori dall'ASCII visibile): le rotte di backup del pannello rispondono 503 finché non si corregge.",
+        "tooShort": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN è troppo corto: usa almeno {minimum} caratteri casuali. Le rotte di backup del pannello rispondono 503 finché non si corregge.",
+        "unreadable": "Il token di backup del pannello non si può leggere: {reason}"
+      },
+      "uploadLimit": {
+        "limited": "Un ripristino accetta archivi fino a {limit_mb} MB.",
+        "unlimited": "Un ripristino accetta archivi di qualsiasi dimensione.",
+        "invalid": "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB non si può usare (un numero intero di megabyte, 0 per nessun limite): i caricamenti per un ripristino sono rifiutati finché non si corregge.",
+        "profileTable": "Le impostazioni predefinite del profilo di LibreFolio non danno al limite di caricamento alcun valore, o gliene danno uno del tipo sbagliato, quindi i caricamenti per un ripristino sono rifiutati: imposta LIBREFOLIO_BACKUP_MAX_UPLOAD_MB a un numero intero di megabyte e segnala l'errore."
+      },
+      "restoreLimit": {
+        "limited": "Una verifica per un ripristino accetta archivi che scompattati arrivano fino a {limit_mb} MB.",
+        "unlimited": "Una verifica per un ripristino accetta archivi che scompattati hanno qualsiasi dimensione.",
+        "invalid": "{variable} non si può usare (un numero intero di megabyte, 0 per nessun limite): le verifiche per un ripristino sono rifiutate finché non si corregge.",
+        "profileTable": "Le impostazioni predefinite del profilo di LibreFolio non danno al limite di caricamento alcun valore, o gliene danno uno del tipo sbagliato, quindi le verifiche per un ripristino sono rifiutate: imposta LIBREFOLIO_BACKUP_MAX_RESTORE_MB a un numero intero di megabyte e segnala l'errore."
+      }
+    }
+  }
+}

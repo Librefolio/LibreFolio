@@ -109,7 +109,7 @@ The first start builds the web interface and the documentation, so it takes a fe
 
 ### 👤 6. Create Your Account
 
-Open LibreFolio in your browser and choose **Register here** below the login form: the first account registered becomes the administrator. To manage users from the terminal, see [Command-Line Tools](cli_tools.md).
+Open LibreFolio in your browser and choose **Register here** below the login form: the first account registered becomes the administrator. To manage users from the terminal, see [Command-Line Tools](cli_tools.md). To have LibreFolio create the administrator at its first start instead, see [The Initial Administrator](configuration.md#initial-admin).
 
 ---
 

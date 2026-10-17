@@ -93,7 +93,9 @@
       "eventPickerCreateNew": "New event",
       "eventCreateTitle": "Create event for {asset}",
       "eventCreateAmountRequired": "Amount is required",
-      "eventCreateDateRequired": "Date is required"
+      "eventCreateDateRequired": "Date is required",
+      "fxDatesHint": "The 'From' and 'To' dates usually match: they differ when the broker credits the new currency on another day.",
+      "eventEditTitle": "Edit event for {asset}"
     },
     "bulk": {
       "resetRow": "Reset row",
@@ -188,7 +190,9 @@
       "concat": "Concatenate",
       "union": "Union",
       "promoteSubtitle": "2 standalone → 1 paired",
-      "target": "Target"
+      "target": "Target",
+      "descriptionTooLong": "The merged description is over {max} characters: shorten it to confirm.",
+      "mergeAllLeftTooLong": "{count, plural, one {# pair was left} other {# pairs were left}} to merge by hand: the combined description would be over {max} characters."
     },
     "validate": {
       "now": "Validate now",
@@ -237,7 +241,20 @@
       "costBasisRequired": "❌ <b>{type}</b> with positive quantity requires a cost basis. Use <b>Auto</b> mode (WAC) or enter a <b>manual</b> value.",
       "pairDeleteIncomplete": "Linked transaction: deleting this row also requires deleting its pair (transaction #{partnerId}). If the pair belongs to a broker you cannot edit, ask its owner to delete it.",
       "pairQuantityMismatch": "A transfer must move the same quantity out of one broker and into the other (found {qtyA} and {qtyB})",
-      "pairAssetMismatch": "Both sides of a transfer must be the same asset"
+      "pairAssetMismatch": "Both sides of a transfer must be the same asset",
+      "wacFxUnavailableSplit": "The units that leave are valued at their average cost, which needs the {pairs} exchange rate: sync the FX rates, then split the pair again.",
+      "pairBrokerMismatch": "Both sides of a currency exchange must be on the same broker",
+      "cashNonzero": "{type} requires a non-zero cash amount",
+      "decimalPlacesExceeded": "At most {max} decimal places",
+      "significantDigitsExceeded": "At most {max} significant digits",
+      "integerDigitsExceeded": "At most {max} digits before the decimal point",
+      "dateOutOfRange": "Between {min} and {max}",
+      "autoCostUnreadable": "Automatic cost unavailable: {count, plural, one {# transaction used} other {# transactions used}} for this asset's average cost {count, plural, one {holds} other {hold}} a value that is not a number. Enter the cost by hand.",
+      "autoCostEmptyPool": "Automatic cost unavailable: no units of this asset were held on that date to average. Enter the cost by hand (0 if they came free).",
+      "autoCostUnknownPool": "Automatic cost unavailable: the units of this asset held on that date have no known cost to average. Enter the cost by hand.",
+      "ledgerUnreadable": "The balances of {brokerName} can't be checked: {count, plural, one {# of its transactions holds} other {# of its transactions hold}} a value that is not a number. Ask the administrator to repair the data.",
+      "costBasisNotAllowed": "❌ {type} takes no cost basis here: remove it. Only units that come in through an Adjustment or an Asset Transfer carry one.",
+      "costBasisModeIncompatible": "❌ {type} takes no cost basis here, so no Auto or Manual mode: remove it."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",
@@ -249,7 +266,8 @@
       "decimalParsing": "Must be a valid number",
       "intParsing": "Must be a valid integer",
       "valueError": "Invalid value",
-      "extraForbidden": "Unexpected field"
+      "extraForbidden": "Unexpected field",
+      "stringTooLong": "At most {max_length} characters"
     },
     "fields": {
       "broker_id": "Broker",

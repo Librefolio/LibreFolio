@@ -14,7 +14,7 @@ Add an instrument you hold or follow, connect it to a price provider and keep it
     1. On the **Assets** page, click **+ Add Asset**.
     2. In **Search Online**, type a name, ticker or ISIN and pick a result: LibreFolio fills in the
        form, connects that provider and [checks its data](#provider-data-comparison). No result?
-       Fill in the form yourself.
+       Fill in the form yourself, and report the search with [**Let us know**](#let-us-know).
     3. Check the fields below, then click **Create Asset**.
 
 === "From a broker import"
@@ -34,12 +34,61 @@ Check these fields before saving:
 - **Name**: required and unique; a warning appears if another asset already uses it.
 - **Type**: see [Choose the asset type](#choosing-the-asset-type).
 - **Units per single price**: how many units one price refers to, usually 1. Bonds are quoted per
-  100: LibreFolio proposes it when you choose **Bond**.
+  100: LibreFolio proposes it when you choose **Bond**. A London share that its provider quotes in
+  pence (GBp) needs 100 too: a price of 7,250 is then read as 72.50 GBP a share. Until you set it,
+  the [Data Quality Banner](../dashboard/index.md#data-quality-banner) lists each one you hold; the
+  dividends of such a share still show in pence.
 - **Currency**: the currency the prices are quoted in. For a fund listed in euros that is EUR,
   even when the fund is denominated in another currency.
 
 After saving from the **Assets** page, the confirmation links to the new asset. If the asset has a
 provider, its price history starts downloading right away.
+
+## 🔎 Search Online results {: #search-online-results }
+
+**Search Online** asks the providers all at once and sorts their results as they arrive:
+**premium** sources first (those your instance vouches for, such as licensed data), then
+**community** ones, each group by priority. None of the providers that come with LibreFolio is
+premium, and all have the same priority: the results appear as the providers answer, unless your
+administrator [changes the order](../../admin/configuration.md#provider-order).
+
+When the search included a premium source, the list has two parts:
+
+- **Premium**: the premium sources' results, or *No results from the premium sources.*
+- **Non-premium sources (community) · N results**, closed. Opening it first shows a warning: these
+  are third-party sources, LibreFolio does not vouch for their prices or data, and choosing one
+  applies to this asset only. The section is closed again the next time you open the form.
+
+### 📨 Can't find it? Let us know {: #let-us-know }
+
+Once a search has finished, whatever it found, even after an error or a timeout, the list offers
+*Can't find it?* **Let us know** (between the two parts, when there are two), as long as the app
+knows where to send the report. The report goes to whoever supports your instance. If the list has
+closed, click in the search box to bring it back; emptying the box forgets the search.
+
+Where the link leads depends on your instance's support address; its tooltip tells you which:
+
+| Support address | What **Let us know** does |
+|---|---|
+| An email address | Your email app opens a message with the subject and the details filled in |
+| A web page | The page opens in a new tab and the details are copied, ready to paste there; a message confirms the copy, or says it failed |
+| None (the default), on a self-hosted instance | A new GitHub issue opens in a new tab, filled in. It is **public**: review it before you submit it |
+
+On a managed instance, one that a hosting provider runs for you, **Let us know** needs a support
+address: without one, the list does not offer it, since a public issue would publish that the
+instance is managed, the providers it asks and the identifiers in your form. The link is also
+missing, even with a support address, when the app could not read your instance's configuration:
+reloading the page tries again.
+
+The details are in English: the text you searched; each provider asked and its outcome (how many
+results, *no answer*, or an error, with its code when it has one; never the error's message); the
+identifiers already in the form, and its currency and type unless they are still the defaults of a
+new, blank form (your base currency and Stock); your LibreFolio version, whether the instance is
+self-hosted or managed, and the language of the app. When you edit an asset, the details therefore
+include the asset's own identifiers (ISIN, ticker…), its currency and its type, as the form shows
+them. They never include who you are, an email address, your instance's address or any portfolio
+data. You send the report yourself, from your own device: it never goes through the LibreFolio
+server.
 
 ## 🗂️ Choose the asset type {: #choosing-the-asset-type }
 
@@ -67,7 +116,14 @@ Picking a **Search Online** result connects its provider for you. To set one up 
 2. Click **Test Configuration**: LibreFolio fetches a **Current Price** and a few days of
    **History**. ⚠️ means the provider does not offer that data or has none right now (CSS Scraper
    has no history, for example); the test still passes. ❌ is an error: check the identifier and
-   the settings.
+   the settings. When **History** answers, ⚠️ included, a note recalls that the test reads only
+   the last few days: a new asset gets its whole price history when it is created.
+
+⚠️ *Paused for too many requests until …* means the provider has refused LibreFolio's requests
+because there were too many: LibreFolio leaves it alone until the time shown, in your local time,
+with the date when the pause ends another day. Your settings may well be right, so the test still
+passes. When the end of the pause is not known, you see *Too many requests: try again later*.
+Meanwhile, the Assets list and the asset page keep showing the last saved price.
 
 An asset has at most one provider; tick **No Provider** if you will enter its prices yourself. See
 [Providers](providers/index.md) for what each one offers.
@@ -115,6 +171,22 @@ On the asset's [detail page](detail/index.md), click **Edit** (✏️), change w
 A new **Currency** for an asset that already has prices means deleting its stored prices and
 events: on saving, a dialog lists what goes (transactions stay) and offers a backup. After
 **Delete & Change Currency**, prices are downloaded again from the provider, if there is one.
+While a split of the asset has linked adjustments without a purchase cost, the change is refused
+and nothing is deleted: the message names the split by its date — give those adjustments a
+[purchase cost](../transactions/form.md) first.
+
+New settings for a [Scheduled Investment](providers/scheduled-investment.md) plan, or another
+provider, delete the asset's prices and the events the plan generated; they are then generated
+again from the new settings, or downloaded from the new provider. While one of those events is a
+split with linked adjustments without a purchase cost, the change of plan or provider is refused:
+the form names the split by its date, and the rest of your edit is saved — give those adjustments
+a [purchase cost](../transactions/form.md) first.
+
+**No Provider** deletes the events the provider generated, but keeps the asset's prices. While a
+transaction is linked to one of those events, such as a dividend or a coupon you recorded against
+it, the removal is refused and the provider stays: the form names the event by its type and date,
+and the rest of your edit is saved — first remove that link, with **No linked event** in the
+transaction's **Linked Event** field ([Transaction Form](../transactions/form.md)).
 
 ## 🏷️ Edit identifiers {: #one-instrument-several-codes }
 

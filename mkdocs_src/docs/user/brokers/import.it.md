@@ -54,3 +54,5 @@ La stessa procedura guidata si apre dalla voce **Importa** nella pagina [Transaz
 - **Gestisci tutti i file** apre la pagina [File e caricamenti](../files/index.md#broker-reports), filtrata su questo broker.
 
 Caricare ed eliminare report richiede l'accesso al broker come Proprietario o Editor.
+
+I report che una versione precedente di LibreFolio ha salvato senza broker non sono in questo elenco: chi li ha caricati e gli amministratori li trovano nella pagina [File e caricamenti](../files/index.md#broker-reports).

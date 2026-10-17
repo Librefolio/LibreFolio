@@ -37,10 +37,12 @@ from backend.app.schemas.signals import (
     SignalWarning,
     SignalWarningCode,
 )
-from backend.app.services.provider_registry import SignalPluginRegistry, register_plugin
-from backend.app.services.signal_plugins.base import SignalPlugin, SignalUnavailableError
+from backend.app.services.financial_math.returns import price_return
+from backend.app.services.provider_registry import register_plugin
+from backend.app.services.signals.base import SignalPlugin, SignalUnavailableError
+from backend.app.services.signals.registry import SignalPluginRegistry
 
-CalendarWindowDays = Annotated[int, Field(strict=True, gt=0)]
+CalendarWindowDays = Annotated[int, Field(strict=True, ge=1)]
 
 
 class CalendarRollingReturnParams(BaseModel):
@@ -55,7 +57,7 @@ class CalendarRollingReturnParams(BaseModel):
             "x-control-order": 1,
             "x-suffix": "days",
             "x-step": 1,
-            "x-tooltip-key": "signals.tooltips.riskWindow",
+            "x-tooltip-key": "signals.riskRollingReturn.windowTooltip",
         },
     )
 
@@ -125,7 +127,7 @@ class CalendarRollingReturnPlugin(SignalPlugin):
     docs_path = "financial-theory/fundamentals/returns/"
     category = SignalCategory.RISK
     params_model = CalendarRollingReturnParams
-    catalog_visible = False
+    catalog_visible = True
     allows_sparse_output_dates = True
     allows_sparse_input_dates = True
     input_requirements = SignalInputRequirements(
@@ -209,7 +211,6 @@ class CalendarRollingReturnPlugin(SignalPlugin):
         points_by_date = {point.date: point for point in price_points}
         output_points: list[SignalCalendarReturnValuePoint] = []
         unavailable_counts: Counter[str] = Counter()
-        one = Decimal("1")
         hundred = Decimal("100")
         requested_end = context.requested_range.end or context.requested_range.start
 
@@ -233,8 +234,10 @@ class CalendarRollingReturnPlugin(SignalPlugin):
                 status = SignalCalendarReturnPointStatus.INVALID_REFERENCE_PRICE
                 value = None
             else:
+                # Both prices are positive here, so the return is always defined.
+                change = price_return(reference.close, current.close)
                 status = SignalCalendarReturnPointStatus.AVAILABLE
-                value = float((current.close / reference.close - one) * hundred)
+                value = float(change * hundred) if change is not None else None
             if value is None:
                 unavailable_counts[status.value] += 1
             output_points.append(

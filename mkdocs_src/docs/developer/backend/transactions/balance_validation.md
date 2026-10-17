@@ -53,14 +53,16 @@ or replaying transactions.
 ## 📅 End-of-day Replay
 
 For an incremental replay beginning at `from_date`, the service first obtains
-cash and asset balances from all rows with `date < from_date`. It then queries
+cash and asset balances from all rows with `date < from_date`
+(`_get_balances_before_date()`, summed in Python, never in SQL: see
+[Balance Queries](service.md#balance-queries)). It then queries
 the broker's rows from `from_date` onward, groups them by date, and applies every
 row for a date before checking either balance dimension:
 
 ```text
 balances = SUM(all rows before from_date)
 
-for each date through the final transaction date:
+for from_date, then each later date that holds a transaction, in order:
     apply every cash and quantity delta dated that day
     validate all cash balances unless overdraft is allowed
     validate all asset balances unless shorting is allowed
@@ -68,8 +70,23 @@ for each date through the final transaction date:
 
 The invariant is therefore **end-of-day**, not per-row or intraday. Opposing
 movements on the same date are netted before validation. A later date cannot
-repair an earlier negative close because each date is checked before replay
-advances.
+repair an earlier negative close because each visited date is checked before
+replay advances.
+
+The replay visits only those dates (R13-SEC7-3): the days that hold a
+transaction, and `from_date`, because the balances carried into it may already be
+negative. No balance changes on a day without transactions, so the first negative
+close always falls on one of them, and the result is the one a walk over every
+calendar day gives. Without a `from_date` — the full replay `BrokerService` runs
+when an update turns `allow_cash_overdraft` or `allow_asset_shorting` off — the
+visited dates are the transaction days alone, from the broker's first row. The
+cost grows with the number of days that hold a transaction, not with the calendar
+span between them. Before, the replay stepped through every calendar day from its
+start to the broker's last row, on the event loop: about 740 000 days for a replay
+starting at a row dated `0001-01-01`, while a row dated `9999-12-31` made every
+later replay of its broker walk up to it, then fail on the date's overflow (a
+*Balance validation error* without a code). Such dates can no longer be written
+(see [Transaction dates](service.md#transaction-dates)).
 
 Starting at the earliest affected date preserves correctness for backdated
 creates, deletes, splits, promotions, and updates without replaying the broker's
@@ -80,7 +97,7 @@ complete history on every batch.
 ## 🚨 Issue Shape and Stop Condition
 
 `BalanceValidationError` is defined in
-`backend/app/services/transaction_batch_context.py` and carries:
+`backend/app/services/transactions/transaction_batch_context.py` and carries:
 
 ```python
 broker_id: int
@@ -100,8 +117,23 @@ The two stable validation codes are:
 | `balanceCashNegative` | A currency closes a day below zero |
 | `balanceAssetNegative` | An asset quantity closes a day below zero |
 
+Before either, the replay counts the broker's transactions whose quantity or amount
+cannot be read — a stored value that is no number reads `None` since W-B58 — with
+`count_unreadable_rows()` (`unreadable_rows.py`), every date included: the starting
+balances skipped such a row (a wrong balance, the batch checked against it) and the
+walk failed on it (a codeless error). Any such row stops the replay with a third
+code, at index −1 since it is the broker's and not a row's (W-B74):
+
+| Code | Condition |
+|------|-----------|
+| `ledgerUnreadable` | `params {brokerId, count}`: that many transactions of the broker hold a value that is not a number, so its balances cannot be checked |
+
+The broker's list cannot show such rows either; the way out is a data repair
+(W-B63). A broker that allows both overdraft and shorting is not replayed, so it
+is not refused either.
+
 The frontend turns each code into `transactions.errors.<code>`
-(`resolveIssueMessage()` in `lib/utils/transactions/resolveValidationMessage.ts`):
+(`resolveIssueMessage()` in `lib/features/transactions/resolveValidationMessage.ts`):
 *Saving would cause … to go negative … on {date} at {brokerName}*. The bulk
 workspace groups these issues under *This configuration causes data
 inconsistencies* (`transactions.validate.balanceIssuesHeader`), each with the

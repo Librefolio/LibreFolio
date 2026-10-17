@@ -13,17 +13,20 @@ Note: The former GET /fx/currencies endpoint was removed and absorbed
 by GET /fx/providers which now includes target_currencies per provider.
 """
 
+import time
 from datetime import date, timedelta
 from decimal import Decimal
 
 import httpx
 import pytest
 
+from backend.app.api.v1.fx import currencies as convert_route
 from backend.app.config import get_settings
 from backend.app.schemas import FXBulkDeleteResponse, FXBulkUpsertResponse, FXConvertResponse
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.fx import (
     FXConversionRequest,
+    FXConversionRouteReadItem,
     FXConversionRoutesResponse,
     FXCreateRoutesResponse,
     FXDeleteItem,
@@ -32,6 +35,7 @@ from backend.app.schemas.fx import (
     FXUpsertItem,
 )
 from backend.app.schemas.refresh import FXSyncBulkResponse
+from backend.app.utils.datetime_utils import latest_range_end
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
 
@@ -100,6 +104,14 @@ def test_server():
 # TEST FUNCTIONS
 # ============================================================================
 
+# Public providers whose get_supported_currencies() is a static list: GET /fx/providers
+# filtered on these answers without any outbound call. ECB fetches its list from the ECB
+# API and SNB its currency map from data.snb.ch (SNBProvider._ensure_currency_map), so
+# their live checks stay in test_external/test_fx_providers.py::test_supported_currencies.
+_STATIC_FX_PROVIDERS = ("FED", "BOE")
+# Every provider GET /fx/providers must list (MANUAL and the MOCKFX* test providers are hidden).
+_PUBLIC_FX_PROVIDERS = frozenset({"ECB", "FED", "BOE", "SNB"})
+
 
 @pytest.mark.asyncio
 async def test_providers_include_target_currencies(test_server):
@@ -107,17 +119,27 @@ async def test_providers_include_target_currencies(test_server):
 
     This test replaces the former test_get_currencies which tested the now-removed
     GET /fx/currencies endpoint. Target currencies are now part of the providers response.
+
+    The contract is checked on FED and BOE only: their get_supported_currencies()
+    returns a static list, so the endpoint answers without any network call. ECB and
+    SNB fetch their lists live (ECB API, data.snb.ch): those checks live in
+    test_external/test_fx_providers.py::test_supported_currencies.
     """
     print_section("Test 1: GET /fx/providers - target_currencies")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
-        response = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
+        response = await client.get(
+            f"{API_BASE}/fx/providers",
+            params={"providers": list(_STATIC_FX_PROVIDERS)},
+            timeout=TIMEOUT,
+        )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
         providers = [FXProviderInfo(**p) for p in response.json()]
-        assert len(providers) > 0, "Should have at least one provider"
+        codes = sorted(p.code for p in providers)
+        assert codes == sorted(_STATIC_FX_PROVIDERS), f"Expected exactly {sorted(_STATIC_FX_PROVIDERS)}, got {codes}"
 
         for provider in providers:
             # Validate target_currencies field exists and is populated
@@ -152,7 +174,14 @@ async def test_old_currencies_endpoint_removed(test_server):
 
 @pytest.mark.asyncio
 async def test_get_providers(test_server):
-    """Test 2: GET /fx/providers - List FX providers with full info."""
+    """Test 2: GET /fx/providers - List FX providers with full info.
+
+    The full-info contract and the providers filter are checked on FED and BOE, whose
+    currency lists are static (no network). The unfiltered calls check provider codes
+    only: answering them, the server still asks ECB and SNB for their currencies live,
+    so their target_currencies are not asserted. The live ECB and SNB lists are checked
+    in test_external/test_fx_providers.py::test_supported_currencies.
+    """
     print_section("Test 2: GET /fx/providers")
 
     async with httpx.AsyncClient() as client:
@@ -161,58 +190,76 @@ async def test_get_providers(test_server):
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
-        # Parse response as List[FXProviderInfo]
-        providers = [FXProviderInfo(**p) for p in response.json()]
+        # Unfiltered: provider codes only (see docstring)
+        listed = {FXProviderInfo(**p).code for p in response.json()}
+        missing = _PUBLIC_FX_PROVIDERS - listed
+        assert not missing, f"Public providers missing from the list: {sorted(missing)} (got {sorted(listed)})"
 
-        assert len(providers) > 0, "Should have at least one provider"
+        print_success(f"✓ Found {len(listed)} providers")
+        print_info(f"  Providers: {', '.join(sorted(listed))}")
+
+        # 2a. Full provider info, on the providers with a static currency list
+        print_info(f"2a. Full info ({', '.join(_STATIC_FX_PROVIDERS)})")
+        response_static = await client.get(
+            f"{API_BASE}/fx/providers",
+            params={"providers": list(_STATIC_FX_PROVIDERS)},
+            timeout=TIMEOUT,
+        )
+        assert response_static.status_code == 200, f"Expected 200, got {response_static.status_code}: {response_static.text}"
+
+        # Parse response as List[FXProviderInfo]
+        providers = [FXProviderInfo(**p) for p in response_static.json()]
+        static_codes = sorted(p.code for p in providers)
+        assert static_codes == sorted(_STATIC_FX_PROVIDERS), f"Expected exactly {sorted(_STATIC_FX_PROVIDERS)}, got {static_codes}"
 
         # Validate each provider
         for provider in providers:
             assert provider.code, "Provider should have code"
-            assert provider.name, "Provider should have name"
-            assert provider.base_currency, "Provider should have base_currency"
-            assert provider.base_currencies, "Provider should have base_currencies"
-            assert provider.target_currencies, "Provider should have target_currencies"
-            assert hasattr(provider, "icon_url"), "Provider should have icon_url field"
+            assert provider.name, f"Provider {provider.code} should have name"
+            assert provider.base_currency, f"Provider {provider.code} should have base_currency"
+            assert provider.base_currencies, f"Provider {provider.code} should have base_currencies"
+            assert provider.target_currencies, f"Provider {provider.code} should have target_currencies"
+            assert hasattr(provider, "icon_url"), f"Provider {provider.code} should have icon_url field"
             # base_currency should be in base_currencies
-            assert provider.base_currency in provider.base_currencies, f"base_currency {provider.base_currency} should be in base_currencies"
+            assert provider.base_currency in provider.base_currencies, f"base_currency {provider.base_currency} should be in base_currencies ({provider.code})"
 
-        print_success(f"✓ Found {len(providers)} providers")
-        print_info(f"  Providers: {', '.join([p.code for p in providers])}")
+        print_success(f"✓ Full info valid for {', '.join(static_codes)}")
 
         # 2b. Test providers filter (single provider)
-        print_info("2b. Filter by single provider (ECB)")
+        print_info("2b. Filter by single provider (FED)")
         response_filtered = await client.get(
             f"{API_BASE}/fx/providers",
-            params={"providers": ["ECB"]},
+            params={"providers": ["FED"]},
             timeout=TIMEOUT,
         )
         assert response_filtered.status_code == 200
         filtered = [FXProviderInfo(**p) for p in response_filtered.json()]
         assert len(filtered) == 1, f"Expected 1 provider, got {len(filtered)}"
-        assert filtered[0].code == "ECB"
+        assert filtered[0].code == "FED"
         print_success("✓ Single provider filter works")
 
         # 2c. Test providers filter (multiple providers)
-        print_info("2c. Filter by multiple providers (ECB, FED)")
+        print_info("2c. Filter by multiple providers (FED, BOE)")
         response_multi = await client.get(
             f"{API_BASE}/fx/providers",
-            params={"providers": ["ECB", "FED"]},
+            params={"providers": ["FED", "BOE"]},
             timeout=TIMEOUT,
         )
         assert response_multi.status_code == 200
         multi = [FXProviderInfo(**p) for p in response_multi.json()]
         assert len(multi) == 2, f"Expected 2 providers, got {len(multi)}"
         codes = {p.code for p in multi}
-        assert codes == {"ECB", "FED"}, f"Expected ECB & FED, got {codes}"
+        assert codes == {"FED", "BOE"}, f"Expected FED & BOE, got {codes}"
         print_success("✓ Multi-provider filter works")
 
-        # 2d. No filter returns all providers
+        # 2d. No filter returns all providers (codes only, see docstring)
         print_info("2d. No filter returns all")
         response_all = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
-        all_providers = [FXProviderInfo(**p) for p in response_all.json()]
-        assert len(all_providers) >= 4, f"Expected >= 4, got {len(all_providers)}"
-        print_success(f"✓ No filter returns {len(all_providers)} providers")
+        assert response_all.status_code == 200, f"Expected 200, got {response_all.status_code}: {response_all.text}"
+        all_codes = {FXProviderInfo(**p).code for p in response_all.json()}
+        missing_all = _PUBLIC_FX_PROVIDERS - all_codes
+        assert not missing_all, f"Public providers missing from the list: {sorted(missing_all)} (got {sorted(all_codes)})"
+        print_success(f"✓ No filter returns {len(all_codes)} providers, public ones included")
 
 
 @pytest.mark.asyncio
@@ -926,6 +973,300 @@ async def test_manual_full_pair_delete_no_reinstate(test_server):
         print_success("✓ Full pair delete: pair completely gone, MANUAL NOT reinstated")
 
 
+# ============================================================================
+# X-R75: POST /fx/providers/routes?replace=true — a pair's routes replaced by one request
+# ============================================================================
+#
+# The FX pair modal edits a pair's routes with DELETE /fx/providers/routes [{base, quote}] (the whole pair, no MANUAL
+# reinstated: Test 17), then POST /fx/providers/routes: a POST that fails leaves the pair with no route at all. The cure
+# (create_routes_bulk): a query parameter ``replace``, default false -- the upsert by (base, quote, priority), as before.
+# With ``replace=true``, in the same transaction, after the validation (the 400 of an unknown provider first, rolled
+# back) and after the upsert, every route of a pair the request names -- base and quote sorted, as the endpoint stores
+# them -- whose priority was not posted for that pair is deleted; then the MANUAL rules as before (a real provider posted
+# removes the MANUAL sentinel). A refusal (400, 409, 500) rolls everything back; a 422 never reaches the handler. The
+# answer is an FXCreateRoutesResponse, as before.
+#
+# FX routes are global. Each test owns its pairs, of currencies nothing else in the repository names -- no API, service
+# or E2E test, no fixture, no mock data, no frontend or backend source (DZD TND LYD IQD JOD DOP NIO PAB KYD AOA CDF LRD
+# SDG DJF: checked by grep over backend/, frontend/e2e, frontend/src and scripts/ when these tests were written) -- and
+# drops them whole before and after, after a red too. The routes name ECB, FED, BOE, SNB and MOCKFX: a route is
+# configuration, nothing here syncs, and the lane's server runs no scheduler (LIBREFOLIO_NO_SCHEDULER), so no request
+# reaches a provider.
+
+R75_ROUTES_URL = f"{API_BASE}/fx/providers/routes"
+R75_ROUTES_PATH = "/api/v1/fx/providers/routes"  # the operation's key in the OpenAPI document
+R75_MANUAL_PRIORITY = 999  # the MANUAL sentinel's priority (MANUAL_PRIORITY): the contract's number, written here
+
+#: One pair per test, written as stored (base < quote).
+R75_EXACT = ("DZD", "TND")  # Test 18a
+R75_EXACT_HOP = "LYD"  # the currency 18a's chain goes through: no route of DZD/LYD or LYD/TND is posted
+R75_MANUAL = ("IQD", "JOD")  # Test 18b
+R75_REFUSED = ("DOP", "NIO")  # Test 18d
+R75_REFUSED_BREAK = ("PAB", "KYD")  # 18d's broken chain leaves DOP for PAB, then starts again from KYD
+R75_UPSERT = ("AOA", "CDF")  # Test 18e
+R75_MAIN = ("LRD", "SDG")  # Test 18f: its chain goes LRD → DJF → SDG
+R75_FIRST_HOP = ("DJF", "LRD")  # Test 18f: new, posted beside the main pair as LRD → DJF
+R75_SECOND_HOP = ("DJF", "SDG")  # Test 18f: configured before, not named by the replace
+
+#: A pair's routes as the listing gives them: (priority, [(from, to, provider), ...]), by priority.
+R75Listing = list[tuple[int, list[tuple[str, str, str]]]]
+
+
+def _r75_route(base: str, quote: str, priority: int, *steps: tuple[str, str, str]) -> dict:
+    """A route as a client posts it: the pair as written, its priority, its steps as (from, to, provider)."""
+    return {"base": base, "quote": quote, "priority": priority, "chain_steps": [{"from": origin, "to": target, "provider": provider} for origin, target, provider in steps]}
+
+
+def _r75_direct(pair: tuple[str, str], priority: int, provider: str) -> dict:
+    """A one-step route of ``pair``, from its base to its quote."""
+    base, quote = pair
+    return _r75_route(base, quote, priority, (base, quote, provider))
+
+
+def _r75_expected(routes: list[dict]) -> R75Listing:
+    """What the listing of their pair must hold after ``routes``: each priority with its steps as posted."""
+    return sorted((route["priority"], [(step["from"], step["to"], step["provider"]) for step in route["chain_steps"]]) for route in routes)
+
+
+async def _r75_listed(client: httpx.AsyncClient, pair: tuple[str, str]) -> R75Listing:
+    """The routes ``GET /fx/providers/routes`` lists for ``pair`` (as stored, base < quote); nobody else's are read."""
+    response = await client.get(R75_ROUTES_URL, timeout=TIMEOUT)
+    assert response.status_code == 200, f"listing the routes: {response.status_code} {response.text[:300]}"
+    routes = [FXConversionRouteReadItem.model_validate(item) for item in response.json()["items"] if (item["base"], item["quote"]) == pair]
+    return sorted((route.priority, [(step.from_currency, step.to_currency, step.provider) for step in route.chain_steps]) for route in routes)
+
+
+async def _r75_post(client: httpx.AsyncClient, routes: list[dict], replace: str | None = None) -> httpx.Response:
+    """``POST /fx/providers/routes`` with ``routes``: ``?replace=<replace>`` when given, no query string otherwise."""
+    params = {} if replace is None else {"replace": replace}
+    return await client.post(R75_ROUTES_URL, params=params, json=routes, timeout=TIMEOUT)
+
+
+def _r75_saved(response: httpx.Response) -> None:
+    """A POST the endpoint accepted: 201, an ``FXCreateRoutesResponse`` (the schema of before), no route refused."""
+    assert response.status_code == 201, f"expected 201, got {response.status_code}: {response.text[:500]}"
+    body = FXCreateRoutesResponse(**response.json())
+    assert body.error_count == 0, f"no route may be refused: {body}"
+
+
+async def _r75_drop(client: httpx.AsyncClient, *pairs: tuple[str, str]) -> None:
+    """Delete every route of ``pairs``: the full-pair DELETE, which reinstates no MANUAL (Test 17)."""
+    response = await client.request("DELETE", R75_ROUTES_URL, json=[{"base": base, "quote": quote} for base, quote in pairs], timeout=TIMEOUT)
+    assert response.status_code == 200, f"dropping {pairs}: {response.status_code} {response.text[:300]}"
+
+
+async def _r75_seed(client: httpx.AsyncClient, pair: tuple[str, str], routes: list[dict]) -> None:
+    """``pair`` dropped, then configured with ``routes`` by a POST without ``replace``; the listing checked."""
+    await _r75_drop(client, pair)
+    _r75_saved(await _r75_post(client, routes))
+    assert await _r75_listed(client, pair) == _r75_expected(routes), f"barrier: {pair[0]}/{pair[1]} does not hold the routes just posted"
+
+
+@pytest.mark.asyncio
+async def test_routes_replace_keeps_exactly_the_posted_priorities(test_server):
+    """Test 18a (X-R75): ``POST /fx/providers/routes?replace=true`` leaves a pair exactly the priorities it posts.
+
+    DZD/TND holds priorities 1, 2 and 3 (ECB, FED, BOE, direct). A replace posting priority 1 (SNB, direct) and priority
+    2 (a chain through LYD: ECB, then FED) answers 201 and leaves exactly those two, with the steps posted: priority 3 is
+    gone. Then a replace posting priority 1 alone, the pair written the other way round (TND/DZD, MOCKFX), leaves exactly
+    that route: the pair a request names is the pair as stored.
+    Red before X-R75: the parameter is ignored, the upsert leaves priority 3 in place.
+    """
+    print_section("Test 18a: routes replace keeps exactly the posted priorities")
+
+    base, quote = R75_EXACT
+    seeded = [_r75_direct(R75_EXACT, 1, "ECB"), _r75_direct(R75_EXACT, 2, "FED"), _r75_direct(R75_EXACT, 3, "BOE")]
+    replacement = [_r75_direct(R75_EXACT, 1, "SNB"), _r75_route(base, quote, 2, (base, R75_EXACT_HOP, "ECB"), (R75_EXACT_HOP, quote, "FED"))]
+    turned_round = [_r75_route(quote, base, 1, (quote, base, "MOCKFX"))]
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            await _r75_seed(client, R75_EXACT, seeded)
+
+            _r75_saved(await _r75_post(client, replacement, replace="true"))
+            listed = await _r75_listed(client, R75_EXACT)
+            assert listed == _r75_expected(replacement), f"after a replace posting priorities 1 and 2, {base}/{quote} must hold exactly them, as posted; it holds {listed}"
+            print_success(f"✓ {base}/{quote}: priorities 1 and 2 as posted, priority 3 gone")
+
+            _r75_saved(await _r75_post(client, turned_round, replace="true"))
+            listed = await _r75_listed(client, R75_EXACT)
+            assert listed == _r75_expected(turned_round), f"a replace posted as {quote}/{base} names the pair stored as {base}/{quote}: it must hold exactly priority 1, as posted; it holds {listed}"
+            print_success(f"✓ posted as {quote}/{base}: {base}/{quote} holds priority 1 alone")
+        finally:
+            await _r75_drop(client, R75_EXACT)
+
+
+@pytest.mark.asyncio
+async def test_routes_replace_with_the_manual_item_leaves_the_pair_manual(test_server):
+    """Test 18b (X-R75): a replace posting the MANUAL item alone keeps the pair, manual.
+
+    IQD/JOD holds priorities 1 and 2 (ECB, FED). ``?replace=true`` with the MANUAL item alone -- one step IQD → JOD,
+    provider MANUAL, priority 999: what the modal posts for a pair left without a provider -- answers 201 and leaves
+    exactly that route. Back: a replace posting one real route (priority 1, MOCKFX) leaves exactly that one, the MANUAL
+    route gone.
+    Red before X-R75: the parameter is ignored, the real routes stay beside the MANUAL one.
+    """
+    print_section("Test 18b: routes replace with the MANUAL item alone leaves the pair manual")
+
+    base, quote = R75_MANUAL
+    seeded = [_r75_direct(R75_MANUAL, 1, "ECB"), _r75_direct(R75_MANUAL, 2, "FED")]
+    manual = [_r75_direct(R75_MANUAL, R75_MANUAL_PRIORITY, "MANUAL")]
+    real = [_r75_direct(R75_MANUAL, 1, "MOCKFX")]
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            await _r75_seed(client, R75_MANUAL, seeded)
+
+            _r75_saved(await _r75_post(client, manual, replace="true"))
+            listed = await _r75_listed(client, R75_MANUAL)
+            assert listed == _r75_expected(manual), f"after a replace posting the MANUAL item alone, {base}/{quote} must hold exactly it (MANUAL, priority {R75_MANUAL_PRIORITY}); it holds {listed}"
+            print_success(f"✓ {base}/{quote}: the MANUAL route alone, the real ones gone")
+
+            _r75_saved(await _r75_post(client, real, replace="true"))
+            listed = await _r75_listed(client, R75_MANUAL)
+            assert listed == _r75_expected(real), f"after a replace posting one real route, {base}/{quote} must hold exactly it, the MANUAL one gone; it holds {listed}"
+            print_success(f"✓ {base}/{quote}: one real route again, the MANUAL one gone")
+        finally:
+            await _r75_drop(client, R75_MANUAL)
+
+
+@pytest.mark.asyncio
+async def test_openapi_documents_replace_on_the_routes_post(test_server):
+    """Test 18c (X-R75): the OpenAPI document the lane's backend serves (``GET /api/v1/openapi.json``) gives ``POST
+    /api/v1/fx/providers/routes`` a query parameter ``replace``: optional, a boolean, default false.
+
+    Red before X-R75: the operation has no ``replace`` parameter.
+    """
+    print_section("Test 18c: the OpenAPI document gives POST /fx/providers/routes a replace parameter")
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"{API_BASE}/openapi.json", timeout=TIMEOUT)
+    assert response.status_code == 200, f"GET /openapi.json: {response.status_code} {response.text[:300]}"
+    operation = response.json()["paths"][R75_ROUTES_PATH]["post"]
+    parameters = {(parameter["name"], parameter["in"]): parameter for parameter in operation.get("parameters", [])}
+    replace = parameters.get(("replace", "query"))
+    assert replace is not None, f"POST {R75_ROUTES_PATH} documents no query parameter replace; its parameters: {sorted(parameters)}"
+    assert not replace.get("required", False), f"replace must be optional: {replace}"
+    schema = replace.get("schema", {})
+    assert schema.get("type") == "boolean", f"replace must be a boolean: {schema}"
+    assert schema.get("default") is False, f"replace must default to false: {schema}"
+    print_success(f"✓ POST {R75_ROUTES_PATH}: replace, in the query, boolean, default false")
+
+
+@pytest.mark.asyncio
+async def test_routes_refused_replace_changes_nothing(test_server):
+    """Test 18d (X-R75, guard): a replace the endpoint refuses leaves the pair as it was.
+
+    DOP/NIO holds priorities 1, 2 and 3 (ECB, FED, BOE). ``?replace=true`` with priority 1 (SNB: valid, and not the
+    stored route) and priority 2 naming the provider NOT_A_PROVIDER: 400, the unknown provider named, and the three
+    routes exactly as before. The same with priority 2 a broken chain instead (DOP → PAB, then KYD → NIO: the steps do
+    not join): 422 on that item, and the three routes exactly as before.
+    Green before X-R75 (the parameter ignored, both refused as today) and after: the replace runs after the validation,
+    in the same transaction, and a 422 never reaches the handler.
+    """
+    print_section("Test 18d: a refused routes replace changes nothing")
+
+    base, quote = R75_REFUSED
+    left_for, resumed_from = R75_REFUSED_BREAK
+    seeded = [_r75_direct(R75_REFUSED, 1, "ECB"), _r75_direct(R75_REFUSED, 2, "FED"), _r75_direct(R75_REFUSED, 3, "BOE")]
+    unknown_provider = [_r75_direct(R75_REFUSED, 1, "SNB"), _r75_direct(R75_REFUSED, 2, "NOT_A_PROVIDER")]
+    broken_chain = [_r75_direct(R75_REFUSED, 1, "SNB"), _r75_route(base, quote, 2, (base, left_for, "ECB"), (resumed_from, quote, "ECB"))]
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            await _r75_seed(client, R75_REFUSED, seeded)
+
+            response = await _r75_post(client, unknown_provider, replace="true")
+            assert response.status_code == 400, f"a route naming an unknown provider: expected 400, got {response.status_code}: {response.text[:500]}"
+            assert "NOT_A_PROVIDER" in response.text, f"the 400 must name the unknown provider: {response.text[:500]}"
+            listed = await _r75_listed(client, R75_REFUSED)
+            assert listed == _r75_expected(seeded), f"a replace refused with 400 changed {base}/{quote}: it holds {listed}"
+            print_success(f"✓ 400 (unknown provider): {base}/{quote} unchanged")
+
+            response = await _r75_post(client, broken_chain, replace="true")
+            assert response.status_code == 422, f"a broken chain: expected 422, got {response.status_code}: {response.text[:500]}"
+            errors = response.json()["detail"]
+            assert any(list(error.get("loc", []))[:2] == ["body", 1] for error in errors), f"the 422 must refuse the request's second route, the broken chain: {errors}"
+            listed = await _r75_listed(client, R75_REFUSED)
+            assert listed == _r75_expected(seeded), f"a replace refused with 422 changed {base}/{quote}: it holds {listed}"
+            print_success(f"✓ 422 (broken chain): {base}/{quote} unchanged")
+        finally:
+            await _r75_drop(client, R75_REFUSED)
+
+
+@pytest.mark.asyncio
+async def test_routes_post_without_replace_upserts_as_before(test_server):
+    """Test 18e (X-R75, guard): without ``replace``, and with ``replace=false``, the POST is the upsert by (base, quote,
+    priority) of before: a priority it does not post stays.
+
+    AOA/CDF holds priorities 1, 2 and 3 (ECB, FED, BOE). A POST of priorities 1 and 2 (SNB, MOCKFX) without the
+    parameter: 201, priorities 1 and 2 as posted, priority 3 (BOE) still there. A POST of priorities 1 and 2 again (FED,
+    ECB) with ``replace=false``: 201, the same, priority 3 still there.
+    Green before X-R75 (the parameter ignored) and after (false is the default).
+    """
+    print_section("Test 18e: routes POST without replace upserts as before")
+
+    base, quote = R75_UPSERT
+    seeded = [_r75_direct(R75_UPSERT, 1, "ECB"), _r75_direct(R75_UPSERT, 2, "FED"), _r75_direct(R75_UPSERT, 3, "BOE")]
+    kept = seeded[2:]
+    without_parameter = [_r75_direct(R75_UPSERT, 1, "SNB"), _r75_direct(R75_UPSERT, 2, "MOCKFX")]
+    replace_false = [_r75_direct(R75_UPSERT, 1, "FED"), _r75_direct(R75_UPSERT, 2, "ECB")]
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            await _r75_seed(client, R75_UPSERT, seeded)
+
+            _r75_saved(await _r75_post(client, without_parameter))
+            listed = await _r75_listed(client, R75_UPSERT)
+            assert listed == _r75_expected(without_parameter + kept), f"a POST of priorities 1 and 2 without replace must update them and keep priority 3 of {base}/{quote}; it holds {listed}"
+            print_success(f"✓ no parameter: {base}/{quote} priorities 1 and 2 updated, priority 3 kept")
+
+            _r75_saved(await _r75_post(client, replace_false, replace="false"))
+            listed = await _r75_listed(client, R75_UPSERT)
+            assert listed == _r75_expected(replace_false + kept), f"a POST of priorities 1 and 2 with replace=false must update them and keep priority 3 of {base}/{quote}; it holds {listed}"
+            print_success(f"✓ replace=false: {base}/{quote} priorities 1 and 2 updated, priority 3 kept")
+        finally:
+            await _r75_drop(client, R75_UPSERT)
+
+
+@pytest.mark.asyncio
+async def test_routes_replace_with_an_intermediate_pair(test_server):
+    """Test 18f (X-R75, guard): one replace configures a new pair and the new pair of its chain's first hop, and leaves
+    the pair of its second hop, which it does not name, as it was.
+
+    LRD/SDG and DJF/LRD hold nothing; DJF/SDG holds priorities 1 and 2 (FED, MOCKFX). ``?replace=true`` with LRD/SDG
+    priority 1 (the chain LRD → DJF → SDG: ECB, then FED), LRD/SDG priority 2 (direct, BOE) and the first hop's one-step
+    route, written in the chain's direction (LRD → DJF, ECB, priority 1; stored as DJF/LRD): 201; LRD/SDG and DJF/LRD
+    hold exactly what was posted for each, DJF/SDG exactly what it held. The replace is per pair, on the pair as stored,
+    and only on the pairs the request names: a step crossing a pair does not name it.
+    Green before X-R75 (both posted pairs new, nothing to remove) and after: the contract's guard.
+    """
+    print_section("Test 18f: routes replace with an intermediate pair")
+
+    base, quote = R75_MAIN
+    hop = R75_FIRST_HOP[0]
+    second_hop = [_r75_direct(R75_SECOND_HOP, 1, "FED"), _r75_direct(R75_SECOND_HOP, 2, "MOCKFX")]
+    main = [_r75_route(base, quote, 1, (base, hop, "ECB"), (hop, quote, "FED")), _r75_direct(R75_MAIN, 2, "BOE")]
+    first_hop = [_r75_route(base, hop, 1, (base, hop, "ECB"))]
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            await _r75_drop(client, R75_MAIN, R75_FIRST_HOP)
+            await _r75_seed(client, R75_SECOND_HOP, second_hop)
+            assert (await _r75_listed(client, R75_MAIN), await _r75_listed(client, R75_FIRST_HOP)) == ([], []), "barrier: the pairs this replace configures must be new"
+
+            _r75_saved(await _r75_post(client, main + first_hop, replace="true"))
+            main_listed = await _r75_listed(client, R75_MAIN)
+            first_hop_listed = await _r75_listed(client, R75_FIRST_HOP)
+            second_hop_listed = await _r75_listed(client, R75_SECOND_HOP)
+            assert main_listed == _r75_expected(main), f"{base}/{quote} must hold exactly the two routes posted for it; it holds {main_listed}"
+            assert first_hop_listed == _r75_expected(first_hop), f"the first hop's pair, posted as {base}/{hop}, must hold exactly its route as {'/'.join(R75_FIRST_HOP)}; it holds {first_hop_listed}"
+            assert second_hop_listed == _r75_expected(second_hop), f"{'/'.join(R75_SECOND_HOP)}, which the request does not name, must keep its routes; it holds {second_hop_listed}"
+            print_success(f"✓ {base}/{quote} and {'/'.join(R75_FIRST_HOP)} as posted, {'/'.join(R75_SECOND_HOP)} untouched")
+        finally:
+            await _r75_drop(client, R75_MAIN, R75_FIRST_HOP, R75_SECOND_HOP)
+
+
 @pytest.mark.asyncio
 async def test_manual_cleanup_from_previous_tests(test_server):
     """Test 18: Cleanup pairs created by earlier MANUAL tests."""
@@ -942,7 +1283,7 @@ async def test_manual_cleanup_from_previous_tests(test_server):
 async def test_delete_rates_mixed_validity(test_server):
     """G7§5: DELETE /fx/currencies/rate with mixed valid+invalid items.
 
-    Contract under test (api/v1/fx.py L319-L327): the endpoint must collect
+    Contract under test (api/v1/fx/currencies.py, ``delete_rates_endpoint``): the endpoint must collect
     per-item errors (e.g. ``from == to``) into the ``errors`` array while
     still processing the valid items. Returns 200 with a partial result.
     """
@@ -997,3 +1338,335 @@ async def test_delete_rates_mixed_validity(test_server):
         assert body.errors, "expected at least one per-item error"
         assert any("EUR" in e for e in body.errors), f"errors should mention EUR: {body.errors}"
         print_success(f"✓ Mixed batch handled: 1 success + {len(body.errors)} error(s)")
+
+
+# ============================================================================
+# X-R55 (N75): a conversion has a ceiling, the server's tomorrow
+# ============================================================================
+#
+# POST /fx/currencies/convert used to expand one conversion a day up to any requested end: 9999-12-31 meant about 3.6
+# million daily conversions in the lane's backend. Identity conversions (CHF → CHF) need no rate and write nothing: the
+# daily expansion alone is under test. The unbounded sizes are pinned at service level (services range-ceiling, RC-F05),
+# behind a fuse: here a red guard on unbounded code must not keep the shared backend busy for minutes.
+#
+# The ceiling is datetime_utils.latest_range_end(), tomorrow by the server's calendar (R13-SEC7-1's one helper). The
+# lane's server runs on this host, in this process's time zone: the test asks the same helper for the day it cuts at.
+
+EXTREME_SECONDS = 20.0  # a capped answer takes milliseconds; an unbounded one, minutes
+
+
+def _identity_conversion(start: str, end: str) -> list[dict]:
+    return [{"from_amount": {"code": "CHF", "amount": "100"}, "to": "CHF", "date_range": {"start": start, "end": end}}]
+
+
+@pytest.mark.asyncio
+async def test_convert_end_after_tomorrow_stops_at_tomorrow(test_server):
+    """RC-API-03 (X-R55, N75): POST /fx/currencies/convert up to today+10 gives no result after the ceiling,
+    ``latest_range_end()``: tomorrow, by the server's calendar.
+
+    The ceiling is read before the request (the results must reach it) and after the answer (no result may pass it): a
+    day turning meanwhile only widens what is accepted.
+    Red before X-R55: one result a day up to today+10.
+    """
+    print_section("RC-API-03: conversion clamped to tomorrow")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        ceiling_before = latest_range_end()
+        today = ceiling_before - timedelta(days=1)
+        request = _identity_conversion((today - timedelta(days=3)).isoformat(), (today + timedelta(days=10)).isoformat())
+        response = await client.post(f"{API_BASE}/fx/currencies/convert", json=request, timeout=TIMEOUT)
+        ceiling = latest_range_end()
+        assert response.status_code == 200, response.text
+        body = FXConvertResponse(**response.json())
+        days = [result.conversion_date for result in body.results]
+        late = [day for day in days if day > ceiling]
+        assert not late, f"{len(late)} conversions after the ceiling {ceiling}: {late[0]} … {late[-1]}"
+        assert days and days[-1] >= ceiling_before, f"one conversion a day up to the ceiling {ceiling_before} expected: {days}"
+        assert body.errors == []
+        print_success(f"✓ {len(days)} conversions, the last on {days[-1]}")
+
+
+@pytest.mark.asyncio
+async def test_convert_extreme_end_is_bounded(test_server):
+    """RC-API-04 (X-R55, N75, guard): a conversion ending 9999-12-31 answers within EXTREME_SECONDS: 9999-12-01 …
+    9999-12-31 lies wholly after the ceiling, ``latest_range_end()``, so it gives no result and no error (200, not the
+    404 of failed ones).
+
+    The start is not 0001-01-01 on purpose: on unbounded code that request makes the lane's shared backend expand about
+    3.6 million conversions, its event loop blocked for minutes and every neighbour test with it. This shape costs
+    unbounded code 31 conversions, and still fails it; 0001-01-01 … 9999-12-31 is pinned at service level (RC-F05).
+    Red before X-R55: 500 Internal Server Error — after its 31 conversions the daily expansion stepped past 9999-12-31,
+    the last day a date can hold (OverflowError, uncaught), as every conversion ending there did.
+    """
+    print_section("RC-API-04: conversion ending 9999-12-31")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        started = time.monotonic()
+        try:
+            response = await client.post(f"{API_BASE}/fx/currencies/convert", json=_identity_conversion("9999-12-01", "9999-12-31"), timeout=EXTREME_SECONDS)
+        except httpx.TimeoutException:
+            pytest.fail(f"no answer within {EXTREME_SECONDS:.0f} s for a conversion ending 9999-12-31")
+        elapsed = time.monotonic() - started
+        ceiling = latest_range_end()
+        assert response.status_code == 200, response.text
+        assert elapsed < EXTREME_SECONDS, f"{elapsed:.1f} s"
+        body = FXConvertResponse(**response.json())
+        late = [result.conversion_date for result in body.results if result.conversion_date > ceiling]
+        assert not late, f"{len(late)} conversions after the ceiling {ceiling}: {late[0]} … {late[-1]}"
+        assert (body.results, body.errors) == ([], [])
+        print_success(f"✓ no conversion, no error, in {elapsed:.2f} s")
+
+
+# ============================================================================
+# Z-25 (N77): a bulk conversion has two caps, its items and its item-days
+# ============================================================================
+#
+# POST /fx/currencies/convert refuses more than MAX_BULK_ITEMS (1 000) conversions before any work, and stops counting
+# the daily and signal items it is about to build as soon as they pass MAX_BULK_ITEM_DAYS (1 million): both are a 422
+# with a coded detail, and nothing is converted. Identity conversions (CHF → CHF) need no rate and write nothing. The
+# lowered budgets, the warm-up and the conversions past the ceiling are pinned at service level (services
+# range-ceiling, BL-I and BL-F).
+
+BULK_REJECT_SECONDS = 30.0  # a refusal is answered once the count passes the budget; 7.3 million conversions, minutes
+BULK_MAX_ITEMS = 1_000  # the contract's numbers (N77), written here and not read from the code under test
+BULK_MAX_ITEM_DAYS = 1_000_000
+CONVERSION_SPAN_DAYS = 36_526  # X-R55: a conversion runs from range_span_floor(end), 36 525 days back, to its end
+
+
+def _identity_conversions(count: int, start: str, end: str) -> list[dict]:
+    return [{"from_amount": {"code": "CHF", "amount": str(100 + n)}, "to": "CHF", "date_range": {"start": start, "end": end}} for n in range(count)]
+
+
+def _coded_refusal(response: httpx.Response, code: str) -> dict:
+    """The 422's detail, its code checked and a non-empty message; returned for the numbers."""
+    assert response.status_code == 422, f"{response.status_code}: {response.text[:300]}"
+    detail = response.json()["detail"]
+    assert isinstance(detail, dict) and detail.get("code") == code, detail
+    assert isinstance(detail.get("message"), str) and detail["message"].strip(), detail
+    return detail
+
+
+@pytest.mark.asyncio
+async def test_convert_more_than_1000_items_is_refused(test_server):
+    """BL-API-02 (Z-25, N77): 1 001 one-day conversions answer 422 ``{"code": "bulk_too_many_items", "message",
+    "max_items": 1000, "items": 1001}``.
+
+    Red before Z-25: 200, the 1 001 conversions made.
+    """
+    print_section("BL-API-02: conversion of 1 001 items refused")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        response = await client.post(f"{API_BASE}/fx/currencies/convert", json=_identity_conversions(BULK_MAX_ITEMS + 1, "2025-06-18", "2025-06-18"), timeout=TIMEOUT)
+        detail = _coded_refusal(response, "bulk_too_many_items")
+        assert {key: value for key, value in detail.items() if key not in ("code", "message")} == {"max_items": BULK_MAX_ITEMS, "items": BULK_MAX_ITEMS + 1}
+        print_success(f"✓ 422 {detail['code']}: {detail['items']} items, at most {detail['max_items']}")
+
+
+@pytest.mark.asyncio
+async def test_convert_over_the_item_day_budget_is_refused_fast(test_server):
+    """BL-API-03 (Z-25, N77, guard): 200 conversions of 100 years — 36 526 daily items each, 7 305 200 in all —
+    answer 422 ``{"code": "bulk_too_many_days", "message", "max_item_days": 1000000, "item_days": n}`` within
+    ``BULK_REJECT_SECONDS``, ``n`` the count when it passed the budget: more than 1 000 000, at most the 1 022 728 of the
+    first 28 conversions (27 make 986 202).
+
+    Not sent to code whose route reads no ``MAX_BULK_ITEM_DAYS``: there the lane's shared backend would build and
+    convert the 7.3 million items, its event loop blocked for minutes and every neighbour test with it (the size X-R55
+    kept out of the API cases). The test fails at once instead.
+    Red before Z-25: the route read no budget — the request not sent.
+    """
+    print_section("BL-API-03: conversion over the item-day budget refused")
+
+    if not hasattr(convert_route, "MAX_BULK_ITEM_DAYS"):
+        pytest.fail("the conversion route reads no MAX_BULK_ITEM_DAYS: 7.3 million item-days not sent to the lane's shared backend")
+    crossing = -(-(BULK_MAX_ITEM_DAYS + 1) // CONVERSION_SPAN_DAYS)  # the conversion whose items pass the budget: 28th
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        started = time.monotonic()
+        try:
+            response = await client.post(f"{API_BASE}/fx/currencies/convert", json=_identity_conversions(200, "1800-01-01", "2025-06-18"), timeout=BULK_REJECT_SECONDS)
+        except httpx.TimeoutException:
+            pytest.fail(f"no answer within {BULK_REJECT_SECONDS:.0f} s for 7.3 million item-days")
+        elapsed = time.monotonic() - started
+        detail = _coded_refusal(response, "bulk_too_many_days")
+        assert set(detail) == {"code", "message", "max_item_days", "item_days"}, detail
+        assert detail["max_item_days"] == BULK_MAX_ITEM_DAYS
+        assert BULK_MAX_ITEM_DAYS < detail["item_days"] <= crossing * CONVERSION_SPAN_DAYS, detail
+        assert elapsed < BULK_REJECT_SECONDS, f"{elapsed:.1f} s"
+        print_success(f"✓ 422 {detail['code']} at {detail['item_days']:,} item-days, in {elapsed:.2f} s")
+
+
+# ============================================================================
+# X-R65 (N83): a stored rate is dated within [1900-01-01, the server's tomorrow]
+# ============================================================================
+#
+# POST /fx/currencies/rate checks every item's date against date_range_limits.stored_date_bounds() -- 1900-01-01 and
+# latest_range_end(), both included -- before its loop: one item outside refuses the request with a 422 coded detail, and
+# nothing is written, not even the valid items. The frozen ceiling, the bounds themselves and the cap of ten are pinned on
+# the handler (services range-ceiling, RC-W05…W07); here the route on the lane's server, at its real ceiling, read before
+# the request and after the answer. The pair is this block's own (no seed and no other test uses CVE or GMD); its rates
+# on the block's days are dropped before and after.
+
+BOUNDS_PAIR = ("CVE", "GMD")  # stored as it is: CVE < GMD
+STORED_FLOOR = "1900-01-01"  # the contract's floor (EARLIEST_RANGE_START), written here and not read from the code
+
+
+async def _pair_rate_days(client: httpx.AsyncClient, base: str, quote: str) -> set[str]:
+    """Every day the pair has a rate on, whatever its date: the backup export reads the table, no range and no fill."""
+    resp = await client.get(f"{API_BASE}/backup/fx/{base}/{quote}/rates", params={"format": "json"}, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return {row["date"] for row in resp.json()["rows"]}
+
+
+async def _drop_pair_rate_days(client: httpx.AsyncClient, base: str, quote: str, days: list[str]) -> None:
+    """Delete the pair's rates on ``days``, one single-day range each, and nothing else."""
+    deletions = [{"from": base, "to": quote, "date_range": {"start": day}} for day in days]
+    resp = await client.request("DELETE", f"{API_BASE}/fx/currencies/rate", json=deletions, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+async def test_rate_upsert_outside_the_stored_bounds_writes_nothing(test_server):
+    """RC-API-06 (X-R65, N83): POST /fx/currencies/rate with four CVE/GMD rates -- a valid day, 1899-12-31, another
+    valid day, a day past the ceiling -- answers 422 ``{"code": "date_out_of_range", "message", "params": {"min":
+    "1900-01-01", "max": the ceiling}, "items": [{"index": 1, "date": "1899-12-31"}, {"index": 3, "date": that day}],
+    "count": 2}``, and the pair has no rate on any of the four days: the valid ones are not written either.
+
+    The ceiling is ``latest_range_end()``, read before the request and after the answer: ``max`` lies between them. The
+    day past it is 30 days on, past whatever the ceiling becomes meanwhile.
+    Red before X-R65: 200, the four rates stored one by one -- 1899-12-31 and the day past the ceiling with them.
+    """
+    print_section("RC-API-06: rate upsert outside the stored bounds refused")
+
+    base, quote = BOUNDS_PAIR
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        ceiling_before = latest_range_end()
+        days = ["2020-03-02", "1899-12-31", "2020-03-03", (ceiling_before + timedelta(days=30)).isoformat()]
+        await _drop_pair_rate_days(client, base, quote, days)
+        try:
+            assert not await _pair_rate_days(client, base, quote) & set(days), "barrier: the block's days still hold a rate after the drop"
+            rates = [{"date": day, "base": base, "quote": quote, "rate": str(Decimal("1.5") + index)} for index, day in enumerate(days)]
+            response = await client.post(f"{API_BASE}/fx/currencies/rate", json=rates, timeout=TIMEOUT)
+            ceiling_after = latest_range_end()
+            detail = _coded_refusal(response, "date_out_of_range")
+            assert set(detail) == {"code", "message", "params", "items", "count"}, detail
+            assert set(detail["params"]) == {"min", "max"} and detail["params"]["min"] == STORED_FLOOR, detail
+            assert ceiling_before <= date.fromisoformat(detail["params"]["max"]) <= ceiling_after, f"max {detail['params']['max']} outside {ceiling_before} … {ceiling_after}"
+            assert detail["items"] == [{"index": 1, "date": "1899-12-31"}, {"index": 3, "date": days[3]}], detail
+            assert detail["count"] == 2, detail
+            written = await _pair_rate_days(client, base, quote) & set(days)
+            assert not written, f"{base}/{quote} has rates on {sorted(written)}: nothing of a refused request may be written"
+            print_success(f"✓ 422 {detail['code']}: {detail['count']} item(s), nothing written")
+        finally:
+            await _drop_pair_rate_days(client, base, quote, days)
+
+
+# ============================================================================
+# MF-SEC9a (E's review of R13-SEC9): an import-sized write of rates, and its cap
+# ============================================================================
+#
+# DELETE /fx/currencies/rate read the rates of every deletion in ONE statement, an OR of one term per deletion, which
+# SQLite refuses from about 1 000 terms: the FX page sends one deletion per run of consecutive days, so deleting more
+# than 1 000 separate days answered 500 (its detail echoing the SQL). Now the statements run in chunks, and a request
+# of more than MAX_BULK_WRITE_ITEMS (10 000) items is refused with 422 bulk_too_many_items before any write. The
+# chunks, the caps of every route and the generic 500s are pinned in-process by services bulk-writes-chunked; this case
+# runs the import size once through the lane's backend.
+
+#: A pair no other test touches: MAD and PKR appear in no other API, E2E or mock-data test (MF-SEC9a, checked by grep
+#: over backend/test_scripts and frontend/e2e when this test was written), so every rate of MAD/PKR on the lane is this
+#: test's; deleted before and after.
+SEC9A_BASE, SEC9A_QUOTE = "MAD", "PKR"
+SEC9A_DAYS = 1_500  # an import: past SQLite's limit of about 1 000 OR terms, past two chunks of 500
+SEC9A_DAY0 = date(2003, 1, 1)
+SEC9A_MAX_WRITE_ITEMS = 10_000  # MAX_BULK_WRITE_ITEMS: the contract's number, written here
+#: 1 500 rates are upserted one at a time, a commit each, on a backend other units share: far longer than one call.
+SEC9A_TIMEOUT = 300
+
+
+def _sec9a_day(offset: int) -> date:
+    return SEC9A_DAY0 + timedelta(days=offset)
+
+
+def _sec9a_rate(offset: int) -> tuple[str, str, Decimal, Decimal]:
+    """The rate posted for a day: (from, to, rate sent, rate stored as MAD/PKR). Every third day is sent as PKR/MAD, its
+    rate the inverse of a power of 2, so the stored value is exact both ways."""
+    if offset % 3 == 2:
+        stored = Decimal(2 ** (offset % 16))
+        return SEC9A_QUOTE, SEC9A_BASE, Decimal(1) / stored, stored
+    stored = Decimal(offset + 1) / 100 + 30
+    return SEC9A_BASE, SEC9A_QUOTE, stored, stored
+
+
+async def _sec9a_delete_all(client: httpx.AsyncClient) -> None:
+    response = await client.request("DELETE", f"{API_BASE}/fx/currencies/rate", json=[{"from": SEC9A_BASE, "to": SEC9A_QUOTE, "delete_all": True}], timeout=SEC9A_TIMEOUT)
+    assert response.status_code == 200, f"deleting every {SEC9A_BASE}/{SEC9A_QUOTE} rate: {response.status_code} {response.text[:300]}"
+
+
+async def _sec9a_stored(client: httpx.AsyncClient) -> dict[date, Decimal]:
+    """Every stored MAD/PKR rate, by day: the pair's export (``GET /backup/fx/{base}/{quote}/rates``)."""
+    response = await client.get(f"{API_BASE}/backup/fx/{SEC9A_BASE}/{SEC9A_QUOTE}/rates", params={"format": "json"}, timeout=SEC9A_TIMEOUT)
+    assert response.status_code == 200, f"export of {SEC9A_BASE}/{SEC9A_QUOTE}: {response.status_code} {response.text[:300]}"
+    return {date.fromisoformat(row["date"]): Decimal(row["rate"]) for row in response.json()["rows"]}
+
+
+@pytest.mark.asyncio
+async def test_rates_of_an_import_written_and_deleted_by_separate_days(test_server):
+    """MF-SEC9a, on a pair this test owns (MAD/PKR):
+
+    1. Guard: ``POST /fx/currencies/rate`` with 1 500 daily rates, every third sent as PKR/MAD: 200, each answered
+       ``inserted`` as MAD/PKR on its day, no error; every rate stored at its value (green before the cure too: the route
+       upserts one rate at a time).
+    2. ``DELETE /fx/currencies/rate`` with 1 500 separate days in one request — every other day of 3 000, the first 750
+       stored, the last 750 past the posted ones; half sent as PKR/MAD —: 200, each deletion MAD/PKR on its day with 1
+       existing and 1 deleted, or 0 and 0 past the posted days; ``total_deleted`` 750, no error; the 750 other days kept
+       at their values.
+    3. ``DELETE /fx/currencies/rate`` with 10 001 deletions: 422 ``bulk_too_many_items``, ``max_items`` 10 000,
+       ``items`` 10 001; nothing deleted, the 750 days still stored.
+
+    Red on HEAD 04955c498: step 2 answers 500 — SQLite refuses the one OR of 1 500 terms («Expression tree is too
+    large»), the detail echoing the SQL.
+    """
+    print_section("MF-SEC9a: 1 500 rates posted, 1 500 separate days deleted, 10 001 deletions refused")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        await _sec9a_delete_all(client)
+        try:
+            rates = [_sec9a_rate(offset) for offset in range(SEC9A_DAYS)]
+            payload = [{"date": _sec9a_day(offset).isoformat(), "base": sent_from, "quote": sent_to, "rate": str(sent), "source": "MANUAL"} for offset, (sent_from, sent_to, sent, _stored) in enumerate(rates)]
+            response = await client.post(f"{API_BASE}/fx/currencies/rate", json=payload, timeout=SEC9A_TIMEOUT)
+            assert response.status_code == 200, f"posting {SEC9A_DAYS} rates: {response.status_code} {response.text[:300]}"
+            upserted = FXBulkUpsertResponse(**response.json())
+            assert (upserted.success_count, upserted.errors) == (SEC9A_DAYS, [])
+            answered = [(result.action, result.date, result.base, result.quote) for result in upserted.results]
+            assert answered == [("inserted", _sec9a_day(offset), SEC9A_BASE, SEC9A_QUOTE) for offset in range(SEC9A_DAYS)], "every rate answered inserted as MAD/PKR on its day, in order"
+            posted = {_sec9a_day(offset): stored for offset, (_from, _to, _sent, stored) in enumerate(rates)}
+            assert await _sec9a_stored(client) == posted
+            print_info(f"posted {SEC9A_DAYS} rates of {SEC9A_BASE}/{SEC9A_QUOTE}")
+
+            offsets = range(0, 2 * SEC9A_DAYS, 2)
+            deletions = [{"from": SEC9A_BASE if index % 2 == 0 else SEC9A_QUOTE, "to": SEC9A_QUOTE if index % 2 == 0 else SEC9A_BASE, "date_range": {"start": _sec9a_day(offset).isoformat()}} for index, offset in enumerate(offsets)]
+            response = await client.request("DELETE", f"{API_BASE}/fx/currencies/rate", json=deletions, timeout=SEC9A_TIMEOUT)
+            assert response.status_code == 200, f"deleting {len(deletions)} separate days: {response.status_code} {response.text[:300]}"
+            deleted = FXBulkDeleteResponse(**response.json())
+            in_posted = [offset < SEC9A_DAYS for offset in offsets]
+            assert (deleted.total_deleted, deleted.success_count, deleted.errors) == (sum(in_posted), len(deletions), [])
+            counts = [(result.success, result.base, result.quote, result.date_range.start, result.existing_count, result.deleted_count) for result in deleted.results]
+            expected_counts = [(True, SEC9A_BASE, SEC9A_QUOTE, _sec9a_day(offset), int(stored), int(stored)) for offset, stored in zip(offsets, in_posted, strict=True)]
+            wrong = [(got, want) for got, want in zip(counts, expected_counts, strict=False) if got != want]
+            assert len(counts) == len(deletions) and not wrong, f"{len(counts)} results for {len(deletions)} deletions; (got, expected): {wrong[:5]}"
+            kept = {day: rate for day, rate in posted.items() if (day - SEC9A_DAY0).days % 2 == 1}
+            assert await _sec9a_stored(client) == kept
+            print_info(f"deleted {deleted.total_deleted} rates in {len(deletions)} separate days, {len(kept)} kept")
+
+            too_many = [{"from": SEC9A_BASE, "to": SEC9A_QUOTE, "date_range": {"start": _sec9a_day(offset).isoformat()}} for offset in range(SEC9A_MAX_WRITE_ITEMS + 1)]
+            response = await client.request("DELETE", f"{API_BASE}/fx/currencies/rate", json=too_many, timeout=SEC9A_TIMEOUT)
+            detail = _coded_refusal(response, "bulk_too_many_items")
+            assert {key: value for key, value in detail.items() if key not in ("code", "message")} == {"max_items": SEC9A_MAX_WRITE_ITEMS, "items": SEC9A_MAX_WRITE_ITEMS + 1}
+            assert await _sec9a_stored(client) == kept, "a refused request deleted rates"
+            print_success(f"✓ 1 500 rates posted, {deleted.total_deleted} deleted by separate days, 10 001 deletions refused with 422")
+        finally:
+            await _sec9a_delete_all(client)

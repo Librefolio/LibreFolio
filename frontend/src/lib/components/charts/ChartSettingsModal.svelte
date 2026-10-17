@@ -346,16 +346,16 @@
 </script>
 
 <ModalBase {open} maxWidth="3xl" onRequestClose={handleClose} testId="chart-settings-modal">
-    <div class="flex flex-col max-h-[85vh]">
+    <div class="flex flex-col max-h-[85vh] text-lf-primary">
         <!-- Header -->
-        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-lf-subtle">
             <div class="flex items-center gap-2">
-                <Settings class="text-libre-green" size={20} />
-                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
+                <Settings class="text-lf-link" size={20} />
+                <h2 class="text-lg font-semibold text-lf-primary">
                     {mode === 'global' ? $t('chartSettings.title') : $t('chartSettings.titleLocal')}
                 </h2>
             </div>
-            <button class="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" onclick={handleClose} type="button">
+            <button class="p-1 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" onclick={handleClose} type="button">
                 <X size={18} />
             </button>
         </div>
@@ -375,23 +375,13 @@
             <!-- Preview Chart -->
             <div>
                 <div class="flex items-center justify-between mb-2">
-                    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">{$t('common.preview')}</h3>
-                    <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-                        <button
-                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                            onclick={() => (previewViewMode = 'absolute')}
-                            type="button"
-                            >Abs
-                        </button>
-                        <button
-                            class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                            onclick={() => (previewViewMode = 'percentage')}
-                            type="button"
-                            >%
-                        </button>
+                    <h3 class="text-sm font-semibold text-lf-secondary">{$t('common.preview')}</h3>
+                    <div class="flex rounded-lg border border-lf-subtle overflow-hidden">
+                        <button class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}" onclick={() => (previewViewMode = 'absolute')} type="button">Abs </button>
+                        <button class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}" onclick={() => (previewViewMode = 'percentage')} type="button">% </button>
                     </div>
                 </div>
-                <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden bg-gray-50 dark:bg-slate-800/50">
+                <div class="rounded-lg border border-lf-subtle overflow-hidden bg-lf-panel">
                     <LineChart
                         {areaFill}
                         {colorByBaseline}
@@ -410,7 +400,7 @@
                         secondaryAxisScales={axisScales.secondary}
                     />
                 </div>
-                <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 italic">
+                <p class="text-[10px] text-lf-muted mt-1 italic">
                     {mode === 'global' ? $t('chartSettings.previewDescGlobal') : $t('chartSettings.previewDescPair')}
                 </p>
                 {#if backendPreviewMessageKey}
@@ -427,11 +417,11 @@
         </div>
 
         <!-- Footer -->
-        <div class="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-slate-700">
-            <button class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" onclick={handleClose} type="button">
+        <div class="flex items-center justify-end gap-2 px-6 py-4 border-t border-lf-subtle">
+            <button class="px-4 py-2 text-sm font-medium text-lf-secondary bg-lf-panel rounded-lg hover:bg-lf-neutral transition-colors" onclick={handleClose} type="button">
                 {$t('common.cancel')}
             </button>
-            <button class="px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSave} type="button">
+            <button class="px-4 py-2 text-sm font-medium text-lf-on-action bg-lf-action rounded-lg hover:bg-lf-action-hover transition-colors" onclick={handleSave} type="button" data-testid="chart-settings-apply">
                 {$t('common.apply')}
             </button>
         </div>

@@ -42,31 +42,39 @@ $$
 \text{RelativeReturn} = \frac{\text{MarketPrice}}{\text{ReferenceUnitPrice}} - 1
 $$
 
-In practice:
+$\text{MarketPrice}$ is the asset's mark from the [unified resolver](../portfolio-engine/price-resolution.md): on the end date for the lot summary, on each day for the return history. The reference depends on what opened the lot:
 
-- if a market quote exists at the lot's opening date, that opening quote becomes `reference_unit_price`
-- if the lot opened before the first available market quote, the system falls back to the lot's own opening cost, scaled to market quote units
-- `reference_price_source` records whether the reference was `exact`, `fallback`, or `unavailable`
+- **A trade** — a BUY, or a SELL that opens a short lot: the lot's own unit price, even when the asset has a market quote that day. A trade is a price.
+- **An adjustment** — an opening position, a succession, a transfer from an untracked broker: its cost basis is a cost, not a price, so the reference is the asset's mark on the opening day. That is the price of the last day on or before it that has one — its market quote or, without a quote, the average price of its BUY and SELL trades, never an adjustment — carried forward.
+- **An adjustment before any price** — no quote, BUY or SELL on or before its opening day: the lot's own unit price, its per-unit cost basis. Without a cost basis that price is zero, and the lot has no Open Return.
+
+`reference_price_source` is `exact` for a market quote of the opening day itself and for the lot's own price, and `fallback` for a quote carried from an earlier day or a price derived from trades. The data-quality banner reports such a fallback (`REFERENCE_PRICE_FALLBACK`), and an adjustment with no price on or before its opening day (`REFERENCE_PRICE_UNAVAILABLE`).
+
+Each price converts into the target currency at the rate of its own day: $\text{MarketPrice}$ at the rate of the day it values, the reference at the rate of the opening date, even when it was carried from an earlier quote or trade. For a price in another currency than the target, Open Return therefore includes the exchange-rate move since the opening.
 
 This metric excludes dividends, interest, and realized sale proceeds. It answers: _"How much has market price moved since this lot was opened?"_
 
-!!! tip "Reference price fallback"
+!!! example "A lot received by succession"
 
-    When no opening-day market quote exists, LibreFolio uses the lot's acquisition price as the reference base, scaled to the asset's quote convention. This avoids misleading percentage returns on instruments quoted per 100 nominal units.
+    An asset is quoted at 50 on 7 March and bought at 52 on 9 March, with no quote since. A lot received by succession on 10 March has a reference of **52**: the BUY is the asset's most recent price on or before that day, carried forward. Its `reference_price_source` is `fallback`, since 52 is not a quote of 10 March; a quote on 10 March itself would be the reference, with `exact`.
 
-    The fallback is $\text{OpeningUnitPrice}\times qbq$. For `qbq = 100`, a bond bought at `0.992` compares against the market quote axis as `99.20`, not `0.992`.
+!!! tip "The lot's own price, on the quote axis"
+
+    When the reference is the lot's own price, LibreFolio scales it to the asset's quote convention. This avoids misleading percentage returns on instruments quoted per 100 nominal units. A mark from the resolver is already on that axis.
+
+    The reference is then $\text{OpeningUnitPrice}\times qbq$. For `qbq = 100`, a bond bought at `0.992` compares against the market quote axis as `99.20`, not `0.992`.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-wac-chart" alt="WAC / Market Price chart — one bubble per lot, colored by opening broker, sized by opening value, plotted against the market price line">
 </div>
 
-The **WAC / Market Price** chart plots each lot as a bubble against the market price line: bubble color marks the broker where the lot was opened, bubble size scales with the lot's opening value. A lot valued only at cost (no live market price) is drawn with a dashed outline.
+The **WAC / Market Price** chart plots each lot as a bubble against the market price line: bubble color marks the broker where the lot was opened, bubble size scales with the lot's opening value. A lot whose current value is estimated at cost — its asset has no price at all on the end date, see [Estimated-at-Cost](#estimated-at-cost) — is drawn with a dashed outline.
 
 ---
 
 ## 💰 Total Return per Lot
 
-**Total Return** is broader than Open Return. It includes the lot's remaining market value, any sale proceeds already realized from that lot, and any allocated income received while the lot was held.
+**Total Return** is broader than Open Return. It includes the lot's remaining market value, any sale proceeds already realized from that lot — or the value an outgoing adjustment with a cost basis handed over at that cost — and any allocated income received while the lot was held.
 
 LibreFolio's lot math uses these exact building blocks:
 
@@ -102,6 +110,8 @@ $$
 \text{TotalPnL} = \text{MarketPnL} + \text{RealizedPnL} + \text{AssetIncome}
 $$
 
+Every amount is in the analysis's target currency. For a lot bought or sold in another currency, each closure converts its two legs at their own dates — see [Lots in Another Currency](#lots-in-another-currency).
+
 For the scalar lot summary, the return percentage is:
 
 $$
@@ -121,6 +131,58 @@ This answers: _"What is full economic return of this lot, including both price m
 </div>
 
 The **Value / Return** comparison chart, switched to **Return** mode, plots exactly this percentage — one line per lot, each measured from its own opening date, over the currently selected lot set.
+
+### 💱 Lots in Another Currency {: #lots-in-another-currency }
+
+A closure's two legs convert into the target currency **each in its own currency, at its own date**: the cost of the units in the lot's currency at the lot's opening date — the purchase rate — and the closing price in the closing transaction's currency at the closing date — the sale rate. With $\text{Convert}(x, ccy, D)$ the amount $x$ in currency $ccy$ converted into the target currency at the rate of date $D$, a closure of $q$ units of a LONG lot opened on $D_{\text{open}}$ at $\text{LotUnitCost}$ in $ccy_{\text{lot}}$, and closed on $D_{\text{close}}$ at $\text{ClosePrice}$ in $ccy_{\text{close}}$, gives:
+
+$$
+\text{Closure Proceeds} = \text{Convert}\left(q \cdot \text{ClosePrice},\ ccy_{\text{close}},\ D_{\text{close}}\right)
+$$
+
+$$
+\text{Closure Cost} = \text{Convert}\left(q \cdot \text{LotUnitCost},\ ccy_{\text{lot}},\ D_{\text{open}}\right)
+$$
+
+$$
+\text{Closure Realized PnL} = \text{Closure Proceeds} - \text{Closure Cost}
+$$
+
+$\text{ClosePrice}$ is a sale's unit price, in the sale's currency, or the per-unit cost basis at which an outgoing adjustment hands its units over, in that cost basis's currency — zero, in the lot's currency, without one (see [Outgoing Adjustments](../../../instruments/transaction-types/adjustment.md#outgoing-adjustments)). $ccy_{\text{close}}$ need not be $ccy_{\text{lot}}$: a lot moved to a broker of another currency and sold there converts the sale from that currency. A SHORT lot mirrors the rule: it realizes the proceeds of its opening sale, $\text{Convert}(q \cdot \text{LotUnitCost}, ccy_{\text{lot}}, D_{\text{open}})$, minus the cost of the purchase that closes it, $\text{Convert}(q \cdot \text{ClosePrice}, ccy_{\text{close}}, D_{\text{close}})$.
+
+When a lot is bought and sold in one currency, with rates $r_{\text{open}}$ and $r_{\text{close}}$ on the two dates, its realized result splits into the price gain at the sale rate and the exchange-rate move on the cost of the units sold:
+
+$$
+\text{Closure Realized PnL} = q\,(\text{ClosePrice} - \text{LotUnitCost})\,r_{\text{close}} + q\,\text{LotUnitCost}\,(r_{\text{close}} - r_{\text{open}})
+$$
+
+The exchange-rate move between purchase and sale is therefore realized with the units, as on the Dashboard, where a sale's proceeds — or the value an outgoing adjustment hands over — convert at its date and the units leave at their historical cost (see [WAC](../weighted-average-cost.md)). A missing rate leaves the closure's realized P&L unknown, and with it the lot's $\text{RealizedPnL}$: it is never computed from the native amounts.
+
+Every closure's cost converts at the opening date, like $\text{OriginalCost}$, so a LONG lot's market P&L is the value of its open units minus their cost at the purchase rate:
+
+$$
+\text{MarketPnL} = \text{PnL} - \text{RealizedPnL} = \text{OpenValue} - \left(\text{OriginalCost} - \sum \text{Closure Cost}\right)
+$$
+
+A fully closed LONG lot has no market P&L: its closures' costs add up to its $\text{OriginalCost}$, and its whole P&L is realized.
+
+!!! example "A dollar lot, target currency EUR"
+
+    Buy 1 unit at 100 USD when 1 USD = 1.00 EUR; sell it at 110 USD when 1 USD = 0.90 EUR.
+
+    $$
+    \text{Closure Proceeds} = 110 \times 0.90 = 99 \text{ EUR}
+    \qquad
+    \text{Closure Cost} = 100 \times 1.00 = 100 \text{ EUR}
+    $$
+
+    $$
+    \text{RealizedPnL} = 99 - 100 = -1 \text{ EUR}
+    \qquad
+    \text{MarketPnL} = \text{PnL} - \text{RealizedPnL} = (99 - 100) - (-1) = 0
+    $$
+
+    The price gain, $10 \times 0.90 = +9$ EUR, is outweighed by the dollar's fall on the cost, $100 \times (0.90 - 1.00) = -10$ EUR. Converting the native realized P&L, 10 USD, at the sale rate would instead report $+9$ EUR realized and $-10$ EUR of market P&L on a lot no longer held; the total, $-1$ EUR, is the same either way.
 
 ---
 
@@ -165,31 +227,37 @@ Without this scaling, bond returns and valuations can be off by orders of magnit
 
 ## 🛟 Estimated-at-Cost {: #estimated-at-cost }
 
-If no live market price is available for an asset, LibreFolio does **not** fail the analysis. Instead, it temporarily values the still-open portion of the lot at cost:
+Each day, a lot is valued at the asset's mark from the [unified resolver](../portfolio-engine/price-resolution.md): a market quote, or the average price of a day's BUY and SELL trades, carried forward. An adjustment is never a price, with or without a cost basis. A day with **no price at all** — no market quote and no BUY or SELL on or before it — does **not** fail the analysis: LibreFolio values the still-open portion of a LONG lot at cost that day, the day-by-day rule the Dashboard applies to a holding with no price:
 
 $$
-\text{OpenValue} = \text{OpeningValue}\cdot \frac{\text{OpenQuantity}}{\text{OriginalQuantity}}
+\text{OpenValue}(t) = \text{OpeningValue}\cdot \frac{\text{OpenQuantity}(t)}{\text{OriginalQuantity}}
 $$
 
 $$
-\text{MarketPnL} = 0
+\text{MarketPnL}(t) = 0
 $$
 
-Practical implication:
+with $\text{OpeningValue}$ the lot's original cost converted at its opening date. The choice is made day by day, with no look-ahead. A price, once observed, is carried forward, so these days all come before the asset's first quote, BUY or SELL: they run from the first transaction of the analysis to the day before that first price, or to the end date when the asset has none — and there are none when the asset already has a price on the day of the first transaction.
+
+- **Before the first price.** A lot opened before the asset's first price — by an adjustment, for example — is valued at cost from its opening to the day before that price, even when the asset is priced later: its value line stays flat at cost, with no market gain or loss, then follows the price.
+- **No price at all.** An asset with no quote, BUY or SELL up to the end date — one held only through adjustments or transfers — is valued at cost on every day, and the lot summary reports `value_source = ESTIMATED_AT_COST`. With a price on or before the end date, the summary values the lot at that price instead: `value_source = MARKET_PRICE`, the label of any mark, quote or trade.
+- **A price without a rate.** A day whose mark has no exchange rate into the target currency is not valued at cost: a still-open lot has no value that day, and on the end date the lot summary has no value and no `value_source`.
+- **An adjustment without a cost basis.** Its lot opens at zero cost, so it counts at zero on those days, while the Dashboard's average cost treats that cost as unknown and leaves the holding unvalued. Such a row is rare: a positive [adjustment](../../../instruments/transaction-types/adjustment.md) can be saved without a cost basis only while it is linked to a split, and then opens no lot, so it comes from an older version, or from one whose split event was later changed to a price adjustment.
+
+Practical implication, on the days valued at cost:
 
 - the lot still shows residual value
 - already realized proceeds still remain visible
 - allocated dividends or interest still remain visible
 - **unrealized volatility is temporarily understated**
-- `value_source = ESTIMATED_AT_COST`
-- `market_pnl = 0`
-- data-quality issue code: `CURRENT_PRICE_ASSUMED_AT_COST`
+- `market_pnl = 0`, and no Open Return: there is no market price to compare with the reference
+- no ROI or TWRR in the lots performance history, which reads only days with a price
 
 !!! info "Interpretation"
 
     Estimated-at-cost is conservative operational fallback. It means: _"We know what you paid, but we do not currently know what market would pay."_
 
-The corresponding data-quality warning is an **as-of valuation-date** statement. It is not a historical union of every day where an asset was ever valued at cost.
+The data-quality warning `CURRENT_PRICE_ASSUMED_AT_COST` — *"No market price available between {date_from} and {date_to} — open value estimated at cost, market P&L excluded"* — names exactly those days: from the first transaction to the day before the asset's first price, or to the end date when the asset has none. It is raised whenever such days exist and the lot summary or the value, return, price or performance history is requested.
 
 ---
 
@@ -221,6 +289,9 @@ The **D-1** rule keeps the day of record clean: a purchase made *on* the income 
 distribution, and a lot sold the day before does not either. Larger eligible lots receive a larger share;
 lots held at other brokers, or not yet (or no longer) eligible, receive nothing.
 
+Income keeps its sign: a negative correction of a dividend or interest payment lowers the lot's income, as it
+does on the Dashboard.
+
 !!! warning "Changed in FIFO v5"
 
     Earlier versions used the income date itself with **all** brokers ($\text{OpenQty}_i(t)$ over every lot).
@@ -232,10 +303,10 @@ lots held at other brokers, or not yet (or no longer) eligible, receive nothing.
     The allocated lot amounts add back exactly to the converted income event total. Income is distributed, not created.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-custody-modal" alt="Lot detail modal — Asset Income row shows the pro-rata dividend/interest allocated to this specific lot, alongside the Estimated-at-Cost badge when no live market price is available">
+    <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-custody-modal" alt="Lot detail modal — Asset Income row shows the pro-rata dividend/interest allocated to this specific lot, alongside the Estimated-at-Cost badge when the lot's current value is estimated at cost">
 </div>
 
-The lot detail modal's **Asset Income** row is exactly $\text{Income}_i$ from the formula above — the pro-rata slice this specific lot received. When the lot has no live market price, the same modal also shows the **Estimated-at-Cost** badge from the previous section.
+The lot detail modal's **Asset Income** row is exactly $\text{Income}_i$ from the formula above — the pro-rata slice this specific lot received. When the lot's current value is estimated at cost — its asset has no price at all on the end date —, the same modal also shows the **Estimated-at-Cost** badge from the previous section.
 
 ---
 
@@ -397,7 +468,7 @@ This lot-level view helps explain **where** return came from. Higher-level metri
 - **TWRR** neutralizes external cash-flow timing
 - FIFO lot analysis explains contribution and path **inside** a position
 
-Price lookup is deliberately outside the FIFO engine itself. The engine produces lots and closures; `LotsAnalysisService` applies the unified resolver ([Price Resolution](../portfolio-engine/price-resolution.md)) and estimated-at-cost fallback when deriving valuation metrics.
+Price lookup is deliberately outside the FIFO engine itself. The engine produces lots and closures, and asks for a price only to give a lot opened by an adjustment its reference; `LotsAnalysisService` answers from the unified resolver ([Price Resolution](../portfolio-engine/price-resolution.md)), then applies the same resolver and the estimated-at-cost fallback when deriving valuation metrics.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-table" alt="Unified Lots Table — one row per lot with opening date, total return, current value, custody and status, the exact per-lot rows the aggregate formulas above sum over">

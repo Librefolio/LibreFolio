@@ -56,7 +56,8 @@
       "progressWipe": "Cancellazione di {prices} prezzi + {events} eventi e scollegamento di {linkedTx} transazioni…",
       "wipeSuccess": "Eliminati {prices} prezzi, {events} eventi; scollegate {linkedTx} transazioni",
       "bodyIntro": "Il cambio valuta richiede la cancellazione di tutti i dati di mercato memorizzati (vedi riepilogo sotto). LibreFolio proverà poi a ri-sincronizzare prezzi ed eventi dal provider nella nuova valuta.",
-      "bodyCaveat": "Le transazioni collegate agli eventi cancellati verranno scollegate — sarà tua responsabilità ricollegarle ai nuovi eventi se necessario."
+      "bodyCaveat": "Le transazioni collegate agli eventi cancellati verranno scollegate — sarà tua responsabilità ricollegarle ai nuovi eventi se necessario.",
+      "splitAdjustmentsWithoutCost": "La valuta non è stata cambiata: lo split del {date} ha {n, plural, one {# rettifica collegata} other {# rettifiche collegate}} senza costo d'acquisto{hidden, plural, =0 {} one { (# in un broker che non puoi vedere)} other { (# in broker che non puoi vedere)}}{more, plural, =0 {} one {, e anche # altro split} other {, e anche altri # split}}. Cambiare la valuta cancella gli split, e quelle unità conterebbero come comprate a un prezzo sconosciuto: dai prima un costo d'acquisto alle rettifiche."
     },
     "pricesInCurrency": "Prezzi in {currency}",
     "eventsInCurrency": "Eventi in {currency}",
@@ -70,7 +71,8 @@
     },
     "notFound": "Asset n. {id} non trovato",
     "loadFailed": "Impossibile caricare i dati dell'asset",
-    "pricesLoadFailed": "Impossibile caricare i prezzi"
+    "pricesLoadFailed": "Impossibile caricare i prezzi",
+    "manualChip": "Manuale"
   },
   "assets": {
     "create": "Nuovo asset",
@@ -98,15 +100,16 @@
     },
     "delete": {
       "confirmQuestion": "Eliminare \"{name}\"?",
-      "confirmWarning": "Assegnazioni provider e storico prezzi verranno rimossi. ⚠️",
+      "confirmWarning": "Assegnazioni provider, storico prezzi ed eventi (dividendi, split…) verranno rimossi. ⚠️",
       "toastOk": "{name} eliminato",
       "toastFailed": "Impossibile eliminare {name}",
       "hasTransactions": "Impossibile eliminare \"{name}\": ha transazioni esistenti",
       "bulkOk": "{n} asset eliminati",
       "bulkPartial": "{failed} asset non eliminabili (hanno transazioni)",
-      "bulkConfirmMessage": "Eliminare {n} asset? Le assegnazioni dei provider e lo storico prezzi verranno rimossi.",
+      "bulkConfirmMessage": "Eliminare {n, plural, one {# asset} other {# asset}}? Le assegnazioni dei provider, lo storico prezzi e gli eventi (dividendi, split…) verranno rimossi.",
       "resultDeleted": "eliminato",
-      "resultHasTransactions": "ha transazioni esistenti"
+      "resultHasTransactions": "ha transazioni esistenti",
+      "itemsLabel": "{count, plural, one {# asset} other {# asset}}"
     },
     "merge": {
       "title": "Unisci asset",
@@ -213,7 +216,10 @@
       "currencyHelp": "Valuta in cui vengono salvati i prezzi dell'asset.",
       "currencyHelpLabel": "Informazioni sulla valuta dell’asset",
       "nameRequired": "Inserisci il nome dell'asset per continuare.",
-      "descriptionPlaceholder": "Breve descrizione dell'asset…"
+      "descriptionPlaceholder": "Breve descrizione dell'asset…",
+      "planSplitAdjustmentsWithoutCost": "Il provider e i suoi parametri non sono stati cambiati: lo split del {date}, generato dal provider, ha {n, plural, one {# rettifica collegata} other {# rettifiche collegate}} senza costo d'acquisto{hidden, plural, =0 {} one { (# in un broker che non puoi vedere)} other { (# in broker che non puoi vedere)}}{more, plural, =0 {} one {, e anche # altro split} other {, e anche altri # split}}. Cambiare questi parametri, o il provider, cancella gli eventi che ha generato, e quelle unità conterebbero come comprate a un prezzo sconosciuto: dai prima un costo d'acquisto alle rettifiche.",
+      "providerRemovalLinkedTransactions": "Il provider non è stato tolto: l'evento {type} del {date}, generato dal provider, è collegato a {n, plural, one {# transazione} other {# transazioni}}{hidden, plural, =0 {} one { (# in un broker che non puoi vedere)} other { (# in broker che non puoi vedere)}}{more, plural, =0 {} one {, e anche # altro evento} other {, e anche altri # eventi}}. Togliere il provider cancella gli eventi che ha generato: scollega prima quelle transazioni.",
+      "providerRemovalConflict": "Il provider non è stato tolto: alcuni dati si riferiscono ancora agli eventi che ha generato. Ricarica la pagina e riprova."
     },
     "provider": {
       "assignment": "Assegnazione Provider",
@@ -281,7 +287,8 @@
       "notTested": "Non testato",
       "totalTime": "Totale",
       "copyErrorDetail": "Copia il dettaglio dell'errore",
-      "points": "{count, plural, one {{n} punto} other {{n} punti}}"
+      "points": "{count, plural, one {{n} punto} other {{n} punti}}",
+      "scopeNote": "Il test legge solo gli ultimi giorni: un asset nuovo riceve tutto lo storico dei prezzi quando viene creato."
     },
     "identifiers": {
       "askProvider": "Chiedi al Provider",
@@ -325,7 +332,23 @@
       "placeholder": "Cerca per nome, ticker, ISIN...",
       "searching": "Ricerca in corso...",
       "timeout": "Ricerca scaduta. Riprova.",
-      "rankHint": "Posizione nella ricerca web (metaricerca su più motori) — il primo risultato è la corrispondenza più probabile"
+      "rankHint": "Posizione nella ricerca web (metaricerca su più motori) — il primo risultato è la corrispondenza più probabile",
+      "notConfigured": "{provider} va configurato prima di poter cercare",
+      "crownLegend": "👑 la valuta del fondo",
+      "premiumBadge": "Premium",
+      "premiumEmpty": "Nessun risultato dalle fonti premium.",
+      "communitySection": "Fonti non premium (community) · {count, plural, one {# risultato} other {# risultati}}",
+      "communityWarning": "Fonti di terzi: LibreFolio non garantisce i loro prezzi né i loro dati. La scelta vale solo per questo asset.",
+      "reportQuestion": "Non lo trovi?",
+      "reportAction": "Segnalacelo",
+      "reportVia": {
+        "mailto": "Apre la tua app di posta con i dettagli di questa ricerca",
+        "page": "Apre la pagina di supporto e copia i dettagli di questa ricerca, da incollare lì",
+        "github": "Apre una issue pubblica su GitHub con i dettagli di questa ricerca: rileggila prima di inviarla"
+      },
+      "reportCopied": "Dettagli della ricerca copiati: incollali nella pagina di supporto.",
+      "reportCopyFailed": "Impossibile copiare i dettagli della ricerca: descrivi la tua ricerca nella pagina di supporto.",
+      "failed": "La ricerca non è riuscita. Riprova."
     },
     "comparison": {
       "title": "Confronto Dati Provider",
@@ -373,13 +396,42 @@
     "typeSelect": {
       "searchPlaceholder": "Cerca un tipo",
       "noMatches": "Nessun tipo corrispondente"
+    },
+    "dataEditor": {
+      "saved": "Dati dell'asset: {details}",
+      "pricesSaved": "{count, plural, one {# prezzo salvato} other {# prezzi salvati}}",
+      "pricesDeleted": "{count, plural, one {# prezzo eliminato} other {# prezzi eliminati}}",
+      "pricesSkipped": "{count, plural, one {# riga scartata (non valida)} other {# righe scartate (non valide)}}",
+      "eventsSaved": "{count, plural, one {# evento salvato} other {# eventi salvati}}",
+      "pricesRefused": "{count, plural, one {# prezzo rifiutato} other {# prezzi rifiutati}}"
     }
   },
   "events": {
-    "deleteSuccess": "{n} evento/i eliminato/i",
-    "deleteNotFound": "Evento/i non trovato/i: {ids}",
-    "deleteBlocked": "Impossibile eliminare: {n} evento/i ancora in uso da transazioni ({accessible} visibili a te, {hidden} nei portafogli di altri utenti)",
-    "fxBannerContext": "per eventi dividendi/cassa"
+    "deleteSuccess": "{n, plural, one {# evento eliminato} other {# eventi eliminati}}",
+    "fxBannerContext": "per eventi dividendi/cassa",
+    "exists": {
+      "title": "Questo evento esiste già",
+      "hint": "L'asset ha già un evento di questo tipo in questa data: usalo, oppure modificalo. Non è stato salvato nulla.",
+      "use": "Usa questo",
+      "edit": "Modifica questo",
+      "fromProvider": "Dal fornitore dei dati",
+      "manual": "Inserito a mano",
+      "linked": "{n, plural, =0 {non collegato a transazioni} one {collegato a # transazione} other {collegato a # transazioni}}",
+      "providerNotEditable": "Il fornitore dei dati aggiorna i suoi eventi: questo non si modifica da qui."
+    },
+    "saveError": {
+      "currencyMismatch": "Non è stato salvato nulla: l'evento del {date} ({type}) è in {currency}, ma l'asset è in {expected}. Convertine l'importo o togli la riga{more, plural, =0 {} one { (e # altro)} other { (e altri #)}}.",
+      "keyConflict": "Non è stato salvato nulla: due eventi manuali di tipo {type} cadrebbero il {date}. Cambia la data o il tipo di uno dei due.",
+      "notEditable": "Non è stato salvato nulla: uno degli eventi non esiste più o non si può modificare da qui. Ricarica i dati e riprova.",
+      "assetNotFound": "Non è stato salvato nulla: l'asset non esiste più. Ricarica la pagina.",
+      "unknownType": "Non è stato salvato nulla: «{value}» (riga del {date}) non è un tipo di evento. Usa DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT o MATURITY_SETTLEMENT.",
+      "generic": "Non è stato salvato nulla: {message}",
+      "inUse": "Non è stato salvato nulla: l'evento {type} del {date} è collegato a {n, plural, one {# transazione} other {# transazioni}} e non si può cancellare. Togli prima il collegamento dalle transazioni{more, plural, =0 {} one { (e un altro evento)} other { (e altri # eventi)}}.",
+      "notDeletable": "Non è stato salvato nulla: uno degli eventi da cancellare non esiste più o non si può cancellare da qui. Ricarica i dati e riprova.",
+      "tooManyDigits": "Non è stato salvato nulla: il valore dell'evento {type} del {date}{more, plural, =0 {} one { (e # altro)} other { (e altri #)}} ha troppe cifre. Il valore di un evento ha al massimo {max} decimali, {significant} cifre significative e {integer} cifre prima della virgola.",
+      "invalidSplitRatio": "Non è stato salvato nulla: l'evento {type} del {date}{more, plural, =0 {} one { (e # altro)} other { (e altri #)}} ha un rapporto di {ratio}. Il rapporto di un frazionamento deve essere un numero maggiore di 0: 2 per un frazionamento 2 a 1, 0,5 per un raggruppamento 1 a 2.",
+      "splitAdjustmentsWithoutCost": "Non è stato salvato nulla: l'evento {type} del {date} ha {n, plural, one {# rettifica collegata} other {# rettifiche collegate}} senza costo d'acquisto{hidden, plural, =0 {} one { (# in un broker che non puoi vedere)} other { (# in broker che non puoi vedere)}}. Senza lo split quelle unità conterebbero come comprate a un prezzo sconosciuto: dai prima un costo d'acquisto alle rettifiche, poi cambia il tipo dell'evento."
+    }
   },
   "providerErrors": {
     "NO_DATA": "Nessun dato disponibile per questo strumento sul provider.",
@@ -391,6 +443,14 @@
     "MISSING_PARAMS": "Alla configurazione del provider mancano parametri obbligatori.",
     "PARSE_ERROR": "La risposta del provider non è stata interpretabile.",
     "SCRAPE_ERROR": "La pagina del provider non è stata leggibile.",
-    "UNSUPPORTED_PAGE": "Il provider ha trovato questo strumento ma la sua pagina di mercato non è ancora leggibile. Apri una issue su GitHub (Librefolio/LibreFolio) segnalando questo ISIN così possiamo aggiungere il supporto."
+    "UNSUPPORTED_PAGE": "Il provider ha trovato questo strumento ma la sua pagina di mercato non è ancora leggibile. Apri una issue su GitHub (Librefolio/LibreFolio) segnalando questo ISIN così possiamo aggiungere il supporto.",
+    "RATE_LIMITED": "In pausa per troppe richieste fino alle {time}",
+    "RATE_LIMITED_NO_TIME": "Troppe richieste: riprova più tardi",
+    "RATE_LIMITED_DAY": "In pausa per troppe richieste fino al {time}",
+    "NOT_CONFIGURED": "Questo provider va configurato prima dell'uso",
+    "PROVIDER_ERROR": "Il provider ha restituito un errore: {detail}",
+    "PROBE_RATE_LIMITED": "Troppe verifiche: riprova alle {time}",
+    "PROBE_RATE_LIMITED_DAY": "Troppe verifiche: riprova il {time}",
+    "PROBE_RATE_LIMITED_NO_TIME": "Troppe verifiche: riprova tra un minuto"
   }
 }

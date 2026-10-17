@@ -37,18 +37,21 @@ export function namedPoint(date: string, value: number | null) {
 }
 ```
 
-**Partial vs Full update pattern** (`lib/components/dashboard/GrowthChart.svelte`, used by the
+**Partial vs Full update pattern** (`lib/features/dashboard/GrowthChart.svelte`, used by the
 Dashboard and Broker detail):
 
 ```typescript
 // GrowthChart.svelte — renderChart(forceFullXAxisRebuild = false)
 const renderedModeKey = viewMode === 'pnl' ? `pnl:${pnlSubmode}` : viewMode;
 const masked = shouldMaskAmount();
+const seriesData = buildChartUpdateSeries(isDark, activeData, logicalRange.startDate);
+const seriesKey = seriesData.map((series) => series.name).join('\u0000');
 const needsFullInit =
     forceFullXAxisRebuild ||
     lastRenderedMode !== renderedModeKey ||
     lastRenderedDark !== isDark ||
-    lastRenderedMasked !== masked;
+    lastRenderedMasked !== masked ||
+    lastRenderedSeriesKey !== seriesKey;
 
 if (needsFullInit) {
     // Axes, tooltip, legend, series: setOption(option, CHART_FULL_UPDATE_OPTS)
@@ -64,6 +67,7 @@ if (needsFullInit) {
 | `renderedModeKey` | The mode (`eur`, `pct`, `pnl`) and, in `pnl`, the submode: the series *type* changes (line, candlestick, bar), which `{name, data}` cannot express. |
 | `isDark` | Colours are set once, in the full option. |
 | `masked` | The privacy toggle: ECharts caches the axis labels, so the tick formatter has to run again. The tooltip formatter reads the flag on every hover. |
+| `seriesKey` | The names of the series last drawn, in order: a broker that joins, leaves or is swapped under the P&L line changes the list, and from `{name, data}` alone ECharts would keep the old series and their legend entries. |
 | `forceFullXAxisRebuild` | The x-axis leaves its compact layout (a narrow container widening on resize). |
 
 The two flag sets differ on purpose:
@@ -75,6 +79,24 @@ The two flag sets differ on purpose:
 
 A resolution switch (daily ↔ weekly/monthly, chosen from the zoom) goes through the partial path
 without animation, after hiding the tooltip.
+
+**Where GrowthChart's code lives.** The component keeps everything reactive; what it computes
+lives in three modules in the same folder, which hold no state and see the component only through
+their arguments:
+
+| File | Holds |
+|---|---|
+| `GrowthChart.svelte` | Props, state, the `$derived` inputs and the memo of each aggregation, zoom handling, the ECharts lifecycle (`renderChart`, `updateChartData`, `applyFullOption`) and the template. `buildChartUpdateSeries` and `buildFullSeries` are thin wrappers that pass the view on screen to the series module. |
+| `growthChartData.ts` | The inputs mapped to one value per day (`mapEurStackedData`, `mapPctValues`, `mapBrokerPnlSeries`, `mapCandlesByDate`, `alignFlowToDates`), the buckets (`buildBucketInfos` for the cascade of Abs, % and the P&L line, `buildLadderBuckets` for the ladder of Candles and Income), their reductions (`aggregateMetric`, `aggregateFlowMetric`, `aggregateCandleMetric` and their `ladder*` counterparts), one entry per resolution or rung (`buildResolutionData`, `buildLadderData`) and the zoom-window geometry (`buildZoomWindow`, `cascadeIndicesAt`, `ladderIndicesAt`). |
+| `growthChartSeries.ts` | What each view draws: `buildGrowthUpdateSeries` (the `{name, data}` of the partial update) and `buildGrowthFullSeries` (every series with its type and style, for the full option), with `splitBySign`, `toCandlestickPoint` (the `'-'` gap), `findReferenceTotalPnl` and `PNL_REFERENCE_SERIES_NAME`. |
+| `growthChartTooltip.ts` | `buildGrowthTooltip`, the HTML ECharts shows on hover, built from a `GrowthTooltipView` the formatter assembles on every hover (entry on screen, mode, labels, translator, currency); amounts are masked under privacy. |
+
+The one rule: an aggregation reads its data only through `AggregationInputs`. Each memo
+(`resolutionCache`, `ladderCache`) is keyed on the identity of the `aggregationInputs` `$derived`
+object, which Svelte rebuilds whenever one of its members changes, so a new input is added to that
+object and to the `AggregationInputs` type, never passed as one more argument (the other arguments
+are the memo's keys: the resolution or rung, and `today` for the ladder). An input that bypasses
+the object does not invalidate the memo, which keeps returning entries computed before it changed.
 
 **Weekly and monthly points.** In the time-axis views (Abs, % and the P&L `line` submode, whose
 daily, weekly and monthly resolutions the code calls the *cascade*), `buildBucketInfos` stands each
@@ -116,11 +138,13 @@ not. The general rule is in [ECharts formatters](../state/app-state.md#privacy-e
 
 The `pnl` mode has three submodes (`pnlSubmode`). The mode and the submode persist per user
 (`dashboard-growth-mode`, `dashboard-growth-pnl-submode`), shared by Dashboard and Broker detail;
-the defaults are `eur` and `line`. A restored `pct` waits for the first completed load: without %
-data (`hasPctData`) the chart shows `eur` and the % button is disabled, but the stored value is
-kept, so the next mount with % data opens on `pct`. The submode buttons float over the plot's
-top-left corner and fold to their icon below a 640 px container (`CONTROLS_COMPACT_BELOW_PX`),
-keeping the label as `title` and `aria-label`.
+the defaults are `eur` and `line`. After every completed load, a `pct` view, restored or picked,
+over a history without % data (`hasPctData`) shows `eur`, and the % button is disabled. The
+fallback is display-only: the stored value is kept and `pctFallback` marks the fallback, so the next
+loaded history with % data brings the view back to `pct`, and the next mount still restores `pct`;
+`selectMode()` clears `pctFallback`, so a mode picked meanwhile, `eur` included, wins. The submode
+buttons float over the plot's top-left corner and fold to their icon below a 640 px container
+(`CONTROLS_COMPACT_BELOW_PX`), keeping the label as `title` and `aria-label`.
 
 | Submode | Series | x-axis |
 |---|---|---|
@@ -180,7 +204,12 @@ number of series in a fixed order, which the partial update relies on across zoo
   goes through `formatDay`; a `1D` bucket prints only its date.
 - **Candles**: the daily OHLC comes from the backend (see
   [Price Resolver](../../backend/transactions/price_resolver.md#intraday-range-open-high-low)),
-  requested through `onRequestPnlCandles` on entry while none is loaded. A bucket takes the first
+  requested through `onRequestPnlCandles` on entry while none is loaded. The effect calls it
+  tracked, on purpose: what the page's loader reads before its first `await` becomes a dependency,
+  so a saved Candles view asks again once the Dashboard knows its brokers (`canAsk`), and a failed
+  request is asked again when a retry falls due, at most three times, 2, 4 and 8 s later
+  ([Lazy sections after a failure](../state/domain-state.md#lazy-report-retry)); an `untrack`
+  around the call would silence both. A bucket takes the first
   open, the highest high, the lowest low and the last close of its days that have a candle
   (`ladderCandleMetric`); a bucket with none is a gap, whose tooltip prints `common.noData`. The
   disclosure caption (`dashboard.pnlCandlesHypotheticalShort`) stays on one line under the plot,
@@ -227,11 +256,23 @@ The rolling return is a backend signal. `loadChartData()` sends one
 `{signal_code: 'ASSET_CALENDAR_ROLLING_RETURN', params: {window_days}}`, with `target_currency` when
 the chart is converted, and each Asset comparison gets an item of its own — `include_price: false`,
 `include_events: true`, `target_currency` set to the chart currency — with the same signal request,
-so every line uses one window and one currency. A page-local wrapper,
-`queryAssetPricesBulkWithSignalIsolation()`, validates each signal result on its own, so one
-malformed result does not discard the response. The plugin is `catalog_visible = False`
-(see [Plugin Contract](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)), so no
-selector offers it.
+so every line uses one window and one currency. The page's `queryAssetPricesBulkWithSignalIsolation()`
+sends it, and `parseAssetPriceQueryWithSignalIsolation()`
+(`lib/components/assets/detail/assetDetailPriceQuery.ts`) validates each signal result on its own, so one
+malformed result does not discard the response.
+
+The same plugin is also in the signal catalog (see
+[Plugin Contract](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)): in
+`'price'` mode the Signals panel offers it in its Risk group as **Rolling Return**, a config of
+`signalType` `asset-calendar-rolling-return` whose card edits `window_days` (30 by default, at
+least 1). `buildBackendSignalRequestPlan()` requests it like any other backend indicator, and its
+`calendar_return` line is drawn over the prices on a secondary axis of its own,
+`independent:calendar_return`. Overlay and mode compute the same metric, the price return against
+the resolved close `window_days` calendar days earlier, but never in the same request:
+`loadChartData()` requests the overlay only in `'price'` mode, with its card's window, and the
+mode's series only in `'calendar-return'` mode, with the **Window** control's days. In
+`'calendar-return'` mode the overlay config stays saved and hidden, like every config but the
+Asset comparisons.
 
 `calendarReturnWindow.ts` turns the **Window** control into days: presets `1w`, `1m`, `3m`, `1y`
 are 7, 30, 90 and 365 days, and a custom amount is multiplied by 7, 30 or 365 (weeks, months,
@@ -263,7 +304,8 @@ only its own layout (page size, column widths, order and visibility) under its `
 
 #### Asset detail: page sync and comparison sync
 
-`requiredFxPairs` lists the FX pairs the page needs to convert into the chart currency: the
+`requiredFxPairs` (built by `buildRequiredFxPairs()`, `lib/components/assets/detail/assetDetailFxRequirements.ts`)
+lists the FX pairs the page needs to convert into the chart currency: the
 asset's, each Asset comparison's, and those of their events' currencies. Each pair has a status
 (`ok`, `missing`, `no-data`, `partial-gap`) that drives the data-quality banners. The toolbar
 **Sync** (`handleSync()`) opens the page sync modal with the main asset (when it has a provider),
@@ -303,6 +345,21 @@ Saving a scope default (`setGlobalSettings(settings, scope)`) deletes every over
 scope, detail pages included, and leaves the other scope alone. The period is not a chart
 setting: `dateRangeStore.svelte.ts` keeps it in `sessionStorage` (`librefolio_dateRange`), shared
 by the Dashboard, broker, asset and FX pages of the tab.
+
+The stored document carries a `version`, `STORAGE_VERSION` (3). When the store reads it,
+`migratePersistedChartSettings()` brings a version 1 or 2 document to version 3, in the global
+settings and in every override; a document of any other version is ignored, and the defaults
+apply. Version 3 follows the developer's decision 29, one Rolling Return measured in calendar
+days: the observation-count `RISK_ROLLING_RETURN` plugin is gone, so every saved
+`risk-rolling-return` config becomes an `asset-calendar-rolling-return` one. Its `window` param
+becomes `window_days`, with the same number; the style of its `rolling_return` output moves to
+`calendar_return` in `componentStyles`; and the secondary-axis scale saved under
+`independent:risk_return` moves to `independent:calendar_return`, unless that key already holds
+one. Every other field and every other signal stay as they were. A window of N observations thus
+becomes N calendar days: 30 observations of an exchange-traded asset, about 42 calendar days,
+become 30 days, while a crypto-asset, quoted every day, sees no change. The store writes the
+migrated document back to `localStorage` at once; `chartSettingsStore.migration.test.ts` covers
+both the function and that rewrite.
 
 ### Axis rows and ranges
 
@@ -349,6 +406,31 @@ Two neighbouring labels never read the same (pinned in `chartCoreHelpers.test.ts
   year tick next to the edge would win, and the end label, pulled inward, would be the one hidden;
   its charts make room for the label instead (next bullet). The first label needs no alignment: it
   spills at most into the y-axis labels, inside the chart.
+- **Zoom** (category axis): an optional `visibleCount`, how many points a zoom leaves visible,
+  replaces `values.length` in the compactness test and the `interval`; without it, every value
+  counts. On the whole series, 365 daily points in 800 px get `interval` 33, which leaves a 34-point
+  zoom only its edge labels; counted on that window, `interval` is 2. `visiblePointCountFromZoom()`
+  reads the count from a `dataZoom` event or a `{start, end}` window, never from `getOption()`, which
+  deep-clones the whole option. `categoryAxisLabelPatch()`, the
+  `axisLabel` merged with `setOption`, puts `interval: 'auto'` first, so no merge keeps the previous
+  window's step, and gives the compact keys back their ECharts defaults once the window is wide.
+  `LineChart` and `CandlestickChart` merge it when a gesture pauses for `ZOOM_LABEL_SETTLE_MS`
+  (120 ms), `PriceChartFull` in its 200 ms `scheduleResolutionRecompute()`; resizes and full renders
+  count the visible window too. Time axes need none of it: ECharts spreads their `splitNumber` ticks
+  over the visible extent.
+- **Arrow markers** (category axis): an overlay signal may end in an arrow
+  (`markerStart`/`markerEnd: 'arrow'`), aimed along the line's on-screen slope, which a zoom, a pan
+  or a resize can change. `updateArrowRotations()` (`lineChartHelpers.ts`) reads `getOption()`, so
+  it re-aims them once a gesture or a resize pauses, in the settle that re-spaces the labels, which
+  a `dataZoom` event or a `ResizeObserver` callback re-arms instead; a full render re-aims them at
+  once, after restoring the zoom. It writes the series back only when an arrow turns by more than
+  `ARROW_ROTATE_EPSILON_DEG` (0.01°), so the stability pass after a first draw and the settle after
+  a redraw write nothing if no arrow moved. `noteArrowMarkers()`, called right after each full
+  render (`setOption(option, true)`), records whether that option draws an arrow: on a chart without
+  one (most charts), `updateArrowRotations()` returns before `getOption()`. It reads the option
+  afresh on every call, so its write-back, which carries every series' colours, never brings back
+  those from before a theme switch or a chart-colour change (pinned in `LineChart.test.ts`,
+  `PriceChartFull.test.ts`, `lineChartHelpers.test.ts` and `chartCoreHelpers.test.ts`).
 - **Right inset** (time axis, compact or wide): the axis ends on the last day of the data or of the
   zoom, and ECharts centres that day's label on its tick, so half of it overhangs the plot's right
   edge. `grid.containLabel: true` reserves the labels' height, never that overhang, so on a phone
@@ -402,7 +484,8 @@ through `PriceChartCompact`, date axis hidden). The time axis serves `GrowthChar
 views (the Candles and Income ladders plan their own labels, above), `AllocationHistoryChart` and
 the broker lots charts (`LotWacPriceChart`, `LotComparisonChart` and `LotGanttChart`, which pass
 their own padding). When a chart goes back from compact to wide, its consumer rebuilds the whole
-option, so compact-only keys such as `alignMaxLabel` do not linger.
+option, or merges `categoryAxisLabelPatch()` on a zoom, so compact-only keys such as
+`alignMaxLabel` do not linger.
 
 Three of the time-axis charts take the right inset. `GrowthChart` (`base: '4%'`, 14 px labels)
 computes it in its time-axis views only (the ladders keep `'4%'`: their plan keeps the outermost
@@ -414,6 +497,84 @@ computes it with every option it builds and on resize (`lazyUpdate`). `LotCompar
 (`base: 18` px, 12 px labels) computes it on its axis date range (`xAxisRange`, else the series'
 own) only when it builds the option: a px base does not follow the width. `LotWacPriceChart` and
 `LotGanttChart` keep a fixed 18 px (`GRID_RIGHT_PX`).
+
+## Chart Text and Tooltips {: #chart-text-and-tooltips }
+
+ECharts reads none of the app's CSS: it draws legends, labels and axes on a canvas, and writes its
+tooltip as HTML with an inline `font`. Two rules follow, one for the font of that text and one for
+the tooltip's HTML.
+
+### Flags in chart text {: #chart-flag-font }
+
+The app draws flags (the regional indicator symbols U+1F1E6–1F1FF) with the `'LF Flags'` face that
+starts its CSS font stacks ([Fonts](../styling.md#fonts)). That CSS never reaches chart text:
+ECharts drew it in its own default family, and a flag in a legend, a label, an axis or a tooltip
+fell back to the system, which prints two letters where it has no flag glyphs (Windows among them).
+
+`lib/components/charts/chartFont.ts` exports the charts' font:
+
+- `CHART_FONT_FAMILY`: `'LF Flags'`, then ECharts' own default family (`sans-serif`, or
+  `'Microsoft YaHei'` on Windows, chosen the way ECharts chooses it). The face covers the flags and
+  nothing else, so every other character falls through to that default and keeps its font.
+- `CHART_INIT_THEME`: `{textStyle: {fontFamily: CHART_FONT_FAMILY}}`.
+
+Every chart is created with that theme:
+
+```typescript
+chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
+```
+
+A theme's `textStyle` is ECharts' global font: the canvas text and the tooltip's inline `font` use
+it unless a component sets its own `fontFamily`. It is a theme rather than a `textStyle` in each
+option because ECharts merges the theme again on every `setOption`, a `notMerge` one included, so
+no option builder has to repeat it. A component that sets its own family uses `CHART_FONT_FAMILY`,
+as `CorrelationHeatmap` does on its axis labels, which it measures with a canvas context in that
+same font. The code that measures chart text from the chart model (`axisLabelFont`, see
+[Responsive Date Axis](#responsive-date-axis), and `GrowthChart`'s ladder labels) reads its
+`textStyle.fontFamily`, which is this family too.
+
+The chart colours stay in `lib/theme/chartTheme.ts`, and the font is kept out of it on purpose:
+that module holds colours only, and `chartTheme.test.ts` requires every string it exports to be a
+colour.
+
+**Loading the face.** A canvas paints its text once, with the faces loaded at that moment, and the
+browser fetches a `unicode-range` face only for page text that needs it: canvas text does not
+count. Two steps cover this:
+
+1. `chartFont.ts` asks for the face when the first chart module loads, before any chart can paint:
+   `chartFontReady()` calls `document.fonts.load()` once, with a flag as sample text (other text
+   would load nothing), and never rejects, so a face that fails to load leaves the system fallback.
+   Without `document.fonts`, in a test or on the server, it resolves at once.
+2. `scheduleFirstRenderStabilityFix` (`echartsTooltipHelpers.ts`), which a chart calls once after
+   its first full `setOption`, checks `chartFontLoaded()`: when the face is not in yet, it repaints
+   the chart (`resize()`) once the request of `chartFontReady()` settles. Every chart calls it
+   except `LotGanttChart`.
+
+### Tooltip HTML {: #chart-tooltip-escaping }
+
+ECharts sets what a tooltip formatter returns as `innerHTML`. Every value a formatter takes from
+the data or from currency metadata (names, captions, currency codes, flags, event types) goes
+through the shared `escapeHtml` (`lib/utils/core/escapeHtml.ts`) where it is interpolated; a flag
+is such a value, read from `getCurrencyInfo(code).flag_emoji`. A series label with its icon goes
+through `signalLabelToHtml` (`lib/charts/signalLabel.ts`), which escapes it.
+
+The frontend sources hold one HTML escaper: write no local copy. `escapeHtml` escapes `&`, `<`,
+`>`, `"` and `'`, so its output is also safe inside an attribute, whichever quote the call site
+uses; a copy that escapes fewer characters is the defect this rule removes. One file is exempt:
+`lib/utils/inlineMath.ts`, whose KaTeX variant keeps the apostrophe on purpose (`f'(x)` is prime
+notation). The rule for every hand-built HTML string, and its other gates, is in
+[Output Escaping](../../architecture/security.md#output-escaping).
+
+### Guards {: #chart-text-guards }
+
+`./dev.py test front-portfolio chart-safety-unit` runs them:
+
+| Test | Checks |
+|---|---|
+| `lib/components/charts/chartFlagFont.test.ts` | With the real ECharts, rendered server-side to SVG: a chart created with `CHART_INIT_THEME` draws its legend, axis and pie labels with `'LF Flags'` first, also after `setOption(option, true)`. A static scan of the production sources: every `echarts.init(` passes exactly `CHART_INIT_THEME` as its second argument, and no module reaches ECharts' `init` under another name. The scan skips `lib/dev/designer-lab/`, whose engine creates a 1×1 probe that never paints. |
+| `lib/components/charts/chartFont.load.test.ts` | The face is requested before the first paint, and a chart that painted before it arrived paints again once it is in. |
+| `*.tooltipEscape.test.ts`: `AllocationPieChart`, `CandlestickChart` and `PriceChartFull` beside the charts, `CorrelationHeatmap` in `lib/features/risk/` | Fed a value that carries markup, the tooltip injects no element and shows the value as text; the heatmap's also requires the shared `escapeHtml`'s output, quotes included. |
+| `lib/utils/core/escapeHtml.single.test.ts` | No production source holds an HTML escaper (`&` mapped to `&amp;`) outside `escapeHtml.ts` and the exempt `inlineMath.ts`; an exempt file that no longer holds one fails too, so an exemption cannot go stale. |
 
 ## Pie Charts (AllocationPieChart)
 

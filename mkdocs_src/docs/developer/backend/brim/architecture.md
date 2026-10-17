@@ -59,7 +59,7 @@ reached only from the review's **Import**, and only for a [report set](#report-s
 
 8. **Review & Confirm** — The user reviews the final list. Importing is blocked while any selected row still points at an unresolved asset. On **Import**, the wizard hands the selected rows to the bulk transaction editor (`TransactionBulkModal`), whose save (`POST /api/v1/transactions/commit`) goes through the standard `TransactionService`.
 
-9. **Align with the bank (`gapFix`)** — Report sets only. Before the hand-off, the wizard sends the truth points to `POST /api/v1/brokers/import/gap-fix` (`backend/app/services/brim_gap_fix.py`). For each checkpoint, in date order, the backend compares the cash balance and positions the bank states with what LibreFolio will know at that date — the saved transactions, minus the ones the bulk editor is deleting, plus its unsaved rows, the wizard's selection and the corrections of the earlier checkpoints — and proposes only the difference, as ordinary transactions tagged `gap_fix`. Verifications are compared, never corrected, and the endpoint writes nothing. The step opens only when there is something to show (a correction, a failed verification, an error); every correction starts selected, and the ones the user keeps join the review's rows in the editor.
+9. **Align with the bank (`gapFix`)** — Report sets only. Before the hand-off, the wizard sends the truth points to `POST /api/v1/brokers/import/gap-fix` (`backend/app/services/brim/brim_gap_fix.py`). For each checkpoint, in date order, the backend compares the cash balance and positions the bank states with what LibreFolio will know at that date — the saved transactions, minus the ones the bulk editor is deleting, plus its unsaved rows, the wizard's selection and the corrections of the earlier checkpoints — and proposes only the difference, as ordinary transactions tagged `gap_fix`. Verifications are compared, never corrected, and the endpoint writes nothing. The step opens only when there is something to show (a correction, a failed verification, an error); every correction starts selected, and the ones the user keeps join the review's rows in the editor.
 
 ### 🧺 Report sets {: #report-sets }
 
@@ -69,7 +69,7 @@ from a custody export and a cash export. A **report-set plugin** declares the ex
 imported as one set:
 
 - **Membership** — the set is the original files of one upload batch (`batch_id`) for one broker that
-  the plugin can read (`collect_members` in `backend/app/services/brim_report_sets.py`). The plugin
+  the plugin can read (`collect_members` in `backend/app/services/brim/brim_report_sets.py`). The plugin
   never parses an original on its own: that request answers 422 `set_required`, and the file is
   **not** moved to `failed/`.
 - **Preview** — `POST /api/v1/brokers/import/sets/preview` reads the members through the plugin
@@ -103,11 +103,22 @@ backend/data/{prod|test}/broker_reports/
 
 Each file is stored with a companion `.json` metadata sidecar recording status, original filename, and any errors encountered. A file keeps its `broker_<id>/` folder for its whole life: a move changes only the status folder.
 
+Deleting a broker clears its storage. Its files live on disk, outside the ORM cascade, so
+`delete_files_for_brokers` (`backend/app/services/brim/brim_provider.py`) runs after the commit that
+deleted the broker — `DELETE /brokers`, the last owner leaving it, an account deletion — and removes
+its files, then (`_remove_broker_storage`, under the broker's metadata lock) its empty
+`uploaded|parsed|failed/broker_<id>/` folders and its `.locks/broker_<id>.lock`, unlinked while held.
+`rmdir` keeps a folder that still holds a file the store did not write, with a warning in the log.
+Broker ids are never reused (`AUTOINCREMENT`), so these leftovers used to pile up; the in-process
+re-entrant lock in `_BROKER_LOCKS` stays on purpose, because dropping it could hand a second lock for
+the same key to a thread already waiting on the first.
+
 ### 🗂️ Sidecar fields
 
 | Field | Written by | Meaning |
 |-------|------------|---------|
 | `status`, `uploaded_at`, `processed_at`, `error_message` | Upload, moves | Where the file is in its lifecycle |
+| `uploaded_by_user_id`, `target_broker_id` | Upload, combine | Who uploaded the file (for a combined file, who combined it) and its broker: they decide [who reaches the file](#file-access). A sidecar written before uploads required a broker (late January 2026, before any tagged version) has neither |
 | `compatible_plugins`, `plugins_signature` | Upload; re-detection on read | The plugins whose `can_parse` accepted the file, and the app version that detected them (`detection_signature()`). A combined file lists only the plugin that built it and is never detected again |
 | `batch_id` | Upload | The upload batch: the files of one wizard session, which a report-set plugin reads as one set |
 | `kind` | Combine | `combined` for a file built by a report-set plugin; absent means `original` |
@@ -119,6 +130,52 @@ Each file is stored with a companion `.json` metadata sidecar recording status, 
 
 A combined file keeps working when one of its originals is deleted, because it carries the values it
 was built from; deleting a combined file removes it from its originals' `combined_into`.
+
+### 🔐 Who reaches a report file {: #file-access }
+
+Every per-file route, `/api/v1/brokers/import/files/{file_id}…`, starts with
+`_get_brim_file_with_access` (`backend/app/api/v1/brokers.py`), which reads the file's sidecar and
+lets through only the users of the table below (decision 36 of release 1.3; the roles are those of
+[Broker Access Control](../../architecture/access_control.md)). The administrator (`is_superuser`)
+reaches every file; anyone else gets 403.
+
+| Route | A file of a broker | A file with no broker |
+|-------|--------------------|-----------------------|
+| `GET /files/{file_id}`, `…/preview`, `…/download`, `…/last-parse`, `…/plugin-check` | Any role on that broker (VIEWER+) | Its uploader |
+| `POST /files/{file_id}/parse`, `DELETE /files/{file_id}` | EDITOR or OWNER of that broker | Its uploader |
+
+- **On a file of a broker, the role decides alone**: having uploaded the file grants nothing, so an
+  uploader who is now a VIEWER of its broker reads it but neither parses nor deletes it.
+- **A file with no broker** (`target_broker_id` null) sits in the root of its status folder
+  (`<status>/{file_id}.{ext}` and its `.json`, not under `broker_<id>/`). Uploads have required a
+  broker since late January 2026, before any tagged version, so only a development build of that
+  time wrote one, and its sidecar records no uploader either: such a file is the administrator's
+  alone. Nothing migrates these files; they stay where they are. Before 1.3 any signed-in user could
+  list, read, parse and delete them (W-B3).
+- **The id is checked first** (`_is_brim_file_id`, W-B4): a `file_id` that is not a UUID in the
+  canonical lower-case 8-4-4-4-12 form an upload writes (`str(uuid.uuid4())`) answers 404 before any
+  lookup; an upper-case id too, which a case-insensitive disk would otherwise still find. An id of 300
+  characters used to answer 500 (the file system refuses so long a name), and a file named `<uuid>-1`
+  used to be served.
+- **The parse checks the broker it imports into.** `POST /files/{file_id}/parse` imports into the
+  `broker_id` of its body (`BRIMParseRequest`) and compares the duplicates and the report-set history
+  against that broker, so the caller must also be its EDITOR or OWNER (`_require_broker_editor`, the
+  check of `/duplicates`, `/sets/preview`, `/sets/combine` and `/gap-fix`): otherwise 403, before
+  anything is parsed. The administrator passes. Before 1.3 an EDITOR of the file's broker could parse
+  it into a broker they could not see.
+
+**The list.** `GET /api/v1/brokers/import/files` gives a regular user the files of the brokers they
+hold a role on, plus the files with no broker they uploaded; the administrator gets every file, as
+before. With `broker_ids`, intersected with a regular user's brokers, the list holds only those
+brokers' files, for the administrator too: the route drops the files with no broker, which
+`brim_provider.list_files` keeps, so they come only without the filter, on the Files page. Before
+1.3 they came with any filter, and a broker's *Uploaded Reports* (`broker_ids=<its id>`) listed them
+under every broker, where its bulk delete could remove them (W-B32). Each item is a
+`BRIMFileListItem`, a `BRIMFileInfo` plus `can_delete`, which says what
+`DELETE /files/{file_id}` would answer: true for the administrator, for an EDITOR or OWNER of the
+file's broker and for the uploader of a file with no broker; false otherwise, a VIEWER included.
+
+Tests: `./dev.py test api brim`, Category 18 of `backend/test_scripts/test_api/test_brim_api.py`.
 
 ---
 
@@ -133,9 +190,10 @@ serialised by the server no matter how parallel the client was.
 |---|---|
 | **Upload** | `save_uploaded_file` runs in `asyncio.to_thread`. A thread is enough: the transfer itself is the OS's work; we only write the file and re-read it to sniff compatible plugins |
 | **Plugin discovery** | `auto_discover()` (`backend/app/services/provider_registry.py`) imports the plugin modules once, under the registry's own `RLock`, and marks discovery done only after every module has run. The first uploads after a start run on worker threads: one that arrives mid-discovery waits for the full catalogue instead of detecting against a half-filled one |
-| **Parse** | `backend/app/services/brim_parse_pool.py` — a **lazy** `ProcessPoolExecutor`, `min(cpu_count, 4)` workers. Parsing is CPU work: a thread would leave it serialised by the GIL |
-| **Sidecar writes** | Every write of a broker's sidecars holds that broker's lock (`broker_metadata_lock`: a re-entrant thread lock plus an advisory `flock` on `broker_reports/.locks/broker_<id>.lock`). `combine_set` holds it, in a worker thread, from the reuse check to the save of the combined file: analysing the same set twice — a double click, two tabs — reuses the first combined file instead of building a second one. See [The broker metadata lock](../../architecture/patterns/brim_plugin_guide.md#broker-metadata-lock) |
-| **Candidate search** | `search_asset_candidates_bulk` issues **one** query per file instead of up to five per extracted asset, then applies the same five priorities in memory |
+| **Parse** | `backend/app/services/brim/brim_parse_pool.py` — a **lazy** `ProcessPoolExecutor`, `min(cpu_count, 4)` workers. Parsing is CPU work: a thread would leave it serialised by the GIL. With the opt-in [warm-up](#parse-pool-warm-up), its forkserver starts at application startup preloaded with the BRIM module and every plugin, so each worker is born with them; with it off nothing is preloaded, and each worker imports them at its first parse |
+| **Sidecar writes** | Every write of a broker's sidecars holds that broker's lock (`broker_metadata_lock`: a re-entrant thread lock plus an advisory `flock` on `broker_reports/.locks/broker_<id>.lock`, created `0600` and opened with `O_NOFOLLOW` — a symbolic link in its place makes the lock raise `OSError` as it is entered, and the write it guards does not run). `combine_set` holds it, in a worker thread, from the reuse check to the save of the combined file: analysing the same set twice — a double click, two tabs — reuses the first combined file instead of building a second one. See [The broker metadata lock](../../architecture/patterns/brim_plugin_guide.md#broker-metadata-lock) |
+| **File reads** | The preview and download routes (`get_brim_file_preview`, `download_file` in `backend/app/api/v1/brokers.py`) resolve the file's path in a worker thread, `await asyncio.to_thread(brim_provider.get_file_path, file_id)`: `get_file_path` finds and reads the sidecar. `./dev.py test utils gate-event-loop-io` fails on any direct call of a synchronous `brim_provider.py` function inside an `async def` of `backend/app/api/v1/`. See the [Event Loop Blocking Rule](../../architecture/patterns/async.md) |
+| **Candidate search** | `search_asset_candidates_bulk` issues **one** query per file instead of up to five per extracted asset — one per chunk of 500 conditions, each name's seven identifier `ILIKE`s counted one by one (MF-SEC9a) — then applies the same five priorities in memory, in a worker thread (`_classify_candidates` over plain `_CandidateView`s, `asyncio.to_thread`; MF-SEC9g): exact ISIN and ticker through an index that keeps the universe's order, each needle's `LIKE` pattern compiled once. On the event loop, a large universe with generic names held it for seconds to minutes |
 | **Frontend** | `lib/utils/core/requestConcurrency.ts` — `mapWithConcurrency` bounds the upload and parse loops instead of awaiting one file at a time |
 
 ### 🧵 Why `forkserver`/`spawn`, never `fork`
@@ -168,6 +226,79 @@ deadlocks that only appear in production. The pool prefers `forkserver` and fall
 
 The pool is shut down from the FastAPI `lifespan`, next to the other pools.
 
+### 🔥 Preload and warm-up {: #parse-pool-warm-up }
+
+With `forkserver`, every worker of the pool is forked from one forkserver process. With the
+warm-up on (below), that forkserver preloads `brim_parse_preload` (`set_forkserver_preload`):
+`prewarm()` sets the preload at startup, and `_get_pool()` sets it too, which counts only
+while the forkserver has not started. That module, imported only by the forkserver, imports
+`brim_provider` and runs `BRIMProviderRegistry.auto_discover()`: every worker is born with
+the BRIM module and every plugin imported and discovered, sharing those pages with the
+forkserver, instead of importing them itself at its first parse.
+
+With the warm-up off, nothing is preloaded (W-B59): `_get_pool()` sets the preload only when
+`_prewarm_enabled()` answers true, that is `brim_prewarm_enabled()` with an invalid value
+counting as off. The first parse starts the forkserver with nothing preloaded, and each
+worker imports the BRIM module and its plugins itself, at its first parse, away from the
+event loop. A preload has no place on that lazy path: on Python 3.13 the first
+`run_in_executor()` waits, on the event loop's thread, for the new worker's pid, which a
+preloading forkserver sends only once the preload is done. When `_get_pool()` preloaded
+whatever the setting, the first parse after every start held every request for the whole
+import, even with the warm-up off (decision N56, below).
+
+So, with the warm-up off, the first parse waits for its worker to load them: about 4 s on an
+idle machine, 30-50 s on an overloaded test machine, longer than the 30-second request
+timeout of `backend/test_scripts/test_api/test_brim_api.py`. The **warm-up** (W-B53) takes
+that wait away: the `brim-parse-pool` step of the
+[startup sequence](../../architecture/overview.md#server-startup) runs `prewarm()` in a
+worker thread, in the background. `prewarm()` sets the preload, calls
+`multiprocessing.forkserver.ensure_running()` and returns at once; the forkserver loads the
+preload in its own process, and the first parse forks a ready worker (a parse that comes
+sooner waits, on the event loop's thread, only for what is left of the preload). The pool
+and its workers stay lazy.
+
+The warm-up is **opt-in** (decision N56): it holds about 80 MB from the start and costs about 1.4 s
+of CPU at every start of the server, to make the first import after a start about 4 s faster, a bad
+trade for a small cloud machine. The step asks `brim_prewarm_enabled()`
+(`backend/app/config/brim.py`), which reads `LIBREFOLIO_BRIM_PREWARM` at each call, ignoring case and
+spaces around the value:
+
+| `LIBREFOLIO_BRIM_PREWARM` | Warm-up |
+| --- | --- |
+| unset or blank | Off, except in test mode (`is_test_mode()`) |
+| `1`, `true`, `yes`, `on` | On |
+| `0`, `false`, `no`, `off` | Off |
+| anything else | Off: `brim_prewarm_enabled()` raises `BrimConfigError`, which names the variable; the step logs the warning `BRIM parse pool prewarm off: invalid setting` and the startup goes on, and `_get_pool()` reads it as off too |
+
+Off, nothing is preloaded, at startup or at the first parse.
+
+`configure_test_runtime()` (`scripts/cli_base.py`), which `./dev.py server --test` and the test
+runner call, drops the variable with the other `LIBREFOLIO_*` names a test lane does not keep, and
+sets `LIBREFOLIO_TEST_MODE=1`: a test server always warms up. For operators, the variable is one line
+of [Configuration](../../../admin/configuration.md).
+
+- **Never fatal.** `prewarm()` never raises: a failure is logged as
+  `BRIM parse pool prewarm failed; the first parse will start the pool`, and the first parse
+  starts everything, the forkserver preloaded since the warm-up is on: on that lazy path, it
+  holds the event loop for the import, as described above. It does nothing where the platform
+  offers only `spawn`, or once the pool has been given up.
+- **A discovery failure** is logged inside the forkserver
+  (`BRIM plugin discovery failed in the parse pool's forkserver; the first parse reports it`) and goes
+  no further: a forkserver survives only an `ImportError` in a preload, so `brim_parse_preload` lets
+  nothing escape. The worker's first parse reports it, as it always did.
+- **One forkserver per process.** The preload list and the forkserver belong to the whole process,
+  and the BRIM pool is their only user: the Tools, the risk worker pools and the market calendar
+  spawn their processes. A new user of the forkserver would get this preload too, with the
+  warm-up on.
+- **Single-threaded.** The workers are forks of the forkserver, and forking a process that runs
+  threads is what the pool avoids (see above): once preloaded, the forkserver must still run one
+  thread, so importing the BRIM module or a plugin must not start one.
+
+Tests: `./dev.py test services brim-parse-pool` (the preload with the warm-up on, none with it
+off or invalid, `prewarm()`, the single-thread guard),
+`./dev.py test services config-brim` (the variable) and `./dev.py test services app-lifecycle` (the
+step: on, off, invalid).
+
 ### 🌐 The browser connection limit
 
 No web API exposes the per-host connection cap. `navigator.connection` describes link *quality*
@@ -193,8 +324,8 @@ Before final import, BRIM compares each parsed transaction against the database 
 | `broker_id` | ✅ |
 | `date` | ✅ |
 | `type` | ✅ — a `DEPOSIT` or `WITHDRAWAL` also meets saved transfer and exchange legs ([below](#dedup-merged-legs)) |
-| `quantity` | ✅ |
-| `amount` | ✅ |
+| `quantity` | ✅ — the same once both are rounded half-up to the decimals of the less precise one, and never more than 0.0001 apart (`_same_quantity`, W-B51): a report that rounds still meets the stored value, two crypto buys of one day stay two rows; a stored quantity that reads back unreadable matches nothing |
+| `amount` | ✅ — within 0.01, same currency |
 | `description` | Used for confidence upgrade |
 | `asset_id` | Used for confidence upgrade |
 
@@ -211,7 +342,7 @@ Confidence levels:
 
 An incoming `DEPOSIT` or `WITHDRAWAL` is also compared with the saved legs of `CASH_TRANSFER` and
 `FX_CONVERSION` pairs (`_MERGED_LEG_TYPES`, read by `detect_tx_duplicates` in
-`backend/app/services/brim_provider.py`): same broker, date and quantity, same amount — sign
+`backend/app/services/brim/brim_provider.py`): same broker, date and quantity, same amount — sign
 included — and currency. A deposit thus meets the leg that received the money, a withdrawal the
 leg that sent it.
 

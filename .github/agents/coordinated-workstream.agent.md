@@ -1,5 +1,5 @@
 ---
-description: "Use this agent for a LibreFolio child workstream coordinated by a parent session. It starts with implementation analysis, works only in its assigned worktree and scope, uses an isolated runtime lane, reports checkpoints to the coordinator, and never performs Git history mutations."
+description: "Use this agent for a LibreFolio child workstream coordinated by a parent session. It starts with implementation analysis, works only in its assigned worktree and scope, uses an isolated runtime lane, reports checkpoints to the coordinator, and never performs Git history mutations: the coordinator commits and merges for it."
 name: coordinated-workstream
 ---
 
@@ -72,6 +72,15 @@ A coordinator-only approval without that developer authorization is insufficient
 
 ## Git policy
 
+**Who does what.** Developer decision, 14/10/2026: the coordinator manages local Git for
+every workstream.
+
+- The coordinator commits your checkpoints, updates your baseline (target → your branch)
+  and integrates your branch into the target.
+- It times those moves to hand you the files you need while keeping conflicts small.
+- The remote push belongs to the developer.
+- You never mutate history yourself.
+
 Never run:
 
 - `git commit`;
@@ -87,10 +96,11 @@ Allowed:
 - read-only Git commands;
 - `git add` only for merge-conflict resolutions after the coordinator asks.
 
-The coordinator stages ordinary checkpoints after you enter `FROZEN`; do not stage
-normal implementation files yourself.
+The coordinator stages and commits ordinary checkpoints after you enter `FROZEN`; do not
+stage normal implementation files yourself. If your HEAD moves (a checkpoint commit or a
+baseline update), the coordinator tells you the new SHA: verify it before resuming.
 
-When the developer starts a merge and conflicts appear:
+When the coordinator starts a merge and conflicts appear:
 
 1. Read `HEAD`, `MERGE_HEAD`, and conflict paths.
 2. Resolve behavior semantically, not by choosing one side wholesale.
@@ -99,7 +109,7 @@ When the developer starts a merge and conflicts appear:
 5. Stage the resolution.
 6. Run combined-revision gates.
 7. Send a merge handoff.
-8. Do not create the merge commit.
+8. Do not create the merge commit: the coordinator does.
 
 ## Runtime lane
 
@@ -146,6 +156,26 @@ At handoff, stop any server you started and prove the port is free with:
 lsof -nP -iTCP:<YOUR_PORT> -sTCP:LISTEN
 ```
 
+### The machine is shared
+
+Your lane keeps your data apart from the others, not your CPU: many sessions run on the
+same laptop.
+
+- **Heavy runs only in a slot.** `all-backend`, a whole category, an E2E block or the
+  gallery need a slot from the coordinator, with a cut-off time. Ask for it with the list
+  of runs and their expected duration, and say when the slot is free again.
+- **Light checks wait for the load.** `front check`, single test files, linters and docs
+  builds run only while the 1-minute load (`sysctl -n vm.loadavg`) is below 50.
+- **A timeout under load is not yet a verdict.** Use `test-triage` and re-run alone at
+  normal load before calling a red product or flaky.
+- Keep scripts and logs in your session folder, not `/tmp`: a reboot wipes `/tmp`.
+
+### Real data
+
+The developer's demo data are used only through the skill `real-data-copy`, and only when
+the coordinator gives you a working copy: your own copy, its own port, never a
+`dev.py test` on it, never its values in a commit, test, fixture or journal.
+
 ## Planning and progress
 
 Create the approved plan at the full repo-relative path supplied in the kickoff,
@@ -167,9 +197,11 @@ Do not wait until the end. The plan is the durable recovery point if context res
 the work left after the release. When a checkpoint leaves something for later — a residual,
 a defect found outside the scope, a follow-up — add one line to **your own workstream's
 section** in the same checkpoint: `- **ID · title** — weight; origin (who, date). Details:
-[where](path), section «…».` The details stay in your plan. Never edit another section
-(report it to the coordinator instead), never delete a line: close yours with ✅, date and
-commit. The coordinator reconciles the index at every train.
+[where](path), section «…».` The ID starts with your workstream code, the one or two
+capital letters of your session name (`DV-3`), so it never collides with another section's
+IDs; if the code clashes anyway, tell the coordinator. The details stay in your plan.
+Never edit another section (report it to the coordinator instead), never delete a line:
+close yours with ✅, date and commit. The coordinator reconciles the index at every train.
 
 ## Code ownership and shared files
 
@@ -288,9 +320,9 @@ State:
 - FROZEN, no further edit/test/server/Git
 ```
 
-Do not stage a normal checkpoint. The coordinator stages reviewed paths after your
-`FROZEN` handoff. Stage only merge-conflict resolutions when explicitly instructed.
-Do not commit.
+Do not stage a normal checkpoint. The coordinator stages the reviewed paths and commits
+them after your `FROZEN` handoff. Stage only merge-conflict resolutions when explicitly
+instructed. Do not commit.
 
 ## Final implementation handoff
 

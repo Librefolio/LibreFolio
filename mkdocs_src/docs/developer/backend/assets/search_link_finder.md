@@ -20,10 +20,10 @@ The system is **not** one function — it is a small **standalone module** (the 
 
 | Piece | File | Role |
 |-------|------|------|
-| **`web_link_finder` module** | `backend/app/services/web_link_finder.py` | Self-contained subsystem: the external-engine client (**ddgs** metasearch by default), config, TTL cache, domain filter. Knows nothing about providers or assets. |
-| **Search orchestration** | `backend/app/services/asset_sources/search.py` → `AssetSearchService` | Ties it together: `_augment_with_link_finder`, `_build_link_finder_queries`, `_filter_items_by_known_identifiers`, `_provider_url_for_item`. Decides *when* to fall back and *how* to narrow. |
+| **`web_link_finder` module** | `backend/app/services/assets/web_link_finder.py` | Self-contained subsystem: the external-engine client (**ddgs** metasearch by default), config, TTL cache, domain filter. Knows nothing about providers or assets. |
+| **Search orchestration** | `backend/app/services/assets/search.py` → `AssetSearchService` | Ties it together: `_augment_with_link_finder`, `_build_link_finder_queries`, `_filter_items_by_known_identifiers`, `_provider_url_for_item`. Decides *when* to fall back and *how* to narrow. |
 | **Provider hook** | each provider's `resolve_url` / `resolvable_url_domains` | Turns a resolved URL back into search-item(s). Only Borsa Italiana implements it today. |
-| **Endpoints** | `backend/app/api/v1/assets.py` | `/assets/provider/search[/stream]` accept the optional `hints` query param. |
+| **Endpoints** | `backend/app/api/v1/assets/providers.py` | `/assets/provider/search[/stream]` accept the optional `hints` query param. |
 
 So the answer to "is it its own subsystem or just a service function?" is **both**: a dedicated
 module for the engine, orchestrated by the service layer, with a thin per-provider hook.
@@ -32,7 +32,7 @@ module for the engine, orchestrated by the service layer, with a thin per-provid
 graph LR
     EP["API /assets/provider/search[/stream]"] --> SVC
 
-    subgraph SVC["asset_sources/search.py — AssetSearchService (orchestration)"]
+    subgraph SVC["assets/search.py — AssetSearchService (orchestration)"]
         A["_augment_with_link_finder"]
         B["_build_link_finder_queries"]
         C["_filter_items_by_known_identifiers"]
@@ -102,28 +102,42 @@ graph TD
 
 ## 🎼 Orchestration (`AssetSearchService`)
 
-Both `search()` (batch) and `search_stream()` (SSE) query every eligible provider in parallel.
-Each `provider.search()` call goes through `asset_sources.core._run_provider_in_thread()`. After a
-provider yields its L1 results, the shared augment helper decides whether to fall back to the
-external stack:
+Both `search()` (batch) and `search_stream()` (SSE) query every eligible provider in parallel, each
+a `core.configured_provider(code, user_id=…)` that carries the searching user's
+[personal settings](../../architecture/patterns/plugin_settings.md#scopes). Each `provider.search()`
+call goes through `assets.core.call_provider()`, the boundary of every provider call, which runs it
+in `_run_provider_in_thread()`. After a provider yields its L1 results, the shared augment helper
+decides whether to fall back to the external stack:
 
 ```python
-# backend/app/services/asset_sources/search.py
-async def search(query: str, provider_codes=None, hints: Optional[list[str]] = None) -> FAProviderSearchResponse
-async def search_stream(query: str, provider_codes=None, hints: Optional[list[str]] = None) -> AsyncGenerator[str]
+# backend/app/services/assets/search.py
+async def search(query: str, provider_codes=None, hints: Optional[list[str]] = None, *, user_id: int | None = None) -> FAProviderSearchResponse
+async def search_stream(query: str, provider_codes=None, hints: Optional[list[str]] = None, *, user_id: int | None = None) -> AsyncGenerator[str]
 ```
 
 - **`_augment_with_link_finder(code, provider, query, hints=None)`** — invoked when a provider
   returns 0 items **and** `provider.supports_url_resolution` **and** `web_link_finder.is_enabled()`.
   It builds the candidate queries (see [Hints](#hints-the-two-stage-stringone)), calls
-  `find_candidate_urls`, then resolves each hit through
-  `asset_sources.core._run_provider_in_thread()` (`resolve_url` may do sync I/O). The helper
+  `find_candidate_urls`, then resolves each hit through `assets.core.call_provider()`
+  (`resolve_url` may do sync I/O). The helper
   flattens one-item/list results, de-duplicates by `(identifier, language)`, and returns the
   non-`None` items. Any failure is caught and yields `[]` — the search always completes and
   emits `done`.
 - **`_provider_url_for_item(code, item)`** — DRY helper used during serialization so the
   `provider_url` display link is (re)computed from the item's `provider_params` on every request.
 - Results are flagged as "found via web" for the UI.
+
+The stream sends one event per provider, then a last one:
+
+| Event | Fields |
+|-------|--------|
+| `provider_results` | `provider_code`, `results` |
+| `provider_error` | `provider_code`, `error` (the message), `error_code` for every `AssetSourceError` (`NOT_CONFIGURED`, `RATE_LIMITED`, or the provider's own code), `retry_after` with `RATE_LIMITED` |
+| `done` | `total_results`, `providers_queried`, `providers_with_errors` |
+
+The batch search lists every provider that failed in `providers_with_errors`, and those not called
+because a required setting has no value also in `providers_not_configured`: see the reasons in
+[Interactive Search Stack](architecture.md#interactive-search).
 
 !!! info "Why the fallback fixes the old \"searching… hangs\" bug"
 
@@ -135,17 +149,18 @@ async def search_stream(query: str, provider_codes=None, hints: Optional[list[st
 
 ## 🌐 `web_link_finder` module
 
-`backend/app/services/web_link_finder.py` is a **LibreFolio-level** module, deliberately kept
+`backend/app/services/assets/web_link_finder.py` is a **LibreFolio-level** module, deliberately kept
 **out of** any scraping library — the choice of external engine is a LibreFolio concern, not a
 provider's.
 
 ```python
-async def find_candidate_urls(query: str, allowed_domains: list[str], *, max_results: int = 5, path_hint: str | None = None) -> list[str]
+async def find_candidate_urls(query: str, allowed_domains: list[str], *, max_results: int | None = None, path_hint: str | None = None) -> list[str]
 def is_enabled() -> bool
 ```
 
 - **Best-effort**: any failure (rate-limit, network error, missing optional
   dependency) yields `[]` and is never fatal.
+- **`max_results`**: `None`, the default, takes `LIBREFOLIO_WEB_LINK_FINDER_MAX` (5 when unset).
 - **Async-safe**: the engine's synchronous `search()` runs inside `asyncio.to_thread`; short
   timeout, small TTL cache, domain-filtered hits, structured logs.
 - **Pluggable engine**: the default `DdgsEngine` wraps the [`ddgs`](https://pypi.org/project/ddgs/)
@@ -159,15 +174,19 @@ def is_enabled() -> bool
 
 ### ⚙️ Configuration (env vars, all optional)
 
+The variables are read in `backend/app/config/plugins.py`, from the process environment only:
+`web_link_finder.py` calls its `web_link_finder_*()` accessors and reads no variable itself.
+
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `LIBREFOLIO_WEB_LINK_FINDER_ENABLED` | `1` | `1`/`0` master switch. |
 | `LIBREFOLIO_WEB_LINK_FINDER_ENGINE` | `ddgs` | `ddgs` \| `apikey` (`searxng` reserved for Fase B). |
 | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | `""` | Key for the `apikey` engine (engine self-disables if absent). |
+| `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` | `""` | Path of a file holding the API key instead: the key is a secret, read by `env_secret()` ([Secrets from Files](../../architecture/security.md#secrets-from-files)), so a blank value counts as unset. Read only when the `apikey` engine is built: a file that cannot give the key makes `_build_engine()` log `web_link_finder: <error>; disabling` and return no engine, so the search returns `[]` and the server keeps running. |
 | `LIBREFOLIO_WEB_LINK_FINDER_DDGS_REGION` | `wt-wt` | ddgs region (e.g. `wt-wt` worldwide, `it-it`). The worldwide default avoids US bias so IT pages aren't down-ranked. |
 | `LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND` | `auto` | ddgs backend(s): `auto` rotates/aggregates, or a comma list (e.g. `google,bing`). |
-| `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` | `6` | Per-request timeout, seconds. |
-| `LIBREFOLIO_WEB_LINK_FINDER_MAX` | `5` | Max candidate URLs returned. |
+| `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` | `6` | Per-request timeout, seconds, read as a `float`: at least 1. Unset, blank, not a number, not finite or below 1: the default. `ddgs` takes whole seconds, so a fraction is rounded up (`math.ceil`): `1.5` gives 2. |
+| `LIBREFOLIO_WEB_LINK_FINDER_MAX` | `5` | Max candidate URLs returned, read as an `int`: at least 1. Unset, blank, not a whole number or below 1: the default. |
 
 ### 🕰️ Transport history (why `ddgs`)
 
@@ -213,13 +232,17 @@ return them **all as a list**. The orchestration flattens the result and **de-du
 Each item must match the search-item shape
 (`identifier`, `identifier_type`, `display_name`, `currency`, `type`, `provider_params`) so the
 create-asset flow can consume it directly. `resolve_url` must be **best-effort** — parse/fetch
-errors return `None`, never raise.
+errors return `None`, never raise. The one exception is a refusal for too many requests: raise it
+as `AssetRateLimitedError`, so that the core pauses the provider
+([Too Many Requests](../../architecture/patterns/asset_plugin_guide.md#too-many-requests)); the
+link-finder then skips that URL without reporting an error.
 
 !!! note "Scope"
 
     The capability is generic in the base class, but **Borsa Italiana is the only provider that
     implements it** in the current pass: a fund detail page resolves to the **IT + EN pair**
-    (Italian first, with flags), each carrying the fund's `codice_fondo`.
+    (Italian first, with flags), each carrying the fund's `codice_fondo`, or to the row of the
+    searching user's preferred language alone.
 
 ---
 
@@ -289,12 +312,41 @@ preserves the legacy single-query behaviour.
 
 | Component | Prop | Role |
 |-----------|------|------|
-| `AssetSearchAutocomplete.svelte` | `hints?: string[]` | Appended as repeated `&hints=` on the SSE fetch URL (deduped client-side). |
-| `AssetModal.svelte` | `searchHints?: string[]` | Forwarded to the autocomplete. |
+| `AssetSearchAutocomplete.svelte` | `hints?: string[]` | Appended as repeated `&hints=` on the SSE fetch URL (deduped client-side). It also reads why a provider did not answer: `error_code: "NOT_CONFIGURED"` on the stream, `providers_not_configured` on the REST fallback, each giving the provider a row with **Configure**. |
+| `AssetSearchAutocomplete.svelte` | `reportContext?: SearchReportContext` | What the caller's form already holds (currency, asset type, identifiers), added to the «Let us know» report below; `null` by default. |
+| `AssetModal.svelte` | `searchHints?: string[]` | Forwarded to the autocomplete, with `searchReportContext` as its `reportContext`: the form's currency, type and the identifier rows that have a value. |
 | `ImportWizardModal.svelte` | `searchHints` | Built from the extracted ISIN + symbol + all candidate report names. |
 
 No UI change is required for the feature to work end-to-end — an asset created from a resolved
 result already carries its `provider_params`, so it is priceable immediately.
+
+**«Can't find it? Let us know» (P20).** Once a search has finished, whatever its outcome, the
+dropdown shows a report row: at its bottom, or between the Premium and the community sections when
+they show (`reportPlacement`). `assetSearchReport.ts` holds its logic.
+`supportChannel(value, {githubFallback})` turns the instance's `support_url`
+(`GET /api/v1/system/instance`, through `instanceConfig`) into a channel, checking it again although
+the backend validated it, so that nothing but http(s) and `mailto:` with one address becomes a link:
+`mailto` (subject and CRLF body in the link), or `page` for an address that `new URL()` parses as
+http(s) with a host name and no user name or password (the page opens in a new tab and the body
+goes to the clipboard, with a toast either way). A `page` carries the parsed `url.href`, normalized
+and absolute, never the raw value: a spelling such as `https:host` would otherwise resolve, as an
+href, to a path on the instance itself. Anything else, user info included, counts as missing, like
+an unset value: `github` (a prefilled new issue) with `githubFallback`, `null` without it.
+
+N61: `AssetSearchAutocomplete.svelte` passes `githubFallback = selfHostedConfirmed()` (the helper of
+`lib/features/instance/profile.ts`: `loaded`, and `profile` is `selfhosted`; see
+[Instance configuration](../../frontend/state/app-state.md#instance-config)), since a
+public issue would publish the profile, the provider codes and the identifiers. On a managed
+instance, or while `GET /api/v1/system/instance` has not answered on this page load (until then
+`instanceConfig` holds `DEFAULT_INSTANCE_CONFIG`, which says `selfhosted`: hence the `loaded`
+guard), a missing address gives a `null` channel: `reportPlacement` is then `null`, and the
+dropdown has no report row. A valid address works in both profiles.
+
+`buildSearchReport()` writes the English subject and body, `reportHref()` the link.
+Each queried provider's outcome comes from the stream, `provider_results` (a count) or
+`provider_error` (its `error_code`, never the `error` message), or on the REST fallback from
+`providers_queried`, `providers_with_errors` and `providers_not_configured`; a provider still silent
+when the search ends is `no answer`. The report leaves from the browser, never from the server.
 
 ---
 

@@ -47,7 +47,7 @@ import pytest_asyncio
 import QuantLib as ql
 from structlog.testing import capture_logs
 
-MODULE = "backend.app.services.market_calendar"
+MODULE = "backend.app.services.assets.market_calendar"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -484,7 +484,7 @@ BOUNDARY_PROBE = textwrap.dedent("""
     import json
     import sys
 
-    import backend.app.services.market_calendar as market_calendar
+    import backend.app.services.assets.market_calendar as market_calendar
 
     imported_with_the_module = "QuantLib" in sys.modules
 
@@ -527,7 +527,7 @@ def test_a_real_build_runs_quantlib_in_its_own_process_never_in_the_web_process(
 # ---------------------------------------------------------------------------
 
 
-def _stub_the_rest_of_the_lifespan(monkeypatch, main) -> None:
+def _stub_the_rest_of_the_lifespan(monkeypatch, app_lifespan) -> None:
     """Everything else the lifespan starts or stops, reduced to nothing, as the other lifespan tests do."""
 
     async def nothing(*_args, **_kwargs):
@@ -541,29 +541,32 @@ def _stub_the_rest_of_the_lifespan(monkeypatch, main) -> None:
     async def scheduler(event):
         await event.wait()
 
-    monkeypatch.setattr(main, "validate_signal_runtime", lambda: SimpleNamespace(pandas_ta_classic_version="test", talib_version="test"))
-    monkeypatch.setattr(main.SignalPluginRegistry, "auto_discover", lambda: None)
-    monkeypatch.setattr(main.SignalPluginRegistry, "list_plugin_codes", lambda: [])
-    monkeypatch.setattr(main.ToolPluginRegistry, "get_snapshot", lambda: SimpleNamespace(definitions=[], failures=[]))
-    monkeypatch.setattr(main, "ensure_data_dirs", lambda: None)
-    monkeypatch.setattr(main, "initialize_risk_scenario_catalog", catalog)
-    monkeypatch.setattr(main, "seed_default_avatars", lambda: 0)
-    monkeypatch.setattr(main, "ensure_database_exists", lambda: None)
-    monkeypatch.setattr(main, "_initialize_global_settings", nothing)
-    monkeypatch.setattr(main, "_prewarm_provider_caches", nothing)
-    monkeypatch.setattr(main, "get_shutdown_event", lambda: shutdown_event)
-    monkeypatch.setattr(main, "scheduler_loop", scheduler)
-    monkeypatch.setattr(main, "shutdown_tool_executor", nothing)
-    for registry in (main.AssetProviderRegistry, main.FXProviderRegistry, main.BRIMProviderRegistry):
+    monkeypatch.setattr(app_lifespan, "validate_signal_runtime", lambda: SimpleNamespace(pandas_ta_classic_version="test", talib_version="test"))
+    monkeypatch.setattr(app_lifespan.SignalPluginRegistry, "auto_discover", lambda: None)
+    monkeypatch.setattr(app_lifespan.SignalPluginRegistry, "list_plugin_codes", lambda: [])
+    monkeypatch.setattr(app_lifespan.ToolPluginRegistry, "get_snapshot", lambda: SimpleNamespace(definitions=[], failures=[]))
+    monkeypatch.setattr(app_lifespan, "ensure_data_dirs", lambda: None)
+    monkeypatch.setattr(app_lifespan, "initialize_risk_scenario_catalog", catalog)
+    monkeypatch.setattr(app_lifespan, "seed_default_avatars", lambda: 0)
+    monkeypatch.setattr(app_lifespan, "ensure_database_exists", lambda: None)
+    monkeypatch.setattr(app_lifespan, "_initialize_global_settings", nothing)
+    monkeypatch.setattr(app_lifespan, "_prewarm_provider_caches", nothing)
+    # W-B53: the BRIM parse pool's forkserver, started in the background by the cure; raising=False: absent before it
+    monkeypatch.setattr(app_lifespan, "prewarm_brim_parse_pool", lambda: None, raising=False)
+    monkeypatch.setattr(app_lifespan, "get_shutdown_event", lambda: shutdown_event)
+    monkeypatch.setattr(app_lifespan, "scheduler_loop", scheduler)
+    monkeypatch.setattr(app_lifespan, "shutdown_tool_executor", nothing)
+    for registry in (app_lifespan.AssetProviderRegistry, app_lifespan.FXProviderRegistry, app_lifespan.BRIMProviderRegistry):
         monkeypatch.setattr(registry, "shutdown_all_providers", lambda: None)
-    monkeypatch.setattr(main, "shutdown_brim_parse_pool", lambda wait=False: None)
-    monkeypatch.setattr(main, "close_all_caches", lambda: None)
+    monkeypatch.setattr(app_lifespan, "shutdown_brim_parse_pool", lambda wait=False: None)
+    monkeypatch.setattr(app_lifespan, "close_all_caches", lambda: None)
 
 
 @pytest.mark.asyncio
 async def test_the_lifespan_prewarms_the_table_off_the_request_path_and_stops_it_at_shutdown(fresh_calendar, monkeypatch):
     module = market_calendar()
-    main = importlib.import_module("backend.app.main")
+    app_lifespan = importlib.import_module("backend.app.services.platform.app_lifespan")
+    app = importlib.import_module("backend.app.main").app
     events: list[str] = []
     release = asyncio.Event()
     prewarms: list[asyncio.Task] = []
@@ -581,15 +584,15 @@ async def test_the_lifespan_prewarms_the_table_off_the_request_path_and_stops_it
     async def fake_shutdown_quant_worker_pools() -> None:
         events.append("shutdown_quant_worker_pools")
 
-    # Whichever way main reaches them: a name imported into main, or the module's attribute.
-    for owner in (main, module):
-        monkeypatch.setattr(owner, "start_market_holiday_prewarm", fake_prewarm, raising=False)
-        monkeypatch.setattr(owner, "shutdown_market_holidays", fake_shutdown_market_holidays, raising=False)
-    monkeypatch.setattr(main, "shutdown_quant_worker_pools", fake_shutdown_quant_worker_pools)
-    _stub_the_rest_of_the_lifespan(monkeypatch, main)
+    # Whichever way the lifespan reaches them: a name imported into app_lifespan, or the module's attribute.
+    for owner in (app_lifespan, module):
+        monkeypatch.setattr(owner, "start_market_holiday_prewarm", fake_prewarm, raising=True)
+        monkeypatch.setattr(owner, "shutdown_market_holidays", fake_shutdown_market_holidays, raising=True)
+    monkeypatch.setattr(app_lifespan, "shutdown_quant_worker_pools", fake_shutdown_quant_worker_pools)
+    _stub_the_rest_of_the_lifespan(monkeypatch, app_lifespan)
 
     async def serve() -> None:
-        async with main.lifespan(main.app):
+        async with app_lifespan.lifespan(app):
             events.append("serving")
             assert len(prewarms) == 1, "startup must start the prewarm"
             # The build is still running: startup did not wait for it.

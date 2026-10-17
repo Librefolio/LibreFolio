@@ -1,0 +1,20 @@
+{
+  "about": "Content-Security-Policy violations the E2E collector (H-43, e2e/fixtures/playwright.ts and e2e/fixtures/csp.ts) already knows: each one is recorded and attached to the test, and does not fail it. A ratchet: an entry is added only by a recorded decision, with its reason and its owner, never to silence a red, and removed by the lot that cures it.",
+  "entries": [
+    {
+      "id": "cheetah-grid-global-probe",
+      "directive": "script-src",
+      "blockedURI": "eval",
+      "sample": "(function anonymous(\n) {\nreturn this\n})",
+      "reason": "cheetah-grid 1.16.7 (both of its builds; it ships no ES module) bundles webpack's global probe, new Function(\"return this\")(), inside a try/catch that falls back to window: harmless under an enforced policy. Seen by the first cloud smoke on the BRIM table preview (files.spec.ts). Known by its exact sample (H-52): Chromium reports the source the Function constructor builds, so istanbul's coverage preamble, the same probe, matches too, and any other eval fails the test.",
+      "owner": "H: removed when cheetah-grid stops probing the global with eval (an upgrade, or a bundler that rewrites the probe)"
+    },
+    {
+      "id": "address-probe-other-origin",
+      "directive": "connect-src",
+      "blockedPath": "/api/v1/auth/address-probe",
+      "reason": "The address check of a link (Settings › Users) fetches <the address the admin typed>/api/v1/auth/address-probe, whatever its origin: admin-users.spec.ts AUSR-E-07 types other origins on purpose (127.0.0.1 for localhost, a closed port, an .invalid host). Under an enforced connect-src 'self', a probe of another origin than the page's would be blocked.",
+      "owner": "A (the probe's experience) + H (the enforcement lot: the configured public origin in connect-src, or a server-side probe)"
+    }
+  ]
+}

@@ -58,6 +58,6 @@ with `DeferredAppPopups` skipping the wait for that one (`64d78e244`, 2026-09-24
 | Popup lane test | `frontend/src/lib/features/onboarding/components/DeferredAppPopups.test.ts` |
 | Requested flag | `frontend/src/lib/features/update-check/updateCheckStore.svelte.ts` |
 | Donation state | `frontend/src/lib/stores/app/donationPopupStore.svelte.ts` |
-| Donation decision at sign-in | `backend/app/services/donation_popup_service.py` |
+| Donation decision at sign-in | `backend/app/services/accounts/donation_popup_service.py` |
 | Layout mount | `frontend/src/routes/(app)/+layout.svelte` |
 | Developer doc | `mkdocs_src/docs/developer/frontend/onboarding.md` |

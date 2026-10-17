@@ -13,10 +13,14 @@
  *        come back — and the lots panel that was already open asks again by itself (decision D2). D2 was written
  *        red-first: until «Sync rates» bumps the dashboard's `refreshVersion`, the signal `LotsAnalysisPanel`
  *        already listens to, the open panel keeps the answer it had.
- *   E2 — item 22, through the one path the app still allows (P-10): an ADJUSTMENT linked to a SPLIT is saved in
- *        Auto without a cost; once the event is retyped to PRICE_ADJUSTMENT the row is an acquisition of unknown
- *        cost. The banner names the asset and links to it, the positions show dashes on the dashboard and on the
- *        broker page, the lots panel reports it — and an explicit cost of 0 per unit clears it.
+ *   E2 — item 22, the path P-10 closed (decision 27): an ADJUSTMENT linked to a SPLIT is saved in Auto without a
+ *        cost of its own; if its event became a PRICE_ADJUSTMENT, the row would be an acquisition of unknown cost.
+ *        That retype is refused while the row has no cost — 409 EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST, naming the
+ *        split, its date and the row — and nothing changes: 20 shares at an average cost of 50, with figures on
+ *        the dashboard and on the broker page, and no unknown cost in the report, the banner or the lots panel.
+ *        With a cost of 0 per unit on the row the same retype goes through, and nothing is unknown either. The
+ *        banner on units of unknown cost (item 22 itself) is proven on the rows an older version left behind, the
+ *        only ones left: `data-quality-legacy.spec.ts`.
  *   E3 — item 23: the tooltip of «Unrealized change» splits the period's change by asset currency into what the
  *        assets did and what the exchange rate did to their cost, in the backend's order and to the cent.
  *
@@ -78,7 +82,7 @@ type ReportIssue = {
     affected_asset_names?: string[] | null;
     cta_action?: string | null;
 };
-type ReportHolding = {asset_id: number; broker_id?: number | null; wac_per_unit?: string | null; gain_loss?: string | null; gain_loss_percent?: string | null};
+type ReportHolding = {asset_id: number; broker_id?: number | null; quantity?: string | null; wac_per_unit?: string | null; gain_loss?: string | null; gain_loss_percent?: string | null};
 type BreakdownRow = {kind: string; asset_currency: string; period_delta: Money};
 type ReportBody = {
     metadata?: {target_currency?: string} | null;
@@ -91,9 +95,11 @@ type ReportBody = {
 };
 type ReportRequestBody = {include_summary?: boolean; date_range?: {start?: string; end?: string} | null};
 type LotsRequestBody = {asset_id?: number; requested_analyses?: string[]};
-type LotsBody = {lots?: unknown[] | null; data_quality?: {issues?: ReportIssue[]} | null};
+type LotsBody = {lots?: Array<{lot_id: number}> | null; data_quality?: {issues?: ReportIssue[]} | null};
 type CommitBody = {committed: boolean; issues?: unknown[]; results?: Array<{operation: string; index: number; ids: number[]}>};
 type TransactionRead = {id: number; asset_event_id?: number | null; cost_basis_override?: Money | null};
+/** A refused events save: the code and where it is, never only a sentence (decision 22). */
+type EventRefusalBody = {detail?: {error_code?: string; message?: string; params?: Record<string, unknown> | null} | null};
 type ConvertBody = {results: Array<{conversion_date: string; to_amount: Money; backward_fill_info?: unknown}>};
 type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
 
@@ -288,9 +294,14 @@ async function createSplitEvent(page: Page, assetId: number, day: string, ratio:
     return splits[0].id;
 }
 
-/** Edit an event in place, by id, as the event editor does. */
+/** An event edited in place, by id, as the event editor saves it: the application's answer, whatever it is. */
+function editEvent(page: Page, assetId: number, eventId: number, day: string, type: string, amount: string) {
+    return page.request.post(`${API}/assets/events`, {data: [{asset_id: assetId, events: [{id: eventId, date: day, type, value: {code: 'EUR', amount}}]}]});
+}
+
+/** Edit an event in place, by id, as the event editor does: the save must be accepted. */
 async function retypeEvent(page: Page, assetId: number, eventId: number, day: string, type: string, amount: string): Promise<void> {
-    await jsonFrom(await page.request.post(`${API}/assets/events`, {data: [{asset_id: assetId, events: [{id: eventId, date: day, type, value: {code: 'EUR', amount}}]}]}), `retype event ${eventId} to ${type}`);
+    await jsonFrom(await editEvent(page, assetId, eventId, day, type, amount), `retype event ${eventId} to ${type}`);
 }
 
 /**
@@ -468,6 +479,57 @@ async function expectLotIssue(page: Page, code: string): Promise<void> {
     await expect(banner.getByTestId(`lot-data-quality-issue-${code}`)).toBeVisible();
 }
 
+/**
+ * No cost is unknown on the dashboard the URL opened, nor in the lots panel it opened on `assetId` (E2).
+ *
+ * The report and the lots answer say what there is; the page must show exactly that. The position's figures — 20
+ * shares at an average cost of 50, quoted 55 — come from the same report and are the presence barrier of the
+ * banner's absence, the lots of the answer that of the lots banner's. Both banners are unmounted when there is
+ * nothing to report, so an absence is a count of 0.
+ */
+async function expectNoUnknownCost(page: Page, load: DashboardLoad, assetId: number, brokerId: number): Promise<void> {
+    expectDashboardPreconditions(load);
+    const issues = reportIssues(load.report);
+    expect(
+        issues.filter((issue) => issue.code === 'MISSING_COST_BASIS'),
+        `no cost is unknown; the report carries ${JSON.stringify(issues)}`,
+    ).toEqual([]);
+    const holding = holdingOf(load.report, assetId, brokerId);
+    expect({quantity: numberOrNull(holding.quantity), ...costFigures(holding)}, '20 shares at an average cost of 50 (1000 EUR over 20), quoted 55: a P&L of 100, +10 %').toEqual({quantity: 20, wac_per_unit: 50, gain_loss: 100, gain_loss_percent: 0.1});
+
+    const dashboard = page.getByTestId('dashboard-page');
+    await waitForSettled(dashboard, 25_000);
+    const row = positionRow(dashboard, assetId, brokerId);
+    await showCostColumns(page, dashboard, row);
+    for (const columnId of COST_COLUMNS) await expect(costCell(row, columnId), `${columnId}: a figure, never a dash`).toHaveText(/\d/);
+    // Decided by the report, not by a probe; the figures above prove that report is on screen.
+    if (issues.length === 0) {
+        await expect(page.getByTestId('data-quality-banner'), 'nothing to report: no banner').toHaveCount(0);
+    } else {
+        await expandStrict(page.getByTestId('data-quality-toggle'));
+        await expect(page.getByTestId('data-quality-issue-MISSING_COST_BASIS'), 'no row for a cost nobody knows').toHaveCount(0);
+    }
+
+    const lotIssuesNow = lotIssues(load.lots);
+    expect(
+        lotIssuesNow.filter((issue) => issue.code === 'MISSING_COST_BASIS'),
+        `the lots analysis knows every cost too; it carries ${JSON.stringify(lotIssuesNow)}`,
+    ).toEqual([]);
+    const lotIds = (load.lots?.lots ?? []).map((lot) => lot.lot_id);
+    expect(lotIds.length, 'precondition: the purchase opened at least one lot').toBeGreaterThan(0);
+    const lotsPanel = page.getByTestId('lots-analysis-panel');
+    await expect(lotsPanel).toBeVisible({timeout: 15_000});
+    // The witness: the lots of this very answer are on screen, so the panel shows it — and its banner with it.
+    for (const lotId of lotIds) await expect(lotsPanel.getByTestId('unified-lots-table').locator(`tbody tr[data-row-id="${lotId}"]`), `lot ${lotId} of the answer is on screen`).toBeVisible({timeout: 20_000});
+    // Decided by that answer, not by a probe of the page.
+    if (lotIssuesNow.length === 0) {
+        await expect(lotsPanel.getByTestId('lot-data-quality-banner'), 'nothing to report in the lots panel: no banner').toHaveCount(0);
+    } else {
+        await expandStrict(lotsPanel.getByTestId('lot-data-quality-toggle'));
+        await expect(lotsPanel.getByTestId('lot-data-quality-issue-MISSING_COST_BASIS'), 'no lots row for a cost nobody knows').toHaveCount(0);
+    }
+}
+
 /** Watch the «Sync rates» requests of this page from now on: how many left before the click, and when the answer came. */
 function watchFxSync(page: Page): SyncWatch {
     const watch: SyncWatch = {sentBeforeClick: 0, clicked: false, answered: false};
@@ -626,18 +688,17 @@ test.describe('Data quality on real data — items 21, 22, 23 (issue #32)', () =
         });
     });
 
-    test('E2 — item 22 (P-10): an acquisition without a purchase cost is on the banner, with the asset to fix', async ({page, request, owned}) => {
+    test('E2 — item 22 (P-10): a SPLIT whose incoming adjustment has no cost cannot be retyped, so no unknown cost reaches the dashboard — with a cost of 0 it can', async ({page, request, owned}) => {
         test.setTimeout(150_000);
         const d0 = daysAgoIso(60);
         const d1 = daysAgoIso(50);
         const d2 = daysAgoIso(30);
 
-        const {brokerId, assetId, assetName, adjustmentId} = await test.step('seed (P-10): an ADJUSTMENT linked to a SPLIT, saved without a cost, then the event retyped to PRICE_ADJUSTMENT', async () => {
+        const {brokerId, assetId, eventId, adjustmentId} = await test.step('seed: 10 shares bought for 1000 EUR, a SPLIT of 2, and its ADJUSTMENT +10 saved in Auto, which stores no cost on a split-linked row', async () => {
             await openAccount(page, request, owned, 'dqcost');
             const suffix = uniqueSuffix();
             const brokerId = await createBroker(page, owned, `dq-cost-broker-${suffix}`);
-            const assetName = `DQ unknown cost ${suffix}`;
-            const assetId = await createManualAsset(page, owned, assetName, 'EUR');
+            const assetId = await createManualAsset(page, owned, `DQ split ${suffix}`, 'EUR');
             await seedPrices(page, assetId, [
                 {date: d1, close: 100, currency: 'EUR'},
                 {date: d2, close: 55, currency: 'EUR'},
@@ -662,50 +723,30 @@ test.describe('Data quality on real data — items 21, 22, 23 (issue #32)', () =
             const saved = await readTransaction(page, adjustmentId);
             expect(saved.asset_event_id, 'the ADJUSTMENT is linked to the split').toBe(eventId);
             expect(saved.cost_basis_override ?? null, 'precondition (P-10): a split-linked ADJUSTMENT in Auto is saved without a cost').toBeNull();
-            await retypeEvent(page, assetId, eventId, d2, 'PRICE_ADJUSTMENT', '2');
-            expect(await eventsOn(page, assetId, d2), 'the event keeps its id and is now a PRICE_ADJUSTMENT').toEqual([{id: eventId, type: 'PRICE_ADJUSTMENT'}]);
-            return {brokerId, assetId, assetName, adjustmentId};
+            return {brokerId, assetId, eventId, adjustmentId};
         });
 
-        const dashboard = page.getByTestId('dashboard-page');
-        const costRow = page.getByTestId('data-quality-issue-MISSING_COST_BASIS');
-        const navLink = costRow.getByTestId('data-quality-nav-assets-MISSING_COST_BASIS').getByTestId(`data-quality-nav-asset-${assetId}`);
-        const row = positionRow(dashboard, assetId, brokerId);
-
-        await test.step('the report flags the asset, the banner links it, the positions show a dash, the lots panel the issue', async () => {
-            const load = await openDashboard(page, dashboardUrl({tab: 'posizioni', assetId}), assetId);
-            expectDashboardPreconditions(load);
-            const issues = reportIssues(load.report);
-            const costIssues = issues.filter((issue) => issue.code === 'MISSING_COST_BASIS');
-            expect(costIssues, `exactly one MISSING_COST_BASIS issue for this account; the report carries ${JSON.stringify(issues)}`).toHaveLength(1);
-            expect(costIssues[0], 'the issue names the asset and links to it').toMatchObject({severity: 'warning', cta_action: 'navigate_asset', affected_asset_ids: [assetId], affected_asset_names: [assetName]});
-            expect(costFigures(holdingOf(load.report, assetId, brokerId)), 'shares of unknown cost leave the average cost and the P&L unknown').toEqual({wac_per_unit: null, gain_loss: null, gain_loss_percent: null});
-
-            await waitForSettled(dashboard, 25_000);
-            await expandStrict(page.getByTestId('data-quality-toggle'));
-            await expect(costRow).toBeVisible({timeout: 10_000});
-            await expect(costRow).toHaveAttribute('data-severity', 'warning');
-            const links = costRow.getByTestId('data-quality-nav-assets-MISSING_COST_BASIS').locator('[data-testid^="data-quality-nav-asset-"]');
-            await expect(links, 'one link per affected asset, and this account has one').toHaveCount(1);
-            await expect(navLink, 'the link names the asset').toContainText(assetName);
-
-            await showCostColumns(page, dashboard, row);
-            for (const columnId of COST_COLUMNS) await expect(costCell(row, columnId), `${columnId}: a dash, never a zero`).toHaveText(DASH);
-
-            expect(
-                lotIssues(load.lots).map((issue) => issue.code),
-                'precondition: the lots analysis reports the unknown cost too',
-            ).toContain('MISSING_COST_BASIS');
-            await expectLotIssue(page, 'MISSING_COST_BASIS');
+        await test.step('the retype to PRICE_ADJUSTMENT is refused (409), naming the split, its date and the ADJUSTMENT without a cost — and nothing changes', async () => {
+            const refused = await editEvent(page, assetId, eventId, d2, 'PRICE_ADJUSTMENT', '2');
+            expect(refused.status(), `the retype of SPLIT ${eventId} must be refused while ADJUSTMENT ${adjustmentId} has no cost — got ${await refused.text()}`).toBe(409);
+            const detail = ((await refused.json()) as EventRefusalBody).detail;
+            expect({error_code: detail?.error_code, params: detail?.params}, 'the refusal says why, and where').toEqual({
+                error_code: 'EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST',
+                // R13-SEC7: the caller owns the broker and sees every adjustment, so none is hidden.
+                params: {asset_id: assetId, item_index: 0, event_id: eventId, date: d2, transaction_ids: [adjustmentId], hidden_transactions_count: 0},
+            });
+            expect(await eventsOn(page, assetId, d2), 'the event is still the SPLIT, under its id').toEqual([{id: eventId, type: 'SPLIT'}]);
+            const kept = await readTransaction(page, adjustmentId);
+            expect({asset_event_id: kept.asset_event_id, cost_basis_override: kept.cost_basis_override ?? null}, 'the ADJUSTMENT is still linked to the split, still without a cost').toEqual({asset_event_id: eventId, cost_basis_override: null});
         });
 
-        await test.step('the banner link opens the asset to fix', async () => {
-            await navLink.click();
-            await expect(page).toHaveURL(new RegExp(`/assets/${assetId}(?:[/?#]|$)`), {timeout: 15_000});
-            await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 15_000});
+        await test.step('no unknown cost anywhere: 20 shares at an average cost of 50 with figures on the dashboard, nothing of the kind in the banner or the lots panel', async () => {
+            // A fresh document: no report the page had already asked for can be taken for the one awaited here.
+            await page.goto('about:blank');
+            await expectNoUnknownCost(page, await openDashboard(page, dashboardUrl({tab: 'posizioni', assetId}), assetId), assetId, brokerId);
         });
 
-        await test.step('the broker page shows the same dashes', async () => {
+        await test.step('the broker page shows the same figures', async () => {
             await page.goto(`/brokers/${brokerId}?tab=posizioni`);
             await expect(page.getByTestId('broker-detail-page')).toBeVisible({timeout: 15_000});
             // Disabled while the broker or its report is loading: the page's busy state.
@@ -713,33 +754,22 @@ test.describe('Data quality on real data — items 21, 22, 23 (issue #32)', () =
             const holdings = page.getByTestId('broker-holdings');
             const brokerRow = positionRow(holdings, assetId, brokerId);
             await showCostColumns(page, holdings, brokerRow);
-            for (const columnId of COST_COLUMNS) await expect(costCell(brokerRow, columnId), `broker page, ${columnId}: a dash, never a zero`).toHaveText(DASH);
+            for (const columnId of COST_COLUMNS) await expect(costCell(brokerRow, columnId), `broker page, ${columnId}: a figure, never a dash`).toHaveText(/\d/);
         });
 
-        await test.step('fix: an explicit purchase cost of 0 per unit clears the warning', async () => {
+        await test.step('with a cost of 0 per unit on the ADJUSTMENT the same retype goes through, and no cost is unknown either', async () => {
             await commitTransactions(page, {updates: [{id: adjustmentId, cost_basis_override: {code: 'EUR', amount: '0'}, cost_basis_mode: 'manual'}]}, 'set a purchase cost of 0 per unit on the ADJUSTMENT');
-            const saved = await readTransaction(page, adjustmentId);
-            expect({code: saved.cost_basis_override?.code, amount: numberOrNull(saved.cost_basis_override?.amount)}, 'precondition: the cost is stored, and it is zero').toEqual({code: 'EUR', amount: 0});
+            const costed = await readTransaction(page, adjustmentId);
+            expect({asset_event_id: costed.asset_event_id, code: costed.cost_basis_override?.code, amount: numberOrNull(costed.cost_basis_override?.amount)}, 'precondition: still linked to the split, with a cost of 0 stored').toEqual({asset_event_id: eventId, code: 'EUR', amount: 0});
 
-            const load = await openDashboard(page, dashboardUrl({tab: 'posizioni'}), null);
-            expectDashboardPreconditions(load);
-            const left = reportIssues(load.report);
-            expect(
-                left.filter((issue) => issue.code === 'MISSING_COST_BASIS'),
-                `every cost is known now; the report carries ${JSON.stringify(left)}`,
-            ).toEqual([]);
-            expect(numberOrNull(holdingOf(load.report, assetId, brokerId).wac_per_unit), '1000 EUR over 20 shares').toBe(50);
+            await retypeEvent(page, assetId, eventId, d2, 'PRICE_ADJUSTMENT', '2');
+            expect(await eventsOn(page, assetId, d2), 'the event keeps its id and is now a PRICE_ADJUSTMENT').toEqual([{id: eventId, type: 'PRICE_ADJUSTMENT'}]);
+            expect((await readTransaction(page, adjustmentId)).asset_event_id, 'the ADJUSTMENT keeps its link').toBe(eventId);
 
-            await waitForSettled(dashboard, 25_000);
-            await showCostColumns(page, dashboard, row);
-            for (const columnId of COST_COLUMNS) await expect(costCell(row, columnId), `${columnId} is a figure again`).toHaveText(/\d/, {timeout: 15_000});
-            // Decided by the report, not by a probe; the figures above prove that report is on screen.
-            if (left.length === 0) {
-                await expect(page.getByTestId('data-quality-banner'), 'nothing is left to report: no banner').toHaveCount(0);
-            } else {
-                await expandStrict(page.getByTestId('data-quality-toggle'));
-                await expect(costRow, 'the unknown-cost row is gone').toHaveCount(0);
-            }
+            // No longer a split: the 10 shares are an acquisition at a known cost of 0, so the average is still 1000 EUR
+            // over 20 shares.
+            await page.goto('about:blank');
+            await expectNoUnknownCost(page, await openDashboard(page, dashboardUrl({tab: 'posizioni', assetId}), assetId), assetId, brokerId);
         });
     });
 

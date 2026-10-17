@@ -27,12 +27,8 @@
         align-items: center;
         justify-content: center;
         gap: 0.75rem;
-        color: #6b7280;
+        color: var(--lf-text-muted);
         font-size: 0.875rem;
-    }
-
-    :global(.dark) .loading-spinner {
-        color: #9ca3af;
     }
 
     .loading-spinner.sm {
@@ -50,15 +46,10 @@
     .spinner {
         width: 24px;
         height: 24px;
-        border: 3px solid #e5e7eb;
-        border-top-color: #1a4031;
+        border: 3px solid var(--lf-surface-neutral);
+        border-top-color: var(--lf-link);
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
-    }
-
-    :global(.dark) .spinner {
-        border-color: #374151;
-        border-top-color: #10b981;
     }
 
     @keyframes spin {

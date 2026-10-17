@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from functools import cache
 from uuid import uuid4
 
@@ -95,9 +95,13 @@ from backend.app.services.ai_export.temporal.policy import (
     EventSelectionPolicy,
     indicator_history_row_limit,
 )
+from backend.app.utils.date_range_limits import BulkTooManyDaysError
+from backend.app.utils.datetime_utils import latest_range_end
 
 SCHEMA_VERSION = AI_EXPORT_SCHEMA_VERSION
 CATALOG_VERSION = AI_EXPORT_CATALOG_VERSION
+# R13-SEC7-1: the longest period a snapshot builds, in calendar years before its end.
+_MAX_PERIOD_YEARS = 100
 
 _DETAIL_ORDER = {
     DetailLevel.COMPACT: 0,
@@ -173,6 +177,30 @@ class AiExportPreparedRequest:
     scope: BuildScope
     dataset: DatasetSpec | None = None
     analysis: AnalysisSpec | None = None
+
+
+def _years_before(day: date, years: int) -> date:
+    """The same month and day ``years`` calendar years before ``day`` (29 February → 28), never before ``date.min``."""
+    if day.year - years < date.min.year:
+        return date.min
+    try:
+        return day.replace(year=day.year - years)
+    except ValueError:
+        return day.replace(year=day.year - years, day=28)
+
+
+def _bounded_period_request(request: AiExportSnapshotRequest) -> AiExportSnapshotRequest:
+    """``request`` with a period a snapshot can build (R13-SEC7-1); the same object when it already is one.
+
+    The period ends by ``latest_range_end()`` (tomorrow) and starts at most ``_MAX_PERIOD_YEARS`` before that end, never
+    after it: components walk the period day by day, and an unbounded one held the instance. The scope, every component
+    and the snapshot's meta then read this one period.
+    """
+    end = min(request.period.end, latest_range_end())
+    start = min(max(request.period.start, _years_before(end, _MAX_PERIOD_YEARS)), end)
+    if start == request.period.start and end == request.period.end:
+        return request
+    return request.model_copy(update={"period": AiExportPeriod(start=start, end=end)})
 
 
 def _api_domain(domain: Domain) -> AiExportDomain:
@@ -490,6 +518,7 @@ class AiExportSnapshotService:
         user_id: int,
         request: AiExportSnapshotRequest,
     ) -> AiExportPreparedRequest:
+        request = _bounded_period_request(request)
         if request.expected_catalog_version != CATALOG_VERSION:
             raise AiExportVersionMismatchError(
                 "expected_catalog_version",
@@ -728,6 +757,8 @@ class AiExportSnapshotService:
         request: AiExportSnapshotRequest,
     ) -> AiExportSnapshotResponse:
         prepared = await self.prepare_request(user_id, request)
+        # The bounded request (R13-SEC7-1): the meta's period and snapshot date are the ones the components built.
+        request = prepared.request
         context = BuildContext(
             self.component_registry,
             request_id=prepared.scope.request_id,
@@ -794,6 +825,11 @@ class AiExportSnapshotService:
             root_cause = _root_cause(exc)
             if isinstance(root_cause, AssetNotFoundError):
                 raise AiExportEntityNotFoundError(str(root_cause)) from exc
+            if isinstance(root_cause, BulkTooManyDaysError):
+                # J-50: the prices this selection reads over this period are more per-day points than one request may
+                # build (Z-25): the selection does not apply to so long a period, a 422 the user can act on, not a 503.
+                applicability_code = prepared.dataset.applicability_code if prepared.dataset is not None else prepared.analysis.applicability_code
+                raise AiExportSelectionNotApplicableError(applicability_code, "too_many_price_days") from exc
             raise AiExportSnapshotSourceError(
                 exc.component_id,
                 retryable=False,

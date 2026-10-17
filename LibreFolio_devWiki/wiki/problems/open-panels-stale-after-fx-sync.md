@@ -49,7 +49,7 @@ reload — was closed the same way in V's batch 2 (`a0722f755`, train 58): red f
 | Role | Path |
 |------|------|
 | `syncMissingFxRates`, `refreshVersion`, `handleBannerAction` | `frontend/src/routes/(app)/dashboard/+page.svelte` |
-| The listener in the lots panel | `frontend/src/lib/components/brokers/lots/LotsAnalysisPanel.svelte` |
+| The listener in the lots panel | `frontend/src/lib/features/brokers/lots/LotsAnalysisPanel.svelte` |
 | E1, the red then the green | `frontend/e2e/portfolio/data-quality-real.spec.ts` |
 | Developer doc (the `sync_fx_pair` CTA) | `mkdocs_src/docs/developer/frontend/data-quality-banner.md` |
 | Backlog V-1 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |

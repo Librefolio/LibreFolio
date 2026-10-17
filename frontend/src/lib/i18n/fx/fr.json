@@ -46,7 +46,8 @@
       "timeoutAfter": "Délai dépassé après {seconds} s",
       "requestTimedOut": "La requête a expiré après {seconds} s. Augmentez le délai et réessayez.",
       "failed": "Échec de la synchronisation",
-      "retryFailed": "{n, plural, one {Réessayer l’échec} other {Réessayer les # échecs}}"
+      "retryFailed": "{n, plural, one {Réessayer l’échec} other {Réessayer les # échecs}}",
+      "overwriteWarning": "{existing, plural, one {# sur {total} a déjà} many {# sur {total} ont déjà} other {# sur {total} ont déjà}} des données enregistrées sur cette période : la synchronisation les remplace par les valeurs du fournisseur, modifications manuelles comprises."
     },
     "route": {
       "title": "Routes de Conversion",
@@ -99,6 +100,7 @@
     "savedCount": "{n, plural, one {# enregistré} other {# enregistrés}}",
     "deletedCount": "{n, plural, one {# supprimé} other {# supprimés}}",
     "skippedCount": "{n, plural, one {# ignoré (invalide)} other {# ignorés (invalides)}}",
-    "saveFailed": "Échec de l’enregistrement des taux FX : {error}"
+    "saveFailed": "Échec de l’enregistrement des taux FX : {error}",
+    "refusedCount": "{n, plural, one {# refusé} other {# refusés}}"
   }
 }

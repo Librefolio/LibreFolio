@@ -26,8 +26,9 @@ A few rules keep entries quick:
 
 - **Amounts are totals** — type the total paid or received, not the price per share (*Total amount (not per share)*).
 - **Type positive numbers** — the form adds the minus sign where money or units go out: a purchase's payment, a sale's units, a withdrawal, a fee, a tax. Only an **Adjustment** quantity takes a sign: positive adds units, negative removes them.
-- **Checks as you go** — once the required fields are filled, the form checks the entry against your ledger and the other workspace rows, and lists any problem at the top. **⚡ Validate now** checks at once. The form also spots some mistakes by itself: a date it cannot read, or one in the future, stays on screen in red, and the previous date is not used in its place; a quantity or amount with the wrong sign or format, such as a negative quantity on a purchase, turns red; and a warning at the top flags a transfer with the same broker on both sides, or an exchange with the same currency. Until you fix them, nothing is checked, *valid* does not appear and **Apply** stays disabled; **⚡ Validate now** takes you to the field to fix instead.
+- **Checks as you go** — once the required fields are filled, the form checks the entry against your ledger and the other workspace rows, and lists any problem at the top. **⚡ Validate now** checks at once. The form also spots some mistakes by itself: a date it cannot read, or one in the future, stays on screen in red, and the previous date is not used in its place; a quantity or amount with the wrong sign or format, such as a negative quantity on a purchase, turns red; and a warning at the top flags a transfer with the same broker on both sides, or an exchange with the same currency. Until you fix them, nothing is checked, *valid* does not appear and **Apply** stays disabled; **⚡ Validate now** takes you to the field to fix instead. Transaction dates go from 1 January 1900 to one year from today, but the form itself stops at today: a date before 1900 is refused with a message such as *Date: Between 1900-01-01 and 2027-10-17*, when today is 17 October 2026.
 - **Missing broker or asset?** — **Create new** in the broker list, or **New asset** in the asset list, creates it without leaving the form.
+- **Missing event?** — **+ New event** in the **Linked Event** field creates the asset's event and links it. If the asset already has an event of that type on that date, nothing is saved: the window shows that event, to use it, or to edit it if you entered it by hand, and never overwrites it ([New event from a transaction](../assets/detail/events.md#new-event)).
 
 ??? info "💰 Cost basis of incoming units — for Adjustments and Asset Transfers"
 
@@ -36,7 +37,7 @@ A few rules keep entries quick:
     - **Auto** — LibreFolio computes it as a [Weighted Average Cost](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md); press **⚡ Validate now** to see it.
     - **Manual** — you type it.
 
-    In **Auto**, the average is taken at the sending broker of a transfer, or at the adjustment's own broker. If that broker has no other transaction in the asset up to the date the units come in, there is nothing to average, and the cost is 0 by design: if those units did cost something, open the transaction later and type their cost in **Manual**. In **Manual**, the field cannot stay empty: LibreFolio flags the row and saves nothing until you fill it in or switch to **Auto**. Type 0 only for units that really cost nothing, such as the new shares of a stock split; for a gift, type the donor's original cost. If an exchange rate is missing, the **Sync FX rates** link fetches it.
+    In **Auto**, the average is taken at the sending broker of a transfer, or at the adjustment's own broker. If that broker has no other transaction in the asset up to the date the units come in, there is nothing to average, and the cost is 0 by design: if those units did cost something, open the transaction later and type their cost in **Manual**. In **Manual**, the field cannot stay empty: LibreFolio flags the row and saves nothing until you fill it in or switch to **Auto**. Editing a saved transaction is no exception: if you empty its cost in **Manual**, the save is refused, because the transaction needs a cost basis — choose **Auto** or type a value. Type 0 only for units that really cost nothing, such as the new shares of a stock split; for a gift, type the donor's original cost. If an exchange rate is missing, the **Sync FX rates** link fetches it.
 
 ---
 
@@ -60,7 +61,7 @@ The [Financial Theory guide](../../financial-theory/instruments/transaction-type
 
 ### 🔗 Paired transactions {: #composite-transactions }
 
-A paired operation is recorded as two linked transactions, which the form shows as one, with a **From** and a **To** side. Each side has its own date, and the **Swap sides** arrow turns the direction around.
+A paired operation is recorded as two linked transactions, which the form shows as one, with a **From** and a **To** side. Each side has its own date, and the **Swap sides** arrow turns the direction around. In a currency exchange the two dates usually match: they differ when the broker credits the new currency on another day.
 
 | Type | What it records | Theory |
 |------|-----------------|--------|

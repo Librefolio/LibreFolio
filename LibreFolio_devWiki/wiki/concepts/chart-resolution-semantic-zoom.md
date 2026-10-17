@@ -26,9 +26,9 @@ repeatedly) and debounced (avoids recomputing buckets on every intermediate zoom
   bucketing, aggregation rules, density/hysteresis thresholds, debounce.
 - **`PriceChartFull` / `CandlestickChart`** (`frontend/src/lib/components/charts/`) — shared line↔candle
   resolution, event markers, "measure" mode, bucket-aware tooltips.
-- **`GrowthChart`** (`frontend/src/lib/components/dashboard/GrowthChart.svelte`) — 5 series in EUR-mode, 3
+- **`GrowthChart`** (`frontend/src/lib/features/dashboard/GrowthChart.svelte`) — 5 series in EUR-mode, 3
   series in %-mode.
-- **`AllocationHistoryChart`** (`frontend/src/lib/components/dashboard/AllocationHistoryChart.svelte`) —
+- **`AllocationHistoryChart`** (`frontend/src/lib/features/dashboard/AllocationHistoryChart.svelte`) —
   dynamic stacked series per allocation category.
 - **Signal overlays** (9 types, e.g. Bollinger = envelope, MACD = 3 series) — each has its own downsample
   dispatch rule.
@@ -62,7 +62,8 @@ component/workstream. All 7 verified ✅ implemented against the actual sources.
 | Candlestick | `frontend/src/lib/components/charts/CandlestickChart.svelte` |
 | Compact/static variant | `frontend/src/lib/components/charts/PriceChartCompact.svelte` |
 | Resolution badge | `frontend/src/lib/components/charts/ResolutionBadge.svelte` |
-| Growth chart | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
-| Allocation history chart | `frontend/src/lib/components/dashboard/AllocationHistoryChart.svelte` |
+| Growth chart | `frontend/src/lib/features/dashboard/GrowthChart.svelte` |
+| Growth chart buckets and aggregation | `frontend/src/lib/features/dashboard/growthChartData.ts` |
+| Allocation history chart | `frontend/src/lib/features/dashboard/AllocationHistoryChart.svelte` |
 | Feasibility study + refinement | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_3/chart_resolution/study_chart_dynamic_resolution.md` |
 | 7 implementation plans | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_3/chart_resolution/impl_plan_chart_resolution_*.md` |

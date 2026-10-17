@@ -9,9 +9,11 @@
 import type {RenderedSignal} from '$lib/charts/signals';
 import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
 import type {ECharts} from 'echarts';
-import {buildBandSeries, buildBarSeries, buildSignalReferencePrimitives, COLORS, hexToRgba} from './lineChartHelpers';
+import {buildBandSeries, buildBarSeries, buildSignalReferencePrimitives, COLORS} from './lineChartHelpers';
+import {toRgba} from '$lib/theme/colorAlpha';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
+import {chartNeutrals} from '$lib/theme/chartTheme';
 
 // =============================================================================
 // Types
@@ -44,13 +46,15 @@ export interface ConfigurableAxisDescriptor {
 // Color palette for dark/light mode
 // =============================================================================
 
-export function getChartColors(dark: boolean): ChartColors {
+/** The price charts' colours: gain and loss, and the axes on their roles (`chartNeutrals().priceAxis`), read on `scope`. */
+export function getChartColors(dark: boolean, scope?: Element | null): ChartColors {
+    const {priceAxis} = chartNeutrals(dark, scope);
     return {
         green: dark ? COLORS.greenDark : COLORS.greenLight,
         red: dark ? COLORS.redDark : COLORS.redLight,
-        axis: dark ? '#475569' : '#d1d5db',
-        label: dark ? '#94a3b8' : '#6b7280',
-        gridLine: dark ? '#4b5563' : '#d1d5db',
+        axis: priceAxis.line,
+        label: priceAxis.label,
+        gridLine: priceAxis.gridLine,
     };
 }
 
@@ -227,11 +231,12 @@ export function buildSecondaryYAxes(
     const activeIndexes = [...signalByIndex.keys()].sort((left, right) => left - right);
     const maxIndex = activeIndexes.at(-1) ?? 0;
     const axes: any[] = [];
+    const fallbackColor = chartNeutrals(dark).secondaryAxisFallback;
 
     for (let index = 1; index <= maxIndex; index++) {
         const signal = signalByIndex.get(index);
         const active = signal !== undefined;
-        const color = signal?.color ?? (dark ? '#64748b' : '#9ca3af');
+        const color = signal?.color ?? fallbackColor;
         const label = signal?.axisLabel ?? (index === 1 ? 'RSI' : index === 2 ? 'MACD' : `AXIS ${index}`);
         const settingsKey = signal ? secondaryAxisSettingsKey(signal) : null;
         const scale = signal ? resolveSecondaryAxisScale(signalsByIndex.get(index) ?? [signal], settingsKey ? axisSettings[settingsKey] : undefined) : {min: 0, max: 1, scale: false};
@@ -340,7 +345,7 @@ export function buildOverlaySignalSeries(overlaySignals: RenderedSignal[], dates
             ...(sType === 'area'
                 ? {
                       areaStyle: {
-                          color: hexToRgba(signal.color, signal.fillOpacity ?? 0.2),
+                          color: toRgba(signal.color, signal.fillOpacity ?? 0.2),
                           origin: 0,
                       },
                   }

@@ -81,8 +81,8 @@ A quick click hid the uploaded files in step 2, and the wrong-broker check read 
 
 | Role | Path |
 |------|------|
-| `trackBrokerLoad`, `loadBrokers`, `brokersLoading`, `goNext` | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| V1–V4b | `frontend/src/lib/components/transactions/modals/ImportWizardModal.test.ts` |
+| `trackBrokerLoad`, `loadBrokers`, `brokersLoading`, `goNext` | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
+| V1–V4b | `frontend/src/lib/features/transactions/import/ImportWizardModal.test.ts` |
 | E1 | `frontend/e2e/transactions/tx-import-upload.spec.ts` |
 | The gallery wait | `frontend/e2e/gallery.spec.ts` |
 | Plan 44 | `LibreFolio_developer_journal/Release_2/Phase_0/44_importWizardBrokerGate/plan-phase00ImportWizardBrokerGate.prompt.md` |

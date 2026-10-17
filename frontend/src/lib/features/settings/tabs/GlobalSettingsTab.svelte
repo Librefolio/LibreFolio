@@ -1,0 +1,895 @@
+<script lang="ts">
+    import {_, LANGUAGE_OPTIONS} from '$lib/i18n';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
+    import {zodiosApi} from '$lib/api';
+    import {isAxiosError} from 'axios';
+    import {onDestroy, onMount} from 'svelte';
+    import {debug} from '$lib/debug';
+    import {BarChart3, ChevronDown, ChevronRight, CircleEllipsis, Clock, Database, Lock, RefreshCw, Settings, Shield, ShieldOff, Unlock, Users} from 'lucide-svelte';
+    import {type SelectOption} from '$lib/components/ui/select';
+    import type {GlobalSetting} from '$lib/types';
+    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+    import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import SettingToggle from '$lib/features/settings/SettingToggle.svelte';
+    import SettingNumber from '$lib/features/settings/SettingNumber.svelte';
+    import SettingSelect from '$lib/features/settings/SettingSelect.svelte';
+    import SettingCurrency from '$lib/features/settings/SettingCurrency.svelte';
+    import SettingTheme from '$lib/features/settings/SettingTheme.svelte';
+    import SettingActions from '$lib/features/settings/SettingActions.svelte';
+    import SettingBulkActions from '$lib/features/settings/SettingBulkActions.svelte';
+    import SchedulerConfigModal from '$lib/features/settings/SchedulerConfigModal.svelte';
+    import SchedulerLogModal from '$lib/features/settings/SchedulerLogModal.svelte';
+    import CachePanel from '$lib/features/settings/CachePanel.svelte';
+    import {ConfirmModal} from '$lib/components/table';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {pendingSchedulerRetry} from '$lib/features/settings/schedulerRetry';
+
+    // Props
+    interface Props {
+        canEdit?: boolean;
+    }
+
+    let {canEdit = false}: Props = $props();
+
+    // Default values for global settings
+    const SETTING_DEFAULTS: Record<string, string> = {
+        session_ttl_hours: '24',
+        registration_mode: 'invite',
+        require_email_verification: 'false',
+        max_file_upload_mb: '10',
+        scheduler_enabled: 'true',
+        scheduler_current_price_frequency_minutes: '10',
+        scheduler_history_sync_times: '06:00,23:00',
+        scheduler_history_sync_days: 'mon,tue,wed,thu,fri,sat',
+        scheduler_history_sync_horizon_days: '14',
+        default_currency: 'EUR',
+        default_language: 'en',
+        default_theme: 'auto',
+    };
+
+    // Category definitions with icons
+    interface Category {
+        id: string;
+        icon: any;
+        keys: string[];
+    }
+
+    const baseCategories: Category[] = [
+        {id: 'session', icon: Clock, keys: ['session_ttl_hours']},
+        {id: 'security', icon: Shield, keys: ['registration_mode', 'require_email_verification']},
+        {id: 'sync', icon: RefreshCw, keys: ['scheduler_enabled']},
+        {id: 'memory', icon: Database, keys: ['max_file_upload_mb']},
+        {id: 'defaults', icon: Users, keys: ['default_currency', 'default_language', 'default_theme']},
+    ];
+    const otherCategory: Category = {id: 'other', icon: CircleEllipsis, keys: []};
+
+    // Keys managed exclusively via SchedulerConfigModal — never shown as raw fields
+    const SCHEDULER_HIDDEN_KEYS = new Set(['scheduler_current_price_frequency_minutes', 'scheduler_history_sync_times', 'scheduler_history_sync_days', 'scheduler_history_sync_horizon_days', 'scheduler_timezone']);
+
+    // Placeholder settings: rendered read-only with a "Coming soon" badge until the feature lands
+    const PLACEHOLDER_KEYS = new Set<string>();
+
+    // Email verification turns on only while an email with a link can go out (workstream E, `GET /system/instance` →
+    // `email.links`); turning it off always works. The server refuses the rest with 409 EMAIL_VERIFICATION_UNAVAILABLE.
+    const EMAIL_VERIFICATION_KEY = 'require_email_verification';
+    let emailLinksReady = $derived(instanceConfig.config.email?.links === true);
+    function verificationBlocked(key: string): boolean {
+        if (key !== EMAIL_VERIFICATION_KEY || emailLinksReady) return false;
+        // Off where it is saved: it cannot go on. Once saved on, it can go off and on again until the next save.
+        return settings.find((setting) => setting.key === key)?.value !== 'true';
+    }
+
+    // LIBREFOLIO_REGISTRATION pins the registration mode on the server (`GET /system/instance`): the field then shows
+    // the mode in force, read-only, and the bulk reset leaves it alone — a save would only meet 409 SETTING_LOCKED_BY_ENV.
+    let registrationLocked = $derived(instanceConfig.config.accounts.registration_locked);
+    let registrationModeOptions: SelectOption[] = $derived.by(() => {
+        $currentLanguage;
+        return [
+            {value: 'open', label: $_('settings.registrationModes.open')},
+            {value: 'invite', label: $_('settings.registrationModes.invite')},
+            {value: 'disabled', label: $_('settings.registrationModes.disabled')},
+        ];
+    });
+
+    function isLockedByEnv(key: string): boolean {
+        return key === 'registration_mode' && registrationLocked;
+    }
+
+    let settings: GlobalSetting[] = $state([]);
+    let editedValues: Record<string, string> = $state({});
+    let isLocked = $state(true);
+    let isLoading = $state(true);
+    let isSaving = $state(false);
+    let error: string | null = $state(null);
+    let selectedCategory: string = $state('all');
+    let showDiscardConfirm = $state(false);
+
+    // Scheduler UI state
+    let showConfigModal = $state(false);
+    let showLogModal = $state(false);
+    let schedulerState: any = $state(null);
+    const schedulerRetry = $derived(pendingSchedulerRetry(schedulerState?.current_price, Date.now()));
+    let serverTz = $state('');
+
+    // Language options for dropdown
+    const languageOptions: SelectOption[] = LANGUAGE_OPTIONS.map((l) => ({
+        value: l.code,
+        label: l.name,
+        icon: l.flag,
+    }));
+
+    onMount(async () => {
+        debug.log('GlobalSettingsTab', 'onMount');
+        await loadSettings();
+        await loadSchedulerState();
+    });
+
+    async function loadSchedulerState() {
+        try {
+            const resp = await zodiosApi.axios.get('/api/v1/settings/scheduler/state');
+            schedulerState = resp.data;
+            serverTz = schedulerState?.server_tz || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        } catch (e) {
+            debug.log('GlobalSettingsTab', 'Failed to load scheduler state', e);
+            serverTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        }
+    }
+
+    async function loadSettings() {
+        debug.log('GlobalSettingsTab', 'loadSettings');
+        isLoading = true;
+        error = null;
+        try {
+            const response = await zodiosApi.list_global_settings_api_v1_settings_global_get();
+            debug.log('GlobalSettingsTab', 'loadSettings response', (response.items || []).length);
+            settings = (response.items || []) as GlobalSetting[];
+            // Initialize edited values
+            editedValues = {};
+            for (const setting of settings) {
+                editedValues[setting.key] = setting.value;
+            }
+        } catch (e) {
+            if (isAxiosError(e)) {
+                error = e.message;
+            } else {
+                error = 'Failed to load settings';
+            }
+        } finally {
+            isLoading = false;
+        }
+    }
+
+    // Single setting actions
+    async function saveSetting(key: string) {
+        isSaving = true;
+        error = null;
+        try {
+            await zodiosApi.axios.patch('/api/v1/settings/global/bulk', {
+                items: [{key, value: editedValues[key]}],
+            });
+            // Update local state
+            const setting = settings.find((s) => s.key === key);
+            if (setting) {
+                setting.value = editedValues[key];
+            }
+            // Trigger reactivity
+            settings = [...settings];
+
+            // Sync globalSettings store
+            syncGlobalSettingsStore();
+            refreshInstanceConfig([key]);
+
+            const label = getSettingLabel(key);
+            notify({
+                name: 'settings.global.saved',
+                detail: {keys: [key], count: 1},
+                toast: {variant: 'success', message: `"${label}" ${$_('settings.savedSuccessfully')}`},
+            });
+        } catch (e) {
+            error = saveErrorMessage(e);
+        } finally {
+            isSaving = false;
+        }
+    }
+
+    function undoSetting(key: string) {
+        const setting = settings.find((s) => s.key === key);
+        if (setting) {
+            editedValues[key] = setting.value;
+            editedValues = {...editedValues}; // Trigger reactivity
+        }
+    }
+
+    function resetSettingToDefault(key: string) {
+        if (SETTING_DEFAULTS[key] !== undefined) {
+            editedValues[key] = SETTING_DEFAULTS[key];
+            editedValues = {...editedValues}; // Trigger reactivity
+        }
+    }
+
+    // Bulk actions
+    async function saveAll() {
+        const keysToSave = settings.filter((s) => changedKeys.includes(s.key)).map((s) => s.key);
+        const savedLabels: string[] = keysToSave.map((key) => getSettingLabel(key));
+
+        isSaving = true;
+        error = null;
+        try {
+            await zodiosApi.axios.patch('/api/v1/settings/global/bulk', {
+                items: keysToSave.map((key) => ({key, value: editedValues[key]})),
+            });
+
+            for (const key of keysToSave) {
+                const setting = settings.find((s) => s.key === key);
+                if (setting) {
+                    setting.value = editedValues[key];
+                }
+            }
+        } catch (e) {
+            error = saveErrorMessage(e);
+        }
+
+        // Trigger reactivity
+        settings = [...settings];
+        isSaving = false;
+
+        if (savedLabels.length > 0 && !error) {
+            // Sync globalSettings store
+            syncGlobalSettingsStore();
+            refreshInstanceConfig(keysToSave);
+
+            // A saved global setting is invisible: the control already showed the new value
+            // before Save, so the page looks identical whether the write landed or not.
+            // That silence is what made the base-currency change untestable and, worse,
+            // unnoticeable. The list of what was actually persisted is the payload.
+            notify({
+                name: 'settings.global.saved',
+                detail: {keys: keysToSave, count: savedLabels.length},
+                toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${savedLabels.map((l) => `<li>${l}</li>`).join('')}</ul>`},
+            });
+        } else if (error) {
+            notify({name: 'settings.global.save.failed', detail: {reason: error}});
+        }
+    }
+
+    function undoAll() {
+        for (const setting of settings) {
+            editedValues[setting.key] = setting.value;
+        }
+        editedValues = {...editedValues}; // Trigger reactivity
+    }
+
+    function resetAllToDefaults() {
+        for (const key of Object.keys(editedValues)) {
+            if (SETTING_DEFAULTS[key] !== undefined && !PLACEHOLDER_KEYS.has(key) && !isLockedByEnv(key)) {
+                editedValues[key] = SETTING_DEFAULTS[key];
+            }
+        }
+        editedValues = {...editedValues}; // Trigger reactivity
+    }
+
+    /** Why a save failed, as the tab says it. */
+    function saveErrorMessage(e: unknown): string {
+        if (!isAxiosError(e)) return $_('settings.saveFailed');
+        if (e.response?.status === 403) return $_('settings.adminRequired');
+        const detail = e.response?.data?.detail;
+        if (e.response?.status === 409 && detail?.error_code === 'SETTING_LOCKED_BY_ENV') {
+            return $_('settings.lockedByEnv', {values: {variable: detail.variable}});
+        }
+        if (e.response?.status === 409 && detail?.error_code === 'EMAIL_VERIFICATION_UNAVAILABLE') {
+            return $_('email.verification.settingUnavailable');
+        }
+        return e.message;
+    }
+
+    /** The public configuration carries the registration mode: ask for it again once the mode has changed. */
+    function refreshInstanceConfig(savedKeys: string[]): void {
+        if (savedKeys.includes('registration_mode')) void instanceConfig.load({force: true});
+    }
+
+    /**
+     * Sync current editedValues to the globalSettings store
+     * This ensures other components see the updated values immediately
+     */
+    function syncGlobalSettingsStore() {
+        globalSettings.setDirect({
+            default_language: editedValues['default_language'] || 'en',
+            default_currency: editedValues['default_currency'] || 'EUR',
+            default_theme: editedValues['default_theme'] || 'auto',
+            session_ttl_hours: parseInt(editedValues['session_ttl_hours'] || '24', 10),
+            max_file_upload_mb: parseInt(editedValues['max_file_upload_mb'] || '10', 10),
+            scheduler_enabled: editedValues['scheduler_enabled'] === 'true',
+            scheduler_current_price_frequency_minutes: parseInt(editedValues['scheduler_current_price_frequency_minutes'] || '10', 10),
+            scheduler_history_sync_times: editedValues['scheduler_history_sync_times'] || '06:00,23:00',
+            scheduler_history_sync_days: editedValues['scheduler_history_sync_days'] || 'mon,tue,wed,thu,fri,sat',
+            scheduler_history_sync_horizon_days: parseInt(editedValues['scheduler_history_sync_horizon_days'] || '14', 10),
+        });
+    }
+
+    // Override map: backend setting keys whose label already exists under settings.*
+    const SETTING_LABEL_OVERRIDES: Record<string, string> = {
+        default_currency: 'settings.defaultCurrency',
+    };
+
+    // Override map: category ids whose label already exists under settings.*
+    const CATEGORY_LABEL_OVERRIDES: Record<string, string> = {
+        security: 'settings.security',
+        all: 'settings.all',
+        other: 'common.other',
+    };
+
+    function getSettingLabel(key: string): string {
+        // Check override first (collapsed duplicates)
+        if (SETTING_LABEL_OVERRIDES[key]) {
+            return $_(SETTING_LABEL_OVERRIDES[key]);
+        }
+        // Try to get localized name, fallback to key
+        const localizedKey = `settings.globalSettingNames.${key}`;
+        const localized = $_(localizedKey);
+        return localized !== localizedKey ? localized : key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+    }
+
+    function getCategoryLabel(id: string): string {
+        if (CATEGORY_LABEL_OVERRIDES[id]) {
+            return $_(CATEGORY_LABEL_OVERRIDES[id]);
+        }
+        const key = `settings.globalSettingCategories.${id}`;
+        const localized = $_(key);
+        return localized !== key ? localized : id.replace(/\b\w/g, (l) => l.toUpperCase());
+    }
+
+    // Keep the explicit locale dependency alongside the translator-store reads.
+    let categoryLabels: Record<string, string> = $derived.by(() => {
+        $currentLanguage;
+        return Object.fromEntries(['all', ...visibleCategories.map((c) => c.id)].map((id) => [id, getCategoryLabel(id)]));
+    });
+
+    function getSettingUnit(key: string): string {
+        const localizedKey = `settings.globalSettingUnits.${key}`;
+        const localized = $_(localizedKey);
+        return localized !== localizedKey ? localized : '';
+    }
+
+    function getSettingHint(key: string): string {
+        const localizedKey = `settings.globalSettingDescriptions.${key}`;
+        const localized = $_(localizedKey);
+        return localized !== localizedKey ? localized : '';
+    }
+
+    function getClaimedCategoryForSetting(key: string): Category | undefined {
+        return baseCategories.find((c) => c.keys.includes(key));
+    }
+
+    function isUnclaimedSetting(key: string): boolean {
+        return !SCHEDULER_HIDDEN_KEYS.has(key) && !getClaimedCategoryForSetting(key);
+    }
+
+    function getCategoryForSetting(key: string): Category | undefined {
+        return getClaimedCategoryForSetting(key) ?? (isUnclaimedSetting(key) ? otherCategory : undefined);
+    }
+
+    // Reactive: compute changed keys based on editedValues
+    let changedKeys = $derived(settings.filter((s) => s.value !== editedValues[s.key]).map((s) => s.key));
+
+    // Reactive: check if any setting has changes
+    let hasAnyChanges = $derived(changedKeys.length > 0);
+
+    // Reactive: compute non-default keys
+    let nonDefaultKeys = $derived(Object.keys(editedValues).filter((key) => SETTING_DEFAULTS[key] !== undefined && editedValues[key] !== SETTING_DEFAULTS[key]));
+
+    // Reactive: check if any setting differs from default
+    let hasAnyNonDefault = $derived(nonDefaultKeys.length > 0);
+
+    // Toggle lock with confirmation if there are pending changes
+    function toggleLock() {
+        if (!isLocked) {
+            // Trying to lock - check for pending changes
+            if (hasAnyChanges) {
+                showDiscardConfirm = true;
+                return;
+            }
+            undoAll();
+        }
+        isLocked = !isLocked;
+    }
+
+    function discardAndLock() {
+        undoAll();
+        isLocked = true;
+        showDiscardConfirm = false;
+    }
+
+    // Reactive: show Other only when server sent unclaimed, visible settings.
+    let hasUnclaimedSettings = $derived(settings.some((s) => isUnclaimedSetting(s.key)));
+    let visibleCategories = $derived(hasUnclaimedSettings ? [...baseCategories, otherCategory] : baseCategories);
+
+    // Reactive: filter settings based on selected category
+    let filteredSettings = $derived(
+        selectedCategory === 'all'
+            ? settings.filter((s) => !SCHEDULER_HIDDEN_KEYS.has(s.key))
+            : selectedCategory === otherCategory.id
+              ? settings.filter((s) => isUnclaimedSetting(s.key))
+              : settings.filter((s) => {
+                    if (SCHEDULER_HIDDEN_KEYS.has(s.key)) return false;
+                    const category = baseCategories.find((c) => c.id === selectedCategory);
+                    return category ? category.keys.includes(s.key) : false;
+                }),
+    );
+
+    // Mobile dropdown state
+    let showDropdown = $state(false);
+    let dropdownRef: HTMLDivElement | null = $state(null);
+
+    // Get selected category label for mobile display
+    let selectedCategoryLabel = $derived(categoryLabels[selectedCategory] ?? selectedCategory);
+
+    // Get selected category icon
+    let SelectedCategoryIcon = $derived(selectedCategory === 'all' ? null : visibleCategories.find((c) => c.id === selectedCategory)?.icon || null);
+
+    function toggleDropdown() {
+        showDropdown = !showDropdown;
+    }
+
+    function selectCategoryMobile(id: string) {
+        selectedCategory = id;
+        showDropdown = false;
+    }
+
+    // Close dropdown on click outside
+    function handleClickOutside(event: MouseEvent) {
+        if (isOutsideClick(event.target, (el) => !dropdownRef || dropdownRef.contains(el))) {
+            showDropdown = false;
+        }
+    }
+
+    onMount(() => {
+        document.addEventListener('click', handleClickOutside);
+    });
+
+    onDestroy(() => {
+        document.removeEventListener('click', handleClickOutside);
+    });
+</script>
+
+<!-- Mobile: Custom dropdown category selector -->
+<div bind:this={dropdownRef} class="sm:hidden mb-4 text-lf-primary">
+    <span class="block text-sm font-medium text-lf-secondary mb-2">
+        {$_('settings.category')}
+    </span>
+    <div class="relative">
+        <button
+            class="w-full flex items-center justify-between px-4 py-3 border border-lf-input
+                   rounded-lg bg-lf-field text-lf-primary hover:border-lf-input-hover text-sm
+                   focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all"
+            onclick={toggleDropdown}
+            type="button"
+            data-testid="global-settings-mobile-category-trigger"
+        >
+            <span class="flex items-center gap-2">
+                {#if SelectedCategoryIcon}
+                    <SelectedCategoryIcon size={16} class="text-lf-muted" />
+                {/if}
+                {selectedCategoryLabel}
+            </span>
+            <ChevronDown class="text-lf-muted transition-transform {showDropdown ? 'rotate-180' : ''}" size={18} />
+        </button>
+
+        {#if showDropdown}
+            <div
+                class="absolute top-full left-0 right-0 mt-1 bg-lf-card border border-lf-raised
+                        rounded-lg shadow-lg shadow-lf-shadow overflow-hidden z-50"
+                data-testid="global-settings-mobile-category-menu"
+            >
+                <!-- All Settings option -->
+                <button
+                    type="button"
+                    onclick={() => selectCategoryMobile('all')}
+                    data-testid="global-settings-mobile-category-all"
+                    class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
+                           {selectedCategory === 'all' ? 'bg-lf-selected text-lf-link font-medium' : 'text-lf-secondary hover:bg-lf-hover'}"
+                >
+                    <span class="flex-1">{categoryLabels['all'] ?? ''}</span>
+                    {#if selectedCategory === 'all'}
+                        <ChevronRight size={16} />
+                    {/if}
+                </button>
+
+                <!-- Category options -->
+                {#each visibleCategories as cat (cat.id)}
+                    <button
+                        type="button"
+                        onclick={() => selectCategoryMobile(cat.id)}
+                        data-testid="global-settings-mobile-category-{cat.id}"
+                        class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
+                               {selectedCategory === cat.id ? 'bg-lf-selected text-lf-link font-medium' : 'text-lf-secondary hover:bg-lf-hover'}"
+                    >
+                        <cat.icon size={16} class={selectedCategory === cat.id ? 'text-lf-link' : 'text-lf-muted'} />
+                        <span class="flex-1">{categoryLabels[cat.id] ?? cat.id}</span>
+                        {#if selectedCategory === cat.id}
+                            <ChevronRight size={16} />
+                        {/if}
+                    </button>
+                {/each}
+            </div>
+        {/if}
+    </div>
+</div>
+
+<div class="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[300px] sm:min-h-[400px] text-lf-primary" data-testid="global-settings-tab" data-busy={isLoading || isSaving ? 'true' : 'false'} aria-busy={isLoading || isSaving}>
+    <!-- Left sidebar: Category navigation (hidden on mobile) -->
+    <div class="hidden sm:block w-48 flex-shrink-0">
+        <nav class="space-y-1">
+            <button
+                class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
+                    {selectedCategory === 'all' ? 'bg-lf-checked text-lf-on-checked' : 'text-lf-secondary hover:bg-lf-hover'}"
+                onclick={() => (selectedCategory = 'all')}
+            >
+                <span class="flex-1 text-left">{categoryLabels['all'] ?? ''}</span>
+                {#if selectedCategory === 'all'}
+                    <ChevronRight size={16} />
+                {/if}
+            </button>
+
+            {#each visibleCategories as cat}
+                <button
+                    onclick={() => (selectedCategory = cat.id)}
+                    data-testid="global-settings-category-{cat.id}"
+                    class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
+                        {selectedCategory === cat.id ? 'bg-lf-checked text-lf-on-checked' : 'text-lf-secondary hover:bg-lf-hover'}"
+                >
+                    <cat.icon size={16} class="mr-2" />
+                    <span class="flex-1 text-left">{categoryLabels[cat.id] ?? cat.id}</span>
+                    {#if selectedCategory === cat.id}
+                        <ChevronRight size={16} />
+                    {/if}
+                </button>
+            {/each}
+        </nav>
+    </div>
+
+    <!-- Right side: Settings content -->
+    <div class="flex-1 space-y-4">
+        <!-- Header with lock/unlock - Title and icons on same row, description below -->
+        <div class="pb-4 border-b border-lf-subtle">
+            <div class="flex items-center justify-between gap-2 mb-1 min-h-[36px]">
+                <h3 class="text-lg font-semibold text-lf-primary">{$_('settings.globalSettings')}</h3>
+                <div class="flex items-center gap-1 flex-shrink-0">
+                    {#if canEdit}
+                        {#if !isLocked}
+                            <SettingBulkActions hasChanges={hasAnyChanges} hasNonDefaults={hasAnyNonDefault} {isLocked} {isSaving} onsaveAll={saveAll} onundoAll={undoAll} onresetAll={resetAllToDefaults} />
+                        {/if}
+                        <button
+                            onclick={toggleLock}
+                            data-testid="settings-lock-toggle"
+                            class="p-2 rounded-lg transition-all
+                                {isLocked ? 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral' : 'bg-lf-warning-soft text-lf-warning hover:bg-lf-warning-line'}"
+                            title={isLocked ? $_('settings.clickToEdit') : $_('settings.clickToLock')}
+                        >
+                            {#if isLocked}
+                                <Lock size={18} />
+                            {:else}
+                                <Unlock size={18} />
+                            {/if}
+                        </button>
+                    {:else}
+                        <div class="flex items-center space-x-2 px-3 py-2 bg-lf-panel text-lf-muted rounded-lg" data-testid="settings-readonly-indicator" title={$_('settings.readOnlyMode')}>
+                            <ShieldOff size={18} />
+                        </div>
+                    {/if}
+                </div>
+            </div>
+            <p class="text-sm text-lf-muted">{$_('settings.globalSettingsDescription')}</p>
+        </div>
+
+        {#if error}
+            <InfoBanner variant="error">
+                <span>{error}</span>
+            </InfoBanner>
+        {/if}
+
+        {#if !isLocked}
+            <InfoBanner variant="warning">
+                <p class="text-sm">
+                    <strong>{$_('settings.warning')}:</strong>
+                    {$_('settings.globalSettingsWarning')}
+                </p>
+            </InfoBanner>
+        {/if}
+
+        {#if isLoading}
+            <LoadingSpinner />
+        {:else if settings.length === 0}
+            <div class="text-center py-8 text-lf-muted">
+                {$_('settings.noGlobalSettings')}
+            </div>
+        {:else}
+            <div class="space-y-4">
+                {#each filteredSettings as setting (setting.key)}
+                    {@const category = getCategoryForSetting(setting.key)}
+                    {#if setting.value_type === 'bool'}
+                        <!-- Boolean toggle (self-contained component) -->
+                        <div class="bg-lf-panel rounded-lg px-4" data-testid="global-setting-{setting.key}">
+                            <SettingToggle
+                                value={editedValues[setting.key] === 'true'}
+                                label={getSettingLabel(setting.key)}
+                                hint={verificationBlocked(setting.key) ? $_('email.verification.settingNeedsEmail') : getSettingHint(setting.key)}
+                                icon={category?.icon ?? null}
+                                isModified={changedKeys.includes(setting.key)}
+                                isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                {isLocked}
+                                {isSaving}
+                                disabled={PLACEHOLDER_KEYS.has(setting.key) || verificationBlocked(setting.key)}
+                                badge={PLACEHOLDER_KEYS.has(setting.key) ? $_('settings.comingSoon') : ''}
+                                onsave={() => saveSetting(setting.key)}
+                                onundo={() => undoSetting(setting.key)}
+                                onreset={() => resetSettingToDefault(setting.key)}
+                                onchange={(val) => {
+                                    editedValues[setting.key] = val ? 'true' : 'false';
+                                    editedValues = {...editedValues};
+                                }}
+                            />
+                        </div>
+                    {:else if setting.value_type === 'int' || setting.value_type === 'float'}
+                        <!-- Numeric input (self-contained component) -->
+                        <div class="bg-lf-panel rounded-lg px-4" data-testid="global-setting-{setting.key}">
+                            <SettingNumber
+                                value={editedValues[setting.key]}
+                                label={getSettingLabel(setting.key)}
+                                hint={getSettingHint(setting.key)}
+                                icon={category?.icon ?? null}
+                                type={setting.value_type === 'float' ? 'float' : 'int'}
+                                unit={getSettingUnit(setting.key)}
+                                isModified={changedKeys.includes(setting.key)}
+                                isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                {isLocked}
+                                {isSaving}
+                                onsave={() => saveSetting(setting.key)}
+                                onundo={() => undoSetting(setting.key)}
+                                onreset={() => resetSettingToDefault(setting.key)}
+                                onchange={(val) => {
+                                    editedValues[setting.key] = val;
+                                    editedValues = {...editedValues};
+                                }}
+                            />
+                        </div>
+                    {:else}
+                        <!-- Language / Currency / Theme use the shared wrappers (same controls as PreferencesTab); any other string setting keeps the generic text row -->
+                        <div class="bg-lf-panel rounded-lg p-4" data-locked={setting.key === 'registration_mode' ? String(registrationLocked) : undefined} data-testid="global-setting-{setting.key}">
+                            {#if setting.key === 'default_language'}
+                                <SettingSelect
+                                    value={editedValues[setting.key]}
+                                    options={languageOptions}
+                                    label={getSettingLabel(setting.key)}
+                                    hint={getSettingHint(setting.key)}
+                                    icon={category?.icon ?? null}
+                                    isModified={changedKeys.includes(setting.key)}
+                                    isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                    {isLocked}
+                                    {isSaving}
+                                    embedded
+                                    onsave={() => saveSetting(setting.key)}
+                                    onundo={() => undoSetting(setting.key)}
+                                    onreset={() => resetSettingToDefault(setting.key)}
+                                    onchange={(val) => {
+                                        editedValues[setting.key] = val;
+                                        editedValues = {...editedValues};
+                                    }}
+                                />
+                            {:else if setting.key === 'registration_mode'}
+                                <SettingSelect
+                                    value={registrationLocked ? instanceConfig.config.accounts.registration_mode : editedValues[setting.key]}
+                                    options={registrationModeOptions}
+                                    label={getSettingLabel(setting.key)}
+                                    hint={registrationLocked ? $_('settings.lockedByEnv', {values: {variable: 'LIBREFOLIO_REGISTRATION'}}) : getSettingHint(setting.key)}
+                                    icon={category?.icon ?? null}
+                                    isModified={changedKeys.includes(setting.key)}
+                                    isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                    isLocked={isLocked || registrationLocked}
+                                    {isSaving}
+                                    embedded
+                                    onsave={() => saveSetting(setting.key)}
+                                    onundo={() => undoSetting(setting.key)}
+                                    onreset={() => resetSettingToDefault(setting.key)}
+                                    onchange={(val) => {
+                                        editedValues[setting.key] = val;
+                                        editedValues = {...editedValues};
+                                    }}
+                                />
+                            {:else if setting.key === 'default_currency'}
+                                <SettingCurrency
+                                    value={editedValues[setting.key]}
+                                    label={getSettingLabel(setting.key)}
+                                    hint={getSettingHint(setting.key)}
+                                    icon={category?.icon ?? null}
+                                    isModified={changedKeys.includes(setting.key)}
+                                    isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                    {isLocked}
+                                    {isSaving}
+                                    embedded
+                                    onsave={() => saveSetting(setting.key)}
+                                    onundo={() => undoSetting(setting.key)}
+                                    onreset={() => resetSettingToDefault(setting.key)}
+                                    onchange={(val) => {
+                                        editedValues[setting.key] = val;
+                                        editedValues = {...editedValues};
+                                    }}
+                                />
+                            {:else if setting.key === 'default_theme'}
+                                <SettingTheme
+                                    value={editedValues[setting.key] as 'light' | 'dark' | 'auto'}
+                                    label={getSettingLabel(setting.key)}
+                                    hint={getSettingHint(setting.key)}
+                                    icon={category?.icon ?? null}
+                                    isModified={changedKeys.includes(setting.key)}
+                                    isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                    {isLocked}
+                                    {isSaving}
+                                    embedded
+                                    onsave={() => saveSetting(setting.key)}
+                                    onundo={() => undoSetting(setting.key)}
+                                    onreset={() => resetSettingToDefault(setting.key)}
+                                    onchange={(val) => {
+                                        editedValues[setting.key] = val;
+                                        editedValues = {...editedValues};
+                                    }}
+                                />
+                            {:else}
+                                <!-- Generic string setting: raw text input -->
+                                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                    <div class="flex-1 min-w-0">
+                                        <label for={setting.key} class="flex items-center text-sm font-medium text-lf-secondary">
+                                            {#if category}
+                                                <category.icon size={16} class="mr-2 text-lf-muted" />
+                                            {/if}
+                                            {getSettingLabel(setting.key)}
+                                        </label>
+                                        <p class="text-xs text-lf-muted mt-1">
+                                            {getSettingHint(setting.key)}
+                                        </p>
+                                    </div>
+                                    <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto min-h-[32px]">
+                                        <SettingActions
+                                            isModified={changedKeys.includes(setting.key)}
+                                            isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                            {isLocked}
+                                            {isSaving}
+                                            onsave={() => saveSetting(setting.key)}
+                                            onundo={() => undoSetting(setting.key)}
+                                            onreset={() => resetSettingToDefault(setting.key)}
+                                        />
+                                        <input
+                                            id={setting.key}
+                                            type="text"
+                                            value={editedValues[setting.key]}
+                                            oninput={(e) => {
+                                                editedValues[setting.key] = e.currentTarget.value;
+                                                editedValues = {...editedValues};
+                                            }}
+                                            disabled={isLocked}
+                                            class="w-32 px-3 py-2 border rounded-lg text-sm
+                                                {isLocked ? 'bg-lf-panel text-lf-muted cursor-not-allowed border-lf-subtle' : 'bg-lf-field text-lf-primary border-lf-input hover:border-lf-input-hover focus:ring-2 focus:ring-lf-focus focus:border-lf-focus'}"
+                                        />
+                                    </div>
+                                </div>
+                            {/if}
+                            {#if setting.updated_at && typeof setting.updated_at === 'string'}
+                                <p class="text-xs text-lf-muted mt-2">
+                                    {$_('common.updated')}: {new Date(setting.updated_at).toLocaleString(uiLocale())}
+                                </p>
+                            {/if}
+                        </div>
+                    {/if}
+                {/each}
+
+                <!-- Scheduler rows: visible when sync or all category is selected -->
+                {#if selectedCategory === 'sync' || selectedCategory === 'all'}
+                    <!-- Scheduler Status Row (clickable → opens log modal) -->
+                    <div
+                        class="bg-lf-panel rounded-lg px-4 py-3 cursor-pointer hover:bg-lf-neutral transition-colors"
+                        data-testid="scheduler-status-row"
+                        onclick={() => (showLogModal = true)}
+                        role="button"
+                        tabindex={0}
+                        onkeydown={(e) => {
+                            if (e.key === 'Enter') showLogModal = true;
+                        }}
+                    >
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <BarChart3 size={16} class="text-lf-muted shrink-0" />
+                                <div class="min-w-0">
+                                    <span class="text-sm font-medium text-lf-secondary">
+                                        {$_('settings.global.scheduler.status.title')}
+                                    </span>
+                                    <p class="text-xs text-lf-muted mt-0.5">
+                                        {#if schedulerState?.current_price?.last_run_at}
+                                            {$_('settings.global.scheduler.status.lastRun')}: {new Date(schedulerState.current_price.last_run_at).toLocaleString(uiLocale())}
+                                            <span class="inline-block w-2 h-2 rounded-full ml-1 {schedulerState.current_price.last_status === 'ok' ? 'bg-lf-success' : schedulerState.current_price.last_status === 'partial' ? 'bg-lf-warning' : 'bg-lf-danger'}"></span>
+                                        {:else}
+                                            {$_('settings.global.scheduler.status.neverRun')}
+                                        {/if}
+                                    </p>
+                                    {#if schedulerRetry}
+                                        <p class="text-xs text-lf-warning mt-0.5" data-testid="scheduler-status-retry" data-kind={schedulerRetry.kind}>
+                                            {$_(schedulerRetry.kind === 'failure' ? 'settings.global.scheduler.status.nextAttemptAt' : 'settings.global.scheduler.status.retryAt', {values: {time: schedulerRetry.at.toLocaleString(uiLocale())}})}
+                                        </p>
+                                    {/if}
+                                </div>
+                            </div>
+                            <button class="text-xs text-lf-link hover:text-lf-link/80 font-medium shrink-0" type="button">
+                                {$_('settings.global.scheduler.status.details')}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Scheduler Config Row (opens config modal) -->
+                    <div class="bg-lf-panel rounded-lg px-4 py-3" data-testid="scheduler-config-row">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <Settings size={16} class="text-lf-muted shrink-0" />
+                                <div class="min-w-0">
+                                    <span class="text-sm font-medium text-lf-secondary">
+                                        {$_('settings.global.scheduler.configTitle')}
+                                    </span>
+                                    <p class="text-xs text-lf-muted mt-0.5">
+                                        {$_('settings.global.scheduler.status.configSummary', {
+                                            values: {
+                                                freq: editedValues['scheduler_current_price_frequency_minutes'] || '10',
+                                                times: editedValues['scheduler_history_sync_times'] || '06:00,23:00',
+                                                days: editedValues['scheduler_history_sync_days'] || 'mon-sat',
+                                            },
+                                        })}
+                                    </p>
+                                </div>
+                            </div>
+                            <button class="text-xs text-lf-link hover:text-lf-link/80 font-medium shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" type="button" data-testid="scheduler-config-btn" disabled={isLocked} onclick={() => (showConfigModal = true)}>
+                                {$_('settings.global.scheduler.status.configure')}
+                            </button>
+                        </div>
+                    </div>
+                {/if}
+
+                <!-- Cache Panel (status for all users; clear actions admin-only via canEdit) -->
+                {#if selectedCategory === 'memory' || selectedCategory === 'all'}
+                    <CachePanel canEdit={canEdit && !isLocked} />
+                {/if}
+            </div>
+        {/if}
+    </div>
+</div>
+
+<!-- Scheduler Modals -->
+<SchedulerConfigModal
+    bind:open={showConfigModal}
+    {serverTz}
+    serverNowUtc={schedulerState?.server_now_utc || ''}
+    schedulerTimezone={schedulerState?.scheduler_timezone || ''}
+    currentValues={{
+        frequency: parseInt(editedValues['scheduler_current_price_frequency_minutes'] || '10', 10),
+        times: editedValues['scheduler_history_sync_times'] || '06:00,23:00',
+        days: editedValues['scheduler_history_sync_days'] || 'mon,tue,wed,thu,fri,sat',
+        horizon: parseInt(editedValues['scheduler_history_sync_horizon_days'] || '14', 10),
+    }}
+    onsave={async () => {
+        await loadSettings();
+        syncGlobalSettingsStore();
+    }}
+/>
+
+<SchedulerLogModal bind:open={showLogModal} />
+
+<ConfirmModal
+    open={showDiscardConfirm}
+    title={$_('common.discardChanges')}
+    message={$_('settings.discardChangesConfirm')}
+    confirmText={$_('common.discard')}
+    cancelText={$_('common.cancel')}
+    warning
+    onConfirm={discardAndLock}
+    onCancel={() => (showDiscardConfirm = false)}
+    testId="global-settings-discard-confirm"
+/>

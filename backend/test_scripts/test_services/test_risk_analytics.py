@@ -47,8 +47,7 @@ from backend.app.schemas.risk import (
     RiskValueStatus,
 )
 from backend.app.schemas.risk_scenarios import RiskScenarioDimension
-from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.provider_registry import RiskAnalyticRegistry
+from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.risk import acquired
 from backend.app.services.risk import base as risk_base
 from backend.app.services.risk.analytic_helpers import require_annualization_factor
@@ -87,6 +86,7 @@ from backend.app.services.risk.quant.optimization_engine import (
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.risk_plugins.asset_risk_return.plugin import (
     AssetRiskReturnAnalytic,
     AssetRiskReturnParams,
@@ -383,6 +383,10 @@ def test_drawdown_summary_asset_scope_uses_price_only_basis():
     assert output.maximum_drawdown < 0
     assert output.n_observations == len(returns)
     assert output.available_end >= output.available_start
+    # P19: the climb from the worst trough back to its peak. The trough is 0.9 * 0.95 of the peak (still open: the
+    # last two days regain only part of it).
+    assert output.maximum_drawdown_trough_to_peak_ratio == pytest.approx(-output.maximum_drawdown / (1.0 + output.maximum_drawdown))
+    assert output.maximum_drawdown_trough_to_peak_ratio == pytest.approx(1.0 / (0.9 * 0.95) - 1.0)
 
 
 def test_drawdown_summary_portfolio_twrr_external_cashflow_has_no_false_drawdown():
@@ -400,6 +404,11 @@ def test_drawdown_summary_portfolio_twrr_external_cashflow_has_no_false_drawdown
     assert output.current_drawdown == 0
     assert output.maximum_drawdown_peak_date is None
     assert output.maximum_drawdown_recovery_date is None
+    # P19: no trough, nothing to climb back, and nothing still owed.
+    assert output.maximum_drawdown_trough_to_peak_ratio == 0.0
+    assert output.remaining_to_peak_ratio == 0.0
+    # 0.0 is a number, not a total loss, falsy as it is: no warning.
+    assert "total_loss_no_recovery" not in {warning.code for warning in computation.warnings}
 
 
 def test_drawdown_summary_broker_filtered_portfolio_reuses_twrr_path():
@@ -414,6 +423,9 @@ def test_drawdown_summary_broker_filtered_portfolio_reuses_twrr_path():
     assert output.return_basis == RiskReturnBasis.TWRR
     assert output.calculation_basis == "historical_twrr"
     assert output.maximum_drawdown < 0
+    # P19, on the portfolio TWRR: the trough is 0.96 * 0.98 of the peak, and the episode is still open.
+    assert output.maximum_drawdown_trough_to_peak_ratio == pytest.approx(-output.maximum_drawdown / (1.0 + output.maximum_drawdown))
+    assert output.maximum_drawdown_trough_to_peak_ratio == pytest.approx(1.0 / (0.96 * 0.98) - 1.0)
 
 
 def test_drawdown_summary_requires_primary_history():
@@ -424,6 +436,75 @@ def test_drawdown_summary_requires_primary_history():
     )
     with pytest.raises(RiskUnavailableError):
         DrawdownSummaryAnalytic().compute(DrawdownSummaryParams(), context)
+
+
+def test_drawdown_summary_trough_to_peak_gain_is_a_new_algorithm_version():
+    # 1.2.0 (CP-13a, developer's decision P19): the payload gains maximum_drawdown_trough_to_peak_ratio, and a total
+    # loss publishes remaining_to_peak_ratio as null instead of failing the computation. Every number 1.1.0 published
+    # is unchanged.
+    assert DrawdownSummaryAnalytic.algorithm_version == "1.2.0"
+
+
+@pytest.mark.parametrize(
+    ("scope_kind", "scope_asset_ids"),
+    [
+        pytest.param(RiskScopeKind.ASSET, (1,), id="asset"),
+        pytest.param(RiskScopeKind.PORTFOLIO, (1, 2), id="portfolio"),
+    ],
+)
+def test_drawdown_summary_publishes_the_climb_from_a_recovered_trough(scope_kind, scope_asset_ids):
+    # A -28 % trough, recovered on the fourth day, then a fresh -3 %. The climb from that trough, 0.8 * 0.9 of its
+    # peak, is published although the episode is over; what is still owed is measured from the current value, 0.97
+    # of the new peak, and is a different number.
+    returns = [0.05, -0.20, -0.10, 0.60, -0.03]
+    computation = DrawdownSummaryAnalytic().compute(
+        DrawdownSummaryParams(),
+        make_context(
+            dict.fromkeys(scope_asset_ids, returns),
+            scope_kind=scope_kind,
+            scope_asset_ids=scope_asset_ids,
+        ),
+    )
+    payload = computation.output.model_dump(mode="json")
+
+    assert payload["maximum_drawdown_recovery_status"] == "recovered"
+    assert payload["maximum_drawdown_trough_to_peak_ratio"] == pytest.approx(1.0 / (0.8 * 0.9) - 1.0)
+    assert payload["remaining_to_peak_ratio"] == pytest.approx(1.0 / 0.97 - 1.0)
+    # Both gains are numbers: there is no total loss to warn about.
+    assert "total_loss_no_recovery" not in {warning.code for warning in computation.warnings}
+
+
+def test_drawdown_summary_publishes_a_total_loss_without_a_gain():
+    # Two falls of 99.99999999 % leave about 1e-20 of the value: a drawdown of exactly -1.0 in floating point, from
+    # which no finite gain climbs back. The analytic publishes the episode with both gains null instead of failing.
+    returns = [-0.9999999999, -0.9999999999]
+    computation = DrawdownSummaryAnalytic().compute(
+        DrawdownSummaryParams(),
+        make_context({1: returns}, scope_kind=RiskScopeKind.ASSET, scope_asset_ids=(1,)),
+    )
+    output = computation.output
+
+    assert output.current_drawdown == -1.0
+    assert output.maximum_drawdown == -1.0
+    assert output.maximum_drawdown_recovery_status == RiskDrawdownRecoveryStatus.OPEN
+    assert output.remaining_to_peak_ratio is None
+    assert output.maximum_drawdown_trough_to_peak_ratio is None
+    payload = output.model_dump(mode="json")
+    assert payload["remaining_to_peak_ratio"] is None
+    assert payload["maximum_drawdown_trough_to_peak_ratio"] is None
+
+    # An undefined value is None plus a warning (risk architecture, «Adding a Risk Analytic», item 4): exactly one
+    # total_loss_no_recovery, with its own sentence and nothing to fill in it.
+    total_loss_warnings = [warning for warning in computation.warnings if warning.code == "total_loss_no_recovery"]
+    assert len(total_loss_warnings) == 1, computation.warnings
+    (warning,) = total_loss_warnings
+    assert warning.message_i18n_key == "risk.warnings.total_loss_no_recovery"
+    assert warning.message_params == {}
+    # It informs, it does not degrade. A RiskWarning degrades unless told otherwise, and the service turns a result
+    # partial for a degrading warning or an excluded asset: the computation hands it neither, so the status stays ok.
+    assert warning.degrades_result is False
+    assert not any(item.degrades_result for item in computation.warnings)
+    assert computation.excluded_assets == ()
 
 
 def test_drawdown_summary_output_serializes_through_discriminated_union():

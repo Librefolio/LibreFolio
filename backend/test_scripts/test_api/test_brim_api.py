@@ -16,6 +16,10 @@ Tests for Broker Report Import Manager API endpoints:
   process responsive (step 5, item 8 + F1: Category 14)
 - GET /brokers/import/files/{id}/preview of a damaged Excel workbook answers 400, not 500
   (step 6, F2: Category 15)
+- who may see a broker's report files: a file with no broker only its uploader and the administrator,
+  and in no broker's list, ``can_delete`` on every list item, a file id that is not a UUID answers 404
+  on every per-file route, a parse imports only into a broker its caller edits (F36, decision 36:
+  W-B3, W-B4, W-B32: Category 18)
 
 See checklist: 01_test_brim_plan.md - Categories 5, 6
 Note: E2E tests are in test_e2e/test_brim_e2e.py (Category 7)
@@ -24,6 +28,7 @@ test_services/test_brim_report_sets.py (Category 8 below explains why).
 Reference: backend/app/api/v1/brokers.py
 """
 
+import contextlib
 import io
 import json
 import os
@@ -31,9 +36,11 @@ import threading
 import time
 import uuid
 import zipfile
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set, TextIO, Tuple
+from typing import Callable, Dict, Iterator, List, Optional, Set, TextIO, Tuple
 
 import httpx
 import psutil
@@ -71,7 +78,7 @@ async def create_test_user(client: httpx.AsyncClient) -> int:
     """Register and login a test user, return user_id."""
     username = unique_username()
     email = f"{username}@example.com"
-    password = "testpass123"
+    password = "TestPass123!"  # meets the password rules (decision 37), which POST /auth/register applies
 
     # Register
     resp = await client.post(
@@ -1161,7 +1168,7 @@ async def _upload_csv(client: httpx.AsyncClient, broker_id: int, content: bytes,
 
 
 async def _files_on(client: httpx.AsyncClient, broker_id: int) -> list:
-    """The BRIM files stored on one broker; the list also returns legacy files with no broker, so the target is filtered."""
+    """The BRIM files stored on one broker, from the list filtered on it; the target is filtered."""
     response = await client.get(f"{API_BASE}/brokers/import/files", params={"broker_ids": broker_id}, timeout=TIMEOUT)
     assert response.status_code == 200, response.text
     return [info for info in response.json() if info.get("target_broker_id") == broker_id]
@@ -2030,9 +2037,10 @@ class TestReportSetExclusions:
 # column, so a parse forced on such a file stops at the guard of ``parse_file``. The developer's
 # decision, verbatim: «Correggi dentro G con il metodo opzionale (Consigliato)» — the plugin says
 # why (``cannot_parse_reason``) and the guard appends it: still a 400, the file still goes to
-# ``failed`` with the same message, which now names the missing column. The name between the
-# quotes is the stored one, ``{file_id}{ext}``, which G.5 does not change: not asserted. The
-# rules of the message are tested at service level, in test_services/test_brim_parse_race.py.
+# ``failed`` with the same message, which now names the missing column. Since workstream W, lot
+# K2a (backlog L6), the message names the plugin by its ``provider_name`` and the file by the name
+# it was uploaded with, never by the plugin code nor by the stored ``{file_id}{ext}``: asserted
+# whole. The rules of the message are tested at service level, in test_services/test_brim_parse_race.py.
 # The test deletes the file and the broker it created.
 
 GENERIC_CSV_CODE = "broker_generic_csv"
@@ -2046,30 +2054,32 @@ class TestParseRefusalReason:
     @pytest.mark.asyncio
     async def test_forcing_the_generic_csv_on_a_csv_without_date_names_the_missing_column(self, test_server):
         """RS-G05: ``plugin_code="broker_generic_csv"`` on an uploaded CSV with ``type`` and no date column: 400, ``detail`` is
-        "Plugin 'broker_generic_csv' cannot parse file '…': required column 'date' not found in the CSV header", and the
-        file is ``failed`` with that message."""
+        "Plugin 'Generic CSV' cannot parse file '<the name it was uploaded with>': required column 'date' not found in the CSV header",
+        and the file is ``failed`` with that message. The plugin by its name and the file by its uploaded name since lot K2a (L6)."""
         print_section("RS-G05: the forced generic CSV names the missing column")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             broker_id = await create_test_broker(client)
             file_ids = []
             try:
-                upload = await _upload_csv(client, broker_id, CSV_WITHOUT_DATE, f"no_date_{uuid.uuid4().hex[:8]}.csv")
+                filename = f"no_date_{uuid.uuid4().hex[:8]}.csv"
+                upload = await _upload_csv(client, broker_id, CSV_WITHOUT_DATE, filename)
                 assert upload.status_code == 200, upload.text
                 file_id = upload.json()["file_id"]
                 file_ids.append(file_id)
+                assert upload.json()["filename"] == filename, f"premise: the upload keeps the name the user gave: {upload.json()}"
                 assert GENERIC_CSV_CODE not in upload.json()["compatible_plugins"], f"premise: the generic CSV does not offer itself for a CSV without a date column, so the parse forces it: {upload.json()}"
 
                 response = await client.post(f"{API_BASE}/brokers/import/files/{file_id}/parse", json={"plugin_code": GENERIC_CSV_CODE, "broker_id": broker_id}, timeout=TIMEOUT)
 
                 assert response.status_code == 400, response.text
                 detail = _detail_text(response)
-                assert detail.startswith(f"Plugin '{GENERIC_CSV_CODE}' cannot parse file '"), detail
                 info = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
                 assert info.status_code == 200, info.text
                 assert (info.json()["status"], info.json()["error_message"]) == ("failed", detail), "the refused file goes to failed, with the message the user reads"
                 assert detail.endswith("': required column 'date' not found in the CSV header"), f"the refusal does not say which column is missing: {detail!r}"
-                print_success("✓ the forced generic CSV names the missing column, and the file is failed")
+                assert detail == f"Plugin 'Generic CSV' cannot parse file '{filename}': required column 'date' not found in the CSV header", f"the refusal does not name the plugin and the file as the user knows them (K2a, L6): {detail!r}"
+                print_success("✓ the forced generic CSV names the missing column, the plugin and the file as the user knows them, and the file is failed")
             finally:
                 await _delete_files(client, file_ids)
                 await _delete_created(client, broker_ids=[broker_id])
@@ -2542,9 +2552,12 @@ class TestDegiroConversionsThroughTheBatch:
 # broker's default plugin. Access as for ``GET /files/{file_id}``: any role on the file's broker (VIEWER+), 403 without one.
 # 404 for an unknown file or plugin, 422 without ``plugin_code``. Nothing is parsed: the file stays ``uploaded``.
 # The overnight account's sample uploaded to a broker is the case the endpoint was made for: the broker plugin refuses it
-# and names the plugin that reads it. Only RS-PC01 and RS-PC02 need the Scalable plugins; the others ask the generic CSV.
-# What the plugins answer, file by file, is in test_external/test_brim_scalable.py; the default refusal of every plugin,
-# in test_external/test_brim_providers.py (category 4d). Each test deletes the files and the broker it created.
+# and names the plugin that reads it. Only RS-PC01 and RS-PC02 need the Scalable plugins; the others ask the generic CSV,
+# which refuses with a code of its own since workstream W, lot K2a (backlog C-70, part a). No real plugin refuses without
+# a code any more, and an API test cannot plant a stand-in in the server, so the default refusal without a code is covered
+# in test_external/test_brim_providers.py (category 4d) and in the frontend's defaultPluginCheck.test.ts. What the plugins
+# answer, file by file, is in test_external/test_brim_scalable.py, test_brim_providers.py (category 4e) and
+# test_brim_degiro.py (A2). Each test deletes the files and the broker it created.
 
 SCALABLE_DEPOSIT_SAMPLE = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports" / "scalable-deposit-export.csv"
 SCALABLE_BROKER_CODE = "broker_scalable"
@@ -2552,8 +2565,9 @@ SCALABLE_DEPOSIT_CODE = "broker_scalable_deposit"
 # What the broker plugin owes about the overnight account's export, but the English sentence: its code and its context.
 SCALABLE_DEPOSIT_REFUSAL = {"code": "scalable_deposit_file", "context": {"plugin_code": SCALABLE_DEPOSIT_CODE, "plugin_name": "Scalable Capital overnight account"}}
 UNKNOWN_PLUGIN_CODE = "broker_does_not_exist"
-# The generic CSV's own reason about CSV_WITHOUT_DATE (category 12), wrapped by the default cannot_parse_detail.
-GENERIC_REFUSAL = {"code": None, "message": "required column 'date' not found in the CSV header", "context": {}}
+# The generic CSV's refusal of CSV_WITHOUT_DATE (category 12): since K2a (backlog C-70, part a) the code the wizard translates and its
+# context, the count an integer for the plural; the English sentence, the message, is unchanged.
+GENERIC_REFUSAL = {"code": "missing_columns", "message": "required column 'date' not found in the CSV header", "context": {"columns": "date", "count": 1}}
 
 
 async def _plugin_check(client: httpx.AsyncClient, file_id: str, **params: str) -> httpx.Response:
@@ -2647,9 +2661,10 @@ class TestPluginCheckEndpoint:
                 await _delete_created(client, broker_ids=[broker_id])
 
     @pytest.mark.asyncio
-    async def test_a_refusal_without_a_code_is_the_plugin_s_reason(self, test_server):
-        """RS-PC03: the CSV without a date column of RS-G05 asked to ``broker_generic_csv``, which overrides only ``cannot_parse_reason``: ``can_parse``
-        false, refusal ``{code: null, message: <the reason>, context: {}}``."""
+    async def test_the_generic_csv_refuses_a_csv_without_date_with_its_code_and_context(self, test_server):
+        """RS-PC03: the CSV without a date column of RS-G05 asked to ``broker_generic_csv``: ``can_parse`` false, refusal ``{code: "missing_columns",
+        message: <its English reason, unchanged>, context: {"columns": "date", "count": 1}}``, the code the import wizard translates (K2a, backlog
+        C-70 part a); the file stays ``uploaded``."""
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             broker_id = await create_test_broker(client)
@@ -2659,8 +2674,9 @@ class TestPluginCheckEndpoint:
 
                 check = _check_of(await _plugin_check(client, file_id, plugin_code=GENERIC_CSV_CODE))
 
-                assert check == (GENERIC_CSV_CODE, False, GENERIC_REFUSAL), check
+                assert check[:2] == (GENERIC_CSV_CODE, False), check
                 await _assert_still_uploaded(client, file_id)
+                assert check[2] == GENERIC_REFUSAL, f"the generic CSV's refusal through the endpoint, with the code the wizard translates and its context: {check[2]}"
             finally:
                 await _delete_files(client, file_ids)
                 await _delete_created(client, broker_ids=[broker_id])
@@ -2739,14 +2755,812 @@ class TestPluginCheckEndpoint:
                 as_viewer = await _plugin_check(viewer, file_id, plugin_code=GENERIC_CSV_CODE)
                 as_stranger = await _plugin_check(stranger, file_id, plugin_code=GENERIC_CSV_CODE)
 
-                assert _check_of(as_owner) == (GENERIC_CSV_CODE, False, GENERIC_REFUSAL), "presence barrier: the owner gets the plugin's answer"
-                assert _check_of(as_viewer) == _check_of(as_owner), "a VIEWER of the broker gets the owner's answer"
+                owner_answer = _check_of(as_owner)
+                # Access is the subject, not the code: the barrier reads the reason, the same before and after K2a; RS-PC03 pins the whole refusal.
+                assert (*owner_answer[:2], (owner_answer[2] or {}).get("message")) == (GENERIC_CSV_CODE, False, GENERIC_REFUSAL["message"]), f"presence barrier: the owner gets the plugin's answer: {owner_answer}"
+                assert _check_of(as_viewer) == owner_answer, "a VIEWER of the broker gets the owner's answer"
                 assert as_stranger.status_code == 403, f"a user without access: {as_stranger.status_code} {as_stranger.text}"
                 await _assert_still_uploaded(owner, file_id)
                 print_success("✓ a VIEWER may ask, a user without access may not")
             finally:
                 await _delete_files(owner, file_ids)
                 await _delete_created(owner, broker_ids=[broker_id])
+
+
+# ============================================================================
+# CATEGORY 18: A BROKER'S REPORTS ONLY TO WHO MAY SEE THAT BROKER (F36, decision 36; W-B3, W-B4, W-B32)
+# ============================================================================
+#
+# Decision 36 (developer, 15/10): a broker's files — list, preview, download — only to users with at least VIEWER on that
+# broker. The per-file routes (``GET /files/{id}``, ``/preview``, ``/download``, ``/last-parse``, ``/plugin-check``: VIEWER+;
+# ``POST /files/{id}/parse`` and ``DELETE /files/{id}``: EDITOR+) all start with ``_get_brim_file_with_access``, which looks
+# at the broker only ``if file_info.target_broker_id and not current_user.is_superuser``: a file with NO broker skips every
+# check, for anyone signed in, its parse and its delete included (W-B3). And ``brim_provider.list_files`` keeps
+# ``target_broker_id is None`` in every list it filters by broker, so such a file reaches every user's list, whatever
+# ``broker_ids`` they ask for. Files with no broker are those an old version left in the ROOT of a status folder of
+# ``broker_reports/`` ("backward compatibility"): before f0b7aad8d (January 2026) a sidecar had neither
+# ``uploaded_by_user_id`` nor ``target_broker_id``; the upload has required a broker since.
+#
+# The cure, approved by the coordinator (plan 04, F36):
+# 1. a file with no broker is its uploader's (``uploaded_by_user_id``) and the administrator's (``is_superuser``) only:
+#    anyone else gets 403 on every per-file route and does not list it. A file with a broker keeps today's rules.
+# 2. a regular user lists the files of the brokers they have at least VIEWER on, plus the files with no broker they
+#    uploaded; the administrator's list is unchanged.
+# 3. every list item carries ``can_delete``: true for the administrator, for an EDITOR or OWNER of the file's broker and
+#    for the uploader of a file with no broker; false otherwise: a VIEWER, and the uploader of a broker's file who is now
+#    only its VIEWER (on a broker's file, having uploaded it grants nothing: DELETE answers by the role).
+# 4. W-B4: a ``file_id`` that is not a UUID in its canonical form (lower-case, as an upload writes it) answers 404 on every
+#    per-file route, before any lookup.
+# 5. no data repair: the files with no broker stay where they are.
+# 6. a parse imports only into a broker its caller may edit: ``POST /files/{id}/parse`` checks the body's ``broker_id`` as
+#    ``/duplicates`` and the report-set routes check theirs (EDITOR or OWNER of that broker; the administrator passes),
+#    otherwise 403, before anything is parsed. Today the route checks only the file's broker: an EDITOR of the file's
+#    broker parses it into any broker id, and reads the duplicate report computed against that broker's transactions.
+# 7. W-B32 (approved by the coordinator on 16/10, within decision 36): a list the request filters by broker (``broker_ids``, as
+#    a broker's «Uploaded Reports» asks) holds that broker's files only: a file with no broker is left out, for its uploader and
+#    the administrator too. Unfiltered (the Files page), the list is that of 2. The cure is the route's: for a regular user the
+#    route hands ``list_files`` the brokers they may see even when the request names none, so ``list_files``, which keeps the
+#    files with no broker under any broker filter, cannot tell the Files page from a broker's list.
+#
+# A file with no broker is written by the test as an old version wrote it: content and sidecar in the root of ``uploaded/``
+# in this lane's ``broker_reports`` (``get_test_data_dir``: the runner exports ``--data-dir`` to the backend under test and
+# to pytest alike, and the function refuses a directory overlapping production data), the sidecar keys of that time, no
+# ``plugins_signature`` (a read detects its plugins again, as for any file older than item 8), and either
+# ``uploaded_by_user_id`` = the test's uploader with ``target_broker_id`` null (what ``save_uploaded_file`` writes when it
+# is given no broker), or neither key (a file from before f0b7aad8d). The writes and the sweep hold the backend's own lock
+# for the files with no broker (``broker_reports/.locks/broker_none.lock``): a concurrent read that detects the plugins
+# again then never writes a sidecar back after the sweep. The sweep covers every status folder, since today a parse moves
+# the file to ``parsed/``, and runs at teardown, after a red too. Before anything is asserted about a user who must be
+# refused, the uploader (or the administrator) reads the file: the premise that the test reached the data directory of
+# the backend under test, and the presence barrier of every negative.
+#
+# W-B4 is pinned three times. Ids that name nothing — ``not-a-uuid``; ``..``, sent as ``%2E%2E`` because httpx resolves a literal
+# dot segment itself, which uvicorn decodes and ``{file_id}`` (``[^/]+``) takes; a UUID with a suffix — already answer 404
+# today, from the lookup: guards. An id of 300 characters makes the lookup itself fail: ``Path.exists`` raises
+# ENAMETOOLONG for a name longer than the file system's limit (255), an errno ``pathlib`` does not swallow, so every route
+# answers 500 today: red. «Before any lookup» needs a file the lookup would find: a sidecar named by a UUID with a suffix,
+# planted in the user's own broker folder next to a twin named by a plain UUID, which is served (the barrier). The canonical
+# form, last: the id of a file the user uploaded, upper-cased. ``uuid.UUID`` reads it, and on a case-insensitive file system
+# (macOS's default, this lane) the lookup finds the file under that spelling, so only a check of the canonical form refuses
+# it; on a case-sensitive one (Linux) the lookup finds nothing. Its red is therefore macOS's only; the cure answers 404 on both.
+#
+# The parse target (item 6) needs no planted file. An owner holds two brokers: the file's, where the caller is EDITOR and
+# the owner uploads the file, and a target, where the caller is VIEWER or holds no role; the access lists are read back
+# before the parse, the roles being the premise. The refused parse must leave the file ``uploaded`` with no parse; then the
+# same caller parses the same file into its own broker, 200: the barrier that puts the 403 on the target broker, not on the
+# file. The administrator, with no role on either broker, parses into the target.
+#
+# The administrator is ``e2e_test_admin`` of populate_mock_data.py, which the api setup (``db populate``) seeds on the lane;
+# every other account is registered by the test and checked to be a regular one. The tests delete the files and brokers
+# they created and sweep what they planted; the accounts stay, as everywhere in this module.
+#
+# Write-scoped, as the rest of the unit: the planted files carry fresh ids and are swept; no other api unit lists BRIM
+# files, and the backend's housekeeping (a broker deletion lists that broker's files, those with no broker included, then
+# deletes only that broker's) leaves them alone.
+
+BRIM_FILES_URL = f"{API_BASE}/brokers/import/files"
+#: The administrator populate_mock_data.py seeds on the lane (the api setup runs ``db populate``).
+LANE_ADMIN = ("e2e_test_admin", "E2eAdminPass123!")
+#: The status folders of ``broker_reports``: a report is planted in the first, a parse moves it to the second.
+STATUS_FOLDERS = ("uploaded", "parsed", "failed")
+#: The rows of ``sample_csv_content``: any plugin catalogue reads them as the generic CSV's, and the generic CSV parses them.
+PLANTED_CSV = b"date,type,quantity,amount,currency,description\n2025-01-01,DEPOSIT,0,1000.00,EUR,Test deposit\n2025-01-02,BUY,10,-500.00,EUR,Buy some shares\n"
+#: Longer than any file name the file system accepts (NAME_MAX 255) once ``.json`` is appended: today's lookup raises ENAMETOOLONG.
+OVERLONG_FILE_ID = "a" * 300
+#: W-B4: ids that are not UUIDs, as F36-10 writes them in the URL path (``_non_uuid_id``).
+NON_UUID_KINDS = ("not-a-uuid", "dot-dot", "over-long", "uuid-with-suffix")
+
+
+@dataclass(frozen=True)
+class _FileRoute:
+    """A per-file route: its name, its method, its path after ``/files/{file_id}``; ``viewer``: a VIEWER of the file's broker may use it."""
+
+    name: str
+    method: str
+    suffix: str
+    viewer: bool
+
+
+FILE_ROUTES = (
+    _FileRoute("info", "GET", "", True),
+    _FileRoute("preview", "GET", "/preview", True),
+    _FileRoute("download", "GET", "/download", True),
+    _FileRoute("last-parse", "GET", "/last-parse", True),
+    _FileRoute("plugin-check", "GET", "/plugin-check", True),
+    _FileRoute("parse", "POST", "/parse", False),
+    _FileRoute("delete", "DELETE", "", False),
+)
+READ_ROUTES = tuple(route for route in FILE_ROUTES if route.viewer)
+ROUTE = {route.name: route for route in FILE_ROUTES}
+
+
+async def _ask(client: httpx.AsyncClient, route: _FileRoute, file_id: str, broker_id: Optional[int] = None) -> httpx.Response:
+    """``route`` on ``file_id``, written in the URL path as given, the request otherwise well-formed: a plugin check asks the
+    generic CSV, a parse imports into ``broker_id`` with it. Only the file and the caller decide the answer."""
+    url = f"{BRIM_FILES_URL}/{file_id}{route.suffix}"
+    if route.name == "parse":
+        assert broker_id is not None, "a parse names the broker it imports into"
+        return await client.post(url, json={"plugin_code": GENERIC_CSV_CODE, "broker_id": broker_id}, timeout=TIMEOUT)
+    params = {"plugin_code": GENERIC_CSV_CODE} if route.name == "plugin-check" else None
+    return await client.request(route.method, url, params=params, timeout=TIMEOUT)
+
+
+def _answer(response: httpx.Response) -> str:
+    """A response, short enough for an assertion message."""
+    return f"{response.status_code} {response.text[:160]}"
+
+
+async def _regular_user(client: httpx.AsyncClient) -> int:
+    """A regular account of this test, registered and signed in on ``client``: its id."""
+    user_id = await create_test_user(client)
+    me = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+    assert me.status_code == 200, _answer(me)
+    assert me.json()["user"]["is_superuser"] is False, "premise: the account registered as the lane's first, hence its administrator: the api setup (db populate) did not run on this lane"
+    return user_id
+
+
+async def _lane_admin(client: httpx.AsyncClient) -> int:
+    """``e2e_test_admin`` signed in on ``client``: its id."""
+    username, password = LANE_ADMIN
+    response = await client.post(f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT)
+    assert response.status_code == 200, f"premise: {username} of populate_mock_data.py signs in on the lane (the api setup, db populate, seeds it): {_answer(response)}"
+    user = response.json()["user"]
+    assert user["is_superuser"] is True, f"premise: {username} is an administrator: {user}"
+    return user["id"]
+
+
+async def _set_access(owner: httpx.AsyncClient, broker_id: int, owner_id: int, members: Dict[int, str]) -> None:
+    """The broker's whole access list (``PUT`` replaces it): its owner, and ``members`` as ``{user_id: role}``."""
+    items = [{"user_id": owner_id, "role": "OWNER", "share_percentage": 1.0}] + [{"user_id": user_id, "role": role, "share_percentage": 0} for user_id, role in members.items()]
+    response = await owner.put(f"{API_BASE}/brokers/{broker_id}/access", json=items, timeout=TIMEOUT)
+    assert response.status_code == 200, _answer(response)
+
+
+async def _listed(client: httpx.AsyncClient, **params: object) -> Dict[str, dict]:
+    """``GET /files`` as ``client``'s user sees it, with the query ``params``: its items by file id."""
+    response = await client.get(BRIM_FILES_URL, params=params, timeout=TIMEOUT)
+    assert response.status_code == 200, _answer(response)
+    return {item["file_id"]: item for item in response.json()}
+
+
+async def _can_delete(client: httpx.AsyncClient, files: Dict[str, str]) -> Dict[str, object]:
+    """``can_delete`` of each of ``files`` (``{label: file_id}``) in ``client``'s list; ``"not listed"`` or ``"no can_delete"`` when there is none to read."""
+    listed = await _listed(client)
+    return {label: listed[file_id].get("can_delete", "no can_delete") if file_id in listed else "not listed" for label, file_id in files.items()}
+
+
+@dataclass(frozen=True)
+class _Planted:
+    """A report the test writes straight into the lane's ``broker_reports``: in ``broker_<id>/``, or in the root when ``broker_id`` is None."""
+
+    file_id: str
+    filename: str
+    broker_id: Optional[int]
+    content: bytes = PLANTED_CSV
+
+    @property
+    def names(self) -> Tuple[str, str]:
+        """The content's file name and the sidecar's, as the backend derives them (the extension from ``filename``)."""
+        return f"{self.file_id}{Path(self.filename).suffix.lower()}", f"{self.file_id}.json"
+
+
+class _Planter:
+    """Writes reports into this lane's ``broker_reports`` under the backend's lock, tells where they are, and sweeps them."""
+
+    def __init__(self) -> None:
+        try:
+            self.reports = get_test_data_dir() / "broker_reports"
+        except ValueError as exc:
+            pytest.fail(f"refusing to write broker reports outside a test data directory: {exc}", pytrace=False)
+        self.planted: List[_Planted] = []
+
+    def _folder(self, report: _Planted, status: str) -> Path:
+        folder = self.reports / status
+        return folder if report.broker_id is None else folder / f"broker_{report.broker_id}"
+
+    @contextlib.contextmanager
+    def _lock(self, broker_id: Optional[int]) -> Iterator[None]:
+        """The backend's metadata lock of one broker (``broker_none`` for the files with no broker), taken as ``brim_provider._acquire_file_lock`` takes it."""
+        if fcntl is None:  # not POSIX: the backend's lock is in-process only, there is nothing to share with it
+            yield
+            return
+        lock_file = self.reports / ".locks" / ("broker_none.lock" if broker_id is None else f"broker_{broker_id}.lock")
+        lock_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(lock_file, "a+") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+    def plant(self, report: _Planted, sidecar: Dict[str, object]) -> _Planted:
+        """Write ``report`` in ``uploaded/`` as the backend writes an upload: the content, then the sidecar, atomically. Recorded first: a failed write is swept too."""
+        self.planted.append(report)
+        folder = self._folder(report, "uploaded")
+        content_name, sidecar_name = report.names
+        with self._lock(report.broker_id):
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / content_name).write_bytes(report.content)
+            staged = folder / f"{sidecar_name}.tmp.{uuid.uuid4().hex}"
+            staged.write_text(json.dumps(sidecar, indent=2))
+            staged.replace(folder / sidecar_name)
+        return report
+
+    def where(self, report: _Planted) -> List[str]:
+        """Where ``report``'s content and sidecar are now, as paths relative to ``broker_reports``."""
+        paths = [self._folder(report, status) / name for status in STATUS_FOLDERS for name in report.names]
+        return sorted(str(path.relative_to(self.reports)) for path in paths if path.exists())
+
+    def as_planted(self, report: _Planted) -> List[str]:
+        """Where ``plant`` left ``report``."""
+        return sorted(str((self._folder(report, "uploaded") / name).relative_to(self.reports)) for name in report.names)
+
+    def sweep_all(self) -> None:
+        """Remove every planted report from every status folder, wherever a route moved it, under the backend's lock.
+
+        A swept report leaves the list, so a second call takes no lock: the lock file of a broker deleted meanwhile is not created again.
+        """
+        while self.planted:
+            report = self.planted[-1]
+            with self._lock(report.broker_id):
+                for status in STATUS_FOLDERS:
+                    for name in report.names:
+                        (self._folder(report, status) / name).unlink(missing_ok=True)
+            self.planted.pop()
+
+
+@pytest.fixture
+def planter() -> Iterator[_Planter]:
+    """Reports written straight into the lane's ``broker_reports``; swept at teardown, after a red too."""
+    planter = _Planter()
+    yield planter
+    planter.sweep_all()
+
+
+def _without_broker(planter: _Planter, uploader_id: Optional[int]) -> _Planted:
+    """A file with no broker, written as an old version wrote it: the sidecar keys of that time, no ``plugins_signature``.
+
+    With ``uploader_id``, what ``save_uploaded_file`` has written since f0b7aad8d when given no broker
+    (``target_broker_id`` null); without it, a file from before f0b7aad8d (neither key).
+    """
+    report = _Planted(file_id=str(uuid.uuid4()), filename=f"legacy_{uuid.uuid4().hex[:8]}.csv", broker_id=None)
+    sidecar: Dict[str, object] = {
+        "file_id": report.file_id,
+        "filename": report.filename,
+        "extension": ".csv",
+        "size_bytes": len(report.content),
+        "status": "uploaded",
+        "uploaded_at": datetime.now(UTC).isoformat(),
+        "processed_at": None,
+        "compatible_plugins": [GENERIC_CSV_CODE],
+        "error_message": None,
+    }
+    if uploader_id is not None:
+        sidecar.update({"uploaded_by_user_id": uploader_id, "target_broker_id": None, "last_parse_result": None})
+    return planter.plant(report, sidecar)
+
+
+def _on_broker(planter: _Planter, broker_id: int, uploader_id: int, file_id: str) -> _Planted:
+    """A file of ``broker_id`` named ``file_id``, with the sidecar today's upload writes, less the detection signature (a read detects its plugins again)."""
+    report = _Planted(file_id=file_id, filename=f"f36_{uuid.uuid4().hex[:8]}.csv", broker_id=broker_id)
+    sidecar: Dict[str, object] = {
+        "file_id": report.file_id,
+        "filename": report.filename,
+        "extension": ".csv",
+        "size_bytes": len(report.content),
+        "status": "uploaded",
+        "uploaded_at": datetime.now(UTC).isoformat(),
+        "processed_at": None,
+        "compatible_plugins": [GENERIC_CSV_CODE],
+        "error_message": None,
+        "uploaded_by_user_id": uploader_id,
+        "target_broker_id": broker_id,
+        "last_parse_result": None,
+        "batch_id": None,
+    }
+    return planter.plant(report, sidecar)
+
+
+async def _assert_reads_without_broker(client: httpx.AsyncClient, report: _Planted, uploader_id: Optional[int]) -> None:
+    """``client``'s user — the uploader, or the administrator — reads the planted file with no broker as it was written: the premise
+    that the test reached the data directory of the backend under test, and the presence barrier of the negatives that follow."""
+    response = await _ask(client, ROUTE["info"], report.file_id)
+    assert response.status_code == 200, f"premise: the file with no broker planted in the root of uploaded/ in {get_test_data_dir()} is read by its uploader or the administrator: {_answer(response)} — the test did not reach the data directory of the backend under test"
+    info = response.json()
+    read = (info["file_id"], info["target_broker_id"], info["uploaded_by_user_id"], info["status"])
+    assert read == (report.file_id, None, uploader_id, "uploaded"), f"premise: the file as planted: {info}"
+
+
+async def _assert_untouched(planter: _Planter, reader: httpx.AsyncClient, report: _Planted) -> None:
+    """``report`` still where it was planted, and still ``uploaded`` with no parse for ``reader`` (its uploader or the administrator)."""
+    assert planter.where(report) == planter.as_planted(report), f"the refused request moved or deleted the file: on disk now {planter.where(report)}, planted as {planter.as_planted(report)}"
+    await _assert_still_uploaded(reader, report.file_id)
+
+
+def _non_uuid_id(kind: str) -> str:
+    """An id that is not a UUID, as written in the URL path (``..`` percent-encoded: httpx resolves a literal dot segment itself)."""
+    return {"not-a-uuid": "not-a-uuid", "dot-dot": "%2E%2E", "over-long": OVERLONG_FILE_ID, "uuid-with-suffix": f"{uuid.uuid4()}-1"}[kind]
+
+
+class TestReportsWithoutBroker:
+    """F36, W-B3 — a file with no broker (an old version's, in the root of a status folder) is its uploader's and the administrator's only."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("query", ["unfiltered", "own-broker", "foreign-broker"])
+    async def test_another_user_does_not_list_it(self, test_server, planter, query):
+        """F36-01: U's file with no broker is absent from V's list: unfiltered, filtered on V's broker, filtered on U's broker
+        (which V cannot see). Barriers: U lists it; V lists V's own file (unfiltered and on V's broker); the filter on U's
+        broker gives U's file to U and never to V. Red today: ``list_files`` keeps every file with no broker in every list."""
+        print_section(f"F36-01: a file with no broker is not in another user's list ({query})")
+        async with httpx.AsyncClient() as uploader, httpx.AsyncClient() as other:
+            uploader_id = await _regular_user(uploader)
+            await _regular_user(other)
+            uploader_broker = await create_test_broker(uploader)
+            other_broker = await create_test_broker(other)
+            uploader_files: List[str] = []
+            other_files: List[str] = []
+            try:
+                legacy = _without_broker(planter, uploader_id)
+                await _assert_reads_without_broker(uploader, legacy, uploader_id)
+                uploader_file = await _upload_for_check(uploader, uploader_broker, PLANTED_CSV, f"f36_{uuid.uuid4().hex[:8]}.csv", uploader_files)
+                other_file = await _upload_for_check(other, other_broker, PLANTED_CSV, f"f36_{uuid.uuid4().hex[:8]}.csv", other_files)
+                assert legacy.file_id in await _listed(uploader), "presence barrier: the uploader lists the file with no broker"
+                params = {"unfiltered": {}, "own-broker": {"broker_ids": other_broker}, "foreign-broker": {"broker_ids": uploader_broker}}[query]
+
+                listed = await _listed(other, **params)
+
+                if query == "foreign-broker":
+                    assert uploader_file in await _listed(uploader, **params), "presence barrier: the filter on the uploader's broker gives the uploader's file to the uploader"
+                else:
+                    assert other_file in listed, "presence barrier: the other user lists their own file"
+                assert uploader_file not in listed, f"a broker's file reached the list of a user without access to that broker ({query})"
+                assert legacy.file_id not in listed, f"the file with no broker uploaded by user {uploader_id} is in another user's list ({query}): list_files keeps every file with no broker in every list"
+                print_success(f"✓ a file with no broker is not in another user's list ({query})")
+            finally:
+                await _delete_files(uploader, uploader_files)
+                await _delete_files(other, other_files)
+                await _delete_created(uploader, broker_ids=[uploader_broker])
+                await _delete_created(other, broker_ids=[other_broker])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("route", FILE_ROUTES, ids=lambda route: route.name)
+    async def test_another_user_is_refused_on_every_route(self, test_server, planter, route):
+        """F36-02: V, neither U nor an administrator, on U's file with no broker: 403 on ``route``, and the file stays where it was,
+        ``uploaded``, with no parse (a parse names V's own broker: only the file can refuse it). Red today: every route answers 200
+        for anyone signed in; the parse moves the file to ``parsed/``, the delete removes it."""
+        print_section(f"F36-02: a file with no broker refuses another user ({route.name})")
+        async with httpx.AsyncClient() as uploader, httpx.AsyncClient() as other:
+            uploader_id = await _regular_user(uploader)
+            await _regular_user(other)
+            other_broker = await create_test_broker(other)
+            try:
+                legacy = _without_broker(planter, uploader_id)
+                await _assert_reads_without_broker(uploader, legacy, uploader_id)
+
+                response = await _ask(other, route, legacy.file_id, other_broker)
+
+                assert response.status_code == 403, f"{route.name} on a file with no broker, by a user who is neither its uploader nor an administrator: expected 403, got {_answer(response)}"
+                await _assert_untouched(planter, uploader, legacy)
+                print_success(f"✓ {route.name}: 403, the file untouched")
+            finally:
+                await _delete_created(other, broker_ids=[other_broker])
+
+    @pytest.mark.asyncio
+    async def test_a_file_with_neither_broker_nor_uploader_is_the_administrators_only(self, test_server, planter):
+        """F36-03: a file from before f0b7aad8d (neither ``target_broker_id`` nor ``uploaded_by_user_id``): a regular user does not list
+        it, gets 403 on ``GET /files/{id}`` and on ``DELETE``, and the file stays. Barrier: the administrator reads and lists it. Red
+        today: listed, 200, and the delete removes it."""
+        print_section("F36-03: a file with neither broker nor uploader is the administrator's only")
+        async with httpx.AsyncClient() as admin, httpx.AsyncClient() as user:
+            await _lane_admin(admin)
+            await _regular_user(user)
+            orphan = _without_broker(planter, None)
+            await _assert_reads_without_broker(admin, orphan, None)
+            assert orphan.file_id in await _listed(admin), "presence barrier: the administrator lists it"
+
+            listed = orphan.file_id in await _listed(user)
+            info = await _ask(user, ROUTE["info"], orphan.file_id)
+            delete = await _ask(user, ROUTE["delete"], orphan.file_id)
+
+            seen = {"listed": listed, "info": info.status_code, "delete": delete.status_code, "on disk": planter.where(orphan)}
+            assert seen == {"listed": False, "info": 403, "delete": 403, "on disk": planter.as_planted(orphan)}, f"a regular user on a file with neither broker nor uploader: {seen} (info {_answer(info)}; delete {_answer(delete)})"
+            print_success("✓ a file with neither broker nor uploader is the administrator's only")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("reader", ["uploader", "administrator"])
+    async def test_its_uploader_and_the_administrator_list_and_read_it(self, test_server, planter, reader):
+        """F36-04 (guard, green today): U's file with no broker is in the list of ``reader`` (U, or the administrator), and every read
+        route answers 200: the info as planted, the preview of this file, the download with the planted bytes, no last parse, the
+        generic CSV's plugin check."""
+        print_section(f"F36-04: the {reader} lists and reads a file with no broker")
+        async with httpx.AsyncClient() as uploader, httpx.AsyncClient() as admin:
+            uploader_id = await _regular_user(uploader)
+            client = uploader
+            if reader == "administrator":
+                await _lane_admin(admin)
+                client = admin
+            legacy = _without_broker(planter, uploader_id)
+            await _assert_reads_without_broker(client, legacy, uploader_id)
+
+            assert legacy.file_id in await _listed(client), f"the {reader} does not list the file with no broker"
+            answers = {route.name: await _ask(client, route, legacy.file_id) for route in READ_ROUTES}
+
+            assert {name: response.status_code for name, response in answers.items()} == dict.fromkeys(answers, 200), {name: _answer(response) for name, response in answers.items()}
+            assert answers["preview"].json()["download_url"].endswith(f"/files/{legacy.file_id}/download"), answers["preview"].text
+            assert answers["download"].content == legacy.content, "the download is not the planted file"
+            assert answers["last-parse"].json() is None, answers["last-parse"].text
+            assert answers["plugin-check"].json()["plugin_code"] == GENERIC_CSV_CODE, answers["plugin-check"].text
+            print_success(f"✓ the {reader} lists and reads a file with no broker")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("deleter", ["uploader", "administrator"])
+    async def test_its_uploader_and_the_administrator_delete_it(self, test_server, planter, deleter):
+        """F36-05 (guard, green today): ``deleter`` (U, or the administrator) deletes U's file with no broker: 200
+        ``{"success": true, "file_id": …}``; content and sidecar are gone from disk, the deleter no longer lists it, and reading it is 404."""
+        print_section(f"F36-05: the {deleter} deletes a file with no broker")
+        async with httpx.AsyncClient() as uploader, httpx.AsyncClient() as admin:
+            uploader_id = await _regular_user(uploader)
+            client = uploader
+            if deleter == "administrator":
+                await _lane_admin(admin)
+                client = admin
+            legacy = _without_broker(planter, uploader_id)
+            await _assert_reads_without_broker(client, legacy, uploader_id)
+
+            response = await _ask(client, ROUTE["delete"], legacy.file_id)
+
+            assert response.status_code == 200 and response.json() == {"success": True, "file_id": legacy.file_id}, _answer(response)
+            assert planter.where(legacy) == [], f"the delete left the file on disk: {planter.where(legacy)}"
+            assert legacy.file_id not in await _listed(client), f"the {deleter} still lists the deleted file"
+            gone = await _ask(client, ROUTE["info"], legacy.file_id)
+            assert gone.status_code == 404, _answer(gone)
+            print_success(f"✓ the {deleter} deletes a file with no broker")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("reader", ["uploader", "administrator"])
+    async def test_the_list_of_a_broker_leaves_out_a_file_with_no_broker(self, test_server, planter, reader):
+        """F36-16 (W-B32): U owns broker B, with a report uploaded to it, and has a file with no broker. ``reader`` (U, or the
+        administrator, who holds no role on B: no role narrows an administrator's list) asks for B's list, ``broker_ids`` = B, as
+        B's «Uploaded Reports» does: B's report is there, the file with no broker is not, and every item is a file of B. Barriers:
+        the reader reads the file with no broker and lists it unfiltered (F36-04's contract, which the cure keeps: the Files page
+        asks with no filter); B's report is in B's list. Red today: the route hands the filter to ``list_files``, which keeps every
+        file with no broker under any broker filter, and then drops only those another user uploaded (decision 36): the file shows
+        in the list of every broker, U's own to U, all of them to the administrator."""
+        print_section(f"F36-16: a broker's list, as the {reader} reads it, leaves out a file with no broker")
+        async with httpx.AsyncClient() as uploader, httpx.AsyncClient() as admin:
+            uploader_id = await _regular_user(uploader)
+            client = uploader
+            if reader == "administrator":
+                await _lane_admin(admin)
+                client = admin
+            broker_id = await create_test_broker(uploader)
+            file_ids: List[str] = []
+            try:
+                broker_report = await _upload_for_check(uploader, broker_id, PLANTED_CSV, f"f36_{uuid.uuid4().hex[:8]}.csv", file_ids)
+                legacy = _without_broker(planter, uploader_id)
+                await _assert_reads_without_broker(client, legacy, uploader_id)
+                assert legacy.file_id in await _listed(client), f"presence barrier: the {reader} lists the file with no broker when the list is not filtered (F36-04)"
+
+                listed = await _listed(client, broker_ids=broker_id)
+
+                assert broker_report in listed, f"presence barrier: the {reader} finds broker {broker_id}'s report in the list of broker {broker_id}"
+                assert legacy.file_id not in listed, f"a report with no broker shows in the list of broker {broker_id} (its «Uploaded Reports») as the {reader} reads it: file {legacy.file_id}, uploaded by user {uploader_id} with no broker, is listed under every broker"
+                strays = {file_id: item["target_broker_id"] for file_id, item in listed.items() if item["target_broker_id"] != broker_id}
+                assert strays == {}, f"the list of broker {broker_id}, as the {reader} reads it, shows reports of another broker or of none ({{file_id: target_broker_id}}): {strays}"
+                print_success(f"✓ a broker's list, as the {reader} reads it, leaves out a file with no broker")
+            finally:
+                await _delete_files(uploader, file_ids)
+                await _delete_created(uploader, broker_ids=[broker_id])
+
+
+class TestReportsOfABroker:
+    """F36 — a broker's file keeps today's rules: any role reads it, EDITOR or OWNER parses and deletes it, anyone else gets 403."""
+
+    @pytest.mark.asyncio
+    async def test_a_viewer_reads_it_but_neither_parses_nor_deletes_it(self, test_server):
+        """F36-06 (guard, green today): a VIEWER of the broker gets 200 on the five read routes, 403 on the parse (into that broker) and
+        on the delete; the file stays ``uploaded`` with no parse."""
+        print_section("F36-06: a VIEWER reads a broker's file, neither parses nor deletes it")
+        async with httpx.AsyncClient() as owner, httpx.AsyncClient() as viewer:
+            owner_id = await _regular_user(owner)
+            viewer_id = await _regular_user(viewer)
+            broker_id = await create_test_broker(owner)
+            file_ids: List[str] = []
+            try:
+                await _set_access(owner, broker_id, owner_id, {viewer_id: "VIEWER"})
+                file_id = await _upload_for_check(owner, broker_id, PLANTED_CSV, f"f36_{uuid.uuid4().hex[:8]}.csv", file_ids)
+
+                answers = {route.name: (await _ask(viewer, route, file_id, broker_id)).status_code for route in FILE_ROUTES}
+
+                assert answers == {route.name: 200 if route.viewer else 403 for route in FILE_ROUTES}, f"a VIEWER on the broker's file: {answers}"
+                await _assert_still_uploaded(owner, file_id)
+                print_success("✓ a VIEWER reads, neither parses nor deletes")
+            finally:
+                await _delete_files(owner, file_ids)
+                await _delete_created(owner, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_a_user_without_access_does_not_list_it_and_is_refused_everywhere(self, test_server):
+        """F36-07 (guard, green today): a user with no role on the broker does not list its file (the owner does: the barrier) and
+        gets 403 on all seven per-file routes; the file stays ``uploaded`` with no parse."""
+        print_section("F36-07: a user without access does not list a broker's file and is refused on every route")
+        async with httpx.AsyncClient() as owner, httpx.AsyncClient() as stranger:
+            await _regular_user(owner)
+            await _regular_user(stranger)
+            broker_id = await create_test_broker(owner)
+            file_ids: List[str] = []
+            try:
+                file_id = await _upload_for_check(owner, broker_id, PLANTED_CSV, f"f36_{uuid.uuid4().hex[:8]}.csv", file_ids)
+                assert file_id in await _listed(owner), "presence barrier: the owner lists the broker's file"
+
+                assert file_id not in await _listed(stranger), "a broker's file is in the list of a user without access to the broker"
+                answers = {route.name: (await _ask(stranger, route, file_id, broker_id)).status_code for route in FILE_ROUTES}
+
+                assert answers == dict.fromkeys(answers, 403), f"a user without access on the broker's file: {answers}"
+                await _assert_still_uploaded(owner, file_id)
+                print_success("✓ a user without access neither lists nor reaches a broker's file")
+            finally:
+                await _delete_files(owner, file_ids)
+                await _delete_created(owner, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_an_editor_deletes_it(self, test_server):
+        """F36-08 (guard, green today): an EDITOR of the broker deletes the owner's file: 200 ``{"success": true, "file_id": …}``; the
+        owner no longer lists it, and reading it is 404."""
+        print_section("F36-08: an EDITOR deletes a broker's file")
+        async with httpx.AsyncClient() as owner, httpx.AsyncClient() as editor:
+            owner_id = await _regular_user(owner)
+            editor_id = await _regular_user(editor)
+            broker_id = await create_test_broker(owner)
+            file_ids: List[str] = []
+            try:
+                await _set_access(owner, broker_id, owner_id, {editor_id: "EDITOR"})
+                file_id = await _upload_for_check(owner, broker_id, PLANTED_CSV, f"f36_{uuid.uuid4().hex[:8]}.csv", file_ids)
+
+                response = await _ask(editor, ROUTE["delete"], file_id)
+
+                assert response.status_code == 200 and response.json() == {"success": True, "file_id": file_id}, _answer(response)
+                assert file_id not in await _listed(owner), "the owner still lists the deleted file"
+                gone = await _ask(owner, ROUTE["info"], file_id)
+                assert gone.status_code == 404, _answer(gone)
+                print_success("✓ an EDITOR deletes a broker's file")
+            finally:
+                await _delete_files(owner, file_ids)
+                await _delete_created(owner, broker_ids=[broker_id])
+
+
+class TestListCanDelete:
+    """F36 — every item of ``GET /files`` says whether its reader may delete it (``can_delete``), as ``DELETE /files/{id}`` will answer."""
+
+    @pytest.mark.asyncio
+    async def test_each_list_item_says_whether_its_reader_may_delete_it(self, test_server, planter):
+        """F36-09: one broker (its OWNER, an EDITOR, and a VIEWER who uploaded a file while EDITOR), U's file with no broker and a
+        file with neither broker nor uploader. ``can_delete``: true for U on U's file; for the OWNER and the EDITOR on both of the
+        broker's files; for the administrator on all four. False for the VIEWER on both of the broker's files, its own upload
+        included. Red today: no list item carries ``can_delete``."""
+        print_section("F36-09: can_delete on every list item")
+        async with httpx.AsyncClient() as uploader, httpx.AsyncClient() as owner, httpx.AsyncClient() as editor, httpx.AsyncClient() as viewer, httpx.AsyncClient() as admin:
+            uploader_id = await _regular_user(uploader)
+            owner_id = await _regular_user(owner)
+            editor_id = await _regular_user(editor)
+            viewer_id = await _regular_user(viewer)
+            await _lane_admin(admin)
+            broker_id = await create_test_broker(owner)
+            file_ids: List[str] = []
+            try:
+                await _set_access(owner, broker_id, owner_id, {editor_id: "EDITOR", viewer_id: "EDITOR"})
+                owners_upload = await _upload_for_check(owner, broker_id, PLANTED_CSV, f"f36_owner_{uuid.uuid4().hex[:8]}.csv", file_ids)
+                viewers_upload = await _upload_for_check(viewer, broker_id, PLANTED_CSV, f"f36_viewer_{uuid.uuid4().hex[:8]}.csv", file_ids)
+                await _set_access(owner, broker_id, owner_id, {editor_id: "EDITOR", viewer_id: "VIEWER"})
+                legacy = _without_broker(planter, uploader_id)
+                orphan = _without_broker(planter, None)
+                await _assert_reads_without_broker(uploader, legacy, uploader_id)
+                files = {"no broker, U's": legacy.file_id, "no broker, no uploader": orphan.file_id, "the owner's upload": owners_upload, "the viewer's upload, made as EDITOR": viewers_upload}
+                broker_files = ("the owner's upload", "the viewer's upload, made as EDITOR")
+                readers = {"U, the uploader": uploader, "the OWNER": owner, "the EDITOR": editor, "the VIEWER": viewer, "the administrator": admin}
+                expected = {
+                    "U, the uploader": {"no broker, U's": True},
+                    "the OWNER": dict.fromkeys(broker_files, True),
+                    "the EDITOR": dict.fromkeys(broker_files, True),
+                    "the VIEWER": dict.fromkeys(broker_files, False),
+                    "the administrator": dict.fromkeys(files, True),
+                }
+
+                seen = {reader: await _can_delete(readers[reader], {label: files[label] for label in wanted}) for reader, wanted in expected.items()}
+
+                assert seen == expected, f"can_delete per reader and file: {seen}"
+                print_success("✓ can_delete on every list item")
+            finally:
+                await _delete_files(owner, file_ids)
+                await _delete_created(owner, broker_ids=[broker_id])
+
+
+class TestFileIdsAreUuids:
+    """W-B4 — a ``file_id`` that is not a UUID in its canonical form (lower-case, as an upload writes it) answers 404 on every per-file route, before any lookup."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("kind", NON_UUID_KINDS)
+    async def test_a_file_id_that_is_not_a_uuid_answers_404_on_every_route(self, test_server, kind):
+        """F36-10: ``not-a-uuid``, ``..``, 300 characters, a UUID with a suffix, on the seven per-file routes, as a regular user with a
+        broker of their own (the parse imports into it): 404 everywhere. Today: guards for ``not-a-uuid``, ``dot-dot`` and
+        ``uuid-with-suffix`` (the lookup finds nothing: 404); red for ``over-long`` (the lookup raises ENAMETOOLONG: 500)."""
+        print_section(f"F36-10: a file id that is not a UUID answers 404 on every route ({kind})")
+        async with httpx.AsyncClient() as client:
+            await _regular_user(client)
+            broker_id = await create_test_broker(client)
+            try:
+                file_id = _non_uuid_id(kind)
+
+                answers = {route.name: await _ask(client, route, file_id, broker_id) for route in FILE_ROUTES}
+
+                assert {name: response.status_code for name, response in answers.items()} == dict.fromkeys(answers, 404), {name: _answer(response) for name, response in answers.items() if response.status_code != 404}
+                print_success(f"✓ {kind}: 404 on every route")
+            finally:
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_a_file_named_by_an_id_that_is_not_a_uuid_is_never_looked_up(self, test_server, planter):
+        """F36-11: in the user's own broker folder, a file named ``<uuid>-1`` (its sidecar says so) next to a twin named by a plain
+        UUID. The twin is served (the barrier: the planted files reach the backend's data directory); ``<uuid>-1`` answers 404 on
+        all seven routes, although the user owns the broker, and stays where it was planted. Red today: the lookup finds it, and
+        every route serves it (200), the parse moving it to ``parsed/``, the delete removing it."""
+        print_section("F36-11: a file named by an id that is not a UUID is never looked up")
+        async with httpx.AsyncClient() as client:
+            owner_id = await _regular_user(client)
+            broker_id = await create_test_broker(client)
+            try:
+                twin = _on_broker(planter, broker_id, owner_id, str(uuid.uuid4()))
+                suffixed = _on_broker(planter, broker_id, owner_id, f"{uuid.uuid4()}-1")
+                served = await _ask(client, ROUTE["info"], twin.file_id)
+                assert served.status_code == 200 and served.json()["file_id"] == twin.file_id, f"premise: a file planted in the owner's broker folder under a plain UUID is served: {_answer(served)} — the test did not reach the data directory of the backend under test"
+
+                answers = {route.name: await _ask(client, route, suffixed.file_id, broker_id) for route in FILE_ROUTES}
+
+                assert {name: response.status_code for name, response in answers.items()} == dict.fromkeys(answers, 404), {name: _answer(response) for name, response in answers.items() if response.status_code != 404}
+                assert planter.where(suffixed) == planter.as_planted(suffixed), f"a route reached the file named {suffixed.file_id}: on disk now {planter.where(suffixed)}"
+                print_success("✓ a file named by an id that is not a UUID is never looked up")
+            finally:
+                planter.sweep_all()  # before the broker goes: its deletion removes its folders only when they are empty
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_the_upper_cased_id_of_an_existing_file_answers_404_on_every_route(self, test_server):
+        """F36-15: a file the user uploaded to their own broker, its id upper-cased, on the seven per-file routes: 404 everywhere,
+        although the user owns the broker and, on a case-insensitive disk, the spelling names the file. The file stays ``uploaded``
+        with no parse, and its own id serves it, before and after (the barrier). A file id is the canonical, lower-case UUID an
+        upload writes. Platform-dependent today. Red on a case-insensitive file system (macOS's default, this lane): the format
+        check accepts the id (``str(uuid.UUID(id)) == id.lower()``), the lookup finds the lower-case sidecar, the access check
+        passes (the user owns the broker) and every route serves the file, 200; the parse moves it to ``parsed/``, the delete
+        removes it. Green on a case-sensitive one (Linux): the lookup finds nothing, 404. The cure, only the canonical form is
+        a file id, answers 404 on both."""
+        print_section("F36-15: the upper-cased id of an existing file answers 404 on every route")
+        async with httpx.AsyncClient() as client:
+            await _regular_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids: List[str] = []
+            try:
+                file_id = await _upload_for_check(client, broker_id, PLANTED_CSV, f"f36_{uuid.uuid4().hex[:8]}.csv", file_ids)
+                shouted = file_id.upper()
+                assert str(uuid.UUID(file_id)) == file_id, f"premise: an upload writes its id as a canonical UUID, lower-case: {file_id}"
+                assert shouted != file_id, f"premise: the id has a letter to upper-case: {file_id}"
+                served = await _ask(client, ROUTE["info"], file_id)
+                assert served.status_code == 200 and served.json()["file_id"] == file_id, f"barrier: the file's own id serves it: {_answer(served)}"
+
+                answers = {route.name: await _ask(client, route, shouted, broker_id) for route in FILE_ROUTES}
+
+                assert {name: response.status_code for name, response in answers.items()} == dict.fromkeys(answers, 404), {name: _answer(response) for name, response in answers.items() if response.status_code != 404}
+                await _assert_still_uploaded(client, file_id)
+                print_success("✓ the upper-cased id of an existing file answers 404 on every route; the file is untouched")
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+
+async def _roles(owner: httpx.AsyncClient, broker_id: int) -> Dict[int, str]:
+    """The broker's access list as its owner reads it: ``{user_id: role}``."""
+    response = await owner.get(f"{API_BASE}/brokers/{broker_id}/access", timeout=TIMEOUT)
+    assert response.status_code == 200, _answer(response)
+    return {item["user_id"]: item["role"] for item in response.json()["items"]}
+
+
+async def _parse_scene(owner: httpx.AsyncClient, caller: httpx.AsyncClient, role_on_target: Optional[str], broker_ids: List[int], file_ids: List[str]) -> Tuple[int, int, str]:
+    """``owner`` holds two brokers: the file's, where ``caller`` is EDITOR and ``owner`` uploads the file, and a target, where ``caller``
+    holds ``role_on_target`` (None: no role). ``(file_broker, target_broker, file_id)``; each broker and the file join ``broker_ids``
+    and ``file_ids`` as soon as they exist, for the test's cleanup. The roles are read back: they are the premise."""
+    owner_id = await _regular_user(owner)
+    caller_id = await _regular_user(caller)
+    file_broker = await create_test_broker(owner)
+    broker_ids.append(file_broker)
+    target_broker = await create_test_broker(owner)
+    broker_ids.append(target_broker)
+    await _set_access(owner, file_broker, owner_id, {caller_id: "EDITOR"})
+    target_members = {} if role_on_target is None else {caller_id: role_on_target}
+    if target_members:
+        await _set_access(owner, target_broker, owner_id, target_members)
+    roles = (await _roles(owner, file_broker), await _roles(owner, target_broker))
+    assert roles == ({owner_id: "OWNER", caller_id: "EDITOR"}, {owner_id: "OWNER", **target_members}), f"premise: the roles of the scene, (the file's broker, the target): {roles}"
+    file_id = await _upload_for_check(owner, file_broker, PLANTED_CSV, f"f36_{uuid.uuid4().hex[:8]}.csv", file_ids)
+    return file_broker, target_broker, file_id
+
+
+class TestParseTargetBroker:
+    """F36 — ``POST /files/{id}/parse`` imports only into a broker its caller may edit: the body's ``broker_id`` needs EDITOR or OWNER there; the administrator passes."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("role_on_target", [pytest.param("VIEWER", id="viewer-of-target"), pytest.param(None, id="no-role-on-target")])
+    async def test_an_editor_cannot_parse_the_file_into_a_broker_they_do_not_edit(self, test_server, role_on_target):
+        """F36-12: E, EDITOR of the file's broker A and VIEWER of broker B (or with no role on B), parses the file with ``broker_id`` B:
+        403, and the file stays ``uploaded`` with no parse. Barrier: E then parses the same file into A, 200: the refusal is about B,
+        not about the file. Red today: 200, the parse of the file into B (the response's ``broker_id`` is B, its duplicate report is
+        computed against B's transactions), and the file moves to ``parsed/`` with that parse cached as its last one."""
+        held = role_on_target or "no role"
+        print_section(f"F36-12: an EDITOR of the file's broker cannot parse it into a broker where they hold {held}")
+        async with httpx.AsyncClient() as owner, httpx.AsyncClient() as editor:
+            broker_ids: List[int] = []
+            file_ids: List[str] = []
+            try:
+                file_broker, target_broker, file_id = await _parse_scene(owner, editor, role_on_target, broker_ids, file_ids)
+
+                refused = await _ask(editor, ROUTE["parse"], file_id, target_broker)
+
+                assert refused.status_code == 403, f"a parse into broker {target_broker}, where the caller holds {held}, of a file of broker {file_broker}, where the caller is EDITOR: expected 403, got {_answer(refused)}"
+                await _assert_still_uploaded(owner, file_id)
+                served = await _ask(editor, ROUTE["parse"], file_id, file_broker)
+                assert served.status_code == 200 and served.json()["broker_id"] == file_broker, f"barrier: the same caller parses the same file into its own broker {file_broker}: {_answer(served)}"
+                print_success(f"✓ a parse into a broker where the caller holds {held}: 403, the file untouched")
+            finally:
+                await _delete_files(owner, file_ids)
+                await _delete_created(owner, broker_ids=broker_ids)
+
+    @pytest.mark.asyncio
+    async def test_an_editor_parses_the_file_into_its_own_broker(self, test_server):
+        """F36-13 (guard, green today): the caller of F36-12, EDITOR of the file's broker A and VIEWER of broker B, parses the same file
+        with ``broker_id`` A: 200, the parse of that file by the generic CSV into A."""
+        print_section("F36-13: an EDITOR parses the file into its own broker")
+        async with httpx.AsyncClient() as owner, httpx.AsyncClient() as editor:
+            broker_ids: List[int] = []
+            file_ids: List[str] = []
+            try:
+                file_broker, _, file_id = await _parse_scene(owner, editor, "VIEWER", broker_ids, file_ids)
+
+                served = await _ask(editor, ROUTE["parse"], file_id, file_broker)
+
+                assert served.status_code == 200, _answer(served)
+                parsed = served.json()
+                assert (parsed["file_id"], parsed["plugin_code"], parsed["broker_id"]) == (file_id, GENERIC_CSV_CODE, file_broker), _answer(served)
+                print_success("✓ an EDITOR parses the file into its own broker")
+            finally:
+                await _delete_files(owner, file_ids)
+                await _delete_created(owner, broker_ids=broker_ids)
+
+    @pytest.mark.asyncio
+    async def test_the_administrator_parses_the_file_into_a_broker_without_a_role(self, test_server):
+        """F36-14 (guard, green today): the administrator, with no role on the file's broker A nor on broker B, parses the file with
+        ``broker_id`` B: 200, the parse of that file into B."""
+        print_section("F36-14: the administrator parses a file into a broker they hold no role on")
+        async with httpx.AsyncClient() as owner, httpx.AsyncClient() as admin:
+            broker_ids: List[int] = []
+            file_ids: List[str] = []
+            try:
+                owner_id = await _regular_user(owner)
+                admin_id = await _lane_admin(admin)
+                file_broker = await create_test_broker(owner)
+                broker_ids.append(file_broker)
+                target_broker = await create_test_broker(owner)
+                broker_ids.append(target_broker)
+                roles = (await _roles(owner, file_broker), await _roles(owner, target_broker))
+                assert roles == ({owner_id: "OWNER"}, {owner_id: "OWNER"}), f"premise: the administrator ({admin_id}) holds no role on either broker: {roles}"
+                file_id = await _upload_for_check(owner, file_broker, PLANTED_CSV, f"f36_{uuid.uuid4().hex[:8]}.csv", file_ids)
+
+                served = await _ask(admin, ROUTE["parse"], file_id, target_broker)
+
+                assert served.status_code == 200, _answer(served)
+                parsed = served.json()
+                assert (parsed["file_id"], parsed["broker_id"]) == (file_id, target_broker), _answer(served)
+                print_success("✓ the administrator parses a file into a broker they hold no role on")
+            finally:
+                await _delete_files(owner, file_ids)
+                await _delete_created(owner, broker_ids=broker_ids)
 
 
 # ============================================================================

@@ -17,7 +17,7 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import type {SelectOption} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import {AlertCircle, AlertTriangle, CheckCircle2, Circle, CircleHelp, ClipboardCopy, ExternalLink, Loader2, Play} from 'lucide-svelte';
+    import {AlertCircle, AlertTriangle, CheckCircle2, Circle, CircleHelp, ClipboardCopy, ExternalLink, Info, Loader2, Play, SlidersHorizontal} from 'lucide-svelte';
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import ScheduledInvestmentEditor from './ScheduledInvestmentEditor.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
@@ -25,12 +25,14 @@
     import {getCurrencyInfo, currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {isSoftProbeFailure, summarizeProbeError, formatCurrencyForTooltip, buildProbeTooltipHtml} from './providerProbe';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
-    import {resolveProviderError} from './resolveProviderError';
+    import {probeRateLimitMessage, resolveProviderError} from './resolveProviderError';
     import {createProviderProbeState, providerConfigurationKey, type ProviderConfiguration, type ProviderProbeState} from './providerProbeState.svelte';
     import {safeScalar, safeString} from '$lib/types/common';
     import {extractErrorMessage} from '$lib/utils/trySave';
+    import PluginSettingsModal from '$lib/features/plugin-settings/PluginSettingsModal.svelte';
+    import {fetchPluginEntry, type PluginSettingsEntry} from '$lib/features/plugin-settings/pluginSettingsApi';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
@@ -117,6 +119,8 @@
     let testStatus: TestStatus = $derived(probe.status);
     let testResults = $derived.by(buildTestResults);
     let totalExecutionMs = $derived(probe.source === 'manual' ? (probe.response?.total_execution_time_ms ?? 0) : 0);
+    // C-90: a settled manual probe that read the history (a success or a warning) says the read covered only a few days.
+    let showScopeNote = $derived(testStatus !== 'testing' && testResults.some((result) => result.operation === 'history' && result.status !== 'error'));
     let paramsValues = $derived(providerParams ?? {});
 
     function currentConfiguration(): ProviderConfiguration {
@@ -124,6 +128,32 @@
     }
 
     onDestroy(() => localProbe.dispose());
+
+    /** The selected provider's settings for the signed-in user (CP11): null when it declares none, or until read. */
+    let settingsEntry = $state<PluginSettingsEntry | null>(null);
+    let configureOpen = $state(false);
+    // The dialog's plugin as plain strings: a save replaces `settingsEntry` with the same plugin, and the dialog must not
+    // read it again (a derived string changes only when its value does).
+    const settingsCode = $derived(settingsEntry?.plugin_code ?? '');
+    const settingsName = $derived(settingsEntry?.plugin_name ?? '');
+    /** Only the latest read writes: the provider may change while one is on its way. */
+    let settingsGeneration = 0;
+
+    $effect(() => {
+        const code = noProvider ? '' : providerCode;
+        const generation = ++settingsGeneration;
+        settingsEntry = null;
+        configureOpen = false;
+        if (!code) return;
+        fetchPluginEntry('asset', code).then(
+            (entry) => {
+                if (generation === settingsGeneration) settingsEntry = entry;
+            },
+            () => {
+                // Not known: no «Configure», as for a provider without settings. The probe still says NOT_CONFIGURED.
+            },
+        );
+    });
 
     /**
      * Localized provider-param text. The backend ships labels/descriptions in English
@@ -328,6 +358,9 @@
     function buildTestResults(): TestResult[] {
         if (probe.source !== 'manual') return [];
         if (probe.error) {
+            // The probe's own limit (X-R66): the translated sentence with the time the wait ends, as detail and summary
+            const limited = probeRateLimitMessage(probe.error, $t);
+            if (limited !== null) return [{success: false, operation: 'probe', status: 'error', label: $t('common.error'), detail: limited, summary: limited, execution_time_ms: 0}];
             const detail = extractErrorMessage(probe.error, $t('common.errorOccurred'));
             return [{success: false, operation: 'probe', status: 'error', label: $t('common.error'), detail, summary: summarizeProbeError(detail), execution_time_ms: 0}];
         }
@@ -348,7 +381,7 @@
             // I3: failures resolve code+details to a localized message; the
             // raw English `error` stays as fallback for unmapped codes.
             const cpError = cp.success ? null : resolveProviderError({error: safeString(cp.error), error_code: safeString(cp.error_code), error_details: safeScalar(cp.error_details)}, $t);
-            const detail = cp.success ? `${formatFixed(Number(cpValue), 2)} ${ccyLabel}${cpDate ? ` (${formatDay(cpDate)})` : ''}` : (cpError ?? undefined);
+            const detail = cp.success ? `${formatPrice(Number(cpValue))} ${ccyLabel}${cpDate ? ` (${formatDay(cpDate)})` : ''}` : (cpError ?? undefined);
             items.push({
                 success: cp.success,
                 operation: 'current_price',
@@ -398,7 +431,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
             <!-- Provider select -->
             <div>
-                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <span class="block text-xs font-medium text-lf-muted mb-1">
                     {$t('common.provider')}
                 </span>
                 <div class="flex items-center gap-2">
@@ -423,9 +456,29 @@
                         </SimpleSelect>
                     </div>
                     {#if selectedProvider?.provider_help_url}
-                        <a href={selectedProvider.provider_help_url} target="_blank" rel="noopener noreferrer" class="shrink-0 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors" title={$t('common.documentation')}>
+                        <a href={selectedProvider.provider_help_url} target="_blank" rel="noopener noreferrer" class="shrink-0 text-lf-muted hover:text-lf-info transition-colors" title={$t('common.documentation')}>
                             <CircleHelp size={18} />
                         </a>
+                    {/if}
+                    {#if settingsEntry && !settingsEntry.configured}
+                        <span class="shrink-0 inline-flex items-center rounded-full bg-lf-warning-soft px-2 py-0.5 text-xs font-semibold text-lf-warning-on-soft" data-configured="false" data-testid="provider-settings-status">
+                            {$t('pluginSettings.status.notConfigured')}
+                        </span>
+                    {/if}
+                    {#if settingsEntry && !readonly}
+                        <button
+                            aria-label={$t('pluginSettings.configure')}
+                            class="shrink-0 inline-flex items-center gap-1 rounded-md border border-lf-input bg-lf-card px-2 py-1 text-xs text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-50"
+                            data-configured={settingsEntry.configured ? 'true' : 'false'}
+                            data-testid="provider-configure"
+                            {disabled}
+                            onclick={() => (configureOpen = true)}
+                            title={$t('pluginSettings.configure')}
+                            type="button"
+                        >
+                            <SlidersHorizontal aria-hidden="true" size={14} />
+                            <span class="hidden sm:inline">{$t('pluginSettings.configure')}</span>
+                        </button>
                     {/if}
                 </div>
             </div>
@@ -436,14 +489,14 @@
             <div class="grid grid-cols-[auto_1fr] gap-3 items-end">
                 <!-- Identifier Type -->
                 <div class="w-36">
-                    <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    <span class="block text-xs font-medium text-lf-muted mb-1">
                         {$t('assets.provider.identifierType')}
                     </span>
                     {#if idTypeAutoSet}
                         <div
                             data-testid="provider-id-type-locked"
-                            class="px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg
-                                    bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-gray-400"
+                            class="px-3 py-2 text-sm border border-lf-subtle rounded-lg
+                                    bg-lf-panel text-lf-muted"
                         >
                             {identifierType.replace('_', ' ')}
                         </div>
@@ -454,7 +507,7 @@
 
                 <!-- Identifier -->
                 <div>
-                    <label for="provider-identifier" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    <label for="provider-identifier" class="block text-xs font-medium text-lf-muted mb-1">
                         {identifierLabel ?? $t('assets.provider.identifier')}
                     </label>
                     <input
@@ -468,10 +521,10 @@
                         }}
                         disabled={disabled || readonly}
                         placeholder={identifierPlaceholder}
-                        class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                   bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                   placeholder-gray-400 dark:placeholder-gray-500
-                                   focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green
+                        class="w-full px-3 py-2 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg
+                                   bg-lf-field text-lf-primary
+                                   placeholder:text-lf-placeholder
+                                   focus:outline-none focus:ring-2 focus:ring-lf-focus/50 focus:border-lf-focus
                                    disabled:opacity-50"
                     />
                 </div>
@@ -490,15 +543,15 @@
                 {readonly}
             />
         {:else if genericFields.length > 0}
-            <div class="space-y-2 pl-3 border-l-2 border-gray-200 dark:border-slate-600">
+            <div class="space-y-2 pl-3 border-l-2 border-lf-subtle">
                 {#each genericFields as field}
                     <div>
-                        <label for="param-{field.key}" class="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        <label for="param-{field.key}" class="flex items-center gap-1 text-xs font-medium text-lf-muted mb-1">
                             <span>{paramText(field, 'label') || field.key}</span>
-                            {#if field.required}<span class="text-red-500">*</span>{/if}
+                            {#if field.required}<span class="text-lf-danger">*</span>{/if}
                             {#if paramText(field, 'description') && paramText(field, 'description') !== paramText(field, 'label')}
                                 <Tooltip text={paramText(field, 'description')} maxWidth="320px">
-                                    <CircleHelp size={13} class="text-gray-400 dark:text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 cursor-help shrink-0" />
+                                    <CircleHelp size={13} class="text-lf-muted hover:text-lf-info cursor-help shrink-0" />
                                 </Tooltip>
                             {/if}
                         </label>
@@ -525,9 +578,9 @@
                                     handleParamChange(field.key, Number(el.value));
                                 }}
                                 disabled={disabled || readonly}
-                                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                           bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                           focus:outline-none focus:ring-2 focus:ring-libre-green/50
+                                class="w-full px-3 py-2 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg
+                                           bg-lf-field text-lf-primary placeholder:text-lf-placeholder
+                                           focus:outline-none focus:ring-2 focus:ring-lf-focus/50
                                            disabled:opacity-50"
                             />
                         {:else}
@@ -542,9 +595,9 @@
                                     handleParamChange(field.key, el.value);
                                 }}
                                 disabled={disabled || readonly}
-                                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                           bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                           focus:outline-none focus:ring-2 focus:ring-libre-green/50
+                                class="w-full px-3 py-2 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg
+                                           bg-lf-field text-lf-primary placeholder:text-lf-placeholder
+                                           focus:outline-none focus:ring-2 focus:ring-lf-focus/50
                                            disabled:opacity-50"
                             />
                         {/if}
@@ -564,9 +617,7 @@
                         onclick={testConfiguration}
                         disabled={!providerCode || (!identifier && !isAutoGenerated) || testStatus === 'testing' || disabled}
                         class="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors
-                                   {testStatus === 'testing'
-                            ? 'bg-gray-100 dark:bg-slate-700 text-gray-500 cursor-wait border-gray-200 dark:border-slate-600'
-                            : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700'}
+                                   {testStatus === 'testing' ? 'bg-lf-panel text-lf-muted cursor-wait border-lf-subtle' : 'bg-lf-card text-lf-secondary border-lf-subtle hover:bg-lf-hover'}
                                    disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {#if testStatus === 'testing'}
@@ -581,7 +632,7 @@
 
             <!-- Test results -->
             {#if testResults.length > 0 || testStatus === 'testing'}
-                <div class="flex flex-col gap-1.5 pl-3 border-l-2 {testStatus === 'passed' ? (testResults.some((r) => r.status === 'warning') ? 'border-amber-400' : 'border-green-400') : testStatus === 'failed' ? 'border-red-400' : 'border-gray-300 dark:border-slate-600'}">
+                <div class="flex flex-col gap-1.5 pl-3 border-l-2 {testStatus === 'passed' ? (testResults.some((r) => r.status === 'warning') ? 'border-lf-warning' : 'border-lf-success') : testStatus === 'failed' ? 'border-lf-danger' : 'border-lf-subtle'}">
                     {#each testResults as result}
                         <Tooltip
                             html={(() => {
@@ -592,23 +643,23 @@
                         >
                             <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm" data-testid="provider-test-result" data-operation={result.operation} data-status={result.status}>
                                 {#if result.status === 'warning'}
-                                    <AlertTriangle size={14} class="text-amber-500 shrink-0 self-center" />
+                                    <AlertTriangle size={14} class="text-lf-warning shrink-0 self-center" />
                                 {:else if result.success}
-                                    <CheckCircle2 size={14} class="text-green-500 shrink-0 self-center" />
+                                    <CheckCircle2 size={14} class="text-lf-success shrink-0 self-center" />
                                 {:else}
-                                    <AlertCircle size={14} class="text-red-500 shrink-0 self-center" />
+                                    <AlertCircle size={14} class="text-lf-danger shrink-0 self-center" />
                                 {/if}
-                                <span class="text-gray-600 dark:text-gray-300">{result.label}:</span>
-                                <span class={result.status === 'warning' ? 'text-amber-600 dark:text-amber-400' : result.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                                <span class="text-lf-secondary">{result.label}:</span>
+                                <span class={result.status === 'warning' ? 'text-lf-warning' : result.success ? 'text-lf-success' : 'text-lf-danger'}>
                                     {result.summary ?? result.detail ?? '—'}
                                 </span>
-                                <span class="text-xs text-gray-400 shrink-0">
+                                <span class="text-xs text-lf-muted shrink-0">
                                     ({formatFixed(result.execution_time_ms / 1000, 2)}s)
                                 </span>
                                 {#if result.status === 'error' && result.detail}
                                     <button
                                         type="button"
-                                        class="ml-auto shrink-0 p-0.5 text-gray-400 hover:text-blue-500 transition-colors"
+                                        class="ml-auto shrink-0 p-0.5 text-lf-muted hover:text-lf-info transition-colors"
                                         data-testid="provider-test-result-copy"
                                         title={$t('assets.probe.copyErrorDetail')}
                                         onclick={async (e) => {
@@ -628,19 +679,26 @@
                         </Tooltip>
                     {/each}
                     {#if testStatus === 'testing'}
-                        <div class="flex items-center gap-2 text-sm text-gray-500">
+                        <div class="flex items-center gap-2 text-sm text-lf-muted">
                             <Loader2 size={14} class="animate-spin" />
                             <span>{$t('assets.provider.testing')}</span>
                         </div>
                     {/if}
                     {#if testResults.length > 0 && testStatus !== 'testing'}
-                        <div class="text-xs text-gray-400 dark:text-gray-500 pt-1">
+                        <div class="text-xs text-lf-muted pt-1">
                             {$t('assets.probe.totalTime')}: {formatFixed(totalExecutionMs / 1000, 2)}s
                         </div>
                     {/if}
                 </div>
+                {#if showScopeNote}
+                    <!-- C-90: the probe reads only the last few days, creating the asset downloads its whole history. -->
+                    <p class="flex items-start gap-1.5 pl-3 text-xs text-lf-muted" data-testid="provider-test-scope-note">
+                        <Info size={12} class="mt-0.5 shrink-0" />
+                        <span>{$t('assets.probe.scopeNote')}</span>
+                    </p>
+                {/if}
             {:else if testStatus === 'not_tested' && providerCode && identifier}
-                <div class="flex items-center gap-2 text-xs text-gray-400">
+                <div class="flex items-center gap-2 text-xs text-lf-muted">
                     <Circle size={12} />
                     <span>{$t('assets.probe.notTested')}</span>
                 </div>
@@ -652,7 +710,7 @@
             <!-- Provider URL (hidden for AUTO_GENERATED) -->
             {#if !isAutoGenerated}
                 <div>
-                    <label for="provider-url-readonly" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    <label for="provider-url-readonly" class="block text-xs font-medium text-lf-muted mb-1">
                         {$t('assets.provider.providerUrl')}
                     </label>
                     <div class="flex gap-1.5">
@@ -661,12 +719,12 @@
                             type="text"
                             value={providerUrl ?? ''}
                             disabled
-                            class="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                       bg-gray-50 dark:bg-slate-900 text-gray-500 dark:text-gray-400
+                            class="flex-1 px-3 py-2 text-sm border border-lf-subtle rounded-lg
+                                       bg-lf-panel text-lf-muted
                                        cursor-not-allowed"
                         />
                         {#if providerUrl}
-                            <a href={providerUrl} target="_blank" rel="noopener noreferrer" class="shrink-0 flex items-center px-2 py-2 text-gray-400 hover:text-libre-green transition-colors">
+                            <a href={providerUrl} target="_blank" rel="noopener noreferrer" class="shrink-0 flex items-center px-2 py-2 text-lf-muted hover:text-lf-link transition-colors">
                                 <ExternalLink size={14} />
                             </a>
                         {/if}
@@ -676,3 +734,8 @@
         </div>
     {/if}
 </div>
+
+{#if settingsEntry}
+    <!-- «Configure» (CP11): the provider's settings over the asset dialog; a save refreshes the badge. -->
+    <PluginSettingsModal family="asset" onClose={() => (configureOpen = false)} onSaved={(fresh) => (settingsEntry = fresh)} open={configureOpen} pluginCode={settingsCode} pluginName={settingsName} />
+{/if}

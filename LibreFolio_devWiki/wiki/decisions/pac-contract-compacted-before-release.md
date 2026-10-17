@@ -68,7 +68,7 @@ floor is zero; a BUY route without a fee schedule pays no commission — the nor
 
 | Role | Path |
 |------|------|
-| Contract (defaults, optional fields, strict model config) | `backend/app/schemas/pac_allocator.py` |
+| Contract (defaults, optional fields, strict model config) | `backend/app/schemas/pac_allocator/request.py`, `backend/app/schemas/pac_allocator/base.py` |
 | Implicit fee schedules, babel minor units | `backend/app/services/pac_allocator/normalize.py` |
 | Issue codes | `backend/app/services/pac_allocator/issues.py` |
 | Request builder (compact form) | `frontend/src/lib/features/tools/pac-allocator/planner/request.ts` |

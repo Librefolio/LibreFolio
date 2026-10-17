@@ -40,7 +40,8 @@ import pytest
 from pydantic import BaseModel
 
 from backend.app.config import PROJECT_ROOT
-from backend.app.db.models import TransactionType
+from backend.app.db import precision
+from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.brim import (
     COMBINED_REQUIRED_HEADERS,
     BRIMCombinedTable,
@@ -51,8 +52,9 @@ from backend.app.schemas.brim import (
     BRIMRefusal,
     is_fake_asset_id,
 )
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, write_combined_csv
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, write_combined_csv
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers._brim_io import MATURITY_NOTICE_KIND, model_bond_maturity, read_rows
 from backend.app.services.brim_providers.broker_coinbase.plugin import CoinbaseBrokerProvider, _parse_coinbase_amount, _parse_coinbase_datetime
 from backend.app.services.brim_providers.broker_credit_agricole import plugin as ca
@@ -72,7 +74,6 @@ from backend.app.services.brim_providers.broker_trading212.plugin import Trading
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
 from backend.app.services.financial_math.price_marks import build_asset_price_series
-from backend.app.services.provider_registry import BRIMProviderRegistry
 from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
@@ -968,9 +969,9 @@ class TestGenericCSVSaysWhyItRefuses:
     """Step G.5 of workstream L (issue #26): a plugin can say why it refuses a file, and the generic CSV says which required column is missing.
 
     Since step G the generic CSV refuses a CSV whose header names no ``date`` or no ``type`` column, so a parse forced on
-    such a file stops at the guard of ``parse_file`` — "Plugin 'broker_generic_csv' cannot parse file '…'" — where the
-    plugin's ``parse`` used to say "Required column 'date' not found in CSV header". The developer's decision, verbatim:
-    «Correggi dentro G con il metodo opzionale (Consigliato)».
+    such a file stops at the guard of ``parse_file`` — "Plugin 'Generic CSV' cannot parse file '…'", the plugin by its name and
+    the file by the name it was uploaded with since lot K2a (backlog L6) — where the plugin's ``parse`` used to say "Required
+    column 'date' not found in CSV header". The developer's decision, verbatim: «Correggi dentro G con il metodo opzionale (Consigliato)».
 
     So ``BRIMProvider`` gains a concrete, optional method, ``cannot_parse_reason(file_path) -> Optional[str]``, ``None`` by
     default: one short English sentence (lowercase start, no final period) saying why ``can_parse`` refuses the file, or
@@ -1146,14 +1147,17 @@ class TestPluginSaysWhyWithACode:
 
     @pytest.mark.parametrize(("content", "missing"), _HEADERS_MISSING_DATE_OR_TYPE)
     def test_the_default_wraps_the_reason_without_a_code(self, content: bytes, missing: tuple, tmp_path: Path):
-        """The generic CSV overrides ``cannot_parse_reason`` only: its refusal is that sentence, without a code, with an empty context."""
+        """``BRIMProvider.cannot_parse_detail`` itself, about the generic CSV's sentence: that sentence, without a code, with an empty context.
+
+        The base method is called unbound on the generic CSV, so it is the default that answers, whether or not the plugin gives codes of its
+        own (lot K2a gives it some: category 4e).
+        """
         path = tmp_path / "export.csv"
         path.write_bytes(content)
         plugin = _generic_plugin()
-        assert type(plugin).cannot_parse_detail is BRIMProvider.cannot_parse_detail, "premise: the generic CSV does not override cannot_parse_detail"
         assert plugin.cannot_parse_reason(path) == _REASON_MISSING[missing], f"premise: the generic CSV names the columns {content.splitlines()[0]!r} misses"
 
-        detail = plugin.cannot_parse_detail(path)
+        detail = BRIMProvider.cannot_parse_detail(plugin, path)
 
         assert isinstance(detail, BRIMRefusal), f"the default answers {detail!r}, not a BRIMRefusal"
         assert (detail.code, detail.message, detail.context) == (None, _REASON_MISSING[missing], {})
@@ -1195,6 +1199,147 @@ class TestPluginSaysWhyWithACode:
         broken = [problem for _, problems in answers for problem in problems]
 
         assert not broken, f"{len(broken)} answer(s) break the contract of cannot_parse_detail, the first ones: {broken[:3]}"
+
+
+# =============================================================================
+# CATEGORY 4e: THE GENERIC CSV REFUSES WITH A CODE (workstream W, lot K2a — backlog C-70, part a)
+# =============================================================================
+
+# What a refusal of the generic CSV carries, by the English sentence of category 4c it keeps: the code the import wizard
+# translates as ``importWizard.parseRefusal.<code>``, and the context it translates it with. Written by hand.
+_GENERIC_REFUSAL_BY_REASON = {
+    _REASON_ONLY_CSV: ("csv_only", {"plugin_code": GENERIC_CSV_CODE}),
+    _REASON_UNREADABLE: ("file_unreadable", {}),
+    _REASON_NO_HEADER: ("no_header_row", {}),
+    _REASON_MISSING[("date",)]: ("missing_columns", {"columns": "date", "count": 1}),
+    _REASON_MISSING[("type",)]: ("missing_columns", {"columns": "type", "count": 1}),
+    _REASON_MISSING[("date", "type")]: ("missing_columns", {"columns": "date, type", "count": 2}),
+}
+
+
+def _typed(context: dict) -> dict:
+    """A context with each value's type beside it: a count written ``"1"`` or ``True`` never compares equal to the integer ``1``."""
+    return {key: (type(value).__name__, value) for key, value in context.items()}
+
+
+def _generic_refusal(path: Path, reason: str) -> BRIMRefusal:
+    """The generic CSV's ``cannot_parse_detail`` about ``path``, after the premises: it refuses the file, with the sentence ``reason`` of category 4c."""
+    plugin = _generic_plugin()
+    assert plugin.can_parse(path) is False, f"premise: the generic CSV refuses {path.name}"
+    assert plugin.cannot_parse_reason(path) == reason, f"premise: the generic CSV's English sentence about {path.name} is {reason!r}"
+
+    detail = plugin.cannot_parse_detail(path)
+
+    assert isinstance(detail, BRIMRefusal), f"the generic CSV answers {detail!r}, not a BRIMRefusal"
+    return detail
+
+
+class TestGenericCSVRefusesWithACode:
+    """Lot K2a of workstream W (backlog C-70, part a): the generic CSV refuses a file with a code the import wizard translates.
+
+    The import wizard asks the broker's default plugin about every uploaded file (``GET /import/files/{file_id}/plugin-check``, category 4d)
+    and shows its refusal in the UI language: ``importWizard.parseRefusal.<code>`` with the refusal's context as values, else the plugin's
+    English sentence (``resolveParseRefusalMessage``). Only the two Scalable plugins give a code today. The generic CSV overrides
+    ``cannot_parse_reason`` only, so its refusal is the default one: that sentence without a code, shown in English in every language.
+
+    The contract: ``cannot_parse_detail(p)`` is None exactly when ``can_parse(p)``; otherwise its ``message`` is ``cannot_parse_reason(p)``, the
+    sentence of category 4c unchanged, and its code and context follow the cause:
+
+    - another extension than ``.csv``: ``csv_only``, ``{"plugin_code": "broker_generic_csv"}`` (the wizard names the plugin in the UI language);
+    - nothing to read at the path: ``file_unreadable``, ``{}``;
+    - no header row: ``no_header_row``, ``{}``;
+    - a header without ``date``, ``type`` or both: ``missing_columns``, ``{"columns": "date" | "type" | "date, type", "count": 1 | 1 | 2}``, the
+      count an integer, for the plural of the translation.
+
+    The seven keys of lot K2a are checked in ``frontend/src/lib/features/transactions/import/defaultPluginCheck.test.ts``; DEGIRO's codes in
+    ``test_brim_degiro.py`` (A2). Every input is a sample or a synthetic case of category 4c, every code and context is written by hand, and
+    each test first checks its premise against ``can_parse`` and ``cannot_parse_reason``. Red until the generic CSV gives its codes, but the guard.
+    """
+
+    @pytest.mark.parametrize("name", _NOT_CSV_NAMES)
+    def test_another_extension_is_csv_only_and_names_the_plugin(self, name: str, tmp_path: Path):
+        """The header names both required columns: only the extension is refused, and the context names the plugin that reads only CSV files."""
+        path = tmp_path / name
+        path.write_bytes(_DATE_AND_TYPE_ROWS)
+
+        detail = _generic_refusal(path, _REASON_ONLY_CSV)
+
+        assert (detail.code, detail.message, _typed(detail.context)) == ("csv_only", _REASON_ONLY_CSV, _typed({"plugin_code": GENERIC_CSV_CODE}))
+
+    @pytest.mark.parametrize("kind", _UNREADABLE_PATHS)
+    def test_a_path_with_nothing_to_read_is_file_unreadable(self, kind: str, tmp_path: Path):
+        path = _unreadable_path(tmp_path, kind)
+
+        detail = _generic_refusal(path, _REASON_UNREADABLE)
+
+        assert (detail.code, detail.message, detail.context) == ("file_unreadable", _REASON_UNREADABLE, {})
+
+    @pytest.mark.parametrize("content", _WITHOUT_A_HEADER_ROW)
+    def test_a_file_without_a_header_row_is_no_header_row(self, content: bytes, tmp_path: Path):
+        path = tmp_path / "export.csv"
+        path.write_bytes(content)
+
+        detail = _generic_refusal(path, _REASON_NO_HEADER)
+
+        assert (detail.code, detail.message, detail.context) == ("no_header_row", _REASON_NO_HEADER, {})
+
+    @pytest.mark.parametrize(("content", "missing"), _HEADERS_MISSING_DATE_OR_TYPE)
+    def test_a_header_without_date_or_type_is_missing_columns_with_the_columns_and_their_count(self, content: bytes, missing: tuple, tmp_path: Path):
+        """The columns the header misses, in the order of the sentence, joined by ``", "``; their number, an integer."""
+        path = tmp_path / "export.csv"
+        path.write_bytes(content)
+
+        detail = _generic_refusal(path, _REASON_MISSING[missing])
+
+        expected = {"columns": ", ".join(missing), "count": len(missing)}
+        assert (detail.code, detail.message, _typed(detail.context)) == ("missing_columns", _REASON_MISSING[missing], _typed(expected))
+
+    @pytest.mark.parametrize("name", _DANSKE_CASH_SAMPLES)
+    def test_the_danske_cash_statement_misses_both_columns(self, name: str):
+        """``Pvm;Saaja/Maksaja;Määrä;Saldo;Tila;Tarkastus``, Latin-1: the real file of category 4c, neither a date nor a type column."""
+        path = SAMPLE_DIR / name
+
+        detail = _generic_refusal(path, _REASON_MISSING[("date", "type")])
+
+        assert (detail.code, _typed(detail.context)) == ("missing_columns", _typed({"columns": "date, type", "count": 2}))
+
+    @pytest.mark.parametrize(("name", "content"), [*_HEADERS_WITH_DATE_AND_TYPE, _WINDOWS_1252_HEADER])
+    def test_a_file_it_reads_has_no_refusal(self, name: str, content: bytes, tmp_path: Path):
+        """Guard, green before the change too: a file the generic CSV reads has no refusal, code or not."""
+        path = tmp_path / name
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is True, f"premise: the generic CSV reads {name}"
+
+        assert plugin.cannot_parse_detail(path) is None
+
+    def test_every_refusal_carries_the_code_and_the_context_of_its_cause(self, tmp_path: Path):
+        """On every file of ``sample_reports/`` (recursive, every extension) and every synthetic case of category 4c: no refusal exactly when
+        ``can_parse``; otherwise the sentence of ``cannot_parse_reason`` with the code and the context ``_GENERIC_REFUSAL_BY_REASON`` gives it."""
+        corpus = sorted(path for path in SAMPLE_DIR.rglob("*") if path.is_file())
+        paths = [*corpus, *_write_every_case(tmp_path)]
+        labels = {path: str(path.relative_to(SAMPLE_DIR) if path.is_relative_to(SAMPLE_DIR) else path.relative_to(tmp_path)) for path in paths}
+        plugin = _generic_plugin()
+        answers = {path: (plugin.can_parse(path), plugin.cannot_parse_reason(path)) for path in paths}
+        causes = {_GENERIC_REFUSAL_BY_REASON[reason][0] for accepted, reason in answers.values() if not accepted and reason in _GENERIC_REFUSAL_BY_REASON}
+        # Positive controls: the generic CSV reads some of these files, and the others cover every cause, so no line of the table is vacuous.
+        assert any(accepted for accepted, _ in answers.values()), "premise: the generic CSV reads some of these files"
+        assert causes == {"csv_only", "file_unreadable", "no_header_row", "missing_columns"}, f"premise: the refused files cover every cause, they cover {sorted(causes)}"
+
+        problems = []
+        for path in paths:
+            accepted, reason = answers[path]
+            detail = plugin.cannot_parse_detail(path)
+            answered = (detail.code, detail.message, _typed(detail.context)) if isinstance(detail, BRIMRefusal) else detail
+            if accepted:
+                if detail is not None:
+                    problems.append(f"{labels[path]}: read, and yet refused with {answered!r}")
+            elif reason not in _GENERIC_REFUSAL_BY_REASON:
+                problems.append(f"{labels[path]}: a sentence this contract does not know, {reason!r}")
+            elif answered != (_GENERIC_REFUSAL_BY_REASON[reason][0], reason, _typed(_GENERIC_REFUSAL_BY_REASON[reason][1])):
+                problems.append(f"{labels[path]}: {answered!r}, expected {(_GENERIC_REFUSAL_BY_REASON[reason][0], reason, _GENERIC_REFUSAL_BY_REASON[reason][1])!r}")
+
+        assert not problems, f"{len(problems)} of {len(paths)} answer(s) of the generic CSV's cannot_parse_detail miss the code of their cause, the first ones: {problems[:3]}"
 
 
 class TestBrokerParserCoverageHelpers:
@@ -6157,6 +6302,105 @@ class TestBundledPluginIcons:
                 problems.append(f"{code}: {relative!r} is not a file of {folder}")
 
         assert not problems, f"{len(problems)} bundled icon(s) the app cannot serve:\n" + "\n".join(f"  {problem}" for problem in problems)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C-97a, decision D6: a value a plugin COMPUTES is rounded by the plugin, with
+# ``precision.round_computed_value`` (column scale ROUND_HALF_EVEN, then 15
+# significant digits on a RealDecimal column), so the batch does not refuse it;
+# a value READ from the file stays as read (decision D2). The rows are the
+# bundled samples with one cell changed, parsed by the rows-level parser, as in
+# test_credit_agricole_securities_ignores_recap_footer.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _decimal_limit_issue():
+    """``precision.decimal_limit_issue``, looked up when the test runs (new in C-97a)."""
+    found = getattr(precision, "decimal_limit_issue", None)
+    if found is None:
+        pytest.fail("backend/app/db/precision.py has no decimal_limit_issue: nothing tells whether the cost basis this plugin computed is one the batch accepts")
+    return found
+
+
+def _set_cells(rows: List[List[Any]], header: List[Any], match: dict, values: dict, *, first_only: bool = True) -> int:
+    """Set ``values`` (column name -> cell) on the rows whose cells equal ``match`` (column name -> cell); returns how many."""
+    index = {str(cell).strip(): position for position, cell in enumerate(header)}
+    changed = 0
+    for row in rows:
+        if all(len(row) > index[name] and str(row[index[name]]).strip() == cell for name, cell in match.items()):
+            for name, cell in values.items():
+                row[index[name]] = cell
+            changed += 1
+            if first_only:
+                break
+    return changed
+
+
+def _succession_costs(out, name: str) -> set:
+    """The per-unit cost bases of the ADJUSTMENTs (successions, transfers-in) of the asset the plugin extracted as ``name``."""
+    return {tx.cost_basis_override.amount for tx in out.transactions if tx.type == TransactionType.ADJUSTMENT and tx.cost_basis_override is not None and getattr(out.extracted_assets.get(tx.asset_id), "extracted_name", None) == name}
+
+
+class TestComputedValuesAreRounded:
+    """C-97a D6: Intesa's per-unit cost (cost / qty) and Crédit Agricole's bond price (price / 100) are rounded by the plugin."""
+
+    INTESA_FUND_ISIN = "LU2178929613"
+    CA_BOND = "BTP 1/12/2026 1.25%"
+    CA_FUND = "AMUNDI PRIMO INV LC"
+
+    def test_intesa_snapshot_per_unit_cost_is_rounded_by_the_plugin(self):
+        """Red. A snapshot position with a fiscal cost of 1000.00 EUR for 3 units.
+
+        Before: cost_basis_override 333.3333333333333333333333333 (cost / qty, 28 digits), which the batch now
+        refuses (more than 12 decimals). Contract: 333.333333333333 (round_computed_value: 12 decimals,
+        ROUND_HALF_EVEN, 15 significant digits), which decimal_limit_issue accepts.
+        """
+        rows = read_rows(INTESA_PATRIMONIO_SAMPLE)
+        header = next(row for row in rows if any(str(cell).strip() == "Numero Quote" for cell in row))
+        cost_column = next(str(cell).strip() for cell in header if str(cell).strip().startswith("Controvalore di carico fiscale"))
+        assert _set_cells(rows, header, {"ISIN": self.INTESA_FUND_ISIN}, {"Numero Quote": "3", cost_column: "1.000,00"}) == 1, f"the sample has no fund {self.INTESA_FUND_ISIN} to edit"
+
+        out = IntesaSanpaoloBrokerProvider()._parse_patrimonio(rows, broker_id=9)
+
+        seed = next(tx for tx in out.transactions if tx.type == TransactionType.ADJUSTMENT and tx.asset_id in out.extracted_assets and out.extracted_assets[tx.asset_id].extracted_isin == self.INTESA_FUND_ISIN)
+        assert seed.quantity == Decimal("3"), f"the edited position was read as {seed.quantity} units, not 3"
+        assert seed.cost_basis_override is not None
+        amount = seed.cost_basis_override.amount
+        assert amount == Decimal("333.333333333333"), f"an Intesa snapshot of 3 units at a fiscal cost of 1000.00 EUR seeds a per-unit cost basis of {amount}: the batch refuses the import; expected 333.333333333333 (round_computed_value)"
+        issue = _decimal_limit_issue()(amount, Transaction, "cost_basis_override")
+        assert issue is None, f"the per-unit cost basis {amount} the Intesa plugin computed is refused by decimal_limit_issue: {issue}"
+
+    def test_credit_agricole_bond_succession_price_over_100_is_rounded_by_the_plugin(self):
+        """Red. A bond carried in (GIRO ALTRO DOSSIER) at 95,123456789087 per 100 of nominal.
+
+        Before: per-unit cost 0.95123456789087 (price / 100, 14 decimals), which the batch now refuses. Contract:
+        0.951234567891 (12 decimals, ROUND_HALF_EVEN: the digit after the 12th is 8, so not ROUND_DOWN's
+        0.951234567890), which decimal_limit_issue accepts.
+        """
+        rows = read_rows(CA_SAMPLE)
+        header = rows[0]
+        assert _set_cells(rows, header, {"Nome": self.CA_BOND, "Causale": "GIRO ALTRO DOSSIER"}, {"Prezzo": "95,123456789087"}) == 1, f"the sample has no succession of {self.CA_BOND} to edit"
+
+        out = CreditAgricoleBrokerProvider()._parse_securities(rows, broker_id=1)
+
+        costs = _succession_costs(out, self.CA_BOND)
+        assert Decimal("0.951234567891") in costs, f"a {self.CA_BOND} carried in at 95,123456789087 per 100 seeds per-unit cost bases {sorted(costs)}: the batch refuses 14 decimals; expected 0.951234567891 (round_computed_value)"
+        refused = {cost: _decimal_limit_issue()(cost, Transaction, "cost_basis_override") for cost in costs}
+        assert not {cost: issue for cost, issue in refused.items() if issue is not None}, f"decimal_limit_issue still refuses the bond cost bases the plugin computed: {refused}"
+
+    def test_guard_credit_agricole_fund_succession_price_stays_as_read(self):
+        """GUARD (D2, green before and after): a fund is priced per unit, nothing is computed, the price is kept as read.
+
+        17 significant digits, which the batch refuses later: rounding a value read from a file is not the plugin's job.
+        """
+        rows = read_rows(CA_SAMPLE)
+        header = rows[0]
+        assert _set_cells(rows, header, {"Nome": self.CA_FUND, "Causale": "VERS.TITOLI"}, {"Prezzo": "4,9812345678912345"}) == 1, f"the sample has no succession of {self.CA_FUND} to edit"
+
+        out = CreditAgricoleBrokerProvider()._parse_securities(rows, broker_id=1)
+
+        costs = _succession_costs(out, self.CA_FUND)
+        assert Decimal("4.9812345678912345") in costs, f"a {self.CA_FUND} carried in at 4,9812345678912345 seeds per-unit cost bases {sorted(costs)}: a price read from the file must stay as read (D2)"
 
 
 if __name__ == "__main__":

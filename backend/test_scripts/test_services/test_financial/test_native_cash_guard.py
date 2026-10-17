@@ -31,7 +31,10 @@ writes Decimal("1E+2") as "100" and hides an exponent drift.
 
 Regenerate the golden only for a reviewed, intended change of these outputs:
 
-    LIBREFOLIO_REGEN_NATIVE_CASH_GUARD=1 ./dev.py test services roi-fifo-utils native_cash_guard
+    LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1 ./dev.py test services roi-fifo-utils native_cash_guard
+
+The switch is a ``LIBREFOLIO_TEST_*`` name because a test lane drops every other ``LIBREFOLIO_*``
+variable of the shell before pytest starts (``configure_test_runtime``, ``scripts/cli_base.py``).
 """
 
 import dataclasses
@@ -72,9 +75,10 @@ from backend.app.schemas.portfolio import PortfolioReportQuery
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import PortfolioCalculationResult
 from backend.app.services.portfolio_service import PortfolioService
+from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
 GOLDEN_PATH = Path(__file__).resolve().parents[2] / "fixtures" / "native_cash_guard" / "eur_only_golden.json"
-_REGEN_ENV = "LIBREFOLIO_REGEN_NATIVE_CASH_GUARD"
+_REGEN_ENV = "LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD"
 _REGEN_COMMAND = f"{_REGEN_ENV}=1 ./dev.py test services roi-fifo-utils native_cash_guard"
 _DIFF_LINES = 120
 
@@ -250,8 +254,10 @@ _ID_FIELDS: dict[str, str] = {
 }
 # Fields holding an id as a digit string: a data-quality issue about an asset points at str(asset_id).
 _DIGIT_ID_FIELDS: dict[str, str] = {"cta_target": "asset"}
-# Dicts keyed by broker id, and dicts keyed by the (asset_id, broker_id) of a position.
+# Dicts keyed by broker id, dicts keyed by asset id (V-11: the day of the last market quote of
+# each transaction-implied asset), and dicts keyed by the (asset_id, broker_id) of a position.
 _BROKER_KEYED_FIELDS = frozenset({"broker_contributions", "capital_pool", "returns_pool", "cumulative_cash_by_broker", "cumulative_ecf_by_broker"})
+_ASSET_KEYED_FIELDS = frozenset({"transaction_implied_last_quote_dates"})
 _POSITION_KEYED_FIELDS = frozenset({"cumulative_qty", "wac_pool_qty", "wac_pool_cost", "average_costs"})
 # AverageCost.key is the (asset_id, broker_id) tuple of its position.
 _POSITION_TUPLE_FIELDS = frozenset({"key"})
@@ -335,6 +341,8 @@ def _walk_model(value: BaseModel, field: str | None, labels: _Labels) -> Any:
 def _key_label(key: Any, field: str | None, labels: _Labels) -> str:
     if field in _BROKER_KEYED_FIELDS:
         return str(labels.of("broker", key))
+    if field in _ASSET_KEYED_FIELDS:
+        return str(labels.of("asset", key))
     if field in _POSITION_KEYED_FIELDS:
         return labels.position(key)
     if isinstance(key, Enum):
@@ -525,6 +533,15 @@ def _diff(expected: str, actual: str, expected_name: str, actual_name: str) -> s
 # =============================================================================
 # FIXTURES — own copies of the helpers of test_portfolio_service.py
 # =============================================================================
+
+
+@pytest.fixture(scope="module", autouse=True)
+def range_bound_lifted():
+    """R13-SEC7-1: the guarded portfolio lives in January 2091, after tomorrow, so the range bound is lifted for the
+    whole module, before any fixture builds data (see ``lift_range_bound``): the golden keeps the unbounded outputs."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        lift_range_bound(monkeypatch)
+        yield
 
 
 @pytest.fixture(scope="module")

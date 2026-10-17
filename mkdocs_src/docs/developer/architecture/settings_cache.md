@@ -46,17 +46,18 @@ rows — clears `portfolio_layer2` and `portfolio_blob` (see
 
 ### 🗂️ Caches registered today
 
-Caches register lazily at import time, so the list below is the full registry as of 2026-09-03
+Caches register lazily at import time, so the list below is the full registry as of 2026-10-15
 (grep `get_ttl_cache(` under `backend/app` to re-derive it):
 
 | Cache | maxsize | TTL | Owner |
 |-------|--------:|----:|-------|
-| `search_results` | 5000 | 24 h | `asset_source` — individual search items |
-| `search_queries` | 500 | 15 min | `asset_source` — query → results |
-| `asset_history_fetch` | 500 | 15 min | `asset_source` |
-| `asset_current_fetch` | 300 | 2 min | `asset_source` |
-| `asset_metadata_fetch` | 200 | 30 min | `asset_source` |
-| `fx_provider_responses` | 200 | 5 min | `fx` |
+| `search_results` | 5000 | 24 h | `assets/core.py` — individual search items |
+| `search_queries` | 500 | 15 min | `assets/core.py` — query → results |
+| `asset_history_fetch` | 500 | 15 min | `assets/core.py` |
+| `asset_current_fetch` | 300 | 2 min | `assets/core.py` |
+| `asset_metadata_fetch` | 200 | 30 min | `assets/core.py` |
+| `fx_provider_responses` | 200 | 5 min | `fx/sync.py` |
+| `fx_provider_currencies` | 32 | 24 h | `fx/catalog.py` — supported currencies per FX provider, for `GET /fx/providers`; a fallback after a failed fetch is kept 5 min |
 | `portfolio_blob` | 30 | 24 h | `financial_math/portfolio/engine.py` |
 | `portfolio_layer2` | 20 | 30 min | `portfolio_service` |
 | `portfolio_wac` | 200 | 1 h | `portfolio_service` |
@@ -70,7 +71,11 @@ Caches register lazily at import time, so the list below is the full registry as
 Two module-local caches stay outside the registry, so the admin panel does not list them: the
 image-preview cache (`PreviewCache` in `backend/app/api/v1/uploads.py`, sized by
 `PREVIEW_CACHE_MAX_MB`, 1 h TTL) and the link-finder's 15-minute query cache in
-`backend/app/services/web_link_finder.py`.
+`backend/app/services/assets/web_link_finder.py`.
+
+The last currency list each FX provider returned is kept outside the registry too, in a module-level
+dict of `fx/catalog.py` that no clear empties: after a clear of `fx_provider_currencies`, a fetch that
+fails still answers with that list.
 
 ## 🌐 The three admin endpoints
 
@@ -100,8 +105,9 @@ A restart empties every worker's caches.
 
 ## 🖥️ Frontend: `CachePanel.svelte`
 
-`frontend/src/lib/components/settings/CachePanel.svelte` renders the registry as a table
-(name, `current_size / maxsize`, human-formatted TTL) inside the **Settings → Global** tab
+`frontend/src/lib/features/settings/CachePanel.svelte` renders the registry as a table
+(name, `current_size / maxsize`, human-formatted TTL) inside the
+**Settings → Administration → Global Settings** tab
 (`GlobalSettingsTab.svelte`). Status loads for everyone; the per-row **Clear** buttons and
 **Clear all** are gated by the `canEdit` prop, which mirrors the Global-settings lock — the
 panel shows data to all users and destructive actions to unlocked admins only. See

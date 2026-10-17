@@ -50,34 +50,39 @@
         type PortfolioAcquisitionFundingSeries,
     } from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
-    import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
-    import {readDashboardView, writeDashboardView} from '$lib/stores/portfolio/dashboardViewStore';
+    import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {createLazyReportRetry} from '$lib/stores/portfolio/lazyReportRetry.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
+    import {readDashboardView, writeDashboardView} from '$lib/features/dashboard/dashboardViewStore';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
-    import {createDateRangeController} from '$lib/stores/dateRangeController.svelte';
+    import {createDateRangeController} from '$lib/features/dashboard/dateRangeController.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
-    import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
-    import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
-    import RiskLevelsPanel from '$lib/components/risk/levels/RiskLevelsPanel.svelte';
-    import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
-    import LotsAnalysisPanel from '$lib/components/brokers/lots/LotsAnalysisPanel.svelte';
+    import AllocationPanel from '$lib/features/dashboard/AllocationPanel.svelte';
+    import GrowthChart from '$lib/features/dashboard/GrowthChart.svelte';
+    import KpiSection from '$lib/features/dashboard/KpiSection.svelte';
+    import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
+    import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
+    import LotsAnalysisPanel from '$lib/features/brokers/lots/LotsAnalysisPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {classifyFxSyncOutcome, formatFxSyncResult, FX_SYNC_TIMEOUT_MS, type FxPairSyncCompleteDetail, type FxSyncResponse} from '$lib/services/fxCreationSync';
-    import {TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
-    import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
+    import TransactionFormModal from '$lib/features/transactions/form/TransactionFormModal.svelte';
+    import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
+    import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
+    import {loadPartnerRows, loadEventTooltipMap} from '$lib/features/transactions/loadTransactionRows';
+    import type {TXReadItem, AssetEvent} from '$lib/features/transactions/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -106,6 +111,9 @@
     let contributionLoading = $state(false);
     /** A contribution already on screen is being refreshed in background: busy, but no skeleton. */
     let contributionRefreshing = $state(false);
+    /** The same refresh after a price catch-up (Z-18): it guards against a second request like `contributionRefreshing`,
+     *  but the root's `aria-busy` does not read it. Never rendered, so not reactive. */
+    let contributionInBackground = false;
     let reportLoading = $state(true);
     /** True only on first load when no data exists yet. Once data is loaded, subsequent fetches are "refreshing". */
     let summaryLoading = $derived(reportLoading && !summary);
@@ -165,7 +173,7 @@
      * shared dateRangeController (owns the seed/display/isMaxPending bookkeeping
      * that used to be duplicated per-page — see dateRangeController.svelte.ts).
      */
-    const dateRangeCtl = createDateRangeController(() => void loadAll());
+    const dateRangeCtl = createDateRangeController(() => void pageBusy.track('dashboard-period', () => loadAll()));
 
     /**
      * Sentinel-aware values for building "See all" links (assets/transactions).
@@ -208,7 +216,7 @@
         // (or a prior currency change) is still in flight — avoids duplicate concurrent
         // fetches racing to reassign summary/history while the user may be interacting
         // with the page (e.g. clicking a card whose click depends on stable DOM state).
-        if (hadLoadedData && !reportLoading) void loadAll(true);
+        if (hadLoadedData && !reportLoading) void pageBusy.track('dashboard-currency', () => loadAll(true));
     });
 
     /**
@@ -281,8 +289,14 @@
     /** FxPairAddModal state for CTA-driven pair creation */
     let showFxPairAddModal = $state(false);
     let pageAlive = true;
+    // Y-24: a failed candles or contribution request is asked again at most three times, 2, 4 and 8 s later, then not
+    // until the scope changes or the user's Refresh (`handleSync`); before, it was asked again at once, without end.
+    const candlesRetry = createLazyReportRetry();
+    const contributionRetry = createLazyReportRetry();
     onDestroy(() => {
         pageAlive = false;
+        candlesRetry.dispose();
+        contributionRetry.dispose();
     });
     let fxPairCreateSlug = $state('');
 
@@ -308,7 +322,7 @@
         if (key !== lastTxLoadKey) {
             lastTxLoadKey = key;
             txCurrentPage = 1;
-            void loadTransactions();
+            void pageBusy.track('dashboard-transactions', loadTransactions);
         }
     });
 
@@ -553,10 +567,12 @@
      * Page cache (E1): the report of the scope on screen comes from the cache at once — stale or
      * not — and only a stale or missing one is asked again, in background: the figures stay up and
      * move to the fresh values when they land. A refresh that fails keeps them, with a toast.
+     * With `background` (after a price catch-up, Z-18) the page does not say it is busy either: neither
+     * `reportLoading` nor `contributionRefreshing` turns on, so the root's `aria-busy` stays off.
      */
     let loadSeq = 0;
 
-    async function loadAll(force = false, propagateError = false) {
+    async function loadAll(force = false, propagateError = false, {background = false}: {background?: boolean} = {}) {
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current() || !brokersReady) return;
@@ -574,13 +590,13 @@
         const cached = peekReport(brokerIds, start, end, requested, false, false, true, true, options);
         if (cached && cached.report !== shownReport) applyReport(cached.report, requested);
         const request = !cached || cached.stale || force ? fetchReport(brokerIds, start, end, requested, force, undefined, undefined, undefined, undefined, options) : null;
-        if (showCachedContribution()) void loadContribution();
+        if (showCachedContribution()) void loadContribution({background});
         if (!request) {
             reportLoading = false;
             return;
         }
 
-        reportLoading = true;
+        if (!background) reportLoading = true;
         try {
             const report = await request;
             if (!current() || load !== loadSeq) return;
@@ -610,7 +626,7 @@
         if (!pageAlive) return;
         invalidateFxRoutes();
         invalidate();
-        await loadAll(true);
+        await pageBusy.track('dashboard-reload', () => loadAll(true));
     }
 
     async function handleFxPairCreationSynced(detail: FxPairSyncCompleteDetail) {
@@ -619,53 +635,72 @@
         await loadAll(true, true);
     }
 
+    /** The scope of a lazy report section: brokers, period and currency. An answer of another scope is not applied, and a failure counts for its own scope only (Y-24). */
+    function reportScope(): string {
+        return `${activeBrokerIds?.join(',')}|${dateRangeCtl.start}|${dateRangeCtl.end}|${targetCurrency}`;
+    }
+
     /**
      * The contribution of the scope on screen: asked by PositionsPanel when its Performance view has
      * none, and by `loadAll` when the cached one is stale — then in background, with the cached rows
-     * kept on screen (`contributionRefreshing`, not the skeleton of `contributionLoading`).
+     * kept on screen (`contributionRefreshing`, not the skeleton of `contributionLoading`). With `background`
+     * (after a price catch-up, Z-18), `contributionInBackground` instead, which the root's `aria-busy` does not read.
      */
-    async function loadContribution() {
-        if (!canAsk || contributionLoading || contributionRefreshing) return;
+    async function loadContribution({background = false}: {background?: boolean} = {}) {
+        const askedScope = reportScope();
+        if (!canAsk || contributionLoading || contributionRefreshing || contributionInBackground || !contributionRetry.canAsk(askedScope)) return;
         const requested = targetCurrency;
         const brokerIds = activeBrokerIds;
         const start = dateRangeCtl.start || undefined;
         const end = dateRangeCtl.end || undefined;
-        const scope = () => `${activeBrokerIds?.join(',')}|${dateRangeCtl.start}|${dateRangeCtl.end}|${targetCurrency}`;
-        const askedScope = scope();
         const cached = peekReport(brokerIds, start, end, requested, true, false, false, false);
         if (cached && !cached.stale) {
             setContribution(cached.report);
             return;
         }
-        if (cached) contributionRefreshing = true;
+        if (cached && background) contributionInBackground = true;
+        else if (cached) contributionRefreshing = true;
         else contributionLoading = true;
         try {
             // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
             const report = await fetchReport(brokerIds, start, end, requested, false, true, false, false, false);
-            if (!pageAlive || scope() !== askedScope) return;
+            if (!pageAlive || reportScope() !== askedScope) return;
+            // The outcome is recorded before the flags fall back in `finally`: the effect they wake reads it (Y-24).
             if (report) {
+                contributionRetry.succeeded(askedScope);
                 setContribution(report);
                 appliedCurrency = requested;
-            } else if (!cached) {
-                setContribution(null);
+            } else {
+                contributionRetry.failed(askedScope);
+                if (!cached) setContribution(null);
             }
         } finally {
             contributionLoading = false;
             contributionRefreshing = false;
+            contributionInBackground = false;
         }
     }
 
     /** Lazy-load the synthetic P&L candle series (G1b — called by GrowthChart's
      *  onRequestPnlCandles when the user first activates the candles submode; caller
-     *  policy per plan §4.1: "expensive OHLC work stays off ordinary reports"). */
+     *  policy per plan §4.1: "expensive OHLC work stays off ordinary reports").
+     *  The guard's reads run synchronously inside GrowthChart's effect, so they are its
+     *  dependencies: `canAsk` turning true is what makes a saved Candles view on a fresh
+     *  page ask again once the brokers are known (Y-16), and `candlesRetry.canAsk` is what
+     *  asks again 2, 4 and 8 s after a failure (Y-24). Keep them before the first await. */
     async function loadPnlCandles() {
-        if (!canAsk || pnlCandles || pnlCandlesLoading) return;
+        const askedScope = reportScope();
+        if (!canAsk || pnlCandles || pnlCandlesLoading || !candlesRetry.canAsk(askedScope)) return;
         pnlCandlesLoading = true;
         const requested = targetCurrency;
         try {
             // includeHistory/includeAllocationHistory/includeContribution/includeBreakdown=false:
             // only pnl_candles is read below.
             const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, false, false, false, false, false, {includePnlCandles: true});
+            // An answer of another scope is not this one's: the scope on screen asks for its own.
+            if (!pageAlive || reportScope() !== askedScope) return;
+            if (report) candlesRetry.succeeded(askedScope);
+            else candlesRetry.failed(askedScope);
             pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
         } finally {
             pnlCandlesLoading = false;
@@ -691,21 +726,41 @@
         if (reloadTimer !== null) clearTimeout(reloadTimer);
         reloadTimer = setTimeout(() => {
             reloadTimer = null;
-            void loadAll();
+            void pageBusy.track('dashboard-scope', () => loadAll());
         }, 2000);
     }
 
     /** «Aggiorna» (E4): report, contribution, risk and lots are all asked again; what is on screen stays meanwhile. */
     async function handleSync() {
         syncLoading = true;
+        // The user's Refresh: the lazy sections may be asked again whatever failed before (Y-24).
+        candlesRetry.reset();
+        contributionRetry.reset();
         requestPortfolioRefresh();
         refreshVersion += 1;
         try {
-            await loadAll(true);
+            await pageBusy.track('dashboard-refresh', () => loadAll(true));
         } finally {
             syncLoading = false;
         }
     }
+
+    /**
+     * The server caught up on prices and updated something (Z5, Z-13): the stale report is asked again in background,
+     * without force, and the figures stay until the new ones land. `refreshVersion` and `requestPortfolioRefresh()` are
+     * the user's Refresh (Y11): the risk and lots panels keep their stale answers until they next load. Nor does the
+     * page say it is busy (Z-18): a screen reader would announce «busy» for a simple price refresh. Run after the
+     * dispatch, so every store has marked its answers stale first.
+     */
+    function reloadAfterPriceCatchUp() {
+        if (!pageAlive) return;
+        void loadAll(false, false, {background: true});
+    }
+    onMount(() =>
+        registerPortfolioMutationListener('dashboard:prices', (signal) => {
+            if (signal.kind === 'prices') queueMicrotask(reloadAfterPriceCatchUp);
+        }),
+    );
 
     async function loadAiExportCompatibility() {
         aiExportCatalogLoading = true;
@@ -799,7 +854,8 @@
     onMount(() => {
         document.addEventListener('click', handleDocumentClick);
         void loadAiExportCompatibility();
-        void (async () => {
+        // The first load holds the Refresh button (Y11), from the reference lists to the report.
+        void pageBusy.track('dashboard-first-load', async () => {
             await Promise.all([ensureBrokersLoaded(), ensureAssetsLoaded()]);
             if (!pageAlive) return;
             // F2: dashboard scope = owned brokers only (share > 0). A user who owns
@@ -817,12 +873,18 @@
             } else {
                 reportLoading = false;
             }
-        })();
+        });
         return () => document.removeEventListener('click', handleDocumentClick);
     });
 </script>
 
-<div class="space-y-4" data-testid="dashboard-page" use:guideAnchor={'page.dashboard'} aria-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading} data-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading ? 'true' : 'false'}>
+<div
+    class="space-y-4 text-lf-primary"
+    data-testid="dashboard-page"
+    use:guideAnchor={'page.dashboard'}
+    aria-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading}
+    data-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading ? 'true' : 'false'}
+>
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
     <PageToolbar
@@ -847,7 +909,7 @@
                  edge lines up with the picker's instead of stretching to the wider column. -->
             <div class="flex items-center gap-3 {filtersStacked ? 'w-full justify-around' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
                 <!-- Currency override selector -->
-                <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                <div class="flex items-center gap-1.5 text-xs text-lf-muted">
                     <!-- Round 13: "Valuta:" is an extra/decorative label — the select itself
                          (flag + code) already conveys enough at very narrow widths, so it hides
                          first via the independent noExtraLabel threshold, well before labelHide*
@@ -871,7 +933,7 @@
                             onchange={() => {
                                 targetCurrencyManuallySet = true;
                                 writeDashboardView({targetCurrency});
-                                void loadAll();
+                                void pageBusy.track('dashboard-currency', () => loadAll());
                             }}
                         />
                     </div>
@@ -884,7 +946,7 @@
                     <button
                         bind:this={brokerFilterTriggerEl}
                         class="flex items-center gap-1.5 min-w-0 max-w-full px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
-                       {brokerFilterActive ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                       {brokerFilterActive ? 'bg-lf-selected text-lf-link border-lf-focus' : 'bg-lf-card text-lf-secondary border-lf-input hover:bg-lf-hover'}"
                         onclick={toggleBrokerFilterDropdown}
                         data-testid="broker-filter-trigger"
                     >
@@ -897,23 +959,15 @@
                     {#if brokerFilterOpen}
                         <div
                             bind:this={brokerFilterPanelEl}
-                            class="fixed z-50 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden"
+                            class="fixed z-50 w-56 bg-lf-card border border-lf-raised rounded-lg shadow-lg shadow-lf-shadow overflow-hidden"
                             style:left={`${brokerFilterDropdownPosition.left}px`}
                             style:top={`${brokerFilterDropdownPosition.top}px`}
                             data-broker-filter-panel
                         >
                             <!-- Select All / Deselect All -->
-                            <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
-                                <button
-                                    type="button"
-                                    class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                                    onclick={() => selectBrokers(allBrokers.map((b) => b.id))}>{$_('common.selectAll')}</button
-                                >
-                                <button
-                                    type="button"
-                                    class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                                    onclick={() => selectBrokers([])}>{$_('common.clearAll')}</button
-                                >
+                            <div class="flex gap-2 px-2.5 py-2 border-b border-lf-subtle">
+                                <button type="button" class="flex-1 px-2 py-1 text-[11px] font-medium border border-lf-subtle rounded bg-lf-panel text-lf-secondary hover:bg-lf-neutral transition-colors" onclick={() => selectBrokers(allBrokers.map((b) => b.id))}>{$_('common.selectAll')}</button>
+                                <button type="button" class="flex-1 px-2 py-1 text-[11px] font-medium border border-lf-subtle rounded bg-lf-panel text-lf-secondary hover:bg-lf-neutral transition-colors" onclick={() => selectBrokers([])}>{$_('common.clearAll')}</button>
                             </div>
                             <!-- Broker list -->
                             <div class="max-h-52 overflow-y-auto mx-2.5 my-2 space-y-0.5">
@@ -923,7 +977,7 @@
                                     {@const RoleIcon = role ? getRoleIcon(role) : null}
                                     <button
                                         type="button"
-                                        class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] rounded hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors {isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'}"
+                                        class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] rounded hover:bg-lf-hover transition-colors {isSelected ? 'text-lf-link' : 'text-lf-secondary'}"
                                         onclick={() => toggleBroker(broker.id)}
                                         data-testid="broker-filter-item-{broker.id}"
                                     >
@@ -933,7 +987,7 @@
                                             <RoleIcon size={14} class={getRoleIconColor(role)} />
                                         {/if}
                                         {#if isSelected}
-                                            <svg class="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg class="w-3.5 h-3.5 text-lf-link flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
                                             </svg>
                                         {/if}
@@ -962,13 +1016,14 @@
             />
 
             <button
-                class="flex items-center justify-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-lf-card border border-lf-subtle rounded-lg text-xs font-medium text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50"
                 onclick={handleSync}
-                disabled={syncLoading}
+                disabled={pageBusy.busy}
+                data-busy={pageBusy.busy ? 'true' : 'false'}
                 data-testid="sync-button"
                 title={$_('dashboard.syncData')}
             >
-                <RefreshCw size={14} class={syncLoading ? 'animate-spin' : ''} />
+                <RefreshCw size={14} class={pageBusy.busy ? 'animate-spin' : ''} />
                 {#if showActionLabels}
                     <span>{$_('dashboard.syncData')}</span>
                 {/if}
@@ -985,8 +1040,8 @@
             <!-- Cash Balances — same position as broker detail (right after the KPIs), using
                  summary.cash_balances which already aggregates by currency across all brokers
                  in scope (all accessible brokers, or the broker-filter subset if active). -->
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="dashboard-cash-balances">
-                <div class="flex items-center space-x-2 text-gray-700 dark:text-gray-200 mb-4">
+            <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="dashboard-cash-balances">
+                <div class="flex items-center space-x-2 text-lf-secondary mb-4">
                     <Wallet size={20} />
                     <h2 class="font-semibold">{$_('brokers.cashBalances')}</h2>
                 </div>
@@ -994,13 +1049,13 @@
                 {#if summary?.cash_balances && summary.cash_balances.length > 0}
                     <div class="flex flex-wrap gap-2">
                         {#each [...summary.cash_balances].sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount)) as balance}
-                            <span class="inline-flex items-center px-3 py-1.5 bg-gray-50 dark:bg-slate-700 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-100">
+                            <span class="inline-flex items-center px-3 py-1.5 bg-lf-panel rounded-lg text-sm font-medium text-lf-primary">
                                 {@html formatCurrencyAmountHtml(parseFloat(balance.amount), balance.code)}
                             </span>
                         {/each}
                     </div>
                 {:else}
-                    <p class="text-gray-400 dark:text-gray-500 text-sm italic py-4 text-center">{$_('brokers.noCashBalances')}</p>
+                    <p class="text-lf-muted text-sm italic py-4 text-center">{$_('brokers.noCashBalances')}</p>
                 {/if}
             </div>
 
@@ -1008,7 +1063,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                 <!-- Growth Chart — 3/5 -->
                 <div class="lg:col-span-3">
-                    <GrowthChart {history} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={loadPnlCandles} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
+                    <GrowthChart {history} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
                 </div>
 
                 <!-- Allocation Panel — 2/5 -->
@@ -1018,7 +1073,17 @@
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
             <!-- F2: nothing is asked before the owned brokers are known — the prop arrives with them. -->
-            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={canAsk ? loadContribution : undefined} onAnalyze={openAssetPanel} analyzedAssetId={activeAssetId} />
+            <PositionsPanel
+                {summary}
+                contribution={positionsContribution}
+                loading={summaryLoading}
+                {contributionLoading}
+                {assetsHref}
+                brokers={allBrokers}
+                onRequestContribution={canAsk ? () => void pageBusy.join('dashboard-contribution', loadContribution) : undefined}
+                onAnalyze={openAssetPanel}
+                analyzedAssetId={activeAssetId}
+            />
             <LotsAnalysisPanel
                 open={activeAssetId != null}
                 assetId={activeAssetId}
@@ -1057,19 +1122,19 @@
                     }}
                 />
             {:else if brokersReady}
-                <p class="py-12 text-center text-sm italic text-gray-400 dark:text-gray-500" data-testid="dashboard-risk-no-owned">{$_('common.noData')}</p>
+                <p class="py-12 text-center text-sm italic text-lf-muted" data-testid="dashboard-risk-no-owned">{$_('common.noData')}</p>
             {:else}
                 <!-- Owned brokers still loading (cold load): say so instead of an empty tab. -->
-                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-12 text-center" data-testid="dashboard-risk-loading">
-                    <RefreshCw class="text-libre-green animate-spin mx-auto" size={28} />
+                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-12 text-center" data-testid="dashboard-risk-loading">
+                    <RefreshCw class="text-lf-link animate-spin mx-auto" size={28} />
                 </div>
             {/if}
         </div>
     {:else if activeTab === 'transazioni'}
         <div data-testid="dashboard-transactions-tab">
             {#if txLoading && txMainRows.length === 0}
-                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-12 text-center">
-                    <RefreshCw class="text-libre-green animate-spin mx-auto" size={28} />
+                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-12 text-center">
+                    <RefreshCw class="text-lf-link animate-spin mx-auto" size={28} />
                 </div>
             {:else}
                 <TransactionsTable

@@ -9,13 +9,19 @@ from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ens
 
 def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Asset unit tests (Vitest) — price store, price/chart derived-state, local
-    signal regression, chart aggregation, and worker-pool infra."""
+    signal regression, chart aggregation, and worker-pool infra; the whole-range Δ read
+    from the backend (X-R59: rangeChange, the period-changes fetchers' range_start, the
+    asset detail page's summary Δ)."""
     cmd = [
         "npx",
         "vitest",
         "run",
         "src/lib/stores/__tests__/assetPriceStoreRegistry.test.ts",
         "src/lib/utils/__tests__/assetPriceDerived.test.ts",
+        "src/lib/utils/__tests__/periodChanges.test.ts",
+        "src/lib/utils/__tests__/periodChanges.rangeChange.test.ts",
+        "src/lib/utils/__tests__/rangeChange.test.ts",
+        "src/lib/components/assets/detail/assetDetailRangeChange.test.ts",
         "src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts",
         "src/lib/components/charts/__tests__/timeSeriesAggregationGolden.test.ts",
         "src/lib/components/charts/__tests__/lineChartHelpers.test.ts",
@@ -31,9 +37,9 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/utils/__tests__/assetGrouping.test.ts",
         "src/lib/utils/__tests__/assetIdentifiers.test.ts",
         "src/lib/utils/__tests__/assetTypeTables.test.ts",
-        "src/lib/components/dashboard/allocationTypeEmoji.test.ts",
-        "src/lib/components/dashboard/growthLadderAxis.test.ts",
-        "src/lib/components/dashboard/growthLadderBuckets.test.ts",
+        "src/lib/features/dashboard/allocationTypeEmoji.test.ts",
+        "src/lib/features/dashboard/growthLadderAxis.test.ts",
+        "src/lib/features/dashboard/growthLadderBuckets.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Asset Vitest unit tests{Colors.NC}")
     result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose)
@@ -63,7 +69,7 @@ def front_growth_chart_memo(verbose: bool = False, ui: bool = False, headed: boo
     privacy-off parity), the persisted mode/submode restore and its fallbacks, and the
     candle caption.
     """
-    cmd = ["npx", "vitest", "run", "src/lib/components/dashboard/GrowthChart.test.ts"]
+    cmd = ["npx", "vitest", "run", "src/lib/features/dashboard/GrowthChart.test.ts"]
     print(f"\n{Colors.BLUE}Running: GrowthChart component tests{Colors.NC}")
     result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose)
     if result.returncode == 0:
@@ -140,6 +146,15 @@ def front_asset_event_delete(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("assets/asset-event-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_event_editor_save(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the Events tab save-order and row-currency E2E tests (release 1.3, W E1b)."""
+    print_section("Frontend Asset Event Editor Save Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("assets/asset-event-editor-save.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_asset_name_xss(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the stored-XSS E2E tests for asset names and icon URLs (K step 13, item 0)."""
     print_section("Frontend Asset Name XSS Tests")
@@ -176,6 +191,18 @@ def front_asset_browse(verbose: bool = False, ui: bool = False, headed: bool = F
     return _run_playwright("assets/asset-browse.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_live_pause(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the live-price pause E2E tests (Z1, F26, Z7c, Z-3): list every 60 s, detail one request every 30 s, pause when hidden or idle, resume at once; back off on failures, wait out a provider pause; «today» is the user's calendar day, not the UTC one."""
+    print_section("Frontend Asset Live Updates Pause Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-live-pause.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Asset tests (unit + E2E)."""
     if _common.nothing_left_to_run("front-asset"):
@@ -198,15 +225,23 @@ def populate_registry(registry: dict) -> None:
     cat = make_category(
         help_text="Frontend Asset E2E & unit tests (list, detail, modal, classification)",
         description="""Frontend Asset Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "asset-unit", front_asset_unit, test_names=False, name="Asset Unit Tests (Vitest)", desc="Unit tests: price store, derived-state, chart aggregation (incl. the pre-refactor golden corpus pinning the four groupPointsByBucket consumers), local signals, worker pool, asset identity engine, an explicit emoji for every asset type in the historical allocation chart, the GrowthChart ladder-axis planner (labels, month separators, sparse anchor) against an independent oracle, and the GrowthChart ladder's calendar periods (Monday weeks, months from the 1st, quarters, halves and years, fixed 3D and 2W blocks that never move), a period that is over and cut by the series marked partial and the one still running left whole", tests="vitest")
-    add_test(cat, "growth-chart-memo", front_growth_chart_memo, test_names=False, name="GrowthChart Component Tests (Vitest + jsdom)", desc="Mounts the real dashboard GrowthChart with ECharts swapped for a recorder. Arrival-order regression for the per-resolution aggregation memo: the component is mounted with a lazily fetched input absent, the memo is populated in that state, the input then lands, and the rebuilt series must carry real values instead of the cached gap sentinels. Parameterised over the whole late-arriving class — pnlCandles, brokerPnlHistory, incomeHistory, costHistory, depositHistory, acquisitionFunding. Also: privacy masking of axis and tooltip amounts (and privacy-off parity), one form for every signed tooltip amount with the locale's own sign (D23, D23b), the persisted mode/submode restore with its fallbacks, the candle caption, the grid's left inset, and the Candles/Income ladder x axis (S7): end-anchored buckets on a category axis, the planner's labels and separators, the short oldest bucket drawn translucent and explained in its tooltip (escaped), and the zoom window kept across rung changes and redraws, and the money axis ticks (S7b): exact, distinct labels (D18), the locale's minus (D23), the auto-scaled lower edge unlabelled while Income keeps ECharts' zero-based defaults (D25), and the Income purchase value (S8): both halves named as the book value in the full build and the partial update, one legend entry, the bold total over its two ↳ shares and their sum, new capital in the KPI blue (R11, D26), and the P&L line rebuilt whole when its set of brokers changes (one leaves, one is swapped, one joins), so it draws and lists exactly the brokers in scope, while new amounts for the same brokers stay a partial update (plan 47, C2)", tests="src/lib/components/dashboard/GrowthChart.test.ts")
-    add_test(cat, "asset-list", front_asset_list, name="Asset List Page", desc="List page navigation, cards/table, filters", tests="assets/asset-list.spec.ts")
-    add_test(cat, "asset-detail", front_asset_detail, name="Asset Detail Page", desc="Detail chart, panels, sync, edit", tests="assets/asset-detail.spec.ts")
+    add_test(cat, "asset-unit", front_asset_unit, test_names=False, name="Asset Unit Tests (Vitest)", desc="Unit tests: price store, derived-state, the whole-range Δ read from the backend (X-R59), chart aggregation (incl. the pre-refactor golden corpus pinning the four groupPointsByBucket consumers), local signals, worker pool, asset identity engine, an explicit emoji for every asset type in the historical allocation chart, the GrowthChart ladder-axis planner (labels, month separators, sparse anchor) against an independent oracle, and the GrowthChart ladder's calendar periods (Monday weeks, months from the 1st, quarters, halves and years, fixed 3D and 2W blocks that never move), a period that is over and cut by the series marked partial and the one still running left whole", tests="vitest")
+    add_test(cat, "growth-chart-memo", front_growth_chart_memo, test_names=False, name="GrowthChart Component Tests (Vitest + jsdom)", desc="Mounts the real dashboard GrowthChart with ECharts swapped for a recorder. Arrival-order regression for the per-resolution aggregation memo: the component is mounted with a lazily fetched input absent, the memo is populated in that state, the input then lands, and the rebuilt series must carry real values instead of the cached gap sentinels. Parameterised over the whole late-arriving class — pnlCandles, brokerPnlHistory, incomeHistory, costHistory, depositHistory, acquisitionFunding. Also: privacy masking of axis and tooltip amounts (and privacy-off parity), one form for every signed tooltip amount with the locale's own sign (D23, D23b), the persisted mode/submode restore with its fallbacks, the candle caption, the grid's left inset, and the Candles/Income ladder x axis (S7): end-anchored buckets on a category axis, the planner's labels and separators, the short oldest bucket drawn translucent and explained in its tooltip (escaped), and the zoom window kept across rung changes and redraws, and the money axis ticks (S7b): exact, distinct labels (D18), the locale's minus (D23), the auto-scaled lower edge unlabelled while Income keeps ECharts' zero-based defaults (D25), and the Income purchase value (S8): both halves named as the book value in the full build and the partial update, one legend entry, the bold total over its two ↳ shares and their sum, new capital in the KPI blue (R11, D26), and the P&L line rebuilt whole when its set of brokers changes (one leaves, one is swapped, one joins), so it draws and lists exactly the brokers in scope, while new amounts for the same brokers stay a partial update (plan 47, C2)", tests="src/lib/features/dashboard/GrowthChart.test.ts")
+    add_test(cat, "asset-list", front_asset_list, name="Asset List Page", desc="List page navigation, cards/table, filters, the sync dialog's overwrite warning (C-66: sync all counts stored prices; the selection's sync over a past weekend filled backward does not warn, a control that stores a price does), the Δ columns from the backend (X-R53)", tests="assets/asset-list.spec.ts")
+    add_test(cat, "asset-detail", front_asset_detail, name="Asset Detail Page", desc="Detail chart, panels, sync, edit, page sync overwrite warning counting this asset (C-66)", tests="assets/asset-detail.spec.ts")
     add_test(cat, "asset-merge", front_asset_merge, name="Asset Merge", desc="Merge duplicate assets: dry-run preview counts, confirm, ISIN inheritance", tests="assets/asset-merge.spec.ts")
     add_test(cat, "asset-modal", front_asset_modal, name="Asset Modal", desc="Create/edit modal, provider, distributions", tests="assets/asset-modal.spec.ts")
     add_test(cat, "asset-data-editor", front_asset_data_editor, name="Asset Data Editor", desc="Prices/Events tabs, CSV import", tests="assets/asset-data-editor.spec.ts")
     add_test(cat, "asset-classification", front_asset_classification, name="Asset Classification", desc="Distribution editors round-trip (geo, sector)", tests="assets/asset-classification.spec.ts")
     add_test(cat, "asset-event-delete", front_asset_event_delete, name="Asset Event Delete", desc="Delete asset events flow", tests="assets/asset-event-delete.spec.ts")
+    add_test(
+        cat,
+        "asset-event-editor-save",
+        front_asset_event_editor_save,
+        name="Asset Event Editor Save",
+        desc="Release 1.3 (W E1b), each test on an asset of its own: one save deletes an event and retypes another onto its key — deletions go first and both are kept (I-10); a CSV line in another currency is sent with its own code and refused, nothing of the save kept (I-11c, decision 22); a refused save is an error toast and keeps nothing (guard)",
+        tests="assets/asset-event-editor-save.spec.ts",
+    )
     add_test(cat, "asset-name-xss", front_asset_name_xss, name="Asset Name XSS", desc="A stored asset name and icon URL carrying markup stay text in the table and card views of /assets, and run nothing (K step 13, item 0)", tests="assets/asset-name-xss.spec.ts")
     add_test(
         cat,
@@ -224,5 +259,6 @@ def populate_registry(registry: dict) -> None:
         desc="Asset detail ‹ n/N › prev/next: follows the list left behind (searched grid in DOM order, table sorted by name), the default order on a direct entry, one Back to the list (header and browser), disabled at the edges, the query kept; at 390/360 px the nav fits and the page does not scroll sideways — K step 16, item 2",
         tests="assets/asset-browse.spec.ts",
     )
+    add_test(cat, "live-pause", front_asset_live_pause, name="Asset Live Updates Pause", desc="Live prices pause when the tab is hidden or after 2 minutes without input and resume at once; list every 60 s, detail one request every 30 s, none on a past range (Z1, F26); on a failing endpoint the detail's requests come 60, 120, 240, 480, 600 and 600 s apart, and an answer with every asset RATE_LIMITED holds the list's next request until its retry_after, counted from the answer (Z7c); «today» is the user's calendar day (Z-3): at 21:00 in New York (01:00 UTC the next day) a range ending today polls on both pages and the detail's summary shows the quote, at 00:30 in Rome (22:30 UTC the day before) a range that ended yesterday polls on neither", tests="assets/asset-live-pause.spec.ts")
     add_test(cat, "all", front_asset_all, test_names=False, name="All Asset Tests", desc="Run all Asset tests (unit + E2E)")
     registry["front-asset"] = cat

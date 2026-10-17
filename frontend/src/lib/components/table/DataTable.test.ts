@@ -39,9 +39,11 @@
  *     reports as zero; asserting on them would measure the absence of a layout
  *     engine, not the component.
  *   - localStorage persistence of page size, widths, order and visibility
- *     overrides. This jsdom build exposes no `localStorage` at all, so
- *     `loadFromStorage`/`saveToStorage` silently no-op behind their try/catch.
- *     (This is also why no test here needs to clear storage between cases.)
+ *     overrides — outside the Y-27 block at the bottom. This jsdom build
+ *     exposes no `localStorage` at all, so `loadFromStorage`/`saveToStorage`
+ *     silently no-op behind their try/catch (which is why no other test here
+ *     needs to clear storage between cases). The Y-27 block stubs one of its
+ *     own for each of its cases and removes it after each.
  *   - the `bulkActions` prop. `handleBulkAction` is defined but never called
  *     from the template: the bulk toolbar is a separate component that callers
  *     mount themselves. Nothing in the public surface can reach it.
@@ -58,18 +60,19 @@
  *   - middle-click-to-open (`e.button === 1 && getRowHref`) opens a row's href in
  *     a new tab. Describable, but it needs the rare `getRowHref` prop and a
  *     synthetic middle-button event whose default jsdom cannot perform.
- *   - `orderedColumns` dropping an id that is in the persisted order but no longer
- *     in `columns`. Only reachable from a stale `localStorage` layout, which this
- *     build cannot populate (see above); the guard stays for all callers.
  * Editable cells are NOT in this list: the inline-editing gestures (arrow-step
  * with min/max clamp, commit-on-blur/Enter, the checkbox toggle and its disabled
  * guard, and the click that must not select the row) are covered below under
- * "DataTable — editable cells".
+ * "DataTable — editable cells". Nor is `orderedColumns` dropping an id that is in
+ * the persisted order but not in `columns`: the Y-27 block saves such a layout in
+ * a stubbed `localStorage`, and once Y-27 keeps the id in the order, that
+ * derivation is what keeps the absent column off screen.
  */
-import {describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {Mock} from 'vitest';
 import {Trash2} from 'lucide-svelte';
-import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {getUserStorageKey} from '$lib/utils/storage';
 import DataTable from './DataTable.svelte';
 import type {ColumnDef, RowAction} from './types';
 
@@ -352,7 +355,7 @@ describe('DataTable — multi selection', () => {
 
     it('select-all replaces the selection with the current page, deselect-all only drops it', async () => {
         await setupI18n();
-        // Documented as intentional at DataTable.svelte:713 — the asymmetry is the
+        // Documented as intentional in toggleAllPageRows (DataTable.svelte) — the asymmetry is the
         // contract, so it is pinned here rather than reported.
         const {component, onSelectionChange} = mount('multi-pages', {data: rows(6), defaultPageSize: 3, alwaysShowPagination: true});
         const api = component as unknown as {toggleRowSelectionById: (id: string) => void};
@@ -1045,5 +1048,242 @@ describe('DataTable — editable cells', () => {
         // Positive control: the row itself still selects, so the negative above is real.
         await fireEvent.click(document.querySelector('tr[data-row-id="e1"]') as HTMLElement);
         expect(onRowClick).toHaveBeenCalledTimes(1);
+    });
+});
+
+// ===========================================================================
+// Y-27 — the saved layout of a column that is absent for a moment
+//
+// Protected: a column the user moved, hid or resized keeps that place,
+// visibility and width across a render that does not have it. Since X-R53 the
+// Assets and FX tables build their Δ period columns (`delta_1W` … `delta_5Y`)
+// from the backend's period list, which is empty until the first answer, so
+// every page load renders once without them.
+//
+// Red today: `onMount` loads only the visibility overrides of the columns
+// present, and the sync `$effect` treats an id it does not see as gone — it
+// drops it from `columnOrder` and saves at once, prunes its override, deletes
+// its width, and gives it the default width when it comes back. A reorder made
+// meanwhile (`setColumnOrder`, which ColumnVisibilityToggle calls with the
+// drawn columns only) saves an order without it. The periods come back at their
+// natural place, visible, at the default width, on every page load.
+//
+// Tested: this block stubs a `localStorage` of its own over a Map (the file's
+// jsdom has none; see the docblock at the top), seeds it under the keys
+// DataTable derives (`getUserStorageKey('dataTable_<key>_<suffix>')`), mounts
+// without `delta_1Y` and hands the table the columns with it through
+// `rerender`, as the period list does when it arrives. Positions are read from
+// the `dt-header-<id>` testids in DOM order, widths from the header cell's
+// inline style (jsdom lays nothing out, but it parses the attribute). After
+// each case the block unmounts and removes the stub, so the rest of the file
+// keeps its storage-less jsdom. The order decisions themselves are unit
+// tested in dataTableLogic.test.ts (withNewColumns, reorderKeepingAbsent).
+//
+// The guards at the end are green before and after the fix: a column never
+// seen still goes to its natural place, a reset still means the defaults of
+// the columns present, and with nothing saved the columns keep their declared
+// order.
+// ===========================================================================
+
+type LayoutSuffix = 'columnOrder' | 'columnVisibilityOverrides' | 'columnWidths';
+
+/** The exports this block drives, as ColumnVisibilityToggle reaches them. */
+interface LayoutApi {
+    getColumnsForVisibility: () => {id: string; visible: boolean}[];
+    toggleColumnVisibilityById: (id: string) => void;
+    setColumnOrder: (order: string[]) => void;
+    resetColumnLayout: () => void;
+}
+
+/** A column of this block: its id and header are the test's own, never a translated label. */
+function layoutColumn(id: string, width?: number): ColumnDef<Row> {
+    return {id, header: `H ${id}`, type: 'text', cell: (r) => `${id} ${r.id}`, ...(width === undefined ? {} : {width})};
+}
+
+const COL_A = layoutColumn('a');
+const COL_B = layoutColumn('b');
+const COL_C = layoutColumn('c');
+/** Δ period columns as AssetTable and FxTable build them: 80 px unless the user resized them. */
+const COL_DELTA_1Y = layoutColumn('delta_1Y', 80);
+const COL_DELTA_5Y = layoutColumn('delta_5Y', 80);
+
+/** The table before the period list has arrived, and after. */
+const BEFORE_PERIODS = [COL_A, COL_B, COL_C] as ColumnDef<unknown>[];
+const WITH_PERIODS = [COL_A, COL_B, COL_C, COL_DELTA_1Y] as ColumnDef<unknown>[];
+
+/** The data columns drawn in the header, in DOM order, read from their `dt-header-<id>` testids. */
+function headerIds(): string[] {
+    return [...document.querySelectorAll('thead th[data-testid^="dt-header-"]')].map((th) => (th.getAttribute('data-testid') ?? '').slice('dt-header-'.length));
+}
+
+/** The width a column's header cell is given inline, e.g. `222px`. */
+function headerWidth(id: string): string {
+    return screen.getByTestId(`dt-header-${id}`).style.width;
+}
+
+describe('DataTable — the saved layout of a column absent for a moment (Y-27)', () => {
+    let storage: Map<string, string>;
+    let getItem: Mock<(key: string) => string | null>;
+
+    const keyOf = (storageKey: string, suffix: LayoutSuffix) => getUserStorageKey(`dataTable_${storageKey}_${suffix}`);
+    const seed = (storageKey: string, suffix: LayoutSuffix, value: unknown) => void storage.set(keyOf(storageKey, suffix), JSON.stringify(value));
+    function stored(storageKey: string, suffix: LayoutSuffix): unknown {
+        const raw = storage.get(keyOf(storageKey, suffix));
+        return raw === undefined ? undefined : JSON.parse(raw);
+    }
+
+    beforeEach(() => {
+        storage = new Map();
+        getItem = vi.fn((key: string) => storage.get(key) ?? null);
+        vi.stubGlobal('localStorage', {
+            getItem,
+            setItem: (key: string, value: string) => void storage.set(key, value),
+            removeItem: (key: string) => void storage.delete(key),
+        });
+    });
+
+    afterEach(() => {
+        // Unmount while the stub is still in place (the library's own cleanup runs after this hook), then give the
+        // rest of the file back its storage-less jsdom.
+        cleanup();
+        vi.unstubAllGlobals();
+    });
+
+    /** Mount before the periods have arrived; the layout API is the component's exports. */
+    function mountLayout(key: string) {
+        const result = mount(key, {columns: BEFORE_PERIODS});
+        return {...result, api: result.component as unknown as LayoutApi};
+    }
+
+    it('leaves the saved order of a column absent at mount as it was', async () => {
+        await setupI18n();
+        seed('y27-order-mount', 'columnOrder', ['a', 'delta_1Y', 'b', 'c']);
+        mountLayout('y27-order-mount');
+
+        // Barrier: the table is drawn with the columns it has.
+        await waitFor(() => expect(headerIds()).toEqual(['a', 'b', 'c']));
+        expect(getItem, 'control: the table read the saved order, so an unchanged value is not a table that never looked').toHaveBeenCalledWith(keyOf('y27-order-mount', 'columnOrder'));
+        expect(stored('y27-order-mount', 'columnOrder'), 'Y-27: mounting without delta_1Y must not save the order without it').toEqual(['a', 'delta_1Y', 'b', 'c']);
+    });
+
+    it('draws a column that arrives late at its saved place', async () => {
+        await setupI18n();
+        seed('y27-order-arrival', 'columnOrder', ['a', 'delta_1Y', 'b', 'c']);
+        const {rerender} = mountLayout('y27-order-arrival');
+        await waitFor(() => expect(headerIds()).toEqual(['a', 'b', 'c']));
+
+        await rerender({columns: WITH_PERIODS});
+
+        // Barrier: the period has arrived.
+        await waitFor(() => expect(headerIds()).toContain('delta_1Y'));
+        expect(headerIds(), 'Y-27: delta_1Y must come back after a, where it was saved — not last, where the columns declare it').toEqual(['a', 'delta_1Y', 'b', 'c']);
+    });
+
+    it('keeps a column that was saved hidden out of the header when it arrives late', async () => {
+        await setupI18n();
+        seed('y27-hidden-arrival', 'columnVisibilityOverrides', {delta_1Y: false});
+        const {rerender, api} = mountLayout('y27-hidden-arrival');
+        await waitFor(() => expect(headerIds()).toEqual(['a', 'b', 'c']));
+
+        await rerender({columns: WITH_PERIODS});
+
+        // Barrier: the table knows the period now (the visibility menu lists it), so a missing header below means
+        // hidden, not late.
+        await waitFor(() => expect(api.getColumnsForVisibility().map((c) => c.id)).toContain('delta_1Y'));
+        expect(api.getColumnsForVisibility().find((c) => c.id === 'delta_1Y')?.visible, 'Y-27: delta_1Y was saved hidden, so it must arrive hidden').toBe(false);
+        expect(screen.getByTestId('dt-header-c')).toBeInTheDocument();
+        expect(screen.queryByTestId('dt-header-delta_1Y'), 'Y-27: no header cell for the hidden period').toBeNull();
+    });
+
+    it('keeps the saved override of an absent column when another column is toggled', async () => {
+        await setupI18n();
+        seed('y27-hidden-toggle', 'columnVisibilityOverrides', {delta_1Y: false});
+        const {api} = mountLayout('y27-hidden-toggle');
+        await waitFor(() => expect(headerIds()).toEqual(['a', 'b', 'c']));
+
+        api.toggleColumnVisibilityById('b');
+
+        // Barrier: the toggle took effect — b is gone, its neighbours are still drawn — and it saves as it applies.
+        await waitFor(() => expect(headerIds()).toEqual(['a', 'c']));
+        expect(stored('y27-hidden-toggle', 'columnVisibilityOverrides'), 'Y-27: saving b hidden must keep delta_1Y hidden in storage, though delta_1Y is not drawn yet').toEqual({delta_1Y: false, b: false});
+    });
+
+    it('keeps the saved width of a column that arrives late', async () => {
+        await setupI18n();
+        seed('y27-width-arrival', 'columnWidths', {a: 111, delta_1Y: 222});
+        const {rerender} = mountLayout('y27-width-arrival');
+        await waitFor(() => expect(headerIds()).toEqual(['a', 'b', 'c']));
+        expect(headerWidth('a'), 'control: the saved widths are read — a present column is drawn at its own').toBe('111px');
+
+        await rerender({columns: WITH_PERIODS});
+
+        await waitFor(() => expect(headerIds()).toContain('delta_1Y'));
+        expect(headerWidth('delta_1Y'), 'Y-27: delta_1Y must keep its saved 222 px, not get its default 80 px').toBe('222px');
+        expect(headerWidth('a'), 'and a keeps its own').toBe('111px');
+    });
+
+    it('keeps an absent column after the one it followed when the columns are reordered meanwhile', async () => {
+        await setupI18n();
+        seed('y27-reorder', 'columnOrder', ['a', 'delta_1Y', 'b', 'c']);
+        const {rerender, api} = mountLayout('y27-reorder');
+        await waitFor(() => expect(headerIds()).toEqual(['a', 'b', 'c']));
+
+        // What ColumnVisibilityToggle.handleReorder hands in: the drawn columns, and only those.
+        api.setColumnOrder(['c', 'a', 'b']);
+        await waitFor(() => expect(headerIds()).toEqual(['c', 'a', 'b']));
+
+        await rerender({columns: WITH_PERIODS});
+
+        await waitFor(() => expect(headerIds()).toContain('delta_1Y'));
+        expect(headerIds(), 'Y-27: delta_1Y followed a before the reorder, so it must still follow a').toEqual(['c', 'a', 'delta_1Y', 'b']);
+        expect(stored('y27-reorder', 'columnOrder'), 'Y-27: and the next page load must read the same order').toEqual(['c', 'a', 'delta_1Y', 'b']);
+    });
+
+    it('guard: puts a column never seen at its natural place within the saved order', async () => {
+        await setupI18n();
+        seed('y27-guard-new', 'columnOrder', ['c', 'a', 'b']);
+        const {rerender} = mountLayout('y27-guard-new');
+        await waitFor(() => expect(headerIds(), 'control: the saved order is read').toEqual(['c', 'a', 'b']));
+
+        // delta_5Y is in no saved order; the columns declare it right after a.
+        await rerender({columns: [COL_A, COL_DELTA_5Y, COL_B, COL_C] as ColumnDef<unknown>[]});
+
+        await waitFor(() => expect(headerIds()).toContain('delta_5Y'));
+        expect(headerIds(), 'a column never seen goes right after its predecessor in the columns').toEqual(['c', 'a', 'delta_5Y', 'b']);
+        expect(stored('y27-guard-new', 'columnOrder'), 'and that place is saved').toEqual(['c', 'a', 'delta_5Y', 'b']);
+    });
+
+    it('guard: resetColumnLayout gives the defaults back, to an absent column too', async () => {
+        await setupI18n();
+        seed('y27-guard-reset', 'columnOrder', ['c', 'delta_1Y', 'a', 'b']);
+        seed('y27-guard-reset', 'columnVisibilityOverrides', {delta_1Y: false, b: false});
+        seed('y27-guard-reset', 'columnWidths', {a: 111, delta_1Y: 222});
+        const {rerender, api} = mountLayout('y27-guard-reset');
+        await waitFor(() => expect(headerIds(), 'control: the saved layout is read').toEqual(['c', 'a']));
+        expect(headerWidth('a'), 'control: the saved width is read').toBe('111px');
+
+        api.resetColumnLayout();
+        await waitFor(() => expect(headerIds()).toEqual(['a', 'b', 'c']));
+        expect(headerWidth('a'), 'reset: the default width').toBe('150px');
+
+        await rerender({columns: WITH_PERIODS});
+
+        // The reset happened while delta_1Y was absent, and it means the defaults for delta_1Y too.
+        await waitFor(() => expect(headerIds()).toContain('delta_1Y'));
+        expect(headerIds(), 'reset: the declared order, delta_1Y drawn and last').toEqual(['a', 'b', 'c', 'delta_1Y']);
+        expect(headerWidth('delta_1Y'), 'reset: its default width').toBe('80px');
+    });
+
+    it('guard: with nothing saved, the declared order — a late column included', async () => {
+        await setupI18n();
+        const {rerender} = mountLayout('y27-guard-empty');
+        await waitFor(() => expect(headerIds()).toEqual(['a', 'b', 'c']));
+
+        // The Assets table declares its periods in the middle (before `provider`), not at the end.
+        await rerender({columns: [COL_A, COL_DELTA_1Y, COL_B, COL_C] as ColumnDef<unknown>[]});
+
+        await waitFor(() => expect(headerIds()).toContain('delta_1Y'));
+        expect(headerIds(), 'nothing saved: the declared order').toEqual(['a', 'delta_1Y', 'b', 'c']);
+        expect(headerWidth('delta_1Y'), 'nothing saved: the default width').toBe('80px');
     });
 });

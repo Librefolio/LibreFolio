@@ -2,11 +2,38 @@
 Test: FX Core Service — normalize_rate_for_storage, upsert_rates_bulk,
 delete_rates_bulk, _count_actual_changes.
 
-Covers the service-layer helper functions in fx.py that are NOT covered
+Covers the service-layer helper functions in services/fx/ (storage.py, sync.py) that are NOT covered
 by test_fx_conversion.py (which focuses on convert_bulk / compute_chain_rate).
+
+X-R38 (the FX side of W-B58, reported as W-B61): a manual rate ``fx_rates.rate`` cannot keep. Measured before the cure:
+``upsert_rates_bulk`` checks ``base != quote`` and ``rate > 0`` only, then writes every rate of the call as a float: 1E+400
+is stored as a REAL inf, its inverse as 0, 1E+15 as it is, 1E-11 as a value that reads back 0; a NaN makes the ``rate > 0``
+check raise ``InvalidOperation``, and the inverse of 1E-1000000 ``decimal.Overflow``. ``_count_actual_changes`` truncates a
+stored rate to compare it, which raises ``InvalidOperation`` on a legacy inf or 1e60. The contract: after its
+normalization (the inverse when base > quote) a rate ``storable_fx_rate`` refuses is a ``ValueError`` naming the pair,
+the date and the limits (14 digits before the decimal point, 10 decimal places), raised before anything of the call is
+written; a rate at the limits is stored; the comparison with a legacy rate no column can keep never raises and counts a
+change. Every X-R38 row is this file's (ISK quote), in a window of 1993 no other test writes, wiped before and after.
+
+X-R50 (E's review R13-SEC5 on X-R38), two notes measured before its cure. The double limit: a rate of 14 digits before
+the decimal point whose double SQLite rounds to ``1E+14`` (``99999999999999.995``) passes ``storable_fx_rate``, so
+``upsert_rates_bulk`` answers «inserted» and stores ``1e14``, which every conversion skips (``convert_bulk`` reads only
+``1E-10 <= rate < 1E+14``); the contract: refused like the X-R38 refusals, the same ``ValueError`` and nothing of the call
+written. The underflow: ``normalize_storable_rate`` promises None for a rate it cannot normalize, yet when base > quote
+the inverse of a huge rate underflows to 0 without an exception (``1 / 1E+1000030`` is ``0E-1000026`` in the default
+decimal context) and it returns that 0; the contract: None when the normalized rate is not above 0, a tiny inverse
+above 0 (``1E-1000000``) still returned, refusing it being ``storable_fx_rate``'s business. Its X-R50 rows are the X-R38
+ones; the underflow tests are pure.
+
+X-R51 (after X-R50): the refusal's words. Measured after X-R50: ``99999999999999.995`` is refused by the double rule, yet
+the refusal (``fx_rate_refusal``, from ``precision.fx_rate_limits_text``) is X-R38's, «at most 14 digits before the
+decimal point and 10 decimal places»: the user typed 14 digits and is told 14 is the limit, nothing saying why. The
+contract: the refusal also names the bound the database stores below, the whole number ``100000000000000``. Its rows are
+the X-R38 ones.
 """
 
 import asyncio
+import re
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
@@ -22,19 +49,16 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import delete
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.models import FxRate
-from backend.app.db.precision import truncate_fx_rate
+from backend.app.db.precision import storable_fx_rate, truncate_fx_rate, usable_fx_rate_bounds
 from backend.app.db.session import get_async_engine
-from backend.app.services.fx import (
-    _count_actual_changes,
-    delete_rates_bulk,
-    normalize_rate_for_storage,
-    upsert_rates_bulk,
-)
+from backend.app.services.fx.storage import delete_rates_bulk, normalize_rate_for_storage, normalize_storable_rate, upsert_rates_bulk
+from backend.app.services.fx.sync import _count_actual_changes
 from backend.app.services.portfolio_service import _portfolio_l2_cache
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -73,6 +97,52 @@ def _clean_fx_rates():
 
     asyncio.run(_purge())
     yield
+
+
+# X-R38: the window of this file's X-R38 rows, far from the dates its other tests write (today and the days before it).
+XR38_DAYS = tuple(date(1993, 4, 5) + timedelta(days=offset) for offset in range(4))
+XR38_SOURCE = "X-R38"
+
+
+async def _xr38_wipe() -> None:
+    """Drop this file's rates (ISK quote) in the X-R38 window."""
+    async with AsyncSession(get_async_engine()) as session:
+        await session.execute(delete(FxRate).where(FxRate.quote == FX_CORE_QUOTE, FxRate.date >= XR38_DAYS[0], FxRate.date <= XR38_DAYS[-1]))
+        await session.commit()
+
+
+@pytest.fixture
+def xr38_rows():
+    """X-R38: no rate of this file in the window before and after the test (the autouse purge runs before it only)."""
+    asyncio.run(_xr38_wipe())
+    yield
+    asyncio.run(_xr38_wipe())
+
+
+async def _xr38_stored() -> dict[tuple[str, str, date], Decimal]:
+    """This file's rates in the X-R38 window by (base, quote, date), read through the model, as the app reads them."""
+    async with AsyncSession(get_async_engine()) as session:
+        rows = (await session.execute(select(FxRate.base, FxRate.quote, FxRate.date, FxRate.rate).where(FxRate.quote == FX_CORE_QUOTE, FxRate.date >= XR38_DAYS[0], FxRate.date <= XR38_DAYS[-1]))).all()
+    return {(row.base, row.quote, row.date): row.rate for row in rows}
+
+
+def _xr38_numbers(message: str) -> set[str]:
+    """The whole numbers ``message`` states, its ISO dates taken out first: a date cannot stand in for a limit."""
+    return set(re.findall(r"\d+", re.sub(r"\d{4}-\d{2}-\d{2}", " ", message)))
+
+
+async def _xr38_upsert_refused(rates: list[tuple], story: str, rule: str = "X-R38: at most 14 digits before the decimal point, not 0 at 10 decimal places") -> ValueError:
+    """``upsert_rates_bulk`` for a call that must be refused: its ValueError, which ``POST /fx/currencies/rate`` turns
+    into the item's error. Any other exception fails the test naming it, and so does a call that goes through, naming
+    ``rule``, the limit the refusal enforces (X-R50 passes its own)."""
+    async with AsyncSession(get_async_engine()) as session:
+        try:
+            results = await upsert_rates_bulk(session, rates)
+        except ValueError as refusal:
+            return refusal
+        except Exception as exc:  # noqa: BLE001 — any other exception is the defect under test
+            pytest.fail(f"{story} raised {exc!r} instead of a ValueError: POST /fx/currencies/rate reports a failure, not the limit (X-R38)")
+    pytest.fail(f"{story} was accepted ({results}) and reads back as {await _xr38_stored()}, instead of being refused ({rule})")
 
 
 # ============================================================================
@@ -344,6 +414,40 @@ class TestCountActualChanges:
             assert count == 0
             print_success("Empty list → 0")
 
+    @pytest.mark.parametrize(
+        "planted",
+        [
+            pytest.param(float("inf"), id="inf"),
+            pytest.param(0.0, id="0"),
+            pytest.param(1e19, id="1e19-20-integer-digits"),
+            pytest.param(1e60, id="1e60"),
+        ],
+    )
+    async def test_xr38_a_legacy_rate_no_column_can_keep_counts_as_a_change_never_raising(self, planted):
+        """Red today for inf and 1e60: the stored rate reads back ``Decimal('Infinity')`` or a Decimal of 70 digits, and
+        ``truncate_fx_rate`` raises ``InvalidOperation`` on it, so the sync of the pair fails. Green today for 0 and 1e19.
+
+        Contract (X-R38): reads never raise. A stored rate no column can keep, as an older release could leave it (planted
+        with raw SQL, past the model), compares as different from the new rate: one change, and the sync overwrites it.
+        The plant is never committed: the session rolls it back.
+        """
+        print_section(f"_count_actual_changes: legacy stored rate {planted!r}")
+        day = XR38_DAYS[0]
+        key = {"day": day.isoformat(), "base": FX_CORE_BASE, "quote": FX_CORE_QUOTE}
+        async with AsyncSession(get_async_engine()) as session:
+            try:
+                await session.execute(text("INSERT INTO fx_rates (date, base, quote, rate, source, fetched_at) VALUES (:day, :base, :quote, :rate, :source, CURRENT_TIMESTAMP)"), {**key, "rate": planted, "source": XR38_SOURCE})
+                found = (await session.execute(text("SELECT rate FROM fx_rates WHERE base = :base AND quote = :quote AND date = :day"), key)).scalar_one()
+                assert found == planted, f"barrier: the legacy rate reads back {found!r} with raw SQL, not {planted!r}"
+                try:
+                    count = await _count_actual_changes(session, [(day, FX_CORE_BASE, FX_CORE_QUOTE, truncate_fx_rate(Decimal("1.5")))])
+                except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+                    pytest.fail(f"comparing a new rate of 1.5 with a stored {planted!r} raised {exc!r}: the sync of {FX_CORE_BASE}/{FX_CORE_QUOTE} fails (X-R38: reads never raise)")
+                assert count == 1, f"a new rate of 1.5 against a stored {planted!r} counts {count} change(s): expected 1, the new rate overwrites it"
+            finally:
+                await session.rollback()
+        print_success(f"legacy {planted!r} counted as a change")
+
 
 # ============================================================================
 # normalize_rate_for_storage — additional edge cases
@@ -416,6 +520,200 @@ class TestUpsertRatesBulkEdgeCases:
             assert len(results) == 3
             assert all(r[0] for r in results), "All should succeed"
             print_success(f"Inserted {len(results)} different pairs")
+
+
+# ============================================================================
+# upsert_rates_bulk — X-R38: a rate no column can keep
+# ============================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr38_rows")
+class TestUpsertRatesBulkDigitLimits:
+    """X-R38 (the FX side of W-B58): a manual rate ``fx_rates.rate`` cannot keep is refused before anything is written.
+    X-R50 (E's review R13-SEC5 on X-R38): so is a rate whose double SQLite rounds to ``1E+14``. X-R51: and its refusal
+    names the bound the database stores below, ``100000000000000``."""
+
+    @pytest.mark.parametrize(
+        ("base", "quote", "typed", "normalized"),
+        [
+            pytest.param(FX_CORE_BASE, FX_CORE_QUOTE, "1E+15", "1E+15", id="1E+15"),
+            pytest.param(FX_CORE_BASE, FX_CORE_QUOTE, "100000000000000", "100000000000000", id="derived-15-integer-digits"),
+            pytest.param(FX_CORE_BASE, FX_CORE_QUOTE, "1E+400", "1E+400", id="1E+400"),
+            pytest.param(FX_CORE_BASE, FX_CORE_QUOTE, "1E-11", "1E-11", id="1E-11"),
+            pytest.param(FX_CORE_BASE, FX_CORE_QUOTE, "NaN", "NaN", id="derived-NaN"),
+            pytest.param(FX_CORE_QUOTE, FX_CORE_BASE, "1E-15", "1E+15", id="inverted-1E-15"),
+            pytest.param(FX_CORE_QUOTE, FX_CORE_BASE, "1E+11", "1E-11", id="inverted-1E+11"),
+            pytest.param(FX_CORE_QUOTE, FX_CORE_BASE, "1E+400", "1E-400", id="derived-inverted-1E+400"),
+            pytest.param(FX_CORE_QUOTE, FX_CORE_BASE, "1E-1000000", "1E+1000000", id="derived-inverted-1E-1000000-the-inverse-overflows"),
+        ],
+    )
+    async def test_xr38_a_rate_no_column_can_keep_is_refused_and_nothing_of_the_call_is_written(self, base, quote, typed, normalized):
+        """Red today: accepted, and written with the valid rate of the call — 1E+15 and 15 integer digits as they are,
+        1E+400 as a REAL inf, 1E-11 and the inverse of 1E+11 or 1E+400 as values that read back 0, the inverse of 1E-15 as
+        1E+15; a NaN makes the ``rate > 0`` check raise ``InvalidOperation``, the inverse of 1E-1000000 ``decimal.Overflow``.
+
+        Contract (X-R38): after the normalization (the inverse when base > quote) a rate ``storable_fx_rate`` refuses is a
+        ``ValueError`` naming the pair, the date and the limits (14 digits before the decimal point, 10 decimal places),
+        raised before anything of the call is written: the valid CHF/ISK rate saved first in the same call is not written
+        either. The ``derived-`` cases read the same rule.
+        """
+        print_section(f"upsert_rates_bulk: {base}/{quote} {typed} refused")
+        story = f"a manual {base}/{quote} rate of {typed} on {XR38_DAYS[1]} ({FX_CORE_BASE}/{FX_CORE_QUOTE} {normalized} once normalized), saved after a valid {FX_CORE_BASE_ALT}/{FX_CORE_QUOTE} rate"
+        rates = [
+            (XR38_DAYS[0], FX_CORE_BASE_ALT, FX_CORE_QUOTE, Decimal("1.5"), XR38_SOURCE),
+            (XR38_DAYS[1], base, quote, Decimal(typed), XR38_SOURCE),
+        ]
+
+        refusal = await _xr38_upsert_refused(rates, story)
+
+        message = str(refusal)
+        assert FX_CORE_BASE in message and FX_CORE_QUOTE in message and XR38_DAYS[1].isoformat() in message, f"the refusal does not name the pair {FX_CORE_BASE}/{FX_CORE_QUOTE} and the date {XR38_DAYS[1]}: {message!r}"
+        assert {"14", "10"} <= _xr38_numbers(message), f"the refusal does not name the limits, 14 digits before the decimal point and 10 decimal places: {message!r}"
+        stored = await _xr38_stored()
+        assert not stored, f"the call was refused, yet rows were written: {stored}"
+        print_success("refused, nothing written")
+
+    async def test_xr38_guard_rates_at_the_limits_are_stored(self):
+        """Guard: green today and after. 14 digits before the decimal point and 1E-10 are the limits, not past them, typed
+        or reached by the inverse (ISK → BGN 1E-13 is stored BGN/ISK 1E+13, ISK → BGN 1E+10 is 1E-10). Each value is one a
+        double holds exactly, so it reads back as typed."""
+        print_section("upsert_rates_bulk: rates at the limits stored")
+        rates = [
+            (XR38_DAYS[0], FX_CORE_BASE, FX_CORE_QUOTE, Decimal("99999999999999"), XR38_SOURCE),
+            (XR38_DAYS[1], FX_CORE_BASE, FX_CORE_QUOTE, Decimal("1E-10"), XR38_SOURCE),
+            (XR38_DAYS[2], FX_CORE_QUOTE, FX_CORE_BASE, Decimal("1E-13"), XR38_SOURCE),
+            (XR38_DAYS[3], FX_CORE_QUOTE, FX_CORE_BASE, Decimal("1E+10"), XR38_SOURCE),
+        ]
+        async with AsyncSession(get_async_engine()) as session:
+            try:
+                await upsert_rates_bulk(session, rates)
+            except ValueError as refusal:
+                pytest.fail(f"rates at the limits were refused: {refusal}")
+
+        stored = await _xr38_stored()
+        expected = {
+            (FX_CORE_BASE, FX_CORE_QUOTE, XR38_DAYS[0]): Decimal("99999999999999"),
+            (FX_CORE_BASE, FX_CORE_QUOTE, XR38_DAYS[1]): Decimal("1E-10"),
+            (FX_CORE_BASE, FX_CORE_QUOTE, XR38_DAYS[2]): Decimal("1E+13"),
+            (FX_CORE_BASE, FX_CORE_QUOTE, XR38_DAYS[3]): Decimal("1E-10"),
+        }
+        assert stored == expected, f"rates at the limits read back as {stored}: expected {expected}"
+        print_success("stored at the limits")
+
+    async def test_xr50_a_rate_whose_double_is_1E14_is_refused_and_nothing_of_the_call_is_written(self):
+        """Red today: accepted, its 14 digits before the decimal point being the X-R38 limit, and written with the valid
+        rate of the call; SQLite keeps it as its double, ``1E+14``, which every conversion then skips (``convert_bulk``
+        reads only ``1E-10 <= rate < 1E+14``): the user is told «inserted» for a rate no conversion will use.
+
+        Contract (X-R50): refused like the X-R38 refusals, a ``ValueError`` naming the pair, the date and the limits (14
+        digits before the decimal point, 10 decimal places), raised before anything of the call is written: the valid
+        CHF/ISK rate saved first in the same call is not written either. X-R51 adds to the refusal the bound the database
+        stores below: see the test beside this one.
+        """
+        typed = "99999999999999.995"
+        print_section(f"upsert_rates_bulk: {FX_CORE_BASE}/{FX_CORE_QUOTE} {typed}, whose double is 1E+14, refused")
+        integer_digits, double = Decimal(typed).adjusted() + 1, float(Decimal(typed))
+        assert integer_digits == 14 and double >= 1e14, f"barrier: {typed} has {integer_digits} digits before the decimal point and the double {double!r}: expected the 14 X-R38 lets through and a double of 1E+14"
+        story = f"a manual {FX_CORE_BASE}/{FX_CORE_QUOTE} rate of {typed} on {XR38_DAYS[1]} (its double {double!r}), saved after a valid {FX_CORE_BASE_ALT}/{FX_CORE_QUOTE} rate"
+        rates = [
+            (XR38_DAYS[0], FX_CORE_BASE_ALT, FX_CORE_QUOTE, Decimal("1.5"), XR38_SOURCE),
+            (XR38_DAYS[1], FX_CORE_BASE, FX_CORE_QUOTE, Decimal(typed), XR38_SOURCE),
+        ]
+
+        refusal = await _xr38_upsert_refused(rates, story, rule="X-R50: not a rate whose double is 1E+14 or more, which every conversion skips")
+
+        message = str(refusal)
+        assert FX_CORE_BASE in message and FX_CORE_QUOTE in message and XR38_DAYS[1].isoformat() in message, f"the refusal does not name the pair {FX_CORE_BASE}/{FX_CORE_QUOTE} and the date {XR38_DAYS[1]}: {message!r}"
+        assert {"14", "10"} <= _xr38_numbers(message), f"the refusal does not name the limits, 14 digits before the decimal point and 10 decimal places: {message!r}"
+        stored = await _xr38_stored()
+        assert not stored, f"the call was refused, yet rows were written: {stored}"
+        print_success("refused, nothing written")
+
+    async def test_xr51_the_refusal_of_a_rate_whose_double_is_1E14_names_the_bound_100000000000000(self):
+        """Red today: X-R50 refuses the rate, its double being ``1E+14`` (which every conversion skips), but the refusal is
+        X-R38's text, «at most 14 digits before the decimal point and 10 decimal places»: the user typed 14 digits before
+        the decimal point and is told 14 is the limit, nothing saying why the rate is refused.
+
+        Contract (X-R51): the refusal also names the bound the database stores below, the whole number
+        ``100000000000000``, beside what X-R50's names (the pair, the date, 14 digits and 10 decimal places).
+        """
+        typed, bound = "99999999999999.995", "100000000000000"
+        print_section(f"upsert_rates_bulk: {FX_CORE_BASE}/{FX_CORE_QUOTE} {typed} refused, the refusal naming {bound}")
+        first_skipped = format(usable_fx_rate_bounds()[1], "f")
+        assert first_skipped == bound, f"barrier: the reads skip a stored rate from {first_skipped}, not from {bound}: the bound this test asks the refusal to name is not the database's"
+        integer_digits, double = Decimal(typed).adjusted() + 1, float(Decimal(typed))
+        assert integer_digits == 14 and double >= 1e14, f"barrier: {typed} has {integer_digits} digits before the decimal point and the double {double!r}: expected the 14 X-R38 lets through and a double of 1E+14"
+        story = f"a manual {FX_CORE_BASE}/{FX_CORE_QUOTE} rate of {typed} on {XR38_DAYS[1]} (its double {double!r})"
+
+        refusal = await _xr38_upsert_refused([(XR38_DAYS[1], FX_CORE_BASE, FX_CORE_QUOTE, Decimal(typed), XR38_SOURCE)], story, rule="X-R50: not a rate whose double is 1E+14 or more, which every conversion skips")
+
+        message = str(refusal)
+        assert FX_CORE_BASE in message and FX_CORE_QUOTE in message and XR38_DAYS[1].isoformat() in message, f"barrier: the refusal does not name the pair {FX_CORE_BASE}/{FX_CORE_QUOTE} and the date {XR38_DAYS[1]}, as X-R50's does: {message!r}"
+        named = _xr38_numbers(message)
+        assert {"14", "10"} <= named, f"barrier: the refusal does not name the limits X-R50's names, 14 digits before the decimal point and 10 decimal places: {message!r}"
+        assert bound in named, f"{story}: the user is told «at most 14 digits before the decimal point» for a rate of 14 digits, and the refusal never names the bound the database stores below, {bound} (X-R51): {message!r}"
+        print_success(f"refused, the refusal naming {bound}")
+
+
+# ============================================================================
+# normalize_storable_rate — X-R50: an inverse that underflows to 0
+# ============================================================================
+
+
+def _xr50_normalized(base: str, quote: str, rate: Decimal):
+    """``normalize_storable_rate(base, quote, rate)``. An exception fails the test naming it: a manual rate answers 500,
+    a sync loses the provider's answer (X-R38: it never raises)."""
+    try:
+        return normalize_storable_rate(base, quote, rate)
+    except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+        pytest.fail(f"normalize_storable_rate({base!r}, {quote!r}, {rate}) raised {exc!r}: a manual rate answers 500, a sync loses the provider's answer (X-R38: it never raises)")
+
+
+class TestNormalizeStorableRateUnderflow:
+    """X-R50 (E's review R13-SEC5 on X-R38): ``normalize_storable_rate`` never answers a rate of 0. Pure: no row read or
+    written (the file's autouse purge still runs before each test)."""
+
+    @pytest.mark.parametrize(
+        "typed",
+        [
+            pytest.param("1E+1000030", id="ISK-BGN-1E+1000030"),
+            pytest.param("1E+1000027", id="derived-ISK-BGN-1E+1000027-the-first-power-of-ten-whose-inverse-underflows"),
+        ],
+    )
+    def test_xr50_normalize_storable_rate_answers_none_when_the_inverse_underflows_to_0(self, typed):
+        """Red today: ISK → BGN is stored BGN/ISK, its rate inverted, and in the default decimal context (28 digits, Emin
+        -999999) the inverse of 1E+1000030 underflows to 0 without an exception: ``("BGN", "ISK", Decimal("0E-1000026"))``,
+        the 0 the function promises never to return. ``POST /fx/currencies/rate`` hands that 0 to ``upsert_rates_bulk``,
+        whose refusal, «Rate must be positive (got 0E-1000026)», tells the user a rate far above 0 is not positive.
+
+        Contract (X-R50): None when the normalized rate is not above 0. The ``derived-`` case reads the same rule.
+        """
+        print_section(f"normalize_storable_rate: {FX_CORE_QUOTE} → {FX_CORE_BASE} {typed}, the inverse underflows")
+        rate = Decimal(typed)
+        inverse = Decimal(1) / rate
+        assert inverse == 0, f"barrier: in this thread's decimal context the inverse of {typed} is {inverse!r}, not 0: the underflow does not happen here"
+
+        found = _xr50_normalized(FX_CORE_QUOTE, FX_CORE_BASE, rate)
+
+        assert found is None, f"normalize_storable_rate({FX_CORE_QUOTE!r}, {FX_CORE_BASE!r}, {typed}) = {found!r}: expected None, the inverse underflowed to 0 (X-R50: never a normalized rate of 0)"
+        print_success("None, the inverse underflowed to 0")
+
+    def test_xr50_guard_normalize_storable_rate_keeps_a_tiny_inverse_above_0(self):
+        """Guard: green today and after. ISK → BGN 1E+1000000: its inverse, 1E-1000000, is tiny but above 0 (subnormal and
+        exact in the default context), so it comes back, ``("BGN", "ISK", Decimal("1E-1000000"))``: refusing it is
+        ``storable_fx_rate``'s business (0 once cut to 10 decimal places), not the normalization's."""
+        print_section(f"normalize_storable_rate: {FX_CORE_QUOTE} → {FX_CORE_BASE} 1E+1000000, a tiny inverse above 0")
+        rate = Decimal("1E+1000000")
+        inverse = Decimal(1) / rate
+        assert inverse > 0, f"barrier: in this thread's decimal context the inverse of 1E+1000000 is {inverse!r}, not above 0"
+
+        found = _xr50_normalized(FX_CORE_QUOTE, FX_CORE_BASE, rate)
+
+        expected = (FX_CORE_BASE, FX_CORE_QUOTE, Decimal("1E-1000000"))
+        assert found == expected, f"normalize_storable_rate({FX_CORE_QUOTE!r}, {FX_CORE_BASE!r}, 1E+1000000) = {found!r}: expected {expected}, the inverse is above 0"
+        assert storable_fx_rate(found[2]) is None, f"storable_fx_rate({found[2]!r}) = {storable_fx_rate(found[2])!r}: expected None, the tiny inverse is 0 once cut to 10 decimal places (X-R38)"
+        print_success("the tiny inverse returned, refused by storable_fx_rate")
 
 
 # ============================================================================

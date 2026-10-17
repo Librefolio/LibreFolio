@@ -60,25 +60,24 @@ const TX_CELL_BUILDERS = 'Built by the transaction cell builders, which escape u
 
 /** Sinks reviewed and kept without `sanitizeHtml`, each with the reason it is safe. */
 const REVIEWED_SINKS: readonly ReviewedSink[] = [
-    {file: 'src/lib/components/table/DataTable.svelte', expr: 'cellContent.html', why: COLUMN_DEFS},
-    {file: 'src/lib/components/table/DataTable.svelte', expr: 'footerContent.html', why: COLUMN_DEFS},
-    {file: 'src/lib/components/table/DataTable.svelte', expr: 'getColumnHeaderHtml(column)', why: COLUMN_DEFS},
+    {file: 'src/lib/components/table/DataTableCellContent.svelte', expr: 'cellContent.html', why: COLUMN_DEFS},
+    {file: 'src/lib/components/table/DataTableColumnHeader.svelte', expr: 'getColumnHeaderHtml(column)', why: COLUMN_DEFS},
     {file: 'src/lib/components/ui/display/CurrencyAmount.svelte', expr: 'formatCurrencyAmountHtml(…)', why: CURRENCY_HTML},
     {file: 'src/routes/(app)/dashboard/+page.svelte', expr: 'formatCurrencyAmountHtml(…)', why: CURRENCY_HTML},
-    {file: 'src/lib/components/transactions/wac/WacPreviewSection.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
-    {file: 'src/lib/components/transactions/modals/TransactionBulkModal.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
+    {file: 'src/lib/features/transactions/wac/WacPreviewSection.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
+    {file: 'src/lib/features/transactions/bulk/TxBulkBanners.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/components/table/DataTableColumnFilter.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
-    {file: 'src/lib/components/files/FilePreviewModal.svelte', expr: 'renderedMarkdown', why: 'DOMPurify-sanitised marked output; the KaTeX pass that follows renders the text content of $$…$$ paragraphs, and KaTeX escapes its input (trust off).'},
+    {file: 'src/lib/features/files/FilePreviewModal.svelte', expr: 'renderedMarkdown', why: 'DOMPurify-sanitised marked output; the KaTeX pass that follows renders the text content of $$…$$ paragraphs, and KaTeX escapes its input (trust off).'},
     {file: 'src/lib/components/charts/SignalOptionContent.svelte', expr: 'renderedSubtitle', why: 'renderInlineMathText(subtitle): the server signal-catalog subtitle is escaped by escapeHtml before KaTeX renders its $…$ spans.'},
     {
         file: 'src/lib/components/assets/PriceDataImportModal.svelte',
-        expr: `$t('import.csv.separatorHint', {values: {sep: '<code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">;</code>'}})`,
+        expr: `$t('import.csv.separatorHint', {values: {sep: '<code class="bg-lf-neutral/50 px-1 rounded">;</code>'}})`,
         why: 'A static i18n message with a static <code> value: nothing in it comes from a user, a file or a provider.',
     },
-    {file: 'src/lib/components/transactions/cells/TxLinksCell.svelte', expr: 'eventHtml', why: TX_CELL_BUILDERS},
-    {file: 'src/lib/components/transactions/cells/TxLinksCell.svelte', expr: 'linkHtml', why: TX_CELL_BUILDERS},
-    {file: 'src/lib/components/transactions/cells/TxTooltipCell.svelte', expr: 'html', why: TX_CELL_BUILDERS},
-    {file: 'src/lib/components/transactions/modals/TransactionCompareModal.svelte', expr: 'cell.display', why: TX_CELL_BUILDERS},
+    {file: 'src/lib/features/transactions/cells/TxLinksCell.svelte', expr: 'eventHtml', why: TX_CELL_BUILDERS},
+    {file: 'src/lib/features/transactions/cells/TxLinksCell.svelte', expr: 'linkHtml', why: TX_CELL_BUILDERS},
+    {file: 'src/lib/features/transactions/cells/TxTooltipCell.svelte', expr: 'html', why: TX_CELL_BUILDERS},
+    {file: 'src/lib/features/transactions/import/TransactionCompareModal.svelte', expr: 'cell.display', why: TX_CELL_BUILDERS},
 ];
 
 interface Sink {
@@ -210,8 +209,11 @@ describe('{@html} renders sanitised or reviewed HTML only (K step 13, item 0 gat
         expect(isScanned('src/lib/utils/core/escapeHtml.ts')).toBe(false);
         // 42 sinks in 19 components when this gate was written, 10 of them in DataTable: a walk that
         // reaches the wrong directory, or a traversal that stops at the first element, finds far fewer.
+        // The Y2 cut (release 1.3) moved DataTable's sinks into DataTableCellContent and
+        // DataTableColumnHeader, 10 → 6 because the footer now renders through DataTableCellContent.
         expect(sinks.length).toBeGreaterThan(35);
-        expect(sinks.filter((sink) => sink.file === 'src/lib/components/table/DataTable.svelte').length).toBeGreaterThanOrEqual(10);
+        expect(sinks.filter((sink) => sink.file === 'src/lib/components/table/DataTableCellContent.svelte').length).toBeGreaterThanOrEqual(4);
+        expect(sinks.filter((sink) => sink.file === 'src/lib/components/table/DataTableColumnHeader.svelte').length).toBeGreaterThanOrEqual(2);
         expect(sinks.map((sink) => sink.file)).toContain('src/lib/components/ui/feedback/ToastContainer.svelte');
     });
 

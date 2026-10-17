@@ -1,0 +1,257 @@
+{
+  "backup": {
+    "tab": "Backup",
+    "intro": "The data of this LibreFolio in one archive, to keep somewhere safe or to move to another installation.",
+    "download": {
+      "title": "Back up the instance",
+      "description": "One archive with the database, the uploaded files, the broker reports and the risk scenarios. The logs are never included; the instance key only in a secure backup.",
+      "privacy": "The archive holds every user's data and is not encrypted: store it somewhere private.",
+      "mode": {
+        "legend": "Kind of backup",
+        "clear": "Clear",
+        "clearDescription": "A plain .zip: whoever has the file sees all the data, and on another instance the keys of the data providers must be entered again.",
+        "secure": "Secure",
+        "secureDescription": "An .lfbk encrypted with a password you choose: only that password opens it, and a lost password cannot be recovered. It also carries the keys of the data providers."
+      },
+      "password": {
+        "label": "Password of the backup",
+        "confirmLabel": "The same password again",
+        "mismatch": "The two passwords differ."
+      },
+      "create": "Create backup",
+      "createAgain": "Create a new backup",
+      "creating": "Creating the backup…",
+      "checking": "Checking the backup…",
+      "phase": {
+        "preparing": "Preparing",
+        "database": "Copying the database",
+        "files": "Adding the files",
+        "finalizing": "Finishing",
+        "encrypting": "Encrypting with your password"
+      },
+      "progress": "{done} of {total}",
+      "ready": "Backup ready",
+      "readyDetails": "{name}, {size}, created on {date}",
+      "readyEncrypted": "Encrypted with your password: keep it safe, LibreFolio cannot recover it.",
+      "download": "Download",
+      "delete": "Delete from the server",
+      "deleting": "Deleting the backup…",
+      "retention": "The archive stays on the server for one hour, then it is deleted.",
+      "recheck": "Check again",
+      "retry": "Try again",
+      "warningsTitle": "The backup is complete, with warnings",
+      "warnings": {
+        "database_integrity": "The database failed its integrity check: it was archived as it is.",
+        "foreign_key_violations": "The database has broken references between tables: it was archived as it is.",
+        "files_skipped": "Some files were left out: links, special files, files or folders that could not be read, or files removed during the backup.",
+        "instance_key_unusable": "The instance key cannot be used: the backup was made without it, so the keys of the data providers must be entered again after a restore."
+      },
+      "errors": {
+        "backup_busy": "Another backup is running: try again when it ends.",
+        "backup_no_space": "Not enough free space on the server for the backup.",
+        "backup_folder_unusable": "The backups folder on the server is a link or a file: LibreFolio builds backups only in a plain folder of its data directory.",
+        "backup_failed": "The backup failed: the server log has the details.",
+        "backup_interrupted": "The backup was interrupted, for example by a restart: create a new one.",
+        "backup_job_not_found": "This backup is no longer on the server: create a new one.",
+        "network": "The server could not be reached.",
+        "unexpected": "The server answered with an error: reload the page and try again.",
+        "password_too_weak": "The password does not meet the rules of a backup's password."
+      },
+      "toast": {
+        "warnings": "Backup ready, with warnings: check them before you rely on it."
+      }
+    },
+    "restore": {
+      "title": "Restore an archive",
+      "description": "Replace the data of this LibreFolio with an archive made by «Back up the instance», here or on another installation. The archive is checked on a copy first: nothing changes until you confirm, and LibreFolio then restarts to apply it.",
+      "replaceNotice": "A restore replaces the data of every user with the archive's. If you may want the current data back, make a backup of the instance first.",
+      "loading": "Reading the state of the restore…",
+      "last": {
+        "rolledBack": "The last restore was rolled back on {date}, and the data is as it was before: {reason}."
+      },
+      "uploading": "Sending the archive…",
+      "progress": "{done} of {total}",
+      "cancelUpload": "Stop sending",
+      "phase": {
+        "decrypting": "Decrypting the backup",
+        "checking": "Checking the archive",
+        "unpacking": "Unpacking it on a copy",
+        "upgrading": "Updating the copy's database",
+        "verifying": "Verifying the copy"
+      },
+      "dropWhenDone": "The check is dropped as soon as it ends.",
+      "cancelCheck": "Stop the check",
+      "openReport": "Read the report",
+      "confirming": "Confirming the restore…",
+      "cancelling": "Cancelling…",
+      "pending": {
+        "title": "A restore waits for the next start of LibreFolio",
+        "details": "Backup made by LibreFolio {version} on {backupDate}; confirmed by {who} on {date}.",
+        "restartHint": "Restarting stops LibreFolio for everyone; its next start applies the restore and ends every session.",
+        "restart": "Restart now and restore",
+        "cancel": "Cancel the restore"
+      },
+      "inProgress": "A start of LibreFolio is applying the restore.",
+      "choose": "Choose an archive…",
+      "retry": "Try again",
+      "limit": "Archives up to {limit} MB.",
+      "reason": {
+        "first_start_failed": "the first start after it did not complete",
+        "swap_interrupted": "the start that applied it was interrupted",
+        "swap_failed": "its folders could not be moved into place",
+        "stage_missing": "its checked copy was gone",
+        "unknown": "the reason is in the server's log"
+      },
+      "waiting": {
+        "backup_running": "At the last start a backup was running: the next start applies it.",
+        "other_data_directory": "It was confirmed for another data directory: this LibreFolio does not apply it. Cancel it, then restore the archive again.",
+        "server_running": "At the last start another LibreFolio process was serving the data: restart the whole server to apply it.",
+        "unknown": "A start did not apply it.",
+        "instance_blocked": "The hosting provider blocked this instance: the restore waits until it is unblocked."
+      },
+      "blocker": {
+        "no_administrator": "The backup has no active administrator: after a restore nobody could manage LibreFolio. It cannot be restored."
+      },
+      "report": {
+        "title": "What this restore would do",
+        "madeBy": "Archive made by LibreFolio {version} on {date}.",
+        "close": "Close",
+        "same": "Its database is at this LibreFolio's version: it is restored as it is.",
+        "upgrade": "Its database was brought to this LibreFolio's version on the copy, with {count, plural, one {# migration} other {# migrations}}:",
+        "fixes": "Fixes applied to the copy: {fixes}.",
+        "contents": "{files, plural, one {# file} other {# files}} ({filesSize}); database {databaseSize}.",
+        "tablesChanged": "Tables whose rows the update changed:",
+        "keyIncluded": "The backup carries the key of the instance it comes from: this LibreFolio keeps its own.",
+        "keyNotIncluded": "The instance key is not included: this LibreFolio keeps its own.",
+        "secretsRekeyed": "{count, plural, one {# saved key of a data provider is re-encrypted with this instance's key.} other {# saved keys of data providers are re-encrypted with this instance's key.}}",
+        "secretsUnreadable": "{count, plural, one {# saved key of a data provider cannot be read with this instance's key: enter it again after the restore.} other {# saved keys of data providers cannot be read with this instance's key: enter them again after the restore.}}",
+        "totals": {
+          "same": "Ledger totals: the same as when the backup was made.",
+          "changed": "Ledger totals differ from the backup's on {count, plural, one {# line} other {# lines}}:",
+          "absent": "Ledger totals: not recorded in this archive.",
+          "other_version": "Ledger totals: recorded by another version of the method, not compared.",
+          "unreadable": "Ledger totals: could not be read on the copy.",
+          "cashLine": "Broker {broker}, {currency} cash: {before} → {after}",
+          "quantityLine": "Broker {broker}, asset {asset}, quantity: {before} → {after}",
+          "more": "{count, plural, one {… and # more line} other {… and # more lines}}"
+        },
+        "admins": "Administrators of the backup: {names}.",
+        "signInAgain": "After the restore you sign in with one of them, with the password of then; every session open now ends.",
+        "linksExpired": "Invitations and links sent before the restore will have expired: send them again if needed.",
+        "warningsTitle": "The restore can go on, but:",
+        "warning": {
+          "rows_changed": "The update changed the rows of some tables (listed above).",
+          "foreign_key_violations": "The backup's database has broken references: they are kept as they are.",
+          "foreign_key_violations_added": "The update added broken references to the copy.",
+          "control_totals_changed": "The ledger's totals differ from those the backup recorded (listed above).",
+          "control_totals_unreadable": "The ledger's totals could not be read on the copy.",
+          "unknown": "Something in the archive deserves a look: the server's log has the details.",
+          "non_iso_currencies": "Some currency codes in the backup are not ISO codes (names or numbers an earlier version saved): an edit of those rows is refused until the code is corrected."
+        },
+        "expires": "The checked copy is kept until {date}.",
+        "drop": "Drop this archive"
+      },
+      "confirm": {
+        "word": "restore",
+        "instruction": "To restore this archive, type this word. LibreFolio then restarts, and its start applies the restore:",
+        "label": "Confirmation word",
+        "button": "Restore and restart",
+        "words": "garden window orange planet silver pencil bridge candle forest harbor island kitchen ladder market meadow mirror morning pepper pocket rabbit school shadow spring summer ticket tomato travel valley village winter yellow basket button castle dinner flower guitar jacket letter marble monkey parrot puzzle rocket sunset thunder tunnel violin wallet notebook umbrella mountain chocolate butterfly strawberry blanket pillow lantern compass"
+      },
+      "restart": {
+        "waitingTitle": "LibreFolio is restarting",
+        "waiting": "Its start applies the restore. This page waits for it to come back.",
+        "slow": "LibreFolio has not come back yet. If nothing starts it again by itself, start it yourself: the restore is applied at that start.",
+        "notStopped": "LibreFolio has not stopped. If it does not restart by itself, restart it yourself: the restore is applied at that start.",
+        "rolledBack": "The data is as it was before: {reason}.",
+        "stillPending": "LibreFolio restarted, but the restore was not applied. {waiting}",
+        "back": "Back to Backup",
+        "failedTitle": "The restore did not go through"
+      },
+      "errors": {
+        "backup_upload_empty": "The file is empty.",
+        "backup_upload_incomplete": "The archive did not arrive whole: send it again.",
+        "backup_too_large": "The archive is larger than this LibreFolio accepts ({limit} MB).",
+        "backup_no_space": "Not enough free space on the server for this archive.",
+        "backup_upload_unavailable": "LibreFolio cannot read its upload limit right now: try again later.",
+        "backup_restore_unavailable": "LibreFolio cannot read its restore limit right now: try again later.",
+        "backup_upload_failed": "The archive could not be saved on the server: the server's log has the cause.",
+        "backup_upload_not_found": "The uploaded archive is gone: send it again.",
+        "restore_folder_unusable": "The restore folder of the data directory is not a plain folder: whoever runs the server must fix it.",
+        "restore_busy": "Another archive is being checked: try again when it ends.",
+        "restore_stage_running": "The check is still running.",
+        "restore_stage_not_found": "This check is gone: check the archive again.",
+        "not_a_backup": "This file is not a LibreFolio backup.",
+        "archive_unreadable": "The archive cannot be read.",
+        "archive_damaged": "The archive is damaged.",
+        "manifest_newer_format": "The archive was made by a newer LibreFolio: update this one first.",
+        "manifest_invalid": "The archive's description is not valid.",
+        "manifest_unreadable": "The archive's description cannot be read.",
+        "manifest_too_large": "The archive's description is too large.",
+        "too_many_entries": "The archive holds too many files.",
+        "unpacked_too_large": "Unpacked, the archive is larger than this LibreFolio accepts for a restore.",
+        "duplicate_entry": "The archive holds the same file twice.",
+        "unexpected_entry": "The archive holds a file its description does not list.",
+        "not_a_file": "The archive holds something that is not a plain file.",
+        "encrypted_entry": "The archive holds an encrypted file.",
+        "unsupported_entry": "The archive uses a compression LibreFolio does not write.",
+        "checksum_mismatch": "A file of the archive differs from its description: the archive is damaged or was changed.",
+        "missing_entry": "Files of the archive are missing.",
+        "no_space": "Not enough free space on the server to check the archive.",
+        "stage_failed": "The copy could not be written: the server's log has the cause.",
+        "database_damaged": "The backup's database is damaged: it cannot be restored.",
+        "database_foreign_objects": "The backup's database holds triggers, views or other objects LibreFolio never creates: it was not made by LibreFolio, or it was changed, and it cannot be restored.",
+        "manifest_mismatch": "The backup's database is not the one its description lists.",
+        "head_unknown": "This LibreFolio cannot read its own migrations: the server's log has the cause.",
+        "revision_missing": "The backup's database has no version.",
+        "revision_unknown": "The archive comes from a newer LibreFolio, or not from this one: update LibreFolio first, then restore it.",
+        "upgrade_failed": "The update of the copy failed: the server's log has the cause.",
+        "post_migration_failed": "A fix of the copy failed: the server's log has the cause.",
+        "restore_interrupted": "The check was interrupted: check the archive again.",
+        "restore_stage_expired": "The check is too old: check the archive again.",
+        "restore_stage_outdated": "LibreFolio was updated since the check: check the archive again.",
+        "restore_not_restorable": "This archive cannot be restored.",
+        "restore_already_pending": "Another restore already waits for the next start.",
+        "restore_not_pending": "No restore waits for the next start.",
+        "restore_pending": "A restore waits to apply this copy: cancel it first.",
+        "restore_confirm_failed": "The restore could not be confirmed: the server's log has the cause. Nothing changed.",
+        "restore_cancel_failed": "The restore could not be cancelled: the server's log has the cause. It still waits for the next start.",
+        "restore_restart_failed": "LibreFolio could not be restarted: the server's log has the cause. The restore still waits for the next start.",
+        "restore_state_unreadable": "The state of the restore cannot be read: the server's log has the cause. A restore may still wait for the next start.",
+        "network": "The server does not answer: check the connection and try again.",
+        "unexpected": "The server answered with an error: the server's log has the cause.",
+        "wrong_password": "Wrong password, or the file was changed: type the password again.",
+        "password_required": "This is a secure backup: type its password.",
+        "envelope_damaged": "The secure backup is damaged or was changed: it cannot be opened.",
+        "envelope_unsupported": "The secure backup comes from a newer LibreFolio: update LibreFolio first."
+      },
+      "password": {
+        "intro": "A secure backup: type the password it was made with.",
+        "label": "Password of the backup",
+        "submit": "Check the backup",
+        "cancel": "Cancel"
+      }
+    },
+    "checks": {
+      "panelToken": {
+        "ok": "The hosting panel's backup token is set and can be used.",
+        "off": "No backup token is set for a hosting panel: the panel's backup routes are off.",
+        "notVisibleAscii": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN holds characters a request header cannot carry as written (spaces, tabs or characters outside visible ASCII): the panel's backup routes answer 503 until it is fixed.",
+        "tooShort": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN is too short: use at least {minimum} random characters. The panel's backup routes answer 503 until it is fixed.",
+        "unreadable": "The hosting panel's backup token cannot be read: {reason}"
+      },
+      "uploadLimit": {
+        "limited": "A restore accepts archives of up to {limit_mb} MB.",
+        "unlimited": "A restore accepts archives of any size.",
+        "invalid": "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB cannot be used (a whole number of megabytes, 0 for no limit): restore uploads are refused until it is fixed.",
+        "profileTable": "LibreFolio's own profile defaults give the upload limit no value, or one of the wrong type, so restore uploads are refused: set LIBREFOLIO_BACKUP_MAX_UPLOAD_MB to a whole number of megabytes and report the error."
+      },
+      "restoreLimit": {
+        "limited": "A restore check accepts archives that unpack to up to {limit_mb} MB.",
+        "unlimited": "A restore check accepts archives that unpack to any size.",
+        "invalid": "{variable} cannot be used (a whole number of megabytes, 0 for no limit): restore checks are refused until it is fixed.",
+        "profileTable": "LibreFolio's own profile defaults give the upload limit no value, or one of the wrong type, so restore checks are refused: set LIBREFOLIO_BACKUP_MAX_RESTORE_MB to a whole number of megabytes and report the error."
+      }
+    }
+  }
+}

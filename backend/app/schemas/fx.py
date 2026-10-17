@@ -30,9 +30,10 @@ Covers provider info, currency conversion, rate upsert/delete, and pair sources.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
+import math
 from datetime import date as date_type
 from decimal import Decimal
-from typing import List, Optional
+from typing import ClassVar, List, Literal, Optional
 
 from pydantic import (
     BaseModel,
@@ -50,8 +51,10 @@ from backend.app.schemas.common import (
     BaseListResponse,
     Currency,
     DateRangeModel,
+    PeriodChangesAsOf,
     SafeDecimal,
     StrictModel,
+    iso_currency_code,
 )
 from backend.app.schemas.signals import (
     SignalAnnotationRequest,
@@ -172,7 +175,10 @@ class FXSignalQueryResult(BaseModel):
     request_index: int = Field(..., ge=0)
     from_currency: str = Field(..., min_length=3, max_length=3)
     to_currency: str = Field(..., min_length=3, max_length=3)
-    date_range: DateRangeModel
+    date_range: DateRangeModel = Field(
+        ...,
+        description="The range the signals cover: the requested one cut at the ceiling (latest_range_end(), at most 100 years long). A conversion entirely after the ceiling echoes the requested range, with no points.",
+    )
     signals: List[SignalResult] = Field(default_factory=list)
 
 
@@ -209,17 +215,20 @@ class FXUpsertItem(BaseModel):
     @field_validator("rate", mode="before")
     @classmethod
     def coerce_rate(cls, v):
-        """Coerce rate to Decimal."""
-        if isinstance(v, str):
-            return Decimal(v)
-        if isinstance(v, (int, float)):
-            return Decimal(str(v))
+        """A finite float as its shortest decimal text (``0.1`` → ``Decimal("0.1")``, never ``0.1000000000000000055…``);
+        anything else as it came. Pydantic's own parsing then refuses what is not a finite number with a 422 that echoes
+        the text sent: ``Decimal("abc")`` here raised ``InvalidOperation`` past Pydantic (a 500), and an echoed
+        ``Decimal('Infinity')`` or ``inf`` (the JSON number ``1E+400``) is a value the JSON renderer cannot write (X-R38).
+        """
+        if isinstance(v, float):
+            return Decimal(str(v)) if math.isfinite(v) else str(v)
         return v
 
     @field_validator("base", "quote", mode="before")
     @classmethod
     def uppercase_currency(cls, v):
-        return Currency.validate_code(v)
+        """An ISO 4217 alphabetic code, upper-case: a manual rate is never stored under a name or a number (E-18)."""
+        return iso_currency_code(v)
 
 
 class FXUpsertResult(BaseModel):
@@ -243,8 +252,21 @@ class FXUpsertResult(BaseModel):
         return self.date.isoformat()
 
 
+class FXRateRejection(BaseModel):
+    """A rate a manual upsert left out, and why (X-R46): the data editor names it instead of counting it as saved."""
+
+    index: int = Field(..., description="The item's position in the request")
+    date: date_type = Field(..., description="Date of the rate left out")
+    reason: Literal["same_currency", "rate_not_storable", "invalid_rate", "internal_error"] = Field(
+        ...,
+        description="same_currency: base and quote are the same; rate_not_storable: a rate fx_rates.rate cannot keep, in either direction; invalid_rate: another refusal of the rate; internal_error: an unexpected error, logged",
+    )
+
+
 class FXBulkUpsertResponse(BaseBulkResponse[FXUpsertResult]):
     """Response model for bulk rate upsert."""
+
+    rejected: List[FXRateRejection] = Field(default_factory=list, description="The items left out, in request order, each with its reason (X-R46); `errors` keeps the same refusals as sentences")
 
 
 # ============================================================================
@@ -406,6 +428,10 @@ class FXConversionRouteItem(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
+    #: Whether the pair and the steps must be ISO 4217 alphabetic codes (E-18): true for what a request writes. The read
+    #: item, a subclass built from the stored routes, turns it off, so a route stored before E-18 still lists.
+    iso_currencies_required: ClassVar[bool] = True
+
     base: str = Field(..., min_length=3, max_length=3, description="Base currency. Stored alphabetically: posting EUR/DKK yields a DKK-EUR row.")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency. See `base` — the pair is sorted on write, not rejected.")
     priority: int = Field(..., ge=1)
@@ -421,11 +447,23 @@ class FXConversionRouteItem(BaseModel):
         validate_chain_steps(self.chain_steps, self.base, self.quote)
         return self
 
+    @model_validator(mode="after")
+    def iso_currencies(self) -> FXConversionRouteItem:
+        """A route a request writes names ISO 4217 alphabetic codes, in its pair and every step, never a name or a number
+        (E-18). The steps stay ``FXRouteStep``, lenient, because the routes listing rebuilds them from what was stored."""
+        if self.iso_currencies_required:
+            for code in (self.base, self.quote, *(code for step in self.chain_steps for code in (step.from_currency, step.to_currency))):
+                iso_currency_code(code)
+        return self
+
 
 class FXConversionRouteReadItem(FXConversionRouteItem):
     """Configured route with derived, response-only routing metadata."""
 
     model_config = ConfigDict(extra="forbid")
+
+    #: Built from the stored routes (``GET /fx/providers/routes``): no ISO 4217 re-check, a route stored before E-18 lists.
+    iso_currencies_required: ClassVar[bool] = False
 
     is_chain: bool = Field(..., description="Whether the configured route contains more than one step", json_schema_extra={"readOnly": True})
     providers_used: list[str] = Field(
@@ -498,3 +536,66 @@ class FXDeleteRoutesResponse(BaseBulkDeleteResponse[FXDeleteRouteResult]):
 # GET /fx/providers which now includes target_currencies per provider.
 # FXPairItem/FXPairsListResponse were removed too — the GET /currencies/pairs
 # endpoint they were pre-written for never shipped (audit 08/G2).
+
+
+# ============================================================================
+# FX FIXED-PERIOD CHANGES (MF-P2, D-MF6 b)
+# ============================================================================
+
+
+class FXPeriodChangesRequest(StrictModel):
+    """One pair of a fixed-period changes request: the FX table's Δ columns (1D … 5Y), up to ``as_of``."""
+
+    base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217): the rate is quote per 1 base")
+    quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
+    as_of: PeriodChangesAsOf = Field(..., description="Anchor day: the end of the range the table shows (1900-01-01 or later)")
+    range_start: Optional[PeriodChangesAsOf] = Field(None, description="First day of the range the page shows: asks its whole-range change (X-R59); on or before as_of")
+
+    @field_validator("base", "quote", mode="before")
+    @classmethod
+    def validate_codes(cls, v):
+        return Currency.validate_code(v)
+
+    @model_validator(mode="after")
+    def validate_distinct(self) -> FXPeriodChangesRequest:
+        if self.base == self.quote:
+            raise ValueError("base and quote must differ")
+        if self.range_start is not None and self.range_start > self.as_of:
+            raise ValueError(f"range_start ({self.range_start}) must be on or before as_of ({self.as_of})")
+        return self
+
+
+class FXPeriodChange(StrictModel):
+    """The change of a rate over one fixed period, as fractions (0.05 = +5 %), in both orientations of the pair."""
+
+    key: str = Field(..., description="Period key: 1D, 1W, 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y")
+    days: int = Field(..., ge=1, description="Calendar days of the period")
+    change_ratio: Optional[SafeDecimal] = Field(None, description="(Rate on as_of ÷ rate on as_of − days) − 1 (quote per base); null without a rate on either day")
+    inverse_change_ratio: Optional[SafeDecimal] = Field(None, description="The same change with the pair inverted (base per quote): (rate on as_of − days ÷ rate on as_of) − 1")
+
+
+class FXRangeChange(StrictModel):
+    """The change of a rate over the whole range the page shows (X-R59), in both orientations: the first and last point
+    of its series."""
+
+    reference_date: Optional[date_type] = Field(None, description="The day of the reference rate: range_start, or the first rate inside the range when none is on or before it; null without any")
+    change_abs: Optional[SafeDecimal] = Field(None, description="Rate on as_of − reference rate (quote per base); null without a usable rate")
+    change_ratio: Optional[SafeDecimal] = Field(None, description="(Rate on as_of ÷ reference rate) − 1; null without a usable rate")
+    inverse_change_abs: Optional[SafeDecimal] = Field(None, description="The same change with the pair inverted (base per quote): 1 ÷ rate on as_of − 1 ÷ reference rate")
+    inverse_change_ratio: Optional[SafeDecimal] = Field(None, description="The same change with the pair inverted: (reference rate ÷ rate on as_of) − 1")
+
+
+class FXPeriodChangesResult(StrictModel):
+    """The fixed-period changes of one pair. The rate on a day is the conversion of 1 base on that day, with the
+    conversion's unlimited backward fill — the rates the FX page shows."""
+
+    base: str = Field(..., description="Base currency")
+    quote: str = Field(..., description="Quote currency")
+    as_of: date_type = Field(..., description="Anchor day")
+    periods: List[FXPeriodChange] = Field(default_factory=list, description="One entry per fixed period, in display order")
+    range_change: Optional[FXRangeChange] = Field(None, description="The whole-range change, when range_start was asked")
+    errors: List[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. no rate on a day)")
+
+
+class FXPeriodChangesResponse(BaseListResponse[FXPeriodChangesResult]):
+    """Bulk response of fixed-period changes: one item per requested pair, in request order."""

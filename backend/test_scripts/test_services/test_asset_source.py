@@ -53,7 +53,8 @@ from backend.app.db.models import (
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas import FAGeographicArea, FASectorArea, SignalVolumeKind
-from backend.app.schemas.assets import FAAssetCreateItem, FAAssetPatchItem, FAClassificationParams
+from backend.app.schemas.assets.assets import FAAssetCreateItem, FAAssetPatchItem
+from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
 from backend.app.schemas.provider import (
@@ -64,23 +65,18 @@ from backend.app.schemas.provider import (
     ProbeOperation,
 )
 from backend.app.schemas.refresh import FARefreshItem, FXSyncPairRequest, SyncStatus
-from backend.app.services.asset_source import (
-    AssetCRUDService,
-    AssetSearchService,
-    AssetSourceManager,
-    AssetSourceProvider,
-)
 from backend.app.services.asset_source_providers.borsa_italiana import plugin as borsa_provider_module
-from backend.app.services.asset_source_providers.scheduled_investment.plugin import (
-    calculate_day_count_fraction,
-)
 from backend.app.services.asset_source_providers.yahoo_finance import plugin as yahoo_provider_module
-from backend.app.services.asset_sources import core as asset_source_core
-from backend.app.services.asset_sources import price_query as price_query_module
-from backend.app.services.asset_sources import price_store as price_store_module
-from backend.app.services.asset_sources import refresh as refresh_module
-from backend.app.services.asset_sources import search as search_module
-from backend.app.services.asset_sources.provider_management import AssetProviderRegistry
+from backend.app.services.assets import core as asset_source_core
+from backend.app.services.assets import price_query as price_query_module
+from backend.app.services.assets import price_store as price_store_module
+from backend.app.services.assets import search as search_module
+from backend.app.services.assets.base import AssetSourceProvider
+from backend.app.services.assets.crud import AssetCRUDService
+from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.assets.search import AssetSearchService
+from backend.app.services.financial_math.interest import calculate_day_count_fraction
 from backend.app.services.fx_providers.mockfx.plugin import MOCKFX_FIXED_RATE, MockFXProvider
 from backend.test_scripts.test_utils import (
     print_info,
@@ -146,10 +142,10 @@ def test_price_column_precision():
     columns = ["open", "high", "low", "close", "adjusted_close"]
     for col in columns:
         precision, scale = get_model_column_precision(PriceHistory, col)
-        # Detailed logging per case
-        print_info(f"Case: column={col} | expected=(18,6) | actual=({precision},{scale})")
-        assert precision == 18, f"{col}: Expected precision 18, got {precision}"
-        assert scale == 6, f"{col}: Expected scale 6, got {scale}"
+        # Detailed logging per case (C-97a: the price columns are RealDecimal(24, 12))
+        print_info(f"Case: column={col} | expected=(24,12) | actual=({precision},{scale})")
+        assert precision == 24, f"{col}: Expected precision 24, got {precision}"
+        assert scale == 12, f"{col}: Expected scale 12, got {scale}"
         print_success(f"✓ {col}: precision OK ({precision},{scale})")
 
 
@@ -157,11 +153,12 @@ def test_truncate_price():
     """Test truncate_price_to_db_precision() helper."""
     print_section("Test 2: Price Truncation")
 
+    # C-97a: a price keeps 12 decimals, then at most 15 significant digits, both ROUND_DOWN
     test_cases = [
-        ("175.1234567890", "175.123456"),  # Truncate extra decimals
+        ("175.1234567890123", "175.123456789012"),  # Truncate extra decimals
         ("175.123456", "175.123456"),  # Already at precision
-        ("175.12", "175.120000"),  # Pad to 6 decimals
-        ("1000.9999999", "1000.999999"),  # Large number
+        ("175.12", "175.12"),  # Fewer decimals: same value
+        ("1000.99999999999999", "1000.99999999999"),  # Large number: 15 significant digits
     ]
 
     for input_str, expected_str in test_cases:
@@ -1918,7 +1915,9 @@ async def test_bulk_refresh_prices_current_only_marks_partial(monkeypatch):
         def validate_params(self, params):
             return None
 
-    original_get_provider_instance = refresh_module.AssetProviderRegistry.get_provider_instance
+    # Patched on the registry class itself: refresh reaches it through core.configured_provider, which looks the
+    # provider up on this same class (refresh no longer imports the registry, so it is no attribute of that module).
+    original_get_provider_instance = AssetProviderRegistry.get_provider_instance
 
     def _patched_get_provider_instance(cls, code: str, **kwargs):
         if code == "partialprov":
@@ -1926,7 +1925,7 @@ async def test_bulk_refresh_prices_current_only_marks_partial(monkeypatch):
         return original_get_provider_instance.__func__(cls, code, **kwargs)
 
     monkeypatch.setattr(
-        refresh_module.AssetProviderRegistry,
+        AssetProviderRegistry,
         "get_provider_instance",
         classmethod(_patched_get_provider_instance),
     )

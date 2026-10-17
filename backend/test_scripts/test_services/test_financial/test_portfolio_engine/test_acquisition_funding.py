@@ -29,10 +29,11 @@ Also covered:
   ``dirty_days``, which is seeded from every transaction date, so it can never
   contain a BUY. A candle legitimately stays flat across a quiet day (it describes a
   standing position); an acquisition is an event, and no event happened.
-- The PRE-FRAME loop's separate, deliberately untouched BUY branch: pre-frame days
-  emit no ``DailyPortfolioState`` at all, so they can carry no funding split — but
-  they must still draw down K/R correctly, because that drawn-down pool state is
-  exactly what seeds the frame's first day.
+- BUYs before ``date_from``: those days emit no ``DailyPortfolioState`` at all, so
+  they carry no funding split — but they must still draw down K/R exactly as an
+  emitted day would (J1: one replay, the same BUY rule every day; before J1 a
+  separate pre-frame branch), because that drawn-down pool state is exactly what
+  seeds the first emitted day.
 - Non-BUY position activity (SELL, in-kind ADJUSTMENT-in) and an unpriceable BUY
   (missing FX route) never fabricate a contribution.
 - ``DerivedViewsBuilder.build_acquisition_funding()``: shape, the sum invariant, and
@@ -84,6 +85,7 @@ from backend.app.services.portfolio_service import PortfolioService
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
+from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
 # =============================================================================
 # HELPERS — mirror the established conventions in this test directory
@@ -483,18 +485,18 @@ class TestStationaryDayAsymmetryVsPnlCandle:
             assert states[quiet].external_cash_flow == _d("0")
 
 
-class TestPreFrameBuysSeedThePoolsWithoutEmittingADay:
-    """The PRE-FRAME loop has its own, deliberately untouched BUY branch. Pre-frame days
-    emit no DailyPortfolioState, so they can carry no split — but the K/R drawdown they
-    perform is exactly what the frame's first BUY then draws against."""
+class TestBuysBeforeDateFromSeedThePoolsWithoutEmittingADay:
+    """A BUY before date_from is replayed, not emitted, so it carries no split — but the
+    K/R drawdown it performs is exactly what the first emitted BUY then draws against.
+    J1: the same BUY rule as any day (before J1, the pre-frame's own copy of it)."""
 
-    def _split_frame_result(self, *, frame_start: date) -> tuple[PortfolioCalculationResult, list[ClassifiedTransaction]]:
+    def _split_result(self, *, date_from: date) -> tuple[PortfolioCalculationResult, list[ClassifiedTransaction]]:
         txs = [
             _ctxn(_tx(id=1, type="DEPOSIT", dt="2025-01-01", amount="1000")),
             _ctxn(_tx(id=2, type="DIVIDEND", dt="2025-01-02", amount="300")),
-            # PRE-FRAME BUY when frame_start=2025-01-05: draws 250 from R (R 300 -> 50).
+            # BUY BEFORE date_from when date_from=2025-01-05: draws 250 from R (R 300 -> 50).
             _ctxn(_tx(id=3, type="BUY", dt="2025-01-03", amount="-250", quantity="2.5", asset_id=100)),
-            # FRAME BUY: R is now 50, so 50 reinvested + 150 fresh.
+            # EMITTED BUY: R is now 50, so 50 reinvested + 150 fresh.
             _ctxn(_tx(id=4, type="BUY", dt="2025-01-05", amount="-200", quantity="2", asset_id=100)),
         ]
         result = _builder(
@@ -502,45 +504,43 @@ class TestPreFrameBuysSeedThePoolsWithoutEmittingADay:
             external_cash_flows=_GOLDEN_ECF,
             price_map=_GOLDEN_PRICE_MAP,
             asset_currencies={100: "EUR"},
-            date_from=date(2025, 1, 1),
-            frame_start=frame_start,
+            date_from=date_from,
             date_to=date(2025, 1, 5),
             compute_acquisition_funding=True,
         ).build()
         return result, txs
 
-    def test_preframe_buy_day_is_not_emitted_at_all(self):
-        result, _ = self._split_frame_result(frame_start=date(2025, 1, 5))
+    def test_a_buy_day_before_date_from_is_not_emitted_at_all(self):
+        result, _ = self._split_result(date_from=date(2025, 1, 5))
 
-        assert [s.date for s in result.daily_states] == [date(2025, 1, 5)], "only the frame day is emitted"
+        assert [s.date for s in result.daily_states] == [date(2025, 1, 5)], "only date_from is emitted"
 
-    def test_preframe_buy_drawdown_is_visible_in_the_frames_own_split(self):
-        """The pre-frame BUY consumed 250 of the 300 returns pool. If the pre-frame
-        branch had NOT drawn the pools down, the frame BUY would have found R=300 and
-        reported (0 fresh / 200 reinvested) instead of (150 / 50)."""
-        result, txs = self._split_frame_result(frame_start=date(2025, 1, 5))
+    def test_a_buy_drawdown_before_date_from_is_visible_in_the_first_split(self):
+        """The BUY before date_from consumed 250 of the 300 returns pool. Had it NOT
+        drawn the pools down, the emitted BUY would have found R=300 and reported
+        (0 fresh / 200 reinvested) instead of (150 / 50)."""
+        result, txs = self._split_result(date_from=date(2025, 1, 5))
         funding = _funding_by_date(result)[date(2025, 1, 5)]
 
         assert funding is not None
-        assert funding.from_reinvested == _d("50"), "only the 50 the pre-frame BUY left behind"
+        assert funding.from_reinvested == _d("50"), "only the 50 the earlier BUY left behind"
         assert funding.from_new_capital == _d("150")
         _assert_split_reproduces_total_buy(result, txs)
 
-    def test_same_transactions_without_a_preframe_produce_the_same_pool_arithmetic(self):
-        """Cross-check that the pre-frame branch and the frame branch agree: run the
-        identical transactions with frame_start at t=0, so the 2025-01-03 BUY goes through
-        the FRAME branch instead. The 2025-01-05 split must be unchanged — the two code
-        paths are two implementations of one pool policy, and this pins them together."""
-        preframe_result, _ = self._split_frame_result(frame_start=date(2025, 1, 5))
-        full_frame_result, txs = self._split_frame_result(frame_start=date(2025, 1, 1))
+    def test_the_run_from_the_first_movement_gives_the_same_pool_arithmetic(self):
+        """Cross-check: run the identical transactions from date_from=2025-01-01, so the
+        2025-01-03 BUY is emitted too. The 2025-01-05 split must be unchanged — one
+        replay, one pool policy, whatever day the states start from."""
+        windowed_result, _ = self._split_result(date_from=date(2025, 1, 5))
+        full_result, txs = self._split_result(date_from=date(2025, 1, 1))
 
-        preframe_day5 = _funding_by_date(preframe_result)[date(2025, 1, 5)]
-        full_day5 = _funding_by_date(full_frame_result)[date(2025, 1, 5)]
+        windowed_day5 = _funding_by_date(windowed_result)[date(2025, 1, 5)]
+        full_day5 = _funding_by_date(full_result)[date(2025, 1, 5)]
 
-        assert (full_day5.from_new_capital, full_day5.from_reinvested) == (preframe_day5.from_new_capital, preframe_day5.from_reinvested)
-        # ...and in the all-frame run the 2025-01-03 BUY now DOES emit its own split.
-        assert _funding_by_date(full_frame_result)[date(2025, 1, 3)].from_reinvested == _d("250")
-        _assert_split_reproduces_total_buy(full_frame_result, txs)
+        assert (full_day5.from_new_capital, full_day5.from_reinvested) == (windowed_day5.from_new_capital, windowed_day5.from_reinvested)
+        # ...and in the run from the first movement the 2025-01-03 BUY DOES emit its own split.
+        assert _funding_by_date(full_result)[date(2025, 1, 3)].from_reinvested == _d("250")
+        _assert_split_reproduces_total_buy(full_result, txs)
 
 
 class TestNonBuyActivityNeverFabricatesAContribution:
@@ -834,6 +834,15 @@ class TestGetAcquisitionFundingHistoryPure:
 # Mirrors test_pnl_candles.py's own DB fixtures (AsyncSession against the test database,
 # no HTTP server). Dates are parked far in the future so these rows cannot collide with
 # mock data or with another unit's window.
+
+
+@pytest.fixture(scope="module", autouse=True)
+def range_bound_lifted():
+    """R13-SEC7-1: the real-DB scenarios below live in 2035, after tomorrow, so the range bound is lifted for the whole
+    module, before any fixture builds data (see ``lift_range_bound``); the pure builder tests above never reach it."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        lift_range_bound(monkeypatch)
+        yield
 
 
 @pytest.fixture(scope="module")

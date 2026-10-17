@@ -296,7 +296,7 @@
     aria-controls={panelId}
     aria-haspopup="dialog"
     aria-label={labels.triggerLabel}
-    class="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600"
+    class="flex items-center justify-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-2.5 py-1.5 text-xs font-medium text-lf-secondary transition-colors hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-50"
     onclick={() => (open ? closeMenu() : void openMenu())}
     data-testid="ai-export-button"
 >
@@ -312,7 +312,7 @@
         role="dialog"
         aria-label={labels.panelLabel}
         tabindex="-1"
-        class="fixed z-[9000] max-h-[calc(100vh-1rem)] w-[30rem] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl outline-none dark:border-slate-600 dark:bg-slate-800"
+        class="fixed z-[9000] max-h-[calc(100vh-1rem)] w-[30rem] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-xl border border-lf-raised bg-lf-card text-lf-primary shadow-xl shadow-lf-shadow outline-none"
         style:left={`${position.left}px`}
         style:top={`${position.top}px`}
         data-testid="ai-export-menu-panel"

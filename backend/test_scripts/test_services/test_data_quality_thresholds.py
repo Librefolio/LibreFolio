@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from backend.app.services import portfolio_service
-from backend.app.services.data_quality_thresholds import (
+from backend.app.services.platform.data_quality_thresholds import (
     QUANTITY_DUST_THRESHOLD,
     REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE,
     RISK_MIN_OBSERVATIONS,
@@ -35,8 +35,8 @@ from backend.app.services.risk_plugins.risk_contribution.plugin import RiskContr
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 APP_ROOT = REPO_ROOT / "backend" / "app"
-THRESHOLDS_MODULE = APP_ROOT / "services" / "data_quality_thresholds.py"
-THRESHOLDS_IMPORT = "backend.app.services.data_quality_thresholds"
+THRESHOLDS_MODULE = APP_ROOT / "services" / "platform" / "data_quality_thresholds.py"
+THRESHOLDS_IMPORT = "backend.app.services.platform.data_quality_thresholds"
 THRESHOLD_NAMES = frozenset({"STALE_PRICE_THRESHOLD_DAYS", "TRANSACTION_IMPLIED_GRACE_DAYS", "RISK_MIN_OBSERVATIONS", "REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE", "QUANTITY_DUST_THRESHOLD"})
 
 # The analytics whose floor was a literal 20 before the thresholds were shared.
@@ -58,10 +58,12 @@ CONSUMERS = {
     # The holdings read positions through the dust threshold...
     "backend/app/services/portfolio_service.py": {"TRANSACTION_IMPLIED_GRACE_DAYS", "QUANTITY_DUST_THRESHOLD"},
     # ...and so do the asset list's held-now flags.
-    "backend/app/services/asset_sources/crud.py": {"QUANTITY_DUST_THRESHOLD"},
-    "backend/app/services/series_preparation.py": {"STALE_PRICE_THRESHOLD_DAYS"},
+    "backend/app/services/assets/crud.py": {"QUANTITY_DUST_THRESHOLD"},
+    "backend/app/services/market_series.py": {"STALE_PRICE_THRESHOLD_DAYS"},
     "backend/app/services/risk/eligibility.py": {"RISK_MIN_OBSERVATIONS", "STALE_PRICE_THRESHOLD_DAYS"},
     "backend/app/services/risk/service.py": {"RISK_MIN_OBSERVATIONS", "STALE_PRICE_THRESHOLD_DAYS"},
+    # A risk result's data quality states the threshold in its stale warnings and the banner's FX issue.
+    "backend/app/services/risk/data_quality.py": {"STALE_PRICE_THRESHOLD_DAYS"},
     # The two stale replay exclusions state the threshold in their sentence; the replay warns past
     # the excluded share.
     "backend/app/services/risk_plugins/stress/plugin.py": {"STALE_PRICE_THRESHOLD_DAYS", "REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE"},

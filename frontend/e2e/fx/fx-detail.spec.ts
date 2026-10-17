@@ -9,13 +9,14 @@
  *   EUR-USD pair must exist.
  */
 
+import type {Route} from '@playwright/test';
 import {expect, test as base} from '../fixtures/playwright';
 import type {Locator, Page, Request, Response} from '../fixtures/playwright';
 import {schemas} from '../../src/lib/api/generated';
-import {waitForSettled} from '../fixtures/app-events';
+import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
-import {localIso, todayIso} from '../fixtures/dates';
+import {daysAgoIso, localIso, todayIso} from '../fixtures/dates';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxDetailPage} from './fx-helpers';
 
@@ -1456,9 +1457,14 @@ test.describe('FX Detail Page', () => {
         expect(fixture.stats.mainPriceRequests.length).toBe(initialMainPriceRequests + 1);
         expect(fixture.stats.comparisonRequests.length).toBe(initialComparisonRequests + 1);
 
+        // Y11: Refresh is disabled while the page's big requests are in flight, and a
+        // disabled button takes no focus: wait until it can be pressed. A sync's own
+        // reload is not one of them (P3), so the A1 sync still held does not keep it.
+        const assetRefreshButton = page.getByTestId('asset-detail-refresh-btn');
+        await expect(assetRefreshButton).toBeEnabled({timeout: 10_000});
         fixture.conversionFailures.add(gbpPeer.slug);
         const restoreComparisonResponsePromise = page.waitForResponse(isComparisonResponse, {timeout: 10_000});
-        await activateByKeyboard(page.getByTestId('asset-detail-refresh-btn'));
+        await activateByKeyboard(assetRefreshButton);
         const restoreComparisonResponse = await restoreComparisonResponsePromise;
         expect(restoreComparisonResponse.status()).toBe(200);
         expect(await restoreComparisonResponse.finished()).toBeNull();
@@ -2340,5 +2346,522 @@ test.describe('FX Detail Page', () => {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-back-btn').click();
         await expect(page).toHaveURL(/\/fx$/, {timeout: 10_000});
+    });
+});
+
+// ============================================================================
+// The summary's Δ over the range is the backend's (workstream Y, lot X-R59 A)
+// ============================================================================
+
+/** The FX period changes, whatever their query string. */
+const FX_PERIOD_CHANGES = /\/api\/v1\/fx\/currencies\/period-changes(\?.*)?$/;
+
+/** The pair the summary is read on: the seeded EUR/USD, canonical (alphabetical) as the backend and the stores key it. */
+const RANGE_PAIR = {base: 'EUR', quote: 'USD'} as const;
+
+/** One pair of a period-changes request (`FXPeriodChangesRequest`). */
+type FxRangeChangesQuery = {base: string; quote: string; as_of: string; range_start?: string | null};
+
+/** A pair's Δ over the range as a stub answers it (`FXRangeChange`): decimal strings, null where the backend has none. */
+type FxRangeChange = {change_abs: string | null; change_ratio: string | null; inverse_change_abs: string | null; inverse_change_ratio: string | null};
+
+/**
+ * +42.42 % as configured, −21.21 % inverted, which is neither the inversion of the first (−29.79 %) nor its negation,
+ * so the inverted page shows it only by reading `inverse_change_ratio`. No seeded rate moves 42 % in two months: a
+ * figure on screen comes from the answer.
+ */
+const STUBBED_RANGE_CHANGE: FxRangeChange = {change_abs: '0.1234', change_ratio: '0.4242', inverse_change_abs: '-0.0567', inverse_change_ratio: '-0.2121'};
+
+/** What the range of the range-change test answers once changed: −13.13 % as configured, a figure of its own. */
+const CHANGED_RANGE_CHANGE: FxRangeChange = {change_abs: '-0.0321', change_ratio: '-0.1313', inverse_change_abs: '0.0222', inverse_change_ratio: '0.1515'};
+
+/** A Δ over the range the backend could not compute: every field null, both ways. */
+const NO_RANGE_CHANGE: FxRangeChange = {change_abs: null, change_ratio: null, inverse_change_abs: null, inverse_change_ratio: null};
+
+/** The first day the backend values (`EARLIEST_RANGE_START`): it refuses an earlier `range_start`, and the whole request with it. */
+const EARLIEST_RANGE_START = '1900-01-01';
+
+/** What `routePairRangeChanges` saw: every item asked, what went wrong, how many requests it answered. */
+type FxRangeChangesLog = {asked: FxRangeChangesQuery[]; failures: string[]; answered: number};
+
+/**
+ * The FX period changes, routed through the backend: every request is recorded, and each answer goes back with each
+ * pair's `range_change` replaced by what `stubFor` gives for the item that asked it — null: as the backend gave it. A
+ * non-OK answer is a failure, passed on as it came.
+ */
+async function routePairRangeChanges(page: Page, stubFor: (asked: FxRangeChangesQuery) => FxRangeChange | null): Promise<FxRangeChangesLog> {
+    const log: FxRangeChangesLog = {asked: [], failures: [], answered: 0};
+    await page.route(FX_PERIOD_CHANGES, async (route) => {
+        try {
+            const body = (route.request().postDataJSON() as FxRangeChangesQuery[] | null) ?? [];
+            log.asked.push(...body);
+            const response = await route.fetch();
+            if (!response.ok()) {
+                log.failures.push(`HTTP ${response.status()}: ${await response.text()}`);
+                await route.fulfill({response});
+                return;
+            }
+            const answer = (await response.json()) as {items?: Array<{base: string; quote: string; range_change?: Record<string, unknown> | null}>};
+            const items = (answer.items ?? []).map((item) => {
+                const asked = body.find((query) => query.base === item.base && query.quote === item.quote);
+                const stub = asked ? stubFor(asked) : null;
+                return stub ? {...item, range_change: {...(item.range_change ?? {}), ...stub}} : item;
+            });
+            await route.fulfill({response, json: {...answer, items}});
+        } catch (error) {
+            // Nobody awaits a route callback, so what it throws would land on whatever runs next: recorded, and the
+            // request let through, for the test to fail on its own assertions.
+            log.failures.push(String(error));
+            await route.continue().catch(() => undefined);
+        } finally {
+            log.answered += 1;
+        }
+    });
+    return log;
+}
+
+/**
+ * A percentage as any of the four languages writes it, matched whole, as `percentCell` reads a Δ cell of the lists:
+ * `+1.25%` (English), `+1,25%` (Italian), `+1,25 %` (French, Spanish: a no-break space before the sign); a minus may be
+ * `-` or `−`. The figure is read, never a translation.
+ */
+function percentText(figure: string): RegExp {
+    const parts = /^([+-])(\d+)\.(\d+)$/.exec(figure);
+    if (!parts) throw new Error(`percentText: ${figure} is not a signed decimal such as +1.25`);
+    return new RegExp(`^\\s*${parts[1] === '+' ? '\\+' : '[-\\u2212]'}${parts[2]}[.,]${parts[3]}\\s?%\\s*$`);
+}
+
+/**
+ * The pair page's summary shows the pair's Δ over the range on screen (X-R59, lot A): the change from the first to the
+ * last day of the range, which the backend computes both ways — the `range_change` of
+ * `POST /fx/currencies/period-changes`, asked for the pair canonical (alphabetical) whichever way the URL shows it, from
+ * the first day of the range (`range_start`, raised to 1900-01-01, the first day the backend values, for a range that
+ * starts before it) to its last (`as_of`): on load, on a range change and after a refresh. Shown as configured the
+ * summary reads `change_ratio`; inverted, `inverse_change_ratio`; where the backend has none it draws no Δ beside the
+ * rate. The browser computes none.
+ *
+ * The pair is the seeded EUR/USD, read and never written: the real answer is fetched and only its `range_change` is
+ * changed, with figures its rates do not give over these days. The range before 1900 has its rates answered in the
+ * browser, empty, so no conversion is walked back over a century; its period changes still reach the backend, which says
+ * whether it takes the first day asked. The refresh button publishes the page's big requests (`data-busy`, `pageBusy`),
+ * the Δ over the range among them: the barrier before reading what an answer left.
+ *
+ * Red before the cure of lot A: the page never asks the endpoint — the route never fires — and computes its Δ from the
+ * rates it charted.
+ */
+test.describe('FX pair page — the summary’s Δ over the range is the backend’s (X-R59)', () => {
+    // A ceiling, never a delay: the page loads the pair's rates, its signals and its Δ, and some tests load them again.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('the page asks the canonical pair from the first day of the range on screen; the summary shows the answer’s Δ, the inverse one once swapped', async ({page}) => {
+        // About two months ending on a known day in the past.
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const expected = {...RANGE_PAIR, as_of: range.end, range_start: range.start};
+        try {
+            const log = await routePairRangeChanges(page, () => STUBBED_RANGE_CHANGE);
+            // Opened by URL: on a full load the query is what seeds the page's period.
+            const root = await openSyntheticDetail(page, `/fx/EUR-USD?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+            await expect(root, 'premise: the page shows the seeded EUR-USD').toHaveAttribute('data-chart-pair', 'EUR-USD');
+
+            await expect.poll(() => log.answered, {message: 'the pair page never asked POST /fx/currencies/period-changes: its Δ is still computed in the browser', timeout: 10_000}).toBeGreaterThan(0);
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            expect(log.asked, 'the page asks the pair from the first day of the range on screen to the last').toContainEqual(expected);
+
+            const delta = page.getByTestId('fx-price-summary-range-delta');
+            await expect(delta, 'as configured: change_ratio 0.4242').toHaveText(percentText('+42.42'), {timeout: 10_000});
+
+            // The page's own swap: the URL shows the pair inverted, and the summary reads the inverse field.
+            await page.getByTestId('fx-detail-swap-btn').click();
+            await expect(page).toHaveURL(/\/fx\/USD-EUR(?:\?|$)/, {timeout: 10_000});
+            await expect(delta, 'inverted: inverse_change_ratio -0.2121').toHaveText(percentText('-21.21'), {timeout: 10_000});
+            await expect(page.getByTestId('fx-detail-refresh-btn'), 'what the swap asked is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            for (const item of log.asked) expect(item, 'whichever way the URL shows the pair, every request asks it canonical over the range on screen').toEqual(expected);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('opened inverted, the page still asks the canonical pair, and the summary shows the answer’s inverse Δ', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const expected = {...RANGE_PAIR, as_of: range.end, range_start: range.start};
+        try {
+            const log = await routePairRangeChanges(page, () => STUBBED_RANGE_CHANGE);
+            const root = await openSyntheticDetail(page, `/fx/USD-EUR?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+            await expect(root, 'premise: the page keys the pair canonical, EUR-USD').toHaveAttribute('data-chart-pair', 'EUR-USD');
+            await expect(page.getByTestId('fx-detail-pair-label'), 'premise: and shows it inverted, USD → EUR').toHaveText(/USD[\s\S]*EUR/);
+
+            await expect.poll(() => log.answered, {message: 'the pair page never asked POST /fx/currencies/period-changes: its Δ is still computed in the browser', timeout: 10_000}).toBeGreaterThan(0);
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            expect(log.asked, 'the page asks the pair canonical, EUR first, though the URL shows it inverted').toContainEqual(expected);
+
+            await expect(page.getByTestId('fx-price-summary-range-delta'), 'inverted: inverse_change_ratio -0.2121, not the direct +42.42 %').toHaveText(percentText('-21.21'), {timeout: 10_000});
+            await expect(page.getByTestId('fx-detail-refresh-btn'), 'the load is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            for (const item of log.asked) expect(item, 'every request asks the pair canonical over the range on screen').toEqual(expected);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('a range change asks the Δ from the new first day, and the summary shows the new answer', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        // A later first day, the same last: the range shrinks to about a month.
+        const changed = {start: daysAgoIso(40), end: range.end};
+        try {
+            // The answer depends on the first day asked: the stub for the first range, a figure of its own for the changed one.
+            const log = await routePairRangeChanges(page, (asked) => (asked.range_start === changed.start ? CHANGED_RANGE_CHANGE : STUBBED_RANGE_CHANGE));
+            await openSyntheticDetail(page, `/fx/EUR-USD?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+            const delta = page.getByTestId('fx-price-summary-range-delta');
+            await expect(delta, 'the first range: change_ratio 0.4242').toHaveText(percentText('+42.42'), {timeout: 10_000});
+            const refresh = page.getByTestId('fx-detail-refresh-btn');
+            await expect(refresh, 'the load is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            const askedBefore = log.asked.length;
+
+            // The range on screen changes through the page's own picker.
+            const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+            const startInput = picker.getByTestId('date-range-input-start');
+            const endInput = picker.getByTestId('date-range-input-end');
+            await startInput.fill(changed.start);
+            await expect(startInput).toHaveValue(changed.start);
+            await endInput.fill(changed.end);
+            await expect(endInput).toHaveValue(changed.end);
+            await endInput.press('Enter');
+            await expect(picker, 'the picker closed on the new range').toHaveAttribute('data-open', 'false');
+
+            await expect(delta, 'the changed range: its own answer, change_ratio -0.1313').toHaveText(percentText('-13.13'), {timeout: 10_000});
+            await expect(refresh, 'the reload of the changed range is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            const askedAfter = log.asked.slice(askedBefore);
+            expect(askedAfter.length, 'the range change asked the Δ over the range again').toBeGreaterThan(0);
+            for (const item of askedAfter) expect(item, 'after the change, every request asks the pair from the new first day to the last').toEqual({...RANGE_PAIR, as_of: changed.end, range_start: changed.start});
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('a refresh asks the Δ again, and an answer with every field null leaves the summary its rate and no Δ', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const expected = {...RANGE_PAIR, as_of: range.end, range_start: range.start};
+        let answer: FxRangeChange = STUBBED_RANGE_CHANGE;
+        try {
+            const log = await routePairRangeChanges(page, () => answer);
+            const root = await openSyntheticDetail(page, `/fx/EUR-USD?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+            const delta = page.getByTestId('fx-price-summary-range-delta');
+            // Presence first: the load's answer is on screen, beside the pair's rate.
+            await expect(delta, 'the load: change_ratio 0.4242').toHaveText(percentText('+42.42'), {timeout: 10_000});
+            const refresh = page.getByTestId('fx-detail-refresh-btn');
+            await expect(refresh, 'the load is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            await expect(refresh).toBeEnabled();
+
+            // The page's refresh, over the same range: this time the backend has no Δ.
+            answer = NO_RANGE_CHANGE;
+            const askedBefore = log.asked.length;
+            const answeredBefore = log.answered;
+            await refresh.click();
+            await expect.poll(() => log.answered, {message: 'the refresh never asked the Δ over the range again', timeout: 10_000}).toBeGreaterThan(answeredBefore);
+            await expect(refresh, 'the refresh is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            for (const item of log.asked.slice(askedBefore)) expect(item, 'the refresh asks the same pair over the same range').toEqual(expected);
+
+            // The summary still draws its rate — the half the Δ sits beside — and no Δ.
+            await expect(root, 'the pair still shows a rate').toHaveAttribute('data-chart-last-rate', /\d/);
+            await expect(page.getByTestId('fx-price-summary-missing')).toHaveCount(0);
+            await expect(delta, 'every field of range_change is null: no Δ in the summary').toHaveCount(0);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('a range that starts before 1900 asks the Δ from 1900-01-01, which the backend takes', async ({page}) => {
+        // A month before the first day the backend values: sent as is, the backend would refuse the whole request.
+        const range = {start: '1899-12-01', end: daysAgoIso(10)};
+        const expected = {...RANGE_PAIR, as_of: range.end, range_start: EARLIEST_RANGE_START};
+        try {
+            // The chart's rates answered in the browser, empty: no conversion is walked back over a century.
+            await page.route(`**${FX_CONVERT_PATH}`, async (route) => {
+                await route.fulfill({json: {results: [], success_count: 0, errors: []}});
+            });
+            const log = await routePairRangeChanges(page, () => null);
+            await openSyntheticDetail(page, `/fx/EUR-USD?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+
+            await expect.poll(() => log.answered, {message: 'the pair page never asked POST /fx/currencies/period-changes', timeout: 10_000}).toBeGreaterThan(0);
+            await expect(page.getByTestId('fx-detail-refresh-btn'), 'the load is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            expect(log.failures, 'the backend took every request: none asks a day before the first it values').toEqual([]);
+            expect(log.asked, `the page asks the pair from ${EARLIEST_RANGE_START} to the last day of the range`).toContainEqual(expected);
+            for (const item of log.asked) expect(item, `never from ${range.start}: the backend would refuse the whole request`).toEqual(expected);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+});
+
+// ============================================================================
+// The provider editor replaces the pair's routes in one write (workstream X, lot X-R75)
+// ============================================================================
+
+/** `GET /fx/providers`: the provider capabilities the editor's route picker builds its graph from — not `/routes`. */
+const FX_PROVIDERS_PATH = `${API}/fx/providers`;
+
+/** What the browser answers the editor's refused POST with: a fixture string, read on the banner without a translation. */
+const REFUSED_ROUTE_WRITE = 'owned-e2e-route-write-refused';
+
+/**
+ * The quote currencies of the provider editor's tests, one per test and per Playwright project, because FX routes are
+ * global rows. As for `RESERVED_QUOTE`: none is used by any seed, spec or other test (grep of the whole worktree), and
+ * each sorts after EUR, so the pair is stored as EUR-X — what `createMockFxRoute` and `resetReservedPair` address.
+ */
+const EDITOR_QUOTE: Readonly<Record<string, Readonly<Record<'failedSave' | 'removeAll', string>>>> = {
+    desktop: {failedSave: 'NIO', removeAll: 'SRD'},
+    mobile: {failedSave: 'MOP', removeAll: 'ZMW'},
+};
+
+function editorQuote(owner: 'failedSave' | 'removeAll'): string {
+    const project = test.info().project.name;
+    const quote = EDITOR_QUOTE[project]?.[owner];
+    if (!quote) throw new Error(`No currency is reserved for the ${owner} editor test on project "${project}": reserve one that sorts after EUR and that no seed, spec or test uses`);
+    return quote;
+}
+
+/** The FX routes endpoint, whatever its query string: the cured editor's POST carries `?replace=true`. */
+function isFxRoutesUrl(url: URL): boolean {
+    return url.pathname === FX_ROUTES_PATH;
+}
+
+/** A route as the backend stores it, reduced to what the editor decides: its priority and its steps. */
+type StoredRoute = {priority: number; chain_steps: Array<{from: string; to: string; provider: string}>};
+
+/** EUR-`quote` served by MOCKFX alone, as `createMockFxRoute` stores it. */
+function mockFxRoute(quote: string): StoredRoute {
+    return {priority: 1, chain_steps: [{from: 'EUR', to: quote, provider: 'MOCKFX'}]};
+}
+
+/** EUR-`quote` kept with no provider: its MANUAL route, priority 999, the item creation posts for a manual pair. */
+function manualRoute(quote: string): StoredRoute {
+    return {priority: 999, chain_steps: [{from: 'EUR', to: quote, provider: 'MANUAL'}]};
+}
+
+/** The routes stored for EUR-`quote`, by priority, read through the API: never inferred from the page. */
+async function storedRoutes(page: Page, quote: string): Promise<StoredRoute[]> {
+    const listing = schemas.FXConversionRoutesResponse.parse(await jsonFrom<unknown>(await page.request.get(FX_ROUTES_PATH), 'list the FX routes'));
+    return (listing.items ?? [])
+        .filter((item) => item.base === 'EUR' && item.quote === quote)
+        .sort((a, b) => a.priority - b.priority)
+        .map((item) => ({priority: item.priority, chain_steps: item.chain_steps.map(({from, to, provider}) => ({from, to, provider}))}));
+}
+
+/** EUR-`quote` with one MOCKFX route and no rate, registered for the teardown before it exists, and verified. */
+async function setUpOwnedMockFxPair(page: Page, ownedFxQuotes: string[], quote: string): Promise<void> {
+    await test.step(`setup: EUR-${quote} routed through MOCKFX alone, with no rate`, async () => {
+        // Registered before it exists: the teardown deletes whatever this step got to create.
+        ownedFxQuotes.push(quote);
+        await resetReservedPair(page, quote, 'precondition');
+        await createMockFxRoute(page, quote);
+        expect(await storedRoutes(page, quote), `precondition: EUR-${quote} has its MOCKFX route and no other`).toEqual([mockFxRoute(quote)]);
+    });
+}
+
+/**
+ * `GET /fx/providers` answered in the browser for EUR-`quote`: MOCKFX, the provider of the pair's stored route, native
+ * EUR→`quote`, and MOCKFX_FAIL, a second direct route to add, native `quote`→EUR. The picker's DFS walks an edge both
+ * ways, so it offers EUR→`quote` through either.
+ *
+ * Never two providers in the same direction: the picker's currency graph is graphology's default export, the plain
+ * `Graph` (mixed, not multi — whatever its local name `MultiDirectedGraph` in `currencyGraph.ts`), which refuses a
+ * second edge between the same two currencies in the same direction. `buildCurrencyGraph` then throws, and the picker
+ * shows nothing but its error: this setup's first run did exactly that, both providers declared EUR→`quote`.
+ *
+ * Both are registered test providers (`test_only`), which is why the real list never names them: without this answer
+ * the picker could neither show the stored MOCKFX route nor remove it. Answered here, it also keeps ECB's and SNB's
+ * currency discovery off the network. Registered before the page is opened: the page builds its graph once and keeps
+ * it (`currencyGraphStore`). Every other request goes on.
+ */
+async function answerProviderCatalog(page: Page, quote: string): Promise<void> {
+    const native: ReadonlyArray<readonly [code: string, base: string, target: string]> = [
+        ['MOCKFX', 'EUR', quote],
+        ['MOCKFX_FAIL', quote, 'EUR'],
+    ];
+    const catalog = native.map(([code, base, target]) => schemas.FXProviderInfo.parse({code, name: `Owned ${code} fixture`, base_currency: base, base_currencies: [base], target_currencies: [target], description: 'Browser-local deterministic fixture'}));
+    const directions = catalog.flatMap((provider) => provider.base_currencies.flatMap((base) => (provider.target_currencies ?? []).map((target) => `${base}→${target}`)));
+    if (new Set(directions).size !== directions.length) throw new Error(`answerProviderCatalog: two providers share a direction (${directions.join(', ')}); the picker's graph is not multi and would refuse the second edge`);
+    await page.route(
+        (url) => url.pathname === FX_PROVIDERS_PATH,
+        async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            await route.fulfill({json: catalog});
+        },
+    );
+}
+
+/** The editor's row of one selected route, found by its key (`EUR-X:PROVIDER`), never by its position. */
+function selectedRoute(modal: Locator, key: string): Locator {
+    return modal.locator(`[data-testid="fx-route-selected"][data-route-key="${key}"]`);
+}
+
+/** What a reported text says, without its stack frames: minified, they say where, not what. */
+function whatItSays(text: string): string {
+    const lines = text.split('\n').filter((line) => !/^\s+at /.test(line));
+    return lines.join(' ⏎ ').slice(0, 600);
+}
+
+/**
+ * What the page reports as broken from now on — its `console.error` lines, with where they come from, and its uncaught
+ * exceptions — as a note for the message of a precondition: the first run of this setup failed on «element(s) not found»
+ * while the page had logged why. Diagnostics only, never the subject of an assertion: a console message is an edge, so
+ * the watch is armed before the navigation it explains.
+ */
+function watchPageErrors(page: Page): () => string {
+    const reported: string[] = [];
+    page.on('console', (message) => {
+        if (message.type() !== 'error') return;
+        const where = message.location().url.replace(/^https?:\/\/[^/]+/, '');
+        reported.push(`console.error: ${whatItSays(message.text())}${where ? ` (${where})` : ''}`);
+    });
+    page.on('pageerror', (error) => reported.push(`uncaught: ${whatItSays(error.stack ?? `${error.name}: ${error.message}`)}`));
+    return () => (reported.length === 0 ? ' (the page reported nothing broken)' : `\nWhat the page reported as broken since it was opened:\n${reported.map((line) => `  - ${line}`).join('\n')}`);
+}
+
+/**
+ * `assertion` retried until it passes or `timeout` runs out, with its message's `note` rebuilt at every attempt from
+ * what the page has reported so far: the last attempt's message is the red's, and it lists what was logged until then.
+ */
+async function expectExplained(note: () => string, assertion: (note: string) => Promise<void>, timeout = 10_000): Promise<void> {
+    await expect(async () => assertion(note())).toPass({timeout});
+}
+
+/**
+ * EUR-`quote`'s page, and its provider editor (the FxPairAddModal in edit mode) opened on it: returned once the editor
+ * shows the pair's one stored route, MOCKFX, selected at priority 1 and alone. A precondition that fails says what the
+ * page reported as broken (`watchPageErrors`).
+ */
+async function openProviderEditor(page: Page, quote: string): Promise<Locator> {
+    const pair = `EUR-${quote}`;
+    const reported = watchPageErrors(page);
+    await goToFxDetailPage(page, pair);
+    await expect(page.getByTestId('fx-detail-page'), 'the page shows the pair this test created').toHaveAttribute('data-chart-pair', pair);
+    // Enabled once the page has loaded a provider other than MANUAL for the pair — the MOCKFX route.
+    const syncBtn = page.getByTestId('fx-detail-sync-btn');
+    await expectExplained(reported, (note) => expect(syncBtn, `precondition: the page sees the MOCKFX route${note}`).toBeEnabled({timeout: 1_000}));
+    await page.getByTestId('fx-detail-provider-btn').click();
+    const modal = page.getByTestId('fx-add-pair-modal');
+    await expect(modal).toBeVisible();
+    // Edit mode loads the pair's stored routes and maps them onto the routes the picker computed from the catalogue.
+    const stored = selectedRoute(modal, `${pair}:MOCKFX`);
+    await expectExplained(reported, (note) => expect(stored, `the editor shows the stored MOCKFX route${note}`).toBeVisible({timeout: 1_000}));
+    await expect(stored).toHaveAttribute('data-priority', '1');
+    await expect(modal.getByTestId('fx-route-selected'), 'and no other route').toHaveCount(1);
+    return modal;
+}
+
+/**
+ * The pair page's provider editor (the FxPairAddModal in edit mode) writes the pair's new configuration in one POST that
+ * replaces its routes (X-R75): `POST /fx/providers/routes?replace=true`, which keeps exactly the routes posted for the
+ * pair, atomically; nothing is deleted first. With every route removed it posts the MANUAL route, priority 999: the
+ * pair is kept, manual, as the user guide says.
+ *
+ * Each test brings a pair of its own, EUR-X with one MOCKFX route and no rate, set up and removed as the sync test's
+ * (`ownedFxQuotes`, see the section above the first describe), on a currency reserved per test and per project
+ * (`EDITOR_QUOTE`). Only `GET /fx/providers` is answered in the browser (`answerProviderCatalog`), and in the first test
+ * the editor's POST: every other request, the routes' reads and writes included, reaches the backend, and what the pair
+ * holds is read back through the API.
+ *
+ * Red before the cure, where the editor DELETEs the whole pair and then POSTs: «a failed save …» — the DELETE went
+ * through and the refused POST left the pair with no route; «removing every route …» — with no route picked there is no
+ * POST at all, and the pair is gone. Green once cured: the first on the editor's cure alone (its one POST is refused in
+ * the browser), the second once the backend honours `replace` too.
+ */
+test.describe('FX pair page — the provider editor replaces the pair’s routes in one write (X-R75)', () => {
+    // A ceiling, never a delay: sign-in, the pair's setup, the page, the editor, a reload and the teardown.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('a failed save keeps the pair’s route', async ({page, ownedFxQuotes}) => {
+        const quote = editorQuote('failedSave');
+        const pair = `EUR-${quote}`;
+        await setUpOwnedMockFxPair(page, ownedFxQuotes, quote);
+        try {
+            await answerProviderCatalog(page, quote);
+            const modal = await openProviderEditor(page, quote);
+
+            // The edit: MOCKFX_FAIL added after the stored MOCKFX route.
+            await modal.getByTestId('fx-route-picker-toggle').click();
+            await modal.getByTestId('fx-route-picker').getByTestId('fx-route-direct-MOCKFX_FAIL').click();
+            await expect(selectedRoute(modal, `${pair}:MOCKFX`)).toHaveAttribute('data-priority', '1');
+            await expect(selectedRoute(modal, `${pair}:MOCKFX_FAIL`)).toHaveAttribute('data-priority', '2');
+
+            // From here every write to the routes is recorded, and a POST is refused in the browser with a 500, as a
+            // server error would refuse it. Everything else, a DELETE included, reaches the backend.
+            const writes: string[] = [];
+            const refusePost = async (route: Route) => {
+                const request = route.request();
+                if (request.method() === 'GET') return route.fallback();
+                writes.push(`${request.method()} ${new URL(request.url()).search || '(no query)'}`);
+                if (request.method() !== 'POST') return route.fallback();
+                await route.fulfill({status: 500, json: {detail: REFUSED_ROUTE_WRITE}});
+            };
+            await page.route(isFxRoutesUrl, refusePost);
+            try {
+                const refused = armed(page.waitForRequest((request) => request.method() === 'POST' && isFxRoutesUrl(new URL(request.url())), {timeout: 10_000}));
+                await modal.getByTestId('fx-add-pair-save').click();
+                await refused;
+
+                // The failure is reported on the editor, which stays open on its draft, ready to save again.
+                const banner = modal.getByTestId('info-banner-error');
+                await expect(banner, 'the editor shows the refusal').toBeVisible({timeout: 10_000});
+                await expect(banner).toContainText(REFUSED_ROUTE_WRITE);
+                await expect(modal).toBeVisible();
+                await expect(modal.getByTestId('fx-add-pair-save')).toBeEnabled();
+                await expect(selectedRoute(modal, `${pair}:MOCKFX_FAIL`), 'the draft is kept').toHaveAttribute('data-priority', '2');
+            } finally {
+                // Stop refusing: from here on the page talks to the backend again.
+                await page.unroute(isFxRoutesUrl, refusePost);
+            }
+
+            // A fresh page, on what the backend holds.
+            await page.reload();
+            const detail = page.getByTestId('fx-detail-page');
+            await expect(detail).toBeVisible({timeout: 15_000});
+            await waitForSettled(detail, 20_000);
+
+            expect(await storedRoutes(page, quote), `the failed save left ${pair} its MOCKFX route — what the save sent: ${writes.join(', ')}`).toEqual([mockFxRoute(quote)]);
+            // Enabled once the page has loaded a provider other than MANUAL for the pair: the MOCKFX route is still there.
+            await expect(page.getByTestId('fx-detail-sync-btn'), 'the page still offers to sync the pair').toBeEnabled({timeout: 10_000});
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('removing every route keeps the pair, manual', async ({page, ownedFxQuotes}) => {
+        const quote = editorQuote('removeAll');
+        const pair = `EUR-${quote}`;
+        await setUpOwnedMockFxPair(page, ownedFxQuotes, quote);
+        try {
+            await answerProviderCatalog(page, quote);
+            const modal = await openProviderEditor(page, quote);
+
+            // The edit: the only route removed. The picker offers the catalogue's routes again, none of them selected.
+            await selectedRoute(modal, `${pair}:MOCKFX`).getByTestId('fx-route-remove').click();
+            await expect(modal.getByTestId('fx-route-picker-toggle'), 'the editor offers routes to add').toBeVisible();
+            await expect(modal.getByTestId('fx-route-selected'), 'no route is left selected').toHaveCount(0);
+
+            const since = await eventSeq(page);
+            await modal.getByTestId('fx-add-pair-save').click();
+            const updated = await waitForEvent(page, 'fx.pair.updated', {since});
+            expect(updated.detail, 'the editor saved this pair, with no provider').toMatchObject({slug: pair, hasRealProvider: false});
+            await expect(modal).toBeHidden();
+
+            expect(await storedRoutes(page, quote), `${pair} is still configured, with exactly its MANUAL route`).toEqual([manualRoute(quote)]);
+            // After the save the page reloads its providers: the sync control, enabled while MOCKFX served the pair (the
+            // editor's precondition), is disabled now that only MANUAL is left — `isManualOnly`, MANUAL being no provider.
+            await expect(page.getByTestId('fx-detail-sync-btn'), 'the page shows the pair as manual').toBeDisabled({timeout: 10_000});
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
     });
 });

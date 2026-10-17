@@ -38,7 +38,7 @@ The project's single Docker image (F-062) and the `dev.py` CLI (F-063) encapsula
 | [[F-070]] | Aphra LLM Translation Pipeline | infra | docs — EN→IT/FR/ES translation via LLM pipeline | implemented |
 | [[F-071]] | EditBuffer Pattern (bidirectional inline editor) | frontend | core pattern — click/CSV/form sync with bulk save | implemented |
 | [[F-072]] | TimeSeriesStore Pattern (delta-fetching client cache) | frontend | core pattern — gap-aware client-side time-series cache | implemented |
-| [[F-073]] | Backup & Restore | fullstack | ops — export and import the full SQLite database | implemented |
+| [[F-073]] | Backup & Restore | fullstack | ops — per-series exports, and a zip backup of the whole instance (1.3); its restore is in progress | implemented |
 | [[F-074]] | E2E Test Gallery (auto-screenshots for docs) | infra | docs — Playwright generates gallery images for mkdocs | implemented |
 | [[F-106]] | Tool platform (atomic Tool plugins, an owned process per item) | fullstack | core pattern — a fourth plugin family: typed calculations in owned processes, compiled renderers | documented |
 
@@ -121,7 +121,7 @@ graph TD
 | Provider registry | `backend/app/services/provider_registry.py` |
 | Tool platform | `backend/app/services/tools/registry.py` |
 | Tool plugins pattern | `mkdocs_src/docs/developer/architecture/patterns/tool_plugins.en.md` |
-| Thread isolation + 5-layer cache | `backend/app/services/asset_source.py` |
+| Thread isolation + 5-layer cache | `backend/app/services/assets/core.py` |
 | Zodios client | `frontend/src/lib/api/` |
 | TimeSeriesStore | `frontend/src/lib/stores/core/TimeSeriesStore.ts` |
 | EditBuffer | `frontend/src/lib/stores/core/EditBuffer.ts` |

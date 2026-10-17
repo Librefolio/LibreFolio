@@ -94,13 +94,19 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, normalize_fx_pair_slug
+from backend.app.services.market_series import prepare_asset_series_set
+from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.services.provider_registry import RiskAnalyticRegistry
+from backend.app.services.risk import scope as risk_scope_module
+from backend.app.services.risk import service as risk_service_module
 from backend.app.services.risk.base import RiskAnalytic, RiskExecutionContext, RiskUnavailableError
 from backend.app.services.risk.metrics import historical_var_cvar
-from backend.app.services.risk.service import RiskService, _AnalyticPlan, _ScopeInputs
+from backend.app.services.risk.plan import AnalyticPlan
+from backend.app.services.risk.registry import RiskAnalyticRegistry
+from backend.app.services.risk.results import available_observations, build_execution_context
+from backend.app.services.risk.scope import ScopeInputs
+from backend.app.services.risk.service import RiskService
 from backend.app.services.risk_plugins.asset_risk_return.plugin import AssetRiskReturnAnalytic
 from backend.app.services.risk_plugins.asset_set_comparison.plugin import (
     AssetSetComparisonAnalytic,
@@ -116,7 +122,6 @@ from backend.app.services.risk_plugins.asset_set_risk_return.plugin import (
     AssetSetRiskReturnParams,
 )
 from backend.app.services.risk_plugins.asset_set_var.plugin import AssetSetVarAnalytic, AssetSetVarParams
-from backend.app.services.series_preparation import prepare_asset_series_set
 
 # ---------------------------------------------------------------------------
 # Fixture material.
@@ -138,6 +143,9 @@ REFERENCE_ASSET_ID = 103
 FLAT_GAINER_ASSET_ID = 104
 STILL_UNDERWATER_ASSET_ID = 105
 RECOVERED_ASSET_ID = 106
+TOTAL_LOSS_ASSET_ID = 107
+FIFTH_BELOW_PEAK_ASSET_ID = 108
+SECOND_TOTAL_LOSS_ASSET_ID = 109
 
 
 def _wave(amplitude: float, phase: float, drift: float) -> list[float]:
@@ -157,6 +165,12 @@ FLAT_GAINER = [0.002] * OBSERVATIONS
 STILL_UNDERWATER = [0.01] * 10 + [-0.015] * 10 + [0.002] * 10
 # Rises, falls, climbs back through the old peak, then stands still on it.
 RECOVERED = [0.01] * 5 + [-0.02] * 5 + [0.03] * 10 + [0.0] * 10
+# Two observations, not OBSERVATIONS: the float total loss of test_risk_metrics.py. Two falls of 99.99999999 % leave
+# about 1e-20 of the value — still a positive price — and a drawdown of exactly -1.0, from which no finite gain climbs
+# back. A joint calendar gives every asset the same number of returns, so its neighbour has two as well: up 25 %, down
+# 20 %, a fifth below its peak with a quarter to climb.
+TOTAL_LOSS = [-0.9999999999] * 2
+FIFTH_BELOW_PEAK = [0.25, -0.2]
 
 ASSET_SET_ANALYTIC_CLASSES: tuple[type[RiskAnalytic], ...] = (
     AssetSetKpiAnalytic,
@@ -253,7 +267,7 @@ def asset_set_request(
     """One ASSET_SET query over the window the prepared set actually covers.
 
     A query must carry at least one analytic, so the default names one. It is only
-    load-bearing for ``RiskService.execute``; ``_build_context`` never looks at the
+    load-bearing for ``RiskService.execute``; ``build_execution_context`` never looks at the
     list, which is why the context helper below leaves it alone.
     """
     return RiskQueryRequest(
@@ -278,23 +292,23 @@ def asset_set_context(
     scope_asset_ids: tuple[int, ...] | None = None,
     prepared: PreparedAssetSeriesSet | None = None,
 ) -> RiskExecutionContext:
-    """Build the context through ``RiskService._build_context``, not by hand.
+    """Build the context through ``build_execution_context``, not by hand.
 
     The context is the whole subject of clause ⓪, so fabricating one would let the
     tests assume exactly what they are supposed to observe. This goes through the
-    service's own builder with the scope inputs ``_load_scope_inputs`` returns for an
+    service's own builder with the scope inputs ``load_scope_inputs`` returns for an
     ``AssetSetRiskScope`` — no weights, no values, no portfolio report — which is why
     ``primary_returns`` comes back empty here rather than by decree.
 
-    ``db=None`` is safe because nothing on this path touches the session: the
-    asset-set branch of ``_load_scope_inputs`` is pure, and ``_build_context`` is a
+    No session is needed because nothing on this path touches one: the asset-set
+    branch of ``load_scope_inputs`` is pure, and ``build_execution_context`` is a
     pure function of its three arguments.
     """
     prepared = prepared if prepared is not None else make_prepared_set(returns_by_asset)
     scope_asset_ids = scope_asset_ids if scope_asset_ids is not None else tuple(returns_by_asset)
-    return RiskService(db=None)._build_context(
+    return build_execution_context(
         request=asset_set_request(scope_asset_ids, prepared),
-        scope_inputs=_ScopeInputs(
+        scope_inputs=ScopeInputs(
             requested_asset_ids=scope_asset_ids,
             weights={},
             asset_values={},
@@ -337,7 +351,7 @@ async def test_one_request_prepares_the_asset_series_exactly_once_for_all_five_c
     whether the plugins compute well, and it is not evidence that any number below
     is right. It proves one thing: a single ``RiskQueryRequest`` carrying all five
     asset-set analytics still results in exactly **one** call to
-    ``_prepare_asset_series``. That property belongs to ``RiskService.execute``,
+    ``prepare_asset_series``. That property belongs to ``RiskService.execute``,
     which prepares once before the per-analytic loop; splitting one comparison
     surface across five codes is precisely the change that could have broken it, so
     it is pinned at the level where the breakage would appear.
@@ -372,18 +386,18 @@ async def test_one_request_prepares_the_asset_series_exactly_once_for_all_five_c
     service = RiskService(db=None)
     preparation_calls: list[dict] = []
 
-    async def counting_prepare(**kwargs):
+    async def counting_prepare(_db, **kwargs):
         preparation_calls.append(kwargs)
         return prepared
 
-    async def existing_asset_ids(asset_ids):
+    async def existing_asset_ids(_db, asset_ids):
         # Pure stand-in for the only other DB read on this path. It answers "these
         # all exist", which is the case the test is about; the asset-not-found path
         # is a different question and has its own gate.
         return set(asset_ids)
 
-    monkeypatch.setattr(service, "_prepare_asset_series", counting_prepare)
-    monkeypatch.setattr(service, "_existing_asset_ids", existing_asset_ids)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", counting_prepare)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", existing_asset_ids)
 
     response = await service.execute(user_id=1, request=request)
 
@@ -463,7 +477,7 @@ def test_the_joint_calendar_is_the_intersection_and_not_each_asset_own_history()
 def test_an_asset_set_context_carries_no_aggregate_series_of_its_own():
     """The premise every asset-set plugin is written against, stated once.
 
-    ``_build_context`` fills ``primary_returns`` from a portfolio's TWRR curve, from
+    ``build_execution_context`` fills ``primary_returns`` from a portfolio's TWRR curve, from
     a weighted backtest, or from the single asset of an ``asset`` scope. A weightless
     selection is none of those, so the field is empty — not zero-length by accident
     but because there is nothing to put in it. Every helper in
@@ -488,7 +502,7 @@ def test_an_asset_set_context_carries_no_aggregate_series_of_its_own():
 def test_asset_set_family_is_gated_on_the_prepared_set_not_on_the_absent_primary_series():
     """The history gate must count what these analytics actually consume.
 
-    ``_available_observations`` decides what ``min_observations`` is compared
+    ``available_observations`` decides what ``min_observations`` is compared
     against. Left on the default branch it returns ``context.n_observations``, which
     on an asset-set scope is **structurally zero** — see the test above — so every
     one of these plugins would be refused for insufficient history before its
@@ -512,13 +526,13 @@ def test_asset_set_family_is_gated_on_the_prepared_set_not_on_the_absent_primary
 
     for analytic_class in ASSET_SET_ANALYTIC_CLASSES:
         code = analytic_class.analytic_code
-        plan = _AnalyticPlan(
+        plan = AnalyticPlan(
             request=RiskAnalyticRequest(instance_id=f"instance-{code}", analytic_code=code, parameters=ASSET_SET_PARAMETERS[code]),
             analytic_class=analytic_class,
             analytic=analytic_class(),
             params=analytic_class.validate_params(ASSET_SET_PARAMETERS[code]),
         )
-        available = RiskService._available_observations(plan, context)
+        available = available_observations(plan, context)
         assert available == context.prepared_series.n_observations, code
         assert available >= analytic_class.min_observations, code
 
@@ -996,6 +1010,102 @@ def test_asset_set_drawdown_states_one_window_once_and_one_episode_per_asset():
     assert recovered.current_drawdown == pytest.approx(0.0, abs=1e-12)
     assert recovered.remaining_to_peak_ratio == pytest.approx(0.0, abs=1e-12)
 
+    # P19: each row also carries the climb from its worst trough back to the peak before it, computed the same way
+    # from its own maximum drawdown. It describes the depth, not the recovery state: the recovered row keeps its climb
+    # from 0.98**5 of the peak, and the open row's climb from 0.985**10 of the peak is larger than what it still owes,
+    # because it has since come off its trough.
+    for episode in (open_episode, recovered):
+        assert episode.maximum_drawdown_trough_to_peak_ratio == pytest.approx(-episode.maximum_drawdown / (1.0 + episode.maximum_drawdown), rel=1e-12)
+    assert recovered.maximum_drawdown_trough_to_peak_ratio == pytest.approx(1.0 / 0.98**5 - 1.0, rel=1e-9)
+    assert open_episode.maximum_drawdown_trough_to_peak_ratio == pytest.approx(1.0 / 0.985**10 - 1.0, rel=1e-9)
+    assert open_episode.maximum_drawdown_trough_to_peak_ratio > open_episode.remaining_to_peak_ratio
+    # Every gain is a number, the recovered row's 0.0 included: there is no total loss to warn about.
+    assert "total_loss_no_recovery" not in {warning.code for warning in computation.warnings}
+
+
+def test_asset_set_drawdown_states_no_climb_for_an_asset_that_never_fell():
+    """A row with no drawdown carries a measured 0.0, beside a row whose climb is real, on the wire too."""
+    context = asset_set_context(
+        {FLAT_GAINER_ASSET_ID: FLAT_GAINER, RECOVERED_ASSET_ID: RECOVERED},
+        scope_asset_ids=(FLAT_GAINER_ASSET_ID, RECOVERED_ASSET_ID),
+    )
+
+    computation = AssetSetDrawdownAnalytic().compute(AssetSetDrawdownParams(), context)
+    output = computation.output
+    by_asset = {item.asset_id: item for item in output.items}
+
+    never_fell = by_asset[FLAT_GAINER_ASSET_ID]
+    assert never_fell.maximum_drawdown_recovery_status == RiskDrawdownRecoveryStatus.NO_DRAWDOWN
+    assert never_fell.maximum_drawdown_trough_to_peak_ratio == 0.0
+    assert never_fell.remaining_to_peak_ratio == 0.0
+    wire = {item["asset_id"]: item for item in output.model_dump(mode="json")["items"]}
+    assert wire[FLAT_GAINER_ASSET_ID]["maximum_drawdown_trough_to_peak_ratio"] == 0.0
+    assert wire[RECOVERED_ASSET_ID]["maximum_drawdown_trough_to_peak_ratio"] == pytest.approx(1.0 / 0.98**5 - 1.0, rel=1e-9)
+    # 0.0 is a number, not a total loss, falsy as it is: no warning.
+    assert "total_loss_no_recovery" not in {warning.code for warning in computation.warnings}
+
+
+def test_asset_set_drawdown_publishes_a_total_loss_row_with_null_gains_and_one_warning():
+    """A wiped-out asset keeps its row, both gains null, and one warning names it; its neighbour keeps its numbers.
+
+    An undefined value is None plus a warning (risk architecture, «Adding a Risk Analytic», item 4). Here the warning
+    is a per-asset sentence: the service fills its count and names from ``details.asset_ids``. It informs and does
+    not degrade: a RiskWarning degrades unless told otherwise, and the service turns a result partial for a degrading
+    warning or an excluded asset — the computation hands it neither, so the status stays ok.
+    """
+    context = asset_set_context(
+        {TOTAL_LOSS_ASSET_ID: TOTAL_LOSS, FIFTH_BELOW_PEAK_ASSET_ID: FIFTH_BELOW_PEAK},
+        scope_asset_ids=(TOTAL_LOSS_ASSET_ID, FIFTH_BELOW_PEAK_ASSET_ID),
+    )
+
+    computation = AssetSetDrawdownAnalytic().compute(AssetSetDrawdownParams(), context)
+    by_asset = {item.asset_id: item for item in computation.output.items}
+
+    wiped_out = by_asset[TOTAL_LOSS_ASSET_ID]
+    assert wiped_out.current_drawdown == -1.0
+    assert wiped_out.maximum_drawdown == -1.0
+    assert wiped_out.maximum_drawdown_recovery_status == RiskDrawdownRecoveryStatus.OPEN
+    assert wiped_out.remaining_to_peak_ratio is None
+    assert wiped_out.maximum_drawdown_trough_to_peak_ratio is None
+
+    neighbour = by_asset[FIFTH_BELOW_PEAK_ASSET_ID]
+    assert neighbour.maximum_drawdown_recovery_status == RiskDrawdownRecoveryStatus.OPEN
+    assert neighbour.maximum_drawdown_trough_to_peak_ratio == pytest.approx(0.25)
+    assert neighbour.remaining_to_peak_ratio == pytest.approx(0.25)
+
+    total_loss_warnings = [warning for warning in computation.warnings if warning.code == "total_loss_no_recovery"]
+    assert len(total_loss_warnings) == 1, computation.warnings
+    (warning,) = total_loss_warnings
+    assert warning.message_i18n_key == "risk.warnings.total_loss_no_recovery_assets"
+    assert warning.details == {"asset_ids": [TOTAL_LOSS_ASSET_ID]}
+    assert warning.degrades_result is False
+    assert not any(item.degrades_result for item in computation.warnings)
+    assert computation.excluded_assets == ()
+
+
+def test_asset_set_drawdown_names_every_total_loss_in_one_warning():
+    """Two assets wiped out: one warning names both, rather than one warning each."""
+    context = asset_set_context(
+        {TOTAL_LOSS_ASSET_ID: TOTAL_LOSS, FIFTH_BELOW_PEAK_ASSET_ID: FIFTH_BELOW_PEAK, SECOND_TOTAL_LOSS_ASSET_ID: TOTAL_LOSS},
+        scope_asset_ids=(TOTAL_LOSS_ASSET_ID, FIFTH_BELOW_PEAK_ASSET_ID, SECOND_TOTAL_LOSS_ASSET_ID),
+    )
+
+    computation = AssetSetDrawdownAnalytic().compute(AssetSetDrawdownParams(), context)
+
+    total_loss_warnings = [warning for warning in computation.warnings if warning.code == "total_loss_no_recovery"]
+    assert len(total_loss_warnings) == 1, computation.warnings
+    (warning,) = total_loss_warnings
+    assert warning.message_i18n_key == "risk.warnings.total_loss_no_recovery_assets"
+    assert set(warning.details) == {"asset_ids"}
+    # The contract names the assets, not their order: compared sorted, so an asset named twice still shows.
+    assert sorted(warning.details["asset_ids"]) == sorted([TOTAL_LOSS_ASSET_ID, SECOND_TOTAL_LOSS_ASSET_ID])
+
+
+def test_asset_set_drawdown_trough_to_peak_gain_is_a_new_algorithm_version():
+    # 1.1.0 (CP-13a, developer's decision P19): every row gains maximum_drawdown_trough_to_peak_ratio, and a total
+    # loss publishes remaining_to_peak_ratio as null instead of failing. Every number 1.0.0 published is unchanged.
+    assert AssetSetDrawdownAnalytic.algorithm_version == "1.1.0"
+
 
 # ---------------------------------------------------------------------------
 # A selected asset may be the benchmark (developer's decision of 02/10/2026, D371)
@@ -1199,15 +1309,15 @@ async def test_asset_set_comparison_accepts_a_selected_reference_through_the_ser
     service = RiskService(db=None)
     preparation_calls: list[dict] = []
 
-    async def counting_prepare(**kwargs):
+    async def counting_prepare(_db, **kwargs):
         preparation_calls.append(kwargs)
         return prepared
 
-    async def existing_asset_ids(asset_ids):
+    async def existing_asset_ids(_db, asset_ids):
         return set(asset_ids)
 
-    monkeypatch.setattr(service, "_prepare_asset_series", counting_prepare)
-    monkeypatch.setattr(service, "_existing_asset_ids", existing_asset_ids)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", counting_prepare)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", existing_asset_ids)
 
     response = await service.execute(user_id=1, request=request)
 
@@ -1457,7 +1567,7 @@ def test_asset_set_outputs_round_trip_through_the_discriminated_union():
 # Clause ② — a degraded selection says what to fix (developer's decisions of 05/10/2026, D373).
 #
 # Until now only the portfolio engine built `DataQualityIssue`s, and they reached risk only
-# through the portfolio's own report. An asset-set report comes from `series_preparation`,
+# through the portfolio's own report. An asset-set report comes from `market_series`,
 # which never builds one, so the lab's banner had no action to offer however degraded the
 # selection was. Every asset-set result whose report is not OK carries one issue per
 # category, `code + group_key` once, `count` and `message_params.count` the length of its
@@ -1881,15 +1991,14 @@ async def test_a_portfolio_result_keeps_exactly_the_issues_of_the_engine(lab_ass
     async def report_of_the_portfolio(_self, *, user_id, query):
         return report
 
-    async def accessible_broker_ids(_user_id):
+    async def accessible_broker_ids(_db, _user_id):
         return (1,)
 
     monkeypatch.setattr(PortfolioService, "get_report", report_of_the_portfolio)
+    monkeypatch.setattr(risk_scope_module, "load_accessible_broker_ids", accessible_broker_ids)
     request = risk_request({"kind": "portfolio"}, LAB_WINDOW, [{"instance_id": "correlation", "analytic_code": "correlation"}], mode="current_composition")
     async with lab_session() as db:
-        service = RiskService(db)
-        monkeypatch.setattr(service, "_accessible_broker_ids", accessible_broker_ids)
-        (result,) = (await service.execute(user_id=1, request=request)).items
+        (result,) = (await RiskService(db).execute(user_id=1, request=request)).items
 
     # The premise: the per-asset report of the lab's assets did reach this result.
     assert result.output is not None, result.error

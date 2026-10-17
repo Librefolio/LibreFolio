@@ -28,7 +28,7 @@
     "unrealizedDelta": "Variazione non realizzata",
     "unrealizedDeltaTooltip": "Variazione del guadagno/perdita latente sulle posizioni ancora aperte.",
     "realizedSales": "Vendite",
-    "realizedSalesTooltip": "Guadagno o perdita realizzata dalle vendite nel periodo, calcolata rispetto al costo medio di carico.",
+    "realizedSalesTooltip": "Guadagno o perdita realizzata dalle vendite nel periodo, e dai titoli ceduti a un costo (per esempio a un broker che LibreFolio non segue), calcolata rispetto al costo medio di carico.",
     "income": "Dividendi e interessi",
     "incomeTooltip": "Proventi incassati nel periodo da dividendi, interessi o cedole.",
     "feesAndTaxes": "Costi e imposte",
@@ -128,7 +128,8 @@
       "missingFx": "Manca il cambio necessario per un pagamento.",
       "missingWac": "Il prezzo medio di carico (PMC) non è disponibile.",
       "nonPositiveWac": "Il prezzo medio di carico (PMC) è nullo o negativo.",
-      "missingFxDetails": "Manca il cambio {pair} necessario per il calcolo alla data {date}."
+      "missingFxDetails": "Manca il cambio {pair} necessario per il calcolo alla data {date}.",
+      "negativeNetIncome": "Le rettifiche superano i proventi dell'ultimo anno."
     },
     "yieldOnCostValue": "Rendimento sul costo",
     "yieldOnCostPeriod": "Periodo",
@@ -147,6 +148,7 @@
     "unrealizedAssetEffect": "Asset in {currency}",
     "unrealizedFxEffect": "Cambio {from} → {to}",
     "unrealizedUnsplit": "{currency}, non scomposto",
-    "fxOnCash": "Effetto cambio sulla liquidità"
+    "fxOnCash": "Effetto cambio sulla liquidità",
+    "allocationNegativeCash": "Liquidità negativa: {amount}"
   }
 }

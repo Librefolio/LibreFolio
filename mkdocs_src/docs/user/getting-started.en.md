@@ -10,13 +10,20 @@ first broker statement — and your dashboard fills up by itself.
 Open your LibreFolio address (for example `http://localhost:6040`): the login page appears. Click
 **Register here** to create an account.
 
+If the login page shows no **Register here**, your administrator lets people in only with an
+invitation link, or has closed sign-ups: ask them for an invitation, or for an account. With an
+invitation, follow [If You Received an Invitation Link](#invitation-link).
+
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Registration Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 Fill in your details:
 
-- 👤 **Username** — unique: you log in with it.
+- 👤 **Username** — unique, 3 to 50 characters, without `@`: you log in with it. Spaces, accented
+  letters and signs such as `.`, `_`, `-` or `+` are fine. When you log in, LibreFolio reads
+  anything with an `@` as an email address, so the form refuses one: *The username cannot contain @:
+  to sign in, you can always use your email address.*
 - 📧 **Email** — a valid address; it works for logging in too.
 - 🔑 **Password** and **Confirm Password** — the strength indicator tells you when the password is
   strong enough.
@@ -28,18 +35,118 @@ Fill in your details:
 !!! info "First User = Admin"
 
     The very first account to register becomes the **administrator**: it manages the instance-wide
-    **[Global Settings](../admin/settings.md)** and every admin feature.
+    **[Global Settings](../admin/settings.md)** and every admin feature. On an instance whose
+    administrator was created from the server's configuration, by a hosting provider for example,
+    nobody registers first: that administrator receives a setup link, which opens the instance's
+    setup page. There they type the password twice, following the rules shown under the field;
+    once they confirm, they are signed in, and the [Welcome setup](#welcome-setup) opens, as for any
+    new account.
+
+### ✉️ If You Received an Invitation Link {: #invitation-link }
+
+An administrator can invite you with a link of your own, by message or by email: the email is
+*You are invited to LibreFolio*, and its **Create your account** button opens the link.
+
+1. Open the link. LibreFolio checks it, then shows the registration form with a note that you have
+   been invited; a second note tells you when the invitation makes you an administrator.
+2. If the administrator wrote your email address on the invitation, it is already filled in: you
+   can change it.
+3. Choose your username and password, then click **Register**.
+4. You are back on the login page, with a confirmation: log in with your new account.
+
+- ⏱️ An invitation link works once, for 7 days. If the page says the link has expired, has already
+  been used, has been withdrawn or is not valid, ask your administrator for a new one.
+- 📬 If the instance asks you to confirm your email address, open the link it emails you before you
+  log in: see [If LibreFolio Asks You to Confirm Your Email](#verify-email).
+- 🔒 As soon as the page opens, the address bar loses the secret part of the link: keep the message
+  you received in case you need to open the link again. If the page says the link is incomplete,
+  open it again from that message.
+- 🚪 If the page says that registration is disabled, the administrator has closed sign-ups for now:
+  ask them.
+
+### 📬 If LibreFolio Asks You to Confirm Your Email {: #verify-email }
+
+Some instances ask every new account to confirm its email address before the first sign-in. Then,
+after **Register**:
+
+1. The login page says: *Account created. We sent you an email with a link to activate it: open it
+   within 24 hours, then sign in.* You cannot sign in yet.
+2. Open the email *Confirm your email address* and click **Confirm my email address**. If the
+   button does not work, copy into your browser the address written under it.
+3. LibreFolio confirms your address and brings you back to the login page, with a confirmation:
+   log in with your username and password.
+
+- ⏱️ The link works once, for 24 hours.
+- 📭 No email? Look in the spam folder. Then, on the login page, sign in with your username and
+  password: LibreFolio says that your address is not verified yet, and offers **Send the link
+  again**. A new link replaces the older ones. If you ask too often, or after too many wrong
+  passwords, the page tells you in how many minutes you can ask again.
+- ⌛ If the page says that the link has expired, sign in the same way: you are offered a new link.
+  If the instance has no free place left meanwhile, ask your administrator.
+- ✅ If the page says that the link has already been used, your account is probably active already:
+  sign in.
+- 🔒 As with an invitation, the address bar loses the secret part of the link as soon as the page
+  opens: keep the email until your account is active.
 
 ---
 
 ## 🔐 2. Log In
 
 After registering, you are back on the login page. Log in with your username (or email) and your
-password.
+password. Type your username exactly as you chose it, capitals included. If your username contains
+an `@`, which accounts created before version 1.3 may have, log in with your email address instead.
+If LibreFolio asked you to confirm your email address, open the link it emailed you
+first: see [If LibreFolio Asks You to Confirm Your Email](#verify-email).
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
+
+Under the card, as on every sign-in page, one line holds the [legal notice](settings/about.md#legal-notice)
+of your instance.
+
+!!! note "Too many login attempts"
+
+    After 10 wrong passwords in 15 minutes for the same username or email address, or 50 from the
+    same IP address, the login page says *Too many login attempts: wait a few minutes and try
+    again.* Until the wait is over, even the right password is refused: wait up to 15 minutes, then
+    log in. Your administrator can also let you in at once, by restarting LibreFolio.
+
+### 📧 If You Forgot Your Password {: #forgot-password }
+
+On the login page, click **Forgot Password?**. When your instance can send emails, the page has a
+form at the top:
+
+1. Type your username or your email address, then click **Email me a reset link**.
+2. The page answers the same way whether an account matches or not: look in your inbox, and in the
+   spam folder.
+3. Open the email *Reset your LibreFolio password* and click **Choose a new password**. The page
+   that opens is the one of a link sent by an administrator: follow
+   [If an Administrator Sent You a Password-Reset Link](#password-reset-link) from step 2.
+
+- ⏱️ The link works once, for 30 minutes.
+- 📭 No email after a few minutes? The account may be deactivated or registered with another
+  address, or the requests came too close together: try again later, or ask your administrator.
+- 💻 Under the form, a closed panel holds the command your administrator runs on the server to reset
+  a password; when your instance cannot send emails, the page shows it open. Either way: ask them.
+- 🏢 On an instance a hosting provider runs for you, the page shows no command. It says *Ask your
+  administrator for a password-reset link: they can create one for your account.* Once you have the
+  link, follow [If an Administrator Sent You a Password-Reset Link](#password-reset-link).
+
+### 🔑 If an Administrator Sent You a Password-Reset Link {: #password-reset-link }
+
+Your administrator can also send you a link to choose a new password yourself, by message or by
+email.
+
+1. Open the link: the page shows the account it belongs to.
+2. Type the new password twice: it must meet the rules shown under the field.
+3. Click **Set the new password**. You are back on the login page, with a confirmation: log in with
+   the new password.
+
+- ⏱️ The link works once, for 30 minutes. If the page says it has expired, has already been used or
+  has been withdrawn, ask for a new one: each new link withdraws the ones sent before it.
+- 🚪 Setting the new password signs your account out on every device: log in again with the new
+  password on each of them.
 
 ---
 
@@ -51,6 +158,7 @@ The first time you log in, LibreFolio opens a **Welcome** page before the dashbo
 - 🖼️ Add a **profile picture** if you like — otherwise your initials are shown.
 - ✅ Click **Continue** to save, or **Skip setup permanently** to keep the current settings.
 - 🚪 Need to leave? **Log out** is at the top right.
+- ⚖️ Under the card: the [legal notice](settings/about.md#legal-notice) of your instance.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="The first-run Welcome page: the profile picture block with the initials avatar and Choose picture, Language and Default Currency pre-filled, the note that your theme preference is kept unchanged, and Skip setup permanently and Continue" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

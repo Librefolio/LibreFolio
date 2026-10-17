@@ -16,12 +16,9 @@ from backend.app.schemas.prices import (
     FAPricePoint,
     FAPriceQueryResult,
 )
-from backend.app.services.asset_source import AssetSourceManager
-from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.series_preparation import (
-    observed_annualization,
-    prepare_asset_series_set,
-)
+from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.market_series import prepare_asset_series_set
+from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 
 
 def converted_point(
@@ -442,23 +439,6 @@ def test_fx_fingerprint_is_order_independent_and_content_sensitive():
 
     assert first.fx_fingerprint == reordered.fx_fingerprint
     assert first.fx_fingerprint != changed.fx_fingerprint
-
-
-def test_observed_annualization_guards_empty_and_invalid_spans():
-    assert observed_annualization(0, None, None) == (0, None)
-    assert observed_annualization(
-        64,
-        date(2026, 1, 1),
-        date(2026, 4, 1),
-    ) == pytest.approx((90, 64 * 365 / 90))
-    with pytest.raises(ValueError, match="cannot be negative"):
-        observed_annualization(-1, None, None)
-    with pytest.raises(ValueError, match="must follow"):
-        observed_annualization(
-            1,
-            date(2026, 1, 1),
-            date(2026, 1, 1),
-        )
 
 
 def test_asset_source_preserves_price_source_through_backward_fill():

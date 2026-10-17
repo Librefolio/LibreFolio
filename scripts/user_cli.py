@@ -7,14 +7,15 @@ Command-line tool for managing users from the server terminal.
 Use this when you need to reset passwords or manage users without the web UI.
 
 Usage:
-    ./dev.sh user:create <username> <email> <password>
-    ./dev.sh user:reset <username> <new_password>
-    ./dev.sh user:list
-    ./dev.sh user:activate <username>
-    ./dev.sh user:deactivate <username>
+    ./dev.py user create <username> <email> <password> [--role admin|user]
+    ./dev.py user reset <username> <new_password>
+    ./dev.py user list
+    ./dev.py user activate <username>
+    ./dev.py user deactivate <username>
 
 Or directly:
     pipenv run python user_cli.py create-superuser <username> <email> <password>
+    pipenv run python user_cli.py create-user <username> <email> <password>
     pipenv run python user_cli.py reset-password <username> <new_password>
     pipenv run python user_cli.py list-users
     pipenv run python user_cli.py activate <username>
@@ -23,6 +24,7 @@ Or directly:
 Use --test-db to operate on the test database:
     pipenv run python user_cli.py --test-db list-users
 """
+
 import argparse
 import asyncio
 import sys
@@ -34,44 +36,33 @@ import argcomplete
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.config import set_test_mode
+from backend.app.config.accounts import public_url
+from backend.app.db.models import AccountTokenPurpose, OnboardingFlow
 from backend.app.db.session import get_async_engine
-from backend.app.services import user_service
-from backend.app.services.settings_service import initialize_global_settings
+from backend.app.services.accounts import bootstrap_admin_service, password_policy, registration_service, token_service, user_service
+from backend.app.services.accounts.onboarding_service import reset_onboarding_progress
+from backend.app.services.accounts.registration_service import RegistrationError
+from backend.app.services.accounts.settings_service import initialize_global_settings
+from backend.app.services.email import verification as email_verification
+
+#: The sentence the command line prints for each rule of ``password_policy`` a new password misses.
+_RULE_MESSAGES = {
+    "min_length": f"min_length: the password must be at least {password_policy.MIN_LENGTH} characters long",
+    "uppercase": "uppercase: the password must contain an uppercase letter",
+    "lowercase": "lowercase: the password must contain a lowercase letter",
+    "digit": "digit: the password must contain a digit",
+    "special": "special: the password must contain a symbol (neither a letter, a number nor a space)",
+}
 
 
 def validate_password(password: str) -> tuple[bool, list[str]]:
-    """
-    Validate password against security requirements.
-    Returns (is_valid, list of errors).
-
-    Requirements:
-    - At least 8 characters
-    - At least one uppercase letter
-    - At least one lowercase letter
-    - At least one number
-    - At least one special character
-    """
-    errors = []
-
-    if len(password) < 8:
-        errors.append("Password must be at least 8 characters")
-
-    if not any(c.isupper() for c in password):
-        errors.append("Password must contain at least one uppercase letter")
-
-    if not any(c.islower() for c in password):
-        errors.append("Password must contain at least one lowercase letter")
-
-    if not any(c.isdigit() for c in password):
-        errors.append("Password must contain at least one number")
-
-    special_chars = set("!@#$%^&*()_+-=[]{}|;':\",./<>?`~")
-    if not any(c in special_chars for c in password):
-        errors.append("Password must contain at least one special character")
-
-    return len(errors) == 0, errors
+    """The app's password rules (``password_policy``, decision 37): whether ``password`` meets them, and a sentence per rule it misses."""
+    failed = password_policy.failed_rules(password)
+    return not failed, [_RULE_MESSAGES.get(code, f"{code}: the password does not meet this rule") for code in failed]
 
 
 async def cmd_reset_password(username: str, new_password: str):
@@ -97,8 +88,8 @@ async def cmd_reset_password(username: str, new_password: str):
         return success
 
 
-async def cmd_create_superuser(username: str, email: str, password: str):
-    """Create a new superuser with password validation."""
+async def cmd_create_user(username: str, email: str, password: str, is_superuser: bool):
+    """Create an administrator or a regular account, with password validation."""
     # Validate password first
     is_valid, errors = validate_password(password)
     if not is_valid:
@@ -110,16 +101,131 @@ async def cmd_create_superuser(username: str, email: str, password: str):
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
-        user, error = await user_service.create_user(
-            session, username, email, password, is_superuser=True
-            )
+        _warn_if_full(await registration_service.user_usage(session), "creates the account")
+        user, error = await user_service.create_user(session, username, email, password, is_superuser=is_superuser)
 
         if user:
-            print(f"✅ Superuser '{username}' created with ID {user.id}")
+            print(f"✅ {'Superuser' if is_superuser else 'User'} '{username}' created with ID {user.id}")
             return True
         else:
             print(f"❌ {error}")
             return False
+
+
+def _warn_if_full(usage: registration_service.UserUsage, action: str) -> None:
+    """Tell the operator the instance is at its limit: the command line goes past it (``action``: what it does anyway)."""
+    if usage.full:
+        print(f"⚠️  The instance is at its limit (LIBREFOLIO_MAX_USERS: {usage.used} of {usage.max_users} places taken): the command line {action} anyway")
+
+
+def _public_url_note() -> str:
+    """Why a printed link has no server address: the variable is unset, or set to something that is not an address."""
+    try:
+        public_url()
+    except ValueError as exc:
+        return f"LIBREFOLIO_PUBLIC_URL is not valid ({exc}): put the address of your server in front of the path"
+    return "LIBREFOLIO_PUBLIC_URL is not set: put the address of your server in front of the path"
+
+
+def _print_link(label: str, path: str, expires_at) -> None:
+    """Print a single-use link: the full address with LIBREFOLIO_PUBLIC_URL, the path otherwise."""
+    url = registration_service.public_link(path)
+    print(f"✅ {label} link, single use, valid until {expires_at:%Y-%m-%d %H:%M} UTC:")
+    print(f"   {url or path}")
+    if url is None:
+        print(f"   {_public_url_note()}")
+
+
+async def cmd_invite(grants_admin: bool, email: str | None):
+    """Create an invitation link; refused when registration is disabled."""
+    engine = get_async_engine()
+
+    async with AsyncSession(engine) as session:
+        usage = await registration_service.user_usage(session)
+        try:
+            issued = await registration_service.create_invite(session, created_by_user_id=None, grants_admin=grants_admin, email=email, enforce_limit=False)
+        except RegistrationError as exc:
+            print(f"❌ {exc.message}")
+            return False
+        # This session expires its objects on commit: read the deadline before it
+        expires_at = issued.record.expires_at
+        await session.commit()
+        _warn_if_full(usage, "creates the invitation")
+        _print_link("Administrator invitation" if grants_admin else "Invitation", token_service.token_path(AccountTokenPurpose.INVITE, issued.token), expires_at)
+        return True
+
+
+async def cmd_reset_link(username: str):
+    """Create a password-reset link for a user; the links issued before stop working."""
+    engine = get_async_engine()
+
+    async with AsyncSession(engine) as session:
+        user = await user_service.get_user_by_username(session, username)
+        if user is None:
+            print(f"❌ User '{username}' not found")
+            return False
+        issued = await user_service.create_password_reset(session, user)
+        expires_at = issued.record.expires_at
+        await session.commit()
+        _print_link(f"Password reset for '{username}'", token_service.token_path(AccountTokenPurpose.PASSWORD_RESET, issued.token), expires_at)
+        return True
+
+
+async def cmd_setup_link():
+    """Create a new setup link for the initial administrator waiting for it (F02); the links issued before stop working."""
+    engine = get_async_engine()
+
+    async with AsyncSession(engine) as session:
+        waiting = await bootstrap_admin_service.pending_admin(session)
+        issued = await bootstrap_admin_service.issue_setup_link(session) if waiting is not None else None
+        if waiting is None or issued is None:
+            print("❌ No administrator account is waiting for its setup link")
+            return False
+        username, expires_at = waiting.username, issued.record.expires_at
+        await session.commit()
+        _print_link(f"Administrator setup for '{username}'", token_service.token_path(AccountTokenPurpose.ADMIN_SETUP, issued.token), expires_at)
+        return True
+
+
+async def cmd_set_email(username: str, address: str):
+    """Change the email address of an account, as a change of address in its profile (decision P18).
+
+    The address must be free regardless of case. A change ends the account's sessions and its address is not verified
+    any more; the same address in another case only changes how it is written. It also separates two accounts that
+    share an address apart from case, which stops migration 009: it works on the database as it is.
+    """
+    try:
+        email = TypeAdapter(EmailStr).validate_python(address)
+    except ValidationError:
+        print("❌ Not an email address")
+        return False
+    engine = get_async_engine()
+
+    async with AsyncSession(engine) as session:
+        user = await user_service.get_user_by_username(session, username)
+        if user is None:
+            print(f"❌ User '{username}' not found")
+            return False
+        updated, error = await user_service.update_profile(session, user.id, email=email)
+        if updated is None:
+            print(f"❌ {error}")
+            return False
+        print(f"✅ Email address of '{username}' changed")
+        return True
+
+
+async def cmd_reset_onboarding(username: str, flow: str | None):
+    """Put the onboarding of a user back to pending: every flow, or one."""
+    engine = get_async_engine()
+
+    async with AsyncSession(engine) as session:
+        user = await user_service.get_user_by_username(session, username)
+        if user is None:
+            print(f"❌ User '{username}' not found")
+            return False
+        reset = await reset_onboarding_progress(session, user.id, OnboardingFlow(flow) if flow else None)
+        print(f"✅ Onboarding of '{username}' reset ({flow or 'every flow'}, {reset} flow row(s))")
+        return True
 
 
 async def cmd_list_users():
@@ -150,6 +256,12 @@ async def cmd_set_user_active(username: str, active: bool):
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
+        if active:
+            user = await user_service.get_user_by_username(session, username)
+            # An account that already holds its place takes no new one: one waiting for its email verification while its
+            # link is live (workstream E), or the initial administrator waiting for its setup (A-40)
+            if user is not None and not user.is_active and not await email_verification.holds_place(session, user) and not await registration_service.is_pending_admin(session, user):
+                _warn_if_full(await registration_service.user_usage(session), "reactivates the account")
         success, error = await user_service.set_user_active(session, username, active)
 
         if success:
@@ -200,24 +312,21 @@ def main():
 Examples:
   python user_cli.py reset-password john newpassword123
   python user_cli.py create-superuser admin admin@example.com adminpass
+  python user_cli.py create-user john john@example.com Johnpass1!
   python user_cli.py list-users
   python user_cli.py deactivate john
   python user_cli.py activate john
   python user_cli.py promote john
   python user_cli.py demote john
-  
+
   # Operate on test database:
   python user_cli.py --test-db list-users
   python user_cli.py --test-db promote john
-        """
-        )
+        """,
+    )
 
     # Global flag for test database
-    parser.add_argument(
-        "--test-db",
-        action="store_true",
-        help="Operate on test database instead of production"
-        )
+    parser.add_argument("--test-db", action="store_true", help="Operate on test database instead of production")
 
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
@@ -231,6 +340,12 @@ Examples:
     super_parser.add_argument("username", help="Username")
     super_parser.add_argument("email", help="Email address")
     super_parser.add_argument("password", help="Password")
+
+    # create-user (a regular account)
+    create_user_parser = subparsers.add_parser("create-user", help="Create regular (non-admin) user")
+    create_user_parser.add_argument("username", help="Username")
+    create_user_parser.add_argument("email", help="Email address")
+    create_user_parser.add_argument("password", help="Password")
 
     # list-users
     subparsers.add_parser("list-users", help="List all users")
@@ -254,6 +369,8 @@ Examples:
     # init-settings (initialize global settings)
     subparsers.add_parser("init-settings", help="Initialize global settings with defaults")
 
+    _add_link_commands(subparsers)
+
     argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
@@ -264,31 +381,51 @@ Examples:
     return 0 if _dispatch_user_command(args) else 1
 
 
+def _add_link_commands(subparsers) -> None:
+    """The commands that print a single-use link, change an address or restart an onboarding: the same names here and in dev.py."""
+    p = subparsers.add_parser("set-email", help="Change the email address of a user (unique regardless of case)")
+    p.add_argument("username", help="Username")
+    p.add_argument("email", help="The new email address")
+
+    p = subparsers.add_parser("invite", help="Create an invitation link")
+    p.add_argument("--admin", action="store_true", help="The account it creates is an administrator")
+    p.add_argument("--email", default=None, help="Who it is for (kept for reference, not enforced)")
+
+    p = subparsers.add_parser("reset-link", help="Create a password-reset link for a user")
+    p.add_argument("username", help="Username")
+
+    subparsers.add_parser("setup-link", help="Create a new setup link for the initial administrator (LIBREFOLIO_ADMIN_EMAIL)")
+
+    p = subparsers.add_parser("reset-onboarding", help="Restart the onboarding of a user")
+    p.add_argument("username", help="Username")
+    p.add_argument("--flow", choices=[flow.value for flow in OnboardingFlow], default=None, help="Only this flow (default: every flow)")
+
+
 def _dispatch_user_command(args):
     """Dispatch to appropriate user command."""
     # Set test mode environment variable if --test-db flag is used
-    if getattr(args, 'test_db', False):
-        from backend.app.config import set_test_mode
+    if getattr(args, "test_db", False):
         set_test_mode(True)
         print("ℹ️  Operating on TEST database")
 
-    if args.command == "reset-password":
-        return asyncio.run(cmd_reset_password(args.username, args.new_password))
-    elif args.command == "create-superuser":
-        return asyncio.run(cmd_create_superuser(args.username, args.email, args.password))
-    elif args.command == "list-users":
-        return asyncio.run(cmd_list_users())
-    elif args.command == "deactivate":
-        return asyncio.run(cmd_set_user_active(args.username, False))
-    elif args.command == "activate":
-        return asyncio.run(cmd_set_user_active(args.username, True))
-    elif args.command == "promote":
-        return asyncio.run(cmd_set_admin(args.username, True))
-    elif args.command == "demote":
-        return asyncio.run(cmd_set_admin(args.username, False))
-    elif args.command == "init-settings":
-        return asyncio.run(cmd_init_settings())
-    return False
+    commands = {
+        "reset-password": lambda: cmd_reset_password(args.username, args.new_password),
+        "create-superuser": lambda: cmd_create_user(args.username, args.email, args.password, is_superuser=True),
+        "create-user": lambda: cmd_create_user(args.username, args.email, args.password, is_superuser=False),
+        "list-users": cmd_list_users,
+        "deactivate": lambda: cmd_set_user_active(args.username, False),
+        "activate": lambda: cmd_set_user_active(args.username, True),
+        "promote": lambda: cmd_set_admin(args.username, True),
+        "demote": lambda: cmd_set_admin(args.username, False),
+        "init-settings": cmd_init_settings,
+        "invite": lambda: cmd_invite(args.admin, args.email),
+        "reset-link": lambda: cmd_reset_link(args.username),
+        "setup-link": cmd_setup_link,
+        "set-email": lambda: cmd_set_email(args.username, args.email),
+        "reset-onboarding": lambda: cmd_reset_onboarding(args.username, args.flow),
+    }
+    command = commands.get(args.command)
+    return asyncio.run(command()) if command else False
 
 
 def register_subparser(parent_subparsers):
@@ -305,30 +442,25 @@ def register_subparser(parent_subparsers):
         epilog="""
 Examples:
   ./dev.py user list                           List all users
-  ./dev.py user create admin admin@ex.com pw   Create user
+  ./dev.py user create admin admin@ex.com pw   Create an administrator
+  ./dev.py user create bob bob@ex.com pw --role user
+                                               Create a regular account
   ./dev.py user reset admin newpassword        Reset password
   ./dev.py user promote admin                  Make admin
   ./dev.py user --test-db list                 Use test database
-"""
-        )
+""",
+    )
 
-    user_parser.add_argument(
-        "--test-db",
-        action="store_true",
-        help="Use test database instead of production"
-        )
+    user_parser.add_argument("--test-db", action="store_true", help="Use test database instead of production")
 
-    user_subparsers = user_parser.add_subparsers(
-        dest="command",
-        title="User commands",
-        metavar=""
-        )
+    user_subparsers = user_parser.add_subparsers(dest="command", title="User commands", metavar="")
 
-    # create-superuser
-    p = user_subparsers.add_parser("create", help="Create new user")
+    # create-superuser, or create-user with --role user
+    p = user_subparsers.add_parser("create", help="Create new user (an administrator unless --role user)")
     p.add_argument("username", help="Username")
     p.add_argument("email", help="Email address")
     p.add_argument("password", help="Password")
+    p.add_argument("--role", choices=("admin", "user"), default="admin", help="admin (default) or user, a regular account")
 
     # list-users
     user_subparsers.add_parser("list", help="List all users")
@@ -357,6 +489,8 @@ Examples:
     # init-settings
     user_subparsers.add_parser("init-settings", help="Initialize global settings")
 
+    _add_link_commands(user_subparsers)
+
     user_parser.set_defaults(func=_dispatch_user_from_devpy)
 
     return user_parser
@@ -370,10 +504,10 @@ def _dispatch_user_from_devpy(args):
 
     # Map dev.py command names to internal names
     command_map = {
-        "create": "create-superuser",
+        "create": "create-user" if getattr(args, "role", "admin") == "user" else "create-superuser",
         "list": "list-users",
         "reset": "reset-password",
-        }
+    }
     args.command = command_map.get(args.command, args.command)
 
     # A command that fails (it printed ❌) exits 1, for scripts that check the status.

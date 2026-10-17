@@ -11,15 +11,12 @@ from backend.app.schemas.risk import (
     RiskOutputKind,
     RiskScopeKind,
 )
-from backend.app.services.provider_registry import (
-    DuplicatePluginCodeError,
-    RiskAnalyticRegistry,
-    register_plugin,
-)
+from backend.app.services.provider_registry import DuplicatePluginCodeError, register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,
 )
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class DemoParams(BaseModel):

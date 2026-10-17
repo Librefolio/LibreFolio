@@ -28,7 +28,7 @@
     "unrealizedDelta": "Variation non réalisée",
     "unrealizedDeltaTooltip": "Variation du gain/perte latent sur les positions encore ouvertes.",
     "realizedSales": "Ventes",
-    "realizedSalesTooltip": "Gain ou perte réalisé sur les ventes de la période, calculé par rapport au prix de revient unitaire.",
+    "realizedSalesTooltip": "Gain ou perte réalisé sur les ventes de la période, et sur les titres cédés à un coût (par exemple à un courtier que LibreFolio ne suit pas), calculé par rapport au prix de revient unitaire.",
     "income": "Dividendes et intérêts",
     "incomeTooltip": "Revenus perçus sur la période via dividendes, intérêts ou coupons.",
     "feesAndTaxes": "Frais et impôts",
@@ -128,7 +128,8 @@
       "missingFx": "Le taux de change nécessaire à un paiement est indisponible.",
       "missingWac": "Le prix de revient unitaire (PRU) n'est pas disponible.",
       "nonPositiveWac": "Le prix de revient unitaire (PRU) est nul ou négatif.",
-      "missingFxDetails": "Le taux de change {pair} requis pour le calcul manque à la date du {date}."
+      "missingFxDetails": "Le taux de change {pair} requis pour le calcul manque à la date du {date}.",
+      "negativeNetIncome": "Les corrections dépassent les revenus de la dernière année."
     },
     "yieldOnCostValue": "Rendement sur coût",
     "yieldOnCostPeriod": "Période",
@@ -147,6 +148,7 @@
     "unrealizedAssetEffect": "Actifs en {currency}",
     "unrealizedFxEffect": "Taux {from} → {to}",
     "unrealizedUnsplit": "{currency}, non décomposé",
-    "fxOnCash": "Effet de change sur les liquidités"
+    "fxOnCash": "Effet de change sur les liquidités",
+    "allocationNegativeCash": "Liquidités négatives : {amount}"
   }
 }

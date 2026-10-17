@@ -435,7 +435,7 @@ describe('flag font — one global rule for flags, no emoji font ahead of text (
 
         it('reads every stylesheet, component, script and document of the app, and no test or generated client', () => {
             const files = scannedFiles();
-            expect(files).toEqual(expect.arrayContaining([APP_CSS, APP_HTML, OFFLINE_HTML, 'src/lib/components/transactions/TransactionsTable.svelte', 'src/lib/utils/currency/currencyFormat.ts', 'src/routes/(app)/dashboard/+page.svelte']));
+            expect(files).toEqual(expect.arrayContaining([APP_CSS, APP_HTML, OFFLINE_HTML, 'src/lib/features/transactions/TransactionsTable.svelte', 'src/lib/utils/currency/currencyFormat.ts', 'src/routes/(app)/dashboard/+page.svelte']));
             expect(files).not.toContain('src/flagFont.gate.test.ts');
             expect(files).not.toContain(LF_FLAGS_CSS);
             expect(files.filter((file) => file.endsWith('.svelte')).length, 'the walk reaches the components').toBeGreaterThan(100);

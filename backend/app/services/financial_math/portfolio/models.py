@@ -31,6 +31,9 @@ ClassificationType = Literal[
 class ValuationSource(StrEnum):
     MARKET_PRICE = "MARKET_PRICE"
     LAST_TRADE_PRICE = "LAST_TRADE_PRICE"
+    # No price observation on or before the day, and the position's cost is known: it counts at its book
+    # cost in the report currency, as a declared estimate, not a price (developer's decision, J-17).
+    ESTIMATED_AT_COST = "ESTIMATED_AT_COST"
     MISSING = "MISSING"
 
 
@@ -116,6 +119,8 @@ class ClassificationResult:
     in_transit_intervals: list[InTransitInterval] = field(default_factory=list)
     external_cash_flows: list[tuple[date_type, int, Decimal, str]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # J-43: the linked internal pairs between brokers owned at different shares, one per pair.
+    share_mismatches: list[ShareMismatch] = field(default_factory=list)
 
     def get_needed_paired_ids(self) -> set[int]:
         """IDs of linked txs whose pair is not in the scope transaction set."""
@@ -185,10 +190,12 @@ class UnrealizedSplit:
 
 @dataclass(frozen=True, slots=True)
 class RealizedSale:
-    """A SELL replayed by the engine, with its proceeds and the historical cost it took from the pool.
+    """A disposal replayed by the engine: a SELL, or a priced outgoing ADJUSTMENT (J-24), with its proceeds and the
+    historical cost it took from the pool.
 
-    Amounts are in the target currency and scaled by the owner's share of the broker.
-    ``proceeds`` is None when they could not be converted (the pair is in the result's
+    Amounts are in the target currency and scaled by the owner's share of the broker. A SELL's ``proceeds`` are
+    its amount converted at its date; a priced outgoing ADJUSTMENT's are the value it hands over, quantity × cost
+    basis converted at its date. ``proceeds`` is None when they could not be converted (the pair is in the result's
     ``missing_fx``); ``cost_complete`` is False when the pool already lacked part of its cost.
     """
 
@@ -216,8 +223,8 @@ class BrokerDailyContribution:
     nav_contribution: Decimal  # market_value_by_broker + cash_by_broker + in_transit_by_broker
     capital_contribution: Decimal  # cumulative_ecf_by_broker (this broker's capital baseline)
     pnl_contribution: Decimal  # nav_contribution - capital_contribution
-    # The in-transit part of nav_contribution. Internal, never exported: the broker card
-    # (PortfolioService.get_summary) adds it to market value and cash valued at its own date.
+    # The in-transit part of nav_contribution, on the departure broker for the whole transit
+    # window. Internal, never exported: the engine's own checks read it.
     in_transit_contribution: Decimal
 
 
@@ -290,6 +297,9 @@ class DailyPortfolioState:
     missing_fx_pairs: set[str] = field(default_factory=set)
     stale_price_asset_ids: set[int] = field(default_factory=set)
     transaction_implied_asset_ids: set[int] = field(default_factory=set)
+    # V-11: for each asset of transaction_implied_asset_ids, the day of its last market quote on or before
+    # this day (None when it was never quoted); the data-quality grace counts from it.
+    transaction_implied_last_quote_dates: dict[int, date_type | None] = field(default_factory=dict)
     nav_complete: bool = True
     # G1a — per-broker additive NAV/capital/P&L slice (see BrokerDailyContribution)
     broker_contributions: dict[int, BrokerDailyContribution] = field(default_factory=dict)
@@ -334,14 +344,81 @@ class EngineEndState:
     cumulative_ecf_by_broker: dict[int, Decimal]
 
 
+@dataclass(frozen=True, slots=True)
+class InternalAssetTransfer:
+    """A security moved between two brokers of the scope by a linked internal TRANSFER pair (MF-A, P22).
+
+    On arrival the sender's tract ends and the receiver's begins, at the same value: what the moved units are worth
+    that day, at the sender's share, as the receiver's NAV values them (``DailyStateBuilder._internal_pair_value``).
+    """
+
+    departure: date_type
+    arrival: date_type
+    asset_id: int
+    sender_broker_id: int
+    receiver_broker_id: int
+    # The moved units' value on arrival in the target currency; None when it cannot be computed (no rate, unknown cost).
+    value_at_arrival: Decimal | None
+    # The historical cost the sender's pool gave up for them, in the target currency; None when that cost is incomplete.
+    cost_moved: Decimal | None
+
+
+@dataclass(frozen=True, slots=True)
+class ShareMismatch:
+    """A linked internal pair between two brokers owned at different shares (J-43).
+
+    Each leg counts at its own broker's share, so what the departure sends and what the arrival brings differ: that
+    gap is a result, never capital (D-MF4 = a). This record lets the data-quality report explain it to the user.
+    """
+
+    # The pair's two transaction ids, lower id first; the brokers and the shares follow the same order.
+    tx_ids: tuple[int, int]
+    broker_ids: tuple[int, int]
+    shares: tuple[Decimal, Decimal]
+    # The later of the two legs' dates: the day the pair is complete.
+    date: date_type
+
+
+@dataclass(frozen=True, slots=True)
+class InvalidSplitEvent:
+    """A SPLIT asset event stored with a ratio the layer cannot use (None, not finite, or ≤ 0; MF-D4).
+
+    It counts as missing: its linked ADJUSTMENT rows stay the split's rescale (cost kept, never in-kind capital), but no
+    ratio restates a trade price observed before it (market quotes are never restated). The data-quality report names
+    its asset.
+    """
+
+    event_id: int
+    asset_id: int
+    date: date_type
+
+
+@dataclass(frozen=True, slots=True)
+class RowsBeforeFloor:
+    """The scope's transactions dated before ``EARLIEST_RANGE_START`` (1 January 1900; MF-SEC8-2a).
+
+    Written by an older version or by hand (N74 refuses new ones). They are replayed on their own dates, but no state is
+    emitted before the floor: the histories start on it. The data-quality report warns, with their number and the
+    earliest date, so the user corrects them.
+    """
+
+    count: int
+    earliest: date_type
+
+
 @dataclass
 class PortfolioCalculationResult:
     """Complete result from the portfolio calculation engine."""
 
     daily_states: list[DailyPortfolioState]
-    # Position snapshots for exposure + contribution views
+    # Position snapshots for exposure + contribution views: the positions held at the end of the period's start day
+    # (``period_start``, the first frame day unless the caller names it) and at date_to.
     position_states_start: list[DailyPositionState] = field(default_factory=list)
+    # The day position_states_start was taken at the end of (None for a result built without a replay).
+    position_states_start_date: date_type | None = None
     position_states_end: list[DailyPositionState] = field(default_factory=list)
+    # Linked internal TRANSFER pairs of securities between two brokers, with their value on arrival (MF-A, P22).
+    internal_asset_transfers: list[InternalAssetTransfer] = field(default_factory=list)
     # Every broker's cash in its own currencies (financial_math.native_cash): balances, values
     # and the period flows by type and position. None when calculate() returns early, with
     # no broker or no transaction in scope.
@@ -357,6 +434,12 @@ class PortfolioCalculationResult:
     average_costs: dict[tuple[int, int], AverageCost] = field(default_factory=dict)
     # SELLs replayed, in replay order, with proceeds and historical cost in target_currency
     realized_sales: list[RealizedSale] = field(default_factory=list)
+    # MF-D4: the SPLIT events whose stored ratio is unusable, counted as missing (one per event, by event id).
+    invalid_split_events: list[InvalidSplitEvent] = field(default_factory=list)
+    # MF-SEC8-2a: the scope's transactions dated before EARLIEST_RANGE_START (None when there is none).
+    rows_before_floor: RowsBeforeFloor | None = None
     # Conversions a movement (cost, cash, external flow, in-transit cost) needed and could not
     # get: pair "FROM/TO" -> dates. Valuation failures are per day in DailyPortfolioState.missing_fx_pairs.
     missing_fx: dict[str, set[date_type]] = field(default_factory=dict)
+    # J-43: the classification's linked internal pairs between brokers owned at different shares.
+    share_mismatches: list[ShareMismatch] = field(default_factory=list)

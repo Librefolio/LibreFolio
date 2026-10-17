@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskRollingReturn": {
+      "name": "Rendement glissant",
+      "description": "Rendement du prix seul sur une fenêtre glissante de jours calendaires, chaque prix comparé à celui d’autant de jours plus tôt.",
+      "output": "Rendement",
+      "outputDescription": "Variation du prix par rapport au prix antérieur, en points de pourcentage.",
+      "windowTooltip": "Jours calendaires entre chaque prix et le prix antérieur auquel il est comparé."
+    }
+  }
+}

@@ -48,7 +48,7 @@ Solo gli amministratori (superutenti) hanno il lucchetto; tutti gli altri otteng
 |---|---|---|---|
 | ⏳ Sessione | **Durata sessione** | 24 ore | Per quanto tempo gli utenti restano connessi. Accorciala su dispositivi condivisi; un nuovo valore si applica dal login successivo di ogni utente. |
 | 🛡️ Sicurezza | **Abilita registrazione** | Attiva | Consente a nuove persone di registrarsi. Disattivala una volta che tutti hanno un account, soprattutto se l'istanza è raggiungibile da Internet. Il primo account di una nuova istanza può sempre essere creato. |
-| 🛡️ Sicurezza | **Richiedi verifica email** | Disattivata | Non ancora attiva: l'invio di email è una funzionalità pianificata, quindi l'interruttore è di sola lettura e contrassegnato **In arrivo**. |
+| 🛡️ Sicurezza | **Richiedi verifica email** | Disattivata | I nuovi account devono aprire un link inviato via email al loro indirizzo prima di poter accedere; il primo account non aspetta mai, e gli account esistenti non cambiano. Si attiva solo mentre l'email funziona e `LIBREFOLIO_PUBLIC_URL` è utilizzabile: fino ad allora l'interruttore resta disabilitato. Vedi *Email Verification* in [Email](email.md). |
 | 🔄 Job di aggiornamento | **Scheduler abilitato** | Attivo | Attiva o disattiva gli aggiornamenti automatici di prezzi e tassi di cambio: vedi [Scheduler dei dati di mercato](#market-data-scheduler). |
 | 🧠 Memoria | **Dimensione Max Upload** | 10 MB | Il file più grande che gli utenti possono caricare, incluso il report del broker. Aumentala se un'esportazione di grandi dimensioni viene rifiutata. |
 | 🌍 Predefiniti | **Valuta predefinita** | `EUR` | La valuta in cui i nuovi utenti registrano i propri dati. |
@@ -68,8 +68,14 @@ Lo scheduler mantiene aggiornati prezzi e tassi di cambio da solo, anche quando 
 - 💰 **Aggiornamento Prezzi Correnti** — ogni pochi minuti, l'ultimo prezzo di ogni asset attivo che ha
   un provider di prezzi.
 - 📊 **Sincronizzazione Storico** — nei giorni e negli orari che scegli, i prezzi giornalieri di quegli asset e i
-  tassi di ogni coppia FX con un provider, nell'**Orizzonte di recupero**, per colmare eventuali lacune. Le coppie
-  con soli tassi manuali vengono saltate.
+  tassi di ogni coppia FX con un provider, almeno nell'**Orizzonte di recupero**, per colmare eventuali lacune.
+  Per un asset o una coppia il cui ultimo prezzo o tasso salvato è più vecchio, risale fino a quel giorno, al massimo
+  di un anno; un asset senza ancora prezzi salvati ha solo l'orizzonte, perché lo scheduler non scarica mai uno
+  storico intero. Le coppie con soli tassi manuali vengono saltate.
+
+Se all'orario di una sincronizzazione il server è spento o sospeso, la sincronizzazione dello storico
+che ha saltato parte appena il server torna attivo, senza aspettare l'orario successivo: un server spento per
+settimane colma tutta la sua lacuna.
 
 ### ⚙️ Configura la pianificazione
 
@@ -86,7 +92,7 @@ La finestra di dialogo ha il proprio pulsante **Salva**.
 | **Aggiorna ogni** | 10 minuti | Ogni quanto vengono aggiornati i prezzi correnti, da 1 a 1440 minuti. |
 | **Orari di sincronizzazione** | `06:00`, `23:00` | Quando viene eseguita la sincronizzazione storica; **Aggiungi orario** aggiunge uno slot. |
 | **Giorni di sincronizzazione** | Lun–Sab | I giorni della sincronizzazione storica. |
-| **Orizzonte di recupero** | 14 giorni | Quanti giorni passati controlla ogni sincronizzazione storica, da 1 a 365. |
+| **Orizzonte di recupero** | 14 giorni | Quanti giorni passati controlla almeno ogni sincronizzazione storica, da 1 a 365. Risale più indietro, fino a un anno, quando l'ultimo prezzo o tasso salvato di un asset o di una coppia è più vecchio. |
 
 Mantieni almeno un orario e un giorno. Suggerimento: una sincronizzazione storica dopo la chiusura dei mercati (ad esempio
 `22:00`) ottiene i dati più completi.
@@ -100,6 +106,9 @@ Mantieni almeno un orario e un giorno. Suggerimento: una sincronizzazione storic
 ### 📜 Leggi il log dello scheduler
 
 La riga **Stato Scheduler** mostra l'ultimo aggiornamento del prezzo corrente, con un punto per il risultato.
+Quando è previsto un nuovo tentativo, una riga in più ne indica l'ora: **Non riuscito: nuovo tentativo alle …** dopo un
+aggiornamento che non si è potuto concludere, altrimenti **Elementi in pausa ritentati alle …** per i prezzi rimandati
+perché il loro fornitore è in pausa.
 Fai clic sulla riga (o su **Dettagli…**) per aprire il **Log Esecuzione Scheduler**. Solo gli amministratori possono
 leggere lo stato e il log.
 
@@ -108,9 +117,13 @@ leggere lo stato e il log.
 </div>
 
 - Ogni voce è un'esecuzione: job, ora, durata e quanti elementi sono riusciti. 🟢 **OK**: tutti, o niente da
-  fare; 🟡 **Parziale**: alcuni non riusciti; 🔴 **Errore**: nessuno riuscito.
+  fare; 🟡 **Parziale**: alcuni non riusciti, o rimandati perché il loro fornitore è in pausa dopo troppe richieste;
+  🔴 **Errore**: nessuno riuscito e nessuno rimandato.
 - Fai clic su una voce per vedere ciascun asset o coppia FX, il relativo provider e i prezzi modificati (**Delta**).
   Passa il mouse su un errore per leggerlo per intero; fai doppio clic (pressione prolungata su un telefono) per copiarlo.
+- Un elemento rimandato mostra un'icona di pausa e **Rimandato: fornitore in pausa**: passa il mouse sull'etichetta per
+  leggere il messaggio del fornitore. La voce conta gli elementi rimandati con ⏸, accanto a ✓ e ✗ (per esempio
+  `3/5 ✓ · 1 ⏸ · 1 ✗`), e **Nuovo tentativo alle …** nella sua intestazione indica l'ora fissata per ritentarli.
 - Filtra per job, stato o periodo, dall'ultima ora agli ultimi 30 giorni. Vengono conservate solo le esecuzioni più recenti.
 
 ---

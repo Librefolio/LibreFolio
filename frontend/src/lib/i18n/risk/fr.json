@@ -302,7 +302,8 @@
       "resource_limit_paths_or_horizon": "Cette simulation est trop volumineuse pour être exécutée. Utilisez moins de trajectoires simulées ou un horizon plus court.",
       "resource_limit_horizon_or_sampling": "Cette simulation quasi-Monte-Carlo est trop volumineuse pour être exécutée. Raccourcissez l'horizon ou choisissez l'échantillonnage Monte-Carlo.",
       "resource_limit_period": "Cette simulation est trop volumineuse pour être exécutée : la période contient trop d'historique. Choisissez une période plus courte.",
-      "resource_limit_positions": "Une simulation peut inclure au plus 100 positions, et ce portefeuille en compte davantage. Simulez plutôt un courtier avec moins de positions."
+      "resource_limit_positions": "Une simulation peut inclure au plus 100 positions, et ce portefeuille en compte davantage. Simulez plutôt un courtier avec moins de positions.",
+      "resource_limit_period_or_assets": "Cette analyse est trop volumineuse pour être exécutée : ces actifs couvrent trop de jours de prix. Choisissez une période plus courte ou moins d'actifs."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe est indéfini car la volatilité est nulle.",
@@ -339,7 +340,9 @@
       "historical_replay_excluded_stale_at_start": "Aucun prix dans les {days} jours précédant le début de la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
       "historical_replay_excluded_stale_at_end": "Aucun prix dans les {days} derniers jours de la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
       "historical_replay_mostly_excluded": "Le résultat ne décrit qu'une partie de votre portefeuille ({covered, number, percent}) : le reste est exclu du rejeu.",
-      "assets_excluded_no_price_source": "{count, plural, one {# actif exclu} other {# actifs exclus}} du calcul : aucune source de prix attribuée et aucun prix jamais enregistré — {names}."
+      "assets_excluded_no_price_source": "{count, plural, one {# actif exclu} other {# actifs exclus}} du calcul : aucune source de prix attribuée et aucun prix jamais enregistré — {names}.",
+      "total_loss_no_recovery": "La valeur est tombée à zéro : aucun gain ne peut la ramener à son sommet, la reprise nécessaire n'est donc pas affichée.",
+      "total_loss_no_recovery_assets": "{count, plural, one {# actif est tombé} other {# actifs sont tombés}} à zéro : aucun gain ne peut {count, plural, one {le ramener à son sommet} other {les ramener à leur sommet}}, la reprise nécessaire n'est donc pas affichée — {names}."
     },
     "assetDetail": {
       "overviewTab": "Vue d'ensemble",

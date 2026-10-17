@@ -204,11 +204,11 @@
 
 <ModalBase maxWidth="3xl" onRequestClose={requestClose} {open} testId="data-import-modal">
     <!-- Header -->
-    <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-600" data-testid="data-import-modal-header">
+    <div class="flex items-center justify-between p-4 border-b border-lf-subtle" data-testid="data-import-modal-header">
         <div class="flex items-center gap-2">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{title}</h2>
+            <h2 class="text-lg font-semibold text-lf-primary">{title}</h2>
             {#if helpContent}
-                <button aria-label="Help" class="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded transition-colors" onclick={() => (showHelp = !showHelp)} title={$t('csvImport.helpTitle')}>
+                <button aria-label={$t('csvImport.helpTitle')} data-testid="data-import-modal-help" class="p-1 text-lf-muted hover:text-lf-info rounded transition-colors" onclick={() => (showHelp = !showHelp)} title={$t('csvImport.helpTitle')}>
                     <HelpCircle size={18} />
                 </button>
             {/if}
@@ -217,7 +217,7 @@
             {#if headerActions}
                 {@render headerActions()}
             {/if}
-            <button aria-label="Close" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded" onclick={requestClose}>✕ </button>
+            <button aria-label={$t('common.close')} data-testid="data-import-modal-close" class="p-1 text-lf-muted hover:text-lf-secondary rounded" onclick={requestClose}>✕ </button>
         </div>
     </div>
 
@@ -226,8 +226,8 @@
         <!-- Help section (collapsible) -->
         {#if showHelp && helpContent}
             <div
-                class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800
-                        rounded-lg px-4 py-3 text-sm text-blue-700 dark:text-blue-300 space-y-2"
+                class="bg-lf-info-soft border border-lf-info-line
+                        rounded-lg px-4 py-3 text-sm text-lf-info-on-soft space-y-2"
             >
                 {@render helpContent()}
             </div>
@@ -236,7 +236,7 @@
         <!-- Drop zone (compact) -->
         <div
             class="relative border-2 border-dashed rounded-lg px-4 py-3 text-center transition-colors
-                {isDragOver ? 'border-libre-green bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-300 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500'}"
+                {isDragOver ? 'border-lf-focus bg-lf-selected' : 'border-lf-input hover:border-lf-input-hover'}"
             ondragleave={handleDragLeave}
             ondragover={handleDragOver}
             ondrop={handleDrop}
@@ -246,12 +246,12 @@
             <input accept=".csv,.txt" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange={handleFileSelect} type="file" />
             <div class="flex items-center justify-center gap-2">
                 {#if fileName}
-                    <FileText size={18} class="text-libre-green shrink-0" />
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{fileName}</span>
-                    <span class="text-xs text-gray-400 dark:text-gray-500">— {$t('csvImport.dropReplace')}</span>
+                    <FileText size={18} class="text-lf-link shrink-0" />
+                    <span class="text-sm font-medium text-lf-secondary">{fileName}</span>
+                    <span class="text-xs text-lf-muted">— {$t('csvImport.dropReplace')}</span>
                 {:else}
-                    <Upload size={18} class="text-gray-400 dark:text-gray-500 shrink-0" />
-                    <span class="text-sm text-gray-600 dark:text-gray-400">{$t('csvImport.dropFile')}</span>
+                    <Upload size={18} class="text-lf-muted shrink-0" />
+                    <span class="text-sm text-lf-secondary">{$t('csvImport.dropFile')}</span>
                 {/if}
             </div>
         </div>
@@ -264,29 +264,29 @@
         <!-- CSV Editor -->
         <CsvEditor {columns} {identity} bind:value={csvValue} minHeight="250px" onvalidchange={handleValidChange} oninput={oncsvtextchange} placeholder={$t('csvImport.placeholder')} />
         {#if domainError}
-            <p class="text-sm text-red-600 dark:text-red-400" data-testid="csv-domain-error">{domainError}</p>
+            <p class="text-sm text-lf-danger" data-testid="csv-domain-error">{domainError}</p>
         {/if}
     </div>
 
     <!-- Footer -->
-    <div class="flex items-center justify-between p-4 border-t border-gray-200 dark:border-slate-600">
-        <div class="text-sm text-gray-500 dark:text-gray-400">
+    <div class="flex items-center justify-between p-4 border-t border-lf-subtle">
+        <div class="text-sm text-lf-muted">
             {#if validRows.length > 0}
-                <span class="text-emerald-600 dark:text-emerald-400 font-medium">{$t('csvImport.validRows', {values: {n: validRows.length}})}</span>
+                <span class="text-lf-success font-medium">{$t('csvImport.validRows', {values: {n: validRows.length}})}</span>
                 {#if errorCount > 0}
-                    <span class="text-red-500 ml-2">• {errorCount} error{errorCount !== 1 ? 's' : ''}</span>
+                    <span class="text-lf-danger ml-2">• {errorCount} error{errorCount !== 1 ? 's' : ''}</span>
                 {/if}
                 {#if hasDuplicates}
-                    <span class="text-amber-500 ml-2">• duplicates</span>
+                    <span class="text-lf-warning ml-2">• duplicates</span>
                 {/if}
             {:else if csvValue.trim()}
-                <span class="text-gray-400">{$t('csvImport.noValidRows')}</span>
+                <span class="text-lf-muted">{$t('csvImport.noValidRows')}</span>
             {/if}
         </div>
         <div class="flex gap-2">
-            <button class="px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" onclick={requestClose}>{$t('common.cancel')}</button>
+            <button class="px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" data-testid="data-import-cancel" onclick={requestClose}>{$t('common.cancel')}</button>
             <button
-                class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 data-domain-error={domainError ? 'true' : 'false'}
                 data-error-count={errorCount}
                 data-has-duplicates={hasDuplicates ? 'true' : 'false'}
@@ -302,4 +302,4 @@
 </ModalBase>
 
 <!-- Confirm discard modal (stacked above) -->
-<ConfirmModal confirmText={$t('common.discardAndClose')} message={$t('csvImport.discardMessage')} onCancel={() => (showDiscardConfirm = false)} onConfirm={doClose} open={showDiscardConfirm} title={$t('common.discardImport')} warning={true} />
+<ConfirmModal confirmText={$t('common.discardAndClose')} message={$t('csvImport.discardMessage')} onCancel={() => (showDiscardConfirm = false)} onConfirm={doClose} open={showDiscardConfirm} testId="data-import-discard-confirm" title={$t('common.discardImport')} warning={true} />

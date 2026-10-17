@@ -281,7 +281,12 @@ again.
 
 The rows arrive in the bulk workspace unsaved. Check or edit them, then click **Save All**: it waits
 for the rows listed in red, and asks before saving the values listed in amber that you have not
-verified (**Save anyway**).
+verified (**Save anyway**). A row whose quantity has more than 10 decimal places, whose cash amount
+has more than 6, or whose per-unit cost basis has more than 12, is refused at **Save All**, with the
+maximum in the message (*Quantity: At most 10 decimal places*): LibreFolio never rounds it.
+Transaction dates go from 1 January 1900 to one year from today: a row of the report dated outside
+that range is refused at **Save All** too, with the range in the message (*Date: Between 1900-01-01
+and 2027-10-17* when today is 17 October 2026).
 
 ---
 

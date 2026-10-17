@@ -13,7 +13,7 @@ from uuid import uuid4
 import pytest
 
 from backend.app.config import DEFAULT_TEST_DATA_DIR
-from backend.app.services.scheduler import joblog
+from backend.app.services.platform.scheduler import joblog
 
 
 @pytest.fixture

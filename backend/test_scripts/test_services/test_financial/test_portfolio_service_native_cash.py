@@ -78,6 +78,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency, OpenDateRangeModel
 from backend.app.schemas.portfolio import BrokerBreakdown, CostHistorySeries, DepositHistorySeries, IncomeHistorySeries, PortfolioReportQuery, PortfolioSummary, PositionsContribution
 from backend.app.services.portfolio_service import PortfolioService
+from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
 _HistorySeries = IncomeHistorySeries | CostHistorySeries | DepositHistorySeries
 
@@ -225,6 +226,15 @@ async def _seed_around_today(session: AsyncSession, keep_alive: list[object], br
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
+
+@pytest.fixture(scope="module", autouse=True)
+def range_bound_lifted():
+    """R13-SEC7-1: the native-cash scenarios here live in 2039–2040, after tomorrow, so the range bound is lifted for the
+    whole module, before any fixture builds data (see ``lift_range_bound``); the today-relative ones end by tomorrow."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        lift_range_bound(monkeypatch)
+        yield
 
 
 @pytest.fixture(scope="module")

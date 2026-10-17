@@ -118,10 +118,13 @@ from backend.app.services.ai_export.temporal.policy import (
     indicator_history_row_limit,
 )
 from backend.app.services.ai_export.temporal.warmup import slice_to_requested_period
-from backend.app.services.asset_source import AssetSourceManager
-from backend.app.services.fx import convert_bulk
-from backend.app.services.provider_registry import SignalPluginRegistry
-from backend.app.services.signal_service import SignalExecutionPlan, SignalService
+from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.financial_math.returns import price_return
+from backend.app.services.financial_math.weights import gross_weights
+from backend.app.services.fx.conversion import convert_bulk
+from backend.app.services.signals.planning import SignalExecutionPlan
+from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.service import SignalService
 
 # =============================================================================
 # Shared temporal aggregator metadata (matches catalog.py's own constant)
@@ -479,10 +482,7 @@ def compute_nav_weights(positions: Sequence[AssetPeriodContribution]) -> Mapping
             Decimal(0),
         ) + abs(position.end_value)
 
-    total = sum(gross_by_asset.values(), Decimal(0))
-    if total <= 0:
-        return MappingProxyType({})
-    return MappingProxyType({asset_id: gross_value / total for asset_id, gross_value in sorted(gross_by_asset.items())})
+    return MappingProxyType(gross_weights(dict(sorted(gross_by_asset.items()))))
 
 
 @dataclass(frozen=True, slots=True)
@@ -623,7 +623,7 @@ BROKER_TECHNICAL_UNIVERSE_KWARGS: Mapping[str, ResourceKey] = MappingProxyType(
 #: workstream's `FX_RATE_SERIES_RESOURCE` (which is scoped to the visible
 #: period only - see `fx_core.py`'s `_load_rate_series`): both loaders share
 #: the same `FxRateSeriesResource` *type* and the same underlying
-#: `backend.app.services.fx.convert_bulk` source of truth, but a shared
+#: `backend.app.services.fx.conversion.convert_bulk` source of truth, but a shared
 #: request-scoped cache key must always mean the exact same date range to
 #: every caller. Reusing the literal `FX_RATE_SERIES_RESOURCE` key here would
 #: make correctness depend on which sibling component resolves it first
@@ -660,7 +660,7 @@ def _fx_warmup_days(scope: BuildScope) -> int:
 async def load_fx_rate_series(context: BuildContext) -> FxRateSeriesResource:
     """Loads a daily base->quote conversion rate series over the warm-up + visible range.
 
-    Routed entirely through the existing `backend.app.services.fx.convert_bulk`
+    Routed entirely through the existing `backend.app.services.fx.conversion.convert_bulk`
     batch conversion service (unlimited backward-fill, no invented economics -
     requirement 6), exactly like the sibling FX-core workstream's own rate
     series loader, just over a wider (warm-up-inclusive) date range and under
@@ -815,8 +815,9 @@ def build_price_buckets(points: Sequence[ContinuousMultiOutputPoint], plan: Buck
     for statistic in statistics:
         simple_return = None
         return_start_date = None
-        if statistic.last is not None and previous_close is not None and previous_close.value != 0:
-            simple_return = float(statistic.last.value / previous_close.value - Decimal(1))
+        bucket_return = price_return(previous_close.value, statistic.last.value) if statistic.last is not None and previous_close is not None else None
+        if bucket_return is not None:
+            simple_return = float(bucket_return)
             return_start_date = previous_close.observed_date
 
         buckets.append(

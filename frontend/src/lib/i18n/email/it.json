@@ -1,0 +1,151 @@
+{
+  "email": {
+    "tab": {
+      "label": "Email",
+      "title": "Email",
+      "intro": "LibreFolio può spedire email attraverso un server SMTP, configurato da chi gestisce l'istanza. L'email è facoltativa: senza, tutto il resto funziona."
+    },
+    "state": {
+      "off": "Spenta",
+      "ready": "Pronta",
+      "invalid": "Non funziona"
+    },
+    "off": {
+      "explanation": "Nessun server SMTP è configurato (LIBREFOLIO_SMTP_HOST), quindi non parte nulla: i link d'invito e di reimpostazione della password si copiano a mano. La guida spiega come configurarne uno."
+    },
+    "invalid": {
+      "explanation": "L'email resta spenta finché la configurazione non è corretta: correggi la variabile, poi riavvia LibreFolio."
+    },
+    "problems": {
+      "SMTP_HOST_INVALID": "{variable} non è un nome di server valido: scrivi solo il nome dell'host o l'indirizzo IP, senza schema, porta né percorso.",
+      "SMTP_TLS_INVALID": "{variable} deve essere starttls, tls o none.",
+      "SMTP_PORT_INVALID": "{variable} deve essere un numero intero da 1 a 65535.",
+      "SMTP_FROM_MISSING": "Manca {variable}: l'indirizzo del mittente è obbligatorio.",
+      "SMTP_FROM_INVALID": "{variable} deve essere un solo indirizzo, per esempio noreply@example.com, eventualmente dopo un nome, con l'indirizzo tra parentesi angolari.",
+      "SMTP_REPLY_TO_INVALID": "{variable} deve essere un solo indirizzo.",
+      "SMTP_MAX_PER_HOUR_INVALID": "{variable} deve essere un numero intero di almeno 1.",
+      "SMTP_PASSWORD_UNREADABLE": "Il file della password indicato da {variable} non si può leggere.",
+      "SMTP_CREDENTIALS_INCOMPLETE": "{variable} è impostata da sola: imposta sia l'utente SMTP sia la sua password, oppure nessuno dei due.",
+      "unknown": "{variable} non si può usare."
+    },
+    "checks": {
+      "smtp": {
+        "off": "L'email è spenta: nessun server SMTP è configurato.",
+        "ok": "La configurazione SMTP si può usare.",
+        "invalid": "{variable} non si può usare ({problem}): l'email resta spenta finché non viene corretta."
+      },
+      "smtpEncryption": {
+        "ok": "Le email viaggiano cifrate, oppure l'email è spenta.",
+        "localPlain": "Le email vanno in chiaro a un server della rete locale.",
+        "plain": "Le email, i loro link e la password SMTP viaggiano in chiaro verso un server fuori dalla rete locale: imposta LIBREFOLIO_SMTP_TLS a starttls o tls."
+      },
+      "links": {
+        "ok": "Le email possono contenere link: LIBREFOLIO_PUBLIC_URL è impostata, oppure l'email è spenta.",
+        "missing": "LIBREFOLIO_PUBLIC_URL non è impostata: le email funzionano, ma nessuna con un link (password dimenticata, invito, reset) può partire.",
+        "invalid": "LIBREFOLIO_PUBLIC_URL non può iniziare un link: serve http:// o https:// e un nome host, senza nome utente, password, ? né #. Nessuna email con un link può partire."
+      }
+    },
+    "links": {
+      "base": "I link nelle email iniziano con {base}.",
+      "probe": {
+        "checking": "Verifico da questo dispositivo che lì risponda questa istanza…",
+        "match": "Lì risponde questa istanza, da questo dispositivo.",
+        "otherInstance": "Da questo dispositivo, a quell'indirizzo risponde un altro server, non questa istanza. La verifica vale solo per questo dispositivo: la causa può essere il suo DNS o la sua rete. Se gli altri dispositivi vedono lo stesso, i link nelle email portano altrove: controlla LIBREFOLIO_PUBLIC_URL.",
+        "unreachable": "Da questo dispositivo questa istanza non si raggiunge a quell'indirizzo. La verifica vale solo per questo dispositivo: la causa può essere il suo DNS o la sua rete. Se nemmeno gli altri dispositivi la raggiungono, i link nelle email non si apriranno: controlla LIBREFOLIO_PUBLIC_URL.",
+        "insecure": "Questa pagina usa https://, mentre LIBREFOLIO_PUBLIC_URL inizia con http://: questo browser non può verificarlo, e i link nelle email viaggerebbero in chiaro. Impostalo all'indirizzo https://.",
+        "invalid": "Questo browser non riesce a leggere LIBREFOLIO_PUBLIC_URL come indirizzo: i link nelle email potrebbero non aprirsi. Controllane il valore."
+      },
+      "recheck": "Verifica di nuovo"
+    },
+    "budget": {
+      "remaining": "Restano {remaining} email su {max} in quest'ora.",
+      "spent": "Il limite di {max} email all'ora è raggiunto: la prossima può partire fra {minutes} min."
+    },
+    "test": {
+      "hint": "Spedisci un'email di prova al tuo indirizzo per verificare la configurazione.",
+      "button": "Spedisci un'email di prova",
+      "sending": "Invio…",
+      "sent": "Email di prova spedita al tuo indirizzo: controlla la posta in arrivo, e anche lo spam.",
+      "errors": {
+        "EMAIL_UNAVAILABLE": "L'email è spenta o non funziona su questa istanza.",
+        "EMAIL_RATE_LIMITED": "Il limite di email all'ora è raggiunto: riprova fra {minutes} min.",
+        "EMAIL_RECIPIENT_INVALID": "L'indirizzo del tuo account non è un indirizzo email valido.",
+        "generic": "Non è stato possibile spedire l'email di prova."
+      }
+    },
+    "smtpErrors": {
+      "CONNECTION_FAILED": "LibreFolio non raggiunge il server SMTP: controlla l'host e la porta.",
+      "TLS_FAILED": "La connessione sicura non è riuscita: controlla LIBREFOLIO_SMTP_TLS e il certificato del server.",
+      "AUTH_FAILED": "Il server SMTP ha rifiutato l'accesso: controlla l'utente e la password.",
+      "SENDER_REFUSED": "Il server SMTP ha rifiutato l'indirizzo del mittente (LIBREFOLIO_SMTP_FROM).",
+      "RECIPIENT_REFUSED": "Il server SMTP ha rifiutato il tuo indirizzo.",
+      "TIMEOUT": "Il server SMTP non ha risposto in tempo.",
+      "SEND_FAILED": "Il server SMTP non ha accettato il messaggio."
+    },
+    "loadError": "Non è stato possibile leggere lo stato dell'email.",
+    "verification": {
+      "page": {
+        "checking": "Verifico il tuo indirizzo email…",
+        "expired": "Questo link è scaduto. Accedi con nome utente e password: ti verrà proposto un link nuovo.",
+        "consumed": "Questo link è già stato usato. Se il tuo account è attivo, accedi.",
+        "revoked": "Questo link non funziona più: accedi per chiederne uno nuovo.",
+        "unknown": "Questo link non è valido: riaprilo intero dall'email. Se non funziona ancora, accedi per chiederne uno nuovo.",
+        "blocked": "Questa istanza è bloccata dal suo fornitore di hosting, quindi il link non può essere verificato ora. Aprilo di nuovo quando l'istanza sarà sbloccata; se intanto il link è scaduto, accedi per averne uno nuovo.",
+        "missing": "Questo link è incompleto: riaprilo dall'email.",
+        "error": "Non è stato possibile verificare il link: riprova."
+      },
+      "verified": "Il tuo indirizzo email è verificato, {username}: ora puoi accedere.",
+      "loginRequired": "Il tuo indirizzo email non è ancora verificato: apri il link nell'email che ti abbiamo mandato, poi accedi.",
+      "resend": "Rispedisci il link",
+      "resending": "Invio…",
+      "resent": "Un link nuovo è in arrivo: controlla la posta, anche nello spam. I link precedenti non funzionano più.",
+      "resendErrors": {
+        "INVALID_CREDENTIALS": "Nome utente o password non corretti: controllali nel modulo qui sopra.",
+        "EMAIL_RATE_LIMITED": "Troppe richieste per ora: riprova tra {minutes} min.",
+        "EMAIL_VERIFICATION_NOT_NEEDED": "Il tuo account è già attivo: accedi.",
+        "USER_LIMIT_REACHED": "Il tuo link è scaduto e ora questa istanza è al completo: chiedi al suo amministratore.",
+        "ACCOUNT_DISABLED": "Questo account è disattivato: chiedi all'amministratore di questa istanza.",
+        "unavailable": "Ora l'email non può partire: riprova più tardi, o chiedi all'amministratore di questa istanza.",
+        "generic": "Non è stato possibile spedire il link: riprova."
+      },
+      "registered": "Account creato. Ti abbiamo mandato un'email con un link per attivarlo: aprilo entro 24 ore, poi accedi.",
+      "signUpUnavailable": "Ora non è possibile registrarsi: questa istanza non riesce a spedire l'email di verifica. Riprova più tardi, o chiedi al suo amministratore.",
+      "settingNeedsEmail": "Serve che un'email con un link possa partire: configura prima SMTP e LIBREFOLIO_PUBLIC_URL (Impostazioni › Amministrazione › Email).",
+      "settingUnavailable": "La verifica dell'email richiede che un'email con un link possa partire, e ora non può: controlla Impostazioni › Amministrazione › Email."
+    },
+    "sendLink": {
+      "button": "Invia per email",
+      "sending": "Invio…",
+      "toLabel": "Invia a",
+      "toPlaceholder": "nome@esempio.it",
+      "resetTarget": "Il link va all'indirizzo email dell'account.",
+      "publicUrlHint": "Il link nell'email inizia con l'indirizzo impostato in LIBREFOLIO_PUBLIC_URL, che può essere diverso da quello qui sopra.",
+      "sent": "Inviato a {to}. Lingua: {language}.",
+      "errors": {
+        "EMAIL_UNAVAILABLE": "L'email è spenta o non funziona su questa istanza.",
+        "EMAIL_LINKS_UNAVAILABLE": "Le email non possono contenere link: LIBREFOLIO_PUBLIC_URL non è impostata, o non può iniziare un link.",
+        "EMAIL_LINK_INVALID": "Questo link non funziona più: creane uno nuovo.",
+        "EMAIL_ACCOUNT_INACTIVE": "L'account non è attivo: attivalo prima di mandargli un link di reset.",
+        "EMAIL_RECIPIENT_REQUIRED": "Scrivi l'indirizzo a cui mandare l'invito.",
+        "EMAIL_RECIPIENT_NOT_ALLOWED": "Un link di reset va solo all'indirizzo del suo account.",
+        "EMAIL_RECIPIENT_INVALID": "Questo non è un solo indirizzo email valido.",
+        "EMAIL_RATE_LIMITED": "Il limite orario di email è raggiunto: riprova tra {minutes} min.",
+        "RECIPIENT_REFUSED": "Il server SMTP ha rifiutato l'indirizzo del destinatario.",
+        "generic": "Non è stato possibile spedire l'email."
+      },
+      "languageLabel": "Lingua dell'email",
+      "languageInstance": "La lingua dell'istanza"
+    },
+    "forgot": {
+      "label": "Nome utente o indirizzo email",
+      "submit": "Mandami un link per il reset",
+      "sending": "Invio…",
+      "accepted": "Se un account attivo corrisponde, il suo proprietario riceve un'email con un link per scegliere una nuova password. Controlla la posta, anche nello spam: il link funziona per 30 minuti.",
+      "errors": {
+        "unavailable": "Ora questa istanza non può spedire email: chiedi al suo amministratore.",
+        "EMAIL_RATE_LIMITED": "Troppe richieste per ora: riprova tra {minutes} min.",
+        "generic": "Non è stato possibile inviare la richiesta: riprova."
+      }
+    }
+  }
+}

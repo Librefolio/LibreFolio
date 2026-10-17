@@ -1,4 +1,5 @@
-import {expect, test as base, type Page} from '../fixtures/playwright';
+import type {Route} from '@playwright/test';
+import {expect, test as base, type Locator, type Page, type Request} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
 import {deleteDisposableUser, registerDisposableUser, skipDueFlowsExcept, type DisposableUser} from '../fixtures/onboarding-accounts';
@@ -65,6 +66,93 @@ async function openSeededOwnedCard(page: Page): Promise<number> {
     return broker.id;
 }
 
+const REPORT_PATH = '/api/v1/portfolio/report';
+const BROKERS_PATH = '/api/v1/brokers';
+/** A page load, or a round trip to the backend (the report is computed on the spot). A deadline, never a delay. */
+const ROUND_TRIP_MS = 30_000;
+/** The sign-in, a full page load and a held round trip, with room for one deadline that runs out on a red. */
+const REFRESH_TEST_MS = 90_000;
+
+/** What a report asks (`fetchReport`, portfolioStore): the fields read here, and the rest compared whole. */
+type ReportBody = Record<string, unknown> & {include_breakdown?: boolean; broker_ids?: number[]};
+
+/** The report of the cards (`loadBrokers`, brokers/+page.svelte): the only report that asks the breakdown by broker. */
+function isCardsReport(request: Request): boolean {
+    if (request.method() !== 'POST' || new URL(request.url()).pathname !== REPORT_PATH) return false;
+    return (request.postDataJSON() as ReportBody | null)?.include_breakdown === true;
+}
+
+/** The list of brokers (`refreshAllBrokers`, brokerStore): always asked with the inaccessible ones included. */
+function isBrokerList(request: Request): boolean {
+    const url = new URL(request.url());
+    return request.method() === 'GET' && url.pathname === BROKERS_PATH && url.searchParams.get('include_inaccessible') === 'true';
+}
+
+/** What a report asks but its brokers: the rest of the cache key (currency, period, every include flag). */
+function questionOf(request: Request): Record<string, unknown> {
+    const body: ReportBody = (request.postDataJSON() as ReportBody | null) ?? {};
+    const question = {...body};
+    delete question.broker_ids;
+    return question;
+}
+
+/** The brokers a report asks about, in id order. */
+function brokersOf(request: Request): number[] {
+    return [...((request.postDataJSON() as ReportBody | null)?.broker_ids ?? [])].sort((a, b) => a - b);
+}
+
+/** Reports the test holds, and owns until it lets them through. */
+interface ReportHold {
+    /** Every report held so far, in arrival order. */
+    readonly held: Request[];
+    /** Lets every held report through as if it had never been held; from then on the hold lets everything through. */
+    release(): Promise<void>;
+    /** `release()`, then the route goes: for `finally`. */
+    dispose(): Promise<void>;
+}
+
+/** Holds every `POST /portfolio/report` the page sends from now until `release()`; every other request goes through untouched. */
+async function holdReports(page: Page): Promise<ReportHold> {
+    const held: Request[] = [];
+    const waiting: Route[] = [];
+    let open = false;
+    const matches = (url: URL): boolean => url.pathname === REPORT_PATH;
+    const handler = async (route: Route): Promise<void> => {
+        if (open || route.request().method() !== 'POST') {
+            await route.fallback();
+            return;
+        }
+        held.push(route.request());
+        waiting.push(route);
+    };
+    await page.route(matches, handler);
+    const release = async (): Promise<void> => {
+        open = true;
+        // A request whose page went away cannot be let through any more, and there is nobody to deliver it to.
+        await Promise.all(waiting.splice(0).map((route) => route.fallback().catch(() => undefined)));
+    };
+    return {
+        held,
+        release,
+        dispose: async () => {
+            await release();
+            await page.unroute(matches, handler);
+        },
+    };
+}
+
+/** Busy, as the user meets it: the button says it is waiting, and cannot be pressed. */
+async function expectBusy(button: Locator, why: string): Promise<void> {
+    await expect(button, why).toHaveAttribute('data-busy', 'true');
+    await expect(button, why).toBeDisabled();
+}
+
+/** Idle: nothing of the page is pending, and the button can be pressed again. A round trip away at most. */
+async function expectIdle(button: Locator, why: string): Promise<void> {
+    await expect(button, why).toHaveAttribute('data-busy', 'false', {timeout: ROUND_TRIP_MS});
+    await expect(button, why).toBeEnabled();
+}
+
 // Earned parallel: this file's blocks own the data they touch and wait on published
 // state, so they share the backend with their neighbours instead of queueing behind
 // them. Verified by a green run of the whole category at 4 workers.
@@ -127,6 +215,76 @@ test.describe('Brokers', () => {
             // Cancel to close dialog: the seeded broker stays
             await page.getByTestId('delete-broker-cancel').click();
             await expect(page.getByTestId('delete-broker-dialog')).not.toBeVisible();
+        });
+    });
+
+    /**
+     * Y-14: the list's Refresh recalculates the cards, as the Dashboard's and a broker's page's do: it asks the report of
+     * the cards again with `force`, past the page's cache (portfolioStore), where the first load left it fresh. Red today:
+     * the Refresh re-reads the list (`refreshAllBrokers`) and asks the report unforced, the fresh cached one answers, and
+     * nothing reaches the network — the cards keep the figures of the first load.
+     *
+     * Fresh: nothing in this document marks the cached report stale between the two loads — no write, no
+     * `requestPortfolioRefresh()`, no price catch-up (the E2E backend runs with `--no-scheduler`). The Refresh must ask
+     * the same question (checked below), so that only the force can send it. Its brokers are part of the cache key too: a
+     * neighbour creating or deleting a broker of TEST_USER between the two loads (brokers-detail, broker-recovery and
+     * broker-create-feedback do, in `front-broker all`) makes the Refresh miss the cache whatever it forces — a green that
+     * does not isolate the force, never a red. This file creates brokers on disposable accounts only.
+     *
+     * The report is held (`page.route`, let through with `route.fallback()`), so its pending state belongs to the test.
+     * Any `POST /portfolio/report` once the page has settled is the Refresh's: `loadBrokers` is the page's only
+     * `fetchReport`, the cards ask nothing, and the page reloads nothing in background (it listens to no portfolio
+     * signal). `navigateTo` is a document load: the Dashboard the sign-in landed on is gone, with its reports. Busy or idle
+     * is read from `data-busy` and `disabled` only. Read-only: TEST_USER, nothing written; the hold is released and
+     * unrouted in `finally`.
+     */
+    test.describe('Broker List Refresh', () => {
+        test.describe.configure({timeout: REFRESH_TEST_MS});
+
+        test('Refresh asks the report of the cards again even when its cache is fresh, and holds its button until it is back (Y-14)', async ({page}) => {
+            // The first load, settled: the list, then the report of the cards, answered — so in the page's cache, fresh.
+            const firstLoad: Request[] = [];
+            const recordCardsReport = (request: Request): void => {
+                if (isCardsReport(request)) firstLoad.push(request);
+            };
+            page.on('request', recordCardsReport);
+            await navigateTo(page, '/brokers');
+            await waitForSettled(page.getByTestId('brokers-page'), ROUND_TRIP_MS);
+            const refresh = page.getByTestId('brokers-refresh');
+            await expectIdle(refresh, 'the list of brokers settled with its Refresh button still waiting');
+            page.off('request', recordCardsReport);
+            expect(firstLoad.length, `precondition: the first load asked the report of the cards (${TEST_USER.username} has brokers: populate_mock_data.py)`).toBeGreaterThan(0);
+            // The latest the page asked: the question its cache holds for the page as it stands.
+            const cached = firstLoad[firstLoad.length - 1];
+            expect((await cached.response())?.ok(), 'precondition: the report of the cards was answered at the first load, so the page cached it').toBe(true);
+
+            const gate = await holdReports(page);
+            try {
+                const listBack = page.waitForResponse((response) => isBrokerList(response.request()), {timeout: ROUND_TRIP_MS});
+                await refresh.click();
+                const list = await listBack;
+                expect(list.ok(), `the list of brokers Refresh asks again: HTTP ${list.status()}`).toBe(true);
+                // The report is asked once the list is in, inside the same Refresh.
+                await expect.poll(() => gate.held.length, {message: 'Refresh never asked the report of the cards again: the cached one, still fresh, answered for it (Y-14)', timeout: ROUND_TRIP_MS}).toBeGreaterThan(0);
+                const asked = gate.held[0];
+                await expectBusy(refresh, 'Refresh asked the report of the cards again, and its button does not wait for it');
+
+                // The question the cache holds, asked again, about the brokers of the refreshed list: the first load's, unless a
+                // neighbour changed them (see above).
+                expect(questionOf(asked), 'the report Refresh asks is not the question of the cards').toEqual(questionOf(cached));
+                const {items = []} = (await list.json()) as {items?: Array<{id: number; user_role?: string | null}>};
+                const shown = items
+                    .filter((broker) => broker.user_role != null)
+                    .map((broker) => broker.id)
+                    .sort((a, b) => a - b);
+                expect(brokersOf(asked), 'the report Refresh asks is not about the brokers of the refreshed list').toEqual(shown);
+
+                await gate.release();
+                await expectIdle(refresh, 'the report of the cards is back, and the Refresh button still waits');
+                expect((await asked.response())?.ok(), 'the report of the cards Refresh asked again failed').toBe(true);
+            } finally {
+                await gate.dispose();
+            }
         });
     });
 });

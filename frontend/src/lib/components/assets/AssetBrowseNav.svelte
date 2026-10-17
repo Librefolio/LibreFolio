@@ -93,7 +93,7 @@
         void goto(url, {replaceState: true, keepFocus: true});
     }
 
-    const buttonClass = 'p-2 rounded-lg text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent';
+    const buttonClass = 'p-2 rounded-lg text-lf-muted transition-colors hover:bg-lf-hover disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent';
 </script>
 
 <div class="contents" data-testid="asset-browse" data-state={browseState} data-source={source ?? undefined}>
@@ -102,7 +102,7 @@
             <button type="button" class={buttonClass} data-testid="asset-browse-prev" disabled={position.previous === null} aria-label={$t('assetDetail.browse.previous')} title={$t('assetDetail.browse.previous')} onclick={() => browseTo(position?.previous ?? null)}>
                 <ChevronLeft size={20} />
             </button>
-            <span class="text-xs tabular-nums whitespace-nowrap text-gray-500 dark:text-gray-400" data-testid="asset-browse-position" aria-hidden="true">{position.index + 1}/{position.total}</span>
+            <span class="text-xs tabular-nums whitespace-nowrap text-lf-muted" data-testid="asset-browse-position" aria-hidden="true">{position.index + 1}/{position.total}</span>
             <button type="button" class={buttonClass} data-testid="asset-browse-next" disabled={position.next === null} aria-label={$t('assetDetail.browse.next')} title={$t('assetDetail.browse.next')} onclick={() => browseTo(position?.next ?? null)}>
                 <ChevronRight size={20} />
             </button>

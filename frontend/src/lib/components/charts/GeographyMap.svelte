@@ -23,6 +23,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
@@ -32,6 +33,10 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {buildChoroplethData, buildGeoLabel, buildGeoNameMaps, centroidOf, choroplethMax, computeUnknownPct} from '$lib/components/charts/geographyMapHelpers';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {themed} from '$lib/theme/themePair';
+    import {chartNeutrals, GEO_MAP_COLORS} from '$lib/theme/chartTheme';
+    import {GEO_CHOROPLETH_SCALE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Props
@@ -99,11 +104,12 @@
 
     onMount(() => {
         registerWorldMap();
-        // Re-render on dark mode toggle
-        const observer = new MutationObserver(() => renderChart());
-        observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        // Re-render on dark mode toggle, and on the Designer Lab's colour edits (C4)
+        const observer = onThemeClassChange(() => renderChart());
+        const chartColors = onChartColorsChange(() => renderChart());
         return () => {
             observer.disconnect();
+            chartColors.disconnect();
             cleanup();
         };
     });
@@ -243,7 +249,7 @@
         if (!chartContainer || !mapRegistered) return;
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
             attachChartReady(chartInstance, chartContainer, 'geography-map');
             needsInitialLayoutStabilityPass = true;
             chartInstance.on('georoam', () => {
@@ -259,7 +265,8 @@
             chartContainer.addEventListener('touchcancel', handleTouchPanEnd, {passive: true});
         }
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
+        const neutrals = chartNeutrals(isDark, chartContainer);
 
         // Convert ISO A3 → GeoJSON country name + percentage (skip unclassified)
         const chartData = buildChoroplethData(data, iso3ToGeoName);
@@ -279,9 +286,9 @@
         const fixedLabelStyle = {
             show: true,
             formatter: labelFormatter,
-            color: isDark ? '#e2e8f0' : '#1e293b',
+            color: neutrals.geoMap.label,
             fontSize: 10,
-            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.55)' : 'rgba(255,255,255,0.72)',
+            backgroundColor: neutrals.geoMap.labelBackground,
             borderRadius: 4,
             padding: [1, 3],
         };
@@ -294,9 +301,9 @@
                 realtime: false,
                 calculable: false,
                 inRange: {
-                    color: isDark ? ['#1e3a2f', '#22543d', '#276749', '#2f855a', '#38a169', '#48bb78'] : ['#f0fdf4', '#bbf7d0', '#86efac', '#4ade80', '#22c55e', '#16a34a'],
+                    color: themed(GEO_CHOROPLETH_SCALE, isDark),
                 },
-                textStyle: {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11},
+                textStyle: {color: neutrals.dashboard.text, fontSize: 11},
                 left: 'left',
                 bottom: 10,
                 orient: 'horizontal',
@@ -313,15 +320,15 @@
                     scaleLimit: {min: 1, max: 5},
                     emphasis: {
                         label: fixedLabelStyle,
-                        itemStyle: {areaColor: isDark ? '#fbbf24' : '#f59e0b'},
+                        itemStyle: {areaColor: themed(GEO_MAP_COLORS.highlight, isDark)},
                     },
                     select: {
                         label: fixedLabelStyle,
-                        itemStyle: {areaColor: isDark ? '#fbbf24' : '#f59e0b'},
+                        itemStyle: {areaColor: themed(GEO_MAP_COLORS.highlight, isDark)},
                     },
                     itemStyle: {
-                        areaColor: isDark ? '#334155' : '#e2e8f0',
-                        borderColor: isDark ? '#1e293b' : '#cbd5e1',
+                        areaColor: themed(GEO_MAP_COLORS.land, isDark),
+                        borderColor: neutrals.geoMap.border,
                         borderWidth: 0.5,
                     },
                     // Always show translated fixed labels for countries that have data.
@@ -341,7 +348,7 @@
 </script>
 
 {#if mapError}
-    <div class="flex items-center justify-center text-sm text-gray-400 dark:text-gray-500 italic" style="height: {height};">
+    <div class="flex items-center justify-center text-sm text-lf-muted italic" style="height: {height};">
         {mapError}
     </div>
 {:else}
@@ -350,7 +357,7 @@
     <div class="flex flex-col" style="height: {height};">
         <div bind:this={chartContainer} class="w-full flex-1 min-h-0"></div>
         {#if unknownPct > 0}
-            <p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 italic text-center leading-snug">
+            <p class="mt-1 text-[11px] text-lf-muted italic text-center leading-snug">
                 {$t('dashboard.geoUnclassified', {values: {pct: unknownPct}})}
             </p>
         {/if}

@@ -33,7 +33,7 @@ async def get_current_value(self, ...):
 
 **Complementary rule**: if an endpoint does only light sync I/O (`Path.exists()`, `FileResponse`), define it as `def` (not `async def`). FastAPI will run it in the thread pool automatically.
 
-Examples of sync-safe endpoints: `frontend_catchall()`, `mkdocs_static()` in `main.py`.
+Examples of sync-safe endpoints: `frontend_catchall()`, `mkdocs_static()` in `services/platform/static_site.py`.
 
 ## Where it applies
 - All asset providers (`F-025`): `get_current_value()`, `get_history_value()`, `search()`
@@ -53,7 +53,7 @@ event loop: [[problems/bcrypt-blocks-the-event-loop]] (V-16).
 
 | Role | Path |
 |------|------|
-| Thread isolation (provider calls) | `backend/app/services/asset_source.py` |
-| FX service (async patterns) | `backend/app/services/fx.py` |
+| Thread isolation (provider calls) | `backend/app/services/assets/core.py` |
+| FX service (async patterns) | `backend/app/services/fx/sync.py` |
 | Example: yfinance provider | `backend/app/services/asset_source_providers/yahoo_finance/plugin.py` |
-| FastAPI main (sync endpoints) | `backend/app/main.py` |
+| Static site (sync endpoints) | `backend/app/services/platform/static_site.py` |

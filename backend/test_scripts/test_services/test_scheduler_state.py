@@ -3,13 +3,21 @@ Test: Scheduler state persistence.
 
 Tests load_state(), save_state(), atomic write, and recovery from corrupt/partial files.
 
-Test IDs: SS-001..SS-006
+Lot Z7b (SS-007..SS-011): ``JobState`` gains, after its six fields, ``last_items_deferred`` (0), ``retry_at``,
+``consecutive_failures`` (0) and ``next_attempt_at`` (None); ``save_state`` writes them; a file written before them loads
+with their defaults, one written by a newer version loads ignoring the keys ``JobState`` does not know, and a section
+that is not an object loads as a fresh ``JobState``, without an exception, as today.
+
+Test IDs: SS-001..SS-011
 """
 
+import dataclasses
 import json
 import sys
 
-import backend.app.services.scheduler.state as state_mod
+import pytest
+
+import backend.app.services.platform.scheduler.state as state_mod
 from backend.app.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -214,3 +222,127 @@ class TestLoadExtraFields:
         assert result.history_sync is not None
 
         print_success("Extra fields tolerated — no crash")
+
+
+# ============================================================================
+# SS-007..SS-011: the fields of lot Z7b
+# ============================================================================
+
+#: The six fields of ``JobState`` before lot Z7b, as such a file holds them: every value differs from its default.
+BEFORE_Z7B = {
+    "current_price": {
+        "last_run_at": "2026-06-08T10:00:00+02:00",
+        "last_duration_s": 1.5,
+        "last_status": "partial",
+        "last_items_ok": 10,
+        "last_items_err": 2,
+        "last_error": "QuotaExceeded",
+    },
+    "history_sync": {
+        "last_run_at": "2026-06-08T06:05:00+02:00",
+        "last_duration_s": 7.2,
+        "last_status": "ok",
+        "last_items_ok": 5,
+        "last_items_err": 0,
+        "last_error": None,
+    },
+}
+#: The four fields lot Z7b adds, in their order.
+Z7B_FIELDS = ("last_items_deferred", "retry_at", "consecutive_failures", "next_attempt_at")
+
+
+class TestZ7bFields:
+    def test_job_state_gains_four_fields_after_its_six_with_their_defaults(self):
+        """SS-007: ``JobState``'s fields, in order, with their defaults: the six of before, then ``last_items_deferred`` 0, ``retry_at`` None, ``consecutive_failures`` 0, ``next_attempt_at`` None."""
+        print_section("SS-007: JobState fields of lot Z7b")
+
+        shape = [(field.name, field.default) for field in dataclasses.fields(state_mod.JobState)]
+
+        assert shape == [
+            ("last_run_at", None),
+            ("last_duration_s", None),
+            ("last_status", None),
+            ("last_items_ok", 0),
+            ("last_items_err", 0),
+            ("last_error", None),
+            ("last_items_deferred", 0),
+            ("retry_at", None),
+            ("consecutive_failures", 0),
+            ("next_attempt_at", None),
+        ]
+        print_success("four fields after the six, with their defaults")
+
+    def test_save_state_writes_the_new_fields_and_load_state_reads_them_back(self, tmp_path, monkeypatch):
+        """SS-008: ``save_state`` writes the four fields in each job's object — set or at their defaults —, and ``load_state`` gives back the very state saved."""
+        print_section("SS-008: save_state + load_state with the fields of lot Z7b")
+        state_mod = _make_state_module(tmp_path, monkeypatch)
+        state = state_mod.SchedulerState(
+            current_price=state_mod.JobState(
+                last_run_at="2026-06-08T10:00:00+00:00",
+                last_duration_s=1.5,
+                last_status="partial",
+                last_items_ok=3,
+                last_items_err=1,
+                last_items_deferred=2,
+                retry_at="2026-06-08T10:05:00+00:00",
+            ),
+            history_sync=state_mod.JobState(
+                last_run_at="2026-06-08T06:05:00+00:00",
+                last_status="error",
+                last_error="ProviderExploded",
+                consecutive_failures=2,
+                next_attempt_at="2026-06-08T10:02:00+00:00",
+            ),
+        )
+
+        state_mod.save_state(state)
+        written = json.loads((tmp_path / "scheduler_state.json").read_text())
+
+        assert {key: written["current_price"].get(key, "<missing>") for key in Z7B_FIELDS} == {"last_items_deferred": 2, "retry_at": "2026-06-08T10:05:00+00:00", "consecutive_failures": 0, "next_attempt_at": None}
+        assert {key: written["history_sync"].get(key, "<missing>") for key in Z7B_FIELDS} == {"last_items_deferred": 0, "retry_at": None, "consecutive_failures": 2, "next_attempt_at": "2026-06-08T10:02:00+00:00"}
+        assert state_mod.load_state() == state
+        print_success("written, and read back as saved")
+
+    def test_a_file_written_before_z7b_loads_with_the_defaults_and_keeps_its_values(self, tmp_path, monkeypatch):
+        """SS-009: a file with the six fields of before only: each job keeps its values, and the four new fields are at their defaults."""
+        print_section("SS-009: load_state — a file written before lot Z7b")
+        state_mod = _make_state_module(tmp_path, monkeypatch)
+        (tmp_path / "scheduler_state.json").write_text(json.dumps(BEFORE_Z7B))
+
+        result = state_mod.load_state()
+
+        assert result == state_mod.SchedulerState(
+            current_price=state_mod.JobState(**BEFORE_Z7B["current_price"]),
+            history_sync=state_mod.JobState(**BEFORE_Z7B["history_sync"]),
+        )
+        assert [tuple(getattr(job, key) for key in Z7B_FIELDS) for job in (result.current_price, result.history_sync)] == [(0, None, 0, None), (0, None, 0, None)]
+        print_success("old values kept, new fields at their defaults")
+
+    def test_a_file_of_a_newer_version_loads_ignoring_the_keys_job_state_does_not_know(self, tmp_path, monkeypatch):
+        """SS-010: a file written by a newer version — a key ``JobState`` does not know in each job, and a job of its own —: each job keeps its known values; the unknown keys are ignored. Before lot Z7b the whole state fell back to a fresh one."""
+        print_section("SS-010: load_state — a file of a newer version")
+        state_mod = _make_state_module(tmp_path, monkeypatch)
+        newer = {
+            "current_price": {**BEFORE_Z7B["current_price"], "last_provider": "yfinance"},
+            "history_sync": {**BEFORE_Z7B["history_sync"], "skipped_pairs": ["NOK-SEK"]},
+            "notifications": {"last_run_at": "2026-06-08T07:00:00+02:00"},
+        }
+        (tmp_path / "scheduler_state.json").write_text(json.dumps(newer))
+
+        result = state_mod.load_state()
+
+        assert result.current_price == state_mod.JobState(**BEFORE_Z7B["current_price"]), "the known values of current_price are kept"
+        assert result.history_sync == state_mod.JobState(**BEFORE_Z7B["history_sync"]), "the known values of history_sync are kept"
+        print_success("known values kept, unknown keys ignored")
+
+    @pytest.mark.parametrize("section", [None, "garbage", [1, 2], 42], ids=["null", "a-string", "a-list", "a-number"])
+    def test_a_section_that_is_not_an_object_loads_as_a_fresh_job_state(self, tmp_path, monkeypatch, section):
+        """SS-011: ``current_price`` is not a JSON object: ``load_state`` does not raise, and that job loads as a fresh ``JobState``, as today — ignoring unknown keys must not turn a corrupt file into an exception at every tick. The other job's fate is not pinned."""
+        print_section(f"SS-011: load_state — current_price is {section!r}")
+        state_mod = _make_state_module(tmp_path, monkeypatch)
+        (tmp_path / "scheduler_state.json").write_text(json.dumps({"current_price": section, "history_sync": BEFORE_Z7B["history_sync"]}))
+
+        result = state_mod.load_state()
+
+        assert result.current_price == state_mod.JobState()
+        print_success("no exception, a fresh JobState")

@@ -21,11 +21,13 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {_ as t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {LineDataPoint} from './LineChart.svelte';
-    import {COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
+    import {COLORS, noteArrowMarkers, updateArrowRotations} from './lineChartHelpers';
+    import {toRgba} from '$lib/theme/colorAlpha';
     import {signalLabelToHtml} from '$lib/charts/signalLabel';
     import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
@@ -35,10 +37,13 @@
     import {buildCandleSeriesData, computePercentageBase, formatCandlePrice, formatVolume, hasRenderableVolume, isBullishBar, parseCandleTooltipValue} from './candlestickChartHelpers';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {truncateName} from '$lib/utils/text';
-    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
+    import {buildResponsiveXAxisPolicy, categoryAxisLabelPatch, visiblePointCountFromZoom, ZOOM_LABEL_SETTLE_MS} from './responsiveXAxis';
+    import {clearTimer} from '$lib/utils/core/clearTimer';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {CHART_TOOLTIP_COLORS, chartNeutrals} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Props
@@ -135,22 +140,56 @@
     let lastRenderedResolution: ChartResolution | null = null;
     let lastRenderedDates: string[] = [];
     let responsiveXAxisCompact = false;
+    /** The last zoom window, and the timer that, once the gesture settles, re-spaces the x labels on it (47-1) and re-aims the arrow markers (Y-8). Plain variables: the teardown reads them. */
+    let lastZoomEvent: unknown = null;
+    let zoomLabelTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** How many of the drawn categories the last zoom left visible; undefined before any zoom. */
+    function zoomedCategoryCount(): number | undefined {
+        return visiblePointCountFromZoom(lastZoomEvent, lastRenderedDates.length) ?? undefined;
+    }
+
+    function scheduleZoomedAxisLabels(event: unknown) {
+        lastZoomEvent = event;
+        zoomLabelTimer = clearTimer(zoomLabelTimer);
+        zoomLabelTimer = setTimeout(() => {
+            zoomLabelTimer = null;
+            applyZoomedAxisLabels();
+            // Once per gesture, never per tick: it reads getOption(), a deep copy of the whole option, and writes every series back (Y-8).
+            if (chartInstance) updateArrowRotations(chartInstance);
+        }, ZOOM_LABEL_SETTLE_MS);
+    }
+
+    /** Re-space the category labels on the zoomed window: the step is computed on all the points otherwise (47-1). */
+    function applyZoomedAxisLabels() {
+        if (!chartInstance || !chartContainer || lastRenderedDates.length === 0) return;
+        const visibleCount = zoomedCategoryCount();
+        if (visibleCount === undefined) return;
+        const policy = buildResponsiveXAxisPolicy({
+            width: chartContainer.clientWidth,
+            values: lastRenderedDates,
+            locale: uiLocale(),
+            axisType: 'category',
+            visibleCount,
+        });
+        responsiveXAxisCompact = policy.compact;
+        chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
+    }
 
     // =========================================================================
     // Lifecycle
     // =========================================================================
 
     onMount(() => {
-        // Watch for dark-mode class changes on <html>
-        const observer = new MutationObserver(() => {
+        // Watch for dark-mode class changes on <html>, and for the Designer Lab's colour edits (C4)
+        const redraw = () => {
             if (chartContainer && data.length > 0) renderChart();
-        });
-        observer.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: ['class'],
-        });
+        };
+        const observer = onThemeClassChange(redraw);
+        const chartColors = onChartColorsChange(redraw);
         return () => {
             observer.disconnect();
+            chartColors.disconnect();
             cleanup();
         };
     });
@@ -177,6 +216,8 @@
         chartOptionSet = false;
         lastRenderedResolution = null;
         lastRenderedDates = [];
+        zoomLabelTimer = clearTimer(zoomLabelTimer);
+        lastZoomEvent = null;
         dataZoomTouchPanHandle?.dispose();
         dataZoomTouchPanHandle = null;
         if (chartContainer) {
@@ -187,19 +228,19 @@
     }
 
     function buildTooltipHeader(date: string, bucketInfo?: {bucketStart: string; bucketEnd: string}): string {
+        const heading = chartNeutrals(isDarkProp ?? isDarkTheme(), chartContainer).tooltip.candlestickBox.heading;
         if (resolution === 'daily') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${(isDarkProp ?? document.documentElement.classList.contains('dark')) ? '#e2e8f0' : '#1f2937'}">${formatDay(date)}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${heading}">${formatDay(date)}</div>`;
         }
 
-        const dark = isDarkProp ?? document.documentElement.classList.contains('dark');
         // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
         const info = bucketSpanUpTo(date, bucketInfo ?? {bucketStart: date, bucketEnd: date});
 
         if (resolution === 'weekly') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${heading}">${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</div>`;
         }
 
-        return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</div><div style="font-size:11px;margin-bottom:3px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</div>`;
+        return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${heading}">${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</div><div style="font-size:11px;margin-bottom:3px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</div>`;
     }
 
     // =========================================================================
@@ -220,16 +261,19 @@
                                 values: lastRenderedDates,
                                 locale: uiLocale(),
                                 axisType: 'category',
+                                visibleCount: zoomedCategoryCount(),
                             });
                             const wasCompact = responsiveXAxisCompact;
                             responsiveXAxisCompact = policy.compact;
                             if (policy.axisLabel) {
-                                chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                                chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
                             } else if (wasCompact) {
                                 renderChart();
                             }
                         }
-                        if (chartInstance) updateArrowRotations(chartInstance);
+                        // Re-aimed once the resize settles, by the settle that re-spaces the labels, never on each callback: a re-aim
+                        // deep-copies the whole option (Y-25)
+                        scheduleZoomedAxisLabels(lastZoomEvent);
                     } catch (_) {
                         /* ignore coord errors during resize */
                     }
@@ -244,13 +288,15 @@
         if (rect.width === 0 || rect.height === 0) return;
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
             (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
             attachChartReady(chartInstance, chartContainer, 'candlestick');
             needsInitialLayoutStabilityPass = true;
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
-            chartInstance.on('dataZoom', () => {
-                if (chartInstance) updateArrowRotations(chartInstance);
+            // A zoom changes the pixel aspect: the x labels are re-spaced on the window, and the arrow markers re-aimed, once the
+            // gesture settles, never on each tick (47-1, Y-8)
+            chartInstance.on('dataZoom', (event: unknown) => {
+                scheduleZoomedAxisLabels(event);
             });
 
             // Measure mode: click handler
@@ -314,12 +360,13 @@
             });
         }
 
-        const dark = isDarkProp ?? document.documentElement.classList.contains('dark');
+        const dark = isDarkProp ?? isDarkTheme();
+        const neutrals = chartNeutrals(dark, chartContainer);
 
         const greenColor = dark ? COLORS.greenDark : COLORS.greenLight;
         const redColor = dark ? COLORS.redDark : COLORS.redLight;
-        const axisColor = dark ? '#475569' : '#d1d5db';
-        const labelColor = dark ? '#94a3b8' : '#6b7280';
+        const axisColor = neutrals.priceAxis.line;
+        const labelColor = neutrals.priceAxis.label;
 
         const dates = data.map((d) => d.date);
         lastRenderedDates = dates;
@@ -341,7 +388,7 @@
         const volumeData: any[] = data.map((d) => ({
             value: d.volume ?? 0,
             itemStyle: {
-                color: isBullishBar(d) ? hexToRgba(greenColor, 0.55) : hexToRgba(redColor, 0.55),
+                color: isBullishBar(d) ? toRgba(greenColor, 0.55) : toRgba(redColor, 0.55),
             },
         }));
 
@@ -408,12 +455,29 @@
             });
         }
 
+        let savedZoom: {start: number; end: number} | null = null;
+        if (chartOptionSet && chartInstance) {
+            const currentOption = chartInstance.getOption() as {
+                dataZoom?: Array<{start?: unknown; end?: unknown}>;
+            };
+            const currentZoom = currentOption.dataZoom?.[0];
+            if (typeof currentZoom?.start === 'number' && typeof currentZoom.end === 'number') {
+                savedZoom = {
+                    start: currentZoom.start,
+                    end: currentZoom.end,
+                };
+            }
+        }
+
         // ── X-axes ──
+        // The zoom about to be restored is read first, so the labels are spaced on that window (47-1).
+        const restoredZoomCount = savedZoom ? visiblePointCountFromZoom(savedZoom, dates.length) : null;
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: rect.width,
             values: dates,
             locale: uiLocale(),
             axisType: 'category',
+            visibleCount: restoredZoomCount ?? undefined,
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
         const xAxisBase = {
@@ -441,7 +505,7 @@
         }
 
         // ── Y-axes ──
-        const colors = getChartColors(dark);
+        const colors = getChartColors(dark, chartContainer);
         const priceYAxis = buildPriceYAxis({mode: yAxisMode, min: yAxisMin, max: yAxisMax, isPercentage}, colors, {gridIndex: 0, showGridLines});
         const yAxes: any[] = [priceYAxis, ...secondaryAxes];
 
@@ -464,9 +528,9 @@
             const label = truncateName(mainSeriesLabel || currency || 'Price');
             let suffix = '';
             if (displayCurrencyProp && mainCurrencyProp && displayCurrencyProp !== mainCurrencyProp) {
-                suffix = ` <span style="font-size:10px">(${displayCurrencyFlag || ''} ${displayCurrencyProp})</span>`;
+                suffix = ` <span style="font-size:10px">(${escapeHtml(displayCurrencyFlag || '')} ${escapeHtml(displayCurrencyProp)})</span>`;
             } else if (mainCurrencyProp) {
-                suffix = ` <span style="font-size:10px">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
+                suffix = ` <span style="font-size:10px">(${escapeHtml(mainCurrencyFlagProp || '')} ${escapeHtml(mainCurrencyProp)})</span>`;
             }
             return signalLabelToHtml({label, iconUrl: mainIconUrl, assetType: mainAssetType, isCrown: true}) + suffix;
         })();
@@ -490,7 +554,7 @@
                 if (p.seriesName === 'Volume') {
                     const vol: number = p.value ?? 0;
                     const volFmt = formatVolume(vol);
-                    html += `<div style="color:${dark ? '#94a3b8' : '#6b7280'};font-size:11px;margin-top:3px">Vol: ${volFmt}</div>`;
+                    html += `<div style="color:${neutrals.tooltip.candlestickBox.muted};font-size:11px;margin-top:3px">Vol: ${volFmt}</div>`;
                     continue;
                 }
 
@@ -502,7 +566,7 @@
                     // works regardless of whether the index got prepended.
                     const {open, close, low, high, bullish} = parseCandleTooltipValue(p.value as number[]);
                     const clr = bullish ? greenColor : redColor;
-                    const dimClr = dark ? '#94a3b8' : '#6b7280';
+                    const dimClr = neutrals.tooltip.candlestickBox.muted;
                     html += `<div style="display:grid;grid-template-columns:auto 1fr;gap:0 6px;font-size:11px;margin-top:2px">`;
                     html += `<span style="color:${dimClr}">O</span><span style="color:${clr}">${fmtPrice(open)}</span>`;
                     html += `<span style="color:${dimClr}">H</span><span style="color:${clr}">${fmtPrice(high)}</span>`;
@@ -514,16 +578,16 @@
 
                 // Overlay signal line
                 if (p.value !== null && p.value !== undefined) {
-                    html += `<div style="font-size:11px"><span style="color:${p.color ?? '#888'}">${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${typeof p.value === 'number' ? formatFixed(p.value, 4) : p.value}</span></div>`;
+                    html += `<div style="font-size:11px"><span style="color:${p.color ?? CHART_TOOLTIP_COLORS.candlestickBox.seriesFallback}">${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${typeof p.value === 'number' ? formatFixed(p.value, 4) : p.value}</span></div>`;
                 }
             }
 
             const staleDays = staleLookup.get(date);
             if (staleDays !== undefined) {
-                html += `<div style="color:#f59e0b;font-size:11px;margin-top:3px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</div>`;
+                html += `<div style="color:${neutrals.tooltip.staleWarning};font-size:11px;margin-top:3px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</div>`;
                 const fxStaleDays = fxStaleLookup.get(date);
                 if (fxStaleDays !== undefined && fxStaleDays > 0) {
-                    html += `<div style="color:#f59e0b;font-size:11px">⚠ ${$t('chart.tooltip.fxStale', {values: {days: fxStaleDays}})}</div>`;
+                    html += `<div style="color:${neutrals.tooltip.staleWarning};font-size:11px">⚠ ${$t('chart.tooltip.fxStale', {values: {days: fxStaleDays}})}</div>`;
                 }
             }
 
@@ -538,31 +602,17 @@
             yAxis: yAxes,
             tooltip: {
                 trigger: 'axis' as const,
-                axisPointer: {type: 'cross' as const, crossStyle: {color: dark ? '#475569' : '#9ca3af'}},
+                axisPointer: {type: 'cross' as const, crossStyle: {color: neutrals.tooltip.candlestickBox.crosshair}},
                 appendToBody: true,
                 confine: true,
                 position: tooltipPositionSide,
-                backgroundColor: dark ? '#1e293b' : '#ffffff',
-                borderColor: dark ? '#334155' : '#e5e7eb',
-                textStyle: {color: dark ? '#e2e8f0' : '#111827', fontSize: 12},
+                backgroundColor: neutrals.tooltip.box.background,
+                borderColor: neutrals.tooltip.candlestickBox.border,
+                textStyle: {color: neutrals.tooltip.candlestickBox.text, fontSize: 12},
                 formatter: tooltipFormatter,
             },
             series,
         };
-
-        let savedZoom: {start: number; end: number} | null = null;
-        if (chartOptionSet && chartInstance) {
-            const currentOption = chartInstance.getOption() as {
-                dataZoom?: Array<{start?: unknown; end?: unknown}>;
-            };
-            const currentZoom = currentOption.dataZoom?.[0];
-            if (typeof currentZoom?.start === 'number' && typeof currentZoom.end === 'number') {
-                savedZoom = {
-                    start: currentZoom.start,
-                    end: currentZoom.end,
-                };
-            }
-        }
 
         // Resolution switch: same ECharts tooltip-crash risk as PriceChartFull's line view
         // (full rebuild via setOption(option,true) while an axis-trigger tooltip + mousewheel
@@ -572,6 +622,7 @@
         }
 
         chartInstance.setOption(option, true);
+        noteArrowMarkers(chartInstance, option);
         chartOptionSet = true;
         lastRenderedResolution = resolution;
         if (savedZoom) {

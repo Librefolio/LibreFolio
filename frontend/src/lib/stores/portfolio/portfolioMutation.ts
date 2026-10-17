@@ -11,8 +11,12 @@
  * Listeners (the report, risk and lots caches) mark their answers stale and keep them: a page shows
  * what it has at once and refreshes it in background (page cache, phase 1, decision E1).
  * `requestPortfolioRefresh()` is the same signal for «Aggiorna», with `kind: 'refresh'`.
+ * `notifyPricesCaughtUp()`, with `kind: 'prices'`, says the server caught up on prices and updated
+ * something (lot Z5): the stores mark stale as for any signal, the asset price and FX registries — which ignore
+ * every other kind — mark their series stale (Z-14), and the pages on screen that listen for it (the Dashboard,
+ * a broker's page) reload in background (Z-13).
  */
-export type PortfolioMutation = {kind: 'mutation'; method: string; path: string} | {kind: 'refresh'};
+export type PortfolioMutation = {kind: 'mutation'; method: string; path: string} | {kind: 'refresh'} | {kind: 'prices'};
 
 export type PortfolioMutationListener = (mutation: PortfolioMutation) => void;
 
@@ -97,6 +101,8 @@ export function isPortfolioAffectingMutation(method: string | undefined, url: st
     }
     if (path.startsWith('/api/v1/assets/prices')) {
         if (path === '/api/v1/assets/prices/query') return false;
+        // The Δ columns' period changes only read the stored prices (X-R53).
+        if (path === '/api/v1/assets/prices/period-changes') return false;
         if (path === '/api/v1/assets/prices/sync') return normalizedMethod === 'POST' && assetSyncWrote(data);
         // `/prices/current` stays a write: it persists today's candle (decision E1). What changed is
         // the effect — the views are marked stale and refreshed in background, not thrown away.
@@ -144,4 +150,10 @@ export function notifyPortfolioMutation(method: string | undefined, url: string 
 /** «Aggiorna»: every portfolio view marks what it holds stale; the page that asked reloads it. */
 export function requestPortfolioRefresh(): void {
     dispatch({kind: 'refresh'});
+}
+
+/** The server caught up on prices and updated something: every portfolio view marks what it holds stale, and the
+ *  pages on screen that listen for `kind: 'prices'` reload it in background (lots Z5 and Z-13). */
+export function notifyPricesCaughtUp(): void {
+    dispatch({kind: 'prices'});
 }

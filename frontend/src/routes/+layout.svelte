@@ -24,6 +24,8 @@
     onMount(() => {
         // Sync language store with i18n after mount
         currentLanguage.init();
+        // Designer Lab, debug builds only: re-applies the colour changes saved in this browser (a no-op without any).
+        if (__LF_DESIGNER_LAB__) import('$lib/dev/designer-lab/client').then((lab) => lab.start()).catch(() => {});
     });
 
     // Remove splash when i18n is ready (reactive)

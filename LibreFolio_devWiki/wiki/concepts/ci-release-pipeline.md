@@ -148,8 +148,8 @@ boundary.
 | Package lock | `frontend/package-lock.json` |
 | Docker compose (end users) | `docker-compose.prod.yml` |
 | Dockerfile | `Dockerfile` |
-| GHCR image-availability probe | `backend/app/services/container_registry.py` |
-| Same-origin system endpoint | `backend/app/api/v1/system.py` |
+| GHCR image-availability probe | `backend/app/services/platform/container_registry.py` |
+| Same-origin system endpoint | `backend/app/api/v1/system/container_image.py` |
 | Image status schema | `backend/app/schemas/system.py` |
 | Release metadata and image gating | `frontend/src/lib/features/update-check/updateCheck.ts` |
 | GHCR probe regressions | `backend/test_scripts/test_services/test_container_registry.py` |

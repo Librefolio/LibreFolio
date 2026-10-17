@@ -1,7 +1,7 @@
 <script lang="ts">
     import ExactDecimalInput from './ExactDecimalInput.svelte';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {decimalDigitCounts, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
 
     type QuantitySignRule = 'positive' | 'negative' | 'nonzero' | 'zero' | 'any';
     type SignState = 'ok' | 'bad' | 'neutral';
@@ -102,12 +102,10 @@
         return sign === 0 ? 'ok' : 'bad';
     }
 
+    /** Within the budget as the backend counts digits, leading integer and trailing fraction zeros not counted (W-B64). */
     function withinDigitBudget(candidate: string): boolean {
-        const normalized = normalizeDecimalInput(candidate);
-        if (!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized)) return false;
-        const unsigned = normalized.startsWith('-') ? normalized.slice(1) : normalized;
-        const [integer = '', fraction = ''] = unsigned.split('.');
-        return (integer || '0').length <= maxIntegerDigits && fraction.length <= maxFractionDigits;
+        const counts = decimalDigitCounts(normalizeDecimalInput(candidate));
+        return counts !== null && counts.integerDigits <= maxIntegerDigits && counts.fractionDigits <= maxFractionDigits;
     }
 
     function displayValue(candidate: string): string {
@@ -159,7 +157,7 @@
     let signState = $derived(signStateFor(rawValue));
     let signInvalid = $derived(signState === 'bad');
     let canShowSignColor = $derived(!externalInvalid && !decimalValidity.empty && decimalValidity.syntaxValid && decimalValidity.digitsValid && decimalValidity.rangeValid);
-    let signBorderColor = $derived(canShowSignColor && signState === 'bad' ? 'oklch(0.637 0.237 25.331 / 0.7)' : canShowSignColor && signState === 'ok' ? 'oklch(0.765 0.177 163.223 / 0.7)' : '');
+    let signBorderColor = $derived(canShowSignColor && signState === 'bad' ? 'color-mix(in oklab, var(--lf-danger) 70%, transparent)' : canShowSignColor && signState === 'ok' ? 'color-mix(in oklab, var(--lf-success) 70%, transparent)' : '');
     let mergedStyle = $derived(`${inlineStyle.trim().replace(/;$/, '')}${inlineStyle.trim() && signBorderColor ? '; ' : ''}${signBorderColor ? `border-color: ${signBorderColor}` : ''}`);
 
     $effect(() => {

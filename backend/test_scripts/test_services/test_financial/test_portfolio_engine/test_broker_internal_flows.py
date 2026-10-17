@@ -18,6 +18,10 @@ The approved fix (decisions D1-D6):
 - D2: a TRANSFER leg whose partner is outside the scope or not found is capital at
   market value on its own date: ``sign(qty) * MV(|qty * share|, leg date)``.
 - D3: no value (MISSING mark, missing rate) means no flow.
+- J-17: a security with no price at all (no quote, BUY or SELL) is valued at its book cost, so X is
+  the book cost the arrival adds to the receiver's pool, rescaled to the sender's share, whether
+  that pool's cost is complete or not: an arrival of unknown cost adds 0 (no flow), and the gap of
+  an unknown cost stays with the broker whose cost it is.
 - D4: ADJUSTMENT pairs keep the in-kind rule (capital at cost).
 - D5: orphans (no related id): a CASH_TRANSFER / FX_CONVERSION with an amount is an
   external cash flow; an orphan TRANSFER follows D2 in the builder.
@@ -299,8 +303,9 @@ def _classify(txs, scope, *, shares=None, external_paired=None):
     return classifier.classify(external_paired=external_paired)
 
 
-def _overrides(classification, *, date_to, price_map=None, fx_rate_map=None, frame_start=None) -> dict:
-    """Builder kwargs for a classified scenario; every asset is a EUR "Stock" with no classification."""
+def _overrides(classification, *, date_to, price_map=None, fx_rate_map=None, date_from=D0) -> dict:
+    """Builder kwargs for a classified scenario; every asset is a EUR "Stock" with no classification.
+    A ``date_from`` after the first transaction emits the states from it on (J1: one replay from the first movement)."""
     price_map = price_map or {}
     asset_ids = {ctxn.tx.asset_id for ctxn in classification.classified if ctxn.tx.asset_id is not None} | set(price_map)
     return {
@@ -312,9 +317,8 @@ def _overrides(classification, *, date_to, price_map=None, fx_rate_map=None, fra
         "asset_currencies": dict.fromkeys(asset_ids, "EUR"),
         "asset_types": dict.fromkeys(asset_ids, "Stock"),
         "asset_classifications": dict.fromkeys(asset_ids),
-        "date_from": D0,
+        "date_from": date_from,
         "date_to": date_to,
-        "frame_start": frame_start,
     }
 
 
@@ -443,6 +447,43 @@ def _case_05_missing_price_at_arrival():
     return classification, _overrides(classification, date_to=D5, price_map={UNPRICED_ASSET: [(D4, Decimal("15"), "EUR")]})
 
 
+def _case_05c_unknown_cost_at_arrival():
+    """Case 5 without any cost: the legs carry no cost_basis_override, so B's units have no known cost."""
+    adjustment = _tx(id=1, broker_id=A, type="ADJUSTMENT", dt=D0, currency=None, quantity="10", asset_id=UNPRICED_ASSET)
+    out_leg, in_leg = _transfer_pair(2, 3, sender=A, receiver=B, out_dt=D1, in_dt=D3, qty="10", asset_id=UNPRICED_ASSET)
+    classification = _classify([adjustment, out_leg, in_leg], {A, B})
+    return classification, _overrides(classification, date_to=D5, price_map={UNPRICED_ASSET: [(D4, Decimal("15"), "EUR")]})
+
+
+def _case_05d_unpriced_with_known_cost_between_brokers():
+    """Case 5 with A's cost known: A's 10 units arrive on d0 by an orphan TRANSFER (no related id) at 10 EUR a unit."""
+    orphan_in = _tx(id=1, broker_id=A, type="TRANSFER", dt=D0, currency=None, quantity="10", asset_id=UNPRICED_ASSET, cost_basis_override="10", cost_basis_currency="EUR")
+    out_leg, in_leg = _transfer_pair(2, 3, sender=A, receiver=B, out_dt=D1, in_dt=D3, qty="10", asset_id=UNPRICED_ASSET, cost_basis_override="10", cost_basis_currency="EUR")
+    classification = _classify([orphan_in, out_leg, in_leg], {A, B})
+    return classification, _overrides(classification, date_to=D5, price_map={UNPRICED_ASSET: [(D4, Decimal("15"), "EUR")]})
+
+
+def _case_05e_unpriced_pair_between_shares(share_a: str, share_b: str, received_unit_cost: str = "10"):
+    """Case 5d's book with ownership shares s_A / s_B and no price at all: A's 10 units arrive on d0 by an orphan
+    TRANSFER at 10 EUR a unit, then move A -> B by a pair on d2 (one day, no transit) whose legs carry
+    ``received_unit_cost`` EUR a unit."""
+    orphan_in = _tx(id=1, broker_id=A, type="TRANSFER", dt=D0, currency=None, quantity="10", asset_id=UNPRICED_ASSET, cost_basis_override="10", cost_basis_currency="EUR")
+    out_leg, in_leg = _transfer_pair(2, 3, sender=A, receiver=B, out_dt=D2, in_dt=D2, qty="10", asset_id=UNPRICED_ASSET, cost_basis_override=received_unit_cost, cost_basis_currency="EUR")
+    classification = _classify([orphan_in, out_leg, in_leg], {A, B}, shares={A: share_a, B: share_b})
+    return classification, _overrides(classification, date_to=D3)
+
+
+def _case_05f_unpriced_arrival_into_a_receiver_of_unknown_cost():
+    """Case 5d's sender with a receiver of unknown cost, no price ever: A's 10 units arrive on d0 by an orphan TRANSFER
+    at 10 EUR a unit, B holds 5 units from an ADJUSTMENT without cost since d0, and the 10 move A -> B, d1 -> d3, their
+    legs carrying 10 EUR a unit."""
+    orphan_in = _tx(id=1, broker_id=A, type="TRANSFER", dt=D0, currency=None, quantity="10", asset_id=UNPRICED_ASSET, cost_basis_override="10", cost_basis_currency="EUR")
+    held_at_b = _tx(id=2, broker_id=B, type="ADJUSTMENT", dt=D0, currency=None, quantity="5", asset_id=UNPRICED_ASSET)
+    out_leg, in_leg = _transfer_pair(3, 4, sender=A, receiver=B, out_dt=D1, in_dt=D3, qty="10", asset_id=UNPRICED_ASSET, cost_basis_override="10", cost_basis_currency="EUR")
+    classification = _classify([orphan_in, held_at_b, out_leg, in_leg], {A, B})
+    return classification, _overrides(classification, date_to=D4)
+
+
 def _case_05b_missing_fx_at_arrival():
     deposit = _tx(id=1, broker_id=A, type="DEPOSIT", dt=D0, amount="1000", currency="USD")
     out_leg, in_leg = _cash_pair(2, 3, sender=A, receiver=B, out_dt=D1, in_dt=D2, out_amount="1000", in_amount="1000", out_currency="USD", in_currency="USD")
@@ -470,17 +511,17 @@ def _case_08_shares(share_a: str, share_b: str):
     return classification, _overrides(classification, date_to=D2)
 
 
-def _case_09_preframe(frame_start: date | None = D10):
+def _case_09_before_date_from(date_from: date = D10):
     out_leg, in_leg = _transfer_pair(3, 4, sender=A, receiver=B, out_dt=D1, in_dt=D3, qty="10")
     classification = _classify([*_setup_t(), out_leg, in_leg], {A, B})
     prices = {ASSET: [(D0, Decimal("10"), "EUR"), (D1, Decimal("11"), "EUR"), (D2, Decimal("12"), "EUR"), (D3, Decimal("13"), "EUR"), (D10, Decimal("14"), "EUR")]}
-    return classification, _overrides(classification, date_to=D10, price_map=prices, frame_start=frame_start)
+    return classification, _overrides(classification, date_to=D10, price_map=prices, date_from=date_from)
 
 
-def _case_10_transit_straddles_frame_start():
+def _case_10_transit_straddles_date_from():
     out_leg, in_leg = _transfer_pair(3, 4, sender=A, receiver=B, out_dt=D1, in_dt=D5, qty="10")
     classification = _classify([*_setup_t(), out_leg, in_leg], {A, B})
-    return classification, _overrides(classification, date_to=D5, price_map=_setup_t_prices(), frame_start=D3)
+    return classification, _overrides(classification, date_to=D5, price_map=_setup_t_prices(), date_from=D3)
 
 
 def _case_11_chain():
@@ -714,11 +755,20 @@ class TestSecuritiesPairsBetweenBrokers:
         assert not problems, "\n".join(problems)
         _assert_invariant_every_day(result.daily_states)
 
-    def test_case_05_missing_price_at_arrival_moves_nothing(self):
-        """Case 5, guard (D3): asset 200 has no price before d4, so its mark at the arrival
-        (d3) is MISSING, X is unavailable and no capital moves (C 0 for both, every day).
-        A's +100 on d1-d2 is the pre-existing in-transit cost fallback (override 10 x 10).
-        Green before and after the fix."""
+    def test_case_05_unpriced_arrival_moves_the_receivers_cost(self):
+        """Case 5 (J-17): asset 200 has no price before d4. A's 10 units came by an ADJUSTMENT with no
+        cost (A's pool has no known cost); the legs carry 10 EUR a unit. On d3 B's pool is complete — 100
+        from its leg — so B values its units at that cost (ESTIMATED_AT_COST) and X = the 100 the arrival
+        adds to B's pool: what it brings into B's NAV, as the NAV values it (lot 41). C_A -100, C_B 100:
+        B starts flat and earns the +50 of the first quote on d4. A keeps the +100 its line showed while
+        the units were in transit (the in-transit cost fallback values them at the legs' 100, against A's
+        unknown cost): the artifact of A's own unknown cost, A's to answer for (P22: each broker answers
+        for its own stretch), which MISSING_COST_BASIS reports. The aggregate does not depend on step 3b.
+
+        Before J-17: on d3 B's units were MISSING and X unavailable, so no capital moved: d3 A (0, 0),
+        B (0, 0); d4-d5 A (0, 0), B (0, 150); the aggregate P 100, 0, 150 on d2, d3, d4. (J-17's first
+        version moved what A's pool gave up, unknown, so nothing: d3 A (0, 0), B (0, 100).)
+        """
         classification, overrides = _case_05_missing_price_at_arrival()
         assert _classifications(classification) == {1: "normal", 2: "linked_internal", 3: "linked_internal"}
         assert _intervals(classification) == [(D1, D2, "asset", Decimal("1"))]
@@ -729,12 +779,122 @@ class TestSecuritiesPairsBetweenBrokers:
             D0: {A: ("0", "0"), B: ("0", "0")},
             D1: {A: ("0", "100"), B: ("0", "0")},
             D2: {A: ("0", "100"), B: ("0", "0")},
-            D3: {A: ("0", "0"), B: ("0", "0")},
-            D4: {A: ("0", "0"), B: ("0", "150")},
-            D5: {A: ("0", "0"), B: ("0", "150")},
+            D3: {A: ("-100", "100"), B: ("100", "0")},
+            D4: {A: ("-100", "100"), B: ("100", "50")},
+            D5: {A: ("-100", "100"), B: ("100", "50")},
         }
+        aggregate = {D0: ("0", "0"), D1: ("0", "100"), D2: ("0", "100"), D3: ("0", "100"), D4: ("0", "150"), D5: ("0", "150")}
+        problems = _line_problems(result, expected) + _aggregate_problems(result, aggregate) + _transit_problems(result, D1, D3, (A, B))
+        assert not problems, "\n".join(problems)
+        _assert_invariant_every_day(result.daily_states)
+
+    def test_case_05d_unpriced_security_of_known_cost_moves_its_cost(self):
+        """Case 5d (J-17): case 5 with A's cost known — A's 10 units came on d0 by an orphan TRANSFER
+        carrying 10 EUR a unit. Asset 200 has no price before d4, so: on d0 the orphan leg is capital
+        at its cost (100) and A holds the units at that cost (P_A 0); in transit A keeps the value at
+        the legs' cost; on d3 X = the 100 the arrival adds to B's pool, the value B's NAV takes at cost
+        (here also what A's pool gives up), so C_A 0, C_B 100 and both lines stay flat at 0 until B
+        earns the +50 of the first quote on d4.
+
+        Before J-17: the orphan leg could not be valued (no capital) and A's units were MISSING:
+        d0 A (0, 0); d1-d2 A (0, 100); d3 no flow, B MISSING: A (0, 0), B (0, 0); d4-d5 B (0, 150).
+        """
+        classification, overrides = _case_05d_unpriced_with_known_cost_between_brokers()
+        assert _classifications(classification) == {1: "normal", 2: "linked_internal", 3: "linked_internal"}
+        assert _intervals(classification) == [(D1, D2, "asset", Decimal("1"))]
+
+        result = _build(**overrides)
+
+        expected = {
+            D0: {A: ("100", "0"), B: ("0", "0")},
+            D1: {A: ("100", "0"), B: ("0", "0")},
+            D2: {A: ("100", "0"), B: ("0", "0")},
+            D3: {A: ("0", "0"), B: ("100", "0")},
+            D4: {A: ("0", "0"), B: ("100", "50")},
+            D5: {A: ("0", "0"), B: ("100", "50")},
+        }
+        aggregate = {D0: ("100", "0"), D1: ("100", "0"), D2: ("100", "0"), D3: ("100", "0"), D4: ("100", "50"), D5: ("100", "50")}
+        problems = _line_problems(result, expected) + _aggregate_problems(result, aggregate) + _transit_problems(result, D1, D3, (A, B))
+        assert not problems, "\n".join(problems)
+        _assert_invariant_every_day(result.daily_states)
+
+    def test_case_05c_unknown_cost_at_arrival_moves_nothing(self):
+        """Case 5c, guard (D3): the same pair with no cost at all — B's units have no price before d4
+        and no known cost, so the arrival adds no known cost to B's pool: X = 0 and no capital moves.
+
+        Before J-17: the same (guard, green before and after): d0-d3 (0, 0) for both, d4-d5 B (0, 150).
+        """
+        classification, overrides = _case_05c_unknown_cost_at_arrival()
+        assert _classifications(classification) == {1: "normal", 2: "linked_internal", 3: "linked_internal"}
+
+        result = _build(**overrides)
+
+        expected = dict.fromkeys((D0, D1, D2, D3), {A: ("0", "0"), B: ("0", "0")}) | dict.fromkeys((D4, D5), {A: ("0", "0"), B: ("0", "150")})
         problems = _line_problems(result, expected)
         assert not problems, "\n".join(problems)
+        _assert_invariant_every_day(result.daily_states)
+
+    @pytest.mark.parametrize(
+        ("share_a", "share_b", "received_unit_cost", "capital_a_before", "lines_after", "aggregate_after"),
+        [
+            pytest.param("0.5", "0.5", "10", "50", {A: ("0", "0"), B: ("50", "0")}, ("50", "0"), id="a50_b50"),
+            pytest.param("0.5", "1", "10", "50", {A: ("0", "0"), B: ("50", "50")}, ("50", "50"), id="a50_b100"),
+            pytest.param("1", "0.5", "10", "100", {A: ("0", "0"), B: ("100", "-50")}, ("100", "-50"), id="a100_b50"),
+            pytest.param("0.5", "1", "12", "50", {A: ("-10", "10"), B: ("60", "60")}, ("50", "70"), id="a50_b100_received_at_12"),
+        ],
+    )
+    def test_case_05e_unpriced_pair_moves_the_receivers_cost_at_the_senders_share(self, share_a, share_b, received_unit_cost, capital_a_before, lines_after, aggregate_after):
+        """Case 5e (J-17): case 5d's book with ownership shares s_A / s_B, the pair on one day (d2), no price
+        at all. A's 10 units came on d0 by an orphan TRANSFER at 10 EUR a unit: capital at cost, 100 x s_A,
+        and A's line flat. On d2 X is the book cost the arrival adds to B's pool — its leg's unit cost x 10 x
+        s_B — rescaled from B's share to the SENDER's (/ s_B x s_A), like case 8: X = unit cost x 10 x s_A.
+        As in case 8, B's line keeps the share-mismatch residual (s_B - s_A) x its leg's unit cost x 10 (D6),
+        and the aggregate is B's NAV at cost against A's capital. The last row costs B's leg at 12 against
+        A's 10: X follows B's cost, 60, not the 50 A's pool gives up, so A keeps (12 - 10) x 10 x s_A = 10
+        (P22).
+
+        Before J-17: no price, so no value, no capital for the orphan leg and no flow: both lines (0, 0)
+        on every day, the aggregate too. (J-17's first version moved what A's pool gave up: the same lines,
+        but for the last row, A (0, 0) and B (50, 70).)
+        """
+        classification, overrides = _case_05e_unpriced_pair_between_shares(share_a, share_b, received_unit_cost)
+        assert _classifications(classification) == {1: "normal", 2: "linked_internal", 3: "linked_internal"}
+        assert classification.in_transit_intervals == []
+
+        result = _build(**overrides)
+
+        expected = dict.fromkeys((D0, D1), {A: (capital_a_before, "0"), B: ("0", "0")}) | dict.fromkeys((D2, D3), lines_after)
+        aggregate = dict.fromkeys((D0, D1), (capital_a_before, "0")) | dict.fromkeys((D2, D3), aggregate_after)
+        problems = _line_problems(result, expected) + _aggregate_problems(result, aggregate)
+        assert not problems, "\n".join(problems)
+        _assert_invariant_every_day(result.daily_states)
+
+    def test_case_05f_unpriced_arrival_into_a_receiver_of_unknown_cost_moves_the_legs_cost(self):
+        """Case 5f (J-17): case 5d's sender — A's 10 units came on d0 by an orphan TRANSFER at 10 EUR a unit
+        (capital 100, A at cost and flat, in transit d1-d2 too) — but B already holds 5 units from an
+        ADJUSTMENT without cost, so B's pool has no known cost and B's holding is MISSING: the NAV is
+        incomplete on every day. No price ever. On d3 the arrival adds its leg's known cost, 100, to B's pool
+        (the unknown part counts as zero), so X = 100 whatever that pool's completeness: C_A 0 and A neutral;
+        C_B 100 and B's line -100, its 15 units MISSING — the gap of B's own unknown cost stays with B (P22).
+        Aggregate (100, -100).
+
+        Before J-17: A's orphan leg brought no capital and A's units were MISSING: d0 A (0, 0); d1-d2
+        A (0, 100) by the in-transit cost fallback; from d3 no flow, A (0, 0) and B (0, 0); the aggregate
+        (0, 0), then (0, 100), then (0, 0). (With the receiver-completeness check tried and reverted on 16/10
+        there was no flow either: from d3 A (100, -100), B (0, 0).)
+        """
+        classification, overrides = _case_05f_unpriced_arrival_into_a_receiver_of_unknown_cost()
+        assert _classifications(classification) == {1: "normal", 2: "normal", 3: "linked_internal", 4: "linked_internal"}
+        assert _intervals(classification) == [(D1, D2, "asset", Decimal("1"))]
+
+        result = _build(**overrides)
+
+        expected = dict.fromkeys((D0, D1, D2), {A: ("100", "0"), B: ("0", "0")}) | dict.fromkeys((D3, D4), {A: ("0", "0"), B: ("100", "-100")})
+        aggregate = dict.fromkeys((D0, D1, D2), ("100", "0")) | dict.fromkeys((D3, D4), ("100", "-100"))
+        problems = _line_problems(result, expected) + _aggregate_problems(result, aggregate) + _transit_problems(result, D1, D3, (A, B))
+        assert not problems, "\n".join(problems)
+        completeness = {state.date: (state.nav_complete, state.missing_price_asset_ids) for state in result.daily_states}
+        assert completeness == dict.fromkeys((D0, D1, D2, D3, D4), (False, {UNPRICED_ASSET})), "B's units of unknown cost are MISSING on every day, so the NAV is incomplete"
         _assert_invariant_every_day(result.daily_states)
 
     def test_case_06_partial_position(self):
@@ -842,38 +1002,39 @@ class TestSecuritiesPairsBetweenBrokers:
 
 
 # =============================================================================
-# D1 — PRE-FRAME AND FRAME START
+# D1 — BEFORE date_from AND ACROSS IT
 # =============================================================================
 
 
-class TestPreFrameAndFrameStart:
-    """Step 3b runs in the pre-frame accounting as well as in the frame."""
+class TestBeforeDateFromAndAcrossIt:
+    """Step 3b runs on the days replayed before date_from as on the emitted ones (J1: one replay, the same rules
+    every day; before J1 those days ran in a separate pre-frame)."""
 
-    def test_case_09_transfer_entirely_before_frame_start(self):
-        """Case 9: 10 units in transit A -> B from d1 to d3, all before frame_start d10
+    def test_case_09_transfer_entirely_before_date_from(self):
+        """Case 9: 10 units in transit A -> B from d1 to d3, all before date_from d10
         (closes 10, 11, 12, 13 on d0..d3, then 14 on d10). X = MV(10, d3) = 130 must be
-        booked by the pre-frame accounting. First emitted state d10: C_A -30, P_A +30,
-        C_B 130, P_B +10; the full computation (no frame) gives the same d10 lines.
+        booked on the replayed days. First emitted state d10: C_A -30, P_A +30,
+        C_B 130, P_B +10; the run from d0 gives the same d10 lines.
         Today d10: P_A -100, P_B +140."""
-        classification, framed_overrides = _case_09_preframe()
+        classification, windowed_overrides = _case_09_before_date_from()
         assert _intervals(classification) == [(D1, D2, "asset", Decimal("1"))]
 
-        framed = _build(**framed_overrides)
-        _, full_overrides = _case_09_preframe(frame_start=None)
+        windowed = _build(**windowed_overrides)
+        _, full_overrides = _case_09_before_date_from(date_from=D0)
         full = _build(**full_overrides)
 
-        assert [s.date for s in framed.daily_states] == [D10]
-        problems = _line_problems(framed, {D10: {A: ("-30", "30"), B: ("130", "10")}}) + _aggregate_problems(framed, {D10: ("100", "40")})
+        assert [s.date for s in windowed.daily_states] == [D10]
+        problems = _line_problems(windowed, {D10: {A: ("-30", "30"), B: ("130", "10")}}) + _aggregate_problems(windowed, {D10: ("100", "40")})
         assert not problems, "\n".join(problems)
-        assert _broker_line(framed, D10) == _broker_line(full, D10), "framed d10 broker lines differ from the full computation's"
-        _assert_invariant_every_day(framed.daily_states)
+        assert _broker_line(windowed, D10) == _broker_line(full, D10), "the d10 broker lines from date_from=d10 differ from the run from d0's"
+        _assert_invariant_every_day(windowed.daily_states)
         _assert_invariant_every_day(full.daily_states)
 
-    def test_case_10_transit_straddles_frame_start(self):
-        """Case 10: 10 units leave A on d1 (pre-frame) and reach B on d5; frame_start d3.
+    def test_case_10_transit_straddles_date_from(self):
+        """Case 10: 10 units leave A on d1 (before date_from) and reach B on d5; date_from d3.
         The value in transit stays with A on d3-d4 (+30, +40, no capital moves); on d5
         X = MV(10, d5) = 150. Today d5: P_A -100, P_B +150."""
-        classification, overrides = _case_10_transit_straddles_frame_start()
+        classification, overrides = _case_10_transit_straddles_date_from()
         assert _intervals(classification) == [(D1, D4, "asset", Decimal("1"))]
 
         result = _build(**overrides)
@@ -1130,14 +1291,20 @@ _GUARD_CASES = [
     pytest.param(_case_04a_securities_same_day, id="case04a_securities_same_day"),
     pytest.param(_case_04b_securities_in_transit, id="case04b_securities_in_transit"),
     pytest.param(_case_05_missing_price_at_arrival, id="case05_missing_price_at_arrival"),
+    pytest.param(_case_05c_unknown_cost_at_arrival, id="case05c_unknown_cost_at_arrival"),
+    pytest.param(_case_05d_unpriced_with_known_cost_between_brokers, id="case05d_unpriced_with_known_cost_between_brokers"),
+    pytest.param(functools.partial(_case_05e_unpriced_pair_between_shares, "0.5", "1"), id="case05e_unpriced_shares_a50_b100"),
+    pytest.param(functools.partial(_case_05e_unpriced_pair_between_shares, "1", "0.5"), id="case05e_unpriced_shares_a100_b50"),
+    pytest.param(functools.partial(_case_05e_unpriced_pair_between_shares, "0.5", "1", "12"), id="case05e_unpriced_shares_a50_b100_received_at_12"),
+    pytest.param(_case_05f_unpriced_arrival_into_a_receiver_of_unknown_cost, id="case05f_unpriced_arrival_into_a_receiver_of_unknown_cost"),
     pytest.param(_case_05b_missing_fx_at_arrival, id="case05b_missing_fx_at_arrival"),
     pytest.param(_case_06_partial_position, id="case06_partial_position"),
     pytest.param(_case_07_fx_conversion_between_brokers, id="case07_fx_conversion_between_brokers"),
     pytest.param(functools.partial(_case_08_shares, "0.5", "0.5"), id="case08_shares_a50_b50"),
     pytest.param(functools.partial(_case_08_shares, "0.5", "1"), id="case08_shares_a50_b100"),
     pytest.param(functools.partial(_case_08_shares, "1", "0.5"), id="case08_shares_a100_b50"),
-    pytest.param(_case_09_preframe, id="case09_preframe"),
-    pytest.param(_case_10_transit_straddles_frame_start, id="case10_transit_straddles_frame_start"),
+    pytest.param(_case_09_before_date_from, id="case09_before_date_from"),
+    pytest.param(_case_10_transit_straddles_date_from, id="case10_transit_straddles_date_from"),
     pytest.param(_case_11_chain, id="case11_chain"),
     pytest.param(_case_12_round_trip, id="case12_round_trip"),
     pytest.param(_case_14a_fee_and_transfer, id="case14a_fee_and_transfer"),

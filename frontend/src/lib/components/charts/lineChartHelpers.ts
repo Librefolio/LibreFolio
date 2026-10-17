@@ -9,19 +9,12 @@
 
 import * as echarts from 'echarts';
 import type {RenderedSignal} from '$lib/charts/signals';
+import {toRgba} from '$lib/theme/colorAlpha';
+import {CHART_GAIN_LOSS, chartNeutrals, PRICE_SERIES} from '$lib/theme/chartTheme';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Color utilities
+// Staleness
 // ═══════════════════════════════════════════════════════════════════════════════
-
-/** Convert hex color to rgba string with given alpha */
-export function hexToRgba(hex: string, alpha: number): string {
-    const h = hex.replace('#', '');
-    const r = parseInt(h.substring(0, 2), 16);
-    const g = parseInt(h.substring(2, 4), 16);
-    const b = parseInt(h.substring(4, 6), 16);
-    return `rgba(${r},${g},${b},${alpha})`;
-}
 
 /**
  * Staleness opacity: fully opaque for fresh data, linearly fading to 0.15
@@ -42,13 +35,14 @@ export function getStaleOpacity(staleDays?: number, maxDays = 14): number {
 // Theme constants
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/** The price charts' line and gain/loss colours, by name, for the charts that pick them that way. Values: `$lib/theme/chartTheme`. */
 export const COLORS = {
-    lineLight: '#1a4031',
-    lineDark: '#4ade80',
-    greenLight: '#16a34a',
-    greenDark: '#4ade80',
-    redLight: '#ef4444',
-    redDark: '#f87171',
+    lineLight: PRICE_SERIES.line.light,
+    lineDark: PRICE_SERIES.line.dark,
+    greenLight: CHART_GAIN_LOSS.price.gain.light,
+    greenDark: CHART_GAIN_LOSS.price.gain.dark,
+    redLight: CHART_GAIN_LOSS.price.loss.light,
+    redDark: CHART_GAIN_LOSS.price.loss.dark,
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -327,12 +321,12 @@ export function buildMainSeries(values: Array<number | null>, staleDays: number[
             const opStart = getStaleOpacity(seg.staleStart);
             const opEnd = getStaleOpacity(seg.staleEnd);
             lineColor = new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                {offset: 0, color: hexToRgba(seg.color, opStart)},
-                {offset: 1, color: hexToRgba(seg.color, opEnd)},
+                {offset: 0, color: toRgba(seg.color, opStart)},
+                {offset: 1, color: toRgba(seg.color, opEnd)},
             ]);
-            itemColor = hexToRgba(seg.color, (opStart + opEnd) / 2);
+            itemColor = toRgba(seg.color, (opStart + opEnd) / 2);
         } else {
-            const solidColor = hexToRgba(seg.color, seg.opacity);
+            const solidColor = toRgba(seg.color, seg.opacity);
             lineColor = solidColor;
             itemColor = solidColor;
         }
@@ -364,15 +358,15 @@ export function buildMainSeries(values: Array<number | null>, staleDays: number[
                 const opEnd = getStaleOpacity(seg.staleEnd);
                 s.areaStyle = {
                     color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                        {offset: 0, color: hexToRgba(seg.color, (isDark ? 0.15 : 0.1) * opStart)},
-                        {offset: 1, color: hexToRgba(seg.color, (isDark ? 0.03 : 0.02) * opEnd)},
+                        {offset: 0, color: toRgba(seg.color, (isDark ? 0.15 : 0.1) * opStart)},
+                        {offset: 1, color: toRgba(seg.color, (isDark ? 0.03 : 0.02) * opEnd)},
                     ]),
                 };
             } else {
                 s.areaStyle = {
                     color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        {offset: 0, color: hexToRgba(seg.color, areaTopOp)},
-                        {offset: 1, color: hexToRgba(seg.color, areaBotOp)},
+                        {offset: 0, color: toRgba(seg.color, areaTopOp)},
+                        {offset: 1, color: toRgba(seg.color, areaBotOp)},
                     ]),
                 };
             }
@@ -471,7 +465,7 @@ export function buildBandSeries(signal: RenderedSignal, dates: string[], isDark:
             name: `${signal.label} Band`,
             data: bridgeBetweenPoints(deltaData),
             lineStyle: {opacity: 0},
-            areaStyle: {color: hexToRgba(bandColor, bandOpacity)},
+            areaStyle: {color: toRgba(bandColor, bandOpacity)},
             stack: `bb-${signal.id}`,
             stackStrategy: 'all',
             symbol: 'none',
@@ -543,7 +537,7 @@ export function buildSignalReferencePrimitives(signal: RenderedSignal, isDark: b
             },
             label: {
                 show: true,
-                color: isDark ? '#cbd5e1' : '#64748b',
+                color: chartNeutrals(isDark).referenceLevelLabel,
                 fontSize: 9,
                 formatter: (params: {name?: string}) => params.name ?? '',
             },
@@ -558,7 +552,7 @@ export function buildSignalReferencePrimitives(signal: RenderedSignal, isDark: b
         primitives.markArea = {
             silent: true,
             itemStyle: {
-                color: hexToRgba(signal.color, isDark ? 0.08 : 0.06),
+                color: toRgba(signal.color, isDark ? 0.08 : 0.06),
             },
             label: {show: false},
             data: signal.valueRegions.map((region) => [
@@ -580,6 +574,29 @@ export function buildSignalReferencePrimitives(signal: RenderedSignal, isDark: b
 // Arrow marker rotation
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/** The smallest turn, in degrees, worth a write-back: below it an arrow looks the same (Y-25). */
+const ARROW_ROTATE_EPSILON_DEG = 0.01;
+
+/** The charts whose last full option drew no arrow marker: `updateArrowRotations` has nothing to aim on them (Y-25). */
+const chartsWithoutArrows = new WeakSet<object>();
+
+/** Whether a series option carries an arrow marker `updateArrowRotations` aims: a `markPoint` item drawn as an arrow, at a coord. */
+function hasArrowMarker(series: unknown): boolean {
+    const items = (series as {markPoint?: {data?: unknown}} | null | undefined)?.markPoint?.data;
+    return Array.isArray(items) && items.some((item) => (item as {symbol?: unknown} | null)?.symbol === 'arrow' && Boolean((item as {coord?: unknown}).coord));
+}
+
+/**
+ * Records, from the option a chart was just given whole (`setOption(option, true)`), whether it draws any arrow
+ * marker: call it right after every full render. On a chart whose last full option drew none, `updateArrowRotations`
+ * returns before its `getOption()`, a deep copy of the whole option; a chart never noted is aimed as before (Y-25).
+ */
+export function noteArrowMarkers(chart: echarts.ECharts, option: {series?: unknown}): void {
+    const series = Array.isArray(option.series) ? option.series : option.series ? [option.series] : [];
+    if (series.some(hasArrowMarker)) chartsWithoutArrows.delete(chart);
+    else chartsWithoutArrows.add(chart);
+}
+
 /**
  * After `chart.setOption()`, scan all series for arrow markPoints
  * and recompute their `symbolRotate` using pixel-space coordinates.
@@ -590,11 +607,20 @@ export function buildSignalReferencePrimitives(signal: RenderedSignal, isDark: b
  *
  * Must be called:
  *  - After every `chart.setOption()`
- *  - On `dataZoom` events (zoom changes pixel aspect ratio)
- *  - On `resize` events
+ *  - Once a `dataZoom` gesture settles (zoom changes pixel aspect ratio), from the chart's zoom
+ *    debounce — never on each tick: `getOption()` deep-clones the whole option, and the write-back
+ *    merges every series again (Y-8)
+ *  - Once a resize settles, from the same debounce — never on each `ResizeObserver` callback (Y-25)
+ *
+ * Reads the option afresh on every call and keeps nothing between calls, so what it writes back
+ * carries the colours of the option on screen, after a theme or colour rebuild too (Y-8).
+ *
+ * Writes the series back only when an arrow turns by more than `ARROW_ROTATE_EPSILON_DEG`, and
+ * reads nothing on a chart whose last full option, noted by `noteArrowMarkers`, drew no arrow (Y-25).
  */
 export function updateArrowRotations(chart: echarts.ECharts): void {
     if (!chart || chart.isDisposed?.()) return;
+    if (chartsWithoutArrows.has(chart)) return;
 
     const option = chart.getOption() as any;
     if (!option?.series) return;
@@ -649,7 +675,10 @@ export function updateArrowRotations(chart: echarts.ECharts): void {
                 //   math: towardNeighborDeg + 180°
                 //   ECharts (0° = up, anti-clockwise): math_angle - 90°
                 //   Combined: towardNeighborDeg + 180 - 90 = towardNeighborDeg + 90
-                marker.symbolRotate = towardNeighborDeg + 90;
+                const rotation = towardNeighborDeg + 90;
+                // An arrow that has not turned is left as it is: the write-back merges every series again (Y-25)
+                if (typeof marker.symbolRotate === 'number' && Math.abs(marker.symbolRotate - rotation) <= ARROW_ROTATE_EPSILON_DEG) continue;
+                marker.symbolRotate = rotation;
                 needsUpdate = true;
             } catch (_) {
                 // convertToPixel can fail if chart not fully laid out

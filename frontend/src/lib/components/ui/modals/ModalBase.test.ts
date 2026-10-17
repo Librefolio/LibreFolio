@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import type {ComponentProps} from 'svelte';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import Harness from '$test/harness/ReviewSupportModalBaseHarness.svelte';
 import ConfirmModal from './ConfirmModal.svelte';
+import ModalBase from './ModalBase.svelte';
 
 vi.mock('$app/environment', () => ({browser: true, dev: true, building: false, version: 'test'}));
 
@@ -88,6 +90,61 @@ describe('ModalBase — optional focus management', () => {
         await view.rerender({open: false, trapFocus: true, restoreFocus: true, onRequestClose: view.onRequestClose});
         await waitFor(() => expect(opener).toHaveFocus());
         opener.remove();
+    });
+});
+
+type Tone = NonNullable<ComponentProps<typeof ModalBase>['tone']>;
+
+/**
+ * The frame's border is one ternary on `tone`. Each branch draws its own border and carries nothing of the other's: two
+ * border colours on one element resolve not in the order a caller wrote them but in the order Tailwind emits them, by
+ * name (rule 4 of the design system), so a danger frame that kept `border-lf-raised` would not be red. The same reason
+ * makes a red frame `tone="danger"`, never a colour passed through `contentClass`.
+ * Exact class tokens, never substrings: `border-2` and every `border-lf-…` role contain `border`.
+ */
+const FRAME_BORDER: Record<Tone, {drawn: string[]; absent: string[]}> = {
+    default: {drawn: ['border', 'border-lf-raised'], absent: ['border-2', 'border-lf-danger-line']},
+    danger: {drawn: ['border-2', 'border-lf-danger-line'], absent: ['border', 'border-lf-raised']},
+};
+
+/** The frame of an open ModalBase: the one element under the dialog that publishes its tone. */
+function frameOf(dialog: HTMLElement): HTMLElement {
+    const frames = dialog.querySelectorAll<HTMLElement>('[data-tone]');
+    expect(frames, 'the dialog does not hold exactly one frame publishing its tone').toHaveLength(1);
+    return frames[0];
+}
+
+/** The state first, then the classes that draw it; one negative per class, as `.not.toHaveClass(a, b)` passes with only one of them gone. */
+function expectFrame(frame: HTMLElement, tone: Tone) {
+    expect(frame, `the frame does not publish tone="${tone}"`).toHaveAttribute('data-tone', tone);
+    expect(frame, `the ${tone} frame does not draw its own border`).toHaveClass(...FRAME_BORDER[tone].drawn);
+    for (const className of FRAME_BORDER[tone].absent) {
+        expect(frame, `the ${tone} frame also carries ${className}, a class of the other frame`).not.toHaveClass(className);
+    }
+}
+
+// The markup exists twice, with and without transitions: both branches must draw the same frame.
+describe.each([
+    {path: 'without transitions', noTransition: true},
+    {path: 'with transitions', noTransition: false},
+])('ModalBase — the frame tone, rendered $path', ({noTransition}) => {
+    function mountFrame(props: {tone?: Tone; contentClass?: string} = {}): HTMLElement {
+        render(ModalBase, {open: true, noTransition, testId: 'modal-base-tone', ...props});
+        return frameOf(screen.getByTestId('modal-base-tone'));
+    }
+
+    it('draws the 1 px neutral frame when no tone is given', () => {
+        expectFrame(mountFrame(), 'default');
+    });
+
+    it('draws the 2 px danger frame for tone="danger", with nothing of the neutral one', () => {
+        expectFrame(mountFrame({tone: 'danger'}), 'danger');
+    });
+
+    it.each(['default', 'danger'] as const)('still appends the caller contentClass to the %s frame', (tone) => {
+        const frame = mountFrame({tone, contentClass: 'max-w-[95vw] w-[95vw]'});
+        expectFrame(frame, tone);
+        expect(frame, 'the caller contentClass did not reach the frame').toHaveClass('max-w-[95vw]', 'w-[95vw]');
     });
 });
 

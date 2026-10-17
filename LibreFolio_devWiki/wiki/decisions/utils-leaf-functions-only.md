@@ -80,7 +80,7 @@ ordered layers that use one another.")
   `utils/asset/geo.py` and `utils/fx/currency.py` no longer load the database models when they are imported. Imports
   rewritten in 7 files.
 - **The lazy imports went, because none of them broke a cycle**: the three of `clear_cache` in `fx.py` joined the
-  top-level `from …runtime.cache import clear_cache, get_ttl_cache`, and `config.py` imports `get_git_version` at the
+  top-level `from …runtime.cache import clear_cache, get_ttl_cache`, and `config/__init__.py` imports `get_git_version` at the
   top. No test patches `clear_cache`, so no patch went mute; importing `backend.app.config` and `backend.app.main`
   shows no cycle.
 - `all-backend` 12 411 passed, 28 skipped, 0 failed: BU1's count plus the two tests of the `version.py` root.
@@ -108,8 +108,8 @@ ordered layers that use one another.")
 | The rule | `.github/instructions/backend.instructions.md` |
 | BU2: the truncation to the database precision | `backend/app/db/precision.py` |
 | BU2: `decimal_utils`, now only `parse_decimal_value` | `backend/app/utils/decimal_utils.py` |
-| BU2: `clear_cache` imported at the top | `backend/app/services/fx.py` |
-| BU2: `get_git_version` imported at the top | `backend/app/config.py` |
+| BU2: `clear_cache` imported at the top | `backend/app/services/fx/sync.py`, `backend/app/services/fx/storage.py` |
+| BU2: `get_git_version` imported at the top | `backend/app/config/__init__.py` |
 | The cache helpers (no service import) | `backend/app/utils/runtime/cache.py` |
 | BU1: the root's docstring (leaf rule and map) | `backend/app/utils/__init__.py` |
 | BU1: the project root from the module's dotted name | `backend/app/utils/runtime/version.py` |

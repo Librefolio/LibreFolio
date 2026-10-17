@@ -11,7 +11,7 @@ variant. Same envelope/CSV contract as ``backup_asset_prices`` (already
 covered by ``test_asset_prices_export.py``):
 
 * CSV: ``text/csv``, ``;`` delimiter, fixed columns from
-  ``backup_service.{EVENT_COLUMNS,FX_RATE_COLUMNS}``, ``Content-Disposition``
+  ``series_export.{EVENT_COLUMNS,FX_RATE_COLUMNS}``, ``Content-Disposition``
   attachment with the ``<scope>_<slug>_<YYYY-MM-DD>.csv`` filename.
 * JSON: ``application/json`` envelope ``{scope, entity, exported_at,
   row_count, rows[]}`` — ``scope`` is ``events`` or ``fx_rates``.
@@ -40,11 +40,11 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
-from backend.app.schemas.assets import FAAssetCreateItem, FABulkAssetCreateResponse
+from backend.app.schemas.assets.assets import FAAssetCreateItem, FABulkAssetCreateResponse
+from backend.app.schemas.assets.events import FAAssetEventPoint, FAEventUpsert
 from backend.app.schemas.common import Currency
 from backend.app.schemas.fx import FXUpsertItem
-from backend.app.schemas.prices import FAAssetEventPoint, FAEventUpsert
-from backend.app.services.backup_service import EVENT_COLUMNS, FX_RATE_COLUMNS
+from backend.app.services.platform.series_export import EVENT_COLUMNS, FX_RATE_COLUMNS
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success, unique_id
 

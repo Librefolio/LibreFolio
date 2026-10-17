@@ -78,7 +78,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from backend.app.services.pac_allocator.evaluator import exact_decision_id
+from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.ledger import (
     _ROUNDED_FAMILIES as LEDGER_ROUNDED_FAMILIES,  # single source of truth for which families are rounded
 )
@@ -129,8 +129,8 @@ def as_float(value: ExactRatio) -> float:
 @dataclass(frozen=True, slots=True)
 class ScenarioFacts:
     """Pure, decision-independent scenario facts, derived only from public
-    ``ExactPlannerScenario`` fields (deliberately not ``evaluator.py``'s
-    private ``_ScenarioIndex`` — see Step3 §16.9 for why: this module must
+    ``ExactPlannerScenario`` fields (deliberately not the evaluator's internal
+    ``evaluation/scenario.py`` ``ScenarioIndex`` — see Step3 §16.9 for why: this module must
     stay buildable without reaching into another module's internals).
     """
 
@@ -151,7 +151,7 @@ def _fx_pair_key(first: str, second: str) -> str:
 def fx_rate(facts: ScenarioFacts, source_currency: str, destination_currency: str) -> float:
     """Return units of ``destination_currency`` per unit of ``source_currency``.
 
-    Mirrors ``evaluator._fx_rate`` exactly (same direct-pair-or-inverse
+    Mirrors ``evaluation.scenario.fx_rate`` exactly (same direct-pair-or-inverse
     lookup over the same alphabetically-ordered pair keys) but is re-derived
     here from the public ``ScenarioFacts.fx_rate_by_pair`` rather than
     imported, since the evaluator's version is a private helper.
@@ -180,7 +180,7 @@ def planning_fx_rate(facts: ScenarioFacts, source_currency: str, destination_cur
 def order_prices(facts: ScenarioFacts, route: ExactOrderRoute) -> tuple[float, float]:
     """Return ``(mid_native, execution_native)`` for one order route.
 
-    Mirrors ``evaluator._order_prices``: the execution side applies the
+    Mirrors ``evaluation.scenario.order_prices``: the execution side applies the
     route's own margin against the Asset's scenario-constant mid price.
     """
     mid_native = facts.mid_native_by_asset[route.asset_id]
@@ -225,7 +225,7 @@ def build_scenario_facts(scenario: ExactPlannerScenario) -> ScenarioFacts:
 
 
 def buy_pool_currencies(scenario: ExactPlannerScenario, facts: ScenarioFacts, *, broker_id: str, quote_currency: str) -> tuple[str, ...]:
-    """Mirror ``evaluator._buy_pool_currencies`` exactly: currencies that hold
+    """Mirror ``evaluation.reachability.buy_pool_currencies`` exactly: currencies that hold
     (or can hold) cash at ``broker_id`` and have a direct FX pair to
     ``quote_currency`` — anti-cascade, one hop only.
     """
@@ -538,7 +538,7 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
         )
 
         for pool_currency in buy_pool_currencies(scenario, facts, broker_id=route.broker_id, quote_currency=quote_currency):
-            # f"{route_id}:{currency}" mirrors evaluator._fx_debit_key exactly (private helper, re-derived not imported).
+            # f"{route_id}:{currency}" mirrors evaluation.keys.fx_debit_key exactly (an evaluator internal, re-derived not imported).
             fx_decision = variables.quanta[exact_decision_id("fx_debit", f"{route.route_id}:{pool_currency}")]
             debit_expr = facts.currency_quantum[pool_currency] * fx_decision
             cells[(route.broker_id, pool_currency)].append(-debit_expr)

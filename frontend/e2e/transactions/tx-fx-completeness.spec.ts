@@ -52,7 +52,7 @@ import {waitForSettled} from '../fixtures/app-events';
 import {optionsClosed} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
 import {daysAgoIso, todayIso} from '../fixtures/dates';
-import type {TXReadItem} from '../../src/lib/components/transactions/types';
+import type {TXReadItem} from '../../src/lib/features/transactions/types';
 
 const API = '/api/v1';
 

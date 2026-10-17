@@ -105,7 +105,8 @@ your router. On a phone, a red dot on the menu button warns you even while the s
 
 👉 **What to do:** avoid this address. If you run the server, give LibreFolio an
 [HTTPS address](#https-address) and stop exposing plain HTTP. Then change your password:
-**Settings** → [**Profile**](settings/profile.md) → **Change Password**.
+**Settings** → [**Profile**](settings/profile.md) → **Change Password**. This also signs out every other device
+signed in to your account.
 
 ??? info "🔍 When a connection counts as not secure"
 

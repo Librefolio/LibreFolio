@@ -41,11 +41,11 @@
         internet: 'connectionSecurity.reason.internet',
     };
     const LEVEL_ICONS = {secure: ShieldCheck, local: ShieldHalf, insecure: ShieldAlert};
-    // Readable on the sidebar's green, in both themes: the sidebar keeps its colour.
+    // On the green bar, in both themes: the bright statuses of the dark theme (designer, round 2; D-T17).
     const LEVEL_TONES: Record<ConnectionLevel, string> = {
-        secure: 'text-emerald-300',
-        local: 'text-lime-200',
-        insecure: 'text-red-300',
+        secure: 'text-lf-bar-success',
+        local: 'text-lf-bar-warning',
+        insecure: 'text-lf-bar-danger',
     };
 
     const AUTO_CLOSE_MS = 30_000;
@@ -105,7 +105,7 @@
     <button
         bind:this={toggleEl}
         type="button"
-        class="w-full flex items-center rounded-lg px-2 py-1.5 text-xs transition-colors hover:bg-white/10 {collapsed ? 'justify-center' : 'gap-2'} {level === 'insecure' ? 'bg-red-500/20' : ''}"
+        class="w-full flex items-center rounded-lg px-2 py-1.5 text-xs transition-colors hover:bg-lf-bar-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus {collapsed ? 'justify-center' : 'gap-2'} {level === 'insecure' ? 'bg-lf-bar-danger/20' : ''}"
         data-testid="connection-security-toggle"
         aria-expanded={detailsOpen}
         aria-controls={collapsed ? undefined : 'connection-security-details'}
@@ -115,17 +115,25 @@
     >
         <Icon size={16} class="flex-shrink-0 {LEVEL_TONES[level]}" aria-hidden="true" />
         {#if !collapsed}
-            <span class="flex-1 truncate text-left text-white/80" data-testid="connection-security-label">{label}</span>
+            <span class="flex-1 truncate text-left text-lf-bar-text" data-testid="connection-security-label">{label}</span>
         {/if}
     </button>
 
     {#if detailsOpen && !collapsed}
-        <div id="connection-security-details" class="mt-1 space-y-2 rounded-lg bg-white/10 px-3 py-2 text-xs leading-relaxed text-white/80" data-testid="connection-security-details" onfocusin={() => (focusInDetails = true)} onfocusout={releaseFocus}>
-            <button type="button" class="block w-full cursor-pointer text-left" data-testid="connection-security-reason" title={$_('common.close')} onclick={closeFromReason}>{$_(REASON_KEYS[$connectionSecurity.reason])}</button>
+        <div id="connection-security-details" class="mt-1 space-y-2 rounded-lg bg-lf-bar-hover px-3 py-2 text-xs leading-relaxed text-lf-bar-text" data-testid="connection-security-details" onfocusin={() => (focusInDetails = true)} onfocusout={releaseFocus}>
+            <button type="button" class="block w-full cursor-pointer text-left rounded focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus" data-testid="connection-security-reason" title={$_('common.close')} onclick={closeFromReason}
+                >{$_(REASON_KEYS[$connectionSecurity.reason])}</button
+            >
             {#if showAdminWarning}
-                <p class="rounded bg-amber-500/20 px-2 py-1 text-amber-100" data-testid="connection-security-admin-warning">{$_('connectionSecurity.cookieWarning')}</p>
+                <p class="rounded border border-lf-bar-warning px-2 py-1 text-lf-bar-warning" data-testid="connection-security-admin-warning">{$_('connectionSecurity.cookieWarning')}</p>
             {/if}
-            <a class="inline-flex items-center gap-1 underline transition-colors hover:text-white" data-testid="connection-security-docs-link" href={connectionSecurityDocsUrl($currentLanguage)} target="_blank" rel="noopener noreferrer">
+            <a
+                class="inline-flex items-center gap-1 underline transition-colors hover:text-lf-on-bar-active rounded focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus"
+                data-testid="connection-security-docs-link"
+                href={connectionSecurityDocsUrl($currentLanguage)}
+                target="_blank"
+                rel="noopener noreferrer"
+            >
                 <BookOpen size={12} aria-hidden="true" />
                 {$_('connectionSecurity.learnMore')}
             </a>

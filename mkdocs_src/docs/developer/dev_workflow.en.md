@@ -29,6 +29,17 @@ The Vite development server will run at **`http://localhost:5173`** and automati
 LibreFolio includes a central orchestration script, `dev.py`, which is your single entry point for all development tasks.
 Run `./dev.py --help` for the full command tree.
 
+### ⏹️ Stopping the Server
+
+`./dev.py server` runs uvicorn as its child process and waits for it (`run_server_live()` in `scripts/cli_base.py`). It lets the server finish its own shutdown, bounded by the shutdown budget (`LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`, 8 s by default; see *Stopping the Server* in [Configuration](../admin/configuration.md)):
+
+- **Ctrl+C**: the terminal sends SIGINT to the whole foreground process group, so the server already has it. `dev.py` sends nothing more, since a second SIGINT would make uvicorn force its exit: it prints `Interrupted: waiting for the server to stop …` and waits.
+- **SIGTERM to `dev.py`**, for example from a process supervisor that signals only the main process: `dev.py` forwards it to the server, prints `SIGTERM: waiting for the server to stop …` and waits the same way. A server that gets the SIGTERM from its process group as well (the test runner signals the whole group, `scripts/test_runner/_server.py`) gets it twice and stops once.
+- **The wait** (`_server_stop_grace()` in `dev.py`) is the budget plus 2 s: 10 s by default, 7 s with `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS=5`, 10 s with a value that cannot be used, and no limit with `0`.
+- **A second Ctrl+C or SIGTERM**, or the end of the wait: `dev.py` kills the server (SIGKILL).
+
+`dev.py` exits with `130` after a Ctrl+C and `143` after a SIGTERM. With `--coverage` no `dev.py` is left to wait: it replaces itself with `coverage run`, and the signals reach the server directly (see [Frontend Coverage Architecture](test-walkthrough/index.md#frontend-coverage-architecture)). The other `dev.py` commands still run through `run_command_live()`, whose `subprocess.run` kills the child 0.25 s after a Ctrl+C.
+
 ### 🖥️ Frontend Management
 
 | Command | Description | Details |
@@ -83,7 +94,7 @@ Create and apply database schema changes:
 | `./dev.py db create-clean` | Recreate a fresh database and apply all migrations |
 | `./dev.py db current` | Show the current database migration revision |
 
-`db migrate`, `db upgrade`, `db downgrade` and `db create-clean` refuse to run while a server listens on the port that serves the target database (`PORT` for the production database, `TEST_PORT` for the test one): stop that server first. The server itself applies pending migrations at startup (`ensure_database_exists()` in `backend/app/main.py`).
+`db migrate`, `db upgrade`, `db downgrade` and `db create-clean` refuse to run while a server listens on the port that serves the target database (`PORT` for the production database, `TEST_PORT` for the test one): stop that server first. The server itself applies pending migrations at startup (`ensure_database_exists()` in `backend/app/services/platform/database_bootstrap.py`, the `database` step of the [lifespan](architecture/overview.md#server-startup)).
 
 ### 🧪 Test Runner
 
@@ -118,7 +129,7 @@ Developers can build and run production-tagged containers locally using the dev 
 | `./dev.py docker up` | Launch the containerized stack in detached mode |
 | `./dev.py docker down` | Stop and remove active Docker containers |
 | `./dev.py docker rebuild` | Build, stop, and restart containers with the new image |
-| `./dev.py docker exec <cmd>` | Execute a `dev.py` command inside the running container |
+| `./dev.py docker exec <cmd>` | Execute a `dev.py` command inside the running container, as the server's user (through `gosu`), not root |
 
 For details on local Docker workflows, container settings, and how the host `.env` file integrates with `docker-compose.yml`, see the [Advanced Docker Guide](../admin/docker_advanced.md). How the image itself is built and started: [Architecture overview → Docker image](architecture/overview.md#docker-image).
 
@@ -126,17 +137,23 @@ For details on local Docker workflows, container settings, and how the host `.en
 
 `cmd_docker_build()` checks that `.env` exists, then `_docker_ensure_assets_built()` prepares what the image copies from the host:
 
-1. **Resource cache**: `scripts/update_js_cache.py`, strict. It caches the flags subset of the Noto Color Emoji font (`frontend/static/fonts/noto-color-emoji/`, drawn by the `'LF Flags'` face of `frontend/static/lf-flags.css` on every non-Apple device: Windows has no flag emoji of its own) and MathJax (`mkdocs_src/docs/javascripts/vendor/`); a resource that cannot be downloaded and has no cached copy fails the build (`❌ Resource cache incomplete`). `./dev.py front build` fails only for the resources the frontend ships (`--required-for frontend`), and `./dev.py server` only warns and falls back to the CDN. `./dev.py cache js` (`--force`) refreshes the cache by hand.
-2. **Frontend**: rebuilt for production when `check_frontend_needs_build()` finds sources newer than `frontend/build/index.html`. The check reads timestamps, not the build mode: a debug build left by `./dev.py server --test` passes it, and the `Dockerfile`'s `frontend` stage then refuses it.
-3. **Documentation**: `mkdocs build` when `mkdocs_src/site/index.html` is missing or older than any `.md` under `mkdocs_src/docs/`.
-4. **`requirements.txt`**: regenerated with `pipenv requirements` when missing or older than `Pipfile.lock`.
-5. **`VERSION`**: `get_git_version()` frozen into a file, since the image has no `.git/`.
+1. **Version**: `get_git_version()`, asked once before any other step, so that a step writing a tracked file cannot turn it into `-dirty`: `LF_APP_VERSION` when it is set, `git describe` otherwise. The `VERSION` file of an earlier build is deleted first, so a checkout where git cannot answer gets `unknown`, not the old value. The frontend bundle and `VERSION` both carry this frozen version (see [Version Stamps → Local image builds](docs/release-pipeline.md#local-image-builds)).
+2. **Resource cache**: `scripts/update_js_cache.py`, strict. It caches the flags subset of the Noto Color Emoji font (`frontend/static/fonts/noto-color-emoji/`, drawn by the `'LF Flags'` face of `frontend/static/lf-flags.css` on every non-Apple device: Windows has no flag emoji of its own) and MathJax (`mkdocs_src/docs/javascripts/vendor/`); a resource that cannot be downloaded and has no cached copy fails the build (`❌ Resource cache incomplete`). `./dev.py front build` fails only for the resources the frontend ships (`--required-for frontend`), and `./dev.py server` only warns and falls back to the CDN. `./dev.py cache js` (`--force`) refreshes the cache by hand.
+3. **Frontend**: `_docker_ensure_frontend_built()` rebuilds it in production mode, with `LF_APP_VERSION` set to the frozen version for that build only, when `_docker_frontend_stale_reason()` gives a reason, shown in the log:
+    - *missing or outdated*: `check_frontend_needs_build()` finds sources newer than `frontend/build/index.html`, the files of `frontend/static/` included, or a Tool codegen input, a frontend source or a static file added, removed or renamed since that build (what it watches: [Frontend Tests Overview → Automated Setup](test-walkthrough/front-overview.md#automated-setup));
+    - *not a production build*: `.build-debug` says `1` (a debug build, for example from `./dev.py server --test`) or is missing (mode unknown);
+    - *built for another version*: `frontend/build/.build-version` does not hold the frozen version.
 
-The build then runs `docker build -t librefolio:<version> -t librefolio:latest --build-arg UID=<uid> --build-arg GID=<gid> .`, where `<version>` comes from `get_git_version()` and the UID/GID are those of the user running the command (`os.getuid()`, `os.getgid()`; only `docker compose build` reads `UID`/`GID` from `.env`). `--light` adds `-light` to both tags and `--build-arg DOCS_VARIANT=light`; `--no-cache` is passed through. `./dev.py docker rebuild` runs the same build, then `docker compose down` and `docker compose up -d`; a failed build leaves the running containers alone.
+    After its build it writes the version into `.build-version`. Every frontend build empties `frontend/build/`, so the file exists only when the last build was made for an image: a build from `./dev.py front build`, a server or the test runner is rebuilt once, and a new commit, even one that touched no frontend file, changes the version and rebuilds the bundle too. The `Dockerfile`'s `frontend` stage still checks the result (`scripts/docker/check_frontend_build.sh`).
+4. **Documentation**: `mkdocs build` when `mkdocs_src/site/index.html` is missing or older than any `.md` under `mkdocs_src/docs/`.
+5. **`requirements.txt`**: regenerated with `pipenv requirements` when missing or older than `Pipfile.lock`.
+6. **`VERSION`**: the frozen version, written into a file, since the image has no `.git/`. The sidebar (the bundle's version) and Settings → About (`GET /api/v1/system/info`, the backend's) show the same version in the image.
+
+The build then runs `docker build -t librefolio:<version> -t librefolio:latest --build-arg UID=<uid> --build-arg GID=<gid> .`. `<version>` comes from `_get_docker_tag()`, which clears `get_git_version()`'s cache and asks again after the steps above: if one of them changed a tracked file, the tags end in `-dirty` while the version inside the image does not. The UID/GID are those of the user running the command (`os.getuid()`, `os.getgid()`; only `docker compose build` reads `UID`/`GID` from `.env`). `--light` adds `-light` to both tags and `--build-arg DOCS_VARIANT=light`; `--no-cache` is passed through. `./dev.py docker rebuild` runs the same build, then `docker compose down` and `docker compose up -d`; a failed build leaves the running containers alone.
 
 ### 🧪 Test Mode in the Container {: #docker-test-mode }
 
-The repository's `docker-compose.yml` maps a second port, `${TEST_PORT:-6041}:6041`, for a test server, but the current image cannot run test mode, for the two reasons below. Run test mode from a source checkout on the host instead:
+The image cannot run test mode, for the two reasons below, and it exposes only the production port `6040`: neither Compose file publishes the test port. Run test mode from a source checkout on the host instead:
 
 ```bash
 ./dev.py test db populate --force --with-static   # mock data in the test database
@@ -145,11 +162,11 @@ The repository's `docker-compose.yml` maps a second port, `${TEST_PORT:-6041}:60
 
 Then open `http://localhost:6041` and sign in as a test user, for example `e2e_test_user` / `E2eTestPass123!` or `e2e_test_admin` / `E2eAdminPass123!`.
 
-While the compose stack runs, Docker holds host port 6041 for that second mapping: `test db populate` starts no server and is not affected, but `./dev.py server --test` cannot start the test server on that port (`dev.py` stops with *Port 6041 is already in use!* or, when it cannot see Docker's process, uvicorn fails to bind the port). Stop the stack first (`docker compose stop`), or start the test server on another port and open that one instead, for example `./dev.py server --test --port 6045` (it must differ from the production `PORT`). Do not use `--force`, although the error suggests it: it kills whatever holds the port, here Docker's own port forwarder.
+The compose stack holds only the host's `PORT` (`${PORT:-6040}`), so the test server can run on the host while the stack is up.
 
 !!! info "Why the image cannot run test mode"
 
     - **`test` is not part of the image.** `dev.py` registers a command group only when the directories it needs exist (`_has()` in `dev.py`): without `backend/test_scripts/`, which `.dockerignore` keeps out, `test` stays listed but answers *'test' is not available in this installation* and exits with `2`, so `test db populate` cannot seed the test database. `i18n` (`frontend/scripts/`) and `mkdocs translate` / `translate-validate` (`mkdocs_src/aphra-pipeline/`) behave the same way; `./dev.py test utils dev-cli-image` pins this behaviour on a copy of the image's file set.
-    - **`server --test`** forces a debug frontend build, while the image ships a production one: `auto_build_frontend()` sees the mode mismatch and rebuilds, which runs `npm` (API client generation, then the build itself), and the image has no Node.js.
+    - **`server --test`** forces a debug frontend build, while the image ships a production one: `auto_build_frontend()` sees the mode mismatch and rebuilds, and the rebuild stops at its first check. Before any `npm` or `npx` call, `cmd_fe_build()` looks in `frontend/node_modules/.bin` for the tools it runs, and the image has no `node_modules` and no Node.js: `dev.py` stops with *Cannot run the frontend build: the frontend dependencies are not installed*, names the missing tools (`openapi-zod-client`, `svelte-check`, `vite`) and the fix for a checkout, `cd frontend && npm ci`, which the image cannot run, and the server does not start.
 
 The flow above runs on the host, so its test database is `backend/data/test/sqlite/app.db` in the source checkout (from `LIBREFOLIO_TEST_DATA_DIR`, default `./backend/data/test`), and `./dev.py test db populate --force` deletes and recreates it.

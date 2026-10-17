@@ -8,7 +8,6 @@
     "password": "Contraseña",
     "confirmPassword": "Confirmar Contraseña",
     "forgotPassword": "¿Olvidaste tu contraseña?",
-    "registerTitle": "Crear una cuenta",
     "noAccount": "¿No tienes una cuenta?",
     "hasAccount": "¿Ya tienes una cuenta?",
     "registerHere": "Regístrate aquí",
@@ -17,8 +16,7 @@
     "accountCreated": "¡Cuenta creada con éxito! Por favor, inicia sesión.",
     "registrationFailed": "El registro falló. Por favor, inténtalo de nuevo.",
     "registrationDisabled": "El registro de nuevos usuarios está actualmente desactivado por el administrador.",
-    "passwordRecovery": "Recuperación de Contraseña",
-    "emailRecoveryNotAvailable": "La recuperación por correo electrónico aún no está disponible. Por favor, usa la terminal del servidor para restablecer tu contraseña.",
+    "emailRecoveryNotAvailable": "La recuperación por correo electrónico no está disponible en esta instancia. Restablece tu contraseña desde la terminal del servidor o pide a tu administrador un enlace para restablecerla.",
     "serverTerminalInstructions": "Ejecuta este comando en el servidor:",
     "contactAdministrator": "Contacta a tu administrador del sistema si no tienes acceso al servidor.",
     "backToLogin": "Volver al Inicio de Sesión",
@@ -29,7 +27,8 @@
       "invalidEmailDomain": "El dominio del correo no es válido o no se puede usar",
       "usernameTaken": "Este nombre de usuario ya está en uso",
       "emailTaken": "Este correo electrónico ya está registrado",
-      "passwordTooWeak": "La contraseña no cumple los requisitos de seguridad"
+      "passwordTooWeak": "La contraseña no cumple los requisitos de seguridad",
+      "usernameNoAt": "El nombre de usuario no puede contener @: para iniciar sesión siempre puedes usar tu dirección de correo electrónico."
     },
     "passwordStrength": {
       "veryWeak": "Muy Débil",
@@ -39,7 +38,7 @@
       "veryStrong": "Muy Fuerte",
       "requirements": "Requisitos de la contraseña:",
       "rules": {
-        "minLength": "Al menos 8 caracteres",
+        "minLength": "Al menos {value} caracteres",
         "hasUppercase": "Una letra mayúscula",
         "hasLowercase": "Una letra minúscula",
         "hasNumber": "Un número",
@@ -53,6 +52,56 @@
     "invalidCredentials": "Nombre de usuario o contraseña no válidos",
     "invalidInput": "Datos no válidos",
     "loginFailed": "No se pudo iniciar sesión",
-    "accountDisabled": "Esta cuenta está desactivada: pide a un administrador que la reactive."
+    "accountDisabled": "Esta cuenta está desactivada: pide a un administrador que la reactive.",
+    "loginServerUnreachable": "El servidor no responde: comprueba tu conexión y vuelve a intentarlo en un momento.",
+    "loginServerError": "El servidor ha tenido un error: vuelve a intentarlo en un momento y, si vuelve a ocurrir, avisa a un administrador.",
+    "tooManyAttempts": "Demasiados intentos de inicio de sesión: espera unos minutos y vuelve a intentarlo.",
+    "showPassword": "Mostrar contraseña",
+    "hidePassword": "Ocultar contraseña",
+    "registrationInviteOnly": "Este servidor solo acepta cuentas nuevas mediante un enlace de invitación. Pide uno a un administrador.",
+    "userLimitReached": "Este servidor ha alcanzado su número máximo de cuentas. Contacta con el administrador.",
+    "invite": {
+      "notice": "Has recibido una invitación para este servidor de LibreFolio: crea tu cuenta.",
+      "adminNotice": "Esta invitación crea una cuenta de administrador."
+    },
+    "link": {
+      "expired": "Este enlace ha caducado.",
+      "consumed": "Este enlace ya se ha usado.",
+      "revoked": "Este enlace ha sido revocado.",
+      "unknown": "Este enlace no es válido.",
+      "missing": "Este enlace está incompleto: ábrelo de nuevo desde el mensaje que recibiste.",
+      "checkFailed": "No se ha podido comprobar el enlace. Inténtalo de nuevo en un momento.",
+      "askAdmin": "Pide un enlace nuevo a un administrador."
+    },
+    "resetPassword": {
+      "title": "Elige una contraseña nueva",
+      "account": "Cuenta:",
+      "submit": "Establecer la contraseña nueva",
+      "done": "Tu contraseña se ha cambiado: inicia sesión con la nueva.",
+      "failed": "No se ha podido cambiar la contraseña. Inténtalo de nuevo."
+    },
+    "setup": {
+      "title": "Configura tu cuenta de administrador",
+      "intro": "Elige la contraseña de la cuenta de administrador de esta instancia.",
+      "account": "Cuenta:",
+      "submit": "Activar la cuenta",
+      "failed": "No se ha podido configurar la cuenta. Inténtalo de nuevo.",
+      "blocked": "Esta instancia está bloqueada por su proveedor: la cuenta se podrá configurar cuando se desbloquee.",
+      "newLinkHint": "Pide un enlace nuevo a tu proveedor. En tu propio servidor, ejecuta «dev.py user setup-link»."
+    },
+    "notices": {
+      "openRegistration": "El registro está abierto y esta instancia es accesible desde fuera de tu red local: cualquiera que la encuentre puede crear una cuenta.",
+      "openRegistrationLocked": "El registro está abierto, fijado por LIBREFOLIO_REGISTRATION, y esta instancia es accesible desde fuera de tu red local: cualquiera que la encuentre puede crear una cuenta. Cambia la variable para cerrarlo.",
+      "openRegistrationAction": "Cambiar quién puede registrarse"
+    },
+    "instanceBlocked": "Esta instancia está bloqueada por su proveedor: inténtalo de nuevo cuando se desbloquee.",
+    "checks": {
+      "loginLimit": {
+        "ok": "Los inicios de sesión fallidos están limitados: tras 10 en 15 minutos para un nombre de usuario o un correo, o 50 desde una dirección, el inicio de sesión espera.",
+        "off": "El límite de inicios de sesión fallidos está desactivado (LIBREFOLIO_LOGIN_LIMIT=off): las contraseñas pueden probarse sin pausa. Vuelve a activarlo, salvo que sea una instancia de prueba.",
+        "invalid": "LIBREFOLIO_LOGIN_LIMIT vale «{value}», que no es ni on ni off: el servidor no arranca con este valor."
+      }
+    },
+    "askAdminToResetPassword": "Pide a tu administrador un enlace para restablecer la contraseña: puede crear uno para tu cuenta."
   }
 }

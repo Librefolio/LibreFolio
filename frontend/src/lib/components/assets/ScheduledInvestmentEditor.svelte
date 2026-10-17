@@ -72,13 +72,13 @@
     // Constants
     // =========================================================================
 
-    // Source of truth: backend/app/schemas/assets.py → InterestType enum
+    // Source of truth: backend/app/schemas/assets/scheduled_investment.py → InterestType enum
     let INTEREST_TYPE_OPTIONS = $derived([
         {value: 'SIMPLE', label: `📊 ${$t('assets.schedule.interestTypeSimple')}`},
         {value: 'COMPOUND', label: `📈 ${$t('assets.schedule.interestTypeCompound')}`},
     ]);
 
-    // Source of truth: backend/app/schemas/assets.py → DayCountConvention enum
+    // Source of truth: backend/app/schemas/assets/scheduled_investment.py → DayCountConvention enum
     const DAY_COUNT_OPTIONS = [
         {value: 'ACT/365', label: 'ACT/365'},
         {value: 'ACT/360', label: 'ACT/360'},
@@ -86,7 +86,7 @@
         {value: '30/360', label: '30/360'},
     ];
 
-    // Source of truth: backend/app/schemas/assets.py → MaturationFrequency enum
+    // Source of truth: backend/app/schemas/assets/scheduled_investment.py → MaturationFrequency enum
     let MATURATION_FREQ_OPTIONS = $derived([
         {value: 'DAILY', label: `🕐 ${$t('assets.schedule.matFreqDaily')}`},
         {value: 'WEEKLY', label: `📅 ${$t('assets.schedule.matFreqWeekly')}`},
@@ -1000,7 +1000,7 @@
         <!-- Row 1: Initial Value + Currency -->
         <div class="flex items-end gap-2">
             <div class="flex-1 min-w-0">
-                <label for="initial-value" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <label for="initial-value" class="block text-xs font-medium text-lf-muted mb-1">
                     💰 {$t('assets.schedule.initialValue')}
                 </label>
                 <input
@@ -1017,14 +1017,14 @@
                         emitChange();
                     }}
                     disabled={disabled || readonly}
-                    class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                           bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                           focus:outline-none focus:ring-2 focus:ring-libre-green/50
+                    class="w-full px-3 py-2 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg
+                           bg-lf-field text-lf-primary
+                           focus:outline-none focus:ring-2 focus:ring-lf-focus/50
                            disabled:opacity-50"
                 />
             </div>
             <div class="w-44 shrink-0">
-                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <span class="block text-xs font-medium text-lf-muted mb-1">
                     💱 {$t('assets.schedule.currency')}
                 </span>
                 <CurrencySearchSelect
@@ -1042,11 +1042,11 @@
         <div class="flex items-end gap-2">
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1 mb-1">
-                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <span class="text-xs font-medium text-lf-muted">
                         📐 {$t('assets.schedule.interestType')}
                     </span>
                     <Tooltip text={$t('assets.schedule.interestTypeTooltip')} position="top">
-                        <a href="/mkdocs/user/assets/providers/scheduled-investment/#how-value-is-calculated" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-libre-green transition-colors" onclick={(e) => e.stopPropagation()}>
+                        <a href="/mkdocs/user/assets/providers/scheduled-investment/#how-value-is-calculated" target="_blank" rel="noopener noreferrer" class="text-lf-muted hover:text-lf-link transition-colors" onclick={(e) => e.stopPropagation()}>
                             <Info size={12} />
                         </a>
                     </Tooltip>
@@ -1063,11 +1063,11 @@
             </div>
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1 mb-1">
-                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <span class="text-xs font-medium text-lf-muted">
                         📆 {$t('assets.schedule.dayCount')}
                     </span>
                     <Tooltip text={$t('assets.schedule.dayCountTooltip')} position="top">
-                        <a href="/mkdocs/user/assets/providers/scheduled-investment/#interest-schedule-editor" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-libre-green transition-colors" onclick={(e) => e.stopPropagation()}>
+                        <a href="/mkdocs/user/assets/providers/scheduled-investment/#interest-schedule-editor" target="_blank" rel="noopener noreferrer" class="text-lf-muted hover:text-lf-link transition-colors" onclick={(e) => e.stopPropagation()}>
                             <Info size={12} />
                         </a>
                     </Tooltip>
@@ -1088,8 +1088,8 @@
     <!-- Header: title + bulk toolbar + Add button (all inline) -->
     <div class="flex items-center gap-2 flex-wrap">
         <div class="flex items-center gap-2">
-            <CalendarDays size={16} class="text-gray-400" />
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <CalendarDays size={16} class="text-lf-muted" />
+            <span class="text-sm font-medium text-lf-secondary">
                 {$t('assets.schedule.title')}
             </span>
         </div>
@@ -1099,12 +1099,12 @@
 
         <!-- Inline bulk toolbar (shown when rows selected) — right-aligned -->
         {#if selectedIds.length > 0}
-            <div class="flex items-center gap-1.5 pr-2 border-r border-gray-200 dark:border-slate-600">
+            <div class="flex items-center gap-1.5 pr-2 border-r border-lf-subtle">
                 <button
                     type="button"
                     class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md
-                           bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300
-                           hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                           bg-lf-panel text-lf-secondary
+                           hover:bg-lf-neutral transition-colors"
                     data-testid="schedule-clear-selection"
                     onclick={() => {
                         selectedIds = [];
@@ -1113,7 +1113,7 @@
                 >
                     <span>{selectedIds.length}</span>
                     <span class="hidden sm:inline">{$t('common.selected')}</span>
-                    <span class="text-gray-400">×</span>
+                    <span class="text-lf-muted">×</span>
                 </button>
                 {#each bulkActions as action}
                     <button
@@ -1124,7 +1124,7 @@
                         title={typeof action.label === 'function' ? action.label() : action.label}
                         class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors
                                disabled:opacity-40 disabled:cursor-not-allowed
-                               {action.variant === 'danger' ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
+                               {action.variant === 'danger' ? 'text-lf-danger hover:bg-lf-danger-soft' : 'text-lf-secondary hover:bg-lf-hover'}"
                     >
                         <action.icon size={14} />
                         <span class="hidden sm:inline">
@@ -1142,9 +1142,9 @@
                 data-testid="schedule-add-period"
                 onclick={handleAddPeriod}
                 class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
-                       border border-gray-200 dark:border-slate-600
-                       text-gray-600 dark:text-gray-300 bg-white dark:bg-slate-800
-                       hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                       border border-lf-subtle
+                       text-lf-secondary bg-lf-card
+                       hover:bg-lf-hover transition-colors"
             >
                 <Plus size={14} />
                 <span class="hidden sm:inline">{$t('assets.schedule.addPeriod')}</span>
@@ -1155,12 +1155,12 @@
     <!-- DataTable or Empty State -->
     {#if normalRows.length === 0 && (!lateRow || !lateRow.enabled)}
         <!-- Empty state -->
-        <div class="p-8 border border-dashed border-gray-300 dark:border-slate-600 rounded-xl text-center space-y-3" data-testid="schedule-empty">
+        <div class="p-8 border border-dashed border-lf-subtle rounded-xl text-center space-y-3" data-testid="schedule-empty">
             <div class="text-3xl">📅</div>
-            <div class="text-sm text-gray-500 dark:text-gray-400">
+            <div class="text-sm text-lf-muted">
                 {$t('assets.schedule.emptyTitle')}
             </div>
-            <p class="text-xs text-gray-400 dark:text-gray-500">
+            <p class="text-xs text-lf-muted">
                 {$t('assets.schedule.emptyHint')}
             </p>
             {#if !readonly && !disabled}
@@ -1169,7 +1169,7 @@
                     data-testid="schedule-add-first-period"
                     onclick={handleAddPeriod}
                     class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg
-                           bg-libre-green text-white hover:bg-libre-green-dark transition-colors"
+                           bg-lf-action text-lf-on-action hover:bg-lf-action-hover transition-colors"
                 >
                     <Plus size={14} />
                     {$t('assets.schedule.addFirstPeriod')}
@@ -1200,7 +1200,7 @@
 
     <!-- Late interest toggle + interest type (always visible if lateRow exists and there are normal periods) -->
     {#if lateRow && normalRows.length > 0}
-        <div class="flex items-center justify-end gap-2 text-xs text-gray-500 dark:text-gray-400">
+        <div class="flex items-center justify-end gap-2 text-xs text-lf-muted">
             {#if lateRow.enabled}
                 <div class="w-36">
                     <SimpleSelect value={lateRow.lateInterestType} options={INTEREST_TYPE_OPTIONS} disabled={disabled || readonly} compact={true} onchange={(v) => updateRow('late-interest', 'lateInterestType', v)} />
@@ -1230,8 +1230,8 @@
     <div class="space-y-2">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-1.5">
-                <CalendarClock size={14} class="text-gray-400" />
-                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{$t('assets.schedule.assetEvents')}</span>
+                <CalendarClock size={14} class="text-lf-muted" />
+                <span class="text-xs font-medium text-lf-muted">{$t('assets.schedule.assetEvents')}</span>
             </div>
             {#if !readonly && !disabled}
                 <button
@@ -1239,9 +1239,9 @@
                     data-testid="schedule-add-event"
                     onclick={handleAddEvent}
                     class="flex items-center gap-1 px-2 py-1 text-xs rounded-md
-                           border border-gray-200 dark:border-slate-600
-                           text-gray-600 dark:text-gray-300 bg-white dark:bg-slate-800
-                           hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                           border border-lf-subtle
+                           text-lf-secondary bg-lf-card
+                           hover:bg-lf-hover transition-colors"
                 >
                     <Plus size={12} />
                     <span class="hidden sm:inline">{$t('assets.schedule.addEvent')}</span>
@@ -1249,20 +1249,20 @@
             {/if}
         </div>
         {#if assetEvents.length > 0}
-            <div class="border border-gray-200 dark:border-slate-600 rounded-lg overflow-hidden">
+            <div class="border border-lf-subtle rounded-lg overflow-hidden">
                 <table class="w-full text-xs">
-                    <thead class="bg-gray-50 dark:bg-slate-800">
+                    <thead class="bg-lf-panel">
                         <tr>
-                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">{$t('common.date')}</th>
-                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">{$t('common.type')}</th>
-                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">{$t('common.value')}</th>
-                            <th class="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">{$t('common.notes')}</th>
+                            <th class="px-2 py-1.5 text-left font-medium text-lf-muted">{$t('common.date')}</th>
+                            <th class="px-2 py-1.5 text-left font-medium text-lf-muted">{$t('common.type')}</th>
+                            <th class="px-2 py-1.5 text-left font-medium text-lf-muted">{$t('common.value')}</th>
+                            <th class="px-2 py-1.5 text-left font-medium text-lf-muted">{$t('common.notes')}</th>
                             <th class="px-2 py-1.5 w-8"></th>
                         </tr>
                     </thead>
                     <tbody>
                         {#each assetEvents as evt, idx}
-                            <tr class="border-t border-gray-100 dark:border-slate-700" data-testid="schedule-event-row" data-event-index={idx}>
+                            <tr class="border-t border-lf-subtle" data-testid="schedule-event-row" data-event-index={idx}>
                                 <td class="px-2 py-1">
                                     <SingleDatePicker value={evt.date} label="" compact={true} allowFuture={true} onchange={(d) => handleEventFieldChange(idx, 'date', d)} />
                                 </td>
@@ -1278,8 +1278,8 @@
                                         step={evt.type === 'MATURITY_SETTLEMENT' ? '100' : '0.01'}
                                         oninput={(e) => handleEventFieldChange(idx, 'value', Number(e.currentTarget.value))}
                                         disabled={disabled || readonly}
-                                        class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
-                                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                                        class="w-full px-1 py-0.5 text-xs border border-lf-input hover:border-lf-input-hover rounded
+                                               bg-lf-field text-lf-primary
                                                disabled:opacity-50"
                                     />
                                 </td>
@@ -1291,14 +1291,14 @@
                                         placeholder="optional"
                                         oninput={(e) => handleEventFieldChange(idx, 'notes', e.currentTarget.value)}
                                         disabled={disabled || readonly}
-                                        class="w-full px-1 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded
-                                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                                        class="w-full px-1 py-0.5 text-xs border border-lf-input hover:border-lf-input-hover rounded
+                                               bg-lf-field text-lf-primary placeholder:text-lf-placeholder
                                                disabled:opacity-50"
                                     />
                                 </td>
                                 <td class="px-2 py-1">
                                     {#if !readonly && !disabled}
-                                        <button type="button" data-testid="schedule-event-delete-{idx}" onclick={() => handleDeleteEvent(idx)} class="text-red-400 hover:text-red-600 transition-colors">
+                                        <button type="button" data-testid="schedule-event-delete-{idx}" onclick={() => handleDeleteEvent(idx)} class="text-lf-danger hover:text-lf-danger-on-soft transition-colors">
                                             <X size={14} />
                                         </button>
                                     {/if}
@@ -1309,14 +1309,14 @@
                 </table>
             </div>
         {:else}
-            <div class="text-xs text-gray-400 dark:text-gray-500 italic pl-1">
+            <div class="text-xs text-lf-muted italic pl-1">
                 {$t('assets.schedule.noEvents')}
             </div>
         {/if}
     </div>
 
     <!-- Status banner -->
-    <div class="flex items-center gap-2 text-xs {statusBanner.ok ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}" data-testid="schedule-status" data-valid={statusBanner.ok ? 'true' : 'false'}>
+    <div class="flex items-center gap-2 text-xs {statusBanner.ok ? 'text-lf-success' : 'text-lf-muted'}" data-testid="schedule-status" data-valid={statusBanner.ok ? 'true' : 'false'}>
         <span>{statusBanner.icon}</span>
         <span>{statusBanner.text}</span>
     </div>
@@ -1347,10 +1347,6 @@
 
 <style>
     :global(.late-row) {
-        border-top: 2px dashed rgb(209 213 219);
-    }
-
-    :global(.dark .late-row) {
-        border-top: 2px dashed rgb(71 85 105);
+        border-top: 2px dashed var(--lf-border-subtle);
     }
 </style>

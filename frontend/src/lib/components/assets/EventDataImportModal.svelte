@@ -8,6 +8,17 @@
   Header slot shows an InfoBanner with valid event types and a link to docs.
   Uses Svelte 5 runes.
 -->
+<script lang="ts" module>
+    /**
+     * The series CSV export writes a formula-like text (`=`, `+`, `-`, `@`, a tab or a CR, after any apostrophes) with
+     * one more leading apostrophe, so that a spreadsheet shows it as text (B-39): an imported note drops exactly one
+     * again, and an exported events file imports back as it was.
+     */
+    export function unescapeFormulaText(raw: string): string {
+        return raw.replace(/^'(?='*[=+\-@\t\r])/, '');
+    }
+</script>
+
 <script lang="ts">
     import type {CsvColumnDef, ParsedRow} from '$lib/components/ui/data-editor/CsvEditor.svelte';
     import DataImportModal from '$lib/components/ui/data-editor/DataImportModal.svelte';
@@ -35,9 +46,9 @@
     // column: the alias lets an exported file come back in.
     const eventColumns: CsvColumnDef[] = [
         {key: 'currency', label: 'currency', type: 'string', required: false},
-        {key: 'type', label: 'type', type: 'string', required: true},
+        {key: 'type', label: 'type', type: 'string', required: true, matchKey: true},
         {key: 'amount', label: 'amount', aliases: ['value'], type: 'number', required: true},
-        {key: 'notes', label: 'notes', type: 'string', required: false},
+        {key: 'notes', label: 'notes', type: 'string', required: false, parse: unescapeFormulaText},
     ];
 
     function openDocs() {
@@ -52,18 +63,18 @@
         <InfoBanner variant="info">
             <div class="flex items-start gap-2">
                 <div class="flex-1 space-y-1">
-                    <p><strong>{$t('import.csv.eventsFormatLabel')}:</strong> <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">date;currency;type;amount;notes</code></p>
+                    <p><strong>{$t('import.csv.eventsFormatLabel')}:</strong> <code class="bg-lf-neutral/50 px-1 rounded">date;currency;type;amount;notes</code></p>
                     <p class="text-[11px] opacity-80">
                         <strong>{$t('import.csv.eventsTypesLabel')}:</strong>
-                        <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">DIVIDEND</code>
-                        <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">INTEREST</code>
-                        <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">SPLIT</code>
-                        <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">PRICE_ADJUSTMENT</code>
-                        <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">MATURITY_SETTLEMENT</code>
+                        <code class="bg-lf-neutral/50 px-1 rounded">DIVIDEND</code>
+                        <code class="bg-lf-neutral/50 px-1 rounded">INTEREST</code>
+                        <code class="bg-lf-neutral/50 px-1 rounded">SPLIT</code>
+                        <code class="bg-lf-neutral/50 px-1 rounded">PRICE_ADJUSTMENT</code>
+                        <code class="bg-lf-neutral/50 px-1 rounded">MATURITY_SETTLEMENT</code>
                     </p>
                     <p class="text-[11px] opacity-80">{$t('import.csv.extraColumnsIgnored')}</p>
                 </div>
-                <button class="p-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 shrink-0" onclick={openDocs} title="Open documentation" type="button">
+                <button class="p-1 text-lf-info hover:text-lf-info-on-soft shrink-0" onclick={openDocs} title="Open documentation" type="button">
                     <BookOpen size={16} />
                 </button>
             </div>
@@ -73,7 +84,7 @@
     {#snippet helpContent()}
         <p class="font-semibold">Event CSV Format</p>
         <p>Each row represents an asset event. <code>type</code> and <code>amount</code> are required.</p>
-        <pre class="bg-white/50 dark:bg-slate-800/50 rounded p-2 text-xs font-mono">date;currency;type;amount;notes
+        <pre class="bg-lf-card/50 rounded p-2 text-xs font-mono">date;currency;type;amount;notes
 2024-03-15;USD;DIVIDEND;1.25;Q1 payout
 2024-06-01;;SPLIT;2;2:1 split
 2024-09-15;USD;DIVIDEND;1.30;</pre>

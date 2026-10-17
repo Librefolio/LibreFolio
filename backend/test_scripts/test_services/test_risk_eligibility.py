@@ -44,7 +44,9 @@ from backend.app.schemas.risk import (  # noqa: E402
     RiskQueryRequest,
     RiskResultStatus,
 )
-from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS  # noqa: E402
+from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS  # noqa: E402
+from backend.app.services.risk import replay as risk_replay_module  # noqa: E402
+from backend.app.services.risk import scope as risk_scope_module  # noqa: E402
 from backend.app.services.risk import service as risk_service_module  # noqa: E402
 from backend.app.services.risk.eligibility import (  # noqa: E402
     PriceWindowFacts,
@@ -56,6 +58,7 @@ from backend.app.services.risk.eligibility import (  # noqa: E402
     suggested_analysis_ranges,
     suggested_replay_range,
 )
+from backend.app.services.risk.scope import prepare_asset_series  # noqa: E402
 from backend.app.services.risk.service import RiskService  # noqa: E402
 
 Level = RiskEligibilityLevel
@@ -546,7 +549,8 @@ async def test_holiday_carries_in_stored_prices_do_not_degrade_the_series(window
     ids = window_assets.ids
 
     async with session() as db:
-        prepared = await RiskService(db)._prepare_asset_series(
+        prepared = await prepare_asset_series(
+            db,
             asset_ids=(ids["early"], ids["holiday"]),
             date_range=DateRangeModel(start=CRISIS_START, end=CRISIS_END),
             target_currency="EUR",
@@ -664,13 +668,20 @@ async def test_a_gap_across_the_replay_start_is_stale_at_the_start_not_a_late_st
 @pytest.fixture
 def loader_calls(monkeypatch):
     calls: list[dict] = []
-    real_loader = risk_service_module.load_price_window_facts
 
-    async def spy(db, **kwargs):
-        calls.append({"asset_ids": set(kwargs["asset_ids"]), "window": (kwargs["window_start"], kwargs["window_end"])})
-        return await real_loader(db, **kwargs)
+    def spy_on(module) -> None:
+        real_loader = module.load_price_window_facts
 
-    monkeypatch.setattr(risk_service_module, "load_price_window_facts", spy)
+        async def spy(db, **kwargs):
+            calls.append({"asset_ids": set(kwargs["asset_ids"]), "window": (kwargs["window_start"], kwargs["window_end"])})
+            return await real_loader(db, **kwargs)
+
+        monkeypatch.setattr(module, "load_price_window_facts", spy)
+
+    # Every reading lands in one list: an eligibility request reads the facts in the service, a
+    # historical replay in `risk.replay`.
+    spy_on(risk_service_module)
+    spy_on(risk_replay_module)
     return calls
 
 
@@ -941,8 +952,8 @@ async def test_replaying_the_proposed_range_brings_the_recovered_asset_back(wind
     # The offer is the day after the first quote in the window.
     assert offered == proposed
     async with session() as db:
-        prepared = await RiskService(db)._prepare_asset_series(asset_ids=tuple(scope), date_range=as_range(*proposed), target_currency="EUR")
-        on_first_quote = await RiskService(db)._prepare_asset_series(asset_ids=tuple(scope), date_range=as_range(first_in_window, CRISIS_END), target_currency="EUR")
+        prepared = await prepare_asset_series(db, asset_ids=tuple(scope), date_range=as_range(*proposed), target_currency="EUR")
+        on_first_quote = await prepare_asset_series(db, asset_ids=tuple(scope), date_range=as_range(first_in_window, CRISIS_END), target_currency="EUR")
         facts_on_first_quote = await load_price_window_facts(db, asset_ids=[ids[key]], window_start=first_in_window, window_end=CRISIS_END, target_currency="EUR")
     assert prepared.baseline_date == first_in_window
     assert unwanted.isdisjoint(prepared.warnings)
@@ -1019,7 +1030,8 @@ async def test_a_replay_from_a_prehistoric_date_is_refused_naming_every_late_sta
     assert details["excluded_asset_ids"] == scope
     assert (details.get("suggested_range"), details.get("suggested_range_recovers")) == ({"start": proposed[0].isoformat(), "end": proposed[1].isoformat()}, scope)
     # Verified before it is offered: one reading of the window, a second of the proposal.
-    assert [call["window"] for call in loader_calls] == [(PREHISTORIC_START, CRISIS_END), proposed]
+    # SEC8-1b: the window is read bounded, 100 years back from its end; before, the requested 1019-01-01.
+    assert [call["window"] for call in loader_calls] == [(date(1911, 4, 29), CRISIS_END), proposed]
     assert loader_calls[1]["asset_ids"] == set(scope)
 
     # D372: each of them with its reason, the same for all three.
@@ -1222,24 +1234,31 @@ NOT_PASSED = object()
 def holiday_table_plumbing(monkeypatch):
     table = frozenset({date(1999, 12, 31)})
     seen: dict[str, list] = {"ensure": [], "loader": [], "prepare": []}
-    real_loader = risk_service_module.load_price_window_facts
-    real_prepare = risk_service_module.prepare_asset_series_set
+    real_prepare = risk_scope_module.prepare_asset_series_set
 
     async def served_table() -> frozenset[date]:
         seen["ensure"].append(table)
         return table
 
-    async def loader_spy(db, **kwargs):
-        seen["loader"].append(kwargs.get("market_holidays", NOT_PASSED))
-        return await real_loader(db, **kwargs)
+    def loader_spy(module):
+        real_loader = module.load_price_window_facts
+
+        async def spy(db, **kwargs):
+            seen["loader"].append(kwargs.get("market_holidays", NOT_PASSED))
+            return await real_loader(db, **kwargs)
+
+        return spy
 
     def prepare_spy(*args, **kwargs):
         seen["prepare"].append(kwargs.get("market_holidays", NOT_PASSED))
         return real_prepare(*args, **kwargs)
 
+    # Each where it is read: the table by the service; the facts by the service for an eligibility
+    # request and by `risk.replay` for a replay; the series set by `risk.scope`, for every preparation.
     monkeypatch.setattr(risk_service_module, "ensure_market_holidays", served_table, raising=False)
-    monkeypatch.setattr(risk_service_module, "load_price_window_facts", loader_spy)
-    monkeypatch.setattr(risk_service_module, "prepare_asset_series_set", prepare_spy)
+    monkeypatch.setattr(risk_service_module, "load_price_window_facts", loader_spy(risk_service_module))
+    monkeypatch.setattr(risk_replay_module, "load_price_window_facts", loader_spy(risk_replay_module))
+    monkeypatch.setattr(risk_scope_module, "prepare_asset_series_set", prepare_spy)
     return table, seen
 
 

@@ -135,8 +135,8 @@ In each case, ask: *if the input arrives late, does the user's intention survive
 | Role | Path |
 |------|------|
 | Session generation + resetters | `frontend/src/lib/stores/app/clientSession.ts` |
-| In-flight slot release | `frontend/src/lib/stores/risk/riskStore.svelte.ts` — `releaseWhenSettled` |
-| Signature reset + relaunch | `frontend/src/lib/components/risk/RiskAnalysisPanel.svelte` |
+| In-flight slot release | `frontend/src/lib/features/risk/riskStore.svelte.ts` — `releaseWhenSettled` |
+| Signature reset + relaunch | `frontend/src/lib/features/risk/RiskAnalysisPanel.svelte` |
 | Async add guarded by `data-busy` | `frontend/src/lib/components/ui/input/DistributionEditor.svelte` |
 | Dirty-preserving rebuild | `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` |
 | Chart reload call sites; `requestedStart` re-sync (case 5) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |

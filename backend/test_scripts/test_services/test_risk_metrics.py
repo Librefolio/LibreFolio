@@ -263,6 +263,8 @@ def test_drawdown_episodes_report_no_drawdown_for_monotonic_growth():
     assert report.available_start == _regular_dates(4)[0]
     assert report.available_end == _regular_dates(4)[-1]
     assert report.n_observations == 4
+    # P19: no trough, no climb back.
+    assert report.maximum_drawdown_trough_to_peak_ratio == 0.0
 
 
 def test_drawdown_episodes_report_open_episode_uses_available_end():
@@ -282,6 +284,10 @@ def test_drawdown_episodes_report_open_episode_uses_available_end():
     assert report.current_drawdown == report.maximum_drawdown
     assert report.current_drawdown_duration_days == (dates[4] - dates[1]).days
     assert report.remaining_to_peak_ratio > 0.0
+    # P19: the trough is 0.9**3 of the peak, so the climb back is 1 / 0.9**3 - 1. The episode ends on its trough,
+    # so the climb from the worst trough and the gain still owed from the current value are the same number.
+    assert report.maximum_drawdown_trough_to_peak_ratio == pytest.approx(1.0 / 0.9**3 - 1.0)
+    assert report.remaining_to_peak_ratio == pytest.approx(1.0 / 0.9**3 - 1.0)
 
 
 def test_drawdown_episodes_report_recovered_episode_reports_recovery_date():
@@ -299,6 +305,9 @@ def test_drawdown_episodes_report_recovered_episode_reports_recovery_date():
     assert report.maximum_drawdown_duration_days == (dates[3] - dates[0]).days
     assert report.current_drawdown == 0.0
     assert report.remaining_to_peak_ratio == 0.0
+    # P19: recovered, and the depth is still the depth. From the trough, 0.8 * 0.9 of the peak, the climb back took
+    # 1 / 0.72 - 1: the ratio describes how deep the episode went, not whether it is over.
+    assert report.maximum_drawdown_trough_to_peak_ratio == pytest.approx(1.0 / (0.8 * 0.9) - 1.0)
 
 
 def test_drawdown_episodes_report_selects_deepest_of_multiple_episodes():
@@ -312,6 +321,11 @@ def test_drawdown_episodes_report_selects_deepest_of_multiple_episodes():
     assert report.maximum_drawdown_peak_date == dates[3]
     assert report.maximum_drawdown_trough_date == dates[5]
     assert report.maximum_drawdown_recovery_status == "open"
+    # P19: the climb from the deeper trough, 0.7 * 0.95 of the higher peak, not from the first one (0.95 of the lower
+    # peak, 1 / 0.95 - 1). Still open but off its trough: what it still owes is measured from the current value,
+    # 0.7 * 0.95 * 1.05 of the same peak, and is a smaller number.
+    assert report.maximum_drawdown_trough_to_peak_ratio == pytest.approx(1.0 / (0.7 * 0.95) - 1.0)
+    assert report.remaining_to_peak_ratio == pytest.approx(1.0 / (0.7 * 0.95 * 1.05) - 1.0)
 
 
 def test_drawdown_episodes_report_breaks_equal_depth_ties_chronologically():
@@ -356,6 +370,91 @@ def test_drawdown_episodes_report_current_and_maximum_can_differ():
     assert report.maximum_drawdown_recovery_status == "recovered"
     assert report.maximum_drawdown < report.current_drawdown < 0.0
     assert report.current_peak_date == dates[3]
+    # P19: each ratio follows its own drawdown. The climb from the worst trough, 0.7 of its peak, and the gain the
+    # still-open shallow episode owes from the current value, 0.95 * 0.98 of the new peak.
+    assert report.maximum_drawdown_trough_to_peak_ratio == pytest.approx(1.0 / 0.7 - 1.0)
+    assert report.remaining_to_peak_ratio == pytest.approx(1.0 / (0.95 * 0.98) - 1.0)
+
+
+# P19 (workstream J, CP-13a): the gain that recovers a drawdown, ``-d / (1 + d)``, comes from its one home,
+# ``financial_math.returns.required_recovery_return``. ``remaining_to_peak_ratio`` is that gain from the current value;
+# ``maximum_drawdown_trough_to_peak_ratio`` is that gain from the worst trough back to the peak before it, whether the
+# episode is still open or has recovered: it describes the depth, not the recovery state. A total loss has no finite
+# gain, so both are None. As below, the home function is reached through the module while a test runs, never imported
+# here: until it exists each pin fails on its own instead of breaking the collection of the whole risk suite.
+
+
+def test_drawdown_episodes_report_a_twenty_percent_fall_needs_a_twenty_five_percent_climb():
+    report = drawdown_episodes([0.25, -0.2], dates=_regular_dates(2), baseline_date=_BASELINE)
+
+    assert report.maximum_drawdown_recovery_status == "open"
+    assert report.maximum_drawdown == pytest.approx(-0.2)
+    assert report.maximum_drawdown_trough_to_peak_ratio == pytest.approx(0.25)
+    assert report.remaining_to_peak_ratio == pytest.approx(0.25)
+
+
+def test_drawdown_episodes_report_the_climb_from_the_trough_once_recovered():
+    report = drawdown_episodes([0.25, -0.2, 0.25], dates=_regular_dates(3), baseline_date=_BASELINE)
+
+    assert report.maximum_drawdown_recovery_status == "recovered"
+    assert report.maximum_drawdown_trough_to_peak_ratio == pytest.approx(0.25)
+    assert report.current_drawdown == 0.0
+    assert report.remaining_to_peak_ratio == 0.0
+
+
+def test_drawdown_episodes_report_no_gain_for_a_dip_within_the_zero_tolerance():
+    # One ulp below the peak is a floating-point artefact, not a drawdown: both gains stay exactly 0.0, rather than
+    # the 1e-16 the home function would compute from it.
+    report = drawdown_episodes([0.0, -(2.0**-53)], dates=_regular_dates(2), baseline_date=_BASELINE)
+
+    assert -risk_metrics_module.ZERO_TOLERANCE < report.current_drawdown < 0.0
+    assert report.maximum_drawdown_recovery_status == "no_drawdown"
+    assert report.remaining_to_peak_ratio == 0.0
+    assert report.maximum_drawdown_trough_to_peak_ratio == 0.0
+
+
+def test_drawdown_episodes_report_a_total_loss_in_floating_point_without_dividing_by_zero():
+    returns = [-0.9999999999, -0.9999999999]
+    # The precondition, verified rather than assumed: about 1e-20 of the wealth is left, still positive, so the
+    # underwater curve accepts it; and 1e-20 / 1 - 1 rounds to exactly -1.0, the drawdown at which -d / (1 + d)
+    # divides by zero.
+    wealth = risk_metrics_module.wealth_index(returns)
+    assert 0.0 < wealth[-1] < 1e-15
+    assert risk_metrics_module.underwater_drawdown(wealth)[-1] == -1.0
+
+    report = drawdown_episodes(returns, dates=_regular_dates(2), baseline_date=_BASELINE)
+
+    assert report.current_drawdown == -1.0
+    assert report.maximum_drawdown == -1.0
+    assert report.maximum_drawdown_recovery_status == "open"
+    assert report.maximum_drawdown_recovered_ratio == 0.0
+    # No finite gain climbs back from nothing: both ratios say so with None, never with a number.
+    assert report.remaining_to_peak_ratio is None
+    assert report.maximum_drawdown_trough_to_peak_ratio is None
+
+
+def test_drawdown_episodes_take_both_gains_from_the_financial_math_home(monkeypatch):
+    # The series statistics read the home function from their own module namespace, so a stub put there must reach
+    # both ratios: a formula kept in metrics.py would ignore it.
+    sentinel = 0.123
+    asked: list[float] = []
+
+    def stub(drawdown: float) -> float:
+        asked.append(drawdown)
+        return sentinel
+
+    monkeypatch.setattr(risk_metrics_module, "required_recovery_return", stub)
+    # Open and off its trough: the worst trough is 0.8 of the peak, the current value 0.88 of it.
+    report = drawdown_episodes([0.25, -0.2, 0.1], dates=_regular_dates(3), baseline_date=_BASELINE)
+
+    assert report.maximum_drawdown_recovery_status == "open"
+    assert report.maximum_drawdown_trough_to_peak_ratio == sentinel
+    assert report.remaining_to_peak_ratio == sentinel
+    # Each ratio asked the home about its own drawdown.
+    assert report.maximum_drawdown == pytest.approx(-0.2)
+    assert report.current_drawdown == pytest.approx(-0.12)
+    assert any(drawdown == pytest.approx(report.maximum_drawdown) for drawdown in asked)
+    assert any(drawdown == pytest.approx(report.current_drawdown) for drawdown in asked)
 
 
 def test_drawdown_episodes_rejects_misaligned_dates():

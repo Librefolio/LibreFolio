@@ -11,7 +11,9 @@ $$
 It is implemented by `AssetPriceSeries.resolve(t)` and built from two observation classes:
 
 - `MARKET`: asset-system `PriceHistory.close`
-- `TRADE`: transaction-implied prices from BUY/SELL and priced ADJUSTMENT rows
+- `TRADE`: transaction-implied prices from BUY/SELL rows
+
+An ADJUSTMENT is never an observation, incoming or outgoing, with or without a cost basis: its cost basis is a cost — often an average cost — not what the asset was worth that day. Only market quotes and BUY/SELL trades mark an asset.
 
 ## 🧮 Daily Tier Cascade
 
@@ -46,11 +48,14 @@ The public engine schema maps resolver marks to valuation-source labels:
 | `TRADE_AVG` | Same-day transaction mark | `LAST_TRADE_PRICE` |
 | `CARRIED` from MARKET | Stale real quote | `MARKET_PRICE` |
 | `CARRIED` from TRADE | Stale transaction mark | `LAST_TRADE_PRICE` |
-| `MISSING` | No observation on or before date | `MISSING` |
+| `MISSING`, position cost complete | No observation on or before date | `ESTIMATED_AT_COST` |
+| `MISSING`, position cost unknown or incomplete | No observation on or before date | `MISSING` |
+
+A holding is therefore valued by the first source available in `MARKET_PRICE` > `LAST_TRADE_PRICE` > `ESTIMATED_AT_COST` > `MISSING`.
 
 !!! warning "No legacy cascade"
 
-    Current shipped code does **not** use a separate `market → last BUY → seed cost` valuation path. Trade-origin marks are observations inside the unified resolver; WAC remains cost basis, not valuation price.
+    Current shipped code does **not** use the legacy, separate `market → last BUY → seed cost` valuation path: market quotes and trades are observations inside the one unified resolver, and WAC never enters it as a price. Only when the resolver has no observation at all does the engine count a position at its book cost — a declared estimate, never a price (see Missing Marks below).
 
 ## 🌍 Currency and Scale
 
@@ -74,7 +79,7 @@ $$
 \mathrm{HoldingValue}(q,p,qbq)=\frac{q}{qbq}\cdot p
 $$
 
-BUY/SELL unit prices and priced ADJUSTMENT overrides are multiplied by `quote_base_quantity` before entering the resolver, so bond-like assets quoted per 100 nominal units compare on the same axis as `PriceHistory.close`.
+BUY/SELL unit prices are multiplied by `quote_base_quantity` before entering the resolver, so bond-like assets quoted per 100 nominal units compare on the same axis as `PriceHistory.close`.
 
 ## 🏷️ Estimated and Stale
 
@@ -94,9 +99,15 @@ $$
 
 ## ⚠️ Missing Marks
 
-`MISSING` means there is no market or trade observation on or before the valuation date. In the portfolio engine, that position cannot contribute market value until a mark exists. In lots analysis, estimated-at-cost mode can still value open lots at cost when the asset has no market price series at all; see [FIFO Lot Analysis](../fifo-engine/fifo-lot-analysis.md#estimated-at-cost).
+`MISSING` means there is no market or trade observation on or before the valuation date. The portfolio engine then counts a position whose cost is complete in $C^*$ at its book cost — each acquisition converted at its own date, as in [Portfolio Engine §3](index.md#3-position-state):
 
-Portfolio warnings are evaluated **as of the valuation date**. Trade-origin valuations older than the 14-day grace period feed the “assets valued at cost / no market price for more than two weeks” warning; an asset that later receives a real market quote clears the warning.
+$$
+\mathrm{MV}(a,b,t)=\mathrm{CB}(a,b,t) \qquad \text{if } \operatorname{mark}(a,t)=\varnothing \text{ and the cost of } (a,b) \text{ is complete}
+$$
+
+This is a declared estimate, not a price: the valuation source is `ESTIMATED_AT_COST`, no unit price is reported, the value does not move with exchange rates, and the unrealized gain/loss is zero — neither a price effect nor an exchange-rate effect. The estimate is chosen day by day, with no look-ahead: it covers only the days before the asset's first observation, and from the first quote, BUY or SELL on, the mark wins, even an old one carried forward. A position whose cost is unknown or incomplete stays `MISSING`: it cannot contribute market value until a mark exists. In lots analysis the same day-by-day rule values an open LONG lot at its cost on the days before the asset's first observation, whether or not it is priced later. See [FIFO Lot Analysis](../fifo-engine/fifo-lot-analysis.md#estimated-at-cost).
+
+Portfolio warnings are evaluated **as of the valuation date**. For an asset with a price provider, a trade-origin valuation feeds the “valued at their last transaction price” warning once the asset has had no market quote for more than the 14-day grace period, counted from its last quote — or from its first BUY or SELL when it was never quoted —, and a valuation at cost feeds the “valued at cost” warning once the same 14-day grace period has passed, counted from the asset's first acquisition (its first BUY, SELL, ADJUSTMENT or TRANSFER). An asset without a provider raises neither: its trades, or its cost, are its intended value. An asset that later receives a real market quote clears the warning.
 
 ## 🔗 Related
 

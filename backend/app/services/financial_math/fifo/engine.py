@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
-from typing import Literal, Sequence
+from typing import Callable, Literal, Sequence
 
 from backend.app.services.financial_math.fifo.eligibility import eligible_income_quantity
 from backend.app.services.financial_math.fifo.models import (
@@ -36,6 +36,8 @@ from backend.app.services.financial_math.fifo.models import (
     _require_decimal,
     _require_id,
 )
+from backend.app.services.financial_math.splits import is_valid_split_ratio
+from backend.app.utils.datetime_utils import day_before
 
 # Tolerance for the split cost invariant (q*p0 = const). Division by a ratio that
 # doesn't divide evenly (e.g. a 3:1 split) produces a non-terminating decimal that
@@ -92,6 +94,7 @@ class FifoLotEngine:
         reference_price_lookup: ReferencePriceLookup | None = None,
         economic_events: Sequence[EconomicEvent] = (),
         target_currency: str = "",
+        replay_until: date | None = None,
     ) -> None:
         normalized = [tx if isinstance(tx, FifoInputTransaction) else FifoInputTransaction.from_transaction(tx) for tx in transactions]
         if not normalized:
@@ -107,6 +110,9 @@ class FifoLotEngine:
         self.reference_price_lookup = reference_price_lookup
         self.economic_events = tuple(economic_events)
         self.target_currency = target_currency
+        # J-47: the replay stops at this day. An event after it is neither applied nor reported: the arrival of a
+        # transfer still in transit then, whose units stay in transit.
+        self.replay_until = replay_until
         self._tx_by_id = {tx.id: tx for tx in normalized}
         self._issues: list[FifoDataQualityIssue] = []
         self._lots: dict[int, FifoLot] = {}
@@ -159,6 +165,10 @@ class FifoLotEngine:
         processed_transfer_pairs: set[int] = set()
         for tx in self.transactions:
             if tx.id in self.split_ratios_by_tx_id:
+                # MF-D4: a SPLIT whose stored ratio is unusable counts as missing — its row stays split-linked (never an
+                # ADJUSTMENT), and the lots are not rescaled; the portfolio report names the asset.
+                if not is_valid_split_ratio(self.split_ratios_by_tx_id[tx.id]):
+                    continue
                 events.append(
                     FifoEvent(
                         kind="SPLIT",
@@ -229,8 +239,13 @@ class FifoLotEngine:
                 adjustment_unit_price = tx.cost_basis_override if tx.cost_basis_override is not None else Decimal("0")
                 events.append(FifoEvent(kind="ADJUSTMENT_IN", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=tx.quantity, unit_price=adjustment_unit_price, raw_transaction_ids=(tx.id,)))
             elif tx.type == "ADJUSTMENT" and tx.quantity < Decimal("0"):
-                events.append(FifoEvent(kind="ADJUSTMENT_OUT", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=abs(tx.quantity), unit_price=Decimal("0"), raw_transaction_ids=(tx.id,)))
-        self._classified_events_cache = sorted(events, key=self._event_sort_key)
+                # A negative ADJUSTMENT that carries a per-unit cost_basis_override hands its units over at
+                # that cost (_apply_adjustment_out); without the override it remains a zero-price correction, unless it
+                # hands each fragment over at its own FIFO cost (hands_over_at_own_cost, J-10).
+                handover_unit_price = tx.cost_basis_override if tx.cost_basis_override is not None else Decimal("0")
+                events.append(FifoEvent(kind="ADJUSTMENT_OUT", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=abs(tx.quantity), unit_price=handover_unit_price, raw_transaction_ids=(tx.id,)))
+        ordered = sorted(events, key=self._event_sort_key)
+        self._classified_events_cache = ordered if self.replay_until is None else [event for event in ordered if event.date <= self.replay_until]
         return self._classified_events_cache
 
     def _resolve_transfer_pair(self, tx: FifoInputTransaction) -> tuple[FifoInputTransaction, FifoInputTransaction] | None:
@@ -280,6 +295,7 @@ class FifoLotEngine:
             transaction_id=event.transaction_id,
             close_reason="BUY",
             close_unit_price=_require_decimal(event.unit_price),
+            close_currency=self._tx_by_id[event.transaction_id].currency,
         )
         remainder = _require_decimal(event.quantity) - closed
         if remainder > Decimal("0"):
@@ -304,6 +320,7 @@ class FifoLotEngine:
             transaction_id=event.transaction_id,
             close_reason="SELL",
             close_unit_price=_require_decimal(event.unit_price),
+            close_currency=self._tx_by_id[event.transaction_id].currency,
         )
         remainder = _require_decimal(event.quantity) - closed
         if remainder <= Decimal("0"):
@@ -330,6 +347,9 @@ class FifoLotEngine:
 
     def _apply_adjustment_in(self, event: FifoEvent) -> None:
         broker_id = _require_id(event.broker_id)
+        tx = self._tx_by_id[event.transaction_id]
+        # The row's price is its cost basis, in that cost's currency (J-9), or 0 in its own currency.
+        price_currency = (tx.cost_basis_currency or tx.currency) if tx.cost_basis_override is not None else tx.currency
         closed = self._consume_broker_fragments(
             broker_id=broker_id,
             direction="SHORT",
@@ -338,6 +358,7 @@ class FifoLotEngine:
             transaction_id=event.transaction_id,
             close_reason="BUY",
             close_unit_price=_require_decimal(event.unit_price),
+            close_currency=price_currency,
         )
         remainder = _require_decimal(event.quantity) - closed
         if remainder <= Decimal("0"):
@@ -350,7 +371,9 @@ class FifoLotEngine:
             direction="LONG",
             quantity=remainder,
             unit_price=_require_decimal(event.unit_price),
-            currency=self._tx_by_id[event.transaction_id].currency,
+            # A lot priced by its cost_basis_override is in the currency of that cost, not in the row's
+            # (an ADJUSTMENT moves no cash, so its own currency is often empty).
+            currency=price_currency,
             reference_resolution=resolution,
         )
         if resolution.source == "fallback":
@@ -373,6 +396,7 @@ class FifoLotEngine:
 
     def _apply_adjustment_out(self, event: FifoEvent) -> None:
         broker_id = _require_id(event.broker_id)
+        tx = self._tx_by_id[event.transaction_id]
         closed = self._consume_broker_fragments(
             broker_id=broker_id,
             direction="LONG",
@@ -380,7 +404,9 @@ class FifoLotEngine:
             event_date=event.date,
             transaction_id=event.transaction_id,
             close_reason="ADJUSTMENT_OUT",
-            close_unit_price=Decimal("0"),
+            close_unit_price=_require_decimal(event.unit_price),
+            close_unit_price_of=_own_fifo_cost if tx.hands_over_at_own_cost else None,
+            close_currency_of=lambda fragment: self._handover_currency(tx, fragment),
         )
         remainder = _require_decimal(event.quantity) - closed
         if remainder <= Decimal("0"):
@@ -402,15 +428,32 @@ class FifoLotEngine:
             params={"missing_quantity": remainder},
         )
 
+    def _handover_currency(self, tx: FifoInputTransaction, fragment: FragmentInterval) -> str | None:
+        """The currency in which an ADJUSTMENT-out hands ``fragment`` over.
+
+        With a cost basis, every fragment leaves at the row's per-unit cost basis — the value the row hands over, as
+        the Dashboard reads it (J-24) — not at the fragment's own FIFO cost. That cost is in ``cost_basis_currency``,
+        or in the lot's when it has none. Without a cost the units leave at 0 — or, ``hands_over_at_own_cost``, at
+        their own FIFO cost — in the lot's currency. Another currency than the lot's leaves the native realized P&L
+        unknown; the lots analysis converts each leg at its own date (decision 26).
+        """
+        lot_currency = self._lots[fragment.lot_id].currency
+        if tx.cost_basis_override is None:
+            return lot_currency
+        return tx.cost_basis_currency or lot_currency
+
     def _apply_transfer_depart(self, event: FifoEvent) -> None:
         pair_id = _require_id(event.pair_id)
+        # An issue names the giving leg, the row to fix (J-12): the departure event carries the lower id of a same-day
+        # pair, or the leg dated first, which can be the receiving one.
+        giving_leg_id = event.raw_transaction_ids[0] if event.raw_transaction_ids else event.transaction_id
         source_broker_id = _require_id(event.source_broker_id)
         destination_broker_id = _require_id(event.destination_broker_id)
         quantity = _require_decimal(event.quantity)
         if self.signed_quantity_for_broker(source_broker_id) < Decimal("0") or any(fragment.direction == "SHORT" for fragment in self._broker_fragments(source_broker_id, "SHORT")):
             self._issue(
                 code="SHORT_TRANSFER_NOT_SUPPORTED",
-                transaction_id=event.transaction_id,
+                transaction_id=giving_leg_id,
                 broker_id=source_broker_id,
                 related_transaction_id=pair_id,
                 message="Transfer of SHORT position is not supported in phase 1.",
@@ -428,7 +471,7 @@ class FifoLotEngine:
         if remainder > Decimal("0"):
             self._issue(
                 code="FIFO_SOURCE_QUANTITY_MISSING",
-                transaction_id=event.transaction_id,
+                transaction_id=giving_leg_id,
                 broker_id=source_broker_id,
                 related_transaction_id=pair_id,
                 message="TRANSFER exceeds available LONG quantity on source broker.",
@@ -580,7 +623,15 @@ class FifoLotEngine:
         transaction_id: int,
         close_reason: Literal["SELL", "BUY", "ADJUSTMENT_OUT"],
         close_unit_price: Decimal,
+        close_unit_price_of: Callable[[FragmentInterval], Decimal] | None = None,
+        close_currency: str | None = None,
+        close_currency_of: Callable[[FragmentInterval], str | None] | None = None,
     ) -> Decimal:
+        """Close up to ``quantity`` of the broker's open fragments, oldest lot first; the quantity closed.
+
+        Each fragment closes at ``close_unit_price``, or at the price ``close_unit_price_of`` gives it, in
+        ``close_currency`` or in the one ``close_currency_of`` gives it.
+        """
         consumed = Decimal("0")
         remaining = quantity
         for fragment in self._broker_fragments(broker_id, direction):
@@ -593,7 +644,8 @@ class FifoLotEngine:
                 event_date=event_date,
                 transaction_id=transaction_id,
                 close_reason=close_reason,
-                close_unit_price=close_unit_price,
+                close_unit_price=close_unit_price if close_unit_price_of is None else close_unit_price_of(fragment),
+                close_currency=close_currency if close_currency_of is None else close_currency_of(fragment),
             )
             consumed += matched
             remaining -= matched
@@ -608,18 +660,24 @@ class FifoLotEngine:
         transaction_id: int,
         close_reason: Literal["SELL", "BUY", "ADJUSTMENT_OUT"],
         close_unit_price: Decimal,
+        close_currency: str | None,
     ) -> None:
         lot = self._lots[fragment.lot_id]
+        # None counts as the report currency, as the lots analysis reads it.
+        same_currency = (close_currency or self.target_currency) == (lot.currency or self.target_currency)
+        realized_pnl: Decimal | None
         if lot.direction == "LONG":
-            realized_pnl = matched_quantity * (close_unit_price - fragment.unit_price)
-            proceeds = matched_quantity * close_unit_price if close_reason == "SELL" else Decimal("0")
+            realized_pnl = matched_quantity * (close_unit_price - fragment.unit_price) if same_currency else None
+            # A sale's cash, or the value an ADJUSTMENT-out hands over at cost (0 when it carries no cost).
+            proceeds = matched_quantity * close_unit_price if close_reason in ("SELL", "ADJUSTMENT_OUT") else Decimal("0")
         else:
-            realized_pnl = matched_quantity * (fragment.unit_price - close_unit_price)
+            realized_pnl = matched_quantity * (fragment.unit_price - close_unit_price) if same_currency else None
             proceeds = Decimal("0")
         lot.realized_quantity += matched_quantity
         lot.open_quantity -= matched_quantity
-        lot.realized_pnl += realized_pnl
-        lot.cumulative_proceeds += proceeds
+        lot.realized_pnl = None if lot.realized_pnl is None or realized_pnl is None else lot.realized_pnl + realized_pnl
+        if lot.direction == "LONG":
+            lot.cumulative_proceeds = None if lot.cumulative_proceeds is None or not same_currency else lot.cumulative_proceeds + proceeds
         self._closures.append(
             LotClosure(
                 lot_id=lot.lot_id,
@@ -632,6 +690,7 @@ class FifoLotEngine:
                 close_unit_price=close_unit_price,
                 realized_pnl=realized_pnl,
                 proceeds=proceeds,
+                close_currency=close_currency,
             )
         )
         remainder = fragment.quantity - matched_quantity
@@ -812,7 +871,8 @@ class FifoLotEngine:
 
         Pool key = (broker, date, economic_type, native_currency, target_currency). Eligibility
         (open LONG quantity on ``date - 1``) is shared across DIVIDEND and INTEREST since it is a
-        function of holdings, but the two remain distinct audit groups by economic_type. A pool is
+        function of holdings, but the two remain distinct audit groups by economic_type. A pool sums the
+        signed amounts, as the Dashboard does: a negative correction lowers the income. It is
         allocated entirely (running-remainder conserves the total) or, when no lot is eligible,
         recorded entirely as orphan income (returned to the caller for the asset-level total).
         """
@@ -823,17 +883,18 @@ class FifoLotEngine:
         for key in sorted(pools, key=lambda item: (item[1], item[0], str(item[2]), str(item[3] or ""))):
             broker_id, event_date, economic_type, native_currency, target_currency = key
             pool_events = pools[key]
-            cutoff = event_date - timedelta(days=1)
+            # MF-SEC8-2b: an event on date.min has no day before, so no lot was held then: orphan, never an OverflowError.
+            cutoff = day_before(event_date)
             eligible: list[tuple[int, Decimal]] = []
             for lot_id, lot in self._lots.items():
-                if lot.direction != "LONG":
+                if lot.direction != "LONG" or cutoff is None:
                     continue
                 quantity = eligible_income_quantity(fragments_by_lot.get(lot_id, ()), broker_id, cutoff)
                 if quantity > Decimal("0"):
                     eligible.append((lot_id, quantity))
             eligible.sort(key=lambda item: item[0])
-            native_pool = sum((abs(event.native_amount) for event in pool_events), Decimal("0"))
-            target_pool = sum((abs(event.target_amount) for event in pool_events), Decimal("0"))
+            native_pool = sum((event.native_amount for event in pool_events), Decimal("0"))
+            target_pool = sum((event.target_amount for event in pool_events), Decimal("0"))
             source_ids = tuple(sorted(event.transaction_id for event in pool_events))
             if not eligible:
                 orphan_total += target_pool
@@ -1021,27 +1082,28 @@ class FifoLotEngine:
         ``rule`` records the level that failed (e.g. ``SAME_DAY_INCOME`` when a taxed income pool
         was itself orphan -> the whole TAX pool is orphan, no mixed allocated/orphan).
         """
-        previous_day = event_date - timedelta(days=1)
+        # MF-SEC8-2b: None on date.min (no day before): every D-1 rule finds nothing, the same-day ones still apply.
+        previous_day = day_before(event_date)
         if economic_type == "TAX":
             if self._income_on(broker_id, event_date):
                 # TAX follows the income it taxes: same D-1 holding weights (§4.2). If that income
                 # was orphan (no eligible lot) the whole TAX pool is orphan -> stop here.
-                ops = self._holding_operations(broker_id, event_date - timedelta(days=1), native_pool, target_pool, fragments_by_lot, "INCOME")
+                ops = self._holding_operations(broker_id, previous_day, native_pool, target_pool, fragments_by_lot, "INCOME")
                 return ops, "SAME_DAY_INCOME"
             same_day_trades = self._trades_on(broker_id, event_date)
             if same_day_trades:
                 ops = self._trade_operations(same_day_trades, native_pool, target_pool)
                 if ops is not None:
                     return ops, self._trade_rule(same_day_trades)
-            if self._income_on(broker_id, previous_day):
-                ops = self._holding_operations(broker_id, previous_day - timedelta(days=1), native_pool, target_pool, fragments_by_lot, "INCOME")
+            if previous_day is not None and self._income_on(broker_id, previous_day):
+                ops = self._holding_operations(broker_id, day_before(previous_day), native_pool, target_pool, fragments_by_lot, "INCOME")
                 return ops, "PREVIOUS_DAY_INCOME"
-            previous_day_trades = self._trades_on(broker_id, previous_day)
+            previous_day_trades = self._trades_on(broker_id, previous_day) if previous_day is not None else []
             if previous_day_trades:
                 ops = self._trade_operations(previous_day_trades, native_pool, target_pool)
                 if ops is not None:
                     return ops, "PREVIOUS_DAY_TRADES"
-            ops = self._holding_operations(broker_id, event_date - timedelta(days=1), native_pool, target_pool, fragments_by_lot, "HOLDING")
+            ops = self._holding_operations(broker_id, previous_day, native_pool, target_pool, fragments_by_lot, "HOLDING")
             return ops, "OPEN_LOTS_FALLBACK"
 
         # FEE
@@ -1050,12 +1112,12 @@ class FifoLotEngine:
             ops = self._trade_operations(same_day_trades, native_pool, target_pool)
             if ops is not None:
                 return ops, self._trade_rule(same_day_trades)
-        previous_day_trades = self._trades_on(broker_id, previous_day)
+        previous_day_trades = self._trades_on(broker_id, previous_day) if previous_day is not None else []
         if previous_day_trades:
             ops = self._trade_operations(previous_day_trades, native_pool, target_pool)
             if ops is not None:
                 return ops, "PREVIOUS_DAY_TRADES"
-        ops = self._holding_operations(broker_id, event_date - timedelta(days=1), native_pool, target_pool, fragments_by_lot, "HOLDING")
+        ops = self._holding_operations(broker_id, previous_day, native_pool, target_pool, fragments_by_lot, "HOLDING")
         return ops, "OPEN_LOTS_FALLBACK"
 
     def _income_on(self, broker_id: int, on_date: date) -> bool:
@@ -1149,15 +1211,18 @@ class FifoLotEngine:
     def _holding_operations(
         self,
         broker_id: int,
-        cutoff: date,
+        cutoff: date | None,
         native_pool: Decimal,
         target_pool: Decimal,
         fragments_by_lot: dict[int, list[FragmentInterval]],
         context: AllocationContext,
     ) -> list[TargetOperationAllocation] | None:
         """Distribute the whole pool over LONG lots open at ``cutoff`` (D-1 holdings). ``None`` when
-        no lot is eligible (orphan). Reused for the FEE/TAX holdings fallback and for TAX-on-income
-        (same D-1 eligibility as the income, ``context=INCOME``)."""
+        no lot is eligible (orphan), or without a cutoff (an event on ``date.min``: no day before).
+        Reused for the FEE/TAX holdings fallback and for TAX-on-income (same D-1 eligibility as the
+        income, ``context=INCOME``)."""
+        if cutoff is None:
+            return None
         eligible: list[tuple[int, Decimal]] = []
         for lot_id, lot in self._lots.items():
             if lot.direction != "LONG":
@@ -1224,6 +1289,7 @@ def run_fifo_lot_engine(
     reference_price_lookup: ReferencePriceLookup | None = None,
     economic_events: Sequence[EconomicEvent] = (),
     target_currency: str = "",
+    replay_until: date | None = None,
 ) -> FifoEngineResult:
     return FifoLotEngine(
         transactions=transactions,
@@ -1233,6 +1299,7 @@ def run_fifo_lot_engine(
         reference_price_lookup=reference_price_lookup,
         economic_events=economic_events,
         target_currency=target_currency,
+        replay_until=replay_until,
     ).run()
 
 
@@ -1245,6 +1312,11 @@ def _unit_price(amount: Decimal, quantity: Decimal) -> Decimal:
     if quantity == Decimal("0"):
         raise ValueError("Unit price requires non-zero quantity")
     return abs(amount) / abs(quantity)
+
+
+def _own_fifo_cost(fragment: FragmentInterval) -> Decimal:
+    """A fragment's own FIFO unit cost: the price an ADJUSTMENT-out ``hands_over_at_own_cost`` closes it at."""
+    return fragment.unit_price
 
 
 def _new_economic_accumulator() -> dict[str, Decimal]:

@@ -39,13 +39,16 @@ from backend.app.schemas.signals import (
     SignalVolumeKind,
     SignalWarningCode,
 )
-from backend.app.services import signal_service as signal_service_module
-from backend.app.services.provider_registry import SignalPluginRegistry
-from backend.app.services.signal_plugins.base import SignalUnavailableError
-from backend.app.services.signal_service import (
-    SignalRequestValidationError,
-    SignalService,
-)
+from backend.app.services.signals import annotations as signal_annotations_module
+from backend.app.services.signals import execution as signal_execution_module
+from backend.app.services.signals import planning as signal_planning_module
+from backend.app.services.signals import service as signal_service_module
+from backend.app.services.signals import validation as signal_validation_module
+from backend.app.services.signals.base import SignalUnavailableError
+from backend.app.services.signals.planning import SignalRequestValidationError
+from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.service import SignalService
+from backend.app.services.signals.validation import normalize_computation
 from backend.test_scripts.fixtures.signal_plugins.events_fixture import (
     EventsFixturePlugin,
 )
@@ -1099,16 +1102,17 @@ async def test_validate_output_rejection_is_isolated_from_valid_signal():
 @pytest.mark.asyncio
 async def test_unexpected_orchestration_failure_is_isolated(monkeypatch):
     service = make_service()
-    original_execute = service._execute_planned_signal
+    original_execute = signal_execution_module.execute_planned_signal
 
     def conditional_failure(planned, *args):
         if planned.plugin_class.signal_code == "FIXTURE_WARMUP":
             raise RuntimeError("orchestration fixture failure")
         return original_execute(planned, *args)
 
+    # Patched where it is read: `execute_signal_plan` resolves this module-level name at call time.
     monkeypatch.setattr(
-        service,
-        "_execute_planned_signal",
+        signal_execution_module,
+        "execute_planned_signal",
         conditional_failure,
     )
     results = await service.compute(
@@ -1682,8 +1686,25 @@ async def test_annotation_batch_failure_warns_for_every_request(monkeypatch):
     assert len(annotation_warnings) == 2
 
 
-def test_service_has_no_indicator_library_or_domain_io_dependencies():
-    source = inspect.getsource(signal_service_module)
+#: Every module the SignalService orchestration lives in: the façade plus the planning, execution, output
+#: validation and annotation modules it delegates to. Guarding only the façade would let a forbidden
+#: dependency land in a sibling module unnoticed.
+SIGNAL_ORCHESTRATION_MODULES = (
+    signal_service_module,
+    signal_planning_module,
+    signal_execution_module,
+    signal_validation_module,
+    signal_annotations_module,
+)
+
+
+@pytest.mark.parametrize(
+    "module",
+    SIGNAL_ORCHESTRATION_MODULES,
+    ids=lambda module: module.__name__.rpartition(".")[2],
+)
+def test_service_has_no_indicator_library_or_domain_io_dependencies(module):
+    source = inspect.getsource(module)
     for forbidden in (
         "pandas_ta_classic",
         "import talib",
@@ -1691,7 +1712,7 @@ def test_service_has_no_indicator_library_or_domain_io_dependencies():
         "AsyncSession",
         "httpx",
     ):
-        assert forbidden not in source
+        assert forbidden not in source, f"{module.__name__} must not reference {forbidden!r}"
 
 
 # =============================================================================
@@ -1822,7 +1843,7 @@ async def test_session_plugin_on_a_calendar_filled_input_equals_the_plugin_on_it
     )[0]
 
     plugin_class = SignalPluginRegistry.get_plugin(signal_code)
-    reference = SignalService._normalize_computation(
+    reference = normalize_computation(
         plugin_class().compute(
             sessions,
             [],

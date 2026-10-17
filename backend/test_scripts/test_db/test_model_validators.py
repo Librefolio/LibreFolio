@@ -313,7 +313,7 @@ class TestAssetValidateClassificationParams:
         assert isinstance(result, str)
 
     def test_fa_classification_params_object(self):
-        from backend.app.schemas.assets import FAClassificationParams  # noqa: PLC0415 — test setup — imports after sys.path/db config
+        from backend.app.schemas.assets.metadata import FAClassificationParams  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         params = FAClassificationParams(short_description="Hello")
         result = Asset.validate_classification_params(params)

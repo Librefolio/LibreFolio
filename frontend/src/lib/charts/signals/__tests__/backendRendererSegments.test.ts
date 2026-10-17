@@ -1,8 +1,10 @@
 import {describe, expect, it} from 'vitest';
 
-import {renderBackendSignalResult} from '../backendRenderer';
+import {buildOverlaySignalSeries} from '$lib/components/charts/chartCoreHelpers';
+
+import {MAX_LINE_RUNS, renderBackendSignalResult, renderedSignalPointCount} from '../backendRenderer';
 import {backendSignalSchemas, type BackendSignalResult} from '../backendTypes';
-import type {SignalConfig, SignalDefinition} from '../ChartSignal';
+import type {RenderedSignal, SignalConfig, SignalDefinition} from '../ChartSignal';
 
 /**
  * A line coloured by value region is not one ECharts series but one per stretch
@@ -93,11 +95,11 @@ function result(series: unknown[]): BackendSignalResult {
     return backendSignalSchemas.result.parse({instance_id: config.id, signal_code: 'RSI', status: 'ok', series});
 }
 
-function render(series: unknown[]) {
+function render(series: unknown[], signalDefinition: SignalDefinition = definition) {
     return renderBackendSignalResult(result(series), config, {
         baseData: [{date: dateAt(0), value: 100}],
         viewMode: 'absolute',
-        definition,
+        definition: signalDefinition,
     });
 }
 
@@ -190,5 +192,609 @@ describe('backend renderer — definitions it refuses to render', () => {
         const series = {...crossingSeries([3]), key: 'macd'};
 
         expect(() => render([series])).toThrow(/macd/);
+    });
+});
+
+/**
+ * J-21. A point the backend sends WITHOUT a value (`value: null`) is a hole in
+ * the line: the calendar Rolling Return when the reference price is missing
+ * mid-series, a Sharpe or Beta window with zero variance. The chart joins the
+ * gaps of a series (`connectNulls` defaults to true), so a line that merely
+ * dropped those points drew a segment across a day nothing was measured on.
+ *
+ * A day ABSENT from `points` is something else: an indicator computed on quote
+ * days sends no point at all for a carried day of the axis (a weekend), and the
+ * line must keep joining it. So a line or area output is cut into runs at the
+ * points sent without a value, and the chart keeps joining absent days inside
+ * each run.
+ */
+
+type SentPoint = {date: string; value: number | null};
+
+/** One point per value on consecutive days from `dateAt(0)`; a `null` is a day sent without a value. */
+function daily(values: Array<number | null>): SentPoint[] {
+    return values.map((value, index) => ({date: dateAt(index), value}));
+}
+
+/** The chart's date axis: every day from `dateAt(0)`, whether or not a point was sent for it. */
+function axisDays(count: number): string[] {
+    return Array.from({length: count}, (_, index) => dateAt(index));
+}
+
+/** An output as the backend sends it, unstyled unless `extra` adds value regions or reference levels. */
+function sentSeries(key: string, kind: 'line' | 'area' | 'bar', points: SentPoint[], extra: Record<string, unknown> = {}) {
+    return {
+        key,
+        label_key: `signals.${key}`,
+        semantic_id: `test.${key}`,
+        semantic_description: `Canonical test output for ${key}.`,
+        unit: 'index',
+        axis: {key, role: 'independent'},
+        kind,
+        points,
+        ...extra,
+    };
+}
+
+function rsiLine(points: SentPoint[], extra: Record<string, unknown> = {}) {
+    return sentSeries('rsi', 'line', points, extra);
+}
+
+/** `series` with the points at `indexes` sent without a value. */
+function withoutValueAt(series: ReturnType<typeof crossingSeries>, indexes: number[]) {
+    return {...series, points: series.points.map((point, index) => (indexes.includes(index) ? {date: point.date, value: null} : point))};
+}
+
+/** `definition` plus an AREA output, which the rule reaches, and a BAR output, which it does not. */
+const kindsDefinition: SignalDefinition = {
+    ...definition,
+    visualComponents: [
+        ...(definition.visualComponents ?? []),
+        {key: 'drawdown', labelKey: 'signals.drawdown', kind: 'area', aggregationProfile: 'min_with_range', style: {colorRole: 'negative', lineWidthDelta: 0, opacity: 1, fillOpacity: 0.2}, fullyPartitioned: false},
+        {key: 'histogram', labelKey: 'signals.histogram', kind: 'bar', aggregationProfile: 'last_with_range', style: {colorRole: 'primary', lineWidthDelta: 0, opacity: 1, fillOpacity: 0.2}, fullyPartitioned: false},
+    ],
+};
+
+function datesOf(signals: RenderedSignal[]): string[][] {
+    return signals.map((signal) => signal.data.map((point) => point.date));
+}
+
+/** The dates of every signal holding days on both sides of `gapDate`: a stroke across a day sent without a value. */
+function signalsAcross(signals: RenderedSignal[], gapDate: string): string[][] {
+    return datesOf(signals).filter((dates) => dates.some((date) => date < gapDate) && dates.some((date) => date > gapDate));
+}
+
+/** The data of every chart series holding a value on both sides of the axis index `gapIndex`: ECharts joins them across it. */
+function seriesAcross(chartSeries: Array<{data: unknown[]}>, gapIndex: number): unknown[][] {
+    return chartSeries.map((series) => series.data).filter((data) => data.slice(0, gapIndex).some((value) => value !== null) && data.slice(gapIndex + 1).some((value) => value !== null));
+}
+
+/** What a run keeps of the line it was cut from. */
+function lineIdentity(signal: RenderedSignal) {
+    return {label: signal.label, axisKey: signal.axisKey, axisRole: signal.axisRole, unit: signal.unit, seriesType: signal.seriesType, aggregationProfile: signal.aggregationProfile, color: signal.color, lineWidth: signal.lineWidth, lineType: signal.lineType};
+}
+
+/** The ids outside `${config.id}:${seriesKey}:`, and the ids given twice. */
+function idProblems(signals: RenderedSignal[], seriesKey: string) {
+    const ids = signals.map((signal) => signal.id);
+    return {outsidePrefix: ids.filter((id) => !id.startsWith(`${config.id}:${seriesKey}:`)), repeated: ids.filter((id, index) => ids.indexOf(id) !== index)};
+}
+
+/**
+ * J-21 bis: the most runs an unstyled line or an area output is cut into. A
+ * literal, so that no data depends on the import: its own test pins
+ * `MAX_LINE_RUNS` to it.
+ */
+const CAP = 30;
+
+/** What an output joined over the cap adds to the outcome's warnings, in the English the renderer falls back on. */
+const GAPS_JOINED_WARNING = 'Too many gaps to draw: the line joins them.';
+
+/** `count` runs of two points on consecutive days, each run but the last followed by one point sent without a value. */
+function brokenDaily(count: number, runValues: (run: number) => [number, number] = () => [40, 60]): SentPoint[] {
+    return daily(
+        Array.from({length: count}, (_, run) => [...runValues(run), null])
+            .flat()
+            .slice(0, -1),
+    );
+}
+
+/** The dates of the runs of `brokenDaily(count)`, one array per run: run `n` holds days 3n and 3n + 1. */
+function runDates(count: number): string[][] {
+    return Array.from({length: count}, (_, run) => [dateAt(3 * run), dateAt(3 * run + 1)]);
+}
+
+/** The points that carry a value, in order: what the line drew before J-21. */
+function withValue(points: SentPoint[]): SentPoint[] {
+    return points.filter((point) => point.value !== null);
+}
+
+describe('backend renderer — a point the backend sent without a value breaks the line', () => {
+    it('cuts the line in two at that point, each run the same line under an id of its own', () => {
+        // Premise: without the null the same output is one line, the one whose attributes each run keeps.
+        const whole = render([rsiLine(daily([40, 45, 50, 60, 65]))]).signals;
+        expect(whole).toHaveLength(1);
+
+        const outcome = render([rsiLine(daily([40, 45, null, 60, 65]))]);
+
+        expect(outcome.signals.map((signal) => signal.data)).toEqual([
+            [
+                {date: dateAt(0), value: 40},
+                {date: dateAt(1), value: 45},
+            ],
+            [
+                {date: dateAt(3), value: 60},
+                {date: dateAt(4), value: 65},
+            ],
+        ]);
+        expect(outcome.signals.map(lineIdentity)).toEqual(outcome.signals.map(() => lineIdentity(whole[0])));
+        expect(idProblems(outcome.signals, 'rsi')).toEqual({outsidePrefix: [], repeated: []});
+    });
+
+    it('gives the chart no series joining the two sides of that point, while every series still joins absent days', () => {
+        const axis = axisDays(5);
+        const gapIndex = axis.indexOf(dateAt(2));
+        const {signals} = render([rsiLine(daily([40, 45, null, 60, 65]))]);
+
+        const chartSeries = buildOverlaySignalSeries(signals, axis, false);
+
+        // Premise: every series is a line, the type `connectNulls` governs.
+        expect(chartSeries.map((series) => series.type)).toEqual(chartSeries.map(() => 'line'));
+        expect(seriesAcross(chartSeries, gapIndex)).toEqual([]);
+        expect(chartSeries.map((series) => series.connectNulls)).toEqual(chartSeries.map(() => true));
+        // Nothing sent with a value is lost: each of those days is drawn by exactly one series.
+        expect(axis.map((_, index) => chartSeries.map((series) => series.data[index]).filter((value) => value !== null))).toEqual([[40], [45], [], [60], [65]]);
+    });
+
+    it('keeps one line across the axis days the backend sent no point for', () => {
+        // Premise: a quote-day indicator has no point at all on the weekend of 3-4
+        // January 2026, which the daily axis still carries; nothing was sent
+        // without a value.
+        const axis = axisDays(6);
+        const weekend = [dateAt(2), dateAt(3)];
+        const outcome = render([
+            rsiLine([
+                {date: dateAt(0), value: 40},
+                {date: dateAt(1), value: 45},
+                {date: dateAt(4), value: 50},
+                {date: dateAt(5), value: 55},
+            ]),
+        ]);
+
+        expect(outcome.signals.map((signal) => signal.id)).toEqual([`${config.id}:rsi`]);
+        const chartSeries = buildOverlaySignalSeries(outcome.signals, axis, false);
+        expect(chartSeries).toHaveLength(1);
+        expect(chartSeries[0]).toMatchObject({type: 'line', connectNulls: true, data: [40, 45, null, null, 50, 55]});
+        expect(axis.filter((_, index) => chartSeries[0].data[index] === null)).toEqual(weekend);
+    });
+
+    it('cuts at the point sent without a value, not at the absent weekend inside a run', () => {
+        // Thursday 1 to Thursday 8 January 2026: no point on the weekend of 3-4,
+        // a point without a value on Tuesday 6.
+        const axis = axisDays(8);
+        const outcome = render([
+            rsiLine([
+                {date: dateAt(0), value: 40},
+                {date: dateAt(1), value: 45},
+                {date: dateAt(4), value: 50},
+                {date: dateAt(5), value: null},
+                {date: dateAt(6), value: 60},
+                {date: dateAt(7), value: 65},
+            ]),
+        ]);
+
+        expect(datesOf(outcome.signals)).toEqual([
+            [dateAt(0), dateAt(1), dateAt(4)],
+            [dateAt(6), dateAt(7)],
+        ]);
+        const chartSeries = buildOverlaySignalSeries(outcome.signals, axis, false);
+        expect(seriesAcross(chartSeries, axis.indexOf(dateAt(5)))).toEqual([]);
+        // Friday and Monday are one series, joined across the weekend.
+        expect(chartSeries.filter((series) => series.data[1] !== null && series.data[4] !== null).map((series) => series.connectNulls)).toEqual([true]);
+    });
+
+    it('leaves one line when the points without a value all come before the first value or after the last', () => {
+        // Premise: a warm-up is sent as points without a value before the first
+        // value, and a series may end the same way.
+        const outcome = render([rsiLine(daily([null, null, 40, 45, 50, null, null]))]);
+
+        expect(outcome.signals.map((signal) => signal.id)).toEqual([`${config.id}:rsi`]);
+        expect(outcome.signals[0].data).toEqual([
+            {date: dateAt(2), value: 40},
+            {date: dateAt(3), value: 45},
+            {date: dateAt(4), value: 50},
+        ]);
+        expect([outcome.signals[0].markerStart, outcome.signals[0].markerEnd]).toEqual(['pin', 'arrow']);
+    });
+
+    it('makes one gap of consecutive points sent without a value', () => {
+        // Premise: days 2 and 3 are both sent without a value.
+        const outcome = render([rsiLine(daily([40, 45, null, null, 60, 65]))]);
+
+        expect(datesOf(outcome.signals)).toEqual([
+            [dateAt(0), dateAt(1)],
+            [dateAt(4), dateAt(5)],
+        ]);
+    });
+
+    it('keeps the start marker on the first run and the end marker on the last: the two ends of the whole line', () => {
+        // Premise: the config asks for a pin where the line starts and an arrow where it ends.
+        expect([config.style.markerStart, config.style.markerEnd]).toEqual(['pin', 'arrow']);
+
+        const outcome = render([rsiLine(daily([40, 45, null, 50, 55, null, 60, 65]))]);
+
+        expect(outcome.signals.map((signal) => [signal.markerStart, signal.markerEnd])).toEqual([
+            ['pin', null],
+            [null, null],
+            [null, 'arrow'],
+        ]);
+    });
+
+    it('draws the reference level and the background region of an unstyled line once, with its first run', () => {
+        const levelAndRegion = {
+            reference_levels: [{key: 'zero', label_key: 'signals.reference.zero', semantic: 'No change.', value: 0}],
+            value_regions: [{key: 'high', label_key: 'signals.rsi.high', semantic: 'overbought', lower: 70}],
+        };
+        // Premise: the region has no line style, so without the gap the line is one signal carrying both.
+        const whole = render([rsiLine(daily([40, 45, 50, 60, 75]), levelAndRegion)]).signals;
+        expect(whole.map((signal) => [signal.referenceLevels?.map((level) => level.key), signal.valueRegions?.map((region) => region.key)])).toEqual([[['zero'], ['high']]]);
+
+        const outcome = render([rsiLine(daily([40, 45, null, 60, 75]), levelAndRegion)]);
+
+        expect(outcome.signals.map((signal) => signal.referenceLevels?.map((level) => level.key))).toEqual([['zero'], undefined]);
+        expect(outcome.signals.map((signal) => signal.valueRegions?.map((region) => region.key))).toEqual([['high'], undefined]);
+        // In the chart: one markLine and one markArea, not one per run stacked on each other.
+        const chartSeries = buildOverlaySignalSeries(outcome.signals, axisDays(5), false);
+        expect(chartSeries.filter((series) => series.markLine).length).toBe(1);
+        expect(chartSeries.filter((series) => series.markArea).length).toBe(1);
+    });
+
+    it('cuts a styled line into its slices within each run, never across the gap', () => {
+        // Premise: below 50 the line is dashed, from 50 solid; day 4 is sent without a value.
+        const gapDate = dateAt(4);
+        const outcome = render([rsiLine(daily([20, 20, 80, 80, null, 20, 20, 80, 80]), {value_regions: valueRegions})]);
+
+        expect(signalsAcross(outcome.signals, gapDate)).toEqual([]);
+        // Within each run, the slicing of an unbroken line: 20, 20, 80, 80 is a
+        // dashed and a solid slice sharing their join.
+        expect(datesOf(outcome.signals)).toEqual([
+            [dateAt(0), dateAt(1)],
+            [dateAt(1), dateAt(2), dateAt(3)],
+            [dateAt(5), dateAt(6)],
+            [dateAt(6), dateAt(7), dateAt(8)],
+        ]);
+        expect(outcome.signals.map((signal) => signal.lineType)).toEqual(['dashed', 'solid', 'dashed', 'solid']);
+        expect(outcome.signals.map((signal) => [signal.markerStart, signal.markerEnd])).toEqual([
+            ['pin', null],
+            [null, null],
+            [null, null],
+            [null, 'arrow'],
+        ]);
+        // As on an unbroken styled line, no slice carries the levels or the regions.
+        expect(outcome.signals.filter((signal) => signal.referenceLevels !== undefined || signal.valueRegions !== undefined)).toEqual([]);
+        expect(idProblems(outcome.signals, 'rsi')).toEqual({outsidePrefix: [], repeated: []});
+    });
+
+    it('caps a wildly crossing line cut by two gaps without merging any slice across them', () => {
+        // 160 stretches of cycling length 1..4, 400 points; two points sent
+        // without a value cut the line into three runs.
+        const stretches = Array.from({length: 160}, (_, index) => 1 + (index % 4));
+        const gapIndexes = [133, 266];
+        const gapDates = gapIndexes.map((index) => dateAt(index));
+        // Premise: unbroken, the same line asks for more slices than the cap and is capped.
+        expect(render([crossingSeries(stretches)]).signals.length).toBe(100);
+
+        const outcome = render([withoutValueAt(crossingSeries(stretches), gapIndexes)]);
+
+        expect(outcome.signals.length).toBeLessThanOrEqual(100);
+        expect(gapDates.flatMap((gapDate) => signalsAcross(outcome.signals, gapDate))).toEqual([]);
+        // In date order: within a run consecutive slices share their join, and
+        // only the two gaps separate a slice from the next.
+        const joins = outcome.signals.slice(1).map((signal, index) => [outcome.signals[index].data.at(-1)!.date, signal.data[0].date]);
+        expect(joins.filter(([end, start]) => end !== start && !gapDates.some((gapDate) => end < gapDate && gapDate < start))).toEqual([]);
+        expect(joins.filter(([end, start]) => end !== start)).toHaveLength(gapDates.length);
+        // Every value is still drawn; the two days without one are not.
+        const drawn = new Set(datesOf(outcome.signals).flat());
+        expect(drawn.size).toBe(400 - gapDates.length);
+        expect(gapDates.filter((gapDate) => drawn.has(gapDate))).toEqual([]);
+        expect(outcome.signals[0].markerStart).toBe('pin');
+        expect(outcome.signals.at(-1)!.markerEnd).toBe('arrow');
+        expect(outcome.signals.slice(1).every((signal) => signal.markerStart === null)).toBe(true);
+        expect(outcome.signals.slice(0, -1).every((signal) => signal.markerEnd === null)).toBe(true);
+    });
+
+    it('leaves one slice per run when a styled line has more runs than the cap allows slices', () => {
+        // Premise: one run of 20, 80 crosses the threshold and alone asks for two
+        // slices; 120 such runs, each followed by a point without a value, ask for 240.
+        expect(render([rsiLine(daily([20, 80]), {value_regions: valueRegions})]).signals).toHaveLength(2);
+        const values = Array.from({length: 120}, () => [20, 80, null])
+            .flat()
+            .slice(0, -1);
+
+        const outcome = render([rsiLine(daily(values), {value_regions: valueRegions})]);
+
+        expect(outcome.signals.length).toBe(120);
+        expect(datesOf(outcome.signals)).toEqual(Array.from({length: 120}, (_, run) => [dateAt(3 * run), dateAt(3 * run + 1)]));
+    });
+
+    it('an unstyled line with more runs than MAX_LINE_RUNS is one line joining its gaps, and says so', () => {
+        // Premise: 120 runs of two points, one point without a value between each
+        // pair: four times the cap on the runs of an unstyled line (J-21 bis).
+        const sent = brokenDaily(120);
+
+        const outcome = render([rsiLine(sent)]);
+
+        expect(outcome.signals).toHaveLength(1);
+        const [joined] = outcome.signals;
+        expect(joined.id).toBe(`${config.id}:rsi`);
+        expect(joined.data).toEqual(withValue(sent));
+        expect(joined.data).toHaveLength(240);
+        expect(joined.label).toBe('RSI (gaps joined)');
+        expect([joined.markerStart, joined.markerEnd]).toEqual(['pin', 'arrow']);
+        expect(outcome.warnings).toEqual([GAPS_JOINED_WARNING]);
+    });
+
+    it('cuts an AREA output the same way, each run still an area', () => {
+        // Premise: the definition declares drawdown as an area output.
+        const outcome = render([sentSeries('drawdown', 'area', daily([-2, -5, null, -3, -1]))], kindsDefinition);
+
+        expect(outcome.signals.map((signal) => [signal.seriesType, signal.data.map((point) => point.date)])).toEqual([
+            ['area', [dateAt(0), dateAt(1)]],
+            ['area', [dateAt(3), dateAt(4)]],
+        ]);
+        expect(idProblems(outcome.signals, 'drawdown')).toEqual({outsidePrefix: [], repeated: []});
+    });
+
+    it('leaves a BAR output whole: bars are never joined, the point without a value is just not drawn', () => {
+        // Premise: the definition declares histogram as a bar output.
+        const outcome = render([sentSeries('histogram', 'bar', daily([1, -2, null, 3]))], kindsDefinition);
+
+        expect(outcome.signals.map((signal) => [signal.id, signal.seriesType])).toEqual([[`${config.id}:histogram`, 'bar']]);
+        expect(outcome.signals[0].data).toEqual([
+            {date: dateAt(0), value: 1},
+            {date: dateAt(1), value: -2},
+            {date: dateAt(3), value: 3},
+        ]);
+    });
+});
+
+/**
+ * J-21 bis. Each run of J-21 is a chart series of its own, as long as the whole
+ * axis. Measured on the backend's real rolling metrics, a small window on an
+ * illiquid daily asset cuts one output into 46 to 371 runs: hundreds of series
+ * for one line. So an unstyled line, or any area, with more runs than
+ * MAX_LINE_RUNS is drawn as before J-21: one series holding every value and
+ * joining its gaps, its label marked «(gaps joined)», with one warning added to
+ * the outcome. At the cap and under it nothing changes; a styled line keeps one
+ * slice per run, and a bar is never cut.
+ */
+
+/** `render`, with what it leaves out: the warnings the backend sent with the result, and the page's `translate`. */
+function renderWith(series: unknown[], {signalDefinition = definition, warnings = [], translate}: {signalDefinition?: SignalDefinition; warnings?: Array<{code: string; message: string}>; translate?: (key: string) => string} = {}) {
+    const sent = backendSignalSchemas.result.parse({instance_id: config.id, signal_code: 'RSI', status: 'ok', series, warnings});
+    return renderBackendSignalResult(sent, config, {baseData: [{date: dateAt(0), value: 100}], viewMode: 'absolute', definition: signalDefinition, translate});
+}
+
+/** `definition` plus a second LINE output, so that one result can carry a line over the cap beside one under it. */
+const twoLinesDefinition: SignalDefinition = {
+    ...definition,
+    visualComponents: [...(definition.visualComponents ?? []), {key: 'average', labelKey: 'signals.average', kind: 'line', aggregationProfile: 'last_with_range', style: {colorRole: 'secondary', lineWidthDelta: 0, opacity: 1, fillOpacity: 0.2}, fullyPartitioned: false}],
+};
+
+describe('backend renderer — the cap on the runs of one output (J-21 bis)', () => {
+    it('exports the cap as MAX_LINE_RUNS: 30 runs of one output', () => {
+        // The one place the import is read: every other test builds its data
+        // from the literal CAP, so that each fails on what it renders.
+        expect(MAX_LINE_RUNS).toBe(CAP);
+    });
+
+    it('draws an unstyled line of one run over the cap as one line joining its gaps, renamed, with one warning', () => {
+        const sent = brokenDaily(CAP + 1);
+        // Premise: the same values without the points sent without a value are
+        // the one line the renderer drew before J-21.
+        const unbroken = render([rsiLine(withValue(sent))]).signals;
+        expect(unbroken).toHaveLength(1);
+
+        const outcome = render([rsiLine(sent)]);
+
+        expect(outcome.signals).toHaveLength(1);
+        const [joined] = outcome.signals;
+        expect(joined.id).toBe(`${config.id}:rsi`);
+        expect(joined.data).toEqual(withValue(sent));
+        expect(lineIdentity(joined)).toEqual({...lineIdentity(unbroken[0]), label: 'RSI (gaps joined)'});
+        expect([joined.markerStart, joined.markerEnd]).toEqual(['pin', 'arrow']);
+        expect(joined.connectNulls).toBeUndefined();
+        expect(outcome.warnings).toEqual([GAPS_JOINED_WARNING]);
+        // In the chart: one series, and it joins the gaps.
+        expect(buildOverlaySignalSeries(outcome.signals, axisDays(sent.length), false).map((series) => series.connectNulls)).toEqual([true]);
+    });
+
+    it('leaves an unstyled line of exactly the cap in runs as it is: one signal per run, no suffix, no warning', () => {
+        const outcome = render([rsiLine(brokenDaily(CAP))]);
+
+        expect(datesOf(outcome.signals)).toEqual(runDates(CAP));
+        expect(outcome.signals.map((signal) => signal.label)).toEqual(runDates(CAP).map(() => 'RSI'));
+        expect(idProblems(outcome.signals, 'rsi')).toEqual({outsidePrefix: [], repeated: []});
+        expect(outcome.warnings).toEqual([]);
+    });
+
+    it('draws an AREA output of one run over the cap as one area joining its gaps, renamed, with one warning', () => {
+        // Premise: the definition declares drawdown as an area output, and
+        // unbroken it is one area.
+        const sent = brokenDaily(CAP + 1, () => [-2, -5]);
+        const unbroken = render([sentSeries('drawdown', 'area', withValue(sent))], kindsDefinition).signals;
+        expect(unbroken).toHaveLength(1);
+
+        const outcome = render([sentSeries('drawdown', 'area', sent)], kindsDefinition);
+
+        expect(outcome.signals).toHaveLength(1);
+        const [joined] = outcome.signals;
+        expect(joined.id).toBe(`${config.id}:drawdown`);
+        expect(joined.data).toEqual(withValue(sent));
+        expect(lineIdentity(joined)).toEqual({...lineIdentity(unbroken[0]), label: 'DRAWDOWN (gaps joined)'});
+        expect([joined.markerStart, joined.markerEnd]).toEqual(['pin', 'arrow']);
+        expect(outcome.warnings).toEqual([GAPS_JOINED_WARNING]);
+    });
+
+    it('joins an AREA output over the cap even when its regions carry a line style: only a line is sliced by style', () => {
+        // Premise: a run of 20, 80 crosses the 50 threshold of the styled
+        // regions; a line is cut there into two slices, an area is not.
+        expect(render([rsiLine(daily([20, 80]), {value_regions: valueRegions})]).signals).toHaveLength(2);
+        expect(render([sentSeries('drawdown', 'area', daily([20, 80]), {value_regions: valueRegions})], kindsDefinition).signals).toHaveLength(1);
+        const sent = brokenDaily(CAP + 1, () => [20, 80]);
+
+        const outcome = render([sentSeries('drawdown', 'area', sent, {value_regions: valueRegions})], kindsDefinition);
+
+        expect(outcome.signals).toHaveLength(1);
+        expect(outcome.signals.map((signal) => [signal.id, signal.seriesType, signal.label])).toEqual([[`${config.id}:drawdown`, 'area', 'DRAWDOWN (gaps joined)']]);
+        expect(outcome.warnings).toEqual([GAPS_JOINED_WARNING]);
+    });
+
+    it('keeps the reference level and the background region of a line joined over the cap on its one signal', () => {
+        const levelAndRegion = {
+            reference_levels: [{key: 'zero', label_key: 'signals.reference.zero', semantic: 'No change.', value: 0}],
+            value_regions: [{key: 'high', label_key: 'signals.rsi.high', semantic: 'overbought', lower: 70}],
+        };
+        const sent = brokenDaily(CAP + 1);
+        // Premise: the region has no line style, so the line is unstyled;
+        // unbroken it is one signal carrying the level and the region.
+        const unbroken = render([rsiLine(withValue(sent), levelAndRegion)]).signals;
+        expect(unbroken.map((signal) => [signal.referenceLevels?.map((level) => level.key), signal.valueRegions?.map((region) => region.key)])).toEqual([[['zero'], ['high']]]);
+
+        const outcome = render([rsiLine(sent, levelAndRegion)]);
+
+        expect(outcome.signals).toHaveLength(1);
+        expect(outcome.signals[0].label).toBe('RSI (gaps joined)');
+        expect(outcome.signals[0].referenceLevels).toEqual(unbroken[0].referenceLevels);
+        expect(outcome.signals[0].valueRegions).toEqual(unbroken[0].valueRegions);
+    });
+
+    it('leaves a styled line of one run over the cap one slice per run: the cap joins no styled line', () => {
+        // Premise: below 50 the line is dashed, from 50 solid; a run of 20, 30 or
+        // of 70, 80 stays on one side, so it is one slice.
+        const oneStylePerRun = (run: number): [number, number] => (run % 2 === 0 ? [20, 30] : [70, 80]);
+        expect([oneStylePerRun(0), oneStylePerRun(1)].map((values) => render([rsiLine(daily(values), {value_regions: valueRegions})]).signals.length)).toEqual([1, 1]);
+
+        const outcome = render([rsiLine(brokenDaily(CAP + 1, oneStylePerRun), {value_regions: valueRegions})]);
+
+        expect(datesOf(outcome.signals)).toEqual(runDates(CAP + 1));
+        expect(outcome.signals.map((signal) => signal.lineType)).toEqual(runDates(CAP + 1).map((_, run) => (run % 2 === 0 ? 'dashed' : 'solid')));
+        expect(outcome.signals.map((signal) => signal.label)).toEqual(runDates(CAP + 1).map(() => 'RSI'));
+        expect(outcome.warnings).toEqual([]);
+    });
+
+    it('joins only the output over the cap, and adds one warning after those the backend sent', () => {
+        const backendWarning = {code: 'undefined_metric_window', message: 'The metric is undefined on some windows.'};
+        const overCap = brokenDaily(CAP + 1);
+
+        const outcome = renderWith([rsiLine(overCap), sentSeries('average', 'line', daily([40, 60, null, 45, 65]))], {signalDefinition: twoLinesDefinition, warnings: [backendWarning]});
+
+        expect(outcome.signals).toHaveLength(3);
+        const [joined, ...averageRuns] = outcome.signals;
+        expect([joined.id, joined.label]).toEqual([`${config.id}:rsi`, 'RSI (gaps joined)']);
+        expect(joined.data).toEqual(withValue(overCap));
+        expect(datesOf(averageRuns)).toEqual([
+            [dateAt(0), dateAt(1)],
+            [dateAt(3), dateAt(4)],
+        ]);
+        expect(averageRuns.map((signal) => signal.label)).toEqual(['AVERAGE', 'AVERAGE']);
+        expect(idProblems(averageRuns, 'average')).toEqual({outsidePrefix: [], repeated: []});
+        expect(outcome.warnings).toEqual([backendWarning.message, GAPS_JOINED_WARNING]);
+    });
+
+    it('words the suffix and the warning through translate, and falls back on English when it hands a key back', () => {
+        const italian = new Map([
+            ['signals.gapsJoined.label', 'lacune unite'],
+            ['signals.gapsJoined.warning', 'Troppe lacune.'],
+        ]);
+        const translate = (key: string) => italian.get(key) ?? key;
+        // Premise: translate hands back the key of the line's own label, so the
+        // label falls back on RSI.
+        expect(renderWith([rsiLine(daily([40, 60]))], {translate}).signals.map((signal) => signal.label)).toEqual(['RSI']);
+
+        const outcome = renderWith([rsiLine(brokenDaily(CAP + 1))], {translate});
+
+        expect(outcome.signals.map((signal) => signal.label)).toEqual(['RSI (lacune unite)']);
+        expect(outcome.warnings).toEqual(['Troppe lacune.']);
+
+        // A translate that knows neither key hands both back: the English fallback.
+        const untranslated = renderWith([rsiLine(brokenDaily(CAP + 1))], {translate: (key) => key});
+        expect(untranslated.signals.map((signal) => signal.label)).toEqual(['RSI (gaps joined)']);
+        expect(untranslated.warnings).toEqual([GAPS_JOINED_WARNING]);
+    });
+
+    it('leaves a BAR output of one run over the cap whole, with no suffix and no warning', () => {
+        // Premise: the definition declares histogram as a bar output, and a bar
+        // is never cut into runs.
+        const sent = brokenDaily(CAP + 1, () => [1, -2]);
+
+        const outcome = render([sentSeries('histogram', 'bar', sent)], kindsDefinition);
+
+        expect(outcome.signals.map((signal) => [signal.id, signal.seriesType, signal.label])).toEqual([[`${config.id}:histogram`, 'bar', 'HISTOGRAM']]);
+        expect(outcome.signals[0].data).toEqual(withValue(sent));
+        expect(outcome.warnings).toEqual([]);
+    });
+});
+
+/**
+ * The «📈N» badge of the signals panel (`SignalDataSummary.pointCount`) for a
+ * backend instance: the number of distinct dates drawn across every signal the
+ * instance rendered into. One instance renders into several signals — one per
+ * output, one per slice of a line coloured by value region, one per run of a
+ * line the backend broke (J-21) — so the longest of them undercounts, and their
+ * sum counts twice the join two slices share and a date two outputs share.
+ */
+describe('signals panel badge — points of one backend instance', () => {
+    it('counts each point of a styled line once, not only its longest slice', () => {
+        // Premise: crossing the threshold twice, the line reaches the badge as
+        // three slices of 2, 3 and 3 points that share their two joins.
+        const {signals} = render([rsiLine(daily([20, 20, 80, 80, 20, 20]), {value_regions: valueRegions})]);
+        expect(signals.map((signal) => signal.data.length)).toEqual([2, 3, 3]);
+
+        expect(renderedSignalPointCount(signals)).toBe(6);
+    });
+
+    it('counts the points of every run of a line broken by a point sent without a value', () => {
+        // Premise: the line reaches the badge as two runs of 2 and 3 points
+        // (J-21); the day sent without a value is drawn by neither.
+        const {signals} = render([rsiLine(daily([40, 45, null, 60, 65, 70]))]);
+        expect(signals.map((signal) => signal.data.length)).toEqual([2, 3]);
+
+        expect(renderedSignalPointCount(signals)).toBe(5);
+    });
+
+    it('counts once a date that two outputs of the instance both draw', () => {
+        // Premise: a line output and a bar output, both drawn on the same four days.
+        const {signals} = render([rsiLine(daily([40, 45, 50, 55])), sentSeries('histogram', 'bar', daily([1, -2, 3, -4]))], kindsDefinition);
+        expect(datesOf(signals)).toEqual([axisDays(4), axisDays(4)]);
+
+        expect(renderedSignalPointCount(signals)).toBe(4);
+    });
+
+    it('counts the points of a plain line', () => {
+        // Premise: an unstyled line with a value on every point is one signal.
+        const {signals} = render([rsiLine(daily([40, 45, 50, 55, 60]))]);
+        expect(signals).toHaveLength(1);
+
+        expect(renderedSignalPointCount(signals)).toBe(5);
+    });
+
+    it('is 0 for an instance that drew nothing', () => {
+        // Premise: a warm-up longer than the history sends every point without
+        // a value, and the instance renders no signal at all.
+        const {signals} = render([rsiLine(daily([null, null, null]))]);
+        expect(signals).toEqual([]);
+
+        expect(renderedSignalPointCount(signals)).toBe(0);
+    });
+
+    it('counts the days of every output when the outputs do not cover the same days', () => {
+        // Premise: the line is drawn on days 0-3 and the bar on days 2-5: six
+        // days in all, two of them drawn by both outputs.
+        const barDays = [1, -2, 3, -4].map((value, index) => ({date: dateAt(2 + index), value}));
+        const {signals} = render([rsiLine(daily([40, 45, 50, 55])), sentSeries('histogram', 'bar', barDays)], kindsDefinition);
+        expect(datesOf(signals)).toEqual([axisDays(4), axisDays(6).slice(2)]);
+
+        expect(renderedSignalPointCount(signals)).toBe(6);
     });
 });

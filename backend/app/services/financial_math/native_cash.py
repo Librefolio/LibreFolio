@@ -13,7 +13,8 @@ The problem is described by plain data only:
 
 All the conversions go to the FX service in one ``convert_bulk`` call: every foreign
 movement at its own date (the flows), and one unit of every foreign currency on every day
-from its first movement on (the valuation). An amount already in T is taken as it is, so
+from its first movement on, and from 1 January 1900 at the earliest, with only the movements' own days before it (the
+valuation). An amount already in T is taken as it is, so
 cash held only in the report currency never needs a rate. A conversion that cannot be made
 never becomes a zero: the movement stays out of values and flows, and its pair is reported
 with every date it was needed on.
@@ -31,7 +32,7 @@ Rules:
 from __future__ import annotations
 
 import bisect
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date as date_type
 from datetime import timedelta
@@ -39,7 +40,8 @@ from decimal import Decimal
 from typing import Any
 
 from backend.app.schemas.common import Currency
-from backend.app.services.fx import convert_bulk
+from backend.app.services.fx.conversion import convert_bulk
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
@@ -178,7 +180,9 @@ class NativeCash:
         object.__setattr__(self, "_first_counted", _first_dates(counted))
         object.__setattr__(self, "_rate_days", rate_days)
         object.__setattr__(self, "_rate_values", rate_values)
-        object.__setattr__(self, "_change_days", _change_days(rate_days, rate_values, {movement.currency for movement in foreign}))
+        held = {movement.currency for movement in foreign}
+        calendar = sorted({day for currency in held for day in rate_days.get(currency, ())})
+        object.__setattr__(self, "_change_days", change_days(self._rate_at, held, calendar))
         object.__setattr__(self, "_foreign_brokers", frozenset(movement.broker_id for movement in foreign))
 
     def _is_counted(self, movement: CashMovement, value: Decimal | None) -> bool:
@@ -279,17 +283,8 @@ class NativeCash:
         return self._change_days[start:end]
 
     def balances(self, as_of: date_type | None = None) -> dict[int, dict[str, Decimal]]:
-        """Each broker's balance in each currency on ``as_of`` (every movement when None).
-
-        Zero and missing movements are included: a balance in its own currency needs no rate.
-        """
-        result: dict[int, dict[str, Decimal]] = {}
-        for movement in self.movements:
-            if as_of is not None and movement.date > as_of:
-                continue
-            by_currency = result.setdefault(movement.broker_id, {})
-            by_currency[movement.currency] = by_currency.get(movement.currency, _ZERO) + movement.native
-        return result
+        """Each broker's balance in each currency on ``as_of`` (every movement when None); see :func:`native_balances`."""
+        return native_balances(self.movements, as_of)
 
     def flows(self, date_from: date_type | None = None, date_to: date_type | None = None) -> CashFlows:
         """The movements dated in ``(date_from, date_to]``, converted at their own dates.
@@ -414,20 +409,39 @@ def _rate_series(unit_rates: Mapping[tuple[str, date_type], Decimal]) -> tuple[d
     return rate_days, rate_values
 
 
-def _change_days(
-    rate_days: Mapping[str, tuple[date_type, ...]],
-    rate_values: Mapping[str, tuple[Decimal, ...]],
-    currencies: set[str],
-) -> tuple[date_type, ...]:
-    """Days a rate of ``currencies`` differs from its previous known rate; a series' first day counts."""
-    days: set[date_type] = set()
-    for currency in currencies:
-        previous: Decimal | None = None
-        for day, rate in zip(rate_days.get(currency, ()), rate_values.get(currency, ()), strict=True):
-            if previous is None or rate != previous:
-                days.add(day)
-            previous = rate
-    return tuple(sorted(days))
+def change_days(read: Callable[[str, date_type], Decimal | None], currencies: Iterable[str], days: Iterable[date_type]) -> tuple[date_type, ...]:
+    """The days of the calendar ``days``, in its order, on which ``read`` gives a currency of ``currencies`` another
+    rate than on the calendar's previous day — the one home of «the day a rate changes».
+
+    The caller chooses the reading and the calendar: the native cash reads the last rate known on or before the day,
+    on the calendar of its rate points; the portfolio engine reads the rate of the exact day, on every day of its
+    frame. A rate that appears or disappears is a change, and so is a rate on the calendar's first day.
+    """
+    watched = tuple(sorted(set(currencies)))
+    changed: list[date_type] = []
+    previous: dict[str, Decimal | None] = dict.fromkeys(watched)
+    for day in days:
+        rates = {currency: read(currency, day) for currency in watched}
+        if rates != previous:
+            changed.append(day)
+        previous = rates
+    return tuple(changed)
+
+
+def native_balances(movements: Iterable[CashMovement], as_of: date_type | None = None) -> dict[int, dict[str, Decimal]]:
+    """Each broker's balance in each currency on ``as_of`` (every movement when None).
+
+    Needs no rate, so a caller that only wants native balances calls it without building a
+    :class:`NativeCash`. Zero and missing movements are included: a balance in its own currency
+    needs no rate, and a currency with movements that cancel out keeps its line at zero.
+    """
+    result: dict[int, dict[str, Decimal]] = {}
+    for movement in movements:
+        if as_of is not None and movement.date > as_of:
+            continue
+        by_currency = result.setdefault(movement.broker_id, {})
+        by_currency[movement.currency] = by_currency.get(movement.currency, _ZERO) + movement.native
+    return result
 
 
 async def compute_native_cash(
@@ -471,18 +485,28 @@ async def compute_native_cash(
 
 
 def _unit_requests(foreign: Sequence[CashMovement], rates_until: date_type | None) -> list[tuple[str, date_type]]:
-    """``(currency, day)`` for every day a foreign balance may need a rate, currencies by code."""
+    """``(currency, day)`` for every day a foreign balance may need a rate, currencies by code.
+
+    Every day from the currency's first movement — but from ``EARLIEST_RANGE_START`` at the earliest (R13-SEC8: a
+    movement stored centuries back would otherwise ask one per day since). Before the floor only the movements' own
+    days are asked, so a balance counted there still has a rate on or before every later day (``_foreign_value`` never
+    meets a counted balance without one); the cost is bounded by the movements, not by the days.
+    """
     first: dict[str, date_type] = {}
     last: dict[str, date_type] = {}
+    early: dict[str, set[date_type]] = {}
     for movement in foreign:
         currency = movement.currency
         if currency not in first or movement.date < first[currency]:
             first[currency] = movement.date
         if currency not in last or movement.date > last[currency]:
             last[currency] = movement.date
+        if movement.date < EARLIEST_RANGE_START:
+            early.setdefault(currency, set()).add(movement.date)
     requests: list[tuple[str, date_type]] = []
     for currency in sorted(first):
-        day = first[currency]
+        requests.extend((currency, day) for day in sorted(early.get(currency, ())))
+        day = max(first[currency], EARLIEST_RANGE_START)
         end = last[currency] if rates_until is None else rates_until
         while day <= end:
             requests.append((currency, day))

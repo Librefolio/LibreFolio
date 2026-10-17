@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskRollingReturn": {
+      "name": "Rolling Return",
+      "description": "Price-only return over a rolling window of calendar days, each price against the price that many days earlier.",
+      "output": "Return",
+      "outputDescription": "Change of the price against the earlier price, in percentage points.",
+      "windowTooltip": "Calendar days between each price and the earlier price it is compared with."
+    }
+  }
+}

@@ -82,8 +82,9 @@ repartent de zéro.
 
 - **Avant la première période**, la valeur est la Valeur initiale.
 - **Après la dernière période**, elle reste à son montant final, sauf si les intérêts de retard sont
-  activés. Avec **Générer Coupon** sur la dernière période et sans intérêts de retard, un
-  événement de règlement à l'échéance clôture l'actif à ce montant.
+  activés. Avec **Générer Coupon** sur la dernière période et sans intérêts de retard, le
+  dernier coupon est versé à la date de fin et un événement de règlement à l'échéance clôture l'actif à
+  la valeur qui reste après lui : la Valeur initiale.
 - **Le graphique** reçoit un point à chaque date de **Fréquence** : choisissez **Journalière** pour
   une courbe lissée.
 

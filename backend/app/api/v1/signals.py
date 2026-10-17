@@ -23,10 +23,8 @@ from backend.app.schemas.signals import (
     SignalPreviewResponse,
     SignalPricePoint,
 )
-from backend.app.services.signal_service import (
-    SignalRequestValidationError,
-    SignalService,
-)
+from backend.app.services.signals.planning import SignalRequestValidationError
+from backend.app.services.signals.service import SignalService
 
 signals_router = APIRouter(prefix="/signals", tags=["Signals"])
 

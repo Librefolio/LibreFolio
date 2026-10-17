@@ -67,7 +67,7 @@ Chaque ligne possède un **Type** (Dividende, Intérêt, Division, Ajustement de
 
     `value` est accepté à la place de `amount`, de sorte qu'un fichier d'événements exporté par LibreFolio (la sauvegarde proposée lorsque vous [modifiez la devise d'un actif](../create-edit.md#editing-an-asset)) puisse être réimporté, ses autres colonnes étant ignorées. Attention à deux limites :
 
-    - **Un événement par date** : les lignes partageant une même date sont toutes écartées comme doublons, donc importez de tels événements depuis des fichiers séparés.
+    - **Un événement par date et par type** : les lignes partageant à la fois une date et un type sont toutes écartées comme doublons ; un dividende et une division du même jour s'importent ensemble.
     - **Chaque ligne devient votre propre événement**, y compris celles d'un fournisseur : omettez les lignes dont la colonne `source` vaut `PROVIDER` si le fournisseur les enverra à nouveau, sinon elles apparaîtront deux fois.
 
 - Les dates sont au format `YYYY-MM-DD`, et les décimales peuvent utiliser `.` ou `,`.

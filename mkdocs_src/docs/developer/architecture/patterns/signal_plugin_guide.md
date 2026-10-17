@@ -66,11 +66,17 @@ flowchart TB
 
 | Component | Responsibility |
 |---|---|
-| `signal_runtime.py` | Verify the locked `pandas-ta-classic` + TA-Lib stack at startup and reject silent fallback. |
-| `signal_plugins/base.py` | Define the plugin contract and build static catalog metadata. |
-| `provider_registry.py` | Discover plugin folders, validate definitions, and reject duplicate codes. |
-| `signal_service.py` | Plan batches, calculate required history, check coverage, execute plugins, isolate failures, and slice output. |
-| `signal_annotations.py` | Derive line crossovers and threshold crossings from extended canonical data. |
+| `signals/runtime.py` | Verify the locked `pandas-ta-classic` + TA-Lib stack at startup and reject silent fallback. |
+| `signals/base.py` | Define the plugin contract and build static catalog metadata. |
+| `signals/registry.py` | `SignalPluginRegistry`: validate definitions and reject duplicate codes. |
+| `provider_registry.py` | Discover plugin folders (shared by every plugin registry). |
+| `signals/service.py` | `SignalService`, the façade: plan a batch through `prepare_plan()`, run it in one worker thread (`asyncio.to_thread`) through `execute()`, or do both with `compute()`. |
+| `signals/planning.py` | `prepare_signal_plan`: validate the batch and its annotation requests (`SignalRequestValidationError`), resolve plugins, validate their parameters, deduplicate identical computations, size the history and inputs to load (`SignalExecutionPlan`), and record preflight failures before any price is read. |
+| `signals/execution.py` | `execute_signal_plan`: per planned computation, derive a prepared-series plugin's input, risk metadata, and data-quality warnings from the `SignalPreparedSeriesBundle`, check coverage and availability, select the quote days, call the plugin, slice its visible output, and isolate failures so that one never aborts the batch. |
+| `signals/validation.py` | Normalize a plugin's output (`NaN` becomes a missing value, infinity an error), check its series count and metadata against `output_specs` and its dates against the input, rewrite an availability as unavailable or partial, and build a failure's details. |
+| `signals/annotations.py` | Derive line crossovers and threshold crossings from extended canonical data, and attach them, with their warnings, to the target results (`attach_annotations`). |
+| `signals/series.py` | Provide the pure helpers that planning and execution use: the calendar days loaded per warm-up session (`SESSION_WARMUP_DAY_MULTIPLIER`), quote-day selection (`is_quote_day()`), field and date coverage (`SignalInputCoverage`), the input segment the data policy allows, event filtering, the availability decision and its warnings, and the check and slice of the visible output. |
+| `signals/risk_adapters.py` | Provide the helpers the prepared-series risk plugins share: read the prepared returns and the annualization factor from the execution context, compute rolling volatility, Sharpe, and beta with vectorised pandas passes (the loop versions stay as the reference that `test_risk_metrics_oracle.py` checks them against), warn about mathematically undefined windows (`undefined_metric_window`), and build a line or area output from its `SignalOutputSpec`. |
 | Chart Asset/FX adapters | Load chart-domain data, perform currency conversion, and map it into neutral points. |
 | AI Export runtime/components | Compose selected datasets, share request-scoped resources, and call the same `SignalService` for curated technical components. |
 
@@ -124,12 +130,14 @@ sequenceDiagram
         S->>P: compute(neutral points, params, context)
         P-->>S: SignalComputation
         S->>S: Validate canonical outputs and isolate failures
+        S->>S: Slice to visible range and assign status
+        S->>S: Keep the extended series for annotations
     end
     opt Annotation requests
-        S->>N: Derive crossings and threshold events
-        N-->>S: Canonical annotations
+        S->>N: Derive crossings and threshold events on the extended series
+        N-->>S: Events within the visible range
+        S->>S: Attach events and warnings to their target results
     end
-    S->>S: Slice to visible range and assign status
     S-->>A: SignalResult[]
     A-->>C: One canonical bulk response
 ```
@@ -186,18 +194,36 @@ sequenceDiagram
 - aggregates the union of required price fields/events;
 - records per-instance preflight failures without aborting the remaining batch.
 
-The chart Asset/FX adapter or AI Export domain assembler uses that plan to load one
+A preflight failure stays with its instance, but an incoherent batch stops entirely.
+`prepare_signal_plan` then raises `SignalRequestValidationError`, and no instance gets a
+plan or a result. The incoherent cases are:
+
+- duplicate `instance_id` values, or duplicate annotation request keys;
+- an annotation whose target (`attach_to_instance_id`) or source instance is not a
+  requested signal instance;
+- a `band` source naming a series that its plugin does not declare, or that is not a band;
+- a scalar `signal` source naming a band series.
+
+The chart endpoints answer it with HTTP 422, the message as `detail`:
+`POST /api/v1/signals/preview` (`api/v1/signals.py`), the Asset price query
+`POST /api/v1/assets/prices/query` (`api/v1/assets/prices.py`), and the FX endpoint
+`POST /api/v1/fx/currencies/convert` (`api/v1/fx/currencies.py`). An Asset or FX request
+then returns no prices either.
+
+The chart Asset/FX adapter or AI Export domain assembler uses the plan to load one
 extended input range. For the plain price input, the warm-up in calendar days is
 `SignalExecutionPlan.max_history_days_before_visible`: the larger of the session
 warm-up times `SESSION_WARMUP_DAY_MULTIPLIER` and the calendar warm-up. The multiplier
-is 2 (`signal_series_preparation.py`): a year holds about 252 sessions in 365 days, and
+is 2 (`signals/series.py`): a year holds about 252 sessions in 365 days, and
 long holiday windows lower that further. The Asset price query, the FX endpoint, and
 the AI Export FX loader all size their load with it.
 
 A warm-up can also be unbounded. A plugin whose result depends on the whole past returns
 `SignalWarmupRequirement(full_history=True)`, and the plan sets `requires_full_history`:
-the Asset price query (`price_query.py`) then loads from the start of the available
-history instead of the point-derived warm-up, and still slices to the visible range after
+the Asset price query (`price_query.py`) then extends the point-derived warm-up back to
+the start of the available history, but not before `EARLIEST_RANGE_START` (1900-01-01),
+never shortening it (a warm-up that starts earlier keeps its start, and a price stored
+before the load start can only seed the fill), and still slices to the visible range after
 the computation. Underwater drawdown (`RISK_DRAWDOWN`) does so through its `full_history`
 parameter, on by default (the card's **Full history** checkbox); off, only the visible
 range and a minimal warm-up are loaded, so the running peak is the window's own. AI Export
@@ -227,12 +253,34 @@ For each plugin, the service:
 Coverage (`SignalInputCoverage`) is measured before step 3 and stays calendar-based,
 so the UI coverage thresholds in [Status and Data Policy](#status-and-data-policy)
 keep their meaning. A quote-day plugin's output is dated on sessions; the chart aligns
-it by date and bridges the days without a point.
+it by date and bridges the days without a point. A point the plugin returns **without a
+value** is different: a warm-up, an undefined window, a missing reference price. The
+chart renderer (`frontend/src/lib/charts/signals/backendRenderer.ts`) breaks a line or
+area output there, drawing each stretch between two such points as its own series, so no
+segment crosses a day on which nothing was measured. Bars simply skip those points.
 
 ### 3. 🎯 Annotations
 
-Optional annotation requests run after indicator calculation against the extended series.
-This allows boundary crossovers to be detected correctly before output is sliced.
+Execution slices each signal's result right after validating it (step 7 above).
+`execute_signal_plan` keeps the unsliced series of each `ok` or `partial` instance aside, in
+`extended_series_by_instance`.
+
+Optional annotation requests run once every planned signal has executed.
+`attach_annotations` hands those extended series and the loaded prices to
+`SignalAnnotationService.compute()`. Crossings are detected across the warm-up too, so a
+crossover on the first visible date is still found. Only the events dated inside the
+requested visible range are kept.
+
+`attach_annotations` adds those events to their target results, merged with any
+annotations the plugin itself returned, and sorted by date. Problems become
+`annotation_unavailable` warnings on the target result:
+
+- a request whose source has no usable series, such as an `unavailable` or `failed`
+  instance, gets `Annotation '<key>' is unavailable`, and the others still run;
+- events whose target status is not `ok` or `partial` are dropped, and the warning
+  `Annotation '<key>' could not be attached` gives that status as its reason;
+- if the whole annotation computation raises, every request gets the
+  `Annotation '<key>' is unavailable` warning on its target, and the signal results are kept.
 
 Supported primitives:
 
@@ -276,11 +324,12 @@ and documentation links without a signal-specific UI implementation.
 
 `catalog_visible` (inherited `True`) decides whether the plugin appears in that catalog:
 `SignalPluginRegistry.list_definitions()` skips a plugin that sets it to `False`, so no
-selector offers it, while a request naming its code still runs. Of the 23 registered plugins,
-`calendar_rolling_return` (`ASSET_CALENDAR_ROLLING_RETURN`) is the one hidden: the asset chart
-requests it for its **Rolling Return** mode (see
+selector offers it, while a request naming its code still runs. None of the 22 registered
+plugins sets it today. `calendar_rolling_return` (`ASSET_CALENDAR_ROLLING_RETURN`) is in the
+catalog like the others, as the **Rolling Return** of the Risk group, and the asset chart also
+requests it by its code for its **Rolling Return** mode (see
 [Chart internals](../../frontend/components/charts.md#asset-detail-prices-and-rolling-return)).
-The Asset catalog, `GET /api/v1/assets/prices/signals`, lists the 22 visible plugins whose
+The Asset catalog, `GET /api/v1/assets/prices/signals`, lists the 22 plugins whose
 `compatible_domains` include `ASSET`, which is all of them; the FX catalog,
 `GET /api/v1/fx/currencies/signals`, lists the 9 close-only ones that also declare `FX`: EMA,
 SMA, KAMA, MACD, PPO, ROC, RSI, Stochastic RSI and Bollinger Bands.
@@ -294,7 +343,7 @@ input, the sessions, so a period of N means N sessions, as the standard definiti
 count them: SMA 200 is 200 sessions, not 200 calendar days.
 
 A quote day is a point whose **price** was quoted on its own date: `backward_fill_info`
-is `None` or `days_back == 0` (`is_quote_day()` in `signal_series_preparation.py`). The
+is `None` or `days_back == 0` (`is_quote_day()` in `signals/series.py`). The
 exchange rate does not decide it: a quote converted with a rate carried from an earlier
 day is still a session of the instrument. On the Asset path, a stored weekend or
 market-holiday row that exactly repeats the previous close is marked as carried before
@@ -306,7 +355,7 @@ Set `computes_on_quote_days = False` only when:
 - the windows are calendar spans by definition, as in `calendar_rolling_return`: its
   input keeps every calendar point, and its window is declared in days;
 - the plugin uses the prepared series (`input_requirements.uses_prepared_asset_series`),
-  as the five prepared-series risk signals do (drawdown and rolling beta, return, Sharpe,
+  as the four prepared-series risk signals do (drawdown and rolling beta, Sharpe,
   volatility): that series is already on the quote calendar, and the service never
   filters it.
 
@@ -408,7 +457,7 @@ An error or a warning also tints the card red or amber; a notice leaves it plain
 ### 🚦 Enforced Status Matrix
 
 A plugin never sets the status itself. `compute()` returns a `SignalComputation`, or raises
-`SignalUnavailableError` (`backend/app/services/signal_plugins/base.py`) with an
+`SignalUnavailableError` (`backend/app/services/signals/base.py`) with an
 *unavailable* `reason_code`, such as `undefined_metric` or `insufficient_history`, when the
 result is mathematically undefined. The service then assigns the status of a computed result —
 `partial` when the warm-up is incomplete, partial coverage was used, or the availability
@@ -490,11 +539,9 @@ from backend.app.schemas.signals import (
     SignalViewTransform,
     SignalWarmupRequirement,
 )
-from backend.app.services.provider_registry import (
-    SignalPluginRegistry,
-    register_plugin,
-)
-from backend.app.services.signal_plugins.base import SignalPlugin
+from backend.app.services.provider_registry import register_plugin
+from backend.app.services.signals.base import SignalPlugin
+from backend.app.services.signals.registry import SignalPluginRegistry
 
 
 class TypicalPriceParams(BaseModel):
@@ -636,10 +683,12 @@ a new plugin lands in the `charts` subsystem, which owns the `signals` prefix.
 Keys outside the plugin's space stay in the `charts` subsystem, where `add` puts them by itself:
 the parameter captions and tooltips named by `x-i18n-key` and `x-tooltip-key`
 (`chartSettings.params.*`, `chartSettings.tooltips.*`), the units (`signals.units.*`), and the
-keys several plugins share — `signals.reference.zero`, and `signals.riskRollingReturn.*`, the space
-of the two rolling-return plugins. `./dev.py test utils gate-plugin-i18n-ownership` keeps every key
-the plugin declares in its space — `display_name_key`, `description_key`, and the `label_key` and
-`description_key` of its outputs, reference levels and regions — in its fragment
+keys several plugins share — `signals.reference.zero`, and `signals.tooltips.riskWindow`, the
+window tooltip of Rolling Volatility, Sharpe and Beta. A tooltip inside the plugin's space belongs
+to its fragment like any other key: `calendar_rolling_return` keeps
+`signals.riskRollingReturn.windowTooltip` there. `./dev.py test utils gate-plugin-i18n-ownership`
+keeps every key the plugin declares in its space — `display_name_key`, `description_key`, and the
+`label_key` and `description_key` of its outputs, reference levels and regions — in its fragment
 ([A Plugin's Translations](registry_pattern.md#plugin-translations)).
 
 ---
@@ -667,8 +716,12 @@ period: int = Field(
 `x-suffix` names the unit shown next to the input. A period counted in sessions
 declares `"x-suffix": "sessions"` and the shared tooltip
 `chartSettings.tooltips.sessionPeriod`, unless the period needs its own explanation
-(EMA, MACD/PPO, and Stochastic RSI keep dedicated tooltip keys). A calendar window
-declares `"x-suffix": "days"` (`calendar_rolling_return` and the rolling risk windows).
+(EMA, MACD/PPO, and Stochastic RSI keep dedicated tooltip keys). A window over the
+prepared return series counts its return observations, one per quote day with a return, and
+declares `"x-suffix": "observations"` with the shared tooltip `signals.tooltips.riskWindow`:
+the `window` of Rolling Volatility, Sharpe and Beta. A calendar window declares
+`"x-suffix": "days"`: the `window_days` of `calendar_rolling_return`, with its own tooltip
+`signals.riskRollingReturn.windowTooltip`.
 `SignalParamControl.svelte` renders the suffix through the i18n key
 `signals.units.<suffix>` and falls back to the raw value when the key is missing: a
 symbol such as `%` or `σ` needs no key, while a word unit needs `signals.units.<suffix>`
@@ -742,7 +795,9 @@ event selection, and tests.
 2. Define a strict Pydantic parameter model.
 3. Declare required price fields/events and compatible domains.
 4. Decide what the periods count: sessions (keep the inherited
-   `computes_on_quote_days = True`, declare `"x-suffix": "sessions"`) or a calendar
+   `computes_on_quote_days = True`, declare `"x-suffix": "sessions"`), the return
+   observations of the prepared series (`uses_prepared_asset_series`,
+   `computes_on_quote_days = False`, `"x-suffix": "observations"`), or a calendar
    span (`computes_on_quote_days = False`, `"x-suffix": "days"`).
 5. Declare every canonical output in `output_specs`.
 6. If AI Export will curate the plugin, declare fixed or parameter-matched
@@ -787,7 +842,8 @@ Useful commands:
 - Never compact missing dates or fields silently; dropping the carried days from a
   quote-day plugin's input is the declared contract, not compaction.
 - Count a period over trading activity in sessions (inherited
-  `computes_on_quote_days = True`); a window that is a calendar span by definition sets
+  `computes_on_quote_days = True`); a window over the prepared return series counts return
+  observations and declares them; a window that is a calendar span by definition sets
   `computes_on_quote_days = False` and declares days.
 - Return canonical line, area, bar, or band series only.
 - Use finite numeric output; `NaN` may represent warm-up gaps, infinity may not.

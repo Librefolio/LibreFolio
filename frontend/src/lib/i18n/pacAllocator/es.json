@@ -196,7 +196,8 @@
           "weight": "Peso",
           "subtitle": "Cuánto pesa hoy cada uno de estos activos en los brókeres marcados, contando solo estos activos: juntos suman el 100 %. El efectivo y los demás activos que tienes no cuentan.",
           "changeColumn": "Objetivo",
-          "confirmApply": "Reemplazar"
+          "confirmApply": "Reemplazar",
+          "valuedAtCost": "valorado al coste · sin precio"
         },
         "fx": {
           "intro": "Los tipos que necesita el cálculo, uno por cada par de divisas en juego. «Auto» usa el tipo guardado en LibreFolio, «Manual» un tipo propio.",
@@ -425,7 +426,11 @@
           "structureInvalid": "Un campo no cumple el contrato del planificador: {path}.",
           "targetInvalid": "El objetivo no es un número desde 0.",
           "targetTotalNotHundred": "El total de los objetivos es {total} %, debe ser 100 % (control).",
-          "valuationCurrencyMissing": "Falta la divisa de valoración."
+          "valuationCurrencyMissing": "Falta la divisa de valoración.",
+          "selectedNegative": "«Importe a usar» no puede ser negativo.",
+          "declaredNegative": "«Liquidez declarada» no puede ser negativo.",
+          "contributionAmountNegative": "El importe de la aportación no puede ser negativo.",
+          "modeStepNotPositive": "El paso de orden debe ser mayor que cero."
         },
         "removal": {
           "cash": "Fila de efectivo {broker} · {currency}",
@@ -451,8 +456,8 @@
             "finalShare": "Parte después del plan",
             "targetShareHelp": "La parte que elegiste para este activo en el paso Objetivos.",
             "finalShareHelp": "La parte del activo en el valor de todos estos activos después del plan. Compárala con la parte objetivo para ver cómo cambia el equilibrio entre los activos.",
-            "targetValueHelp": "Lo que valdría el activo con exactamente su parte objetivo: parte objetivo × base de los objetivos (lo ya invertido en estos activos más el efectivo utilizable).",
-            "finalValueHelp": "Lo que vale el activo después del plan: las unidades que tenías más las compradas, al precio de cotización y, cuando hace falta, al tipo de cambio del paso Cambio."
+            "targetValueHelp": "Lo que valdría el activo con exactamente su parte objetivo: parte objetivo × base de los objetivos. En un PAC, que parte de cero, la base es el efectivo utilizable.",
+            "finalValueHelp": "Lo que vale el activo después del plan: las unidades que compra el plan, al precio de cotización y, cuando hace falta, al tipo de cambio del paso Cambio. En un PAC, que parte de cero, coincide con el valor comprado."
           },
           "badges": {
             "decimalVerified": "Verificado en Decimal",

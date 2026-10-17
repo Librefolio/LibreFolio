@@ -1,18 +1,21 @@
 /**
- * colors.test.ts — Unit tests for `hexToHsl()`, the exact inverse of `hslToHex()`.
+ * colors.test.ts — `hexToHsl()`, the exact inverse of `hslToHex()` (`$lib/utils/colors`).
  *
- * Why this file exists: the allocation charts derive a *related* shade from a
- * hand-written hex palette. That only works if going hex → HSL → hex is lossless
- * and if a malformed colour degrades to `null` (so the caller can keep the
- * original string) rather than to black — a black slice is an invisible bug,
- * a `null` is a branch the caller can handle.
+ * Why the round trip matters: a caller that moves a colour in HSL — a lightness step, a hue rotation — and writes it
+ * back must get the colour it started from when it moves nothing. That holds only if hex → HSL → hex is lossless
+ * (within one unit per channel, the rounding of `hslToHex`) and if a malformed colour degrades to `null`, a branch the
+ * caller can handle, rather than to black — a black slice is an invisible bug.
  *
- * The palettes below are **read from the two components that own them** —
- * `PALETTE_LIGHT` and `PALETTE_DARK` in `AllocationPieChart.svelte`
- * (src/lib/components/charts/) and in `AllocationHistoryChart.svelte`
- * (src/lib/components/dashboard/) — by name, through `$test/sourcePalettes`. So
- * an edit there is measured here. (They used to be copies, and a copy agrees
- * with itself: an edited palette left this file green.)
+ * **The colours it is proven on are the ones the charts draw today**: the category colours of the designer's round 2
+ * (GR1, D-T17) — every asset-type family, every sector and the engine's two buckets, in both themes — read through
+ * `categoryColor` (`$lib/theme/chartCategories`), the charts' one read point. So an edit of the designer's tables is
+ * measured here.
+ *
+ * Until round 2 the allocation charts derived a family's shades in HSL from hand-written 14-slot palettes, and this file
+ * measured those palettes. The shades are now OKLab mixes (`$lib/theme/chartShades`) and the palettes are gone, so
+ * `hexToHsl` has no production caller left; `hslToHex` draws the measure tool's lines (`MeasurePanel.svelte`). What the
+ * category tables must be — their slots, no repeat, how far apart — is `src/__tests__/palettes.test.ts`'s and
+ * `src/lib/theme/chartCategories.test.ts`'s, not repeated here.
  *
  * No runes, no DOM: this stays in the default `node` environment.
  *
@@ -20,38 +23,18 @@
  */
 import {describe, expect, it} from 'vitest';
 
-import {PALETTE_SLOTS, paletteDefects, readSourcePalette} from '$test/sourcePalettes';
+import {CATEGORY_BUCKETS, CATEGORY_KEYS, categoryColor, type CategoryKind} from '$lib/theme/chartCategories';
 
 import {hexToHsl, hslToHex} from '../colors';
 
 // =============================================================================
-// The four real palettes — read from the components that declare them
+// The colours under test — the category colours, read as the charts read them
 // =============================================================================
 
-const PIE_CHART = new URL('../../components/charts/AllocationPieChart.svelte', import.meta.url);
-const HISTORY_CHART = new URL('../../components/dashboard/AllocationHistoryChart.svelte', import.meta.url);
+const KINDS: readonly CategoryKind[] = ['type', 'sector'];
 
-/** `PALETTE_LIGHT` in `AllocationPieChart.svelte`. */
-const PIE_PALETTE_LIGHT = readSourcePalette(PIE_CHART, 'PALETTE_LIGHT');
-/** `PALETTE_DARK` in `AllocationPieChart.svelte`. */
-const PIE_PALETTE_DARK = readSourcePalette(PIE_CHART, 'PALETTE_DARK');
-/** `PALETTE_LIGHT` in `AllocationHistoryChart.svelte`. */
-const HISTORY_PALETTE_LIGHT = readSourcePalette(HISTORY_CHART, 'PALETTE_LIGHT');
-/** `PALETTE_DARK` in `AllocationHistoryChart.svelte`. */
-const HISTORY_PALETTE_DARK = readSourcePalette(HISTORY_CHART, 'PALETTE_DARK');
-
-const ALL_PALETTES: ReadonlyArray<readonly [string, readonly string[]]> = [
-    ['AllocationPieChart PALETTE_LIGHT', PIE_PALETTE_LIGHT],
-    ['AllocationPieChart PALETTE_DARK', PIE_PALETTE_DARK],
-    ['AllocationHistoryChart PALETTE_LIGHT', HISTORY_PALETTE_LIGHT],
-    ['AllocationHistoryChart PALETTE_DARK', HISTORY_PALETTE_DARK],
-];
-
-/** Each chart's two themes, paired slot by slot (the comment above the constants in `AllocationHistoryChart.svelte`). */
-const THEME_PAIRS: ReadonlyArray<readonly [string, readonly string[], readonly string[]]> = [
-    ['AllocationPieChart', PIE_PALETTE_LIGHT, PIE_PALETTE_DARK],
-    ['AllocationHistoryChart', HISTORY_PALETTE_LIGHT, HISTORY_PALETTE_DARK],
-];
+/** Each table in each theme, its keys and the two buckets beside it, read through `categoryColor`. */
+const TABLES: ReadonlyArray<readonly [string, readonly string[]]> = KINDS.flatMap((kind) => [false, true].map((dark) => [`${kind} ${dark ? 'dark' : 'light'}`, [...CATEGORY_KEYS[kind], ...CATEGORY_BUCKETS].map((key) => categoryColor(kind, key, dark))] as const));
 
 /** Split a `#rrggbb` (or bare `rrggbb`) into its three 0-255 channels. */
 function channels(hex: string): [number, number, number] {
@@ -60,25 +43,28 @@ function channels(hex: string): [number, number, number] {
 }
 
 // =============================================================================
-// The palettes under test — what was read, so no loop below can pass on nothing
+// The colours under test — checked first, so no loop below can pass on nothing
 // =============================================================================
 
-describe('the palettes under test', () => {
-    it.each(ALL_PALETTES)(`%s is ${PALETTE_SLOTS} distinct #rrggbb colours`, (_name, palette) => {
-        expect(paletteDefects(palette), `the palette the chart draws with is not ${PALETTE_SLOTS} distinct colours: two slices would share one, or a slot is missing`).toEqual([]);
+describe('the colours under test', () => {
+    it('are the category tables of both kinds, in both themes, the keys certainly there among them', () => {
+        expect(TABLES.map(([name]) => name)).toEqual(['type light', 'type dark', 'sector light', 'sector dark']);
+        expect(CATEGORY_KEYS.type, 'barrier: the type table').toEqual(expect.arrayContaining(['STOCK', 'ETF', 'OTHER']));
+        expect(CATEGORY_KEYS.sector, 'barrier: the sector table').toEqual(expect.arrayContaining(['Technology', 'Health Care', 'Other']));
     });
 
-    it.each(THEME_PAIRS)('%s pairs its light and dark palettes slot by slot', (_name, light, dark) => {
-        expect(dark.length, 'the two themes are not the same length: a slot would change colour family when the theme changes').toBe(light.length);
+    it.each(TABLES)('%s: every colour is a #rrggbb, the notation hexToHsl reads', (_name, colours) => {
+        expect(colours.length, 'barrier: the table has colours').toBeGreaterThan(CATEGORY_BUCKETS.length);
+        expect(colours.filter((colour) => !/^#[0-9a-f]{6}$/i.test(colour))).toEqual([]);
     });
 });
 
 // =============================================================================
-// Round trip — the property the whole shading feature rests on
+// Round trip — the property the whole HSL conversion rests on
 // =============================================================================
 
 describe('hexToHsl — round trip through hslToHex', () => {
-    it.each(ALL_PALETTES)('reproduces every entry of %s within ±1 per channel', (_name, palette) => {
+    it.each(TABLES)('reproduces every colour of the %s table within ±1 per channel', (_name, palette) => {
         // Positive barrier first: an empty palette would make the loop below
         // pass by doing nothing at all.
         expect(palette.length).toBeGreaterThan(0);
@@ -97,7 +83,7 @@ describe('hexToHsl — round trip through hslToHex', () => {
         }
     });
 
-    it.each(ALL_PALETTES)('keeps h in 0-360 and s/l in 0-100 for every entry of %s', (_name, palette) => {
+    it.each(TABLES)('keeps h in 0-360 and s/l in 0-100 for every colour of the %s table', (_name, palette) => {
         expect(palette.length).toBeGreaterThan(0);
 
         for (const hex of palette) {
@@ -149,7 +135,7 @@ describe('hexToHsl — accepted notations', () => {
         expect(hexToHsl('  #0d9488  ')).toEqual(canonical);
     });
 
-    it.each(ALL_PALETTES)('accepts every entry of %s with and without the #', (_name, palette) => {
+    it.each(TABLES)('accepts every colour of the %s table with and without the #', (_name, palette) => {
         expect(palette.length).toBeGreaterThan(0);
         for (const hex of palette) {
             const withHash = hexToHsl(hex);

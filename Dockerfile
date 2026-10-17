@@ -81,11 +81,15 @@ ARG GID=1000
 #   - gosu: privilege drop in entrypoint (like postgres/mysql/redis images)
 #   - sqlite3: CLI for manual DB inspection / ad-hoc one-off fixes on a prod
 #     volume. Schema migrations are now applied automatically at startup — the
-#     app runs `alembic upgrade head` in its lifespan (see backend/app/main.py::
-#     ensure_database_exists), so upgrading the image over an existing data
+#     app runs `alembic upgrade head` in its lifespan (see backend/app/services/
+#     platform/database_bootstrap.py::ensure_database_exists), so upgrading the image over an existing data
 #     volume no longer needs manual migration; sqlite3 stays for inspection only.
+#   - tzdata, tzdata-legacy: the IANA time zone database, old names included
+#     (Asia/Calcutta, US/Eastern…). Python's zoneinfo reads it from the system,
+#     and Debian keeps the old names in tzdata-legacy: without it, a scheduler
+#     time zone saved under an old name would fall back to UTC.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gosu sqlite3 \
+    gosu sqlite3 tzdata tzdata-legacy \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -147,7 +151,8 @@ ENV HOST=0.0.0.0 \
     LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker \
     LOG_LEVEL=INFO
 
-EXPOSE 6040 6041
+# The server listens on 6040 only: the image has no test mode.
+EXPOSE 6040
 
 # Health check — on the port the CMD binds (6040), like docker-compose.yml. PORT is
 # the host side of the mapping ("${PORT:-6040}:6040"): inside the container

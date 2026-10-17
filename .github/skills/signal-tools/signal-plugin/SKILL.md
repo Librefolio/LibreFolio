@@ -14,7 +14,7 @@ description: "Use this skill when creating, extending, or reviewing a LibreFolio
 A signal plugin teaches LibreFolio **one technical indicator** (SMA, RSI, Bollinger Bands,
 rolling drawdown, …). It lives in `backend/app/services/signal_plugins/<code>/` (one folder per
 indicator: `plugin.py` holds the code, `i18n/` its `signals.<ns>.*` texts), extends `SignalPlugin`
-(`signal_plugins/base.py`), and is auto-discovered via
+(`signals/base.py`), and is auto-discovered via
 `@register_plugin(SignalPluginRegistry)`.
 
 It is a **pure, declarative calculator**: it declares its parameters, required data, outputs
@@ -71,8 +71,9 @@ This skill is intentionally **high-level and durable**. For the precise, current
 - **Registry Pattern** — `mkdocs_src/docs/developer/architecture/patterns/registry_pattern.md`
 - **Instructions** — `.github/instructions/backend-signals.instructions.md` (backend) and
   `.github/instructions/frontend-signals.instructions.md` (frontend renderer)
-- **Reference code** — `backend/app/services/signal_plugins/base.py` and simple plugins such
-  as `sma/plugin.py` and `rsi/plugin.py`; the runtime in `signal_service.py`.
+- **Reference code** — `backend/app/services/signals/base.py` and simple plugins such
+  as `sma/plugin.py` and `rsi/plugin.py`; the runtime in `services/signals/` (`service.py` is the façade over
+  `planning.py`, `execution.py` and `validation.py`).
 
 Do not rely on this page for method signatures or exact conventions — they can change; the
 developer guide is kept up to date.

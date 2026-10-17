@@ -3,7 +3,7 @@ API v1 router.
 Aggregates all v1 endpoints.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from backend.app.api.v1 import (
     ai_export,
@@ -11,9 +11,12 @@ from backend.app.api.v1 import (
     auth,
     backup,
     brokers,
+    email,
     fx,
+    plugin_settings,
     portfolio_api,
     risk,
+    security,
     settings,
     signals,
     system,
@@ -22,20 +25,25 @@ from backend.app.api.v1 import (
     uploads,
     users,
 )
+from backend.app.api.v1.instance_block import refuse_when_blocked
 from backend.app.api.v1.utilities import router as utilities_router
 from backend.app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter()
+# On a blocked instance, every route below answers 423 but those of instance_block.ALLOWED_WHEN_BLOCKED
+router = APIRouter(dependencies=[Depends(refuse_when_blocked)])
 
 # Include sub-routers
 router.include_router(auth.router)  # Auth first (no prefix, uses /auth)
 router.include_router(ai_export.router)
 router.include_router(settings.router)  # Settings
+router.include_router(plugin_settings.router)  # Plugin settings (/settings/plugins)
 router.include_router(system.router)  # System info
 router.include_router(uploads.router)  # File uploads
 router.include_router(users.router)  # User search
+router.include_router(email.router)  # Email: state and test email (admin)
+router.include_router(security.router)  # Security: the checks of the «Security» tab (admin)
 router.include_router(fx.fx_router)
 router.include_router(assets.asset_router)
 router.include_router(transactions.tx_router)

@@ -120,19 +120,30 @@ describe('RiskMetricCard', () => {
             await setupI18n();
             render(RiskMetricCard, {props: BASE});
 
+            // The value is there, in the neutral text role: it is also the barrier that makes the
+            // absence below mean "no strip" rather than "nothing rendered yet".
+            expect(screen.getByTestId('card-value').className).toContain('text-lf-primary');
             // Neutral is the default: a risk number is often neither good nor bad.
             expect(screen.queryByTestId('card-accent')).not.toBeInTheDocument();
         });
 
-        it('draws a green strip for positive and a red strip for negative', async () => {
+        it('draws the gain role for positive and the loss role for negative', async () => {
             await setupI18n();
+            // Colour roles, not palette shades: `bg-lf-gain` and `text-lf-loss` take their value
+            // from the theme, so there is no `dark:` half left to pin. Each half also asserts the
+            // other role is absent — after the flip the gain role must be gone, not merely joined
+            // by the loss one, and a swap of the two fails on either side.
             const rendered = render(RiskMetricCard, {props: {...BASE, sentiment: 'positive'}});
-            expect(screen.getByTestId('card-accent').className).toContain('bg-green-500');
-            expect(screen.getByTestId('card-value').className).toContain('text-green-700');
+            expect(screen.getByTestId('card-accent').className).toContain('bg-lf-gain');
+            expect(screen.getByTestId('card-accent').className).not.toContain('bg-lf-loss');
+            expect(screen.getByTestId('card-value').className).toContain('text-lf-gain');
+            expect(screen.getByTestId('card-value').className).not.toContain('text-lf-loss');
 
             await rendered.rerender({...BASE, sentiment: 'negative'});
-            expect(screen.getByTestId('card-accent').className).toContain('bg-red-500');
-            expect(screen.getByTestId('card-value').className).toContain('text-red-700');
+            expect(screen.getByTestId('card-accent').className).toContain('bg-lf-loss');
+            expect(screen.getByTestId('card-accent').className).not.toContain('bg-lf-gain');
+            expect(screen.getByTestId('card-value').className).toContain('text-lf-loss');
+            expect(screen.getByTestId('card-value').className).not.toContain('text-lf-gain');
         });
     });
 

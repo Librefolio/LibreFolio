@@ -9,6 +9,9 @@
      */
 
     import {cachePreview, extractFileIdFromUrl, getCachedPreview, parsePreviewWidth} from '$lib/stores/files/imagePreviewCache';
+    import {imagePlaceholderColors} from '$lib/theme/drawnColors';
+    import {chartRoles} from '$lib/theme/roleColors';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     interface Props {
         /** Normal mode: direct image URL */
@@ -36,28 +39,46 @@
     // Determine if we're in cache mode
     const cacheMode = $derived(!!(fileId && previewUrl));
 
+    // The placeholder's colours are roles. An SVG data URL cannot follow a `var()`, so they are read on the container
+    // while the placeholder shows, and again at a theme switch or a Designer Lab edit (contract C4) until it goes.
+    let container: HTMLDivElement | undefined = $state(undefined);
+    let placeholderColors = $state(imagePlaceholderColors(chartRoles(isDarkTheme())));
+
+    $effect(() => {
+        if (loaded || error) return;
+        const scope = container;
+        const refresh = () => (placeholderColors = imagePlaceholderColors(chartRoles(isDarkTheme(), scope)));
+        refresh();
+        const themeChange = onThemeClassChange(refresh);
+        const labChange = onChartColorsChange(refresh);
+        return () => {
+            themeChange.disconnect();
+            labChange.disconnect();
+        };
+    });
+
     // Placeholder SVGs
-    const placeholders: Record<string, string> = {
+    const placeholders: Record<string, string> = $derived({
         generic: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-            <rect width="100" height="100" fill="#e5e7eb"/>
-            <path d="M30 65 L50 40 L70 65" stroke="#9ca3af" stroke-width="3" fill="none"/>
-            <circle cx="35" cy="35" r="8" fill="#9ca3af"/>
+            <rect width="100" height="100" fill="${placeholderColors.background}"/>
+            <path d="M30 65 L50 40 L70 65" stroke="${placeholderColors.shape}" stroke-width="3" fill="none"/>
+            <circle cx="35" cy="35" r="8" fill="${placeholderColors.shape}"/>
         </svg>`,
         avatar: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-            <rect width="100" height="100" fill="#e5e7eb"/>
-            <circle cx="50" cy="35" r="18" fill="#9ca3af"/>
-            <ellipse cx="50" cy="85" rx="30" ry="25" fill="#9ca3af"/>
+            <rect width="100" height="100" fill="${placeholderColors.background}"/>
+            <circle cx="50" cy="35" r="18" fill="${placeholderColors.shape}"/>
+            <ellipse cx="50" cy="85" rx="30" ry="25" fill="${placeholderColors.shape}"/>
         </svg>`,
         broker: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-            <rect width="100" height="100" fill="#e5e7eb"/>
-            <rect x="20" y="25" width="60" height="50" rx="5" stroke="#9ca3af" stroke-width="3" fill="none"/>
-            <path d="M35 50 h30 M35 60 h20" stroke="#9ca3af" stroke-width="3"/>
+            <rect width="100" height="100" fill="${placeholderColors.background}"/>
+            <rect x="20" y="25" width="60" height="50" rx="5" stroke="${placeholderColors.shape}" stroke-width="3" fill="none"/>
+            <path d="M35 50 h30 M35 60 h20" stroke="${placeholderColors.shape}" stroke-width="3"/>
         </svg>`,
         icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-            <rect width="100" height="100" fill="#e5e7eb" rx="10"/>
-            <circle cx="50" cy="50" r="25" stroke="#9ca3af" stroke-width="3" fill="none"/>
+            <rect width="100" height="100" fill="${placeholderColors.background}" rx="10"/>
+            <circle cx="50" cy="50" r="25" stroke="${placeholderColors.shape}" stroke-width="3" fill="none"/>
         </svg>`,
-    };
+    });
 
     const placeholderDataUrl = $derived(`data:image/svg+xml,${encodeURIComponent(placeholders[placeholder])}`);
 
@@ -166,7 +187,7 @@
     }
 </script>
 
-<div class={containerClass} style="width: {width}; height: {height};">
+<div bind:this={container} class={containerClass} style="width: {width}; height: {height};">
     {#if !loaded && !error}
         <img src={placeholderDataUrl} {alt} class="placeholder-img" />
     {/if}

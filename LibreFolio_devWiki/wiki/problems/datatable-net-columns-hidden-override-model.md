@@ -43,5 +43,5 @@ v4 FEE/TAX work (see [[decisions/fifo-v4-gross-net-status-model]]), fixed in the
 | File |
 |------|
 | `frontend/src/lib/components/table/DataTable.svelte` |
-| `frontend/src/lib/components/brokers/lots/UnifiedLotsTable.svelte` |
+| `frontend/src/lib/features/brokers/lots/UnifiedLotsTable.svelte` |
 | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/post-implementation-review-v5.md` §2.1-2.6 |

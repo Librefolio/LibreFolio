@@ -39,6 +39,6 @@ wrong key and a wrong signature.
 
 | Role | Path |
 |------|------|
-| `get_effective_base_currency()` | `backend/app/services/settings_service.py` |
+| `get_effective_base_currency()` | `backend/app/services/accounts/settings_service.py` |
 | A caller | `backend/app/services/lots_analysis_service.py` |
 | Journal (P0-1) | `LibreFolio_developer_journal/Release_2/phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md` |

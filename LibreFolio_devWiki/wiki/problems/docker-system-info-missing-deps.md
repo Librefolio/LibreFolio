@@ -21,7 +21,7 @@ Dependencies — but **only** when running from the Docker image. Local dev
 `mkdocs_src/site/` — but never `.git/`, `Pipfile`, or the frontend's
 *source* manifest `frontend/package.json` (only the compiled static site).
 
-`backend/app/api/v1/system.py` derives all three broken fields from those
+`backend/app/api/v1/system/info.py` derives all three broken fields from those
 missing sources, and each fails via a silent `try/except: pass` (by
 design, so the endpoint never 500s) — it just silently returns empty data:
 
@@ -105,8 +105,8 @@ unrelated, still-open bug discovered while verifying this fix (blocks
 | Role | Path |
 |------|------|
 | Version resolution | `backend/app/utils/runtime/version.py` |
-| System info endpoint | `backend/app/api/v1/system.py` |
+| System info endpoint | `backend/app/api/v1/system/info.py` |
 | VERSION file generation | `dev.py` (`_docker_ensure_assets_built()`) |
 | Docker image build | `Dockerfile` |
-| Frontend display | `frontend/src/lib/components/settings/tabs/AboutTab.svelte` |
+| Frontend display | `frontend/src/lib/features/settings/tabs/AboutTab.svelte` |
 | Regression tests | `backend/test_scripts/test_api/test_system_api.py` |

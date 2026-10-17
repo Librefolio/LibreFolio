@@ -16,7 +16,6 @@ The pipeline translates `*.en.md` source files into `it`, `fr`, `es`. The transl
 | Gallery | 3 files | ✅ |
 | Root and Community (Home, FAQ, Contribute, Credits) | 4 files | ✅ |
 | Developer Manual | 114 files | ❌ EN-only |
-| POC UX | 1 file | ❌ EN-only |
 
 **Total**: 208 source files → 624 translated files (3 languages)
 

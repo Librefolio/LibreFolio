@@ -1,0 +1,64 @@
+{
+  "instance": {
+    "notices": {
+      "label": "Avisos de la instancia"
+    },
+    "checks": {
+      "jwtSecret": {
+        "ok": "Las sesiones se firman con una clave definida por el administrador.",
+        "ephemeral": "No hay ninguna clave de firma de sesiones: cada reinicio cierra la sesión de todos los usuarios.",
+        "short": "La clave de firma de sesiones de {source} tiene {length} caracteres: usa al menos {minimum} caracteres aleatorios.",
+        "unreadable": "No se puede leer la clave de firma de sesiones: {reason}"
+      },
+      "secretsSetTwice": {
+        "ok": "Cada secreto está definido en un solo lugar.",
+        "found": "Definidos a la vez directamente y mediante un archivo: {variables}. Gana el valor directo y el archivo se ignora."
+      },
+      "instanceKey": {
+        "ok": "La clave de instancia se puede usar.",
+        "unusable": "No se puede usar la clave de instancia: {reason}",
+        "permissions": "{path} es accesible para otros usuarios: la carpeta debería ser 0700 y el archivo 0600."
+      },
+      "sessionCookie": {
+        "ok": "La cookie de sesión es Secure siempre que el navegador usa HTTPS.",
+        "never": "La cookie de sesión también se envía por HTTP sin cifrar (SESSION_COOKIE_SECURE=never)."
+      },
+      "clientAddress": {
+        "ok": "Desde que se inició el servidor, ninguna solicitud ha pasado por un proxy en el que LibreFolio no confía.",
+        "untrustedProxy": "Las solicitudes pasan por un proxy inverso en el que LibreFolio no confía ({headers}): los límites por dirección del visitante no se les aplican. Añade el proxy a FORWARDED_ALLOW_IPS, o indica en LIBREFOLIO_CLIENT_IP_HEADER la cabecera que establece.",
+        "publicForwarding": "Cabeceras de reenvío desde una dirección pública ignoradas ({headers}). Si un proxy con dirección pública reenvía las solicitudes, añádelo a FORWARDED_ALLOW_IPS; si no, no hay nada que hacer."
+      },
+      "frameProtection": {
+        "on": "Solo las páginas de LibreFolio pueden mostrarlo en un marco.",
+        "offSelfHosted": "Las páginas en otra dirección, como tus paneles, pueden mostrar LibreFolio en un marco: el valor predeterminado de una instalación propia.",
+        "offManaged": "La protección de marcos está desactivada en el perfil managed: cualquier sitio puede mostrar LibreFolio en un marco. Activa LIBREFOLIO_FRAME_PROTECTION, como hace por defecto el perfil managed."
+      },
+      "cspReportOnly": {
+        "on": "Las páginas de la aplicación llevan una Content-Security-Policy de solo informe: el navegador lista en su consola lo que bloquearía, y no bloquea nada.",
+        "offSelfHosted": "Ninguna Content-Security-Policy de solo informe: el valor predeterminado de una instalación propia.",
+        "offManaged": "La Content-Security-Policy de solo informe está desactivada en el perfil managed: los navegadores no listan nada de lo que bloquearía. Activa LIBREFOLIO_CSP_REPORT_ONLY, como hace por defecto el perfil managed."
+      },
+      "logLevel": {
+        "ok": "El nivel de registro es adecuado para producción.",
+        "verbose": "El nivel de registro es {log_level}: el registro guarda detalles de funcionamiento; en producción basta con INFO."
+      },
+      "pluginSecrets": {
+        "ok": "Los secretos de plugins guardados se pueden leer con la clave de instancia.",
+        "unreadable": "{count, plural, one {# secreto de plugin guardado no se puede leer con la clave de instancia: vuelve a introducirlo en Configuración → Plugins o restaura la clave de instancia con la que se guardó.} other {# secretos de plugins guardados no se pueden leer con la clave de instancia: vuelve a introducirlos en Configuración → Plugins o restaura la clave de instancia con la que se guardaron.}}"
+      },
+      "testMode": {
+        "off": "El modo de prueba está desactivado.",
+        "testLane": "El modo de prueba está activado, en una vía del ejecutor de pruebas.",
+        "outsideTestLane": "El modo de prueba está activado fuera del ejecutor de pruebas: se ofrecen los proveedores de datos hechos para las pruebas, los datos se guardan en {data_dir} y el archivo .env no se lee. Quita LIBREFOLIO_TEST_MODE."
+      }
+    },
+    "block": {
+      "title": "Esta instancia está bloqueada",
+      "adminDescription": "El proveedor de alojamiento ha bloqueado esta instancia, por ejemplo porque su suscripción no está pagada. Regulariza la situación con el proveedor para desbloquearla.",
+      "userDescription": "El proveedor de alojamiento ha bloqueado esta instancia, por ejemplo porque su suscripción no está pagada. Pide a tu administrador una copia de seguridad de tus datos.",
+      "deletionDate": "La instancia y sus datos se eliminarán el {date}.",
+      "manageSubscription": "Gestionar la suscripción",
+      "backupTitle": "Guarda una copia de los datos"
+    }
+  }
+}

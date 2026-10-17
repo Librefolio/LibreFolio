@@ -75,7 +75,10 @@ graph LR
 | Role | Path |
 |------|------|
 | Canonical contracts | `backend/app/schemas/signals.py` |
-| Signal service | `backend/app/services/signal_service.py` |
+| Signal service (façade) | `backend/app/services/signals/service.py` |
+| Batch plan, dedup, warm-up | `backend/app/services/signals/planning.py` |
+| Execution, availability, failure isolation | `backend/app/services/signals/execution.py` |
+| Output contract and sanitization | `backend/app/services/signals/validation.py` |
 | Plugin registry | `backend/app/services/provider_registry.py` |
 | Production plugins | `backend/app/services/signal_plugins/` |
 | Catalog + schema mapper | `frontend/src/lib/charts/signals/catalogMapper.ts`, `schemaMapper.ts` |

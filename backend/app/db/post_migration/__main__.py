@@ -9,12 +9,15 @@ failed its integrity check. Plan ``34_accountAndIdReuse`` §2.3.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import sys
 from pathlib import Path
 from typing import Optional
 
-from backend.app.config import get_data_dir
+from backend.app.config import get_data_dir, get_settings
 from backend.app.db.post_migration import configured_sqlite_path, run_post_migration_fixes
+from backend.app.logging_config import configure_logging
+from backend.app.services.transactions.lone_transfer_legs import run_lone_giving_legs
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -31,6 +34,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
     data_dir = args.data_dir or get_data_dir()
     report = run_post_migration_fixes(db_path, data_dir, dry_run=args.dry_run)
+    # Then, as at startup, the lone giving TRANSFER legs at their Auto cost (decision 47): listed with it on a dry run.
+    legs, legs_error = [], None
+    if report.integrity_ok and not report.failed:
+        try:
+            legs = asyncio.run(run_lone_giving_legs(db_path, dry_run=args.dry_run))
+        except Exception as exc:  # noqa: BLE001 — reported like a failed fix
+            legs_error = str(exc)
 
     print(f"Database: {db_path}")
     print(f"Integrity check: {'ok' if report.integrity_ok else 'FAILED'}")
@@ -42,8 +52,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"Backup kept: {report.backup_path}")
     for error in report.errors:
         print(f"Error: {error}")
-    return 1 if report.failed else 0
+    for leg in legs:
+        print(leg.describe(dry_run=args.dry_run))
+    if legs_error is not None:
+        print(f"Error: lone transfer legs: {legs_error}")
+    return 1 if report.failed or legs_error is not None else 0
 
 
 if __name__ == "__main__":
+    # A run by hand logs as the server does at startup: one line per row a fix changes, and how long it took. On the
+    # console only, so the script writes nothing in the data dir but what the fixes change. main() called from code
+    # configures nothing.
+    configure_logging(get_settings().LOG_LEVEL, enable_file_logging=False)
     sys.exit(main())

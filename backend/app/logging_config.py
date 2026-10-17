@@ -29,16 +29,19 @@ Log rotation: Weekly with 52 weeks (1 year) retention, gzip compression.
 import gzip
 import logging
 import logging.handlers
+import re
 import shutil
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote_plus
 
 import structlog
 import structlog.stdlib
 from structlog.types import EventDict
 
 from backend.app.config import get_data_dir
+from backend.app.utils.runtime.secret_masking import SecretMaskingFilter, mask_event_dict
 
 # TRACE level constant — importable by other modules
 TRACE: int = 5
@@ -114,6 +117,59 @@ def _compress_rotated_file(source: str, dest: str) -> None:  # pragma: no cover
     Path(source).unlink()
 
 
+#: A query parameter in a log line: separator, name, value. A value ends at the next separator, so a URL nested unencoded
+#: in another parameter's value is read parameter by parameter too.
+_QUERY_PARAMETER = re.compile(r"([?&])([^=&#?\s]*)=([^&#?\s]*)")
+#: A word that makes a parameter name a credential's, in any case.
+_CREDENTIAL_WORD = re.compile(r"token|secret|password|passwd|api[-_]?key|signature|ticket", re.IGNORECASE)
+
+
+def _is_credential_name(name: str) -> bool:
+    """Whether a query parameter named ``name`` carries a credential, judged on the name as the app reads it (decoded)."""
+    decoded = unquote_plus(name)
+    return decoded.lower() == "code" or _CREDENTIAL_WORD.search(decoded) is not None
+
+
+def mask_query_credentials(text: str) -> str:
+    """``text`` with the value of every credential-like query parameter replaced by ``***``; the rest unchanged.
+
+    A credential-like parameter is named exactly ``code``, or its name holds token, secret, password, passwd,
+    api_key/apikey/api-key, signature or ticket (the restore's outcome ticket, lot B5c), in any case and once
+    percent-decoded. A value is not decoded: a URL encoded
+    inside another parameter's value is not read.
+    """
+    return _QUERY_PARAMETER.sub(lambda match: f"{match[1]}{match[2]}=***" if _is_credential_name(match[2]) else match[0], text)
+
+
+class _QueryCredentialFilter(logging.Filter):
+    """Mask credentials in the request lines uvicorn logs: HTTP on ``uvicorn.access``, WebSocket handshakes on ``uvicorn.error``.
+
+    uvicorn passes the request's path, query string included, as one argument of the record: ``(client, method, path,
+    http_version, status)`` for an HTTP request, ``(client, path[, status])`` for a WebSocket handshake. A ``?token=…``
+    typed by hand would reach the log in clear; the links the app writes carry their tokens in the URL fragment, which
+    the browser never sends.
+
+    Every string argument is masked where it stands, so the arguments keep their number and order (uvicorn's
+    ``AccessFormatter`` unpacks them); a message logged without arguments is masked itself. A format string with
+    arguments is never rewritten, so its placeholders keep matching them.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if not args:
+            if isinstance(record.msg, str):
+                record.msg = mask_query_credentials(record.msg)
+        elif isinstance(args, tuple):
+            masked = tuple(mask_query_credentials(arg) if isinstance(arg, str) else arg for arg in args)
+            if masked != args:
+                record.args = masked
+        return True
+
+
+_QUERY_CREDENTIAL_FILTER = _QueryCredentialFilter()
+_SECRET_MASKING_FILTER = SecretMaskingFilter()
+
+
 def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True) -> None:
     """
     Configure structured logging for the application.
@@ -133,6 +189,8 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     root_logger = logging.getLogger()
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
+        # basicConfig(force=True) below would close it, but finds nothing left: a log file would stay open
+        handler.close()
 
     # Silence verbose third-party loggers
     # aiosqlite logs every SQL operation at DEBUG level
@@ -159,6 +217,10 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     # urllib3 (HTTP pool) and asyncio (event-loop selector) are also verbose at DEBUG
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
+    # uvicorn's request lines (HTTP on uvicorn.access, WebSocket handshakes on uvicorn.error): credentials in a query
+    # string are masked. The same filter object, so a second call never adds it twice.
+    for uvicorn_logger in ("uvicorn.access", "uvicorn.error"):
+        logging.getLogger(uvicorn_logger).addFilter(_QUERY_CREDENTIAL_FILTER)
 
     # Configure handlers
     handlers = []
@@ -166,6 +228,8 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     # Console handler (always enabled) - human-readable format
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(numeric_level)
+    # The secrets a plugin call carries, masked in the records of every logger while the call runs (plugin settings).
+    console_handler.addFilter(_SECRET_MASKING_FILTER)
     handlers.append(console_handler)
 
     # File handler with weekly rotation (if enabled)
@@ -183,6 +247,7 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
             utc=True,  # Use UTC for rotation timing
         )
         file_handler.setLevel(numeric_level)
+        file_handler.addFilter(_SECRET_MASKING_FILTER)
 
         # Enable compression of rotated files
         file_handler.rotator = _compress_rotated_file
@@ -202,6 +267,8 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
+        # After the traceback is formatted and before rendering: JSON would escape a secret into another text.
+        mask_event_dict,
         structlog.processors.UnicodeDecoder(),
         structlog.processors.JSONRenderer(),
     ]

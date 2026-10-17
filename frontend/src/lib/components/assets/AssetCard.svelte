@@ -21,8 +21,9 @@
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {assetTypeBadgeClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     // =========================================================================
     // Props
@@ -46,9 +47,9 @@
         livePrice?: number | null;
         /** Direction of last price change (for flash animation) */
         livePriceDirection?: LivePriceDirection;
-        /** Delta percent (first vs last in range — from chart data) */
+        /** Δ over the range on screen, in percent: the backend's (X-R59), null where it has none */
         deltaPercent?: number | null;
-        /** Delta absolute (from chart data) */
+        /** Δ over the range on screen, absolute, in the asset's currency: the backend's (X-R59) */
         deltaAbs?: number | null;
         /** Date range start (passed to detail page on navigation) */
         dateStart?: string;
@@ -130,15 +131,15 @@
     let cardBorderClass = $derived.by(() => {
         switch (livePriceDirection) {
             case 'up':
-                return 'border-emerald-300 dark:border-emerald-600';
+                return 'border-lf-gain/50';
             case 'down':
-                return 'border-red-300 dark:border-red-600';
+                return 'border-lf-loss/50';
             default:
-                return asset.active ? 'border-gray-100 dark:border-slate-700' : 'border-amber-200 dark:border-amber-800';
+                return asset.active ? 'border-lf-subtle' : 'border-lf-warning-line';
         }
     });
 
-    let cardSurfaceClass = $derived(asset.active ? 'bg-white hover:bg-libre-green/5 dark:bg-slate-800 dark:hover:bg-slate-700' : 'bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-950/30 dark:hover:bg-amber-900/40');
+    let cardSurfaceClass = $derived(asset.active ? 'bg-lf-card hover:bg-lf-hover' : 'bg-lf-warning-soft hover:bg-lf-warning-line/50');
 
     // =========================================================================
     // Helpers
@@ -165,9 +166,9 @@
 </script>
 
 <div
-    class="w-full text-left rounded-xl shadow-sm border overflow-hidden cursor-pointer
-       transition-all duration-300 hover:shadow-lg hover:border-libre-green/30
-       focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2
+    class="w-full text-left text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border overflow-hidden cursor-pointer
+       transition-all duration-300 hover:shadow-lg hover:border-lf-focus/30
+       focus:outline-none focus:ring-2 focus:ring-lf-focus focus:ring-offset-2
        {cardSurfaceClass} {cardBorderClass}"
     data-testid="asset-card-{asset.id}"
     data-lifecycle={asset.active ? 'active' : 'inactive'}
@@ -182,7 +183,7 @@
         <div class="flex items-center gap-2">
             <AssetIcon altText={asset.display_name} assetType={asset.asset_type} iconUrl={asset.icon_url} size="sm" />
             <div class="flex-1 min-w-0">
-                <span use:scrollOnOverflow class="{overflowScrollTextClass} font-semibold text-gray-800 dark:text-gray-100" title={asset.display_name}>{asset.display_name}</span>
+                <span use:scrollOnOverflow class="{overflowScrollTextClass} font-semibold text-lf-primary" title={asset.display_name}>{asset.display_name}</span>
             </div>
             <div class="flex items-center gap-1.5 shrink-0">
                 {#if asset.asset_type}
@@ -192,10 +193,10 @@
                     </span>
                 {/if}
                 {#if !asset.provider_code}
-                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"> ✏️ Manual </span>
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-lf-warning-soft text-lf-warning-on-soft"> ✏️ Manual </span>
                 {/if}
                 <button
-                    class="p-1 rounded-md transition-colors {cardViewMode === 'percentage' ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'}"
+                    class="p-1 rounded-md transition-colors {cardViewMode === 'percentage' ? 'bg-lf-selected text-lf-link' : 'text-lf-muted hover:bg-lf-neutral hover:text-lf-secondary'}"
                     data-testid="asset-card-view-toggle"
                     onclick={(e) => {
                         stop(e);
@@ -205,9 +206,9 @@
                 >
                     <Percent size={14} />
                 </button>
-                <span class="w-2 h-2 rounded-full shrink-0 {asset.active ? 'bg-emerald-500' : 'bg-red-400'}"></span>
+                <span class="w-2 h-2 rounded-full shrink-0 {asset.active ? 'bg-lf-success' : 'bg-lf-danger'}"></span>
                 {#if txCount !== undefined}
-                    <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 shrink-0" title={$t('assets.table.txCountTooltip')} data-testid="asset-card-tx-count">
+                    <span class="text-[10px] font-mono text-lf-muted shrink-0" title={$t('assets.table.txCountTooltip')} data-testid="asset-card-tx-count">
                         {txCount} tx
                     </span>
                 {/if}
@@ -220,20 +221,20 @@
         <div class="flex items-baseline gap-2">
             <span
                 class="text-xl font-mono font-bold transition-colors duration-300
-                         {livePriceDirection === 'up' ? 'text-emerald-600 dark:text-emerald-400' : livePriceDirection === 'down' ? 'text-red-500 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}"
+                         {livePriceDirection === 'up' ? SIGN_TEXT.market.gain : livePriceDirection === 'down' ? SIGN_TEXT.market.loss : 'text-lf-primary'}"
             >
-                {livePrice != null ? formatFixed(Number(livePrice), 2) : '--'}
+                {livePrice != null ? formatPrice(livePrice) : '--'}
             </span>
-            <span class="text-xs text-gray-500 dark:text-gray-400 emoji-flag">{currencyFlag(asset.currency)}</span>
-            <span class="text-xs text-gray-500 dark:text-gray-400">{asset.currency}</span>
+            <span class="text-xs text-lf-muted emoji-flag">{currencyFlag(asset.currency)}</span>
+            <span class="text-xs text-lf-muted">{asset.currency}</span>
             {#if cardViewMode === 'absolute' && deltaAbs !== null}
-                <span class="text-sm font-medium {deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                <span class="text-sm font-medium {deltaAbs >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}" data-testid="asset-range-delta" data-mode="absolute">
                     {deltaAbs >= 0 ? '▲' : '▼'}
-                    {formatFixed(Number(deltaAbs), 2, {signed: true})}
+                    {formatPrice(deltaAbs, {signed: true})}
                     {asset.currency}
                 </span>
             {:else if deltaPercent !== null}
-                <span class="text-sm font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                <span class="text-sm font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}" data-testid="asset-range-delta" data-mode="percentage">
                     {deltaPercent >= 0 ? '▲' : '▼'}
                     {formatPercent(Number(deltaPercent))}
                 </span>
@@ -258,20 +259,20 @@
             />
         {:else if loading}
             <div class="h-20 flex items-center justify-center">
-                <div class="animate-pulse bg-gray-100 dark:bg-slate-700 rounded w-full h-12"></div>
+                <div class="animate-pulse bg-lf-neutral rounded w-full h-12"></div>
             </div>
         {:else}
-            <div class="h-20 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+            <div class="h-20 flex items-center justify-center text-sm text-lf-muted">
                 {$t('common.noData')}
             </div>
         {/if}
     </div>
 
     <!-- Footer: actions -->
-    <div class="px-4 py-2.5 flex items-center justify-between border-t border-gray-50 dark:border-slate-700/50">
+    <div class="px-4 py-2.5 flex items-center justify-between border-t border-lf-subtle">
         <div class="flex items-center gap-0.5">
             <button
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                class="p-1.5 rounded-md hover:bg-lf-neutral text-lf-muted hover:text-lf-secondary transition-colors"
                 onclick={(e) => {
                     stop(e);
                     onsettings?.(asset);
@@ -281,7 +282,7 @@
                 <Settings size={15} />
             </button>
             <button
-                class="p-1.5 rounded-md transition-colors {!asset.provider_code ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600'}"
+                class="p-1.5 rounded-md transition-colors {!asset.provider_code ? 'text-lf-muted/50 cursor-not-allowed' : 'hover:bg-lf-neutral text-lf-muted hover:text-lf-warning'}"
                 disabled={!asset.provider_code || syncing}
                 onclick={(e) => {
                     stop(e);
@@ -292,7 +293,7 @@
                 <RotateCw class={syncing ? 'animate-spin' : ''} size={15} />
             </button>
             <button
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
+                class="p-1.5 rounded-md hover:bg-lf-neutral text-lf-muted hover:text-lf-link transition-colors"
                 onclick={(e) => {
                     stop(e);
                     onrefresh?.(asset);
@@ -304,7 +305,7 @@
         </div>
         <div class="flex items-center gap-0.5">
             <button
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
+                class="p-1.5 rounded-md hover:bg-lf-neutral text-lf-muted hover:text-lf-link transition-colors"
                 data-testid="asset-card-merge"
                 onclick={(e) => {
                     stop(e);
@@ -315,7 +316,8 @@
                 <Merge size={15} />
             </button>
             <button
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
+                class="p-1.5 rounded-md hover:bg-lf-neutral text-lf-muted hover:text-lf-danger transition-colors"
+                data-testid="asset-card-delete-btn"
                 onclick={(e) => {
                     stop(e);
                     ondelete?.(asset);

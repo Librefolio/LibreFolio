@@ -12,7 +12,7 @@ by the API/e2e suites, but only over the mock dataset, which contains a single
 shape of portfolio: LONG lots, a dense daily price series, and plain BUY/SELL
 transactions. Everything the builders do for the *other* shapes a real user
 produces -- a SHORT position, an unlisted asset with no price history at all
-(``estimated_mode``), a gap in the price series, a manual ADJUSTMENT carrying a
+(valued at cost), a gap in the price series, a manual ADJUSTMENT carrying a
 cost-basis override, a share grant bought for zero, a transfer that crosses the
 analysis scope -- was never executed. These are the branches pinned below.
 
@@ -21,15 +21,19 @@ than by running the engine, so each test states exactly the one situation it is
 about and nothing else can drift into it.
 """
 
+from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
 import backend.app.services.financial_math.lots.conversions as conversions_module
+import backend.app.services.financial_math.lots.histories as histories_module
+import backend.app.services.financial_math.lots.prices as prices_module
 from backend.app.db.models import PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, LotAnalysisType
+from backend.app.schemas.portfolio import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, IssueCode, LotAnalysisType, LotsAnalysisResponse, LotTimelineEventKind
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.average_cost import (
     AverageCost,
@@ -40,7 +44,8 @@ from backend.app.services.financial_math.average_cost import (
     _fold_average_costs,
     _ResolvedConversion,
 )
-from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FifoLot, FragmentInterval, LotClosure
+from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
+from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, average_cost_points, build_broker_wac_history, build_cumulative_wac_history
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs
 from backend.app.services.financial_math.lots.economic_events import build_cost_economic_events, build_engine_transactions, build_income_economic_events
@@ -51,10 +56,15 @@ from backend.app.services.financial_math.lots.histories import (
     build_price_history,
     build_return_history,
     build_value_history,
+    group_closures,
+    group_fragments,
     known_cumulative_proceeds,
+    known_realized_pnl,
     lot_history_end_date,
 )
-from backend.app.services.financial_math.lots.prices import PriceHistoryLookup, opening_reference_price
+from backend.app.services.financial_math.lots.prices import opening_reference_price
+from backend.app.services.financial_math.lots.scope_boundary import BoundaryLeg
+from backend.app.services.financial_math.price_marks import AssetPriceSeries, ObservationKind, PriceObservation, build_asset_price_series
 from backend.app.services.lots_analysis_service import LotsAnalysisService, _parse_transfer_pair_id
 
 # --------------------------------------------------------------------------- #
@@ -149,8 +159,13 @@ def _closure(
     close_unit_price: Decimal = D("12"),
     realized_pnl: Decimal = D("80"),
     proceeds: Decimal = D("480"),
+    close_currency: str | None = None,
 ) -> LotClosure:
-    return LotClosure(
+    """A closure double; ``close_currency`` (CP-7a) is the currency of its close leg, None for the report currency.
+
+    It is set only when named, so a double in the report currency builds the same LotClosure as before CP-7a.
+    """
+    closure = LotClosure(
         lot_id=lot_id,
         transaction_id=transaction_id,
         quantity=quantity,
@@ -162,6 +177,7 @@ def _closure(
         realized_pnl=realized_pnl,
         proceeds=proceeds,
     )
+    return closure if close_currency is None else replace(closure, close_currency=close_currency)
 
 
 def _tx(
@@ -194,6 +210,21 @@ def _tx(
 
 def _price(day: date, close: Decimal | None = D("11"), currency: str = "EUR") -> PriceHistory:
     return PriceHistory(asset_id=7, date=day, close=close, currency=currency)
+
+
+def _quote(day: date, close: Decimal, currency: str = "EUR") -> PriceObservation:
+    """A market close in the home's daily price series (financial_math.price_marks): what ``price_history`` holds that day."""
+    return PriceObservation(date=day, unit_price=close, currency=currency, kind=ObservationKind.MARKET)
+
+
+def _trade(day: date, unit_price: Decimal, currency: str = "EUR") -> PriceObservation:
+    """A BUY or SELL price in the home's daily price series: the trade's amount over its quantity, in the trade's currency."""
+    return PriceObservation(date=day, unit_price=unit_price, currency=currency, kind=ObservationKind.TRADE)
+
+
+def _series(*observations: PriceObservation) -> AssetPriceSeries:
+    """The asset's daily price series, which the lots read their prices and references from since CP-7b."""
+    return AssetPriceSeries(list(observations))
 
 
 def _engine_result(
@@ -235,41 +266,6 @@ def _perf_context(
 
 def _days(start: date, count: int) -> list[date]:
     return [start + timedelta(days=offset) for offset in range(count)]
-
-
-# --------------------------------------------------------------------------- #
-# PriceHistoryLookup
-# --------------------------------------------------------------------------- #
-
-
-class TestPriceHistoryLookup:
-    def test_resolve_returns_none_when_asset_has_no_usable_prices(self):
-        """An unlisted asset: no PriceHistory row was ever stored for it."""
-        assert PriceHistoryLookup([]).resolve(date(2024, 3, 1)) is None
-
-    def test_resolve_returns_none_before_the_first_known_price(self):
-        """A lot opened before the asset started being quoted has nothing to fall back to."""
-        lookup = PriceHistoryLookup([_price(date(2024, 5, 1))])
-        assert lookup.resolve(date(2024, 4, 30)) is None
-
-    def test_resolve_uses_the_latest_price_at_or_before_the_query_date(self):
-        lookup = PriceHistoryLookup([_price(date(2024, 5, 1), D("10")), _price(date(2024, 5, 6), D("12"))])
-        resolved = lookup.resolve(date(2024, 5, 4))
-        assert (resolved.price, resolved.resolved_date, resolved.source) == (D("10"), date(2024, 5, 1), "fallback")
-
-    def test_resolve_marks_an_exact_date_hit_as_exact(self):
-        lookup = PriceHistoryLookup([_price(date(2024, 5, 1), D("10"))])
-        assert PriceHistoryLookup([_price(date(2024, 5, 1), D("10"))]).resolve(date(2024, 5, 1)).source == "exact"
-        assert lookup.latest().resolved_date == date(2024, 5, 1)
-
-    def test_latest_returns_none_when_there_are_no_rows(self):
-        """This is exactly what puts the whole analysis into estimated_mode."""
-        assert PriceHistoryLookup([]).latest() is None
-
-    def test_rows_with_a_null_close_are_ignored(self):
-        """A PriceHistory row can carry only volume/open; it is not a usable quote."""
-        lookup = PriceHistoryLookup([_price(date(2024, 5, 1), None)])
-        assert lookup.latest() is None
 
 
 # --------------------------------------------------------------------------- #
@@ -379,7 +375,7 @@ class TestCollectFxNeeds:
             "lots_by_id": {},
             "selected_ids": [],
             "transactions": [],
-            "price_lookup": PriceHistoryLookup([]),
+            "price_series": AssetPriceSeries([]),
             "prices": [],
             "fragments": [],
             "events": [],
@@ -420,7 +416,7 @@ class TestCollectFxNeeds:
         assert resolver._needs == []
 
     def test_lot_summary_skips_the_reference_price_when_none_can_be_resolved(self):
-        """The lot carries a reference price but the asset has no quotes at all."""
+        """The lot carries a reference price but the asset's series has no observation at all."""
         resolver = _resolver("EUR")
         lot = _lot(1, currency="EUR", reference_unit_price=D("9"))
         self._call(
@@ -428,7 +424,7 @@ class TestCollectFxNeeds:
             analyses=[LotAnalysisType.LOT_SUMMARY],
             lots_by_id={1: lot},
             selected_ids=[1],
-            price_lookup=PriceHistoryLookup([]),
+            price_series=AssetPriceSeries([]),
         )
         assert resolver._needs == []
 
@@ -472,6 +468,27 @@ class TestCollectFxNeeds:
             closures=[_closure(2)],
         )
         assert resolver._needs == []
+
+    def test_a_priced_adjustment_is_no_rate_the_market_series_reads(self):
+        """J-17: only BUY and SELL mark the asset, so the market series needs the currency a BUY was
+        paid in on every day of the window, and never the cost-basis currency of an ADJUSTMENT — the
+        adjustment carries a WAC, not a price, and leaves no mark to convert.
+
+        Before J-17: the series also registered the ADJUSTMENT's cost-basis currency (GBP) on every day
+        from 2024-01-01 to 2024-06-01, to convert the adjustment's mark.
+        """
+        resolver = _resolver("EUR")
+        self._call(
+            resolver,
+            analyses=[LotAnalysisType.PRICE_HISTORY],
+            transactions=[
+                _tx(1, tx_type=TransactionType.BUY, quantity=D("10"), amount=D("-100"), currency="USD"),
+                _tx(2, tx_type=TransactionType.ADJUSTMENT, tx_date=date(2024, 2, 1), quantity=D("10"), amount=D("0"), currency=None, cost_basis_override=D("5"), cost_basis_currency="GBP"),
+            ],
+        )
+        needed = set(resolver._needs)
+        assert {("USD", date(2024, 1, 1)), ("USD", date(2024, 3, 15)), ("USD", date(2024, 6, 1))} <= needed, "guard: a BUY's currency is read on every day of the window"
+        assert {currency for currency, _day in needed} == {"USD"}, f"currencies the market series asks: {sorted({currency for currency, _day in needed})}"
 
 
 # --------------------------------------------------------------------------- #
@@ -567,10 +584,14 @@ class TestCollectPerformanceFxNeeds:
         self._call(resolver, closures=[_closure(99)], lots_by_id={1: _lot(1, currency="USD")})
         assert resolver._needs == []
 
-    def test_a_long_sell_closure_needs_the_lot_currency_on_the_close_date(self):
+    def test_a_long_sell_closure_needs_its_currency_on_the_close_date_and_the_lots_on_its_opening_date(self):
+        """CP-7a: a USD lot sold in USD asks for USD on the sale's date (its proceeds) and on the lot's opening date (its cost).
+
+        Before CP-7a it asked for the lot's currency on the close date only: [("USD", 1 Feb)].
+        """
         resolver = _resolver("EUR")
-        self._call(resolver, closures=[_closure(1)], lots_by_id={1: _lot(1, currency="USD")})
-        assert resolver._needs == [("USD", date(2024, 2, 1))]
+        self._call(resolver, closures=[_closure(1, close_currency="USD")], lots_by_id={1: _lot(1, currency="USD")})
+        assert sorted(resolver._needs) == [("USD", date(2024, 1, 10)), ("USD", date(2024, 2, 1))]
 
 
 # --------------------------------------------------------------------------- #
@@ -709,6 +730,8 @@ class TestAverageCostPoints:
 
 
 class TestBuildPerformanceHistory:
+    """No day is valued at cost here (``at_cost_until=None``): the rules of a day with a mark, or without one outside the days at cost; the days at cost are ``TestPerformanceHistoryAtCost``."""
+
     def _call(self, **overrides):
         kwargs = {
             "scope_broker_ids": [1],
@@ -718,6 +741,7 @@ class TestBuildPerformanceHistory:
             "fx_resolver": _resolver("EUR"),
             "context": _perf_context(),
             "quote_base_quantity": 1,
+            "at_cost_until": None,
         }
         kwargs.update(overrides)
         return build_performance_history(**kwargs)
@@ -1020,7 +1044,8 @@ class TestBuildPerformanceHistory:
         """B3a: a USD lot bought for 2000 USD at 0.5 (1000 EUR); 40 sold on the 12th for 960 USD, no USD rate that day.
 
         The cash that left on the 12th is unknown in EUR. The native fallback counted 960 USD as
-        960 EUR and reported an ROI of 1700% on the 12th.
+        960 EUR and reported an ROI of 1700% on the 12th. Since CP-7a the sale's proceeds convert from
+        its own currency (the closure's close_currency, USD), no longer from the lot's: the same here.
         """
         sell = _tx(2, tx_type=TransactionType.SELL, tx_date=date(2024, 1, 12), quantity=D("-40"), amount=D("960"), currency="USD")
         points = self._call(
@@ -1030,7 +1055,7 @@ class TestBuildPerformanceHistory:
                 transactions=[_tx(1, amount=D("-2000"), currency="USD"), sell],
                 fragments_by_lot={1: [_fragment(1, end_date=date(2024, 1, 12)), _fragment(1, fragment_id="frag-1b", quantity=D("60"), start_date=date(2024, 1, 12))]},
                 lots_by_id={1: _lot(1, currency="USD", original_cost=D("2000"), opening_unit_price=D("20"), open_quantity=D("60"))},
-                engine_result=_engine_result(closures=[_closure(1, transaction_id=2, quantity=D("40"), close_date=date(2024, 1, 12), proceeds=D("960"))]),
+                engine_result=_engine_result(closures=[_closure(1, transaction_id=2, quantity=D("40"), close_date=date(2024, 1, 12), proceeds=D("960"), close_currency="USD")]),
             ),
         )
 
@@ -1051,7 +1076,7 @@ class TestBuildLotSummaries:
             "selected_ids": [1],
             "fx_resolver": _resolver("EUR"),
             "market_prices": {date(2024, 2, 1): D("12")},
-            "price_lookup": PriceHistoryLookup([_price(date(2024, 1, 10), D("10"))]),
+            "price_series": _series(_quote(date(2024, 1, 10), D("10"))),
             "closures_by_lot": {},
             "income_by_lot": {},
             "fees_by_lot": {},
@@ -1063,16 +1088,20 @@ class TestBuildLotSummaries:
         kwargs.update(overrides)
         return _svc()._build_lot_summaries(**kwargs)[0]
 
-    def test_a_short_lot_values_proceeds_minus_the_open_position(self):
-        """Shorting: the money came in first, and the open leg is a liability.
+    def test_a_short_lot_values_its_proceeds_less_its_buy_backs_and_its_open_position(self):
+        """Shorting: the money came in first, the buy-backs paid part of it out, and the open leg is a liability.
 
-        A SHORT lot reports cumulative_proceeds from the lot itself (the sale
-        happened at opening), not from its closures, which are the covers.
+        100 sold short at 15: 1500 of proceeds, the lot's own (the sale happened at opening). 40 bought back at 12: 480,
+        the cover's cost — its proceeds field, 900 here, is never read. 60 still open at 12: 720. Total value = pnl =
+        1500 − 480 − 720 = 300, i.e. 100 × (15 − 12). R10 (CP-7a). Before it the buy-back was never subtracted: total
+        value and pnl 1500 − 720 = 780. (The double used to keep its open quantity at 100 beside a cover of 40, which
+        that formula could not see.)
         """
-        lot = _lot(1, direction="SHORT", open_quantity=D("100"), original_cost=D("1000"), cumulative_proceeds=D("1500"))
-        row = self._call(lot=lot, closures_by_lot={1: [_closure(1, close_reason="BUY", proceeds=D("900"))]})
-        # open_value = 100 * 12 = 1200; proceeds = 1500 -> total 300, and pnl == total.
-        assert (row.open_value, row.total_value, row.pnl) == (D("1200"), D("300"), D("300"))
+        lot = _lot(1, direction="SHORT", opening_unit_price=D("15"), original_cost=D("1500"), open_quantity=D("60"), cumulative_proceeds=D("1500"))
+        cover = _closure(1, quantity=D("40"), close_reason="BUY", open_unit_price=D("15"), close_unit_price=D("12"), realized_pnl=D("120"), proceeds=D("900"))
+        row = self._call(lot=lot, closures_by_lot={1: [cover]})
+        # open_value = 60 * 12 = 720; 1500 of proceeds less 480 paid for the cover -> total 300, and pnl == total.
+        assert (row.open_value, row.total_value, row.pnl) == (D("720"), D("300"), D("300"))
 
     def test_a_lot_opened_at_zero_reports_no_relative_return(self):
         """A free grant has no reference price, so "x% versus entry" is undefined."""
@@ -1153,22 +1182,24 @@ class TestBuildLotSummaries:
 
     @staticmethod
     def _sold_twice() -> list[LotClosure]:
-        """40 of the 100 units sold in two halves, 20 on 20 Jan and 20 on 1 Feb: 240 of proceeds and 40 of gain each."""
+        """40 of the 100 units sold in two halves, in USD, 20 on 20 Jan and 20 on 1 Feb: 240 USD of proceeds and 40 of native gain each."""
         return [
-            _closure(1, transaction_id=500, quantity=D("20"), close_date=date(2024, 1, 20), realized_pnl=D("40"), proceeds=D("240")),
-            _closure(1, transaction_id=501, quantity=D("20"), close_date=date(2024, 2, 1), realized_pnl=D("40"), proceeds=D("240")),
+            _closure(1, transaction_id=500, quantity=D("20"), close_date=date(2024, 1, 20), realized_pnl=D("40"), proceeds=D("240"), close_currency="USD"),
+            _closure(1, transaction_id=501, quantity=D("20"), close_date=date(2024, 2, 1), realized_pnl=D("40"), proceeds=D("240"), close_currency="USD"),
         ]
 
     def test_with_every_rate_the_base_fields_are_the_converted_amounts(self):
         """B3b control: a USD lot whose opening and both sales have a USD rate (0.5, 0.5, 0.6).
 
-        The four base fields are what B3b keeps unchanged: the cost and unit price at the opening rate,
-        each sale at its own rate. 1000 × 0.5, 10 × 0.5, 40 × 0.5 + 40 × 0.6, 240 × 0.5 + 240 × 0.6.
+        The cost and unit price at the opening rate (1000 × 0.5, 10 × 0.5), the proceeds each at their sale's rate
+        (240 × 0.5 + 240 × 0.6). The realized P&L since CP-7a (decision 26): each sale's proceeds at its rate less the cost
+        of its 20 units at the opening rate, (120 − 100) + (144 − 100) = 64. Before CP-7a: 44 = 40 × 0.5 + 40 × 0.6, each
+        sale's native gain at the sale's rate.
         """
         rates = {("USD", date(2024, 1, 10)): D("0.5"), ("USD", date(2024, 1, 20)): D("0.5"), ("USD", date(2024, 2, 1)): D("0.6")}
         row = self._call(lot=_lot(1, currency="USD", open_quantity=D("60")), closures_by_lot={1: self._sold_twice()}, fx_resolver=_resolver("EUR", rates))
 
-        assert (row.original_cost, row.opening_unit_price, row.realized_pnl, row.cumulative_proceeds) == (D("500"), D("5"), D("44"), D("264"))
+        assert (row.original_cost, row.opening_unit_price, row.realized_pnl, row.cumulative_proceeds) == (D("500"), D("5"), D("64"), D("264"))
 
     def test_the_cost_of_a_lot_without_a_rate_at_its_opening_is_unknown(self):
         """B3b: a USD lot with no USD rate at its opening date, analysed in EUR.
@@ -1193,17 +1224,45 @@ class TestBuildLotSummaries:
         assert (row.realized_pnl, row.cumulative_proceeds) == (None, None)
 
     def test_the_proceeds_of_a_short_lot_without_a_rate_at_its_opening_are_unknown(self):
-        """B3b: a USD short that sold 1500 USD at its opening, a day without a USD rate; its cover (1 Feb) has one.
+        """B3b: a USD short that sold 1500 USD at its opening, a day without a USD rate; its cover (1 Feb, in USD) has one.
 
-        A short's proceeds arrived at its opening, so they are converted there: unknown, never 1500 "EUR"
-        as today. Its realized P&L only needs the cover's rate and stays known: -80 × 0.5.
+        A short's proceeds arrived at its opening, so they are converted there: unknown, never 1500 "EUR".
+        Its realized P&L is unknown too since CP-7a: the opening sale is one of its legs (40 × 10 at the opening
+        rate, less the cover's 40 × 12 at 0.5). Before CP-7a: −40 = −80 × 0.5, the cover's rate only.
         """
         lot = _lot(1, direction="SHORT", currency="USD", open_quantity=D("60"), cumulative_proceeds=D("1500"))
-        cover = _closure(1, quantity=D("40"), close_reason="BUY", realized_pnl=D("-80"), proceeds=D("0"))
+        cover = _closure(1, quantity=D("40"), close_reason="BUY", realized_pnl=D("-80"), proceeds=D("0"), close_currency="USD")
         row = self._call(lot=lot, closures_by_lot={1: [cover]}, fx_resolver=_resolver("EUR", {("USD", date(2024, 2, 1)): D("0.5")}))
 
-        assert row.realized_pnl == D("-40")
-        assert row.cumulative_proceeds is None
+        assert (row.realized_pnl, row.cumulative_proceeds) == (None, None)
+
+    # -- CP-7a, T-B6: a reference price that cannot be converted has no source -- #
+
+    @pytest.mark.parametrize(
+        ("lot_currency", "quote", "expected"),
+        [
+            pytest.param("USD", None, (None, None), id="its-own-price-in-USD-without-a-rate"),
+            pytest.param("EUR", ("9", "USD"), (None, None), id="a-quote-in-USD-without-a-rate"),
+            pytest.param("EUR", None, (D("10"), "exact"), id="GUARD-its-own-price-in-EUR"),
+        ],
+    )
+    def test_a_reference_price_without_a_rate_has_no_source(self, lot_currency, quote, expected):
+        """R8, T-B6: (reference_unit_price, reference_price_source) of the summary, no USD rate anywhere: no price, no source.
+
+        The return history already reads it so (histories.py, build_return_history). Before CP-7a the source stayed beside
+        the missing price: (None, "exact") for the lot's own USD price, (None, "fallback") for a quote in USD found on 8 Jan.
+        GUARD: a reference that converts keeps its source. CP-7b moved it to the asset's price series (the quote of 8 Jan
+        is now a market observation, the reference dated the opening day, 10 Jan): without any USD rate, the same values.
+        """
+        if quote is None:
+            lot, series = _lot(1, currency=lot_currency), AssetPriceSeries([])
+        else:
+            lot = _lot(1, currency=lot_currency, reference_unit_price=D(quote[0]), reference_price_source="fallback")
+            series = _series(_quote(date(2024, 1, 8), D(quote[0]), quote[1]))
+
+        row = self._call(lot=lot, price_series=series)
+
+        assert (row.reference_unit_price, row.reference_price_source) == expected
 
 
 # --------------------------------------------------------------------------- #
@@ -1212,7 +1271,13 @@ class TestBuildLotSummaries:
 
 
 class TestBuildValueAndReturnHistory:
-    """Both builders share the same market_price-is-None ladder, so both are pinned."""
+    """Both builders share the same market_price-is-None ladder, so both are pinned.
+
+    CP-7b: ``estimated_mode`` (one flag for the whole window) became ``at_cost_until``, the last day with no observation on
+    or before it; every day up to it is valued at cost. ``_LAST_DAY`` puts the whole window at cost, as the flag did.
+    """
+
+    _LAST_DAY = date(2024, 1, 12)  # the last of the three history days the helpers use by default
 
     def _value(self, **overrides):
         lot = overrides.pop("lot", _lot(1))
@@ -1227,7 +1292,7 @@ class TestBuildValueAndReturnHistory:
             "income_prefix_by_lot": {},
             "fees_prefix_by_lot": {},
             "taxes_prefix_by_lot": {},
-            "estimated_mode": False,
+            "at_cost_until": None,
             "quote_base_quantity": 1,
         }
         kwargs.update(overrides)
@@ -1240,14 +1305,14 @@ class TestBuildValueAndReturnHistory:
             "lots_by_id": {1: lot},
             "fragments_by_lot": {1: [_fragment(1)]},
             "market_prices": {},
-            "price_lookup": PriceHistoryLookup([_price(date(2024, 1, 10), D("10"))]),
+            "price_series": _series(_quote(date(2024, 1, 10), D("10"))),
             "fx_resolver": _resolver("EUR"),
             "history_dates": _days(date(2024, 1, 10), 3),
             "closures_by_lot": {},
             "income_prefix_by_lot": {},
             "fees_prefix_by_lot": {},
             "taxes_prefix_by_lot": {},
-            "estimated_mode": False,
+            "at_cost_until": None,
             "quote_base_quantity": 1,
         }
         kwargs.update(overrides)
@@ -1267,16 +1332,22 @@ class TestBuildValueAndReturnHistory:
         last = next(point for point in points if point.date == date(2024, 1, 12))
         assert (last.open_value, last.proceeds, last.total_value, last.pnl) == (D("0"), D("1200"), D("1200"), D("200"))
 
-    def test_value_of_a_closed_short_lot_on_an_unpriced_day_uses_cumulative_proceeds(self):
-        """A covered short is worth the money it took in, whatever the market does next."""
+    def test_value_of_a_closed_short_lot_on_an_unpriced_day_is_its_proceeds_less_its_buy_backs(self):
+        """A covered short is worth the money it took in less what buying it back cost, whatever the market does next.
+
+        100 sold short for 1500 and all bought back at 12 on 10 Jan (1200, the cover's cost — its proceeds field, 900 here,
+        is never read): 300 on the unpriced 12th, total value and pnl alike. The proceeds field stays the opening sale's,
+        1500 (GUARD). R10 (CP-7a). Before it the buy-back was never subtracted: total value and pnl 1500. (The cover used to
+        be of 40 units only, on a lot closed whole.)
+        """
         lot = _lot(1, direction="SHORT", open_quantity=D("0"), cumulative_proceeds=D("1500"))
         points = self._value(
             lot=lot,
             fragments_by_lot={1: [_fragment(1, direction="SHORT", end_date=date(2024, 1, 10))]},
-            closures_by_lot={1: [_closure(1, close_date=date(2024, 1, 10), close_reason="BUY", proceeds=D("900"))]},
+            closures_by_lot={1: [_closure(1, quantity=D("100"), close_date=date(2024, 1, 10), close_reason="BUY", proceeds=D("900"))]},
         )
         last = next(point for point in points if point.date == date(2024, 1, 12))
-        assert (last.open_value, last.proceeds, last.total_value, last.pnl) == (D("0"), D("1500"), D("1500"), D("1500"))
+        assert (last.open_value, last.proceeds, last.total_value, last.pnl) == (D("0"), D("1500"), D("300"), D("300"))
 
     def test_return_of_a_closed_long_lot_on_an_unpriced_day_is_computed(self):
         lot = _lot(1, open_quantity=D("0"))
@@ -1289,36 +1360,60 @@ class TestBuildValueAndReturnHistory:
         assert last.total_return == D("0.2")
 
     def test_return_of_a_closed_short_lot_on_an_unpriced_day_is_computed(self):
-        lot = _lot(1, direction="SHORT", open_quantity=D("0"), cumulative_proceeds=D("1500"))
+        """A covered short's return is its P&L after its buy-backs over its notional, on an unpriced day too: 0.2.
+
+        100 sold short at 15 — a notional of 1500, its proceeds — and all bought back at 12 on 10 Jan, 1200: P&L 300, so
+        (1500 + 300) / 1500 − 1 = 0.2, the lot summary's total P&L / opening value (CP-7a: R10 subtracts the buy-back, and a
+        short's return reads against its notional). Before CP-7a: 0 = 1500 / 1500 − 1, a short read like a long — its
+        proceeds taken for its value, its buy-back never subtracted.
+        """
+        lot = _lot(1, direction="SHORT", opening_unit_price=D("15"), original_cost=D("1500"), open_quantity=D("0"), cumulative_proceeds=D("1500"))
+        cover = _closure(1, quantity=D("100"), close_date=date(2024, 1, 10), close_reason="BUY", open_unit_price=D("15"), close_unit_price=D("12"), realized_pnl=D("300"), proceeds=D("0"))
         points = self._returns(
             lot=lot,
-            fragments_by_lot={1: [_fragment(1, direction="SHORT", end_date=date(2024, 1, 10))]},
-            closures_by_lot={1: [_closure(1, close_date=date(2024, 1, 10), close_reason="BUY")]},
+            fragments_by_lot={1: [_fragment(1, direction="SHORT", unit_price=D("15"), end_date=date(2024, 1, 10))]},
+            closures_by_lot={1: [cover]},
         )
         last = next(point for point in points if point.date == date(2024, 1, 12))
-        assert last.total_return == D("0.5")
+        assert last.total_return == D("0.2")
 
     # -- market price missing, position still open --------------------------- #
 
     def test_an_open_lot_on_an_unpriced_day_is_valued_at_cost_in_estimated_mode(self):
-        """An unlisted holding: the only defensible mark is what it cost."""
-        points = self._value(estimated_mode=True)
+        """An unlisted holding: the only defensible mark is what it cost. No day of the window has an observation."""
+        points = self._value(at_cost_until=self._LAST_DAY)
         assert {point.open_value for point in points} == {D("1000")}
 
     def test_an_open_lot_on_an_unpriced_day_emits_nothing_when_not_estimating(self):
         """A gap in a normally-quoted series must leave a hole, not a fabricated value."""
-        assert self._value(estimated_mode=False) == []
+        assert self._value(at_cost_until=None) == []
 
     def test_an_open_short_lot_is_never_valued_at_cost(self):
-        """estimated_mode only rescues LONG lots; a short at cost would flip the sign."""
-        assert self._value(lot=_lot(1, direction="SHORT"), estimated_mode=True) == []
+        """The days at cost only rescue LONG lots; a short at cost would flip the sign."""
+        assert self._value(lot=_lot(1, direction="SHORT"), at_cost_until=self._LAST_DAY) == []
 
     def test_return_of_an_open_lot_on_an_unpriced_day_uses_the_cost_mark(self):
-        points = self._returns(estimated_mode=True)
+        points = self._returns(at_cost_until=self._LAST_DAY)
         assert {point.total_return for point in points} == {D("0")}
 
     def test_return_of_an_open_lot_emits_nothing_when_not_estimating(self):
-        assert self._returns(estimated_mode=False) == []
+        assert self._returns(at_cost_until=None) == []
+
+    def test_the_days_up_to_at_cost_until_are_at_cost_and_a_later_unpriced_day_is_a_gap(self):
+        """CP-7b, the Dashboard's per-day rule in the lots (J-17): ``at_cost_until`` 11 Jan, a window of 10–14 Jan, X priced 12 EUR on the 13th only.
+
+        (date, open value, P&L): 10 and 11 Jan have no observation on or before them, so the lot is worth its cost, 1000,
+        P&L 0; the 13th is priced, 1200. The 12th and the 14th come after the cut without a market price — in the service a
+        mark without a rate, since every day after the first observation has one — so they stay a gap, never at cost.
+        Before CP-7b ``estimated_mode`` was one flag for the whole window and there was no cut to pass (TypeError).
+        """
+        points = self._value(history_dates=_days(date(2024, 1, 10), 5), market_prices={date(2024, 1, 13): D("12")}, at_cost_until=date(2024, 1, 11))
+
+        assert [(point.date, point.open_value, point.pnl) for point in points] == [
+            (date(2024, 1, 10), D("1000"), D("0")),
+            (date(2024, 1, 11), D("1000"), D("0")),
+            (date(2024, 1, 13), D("1200"), D("200")),
+        ]
 
     # -- priced days --------------------------------------------------------- #
 
@@ -1335,7 +1430,7 @@ class TestBuildValueAndReturnHistory:
         """The asset had no quote at the opening date and the lot was booked at zero."""
         points = self._returns(
             lot=_lot(1, opening_unit_price=D("0"), original_cost=D("1000")),
-            price_lookup=PriceHistoryLookup([]),
+            price_series=AssetPriceSeries([]),
             market_prices={date(2024, 1, 11): D("12")},
         )
         assert next(p for p in points if p.date == date(2024, 1, 11)).relative_return is None
@@ -1374,13 +1469,14 @@ class TestBuildValueAndReturnHistory:
 
         The 10th and the 11th are fully known (100 × 12 EUR against a cost of 500 EUR) and stay.
         From the sale on its proceeds are unknown in EUR, so there is no point -- the native
-        fallback added 960 USD to the EUR value.
+        fallback added 960 USD to the EUR value. Since CP-7a the proceeds convert from the sale's
+        own currency (close_currency, USD), no longer from the lot's: the same here.
         """
         days = _days(date(2024, 1, 10), 5)
         points = self._value(
             lot=_lot(1, currency="USD", open_quantity=D("60")),
             fragments_by_lot={1: [_fragment(1, end_date=date(2024, 1, 12)), _fragment(1, fragment_id="frag-1b", quantity=D("60"), start_date=date(2024, 1, 12))]},
-            closures_by_lot={1: [_closure(1, close_date=date(2024, 1, 12), quantity=D("40"), proceeds=D("960"))]},
+            closures_by_lot={1: [_closure(1, close_date=date(2024, 1, 12), quantity=D("40"), proceeds=D("960"), close_currency="USD")]},
             market_prices=dict.fromkeys(days, D("12")),
             history_dates=days,
             fx_resolver=_resolver("EUR", {("USD", date(2024, 1, 10)): D("0.5")}),
@@ -1406,6 +1502,257 @@ class TestBuildValueAndReturnHistory:
 
         assert [(p.date, p.total_return) for p in points if p.lot_id == 2] == [(day, D("0.2")) for day in days]
         assert [(p.date, p.total_return) for p in points if p.lot_id == 1] == []
+
+
+# --------------------------------------------------------------------------- #
+# J-33: the performance history values the days at cost
+# --------------------------------------------------------------------------- #
+
+# The quantized values ROI and TWRR come out of ``returns.py`` with (``_PREC_PCT``, six decimals), as strings.
+_ZERO, _TEN, _TWENTY_ONE = "0.000000", "0.100000", "0.210000"
+
+
+class TestPerformanceHistoryAtCost:
+    """J-33: ``build_performance_history`` values the days at cost, as the value and return histories above do (CP-7b).
+
+    ``at_cost_until`` is the last day with no observation on or before it (J-17 decision (a)). Up to it, a day without a
+    mark gets a NAV at cost: the sum, over the in-scope fragments active that day, of ``residual_cost`` (the lot's cost at
+    its opening rate, the fragment's quantity, the lot's original quantity) — no NAV when one of them is SHORT or its cost
+    has no rate. After it, a day without a mark (a mark without a rate) still gets none. A transfer crossing the scope on
+    such a day moves cost, not market value: an incoming edge leg its own cost, an outgoing one
+    (``hands_over_at_own_cost``) the cost of its closures, a replayed pair the cost of the pieces it moves.
+    ``collect_performance_fx_needs`` asks for each LONG lot's currency at its opening date.
+
+    Today the builder takes no ``at_cost_until`` (TypeError) and values only the days with a mark: the flows before the
+    first one land on it, and ``calculate_twrr_period_series`` takes the first NAV as its base, so the jump from cost to
+    the first price is in ROI and not in TWRR; a crossing transfer on a day without a mark voids ROI and TWRR from that
+    day. Each docstring says what today's builder gives for its book, called without the keyword (``_book`` minus
+    ``at_cost_until``). Values are read as the quantized strings the series return; None is no point.
+    """
+
+    # d0 … d10: 4–14 March 2024.
+    _DAYS = _days(date(2024, 3, 4), 11)
+
+    # -- builders ------------------------------------------------------------ #
+
+    @staticmethod
+    def _adjusted_in(tx_id: int, *, day: date, quantity: str = "10", broker_id: int = 1) -> Transaction:
+        """An ADJUSTMENT-in at 100 EUR a unit, as the app stores one: no amount, the cost in its cost basis."""
+        return _tx(tx_id, tx_type=TransactionType.ADJUSTMENT, tx_date=day, quantity=D(quantity), amount=D("0"), currency=None, broker_id=broker_id, cost_basis_override=D("100"), cost_basis_currency="EUR")
+
+    @staticmethod
+    def _long_lot(lot_id: int, *, day: date, quantity: str = "10", currency: str = "EUR", direction: str = "LONG") -> FifoLot:
+        """A lot of ``quantity`` at 100 a unit, opened on ``day`` at broker 1, all still open."""
+        return _lot(lot_id, direction=direction, opening_date=day, original_quantity=D(quantity), opening_unit_price=D("100"), original_cost=D(quantity) * 100, currency=currency, open_quantity=D(quantity))
+
+    @staticmethod
+    def _open_fragment(lot_id: int, *, day: date, quantity: str = "10", direction: str = "LONG") -> FragmentInterval:
+        return _fragment(lot_id, fragment_id=f"frag-{lot_id}", direction=direction, quantity=D(quantity), unit_price=D("100"), start_date=day)
+
+    def _adjusted_book(self, days: list[date], prices: dict[date, Decimal | None], at_cost_until: date | None, *, extra_lots: dict[int, tuple[FifoLot, FragmentInterval]] | None = None) -> dict:
+        """The ADJUSTMENT-in of 10 at 100 on the first day (1 000 in), with ``extra_lots`` held beside it and no flow of theirs."""
+        lots = {1: (self._long_lot(1, day=days[0]), self._open_fragment(1, day=days[0])), **(extra_lots or {})}
+        context = _perf_context(transactions=[self._adjusted_in(1, day=days[0])], lots_by_id={lot_id: lot for lot_id, (lot, _) in lots.items()}, fragments_by_lot={lot_id: [fragment] for lot_id, (_, fragment) in lots.items()})
+        return {"context": context, "history_dates": days, "market_prices": prices, "at_cost_until": at_cost_until}
+
+    @staticmethod
+    def _engine_book(rows: list, days: list[date], prices: dict[date, Decimal | None], at_cost_until: date, *, boundary_legs: dict | None = None) -> dict:
+        """A book whose lots, fragments, closures and events come from the real engine over ``rows`` (brokers 1 and 2)."""
+        result = run_fifo_lot_engine(rows, {1: False, 2: False}, target_currency="EUR")
+        context = PerformanceSourceContext(
+            transactions=rows,
+            engine_result=result,
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            fragments_by_lot=group_fragments(result.fragment_intervals),
+            closures_by_lot=group_closures(result.closures),
+            tx_by_id={row.id: row for row in rows},
+            boundary_legs=boundary_legs or {},
+        )
+        return {"context": context, "history_dates": days, "market_prices": prices, "at_cost_until": at_cost_until}
+
+    @staticmethod
+    def _history(book: dict, *, scope_broker_ids: tuple[int, ...] = (1,), fx_resolver: FxRateResolver | None = None) -> list[tuple]:
+        """(date, ROI, TWRR) of each day, the values as the quantized strings the series return, None for no point."""
+        points = build_performance_history(
+            scope_broker_ids=list(scope_broker_ids),
+            history_dates=book["history_dates"],
+            market_prices=book["market_prices"],
+            asset_currency="EUR",
+            fx_resolver=fx_resolver or _resolver("EUR"),
+            context=book["context"],
+            quote_base_quantity=1,
+            at_cost_until=book["at_cost_until"],
+        )
+        return [(point.date, None if point.roi is None else str(point.roi), None if point.twrr is None else str(point.twrr)) for point in points]
+
+    def _unpriced_then_110(self) -> tuple[list[date], dict[date, Decimal | None]]:
+        """d0 … d5: no mark on d0–d3, 110 on d4 and d5."""
+        days = self._DAYS[:6]
+        return days, {day: (D("110") if day >= days[4] else None) for day in days}
+
+    def _flat_then_ten_percent(self) -> list[tuple]:
+        """d0 … d5 after J-33 for the transfer books: at cost until d3, the market 10% above cost from d4."""
+        days = self._DAYS[:6]
+        return [(days[0], _ZERO, None), *[(day, _ZERO, _ZERO) for day in days[1:4]], (days[4], _TEN, _TEN), (days[5], _TEN, _TEN)]
+
+    # -- V1, V2: the days at cost carry NAV ----------------------------------- #
+
+    def _v1_book(self) -> dict:
+        days = self._DAYS
+        prices = dict.fromkeys(days[:5]) | dict.fromkeys(days[5:10], D("110")) | {days[10]: D("121")}
+        return self._adjusted_book(days, prices, days[4])
+
+    def test_v1_the_days_at_cost_put_the_jump_to_the_first_price_in_twrr_as_in_roi(self):
+        """V1: 10 adjusted in at a cost of 1 000 on d0, no mark on d0–d4, 110 on d5–d9 and 121 on d10, at cost until d4. NAV
+        1 000 on d0–d4, 1 100 on d5–d9, 1 210 on d10; the 1 000 flows in on d0. ROI 0 on d0–d4, 10% on d5–d9, 21% on d10;
+        TWRR, based on d0, 0 on d1–d4, 10% on d5–d9, 21% on d10: the jump from cost to the first price is in both.
+
+        Today (read 17/10/2026): no point on d0–d4; the 1 000 lands on d5, the first NAV, so ROI 10% on d5–d9 and 21% on
+        d10, while TWRR, based on d5, has no point on d5, 0 on d6–d9 and 10% on d10.
+        """
+        days = self._DAYS
+
+        assert self._history(self._v1_book()) == [(days[0], _ZERO, None), *[(day, _ZERO, _ZERO) for day in days[1:5]], *[(day, _TEN, _TEN) for day in days[5:10]], (days[10], _TWENTY_ONE, _TWENTY_ONE)]
+
+    def _v2_book(self) -> dict:
+        days = self._DAYS[:5]
+        return self._adjusted_book(days, dict.fromkeys(days), days[-1])
+
+    def test_v2_an_asset_never_priced_has_roi_and_twrr_at_cost_every_day(self):
+        """V2: the same 10 at 1 000 on d0, no mark at all on d0–d4, at cost until d4: NAV 1 000 every day, so ROI 0 every day
+        and TWRR 0 from d1.
+
+        Today (read 17/10/2026): no point at all — no mark, no NAV.
+        """
+        days = self._DAYS[:5]
+
+        assert self._history(self._v2_book()) == [(days[0], _ZERO, None), *[(day, _ZERO, _ZERO) for day in days[1:]]]
+
+    # -- GUARDS: the days at cost that still get no point --------------------- #
+
+    def _short_book(self) -> dict:
+        days = self._DAYS[:5]
+        short = (self._long_lot(2, day=days[2], quantity="5", direction="SHORT"), self._open_fragment(2, day=days[2], quantity="5", direction="SHORT"))
+        return self._adjusted_book(days, dict.fromkeys(days), days[-1], extra_lots={2: short})
+
+    def test_guard_a_day_at_cost_with_a_short_lot_open_gets_no_point(self):
+        """GUARD: beside the 10 at 1 000 of d0, a SHORT lot of 5 open from d2, no mark on d0–d4, at cost until d4. A short is
+        never valued at cost: d2–d4 get no point, as today. d0 and d1, the long alone, are at cost (ROI 0, TWRR 0 from d1):
+        the presence barrier that makes the absence mean something.
+
+        Today (read 17/10/2026): no point at all — no mark. The absence on d2–d4 is today's; the barrier is new.
+        """
+        days = self._DAYS[:5]
+
+        assert self._history(self._short_book()) == [(days[0], _ZERO, None), (days[1], _ZERO, _ZERO), *[(day, None, None) for day in days[2:]]]
+
+    def _cost_without_rate_book(self) -> dict:
+        days = self._DAYS[:5]
+        usd = (self._long_lot(2, day=days[2], quantity="5", currency="USD"), self._open_fragment(2, day=days[2], quantity="5"))
+        return self._adjusted_book(days, dict.fromkeys(days), days[-1], extra_lots={2: usd})
+
+    def test_guard_a_day_at_cost_with_a_lot_whose_cost_has_no_rate_gets_no_point(self):
+        """GUARD: beside the 10 at 1 000 of d0, a USD lot of 5 open from d2 with no USD rate at its opening, no mark on d0–d4,
+        at cost until d4. That lot's cost is unknown in EUR: d2–d4 get no point, as today; d0 and d1 are at cost (the
+        presence barrier).
+
+        Today (read 17/10/2026): no point at all — no mark. The absence on d2–d4 is today's; the barrier is new.
+        """
+        days = self._DAYS[:5]
+
+        assert self._history(self._cost_without_rate_book()) == [(days[0], _ZERO, None), (days[1], _ZERO, _ZERO), *[(day, None, None) for day in days[2:]]]
+
+    def _gap_after_the_cut_book(self) -> dict:
+        days = self._DAYS[:5]
+        prices = {days[0]: None, days[1]: None, days[2]: D("110"), days[3]: None, days[4]: D("110")}
+        return self._adjusted_book(days, prices, days[1])
+
+    def test_guard_a_day_after_at_cost_until_without_a_mark_gets_no_point(self):
+        """GUARD: the 10 at 1 000 of d0, at cost until d1, 110 on d2 and d4, no mark on d3 — after the cut, a mark without a
+        rate. d3 gets no point, as today; d0 and d1 are at cost, d2 and d4 at 110 (ROI 10%, TWRR 10% from d0).
+
+        Today (read 17/10/2026): no point on d0–d1, d3 none either; the 1 000 lands on d2, so ROI 10% on d2 and d4, TWRR
+        none on d2 and 0 on d4.
+        """
+        days = self._DAYS[:5]
+
+        assert self._history(self._gap_after_the_cut_book()) == [(days[0], _ZERO, None), (days[1], _ZERO, _ZERO), (days[2], _TEN, _TEN), (days[3], None, None), (days[4], _TEN, _TEN)]
+
+    # -- V3: a transfer crossing the scope on a day at cost moves its cost ---- #
+
+    def _incoming_edge_leg_book(self) -> dict:
+        days, prices = self._unpriced_then_110()
+        leg = FifoInputTransaction(id=2, broker_id=1, asset_id=7, date=days[1], type="ADJUSTMENT", quantity=D("5"), cost_basis_override=D("100"), cost_basis_currency="EUR")
+        return self._engine_book([self._adjusted_in(1, day=days[0]), leg], days, prices, days[3], boundary_legs={2: BoundaryLeg(2, "IN")})
+
+    def test_v3a_an_incoming_edge_leg_on_a_day_at_cost_brings_in_its_cost(self):
+        """V3a: the 10 at 1 000 of d0; on d1 a J-10 edge leg brings 5 in — the ADJUSTMENT-in copy carrying its cost basis, 100
+        a unit, named IN in ``boundary_legs``; no mark on d0–d3, 110 on d4–d5, at cost until d3. The leg is an inflow of its
+        cost, 500: NAV 1 000 then 1 500 at cost, 1 650 at 110; ROI and TWRR 0 until d3, 10% from d4 — the series goes on.
+
+        Today (read 17/10/2026): no point at all. The leg, on a day without a mark, voids ROI and TWRR from d1; before it no
+        day has a mark.
+        """
+        assert self._history(self._incoming_edge_leg_book()) == self._flat_then_ten_percent()
+
+    def _outgoing_edge_leg_book(self) -> dict:
+        days, prices = self._unpriced_then_110()
+        leg = FifoInputTransaction(id=2, broker_id=1, asset_id=7, date=days[2], type="ADJUSTMENT", quantity=D("-4"), hands_over_at_own_cost=True)
+        return self._engine_book([self._adjusted_in(1, day=days[0]), leg], days, prices, days[3], boundary_legs={2: BoundaryLeg(2, "OUT")})
+
+    def test_v3b_an_outgoing_edge_leg_on_a_day_at_cost_takes_out_the_cost_of_its_pieces(self):
+        """V3b: the 10 at 1 000 of d0; on d2 a J-10 edge leg sends 4 out, handing each piece over at its own FIFO cost
+        (``hands_over_at_own_cost``; the engine closes 4 of lot 1, named OUT in ``boundary_legs``); no mark on d0–d3, 110 on
+        d4–d5, at cost until d3. The leg is an outflow of the cost of its closures, 4 × 100 = 400: NAV 1 000, then 600 at
+        cost, 660 at 110; TWRR flat on d2, (600 + 400 − 1 000) / 1 000 = 0; ROI and TWRR 0 until d3, 10% from d4.
+
+        Today (read 17/10/2026): no point at all. The leg, on a day without a mark, voids ROI and TWRR from d2; before it no
+        day has a mark.
+        """
+        assert self._history(self._outgoing_edge_leg_book()) == self._flat_then_ten_percent()
+
+    def _replayed_transfer_book(self, direction: str) -> dict:
+        """4 units moved on d2 between broker 1 (the scope) and broker 2, both legs that day, the receiving one with its cost."""
+        days, prices = self._unpriced_then_110()
+        source, destination = (2, 1) if direction == "arrives" else (1, 2)
+        rows = [self._adjusted_in(1, day=days[0])]
+        if direction == "arrives":
+            rows.append(self._adjusted_in(2, day=days[0], broker_id=2))
+        out_leg = _tx(3, tx_type=TransactionType.TRANSFER, tx_date=days[2], quantity=D("-4"), amount=D("0"), broker_id=source)
+        in_leg = _tx(4, tx_type=TransactionType.TRANSFER, tx_date=days[2], quantity=D("4"), amount=D("0"), broker_id=destination, cost_basis_override=D("100"), cost_basis_currency="EUR")
+        out_leg.related_transaction_id, in_leg.related_transaction_id = in_leg.id, out_leg.id
+        return self._engine_book([*rows, out_leg, in_leg], days, prices, days[3])
+
+    @pytest.mark.parametrize("direction", ["arrives", "leaves"])
+    def test_v3c_a_replayed_transfer_crossing_the_scope_on_a_day_at_cost_moves_the_cost_of_its_pieces(self, direction):
+        """V3c: the 10 at 1 000 of d0 at broker 1 (the scope); on d2 a pair moves 4 units across the scope, its two legs in
+        the replay (the engine's TRANSFER_DEPART / ARRIVE and its ``lot:{id}/transfer:{pair}/to:{broker}`` pieces); no mark
+        on d0–d3, 110 on d4–d5, at cost until d3. ``arrives``: 4 of a lot of 10 at 1 000 at broker 2 come in, an inflow of
+        their cost, 400 (NAV 1 400 at cost, 1 540 at 110). ``leaves``: 4 of the scope's lot go out, an outflow of 400 (NAV 600
+        at cost, 660 at 110). Either way ROI and TWRR 0 until d3 (TWRR flat on d2), 10% from d4.
+
+        Today (read 17/10/2026): no point at all, both ways. The crossing event on d2, a day without a mark, voids ROI and
+        TWRR from d2; before it no day has a mark.
+        """
+        assert self._history(self._replayed_transfer_book(direction)) == self._flat_then_ten_percent()
+
+    # -- P4: the rates the days at cost need ---------------------------------- #
+
+    @pytest.mark.parametrize(("cut", "expected"), [("d4", [("CHF", date(2024, 3, 6)), ("USD", date(2024, 3, 4))]), (None, [])], ids=["days-at-cost", "no-day-at-cost"])
+    def test_p4_the_days_at_cost_need_each_long_lots_currency_at_its_opening_date(self, cut, expected):
+        """P4: a USD LONG lot opened on d0, a GBP SHORT lot on d1, a CHF LONG lot on d2, report EUR, no transaction. With days
+        at cost (``at_cost_until`` d4) each LONG lot's cost is converted at its opening date: (USD, d0) and (CHF, d2) are
+        asked, never the short's GBP. With no day at cost (None), nothing is asked.
+
+        Today: TypeError on ``at_cost_until``; without it nothing is asked — the no-day-at-cost case's value.
+        """
+        days = self._DAYS
+        resolver = _resolver("EUR")
+        lots = {1: self._long_lot(1, day=days[0], currency="USD"), 2: self._long_lot(2, day=days[1], currency="GBP", direction="SHORT"), 3: self._long_lot(3, day=days[2], currency="CHF")}
+
+        collect_performance_fx_needs(fx_resolver=resolver, analyses=[LotAnalysisType.PERFORMANCE_HISTORY], transactions=[], closures=[], lots_by_id=lots, asset_currency="EUR", at_cost_until=days[4] if cut == "d4" else None)
+
+        assert sorted(resolver._needs) == expected
 
 
 # --------------------------------------------------------------------------- #
@@ -1505,20 +1852,25 @@ class TestSmallBuilders:
         assert rows[0].target_amount == D("-500.0")
 
     def test_opening_reference_price_returns_nothing_when_no_quote_exists(self):
-        """The lot knows its reference price but the quote series is empty."""
+        """The lot knows its reference price but the asset's price series is empty."""
         lot = _lot(1, reference_unit_price=D("9"), reference_price_source="fallback")
-        price, currency, resolved_date, source = opening_reference_price(lot, PriceHistoryLookup([]))
-        assert (price, currency, resolved_date, source) == (None, None, lot.opening_date, "fallback")
+        price, currency, reference_date, source = opening_reference_price(lot, AssetPriceSeries([]))
+        assert (price, currency, reference_date, source) == (None, None, lot.opening_date, "fallback")
 
     def test_opening_reference_price_uses_the_resolved_quote_currency(self):
+        """A USD close of 8 Jan carried onto the lot's opening, 10 Jan: the reference is in USD, dated 10 Jan.
+
+        CP-7b (P21, every amount at the rate of its day): the reference is dated its opening day, so it converts at that
+        day's rate. Before CP-7b it was dated the close's own day, 8 Jan.
+        """
         lot = _lot(1, reference_unit_price=D("9"))
-        lookup = PriceHistoryLookup([_price(date(2024, 1, 8), D("9"), "USD")])
-        price, currency, resolved_date, _source = opening_reference_price(lot, lookup)
-        assert (price, currency, resolved_date) == (D("9"), "USD", date(2024, 1, 8))
+        series = _series(_quote(date(2024, 1, 8), D("9"), "USD"))
+        price, currency, reference_date, _source = opening_reference_price(lot, series)
+        assert (price, currency, reference_date) == (D("9"), "USD", date(2024, 1, 10))
 
     def test_opening_reference_price_scales_the_buy_price_by_the_quote_base(self):
         """A bond quoted per 100 units: the entry price must land on the same axis."""
-        price, _currency, _resolved, source = opening_reference_price(_lot(1, opening_unit_price=D("0.98")), PriceHistoryLookup([]), 100)
+        price, _currency, _resolved, source = opening_reference_price(_lot(1, opening_unit_price=D("0.98")), AssetPriceSeries([]), 100)
         assert (price, source) == (D("98.00"), "exact")
 
     def test_price_history_skips_days_with_no_estimated_price(self):
@@ -1691,3 +2043,1101 @@ class TestParseTransferPairId:
 
     def test_extracts_the_pair_id_from_a_transfer_fragment(self):
         assert _parse_transfer_pair_id("lot:1/transfer:42/leg:in") == 42
+
+
+# =========================================================================== #
+# CP-16 — decision 47 and J-9 in the lots builders
+# =========================================================================== #
+#
+# Workstream J «Numeri e analisi», release 1.3. Decision 47: a negative ADJUSTMENT carrying cost_basis_override
+# hands its units over at that cost; in the lots performance history its value leaves as an external flow, the
+# mirror of an ADJUSTMENT-in with a cost. J-9: a lot opened by an ADJUSTMENT-in priced by its override is in
+# cost_basis_currency, so every builder that converts that lot — the summary, the lot history's opening row and the
+# FX needs of that history — converts from that currency, not from the row's (usually None, which the FX resolver
+# reads as already in the report currency). The engine side is pinned in
+# test_financial/test_fifo_adjustment_out_with_cost.py, the end-to-end example in
+# test_financial/test_adjustment_out_with_cost_numbers.py.
+#
+# Unlike the doubles above, these tests take their lots, fragments, closures and events from the real engine
+# (run_fifo_lot_engine, pure as well): what changed is precisely what the engine hands to the builders, so a
+# hand-built double would restate the expected engine output instead of testing it.
+# Each docstring keeps the values its test read before CP-16; GUARD marks a test whose values CP-16 left as they were.
+
+
+def _engine_run(*transactions: Transaction, shorting: bool = False) -> FifoEngineResult:
+    """The engine as the service runs it on these in-memory rows: report currency EUR, broker 1 without shorting unless asked."""
+    return run_fifo_lot_engine(list(transactions), {1: shorting}, target_currency="EUR")
+
+
+class TestHandoverAtCostPerformanceHistory:
+    """Decision 47 in ``build_performance_history`` (lots/histories.py).
+
+    The decision's example: 10 bought at 20 EUR on 1 Oct 2018, 4 handed over on 3 Oct by an ADJUSTMENT −4 carrying
+    20 EUR a unit; X at 20, 20, 25, 25, 30 from 1 to 5 Oct. An ADJUSTMENT-in with a cost is an external flow of
+    −cost; the handover is its mirror, +4 × 20 = +80 on 3 Oct, converted from cost_basis_currency at the row's date.
+    Before CP-16 an ADJUSTMENT with a cost was a flow only when its quantity was positive: the 80 never left, and the
+    series read the 4 units as lost.
+
+    No day is valued at cost here (``at_cost_until=None``): the rules of a day with a mark, or without one outside the days at cost; the days at cost are ``TestPerformanceHistoryAtCost``.
+    """
+
+    _DAYS = _days(date(2018, 10, 1), 5)
+    _PRICES = dict(zip(_days(date(2018, 10, 1), 5), (D("20"), D("20"), D("25"), D("25"), D("30")), strict=True))
+
+    def _history(self) -> list:
+        buy = _tx(1, tx_date=date(2018, 10, 1), quantity=D("10"), amount=D("-200"), currency="EUR")
+        handover = _tx(
+            2,
+            tx_type=TransactionType.ADJUSTMENT,
+            tx_date=date(2018, 10, 3),
+            quantity=D("-4"),
+            amount=D("0"),
+            currency=None,
+            cost_basis_override=D("20"),
+            cost_basis_currency="EUR",
+        )
+        result = _engine_run(buy, handover)
+        context = PerformanceSourceContext(
+            transactions=[buy, handover],
+            engine_result=result,
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            fragments_by_lot=group_fragments(result.fragment_intervals),
+            closures_by_lot=group_closures(result.closures),
+            tx_by_id={buy.id: buy, handover.id: handover},
+        )
+        return build_performance_history(
+            scope_broker_ids=[1],
+            history_dates=self._DAYS,
+            market_prices=self._PRICES,
+            asset_currency="EUR",
+            fx_resolver=_resolver("EUR"),
+            context=context,
+            quote_base_quantity=1,
+            at_cost_until=None,
+        )
+
+    def test_the_handover_is_an_external_flow_of_its_cost(self, monkeypatch):
+        """The flows the series is computed from, net by date: −200 (the BUY) on 1 Oct, +80 (the handover at cost) on 3 Oct.
+
+        Read where build_performance_history hands them on — calculate_simple_roi_series, as histories imports it — and
+        netted by date, so a flow counted twice (from the row and again from its closure) shows. Before CP-16: {1 Oct: −200}.
+        """
+        received: list[list] = []
+        original = histories_module.calculate_simple_roi_series
+
+        def spy(nav_snapshots, cash_flows):
+            received.append(list(cash_flows))
+            return original(nav_snapshots, cash_flows)
+
+        monkeypatch.setattr(histories_module, "calculate_simple_roi_series", spy)
+
+        self._history()
+
+        assert len(received) == 1, "precondition: the series is computed once, the BUY being a flow"
+        net_by_date: dict[date, Decimal] = {}
+        for flow in received[0]:
+            net_by_date[flow.date] = net_by_date.get(flow.date, D("0")) + flow.amount
+        assert net_by_date == {date(2018, 10, 1): D("-200"), date(2018, 10, 3): D("80")}
+
+    def test_roi_and_twrr_count_the_handover_as_money_taken_out(self):
+        """The visible effect, from returns.py's definitions, on NAVs of 200, 200, 150 (6 × 25), 150 and 180 (6 × 30).
+
+        ROI = (NAV − invested) / invested with invested = −Σ flows: 200 until 2 Oct, 120 from 3 Oct → 0, 0, 0.25, 0.25,
+        0.5. TWRR compounds (NAV + the day's flow − previous NAV) / previous NAV: 3 Oct (150 + 80 − 200) / 200 = 0.15,
+        5 Oct (180 − 150) / 150 = 0.2, so 1.15 × 1.2 − 1 = 0.38 — the 4 units leave at their cost, 20, on a day X is
+        quoted 25, the mirror of an ADJUSTMENT-in costed below the market. No TWRR on the first day.
+        Before CP-16, without the flow: ROI −0.25, −0.25, −0.1 and TWRR −0.25, −0.25, −0.1 from 3 Oct.
+        """
+        points = self._history()
+
+        assert [(point.date, point.roi, point.twrr) for point in points] == [
+            (date(2018, 10, 1), D("0"), None),
+            (date(2018, 10, 2), D("0"), D("0")),
+            (date(2018, 10, 3), D("0.25"), D("0.15")),
+            (date(2018, 10, 4), D("0.25"), D("0.15")),
+            (date(2018, 10, 5), D("0.5"), D("0.38")),
+        ]
+
+
+class TestHandoverAtCostPerformanceFxNeeds:
+    """Decision 47's flow needs its rate: ``collect_performance_fx_needs`` asks for the handover's cost currency."""
+
+    def _call(self, resolver, **overrides):
+        kwargs = {
+            "fx_resolver": resolver,
+            "analyses": [LotAnalysisType.PERFORMANCE_HISTORY],
+            "transactions": [],
+            "closures": [],
+            "lots_by_id": {},
+            "asset_currency": "EUR",
+        }
+        kwargs.update(overrides)
+        collect_performance_fx_needs(**kwargs)
+
+    def test_a_handover_with_a_cost_needs_its_cost_currency_on_its_date(self):
+        """An ADJUSTMENT −4 at 18 USD a unit, report EUR: the 72 USD that leave are converted on the row's date.
+
+        So ("USD", that date) is asked for, as for an ADJUSTMENT-in with a cost. Before CP-16 only a positive ADJUSTMENT
+        registered it: nothing was asked, and the flow would have found no rate.
+        """
+        resolver = _resolver("EUR")
+        handover = _tx(1, tx_type=TransactionType.ADJUSTMENT, quantity=D("-4"), amount=D("0"), currency=None, cost_basis_override=D("18"), cost_basis_currency="USD")
+
+        self._call(resolver, transactions=[handover])
+
+        assert resolver._needs == [("USD", date(2024, 1, 10))]
+
+    def test_a_handover_without_a_cost_needs_nothing(self):
+        """GUARD: an ADJUSTMENT −4 without an override moves no money, so no rate is asked — not even for an asset quoted in USD."""
+        resolver = _resolver("EUR")
+
+        self._call(resolver, asset_currency="USD", transactions=[_tx(1, tx_type=TransactionType.ADJUSTMENT, quantity=D("-4"), amount=D("0"), currency=None)])
+
+        assert resolver._needs == []
+
+
+class TestPricedAdjustmentInLotCurrency:
+    """J-9 in the lots builders: the lot opened by an ADJUSTMENT +5 at 90 USD a unit, row currency None, report EUR.
+
+    The engine gives that lot the currency its price is in, USD (J-9), and each builder that converts the lot reads it:
+    with USD→EUR at 0.9 on the opening day, a cost of 5 × 90 = 450 USD is 405 EUR and a unit price of 90 USD is 81 EUR.
+    Before CP-16 the lot was in None, which the FX resolver reads as already EUR: 450 and 90, a USD price shown as euros.
+    """
+
+    _OPENED = date(2024, 1, 10)
+
+    def _priced_adjustment_in(self) -> Transaction:
+        return _tx(
+            1,
+            tx_type=TransactionType.ADJUSTMENT,
+            tx_date=self._OPENED,
+            quantity=D("5"),
+            amount=D("0"),
+            currency=None,
+            cost_basis_override=D("90"),
+            cost_basis_currency="USD",
+        )
+
+    def _usd_at_090(self) -> FxRateResolver:
+        return _resolver("EUR", {("USD", self._OPENED): D("0.9")})
+
+    def _opening_rows(self, opening: Transaction) -> list[tuple[LotTimelineEventKind, Decimal | None]]:
+        """(kind, unit price) of the lot history's opening row of ``opening``'s lot."""
+        result = _engine_run(opening)
+        rows = _svc()._build_lot_event_rows(
+            engine_result=result,
+            selected_ids=[opening.id],
+            fx_resolver=self._usd_at_090(),
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+        )
+        opening_kinds = (LotTimelineEventKind.BUY, LotTimelineEventKind.ADJUSTMENT_IN)
+        return [(row.kind, row.unit_price) for row in rows if row.transaction_id == opening.id and row.kind in opening_kinds]
+
+    def test_the_summary_converts_the_lots_cost_from_the_currency_it_is_in(self):
+        """The lot summary (``_build_lot_summaries``): currency USD, original cost 405 EUR, opening unit price 81 EUR.
+
+        Before CP-16: currency None, original cost 450, opening unit price 90 — the USD amounts read as euros.
+        """
+        result = _engine_run(self._priced_adjustment_in())
+
+        rows = _svc()._build_lot_summaries(
+            engine_result=result,
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            selected_ids=[1],
+            fx_resolver=self._usd_at_090(),
+            market_prices={},
+            price_series=AssetPriceSeries([]),
+            closures_by_lot={},
+            income_by_lot={},
+            fees_by_lot={},
+            taxes_by_lot={},
+            estimated_mode=False,
+            quote_base_quantity=1,
+            analysis_end=date(2024, 3, 1),
+        )
+        row = next(row for row in rows if row.lot_id == 1)
+        observed = {"currency": row.currency, "original_cost": row.original_cost, "opening_unit_price": row.opening_unit_price}
+
+        assert observed == {"currency": "USD", "original_cost": D("405"), "opening_unit_price": D("81")}
+
+    def test_the_opening_row_of_the_lot_history_converts_its_price_from_the_lots_currency(self):
+        """The lot history's ADJUSTMENT_IN row (``_build_opening_and_split_rows``): unit price 90 USD × 0.9 = 81 EUR.
+
+        An opening row converts its price from the lot's currency — the cost basis's for a priced ADJUSTMENT, the BUY's
+        own for a BUY. Before CP-16 it converted with the row's currency (``tx.currency``, None): 90, a USD price shown
+        as euros — the J-9 defect again, in the history.
+        """
+        assert self._opening_rows(self._priced_adjustment_in()) == [(LotTimelineEventKind.ADJUSTMENT_IN, D("81"))]
+
+    def test_a_buys_opening_row_still_converts_from_its_own_currency(self):
+        """GUARD: 10 bought at 20 USD — a BUY's lot is in the BUY's currency, so its row reads 20 × 0.9 = 18 EUR, as before CP-16."""
+        buy = _tx(1, tx_date=self._OPENED, quantity=D("10"), amount=D("-200"), currency="USD")
+
+        assert self._opening_rows(buy) == [(LotTimelineEventKind.BUY, D("18"))]
+
+    def test_the_event_history_needs_the_lots_currency_on_its_opening_date(self):
+        """``collect_fx_needs`` for EVENT_HISTORY alone, the lot selected: ("USD", the opening date), the rate its opening row needs.
+
+        Before CP-16 the history registered only each event's row currency — None for this ADJUSTMENT — so nothing was asked.
+        """
+        adjustment = self._priced_adjustment_in()
+        result = _engine_run(adjustment)
+        resolver = _resolver("EUR")
+
+        collect_fx_needs(
+            fx_resolver=resolver,
+            analyses=[LotAnalysisType.EVENT_HISTORY],
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            selected_ids=[1],
+            transactions=[adjustment],
+            price_series=AssetPriceSeries([]),
+            prices=[],
+            fragments=result.fragment_intervals,
+            events=result.classified_events,
+            closures=result.closures,
+            split_ratios_by_tx_id={},
+            actual_to=date(2024, 3, 1),
+            computed_from=self._OPENED,
+            asset_currency="EUR",
+        )
+
+        assert resolver._needs == [("USD", self._OPENED)]
+
+
+# =========================================================================== #
+# CP-7a — developer's decision 26 (D-J1, option B): each leg of a closure at its own date
+# =========================================================================== #
+#
+# Workstream J «Numeri e analisi», release 1.3. A FIFO lot's legs convert to the report currency each in its own currency
+# at its own date: the cost in the lot's currency at the lot's opening date (the purchase rate), the proceeds in the
+# closing transaction's currency (LotClosure.close_currency) at the close date (the sale rate). One conversion point,
+# lots/conversions.py convert_closure; need_closure_rates asks for both rates. So a fully closed lot keeps no market P&L,
+# its realized P&L is the Dashboard's, and a lot sold in another currency than it was bought in gets its proceeds in the
+# right one. Before CP-7a every reader converted every figure in the lot's currency at the close date — the cost
+# included — and the engine subtracted a sale's USD from a lot's EUR.
+#
+# The D-J1 example, R1: 1 unit bought at 100 USD on 2 Jan 2025 (USD→EUR 1.00), sold at 110 USD on 2 Jun 2025 (0.90).
+# Proceeds 110 × 0.90 = 99 EUR, cost 100 × 1.00 = 100 EUR: realized −1 and, the lot being closed, market 0 — where the
+# native gain of 10 USD at the sale's rate read +9 of realized P&L and −10 of market P&L.
+#
+# R10, in the same lot: a short lot's P&L — its total value — is its opening proceeds (at the opening rate) less the cost
+# of every buy-back to date (ConvertedClosure.cost, in the BUY's currency at its date) less its open value. Before it a
+# buy-back paid money out and nothing subtracted it.
+#
+# As in the CP-16 section, lots and closures come from the real engine (broker 1 allowing shorting, which only the short
+# books use): what changed is what the engine hands over (close_currency; no native realized P&L across two currencies)
+# and how the builders convert it. The two new names are read through the module while a test runs
+# (conversions_module.convert_closure, conversions_module.need_closure_rates), never imported at module level: before
+# CP-7a only the tests that call them fail, on the missing attribute, and the rest of the file still collects. Every
+# other test here fails before CP-7a on its values. Each docstring says what its test read before CP-7a; GUARD marks a
+# value CP-7a leaves as it was.
+
+_JAN_2 = date(2025, 1, 2)  # every book opens on 2 Jan 2025...
+_JUN_2 = date(2025, 6, 2)  # ...and closes, wholly or in part, on 2 Jun 2025
+_SEP_1 = date(2025, 9, 1)  # the reading day of the summaries
+_USD_1_THEN_090 = {("USD", _JAN_2): D("1.00"), ("USD", _JUN_2): D("0.90")}  # the D-J1 example's rates (R1, R2)
+_USD_110_THEN_090 = {("USD", _JAN_2): D("1.10"), ("USD", _JUN_2): D("0.90")}  # the USD short's
+_USD_090_ON_JUN_2 = {("USD", _JUN_2): D("0.90")}  # R3's: its lot is in EUR
+_CONVERTED_FIGURES = ("open_unit_price", "close_unit_price", "proceeds", "cost", "realized_pnl")
+
+
+def _cp7a_run(rows: list[Transaction]) -> FifoEngineResult:
+    """The engine on a CP-7a book: report currency EUR, broker 1 allowing shorting (only the short books sell what they do not hold)."""
+    return _engine_run(*rows, shorting=True)
+
+
+def _bought_on_jan_2(quantity: str, unit_price: str, currency: str) -> Transaction:
+    """Transaction 1: ``quantity`` bought at ``unit_price`` on 2 Jan."""
+    return _tx(1, tx_date=_JAN_2, quantity=D(quantity), amount=-D(quantity) * D(unit_price), currency=currency)
+
+
+def _sold_on_jun_2(quantity: str, unit_price: str, currency: str) -> Transaction:
+    """Transaction 2: ``quantity`` sold at ``unit_price`` on 2 Jun."""
+    return _tx(2, tx_type=TransactionType.SELL, tx_date=_JUN_2, quantity=-D(quantity), amount=D(quantity) * D(unit_price), currency=currency)
+
+
+def _shorted_on_jan_2(quantity: str, unit_price: str, currency: str) -> Transaction:
+    """Transaction 1: ``quantity`` sold short at ``unit_price`` on 2 Jan."""
+    return _tx(1, tx_type=TransactionType.SELL, tx_date=_JAN_2, quantity=-D(quantity), amount=D(quantity) * D(unit_price), currency=currency)
+
+
+def _bought_back_on_jun_2(quantity: str, unit_price: str, currency: str) -> Transaction:
+    """Transaction 2: ``quantity`` bought back at ``unit_price`` on 2 Jun."""
+    return _tx(2, tx_date=_JUN_2, quantity=D(quantity), amount=-D(quantity) * D(unit_price), currency=currency)
+
+
+def _r1() -> list[Transaction]:
+    """R1, the D-J1 example: 1 bought at 100 USD, sold at 110 USD."""
+    return [_bought_on_jan_2("1", "100", "USD"), _sold_on_jun_2("1", "110", "USD")]
+
+
+def _r2() -> list[Transaction]:
+    """R2: 10 bought at 100 USD, 4 of them sold at 110 USD."""
+    return [_bought_on_jan_2("10", "100", "USD"), _sold_on_jun_2("4", "110", "USD")]
+
+
+def _r3() -> list[Transaction]:
+    """R3: 1 bought at 100 EUR, sold at 110 USD — in another currency than it was bought in; the engine never asks which a broker trades in."""
+    return [_bought_on_jan_2("1", "100", "EUR"), _sold_on_jun_2("1", "110", "USD")]
+
+
+def _usd_short() -> list[Transaction]:
+    """A short in USD: 1 sold at 50 USD (USD→EUR 1.10 on 2 Jan), bought back at 40 USD (0.90 on 2 Jun)."""
+    return [_shorted_on_jan_2("1", "50", "USD"), _bought_back_on_jun_2("1", "40", "USD")]
+
+
+def _short_half_bought_back() -> list[Transaction]:
+    """R10: 10 sold short at 100 EUR, 5 of them bought back at 90 EUR."""
+    return [_shorted_on_jan_2("10", "100", "EUR"), _bought_back_on_jun_2("5", "90", "EUR")]
+
+
+def _short_bought_back_whole() -> list[Transaction]:
+    """R10: the same short bought back whole, 10 at 90 EUR."""
+    return [_shorted_on_jan_2("10", "100", "EUR"), _bought_back_on_jun_2("10", "90", "EUR")]
+
+
+def _gbp_lot_sold_in_usd() -> list[Transaction]:
+    """1 bought at 100 GBP, sold at 110 USD: each leg needs a rate of its own."""
+    return [_bought_on_jan_2("1", "100", "GBP"), _sold_on_jun_2("1", "110", "USD")]
+
+
+def _gbp_lot_handed_over_at_a_usd_cost() -> list[Transaction]:
+    """10 bought at 20 GBP; on 2 Jun an ADJUSTMENT −4 hands 4 over at 18 USD a unit (decision 47), its own currency None."""
+    handover = _tx(2, tx_type=TransactionType.ADJUSTMENT, tx_date=_JUN_2, quantity=D("-4"), amount=D("0"), currency=None, cost_basis_override=D("18"), cost_basis_currency="USD")
+    return [_bought_on_jan_2("10", "20", "GBP"), handover]
+
+
+def _lot_1_and_the_closure_of_transaction_2(result: FifoEngineResult) -> tuple[FifoLot, LotClosure]:
+    """Lot 1 — every book opens one — and the closure transaction 2 made of it, both found by their ids."""
+    closures = [closure for closure in result.closures if closure.lot_id == 1 and closure.transaction_id == 2]
+    assert len(closures) == 1, f"precondition: transaction 2 closes lot 1 once, got {result.closures}"
+    return result.get_lot(1), closures[0]
+
+
+def _converted(rows: list[Transaction], resolver: FxRateResolver) -> dict:
+    """``convert_closure`` (CP-7a, read through the module) of lot 1's closure by transaction 2, figure by figure."""
+    lot, closure = _lot_1_and_the_closure_of_transaction_2(_cp7a_run(rows))
+    converted = conversions_module.convert_closure(closure, lot, resolver)
+    return {name: getattr(converted, name) for name in _CONVERTED_FIGURES}
+
+
+def _summary_row(rows: list[Transaction], rates: dict, market_price: Decimal):
+    """Lot 1's summary row (``_build_lot_summaries``) in EUR, X quoted ``market_price`` EUR on 1 Sep, the reading day."""
+    result = _cp7a_run(rows)
+    summaries = _svc()._build_lot_summaries(
+        engine_result=result,
+        lots_by_id={lot.lot_id: lot for lot in result.lots},
+        selected_ids=[1],
+        fx_resolver=_resolver("EUR", rates),
+        market_prices={_SEP_1: market_price},
+        price_series=AssetPriceSeries([]),
+        closures_by_lot=group_closures(result.closures),
+        income_by_lot={},
+        fees_by_lot={},
+        taxes_by_lot={},
+        estimated_mode=False,
+        quote_base_quantity=1,
+        analysis_end=_SEP_1,
+    )
+    return next(summary for summary in summaries if summary.lot_id == 1)
+
+
+def _needs_of_the_lot_analysis(analysis: LotAnalysisType, rows: list[Transaction]) -> set[tuple[str, date]]:
+    """What ``collect_fx_needs`` asks for lot 1, the window reduced to 1 Sep: no market day asks for 2 Jan or 2 Jun."""
+    result = _cp7a_run(rows)
+    resolver = _resolver("EUR")
+    collect_fx_needs(
+        fx_resolver=resolver,
+        analyses=[analysis],
+        lots_by_id={lot.lot_id: lot for lot in result.lots},
+        selected_ids=[1],
+        transactions=rows,
+        price_series=AssetPriceSeries([]),
+        prices=[],
+        fragments=result.fragment_intervals,
+        events=result.classified_events,
+        closures=result.closures,
+        split_ratios_by_tx_id={},
+        actual_to=_SEP_1,
+        computed_from=_SEP_1,
+        asset_currency="EUR",
+    )
+    return set(resolver._needs)
+
+
+class TestConvertClosure:
+    """``convert_closure`` (lots/conversions.py), the one conversion point of a closure: each leg in its currency at its date."""
+
+    @pytest.mark.parametrize(
+        ("book", "rates", "expected"),
+        [
+            pytest.param(_r1, _USD_1_THEN_090, ("100", "99", "99", "100", "-1"), id="R1-the-D-J1-example"),
+            pytest.param(_r2, _USD_1_THEN_090, ("100", "99", "396", "400", "-4"), id="R2-four-of-ten-sold"),
+            pytest.param(_r3, _USD_090_ON_JUN_2, ("100", "99", "99", "100", "-1"), id="R3-bought-in-EUR-sold-in-USD"),
+            pytest.param(_usd_short, _USD_110_THEN_090, ("55", "36", "0", "36", "19"), id="a-USD-short-bought-back"),
+        ],
+    )
+    def test_each_leg_converts_in_its_own_currency_at_its_own_date(self, book, rates, expected):
+        """(open price, close price, proceeds, cost, realized) in EUR: the lot's leg at its opening rate, the closing leg at the close's.
+
+        R1: 110 × 0.90 − 100 × 1.00 = −1. R2: 4 × 110 × 0.90 − 4 × 100 × 1.00 = 396 − 400 = −4. R3: 110 USD × 0.90 − 100 EUR = −1.
+        The short: its opening sale, 50 × 1.10 = 55, less its buy-back, 40 × 0.90 = 36, which is its cost: 19; a short's
+        closure has no proceeds. Before CP-7a: no convert_closure (AttributeError); the readers converted every figure in the
+        lot's currency at the close date — R1 open price 90, realized +9; R2 +36; R3 close price and proceeds 110, realized +10;
+        the short open price 45, realized +9.
+        """
+        assert _converted(book(), _resolver("EUR", rates)) == dict(zip(_CONVERTED_FIGURES, map(D, expected), strict=True))
+
+    def test_without_the_sales_rate_the_closing_leg_and_the_realized_pnl_are_unknown(self):
+        """R6: R1 without a USD rate on 2 Jun — close price, proceeds and realized None, never the native 110; USD/EUR on 2 Jun reported.
+
+        The lot's leg keeps its purchase rate: open price and cost 100. Before CP-7a: no convert_closure (AttributeError); the
+        readers already read this realized P&L as None, the sale's rate being the only one it needed.
+        """
+        resolver = _resolver("EUR", {("USD", _JAN_2): D("1.00")})
+
+        assert _converted(_r1(), resolver) == {"open_unit_price": D("100"), "close_unit_price": None, "proceeds": None, "cost": D("100"), "realized_pnl": None}
+        assert resolver.missing_pairs() == [WACMissingPairInfo(pair="USD/EUR", dates=[_JUN_2])]
+
+    def test_without_the_purchase_rate_the_lots_leg_and_the_realized_pnl_are_unknown(self):
+        """R6: R1 without a USD rate on 2 Jan — open price, cost and realized None; the proceeds, 99, stay known; USD/EUR on 2 Jan reported.
+
+        Before CP-7a: no convert_closure (AttributeError); the realized P&L read +9 without ever asking for the purchase rate.
+        """
+        resolver = _resolver("EUR", {("USD", _JUN_2): D("0.90")})
+
+        assert _converted(_r1(), resolver) == {"open_unit_price": None, "close_unit_price": D("99"), "proceeds": D("99"), "cost": None, "realized_pnl": None}
+        assert resolver.missing_pairs() == [WACMissingPairInfo(pair="USD/EUR", dates=[_JAN_2])]
+
+
+class TestTheLotsRealizedPnlAndProceeds:
+    """``known_realized_pnl`` and ``known_cumulative_proceeds`` (lots/histories.py): the lot summary's sums, through convert_closure."""
+
+    @pytest.mark.parametrize(
+        ("book", "rates", "expected"),
+        [
+            pytest.param(_r1, _USD_1_THEN_090, (D("-1"), D("99")), id="R1"),
+            pytest.param(_r2, _USD_1_THEN_090, (D("-4"), D("396")), id="R2"),
+            pytest.param(_r3, _USD_090_ON_JUN_2, (D("-1"), D("99")), id="R3"),
+            pytest.param(_usd_short, _USD_110_THEN_090, (D("19"), D("55")), id="USD-short"),
+            pytest.param(_r1, {("USD", _JUN_2): D("0.90")}, (None, D("99")), id="R6-R1-without-the-purchase-rate"),
+            pytest.param(_r1, {("USD", _JAN_2): D("1.00")}, (None, None), id="GUARD-R6-R1-without-the-sales-rate"),
+        ],
+    )
+    def test_each_closure_counts_its_legs_at_their_own_dates(self, book, rates, expected):
+        """(known_realized_pnl, known_cumulative_proceeds) of lot 1, in EUR.
+
+        Before CP-7a: R1 (+9, 99), R2 (+36, 396), R3 (+10, 110 — the USD read as EUR), the USD short (+9, 55) and R1 without
+        the purchase rate (+9, 99): the realized P&L was the native gain at the sale's rate. GUARDs: the proceeds of R1, R2, the
+        short (its opening sale, 50 × 1.10) and R6, and R1 without the sale's rate, unknown before as after.
+        """
+        result = _cp7a_run(book())
+        lot = result.get_lot(1)
+        closures = [closure for closure in result.closures if closure.lot_id == 1]
+        resolver = _resolver("EUR", rates)
+
+        assert (known_realized_pnl(lot, closures, resolver), known_cumulative_proceeds(lot, closures, resolver)) == expected
+
+
+class TestTheLotSummaryOfASoldLot:
+    """``_build_lot_summaries``: market P&L = pnl − realized, the realized P&L now each leg at its own date."""
+
+    @pytest.mark.parametrize(
+        ("book", "rates", "expected"),
+        [
+            pytest.param(_r1, _USD_1_THEN_090, ("99", "-1", "-1", "0", "-1"), id="R1-closed"),
+            pytest.param(_r2, _USD_1_THEN_090, ("396", "80", "-4", "84", "80"), id="R2-partly-sold"),
+            pytest.param(_r3, _USD_090_ON_JUN_2, ("99", "-1", "-1", "0", "-1"), id="R3-closed-sold-in-USD"),
+        ],
+    )
+    def test_the_split_between_realized_and_market_pnl(self, book, rates, expected):
+        """(cumulative proceeds, pnl, realized, market, total P&L) in EUR, X quoted 114 EUR on 1 Sep (120 USD at 0.95).
+
+        R1: closed, so market 0 and realized = pnl = 99 − 100 = −1. R2: 6 open worth 6 × 114 = 684, proceeds 396, cost 1000:
+        pnl 80, realized −4, market 84 = 6 × 114 − 6 × 100 × 1.00, the open part's gain at today's price. R3: 99 − 100 = −1.
+        Before CP-7a: R1 (99, −1, +9, −10, −1) and R2 (396, 80, +36, +44, 80) — the same total, split otherwise — and R3
+        (110, +10, +10, 0, +10), the sale's 110 USD read as euros.
+        """
+        row = _summary_row(book(), rates, D("114"))
+
+        assert (row.cumulative_proceeds, row.pnl, row.realized_pnl, row.market_pnl, row.total_pnl) == tuple(map(D, expected))
+
+
+class TestShortLotsSubtractTheirBuyBacks:
+    """R10 (CP-7a): a short lot's P&L — its total value — is its opening proceeds less every buy-back's cost to date less its open value.
+
+    Each buy-back costs its ConvertedClosure.cost: the BUY's price, in its currency at its date. Before R10 a short read its
+    opening proceeds less its open value only: what a buy-back paid out was never subtracted, so covering a short at the
+    market price added the price paid to its P&L.
+    """
+
+    @pytest.mark.parametrize(
+        ("book", "rates", "expected"),
+        [
+            pytest.param(_short_half_bought_back, {}, ("450", "100", "100", "50", "50"), id="half-bought-back"),
+            pytest.param(_short_bought_back_whole, {}, ("0", "100", "100", "100", "0"), id="bought-back-whole"),
+            pytest.param(_usd_short, _USD_110_THEN_090, ("0", "19", "19", "19", "0"), id="a-USD-short-bought-back-whole"),
+        ],
+    )
+    def test_the_summary_subtracts_the_buy_backs(self, book, rates, expected):
+        """(open value, total value, pnl, realized, market) of the short in EUR, X quoted 90 EUR on 1 Sep.
+
+        Half bought back: 1000 − 5 × 90 paid − 5 × 90 still owed = 100; realized 5 × (100 − 90) = 50, market 50 on the 5 still
+        open. Whole: 1000 − 900 = 100, all of it realized, market 0. The USD short: 55 − 36 = 19, all realized, market 0 —
+        each leg at its own date. Before R10 (and CP-7a): (450, 550, 550, 50, 500), (0, 1000, 1000, 100, 900) and
+        (0, 55, 55, +9, 46).
+        """
+        row = _summary_row(book(), rates, D("90"))
+
+        assert (row.open_value, row.total_value, row.pnl, row.realized_pnl, row.market_pnl) == tuple(map(D, expected))
+
+    def test_a_buy_back_at_the_market_price_does_not_move_the_value_history(self):
+        """R10 on the value history of the half-bought-back short, X at 90 EUR from 1 to 3 Jun: (date, open value, total value, pnl).
+
+        At 90 the short is worth 10 × (100 − 90) = 100 before the buy-back and after it: buying 5 back at 90 on 2 Jun pays 450
+        out and removes 450 of liability. Before R10 the 450 paid out was never subtracted: 100 on 1 Jun (GUARD), then 550.
+        """
+        result = _cp7a_run(_short_half_bought_back())
+        days = _days(date(2025, 6, 1), 3)
+
+        points = build_value_history(
+            selected_ids=[1],
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            fragments_by_lot=group_fragments(result.fragment_intervals),
+            closures_by_lot=group_closures(result.closures),
+            market_prices=dict.fromkeys(days, D("90")),
+            history_dates=days,
+            fx_resolver=_resolver("EUR"),
+            income_prefix_by_lot={},
+            fees_prefix_by_lot={},
+            taxes_prefix_by_lot={},
+            at_cost_until=None,
+            quote_base_quantity=1,
+        )
+
+        assert [(point.date, point.open_value, point.total_value, point.pnl) for point in points if point.lot_id == 1] == [
+            (date(2025, 6, 1), D("900"), D("100"), D("100")),
+            (date(2025, 6, 2), D("450"), D("100"), D("100")),
+            (date(2025, 6, 3), D("450"), D("100"), D("100")),
+        ]
+
+
+class TestTheClosureRowsOfTheLotHistory:
+    """``_build_closure_rows``: a closure row's open price at the lot's opening rate, its close price and proceeds at the close's."""
+
+    @pytest.mark.parametrize(
+        ("book", "rates", "expected"),
+        [
+            pytest.param(_r1, _USD_1_THEN_090, (LotTimelineEventKind.SELL, D("100"), D("99"), D("-1"), D("99")), id="R1"),
+            pytest.param(_r3, _USD_090_ON_JUN_2, (LotTimelineEventKind.SELL, D("100"), D("99"), D("-1"), D("99")), id="R3-sold-in-USD"),
+            pytest.param(_usd_short, _USD_110_THEN_090, (LotTimelineEventKind.BUY, D("55"), D("36"), D("19"), D("0")), id="USD-short-bought-back"),
+        ],
+    )
+    def test_a_closure_row_converts_each_leg_at_its_own_date(self, book, rates, expected):
+        """(kind, open price, close price, realized, proceeds) of transaction 2's row, in EUR.
+
+        Before CP-7a every figure converted in the lot's currency at the close date: R1 (SELL, 90, 99, +9, 99), R3 (SELL, 100,
+        110, +10, 110), the USD short (BUY, 45, 36, +9, 0).
+        """
+        result = _cp7a_run(book())
+        rows = _svc()._build_closure_rows(result.closures, {1}, {lot.lot_id: lot for lot in result.lots}, _resolver("EUR", rates))
+
+        assert [(row.kind, row.open_unit_price, row.close_unit_price, row.realized_pnl, row.proceeds) for row in rows if row.transaction_id == 2] == [expected]
+
+
+class TestTheRatesAClosureNeeds:
+    """The rates a closure needs: its own currency at its close date, its lot's at the lot's opening — need_closure_rates."""
+
+    def test_need_closure_rates_asks_for_both_legs(self):
+        """need_closure_rates (CP-7a, read through the module) alone: R1 asks for USD on 2 Jan and on 2 Jun; R3, whose lot is in EUR, on 2 Jun only.
+
+        Before CP-7a: no need_closure_rates (AttributeError).
+        """
+        needs = {}
+        for name, book in (("R1", _r1), ("R3", _r3)):
+            lot, closure = _lot_1_and_the_closure_of_transaction_2(_cp7a_run(book()))
+            resolver = _resolver("EUR")
+            conversions_module.need_closure_rates(resolver, closure, lot)
+            needs[name] = sorted(resolver._needs)
+
+        assert needs == {"R1": [("USD", _JAN_2), ("USD", _JUN_2)], "R3": [("USD", _JUN_2)]}
+
+    @pytest.mark.parametrize("analysis", [LotAnalysisType.LOT_SUMMARY, LotAnalysisType.RETURN_HISTORY])
+    def test_the_lot_summary_asks_for_the_sales_currency_on_the_sales_date(self, analysis):
+        """collect_fx_needs for 1 bought in GBP and sold in USD, read from 1 Sep: ("USD", 2 Jun) and ("GBP", 2 Jan) among the needs.
+
+        The window starts after the sale, so no market day asks for 2 Jun: the closure must. Before CP-7a it asked for the lot's
+        GBP on 2 Jun instead, and the sale's USD was never loaded.
+        """
+        assert {("USD", _JUN_2), ("GBP", _JAN_2)} <= _needs_of_the_lot_analysis(analysis, _gbp_lot_sold_in_usd())
+
+    @pytest.mark.parametrize("analysis", [LotAnalysisType.EVENT_HISTORY, LotAnalysisType.CUSTODY_HISTORY])
+    def test_the_lot_history_asks_for_a_handovers_cost_currency_on_its_date(self, analysis):
+        """collect_fx_needs for 10 bought in GBP, 4 handed over at 18 USD on 2 Jun: ("USD", 2 Jun) and ("GBP", 2 Jan) among the needs.
+
+        No row is in USD — the ADJUSTMENT's own currency is None — so only its closure can ask. Before CP-7a: ("GBP", 2 Jan) and
+        ("GBP", 2 Jun) only; the units left at their own GBP cost (CP-16's fallback) and USD was never asked for.
+        """
+        assert {("USD", _JUN_2), ("GBP", _JAN_2)} <= _needs_of_the_lot_analysis(analysis, _gbp_lot_handed_over_at_a_usd_cost())
+
+    def test_the_performance_history_asks_for_the_sales_currency_on_the_sales_date(self):
+        """collect_performance_fx_needs for 1 bought in GBP and sold in USD: ("USD", 2 Jun) and ("GBP", 2 Jan) among the needs.
+
+        Before CP-7a: ("GBP", 2 Jan) for the BUY and ("GBP", 2 Jun) for the sale, whose 110 USD were then read as GBP.
+        """
+        rows = _gbp_lot_sold_in_usd()
+        result = _cp7a_run(rows)
+        resolver = _resolver("EUR")
+
+        collect_performance_fx_needs(
+            fx_resolver=resolver,
+            analyses=[LotAnalysisType.PERFORMANCE_HISTORY],
+            transactions=rows,
+            closures=result.closures,
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            asset_currency="EUR",
+        )
+
+        assert {("USD", _JUN_2), ("GBP", _JAN_2)} <= set(resolver._needs)
+
+
+class TestTheCashFlowOfASale:
+    """``build_performance_history``: a SELL enters the cash flows at its proceeds, converted from its own currency at its date.
+
+    No day is valued at cost here (``at_cost_until=None``): the rules of a day with a mark, or without one outside the days at cost; the days at cost are ``TestPerformanceHistoryAtCost``.
+    """
+
+    _DAYS = _days(date(2025, 6, 1), 3)
+
+    @pytest.mark.parametrize(
+        ("book", "rates", "expected_sale_flow"),
+        [
+            pytest.param(_r3, _USD_090_ON_JUN_2, D("99"), id="R3-a-lot-bought-in-EUR-sold-in-USD"),
+            pytest.param(_r1, _USD_1_THEN_090, D("99"), id="GUARD-R1-a-USD-lot-sold-in-USD"),
+        ],
+    )
+    def test_a_sale_enters_the_cash_flows_at_its_converted_proceeds(self, monkeypatch, book, rates, expected_sale_flow):
+        """The flows, net by date: −100 for the purchase, carried onto 1 Jun (the first priced day), then the sale's 110 USD at 0.90 on 2 Jun.
+
+        Read where build_performance_history hands them on — calculate_simple_roi_series, as histories imports it. Before CP-7a
+        R3's sale entered at +110, its USD read as the lot's EUR; R1's at +99 (GUARD: lot and sale in USD).
+        """
+        received: list[list] = []
+        original = histories_module.calculate_simple_roi_series
+
+        def spy(nav_snapshots, cash_flows):
+            received.append(list(cash_flows))
+            return original(nav_snapshots, cash_flows)
+
+        monkeypatch.setattr(histories_module, "calculate_simple_roi_series", spy)
+        rows = book()
+        result = _cp7a_run(rows)
+        context = PerformanceSourceContext(
+            transactions=rows,
+            engine_result=result,
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            fragments_by_lot=group_fragments(result.fragment_intervals),
+            closures_by_lot=group_closures(result.closures),
+            tx_by_id={row.id: row for row in rows},
+        )
+
+        build_performance_history(
+            scope_broker_ids=[1],
+            history_dates=self._DAYS,
+            market_prices=dict.fromkeys(self._DAYS, D("100")),
+            asset_currency="EUR",
+            fx_resolver=_resolver("EUR", rates),
+            context=context,
+            quote_base_quantity=1,
+            at_cost_until=None,
+        )
+
+        assert len(received) == 1, "precondition: the series is computed once, the purchase being a flow"
+        net_by_date: dict[date, Decimal] = {}
+        for flow in received[0]:
+            net_by_date[flow.date] = net_by_date.get(flow.date, D("0")) + flow.amount
+        assert net_by_date == {date(2025, 6, 1): D("-100"), _JUN_2: expected_sale_flow}
+
+
+# =========================================================================== #
+# CP-7b — the lots read their prices from the asset's daily price series (V1, with J-28)
+# =========================================================================== #
+#
+# Workstream J «Numeri e analisi», release 1.3. The developer's decisions P2/J-17 («trades are prices, an adjustment
+# isn't») and P21 («every amount at the rate of its day»), then option (a) of the CP-7b amendment («the Dashboard's
+# per-day rule in the lots too: one rule in the whole app»). The lots read every price from the asset's daily price
+# series (financial_math.price_marks.AssetPriceSeries, built by build_asset_price_series): the last observation on or
+# before a day — a market close, or the average of that day's BUY/SELL prices, never an ADJUSTMENT — carried forward.
+#
+# * A lot opened by an ADJUSTMENT takes the series' mark on its opening day as its reference: ``exact`` for a close of
+#   that day, ``fallback`` for anything else (a close carried forward, a trade price, carried or not). No mark, no
+#   reference: the lot falls back to its own price, as before. A lot opened by a BUY keeps its own price.
+# * opening_reference_price(lot, price_series) hands that reference over in the currency of the opening day's mark,
+#   dated the opening day, so it converts at that day's rate; collect_fx_needs asks for that rate.
+# * The days with no observation on or before them — the run before the asset's first close, BUY or SELL — are valued
+#   at cost (last_day_without_observation gives the last of them); a later day without a market price stays a gap.
+#
+# Before CP-7b a PriceHistoryLookup read the stored closes alone: an ADJUSTMENT's lot took the last close however old,
+# dated (and so converted) at that close's own day, and the lots were at cost only when the asset had no close at all.
+#
+# The reference is decided inside get_lots_analysis, before the FIFO engine runs, so the first class drives the whole
+# service on in-memory rows: its loaders are doubles returning the test's rows, its session a double that hands over
+# the asset. Everything is in EUR, so no rate is ever asked and nothing reaches a database: the unit stays PURE. The new
+# name, last_day_without_observation, is read through its module while a test runs (prices_module), never imported at
+# module level: before CP-7b only the tests that call it fail, and the rest of the file still collects. Each docstring
+# says what its test read before CP-7b; GUARD marks a value CP-7b leaves as it was.
+
+_MAR_10 = date(2024, 3, 10)  # five days before the opening
+_MAR_12 = date(2024, 3, 12)  # three days before
+_MAR_13 = date(2024, 3, 13)  # two days before
+_MAR_15 = date(2024, 3, 15)  # transaction 2, an ADJUSTMENT +5 at 90 EUR a unit, opens the lot under test
+_MAR_17 = date(2024, 3, 17)  # two days after
+_MAR_18 = date(2024, 3, 18)  # three days after
+_MAR_20 = date(2024, 3, 20)  # the reading day of every analysis of this section
+_REFERENCE_ISSUES = {IssueCode.REFERENCE_PRICE_FALLBACK, IssueCode.REFERENCE_PRICE_UNAVAILABLE}
+
+
+def _adjustment_in_at_90(day: date = _MAR_15) -> Transaction:
+    """Transaction 2: 5 units received by an ADJUSTMENT at a cost basis of 90 EUR a unit — an inherited position."""
+    return _tx(2, tx_type=TransactionType.ADJUSTMENT, tx_date=day, quantity=D("5"), amount=D("0"), currency=None, cost_basis_override=D("90"), cost_basis_currency="EUR")
+
+
+def _bought_at_120(day: date) -> Transaction:
+    """Transaction 1: 10 bought for 1200 EUR, 120 a unit."""
+    return _tx(1, tx_date=day, quantity=D("10"), amount=D("-1200"), currency="EUR")
+
+
+def _series_of(*rows: Transaction, closes: dict[date, str] | None = None) -> AssetPriceSeries:
+    """The asset's series as the service builds it (build_asset_price_series), from EUR closes and transaction rows, quoted per unit."""
+    return build_asset_price_series(
+        price_rows=[(day, D(close), "EUR") for day, close in (closes or {}).items()],
+        transactions=list(rows),
+        split_linked_tx_ids=set(),
+        asset_currency="EUR",
+        quote_base_quantity=1,
+    )
+
+
+def _loader_returning(value):
+    """A double of one of the service's async loaders: whatever it is asked, ``value``."""
+
+    async def loader(*_args, **_kwargs):
+        return value
+
+    return loader
+
+
+class _SessionWithTheAsset:
+    """The session double: get_lots_analysis asks its session for the asset directly, for everything else through a loader."""
+
+    def __init__(self, asset) -> None:
+        self._asset = asset
+
+    async def get(self, _model, _key):
+        return self._asset
+
+
+async def _analysis_on_rows(monkeypatch, *rows: Transaction, quotes: tuple[PriceHistory, ...] = ()) -> LotsAnalysisResponse:
+    """get_lots_analysis (LOT_SUMMARY, in EUR, up to 20 Mar) on in-memory rows: asset 7 in EUR quoted per unit, broker 1 alone in scope.
+
+    Each loader hands over what the database would for these rows — the transactions by date then id, the closes by
+    date (the caller passes those up to the reading day), no split, no income, no cost — and monkeypatch fails on a
+    loader the service no longer has, rather than letting the call reach the session double.
+    """
+    service = LotsAnalysisService(db=_SessionWithTheAsset(SimpleNamespace(id=7, display_name="X", currency="EUR", quote_base_quantity=1)))
+    loaded = {
+        "_get_scope_broker_ids": [1],
+        "_load_transactions": sorted(rows, key=lambda row: (row.date, row.id)),
+        "_load_split_ratios": {},
+        "_load_broker_shorting": {1: False},
+        "_load_prices": sorted(quotes, key=lambda row: row.date),
+        "_load_income_transactions": [],
+        "_load_cost_transactions": [],
+    }
+    for name, value in loaded.items():
+        monkeypatch.setattr(service, name, _loader_returning(value))
+    return await service.get_lots_analysis(
+        user_id=1,
+        asset_id=7,
+        broker_ids=[1],
+        date_from=None,
+        date_to=_MAR_20,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+    )
+
+
+def _reference_of(response: LotsAnalysisResponse, transaction_id: int) -> tuple:
+    """(reference unit price, its source, the engine's reference issues) of the lot ``transaction_id`` opened, found by that id."""
+    lots = [lot for lot in response.lots or [] if lot.opening_transaction_id == transaction_id]
+    assert len(lots) == 1, f"precondition: transaction {transaction_id} opens one lot, got {response.lots}"
+    assert response.data_quality is not None
+    issues = [str(issue.code) for issue in response.data_quality.issues if issue.code in _REFERENCE_ISSUES and issue.message_params.get("lot_id") == lots[0].lot_id]
+    return lots[0].reference_unit_price, lots[0].reference_price_source, issues
+
+
+class TestTheReferenceOfALotOpenedByAnAdjustment:
+    """The reference get_lots_analysis gives the lot transaction 2 opens — an ADJUSTMENT +5 at 90 EUR on 15 Mar — and a BUY's lot."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("closes", "buy_day", "expected"),
+        [
+            pytest.param({_MAR_15: "100"}, _MAR_15, (D("100"), "exact", []), id="GUARD-a-close-on-the-opening-day-wins-over-a-same-day-BUY"),
+            pytest.param({_MAR_12: "100"}, None, (D("100"), "fallback", ["REFERENCE_PRICE_FALLBACK"]), id="GUARD-a-close-three-days-before-nothing-after"),
+            pytest.param({_MAR_10: "100"}, _MAR_13, (D("120"), "fallback", ["REFERENCE_PRICE_FALLBACK"]), id="a-BUY-newer-than-the-last-close"),
+            pytest.param({_MAR_10: "100"}, _MAR_15, (D("120"), "fallback", ["REFERENCE_PRICE_FALLBACK"]), id="a-BUY-on-the-opening-day-after-an-older-close"),
+            pytest.param({}, _MAR_13, (D("120"), "fallback", ["REFERENCE_PRICE_FALLBACK"]), id="no-close-a-BUY-before"),
+            pytest.param({_MAR_18: "100"}, _MAR_17, (D("90"), "exact", ["REFERENCE_PRICE_UNAVAILABLE"]), id="GUARD-nothing-on-or-before-the-opening-day"),
+        ],
+    )
+    async def test_the_reference_is_the_mark_of_the_opening_day(self, monkeypatch, closes, buy_day, expected):
+        """(reference unit price, source, the engine's reference issue) of the ADJUSTMENT's lot in EUR; the BUY, when there is one, is 10 at 120 EUR.
+
+        (a) A close on the opening day is the reference, ``exact`` — over a BUY of the same day too: a close wins its day.
+        (b) A close three days before, nothing after: that close, ``fallback``. (c) A BUY newer than the last close, before
+        the opening day or on it: the BUY's 120, ``fallback``; before CP-7b the older close, 100, ``fallback``. (d) No close,
+        a BUY before: the BUY's 120, ``fallback``; before CP-7b no reference (REFERENCE_PRICE_UNAVAILABLE), so the lot's own
+        90, ``exact``. GUARD: with nothing on or before the opening day (a BUY and a close after it) there is still no
+        reference, and the lot keeps its own 90.
+        """
+        rows = [_adjustment_in_at_90()] if buy_day is None else [_adjustment_in_at_90(), _bought_at_120(buy_day)]
+        response = await _analysis_on_rows(monkeypatch, *rows, quotes=tuple(_price(day, D(close)) for day, close in closes.items()))
+
+        assert _reference_of(response, 2) == expected
+
+    @pytest.mark.asyncio
+    async def test_a_lot_opened_by_a_buy_keeps_its_own_price(self, monkeypatch):
+        """GUARD: 10 bought at 120 EUR on 13 Mar, a day X closed at 100 — the BUY's lot is referenced to its own price, exact, with no issue."""
+        response = await _analysis_on_rows(monkeypatch, _bought_at_120(_MAR_13), quotes=(_price(_MAR_13, D("100")),))
+
+        assert _reference_of(response, 1) == (D("120"), "exact", [])
+
+
+class TestOpeningReferencePriceReadsTheSeries:
+    """opening_reference_price(lot, price_series): the engine's reference, in the currency of the day's mark, dated the opening day.
+
+    The price and its source are the ones the FIFO engine put on the lot, from the same series (the class above); what the
+    function adds is the currency of the opening day's mark and the date the reference converts at. Before CP-7b it read a
+    PriceHistoryLookup: handed a series, it fails on the mark, which has no ``resolved_date``.
+    """
+
+    def test_a_reference_carried_from_an_older_close_is_dated_the_opening_day(self):
+        """(e) A lot opened on 15 Mar whose reference, 64, is a USD close of 10 Mar carried forward: (64, "USD", 15 Mar, "fallback").
+
+        Dated its opening day, the reference converts at that day's rate (P21). Before CP-7b: 10 Mar, the close's own day.
+        """
+        lot = _lot(1, opening_date=_MAR_15, reference_unit_price=D("64"), reference_price_source="fallback")
+
+        assert opening_reference_price(lot, _series(_quote(_MAR_10, D("64"), "USD"))) == (D("64"), "USD", _MAR_15, "fallback")
+
+    def test_the_reference_is_in_the_currency_of_the_days_mark_a_trade_too(self):
+        """(c) X closed at 120 USD on 10 Mar, then was bought at 96 GBP on 13 Mar: on 15 Mar the mark is the BUY's, so the reference is in GBP.
+
+        The engine took the BUY's 96 as the lot's reference; the function names its currency, GBP — not the last close's
+        USD, which the lookup of the closes alone gave before CP-7b, with that close's day, 10 Mar.
+        """
+        lot = _lot(1, opening_date=_MAR_15, reference_unit_price=D("96"), reference_price_source="fallback")
+        series = _series(_quote(_MAR_10, D("120"), "USD"), _trade(_MAR_13, D("96"), "GBP"))
+
+        assert opening_reference_price(lot, series) == (D("96"), "GBP", _MAR_15, "fallback")
+
+    @pytest.mark.parametrize(
+        "series",
+        [
+            pytest.param(_series(_quote(_MAR_17, D("100"))), id="a-first-close-after-the-opening-day"),
+            pytest.param(
+                build_asset_price_series(price_rows=[(_MAR_15, None, "EUR")], transactions=[], split_linked_tx_ids=set(), asset_currency="EUR", quote_base_quantity=1),
+                id="a-price-row-without-a-close",
+            ),
+        ],
+    )
+    def test_no_mark_on_or_before_the_opening_day_hands_no_reference_over(self, series):
+        """No mark on the opening day: the first observation comes after it, or the only row has no close (volume or open only),
+        which is no quote. The reference the lot carries is not handed over: (None, None, 15 Mar, its source).
+
+        The two cases of the old closes' lookup — nothing before the first close, a null close ignored — on the series.
+        """
+        lot = _lot(1, opening_date=_MAR_15, reference_unit_price=D("9"), reference_price_source="fallback")
+
+        assert opening_reference_price(lot, series) == (None, None, _MAR_15, "fallback")
+
+
+class TestTheReferenceAsksForTheRateOfItsOpeningDay:
+    """collect_fx_needs (lots/conversions.py): the reference's rate is its mark's currency on the lot's opening day."""
+
+    @pytest.mark.parametrize("analysis", [LotAnalysisType.LOT_SUMMARY, LotAnalysisType.RETURN_HISTORY])
+    def test_the_reference_needs_the_marks_currency_on_the_opening_day(self, analysis):
+        """(f) The EUR lot of 15 Mar referenced to a USD close of 10 Mar, read from 20 Mar: one need, ("USD", 15 Mar).
+
+        No market day asks for anything (no close row, no trade) and the lot's own EUR needs no rate, so the one rate asked
+        is the reference's. Before CP-7b: ("USD", 10 Mar), the close's day.
+        """
+        lot = _lot(1, opening_date=_MAR_15, currency="EUR", reference_unit_price=D("64"), reference_price_source="fallback")
+        resolver = _resolver("EUR")
+
+        collect_fx_needs(
+            fx_resolver=resolver,
+            analyses=[analysis],
+            lots_by_id={1: lot},
+            selected_ids=[1],
+            transactions=[],
+            price_series=_series(_quote(_MAR_10, D("64"), "USD")),
+            prices=[],
+            fragments=[],
+            events=[],
+            closures=[],
+            split_ratios_by_tx_id={},
+            actual_to=_MAR_20,
+            computed_from=_MAR_20,
+            asset_currency="USD",
+        )
+
+        assert resolver._needs == [("USD", _MAR_15)]
+
+
+class TestLastDayWithoutObservation:
+    """last_day_without_observation (lots/prices.py, read through the module) over 15–19 Mar: the last day valued at cost, or None.
+
+    The last of the ascending days with no observation on or before it — no close, no BUY or SELL — which the lots value at
+    cost, as the Dashboard values a holding (J-17); None when the first day already has one. Before CP-7b: no such function
+    (AttributeError), and the lots were at cost only when the asset had no close at all, then on every day.
+    """
+
+    _DAYS = _days(_MAR_15, 5)
+
+    @pytest.mark.parametrize(
+        ("build_series", "expected"),
+        [
+            pytest.param(lambda: _series_of(), date(2024, 3, 19), id="no-observation-at-all-the-last-day"),
+            pytest.param(lambda: _series_of(closes={_MAR_15: "100"}), None, id="the-first-day-observed-None"),
+            pytest.param(lambda: _series_of(closes={_MAR_10: "100"}), None, id="an-older-close-carried-onto-the-first-day-None"),
+            pytest.param(lambda: _series_of(closes={_MAR_17: "100"}), date(2024, 3, 16), id="a-first-close-mid-run-the-day-before-it"),
+            pytest.param(lambda: _series_of(_bought_at_120(_MAR_17)), date(2024, 3, 16), id="a-first-BUY-mid-run-counts-like-a-close"),
+            pytest.param(lambda: _series_of(_adjustment_in_at_90(_MAR_17)), date(2024, 3, 19), id="an-ADJUSTMENT-is-no-observation-the-last-day"),
+        ],
+    )
+    def test_the_last_day_valued_at_cost(self, build_series, expected):
+        """The series is the service's, built from rows (closes in EUR, transactions): a BUY observes like a close, an
+        ADJUSTMENT at a cost never does (J-17), and a close older than the first day is carried onto it."""
+        assert prices_module.last_day_without_observation(build_series(), self._DAYS) == expected
+
+
+# =========================================================================== #
+# R13-SEC8-2 — a lot opened before 1900: the analysis starts at the floor
+# =========================================================================== #
+#
+# MF-SEC8-2 (MEDIUM, DoS). get_lots_analysis started its window at the first transaction: computed_from =
+# transactions[0].date, the prices loaded from it, every day from it valued (history_dates), a rate asked for every day
+# since for a foreign asset (collect_fx_needs), and display_from = date_from or computed_from. A lot stored in 1890 made
+# it walk every day since 1890. The cure: computed_from = max(first transaction, EARLIEST_RANGE_START = 1900-01-01) and
+# display_from clamped to it too — no price load, history point, income marker or daily rate before 1900 — while the
+# FIFO engine still opens the lot on its own date, with its own quantity, cost and income. The floor is a literal here:
+# the name is new. Driven like the CP-7b class above: get_lots_analysis on loader doubles and a session double; in EUR
+# no rate is asked, and the USD case replaces convert_bulk where conversions reads it. Each docstring says what HEAD
+# 94e170ae1 returns; GUARD marks a value the cure leaves as it was.
+
+_SEC8_FLOOR = date(1900, 1, 1)
+_SEC8_OPENED = date(1890, 1, 1)  # transaction 1, a BUY of 10 at 120 a unit
+_SEC8_DIVIDEND_DAY = date(1890, 6, 1)  # transaction 2, a DIVIDEND of 50 on the lot
+_SEC8_QUOTED = date(1900, 1, 5)  # the asset's only close, 150
+_SEC8_END = date(1900, 1, 10)  # the reading day: near the floor, so the cured run walks ten days, HEAD's 3 662
+_SEC8_HISTORIES = (LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.PRICE_HISTORY, LotAnalysisType.PERFORMANCE_HISTORY)
+
+
+async def _sec8_analysis(monkeypatch, *, date_from: date | None, currency: str = "EUR") -> tuple[LotsAnalysisResponse, list[dict]]:
+    """get_lots_analysis up to 10 Jan 1900 of asset 7 (in ``currency``, quoted per unit) for broker 1 alone: the summary,
+    the four histories and the income markers. Returns the response and the arguments of every price load.
+
+    The rows: 10 units bought for 1200 on 1890-01-01, a DIVIDEND of 50 on 1890-06-01, a close of 150 on 5 Jan 1900 —
+    all in ``currency``. No split, no cost transaction.
+    """
+    service = LotsAnalysisService(db=_SessionWithTheAsset(SimpleNamespace(id=7, display_name="X", currency=currency, quote_base_quantity=1)))
+    price_loads: list[dict] = []
+
+    async def load_prices(*_args, **kwargs):
+        price_loads.append(kwargs)
+        return [_price(_SEC8_QUOTED, D("150"), currency)]
+
+    loaded = {
+        "_get_scope_broker_ids": [1],
+        "_load_transactions": [_tx(1, tx_date=_SEC8_OPENED, quantity=D("10"), amount=D("-1200"), currency=currency)],
+        "_load_split_ratios": {},
+        "_load_broker_shorting": {1: False},
+        "_load_income_transactions": [_tx(2, tx_type=TransactionType.DIVIDEND, tx_date=_SEC8_DIVIDEND_DAY, quantity=D("0"), amount=D("50"), currency=currency)],
+        "_load_cost_transactions": [],
+    }
+    for name, value in loaded.items():
+        monkeypatch.setattr(service, name, _loader_returning(value))
+    monkeypatch.setattr(service, "_load_prices", load_prices)
+    response = await service.get_lots_analysis(
+        user_id=1,
+        asset_id=7,
+        broker_ids=[1],
+        date_from=date_from,
+        date_to=_SEC8_END,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=[LotAnalysisType.LOT_SUMMARY, *_SEC8_HISTORIES, LotAnalysisType.INCOME_EVENTS],
+    )
+    return response, price_loads
+
+
+def _sec8_history_dates(response: LotsAnalysisResponse) -> dict[str, list[date]]:
+    """The dates of every point of the four histories, by history."""
+    return {name: [point.date for point in getattr(response, name) or []] for name in ("value_history", "return_history", "price_history", "performance_history")}
+
+
+class TestALotOpenedBeforeTheFloor:
+    """get_lots_analysis on a lot bought on 1890-01-01: nothing of the analysis' window before 1900-01-01."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("date_from", [pytest.param(None, id="no-date_from"), pytest.param(date(1, 1, 1), id="date_from-day-one")])
+    async def test_the_window_starts_at_the_floor(self, monkeypatch, date_from):
+        """computed_date_from 1900-01-01, the prices loaded from it, every history point and income marker on or after
+        it, the value history starting on it. HEAD: computed_date_from 1890-01-01, the prices loaded from it, the
+        histories from 1890-01-01 and the 1890 dividend's marker."""
+        response, price_loads = await _sec8_analysis(monkeypatch, date_from=date_from)
+
+        assert response.calculation_metadata.computed_date_from == _SEC8_FLOOR
+        assert [load.get("date_from") for load in price_loads] == [_SEC8_FLOOR], f"price loads: {price_loads}"
+        histories = _sec8_history_dates(response)
+        assert all(histories.values()), f"precondition: every history has points, got {[name for name, dates in histories.items() if not dates]} empty"
+        early = {name: (len(dates), min(dates)) for name, dates in histories.items() if min(dates) < _SEC8_FLOOR}
+        assert early == {}, f"(points before the floor, first date) by history: {early}"
+        assert min(histories["value_history"]) == _SEC8_FLOOR
+        assert [event.date for event in response.income_events or [] if event.date < _SEC8_FLOOR] == []
+
+    @pytest.mark.asyncio
+    async def test_the_lot_keeps_its_own_date_and_numbers(self, monkeypatch):
+        """GUARD: the lot opens on 1890-01-01 with its 10 units for 1200 and its 50 of income; on 1900-01-01 it is worth
+        1200 (the BUY's 120, carried), its income 50; on 10 Jan 1900, 1500 (10 x 150)."""
+        response, _ = await _sec8_analysis(monkeypatch, date_from=None)
+
+        lots = [lot for lot in response.lots or [] if lot.opening_transaction_id == 1]
+        assert len(lots) == 1, f"precondition: transaction 1 opens one lot, got {response.lots}"
+        lot = lots[0]
+        assert (lot.opening_date, lot.original_quantity, lot.open_quantity, lot.original_cost, lot.asset_income, lot.open_value) == (_SEC8_OPENED, D("10"), D("10"), D("1200"), D("50"), D("1500"))
+        value_by_day = {point.date: point for point in response.value_history or [] if point.lot_id == lot.lot_id}
+        assert (value_by_day[_SEC8_FLOOR].open_value, value_by_day[_SEC8_FLOOR].original_cost, value_by_day[_SEC8_FLOOR].income) == (D("1200"), D("1200"), D("50"))
+        assert value_by_day[_SEC8_END].open_value == D("1500")
+
+    @pytest.mark.asyncio
+    async def test_a_foreign_lot_asks_no_daily_rate_before_the_floor(self, monkeypatch):
+        """The same rows in USD, read in EUR: before the floor only the rows' own days are asked (the BUY's 1890-01-01,
+        the dividend's 1890-06-01); the daily rates of the price line start on 1900-01-01. HEAD: every day from
+        1890-01-01."""
+        requested: set[tuple[str, date]] = set()
+
+        async def recording_convert_bulk(_session, conversions, raise_on_error=False):
+            requested.update((amount.code, day) for amount, _to, day in conversions)
+            return [(Currency(code="EUR", amount=amount.amount * D("0.9")), day, False) for amount, _to, day in conversions], []
+
+        monkeypatch.setattr(conversions_module, "convert_bulk", recording_convert_bulk)
+
+        await _sec8_analysis(monkeypatch, date_from=None, currency="USD")
+
+        before_the_floor = sorted(day for _currency, day in requested if day < _SEC8_FLOOR)
+        assert before_the_floor == [_SEC8_OPENED, _SEC8_DIVIDEND_DAY], f"{len(before_the_floor)} days asked before the floor, from {before_the_floor[:1]}"
+        assert ("USD", _SEC8_FLOOR) in requested, "the price line's daily rates start on the floor"

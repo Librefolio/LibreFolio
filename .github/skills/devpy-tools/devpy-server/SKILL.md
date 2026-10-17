@@ -15,6 +15,7 @@ description: "Use this skill when the user needs to start/stop the development s
 ./dev.py server --workers 4            # Multi-worker (default: 1)
 ./dev.py server --coverage             # Start under Python coverage tracking (boolean — no language argument)
 ./dev.py server --rebuild              # Force frontend rebuild before start
+./dev.py server --test --build-only    # Only the builds the server does before binding, then exit (no port, no uvicorn)
 ./dev.py server --host 0.0.0.0        # Override host
 ./dev.py server --port 9000           # Override port
 ./dev.py server --data-dir /tmp/lf-b  # Override this server's data root
@@ -39,11 +40,16 @@ Test data is kept in `LIBREFOLIO_TEST_DATA_DIR`, never
 `LIBREFOLIO_DATA_DIR`, and production paths are rejected.
 
 ### What `server` does automatically
-1. Checks if port is in use (with `--force`: kills blockers)
-2. Auto-builds frontend if missing/outdated
-3. Auto-builds MkDocs if missing/outdated
-4. Updates JS library cache
+1. Auto-builds frontend if missing/outdated (a debug build under `--test`)
+2. Auto-builds MkDocs if missing/outdated
+3. Updates JS library cache
+4. Checks if port is in use, right before binding (with `--force`: kills blockers)
 5. Starts uvicorn with the app
+
+`--build-only` stops after step 3 and exits: 0, or the frontend build's exit code. The test runner and
+`mkdocs gallery` run `dev.py server --test --build-only` in the foreground before they start a test server,
+with its output visible, so a rebuild after a merge never counts against the server's startup timeout
+(300 s, `LIBREFOLIO_TEST_STARTUP_TIMEOUT`), which measures the start only.
 
 ### Coverage mode
 When `--coverage` is used, `dev.py` replaces itself via `os.execvpe()` with `coverage run -m uvicorn`. This enables backend coverage tracking during E2E tests via the SIGTERM chain (see testing-frontend skill).
@@ -96,6 +102,11 @@ Playwright `webServer` command line.
 ./dev.py front check                   # Run svelte-check (type checking)
 ./dev.py front preview                 # Preview production build locally
 ```
+
+`front build` and `api client` (so also `api sync`) first check `frontend/node_modules/.bin`
+(`openapi-zod-client`, `svelte-check`, `vite`; the client only its generator). If one is missing they stop
+with exit 1, naming it and `cd frontend && npm ci`, before any npm or npx call: npx would otherwise fetch
+an unpinned version from the registry.
 
 ### Development workflow
 Terminal 1: `./dev.py server` (backend on 6040, serves static build)

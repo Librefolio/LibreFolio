@@ -1,0 +1,257 @@
+{
+  "backup": {
+    "tab": "Sauvegarde",
+    "intro": "Les données de ce LibreFolio dans une seule archive, à conserver en lieu sûr ou à transférer vers une autre installation.",
+    "download": {
+      "title": "Sauvegarder l'instance",
+      "description": "Une archive avec la base de données, les fichiers téléversés, les relevés des courtiers et les scénarios de risque. Les journaux ne sont jamais inclus ; la clé de l'instance seulement dans une sauvegarde sécurisée.",
+      "privacy": "L'archive contient les données de tous les utilisateurs et n'est pas chiffrée : conservez-la en lieu sûr.",
+      "mode": {
+        "legend": "Type de sauvegarde",
+        "clear": "En clair",
+        "clearDescription": "Un simple .zip : qui possède le fichier voit toutes les données, et sur une autre instance les clés des fournisseurs de données doivent être saisies à nouveau.",
+        "secure": "Sécurisée",
+        "secureDescription": "Un .lfbk chiffré avec un mot de passe que vous choisissez : seul ce mot de passe l'ouvre, et un mot de passe perdu ne peut pas être récupéré. Il emporte aussi les clés des fournisseurs de données."
+      },
+      "password": {
+        "label": "Mot de passe de la sauvegarde",
+        "confirmLabel": "Le même mot de passe, à nouveau",
+        "mismatch": "Les deux mots de passe sont différents."
+      },
+      "create": "Créer une sauvegarde",
+      "createAgain": "Créer une nouvelle sauvegarde",
+      "creating": "Création de la sauvegarde…",
+      "checking": "Vérification de la sauvegarde…",
+      "phase": {
+        "preparing": "Préparation",
+        "database": "Copie de la base de données",
+        "files": "Ajout des fichiers",
+        "finalizing": "Finalisation",
+        "encrypting": "Chiffrement avec votre mot de passe"
+      },
+      "progress": "{done} sur {total}",
+      "ready": "Sauvegarde prête",
+      "readyDetails": "{name}, {size}, créée le {date}",
+      "readyEncrypted": "Chiffrée avec votre mot de passe : conservez-le bien, LibreFolio ne peut pas le récupérer.",
+      "download": "Télécharger",
+      "delete": "Supprimer du serveur",
+      "deleting": "Suppression de la sauvegarde…",
+      "retention": "L'archive reste sur le serveur pendant une heure, puis elle est supprimée.",
+      "recheck": "Vérifier à nouveau",
+      "retry": "Réessayer",
+      "warningsTitle": "Sauvegarde terminée, avec des avertissements",
+      "warnings": {
+        "database_integrity": "La base de données a échoué au contrôle d'intégrité : elle a été archivée telle quelle.",
+        "foreign_key_violations": "La base de données contient des références invalides entre tables : elle a été archivée telle quelle.",
+        "files_skipped": "Certains fichiers ont été exclus : liens, fichiers spéciaux, fichiers ou dossiers illisibles, ou fichiers supprimés pendant la sauvegarde.",
+        "instance_key_unusable": "La clé de l'instance est inutilisable : la sauvegarde a été faite sans elle, il faudra donc saisir à nouveau les clés des fournisseurs de données après une restauration."
+      },
+      "errors": {
+        "backup_busy": "Une autre sauvegarde est en cours : réessayez quand elle sera terminée.",
+        "backup_no_space": "Espace libre insuffisant sur le serveur pour la sauvegarde.",
+        "backup_folder_unusable": "Le dossier des sauvegardes sur le serveur est un lien ou un fichier : LibreFolio crée les sauvegardes uniquement dans un vrai dossier de son répertoire de données.",
+        "backup_failed": "La sauvegarde a échoué : le journal du serveur donne les détails.",
+        "backup_interrupted": "La sauvegarde a été interrompue, par exemple par un redémarrage : créez-en une nouvelle.",
+        "backup_job_not_found": "Cette sauvegarde n'est plus sur le serveur : créez-en une nouvelle.",
+        "network": "Le serveur ne répond pas.",
+        "unexpected": "Le serveur a répondu par une erreur : rechargez la page et réessayez.",
+        "password_too_weak": "Le mot de passe ne respecte pas les règles du mot de passe d'une sauvegarde."
+      },
+      "toast": {
+        "warnings": "Sauvegarde prête, avec des avertissements : vérifiez-les avant de vous y fier."
+      }
+    },
+    "restore": {
+      "title": "Restaurer une archive",
+      "description": "Remplacez les données de ce LibreFolio par une archive créée avec « Sauvegarder l'instance », ici ou sur une autre installation. L'archive est d'abord vérifiée sur une copie : rien ne change tant que vous n'avez pas confirmé, puis LibreFolio redémarre pour l'appliquer.",
+      "replaceNotice": "Une restauration remplace les données de tous les utilisateurs par celles de l'archive. Si vous pourriez avoir encore besoin des données actuelles, faites d'abord une sauvegarde de l'instance.",
+      "loading": "Lecture de l'état de la restauration…",
+      "last": {
+        "rolledBack": "La dernière restauration a été annulée le {date}, et les données sont comme avant : {reason}."
+      },
+      "uploading": "Envoi de l'archive…",
+      "progress": "{done} sur {total}",
+      "cancelUpload": "Arrêter l'envoi",
+      "phase": {
+        "decrypting": "Déchiffrement de la sauvegarde",
+        "checking": "Vérification de l'archive",
+        "unpacking": "Extraction sur une copie",
+        "upgrading": "Mise à jour de la base de données de la copie",
+        "verifying": "Vérification de la copie"
+      },
+      "dropWhenDone": "La vérification est abandonnée dès qu'elle se termine.",
+      "cancelCheck": "Arrêter la vérification",
+      "openReport": "Lire le rapport",
+      "confirming": "Confirmation de la restauration…",
+      "cancelling": "Annulation…",
+      "pending": {
+        "title": "Une restauration attend le prochain démarrage de LibreFolio",
+        "details": "Sauvegarde créée par LibreFolio {version} le {backupDate} ; confirmée par {who} le {date}.",
+        "restartHint": "Le redémarrage arrête LibreFolio pour tout le monde ; son prochain démarrage applique la restauration et ferme toutes les sessions.",
+        "restart": "Redémarrer et restaurer",
+        "cancel": "Annuler la restauration"
+      },
+      "inProgress": "Un démarrage de LibreFolio applique la restauration.",
+      "choose": "Choisir une archive…",
+      "retry": "Réessayer",
+      "limit": "Archives jusqu'à {limit} Mo.",
+      "reason": {
+        "first_start_failed": "le premier démarrage qui a suivi n'a pas abouti",
+        "swap_interrupted": "le démarrage qui l'appliquait a été interrompu",
+        "swap_failed": "ses dossiers n'ont pas pu être mis en place",
+        "stage_missing": "sa copie vérifiée n'était plus là",
+        "unknown": "la raison est dans le journal du serveur"
+      },
+      "waiting": {
+        "backup_running": "Au dernier démarrage, une sauvegarde était en cours : le prochain démarrage l'applique.",
+        "other_data_directory": "Elle a été confirmée pour un autre dossier de données : ce LibreFolio ne l'applique pas. Annulez-la, puis restaurez de nouveau l'archive.",
+        "server_running": "Au dernier démarrage, un autre processus de LibreFolio servait les données : redémarrez tout le serveur pour l'appliquer.",
+        "unknown": "Un démarrage ne l'a pas appliquée.",
+        "instance_blocked": "L'hébergeur a bloqué cette instance : la restauration attend son déblocage."
+      },
+      "blocker": {
+        "no_administrator": "La sauvegarde n'a aucun administrateur actif : après une restauration, personne ne pourrait gérer LibreFolio. Elle ne peut pas être restaurée."
+      },
+      "report": {
+        "title": "Ce que ferait cette restauration",
+        "madeBy": "Archive créée par LibreFolio {version} le {date}.",
+        "close": "Fermer",
+        "same": "Sa base de données est à la version de ce LibreFolio : elle est restaurée telle quelle.",
+        "upgrade": "Sa base de données a été mise à la version de ce LibreFolio sur la copie, avec {count, plural, one {# migration} other {# migrations}} :",
+        "fixes": "Corrections appliquées à la copie : {fixes}.",
+        "contents": "{files, plural, one {# fichier} other {# fichiers}} ({filesSize}) ; base de données {databaseSize}.",
+        "tablesChanged": "Tables dont la mise à jour a changé les lignes :",
+        "keyIncluded": "La sauvegarde emporte la clé de l'instance d'où elle vient : ce LibreFolio garde la sienne.",
+        "keyNotIncluded": "La clé de l'instance n'est pas incluse : ce LibreFolio garde la sienne.",
+        "secretsRekeyed": "{count, plural, one {# clé enregistrée d'un fournisseur de données est rechiffrée avec la clé de cette instance.} many {# clés enregistrées de fournisseurs de données sont rechiffrées avec la clé de cette instance.} other {# clés enregistrées de fournisseurs de données sont rechiffrées avec la clé de cette instance.}}",
+        "secretsUnreadable": "{count, plural, one {# clé enregistrée d'un fournisseur de données ne peut pas être lue avec la clé de cette instance : saisissez-la à nouveau après la restauration.} many {# clés enregistrées de fournisseurs de données ne peuvent pas être lues avec la clé de cette instance : saisissez-les à nouveau après la restauration.} other {# clés enregistrées de fournisseurs de données ne peuvent pas être lues avec la clé de cette instance : saisissez-les à nouveau après la restauration.}}",
+        "totals": {
+          "same": "Totaux du registre : identiques à ceux du moment de la sauvegarde.",
+          "changed": "Les totaux du registre diffèrent de ceux de la sauvegarde sur {count, plural, one {# ligne} other {# lignes}} :",
+          "absent": "Totaux du registre : non enregistrés dans cette archive.",
+          "other_version": "Totaux du registre : enregistrés par une autre version de la méthode, non comparés.",
+          "unreadable": "Totaux du registre : illisibles sur la copie.",
+          "cashLine": "Courtier {broker}, liquidités en {currency} : {before} → {after}",
+          "quantityLine": "Courtier {broker}, actif {asset}, quantité : {before} → {after}",
+          "more": "{count, plural, one {… et # autre ligne} other {… et # autres lignes}}"
+        },
+        "admins": "Administrateurs de la sauvegarde : {names}.",
+        "signInAgain": "Après la restauration, on se connecte avec l'un d'eux, avec le mot de passe de l'époque ; toutes les sessions ouvertes maintenant se ferment.",
+        "linksExpired": "Les invitations et les liens envoyés avant la restauration auront expiré : renvoyez-les si nécessaire.",
+        "warningsTitle": "La restauration peut continuer, mais :",
+        "warning": {
+          "rows_changed": "La mise à jour a changé les lignes de certaines tables (listées ci-dessus).",
+          "foreign_key_violations": "La base de données de la sauvegarde a des références cassées : elles sont gardées telles quelles.",
+          "foreign_key_violations_added": "La mise à jour a ajouté des références cassées à la copie.",
+          "control_totals_changed": "Les totaux du registre diffèrent de ceux enregistrés dans la sauvegarde (listés ci-dessus).",
+          "control_totals_unreadable": "Les totaux du registre n'ont pas pu être lus sur la copie.",
+          "unknown": "Un élément de l'archive mérite un coup d'œil : le journal du serveur donne les détails.",
+          "non_iso_currencies": "Certains codes de devise de la sauvegarde ne sont pas des codes ISO (noms ou numéros enregistrés par une version précédente) : la modification de ces lignes est refusée tant que le code n'est pas corrigé."
+        },
+        "expires": "La copie vérifiée est conservée jusqu'au {date}.",
+        "drop": "Abandonner cette archive"
+      },
+      "confirm": {
+        "word": "restaurer",
+        "instruction": "Pour restaurer cette archive, tapez ce mot. LibreFolio redémarre ensuite, et son démarrage applique la restauration :",
+        "label": "Mot de confirmation",
+        "button": "Restaurer et redémarrer",
+        "words": "jardin orange bougie maison cuisine miroir nombre poivre pochette printemps automne billet tomate voyage village panier bouton guitare lettre marbre perroquet tonnerre tunnel violon montagne papillon parapluie cahier coussin bateau chemin sourire citron cerise fromage chocolat soleil oiseau cheval chanson crayon bouteille horloge journal mouton pinceau"
+      },
+      "restart": {
+        "waitingTitle": "LibreFolio redémarre",
+        "waiting": "Son démarrage applique la restauration. Cette page attend son retour.",
+        "slow": "LibreFolio n'est pas encore revenu. Si rien ne le redémarre tout seul, démarrez-le vous-même : la restauration est appliquée à ce démarrage.",
+        "notStopped": "LibreFolio ne s'est pas arrêté. S'il ne redémarre pas tout seul, redémarrez-le vous-même : la restauration est appliquée à ce démarrage.",
+        "rolledBack": "Les données sont comme avant : {reason}.",
+        "stillPending": "LibreFolio a redémarré, mais la restauration n'a pas été appliquée. {waiting}",
+        "back": "Retour à la sauvegarde",
+        "failedTitle": "La restauration n'a pas abouti"
+      },
+      "errors": {
+        "backup_upload_empty": "Le fichier est vide.",
+        "backup_upload_incomplete": "L'archive n'est pas arrivée entière : envoyez-la de nouveau.",
+        "backup_too_large": "L'archive est plus grande que ce que ce LibreFolio accepte ({limit} Mo).",
+        "backup_no_space": "Pas assez d'espace libre sur le serveur pour cette archive.",
+        "backup_upload_unavailable": "LibreFolio ne peut pas lire sa limite de téléversement pour l'instant : réessayez plus tard.",
+        "backup_restore_unavailable": "LibreFolio ne peut pas lire sa limite de restauration pour l'instant : réessayez plus tard.",
+        "backup_upload_failed": "L'archive n'a pas pu être enregistrée sur le serveur : le journal du serveur donne la cause.",
+        "backup_upload_not_found": "L'archive téléversée n'est plus là : envoyez-la de nouveau.",
+        "restore_folder_unusable": "Le dossier de restauration du dossier de données n'est pas un dossier ordinaire : la personne qui gère le serveur doit le corriger.",
+        "restore_busy": "Une autre archive est en cours de vérification : réessayez quand elle sera terminée.",
+        "restore_stage_running": "La vérification est encore en cours.",
+        "restore_stage_not_found": "Cette vérification n'existe plus : vérifiez de nouveau l'archive.",
+        "not_a_backup": "Ce fichier n'est pas une sauvegarde de LibreFolio.",
+        "archive_unreadable": "L'archive ne peut pas être lue.",
+        "archive_damaged": "L'archive est endommagée.",
+        "manifest_newer_format": "L'archive a été créée par un LibreFolio plus récent : mettez d'abord celui-ci à jour.",
+        "manifest_invalid": "La description de l'archive n'est pas valide.",
+        "manifest_unreadable": "La description de l'archive ne peut pas être lue.",
+        "manifest_too_large": "La description de l'archive est trop volumineuse.",
+        "too_many_entries": "L'archive contient trop de fichiers.",
+        "unpacked_too_large": "Décompressée, l'archive est plus grande que ce que ce LibreFolio accepte pour une restauration.",
+        "duplicate_entry": "L'archive contient deux fois le même fichier.",
+        "unexpected_entry": "L'archive contient un fichier que sa description ne mentionne pas.",
+        "not_a_file": "L'archive contient quelque chose qui n'est pas un fichier ordinaire.",
+        "encrypted_entry": "L'archive contient un fichier chiffré.",
+        "unsupported_entry": "L'archive utilise une compression que LibreFolio n'écrit pas.",
+        "checksum_mismatch": "Un fichier de l'archive diffère de sa description : l'archive est endommagée ou a été modifiée.",
+        "missing_entry": "Des fichiers de l'archive manquent.",
+        "no_space": "Pas assez d'espace libre sur le serveur pour vérifier l'archive.",
+        "stage_failed": "La copie n'a pas pu être écrite : le journal du serveur donne la cause.",
+        "database_damaged": "La base de données de la sauvegarde est endommagée : elle ne peut pas être restaurée.",
+        "database_foreign_objects": "La base de données de la sauvegarde contient des déclencheurs, des vues ou d'autres objets que LibreFolio ne crée jamais : elle ne vient pas de LibreFolio, ou elle a été modifiée, et elle ne peut pas être restaurée.",
+        "manifest_mismatch": "La base de données de la sauvegarde n'est pas celle que sa description indique.",
+        "head_unknown": "Ce LibreFolio ne peut pas lire ses propres migrations : le journal du serveur donne la cause.",
+        "revision_missing": "La base de données de la sauvegarde n'a pas de version.",
+        "revision_unknown": "L'archive vient d'un LibreFolio plus récent, ou pas de celui-ci : mettez d'abord LibreFolio à jour, puis restaurez-la.",
+        "upgrade_failed": "La mise à jour de la copie a échoué : le journal du serveur donne la cause.",
+        "post_migration_failed": "Une correction de la copie a échoué : le journal du serveur donne la cause.",
+        "restore_interrupted": "La vérification a été interrompue : vérifiez de nouveau l'archive.",
+        "restore_stage_expired": "La vérification est trop ancienne : vérifiez de nouveau l'archive.",
+        "restore_stage_outdated": "LibreFolio a été mis à jour depuis la vérification : vérifiez de nouveau l'archive.",
+        "restore_not_restorable": "Cette archive ne peut pas être restaurée.",
+        "restore_already_pending": "Une autre restauration attend déjà le prochain démarrage.",
+        "restore_not_pending": "Aucune restauration n'attend le prochain démarrage.",
+        "restore_pending": "Une restauration attend d'appliquer cette copie : annulez-la d'abord.",
+        "restore_confirm_failed": "La restauration n'a pas pu être confirmée : le journal du serveur donne la cause. Rien n'a changé.",
+        "restore_cancel_failed": "La restauration n'a pas pu être annulée : le journal du serveur donne la cause. Elle attend toujours le prochain démarrage.",
+        "restore_restart_failed": "LibreFolio n'a pas pu être redémarré : le journal du serveur donne la cause. La restauration attend toujours le prochain démarrage.",
+        "restore_state_unreadable": "L'état de la restauration ne peut pas être lu : le journal du serveur donne la cause. Une restauration attend peut-être encore le prochain démarrage.",
+        "network": "Le serveur ne répond pas : vérifiez la connexion et réessayez.",
+        "unexpected": "Le serveur a répondu par une erreur : le journal du serveur donne la cause.",
+        "wrong_password": "Mot de passe erroné, ou le fichier a été modifié : saisissez à nouveau le mot de passe.",
+        "password_required": "C'est une sauvegarde sécurisée : saisissez son mot de passe.",
+        "envelope_damaged": "La sauvegarde sécurisée est endommagée ou a été modifiée : elle ne peut pas être ouverte.",
+        "envelope_unsupported": "La sauvegarde sécurisée provient d'un LibreFolio plus récent : mettez d'abord LibreFolio à jour."
+      },
+      "password": {
+        "intro": "Une sauvegarde sécurisée : saisissez le mot de passe avec lequel elle a été faite.",
+        "label": "Mot de passe de la sauvegarde",
+        "submit": "Vérifier la sauvegarde",
+        "cancel": "Annuler"
+      }
+    },
+    "checks": {
+      "panelToken": {
+        "ok": "Le jeton de sauvegarde du panneau de l'hébergeur est défini et utilisable.",
+        "off": "Aucun jeton de sauvegarde n'est défini pour un panneau d'hébergeur : les routes de sauvegarde du panneau sont désactivées.",
+        "notVisibleAscii": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN contient des caractères qu'un en-tête de requête ne transporte pas tels quels (espaces, tabulations ou caractères hors de l'ASCII visible) : les routes de sauvegarde du panneau répondent 503 tant qu'il n'est pas corrigé.",
+        "tooShort": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN est trop court : utilisez au moins {minimum} caractères aléatoires. Les routes de sauvegarde du panneau répondent 503 tant qu'il n'est pas corrigé.",
+        "unreadable": "Le jeton de sauvegarde du panneau ne peut pas être lu : {reason}"
+      },
+      "uploadLimit": {
+        "limited": "Une restauration accepte des archives jusqu'à {limit_mb} Mo.",
+        "unlimited": "Une restauration accepte des archives de toute taille.",
+        "invalid": "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB est inutilisable (un nombre entier de mégaoctets, 0 pour aucune limite) : les téléversements pour une restauration sont refusés tant qu'il n'est pas corrigé.",
+        "profileTable": "Les valeurs par défaut du profil de LibreFolio ne donnent aucune valeur à la limite de téléversement, ou une valeur du mauvais type, donc les téléversements pour une restauration sont refusés : définissez LIBREFOLIO_BACKUP_MAX_UPLOAD_MB à un nombre entier de mégaoctets et signalez l'erreur."
+      },
+      "restoreLimit": {
+        "limited": "Une vérification pour une restauration accepte des archives qui, décompressées, font jusqu'à {limit_mb} Mo.",
+        "unlimited": "Une vérification pour une restauration accepte des archives qui, décompressées, font n'importe quelle taille.",
+        "invalid": "{variable} est inutilisable (un nombre entier de mégaoctets, 0 pour aucune limite) : les vérifications pour une restauration sont refusées tant qu'il n'est pas corrigé.",
+        "profileTable": "Les valeurs par défaut du profil de LibreFolio ne donnent aucune valeur à la limite de téléversement, ou une valeur du mauvais type, donc les vérifications pour une restauration sont refusées : définissez LIBREFOLIO_BACKUP_MAX_RESTORE_MB à un nombre entier de mégaoctets et signalez l'erreur."
+      }
+    }
+  }
+}

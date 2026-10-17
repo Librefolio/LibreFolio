@@ -20,7 +20,7 @@ The FX *technical* components (`fx.rate_ohlc`, `fx.returns_volatility`,
 never referenced here.
 
 Design notes:
-- All rate data flows through the existing `backend.app.services.fx.convert_bulk`
+- All rate data flows through the existing `backend.app.services.fx.conversion.convert_bulk`
   batch conversion service - never a hand-rolled provider route. `convert_bulk`
   only ever resolves a *direct* or *inverse* stored `FxRate` row (see
   `backend.app.db.models.FxRate`'s alphabetical storage invariant) and raises
@@ -84,7 +84,7 @@ from backend.app.services.ai_export.components.technical_shared import load_fx_r
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, BuildContextScopeError
 from backend.app.services.financial_math.valuation import compute_holding_value, normalize_quote_base_quantity
-from backend.app.services.fx import convert_bulk
+from backend.app.services.fx.conversion import convert_bulk
 
 # Relative tolerance used to decide whether an independently-resolved exposure
 # rate (via `_load_exposure_conversions`/`convert_bulk`) "reconciles" with the
@@ -113,7 +113,7 @@ def _require_fx_scope(context: BuildContext) -> BuildScope:
 def _direction_for(from_currency: str, to_currency: str) -> FxRateDirection:
     """Direction of a from_currency->to_currency conversion given `FxRate`'s alphabetical storage.
 
-    Mirrors (without depending on) `backend.app.services.fx.convert_bulk`'s own
+    Mirrors (without depending on) `backend.app.services.fx.conversion.convert_bulk`'s own
     internal `direct` flag: DIRECT when the pair is already stored in the
     requested order (`from_currency < to_currency`), INVERSE when the stored
     row is the reverse of it. Callers must never pass equal currencies.

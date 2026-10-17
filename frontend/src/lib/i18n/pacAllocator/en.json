@@ -196,7 +196,8 @@
           "weight": "Weight",
           "subtitle": "How much each of these Assets weighs today in the ticked Brokers, counting only these Assets: together they make 100%. Cash and the other Assets you hold do not count.",
           "changeColumn": "Target",
-          "confirmApply": "Replace"
+          "confirmApply": "Replace",
+          "valuedAtCost": "valued at cost · no price"
         },
         "fx": {
           "intro": "The rates the calculation needs, one for each pair of currencies in play. «Auto» uses the rate stored in LibreFolio, «Manual» a rate of your own.",
@@ -425,7 +426,11 @@
           "structureInvalid": "A field does not match the planner contract: {path}.",
           "targetInvalid": "The target is not a number from 0.",
           "targetTotalNotHundred": "The target total is {total}%, it must be 100% (control).",
-          "valuationCurrencyMissing": "The valuation currency is missing."
+          "valuationCurrencyMissing": "The valuation currency is missing.",
+          "selectedNegative": "'Amount to use' cannot be negative.",
+          "declaredNegative": "'Declared liquidity' cannot be negative.",
+          "contributionAmountNegative": "The contribution amount cannot be negative.",
+          "modeStepNotPositive": "The order step must be greater than zero."
         },
         "removal": {
           "cash": "Cash row {broker} · {currency}",
@@ -451,8 +456,8 @@
             "finalShare": "Share after the plan",
             "targetShareHelp": "The share you chose for this Asset in the Targets step.",
             "finalShareHelp": "The share of the Asset in the value of all these Assets after the plan. Compare it with the target share to see how the balance between the Assets changes.",
-            "targetValueHelp": "What the Asset would be worth with exactly its target share: target share × base of the targets (already invested in these Assets plus usable cash).",
-            "finalValueHelp": "What the Asset is worth after the plan: the units you had plus the ones bought, at the quote price and, when needed, at the rate of the FX step."
+            "targetValueHelp": "What the Asset would be worth with exactly its target share: target share × base of the targets. In a PAC, which starts from zero, the base is the usable cash.",
+            "finalValueHelp": "What the Asset is worth after the plan: the units the plan buys, at the quote price and, when needed, at the rate of the FX step. In a PAC, which starts from zero, it equals the value bought."
           },
           "badges": {
             "decimalVerified": "Verified in Decimal",

@@ -8,7 +8,7 @@ Below the KPI cards, the **Portfolio Growth** chart and the **Asset Allocation**
 
 The growth chart shows how your portfolio evolved over the selected period: the **Abs / % / P&L** toggle in its top-right corner switches between absolute values, rates of return, and the money actually earned.
 
-The chart remembers your last view, P&L sub-view included, in this browser and for each user, and shares it with the broker pages. It starts on **Abs**. Without rate-of-return data, **%** is greyed out and the chart shows **Abs**; your choice comes back the next time you open the chart with data to draw.
+The chart remembers your last view, P&L sub-view included, in this browser and for each user, and shares it with the broker pages. It starts on **Abs**. Without rate-of-return data, **%** is greyed out and the chart shows **Abs**, but keeps your choice: **%** comes back as soon as there is data to draw — after you change the period or the broker, or the next time you open the chart — unless you pick another view in the meantime.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-growth" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active chart-crop-container" data-title="📈 Absolute Mode" alt="Growth Chart — Absolute Mode">
@@ -51,7 +51,7 @@ Each line is the return accumulated since the start of the selected period:
 | **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** | Pure asset strategy return, ignoring when you deposited |
 | **[ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)** | Raw return on net invested capital |
 
-The gap between MWRR and TWRR is the [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md). If the [Data Quality banner](index.md#data-quality-banner) says **MWRR chart unavailable**, the MWRR line is hidden; TWRR and ROI stay.
+The gap between MWRR and TWRR is the [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md). The MWRR line has a gap on the days that have no MWRR — a value of zero or less, or net withdrawals that leave no invested capital — by the same rule as the MWRR cards ([MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)); TWRR and ROI stay. When the last day of the period has none, the [Data Quality banner](index.md#data-quality-banner) says *MWRR cannot be calculated for this period*.
 
 ### 💰 P&L — the money you made {: #pnl-mode }
 
@@ -80,8 +80,8 @@ A second toggle, at the top-left of the plot, picks how to draw it (icons only o
 
 - **In transit** — until the transfer arrives, the value and its price or exchange-rate moves stay with the broker it left.
 - **Different ownership shares** — when the two brokers have different [ownership shares](../brokers/sharing.md), the receiving line keeps a step on the arrival day: the same step the total shows.
-- **No value on the arrival day** — if the security has no price yet, or an exchange rate is missing, the jump stays: nothing is guessed.
-- **Brokers outside the view** — on a broker's page, or with the broker filter on, securities sent to or received from a broker outside the view count as capital at their market value on that day, not as a gain or a loss; money counts as a deposit or a withdrawal. The same goes for the half left behind when the other broker of a transfer is deleted.
+- **No value on the arrival day** — if an exchange rate is missing, or the security has no price yet and no cost was recorded on its arrival, the jump stays: nothing is guessed. A security with no price at all moves at the cost the receiving broker records for it, the value LibreFolio gives it there; if part of what that broker paid for the asset was already unknown, its own line takes the gap.
+- **Brokers outside the view** — on a broker's page, or with the broker filter on, securities sent to or received from a broker outside the view count as capital at their market value on that day — at their cost if they have no price at all — not as a gain or a loss; money counts as a deposit or a withdrawal. When the other broker of a transfer is deleted, the half left behind is no longer a transfer: securities become an adjustment, counted as capital at their cost rather than their market value, and money a deposit or a withdrawal (see [Edit or delete a broker](../brokers/index.md)). Only securities sent whose average cost needs a missing exchange rate stay a transfer, counted at market value.
 
 With one broker, or on a broker's page, only the total is drawn.
 

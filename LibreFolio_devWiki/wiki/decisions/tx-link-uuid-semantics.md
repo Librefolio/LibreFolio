@@ -78,6 +78,6 @@ imported DEPOSIT/WITHDRAWAL pair is later recognized as an inter-broker transfer
 
 | Role | Path |
 |------|------|
-| Transaction service (link_uuid validation) | `backend/app/services/transaction_service.py` |
+| Batch stage (link_uuid validation) | `backend/app/services/transactions/batch_creates.py` |
 | Transaction API | `backend/app/api/v1/transactions.py` |
 | Transfer promote endpoint | `backend/app/api/v1/transactions.py` |

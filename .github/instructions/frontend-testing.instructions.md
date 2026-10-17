@@ -449,6 +449,7 @@ scripts/test_runner/
 ├── _frontend_asset.py        # Asset E2E runners
 ├── _frontend_utility.py      # Auth, settings, files E2E runners
 ├── _frontend_user.py         # User-related E2E runners
+├── _frontend_designer_lab.py # Designer Lab unit + E2E runners
 ├── _backend_api.py           # Backend API test runners (pytest)
 ├── _backend_db.py            # DB populate, create-clean
 └── ...                       # Other backend categories

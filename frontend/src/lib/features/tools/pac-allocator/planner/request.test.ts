@@ -35,6 +35,23 @@
  *     (`svelte/internal/server` `derived` = `once(fn)`).
  *   - `operativeBrokers`, `targetTotal`, the FX closure and the fingerprint would then stay
  *     frozen at their first read. The client build keeps them live.
+ *
+ * The sign gate (C-76, TP-12, last block). `localProblems` is what the steps show live and what
+ * stops the request before it is sent. For the four values the user types whose sign the contract
+ * restricts — the cash row's «Amount to use», a manual «Declared liquidity», a contribution, an order
+ * step — it checked only «empty» and «not a number».
+ *   - The sign table is the contract's. The generated codec takes any sign there (a fixed decimal; a
+ *     whole-unit step is any integer), and the backend normalizer decides (`normalize.py`): it refuses
+ *     `selected` or `available` below zero, a contribution below zero, a step at or below zero. Zero
+ *     is a valid amount to use, declared liquidity or contribution, and never a valid step.
+ *   - Each row types one value into one field of a sendable draft and reads every local problem as
+ *     `{step, key, entity}`: the field's own problem or none, and nothing else, so a negative is
+ *     reported as negative and never also as missing or invalid. It also reads whether the request
+ *     is built: a row whose value the gate lets through would travel to the backend as it is.
+ *   - An empty field is a positive control: today's problem, with the entity the new one must name.
+ *   - A negative declared liquidity is exceeded by any amount to use. As in the backend
+ *     (`validate_cash` checks «exceeds» only when neither amount is negative), the gate then reports
+ *     the negative alone (developer's decision, C-76).
  */
 import {describe, expect, it, vi} from 'vitest';
 
@@ -47,7 +64,8 @@ vi.mock('$lib/api', () => ({
 import {toolContractMap} from '$lib/api/tool-contract-map.generated';
 import {draftAssetFromInfo} from './copies';
 import {PlannerDraft, priceIsCopied, routeKey, type DraftAsset, type DraftFunding, type DraftMode} from './draft.svelte';
-import {buildRequest, capabilityId, feeScheduleId, type BuiltRequest} from './request';
+import {buildRequest, capabilityId, feeScheduleId, localProblems, type BuiltRequest} from './request';
+import type {PlannerStep} from './types';
 
 const NOW = new Date('2026-09-16T12:00:00Z');
 const AS_OF = '2026-09-16';
@@ -364,5 +382,122 @@ describe('buildRequest: values the user changed', () => {
 
         const resolved = resolvedOf(built);
         expect(itemBy(resolved.brokers, 'broker_id', brokerKey).fee_schedules).toStrictEqual([{...identity, ...sent, ...filled}]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// C-76 (TP-12) — the local gate reads the sign of an amount and of an order step
+// ---------------------------------------------------------------------------
+
+/** Where a problem on the account's cash row is shown: `cashLabel`, «Broker · currency». */
+const CASH_LABEL = 'Bank probe · EUR';
+/** Where a problem on the operative Broker's EUR mode is shown: «Broker · currency». */
+const MODE_LABEL = 'Broker probe · EUR';
+/** Where a problem on the contribution is shown: its label. */
+const CONTRIBUTION_LABEL = 'Saving probe';
+
+/** The values the user types whose sign the contract restricts. */
+type SignField = 'selected' | 'declared' | 'contribution' | 'wholeStep' | 'amountStep';
+
+interface SignRow {
+    field: SignField;
+    /** The text typed into the field. */
+    value: string;
+    /** The one local problem the field owes, or null for none. */
+    problem: string | null;
+    why: string;
+}
+
+/**
+ * The sign table, from the contract. The generated codec takes every sign in these fields
+ * (`PlannerMoneyInput.amount` is any fixed decimal, `quantity_step` any integer), so the backend normalizer decides
+ * (`backend/app/services/pac_allocator/normalize.py`):
+ *   - `validate_cash`: `available` or `selected` below zero → `allocation.negative_cash_unsupported`;
+ *   - `validate_contribution`: an amount below zero → `allocation.negative_contribution`;
+ *   - `validate_capability`: a whole-unit step at or below zero → `allocation.nonpositive_quantity_step`, an amount
+ *     step at or below zero → `allocation.nonpositive_order_amount_step`.
+ * Zero is a valid amount to use, declared liquidity or contribution; a step must be above zero.
+ */
+const SIGN_ROWS: SignRow[] = [
+    // «Amount to use» (`cash.selected`), next to 100 EUR of declared liquidity
+    {field: 'selected', value: '', problem: 'selectedMissing', why: 'control: empty, as today'},
+    {field: 'selected', value: 'abc', problem: 'selectedInvalid', why: 'control: not a number, as today'},
+    {field: 'selected', value: '-0.01', problem: 'selectedNegative', why: 'negative: refused as negative, and only so'},
+    {field: 'selected', value: '-0,01', problem: 'selectedNegative', why: 'negative, typed with a decimal comma: the gate reads the typed text the way the field does'},
+    {field: 'selected', value: '0', problem: null, why: 'zero: using nothing is a valid selection'},
+    {field: 'selected', value: '-0', problem: null, why: 'zero typed with a minus is zero, not negative'},
+    {field: 'selected', value: '0.01', problem: null, why: 'positive'},
+    {field: 'selected', value: '100', problem: null, why: 'guard: the whole declared liquidity'},
+    {field: 'selected', value: '100.01', problem: 'selectedExceedsAvailable', why: 'guard: above the declared liquidity, still refused as exceeding it'},
+    // «Declared liquidity» (`cash.available`, manual cash), with nothing to use
+    {field: 'declared', value: '', problem: 'declaredMissing', why: 'control: empty, as today'},
+    {field: 'declared', value: '-0.01', problem: 'declaredNegative', why: 'negative: refused as negative, and only so: the amount to use, 0, exceeds it, but as in the backend «exceeds» is not reported on top'},
+    {field: 'declared', value: '0', problem: null, why: 'zero: a valid declared liquidity'},
+    {field: 'declared', value: '-0', problem: null, why: 'zero typed with a minus is zero, not negative'},
+    {field: 'declared', value: '0.01', problem: null, why: 'positive'},
+    // The contribution amount
+    {field: 'contribution', value: '', problem: 'contributionAmountMissing', why: 'control: empty, as today'},
+    {field: 'contribution', value: '-0.01', problem: 'contributionAmountNegative', why: 'negative: refused as negative, and only so'},
+    {field: 'contribution', value: '0', problem: null, why: 'zero: a valid contribution'},
+    {field: 'contribution', value: '-0', problem: null, why: 'zero typed with a minus is zero, not negative'},
+    {field: 'contribution', value: '0.01', problem: null, why: 'positive'},
+    // The order step of a whole-unit mode
+    {field: 'wholeStep', value: '', problem: 'modeStepMissing', why: 'control: empty, as today'},
+    {field: 'wholeStep', value: '-1', problem: 'modeStepNotPositive', why: 'negative: a whole number, refused as not positive, and only so'},
+    {field: 'wholeStep', value: '0', problem: 'modeStepNotPositive', why: 'zero: a step must be above zero'},
+    {field: 'wholeStep', value: '1', problem: null, why: 'positive'},
+    // The order step of an amount mode
+    {field: 'amountStep', value: '', problem: 'modeStepMissing', why: 'control: empty, as today'},
+    {field: 'amountStep', value: '-0.01', problem: 'modeStepNotPositive', why: 'negative: refused as not positive, and only so'},
+    {field: 'amountStep', value: '0', problem: 'modeStepNotPositive', why: 'zero: a step must be above zero'},
+    {field: 'amountStep', value: '0.01', problem: null, why: 'positive'},
+];
+
+/**
+ * A sendable draft with `value` typed into `field`, and where a problem on that field is shown. The cash fields and
+ * the steps live in `cashScenario` (100 EUR declared, 50 to use, one operative Broker in whole units); the
+ * contribution is the only liquidity of `baseScenario`, as in the cases above.
+ */
+function signScenario(field: SignField, value: string): {draft: PlannerDraft; step: PlannerStep; entity: string} {
+    if (field === 'contribution') {
+        const {draft} = baseScenario();
+        const contribution = draft.addContribution('EUR', CONTRIBUTION_LABEL);
+        draft.contribution(contribution.key)!.amount = value;
+        return {draft, step: 'liquidity', entity: CONTRIBUTION_LABEL};
+    }
+    const {draft, brokerKey, cashKey} = cashScenario();
+    if (field === 'selected' || field === 'declared') {
+        const cash = draft.cashRow(cashKey);
+        if (cash === undefined) throw new Error('unreachable: cashScenario adds this cash row');
+        if (field === 'selected') {
+            cash.selected = value;
+        } else {
+            // Nothing to use, so a declared liquidity of zero stays sendable and the row isolates the declared field.
+            // A negative one is still exceeded by this 0: the exact list proves «exceeds» is not reported on top of it,
+            // while the `selected` 100.01 row proves the key is still raised against a balance that is not negative.
+            cash.selected = '0';
+            cash.available = value;
+        }
+        return {draft, step: 'liquidity', entity: CASH_LABEL};
+    }
+    const mode = eurMode(draft, brokerKey);
+    if (field === 'amountStep') mode.kind = 'monetary_amount';
+    mode.step = value;
+    return {draft, step: 'brokers', entity: MODE_LABEL};
+}
+
+/** A row's whole test title: Vitest cuts a `$`-interpolated string at 40 characters. */
+function signTitle({field, value, problem, why}: SignRow): string {
+    return `${field} «${value}» → ${problem ?? 'no problem'}: ${why}`;
+}
+
+describe('localProblems: the sign of an amount and of an order step (C-76, TP-12)', () => {
+    it.each(SIGN_ROWS.map((row): [string, SignRow] => [signTitle(row), row]))('%s', (_title, {field, value, problem}) => {
+        const {draft, step, entity} = signScenario(field, value);
+        const owed = problem === null ? [] : [{step, key: problem, entity}];
+        const raised = localProblems(draft).map((item) => ({step: item.step, key: item.key, entity: item.entity}));
+
+        // `built`: no local problem, and the codec takes the body, so the request would be sent as it is.
+        expect({problems: raised, built: buildRequest(draft, NOW).ok}).toEqual({problems: owed, built: owed.length === 0});
     });
 });

@@ -1,0 +1,64 @@
+{
+  "instance": {
+    "notices": {
+      "label": "Avis de l'instance"
+    },
+    "checks": {
+      "jwtSecret": {
+        "ok": "Les sessions sont signées avec une clé définie par l'administrateur.",
+        "ephemeral": "Aucune clé de signature des sessions n'est définie : chaque redémarrage déconnecte tous les utilisateurs.",
+        "short": "La clé de signature des sessions de {source} fait {length} caractères : utilisez-en au moins {minimum}, aléatoires.",
+        "unreadable": "La clé de signature des sessions est illisible : {reason}"
+      },
+      "secretsSetTwice": {
+        "ok": "Chaque secret est défini à un seul endroit.",
+        "found": "Définis à la fois directement et par un fichier : {variables}. La valeur directe l'emporte et le fichier est ignoré."
+      },
+      "instanceKey": {
+        "ok": "La clé d'instance est utilisable.",
+        "unusable": "La clé d'instance est inutilisable : {reason}",
+        "permissions": "{path} est accessible aux autres utilisateurs : le dossier devrait être en 0700 et le fichier en 0600."
+      },
+      "sessionCookie": {
+        "ok": "Le cookie de session est Secure dès que le navigateur utilise HTTPS.",
+        "never": "Le cookie de session est aussi envoyé en HTTP non chiffré (SESSION_COOKIE_SECURE=never)."
+      },
+      "clientAddress": {
+        "ok": "Aucune requête n'est passée par un proxy auquel LibreFolio ne fait pas confiance depuis le démarrage du serveur.",
+        "untrustedProxy": "Les requêtes passent par un proxy inverse auquel LibreFolio ne fait pas confiance ({headers}) : les limites par adresse de visiteur ne s'y appliquent pas. Ajoutez le proxy à FORWARDED_ALLOW_IPS, ou indiquez dans LIBREFOLIO_CLIENT_IP_HEADER l'en-tête qu'il définit.",
+        "publicForwarding": "En-têtes de transfert reçus d'une adresse publique et ignorés ({headers}). Si un proxy à une adresse publique transmet les requêtes, ajoutez-le à FORWARDED_ALLOW_IPS ; sinon, il n'y a rien à faire."
+      },
+      "frameProtection": {
+        "on": "Seules les pages de LibreFolio peuvent l'afficher dans un cadre.",
+        "offSelfHosted": "Des pages à une autre adresse, comme vos tableaux de bord, peuvent afficher LibreFolio dans un cadre : le réglage par défaut d'une installation personnelle.",
+        "offManaged": "La protection contre l'affichage dans un cadre est désactivée dans le profil managed : n'importe quel site peut afficher LibreFolio dans un cadre. Activez LIBREFOLIO_FRAME_PROTECTION, comme le fait par défaut le profil managed."
+      },
+      "cspReportOnly": {
+        "on": "Les pages de l'application portent une Content-Security-Policy en mode rapport seul : le navigateur liste dans sa console ce qu'elle bloquerait, et ne bloque rien.",
+        "offSelfHosted": "Aucune Content-Security-Policy en mode rapport seul : le réglage par défaut d'une installation personnelle.",
+        "offManaged": "La Content-Security-Policy en mode rapport seul est désactivée dans le profil managed : les navigateurs ne listent rien de ce qu'elle bloquerait. Activez LIBREFOLIO_CSP_REPORT_ONLY, comme le fait par défaut le profil managed."
+      },
+      "logLevel": {
+        "ok": "Le niveau de journalisation convient à la production.",
+        "verbose": "Le niveau de journalisation est {log_level} : le journal enregistre des détails de fonctionnement ; INFO suffit en production."
+      },
+      "pluginSecrets": {
+        "ok": "Les secrets des plugins enregistrés sont lisibles avec la clé d'instance.",
+        "unreadable": "{count, plural, one {# secret de plugin enregistré est illisible avec la clé d'instance : saisissez-le à nouveau dans Paramètres → Plugins, ou restaurez la clé d'instance avec laquelle il a été enregistré.} many {# secrets de plugins enregistrés sont illisibles avec la clé d'instance : saisissez-les à nouveau dans Paramètres → Plugins, ou restaurez la clé d'instance avec laquelle ils ont été enregistrés.} other {# secrets de plugins enregistrés sont illisibles avec la clé d'instance : saisissez-les à nouveau dans Paramètres → Plugins, ou restaurez la clé d'instance avec laquelle ils ont été enregistrés.}}"
+      },
+      "testMode": {
+        "off": "Le mode test est désactivé.",
+        "testLane": "Le mode test est activé, dans une voie du lanceur de tests.",
+        "outsideTestLane": "Le mode test est activé en dehors du lanceur de tests : les fournisseurs de données conçus pour les tests sont proposés, les données sont conservées dans {data_dir} et le fichier .env n'est pas lu. Retirez LIBREFOLIO_TEST_MODE."
+      }
+    },
+    "block": {
+      "title": "Cette instance est bloquée",
+      "adminDescription": "L'hébergeur a bloqué cette instance, par exemple parce que son abonnement n'est pas payé. Régularisez la situation auprès de l'hébergeur pour la débloquer.",
+      "userDescription": "L'hébergeur a bloqué cette instance, par exemple parce que son abonnement n'est pas payé. Demandez à votre administrateur une sauvegarde de vos données.",
+      "deletionDate": "L'instance et ses données seront supprimées le {date}.",
+      "manageSubscription": "Gérer l'abonnement",
+      "backupTitle": "Gardez une copie des données"
+    }
+  }
+}

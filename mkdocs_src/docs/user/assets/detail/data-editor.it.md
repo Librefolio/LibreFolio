@@ -67,7 +67,7 @@ Ogni riga ha un **Tipo** (Dividendo, Interesse, Split, Rettifica Prezzo o Scaden
 
     `value` è accettato al posto di `amount`, così un file di eventi esportato da LibreFolio (il backup offerto quando [cambi la valuta di un asset](../create-edit.md#editing-an-asset)) si reimporta, con le sue altre colonne ignorate. Tieni presente due limiti:
 
-    - **Un evento per data**: le righe che condividono una data vengono tutte escluse come duplicati, perciò importa tali eventi da file separati.
+    - **Un evento per data e tipo**: le righe che condividono sia la data sia il tipo vengono tutte escluse come duplicati; un dividendo e uno split dello stesso giorno si importano insieme.
     - **Ogni riga diventa un tuo evento**, inclusi quelli di un provider: ometti le righe il cui `source` è `PROVIDER` se il provider le invierà di nuovo, altrimenti compariranno due volte.
 
 - Le date sono nel formato `YYYY-MM-DD`, e i decimali possono usare `.` o `,`.

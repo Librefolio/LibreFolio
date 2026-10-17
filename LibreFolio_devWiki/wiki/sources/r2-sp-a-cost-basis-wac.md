@@ -55,8 +55,8 @@ Backend implementation plan (✅ completed, commit `a79e68156`) covering the fun
 |------|------|
 | DB model | `backend/app/db/models.py` |
 | Alembic migration | `backend/alembic/versions/001_initial.py` |
-| TX schemas | `backend/app/schemas/transactions.py` |
+| TX schemas | `backend/app/schemas/transactions/transactions.py` |
 | Common schemas (Currency) | `backend/app/schemas/common.py` |
-| TX service (WAC) | `backend/app/services/transaction_service.py` |
-| FX service (rate lookup) | `backend/app/services/fx.py` |
+| TX service (WAC) | `backend/app/services/transactions/transaction_service.py` |
+| FX service (rate lookup) | `backend/app/services/fx/conversion.py` |
 | TX API endpoints | `backend/app/api/v1/transactions.py` |

@@ -28,9 +28,15 @@
     import {type ChartSettings, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, displayFxDelta, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
+    import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
+    import {extractDaysBack} from '$lib/utils/assetPriceDerived';
+    import {fetchFxPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
+    import type {RangeDelta} from '$lib/utils/rangeChange';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
@@ -118,6 +124,18 @@
     let addModalOpen = $state(false);
     let fxTourPreview = $state(false);
     let syncModalOpen = $state(false);
+    /** The sync dialog's pairs whose shown rates hold a stored row in its range (C-66): the dialog warns that the sync
+     * replaces them. */
+    let syncModalWithData = $derived.by(() => {
+        if (!syncModalOpen) return [];
+        const targets = new Set(syncModalPairs);
+        const withData: string[] = [];
+        for (const p of pairs) {
+            const id = `${p.config.base}-${p.config.quote}`;
+            if (targets.has(id) && hasStoredPointInRange(getFxStore(p.config.slug).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)) withData.push(id);
+        }
+        return withData;
+    });
     let settingsModalOpen = $state(false);
     /** Slug of the pair currently being configured via per-card ⚙️ (null = global) */
     let settingsTargetSlug = $state<string | null>(null);
@@ -155,44 +173,26 @@
 
     let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
-    // Delta periods for table columns
-    const DELTA_PERIODS = [
-        {key: '1W', days: 7},
-        {key: '1M', days: 30},
-        {key: '3M', days: 91},
-        {key: '6M', days: 182},
-        {key: '1Y', days: 365},
-        {key: '2Y', days: 730},
-        {key: '3Y', days: 1095},
-        {key: '5Y', days: 1825},
-    ] as const;
+    // The Δ columns (1D … 5Y): the backend computes them up to the end of the range, both ways, and lists the
+    // periods (X-R53). Kept apart from the rate flow. Which answer is kept while several are in flight, the ledger says
+    // (X-R60); `periodChangesLoading` copies its `busy`, one-pair requests included.
+    let periodSpecs = $state<PeriodSpec[]>([]);
+    let periodDeltas = $state<Map<string, {direct: PeriodDeltas; inverse: PeriodDeltas}>>(new Map());
+    let periodChangesLoading = $state(false);
+    const periodChangesLedger = new PeriodChangesLedger<string>();
+    // The Δ over the whole range (the table's Δ Abs and Δ %, the card's), both ways, comes in the same answer (X-R59),
+    // kept by a ledger of its own: it belongs to the range's first day too, so a failed request keeps only the values
+    // of the same range (`rangeKey`).
+    let rangeDeltas = $state<Map<string, {direct: RangeDelta; inverse: RangeDelta}>>(new Map());
+    const rangeDeltaLedger = new PeriodChangesLedger<string>();
+
+    /** The identity of a range for the range-Δ ledger: both its days. */
+    function rangeKey(start: string, end: string): string {
+        return `${start}…${end}`;
+    }
 
     // Which delta periods are visible for the selected date range
-    let visiblePeriods = $derived(
-        DELTA_PERIODS.filter((p) => {
-            const rangeMs = new Date(dateEnd).getTime() - new Date(dateStart).getTime();
-            const rangeDays = rangeMs / (1000 * 60 * 60 * 24);
-            return rangeDays >= p.days;
-        }),
-    );
-
-    function computePeriodDelta(data: FxDataPoint[], periodDays: number, inverted: boolean): number | null {
-        if (data.length < 2) return null;
-        const lastPoint = data[data.length - 1];
-        const targetDate = new Date(lastPoint.date);
-        targetDate.setDate(targetDate.getDate() - periodDays);
-        const targetStr = targetDate.toISOString().slice(0, 10);
-        // Find closest point at or before target date (backward-fill)
-        let refPoint: FxDataPoint | null = null;
-        for (let i = data.length - 1; i >= 0; i--) {
-            if (data[i].date <= targetStr) {
-                refPoint = data[i];
-                break;
-            }
-        }
-        if (!refPoint) return null;
-        return displayFxDelta(refPoint.rate, lastPoint.rate, inverted)?.pct ?? null;
-    }
+    let visiblePeriods = $derived(visiblePeriodColumns(periodSpecs, dateStart, dateEnd));
 
     function fxPointToLineDataPoint(point: FxDataPoint, inverted: boolean): LineDataPoint {
         const rate = displayFxRate(point.rate, inverted);
@@ -200,7 +200,7 @@
             date: point.date,
             value: rate ?? 0,
             missing: rate === null,
-            staleDays: point.backwardFillInfo?.daysBack ?? 0,
+            staleDays: extractDaysBack(point),
         };
     }
 
@@ -231,13 +231,8 @@
     // Map to FxRow for table view
     let fxTableRows = $derived<FxRow[]>(
         filteredPairs.map((p) => {
-            const inv = isCardInverted(p.config.slug);
-            const deltas: Record<string, number | null> = {
-                '1D': computePeriodDelta(p.data, 1, inv),
-            };
-            for (const period of visiblePeriods) {
-                deltas[period.key] = computePeriodDelta(p.data, period.days, inv);
-            }
+            const changes = periodDeltas.get(`${p.config.base}/${p.config.quote}`);
+            const deltas: PeriodDeltas = (isCardInverted(p.config.slug) ? changes?.inverse : changes?.direct) ?? {};
             return {
                 slug: p.config.slug,
                 base: p.config.base,
@@ -246,6 +241,7 @@
                 manualOnly: p.config.providers.length === 1 && p.config.providers[0].providerCode === 'MANUAL',
                 providers: p.config.providers,
                 deltas,
+                rangeDeltas: rangeDeltas.get(`${p.config.base}/${p.config.quote}`) ?? null,
             };
         }),
     );
@@ -283,15 +279,21 @@
     }
 
     async function retryBackendSignals() {
-        await loadFxSignalDefinitions(true);
-        await fetchAllPairData();
+        await pageBusy.track('fx-signals-retry', async () => {
+            await loadFxSignalDefinitions(true);
+            // The rates and the signals only: the Δ columns do not depend on the signals (X-R60).
+            await fetchAllPairSeries();
+        });
     }
 
     onMount(async () => {
         // Preload currency graph so provider icons are cached before FxTable renders (E1c fix)
         getCurrencyGraph();
-        await loadFxSignalDefinitions();
-        await loadPairSources();
+        // The first load holds the page's Refresh button (Y11): the catalog, the pairs, their rates.
+        await pageBusy.track('fx-first-load', async () => {
+            await loadFxSignalDefinitions();
+            await loadPairSources();
+        });
         // Load asset list for cross-domain signal selection
         loadAssetList();
         onboardingGuide.maybeStartContextual('fx_page_guide');
@@ -398,7 +400,86 @@
         displayDateStart = 'min';
     }
 
+    /**
+     * Rates and signals (the bulk convert, the cache) and the Δ columns (the backend's period changes), together. The
+     * signals' retry, a settings change and an inversion ask only the rates and signals (`fetchAllPairSeries`): the Δ
+     * columns come both ways and depend on none of them (X-R60).
+     */
     async function fetchAllPairData(propagateError = false) {
+        await Promise.all([fetchAllPairSeries(propagateError), loadPeriodChanges()]);
+    }
+
+    /** The Δ columns of every configured pair up to the end of the range, and each pair's Δ over the range, both ways, from the backend (X-R53, X-R59). */
+    async function loadPeriodChanges() {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        if (!current() || pairs.length === 0) return;
+        const ticket = periodChangesLedger.begin(dateEnd, true);
+        const rangeStart = dateStart;
+        const rangeTicket = rangeDeltaLedger.begin(rangeKey(rangeStart, ticket.asOf), true);
+        periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
+        try {
+            const result = await fetchFxPeriodChanges(
+                pairs.map((pair) => ({base: pair.config.base, quote: pair.config.quote})),
+                ticket.asOf,
+                rangeStart,
+            );
+            if (!current()) return;
+            const nextRange = rangeDeltaLedger.settle(rangeTicket, rangeDeltas, result.rangeDeltasByPair);
+            if (nextRange !== null) rangeDeltas = nextRange;
+            const next = periodChangesLedger.settle(ticket, periodDeltas, result.deltasByPair);
+            if (next === null) return;
+            if (result.periods.length > 0) periodSpecs = result.periods;
+            periodDeltas = next;
+        } catch (requestError) {
+            if (!current()) return;
+            // The Δ computed up to the same day stay: only those of another range go (X-R60); the range's Δ, only for the same range.
+            const nextRange = rangeDeltaLedger.fail(rangeTicket, rangeDeltas);
+            if (nextRange !== null) rangeDeltas = nextRange;
+            const next = periodChangesLedger.fail(ticket, periodDeltas);
+            if (next === null) return;
+            console.error('Failed to fetch FX period changes:', requestError);
+            periodDeltas = next;
+        } finally {
+            periodChangesLedger.end(ticket);
+            rangeDeltaLedger.end(rangeTicket);
+            periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
+        }
+    }
+
+    /**
+     * One pair's Δ columns and Δ over the range from the backend, merged into the others' (after its sync, or once
+     * added). The page stays busy while it is in flight, and a full answer asked before it can no longer overwrite the
+     * pair (X-R60).
+     */
+    async function loadPairPeriodChanges(index: number) {
+        const pair = pairs[index];
+        if (!pair) return;
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        const ticket = periodChangesLedger.begin(dateEnd, false);
+        const rangeStart = dateStart;
+        const rangeTicket = rangeDeltaLedger.begin(rangeKey(rangeStart, ticket.asOf), false);
+        periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
+        try {
+            const result = await fetchFxPeriodChanges([{base: pair.config.base, quote: pair.config.quote}], ticket.asOf, rangeStart);
+            if (!current()) return;
+            const nextRange = rangeDeltaLedger.settle(rangeTicket, rangeDeltas, result.rangeDeltasByPair);
+            if (nextRange !== null) rangeDeltas = nextRange;
+            const next = periodChangesLedger.settle(ticket, periodDeltas, result.deltasByPair);
+            if (next === null) return;
+            if (result.periods.length > 0) periodSpecs = result.periods;
+            periodDeltas = next;
+        } catch (requestError) {
+            if (current()) console.error(`Failed to fetch the period changes of ${pair.config.slug}:`, requestError);
+        } finally {
+            periodChangesLedger.end(ticket);
+            rangeDeltaLedger.end(rangeTicket);
+            periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
+        }
+    }
+
+    async function fetchAllPairSeries(propagateError = false) {
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current() || pairs.length === 0) return;
@@ -469,7 +550,7 @@
             return;
         }
 
-        // Exactly one bulk call for every pair needing rates and/or signals.
+        // One bulk call for every pair needing rates and/or signals, in batches under the backend's caps (Z-27).
         signalRequestFailed = false;
         try {
             const bulkResult = await loadFxRatesAndSignalsBulk(bulkRequests);
@@ -491,6 +572,9 @@
         } catch (requestError) {
             if (!current()) return;
             console.error('Failed to fetch FX rates/signals bulk:', requestError);
+            // X-R58: a request the backend refused as too large is said, not left as cards without rates.
+            const refusal = bulkRefusalMessage(requestError, $_);
+            if (refusal !== null) toasts.error(refusal);
             signalRequestFailed = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
             // Fallback: update with whatever is cached
             for (const nf of needFetch) {
@@ -501,7 +585,12 @@
         }
     }
 
+    /** One pair's rates and signals, and its Δ columns, together. */
     async function fetchPairData(index: number) {
+        await Promise.all([fetchPairSeries(index), loadPairPeriodChanges(index)]);
+    }
+
+    async function fetchPairSeries(index: number) {
         const pair = pairs[index];
         if (!pair) return;
         const store = getFxStore(pair.config.slug);
@@ -549,6 +638,8 @@
             if (e?.response?.status !== 404) {
                 console.error(`Failed to fetch data for ${pair.config.slug}:`, e);
             }
+            const refusal = bulkRefusalMessage(e, $_);
+            if (refusal !== null) toasts.error(refusal);
         }
     }
 
@@ -574,7 +665,7 @@
             setGlobalSettings(s, 'fx');
         }
         if (shouldReloadBackend) {
-            void fetchAllPairData();
+            void pageBusy.track('fx-settings', () => fetchAllPairSeries());
         }
     }
 
@@ -705,7 +796,7 @@
             invalidateAllFxStores();
             rearmMaxPendingBeforeReload();
             pairs = pairs.map((p) => ({...p, data: [], loading: true}));
-            await fetchAllPairData();
+            await pageBusy.track('fx-refresh', () => fetchAllPairData());
         } finally {
             refreshing = false;
         }
@@ -779,7 +870,7 @@
         // resolved date) so the URL stays meaningful across reloads/shares and
         // the "All" badge doesn't look stuck on a specific historical date.
         gotoDateRange(newStart, newEnd);
-        fetchAllPairData();
+        void pageBusy.track('fx-period', () => fetchAllPairData());
     }
 
     function handleAddPair() {
@@ -924,7 +1015,7 @@
     async function handlePairCreated() {
         if (!pageAlive) return;
         addModalOpen = false;
-        await loadPairSources();
+        await pageBusy.track('fx-reload', () => loadPairSources());
     }
 
     async function handlePairCreationSynced(detail: FxPairSyncCompleteDetail) {
@@ -946,10 +1037,10 @@
      * Same two-wave load as the assets page: the pair list first, then rates per pair. See the
      * note there — until this is false, the rates on screen are not the final ones.
      */
-    let busy = $derived(loading || pairs.some((p) => p.loading));
+    let busy = $derived(loading || periodChangesLoading || pairs.some((p) => p.loading));
 </script>
 
-<div class="space-y-6" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="fx-page">
+<div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="fx-page">
     <!-- Header: Title left, ViewModeToggle + Add Pair right. Round 14.1 bugfix: `lg:` is a
          VIEWPORT breakpoint (1024px) — wraps unconditionally below that width regardless of
          whether the actual header row has room, the opposite of what "wrap only when space is
@@ -958,13 +1049,13 @@
          no JS threshold tuning is needed for a simple 2-block header). -->
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div use:guideAnchor={'fx.page.overview'} data-testid="fx-page-overview-guide-target">
-            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+            <h2 class="text-lg font-semibold text-lf-secondary flex items-center gap-2">
                 {$_('fx.title')}
                 {#if pairs.length > 0}
-                    <span data-testid="fx-pair-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{pairs.length}</span>
+                    <span data-testid="fx-pair-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-lf-selected text-lf-link">{pairs.length}</span>
                 {/if}
             </h2>
-            <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('fx.subtitle')}</p>
+            <p class="text-lf-muted text-sm">{$_('fx.subtitle')}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
             {#if viewMode === 'list' && selectedFxRows.length > 0}
@@ -983,7 +1074,7 @@
                 />
             {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
-            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" use:guideAnchor={'fx.page.add'} onclick={handleAddPair}>
+            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" use:guideAnchor={'fx.page.add'} onclick={handleAddPair}>
                 <Plus size={16} />
                 {$_('fx.actions.addPair')}
             </button>
@@ -1041,7 +1132,7 @@
                 </div>
                 <!-- Reset filters button -->
                 <button
-                    class="p-1.5 rounded-md transition-colors {filterCurrency1 ? 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400' : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'}"
+                    class="p-1.5 rounded-md transition-colors {filterCurrency1 ? 'hover:bg-lf-hover text-lf-muted hover:text-lf-danger' : 'text-lf-muted/50 cursor-not-allowed'}"
                     data-testid="fx-reset-filters"
                     disabled={!filterCurrency1}
                     onclick={() => {
@@ -1060,16 +1151,16 @@
             {#if viewMode === 'list'}
                 <ColumnVisibilityToggle tableRef={fxTableComponent?.getTableRef()} showLabel={showActionLabels} />
             {:else}
-                <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                <div class="flex rounded-lg border border-lf-subtle overflow-hidden">
                     <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                         onclick={() => {
                             globalViewMode = 'absolute';
                         }}
                         >Abs
                     </button>
                     <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                         onclick={() => {
                             globalViewMode = 'percentage';
                         }}
@@ -1078,31 +1169,24 @@
                 </div>
             {/if}
             <!-- Settings -->
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                data-testid="fx-chart-settings-button"
-                onclick={handleGlobalSettings}
-            >
+            <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="fx-chart-settings-button" onclick={handleGlobalSettings}>
                 <Settings size={14} />
                 {#if showActionLabels}<span>{$_('sharedResource.settings')}</span>{/if}
             </button>
             <!-- Sync All -->
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                data-testid="fx-sync-all-button"
-                use:guideAnchor={'fx.page.sync'}
-                onclick={handleSyncAll}
-            >
+            <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="fx-sync-all-button" use:guideAnchor={'fx.page.sync'} onclick={handleSyncAll}>
                 <RotateCw size={14} />
                 {#if showActionLabels}<span>{$_('sharedResource.syncAll')}</span>{/if}
             </button>
             <!-- Refresh All -->
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
                 data-testid="fx-refresh-all-button"
+                data-busy={pageBusy.busy ? 'true' : 'false'}
+                disabled={pageBusy.busy}
                 onclick={handleRefreshAll}
             >
-                <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
+                <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
                 {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
             </button>
         {/snippet}
@@ -1110,34 +1194,34 @@
 
     <!-- Content -->
     {#if loading}
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
-                <RefreshCw class="text-libre-green animate-spin" size={32} />
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-selected rounded-full mb-4">
+                <RefreshCw class="text-lf-link animate-spin" size={32} />
             </div>
-            <p class="text-gray-500 dark:text-gray-400">{$_('common.loading')}</p>
+            <p class="text-lf-muted">{$_('common.loading')}</p>
         </div>
     {:else if error}
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
-            <p class="text-red-600 dark:text-red-400">{error}</p>
-            <button class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" onclick={() => loadPairSources()}>
+        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-xl p-6 text-center">
+            <p class="text-lf-danger-on-soft">{error}</p>
+            <button class="mt-3 px-4 py-2 text-sm bg-lf-danger-solid text-lf-on-danger-solid rounded-lg hover:bg-lf-danger-hover transition-colors" onclick={() => loadPairSources()}>
                 {$_('common.retry')}
             </button>
         </div>
     {:else if filteredPairs.length === 0}
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full mb-4">
                 <Coins class="text-amber-600 dark:text-amber-400" size={32} />
             </div>
             {#if pairs.length === 0}
-                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('fx.empty.noPairsTitle')}</h3>
-                <p class="text-gray-500 dark:text-gray-400 mb-4">{$_('fx.empty.noPairsDesc')}</p>
-                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" use:guideAnchor={'fx.add'} onclick={handleAddPair}>
+                <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$_('fx.empty.noPairsTitle')}</h3>
+                <p class="text-lf-muted mb-4">{$_('fx.empty.noPairsDesc')}</p>
+                <button class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors" use:guideAnchor={'fx.add'} onclick={handleAddPair}>
                     <Plus size={16} class="inline mr-1" />
                     {$_('fx.empty.addFirstPair')}
                 </button>
             {:else}
-                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('common.noMatchesTitle')}</h3>
-                <p class="text-gray-500 dark:text-gray-400">{$_('fx.empty.noMatchesDesc')}</p>
+                <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$_('common.noMatchesTitle')}</h3>
+                <p class="text-lf-muted">{$_('fx.empty.noMatchesDesc')}</p>
             {/if}
         </div>
     {:else if viewMode === 'grid'}
@@ -1149,6 +1233,7 @@
                     quote={pair.config.quote}
                     slug={pair.config.slug}
                     data={pair.data}
+                    rangeDeltas={rangeDeltas.get(`${pair.config.base}/${pair.config.quote}`) ?? null}
                     loading={pair.loading}
                     dateStart={urlDateStart}
                     dateEnd={urlDateEnd}
@@ -1160,7 +1245,7 @@
                     onrefresh={handleRefreshPair}
                     onsync={handleSyncPair}
                     onsettings={handleCardSettings}
-                    oninversionchange={() => void fetchAllPairData()}
+                    oninversionchange={() => void fetchAllPairSeries()}
                 />
             {/each}
         </div>
@@ -1176,7 +1261,7 @@
             onsync={handleSyncPair}
             onrefresh={handleRefreshPair}
             ondelete={handleDeletePair}
-            oninversionchange={() => void fetchAllPairData()}
+            oninversionchange={() => void fetchAllPairSeries()}
             onselectionchange={(rows) => {
                 selectedFxRows = rows;
             }}
@@ -1218,7 +1303,7 @@
 <FxPairAddModal bind:open={addModalOpen} tourPreview={fxTourPreview} onclose={closeAddPair} oncreated={handlePairCreated} onsynced={handlePairCreationSynced} />
 
 <!-- Sync Modal -->
-<FxSyncModal bind:open={syncModalOpen} {dateEnd} dateStart={syncDateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} />
+<FxSyncModal bind:open={syncModalOpen} {dateEnd} dateStart={syncDateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} withDataInRange={syncModalWithData} />
 
 <!-- Chart Settings Modal (global or per-card depending on settingsTargetSlug) -->
 <ChartSettingsModal

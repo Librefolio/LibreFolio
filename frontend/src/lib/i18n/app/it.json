@@ -43,7 +43,14 @@
     "imagePending": "È stata rilevata una versione stabile più recente, ma la relativa immagine Docker non è ancora disponibile.",
     "imageCheckFailed": "È stata rilevata una versione stabile più recente, ma non è stato possibile verificarne l’immagine Docker. Riprova.",
     "adminLookupFailed": "Aggiornamento disponibile, ma non è stato possibile caricare l’elenco degli amministratori.",
-    "notTranslated": "Non ancora tradotto"
+    "notTranslated": "Non ancora tradotto",
+    "whatsNew": {
+      "title": "Novità di LibreFolio",
+      "intro": "LibreFolio è stato aggiornato dalla tua ultima visita. Ecco cosa è cambiato.",
+      "introRelease": "Ecco le novità della versione {version}.",
+      "close": "Ho capito",
+      "fullChangelog": "Tutte le note di rilascio"
+    }
   },
   "support": {
     "title": "Sostieni LibreFolio",
@@ -98,5 +105,12 @@
     },
     "cookieWarning": "Il browser usa HTTPS, ma il cookie di sessione non è marcato Secure. Fai mandare X-Forwarded-Proto al reverse proxy (Nginx: proxy_set_header X-Forwarded-Proto $scheme;), oppure riporta SESSION_COOKIE_SECURE ad auto se è never.",
     "learnMore": "Come connettersi in sicurezza"
+  },
+  "legal": {
+    "title": "Note legali",
+    "disclaimer": "LibreFolio ti aiuta a seguire i tuoi investimenti; non dà consigli finanziari, fiscali o legali. I numeri possono contenere errori: verificali prima di agire.",
+    "disclaimerShort": "Non è una consulenza finanziaria.",
+    "terms": "Termini di servizio",
+    "privacy": "Informativa sulla privacy"
   }
 }

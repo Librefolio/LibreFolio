@@ -7,6 +7,10 @@ Also serves static assets from plugins.
 Security:
 - Files are validated for MIME type (prevents executable/script uploads)
 - File size is checked against global settings
+- Scope (decision 36): a common file is seen by every signed-in user, a personal one only by its uploader and the
+  admins. A personal file of someone else answers 404, the same answer as a file that does not exist; deleting a file
+  and changing its scope belong to its uploader and the admins (403 for a common file of someone else).
+- Thumbnails are ``Cache-Control: private``: they are signed-in content, never for a shared cache.
 """
 
 import asyncio
@@ -29,25 +33,36 @@ from backend.app.schemas.uploads import (
     UploadFileInfo,
     UploadListResponse,
     UploadResponse,
+    UploadScope,
+    UploadUpdateRequest,
 )
-from backend.app.services.file_preview import (
+from backend.app.services.accounts.global_settings_service import get_max_upload_mb
+from backend.app.services.files.file_preview import (
     FilePreviewLinks,
     UnsupportedPreviewError,
     build_image_preview_url,
     build_preview_response,
 )
-from backend.app.services.global_settings_service import get_max_upload_mb
-from backend.app.services.static_uploads import (
+from backend.app.services.files.static_uploads import (
     UploadSecurityError,
+    can_manage_upload,
+    can_view_upload,
     delete_upload,
     get_upload_info,
-    get_upload_mime_type,
     get_upload_path,
     list_uploads,
     save_upload,
+    set_upload_scope,
 )
+from backend.app.utils.runtime.paths import confined_path
 
 logger = structlog.get_logger(__name__)
+
+#: The answer to a file that does not exist, and to a personal file of someone else: the two cannot be told apart.
+FILE_NOT_FOUND = "File not found"
+
+#: Thumbnails are signed-in content: the browser may keep them, a shared cache must not.
+THUMBNAIL_CACHE_CONTROL = {"Cache-Control": "private, max-age=3600"}
 
 # OpenAPI documentation for endpoints that stream raw file bytes (no JSON body).
 BINARY_FILE_RESPONSE: dict = {
@@ -152,10 +167,24 @@ PLUGIN_STATIC_DIRS = {
 }
 
 
+def _for_user(info: UploadFileInfo, user: User) -> UploadFileInfo:
+    """``info`` as ``user`` gets it: ``can_delete`` set for that user."""
+    return info.model_copy(update={"can_delete": can_manage_upload(info, user.id, user.is_superuser)})
+
+
+async def _visible_upload(file_id: str, user: User) -> UploadFileInfo:
+    """The info of a file ``user`` may see; 404 otherwise, the same answer as a file that does not exist."""
+    info = await asyncio.to_thread(get_upload_info, file_id)
+    if info is None or not can_view_upload(info, user.id, user.is_superuser):
+        raise HTTPException(status_code=404, detail=FILE_NOT_FOUND)
+    return info
+
+
 @router.post("", response_model=UploadResponse)
 async def upload_file(
     file: UploadFile = File(...),
     description: Optional[str] = Form(default=None),
+    scope: Optional[UploadScope] = Form(default=None),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     session: AsyncSession = Depends(get_session_generator),
 ):
@@ -168,6 +197,8 @@ async def upload_file(
     Args:
         file: File to upload
         description: Optional description
+        scope: common (the image pickers) or personal (the Files page); without it, images are common and the rest
+            personal
 
     Returns:
         UploadResponse with file info
@@ -184,14 +215,16 @@ async def upload_file(
     if len(content) > max_bytes:
         raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {max_mb} MB")
 
-    # Save file (includes security validation)
+    # Save file (includes security validation), off the event loop: it writes the file and its sidecar
     try:
-        file_info = save_upload(
+        file_info = await asyncio.to_thread(
+            save_upload,
             content=content,
             original_filename=file.filename or "unnamed",
             user_id=current_user.id,
             description=description,
             mime_type=file.content_type,
+            scope=scope,
         )
 
         logger.info(
@@ -199,9 +232,10 @@ async def upload_file(
             file_id=file_info.id,
             user_id=current_user.id,
             size_bytes=file_info.size_bytes,
+            scope=file_info.scope.value,
         )
 
-        return UploadResponse(file=file_info)
+        return UploadResponse(file=_for_user(file_info, current_user))
 
     except UploadSecurityError as e:
         logger.warning(
@@ -222,7 +256,7 @@ async def list_files(
     my_files_only: bool = False,
 ):
     """
-    List all uploaded files.
+    List the uploaded files the user may see: every common file and the user's own personal ones (an admin sees all).
 
     Args:
         my_files_only: If True, only show files uploaded by current user
@@ -231,9 +265,10 @@ async def list_files(
         List of files with metadata
     """
     user_filter = current_user.id if my_files_only else None
-    files, _ = list_uploads(user_id=user_filter)
+    files, _ = await asyncio.to_thread(list_uploads, user_id=user_filter)
+    visible = [_for_user(info, current_user) for info in files if can_view_upload(info, current_user.id, current_user.is_superuser)]
 
-    return UploadListResponse(items=files)
+    return UploadListResponse(items=visible)
 
 
 @router.get("/{file_id}", response_model=UploadFileInfo)
@@ -250,28 +285,23 @@ async def get_file_info(
     Returns:
         File metadata
     """
-    info = get_upload_info(file_id)
-    if not info:
-        raise HTTPException(status_code=404, detail="File not found")
-    return info
+    return _for_user(await _visible_upload(file_id, current_user), current_user)
 
 
 @router.get("/{file_id}/preview", response_model=FilePreviewResponse)
 async def get_upload_file_preview(
     file_id: str,
     sheet_name: Optional[str] = None,
-    _current_user: Annotated[User, Depends(get_current_user)] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
 ) -> FilePreviewResponse:
     """Get structured preview data for an uploaded file."""
-    info = get_upload_info(file_id)
-    if not info:
-        raise HTTPException(status_code=404, detail="File not found")
+    info = await _visible_upload(file_id, current_user)
 
-    file_path = get_upload_path(file_id)
-    if not file_path or not file_path.exists():
+    file_path = await asyncio.to_thread(get_upload_path, file_id)
+    if not file_path:
         raise HTTPException(status_code=404, detail="File content not found")
 
-    mime_type = get_upload_mime_type(file_id) or info.mime_type
+    mime_type = info.mime_type
     source_url = f"/api/v1/uploads/file/{file_id}"
     links = FilePreviewLinks(
         source_url=source_url,
@@ -314,15 +344,13 @@ async def delete_file(
     Returns:
         Deletion confirmation
     """
-    info = get_upload_info(file_id)
-    if not info:
-        raise HTTPException(status_code=404, detail="File not found")
+    info = await _visible_upload(file_id, current_user)
 
     # Check ownership (superusers can delete any file)
-    if not current_user.is_superuser and info.uploaded_by_user_id != current_user.id:
+    if not can_manage_upload(info, current_user.id, current_user.is_superuser):
         raise HTTPException(status_code=403, detail="Cannot delete files uploaded by other users")
 
-    success = delete_upload(file_id)
+    success = await asyncio.to_thread(delete_upload, file_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete file")
 
@@ -336,6 +364,29 @@ async def delete_file(
         message="File deleted successfully",
         file_id=file_id,
     )
+
+
+@router.patch("/{file_id}", response_model=UploadFileInfo)
+async def update_file(
+    file_id: str,
+    body: UploadUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+):
+    """
+    Change the scope of an uploaded file: common (every signed-in user) or personal (its uploader and the admins).
+
+    Only its uploader and the admins may change it: 403 for a common file of someone else, 404 for a personal one.
+    """
+    info = await _visible_upload(file_id, current_user)
+    if not can_manage_upload(info, current_user.id, current_user.is_superuser):
+        raise HTTPException(status_code=403, detail="Cannot change files uploaded by other users")
+
+    updated = await asyncio.to_thread(set_upload_scope, file_id, body.scope)
+    if updated is None:
+        raise HTTPException(status_code=404, detail=FILE_NOT_FOUND)
+
+    logger.info("File scope changed via API", file_id=file_id, user_id=current_user.id, scope=updated.scope.value)
+    return _for_user(updated, current_user)
 
 
 def _resize_image(file_path: Path, max_width: int, max_height: int) -> bytes | None:
@@ -371,14 +422,14 @@ async def serve_file(  # noqa: C901 — flat preview-mode dispatch with early re
     offset: Optional[int] = None,
     window: Optional[int] = None,
     img_preview: Optional[str] = None,
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Serve the actual file content.
 
     Requires authentication via session cookie.
     Browser <img> tags automatically include cookies,
-    so embedded images work seamlessly.
+    so embedded images work seamlessly. A personal file of someone else answers 404, before any cache is read.
 
     Preview modes:
     - Text preview: ?offset=0&window=1000 (returns first 1000 chars)
@@ -398,11 +449,12 @@ async def serve_file(  # noqa: C901 — flat preview-mode dispatch with early re
         400: If preview params used on incompatible file type
         404: If file not found
     """
-    file_path = get_upload_path(file_id)
+    info = await _visible_upload(file_id, current_user)
+    file_path = await asyncio.to_thread(get_upload_path, file_id)
     if not file_path:
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail=FILE_NOT_FOUND)
 
-    mime_type = get_upload_mime_type(file_id) or "application/octet-stream"
+    mime_type = info.mime_type or "application/octet-stream"
 
     # Text preview mode
     if offset is not None or window is not None:
@@ -421,7 +473,8 @@ async def serve_file(  # noqa: C901 — flat preview-mode dispatch with early re
 
             from fastapi.responses import PlainTextResponse  # noqa: PLC0415 — lazy import / avoid circular
 
-            return PlainTextResponse(content=content, media_type=mime_type)
+            # Always plain text, whatever the stored type: an uploaded document is shown, never run.
+            return PlainTextResponse(content=content, headers={"X-Content-Type-Options": "nosniff"})
         except Exception as e:
             logger.exception("Failed to read text preview", error=str(e), file_id=file_id)
             raise HTTPException(status_code=500, detail="Failed to read file preview") from e
@@ -448,7 +501,7 @@ async def serve_file(  # noqa: C901 — flat preview-mode dispatch with early re
 
             from fastapi.responses import StreamingResponse  # noqa: PLC0415 — avoid circular import
 
-            return StreamingResponse(io.BytesIO(image_bytes), media_type=cached_mime, headers={"Cache-Control": "public, max-age=3600"})
+            return StreamingResponse(io.BytesIO(image_bytes), media_type=cached_mime, headers=THUMBNAIL_CACHE_CONTROL)
 
         # Generate resized image OFF the event loop (Pillow is sync CPU+IO —
         # a big upload would otherwise stall every concurrent request).
@@ -457,7 +510,7 @@ async def serve_file(  # noqa: C901 — flat preview-mode dispatch with early re
 
             if image_bytes is None:
                 # Requested size >= original — serve file directly, no processing needed
-                return FileResponse(path=file_path, media_type=mime_type, headers={"Cache-Control": "public, max-age=3600"})
+                return FileResponse(path=file_path, media_type=mime_type, headers=THUMBNAIL_CACHE_CONTROL)
 
             # Store in cache
             preview_cache.put(file_id, size_key, image_bytes, mime_type)
@@ -466,7 +519,7 @@ async def serve_file(  # noqa: C901 — flat preview-mode dispatch with early re
 
             from fastapi.responses import StreamingResponse  # noqa: PLC0415 — lazy import / avoid circular
 
-            return StreamingResponse(io.BytesIO(image_bytes), media_type=mime_type, headers={"Cache-Control": "public, max-age=3600"})
+            return StreamingResponse(io.BytesIO(image_bytes), media_type=mime_type, headers=THUMBNAIL_CACHE_CONTROL)
 
         except Exception as e:
             logger.exception("Failed to generate image preview", error=str(e), file_id=file_id)
@@ -474,11 +527,7 @@ async def serve_file(  # noqa: C901 — flat preview-mode dispatch with early re
 
     # Normal file serving (no preview)
     # Get original filename for downloads
-    filename = None
-    if download:
-        info = get_upload_info(file_id)
-        if info:
-            filename = info.original_name
+    filename = info.original_name if download else None
 
     return FileResponse(
         path=file_path,
@@ -532,16 +581,11 @@ async def serve_plugin_static(
 
     # Build path and validate
     base_dir = PLUGIN_STATIC_DIRS[provider_type]
-    file_path = base_dir / path
 
-    # Security: prevent path traversal
-    try:
-        file_path = file_path.resolve()
-        base_resolved = base_dir.resolve()
-        if not str(file_path).startswith(str(base_resolved)):
-            raise HTTPException(status_code=403, detail="Access denied")
-    except (OSError, ValueError):
-        raise HTTPException(status_code=400, detail="Invalid path") from None
+    # Security: the requested path must stay inside the plugin's static folder
+    file_path = confined_path(base_dir, path)
+    if file_path is None:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")

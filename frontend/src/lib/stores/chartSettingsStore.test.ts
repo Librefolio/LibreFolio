@@ -250,7 +250,8 @@ describe('chartSettingsStore — hydration', () => {
         expect(rewrittenRaw).not.toContain('"_resolvedData"');
         expect(rewrittenRaw).not.toContain('legacy-runtime');
         const rewritten = persistedFor(user);
-        expect(rewritten?.version).toBe(2);
+        // Storage version 3 since CP-10a (developer's decision 29): a v1 payload is rewritten as v3.
+        expect(rewritten?.version).toBe(3);
         expect(rewritten?.globalSettings.signals).toEqual([durableSignal]);
         const rewrittenOverrides = new Map(rewritten?.pairOverrides);
         expect(rewrittenOverrides.get('__global_assets__')?.signals).toEqual([durableSignal]);
@@ -298,7 +299,8 @@ describe('chartSettingsStore — hydration', () => {
         expect(rewrittenRaw).not.toContain('"_resolvedData"');
         expect(rewrittenRaw).not.toContain('v2-runtime');
         const rewritten = persistedFor(user);
-        expect(rewritten?.version).toBe(2);
+        // Storage version 3 since CP-10a: the scrubbed v2 payload is rewritten as v3.
+        expect(rewritten?.version).toBe(3);
         expect(rewritten?.globalSettings.signals).toEqual([durableSignal]);
         expect(new Map(rewritten?.pairOverrides).get('EUR-USD')?.signals).toEqual([durableSignal]);
         expect(setItem).toHaveBeenCalledTimes(1);
@@ -334,7 +336,8 @@ describe('chartSettingsStore — hydration', () => {
     });
 
     it('falls back to defaults for a payload written by another storage version', () => {
-        seed(`chart-settings-u${userSeq + 1}`, {version: 3, globalSettings: settings({areaFill: false}), pairOverrides: []});
+        // A later version than the store knows (3 is current since CP-10a).
+        seed(`chart-settings-u${userSeq + 1}`, {version: 4, globalSettings: settings({areaFill: false}), pairOverrides: []});
         freshUser();
 
         expect(getGlobalSettings().areaFill).toBe(true);
@@ -728,7 +731,7 @@ describe('chartSettingsStore — persistence', () => {
         flushWrite();
 
         const payload = persistedFor(user);
-        expect(payload?.version).toBe(2);
+        expect(payload?.version).toBe(3);
         expect(payload?.globalSettings).toMatchObject({colorByBaseline: false});
         expect(Object.fromEntries(payload!.pairOverrides)).toMatchObject({
             __global_assets__: expect.objectContaining({gridLines: false}),

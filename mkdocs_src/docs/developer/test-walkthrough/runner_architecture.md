@@ -107,8 +107,8 @@ make_category(
 
 add_test(
     "auth", ...,
-    exclusive_because="rewrites global_settings.enable_registration; while it is False "
-                      "every concurrent user creation fails",
+    exclusive_because="rewrites global_settings.registration_mode, one row shared by every user: "
+                      "a concurrent unit would register against whatever value this one left behind",
 )
 ```
 
@@ -135,7 +135,14 @@ is small because an exclusive has to survive being written down.
 
 | Unit | Why it cannot be scoped |
 |---|---|
-| `api auth` | rewrites `global_settings.enable_registration` — an **instance-wide flag**, not a per-user row. While it is `False` every concurrent user creation fails, and a test that verifies closed registration necessarily owns the instance. |
+| `api auth` | rewrites `global_settings.registration_mode` — **one row shared by every user**, not a per-user row. A concurrent unit would register against whatever value this one left behind (`disabled` while it checks closed registration), and a test that verifies a registration mode on the lane's server necessarily owns the instance. |
+
+The units that came with the registration modes show the other way out: `api registration` and `api users-admin`
+run every case that needs another mode, an accounts variable or a user limit in-process, on a private database, and
+touch only their own accounts and tokens on the lane's server, so they stay WRITE-SCOPED with no exclusive.
+`api admin-setup` goes the same way: an administrator waiting for its setup exists only on an instance that had no
+account, so every case that needs one runs in-process on a private database, and the lane's server only gets
+refusals that write nothing.
 
 Two claims that look like reasons and are not:
 
@@ -352,6 +359,11 @@ and a shared `htmlcov-backend/` would be written by every worker at once.
   execution follows exactly the route it followed before the migration.
 - `--workers N` parallelises the isolation-safe units and leaves everything else serial — a
   WRITE-GLOBAL unit stays serial even at `--workers 8`.
+- The parallel pass plans category by category, so it runs only for a whole backend category
+  (`<category> all`) or a whole suite (`all`, `all-backend`): naming one action, or filtering by test
+  name (pytest `-k`, which only a named action takes), keeps the serial path. The check is
+  `_parallel_prepass_applies()`, which follows the same scope rule as the consolidated pre-passes
+  (`_backend_consolidation_scope()`).
 - `--workers auto` resolves to half the cores, because a development machine is not dedicated to tests
   and timing-sensitive tests degrade under load.
 - On a **frontend** category the same flag sets Playwright's browser workers, capped at half the
@@ -393,8 +405,9 @@ bigger `N`.
     instead of 3224 — *more* covered, despite doing strictly less work, which is causally impossible
     for a deterministic number.
 
-    Compared file by file, the difference sits entirely in `asset_source.py` and
-    `asset_source_providers/borsa_italiana/plugin.py`: the two modules that talk to the live internet. Test
+    Compared file by file, the difference sits entirely in the asset pricing service (a single
+    module at the time, now split across the `backend/app/services/assets/` package) and
+    `asset_source_providers/borsa_italiana/plugin.py`: the two places that talk to the live internet. Test
     and skip counts were identical in all three runs, so nothing changed about *what* ran — only
     which branch the provider took given what the site returned that day.
 
@@ -440,16 +453,17 @@ So the units of a category are grouped into one Playwright invocation and one vi
 | `front-ai-export` | 4 | 22 | 26 | 2 |
 | `front-asset` | 7 | 15 | 22 | 2 |
 | `front-broker` | 2 | 3 | 5 | 2 |
+| `front-designer-lab` | 3 | 15 | 18 | 2 |
 | `front-fx` | 8 | 3 | 11 | 2 |
 | `front-portfolio` | 3 | 3 | 6 | 2 |
 | `front-transaction` | 25 | 7 | 32 | 2 |
 | `front-user` | 2 | 2 | 4 | 2 |
 | `front-utility` | 8 | 6 | 14 | 2 |
-| **total** | **59** | **61** | **120** | **16** |
+| **total** | **62** | **76** | **138** | **18** |
 
 The `after` column is the shape without JS coverage. With `--coverage js` the Playwright side is run
 in batches of 8 specs (see below), so `front-transaction` costs 4 invocations instead of 1 and the
-total is 21 rather than 16.
+total is 23 rather than 18.
 
 !!! tip "Consolidation is now also what makes parallelism possible"
 
@@ -519,7 +533,8 @@ purpose.
 Even 16 invocations would each redo the same preparation, so the Python side signals that it is
 already done with `LF_SETUP_DONE=1`. `global-setup.ts` then skips populating the database and
 creating the E2E users, and jumps straight to initialising the global settings via the API — the one
-step nothing on the Python side performs, and one that `populate --force` wipes.
+step nothing on the Python side performs (populate writes a single row, `registration_mode`), and one
+that `populate --force` wipes.
 
 The variable is set only after *both* the populate and the users have succeeded, and cleared by any
 repopulate. Running `npx playwright test` by hand never has it, so that path is unchanged.
@@ -536,8 +551,8 @@ repopulate. Running `npx playwright test` by hand never has it, so that path is 
 
 `./dev.py test front-fx fx-list` still means one invocation for one spec. Consolidation applies to
 `all` of a category and to `all-frontend` — the cases where the actions would have run back to back
-anyway. `--no-consolidate`, `--test-names`, `--ui`, `--headed` and `--debug` all return to the 1:1
-shape.
+anyway. `--no-consolidate`, `--ui`, `--headed` and `--debug` all return to the 1:1 shape. Neither
+`all` nor `all-frontend` takes test names: a name after either stops the command with exit code 2.
 
 ### Per-unit outcomes are part of it, not a follow-up
 
@@ -646,8 +661,11 @@ difference, as before.
     happened** — raising it unconditionally would hide the very slowness those timeouts exist to
     catch.
 
-    Also worth knowing: `populate_mock_data` recreates the E2E users itself, but not the global
-    settings. Those are the one piece of `globalSetup` that has to be replayed by hand.
+    Also worth knowing: `populate_mock_data` recreates the E2E users itself, but of the global
+    settings only one row: `registration_mode`, written `open` by `open_lane_registration()`, since
+    the API and E2E tests register accounts of their own and a new install's default, `invite`,
+    would refuse them. The other global settings are the one piece of `globalSetup` that has to be
+    replayed by hand; `initGlobalSettings()` creates only the missing rows, so it keeps that `open`.
 
 !!! tip "A wedged test server looks exactly like a hung test suite"
 
@@ -711,15 +729,31 @@ def populate_registry(registry: dict) -> None:
     registry["utils"] = cat
 ```
 
-### Registry Entry Shape
+### Registry Entry Shape {: #registry-entry-shape }
 
 A category registered in `TEST_REGISTRY` maps to a dictionary containing:
-* `_meta`: General information about the category (used for `--help` texts).
+
+* `_meta`: General information about the category (used for `--help` texts) and, when the category declares them in `make_category()`, these keys:
+    * `setup`: What the category does to its environment before its units run: `services` recreates the test database empty, `api` reseeds it. `run_category_setup()` runs it once per invocation, whichever caller reaches it first.
+    * `setup_exclusive`: The setup needs the database file to itself (`services`), so it is hoisted to before the shared backend starts. For one action run on its own that the catalogue declares `pure` (as `declared_isolation()` resolves it: an `exclusive_because` means `write-global`, else the action's own `isolation`, else the category's `default_isolation`), the setup is skipped, since such a unit opens no database, and one line says the lane's database is left as it is. A whole category, `all` and any action not declared `pure` (one with no declared class at all included) still run it. The skip holds at any `--workers`, since the parallel pass does not run for one action.
+    * `setup_needed`: For one action run on its own, a no-argument callable that returns why the setup must run first, or `None` (a check that raises counts as a reason). With a reason, `ensure_category_setup()` prints it in one line and runs the setup. `api` returns one when the lane's test database is missing, unreadable or lacks one of its fixture users.
+    * `default_isolation`: The isolation class of every unit that declares neither `isolation` nor `exclusive_because` — see [Declaring a class — and earning it](#declaring-a-class-and-earning-it).
 * A set of actions (e.g., `"decimal-precision"`, `"all"`), where each action points to:
-  * `func`: The Python callable that starts the test.
-  * `name`: A human-readable title.
-  * `desc`: A short description of the test action.
-  * `prereq` / `tests` / `note`: Optional flags and metadata for dependencies.
+    * `func`: The Python callable that starts the test.
+    * `name`: A human-readable title.
+    * `desc`: A short description of the test action.
+    * `prereq` / `tests` / `note`: Optional flags and metadata for dependencies.
+    * `in_all`: `True` unless the action is registered `in_all=False` or `named_only=True`. `False` leaves it out of
+      its category's serial `all`: an action whose files another action already runs, such as an aggregate alias, or
+      the four per-spec actions of `front-ai-export` that `cutover` runs in one invocation. Such an action is still a
+      claimant in the frontend consolidated pass: it gets its verdict from the run that covers its files.
+    * `named_only`: Present, and `True`, only for an action registered `named_only=True`: it runs only when named on
+      the command line, on any lane. It implies `in_all=False`, and `group_frontend_units()` (`_consolidate.py`)
+      leaves it out of the frontend consolidated pass too, whatever it launches. It exists for an action that needs a
+      lane of its own while other actions already run its files: today `front-utility cloud-smoke`, refused unless the
+      lane is managed. On a managed lane its profile check passes while the inventory collects launches, so with
+      `in_all=False` alone it would have stayed in `front-utility all`, and `all-frontend` would have run seven specs
+      twice. The backend's consolidated and parallel passes do not read it: no backend action needs it today.
 
 ---
 
@@ -793,10 +827,10 @@ sequenceDiagram
 | `scripts/test_runner/_inventory.py` | Derives the test units from the registry without executing them, classifies each one by isolation class, and answers the reachability questions used by `check-orphans`. |
 | `scripts/test_runner/_scheduler.py` | Turns inventory plus `--workers N` into an execution plan, balancing groups longest-processing-time first from persisted per-unit durations. |
 | `scripts/test_runner/_executor.py` | Runs the plan's groups as concurrent processes, hands each worker its exclusive resource lot, and combines the per-worker coverage databases afterwards. |
-| `scripts/test_runner/_server.py` | One test backend for the whole run (`SharedTestServer`), opened by `_cli.py` when the invocation needs a server (`api`, `e2e`, the `all*` suites, frontend runs with Playwright specs): `dev.py server --test --no-reload --no-scheduler`, plus `--coverage` under Python coverage, in its own process group, with its uvicorn workers sized to the client workers. It refuses a port that another process holds, sets `LIBREFOLIO_TEST_SHARED_SERVER=1` so that pytest modules and Playwright attach to it instead of starting their own, stops with SIGTERM and a grace period (30 s under coverage, 5 s otherwise), and steps aside while `db create` rebuilds the database file (`database_file_owned_exclusively()`). `--no-shared-server` turns it off. |
+| `scripts/test_runner/_server.py` | One test backend for the whole run (`SharedTestServer`), opened by `_cli.py` when the invocation needs a server (`api`, `e2e`, the `all*` suites, frontend runs with Playwright specs): `dev.py server --test --no-reload --no-scheduler`, plus `--coverage` under Python coverage, in its own process group, with its uvicorn workers sized to the client workers. `start()` refuses a port that another process holds, then builds before it spawns: `build_server_prerequisites()` runs `dev.py server --test --build-only` in the foreground, its output on the terminal, with the runner's environment but not the coverage wiring the server gets (the tooling is not measured). That rebuilds the frontend (debug) and the MkDocs site when they are missing or stale and refreshes the JS cache; a failed build starts no server. The backend spawned next finds those builds up to date, so `STARTUP_TIMEOUT` (300 s; `LIBREFOLIO_TEST_STARTUP_TIMEOUT` overrides it, in whole seconds) measures its start alone. Before this step the server made the builds inside that wait, about 130 s after a large merge, unseen: its output was discarded at the time. Its stdout and stderr (dev.py, uvicorn, the app's console log) go to one file for the whole run, not only the startup: `shared-backend.log`, in the run's log directory (`--log-dir`, `.testLog` by default), next to the per-unit logs. The file is emptied when the run's backend first starts and appended to when the backend restarts mid-run around `db create`, so it keeps every start's output; the next run archives it with the per-unit logs (`prepare_log_dir`, `00_archive/`). A file and not a pipe, so a server that writes a lot never blocks; when the output goes there, the spawn sets `PYTHONUNBUFFERED=1` for the whole exec chain, so dev.py's own lines come out in order among uvicorn's. When a start fails (the process exits during startup, or `STARTUP_TIMEOUT` passes), the runner prints, under its error line, the file's path and the last 30 lines written by that start, never an earlier start's, or `(no output)` when that start wrote nothing; it reads at most the file's last 64 KiB. With `--log-dir ""` there is no file and the output is discarded. It sets `LIBREFOLIO_TEST_SHARED_SERVER=1` so that pytest modules and Playwright attach to it instead of starting their own, and stops with SIGTERM and a grace period: 30 s under coverage, 10 s otherwise, the server's own shutdown budget (`LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`, 8 s by default) plus a margin, so that outside coverage a `Shared backend ignored SIGTERM` warning means the server broke that budget. It steps aside while `db create` rebuilds the database file (`database_file_owned_exclusively()`). `--no-shared-server` turns it off. |
 | `scripts/test_runner/_consolidate.py` | Groups a frontend category's units into one vitest invocation and one Playwright invocation per project selection (desktop only, or desktop and mobile; in batches of 8 specs under JS coverage), then reads the JSON reporters back into a per-spec verdict. |
 | `scripts/test_runner/_consolidate_backend.py` | The backend counterpart: when a whole category or suite runs, one pytest invocation per category instead of one per unit — `services`, `utils`, `schemas`, `api`, `e2e`, in that order, while `db` and `external` keep one per action — with the JUnit report read back into a per-file verdict, so the summary and `--resume` stay per unit. |
-| `scripts/test_runner/_common.py` | Shared helpers and run-wide state: `run_command` (launches one unit; for pytest it adds the coverage flags, swaps the accumulated coverage database in and out, and points the child at the test database), `_run_test_suite` (the serial loop of a suite, with the run-cache bookkeeping), `tee_output` (behind `--log-file` and the per-unit logs), and the registry helpers `make_category` and `add_test`. |
+| `scripts/test_runner/_common.py` | Shared helpers and run-wide state: `run_command` (launches one unit; for pytest it adds the coverage flags, swaps the accumulated coverage database in and out, and points the child at the test database), `_run_test_suite` (the serial loop of a suite, with the run-cache bookkeeping), `tee_output` (behind `--log-file` and the per-unit logs), and the registry helpers `make_category`, `add_test`, `run_category_setup` (runs a category's declared setup, once per invocation) and `ensure_category_setup` (before one action run on its own, runs that setup when the category's `setup_needed` gives a reason). |
 | `scripts/test_runner/_archive.py` | Archives test artefacts — the previous `--log-dir` logs, coverage databases before they are replaced or cleaned, the test-DB snapshot taken at the end of a run with a log directory — as `<target>/00_archive/<label>_<YYYYMMDD_HHMMSS>.tar.xz`, compressed with the standard library only (falling back to `.tar.bz2`, `.tar.gz`, then plain `.tar` when the interpreter lacks `lzma`). It also names the per-unit logs, `<category>__<unit>.log`. |
 | `scripts/test_runner/_backend_*.py` | One module per backend category; `_backend_api.py` registers both `api` and `e2e`. The actions launch pytest, except `db create` and `db populate`, which build and fill the test database. |
 | `scripts/test_runner/_frontend_*.py` | One module per frontend category (`utility`, `broker`, `user`, `fx`, `asset`, `transaction`, `portfolio`, `ai_export`): its Playwright specs and Vitest files. `_frontend_common.py` matches the pattern but is not a category — see the next row. |
@@ -811,8 +845,10 @@ To add a new test action to an existing category:
 1. Open the category module (e.g., `_backend_utils.py` for utility tests).
 2. Write a function that executes your test suite using the shared runner helpers. Accept
    `test_names`: an action registered with the default `test_names=True` receives the test names
-   the user passes. `run_command` requires a description, the label it prints, also used to name the
-   unit's log file:
+   the user passes, and `./dev.py test <category> --help` marks it `[TEST_NAME]`. One registered
+   with `test_names=False` refuses them: the runner exits with code 2 before anything runs, rather
+   than running the whole action as if no name had been given. `run_command` requires a
+   description, the label it prints, also used to name the unit's log file:
    ```python
    def utils_my_new_utility(verbose: bool = False, test_names: list = None) -> bool:
        """Run tests for the new utility helper."""
@@ -833,7 +869,11 @@ To add a new test action to an existing category:
 5. Nothing else is needed. The category's `all` list is **derived** from the registry by
    `_get_category_tests_for_all()`, so a registered action is reachable by construction — the state
    "registered but never executed" is no longer expressible. Pass `in_all=False` only when another
-   action already runs the same files, as with an aggregate alias.
+   action already runs the same files, as with an aggregate alias. Pass `named_only=True` for an
+   action that must run only when named, on any lane: one that needs a lane of its own while other
+   actions already run its files, as `front-utility cloud-smoke` on a managed lane. It implies
+   `in_all=False`, and the frontend consolidated pass leaves it out too (see
+   [Registry Entry Shape](#registry-entry-shape)).
 
 !!! danger "Never hand-write an `all` list"
 

@@ -16,8 +16,8 @@ Only the rows without an instrument are saved, so no asset needs resolving. What
 tested in test_external/test_brim_scalable.py. Each test logs in a user of its own, creates its brokers and files, and
 deletes them.
 
-Reference: backend/app/services/brim_provider.py (detect_tx_duplicates), backend/app/services/brim_providers/_scalable.py,
-backend/app/services/transaction_service.py (promote_suggest_bulk)
+Reference: backend/app/services/brim/brim_provider.py (detect_tx_duplicates), backend/app/services/brim_providers/_scalable.py,
+backend/app/services/transactions/transaction_service.py (promote_suggest_bulk)
 """
 
 import io
@@ -91,7 +91,7 @@ def test_server():
 async def _log_in_new_user(client: httpx.AsyncClient) -> None:
     """Register a user of this test alone and log it in: the brokers it creates are the only ones it can see."""
     username = f"brim_scalable_{uuid.uuid4().hex[:12]}"
-    password = "testpass123"
+    password = "TestPass123!"  # meets the password rules (decision 37), which POST /auth/register applies
     response = await client.post(f"{API_BASE}/auth/register", json={"username": username, "email": f"{username}@example.com", "password": password}, timeout=TIMEOUT)
     assert response.status_code == 201, f"Register failed: {response.text}"
     response = await client.post(f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT)

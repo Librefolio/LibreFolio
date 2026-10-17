@@ -7,7 +7,7 @@ Validates the core architectural invariants:
 3. 3-pool event-driven (K, R, W)
 4. Position states emission (start + end snapshots)
 5. Realized sales (proceeds and historical cost)
-6. Pre-frame / frame separation
+6. A run from a date_from after the first movement (one replay, states from date_from)
 """
 
 from datetime import date
@@ -77,7 +77,6 @@ def _build(
     fx_rate_map=None,
     split_history=None,
     split_linked_tx_ids=None,
-    frame_start=None,
     date_from=date(2025, 1, 1),
     date_to=date(2025, 1, 10),
     mark_series=None,
@@ -106,7 +105,6 @@ def _build(
         target_currency="EUR",
         date_from=date_from,
         date_to=date_to,
-        frame_start=frame_start,
         split_history=split_history or {},
         split_linked_tx_ids=split_linked_tx_ids or set(),
         mark_series=mark_series,
@@ -177,8 +175,12 @@ class TestInlineWAC:
 
 class TestResolverValuation:
     """The unified price resolver is the single valuation brain: a real quote (exact or carried)
-    → MARKET_PRICE; an observed trade mark (BUY/SELL/priced ADJUSTMENT, same-day average, LOCF)
-    → LAST_TRADE_PRICE; nothing on/before the date → MISSING.
+    → MARKET_PRICE; an observed trade mark (BUY/SELL, same-day average, LOCF) → LAST_TRADE_PRICE;
+    nothing on/before the date → MISSING, unless the position's cost is fully known, in which case
+    it is ESTIMATED_AT_COST (J-17, option A — see TestPricedAdjustmentValuation).
+
+    Before J-17: a priced ADJUSTMENT was a trade mark too (BUY/SELL/priced ADJUSTMENT), and nothing
+    on/before the date was always MISSING.
     """
 
     def test_market_price_preferred(self):
@@ -294,8 +296,9 @@ class TestResolverValuation:
         assert ps[0].missing_fx_pair is None
 
     def test_wac_is_not_used_as_price(self):
-        """WAC is NEVER the valuation source: with only an unpriced adjustment the position is
-        MISSING even though a WAC exists (from a separate priced leg would still not apply)."""
+        """WAC is NEVER a price: with only an unpriced adjustment the cost is unknown, so the position
+        is MISSING (J-17 values a position at its book cost only when that cost is fully known, and
+        even then as a declared estimate, never as a price)."""
         txs = [_c(_tx(quantity=Decimal("10"), amount=Decimal("0"), tx_type=TransactionType.ADJUSTMENT, dt=date(2025, 1, 2)))]
         result = _build(txs)
         ps = result.position_states_end
@@ -304,25 +307,41 @@ class TestResolverValuation:
 
 
 class TestPricedAdjustmentValuation:
-    """A priced opening ADJUSTMENT (per-unit ``cost_basis_override``) is a TRADE observation the
-    resolver ingests, so a holding with no market quote is marked LAST_TRADE_PRICE at its seeded
-    unit price (unrealized P&L 0 when valued at cost)."""
+    """J-17 (developer's P2 and option A, 16/10): a priced opening ADJUSTMENT (per-unit
+    ``cost_basis_override``) is NOT a price observation — it carries a WAC, not the asset's price.
+    A holding with no market quote, BUY or SELL on or before the day is valued at its book cost,
+    as a declared estimate (``ESTIMATED_AT_COST``: value = cost, no price, unrealized 0), when that
+    cost is fully known; an unknown cost stays MISSING.
 
-    def test_priced_adjustment_used_when_no_market(self):
+    Before J-17: the priced ADJUSTMENT was a TRADE observation, so the holding was marked
+    LAST_TRADE_PRICE at the seeded unit price (reference = the adjustment), carried like a trade.
+    """
+
+    def test_priced_adjustment_without_market_is_valued_at_cost(self):
+        """Before J-17: LAST_TRADE_PRICE, reference 2025-01-02 at 100 EUR (the adjustment's override),
+        same 1000 value; the asset transaction-implied."""
         txs = [_c(_tx(tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 2)))]
         result = _build(txs, quote_base_map={1: 100})
         ps = result.position_states_end
-        assert ps[0].market_value == Decimal("1000")  # 10 * 100
+        assert ps[0].valuation_source == "ESTIMATED_AT_COST"
+        assert ps[0].market_value == Decimal("1000")  # the book cost, 10 * 100 (quote_base_quantity plays no part)
         assert ps[0].cost_basis == Decimal("1000")
         assert ps[0].unrealized_pnl == Decimal("0")  # valued at cost
-        assert ps[0].valuation_source == "LAST_TRADE_PRICE"
-        assert ps[0].valuation_reference_date == date(2025, 1, 2)
-        assert ps[0].valuation_reference_unit_price == Decimal("100")
-        assert ps[0].valuation_reference_currency == "EUR"
-        assert result.daily_states[-1].market_value == Decimal("1000")
-        assert result.daily_states[-1].open_cost_basis == Decimal("1000")
-        assert result.daily_states[-1].unrealized_gain_loss == Decimal("0")
-        assert result.daily_states[-1].nav_value == Decimal("1000")
+        assert ps[0].valuation_reference_date is None
+        assert ps[0].valuation_reference_unit_price is None
+        assert ps[0].valuation_reference_currency is None
+        assert ps[0].valuation_effective_unit_price is None
+        assert ps[0].valuation_effective_currency is None
+        assert ps[0].valuation_stale is False
+        last = result.daily_states[-1]
+        assert last.market_value == Decimal("1000")
+        assert last.open_cost_basis == Decimal("1000")
+        assert last.unrealized_gain_loss == Decimal("0")
+        assert last.nav_value == Decimal("1000")
+        assert last.total_pnl == Decimal("0")
+        assert last.transaction_implied_asset_ids == set()
+        assert last.missing_price_asset_ids == set()
+        assert last.nav_complete is True
 
     def test_market_price_preferred_over_priced_adjustment(self):
         txs = [_c(_tx(tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 2)))]
@@ -333,6 +352,12 @@ class TestPricedAdjustmentValuation:
         assert ps[0].market_value == Decimal("1300")  # 10 * 130 (not the seed cost)
 
     def test_priced_adjustment_isolated_position_by_broker(self):
+        """Broker 1's priced ADJUSTMENT has a known cost: valued at it. Broker 2's unpriced one has none:
+        MISSING. An adjustment marks nothing, so neither position borrows the other's cost as a price.
+
+        Before J-17: both LAST_TRADE_PRICE at broker 1's 100 EUR override (1000 and 500): broker 2's
+        unpriced units were valued at broker 1's seeded cost through the shared resolver series.
+        """
         txs = [
             _c(_tx(tx_id=1, broker_id=1, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), cbo=Decimal("100"), cbo_ccy="EUR")),
             _c(_tx(tx_id=2, broker_id=2, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("5"), cbo=None, cbo_ccy=None)),
@@ -340,16 +365,23 @@ class TestPricedAdjustmentValuation:
         result = _build(txs)
         by_broker = {position.broker_id: position for position in result.position_states_end}
 
-        # The priced adjustment marks the asset (shared resolver series); broker 2's unpriced leg
-        # holds units of the same asset and is marked at the same last observed trade.
-        assert by_broker[1].valuation_source == "LAST_TRADE_PRICE"
+        assert by_broker[1].valuation_source == "ESTIMATED_AT_COST"
         assert by_broker[1].market_value == Decimal("1000")
-        assert by_broker[2].valuation_source == "LAST_TRADE_PRICE"
-        assert by_broker[2].market_value == Decimal("500")
+        assert by_broker[2].valuation_source == "MISSING"
+        assert by_broker[2].market_value is None
+        last = result.daily_states[-1]
+        assert last.market_value == Decimal("1000")
+        assert last.missing_price_asset_ids == {1}  # broker 2's units of asset 1 have no value
+        assert last.transaction_implied_asset_ids == set()
 
     def test_trade_fx_missing_preserves_source_and_metadata(self):
+        """A trade mark whose currency has no rate keeps its source and price metadata, with no value.
+
+        Before J-17: the trade here was a priced ADJUSTMENT (100 USD override), with the same values;
+        an adjustment is no longer a price, so the trade is a BUY of 10 units for 1000 USD.
+        """
         txs = [
-            _c(_tx(tx_id=1, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), cbo=Decimal("100"), cbo_ccy="USD")),
+            _c(_tx(tx_id=1, tx_type=TransactionType.BUY, quantity=Decimal("10"), amount=Decimal("-1000"), currency="USD")),
             _c(_tx(tx_id=2, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), amount=Decimal("0"), dt=date(2025, 1, 5))),
         ]
         result = _build(
@@ -372,14 +404,22 @@ class TestPricedAdjustmentValuation:
         assert result.daily_states[-1].missing_fx_pairs == {"USD/EUR"}
 
     def test_zero_cost_priced_adjustment_stays_at_zero(self):
+        """A zero cost override is a known cost (the pool is complete at 0): the position is valued at
+        cost, 0, as a declared estimate — not MISSING, NAV complete.
+
+        Before J-17: MISSING (market value None, the asset missing, NAV incomplete): a zero override
+        carried no price and an unpriced position was always MISSING.
+        """
         txs = [_c(_tx(tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), cbo=Decimal("0"), cbo_ccy="EUR", dt=date(2025, 1, 2)))]
         result = _build(txs)
         position = result.position_states_end[0]
 
-        # A zero-cost override carries no price → the position is MISSING (no priced observation).
-        assert position.valuation_source == "MISSING"
-        assert position.market_value is None
+        assert position.valuation_source == "ESTIMATED_AT_COST"
+        assert position.market_value == Decimal("0")
         assert position.cost_basis == Decimal("0")
+        assert position.unrealized_pnl == Decimal("0")
+        assert result.daily_states[-1].missing_price_asset_ids == set()
+        assert result.daily_states[-1].nav_complete is True
 
 
 class TestSplitAdjustedResolver:
@@ -412,13 +452,19 @@ class TestSplitAdjustedResolver:
         assert position.market_value == Decimal("1000")
 
     @pytest.mark.parametrize(
-        ("ratio", "split_quantity", "expected_quantity", "expected_price"),
+        ("ratio", "split_quantity", "expected_quantity"),
         [
-            (Decimal("2"), Decimal("10"), Decimal("20"), Decimal("50")),
-            (Decimal("0.5"), Decimal("-5"), Decimal("5"), Decimal("200")),
+            (Decimal("2"), Decimal("10"), Decimal("20")),
+            (Decimal("0.5"), Decimal("-5"), Decimal("5")),
         ],
     )
-    def test_priced_adjustment_mark_uses_split_adjusted_units(self, ratio, split_quantity, expected_quantity, expected_price):
+    def test_priced_adjustment_with_split_is_valued_at_cost(self, ratio, split_quantity, expected_quantity):
+        """A split rescales the quantity and keeps the cost: the position stays valued at its 1000 cost,
+        with no price to restate.
+
+        Before J-17: LAST_TRADE_PRICE at the adjustment's 100 EUR restated through the split
+        (effective 50 for ×2, 200 for ×0.5; reference 100; split_adjusted True), same 1000 value.
+        """
         txs = [
             _c(_tx(tx_id=1, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), amount=Decimal("0"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 2))),
             _c(_tx(tx_id=2, tx_type=TransactionType.ADJUSTMENT, quantity=split_quantity, amount=Decimal("0"), dt=date(2025, 1, 5))),
@@ -431,10 +477,9 @@ class TestSplitAdjustedResolver:
         position = result.position_states_end[0]
 
         assert position.quantity == expected_quantity
-        assert position.valuation_source == ValuationSource.LAST_TRADE_PRICE
-        assert position.valuation_effective_unit_price == expected_price
-        assert position.valuation_reference_unit_price == Decimal("100")
-        assert position.valuation_split_adjusted is True
+        assert position.valuation_source == "ESTIMATED_AT_COST"
+        assert position.valuation_effective_unit_price is None
+        assert position.valuation_reference_unit_price is None
         assert position.market_value == Decimal("1000")
         assert position.cost_basis == Decimal("1000")
         assert position.unrealized_pnl == Decimal("0")
@@ -585,12 +630,14 @@ class TestInKindAdjustmentCapital:
         assert last.cumulative_external_cash_flow == Decimal("0")
         assert last.total_pnl == Decimal("0")
 
-    def test_preframe_priced_adjustment_carries_capital_into_frame(self):
-        """An opening ADJUSTMENT before frame_start seeds the capital baseline so a
+    def test_priced_adjustment_before_date_from_carries_capital_into_the_states(self):
+        """An opening ADJUSTMENT before date_from seeds the capital baseline so a
         bounded period starts with the right capital (not a phantom P&L)."""
         txs = [_c(_tx(tx_id=1, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), amount=Decimal("0"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 2)))]
         prices = {1: [(date(2025, 1, 2), Decimal("120"), "EUR"), (date(2025, 1, 5), Decimal("120"), "EUR")]}
-        result = _build(txs, price_map=prices, frame_start=date(2025, 1, 5))
+        result = _build(txs, price_map=prices, date_from=date(2025, 1, 5))
+        assert result.daily_states[0].date == date(2025, 1, 5)
+        assert result.daily_states[0].cumulative_external_cash_flow == Decimal("1000")
         last = result.daily_states[-1]
         assert last.cumulative_external_cash_flow == Decimal("1000")
         assert last.total_pnl == Decimal("200")
@@ -637,14 +684,15 @@ class TestPositionStates:
         result = _build(txs)
         assert len(result.position_states_end) == 0
 
-    def test_start_positions_from_preframe(self):
-        """Positions at frame_start reflect pre-frame accumulation."""
+    def test_start_positions_at_date_from_include_earlier_movements(self):
+        """Positions at the end of date_from include the movements replayed before it."""
         txs = [
             _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
             _c(_tx(tx_id=2, quantity=Decimal("5"), amount=Decimal("-600"), dt=date(2025, 1, 8))),
         ]
-        # frame_start=Jan 5 → pre-frame includes tx1, frame includes tx2
-        result = _build(txs, frame_start=date(2025, 1, 5))
+        # date_from=Jan 5 → tx1 is replayed before the first emitted state, tx2 after it
+        result = _build(txs, date_from=date(2025, 1, 5))
+        assert result.position_states_start_date == date(2025, 1, 5)
         assert len(result.position_states_start) == 1
         assert result.position_states_start[0].quantity == Decimal("10")
         # End includes both
@@ -677,30 +725,30 @@ class TestRealizedSales:
 
 
 # =============================================================================
-# 6. PRE-FRAME / FRAME SEPARATION
+# 6. A RUN FROM A date_from AFTER THE FIRST MOVEMENT
 # =============================================================================
 
 
-class TestPreframeFrame:
-    """Verify pre-frame processes txs without market eval."""
+class TestDateFromAfterTheFirstMovement:
+    """J1: one replay from the first movement, with the same rules every day; only the states from date_from are emitted."""
 
-    def test_preframe_no_states_emitted(self):
-        """Transactions before frame_start don't produce daily states."""
+    def test_no_states_before_date_from(self):
+        """Transactions before date_from don't produce daily states."""
         txs = [
             _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
         ]
-        result = _build(txs, frame_start=date(2025, 1, 5))
-        # States only from frame_start to date_to
+        result = _build(txs, date_from=date(2025, 1, 5))
+        # States only from date_from to date_to
         assert all(s.date >= date(2025, 1, 5) for s in result.daily_states)
         assert result.daily_states[0].date == date(2025, 1, 5)
 
-    def test_preframe_accumulates_cash(self):
-        """Pre-frame deposit is reflected in frame's cash value."""
+    def test_cash_before_date_from_is_carried(self):
+        """A deposit before date_from is in the first emitted state's cash value."""
         txs = [
             _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
         ]
-        result = _build(txs, frame_start=date(2025, 1, 5))
-        # First frame day should show cash=1000 from pre-frame deposit
+        result = _build(txs, date_from=date(2025, 1, 5))
+        # The first emitted day shows cash=1000 from the earlier deposit
         assert result.daily_states[0].cash_value == Decimal("1000")
 
 
@@ -915,3 +963,52 @@ class TestPreloadFxRates:
         assert set(fx_map.values()) == {Decimal("1")}
         # Asset currencies only over the range: no rate at a BUY date before it (was requested for the inline WAC).
         assert ("JPY", "EUR", date(2024, 12, 30)) not in fx_map
+
+    @pytest.mark.asyncio
+    async def test_preload_asks_the_rate_of_every_priced_outgoing_adjustment_at_its_date(self, monkeypatch):
+        """J-24: a priced outgoing ADJUSTMENT leaves the capital at the value it hands over, converted at its own date,
+        so the preload asks (cost currency, row date) for every one of them — before the range too, where the per-day
+        loop over the asset currencies never reaches, and inside it in a currency no asset is quoted in. The cost
+        currency is ``cost_basis_currency``, or the asset's when it is None.
+
+        Range 2025-01-01..01-02, asset 1 in EUR, asset 2 in JPY (its rate asked every day of the range, as always).
+        Asked: (USD, 2024-12-20), an ADJUSTMENT −2 of asset 1 at 50 USD; (JPY, 2024-12-23), an ADJUSTMENT −3 of asset 2
+        at 700 with no cost currency; (GBP, 2025-01-02), an ADJUSTMENT −1 of asset 1 at 60 GBP inside the range. Not
+        asked: an ADJUSTMENT −1 without a cost basis on 2024-12-27 (it hands nothing over, J-11) and an ADJUSTMENT −1
+        at 40 EUR on 2024-12-30 (already in the report currency).
+
+        Before J-24: only (JPY, 2025-01-01) and (JPY, 2025-01-02) — nothing at the rows' dates.
+        """
+        txs = [
+            _c(_tx(tx_id=1, asset_id=1, tx_type=TransactionType.ADJUSTMENT, dt=date(2024, 12, 20), quantity=Decimal("-2"), currency=None, cbo=Decimal("50"), cbo_ccy="USD")),
+            _c(_tx(tx_id=2, asset_id=2, tx_type=TransactionType.ADJUSTMENT, dt=date(2024, 12, 23), quantity=Decimal("-3"), currency=None, cbo=Decimal("700"), cbo_ccy=None)),
+            _c(_tx(tx_id=3, asset_id=1, tx_type=TransactionType.ADJUSTMENT, dt=date(2024, 12, 27), quantity=Decimal("-1"), currency=None)),
+            _c(_tx(tx_id=4, asset_id=1, tx_type=TransactionType.ADJUSTMENT, dt=date(2024, 12, 30), quantity=Decimal("-1"), currency=None, cbo=Decimal("40"), cbo_ccy="EUR")),
+            _c(_tx(tx_id=5, asset_id=1, tx_type=TransactionType.ADJUSTMENT, dt=date(2025, 1, 2), quantity=Decimal("-1"), currency=None, cbo=Decimal("60"), cbo_ccy="GBP")),
+        ]
+
+        async def fake_convert_bulk(db, bulk_items, raise_on_error=False):
+            return [(Currency(code="EUR", amount=Decimal("1")), item[2], False) for item in bulk_items], []
+
+        monkeypatch.setattr(portfolio_engine_module, "convert_bulk", fake_convert_bulk)
+
+        fx_map = await PortfolioCalculationEngine(object())._preload_fx_rates(
+            classified_txs=txs,
+            in_transit_intervals=[],
+            external_cash_flows=[],
+            price_map={},
+            asset_currencies={1: "EUR", 2: "JPY"},
+            target_currency="EUR",
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 2),
+        )
+
+        keys = set(fx_map)
+        expected = {
+            ("USD", "EUR", date(2024, 12, 20)),
+            ("JPY", "EUR", date(2024, 12, 23)),
+            ("GBP", "EUR", date(2025, 1, 2)),
+            ("JPY", "EUR", date(2025, 1, 1)),
+            ("JPY", "EUR", date(2025, 1, 2)),
+        }
+        assert keys == expected, f"missing={sorted(expected - keys)} unexpected={sorted(keys - expected)}"

@@ -124,6 +124,6 @@ not collect it.
 | MOCKFX provider | `backend/app/services/fx_providers/mockfx/plugin.py` |
 | Runner actions `data-quality-real`, `data-quality-legacy` | `scripts/test_runner/_frontend_portfolio.py` |
 | `data-column-id` (D3) | `frontend/src/lib/components/table/DataTable.svelte` |
-| `kpi-unrealized-delta` test id | `frontend/src/lib/components/dashboard/KpiSection.svelte` |
+| `kpi-unrealized-delta` test id | `frontend/src/lib/features/dashboard/KpiSection.svelte` |
 | Developer doc (how to trigger each warning, the tests) | `mkdocs_src/docs/developer/frontend/data-quality-banner.md` |
 | Plan 46 | `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` |

@@ -22,7 +22,9 @@ exports never get the shortened variant.
 - **Signal path**: `DrawdownParams.full_history: bool = True` (user-visible
   toggle — boolean params render as checkboxes via `SignalParamControl`).
   `SignalWarmupRequirement.full_history` → `SignalExecutionPlan.requires_full_history`
-  → `get_prices_bulk` loads from `date.min`. `compute()` unchanged; the existing
+  → `get_prices_bulk` loads from `date.min` (since Z-30, 17/10/2026: from the earlier of
+  1900-01-01 and the start of the plan's finite warm-up; a row stored before 1900 only seeds
+  the fill). `compute()` unchanged; the existing
   post-computation slicing still cuts to the visible window.
 - **AI Export path** (`drawdown_context._execute_drawdown`): the risk
   `drawdown_summary` analytic is always called with a full-history range —
@@ -47,7 +49,7 @@ exports never get the shortened variant.
 |------|------|
 | Signal param + warmup | `backend/app/services/signal_plugins/drawdown/plugin.py` |
 | Warmup contract | `backend/app/schemas/signals.py` (`SignalWarmupRequirement.full_history`) |
-| Plan aggregation | `backend/app/services/signal_service.py` (`requires_full_history`) |
-| Fetch window | `backend/app/services/asset_source.py` (`get_prices_bulk`) |
+| Plan aggregation | `backend/app/services/signals/planning.py` (`requires_full_history`) |
+| Fetch window | `backend/app/services/assets/price_query.py` (`get_prices_bulk`) |
 | AI Export full-history call | `backend/app/services/ai_export/components/drawdown_context.py` |
-| Sentinel resolution | `backend/app/services/date_sentinel.py` |
+| Sentinel resolution | `backend/app/services/platform/date_sentinel.py` |

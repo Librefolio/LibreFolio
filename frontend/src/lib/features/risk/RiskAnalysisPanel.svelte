@@ -1,0 +1,1084 @@
+<script lang="ts">
+    import {untrack} from 'svelte';
+    import {goto} from '$app/navigation';
+    import {Play, RotateCw} from 'lucide-svelte';
+    import type {z} from 'zod';
+
+    import {schemas} from '$lib/api';
+    import {_ as t} from '$lib/i18n';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import type {RenderedSignal} from '$lib/charts/signals';
+    import SignalAssetParamControl from '$lib/components/charts/SignalAssetParamControl.svelte';
+    import BenchmarkSelect from '$lib/features/risk/BenchmarkSelect.svelte';
+    import type {RiskBenchmarkState} from '$lib/features/risk/riskBenchmarkStore.svelte';
+    import LineChart, {type LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+    import KpiCard from '$lib/features/dashboard/KpiCard.svelte';
+    import {DataQualityBanner} from '$lib/components/ui/feedback';
+    import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
+    import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
+    import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
+    import {buildHistoricalReplayParameters, buildHypotheticalShockParameters, buildSimulationParameters, STRESS_ASSET_CLASSES, uniformAssetClassShocks, type RiskScenarioDimension, type SimulationView} from '$lib/features/risk/riskRequest';
+    import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
+    import {ensureCountriesLoaded, getAllCountries, getCountryInfo} from '$lib/stores/reference/countryStore';
+    import {ensureFxRoutesLoaded, fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
+    import {ensureSectorsLoaded, getSectorEmoji, getSectorKeys} from '$lib/stores/reference/sectorStore';
+    import {getRiskDefinition, hasRiskCapability, type RiskAnalyticResult, type RiskScope} from '$lib/features/risk/riskStore.svelte';
+    import {createRiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
+    import {riskDataQuality, riskMetadata, riskOutput, singleValue, type RiskDataQualityReport} from '$lib/features/risk/riskTypes';
+    import CorrelationHeatmap from './CorrelationHeatmap.svelte';
+    import RiskBetaBanner from './RiskBetaBanner.svelte';
+    import RiskResultFrame from './RiskResultFrame.svelte';
+
+    import {numericArrows} from '$lib/actions/numericArrows';
+    import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
+    import * as riskHelpers from './riskAnalysisHelpers';
+    import {stressBucketLabel as bucketLabel} from './stressBucketLabel';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {POLARITY_TONES} from '$lib/theme/toneClasses';
+    import {RISK_OVERLAY_COLORS} from '$lib/theme/chartTheme';
+    interface Props {
+        scope: RiskScope;
+        dateStart: string;
+        dateEnd: string;
+        targetCurrency: string;
+        assetIds?: number[];
+        title?: string;
+        subtitle?: string;
+        internalSubset?: boolean;
+        assetClass?: string | null;
+        sectorExposure?: Record<string, number> | null;
+        geographyExposure?: Record<string, number> | null;
+        refreshVersion?: number;
+        showHeaderActions?: boolean;
+        showBetaBanner?: boolean;
+        onsynced?: (detail: {accepted: boolean}) => void | Promise<void>;
+    }
+
+    let {scope, dateStart, dateEnd, targetCurrency, assetIds = [], title = '', subtitle = '', internalSubset = false, assetClass = null, sectorExposure = null, geographyExposure = null, refreshVersion = 0, showHeaderActions = true, showBetaBanner = true, onsynced}: Props = $props();
+
+    // Every fetch, generation guard and invalidation rule lives in the controller;
+    // this component owns only what the user can see and touch. The aliases below
+    // are read-only views, so the markup keeps reading the names it always read.
+    const controller = createRiskPanelController(() => ({scope, dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, refreshVersion}), {scenarioCatalogLoaded: initializeScenarioEditors});
+
+    let catalog = $derived(controller.catalog);
+    let scenarioCatalog = $derived(controller.scenarioCatalog);
+    let historicalResults = $derived(controller.historicalResults);
+    let currentResults = $derived(controller.currentResults);
+    let comparisonResult = $derived(controller.comparisonResult);
+    let stressResult = $derived(controller.stressResult);
+    let replayResult = $derived(controller.replayResult);
+    let simulationResult = $derived(controller.simulationResult);
+    let initialLoading = $derived(controller.initialLoading);
+    let refreshing = $derived(controller.refreshing);
+    let loadError = $derived(controller.loadError);
+    let comparisonLoading = $derived(controller.comparisonLoading);
+    let stressLoading = $derived(controller.stressLoading);
+    let replayLoading = $derived(controller.replayLoading);
+    let simulationLoading = $derived(controller.simulationLoading);
+
+    // The shared benchmark (D370): `BenchmarkSelect` opens on it and writes it back. The asset
+    // itself can be the shared choice — chosen on another page — and is then shown and
+    // flagged, but never compared: an asset is not its own yardstick.
+    let comparisonAssetId = $state<number | null>(null);
+    /** The picker's word on the choice: a comparison is asked on `set` only, never on a `blocked` one (D378). */
+    let comparisonState = $state<RiskBenchmarkState>('none');
+    let comparisonUsable = $derived(comparisonAssetId !== null && comparisonState === 'set' && !(scope.kind === 'asset' && comparisonAssetId === scope.asset_id));
+
+    // Without these four the controller would have nothing to re-issue, and the
+    // `discard-the-answer-not-the-question` fix would be silently gone while every
+    // test stayed green. Registration happens before the first effect runs.
+    controller.registerLauncher('comparison', runComparison);
+    controller.registerLauncher('stress', runStress);
+    controller.registerLauncher('replay', runReplay);
+    controller.registerLauncher('simulation', runSimulation);
+    let stressClientError = $state(false);
+    let stressPercent = $state(-10);
+    let stressPresetId = $state('');
+    let stressDimension = $state<RiskScenarioDimension>('asset_class');
+    let stressBucketShocks = $state<Record<string, number>>({});
+    let stressShowAllBuckets = $state(false);
+    let stressEditedBuckets = $state(new Set<string>());
+    let stressPresetInitialized = $state(false);
+    let replayPresetId = $state('');
+    let replayStart = $state(untrack(() => dateStart));
+    let replayEnd = $state(untrack(() => dateEnd));
+    let replayProxyAssetId = $state<number | undefined>(undefined);
+    let replayExcludeAsset = $state(false);
+    let replayPresetInitialized = $state(false);
+    let riskFreePercentInput = $state(0);
+    let appliedRiskFreePercent = $state(0);
+    let simulationSampling = $state<'mc' | 'qmc'>('mc');
+    let simulationHorizonDays = $state(365);
+    let simulationPaths = $state(8192);
+    let simulationRandomSeed = $state(123456);
+    let simulationSobolStartIndex = $state(123456);
+    let simulationView = $state<SimulationView>('evolution');
+    let syncOpen = $state(false);
+    let referenceLabelsVersion = $state(0);
+
+    const samplingOptions = [
+        {value: 'mc', label: 'MC'},
+        {value: 'qmc', label: 'QMC'},
+    ];
+    const pathOptions = $derived([1024, 2048, 4096, 8192, 16384].map((value) => ({value: String(value), label: value.toLocaleString(uiLocale())})));
+    const simulationTabs = $derived([
+        {id: 'evolution', label: $t('risk.simulation.evolution'), testId: 'risk-simulation-view-evolution'},
+        {id: 'terminal_distribution', label: $t('risk.simulation.terminalDistribution'), testId: 'risk-simulation-view-terminal'},
+    ]);
+
+    type HistoricalReplayScenario = z.output<typeof schemas.RiskHistoricalReplayScenario>;
+    type HypotheticalShockScenario = z.output<typeof schemas.RiskHypotheticalShockScenario>;
+
+    let supportsKpi = $derived(hasRiskCapability(catalog, 'historical_kpi', scope.kind, 'historical'));
+    let supportsCorrelation = $derived(hasRiskCapability(catalog, 'correlation', scope.kind, 'historical'));
+    let supportsContribution = $derived(hasRiskCapability(catalog, 'risk_contribution', scope.kind, 'current_composition'));
+    let supportsVar = $derived(hasRiskCapability(catalog, 'historical_var', scope.kind, 'historical'));
+    let supportsComparison = $derived(hasRiskCapability(catalog, 'comparison', scope.kind, 'historical'));
+    let supportsStress = $derived(hasRiskCapability(catalog, 'stress', scope.kind, 'current_composition'));
+    let supportsSimulation = $derived(hasRiskCapability(catalog, 'simulation', scope.kind, 'current_composition'));
+
+    let kpiResult = $derived(resultByCode(historicalResults, 'historical_kpi'));
+    let correlationResult = $derived(resultByCode(historicalResults, 'correlation'));
+    let contributionResult = $derived(resultByCode(currentResults, 'risk_contribution'));
+    let varResult = $derived(resultByCode(historicalResults, 'historical_var'));
+
+    let kpiOutput = $derived(riskOutput(kpiResult, schemas.RiskKpiOutput));
+    let correlationOutput = $derived(riskOutput(correlationResult, schemas.RiskCorrelationOutput));
+    let contributionOutput = $derived(riskOutput(contributionResult, schemas.RiskContributionOutput));
+    let varOutput = $derived(riskOutput(varResult, schemas.RiskVarCvarOutput));
+    let comparisonOutput = $derived(riskOutput(comparisonResult, schemas.RiskComparisonOutput));
+    let stressOutput = $derived(riskOutput(stressResult, schemas.RiskStressOutput));
+    let replayOutput = $derived(riskOutput(replayResult, schemas.RiskStressOutput));
+    let simulationOutput = $derived(riskOutput(simulationResult, schemas.RiskSimulationOutput));
+    let replayAudit = $derived(singleValue(riskMetadata(replayResult)?.historical_replay_audit));
+    let simulationTerminalPoint = $derived(simulationOutput?.percentile_bands.at(-1) ?? null);
+
+    let historicalReplayScenarios = $derived.by<HistoricalReplayScenario[]>(() =>
+        (scenarioCatalog?.items ?? []).flatMap((entry) => {
+            const parsed = schemas.RiskHistoricalReplayScenario.safeParse(entry.scenario);
+            return parsed.success ? [parsed.data] : [];
+        }),
+    );
+    let hypotheticalShockScenarios = $derived.by<HypotheticalShockScenario[]>(() =>
+        (scenarioCatalog?.items ?? []).flatMap((entry) => {
+            const parsed = schemas.RiskHypotheticalShockScenario.safeParse(entry.scenario);
+            return parsed.success ? [parsed.data] : [];
+        }),
+    );
+    let historicalReplayOptions = $derived(historicalReplayScenarios.map((scenario) => ({value: scenario.id, label: localizedScenarioText(scenario.name)})));
+    let hypotheticalShockOptions = $derived(hypotheticalShockScenarios.map((scenario) => ({value: scenario.id, label: localizedScenarioText(scenario.name)})));
+    let selectedHypotheticalScenario = $derived(hypotheticalShockScenarios.find((scenario) => scenario.id === stressPresetId) ?? null);
+    let stressDimensionOptions = $derived(
+        (selectedHypotheticalScenario?.allowed_dimensions ?? ['asset_class', 'sector', 'geography']).map((dimension) => ({
+            value: dimension,
+            label: $t(`risk.stress.dimensions.${dimension}`),
+        })),
+    );
+    let stressPresentBuckets = $derived(presentStressBuckets(stressDimension));
+    let stressAllBuckets = $derived.by(() => {
+        void referenceLabelsVersion;
+        const buckets = new Set([...stressPresentBuckets, ...Object.keys(stressBucketShocks)]);
+        if (stressDimension === 'asset_class') STRESS_ASSET_CLASSES.forEach((bucket) => buckets.add(bucket));
+        if (stressDimension === 'sector') getSectorKeys().forEach((bucket) => buckets.add(bucket));
+        if (stressDimension === 'geography') {
+            getAllCountries().forEach((country) => buckets.add(country.iso3));
+            scenarioCatalog?.geography_groups?.forEach((group) => buckets.add(group.id));
+        }
+        if (stressDimension !== 'asset_class') buckets.add('Other');
+        return [...buckets].sort((left, right) => left.localeCompare(right));
+    });
+    let stressVisibleBuckets = $derived.by(() => {
+        if (stressShowAllBuckets) return stressAllBuckets;
+        const visible = new Set([...stressPresentBuckets, ...stressEditedBuckets]);
+        if (stressDimension !== 'asset_class') visible.add('Other');
+        return [...visible].sort((left, right) => left.localeCompare(right));
+    });
+
+    let scopeAssetIds = $derived.by(() => {
+        const ids = new Set<number>(assetIds);
+        if (scope.kind === 'asset') ids.add(scope.asset_id);
+        if (scope.kind === 'asset_set') scope.asset_ids.forEach((assetId) => ids.add(assetId));
+        if (replayProxyAssetId) ids.add(replayProxyAssetId);
+        correlationOutput?.asset_ids.forEach((assetId) => ids.add(assetId));
+        contributionOutput?.items?.forEach((item) => ids.add(item.asset_id));
+        return [...ids].sort((left, right) => left - right);
+    });
+
+    let assetLabels = $derived.by(() => {
+        void $assetStoreVersion;
+        return new Map(scopeAssetIds.map((assetId) => [assetId, getAssetInfo(assetId)?.display_name ?? `#${assetId}`]));
+    });
+
+    let contributionRows = $derived.by(() => {
+        const rows = (contributionOutput?.items ?? []).map((item) => ({
+            ...item,
+            name: assetLabels.get(item.asset_id) ?? `#${item.asset_id}`,
+            percentage: singleValue(item.percentage_contribution),
+        }));
+        const maxAbs = Math.max(...rows.map((item) => Math.abs(item.percentage ?? 0)), 0);
+        return rows.map((item) => ({...item, barWidth: maxAbs > 0 ? (Math.abs(item.percentage ?? 0) / maxAbs) * 50 : 0})).sort((left, right) => Math.abs(right.percentage ?? 0) - Math.abs(left.percentage ?? 0));
+    });
+
+    let comparisonPrimaryData = $derived.by<LineDataPoint[]>(() =>
+        (comparisonOutput?.series ?? []).map((point) => ({
+            date: point.date,
+            value: point.primary_cumulative_return * 100,
+        })),
+    );
+    let comparisonOverlay = $derived.by<RenderedSignal[]>(() => {
+        if (!comparisonOutput) return [];
+        return [
+            {
+                id: 'risk-comparison',
+                label: $t('risk.comparison.comparisonAsset'),
+                data: (comparisonOutput.series ?? []).map((point) => ({date: point.date, value: point.comparison_cumulative_return * 100})),
+                color: RISK_OVERLAY_COLORS.comparisonAsset,
+                lineWidth: 2,
+                lineType: 'solid',
+                markerStart: null,
+                markerEnd: null,
+                aggregationProfile: 'last_with_range',
+                unit: 'percentage',
+            },
+        ];
+    });
+
+    let simulationData = $derived.by<LineDataPoint[]>(() =>
+        (simulationOutput?.percentile_bands ?? []).map((point) => ({
+            date: addDays(dateEnd, point.day),
+            value: point.p50 * 100,
+        })),
+    );
+    let simulationOverlay = $derived.by<RenderedSignal[]>(() => {
+        if (!simulationOutput) return [];
+        return [
+            {
+                id: 'risk-simulation-band',
+                label: $t('risk.simulation.simulated'),
+                data: simulationData,
+                color: RISK_OVERLAY_COLORS.simulation,
+                lineWidth: 2,
+                lineType: 'solid',
+                markerStart: null,
+                markerEnd: null,
+                aggregationProfile: 'band_envelope',
+                unit: 'percentage',
+                seriesType: 'band',
+                bandData: {
+                    lower: simulationOutput.percentile_bands.map((point) => point.p05 * 100),
+                    middle: simulationOutput.percentile_bands.map((point) => point.p50 * 100),
+                    upper: simulationOutput.percentile_bands.map((point) => point.p95 * 100),
+                },
+            },
+        ];
+    });
+
+    let allResults = $derived([kpiResult, correlationResult, contributionResult, varResult, comparisonResult, stressResult, replayResult, simulationResult].filter((result): result is RiskAnalyticResult => result !== null && result !== undefined));
+    let qualityReports = $derived(allResults.map(riskDataQuality).filter((report) => report !== null));
+    let dataQualityIssues = $derived.by<DataQualityIssue[]>(() => {
+        const deduped = new Map<string, DataQualityIssue>();
+        for (const report of qualityReports) {
+            for (const issue of report?.issues ?? []) {
+                const normalized = normalizeQualityIssue(issue);
+                const key = [normalized.code, normalized.affected_asset_ids?.join(','), normalized.affected_fx_pairs?.join(',')].join('|');
+                deduped.set(key, normalized);
+            }
+        }
+        return [...deduped.values()];
+    });
+    let qualityStatus = $derived.by(() => {
+        const statuses = qualityReports.map((report) => report?.data_quality_status);
+        if (statuses.includes('partial')) return 'partial';
+        if (statuses.includes('carried_forward')) return 'carried_forward';
+        return statuses.length > 0 ? 'ok' : null;
+    });
+    let carriedPricePoints = $derived(Math.max(0, ...qualityReports.map((report) => report?.carried_forward_price_points ?? 0)));
+    let carriedFxPoints = $derived(Math.max(0, ...qualityReports.map((report) => report?.carried_forward_fx_points ?? 0)));
+
+    let syncAssetIds = $derived([...new Set([...scopeAssetIds, ...(comparisonAssetId ? [comparisonAssetId] : [])])]);
+    let syncAssets = $derived.by(() => {
+        void $assetStoreVersion;
+        return syncAssetIds
+            .map((assetId) => getAssetInfo(assetId))
+            .filter((asset) => Boolean(asset))
+            .map((asset) => ({
+                id: asset!.id,
+                display_name: asset!.display_name,
+                currency: asset!.currency,
+                icon_url: asset!.icon_url,
+                asset_type: asset!.asset_type,
+                provider_code: asset!.provider_code,
+            }));
+    });
+    let syncFxPairs = $derived.by(() => {
+        void $fxRoutesVersion;
+        const configured = getConfiguredPairSlugs();
+        const pairs = new Set<string>();
+        for (const asset of syncAssets) {
+            if (!asset || asset.currency === targetCurrency) continue;
+            const slug = [asset.currency, targetCurrency].sort().join('-');
+            if (configured.has(slug)) pairs.add(slug);
+        }
+        return [...pairs].sort();
+    });
+
+    $effect(() => {
+        untrack(() => {
+            void Promise.all([ensureAssetsLoaded(), ensureFxRoutesLoaded()]);
+            if (scope.kind === 'asset') void loadScenarioCatalog();
+        });
+    });
+
+    $effect(() => {
+        const language = $currentLanguage;
+        untrack(() => {
+            void Promise.all([ensureCountriesLoaded(language), ensureSectorsLoaded()]).then(() => {
+                referenceLabelsVersion += 1;
+            });
+        });
+    });
+
+    function localizedScenarioText(value: unknown): string {
+        return riskHelpers.localizedScenarioText(value, $currentLanguage);
+    }
+
+    function scalarString(value: unknown): string | null {
+        return riskHelpers.scalarString(value);
+    }
+
+    function numberRecord(value: unknown): Record<string, number> {
+        return riskHelpers.numberRecord(value);
+    }
+
+    function presentStressBuckets(dimension: RiskScenarioDimension): string[] {
+        return riskHelpers.presentStressBuckets(dimension, {assetClass, sectorExposure, geographyExposure});
+    }
+
+    function stressBucketLabel(bucket: string, dimension: RiskScenarioDimension): string {
+        void referenceLabelsVersion;
+        return bucketLabel(bucket, dimension, {translate: $t, sectorEmoji: getSectorEmoji, country: getCountryInfo});
+    }
+
+    function stressImpactDimension(value: unknown): RiskScenarioDimension {
+        return riskHelpers.stressImpactDimension(value, stressDimension);
+    }
+
+    function applyReplayPreset(scenario: HistoricalReplayScenario): void {
+        replayPresetId = scenario.id;
+        replayStart = scalarString(scenario.defaults.start) ?? dateStart;
+        replayEnd = scalarString(scenario.defaults.end) ?? dateEnd;
+        replayPresetInitialized = true;
+        controller.resetAnalysis('replay');
+    }
+
+    function applyStressPreset(scenario: HypotheticalShockScenario): void {
+        stressPresetId = scenario.id;
+        stressDimension = scenario.defaults.dimension;
+        stressBucketShocks = numberRecord(scenario.defaults.bucket_shocks);
+        if (stressDimension !== 'asset_class' && stressBucketShocks.Other === undefined) stressBucketShocks = {...stressBucketShocks, Other: 0};
+        stressEditedBuckets = new Set();
+        stressShowAllBuckets = false;
+        stressPresetInitialized = true;
+        controller.resetAnalysis('stress');
+    }
+
+    function initializeScenarioEditors(): void {
+        if (!replayPresetInitialized) {
+            const replayPreset = historicalReplayScenarios.find((scenario) => scenario.id === 'custom_period') ?? historicalReplayScenarios[0];
+            if (replayPreset) applyReplayPreset(replayPreset);
+            else {
+                replayStart = dateStart;
+                replayEnd = dateEnd;
+                replayPresetInitialized = true;
+            }
+        }
+        if (!stressPresetInitialized) {
+            const stressPreset = hypotheticalShockScenarios.find((scenario) => scenario.id === 'global_risk_off') ?? hypotheticalShockScenarios[0];
+            if (stressPreset) applyStressPreset(stressPreset);
+            else {
+                const bucket = presentStressBuckets('asset_class')[0];
+                stressBucketShocks = {[bucket]: -0.1};
+                stressPresetInitialized = true;
+            }
+        }
+    }
+
+    async function loadScenarioCatalog(): Promise<void> {
+        await controller.loadScenarioCatalog();
+    }
+
+    function selectReplayPreset(presetId: string): void {
+        const preset = historicalReplayScenarios.find((scenario) => scenario.id === presetId);
+        if (preset) applyReplayPreset(preset);
+    }
+
+    function selectStressPreset(presetId: string): void {
+        const preset = hypotheticalShockScenarios.find((scenario) => scenario.id === presetId);
+        if (preset) applyStressPreset(preset);
+    }
+
+    function changeStressDimension(dimension: RiskScenarioDimension): void {
+        stressDimension = dimension;
+        const buckets = presentStressBuckets(dimension);
+        stressBucketShocks = Object.fromEntries(buckets.map((bucket) => [bucket, stressBucketShocks[bucket] ?? 0]));
+        if (dimension !== 'asset_class' && stressBucketShocks.Other === undefined) stressBucketShocks = {...stressBucketShocks, Other: 0};
+        stressEditedBuckets = new Set();
+        stressShowAllBuckets = false;
+        controller.resetAnalysis('stress');
+    }
+
+    function updateStressBucket(bucket: string, percentage: number): void {
+        stressBucketShocks = {...stressBucketShocks, [bucket]: percentage / 100};
+        stressEditedBuckets = new Set(stressEditedBuckets).add(bucket);
+        controller.resetAnalysis('stress');
+    }
+
+    function resultByCode(results: RiskAnalyticResult[], analyticCode: string): RiskAnalyticResult | null {
+        return riskHelpers.resultByCode(results, analyticCode);
+    }
+
+    function normalizeQualityIssue(issue: NonNullable<RiskDataQualityReport['issues']>[number]): DataQualityIssue {
+        return riskHelpers.normalizeQualityIssue(issue);
+    }
+
+    function analyticTitle(code: string, fallbackKey: string): string {
+        const definition = getRiskDefinition(catalog, code);
+        return $t(definition?.name_i18n_key ?? fallbackKey);
+    }
+
+    function analyticDescription(code: string): string {
+        const key = getRiskDefinition(catalog, code)?.description_i18n_key;
+        return key ? $t(key) : '';
+    }
+
+    async function runComparison(): Promise<void> {
+        await controller.runGuarded('comparison', () => (comparisonUsable ? {code: 'comparison', mode: 'historical', parameters: {comparison_asset_id: comparisonAssetId}} : null));
+    }
+
+    async function runStress(): Promise<void> {
+        stressClientError = scopeAssetIds.length === 0;
+        if (stressClientError) return;
+        await controller.runGuarded('stress', () => {
+            const assetBucketShocks = Object.keys(stressBucketShocks).length > 0 ? stressBucketShocks : {[presentStressBuckets('asset_class')[0]]: stressPercent / 100};
+            return {
+                code: 'stress',
+                mode: 'current_composition',
+                parameters:
+                    scope.kind === 'asset'
+                        ? buildHypotheticalShockParameters({dimension: stressDimension, bucketShocks: assetBucketShocks})
+                        : buildHypotheticalShockParameters({
+                              dimension: 'asset_class',
+                              bucketShocks: uniformAssetClassShocks(stressPercent / 100),
+                          }),
+            };
+        });
+    }
+
+    async function runReplay(): Promise<void> {
+        await controller.runGuarded('replay', () =>
+            scope.kind !== 'asset'
+                ? null
+                : {
+                      code: 'stress',
+                      mode: 'current_composition',
+                      parameters: buildHistoricalReplayParameters({
+                          start: replayStart,
+                          end: replayEnd,
+                          missingHistoryPolicy: 'manual_proxy_or_exclude',
+                          proxyAssets: replayProxyAssetId && !replayExcludeAsset ? [{asset_id: scope.asset_id, proxy_asset_id: replayProxyAssetId}] : [],
+                          excludedAssetIds: replayExcludeAsset ? [scope.asset_id] : [],
+                      }),
+                  },
+        );
+    }
+
+    async function runSimulation(): Promise<void> {
+        await controller.runGuarded('simulation', () => ({
+            code: 'simulation',
+            mode: 'current_composition',
+            parameters: buildSimulationParameters({
+                // This surface still prints the fixed `risk.simulation.assumptions`
+                // caption (:1058) and renders no provenance block, so it describes a
+                // lognormal process whatever the engine did. Moving it to the
+                // resampled default would put honest numbers under a caption that
+                // misdescribes them — which is the case `simulation.py:118-138`
+                // names when it keeps pre-resampler callers on the parametric
+                // engine. The mode selector lives on L4, and so does the default.
+                process: 'gbm',
+                regime: 'none',
+                samplingMethod: simulationSampling,
+                horizonDays: simulationHorizonDays,
+                pathCount: simulationPaths,
+                randomSeed: simulationRandomSeed,
+                sobolStartIndex: simulationSobolStartIndex,
+            }),
+        }));
+    }
+
+    // The detail reaches the parent from here, not from the controller hook: the
+    // controller's `onsynced` carries no argument, so leaving both wired would
+    // have called the parent twice — once bare, once with the detail — and the
+    // source contract in riskAnalysisHelpers.test.ts only reads this body.
+    async function handleSynced(detail: {accepted: boolean}): Promise<void> {
+        await controller.handleSynced();
+        await onsynced?.(detail);
+    }
+
+    function handleQualityAction(action: string, target: string | null): void {
+        if (action.includes('sync')) {
+            syncOpen = true;
+        } else if (action === 'navigate_asset' && target) {
+            void goto(`/assets/${target}`);
+        } else if (action === 'navigate_fx' && target) {
+            void goto(`/fx/${target}`);
+        } else if (action === 'add_fx_pair') {
+            void goto('/fx');
+        }
+    }
+
+    /** Fractions from the risk API, hence scale 100. Unlike the lot charts this
+     *  one defaults to *unsigned*: most of these figures are shares, not deltas. */
+    const formatPercent = (value: number | null | undefined, signed = false): string => sharedFormatPercent(value, {scale: 100, signed});
+
+    function formatRatio(value: number | null | undefined): string {
+        return riskHelpers.formatRatio(value);
+    }
+
+    function formatAmount(value: string | readonly (string | null)[] | null | undefined): string {
+        return riskHelpers.formatScopedCurrencyAmount(value, targetCurrency, scope.kind);
+    }
+
+    function addDays(baseDate: string, days: number): string {
+        return riskHelpers.addDays(baseDate, days);
+    }
+</script>
+
+<!--
+    `data-catalog` publishes whether the capability catalog has landed. Every
+    section below is gated on it (`supportsComparison`, `supportsStress`, …), so
+    a caller that clicks straight into one of them is really betting on a fetch
+    it cannot see. Absence of a section means "not supported" *or* "not loaded
+    yet"; this attribute separates the two — and `error` separates a fetch that
+    failed from one that is merely slow, which `pending` alone could not say.
+-->
+<div class="space-y-4 text-lf-primary" data-testid="risk-analysis-panel" data-catalog={catalog ? 'ready' : loadError ? 'error' : 'pending'} data-busy={initialLoading ? 'true' : 'false'}>
+    {#if showBetaBanner}
+        <RiskBetaBanner />
+    {/if}
+
+    <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+            <h2 class="text-lg font-semibold text-lf-primary">{title || $t('risk.title')}</h2>
+            {#if subtitle || internalSubset}
+                <p class="text-sm text-lf-muted" data-testid="risk-scope-label">
+                    {internalSubset ? $t('risk.internalSubset') : subtitle}
+                </p>
+            {/if}
+        </div>
+        {#if showHeaderActions}
+            <div class="flex items-center gap-2">
+                <button
+                    type="button"
+                    class="flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-3 py-1.5 text-xs text-lf-secondary disabled:opacity-50"
+                    onclick={() => (syncOpen = true)}
+                    disabled={syncAssets.length === 0 && syncFxPairs.length === 0}
+                    data-testid="risk-sync-button"
+                >
+                    <RotateCw size={14} />
+                    {$t('common.sync')}
+                </button>
+            </div>
+        {/if}
+    </div>
+
+    {#if loadError}
+        <div class="rounded-xl border border-lf-danger-line bg-lf-danger-soft p-4 text-sm text-lf-danger-on-soft" data-testid="risk-load-error">
+            {$t('risk.states.loadFailed')}
+        </div>
+    {/if}
+
+    {#if dataQualityIssues.length > 0}
+        <DataQualityBanner issues={dataQualityIssues} mode="grouped" onaction={(action, target) => handleQualityAction(action, target)} />
+    {/if}
+
+    {#if qualityStatus}
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-lf-subtle bg-lf-panel px-3 py-2 text-xs text-lf-muted" data-testid="risk-quality-summary">
+            <span>{$t('risk.quality.status')}: <strong class="text-lf-secondary">{$t(`risk.quality.${qualityStatus}`)}</strong></span>
+            <span>{$t('risk.quality.carriedPrices')}: {carriedPricePoints}</span>
+            <span>{$t('risk.quality.carriedFx')}: {carriedFxPoints}</span>
+        </div>
+    {/if}
+
+    {#if supportsKpi}
+        <div class="flex flex-wrap items-end gap-3 rounded-xl border border-lf-subtle bg-lf-card p-3" data-testid="risk-free-control">
+            <label class="text-xs text-lf-muted">
+                {$t('chartSettings.params.riskFreeAnnualRate')}
+                <span class="mt-1 flex items-center gap-1">
+                    <input
+                        class="w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
+                        type="number"
+                        use:numericArrows={{step: 0.1}}
+                        step="0.1"
+                        min="-99.9"
+                        bind:value={riskFreePercentInput}
+                        data-testid="risk-free-rate-input"
+                    />
+                    <span>%</span>
+                </span>
+            </label>
+            <button class="rounded-lg bg-lf-action px-3 py-1.5 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={() => (appliedRiskFreePercent = riskFreePercentInput)} disabled={riskFreePercentInput === appliedRiskFreePercent} data-testid="risk-free-apply">
+                {$t('common.apply')}
+            </button>
+        </div>
+
+        <RiskResultFrame title={analyticTitle('historical_kpi', 'risk.analytics.historicalKpi.name')} description={analyticDescription('historical_kpi')} result={kpiResult} loading={initialLoading} {refreshing} testId="risk-kpi-section">
+            <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <KpiCard label={$t('risk.metrics.volatility')} value={formatPercent(kpiOutput?.volatility)} />
+                <KpiCard label={$t('risk.metrics.maxDrawdown')} value={formatPercent(kpiOutput?.max_drawdown)} positive={false} />
+                <KpiCard label={$t('risk.metrics.drawdownDuration')} value={kpiOutput ? `${kpiOutput.max_drawdown_duration_days} ${$t('signals.units.days')}` : '—'} />
+                <KpiCard label={$t('risk.metrics.sharpe')} value={formatRatio(singleValue(kpiOutput?.sharpe))} />
+                <KpiCard label={$t('risk.metrics.sortino')} value={formatRatio(singleValue(kpiOutput?.sortino))} />
+            </div>
+        </RiskResultFrame>
+    {/if}
+
+    {#if supportsCorrelation}
+        <RiskResultFrame title={analyticTitle('correlation', 'risk.analytics.correlation.name')} description={analyticDescription('correlation')} result={correlationResult} loading={initialLoading} {refreshing} testId="risk-correlation-section">
+            <div class="mt-4">
+                {#if correlationOutput}
+                    <CorrelationHeatmap output={correlationOutput} {assetLabels} />
+                {/if}
+            </div>
+        </RiskResultFrame>
+    {/if}
+
+    {#if supportsContribution}
+        <RiskResultFrame title={analyticTitle('risk_contribution', 'risk.analytics.riskContribution.name')} description={analyticDescription('risk_contribution')} result={contributionResult} loading={initialLoading} {refreshing} testId="risk-contribution-section">
+            <div class="mt-4 space-y-3">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <KpiCard label={$t('risk.metrics.portfolioVolatility')} value={formatPercent(contributionOutput?.portfolio_volatility)} />
+                    <KpiCard label={$t('risk.metrics.cashWeight')} value={formatPercent(contributionOutput?.cash_weight ?? 0)} />
+                </div>
+                <div class="space-y-2" data-testid="risk-contribution-bars">
+                    {#each contributionRows as row}
+                        <div class="grid grid-cols-[minmax(7rem,1fr)_minmax(10rem,2fr)_5rem] items-center gap-2 text-xs" data-testid="risk-contribution-row-{row.asset_id}">
+                            <span class="truncate text-lf-secondary" title={row.name}>{row.name}</span>
+                            <div class="relative h-5 rounded bg-lf-panel">
+                                <div class="absolute left-1/2 top-0 h-full w-px bg-lf-input"></div>
+                                <div class="absolute top-1/2 h-2 -translate-y-1/2 rounded {row.percentage != null && row.percentage < 0 ? `right-1/2 ${POLARITY_TONES.riskContributionBar.negative}` : `left-1/2 ${POLARITY_TONES.riskContributionBar.positive}`}" style={`width: ${row.barWidth}%`}></div>
+                            </div>
+                            <span class="text-right font-mono text-lf-secondary">{formatPercent(row.percentage, true)}</span>
+                        </div>
+                    {/each}
+                </div>
+            </div>
+        </RiskResultFrame>
+    {/if}
+
+    {#if supportsVar}
+        <RiskResultFrame title={analyticTitle('historical_var', 'risk.analytics.historicalVar.name')} description={analyticDescription('historical_var')} result={varResult} loading={initialLoading} {refreshing} testId="risk-var-section">
+            <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <KpiCard label={$t('risk.metrics.var')} value={formatPercent(varOutput?.value_at_risk)} subLabel={varOutput ? `${formatPercent(varOutput.confidence_level)} · ${varOutput.horizon_days} ${$t('signals.units.days')}` : undefined} positive={false} />
+                <KpiCard label={$t('risk.metrics.cvar')} value={formatPercent(varOutput?.conditional_value_at_risk)} subLabel={varOutput ? `${varOutput.observations} ${$t('risk.metadata.observations').toLowerCase()}` : undefined} positive={false} />
+            </div>
+        </RiskResultFrame>
+    {/if}
+
+    {#if supportsComparison}
+        <section class="rounded-xl border border-lf-subtle bg-lf-card p-4" data-testid="risk-comparison-controls">
+            <h3 class="text-sm font-semibold text-lf-secondary">{analyticTitle('comparison', 'risk.analytics.comparison.name')}</h3>
+            <p class="text-xs text-lf-muted">{analyticDescription('comparison')}</p>
+            <div class="mt-3 flex flex-wrap items-end gap-2">
+                <BenchmarkSelect
+                    bind:value={comparisonAssetId}
+                    bind:state={comparisonState}
+                    measuredAssetIds={scope.kind === 'asset' ? [scope.asset_id] : []}
+                    period={{start: dateStart, end: dateEnd}}
+                    currency={targetCurrency}
+                    testid="risk-comparison-asset-select"
+                    placeholder={$t('signals.comparisonAsset.placeholder')}
+                    onchange={() => {
+                        controller.bumpGeneration('comparison');
+                        controller.resetAnalysis('comparison');
+                    }}
+                />
+                <button class="flex items-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={runComparison} disabled={!comparisonUsable || comparisonLoading} data-testid="risk-comparison-run">
+                    <Play size={13} />
+                    {$t('risk.actions.compare')}
+                </button>
+            </div>
+        </section>
+
+        {#if comparisonResult || comparisonLoading}
+            <RiskResultFrame title={$t('risk.comparison.results')} result={comparisonResult} loading={comparisonLoading} testId="risk-comparison-section">
+                <div class="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+                    <KpiCard label={$t('risk.metrics.activeReturn')} value={formatPercent(comparisonOutput?.active_return, true)} />
+                    <KpiCard label={$t('risk.metrics.trackingError')} value={formatPercent(comparisonOutput?.tracking_error)} />
+                    <KpiCard label={$t('risk.metrics.informationRatio')} value={formatRatio(singleValue(comparisonOutput?.information_ratio))} />
+                    <KpiCard label={$t('risk.metrics.correlation')} value={formatRatio(singleValue(comparisonOutput?.correlation))} />
+                    <KpiCard label={$t('risk.metrics.beta')} value={formatRatio(singleValue(comparisonOutput?.beta))} />
+                </div>
+                {#if comparisonOutput && comparisonPrimaryData.length > 0}
+                    <div class="mt-4" data-testid="risk-comparison-chart">
+                        <LineChart data={comparisonPrimaryData} overlaySignals={comparisonOverlay} currency="%" viewMode="percentage" colorByBaseline={false} showGradient={false} height="320px" />
+                    </div>
+                {/if}
+            </RiskResultFrame>
+        {/if}
+    {/if}
+
+    {#if supportsStress}
+        <section class="rounded-xl border border-lf-subtle bg-lf-card p-4" data-testid="risk-stress-controls">
+            <h3 class="text-sm font-semibold text-lf-secondary">{analyticTitle('stress', 'risk.analytics.stress.name')}</h3>
+            <p class="text-xs text-lf-muted">{analyticDescription('stress')}</p>
+            {#if scope.kind === 'asset'}
+                <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label class="text-xs text-lf-muted">
+                        {$t('risk.stress.preset')}
+                        <div class="mt-1">
+                            <SimpleSelect value={stressPresetId} options={hypotheticalShockOptions} compact testId="risk-stress-preset" onchange={selectStressPreset} />
+                        </div>
+                    </label>
+                    <label class="text-xs text-lf-muted">
+                        {$t('risk.stress.dimension')}
+                        <div class="mt-1">
+                            <SimpleSelect value={stressDimension} options={stressDimensionOptions} compact testId="risk-stress-dimension" onchange={(value) => changeStressDimension(value as RiskScenarioDimension)} />
+                        </div>
+                    </label>
+                </div>
+                <div class="mt-3 space-y-2" data-testid="risk-stress-buckets">
+                    {#each stressVisibleBuckets as bucket}
+                        <label class="grid grid-cols-[minmax(8rem,1fr)_7rem] items-center gap-2 text-xs text-lf-muted" data-testid="risk-stress-bucket-{bucket}">
+                            <span class="truncate" title={stressBucketLabel(bucket, stressDimension)}>{stressBucketLabel(bucket, stressDimension)}</span>
+                            <span class="flex items-center gap-1">
+                                <input
+                                    class="w-full rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
+                                    type="number"
+                                    use:numericArrows
+                                    min="-100"
+                                    max="100"
+                                    step="1"
+                                    value={(stressBucketShocks[bucket] ?? 0) * 100}
+                                    data-testid="risk-stress-bucket-input-{bucket}"
+                                    oninput={(event) => updateStressBucket(bucket, Number(event.currentTarget.value))}
+                                />
+                                <span>%</span>
+                            </span>
+                        </label>
+                    {/each}
+                </div>
+                <label class="mt-3 flex items-center gap-2 text-xs text-lf-muted">
+                    <input type="checkbox" bind:checked={stressShowAllBuckets} data-testid="risk-stress-show-all" />
+                    {$t('risk.stress.showAllBuckets')}
+                </label>
+            {:else}
+                <div class="mt-3 flex flex-wrap items-end gap-2">
+                    <label class="text-xs text-lf-muted">
+                        {$t('risk.stress.uniformShock')}
+                        <span class="mt-1 flex items-center gap-1">
+                            <input
+                                class="w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
+                                type="number"
+                                use:numericArrows
+                                min="-100"
+                                step="1"
+                                bind:value={stressPercent}
+                                data-testid="risk-stress-input"
+                            />
+                            <span>%</span>
+                        </span>
+                    </label>
+                </div>
+            {/if}
+            <div class="mt-3 flex items-center gap-2">
+                <button class="flex items-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={runStress} disabled={stressLoading} data-testid="risk-stress-run">
+                    <Play size={13} />
+                    {$t('risk.actions.runScenario')}
+                </button>
+            </div>
+            {#if stressClientError}
+                <p class="mt-2 text-xs text-lf-warning" data-testid="risk-stress-no-assets">{$t('risk.states.noAssets')}</p>
+            {/if}
+        </section>
+
+        {#if stressResult || stressLoading}
+            <RiskResultFrame title={$t('risk.stress.results')} result={stressResult} loading={stressLoading} testId="risk-stress-section">
+                <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <KpiCard label={$t('risk.metrics.scenarioReturn')} value={formatPercent(singleValue(stressOutput?.portfolio_return), true)} />
+                    <KpiCard label={$t('risk.metrics.impactAmount')} value={formatAmount(stressOutput?.impact_amount)} />
+                </div>
+                {#if stressOutput?.impacts?.length}
+                    <div class="mt-3 overflow-x-auto">
+                        <table class="w-full text-xs" data-testid="risk-stress-impacts">
+                            <thead class="text-left text-lf-muted">
+                                <tr>
+                                    <th class="py-1">{$t('common.asset')}</th>
+                                    <th class="py-1 text-right">{$t('risk.metrics.shock')}</th>
+                                    <th class="py-1 text-right">{$t('risk.metrics.contribution')}</th>
+                                    <th class="py-1 text-right">{$t('risk.metrics.impactAmount')}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {#each stressOutput.impacts as impact}
+                                    <tr class="border-t border-lf-subtle">
+                                        <td class="py-1.5 text-lf-secondary">{assetLabels.get(impact.asset_id) ?? `#${impact.asset_id}`}</td>
+                                        <td class="py-1.5 text-right font-mono">{formatPercent(impact.shock_return, true)}</td>
+                                        <td class="py-1.5 text-right font-mono">{formatPercent(singleValue(impact.contribution_return), true)}</td>
+                                        <td class="py-1.5 text-right font-mono">{formatAmount(impact.impact_amount)}</td>
+                                    </tr>
+                                {/each}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-4 space-y-3" data-testid="risk-stress-audit">
+                        <h4 class="text-xs font-semibold text-lf-secondary">{$t('risk.stress.auditTitle')}</h4>
+                        {#each stressOutput.impacts as impact}
+                            <div class="rounded-lg border border-lf-subtle p-3" data-testid="risk-stress-audit-asset-{impact.asset_id}">
+                                <p class="text-xs font-medium text-lf-secondary">{assetLabels.get(impact.asset_id) ?? `#${impact.asset_id}`}</p>
+                                {#if singleValue(impact.metadata_fallback)}
+                                    <p class="mt-1 text-xs text-lf-warning" data-testid="risk-stress-metadata-fallback-{impact.asset_id}">
+                                        {$t('risk.stress.missingMetadataOther')}
+                                    </p>
+                                {/if}
+                                {#if (impact.bucket_audit ?? []).length > 0}
+                                    <div class="mt-2 overflow-x-auto">
+                                        <table class="w-full text-xs">
+                                            <thead class="text-left text-lf-muted">
+                                                <tr>
+                                                    <th class="py-1">{$t('risk.stress.exposureBucket')}</th>
+                                                    <th class="py-1 text-right">{$t('risk.stress.exposure')}</th>
+                                                    <th class="py-1">{$t('risk.stress.appliedBucket')}</th>
+                                                    <th class="py-1 text-right">{$t('risk.metrics.shock')}</th>
+                                                    <th class="py-1 text-right">{$t('risk.metrics.contribution')}</th>
+                                                    <th class="py-1">{$t('risk.stress.rule')}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {#each impact.bucket_audit ?? [] as audit}
+                                                    {@const appliedBucket = scalarString(audit.applied_bucket_id)}
+                                                    <tr class="border-t border-lf-subtle" data-testid="risk-stress-audit-bucket-{impact.asset_id}-{audit.exposure_bucket_id}">
+                                                        <td class="py-1.5 text-lf-secondary">{stressBucketLabel(audit.exposure_bucket_id, stressImpactDimension(impact.dimension))}</td>
+                                                        <td class="py-1.5 text-right font-mono">{formatPercent(audit.exposure)}</td>
+                                                        <td class="py-1.5 text-lf-secondary">{appliedBucket ? stressBucketLabel(appliedBucket, stressImpactDimension(impact.dimension)) : '—'}</td>
+                                                        <td class="py-1.5 text-right font-mono">{formatPercent(audit.bucket_shock, true)}</td>
+                                                        <td class="py-1.5 text-right font-mono">{formatPercent(audit.shock_contribution, true)}</td>
+                                                        <td class="py-1.5 text-lf-secondary">{$t(`risk.stress.rules.${audit.rule}`)}</td>
+                                                    </tr>
+                                                {/each}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                {/if}
+                            </div>
+                        {/each}
+                    </div>
+                {/if}
+            </RiskResultFrame>
+        {/if}
+
+        {#if scope.kind === 'asset'}
+            <section class="rounded-xl border border-lf-subtle bg-lf-card p-4" data-testid="risk-replay-controls">
+                <h3 class="text-sm font-semibold text-lf-secondary">{$t('risk.replay.title')}</h3>
+                <p class="text-xs text-lf-muted">{$t('risk.replay.compositionNotice')}</p>
+                <div class="mt-3 grid gap-3 sm:grid-cols-3">
+                    <label class="text-xs text-lf-muted">
+                        {$t('risk.replay.preset')}
+                        <div class="mt-1">
+                            <SimpleSelect value={replayPresetId} options={historicalReplayOptions} compact testId="risk-replay-preset" onchange={selectReplayPreset} />
+                        </div>
+                    </label>
+                    <label class="text-xs text-lf-muted">
+                        {$t('risk.replay.start')}
+                        <input class="mt-1 block w-full rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" type="date" bind:value={replayStart} data-testid="risk-replay-start" />
+                    </label>
+                    <label class="text-xs text-lf-muted">
+                        {$t('risk.replay.end')}
+                        <input class="mt-1 block w-full rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" type="date" bind:value={replayEnd} data-testid="risk-replay-end" />
+                    </label>
+                </div>
+                <div class="mt-3 flex flex-wrap items-end gap-3">
+                    <div>
+                        <span class="text-xs text-lf-muted">{$t('risk.replay.proxy')}</span>
+                        <SignalAssetParamControl
+                            value={replayProxyAssetId}
+                            excludeAssetIds={[scope.asset_id]}
+                            testId="risk-replay-proxy-select"
+                            onchange={(assetId) => {
+                                controller.bumpGeneration('replay');
+                                replayProxyAssetId = assetId;
+                                if (assetId) replayExcludeAsset = false;
+                                controller.setResult('replay', null);
+                            }}
+                        />
+                    </div>
+                    <label class="flex items-center gap-2 pb-1 text-xs text-lf-muted">
+                        <input
+                            type="checkbox"
+                            checked={replayExcludeAsset}
+                            data-testid="risk-replay-exclude"
+                            onchange={(event) => {
+                                controller.bumpGeneration('replay');
+                                replayExcludeAsset = event.currentTarget.checked;
+                                if (replayExcludeAsset) replayProxyAssetId = undefined;
+                                controller.setResult('replay', null);
+                            }}
+                        />
+                        {$t('risk.replay.exclude')}
+                    </label>
+                    <button class="flex items-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={runReplay} disabled={replayLoading || !replayStart || !replayEnd} data-testid="risk-replay-run">
+                        <Play size={13} />
+                        {$t('risk.actions.runReplay')}
+                    </button>
+                </div>
+            </section>
+
+            {#if replayResult || replayLoading}
+                <RiskResultFrame title={$t('risk.replay.results')} result={replayResult} loading={replayLoading} testId="risk-replay-section">
+                    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <KpiCard label={$t('risk.metrics.scenarioReturn')} value={formatPercent(singleValue(replayOutput?.portfolio_return), true)} />
+                        <KpiCard label={$t('risk.metrics.impactAmount')} value={formatAmount(replayOutput?.impact_amount)} />
+                    </div>
+                    {#if replayAudit}
+                        <div class="mt-3 space-y-2 text-xs text-lf-secondary" data-testid="risk-replay-audit">
+                            <p>{$t('risk.replay.proxyCount')}: <strong>{replayAudit.proxy_count}</strong></p>
+                            <p>{$t('risk.replay.excludedCount')}: <strong>{replayAudit.excluded_count}</strong></p>
+                            <p data-testid="risk-replay-audit-missing-history-policy">
+                                {$t('risk.replay.missingHistoryPolicy')}:
+                                <strong>{$t(`risk.replay.missingHistoryPolicies.${replayAudit.missing_history_policy}`)}</strong>
+                            </p>
+                            <p data-testid="risk-replay-audit-composition-policy">
+                                {$t('risk.replay.compositionPolicy')}:
+                                <strong>{$t(`risk.replay.compositionPolicies.${replayAudit.composition_policy}`)}</strong>
+                            </p>
+                            <p data-testid="risk-replay-audit-proxy-series-usage">
+                                {$t('risk.replay.proxySeriesUsage')}:
+                                <strong>{$t(`risk.replay.proxySeriesUsages.${replayAudit.proxy_series_usage}`)}</strong>
+                            </p>
+                            {#each replayAudit.proxy_assets ?? [] as mapping}
+                                <p data-testid="risk-replay-audit-proxy-{mapping.asset_id}">
+                                    {assetLabels.get(mapping.asset_id) ?? `#${mapping.asset_id}`} → {assetLabels.get(mapping.proxy_asset_id) ?? getAssetInfo(mapping.proxy_asset_id)?.display_name ?? `#${mapping.proxy_asset_id}`}
+                                </p>
+                            {/each}
+                            {#each replayAudit.excluded_assets ?? [] as excluded}
+                                <p data-testid="risk-replay-audit-excluded-{excluded.asset_id}">
+                                    {assetLabels.get(excluded.asset_id) ?? `#${excluded.asset_id}`} · {$t(`risk.replay.treatment.${excluded.treatment}`)}
+                                </p>
+                            {/each}
+                        </div>
+                    {/if}
+                </RiskResultFrame>
+            {/if}
+        {/if}
+    {/if}
+
+    {#if supportsSimulation}
+        <section class="rounded-xl border border-lf-subtle bg-lf-card p-4" data-testid="risk-simulation-controls">
+            <h3 class="text-sm font-semibold text-lf-secondary">{analyticTitle('simulation', 'risk.analytics.simulation.name')}</h3>
+            <p class="text-xs text-lf-muted">{analyticDescription('simulation')}</p>
+            <div class="mt-3 flex flex-wrap items-end gap-3">
+                <label class="text-xs text-lf-muted">
+                    {$t('risk.params.sampling')}
+                    <div class="mt-1 w-28">
+                        <SimpleSelect
+                            value={simulationSampling}
+                            options={samplingOptions}
+                            compact
+                            testId="risk-simulation-sampling"
+                            onchange={(value) => {
+                                simulationSampling = value as 'mc' | 'qmc';
+                            }}
+                        />
+                    </div>
+                </label>
+                <label class="text-xs text-lf-muted">
+                    {$t('risk.params.horizonDays')}
+                    <input
+                        class="mt-1 block w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
+                        type="number"
+                        use:numericArrows
+                        min="1"
+                        max="3650"
+                        step="1"
+                        bind:value={simulationHorizonDays}
+                        data-testid="risk-simulation-horizon"
+                    />
+                </label>
+                <label class="text-xs text-lf-muted">
+                    {$t('risk.params.paths')}
+                    <div class="mt-1 w-28">
+                        <SimpleSelect value={String(simulationPaths)} options={pathOptions} compact testId="risk-simulation-paths" onchange={(value) => (simulationPaths = Number(value))} />
+                    </div>
+                </label>
+                {#if simulationSampling === 'mc'}
+                    <label class="text-xs text-lf-muted">
+                        {$t('risk.params.randomSeed')}
+                        <input
+                            class="mt-1 block w-28 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
+                            type="number"
+                            use:numericArrows
+                            min="0"
+                            step="1"
+                            bind:value={simulationRandomSeed}
+                            data-testid="risk-simulation-random-seed"
+                        />
+                    </label>
+                {:else}
+                    <label class="text-xs text-lf-muted">
+                        {$t('risk.params.sobolStartIndex')}
+                        <input
+                            class="mt-1 block w-28 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
+                            type="number"
+                            use:numericArrows
+                            min="0"
+                            step="1"
+                            bind:value={simulationSobolStartIndex}
+                            data-testid="risk-simulation-sobol-start-index"
+                        />
+                    </label>
+                {/if}
+                <button class="flex items-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={runSimulation} disabled={simulationLoading} data-testid="risk-simulation-run">
+                    <Play size={13} />
+                    {$t('risk.actions.simulate')}
+                </button>
+            </div>
+        </section>
+
+        {#if simulationResult || simulationLoading}
+            <RiskResultFrame title={$t('risk.simulation.simulated')} result={simulationResult} loading={simulationLoading} testId="risk-simulation-section">
+                <div class="mt-3">
+                    <TabBar tabs={simulationTabs} activeTab={simulationView} onchange={(tabId) => (simulationView = tabId as SimulationView)} fillWidth />
+                </div>
+                {#if simulationView === 'evolution'}
+                    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <KpiCard label={$t('risk.metrics.terminalMean')} value={formatPercent(simulationOutput?.terminal_mean_return, true)} />
+                        <KpiCard label={$t('risk.metrics.terminalVolatility')} value={formatPercent(simulationOutput?.terminal_volatility)} />
+                        <KpiCard label={$t('risk.metrics.probabilityOfLoss')} value={formatPercent(simulationOutput?.probability_of_loss)} positive={false} />
+                    </div>
+                    {#if simulationOutput && simulationData.length > 0}
+                        <div class="mt-4" data-testid="risk-simulation-chart">
+                            <LineChart data={simulationData} overlaySignals={simulationOverlay} currency="%" viewMode="percentage" colorByBaseline={false} showGradient={false} height="320px" />
+                        </div>
+                    {/if}
+                {:else}
+                    <div class="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="risk-simulation-terminal-distribution">
+                        <KpiCard label={$t('risk.simulation.p05')} value={formatPercent(simulationTerminalPoint?.p05, true)} positive={false} />
+                        <KpiCard label={$t('risk.simulation.p50')} value={formatPercent(simulationTerminalPoint?.p50, true)} />
+                        <KpiCard label={$t('risk.simulation.p95')} value={formatPercent(simulationTerminalPoint?.p95, true)} />
+                        <KpiCard label={$t('risk.metrics.probabilityOfLoss')} value={formatPercent(simulationOutput?.probability_of_loss)} positive={false} />
+                    </div>
+                {/if}
+                {#if simulationOutput}
+                    <p class="mt-2 text-xs text-lf-muted" data-testid="risk-simulation-assumptions">
+                        {$t('risk.simulation.assumptions', {values: {paths: simulationOutput.path_count, days: simulationOutput.horizon_days}})}
+                    </p>
+                {/if}
+            </RiskResultFrame>
+        {/if}
+    {/if}
+
+    <div class="hidden" data-testid="risk-frontier-capability" data-available={hasRiskCapability(catalog, 'frontier', scope.kind, 'current_composition') ? 'true' : 'false'}></div>
+
+    <PageSyncModal bind:open={syncOpen} {dateStart} {dateEnd} assets={syncAssets} fxPairs={syncFxPairs} onsynced={handleSynced} onclose={() => (syncOpen = false)} />
+</div>

@@ -18,8 +18,8 @@ class TestGetOrCreateUserSettings:
 
         from backend.app.db.models import GlobalSetting  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services.settings_service import get_or_create_user_settings  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts.settings_service import get_or_create_user_settings  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.utils.datetime_utils import utcnow  # noqa: PLC0415 — test setup — imports after db config
 
         unique_id = uuid.uuid4().hex[:8]
@@ -156,8 +156,8 @@ class TestGetOrCreateUserSettings:
 
         from backend.app.db.models import GlobalSetting  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services.settings_service import get_or_create_user_settings  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts.settings_service import get_or_create_user_settings  # noqa: PLC0415 — test setup — imports after db config
 
         unique_id = uuid.uuid4().hex[:8]
         engine = get_async_engine()
@@ -263,8 +263,8 @@ class TestUpdateUserSettings:
 
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services.settings_service import update_user_settings  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts.settings_service import update_user_settings  # noqa: PLC0415 — test setup — imports after db config
 
         unique_id = uuid.uuid4().hex[:8]
         engine = get_async_engine()
@@ -302,8 +302,8 @@ class TestUpdateUserSettings:
 
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services.settings_service import update_user_settings  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts.settings_service import update_user_settings  # noqa: PLC0415 — test setup — imports after db config
 
         unique_id = uuid.uuid4().hex[:8]
         engine = get_async_engine()
@@ -348,8 +348,8 @@ class TestUpdateUserSettings:
 
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services.settings_service import update_user_settings  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts.settings_service import update_user_settings  # noqa: PLC0415 — test setup — imports after db config
 
         unique_id = uuid.uuid4().hex[:8]
         engine = get_async_engine()
@@ -446,8 +446,8 @@ class TestGetEffectiveBaseCurrency:
         from backend.app.db.models import GlobalSetting  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services.settings_service import get_effective_base_currency, update_user_settings  # noqa: PLC0415
+        from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts.settings_service import get_effective_base_currency, update_user_settings  # noqa: PLC0415
         from backend.app.utils.datetime_utils import utcnow  # noqa: PLC0415 — test setup — imports after db config
 
         unique_id = uuid.uuid4().hex[:8]
@@ -486,8 +486,8 @@ class TestGetEffectiveBaseCurrency:
 
         from backend.app.db.models import GlobalSetting  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services.settings_service import get_effective_base_currency  # noqa: PLC0415
+        from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts.settings_service import get_effective_base_currency  # noqa: PLC0415
         from backend.app.utils.datetime_utils import utcnow  # noqa: PLC0415 — test setup — imports after db config
 
         unique_id = uuid.uuid4().hex[:8]
@@ -523,8 +523,8 @@ class TestGetEffectiveBaseCurrency:
 
         from backend.app.db.models import GlobalSetting  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services.settings_service import get_effective_base_currency  # noqa: PLC0415
+        from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts.settings_service import get_effective_base_currency  # noqa: PLC0415
 
         unique_id = uuid.uuid4().hex[:8]
         engine = get_async_engine()
@@ -565,9 +565,9 @@ class TestEngineBaseCurrencyBranch:
 
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts.settings_service import update_user_settings  # noqa: PLC0415
         from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
-        from backend.app.services.settings_service import update_user_settings  # noqa: PLC0415
 
         unique_id = uuid.uuid4().hex[:8]
         engine_session = get_async_engine()
@@ -594,7 +594,7 @@ class TestEngineBaseCurrencyBranch:
 # ONBOARDING SERVICE (Workstream J foundation)
 # ============================================================================
 #
-# Tests for backend/app/services/onboarding_service.py: ensure/get/transition.
+# Tests for backend/app/services/accounts/onboarding_service.py: ensure/get/transition.
 # Appended here (rather than a new test file) because the backend test runner
 # registers test files individually by name — this file is already registered
 # as `services settings`, and its domain (per-user settings.py surface) is the
@@ -672,7 +672,7 @@ class TestOnboardingServiceEnsure:
 
     @staticmethod
     async def _make_user(session, marker: str):
-        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
 
         unique_id = uuid.uuid4().hex[:8]
         user, error = await user_service.create_user(
@@ -689,7 +689,7 @@ class TestOnboardingServiceEnsure:
     def test_round5_registry_is_exactly_fifteen_flows_with_two_step_managed_flows(self):
         """Model, flow registry and step registry share the final Round 5 contract."""
         from backend.app.db.models import OnboardingFlow  # noqa: PLC0415
-        from backend.app.services.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS  # noqa: PLC0415
 
         actual_versions = {flow.value: version for flow, version in ONBOARDING_FLOW_VERSIONS.items()}
         actual_steps = {flow.value: step_ids for flow, step_ids in ONBOARDING_FLOW_STEPS.items()}
@@ -708,7 +708,7 @@ class TestOnboardingServiceEnsure:
 
         from backend.app.db.models import OnboardingStatus, User  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
             ensure_onboarding_progress,
             get_onboarding_progress,
@@ -756,7 +756,7 @@ class TestOnboardingServiceEnsure:
 
         from backend.app.db.models import User, UserOnboardingStepProgress  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
             ensure_onboarding_progress,
         )
@@ -793,7 +793,7 @@ class TestOnboardingServiceStepTransition:
 
     @staticmethod
     async def _make_user(session, marker: str):
-        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
 
         unique_id = uuid.uuid4().hex[:8]
         user, error = await user_service.create_user(
@@ -816,7 +816,7 @@ class TestOnboardingServiceStepTransition:
 
         from backend.app.db.models import OnboardingFlow, OnboardingStatus, User  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_STEPS,
             ONBOARDING_FLOW_VERSIONS,
             transition_onboarding_step_progress,
@@ -888,7 +888,7 @@ class TestOnboardingServiceStepTransition:
 
         from backend.app.db.models import OnboardingFlow, OnboardingStatus, User  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_STEPS,
             ONBOARDING_FLOW_VERSIONS,
             transition_onboarding_step_progress,
@@ -931,7 +931,7 @@ class TestOnboardingServiceTransition:
 
     @staticmethod
     async def _make_user(session, marker: str):
-        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
 
         unique_id = uuid.uuid4().hex[:8]
         user, error = await user_service.create_user(
@@ -952,7 +952,7 @@ class TestOnboardingServiceTransition:
 
         from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
             transition_onboarding_progress,
         )
@@ -981,7 +981,7 @@ class TestOnboardingServiceTransition:
 
         from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
             transition_onboarding_progress,
         )
@@ -1011,7 +1011,7 @@ class TestOnboardingServiceTransition:
 
         from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
             transition_onboarding_progress,
         )
@@ -1041,7 +1041,7 @@ class TestOnboardingServiceTransition:
 
         from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
             transition_onboarding_progress,
         )
@@ -1063,7 +1063,7 @@ class TestOnboardingServiceTransition:
 
         from backend.app.db.models import OnboardingFlow, OnboardingStatus  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
             get_onboarding_progress,
             transition_onboarding_progress,
@@ -1097,7 +1097,7 @@ class TestOnboardingServiceCompleteWelcome:
 
     @staticmethod
     async def _make_user(session, marker: str):
-        from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
 
         unique_id = uuid.uuid4().hex[:8]
         user, error = await user_service.create_user(
@@ -1122,7 +1122,7 @@ class TestOnboardingServiceCompleteWelcome:
         from backend.app.db.models import OnboardingFlow, OnboardingStatus, UserSettings  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
         from backend.app.schemas.settings import OnboardingWelcomeSettings  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
             complete_welcome_onboarding,
         )
@@ -1164,11 +1164,11 @@ class TestOnboardingServiceCompleteWelcome:
         from backend.app.db.models import OnboardingFlow, UserSettings  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
         from backend.app.schemas.settings import OnboardingWelcomeSettings, UserSettingsUpdate  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
             complete_welcome_onboarding,
         )
-        from backend.app.services.settings_service import update_user_settings  # noqa: PLC0415
+        from backend.app.services.accounts.settings_service import update_user_settings  # noqa: PLC0415
 
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
@@ -1207,7 +1207,7 @@ class TestOnboardingServiceCompleteWelcome:
         from backend.app.db.models import OnboardingFlow, OnboardingStatus, UserSettings  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
         from backend.app.schemas.settings import OnboardingWelcomeSettings  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
             complete_welcome_onboarding,
         )
@@ -1254,7 +1254,7 @@ class TestOnboardingServiceCompleteWelcome:
         from backend.app.db.models import OnboardingFlow, UserOnboardingProgress, UserSettings  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
         from backend.app.schemas.settings import OnboardingWelcomeSettings  # noqa: PLC0415
-        from backend.app.services.onboarding_service import (  # noqa: PLC0415
+        from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
             complete_welcome_onboarding,
         )

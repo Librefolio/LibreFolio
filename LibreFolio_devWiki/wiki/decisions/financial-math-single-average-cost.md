@@ -239,15 +239,15 @@ average cost comes from this one function.
 | Lots WAC lines and gaps | `backend/app/services/lots_analysis_service.py` |
 | Lots WAC line math (since 2026-10-12) | `backend/app/services/financial_math/lots/average_cost_lines.py` |
 | Lot value and return histories, no native fallback (since 2026-10-11/12) | `backend/app/services/financial_math/lots/histories.py` |
-| Broker summary holdings cost | `backend/app/services/broker_service.py` |
-| FX service (`convert_bulk`) | `backend/app/services/fx.py` |
+| Broker summary holdings cost | `backend/app/services/brokers/summary.py` |
+| FX service (`convert_bulk`) | `backend/app/services/fx/conversion.py` |
 | `MISSING_COST_BASIS`, `UnrealizedBreakdownRow` | `backend/app/schemas/portfolio.py` |
 | `BRAssetHolding.total_cost`, `BRSummary.missing_fx_pairs` | `backend/app/schemas/brokers.py` |
 | Facade output (`WACPreviewResultItem`, `WACQualifyingTX`) | `backend/app/schemas/wac.py` |
-| PAC planner (passes T as override) | `backend/app/services/portfolio_allocation_source.py` |
+| PAC planner (passes T as override) | `backend/app/services/pac_allocator/source/wac.py` |
 | `POST /portfolio/wac` | `backend/app/api/v1/portfolio_api.py` |
-| Batch auto cost basis | `backend/app/services/transaction_service.py` |
-| Dashboard tooltip | `frontend/src/lib/components/dashboard/KpiSection.svelte` |
+| Batch auto cost basis | `backend/app/services/transactions/auto_cost.py` |
+| Dashboard tooltip | `frontend/src/lib/features/dashboard/KpiSection.svelte` |
 | AI Export provenance v2 | `backend/app/services/ai_export/components/portfolio_financial.py` |
 | AI Export provenance v2 (broker) | `backend/app/services/ai_export/components/broker_financial.py` |
 | AI Export component catalogue (both provenances declared `version=2`) | `backend/app/services/ai_export/components/catalog.py` |

@@ -7,6 +7,7 @@
 -->
 <script lang="ts" module>
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {buildGeoNameMaps} from '$lib/components/charts/geographyMapHelpers';
 
     /** The world map, fetched and registered once, then shared by every planner result. */
@@ -43,6 +44,10 @@
     import {HINT} from '../ui';
     import {exposureTooltipHtml, exposureTooltipText} from './exposureTooltip';
     import {chartPercent, type MapWeightRow} from './model';
+    import {themed} from '$lib/theme/themePair';
+    import {chartNeutrals, GEO_MAP_COLORS} from '$lib/theme/chartTheme';
+    import {GEO_CHOROPLETH_SCALE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
     const KEY = 'tools.pacAllocator.planner.result';
 
     interface Props {
@@ -56,14 +61,13 @@
     const SIDES: readonly Side[] = ['target', 'final'];
     const SERIES_ID = 'pac-planner-exposure-map';
     /** The colours of the portfolio map (`GeographyMap`), so one weight reads the same on both pages. */
-    const SCALE = {
-        light: ['#f0fdf4', '#bbf7d0', '#86efac', '#4ade80', '#22c55e', '#16a34a'],
-        dark: ['#1e3a2f', '#22543d', '#276749', '#2f855a', '#38a169', '#48bb78'],
-    };
+    const SCALE = GEO_CHOROPLETH_SCALE;
 
     let geoNames = $state<Record<string, string> | null>(null);
     let failed = $state(false);
     let dark = $state(false);
+    /** Bumped by the Designer Lab's colour edits (C4): the options are rebuilt and their roles read again. */
+    let colorsVersion = $state(0);
     let frame = $state<HTMLDivElement | null>(null);
     const containers = $state<Record<Side, HTMLDivElement | null>>({target: null, final: null});
     const charts: Record<Side, echarts.ECharts | null> = {target: null, final: null};
@@ -94,11 +98,13 @@
 
     onMount(() => {
         const readTheme = () => {
-            dark = document.documentElement.classList.contains('dark');
+            dark = isDarkTheme();
         };
         readTheme();
-        const observer = new MutationObserver(readTheme);
-        observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const observer = onThemeClassChange(readTheme);
+        const chartColors = onChartColorsChange(() => {
+            colorsVersion += 1;
+        });
         loadWorldMap()
             .then((names) => {
                 geoNames = names;
@@ -110,6 +116,7 @@
         return () => {
             renderGeneration += 1;
             observer.disconnect();
+            chartColors.disconnect();
             resizeWatcher.disconnect();
             for (const side of SIDES) release(side);
         };
@@ -129,7 +136,10 @@
     });
 
     function option(side: Side): echarts.EChartsOption {
-        const theme = buildTooltipTheme(dark);
+        void colorsVersion;
+        // The roles of the maps' own frame: both maps sit in it.
+        const neutrals = chartNeutrals(dark, frame);
+        const theme = buildTooltipTheme(dark, frame);
         const tooltipText = text;
         const rowsByName = byGeoName;
         return {
@@ -155,8 +165,8 @@
                     selectedMode: false,
                     // A country outside the plan has no box: only the plan's countries switch it back on.
                     tooltip: {show: false},
-                    emphasis: {label: {show: false}, itemStyle: {areaColor: dark ? '#fbbf24' : '#f59e0b'}},
-                    itemStyle: {areaColor: dark ? '#334155' : '#e2e8f0', borderColor: dark ? '#1e293b' : '#cbd5e1', borderWidth: 0.5},
+                    emphasis: {label: {show: false}, itemStyle: {areaColor: themed(GEO_MAP_COLORS.highlight, dark)}},
+                    itemStyle: {areaColor: themed(GEO_MAP_COLORS.land, dark), borderColor: neutrals.geoMap.border, borderWidth: 0.5},
                     label: {show: false},
                     data: placed.map((row) => ({name: geoName(row) as string, value: chartPercent(side === 'target' ? row.target : row.final) ?? '-', tooltip: {show: true}})),
                 },
@@ -177,7 +187,7 @@
         let chart = charts[side];
         const fresh = chart === null;
         if (!chart) {
-            chart = echarts.init(element, undefined, {renderer: 'canvas'});
+            chart = echarts.init(element, CHART_INIT_THEME, {renderer: 'canvas'});
             charts[side] = chart;
             attachChartReady(chart, element, `pac-planner-exposure-map-${side}`);
             follow(side, chart);
@@ -255,14 +265,14 @@
         <div bind:this={frame} class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {#each SIDES as side (side)}
                 <figure class="min-w-0">
-                    <figcaption class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    <figcaption class="text-xs font-semibold uppercase tracking-wide text-lf-muted">
                         {side === 'target' ? text.target : text.final}
                     </figcaption>
                     <div bind:this={containers[side]} class="mt-1 h-52 w-full sm:h-60" data-testid="pac-planner-exposures-map" data-side={side} aria-hidden="true"></div>
                 </figure>
             {/each}
         </div>
-        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400" data-testid="pac-planner-exposures-scale">
+        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-lf-muted" data-testid="pac-planner-exposures-scale">
             <span>{$t(`${KEY}.exposures.scale`, {default: 'Colour scale'})}</span>
             <span class="tabular-nums">{formatPlannerPercentUnits('0', 0)}</span>
             <span class="h-2 w-32 rounded-sm" style:background="linear-gradient(to right, {colours.join(', ')})" aria-hidden="true"></span>

@@ -107,12 +107,12 @@ trigger and misses every row; search for `-option-` / `-group-` or for the prop 
 | Suffix composition | `frontend/src/lib/components/ui/select/SimpleSelect.svelte` |
 | Suffix composition | `frontend/src/lib/components/ui/select/SearchSelect.svelte` |
 | Wrapper — did not forward `testId` when this page was written (`f2ad97dd4`); forwards it since `00d8c735b` | `frontend/src/lib/components/ui/select/AssetSelect.svelte` |
-| Consumer passing the stem | `frontend/src/lib/components/risk/AssetSetRiskPanel.svelte` |
+| Consumer passing the stem | `frontend/src/lib/features/risk/AssetSetRiskPanel.svelte` |
 | Specs bound to the wrapper id | `frontend/e2e/transactions/tx-import-resolution.spec.ts` |
-| Composes `{testId}-health`, `-reasons`, `-errors`, `-metadata`, `-toggle`, `-body`, … | `frontend/src/lib/components/risk/levels/RiskLevelSection.svelte` |
-| Composes `{testId}-row`, `-bar`, `-value` | `frontend/src/lib/components/risk/levels/l4/TornadoChart.svelte` |
+| Composes `{testId}-health`, `-reasons`, `-errors`, `-metadata`, `-toggle`, `-body`, … | `frontend/src/lib/features/risk/levels/RiskLevelSection.svelte` |
+| Composes `{testId}-row`, `-bar`, `-value` | `frontend/src/lib/features/risk/levels/l4/TornadoChart.svelte` |
 | Composes from `testIdPrefix` (rows, groups) | `frontend/src/lib/components/ui/select/TreeSelect.svelte` |
-| Literal `risk-asset-set-l1-row` | `frontend/src/lib/components/risk/AssetSetLossComparisonSection.svelte` |
+| Literal `risk-asset-set-l1-row` | `frontend/src/lib/features/risk/AssetSetLossComparisonSection.svelte` |
 | The spec probed on 23/09 | `frontend/e2e/portfolio/risk-lab.spec.ts` |
 | F's recon (§3) and the missed `wiki-search` (F-5) | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/F-laboratorio-postmerge.md` |
 

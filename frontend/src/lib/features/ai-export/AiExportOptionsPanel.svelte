@@ -147,9 +147,9 @@
     }
 
     function severityClasses(value: 'normal' | 'warning' | 'large'): string {
-        if (value === 'large') return 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40';
-        if (value === 'warning') return 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40';
-        return 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40';
+        if (value === 'large') return 'text-lf-danger-on-soft bg-lf-danger-soft';
+        if (value === 'warning') return 'text-lf-warning-on-soft bg-lf-warning-soft';
+        return 'text-lf-success-on-soft bg-lf-success-soft';
     }
 
     function submit(event: SubmitEvent) {
@@ -158,16 +158,16 @@
     }
 </script>
 
-<form class="flex flex-col gap-4 p-4" onsubmit={submit} data-testid="ai-export-options-panel">
+<form class="flex flex-col gap-4 p-4 text-lf-primary" onsubmit={submit} data-testid="ai-export-options-panel">
     <fieldset class="flex flex-col gap-2">
-        <legend class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.categoryLabel}</legend>
-        <div class="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-slate-900">
+        <legend class="text-xs font-semibold text-lf-secondary">{labels.categoryLabel}</legend>
+        <div class="grid grid-cols-2 gap-1 rounded-lg bg-lf-panel p-1">
             {#each selectionKinds as kind}
                 <button
                     type="button"
                     disabled={controlsDisabled}
                     aria-pressed={selectionKind === kind}
-                    class="rounded-md px-2 py-1.5 text-xs font-medium transition-colors {selectionKind === kind ? 'bg-white text-purple-700 shadow-sm dark:bg-slate-700 dark:text-purple-300' : 'text-gray-600 dark:text-gray-300'}"
+                    class="rounded-md px-2 py-1.5 text-xs font-medium transition-colors {selectionKind === kind ? 'bg-lf-card text-lf-ai shadow-sm' : 'text-lf-secondary'}"
                     onclick={() => setCategory(kind)}
                     data-testid={`ai-export-category-${kind}`}
                 >
@@ -175,11 +175,11 @@
                 </button>
             {/each}
         </div>
-        <p class="text-[11px] leading-4 text-gray-500 dark:text-gray-400" data-testid="ai-export-category-help">{labels.categoryHelp[selectionKind]}</p>
+        <p class="text-[11px] leading-4 text-lf-muted" data-testid="ai-export-category-help">{labels.categoryHelp[selectionKind]}</p>
     </fieldset>
 
     <div class="flex flex-col gap-1.5">
-        <span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.selectionLabel}</span>
+        <span class="text-xs font-semibold text-lf-secondary">{labels.selectionLabel}</span>
         <SimpleSelect
             value={selectionId}
             options={selectionOptions}
@@ -194,20 +194,20 @@
             {#snippet selectedItem(option)}
                 {@const SelectionIcon = getSelectionIcon(option.icon)}
                 <span class="flex min-w-0 flex-1 items-center gap-2.5">
-                    <SelectionIcon class="shrink-0 text-purple-600 dark:text-purple-300" size={18} aria-hidden="true" data-testid="ai-export-selection-selected-icon" />
+                    <SelectionIcon class="shrink-0 text-lf-ai" size={18} aria-hidden="true" data-testid="ai-export-selection-selected-icon" />
                     <span class="min-w-0 flex-1">
                         <span class="block truncate font-medium">{option.label}</span>
-                        <span class="block truncate text-[11px] text-gray-500 dark:text-gray-400">{option.searchText}</span>
+                        <span class="block truncate text-[11px] text-lf-muted">{option.searchText}</span>
                     </span>
                 </span>
             {/snippet}
             {#snippet item(option)}
                 {@const SelectionIcon = getSelectionIcon(option.icon)}
                 <span class="flex min-w-0 items-start gap-2.5 whitespace-normal">
-                    <SelectionIcon class="mt-0.5 shrink-0 text-purple-600 dark:text-purple-300" size={18} aria-hidden="true" data-testid={`ai-export-selection-option-${option.value}-icon`} />
+                    <SelectionIcon class="mt-0.5 shrink-0 text-lf-ai" size={18} aria-hidden="true" data-testid={`ai-export-selection-option-${option.value}-icon`} />
                     <span class="min-w-0 flex-1">
                         <span class="block font-medium">{option.label}</span>
-                        <span class="block whitespace-normal break-words text-xs leading-4 text-gray-500 dark:text-gray-400" data-testid={`ai-export-selection-option-${option.value}-description`}>{option.searchText}</span>
+                        <span class="block whitespace-normal break-words text-xs leading-4 text-lf-muted" data-testid={`ai-export-selection-option-${option.value}-description`}>{option.searchText}</span>
                     </span>
                 </span>
             {/snippet}
@@ -215,15 +215,15 @@
     </div>
 
     <fieldset class="flex flex-col gap-2">
-        <legend class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.detailLevelLabel}</legend>
-        <div class="grid grid-cols-3 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-slate-900">
+        <legend class="text-xs font-semibold text-lf-secondary">{labels.detailLevelLabel}</legend>
+        <div class="grid grid-cols-3 gap-1 rounded-lg bg-lf-panel p-1">
             {#each AI_EXPORT_DETAIL_LEVELS as detail}
                 <div class="relative">
                     <button
                         type="button"
                         disabled={controlsDisabled || !selected?.supportedDetailLevels.includes(detail)}
                         aria-pressed={detailLevel === detail}
-                        class="w-full rounded-md py-1.5 pr-6 pl-2 text-xs font-medium {detailLevel === detail ? 'bg-white text-purple-700 shadow-sm dark:bg-slate-700 dark:text-purple-300' : 'text-gray-600 dark:text-gray-300'}"
+                        class="w-full rounded-md py-1.5 pr-6 pl-2 text-xs font-medium {detailLevel === detail ? 'bg-lf-card text-lf-ai shadow-sm' : 'text-lf-secondary'}"
                         onclick={() => (detailLevel = detail)}
                         data-testid={`ai-export-detail-${detail}`}
                     >
@@ -231,7 +231,7 @@
                     </button>
                     <span class="absolute top-1/2 right-1 -translate-y-1/2">
                         <Tooltip text={labels.detailLevelHelp[detail]} position="right" maxWidth="320px" interactiveChild>
-                            <button type="button" aria-label={`${labels.detailLevelLabels[detail]}: ${labels.detailLevelHelp[detail]}`} class="rounded-sm p-0.5 text-gray-400" data-testid={`ai-export-detail-help-${detail}`}>
+                            <button type="button" aria-label={`${labels.detailLevelLabels[detail]}: ${labels.detailLevelHelp[detail]}`} class="rounded-sm p-0.5 text-lf-muted" data-testid={`ai-export-detail-help-${detail}`}>
                                 <CircleHelp size={13} aria-hidden="true" />
                             </button>
                         </Tooltip>
@@ -243,24 +243,24 @@
 
     <fieldset class="flex flex-col gap-2">
         <div class="flex items-center gap-1.5">
-            <legend class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.periodLabel}</legend>
+            <legend class="text-xs font-semibold text-lf-secondary">{labels.periodLabel}</legend>
             <Tooltip text={labels.periodHelp} position="right" maxWidth="320px" interactiveChild>
-                <button type="button" aria-label={`${labels.periodLabel}: ${labels.periodHelp}`} class="rounded-sm p-0.5 text-gray-400" data-testid="ai-export-period-help"><CircleHelp size={13} /></button>
+                <button type="button" aria-label={`${labels.periodLabel}: ${labels.periodHelp}`} class="rounded-sm p-0.5 text-lf-muted" data-testid="ai-export-period-help"><CircleHelp size={13} /></button>
             </Tooltip>
         </div>
-        <div class="flex min-w-0 items-center gap-1 rounded-lg bg-gray-100 p-1 dark:bg-slate-900">
+        <div class="flex min-w-0 items-center gap-1 rounded-lg bg-lf-panel p-1">
             {#each AI_EXPORT_PERIOD_PRESETS.filter((preset) => preset !== 'custom') as preset}
                 <button
                     type="button"
                     disabled={controlsDisabled}
                     aria-pressed={periodPreset === preset}
-                    class="min-w-0 flex-1 rounded-md px-1 py-1.5 text-xs font-medium {periodPreset === preset ? 'bg-white text-purple-700 shadow-sm dark:bg-slate-700 dark:text-purple-300' : 'text-gray-600 dark:text-gray-300'}"
+                    class="min-w-0 flex-1 rounded-md px-1 py-1.5 text-xs font-medium {periodPreset === preset ? 'bg-lf-card text-lf-ai shadow-sm' : 'text-lf-secondary'}"
                     onclick={() => isPeriodPreset(preset) && (periodPreset = preset)}
                     data-testid={`ai-export-period-${preset}`}>{labels.periodPresetLabels[preset]}</button
                 >
             {/each}
             {#if periodPreset === 'custom'}
-                <div class="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-purple-400/40 bg-purple-500/10 px-1.5 py-0.5" data-testid="ai-export-period-custom">
+                <div class="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-lf-ai-line bg-lf-ai-soft px-1.5 py-0.5" data-testid="ai-export-period-custom">
                     <input type="number" use:numericArrows min="1" max="999" step="1" bind:value={customAmount} disabled={controlsDisabled} class="w-8 appearance-none bg-transparent text-center text-xs outline-none" data-testid="ai-export-period-custom-amount" />
                     <SimpleSelect
                         value={customUnit}
@@ -274,23 +274,30 @@
                     />
                 </div>
             {:else}
-                <button type="button" disabled={controlsDisabled} class="min-w-0 flex-1 rounded-md px-1 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300" onclick={() => (periodPreset = 'custom')} data-testid="ai-export-period-custom">{labels.periodPresetLabels.custom}</button>
+                <button type="button" disabled={controlsDisabled} class="min-w-0 flex-1 rounded-md px-1 py-1.5 text-xs font-medium text-lf-secondary" onclick={() => (periodPreset = 'custom')} data-testid="ai-export-period-custom">{labels.periodPresetLabels.custom}</button>
             {/if}
         </div>
     </fieldset>
 
     {#if selectionKind === 'analysis' && selected?.entry.kind === 'analysis' && selected.entry.supports_user_notes}
         <div class="flex flex-col gap-1.5">
-            <label for={notesId} class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.userNotesLabel}</label>
-            <textarea id={notesId} bind:value={userNotes} disabled={controlsDisabled} placeholder={labels.userNotesPlaceholder} rows="3" class="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900" data-testid="ai-export-user-notes"
+            <label for={notesId} class="text-xs font-semibold text-lf-secondary">{labels.userNotesLabel}</label>
+            <textarea
+                id={notesId}
+                bind:value={userNotes}
+                disabled={controlsDisabled}
+                placeholder={labels.userNotesPlaceholder}
+                rows="3"
+                class="w-full resize-y rounded-lg border border-lf-input bg-lf-field px-3 py-2 text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover"
+                data-testid="ai-export-user-notes"
             ></textarea>
         </div>
     {/if}
 
     {#if pending && severity}
-        <section class="rounded-lg border border-gray-200 p-3 dark:border-slate-700" aria-live="polite" data-testid="ai-export-payload-stats">
+        <section class="rounded-lg border border-lf-subtle p-3" aria-live="polite" data-testid="ai-export-payload-stats">
             <h3 class="text-xs font-semibold">{labels.payloadStatsLabel}</h3>
-            <p class="mt-1 text-[11px] leading-4 text-gray-500 dark:text-gray-400">{labels.payloadStatsHelp}</p>
+            <p class="mt-1 text-[11px] leading-4 text-lf-muted">{labels.payloadStatsHelp}</p>
             <p class="mt-2 text-sm font-semibold" data-testid="ai-export-final-size">
                 {formatAiExportTokenCount(pending.stats.finalPrompt.estimatedTokens, locale, labels.tokenUnitLabel)}
                 <span class="whitespace-nowrap">(<span aria-hidden="true">💾</span> {formatAiExportByteSize(pending.stats.finalPrompt.byteCountUtf8, locale)})</span>
@@ -301,13 +308,13 @@
                     {#if currentOptions.detailLevel !== 'compact'}
                         <button type="button" class="flex-1 rounded-md border px-2 py-1.5 text-xs font-semibold" onclick={() => onusecompact({...currentOptions, detailLevel: 'compact'})} data-testid="ai-export-use-compact">{labels.useCompactLabel}</button>
                     {/if}
-                    <button type="button" class="flex-1 rounded-md bg-purple-600 px-2 py-1.5 text-xs font-semibold text-white" onclick={oncopyanyway} data-testid="ai-export-copy-anyway">{labels.copyAnywayLabel}</button>
+                    <button type="button" class="flex-1 rounded-md bg-lf-ai px-2 py-1.5 text-xs font-semibold text-lf-on-ai" onclick={oncopyanyway} data-testid="ai-export-copy-anyway">{labels.copyAnywayLabel}</button>
                 </div>
             {/if}
         </section>
     {/if}
 
-    <button type="submit" disabled={controlsDisabled || !selected} class="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" data-testid="ai-export-copy-button">
+    <button type="submit" disabled={controlsDisabled || !selected} class="rounded-lg bg-lf-ai px-4 py-2 text-sm font-semibold text-lf-on-ai disabled:opacity-50" data-testid="ai-export-copy-button">
         {loading ? labels.preparingLabel : labels.prepareLabel}
     </button>
 </form>

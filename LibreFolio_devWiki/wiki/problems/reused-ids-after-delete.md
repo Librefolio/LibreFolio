@@ -39,7 +39,7 @@ The developer rejected a local workaround ("b2") and asked for a fix at the root
 - **Existing databases** are converted by a new subsystem of *post-migration fixes*
   (`backend/app/db/post_migration/`): ordered repairs that look for the anomaly they correct and apply only if they
   find it. Two entry points — server start-up, right after the migrations (`run_post_migration_fixes_at_startup()`
-  in `main.py`, never raising), and offline with the server stopped (`python -m backend.app.db.post_migration`, also
+  in `services/platform/database_bootstrap.py`, never raising), and offline with the server stopped (`python -m backend.app.db.post_migration`, also
   inside the Docker image). Safety rules: `PRAGMA integrity_check` first (a damaged database is never touched); WAL
   checkpoint and a backup copy; one transaction with foreign keys off; then `foreign_key_check` empty and identical
   row counts; the backup is deleted once verified (D2) and kept on any error, with a rollback, a warning and a normal
@@ -69,7 +69,7 @@ No field case was known when it was fixed.
 | Fix contract | `backend/app/db/post_migration/base.py` |
 | The AUTOINCREMENT fix, orphan-folder quarantine | `backend/app/db/post_migration/autoincrement.py` |
 | Offline entry point | `backend/app/db/post_migration/__main__.py` |
-| Start-up entry point | `backend/app/main.py` |
+| Start-up entry point | `backend/app/services/platform/database_bootstrap.py` |
 | Tests | `backend/test_scripts/test_db/test_post_migration.py` |
 | E2E reset of report folders (plan 33) | `backend/test_scripts/test_db/populate_mock_data.py` |
 | Plan (§0 B, §2.3, D1–D6) | `LibreFolio_developer_journal/Release_2/phases/34_accountAndIdReuse/plan-phase00AccountAndIdReuse.prompt.md` |

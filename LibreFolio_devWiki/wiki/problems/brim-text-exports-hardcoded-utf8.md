@@ -22,7 +22,7 @@ valid UTF-8 raised a decode error, or a header with an accented column name no l
 
 ## Solution (2026-09-28, `6ea71ea8d`)
 
-- One ordered list, `TEXT_ENCODINGS = ("utf-8-sig", "cp1252", "latin-1")` in `backend/app/services/brim_provider.py`,
+- One ordered list, `TEXT_ENCODINGS = ("utf-8-sig", "cp1252", "latin-1")` in `backend/app/services/brim/brim_provider.py`,
   and helpers built on it: `_read_text` (whole file), `_open_text` (a `StringIO` for `csv` readers),
   `_read_file_head`, `detect_csv_delimiter`. UTF-8 is tried first (with or without BOM), then Windows-1252, and
   **Latin-1 last, because it decodes any byte sequence** — it would mask every other choice if it came earlier.
@@ -42,7 +42,7 @@ Imports of whole banks failed before the user could do anything; a user had to r
 
 | Role | Path |
 |------|------|
-| `TEXT_ENCODINGS`, `_read_text`, `_open_text` | `backend/app/services/brim_provider.py` |
+| `TEXT_ENCODINGS`, `_read_text`, `_open_text` | `backend/app/services/brim/brim_provider.py` |
 | Plugin readers that delegate to them | `backend/app/services/brim_providers/_brim_io.py` |
 | Encoding tests (`TestTextEncodingFallback`) | `backend/test_scripts/test_services/test_brim_provider_base.py` |
 | Guard against fixed encodings | `backend/test_scripts/test_external/test_brim_providers.py` |

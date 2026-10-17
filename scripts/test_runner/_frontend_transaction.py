@@ -11,27 +11,28 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
     """Run Transaction unit tests (Vitest), including URL/filter state."""
     print_section("Frontend TX Unit Tests (Vitest)")
     cmd = ["npx", "vitest", "run",
-           "src/lib/utils/__tests__/txPayloadHelpers.test.ts",
-           "src/lib/utils/__tests__/txCommitApi.test.ts",
-           "src/lib/utils/__tests__/promoteHelpers.test.ts",
-           "src/lib/utils/transactions/splitRowCharges.test.ts",
-           "src/lib/utils/transactions/fixRowLifecycle.test.ts",
-           "src/lib/utils/transactions/duplicateRecheckPayload.test.ts",
-           "src/lib/utils/transactions/bulkDisplay.test.ts",
-           "src/lib/utils/transactions/importReportSets.test.ts",
-           "src/lib/utils/transactions/importPairs.test.ts",
-           "src/lib/utils/transactions/promoteSuggest.test.ts",
-           "src/lib/utils/brim/defaultPluginCheck.test.ts",
+           "src/lib/features/transactions/txPayloadHelpers.test.ts",
+           "src/lib/features/transactions/txCommitApi.test.ts",
+           "src/lib/features/transactions/bulk/promoteHelpers.test.ts",
+           "src/lib/features/transactions/import/splitRowCharges.test.ts",
+           "src/lib/features/transactions/import/fixRowLifecycle.test.ts",
+           "src/lib/features/transactions/import/duplicateRecheckPayload.test.ts",
+           "src/lib/features/transactions/bulk/bulkDisplay.test.ts",
+           "src/lib/features/transactions/import/importReportSets.test.ts",
+           "src/lib/features/transactions/import/importPairs.test.ts",
+           "src/lib/features/transactions/bulk/promoteSuggest.test.ts",
+           "src/lib/features/transactions/import/defaultPluginCheck.test.ts",
            "src/lib/utils/brim/pluginText.test.ts",
            "src/lib/utils/brim/pluginKind.test.ts",
-           "src/lib/components/transactions/modals/ImportBrokerMismatchModal.test.ts",
-           "src/lib/components/transactions/modals/PromoteAllModal.test.ts",
-           "src/lib/utils/transactions/gapFixModel.test.ts",
-           "src/lib/components/transactions/import/GapFixStep.test.ts",
-           "src/lib/components/transactions/import/ReportSetCard.test.ts",
-           "src/lib/components/transactions/modals/ParseDetailModal.test.ts",
-           "src/lib/utils/transactions/bulkTodos.test.ts",
-           "src/lib/stores/transactions/transactionTypeStore.test.ts",
+           "src/lib/features/transactions/import/ImportBrokerMismatchModal.test.ts",
+           "src/lib/features/transactions/bulk/PromoteAllModal.test.ts",
+           "src/lib/features/transactions/bulk/PromoteMergeModal.test.ts",
+           "src/lib/features/transactions/import/gapFixModel.test.ts",
+           "src/lib/features/transactions/import/GapFixStep.test.ts",
+           "src/lib/features/transactions/import/ReportSetCard.test.ts",
+           "src/lib/features/transactions/import/ParseDetailModal.test.ts",
+           "src/lib/features/transactions/bulk/bulkTodos.test.ts",
+           "src/lib/features/transactions/transactionTypeStore.test.ts",
            "src/routes/(app)/transactions/filterState.test.ts"]
     print(f"\n{Colors.BLUE}Running: TX Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
@@ -336,6 +337,18 @@ def front_tx_event_picker(verbose: bool = False, ui: bool = False, headed: bool 
     return _run_playwright("transactions/tx-event-picker.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_event_create_exists(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run «+ New event» never-overwrites E2E tests (release 1.3, decision 20; I-10 S4)."""
+    print_section("Frontend TX «+ New event» Exists Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-event-create-exists.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_brim_import(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run BRIM Import Wizard E2E tests (wizard flow, parse, resolve, import to BulkModal)."""
     print_section("Frontend TX BRIM Import Wizard Tests")
@@ -597,6 +610,19 @@ def front_tx_selection_after_bulk(verbose: bool = False, ui: bool = False, heade
     return _run_playwright("transactions/tx-selection-after-bulk.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_split_refusal(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the refused Split pair / Promote pair E2E tests (W-B39)."""
+    print_section("Frontend TX Split Refusal Tests")
+    if not _ensure_frontend_build():
+        return False
+    # The split test's pair is a TRANSFER of the seeded ETH-USD asset (fixtures/owned-pair.ts).
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-split-refusal.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Transaction E2E tests."""
     if _common.nothing_left_to_run("front-transaction"):
@@ -656,6 +682,14 @@ def populate_registry(registry: dict) -> None:
         tests="transactions/tx-transfer-auto-cost.spec.ts",
     )
     add_test(cat, "tx-event-picker", front_tx_event_picker, name="TX Event Picker Tests", desc="Event picker card-style dropdown, delta, slider range, type visibility", tests="transactions/tx-event-picker.spec.ts")
+    add_test(
+        cat,
+        "tx-event-create-exists",
+        front_tx_event_create_exists,
+        name="TX «+ New event» Exists Tests",
+        desc="Release 1.3, decision 20 (W E1b), each test on an asset of its own: «+ New event» is sent in create mode; on a date and type the asset already holds (manual, or provider through a scheduled_investment assignment) the modal shows the events there and writes nothing — «Use this» links one, «Edit this» (manual only) prefills it with its own decimals and saves it by id, a provider event has only a note and «Use this», «Cancel» returns to the typed values; the picker holds the id the response names (I-10 S4, two same-key events); a refused save reads as a sentence, never [object Object] nor a raw code",
+        tests="transactions/tx-event-create-exists.spec.ts",
+    )
     add_test(cat, "tx-brim-import", front_tx_brim_import, name="TX BRIM Import Wizard Tests", desc="Import Wizard flow: open, select file, parse, resolve assets, import to BulkModal", tests="transactions/tx-brim-import.spec.ts")
     add_test(cat, "tx-ca-contract", front_tx_ca_contract, name="TX Import Plugin Contract Tests", desc="plugin->frontend channels: notices, evidence, field todos, split hints, asset notices", tests="transactions/tx-import-ca-contract.spec.ts")
     add_test(cat, "tx-asset-identity", front_tx_asset_identity, name="TX Import Asset Identity Tests", desc="Unification step: certain/proposed/lone states, merge, split, rename, primary ISIN election", tests="transactions/tx-import-asset-identity.spec.ts")
@@ -746,6 +780,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Selection After Bulk Tests",
         desc="Step 12a: after an executed edit, clone, delete, add, link or unlink the toolbar and the table checkboxes are empty and one click selects one row; after a cancelled editor, link or unlink both are unchanged",
         tests="transactions/tx-selection-after-bulk.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-split-refusal",
+        front_tx_split_refusal,
+        name="TX Split Refusal Tests",
+        desc="W-B39, each test on a disposable account with brokers of its own, the page's commit answered through page.route by a refusal the generated client's response schema accepts: S1 a linked TRANSFER pair split from its row menu and refused with wacFxUnavailable on the split → an error toast naming the pair (USD, no {placeholder}), the confirmation still open and usable, the pair still linked after Cancel; P1 a WITHDRAWAL and a DEPOSIT linked from the selection toolbar's plain confirm and refused with accessDenied on the receiving broker → an error toast naming that broker, the confirmation still open, both rows still standalone after Cancel",
+        tests="transactions/tx-split-refusal.spec.ts",
     )
     add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload + importReportSets + gapFixModel + GapFixStep (jsdom)", tests="vitest")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")

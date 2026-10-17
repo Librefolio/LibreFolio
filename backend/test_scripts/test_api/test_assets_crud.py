@@ -24,7 +24,7 @@ from backend.app.schemas import (
     FAinfoResponse,
     FASectorArea,
 )
-from backend.app.schemas.assets import FAAssetPatchItem
+from backend.app.schemas.assets.assets import FAAssetPatchItem
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
@@ -973,7 +973,7 @@ async def test_list_asset_providers(test_server):
             assert "volume_kind" in provider, "Provider should have 'volume_kind'"
 
         # Note: `mockprov` is intentionally hidden from the public /assets/provider
-        # list (see backend/app/api/v1/assets.py::list_providers). It remains usable
+        # list (see backend/app/api/v1/assets/providers.py::list_providers). It remains usable
         # internally by tests that reference it by code, but must NOT appear here.
         mock_provider = next((p for p in providers if p["code"] == "mockprov"), None)
         assert mock_provider is None, "mockprov must be hidden from the public provider list"
@@ -987,6 +987,12 @@ async def test_list_asset_providers(test_server):
         for code in ("justetf", "css_scraper", "scheduled_investment"):
             assert by_code[code]["supports_meaningful_volume"] is False, f"{code} should NOT declare meaningful volume support"
             assert by_code[code]["volume_kind"] == "unknown", f"{code} should default to unknown volume kind"
+
+        # F21: where each provider stands in the asset search. A lane sets neither LIBREFOLIO_ASSET_PROVIDERS_PREMIUM nor
+        # LIBREFOLIO_ASSET_PROVIDERS_ORDER (configure_test_runtime drops them) and no shipped plugin declares otherwise,
+        # so every listed provider is community at the default priority.
+        placements = {p["code"]: (p.get("tier"), p.get("priority")) for p in providers}
+        assert placements == dict.fromkeys(placements, ("community", 100)), f"every listed provider must be community at priority 100 on a lane without overrides: {placements}"
 
         print_success(f"✓ Listed {len(providers)} providers")
         print_info(f"  Providers: {', '.join([p['code'] for p in providers])}")
@@ -1674,7 +1680,7 @@ async def test_list_held_flags_read_positions_through_the_portfolio_dust_thresho
 # .patch_assets_bulk / prepared patch_dict must shallow-merge classification_
 # params per subfield, not fully replace it: an unrelated field patch must
 # leave it alone, and an explicit null on one subfield must clear only that
-# subfield, never the whole block. See backend/app/services/asset_source.py
+# subfield, never the whole block. See backend/app/services/assets/crud.py
 # ~ patch_assets_bulk (prepared patch_dict + per-field merge loop).
 # ============================================================================
 

@@ -14,7 +14,7 @@ import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/
 import {daysAgoIso, todayIso} from '../fixtures/dates';
 import {uniqueSuffix} from '../fixtures/unique';
 import {createOwnedBroker} from '../fixtures/onboarding-accounts';
-import {cleanupOwnedAccount, commitCreates, emptyOwnedAccount, openOwnedAccount, readTransactions, seededAssetId} from '../fixtures/owned-pair';
+import {cleanupOwnedAccount, commitCreates, emptyOwnedAccount, jsonFrom, openOwnedAccount, readTransactions, seededAssetId} from '../fixtures/owned-pair';
 
 // ---------------------------------------------------------------------------
 // Constants — known mock data (populate_mock_data.py)
@@ -663,6 +663,96 @@ test.describe('Transactions', () => {
             expect(quantitiesPerRequest(posts.validate.slice(validatesAtEdit), broker.id), 'since -1: one validate request, for 3, and none for 1').toEqual([['3']]);
         });
     });
+
+    // ===================================================================
+    // V-38 — a balance problem is listed with the balance problems
+    // ===================================================================
+    // The form's warning banner has two lists: the problems of its own fields (`tx-form-issue`)
+    // and the inconsistencies the entry would cause in the data (`tx-form-balance-issue`, under
+    // its own header). The form splits the server's verdict by index — a field problem when the
+    // index is 0 or more — while the server attaches `balanceCashNegative` to the row that takes
+    // the cash below zero: the form's own create, index 0. A WITHDRAWAL from a broker without
+    // cash is therefore listed as a problem of the form's fields, which no field can fix. The
+    // bulk editor classifies by code (`isBulkBalanceIssue`). Read on screen, by testid and count;
+    // the server's verdict is read off the wire, as the premise. The account, its broker and the
+    // form are this test's own: nothing is saved, form and editor are discarded, and the block's
+    // `afterEach` deletes the broker and the account — after a red too.
+    test.describe('A balance problem is not a field problem (V-38)', () => {
+        type SentCreate = {type?: string; broker_id?: number; date?: string; cash?: {code?: string; amount?: string} | null};
+        type ValidateAnswer = {issues?: Array<{operation?: string; index?: number; code?: string | null}>};
+
+        /** A broker of the account's own that allows no overdraft and holds no cash; its id is recorded for cleanup before anything else is checked. */
+        async function createBrokerWithoutCash(page: Page, tag: string): Promise<{id: number; name: string}> {
+            const name = `${tag}-broker-${uniqueSuffix()}`;
+            const body = await jsonFrom<{results: Array<{name: string; success: boolean; broker_id: number | null; message?: string}>}>(await page.request.post(`${API}/brokers`, {data: [{name, opened_at: '2025-01-01', allow_cash_overdraft: false}]}), `create the broker ${name}`);
+            const created = body.results.find((result) => result.name === name);
+            if (typeof created?.broker_id === 'number') owned.brokerIds.push(created.broker_id);
+            if (!created?.success || typeof created.broker_id !== 'number') throw new Error(`create the broker ${name}: no id — ${created?.message ?? 'no result'}`);
+            return {id: created.broker_id, name};
+        }
+
+        /** Leave without saving: the form through its discard guard — it holds the WITHDRAWAL —, then the editor, which holds nothing: Apply was never pressed. */
+        async function discardFormAndEditor(page: Page) {
+            const discard = page.getByTestId('confirm-modal-confirm');
+            await page.getByTestId('tx-form-cancel').click();
+            await expect(discard, 'the form holds the WITHDRAWAL: cancelling it asks to discard it').toBeVisible({timeout: 5_000});
+            await discard.click();
+            await expect(page.getByTestId('tx-form-modal')).toBeHidden({timeout: 5_000});
+            await page.getByTestId('tx-bulk-close').click();
+            await expect.poll(() => closeOutcome(page), {timeout: 5_000, message: 'the editor holds nothing: one click on close closes it'}).toBe('closed');
+        }
+
+        test('V-38: a WITHDRAWAL from a broker without cash lists the negative cash among the balance problems, none among the field problems', async ({page, request}, testInfo) => {
+            // The account goes through the real welcome flow before the form itself.
+            test.setTimeout(60_000);
+            await openOwnedAccount(page, request, owned, `v38_${testInfo.project.name}`);
+            const broker = await createBrokerWithoutCash(page, 'v38');
+            // After the broker exists, so the page's broker list has it.
+            await goToTransactions(page);
+            await openCreateFlow(page);
+            await selectType(page, 'WITHDRAWAL');
+            await pickBroker(page, broker.name);
+            await fillCashAmount(page, '100');
+
+            // Validate now, and wait for that run: the counter is read before the click, and the
+            // response is armed before it too — a response is an edge.
+            const root = page.getByTestId('tx-form-modal-root');
+            const validateNow = page.getByTestId('tx-form-validate-now');
+            await expect(validateNow).toBeEnabled({timeout: 5_000});
+            const runsBefore = await validateRuns(root);
+            const validated = page.waitForResponse((res) => res.request().method() === 'POST' && new URL(res.url()).pathname === `${API}/transactions/validate`, {timeout: 15_000});
+            await validateNow.click();
+            const response = await validated;
+            await waitForValidateRun(root, runsBefore);
+
+            // Premise, off the wire: the form sent its WITHDRAWAL of 100 today on this broker, and the
+            // server answers with one problem, the negative cash, attached to that create — index 0.
+            const sent = ((response.request().postDataJSON() as {creates?: SentCreate[]}).creates ?? []).map((create) => ({type: create.type, broker_id: create.broker_id, date: create.date, amount: Number(create.cash?.amount)}));
+            expect(sent, 'premise: the form validates its WITHDRAWAL of 100, today, on the broker').toEqual([{type: 'WITHDRAWAL', broker_id: broker.id, date: todayIso(), amount: -100}]);
+            const answer = (await response.json()) as ValidateAnswer;
+            expect(
+                (answer.issues ?? []).map(({operation, index, code}) => ({operation, index, code})),
+                'premise: one problem, the negative cash, attached to the form’s own create',
+            ).toEqual([{operation: 'create', index: 0, code: 'balanceCashNegative'}]);
+
+            // On screen the verdict is in: the warning banner names this test's broker.
+            const body = page.getByTestId('tx-form-body');
+            const banner = body.getByTestId('info-banner-warning');
+            await expect(banner).toBeVisible({timeout: 5_000});
+            await expect(banner).toContainText(broker.name);
+            await banner.scrollIntoViewIfNeeded();
+            const shot = testInfo.outputPath('V-38-form-after-validation.png');
+            await root.screenshot({path: shot});
+            await testInfo.attach('V-38 form after validation', {path: shot, contentType: 'image/png'});
+
+            // The subject, soft: the form and the editor are discarded whatever the verdict.
+            await expect.soft(body.getByTestId('tx-form-balance-issue'), 'the negative cash is listed among the balance problems').toHaveCount(1);
+            await expect.soft(body.getByTestId('tx-form-issue'), 'no field has a problem: none is listed among the field problems').toHaveCount(0);
+
+            await discardFormAndEditor(page);
+            expect(await readTransactions(page, {broker_id: broker.id}), 'nothing was saved: the broker holds no row').toEqual([]);
+        });
+    });
 });
 
 test.describe('Transactions', () => {
@@ -1075,15 +1165,15 @@ test.describe('Transactions', () => {
             const qtyWrap = page.getByTestId('tx-form-quantity-wrap');
             await expect(qtyWrap.locator('text=(+)')).toBeVisible({timeout: 5_000});
 
-            // Enter negative value → border-color should have red hue (~25 in oklch)
+            // Enter negative value → border-color should be the danger role at 70%
             await qtyInput.fill('');
             await qtyInput.type('-5');
-            await expectComputedBorderColor(page, qtyInput, 'oklch(0.637 0.237 25.331 / 0.7)', 'Negative qty on BUY should have the effective red border color');
+            await expectComputedBorderColor(page, qtyInput, 'color-mix(in oklab, var(--lf-danger) 70%, transparent)', 'Negative qty on BUY should have the effective red border color');
 
-            // Enter positive value → green hue (~163 in oklch)
+            // Enter positive value → the success role at 70%
             await qtyInput.fill('');
             await qtyInput.type('5');
-            await expectComputedBorderColor(page, qtyInput, 'oklch(0.765 0.177 163.223 / 0.7)', 'Positive qty on BUY should have the effective green border color');
+            await expectComputedBorderColor(page, qtyInput, 'color-mix(in oklab, var(--lf-success) 70%, transparent)', 'Positive qty on BUY should have the effective green border color');
         });
 
         test('SELL qty positive → green border (auto-negated on save)', async ({page}) => {
@@ -1105,12 +1195,12 @@ test.describe('Transactions', () => {
             // Enter positive → green (auto-negated = correct)
             await qtyInput.fill('');
             await qtyInput.type('10');
-            await expectComputedBorderColor(page, qtyInput, 'oklch(0.765 0.177 163.223 / 0.7)', 'Positive qty on SELL should have the effective green border color');
+            await expectComputedBorderColor(page, qtyInput, 'color-mix(in oklab, var(--lf-success) 70%, transparent)', 'Positive qty on SELL should have the effective green border color');
 
             // Enter negative → red (double-negative = wrong)
             await qtyInput.fill('');
             await qtyInput.type('-10');
-            await expectComputedBorderColor(page, qtyInput, 'oklch(0.637 0.237 25.331 / 0.7)', 'Negative qty on SELL should have the effective red border color');
+            await expectComputedBorderColor(page, qtyInput, 'color-mix(in oklab, var(--lf-danger) 70%, transparent)', 'Negative qty on SELL should have the effective red border color');
         });
     });
 
@@ -1119,6 +1209,8 @@ test.describe('Transactions', () => {
     // ===================================================================
     test.describe('BulkModal validation issues', () => {
         test('invalid TX in BulkModal shows issues banner with clickable error', async ({page}) => {
+            // Under load the create flow alone can use the default 30 s before any check: the budget of its neighbours (W-B45).
+            test.setTimeout(60_000);
             await openCreateFlow(page);
 
             // Use ADJUSTMENT type with qty>0 and cost_basis_mode=auto

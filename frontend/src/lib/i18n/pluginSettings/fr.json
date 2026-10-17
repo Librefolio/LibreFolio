@@ -1,0 +1,71 @@
+{
+  "pluginSettings": {
+    "tab": {
+      "label": "Plugins",
+      "title": "Paramètres des plugins",
+      "intro": "Ce que demandent les sources de prix et de taux de change. Les paramètres personnels ne valent que pour vous ; ceux de l'instance valent pour tous, et seul un administrateur les modifie.",
+      "empty": "Aucun plugin installé ne demande de paramètres."
+    },
+    "loadError": "Impossible de charger les paramètres des plugins.",
+    "families": {
+      "asset": "Prix",
+      "fx": "Taux de change"
+    },
+    "status": {
+      "configured": "Configuré",
+      "notConfigured": "À configurer"
+    },
+    "scope": {
+      "user": "Personnel",
+      "system": "Toute l'instance"
+    },
+    "configure": "Configurer",
+    "modal": {
+      "title": "Configurer {plugin}",
+      "none": "Ce plugin n'a aucun paramètre."
+    },
+    "secret": {
+      "set": "Défini",
+      "setOn": "Défini le {date}",
+      "unset": "Non défini",
+      "unreadable": "Enregistré, mais la clé de cette instance ne peut pas le lire. Si un administrateur peut remettre l'ancienne clé, c'est à faire d'abord ; sinon, saisissez-le à nouveau.",
+      "replace": "Remplacer",
+      "clear": "Effacer",
+      "willClear": "Il sera effacé à l'enregistrement.",
+      "placeholder": "Saisissez la valeur",
+      "writeOnly": "Une fois enregistré, il n'est plus jamais affiché."
+    },
+    "field": {
+      "locked": "Défini par le serveur",
+      "lockedBy": "Défini par la variable du serveur {variable}",
+      "adminOnly": "Seul un administrateur peut le modifier.",
+      "invalidEnv": "La variable du serveur qui le définit n'est pas valide : le plugin reste à configurer tant qu'elle n'est pas corrigée.",
+      "invalidEnvBy": "La variable du serveur {variable} n'est pas valide : le plugin reste à configurer tant qu'elle n'est pas corrigée.",
+      "invalidStored": "La valeur enregistrée n'est plus valide : la valeur par défaut s'applique.",
+      "useDefault": "Utiliser la valeur par défaut",
+      "willUseDefault": "La valeur enregistrée sera effacée à l'enregistrement : la valeur par défaut s'appliquera."
+    },
+    "problems": {
+      "required": "Saisissez une valeur",
+      "number": "Saisissez un nombre",
+      "integer": "Saisissez un nombre entier",
+      "below": "Au moins {limit}",
+      "above": "Au plus {limit}",
+      "tooShort": "Au moins {limit} caractères",
+      "tooLong": "Au plus {limit} caractères",
+      "option": "Choisissez l'une des options"
+    },
+    "refusals": {
+      "UNKNOWN_FIELD": "Ce paramètre n'existe plus : rechargez la page.",
+      "FORBIDDEN_SCOPE": "Seul un administrateur peut modifier ce paramètre.",
+      "LOCKED_BY_ENV": "Une variable du serveur le définit : il ne peut pas être modifié ici.",
+      "INVALID_VALUE": "La valeur n'est pas valide pour ce paramètre."
+    },
+    "form": {
+      "refused": "Rien n'a été enregistré : vérifiez les paramètres ci-dessous.",
+      "conflict": "Ces paramètres ont changé entre-temps : ils ont été rechargés, enregistrez à nouveau.",
+      "keyUnavailable": "Les secrets ne peuvent pas être enregistrés : la clé de cette instance est inutilisable (voir les contrôles de la configuration).",
+      "saveFailed": "Impossible d'enregistrer les paramètres."
+    }
+  }
+}

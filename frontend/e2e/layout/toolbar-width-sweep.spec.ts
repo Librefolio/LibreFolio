@@ -356,7 +356,7 @@ async function assetDetailReady(page: Page): Promise<void> {
 
 async function brokerDetailReady(page: Page): Promise<void> {
     await expect(page.getByTestId('broker-controls')).toBeVisible({timeout: 15_000});
-    // The page publishes no data-busy. Refresh is disabled exactly while the broker or its report loads.
+    // The page root publishes no data-busy; broker-refresh does, and is disabled while the page's tracked loads (pageBusy) run, the first load included.
     await expect(page.getByTestId('broker-refresh'), 'the broker and its report finished loading (Refresh enabled again)').toBeEnabled({timeout: 30_000});
     await expect(page.getByTestId('broker-edit-button'), 'precondition: the E2E user can edit this broker, so the bar shows all four actions').toBeVisible();
 }
@@ -377,7 +377,7 @@ async function keepOffline(page: Page, origin: string): Promise<void> {
     );
     // /assets and /assets/{id} poll this on load and every 30 s. It asks the live providers and upserts today's
     // OHLC row on the shared seeded assets. Answered empty, the price summary shows the last stored close.
-    await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
 }
 
 /**

@@ -1141,6 +1141,7 @@ Systematically read all 68 mkdocs developer pages and mapped them to 36 features
 - Log format: all entries well-formed
 - Thin pages: all under-25-line pages are planned/idea features (appropriate)
 - Concept pages (daily-point-policy, backend-only-calculations, fifo-runtime-decision): substantive and accurate
+
 ## [2026-04-24] file | I-bis #24 v4 — `/prices/current` has a persistence side-effect
 Filed lesson learned from final iteration of I-bis #24 (Auto-refresh mirato post-sync).
 Root cause: `AssetSourceManager.get_current_prices_bulk` upserts today's OHLC to
@@ -3444,3 +3445,435 @@ release pipeline's run — which the next ingest fills. Also [[problems/gallery-
 decision), [[sources/r-full-run-coverage-2026-10-12]] (a pointer to the final run), and a C-82 note on
 [[problems/jscoverage-teardown-spends-the-test-budget]] and [[problems/login-returns-before-the-app-has-started]].
 Graph: not updated (P-6).
+
+## [2026-10-14] file | The promotional video project leaves the repository
+`mkdocs_src/videoClipPrject/` (64 tracked files, ~22 MB) is removed, with `./dev.py mkdocs video` and its skill section:
+the project lives in the business repository since 2026-10-14 (`media/video/`). The history is not rewritten — the
+folder stays in the tags v0.9.0 to v1.2.0. Updated [[entities/video-promo-remotion]]: moved out, and its source files
+are now what the video's asset sync still reads here (the gallery screenshots and `docs/static/`, through
+`LIBREFOLIO_MKDOCS_SRC`). A note on [[sources/source-code-v0.9.0-batch]]. Graph: not updated (P-6) — graphify 0.9.54 no
+longer indexes the corpus's out-of-root symlinks.
+
+## [2026-10-14] file | Repository cleanup after 1.2.0
+Besides the video project: the early UI mockups (`mkdocs_src/docs/POC_UX/`, 75 images, ~158 MB, always excluded from
+the docs build) leave the repository, with their `exclude_docs` entry, the `/POC_UX/` segment in the two docs scripts
+and the `POC UX` entry of `EN_ONLY_SECTIONS` — updated [[concepts/mkdocs-suffix-i18n]]. Also gone: `dev.sh` (the
+messages that still suggested it name `./dev.py` now), the unused `engineering-skills` pack, the stray root
+`graphify-out/` and 26 leftovers of the June semantic run in `graphify-out/` (`.chunk_files_*.txt`,
+`chunk15_summary.json`; `cost.json` stays, graphify protects it). The history is not rewritten: everything stays in the
+tags up to v1.2.0. Graph: not updated (P-6).
+
+## [2026-10-14] ingest | Release 1.2.0 published — the release page is `released`
+The two rows that existed only after publication are filled on [[sources/release-1.2.0]]: the tag `v1.2.0` is on
+`cf00fac7d`, the merge of PR #46 into `main`, with the tree of `a3fe2eb04` on `dev_release2`; the release pipeline's
+run 38540086298 is green (images `1.2.0`, `1.2.0-light` and `latest`, the `docker pull` lines on the GitHub release,
+the docs site deployed from `cf00fac7d`). Status `released`; index row updated. Graph: not updated (P-6).
+
+## [2026-10-15] file | Account link tokens travel in the URL fragment
+Release 1.3, workstream A, lot A5b. A review of the A5a docs found that `/invite?token=…` would put the token in
+uvicorn's access log (on in the Docker image) and in any proxy log; the token now travels in the fragment, before
+A5a was integrated. Filed [[decisions/link-tokens-in-the-url-fragment]]; updated [[domains/auth]] (registration
+modes, invitations, admin API, limit, K-5 until A7, what comes next in workstream A) and [[features/F-001]] (the
+register link reads `GET /system/instance`). Graph: not updated (P-6).
+
+## [2026-10-15] file | Colours factored into lib/theme at pixel parity (workstream R)
+Workstream R of the colour programme (`Phase_1/10_colorSystem`) closed: lots A–D entered `dev_release2` with
+`8fd8e494b` after one gallery gate (2 370 identical, 454 changed, all content or the shots' own noise). The decision
+page records the modules of `frontend/src/lib/theme/`, the rules (same values, divergences kept under a name), the
+proofs and what phase B inherits. Two problems filed:
+- esbuild rewrites colours in some declarations but never in custom properties, so tokens hold the build's emitted
+  text;
+- the colour ratchet's `--resolve` drops a colour accepted on one side (backlog R-8, for T).
+
+Pages updated:
+- [[features/F-007]]: a drift corrected; charts follow the theme through `onThemeClassChange()`, not store
+  subscriptions;
+- [[features/F-098]]: a change to `offline.html` ships with `sw.js` restamped (`23f6578f3`);
+- [[problems/front-check-does-not-check-what-you-think]]: a merge can make the generated client stale.
+
+Filed: [[decisions/colour-factorisation-at-pixel-parity]], [[problems/esbuild-colour-minify-skips-custom-properties]],
+[[problems/colour-ratchet-resolve-drops-an-accept]]. Graph: not updated (P-6).
+
+## [2026-10-15] file | Asset event saves all or nothing — workstream W, lot E1 (decisions 20–23)
+Release 1.3, workstream W, lot E1, filed from plan 04 (sections «Analisi di E1», «E0», «E1»), the decisions file
+(points 20–23) and the code, every claim checked on the worktree.
+
+What the lot is:
+- E1a (`a2fb6936f`) and E1c (`313dde70e`) entered `dev_release2` with `14d58cc61`;
+- E1b and its docs were still uncommitted in W's worktree.
+
+The decision page covers decisions 20–23 and the coordinator's «one request» (`delete_ids`):
+- a save that is one transaction, with structured refusals;
+- `mode: "create"` and the existing-events panel;
+- the scoped `DELETE` and the type check;
+- the post-migration fix `event_types`, with the framework's `row_count_changes()`;
+- the editor's one-`POST` save, the translated refusals and the picker's re-read.
+
+A correction landed while filing (W, 17:50, found by the docs-writer). The first E1b cure let `delete_ids` take
+manual events only, so a save that deleted a provider's read-only row was refused whole. Now:
+- `_delete_item_events()` (renamed from `_delete_manual_events()`) takes any event of the asset, as in 1.2;
+- `EVENT_NOT_DELETABLE` covers only unknown, gone, or other-asset ids;
+- `EVENT_IN_USE` covers any linked event.
+
+The decision page records both, and S3's contract holds.
+
+Three problems filed, from E1b's reds:
+- a provider event dated today waits for a later sync (X's area, open);
+- a `SimpleSelect` list under the sticky table header (W-B26, open);
+- `@testing-library/svelte` reading a prop named `events` as a mount option.
+
+The fourth discovery, pysqlite's deferred `BEGIN`, was already filed on 2026-09-10: its page gains the recurrence
+W-B20 instead of a duplicate.
+
+Pages updated:
+- [[features/F-031]]: the routes, the model's real fields (`details` JSON never existed), the 1.3 notes and sources;
+- [[features/F-090]]: the scoped `DELETE`, the editor's `EVENT_IN_USE`, and the reverse lookup built on 15/10
+  (C-65b, `5e96df752`), noted in [[features/registry]] too;
+- [[problems/asset-event-edit-delete-reinsert]]: I-09…I-12 closed, I-11b open as W-B16;
+- [[domains/assets]], [[problems/datatable-actions-column-on-mobile]] and
+  [[problems/sqlite-savepoint-without-write-begins-as-transaction]].
+
+`check_source_paths.py` gives 5 missing (8 occurrences) before and after, all pre-existing. No ingest-registry row: a
+file operation, like the other entries of 15/10.
+
+Filed: [[decisions/asset-event-saves-all-or-nothing]], [[problems/provider-event-dated-today-not-synced]],
+[[problems/select-list-under-the-sticky-table-header]], [[problems/testing-library-events-prop-read-as-mount-option]].
+Graph: not updated (P-6); graphify is not available in this worktree.
+
+## [2026-10-15] file | A mutation restored with its old file time skips the frontend rebuild
+Found by test-author during the Backup tab E2E mutations (workstream B, lot B5a): the runner's staleness check compares
+file times, so a restore with `cp -p` would leave the mutated bundle in place for the «final green» run.
+Filed: [[problems/mutation-restore-keeps-old-mtime-skips-frontend-rebuild]]. Graph: not updated (no graph in this
+worktree).
+
+## [2026-10-15] file | Category axes under zoom, and the AI Export button — workstream Y, lot Y8
+Y's lot Y8 closed two items the wiki still listed as open, and taught one ECharts rule.
+
+- 47-1: on a phone, a zoomed category axis kept the compact `interval` computed for every point. The policy now takes
+  the visible count (`visiblePointCountFromZoom`, read from the event), and `LineChart`, `CandlestickChart` and
+  `PriceChartFull` merge `categoryAxisLabelPatch()` once the gesture settles.
+- The rule: a `setOption` merge keeps every key the patch omits, so the patch always sets `interval: 'auto'`. Filed as a
+  row of [[concepts/echarts-chart-gotchas]].
+- 48-1: the AI Export trigger and the Dashboard's `sync-button` use `gap-1.5 px-2.5`, like the other toolbars.
+
+Pages updated: [[problems/line-chart-axes-lost-the-day]], [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]],
+[[concepts/echarts-chart-gotchas]] and their index rows. `check_source_paths.py` gives 5 missing (8 occurrences) before
+and after, all pre-existing.
+
+Filed: [[concepts/echarts-chart-gotchas]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-15] file | Correction: 47-1 was not a phone-only defect
+The Y8 entry above says «on a phone». The compact axis policy also applies below 24 px per point, so a long period lost
+its labels under zoom on desktop too: 33 is the step for a year of days in an 800 px chart, 90 or more on a phone.
+Corrected in the row of [[concepts/echarts-chart-gotchas]]; the CHANGELOG line was already right.
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-15] file | DataTable on phones and column resize — workstream Y, lot Y7
+Y's lot Y7 closed the two DataTable problems the wiki still held as open or as hypotheses.
+
+- [[problems/datatable-actions-column-on-mobile]]: the hypothesis of 2026-10-10 was right, confirmed red in a browser
+  (`layout/datatable-mobile.spec.ts`). At 768 px and below the selection and actions columns now scroll with the
+  table, header and cells alike (D-Y17). The lesson is the specificity: a bare class cannot undo a pin that a
+  `thead … th` rule carries.
+- [[problems/datatable-column-resize-noop]]: the old cause («`onColumnResize` not read by the parent») was wrong.
+  Measured: auto layout shares spare width in proportion to the given widths (+57 px for a +80 px drag), the drag
+  started from the configured width, and the handle answered the mouse only (D-Y18). The cure follows the drawn width,
+  uses Pointer Events, and pins a resized column's width as its minimum.
+- The two index rows are updated. `check_source_paths.py` gives 5 missing (8 occurrences) before and after, all
+  pre-existing.
+
+Filed: [[problems/datatable-actions-column-on-mobile]], [[problems/datatable-column-resize-noop]].
+
+## [2026-10-15] update | SQLite savepoint without an outer write transaction commits on release
+W-B20 built (workstream W): `begin_writes()` in `backend/app/db/session.py` opens the transaction before the per-broker
+savepoints of `BrokerService.delete_bulk`, so a broker that fails half-way leaves nothing behind and account deletion
+stays all or nothing. Red first (BR-U-081…085); a mutation without the helper turns BR-U-082 and the account's
+all-or-nothing tests red. The page gains the fix, a testing lesson (only a *released* outermost savepoint commits
+early) and its source files.
+Updated: [[problems/sqlite-savepoint-without-write-begins-as-transaction]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | A TRANSFER left without its other half becomes a plain ADJUSTMENT (V-3)
+Decision 47 built (workstream W, on J's CP-16 FIFO handover at cost): the giving leg of a TRANSFER whose receiver is
+deleted becomes an ADJUSTMENT-out at the Auto cost of its own broker (`_handover_cost`), without a cost it only loses its
+link; the split of a TRANSFER pair prices its giving leg in the WAC stage (refused with `WAC_FX_UNAVAILABLE` on a missing
+conversion), a promote back to TRANSFER drops the giving side's cost; the lone legs already in databases are converted by
+the `lone-transfer-legs` startup step after the post-migration fixes (the sync fix cannot compute the async WAC), with a
+dry run in the offline CLI. Entry after J-17 (price marks from adjustments). The status's stale «not in the code yet» and
+«waits for point 46/47» lines are gone.
+Updated: [[decisions/orphan-transfer-becomes-an-adjustment]].
+
+## [2026-10-16] update | Days that only move an exchange rate, or a price's source or age, were skipped
+J CP-6 (release 1.3, decision 28) closes B11's securities half: a frame day is dirty when a rate the day reads to value
+it changes (securities, the unrealized split, cash in transit), on every market-quote day, and on the first day a
+carried price turns stale; `native_cash.change_days` is the one home for «the day a rate changes». The page moves to
+resolved, with the test lesson (buy in the report currency, or the cash leg hides the defect) and its source files.
+Updated: [[problems/dirty-days-ignore-fx-only-moves]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | Three pages that still said B11's securities half was open
+After J CP-6 the docs-writer found three statements left behind: the pre-frame/frame concept («still skipped»), the
+native-cash revaluation decision («stays open») and the native-cash entity (no `change_days` in its API). Brought in
+line with the resolved problem page.
+Updated: [[concepts/pre-frame-frame-separation]], [[decisions/native-cash-daily-revaluation]], [[entities/native-cash]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] file | Tailwind 4 sorts same-property utilities by name
+Workstream T, lot I1 of the colour programme (the selects, night of 15–16/10): moving `SimpleSelect`'s trigger onto the
+roles kept the idle border always on and added the open one conditionally, and the open border vanished. Tailwind 4
+emits two base utilities of one property sorted by name, so `border-lf-input` came after `border-lf-focus`; the legacy
+pair had worked by luck. The page covers the cause (variant order and specificity in 4.1.18, the `:where()` dark
+variant), the rule (one property, one ternary; a state that must beat a caller is a variant), the same logic across
+class props and `<style>` (`ModalBase`, `AssetCurrencyChangeModal`), and the prevention. The rule is also rule 8 of the
+`theme-roles` skill.
+Filed: [[problems/tailwind4-same-property-utilities-sorted-by-name]].
+Graph: not updated; no graphify run while the machine is reserved for the gallery (coordinator, 16/10).
+
+## [2026-10-16] update | F-088 becomes the one Rolling Return (decision 29)
+J CP-10a removed the observation-based `RISK_ROLLING_RETURN` and made the calendar plugin visible in the Signals panel;
+the page said the old signal «stays, unchanged». Now it records the removal, the parity proof, the store's version-3
+migration of saved overlays, the plugin-owned `signals.riskRollingReturn.*` keys and the `price_return` home.
+Updated: [[features/F-088]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] file | An ADJUSTMENT is never a price; no price at all → valued at cost (J-17)
+J-17 recorded the developer's decision P2 (option A, SELL stays a price source), the valued-at-cost rule and two review
+pitfalls: the grace counted from BUY/SELL dates never applied, and a completeness check on unpriced transfers left a
+permanent capital artifact. Two pages that stated the old rule got a dated note.
+Filed: [[decisions/adjustment-is-never-a-price]]. Updated: [[entities/portfolio-engine]],
+[[problems/stale-price-banner-never-emitted]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | J-24: an outgoing priced ADJUSTMENT leaves at the value it hands over
+The Dashboard now follows the developer's rule P21 for outgoing adjustments with a cost: the units leave the capital at
+quantity × cost basis converted at the adjustment's date, and the difference from the average cost removed is realized,
+as the lots do since CP-7a. Two pages that stated the historical-cost rule got a dated note.
+Updated: [[entities/portfolio-engine]], [[concepts/inline-wac-computation]].
+Graph: not updated; graphify is not available in this worktree.
+## [2026-10-16] file | Domain: EMAIL — optional SMTP email of release 1.3 (workstream E, F04)
+Workstream E's lot E6 asked for the domain page of the optional email. Filed from plan 08
+(`Release_2/Phase_1/08_email/plan-phase01Email.prompt.md`, committed at `b22747e52`, read with the uncommitted
+E6.0–E6.2 notes), the backlog section «E · Email (fase 01)», developer decisions 44 and 45, `admin/email.en.md`,
+`developer/backend/email.md` and the code at `b22747e52`. The page covers what the domain sends and why, the
+architecture, decisions D-E1…D-E14 with 44 and 45, the security decisions of E3s, E5b and E4b, P1 and the E4c rule,
+the known limits (per process, behind a proxy, no queue, E-7, E-8, F19), 16 problems solved, mostly from the plan's
+«Fuori pista» notes, and what comes next (A7a, E4c, E6, the backlog). No email feature code exists: `features: []`.
+Decisions and problems stay inside the page, as the coordinator asked. `build_admin_setup()` has no caller yet:
+pending A7a. `check_source_paths.py`: 5 missing (8 occurrences) before and after, all pre-existing; the page cites
+50 paths, all present.
+Filed: [[domains/email]].
+Graph not rebuilt: not available in the worktree.
+
+## [2026-10-16] update | CP-7b: the lots follow the Dashboard's at-cost rule day by day
+The lots now value an open LONG lot at cost on every day with no observation on or before it, as the Dashboard does,
+and the lots warning names exactly those days, which closes J-28. A lot opened by an ADJUSTMENT takes the home's mark on
+its opening day as its reference, trades included, converted at that day's rate.
+Updated: [[decisions/adjustment-is-never-a-price]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | `toISOString().slice(0,10)` is not today — a comparison is one site (Z-3)
+Workstream Z's lot A (`a43502298`) fixed the asset pages' `isHeadToday`, which compared the store's `dateEnd` (the
+user's calendar since the audit's commit `2e104b919`, 2026-08-30) with the UTC date. Added to the page: the history
+checked in git (both sides UTC until that commit, which fixed only the store), the two faces of the `>=` (west in the
+evening, a range ending today looks past, since 2026-08-30; east after midnight, a range that ended yesterday polls
+and writes, older), the rule that a date comparison moves as one site, the FX conversion date left UTC on purpose (a
+backward-filled lookup), the guard that freezes the time zone as well as the clock, and the six product lines that
+still carry the idiom, not re-audited. `check_source_paths.py`: 5 missing (8 occurrences) before and after, all
+pre-existing; the five new rows exist.
+Updated: [[problems/utc-today-vs-user-calendar]].
+## [2026-10-16] update | CP-9a: the risk service split by theme, T-R1 risk half closed
+The risk service is split into `risk/{plan,scope,replay,results,data_quality}.py`, `RiskService` keeping the
+orchestration; the risk side reads the FX routes through the home's `load_configured_fx_pair_sets`. Source-file rows
+that sent moved behaviour to `risk/service.py` now point to its new module.
+Updated: [[decisions/financial-math-one-home]], [[entities/portfolio-service]], [[features/F-110]],
+[[problems/asset-set-scope-has-no-primary-series]], [[problems/stale-price-banner-never-emitted]],
+[[problems/fx-backward-fill-unbounded-stale-rates]], [[decisions/asset-global-page-shows-no-money]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] update | CP-10b: the signals runtime moves into services/signals/
+The signals runtime (service, runtime, annotations, series), the plugin contract and the risk adapters moved into
+`services/signals/`, which ends the risk-signals import cycle. Source-file rows follow the new paths; a dated note on
+the plugin-folder decision says the family root no longer keeps a contract.
+Updated: [[decisions/plugin-folders-and-split-i18n]], [[decisions/ai-export-technical-series-and-density-contract]],
+[[decisions/drawdown-full-history-warmup]], [[decisions/risk-library-versus-own-maths]],
+[[decisions/signal-backend-plugin-architecture]], [[domains/signals]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] update | CP-10c: the signal service is cut by theme
+`signals/service.py` keeps only `SignalService`, the façade. The batch plan moves to `signals/planning.py`, its
+execution to `signals/execution.py` and the output checks to `signals/validation.py`; the annotation helpers join
+`signals/annotations.py`. No behaviour change. Source-file rows point at the module that now holds the behaviour.
+Updated: [[domains/signals]], [[decisions/signal-backend-plugin-architecture]], [[decisions/drawdown-full-history-warmup]].
+## [2026-10-17] update | Domain: EMAIL — E-14: the limiter evicts the key with the fewest hits
+Workstream E's lot E-14 (release 1.3), from E's after-the-fact review of decision N70, approved by the coordinator for
+the cloud. `SlidingWindowLimiter` now evicts the key with the fewest hits still in the window, the least recently used
+among them, with exact expiry (a heap of each key's oldest hit) and no search; `eviction_scan` is gone. The lesson
+filed on the page: any least-recently-used family, N70's «spare the full keys» included, lets an attacker who stops one
+failure short of a lock reset the count with a spray of `max_keys` fresh keys (about 1,100 requests per guess,
+measured); only «fewest hits go» makes every other key carry as many hits (about 10,000 per guess), and only with
+exact expiry, or keys at a stale high count would shield the spray. The first design E proposed (an index of the keys
+not full) protected locked keys only: corrected before any code. Sources: plan 08 «E-14», `rate_window.py`.
+Updated: [[domains/email]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] update | Domain: EMAIL — E-13: the per-address limits skip an untrusted local proxy
+Workstream E's lot E-13 (release 1.3), approved by the coordinator after H-36 and A8a+N70. The three per-address
+limits of E (forgot password, «send the link again», the registration emails) take workstream H's
+`rate_limit_address(request)` instead of `client_address(request)`: `None`, which each of them already read as «no
+count», behind a reverse proxy LibreFolio does not trust on a local address (the usual Docker setup), where one count
+would let 10 requests from anyone block the feature for everyone. The «Behind a proxy» limitation is rewritten: the
+local case skips, the public case (a CDN) still shares one count, `FORWARDED_ALLOW_IPS` takes networks; the old
+example «Fly's, without the variable» is dropped, since Fly's proxy may reach the app from a private address.
+Sources: plan 08 «E-13», H's `client_address.py`, `security.md` «The Client's Address».
+Updated: [[domains/email]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] update | Domain: EMAIL — E-9 done as night decision N62 (aliases folded, no stranger's text)
+Workstream E's lot E-9 (release 1.3), done the night of 17/10 as the coordinator's night decision N62, to be reviewed
+by the developer. Checked in the code first: the three per-mailbox limits count on `delivery.mailbox_budget_key()`
+(`+tag` and Gmail's dots folded, never stored, logged or shown); reset, verification and change notice greet
+anonymously, the notice shows nothing of the new address, `masked_address()` is gone, admin setup and test keep the
+username. The page gains the N62 bullet with its why (the spam relay that would harm the cloud's Brevo key and
+`mail.librefolio.eu`); the notice bullet, the limits paragraph, the E4c sentence on the four limiter keys, the Aliases
+limit (resolved; E-12, catch-all and Fastmail, left), the developer decisions (the drained instance budget, N62), the
+backlog line and the `delivery.py` row follow. Sources: plan 08 «E-9.0» and «E-9.1», backlog E-9 and E-12; R13-SEC…3
+stay in the plan. `developer/backend/email.md` still shows the masked notice and E-9 open: the docs-writer's part.
+`check_source_paths.py`: 5 missing (8 occurrences) of 4108, all pre-existing, none on this page.
+Updated: [[domains/email]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | Page busy, the E2E budget, and a direct Playwright run in a lane
+Three pages from Y's night of 16→17/10 (Y11 closing lots, Y-21, Y-22). The concept: the `pageBusy` contract of
+decision 48 / P3: tokens on the trigger and never in a load function, `join` (N55), the post-sync rule, N64, the
+panels' own tokens, the button contract and the hold/record/control E2E pattern; nothing in the wiki described it.
+Two problems: waits chained past the 30 s test budget (a block budget, real poll deadlines, the tooltip retry's
+per-attempt rest); and a direct Playwright run in a coordinated lane (`LF_SETUP_DONE=1`, the lane guard, never
+edit a script bash is running). `check_source_paths.py`: 7 missing (12 occurrences) of 4127, all pre-existing,
+none on these pages.
+Filed: [[concepts/page-busy-refresh-button]], [[problems/e2e-chained-waits-outlast-the-test-budget]],
+[[problems/direct-playwright-run-in-a-test-lane]].
+## [2026-10-17] file | Workstream H: the platform's night discoveries (H-24r, H-26, H-28/29, H-32, H-33)
+Filed at the coordinator's request, after lots H-24 … H-33 of release 1.3 entered `dev_release2` the night of 17/10.
+Each page carries its «why», checked in the code at `5bba93280`:
+- the frontend rebuilt for files it never bundles, and a folder's time cannot tell a `.DS_Store` from a removed file,
+  so the last successful build records the listing of the Tool codegen inputs;
+- no route serves a hidden file of the build or of the site;
+- the test runner refuses names an action cannot apply, before any side effect;
+- request floats refuse infinity and NaN, field by field, with a guard over every route;
+- a response that breaks its model no longer leaves its content in the log.
+The concept page collects five FastAPI 0.141 behaviours measured in process: included routers hidden from
+`app.routes`, `scope["route"]` without the include prefix, infinity serialised as `null`, the stock 422 that echoes the
+input and fails with a 500 on a non-finite value, and no handler for `ResponseValidationError`. Sources: plan
+`Phase_1/01_platform` §14, with the lots, measurements and real checks; backlog section H (H-24 … H-34).
+`check_source_paths.py`: 7 missing (12 occurrences) of 4149, all pre-existing, none on these pages.
+Filed: [[problems/frontend-build-looked-stale-for-files-it-never-bundles]], [[problems/static-site-served-hidden-build-files]],
+[[decisions/test-runner-refuses-test-names-it-cannot-apply]], [[decisions/request-floats-refuse-inf-and-nan]],
+[[problems/response-validation-error-wrote-the-response-to-the-log]], [[concepts/fastapi-0141-routing-and-validation-gotchas]].
+## [2026-10-17] file | Vite HMR: dispose() runs only on the module an update is accepted through
+Workstream Z, Z-22 (release 1.3). H's review of Z-20 proposed `import.meta.hot?.dispose(stop)` for the listener that
+`instanceBlock.svelte.ts` adds at every hot update. Measured with the repo's Vite 7.3.5 (module runner, same
+`HMRClient` as the browser): `dispose` runs only on the accepted module, the `(app)` layout, so the leak stays (1→4
+listeners in three edits); handing the unsubscribe over through `import.meta.hot.data` keeps one. Also filed: Vitest
+4.1.11's `import.meta.hot` has no `data`, which made the first guard throw in 24 tests. Fix `d49263b0e`.
+Filed: [[problems/vite-hmr-dispose-only-on-the-accepted-module]].
+## [2026-10-17] update | CP-14a: day count and simple interest in the home, one accrual walk, P-10
+U10 (D-8): the day count conventions and simple interest moved, unchanged, from the Scheduled Investment provider into
+`financial_math/interest.py`. The provider's two duplicated day walks are one (`_accrual_days`), pinned by a golden
+test. P-10 (decision 27): the event store refuses to change a SPLIT's type while a linked incoming adjustment has no
+cost, asking `splits.py`.
+Updated: [[decisions/financial-math-one-home]], [[decisions/scheduled-investment-redesign]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | CP-14b: ACT/ACT ISDA, the maturity settlement after the final coupon, the measure tool's floor
+ACT/ACT counted one day short per year end crossed; the Scheduled Investment's maturity settlement counted the final
+coupon twice (J-39, the part without late interest); the chart measure tool annualised from one day and showed 0 % on a
+zero start. All three fixed red first, with the changed values declared before the code; two reds had failed on a
+mistyped literal, not on the behaviour, which the page on the settlement keeps as a lesson.
+Filed: [[problems/act-act-lost-a-day-per-year-end]], [[problems/maturity-settlement-counted-the-final-coupon-twice]].
+Updated: [[features/F-045]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | J-43 (transfer share mismatch) and R13-SEC7-1 (unbounded date ranges)
+The share-mismatch warning of the portfolio classifier skipped same-day pairs and never reached the user, so a transfer
+between brokers owned at different shares made P&L with no explanation: now an INFO data-quality issue. And an
+unbounded date range (`end: 9999-12-30`) froze the instance through the portfolio, lots, risk and AI Export routes:
+every range now ends by tomorrow and starts at the first transaction, with a test seam for the far-future suites.
+Filed: [[problems/share-mismatch-warning-never-left-the-classifier]], [[problems/unbounded-date-range-froze-the-instance]].
+## [2026-10-17] file | Y-8: the arrow markers are re-aimed once a zoom settles, not on every tick
+`updateArrowRotations()` read `getOption()`, a deep clone of the whole option, and wrote every series back on each
+`dataZoom` tick of `LineChart`, `CandlestickChart` and `PriceChartFull`. The arrows are now re-aimed in the debounce
+that re-spaces the labels, reading the option afresh each time: a cached option would paint pre-rebuild colours back
+after a theme or Designer Lab rebuild, which a light → dark → zoom unit test pins. A full render of `LineChart` now
+restores the saved zoom before it re-aims, as `CandlestickChart` did: the restore's event only schedules the settle (Y-8b).
+Updated: [[concepts/echarts-chart-gotchas]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | Y-25: arrow markers cost nothing on charts without them, and only a turn is written back
+After Y-8, `updateArrowRotations()` still deep-copied the option on every `ResizeObserver` callback and on charts that
+draw no arrow at all, and wrote every series back even when no angle had changed. A resize now re-aims at the settle; the
+write-back happens only when an arrow turns by more than 0.01°; and `noteArrowMarkers()`, called right after each full
+render, lets charts without arrows skip `getOption()` altogether.
+Updated: [[concepts/echarts-chart-gotchas]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | J-10: the lots failed whenever a transfer crossed the broker scope
+A lots analysis gets only its scope's rows, so a TRANSFER whose partner sat at another broker could not pair and failed the whole asset:
+on a broker's page, on a filtered Dashboard, for a co-owner, and in AI Export `broker.fifo_summary`. The leg is now read at the scope's
+edge, in at its own cost and out at the market value of its day, from detached copies and the partner's pairing columns only (N76).
+Filed: [[problems/lots-failed-when-a-transfer-crossed-the-broker-scope]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | DataTable pruned the saved preferences of columns absent for a moment
+Since X-R53 the Assets and FX tables' Δ period columns arrive after the backend lists the periods, and DataTable treated
+a column missing at the first render as gone: it rewrote the saved order without it and dropped its visibility override
+and width, so every load reset them. Y-27 keeps the preferences of absent columns and filters them only when drawing.
+Filed: [[problems/datatable-pruned-preferences-of-absent-columns]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] update | A FAILED lots analysis withholds its figures (J-12)
+Decision N81, option A: a lots analysis whose replay FAILED no longer shows the lots of a replay that does not match the
+account. The service keeps only the WAC lines, the issues that fail the replay (with `transaction_date`,
+`fails_analysis` and the giving leg of a transfer) and the WAC-line gaps; the AI Export declares the asset in
+`failed_lot_reconstructions` (FIFO lots v3, lot detail v4) with the scope totals null. Updated:
+[[entities/lots-analysis-service]] (backend half; the decision record and the panel half are Y's).
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | A FAILED lots analysis explains and hides (N81, J-12)
+The «warn but show» choice of 2026-07-22 let the lots panel draw the lots of a replay that had failed. N81 (option A)
+reverses it: the backend sends the lot-derived sections null and flags the blocking issues; the panel keeps only the
+average-cost lines and lists each transaction to fix, by broker name, day and a link.
+Filed: revision of [[decisions/fifo-v4-gross-net-status-model]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | A column null in every row is named after its table (T-B7)
+The compact AI Export renderer used to drop a column empty in every row with no trace in the prompt. Since 1.3 it names
+the columns that held an explicit `null` on an `omitted_null_columns=` line after the table (`null` = unavailable),
+keeps `undefined`/`''` columns silent (not applicable), and labels its tables `_v2`; J-54 records that the backend also
+writes `null` for "none".
+Filed: revision of [[decisions/ai-export-versioned-snapshot-boundary]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | Columns whose null means "none" are not named (J-54)
+T-B7 named every column null in every row; the backend also writes `null` for "none" (an open lot's closing date, an
+unbounded output's bounds), so J-54 adds one exported list of such columns, `NULL_MEANS_NONE_COLUMNS` (11 entries, scoped
+by table and component), whose all-null drop stays silent. `partial_reason_code` stays out: its null means unknown.
+Filed: revision of [[decisions/ai-export-versioned-snapshot-boundary]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | A day without a point is not a point without a value (J-21)
+Backend signal lines joined the points sent with `value: null` like absent days; the first fix proposed,
+`connectNulls: false`, would have broken every quote-day indicator on every weekend. The renderer now cuts a line or
+area output into runs at the points without a value, one series each with the same label, and absent days stay bridged;
+the signals panel badge counts distinct dates (`renderedSignalPointCount`).
+Filed: section added to [[concepts/absence-sentinel-vs-nullable-type]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | Yahoo bars of exchanges east of UTC were stored one day early (Z-33)
+Workstream Z, Z-33 (release 1.3, decision N86). yfinance stamps daily bars, dividends and splits at the exchange's
+local midnight, and `_normalize_yahoo_date` took their UTC date: every row of an exchange east of UTC was a day early,
+in every release up to 1.2.1. Fixed with migration 011 (`exchange_timezone`, a `'legacy-utc'` mark) and a one-time
+check in the refresh that moves old rows only where the full history, read as a calendar, confirms the session (D″).
+Replacing the closes from a fresh history (D′) was dropped: they are adjusted as of each fetch (Z-35). Fix `60170aae5`.
+Filed: [[problems/yahoo-bars-dated-one-day-early-east-of-utc]].
+Graph: not updated; graphify is not available in this worktree.

@@ -7,7 +7,7 @@ verbatim from the already-computed ``fx.current_rate`` / ``fx.conversion_provena
 sibling components - never recomputed) or a pure function of the genuine,
 observed daily rate series loaded through
 ``backend.app.services.ai_export.components.technical_shared.load_fx_rate_series``
-(routed through ``backend.app.services.fx.convert_bulk`` - no invented economics).
+(routed through ``backend.app.services.fx.conversion.convert_bulk`` - no invented economics).
 
 Design rules (task ``ai-adequacy-v1-remediate-fx``, goal A):
 
@@ -59,6 +59,7 @@ from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.technical_shared import load_fx_rate_series
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, normalize_currency_code
 from backend.app.services.ai_export.dependencies import BuildContext, BuildContextScopeError
+from backend.app.services.financial_math.returns import price_return
 
 # Trailing calendar windows for the observed short-horizon returns. Kept as plain
 # Fixed day counts are named as days in the public payload, never as months.
@@ -318,19 +319,19 @@ def _trailing_return(points: Sequence[tuple[date, Decimal]], *, as_of: date, day
     anchor_date = as_of - timedelta(days=days)
     start = _value_on_or_before(points, anchor_date)
     end = points[-1]
-    if start is None or start[0] >= end[0] or start[1] == 0:
+    if start is None or start[0] >= end[0]:
         return None
-    return float(end[1] / start[1] - 1)
+    change = price_return(start[1], end[1])
+    return float(change) if change is not None else None
 
 
 def _period_return(points: Sequence[tuple[date, Decimal]]) -> float | None:
-    if len(points) < 2 or points[0][1] == 0:
-        return None
-    return float(points[-1][1] / points[0][1] - 1)
+    change = price_return(points[0][1], points[-1][1]) if len(points) >= 2 else None
+    return float(change) if change is not None else None
 
 
 def _daily_return_volatility(points: Sequence[tuple[date, Decimal]]) -> float | None:
-    returns = [float(current[1] / previous[1] - 1) for previous, current in zip(points, points[1:], strict=False) if previous[1] != 0]
+    returns = [float(change) for previous, current in zip(points, points[1:], strict=False) if (change := price_return(previous[1], current[1])) is not None]
     if len(returns) < 2:
         return None
     return pstdev(returns)
@@ -358,8 +359,8 @@ def _build_observed_range(points: Sequence[tuple[date, Decimal]], *, current_rat
     # the most recent genuine observation (still within the observed envelope).
     raw_position = float((current_rate - observed_min) / (observed_max - observed_min))
     range_position = min(1.0, max(0.0, raw_position))
-    distance_to_min = float(current_rate / observed_min - 1) if observed_min > 0 else None
-    distance_to_max = float(observed_max / current_rate - 1) if current_rate > 0 else None
+    distance_to_min = float(price_return(observed_min, current_rate)) if observed_min > 0 else None
+    distance_to_max = float(price_return(current_rate, observed_max)) if current_rate > 0 else None
     return FxObservedRangePosition(
         observed_minimum=observed_min,
         observed_minimum_date=minimum_point[0],

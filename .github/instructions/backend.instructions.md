@@ -13,10 +13,13 @@ backend/
 │   ├── db/models.py           # SQLModel ORM models
 │   ├── schemas/               # Pydantic schemas (I/O validation)
 │   ├── services/              # Business logic
+│   │   ├── platform/                 # app startup/shutdown steps, middleware stack, static site, DB bootstrap; scheduler, container registry, date sentinels, data-quality thresholds, per-series exports, instance backup, instance key, config checks, readiness, provider pauses
+│   │   ├── files/                    # uploaded static files and their previews
+│   │   ├── email/                    # optional SMTP email: config checks, transport, budget, templates
 │   │   ├── asset_source_providers/   # yfinance, JustETF, CSS Scraper, Scheduled Investment
 │   │   ├── fx_providers/             # ECB, FED, BOE, SNB, MANUAL
 │   │   └── brim_providers/           # 11 broker import plugins
-│   ├── config.py              # get_data_dir(), paths, env vars
+│   ├── config/                # env vars, paths, get_data_dir(): the only place that reads os.environ
 │   └── utils/                 # Shared utilities
 ├── alembic/                   # Database migrations (001_initial.py)
 ├── test_scripts/              # Full test suite (850+ tests, 8 categories)
@@ -45,7 +48,9 @@ backend/
 
 - Cookie-based sessions (JWT in HttpOnly cookie)
 - Multi-worker: JWT stateless (no session store)
-- First user = automatic admin
+- The first account of an instance without accounts is an administrator (registration, in any mode); with
+  `LIBREFOLIO_ADMIN_EMAIL` (F02) that administrator is created at startup instead, and activates through a
+  single-use `/setup` link (`services/accounts/bootstrap_admin_service.py`)
 - Broker roles: Owner / Editor / Viewer
 
 ## Financial Math — One Home
@@ -66,15 +71,22 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 |---|---|
 | Average purchase cost (WAC), cost-basis steps and conversions | `services/financial_math/average_cost.py` |
 | Cash per broker and currency, its daily value, FX results on cash | `services/financial_math/native_cash.py` |
+| Control totals of the ledger (backup manifest, restore check) | `services/financial_math/ledger_totals.py` |
 | Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions | `services/financial_math/portfolio/` (`daily_state.py`, run by `engine.py`) |
+| A period's boundary states, P&L and identity; the day's change of the total P&L | `services/financial_math/portfolio/period.py` |
+| A position's period contribution (Performance table): the transfer split between brokers, return on the start value, annualized window, closed positions | `services/financial_math/portfolio/contributions.py` |
 | FIFO lots and realized gains | `services/financial_math/fifo/` |
-| Lots analysis: lot histories, economic events, average cost lines | `services/financial_math/lots/` |
-| Simple ROI, TWRR, MWRR, annualization | `services/financial_math/returns.py` |
+| Lots analysis: lot summary and histories, economic events, average cost lines, transfers at the scope's edge | `services/financial_math/lots/` |
+| Simple ROI, TWRR, MWRR (and the Dashboard's MWRR rule for card and line), annualization, a period's start (rebasing), net holding return, G/L ratio (of a holding or a group), a change as a fraction of its base, the timing effect, realized gain, price return (also as a float for a return series), the observed annualization factor of a return series, the fixed-period changes of a price or rate (1D … 5Y, both orientations), the gain that recovers a drawdown | `services/financial_math/returns.py` |
 | Holding value from quantity and price | `services/financial_math/valuation.py` |
+| Day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest, daily compounding over a span in closed form | `services/financial_math/interest.py` |
 | Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
-| FX conversion | `services/fx.py` (`convert_bulk`) |
-| Technical indicators | `services/signal_plugins/`, `services/signal_runtime.py` |
+| Stock splits linked to the ledger: their rows, the usable ratio, and the incoming adjustments without a cost a SPLIT may not lose by a retype | `services/financial_math/splits.py` |
+| Weights and concentration: a share of a total, allocation slices, gross weights, largest weight and Herfindahl index | `services/financial_math/weights.py` |
+| Holding window of a position: oldest lot still open, a closed position's flight time | `services/financial_math/holding_window.py` |
+| FX conversion | `services/fx/conversion.py` (`convert_bulk`) |
+| Technical indicators | `services/signal_plugins/` (the plugins), `services/signals/` (runtime, contract, registry) |
 | Risk metrics and optimization | `services/risk/quant/` |
 | PAC allocation | `services/pac_allocator/` |
 
@@ -85,7 +97,8 @@ decision 1).
 `utils/` holds leaf functions only: they never import services; anything that needs FX, assets or other services
 belongs to a service layer, such as `financial_math/` (developer decision D-P7, 2026-10-12). Its folders group them by
 type: `utils/asset/` (sectors, geographic areas, identifiers, display-name locale), `utils/fx/` (currencies),
-`utils/runtime/` (version, client network address, TTL caches); `datetime_utils`, `json_utils` and `decimal_utils` stay
+`utils/runtime/` (version, client network address, TTL caches, sliding-window rate limits in `rate_window.py`, pauses
+after a remote's «too many requests» in `cooldown.py`); `datetime_utils`, `json_utils` and `decimal_utils` stay
 at the root. The truncation to the database precision reads the models, so it lives in `db/precision.py`.
 
 ## Where to Find Things
@@ -95,10 +108,14 @@ at the root. The truncation to the database precision reads the models, so it li
 | DB Models | `backend/app/db/models.py` |
 | API Schemas | `backend/app/schemas/*.py` |
 | Business Logic | `backend/app/services/*.py` |
+| App startup and shutdown: one line per step (`STARTUP_STEPS`, `SHUTDOWN_STEPS`), run by `lifecycle.py`; middleware, outermost first (`MIDDLEWARE_STACK`); MkDocs and SPA serving; DB create/migrate at startup. `main.py` only wires them | `backend/app/services/platform/app_lifespan.py`, `lifecycle.py`, `middleware.py`, `static_site.py`, `database_bootstrap.py` |
+| Platform services (scheduler, data-quality thresholds, per-series exports `series_export.py`, instance backup `instance_backup/`, instance key `derive_key()`, startup config checks, readiness `/system/ready`, provider pauses after HTTP 429 `provider_cooldown.py`, shutdown budget `shutdown_budget.py`, sleep and wake `sleep_wake/`: the user's activity and the work in progress) | `backend/app/services/platform/` |
+| Uploads and file previews | `backend/app/services/files/` |
+| Email (optional SMTP: transport, hourly budget, templates in 4 languages, config checks) | `backend/app/services/email/` (config in `backend/app/config/email.py`; sliding-window limiter in `backend/app/utils/runtime/rate_window.py`) |
 | API Endpoints | `backend/app/api/v1/*.py` |
-| Config & Data Paths | `backend/app/config.py` |
+| Config & Data Paths | `backend/app/config/` (base in `__init__.py`, one module per owner section; env vars are read only here; secrets through `env_secret()`, which also reads `NAME_FILE`; every variable documented in `.env.example`, new lines commented; a new security `Settings` field states its `managed` value in `PROFILE_DEFAULTS` in the same lot, or why `managed` keeps the code default (H-39)) |
 | FX Providers | `backend/app/services/fx_providers/` |
 | Asset Providers | `backend/app/services/asset_source_providers/` |
 | Broker Import | `backend/app/services/brim_providers/` |
-| System & Health | `backend/app/api/v1/system.py` |
+| System & Health | `backend/app/api/v1/system/` (one module per resource) |
 | Test Suite | `backend/test_scripts/` |

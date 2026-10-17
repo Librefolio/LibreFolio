@@ -1,8 +1,11 @@
 import {describe, expect, it} from 'vitest';
 
 import {handleProbeMessage, probeTranslation} from '../../../../../scripts/ai-export-render-prompt-probe';
+import type {AiExportCompatibleSelection} from '../catalog/shared';
 import {AiExportPromptRenderError, renderAiExportPrompt, renderAiExportPromptDiagnostics} from '../templates/promptRenderer';
 import {backendCatalogFixture, compatibilityFixture, selectionFixture, snapshotFixture} from './runtimeFixtures';
+
+const markKey = (key: string): string => `⟦${key}⟧`;
 
 describe('AI Export prompt renderer', () => {
     it('renders analysis sections in the exact deterministic order', () => {
@@ -17,7 +20,8 @@ describe('AI Export prompt renderer', () => {
             translate: probeTranslation('it'),
         });
 
-        expect(diagnostics.sections.map((section) => section.id)).toEqual(['analysis_objective', 'shared_verification_instructions', 'response_contract', 'snapshot_metadata', 'snapshot_data', 'additional_librefolio_data', 'domain_notes', 'user_notes', 'response_language']);
+        // The legal notice comes right before response_language, which stays last: the app's trusted instruction.
+        expect(diagnostics.sections.map((section) => section.id)).toEqual(['analysis_objective', 'shared_verification_instructions', 'response_contract', 'snapshot_metadata', 'snapshot_data', 'additional_librefolio_data', 'domain_notes', 'user_notes', 'legal_notice', 'response_language']);
         expect(diagnostics.rendered.mode).toBe('full_prompt');
         expect(diagnostics.sections.find((section) => section.id === 'user_notes')?.content).toContain('Focus on recovery duration.');
         expect(diagnostics.sections.find((section) => section.id === 'response_language')?.content).toContain('Italian');
@@ -118,7 +122,60 @@ describe('AI Export prompt renderer', () => {
         });
 
         expect(diagnostics.rendered.mode).toBe('data_only');
-        expect(diagnostics.sections.map((section) => section.id)).toEqual(['snapshot_metadata', 'snapshot_data']);
+        // Data only: the legal notice comes last.
+        expect(diagnostics.sections.map((section) => section.id)).toEqual(['snapshot_metadata', 'snapshot_data', 'legal_notice']);
+    });
+
+    it('ends every analysis with response_language and every dataset with legal_notice', () => {
+        const compatibility = compatibilityFixture();
+        function sectionIds(selection: AiExportCompatibleSelection, userNotes?: string) {
+            return renderAiExportPromptDiagnostics({
+                selection,
+                compatibility,
+                snapshot: snapshotFixture(selection),
+                responseLanguage: 'English',
+                userNotes,
+                translate: markKey,
+            }).sections.map((section) => section.id);
+        }
+        function lastSectionId(selection: AiExportCompatibleSelection, userNotes?: string) {
+            return sectionIds(selection, userNotes).at(-1);
+        }
+        const analyses = (['asset.market_analysis', 'portfolio.rebalancing', 'fx.pair_analysis', 'asset.position_review'] as const).map((id) => selectionFixture('analysis', id));
+        const datasets = (['portfolio.overview_and_history'] as const).map((id) => selectionFixture('dataset', id));
+
+        // response_language stays the analysis prompt's last word: the app's trusted instruction after the untrusted user notes.
+        expect(analyses.map((selection) => [selection.id, lastSectionId(selection), lastSectionId(selection, 'Focus on recovery duration.')])).toEqual(analyses.map((selection) => [selection.id, 'response_language', 'response_language']));
+        // legal_notice sits immediately before it, with and without user notes.
+        expect(analyses.map((selection) => [selection.id, sectionIds(selection).at(-2), sectionIds(selection, 'Focus on recovery duration.').at(-2)])).toEqual(analyses.map((selection) => [selection.id, 'legal_notice', 'legal_notice']));
+        expect(datasets.map((selection) => [selection.id, lastSectionId(selection)])).toEqual(datasets.map((selection) => [selection.id, 'legal_notice']));
+    });
+
+    it('renders legal_notice once, as its own heading over the disclaimer and outside any fence, in both modes', () => {
+        const compatibility = compatibilityFixture();
+        const analysis = selectionFixture('analysis', 'asset.market_analysis');
+        const dataset = selectionFixture('dataset', 'portfolio.overview_and_history');
+        function legalNotices(translate: (key: string) => string) {
+            return [
+                renderAiExportPromptDiagnostics({selection: analysis, compatibility, snapshot: snapshotFixture(analysis), responseLanguage: 'Italian', userNotes: 'Focus on recovery duration.', translate}),
+                renderAiExportPromptDiagnostics({selection: dataset, compatibility, snapshot: snapshotFixture(dataset, 'compact'), responseLanguage: 'English', translate}),
+            ].map((diagnostics) => ({
+                mode: diagnostics.rendered.mode,
+                contents: diagnostics.sections.filter((section) => section.id === 'legal_notice').map((section) => section.content),
+            }));
+        }
+
+        expect(legalNotices(markKey)).toEqual([
+            {mode: 'full_prompt', contents: ['## ⟦legal.title⟧\n\n⟦legal.disclaimer⟧']},
+            {mode: 'data_only', contents: ['## ⟦legal.title⟧\n\n⟦legal.disclaimer⟧']},
+        ]);
+        for (const locale of ['en', 'it', 'fr', 'es'] as const) {
+            for (const {mode, contents} of legalNotices(probeTranslation(locale))) {
+                expect(contents, `${locale} ${mode}: exactly one legal_notice`).toHaveLength(1);
+                expect(contents[0], `${locale} ${mode}: no fence`).not.toContain('```');
+                expect(contents[0], `${locale} ${mode}: no URL`).not.toMatch(/http/iu);
+            }
+        }
     });
 
     it('exposes exact diagnostic blocks without changing the official prompt', () => {
@@ -139,7 +196,9 @@ describe('AI Export prompt renderer', () => {
 
         expect(diagnostics.rendered).toEqual(rendered);
         expect(reconstructedPrompt).toBe(rendered.prompt);
-        expect(reconstructedSnapshotData).toContain('technical_components=compact_pipe_tables_v1');
+        // T-B7: both table families move to v2 (the declaration of the columns null in every row). Before T-B7: v1.
+        expect(reconstructedSnapshotData).toContain('technical_components=compact_pipe_tables_v2');
+        expect(reconstructedSnapshotData).toContain('other_components=generic_pipe_tables_v2');
         expect(reconstructedSnapshotData).toContain('COMPONENT portfolio.summary');
         expect(reconstructedSnapshotData).toContain('2026/03/04');
         expect(rendered.prompt).toContain('```text');

@@ -15,6 +15,7 @@
     import TableColumns from '../shared/TableColumns.svelte';
     import {withHelpCues} from '../shared/columnHelp';
     import DistributionDialog from './DistributionDialog.svelte';
+    import {STATUS_TONES} from '$lib/theme/toneClasses';
 
     interface Props {
         draft: PlannerDraft;
@@ -26,8 +27,8 @@
     const KEY = 'tools.pacAllocator.planner.targets';
     type TotalState = 'balanced' | 'excess' | 'missing' | 'unknown';
     /** Colours of the Asset distribution editor: green at 100%, red above, amber below. */
-    const BAR_CLASS: Record<TotalState, string> = {balanced: 'bg-libre-green', excess: 'bg-red-400', missing: 'bg-amber-400', unknown: 'bg-gray-300 dark:bg-gray-600'};
-    const TOTAL_CLASS: Record<TotalState, string> = {balanced: 'text-green-600 dark:text-green-400', excess: 'text-red-500', missing: 'text-amber-500', unknown: 'text-gray-500 dark:text-gray-400'};
+    const BAR_CLASS: Record<TotalState, string> = STATUS_TONES.pacTargetBar;
+    const TOTAL_CLASS: Record<TotalState, string> = STATUS_TONES.pacTargetTotal;
 
     let copying = $state(false);
     let selectedKeys = $state<string[]>([]);
@@ -59,7 +60,7 @@
 
     function barHtml(asset: DraftAsset): string {
         const width = Math.min(100, (percentNumber(draft.data.targets[asset.key]) / maxWeight) * 100);
-        return `<div data-testid="pac-planner-target-bar" data-asset-key="${escapeHtml(asset.key)}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700"><div class="h-full rounded-full transition-all ${escapeHtml(BAR_CLASS[totalState])}" style="width: ${width}%"></div></div>`;
+        return `<div data-testid="pac-planner-target-bar" data-asset-key="${escapeHtml(asset.key)}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-lf-neutral"><div class="h-full rounded-full transition-all ${escapeHtml(BAR_CLASS[totalState])}" style="width: ${width}%"></div></div>`;
     }
 
     /** Gives this Asset what is missing, or takes away the excess, within 0–100. */
@@ -150,7 +151,7 @@
 
 <div class="space-y-3" data-testid="pac-planner-targets">
     <div class="flex flex-wrap items-center gap-2">
-        <p class="text-sm text-gray-700 dark:text-gray-300">{$t(`${KEY}.intro`, {default: 'How to split among the Assets the money you invest now, in percent.'})}</p>
+        <p class="text-sm text-lf-secondary">{$t(`${KEY}.intro`, {default: 'How to split among the Assets the money you invest now, in percent.'})}</p>
         <div class="ml-auto flex flex-wrap items-center justify-end gap-1.5">
             {#if selectedKeys.length > 0}
                 <DataTableToolbar
@@ -220,14 +221,14 @@
         </div>
 
         <div class="flex flex-wrap items-center justify-end gap-1.5 pt-1 text-xs font-medium" data-testid="pac-planner-targets-control" data-balanced={totalState === 'balanced' ? 'true' : 'false'} data-state={totalState}>
-            <span class="text-gray-500 dark:text-gray-400">{$t(`${KEY}.total`, {default: 'Total'})}</span>
+            <span class="text-lf-muted">{$t(`${KEY}.total`, {default: 'Total'})}</span>
             <span class="font-mono {TOTAL_CLASS[totalState]}" data-testid="pac-planner-targets-total">{total === null ? '—' : formatPlannerPercentUnits(total)}</span>
             {#if totalState === 'balanced'}
-                <span class="text-green-500" aria-hidden="true">✅</span>
+                <span class="text-lf-success" aria-hidden="true">✅</span>
             {:else if totalState === 'excess' && excess !== null}
-                <span class="text-red-500">⚠ {$t(`${KEY}.excess`, {default: '+{value} in excess', values: {value: formatPlannerPercentUnits(excess)}})}</span>
+                <span class="text-lf-danger">⚠ {$t(`${KEY}.excess`, {default: '+{value} in excess', values: {value: formatPlannerPercentUnits(excess)}})}</span>
             {:else if totalState === 'missing' && remaining !== null}
-                <span class="text-amber-500">⚠ {$t(`${KEY}.remaining`, {default: '{value} missing', values: {value: formatPlannerPercentUnits(remaining)}})}</span>
+                <span class="text-lf-warning">⚠ {$t(`${KEY}.remaining`, {default: '{value} missing', values: {value: formatPlannerPercentUnits(remaining)}})}</span>
             {/if}
             <HelpTip
                 label={$t(`${KEY}.total`, {default: 'Total'})}

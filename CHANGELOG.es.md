@@ -7,6 +7,20 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ---
 
+## [1.2.1] - 2026-10-15
+
+Una versión de seguridad: actualiza lo antes posible cada instalación 1.2.0, y cualquier versión anterior.
+
+### 🐛 Corregido
+
+#### 🔒 Seguridad
+
+- El servidor mantiene cada archivo que sirve dentro de la carpeta a la que pertenece. Una dirección manipulada podía hacer que las páginas de la aplicación y de la documentación devolvieran archivos de otras partes del servidor, sin iniciar sesión; era posible desde la v0.4.24. Los iconos de los plugins, que ya tenían una comprobación, ahora usan la misma comprobación, más estricta.
+- Los archivos subidos y los informes de los brókers se abren en el navegador solo como contenido que no puede ejecutarse. La vista previa de texto de un archivo subido es siempre texto plano, y un informe de un bróker se abre directamente solo si es un PDF, una imagen PNG, JPEG, GIF, WebP o BMP, texto plano, CSV o JSON; cualquier otro tipo se descarga. Antes, un usuario con sesión iniciada podía subir una página web que se ejecutaba para otro usuario que abría su vista previa.
+- Un `JWT_SECRET` formado solo por espacios ya no firma las sesiones. Con `docker run --env-file`, una línea `JWT_SECRET=   ` se convertía en la clave de firma, y cualquiera podía falsificar una sesión; ahora un valor así cuenta como no definido, igual que uno vacío. Un `JWT_SECRET` real se usa como antes, así que nadie pierde la sesión.
+
+---
+
 ## [1.2.0] - 2026-10-14
 
 Lo que la 1.2 añade a la 1.1:

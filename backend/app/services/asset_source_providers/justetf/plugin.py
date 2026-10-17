@@ -14,19 +14,23 @@ from typing import Dict, List, Optional
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.logging_config import get_logger
-from backend.app.schemas.assets import (
-    FAAssetEventPoint,
-    FAAssetPatchItem,
+from backend.app.schemas.assets.assets import FAAssetPatchItem
+from backend.app.schemas.assets.events import FAAssetEventPoint
+from backend.app.schemas.assets.metadata import (
     FAClassificationParams,
-    FACurrentValue,
     FAGeographicArea,
-    FAHistoricalData,
-    FAPricePoint,
     FASectorArea,
 )
 from backend.app.schemas.common import Currency as CurrencyAmount
-from backend.app.services.asset_source import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
-from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
+from backend.app.schemas.prices import (
+    FACurrentValue,
+    FAHistoricalData,
+    FAPricePoint,
+)
+from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider, raise_if_rate_limited
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
+from backend.app.services.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
 from backend.app.utils.runtime.cache import get_ttl_cache
 
@@ -62,6 +66,11 @@ logger = get_logger(__name__)
 _overview_cache = get_ttl_cache("justetf_overview", maxsize=500, ttl=3600)  # 1 hour
 _chart_cache = get_ttl_cache("justetf_chart", maxsize=500, ttl=3600)  # 1 hour
 _etf_list_cache = get_ttl_cache("justetf_etf_list", maxsize=100, ttl=3600)  # 1 hour
+
+# The currencies of JustETF's chart API, and the flag of each in search; module-level so the class body can build its
+# settings' options from them.
+_SUPPORTED_CURRENCIES = ("EUR", "USD", "CHF", "GBP")
+_CURRENCY_FLAGS = {"EUR": "🇪🇺", "USD": "🇺🇸", "CHF": "🇨🇭", "GBP": "🇬🇧"}
 
 # ============================================================================
 # LIVE QUOTE STREAMING — Persistent WebSocket feeds
@@ -212,8 +221,27 @@ class JustETFProvider(AssetSourceProvider):
         return f"https://www.justetf.com/en/etf-profile.html?isin={identifier}"
 
     # Supported currencies for JustETF chart API
-    SUPPORTED_CURRENCIES = ("EUR", "USD", "CHF", "GBP")
-    CURRENCY_FLAGS = {"EUR": "🇪🇺", "USD": "🇺🇸", "CHF": "🇨🇭", "GBP": "🇬🇧"}
+    SUPPORTED_CURRENCIES = _SUPPORTED_CURRENCIES
+    CURRENCY_FLAGS = _CURRENCY_FLAGS
+
+    #: The currency line search shows for each fund (early user C, item 15; decision D-X14). A user's own choice, so it
+    #: reaches search only (D-X13): prices and history never depend on it.
+    settings_fields = (
+        PluginSettingField(
+            key="preferred_currency",
+            type=SettingType.SELECT,
+            scope=SettingScope.USER,
+            label="Preferred currency",
+            description="Search shows each fund only in this currency. With All currencies, every fund appears in all four, and 👑 marks the fund's own currency.",
+            default="all",
+            options=(
+                SettingOption("all", "All currencies", label_key="pluginSettings.asset.justetf.option.preferred_currency.all"),
+                *(SettingOption(currency, f"{_CURRENCY_FLAGS[currency]} {currency}") for currency in _SUPPORTED_CURRENCIES),
+            ),
+            label_key="pluginSettings.asset.justetf.label.preferred_currency",
+            description_key="pluginSettings.asset.justetf.description.preferred_currency",
+        ),
+    )
 
     @property
     def params_schema(self) -> list[dict]:
@@ -224,6 +252,7 @@ class JustETFProvider(AssetSourceProvider):
                 "required": False,
                 "options": list(self.SUPPORTED_CURRENCIES),
                 "default": "EUR",
+                "label": "Price currency",
                 "description": "Price currency. EUR = real-time quote + history. USD/CHF/GBP = latest daily price + history (converted by JustETF).",
             }
         ]
@@ -318,6 +347,7 @@ class JustETFProvider(AssetSourceProvider):
         except AssetSourceError:
             raise
         except Exception as e:
+            raise_if_rate_limited(e, self.provider_name)
             raise AssetSourceError(
                 f"Failed to fetch current value for {identifier} from JustETF: {e}",
                 "FETCH_ERROR",
@@ -428,6 +458,7 @@ class JustETFProvider(AssetSourceProvider):
 
             return FAHistoricalData(prices=prices, events=events, currency=currency, source=self.provider_name)
         except Exception as e:
+            raise_if_rate_limited(e, self.provider_name)
             raise AssetSourceError(
                 f"Failed to fetch history for {identifier} from JustETF: {e}",
                 "FETCH_ERROR",
@@ -439,9 +470,13 @@ class JustETFProvider(AssetSourceProvider):
         return "iShares Core S&P 500"
 
     async def search(self, query: str) -> list[dict]:
-        """Search for ETFs in the cached ETF list, returning 4 currency variants per match."""
+        """Search for ETFs in the cached ETF list: one row per currency for each match, the 4 of them, or only the
+        user's preferred one (setting ``preferred_currency``)."""
         self._check_availability()
         try:
+            # Every fund has a row in every supported currency, so keeping only the preferred one never drops a fund.
+            preferred = self.settings.get("preferred_currency")
+            currencies = (preferred,) if preferred in self.SUPPORTED_CURRENCIES else self.SUPPORTED_CURRENCIES
             df_all = JustETFProvider.etf_list()
             # Define only the normal columns (exclude index 'isin' from here)
             cols_only = ["name", "ticker", "wkn"]
@@ -459,7 +494,7 @@ class JustETFProvider(AssetSourceProvider):
                 fund_currency = row.get("currency", "USD")  # fundCurrency from overview
                 etf_name = row["name"]
 
-                for ccy in self.SUPPORTED_CURRENCIES:
+                for ccy in currencies:
                     flag = self.CURRENCY_FLAGS[ccy]
                     # 👑 marks the fund's native NAV currency
                     crown = "👑" if ccy == fund_currency else ""
@@ -474,6 +509,7 @@ class JustETFProvider(AssetSourceProvider):
                     )
             return items
         except Exception as e:
+            raise_if_rate_limited(e, self.provider_name)
             raise AssetSourceError(
                 f"Search failed for '{query}' on JustETF: {e}",
                 "SEARCH_ERROR",
@@ -619,6 +655,7 @@ class JustETFProvider(AssetSourceProvider):
                 identifier_ticker=ticker_val if ticker_val else None,
             )
         except Exception as e:
+            raise_if_rate_limited(e, self.provider_name)  # the core pauses the provider: not "no metadata"
             logger.warning(f"Could not fetch metadata for {identifier} from JustETF: {e}")
             return None
 

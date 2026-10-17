@@ -56,7 +56,7 @@ and timeout/crash behavior is unchanged.
 |------|------|
 | Pool lifecycle | `backend/app/services/risk/quant/spawn_worker.py` |
 | Pool configuration | `backend/app/services/risk/quant/workers.py` |
-| Settings | `backend/app/config.py` |
+| Settings | `backend/app/config/__init__.py` |
 | Lifecycle tests | `backend/test_scripts/test_services/test_risk_spawn_worker.py` |
 | Benchmark | `scripts/spikes/risk/run_simulation_scale_benchmark.py` |
 | Audit report | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/report-phase01RiskBackendAuditAndRemediation.md` |

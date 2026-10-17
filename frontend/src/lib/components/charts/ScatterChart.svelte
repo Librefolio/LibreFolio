@@ -35,14 +35,16 @@
      */
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
 
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from './echartsAnimationConfig';
-    import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from './echartsTooltipHelpers';
+    import {buildTooltipTheme, scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from './echartsTooltipHelpers';
     import {buildScatterOption, type RiskReturnPoint} from './scatterChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     interface Props {
         points: readonly RiskReturnPoint[];
@@ -75,16 +77,24 @@
     let dark = $state(false);
     const resizeWatcher = createResizeWatcher(() => chart?.resize());
 
-    let built = $derived(buildScatterOption({points, riskFreeRate, dark, labels, selectedId}));
+    /** Bumped by the Designer Lab's colour edits (C4): the option is rebuilt and its roles read again. */
+    let chartColorsRevision = $state(0);
+    let built = $derived.by(() => {
+        void chartColorsRevision;
+        return buildScatterOption({points, riskFreeRate, dark, labels, selectedId});
+    });
 
     onMount(() => {
-        dark = document.documentElement.classList.contains('dark');
-        const darkObserver = new MutationObserver(() => {
-            dark = document.documentElement.classList.contains('dark');
+        dark = isDarkTheme();
+        const darkObserver = onThemeClassChange(() => {
+            dark = isDarkTheme();
         });
-        darkObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const chartColors = onChartColorsChange(() => {
+            chartColorsRevision += 1;
+        });
         return () => {
             darkObserver.disconnect();
+            chartColors.disconnect();
             resizeWatcher.disconnect();
             chart?.dispose();
         };
@@ -116,7 +126,7 @@
     function render(): void {
         if (!container) return;
         if (!chart) {
-            chart = echarts.init(container);
+            chart = echarts.init(container, CHART_INIT_THEME);
             attachChartReady(chart, container, testId);
             scheduleFirstRenderStabilityFix(chart, container);
             // Once per instance: `render()` runs on every option change, and a listener
@@ -130,6 +140,7 @@
         resizeWatcher.observe(container);
 
         const {xAxis, yAxis, ...rest} = built.option;
+        const box = buildTooltipTheme(dark, container);
 
         chart.setOption(
             {
@@ -143,6 +154,10 @@
                 tooltip: {
                     position: tooltipPositionAboveFinger,
                     confine: true,
+                    // The shared box: without it ECharts drew its own, white in both themes (B4).
+                    backgroundColor: box.bg,
+                    borderColor: box.border,
+                    textStyle: {color: box.textColor},
                     formatter: (params: {data?: {name?: string; value?: [number, number]; detail?: string}}) => {
                         const item = params.data;
                         if (!item?.value) return '';
@@ -164,7 +179,7 @@
     {#if built.isEmpty}
         <!-- An empty canvas is indistinguishable from a broken one, so the empty
              case says so in words rather than rendering nothing. -->
-        <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm text-gray-500 dark:border-slate-600 dark:text-gray-400" style:height data-testid="{testId}-empty">
+        <div class="flex items-center justify-center rounded-lg border border-dashed border-lf-input text-sm text-lf-muted" style:height data-testid="{testId}-empty">
             {emptyLabel}
         </div>
     {:else}

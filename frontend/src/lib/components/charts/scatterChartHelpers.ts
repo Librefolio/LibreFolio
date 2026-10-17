@@ -32,6 +32,9 @@
  * how many assets it could not place.
  */
 
+import {themed} from '$lib/theme/themePair';
+import {chartNeutrals, RISK_RETURN_COLORS} from '$lib/theme/chartTheme';
+
 /** What a point stands for. Drives symbol and colour, never position. */
 export type RiskReturnRole = 'portfolio' | 'benchmark' | 'asset';
 
@@ -68,7 +71,7 @@ export interface ScatterOptionInput {
      * reads as "better paid for the risk taken" than the dot it runs through.
      */
     riskFreeRate?: number;
-    /** `document.documentElement.classList.contains('dark')`, resolved by the caller. */
+    /** `isDarkTheme()`, resolved by the caller. */
     dark?: boolean;
     /** Axis titles and the CML name. Supplied already translated. */
     labels: {
@@ -99,7 +102,7 @@ const SELECTED_SYMBOL_SCALE = 1.5;
 
 /** The selection green, the hue of a selected table row, apart from every role colour. */
 function selectedColor(dark: boolean): string {
-    return dark ? '#4ade80' : '#22c55e';
+    return themed(RISK_RETURN_COLORS.selected, dark);
 }
 
 const SYMBOL_BY_ROLE: Record<RiskReturnRole, 'circle' | 'diamond'> = {
@@ -188,9 +191,9 @@ export function capitalMarketLine(points: readonly RiskReturnPoint[], riskFreeRa
 
 /** Colours per role, resolved for the active theme. */
 export function colorForRole(role: RiskReturnRole, dark: boolean): string {
-    if (role === 'portfolio') return dark ? '#38bdf8' : '#0284c7';
-    if (role === 'benchmark') return dark ? '#fbbf24' : '#d97706';
-    return dark ? '#94a3b8' : '#64748b';
+    if (role === 'portfolio') return themed(RISK_RETURN_COLORS.portfolio, dark);
+    if (role === 'benchmark') return themed(RISK_RETURN_COLORS.benchmark, dark);
+    return themed(RISK_RETURN_COLORS.other, dark);
 }
 
 interface ScatterDataItem {
@@ -247,8 +250,9 @@ export function buildScatterOption(input: ScatterOptionInput): ScatterOptionResu
                 };
             });
 
-    const axisColor = dark ? '#475569' : '#cbd5e1';
-    const textColor = dark ? '#cbd5e1' : '#475569';
+    const {riskReturn} = chartNeutrals(dark);
+    const axisColor = riskReturn.axis;
+    const textColor = riskReturn.axisText;
 
     const line = capitalMarketLine(placeable, riskFreeRate);
 
@@ -263,7 +267,7 @@ export function buildScatterOption(input: ScatterOptionInput): ScatterOptionResu
             data: line,
             showSymbol: false,
             silent: true,
-            lineStyle: {type: 'dashed', width: 1, color: dark ? '#64748b' : '#94a3b8'},
+            lineStyle: {type: 'dashed', width: 1, color: riskReturn.capitalMarketLine},
             z: 1,
         });
     }

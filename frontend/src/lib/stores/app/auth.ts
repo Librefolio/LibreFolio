@@ -11,7 +11,7 @@ import {browser} from '$app/environment';
 import {goto} from '$app/navigation';
 import {zodiosApi} from '$lib/api';
 import {debug} from '$lib/debug';
-import type {AuthError, AuthState, AuthUser} from '$lib/types';
+import type {AuthError, AuthErrorKey, AuthState, AuthUser} from '$lib/types';
 import {isAxiosError} from 'axios';
 import {currentLanguage} from '$lib/stores/app/language';
 import {userSettings} from '$lib/stores/app/settings';
@@ -42,10 +42,36 @@ export function isSignOutRequested(): boolean {
     return signOutRequested;
 }
 
+/** The `error_code` of a refused sign-in's `detail`, when it carries one. */
+function loginErrorCode(body: unknown): unknown {
+    const detail = typeof body === 'object' && body !== null ? (body as {detail?: unknown}).detail : undefined;
+    return typeof detail === 'object' && detail !== null ? (detail as {error_code?: unknown}).error_code : undefined;
+}
+
 /** The login's 403 for a disabled account, sent only to whoever gave its right password (plan 36). */
 function isAccountDisabled(body: unknown): boolean {
-    const detail = typeof body === 'object' && body !== null ? (body as {detail?: unknown}).detail : undefined;
-    return typeof detail === 'object' && detail !== null && (detail as {error_code?: unknown}).error_code === 'ACCOUNT_DISABLED';
+    return loginErrorCode(body) === 'ACCOUNT_DISABLED';
+}
+
+/** The login's 403 for an account waiting for its email verification (workstream E), with the right password only. */
+function isEmailNotVerified(body: unknown): boolean {
+    return loginErrorCode(body) === 'EMAIL_NOT_VERIFIED';
+}
+
+/** The key of a sign-in that failed with this HTTP status, or with none when nothing answered. */
+function loginErrorKey(status: number | undefined, body: unknown): AuthErrorKey {
+    // One key for every 401: telling an unknown user from a wrong password would reveal which accounts exist.
+    if (status === 401) return 'auth.invalidCredentials';
+    // A disabled account is told so only with its right password, as a 403 ACCOUNT_DISABLED (plan 36).
+    if (status === 403 && isAccountDisabled(body)) return 'auth.accountDisabled';
+    // The sign-in card answers it with «send the link again» (`features/email/VerificationNotice.svelte`).
+    if (status === 403 && isEmailNotVerified(body)) return 'email.verification.loginRequired';
+    if (status === 422) return 'auth.invalidInput';
+    if (status === 429) return 'auth.tooManyAttempts';
+    // No answer, or a gateway saying the server behind it is down or too slow.
+    if (status === undefined || status === 502 || status === 503 || status === 504) return 'auth.loginServerUnreachable';
+    if (status >= 500 && status <= 599) return 'auth.loginServerError';
+    return 'auth.loginFailed';
 }
 
 /**
@@ -126,22 +152,14 @@ function createAuthStore() {
                 if (!isCurrentAuthOperation(operationGeneration)) return false;
                 transitionClientSession(null);
                 debug.log('AuthStore', 'Login error:', error);
-                // One key for every 401: telling an unknown user from a wrong password would reveal which accounts exist.
-                // A disabled account is told so only with its right password, as a 403 ACCOUNT_DISABLED (plan 36).
+                // A failure that is not an axios error (a response that did not match the schema, a bug) has no
+                // sentence for a user.
                 let authError: AuthError = {key: 'auth.loginFailed'};
 
                 if (isAxiosError(error)) {
                     debug.log('AuthStore', 'Axios error status:', error.response?.status);
                     debug.log('AuthStore', 'Axios error data:', error.response?.data);
-                    if (error.response?.status === 401) {
-                        authError = {key: 'auth.invalidCredentials'};
-                    } else if (error.response?.status === 403 && isAccountDisabled(error.response.data)) {
-                        authError = {key: 'auth.accountDisabled'};
-                    } else if (error.response?.status === 422) {
-                        authError = {key: 'auth.invalidInput'};
-                    } else {
-                        authError = {message: error.message};
-                    }
+                    authError = {key: loginErrorKey(error.response?.status, error.response?.data)};
                 }
 
                 update((state) => ({

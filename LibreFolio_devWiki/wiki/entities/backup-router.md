@@ -25,13 +25,14 @@ Introduced 2026-04-24 (commit `c7cf528c4`) to support the
 [[decisions/policy-d-currency-wipe]] flow end-to-end. Replaces an earlier
 ad-hoc `GET /assets/{id}/prices/export` endpoint that lived directly on the
 assets router. This router is the per-series implementation of
-[[features/F-073]] (Backup & Restore); F-073 also covers the still-placeholder
-full-portfolio export/restore endpoints.
+[[features/F-073]] (Backup & Restore); F-073 also covers the backup of the whole
+instance, `/backup/instance` in `instance.py` (1.3, lot B1).
 
 ## Location
 
-`backend/app/api/v1/backup.py` — mounted under `/api/v1/backup` by the main
-v1 router (see [[entities/api-router]]).
+`backend/app/api/v1/backup/` — a package since the 1.3 split (rule C2): `__init__.py` composes `backup_router` from
+`instance.py` (the backup of the whole instance) and `exports.py` (the per-series exports below). It is mounted
+under `/api/v1/backup` by the main v1 router (see [[entities/api-router]]).
 
 ## Key Endpoints
 
@@ -103,10 +104,11 @@ const eventsBlob  = await api.get(`/backup/asset/${assetId}/events?format=csv`);
 
 | Role | Path |
 |------|------|
-| Router definition | `backend/app/api/v1/backup.py` |
+| Router composition | `backend/app/api/v1/backup/__init__.py` |
+| Per-series export endpoints | `backend/app/api/v1/backup/exports.py` |
 | Mount | `backend/app/api/v1/router.py` |
-| Asset events serializer | `backend/app/services/asset_source.py::query_events_bulk` |
-| FX rates serializer | `backend/app/services/fx.py` |
+| Asset events serializer | `backend/app/services/assets/event_store.py::query_events_bulk` |
+| FX rates serializer | `backend/app/api/v1/backup/exports.py` (`backup_fx_rates`) |
 | Tests | `backend/test_scripts/test_api/test_backup_export_extras.py`, `test_asset_prices_export.py` |
 | Frontend consumer | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
 

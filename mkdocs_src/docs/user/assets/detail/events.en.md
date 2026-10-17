@@ -34,9 +34,21 @@ In **Prices** mode, events appear as markers on the [price chart](chart.md), eac
 ## ⚙️ Where events come from
 
 - **From a provider**, at each sync: dividends and splits from [Yahoo Finance](../providers/yahoo-finance.md), dividends from [justETF](../providers/justetf.md), and from [Scheduled Investment](../providers/scheduled-investment.md) the interest payouts and final maturity settlement of **Generate Coupon**, plus the events listed in its schedule (**Add Event** in the asset form).
-- **From you**: in the **Events** tab of the [Data Editor](data-editor.md), one by one or from a CSV file, or with **New event** in the **Linked Event** field of a transaction.
+- **From you**: in the **Events** tab of the [Data Editor](data-editor.md), one by one or from a CSV file, or with **+ New event** in the **Linked Event** field of a transaction ([below](#new-event)).
 
-A sync refreshes the provider's events and never touches yours. A provider's event is read-only in the editor, and deleting it lasts only until the provider sends it again: to change a Scheduled Investment's events, edit its schedule.
+A sync refreshes the provider's events and never touches yours. A provider's event is read-only in the editor, and deleting it lasts only until the provider sends it again: to change a Scheduled Investment's events, edit its schedule. Removing the provider (**No Provider** in the [asset form](../create-edit.md#editing-an-asset)) deletes its events, and is refused while a transaction is linked to one of them.
+
+### ✨ New event from a transaction {: #new-event }
+
+**+ New event**, in the **Linked Event** field of a dividend, an interest or an adjustment, creates an event for the transaction's asset and links it to the transaction. It never overwrites an event: if the asset already has one of that type on that date, entered by hand or from a data provider, nothing is saved and the window shows what is there under *This event already exists*. For each event: its type, date, amount and notes, where it comes from and how many transactions are linked to it. Then choose:
+
+- **Use this** — links that event to the transaction, and changes nothing else.
+- **Edit this** — only for an event entered by hand: the window becomes *Edit event for …*, filled with that event's values. Change what you need and click **Save**: that same event is updated, for the transactions already linked to it too, and this transaction is linked to it.
+- **Cancel** — back to the form, with what you typed (the **Cancel** at the bottom closes the window).
+
+An event from a data provider offers only **Use this**, with a note: the provider updates its own events. There is no way to add a second event of the same type on the same date from here. In the [Data Editor](data-editor.md), instead, a new row or a CSV line on the date and type of one of your events updates that event.
+
+After **Edit this**, the **Linked Event** field shows the event with its new values.
 
 ---
 

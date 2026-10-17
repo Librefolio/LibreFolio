@@ -1,10 +1,23 @@
 # 📝 Transaction Form Modal
 
 The Transaction Form Modal (`TransactionFormModal.svelte`, in
-`frontend/src/lib/components/transactions/modals/`) creates, edits or displays one transaction —
+`frontend/src/lib/features/transactions/form/`) creates, edits or displays one transaction —
 or one linked pair, shown as a single two-sided form. It adapts its fields to the selected
 transaction type, validates against the backend while the user types, and either hands the result
 back to the bulk workspace or commits it itself.
+
+The modal owns the whole state — the draft, the validation, the handlers — and renders its
+sections through four components in `frontend/src/lib/features/transactions/form/`, which read
+that state as props, write back only what they bind, and call the modal's handlers:
+
+| Component | Section |
+|---|---|
+| `TxFormBanners` | The inline banners: a failed commit, the validation result and its issues, the partner loading |
+| `TxFormPairSection` | The two-sided form of a pair (FX, transfer of an asset, transfer of cash): the shared fields, then **From** and **To** |
+| `TxFormSingleSection` | The one-row form: date, type, quantity and cash, asset, broker, and the cost basis of an adjustment |
+| `TxFormOptionalSection` | The optional fields: linked event, tags, description, link id, pair partner |
+
+The header, the footer, the read-only footer and the stacked modals stay in the modal.
 
 ---
 
@@ -40,7 +53,11 @@ It is important to keep the single-item form state apart from the workspace's st
   forces a rebuild even when `open` never went back to `false`) and may be incomplete or invalid
   while the user types.
 * **Staging state** — on **Apply**, `TransactionBulkModal` writes the pushed payload into the row's
-  `DraftFields` (`applyFormPayload`) and keeps the row as a `PendingOp`. Read more in the
+  `DraftFields` (`applyFormPayload`) and keeps the row as a `PendingOp`. The payload is signed, as
+  a create is sent, while the workspace holds a value whose type rule demands a negative (a
+  `SELL`'s quantity, a `BUY`'s cash) as its magnitude: `applyFormPayload` ends by bringing the
+  quantity and the cash back to that convention (`magnitudeForRule`), so an untouched **Apply**
+  leaves them as the row held them (W-B65). Read more in the
   **[Transaction Staging State](../../state/transaction-draft.md)** guide.
 
 ---
@@ -54,7 +71,7 @@ values the new type forbids.
 
 ### 📋 Common Fields
 
-`FormDraft` (declared in `TransactionFormModal.svelte`):
+`FormDraft` (declared, with `DualDraftTo`, in `features/transactions/form/txFormTypes.ts`):
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -64,7 +81,7 @@ values the new type forbids.
 | `cash` | `{code, amount} \| null` | ISO 4217 code and decimal string, edited with `CompactCashCell` |
 | `tags` | `string[]` | Free tags, with suggestions from `availableTags` |
 | `description` | `string` | Free-text memo |
-| `asset_event_id` | `number \| null` | Linked asset event (**Linked Event**, `AssetEventPicker`), for the event-linkable types (`DIVIDEND`, `INTEREST`, `ADJUSTMENT`); the picker shows once an asset and a date are set (`canShowAssetEvent`) |
+| `asset_event_id` | `number \| null` | Linked asset event (**Linked Event**, `AssetEventPicker`), for the event-linkable types (`DIVIDEND`, `INTEREST`, `ADJUSTMENT`); the picker shows once an asset and a date are set (`canShowAssetEvent`). **+ New event** in the picker (not in `view` mode) opens a stacked `EventCreateMiniModal` (`zIndex + 10`), which sends the new event with `mode: "create"`. Its amount is handled as a decimal string: the suggestion (the form's cash) is prefilled whole (`0.2345` stays `0.2345`), blur pads it to two decimals at least and keeps the typed ones, the event is sent with that string, and past the 6 decimals an event value keeps (trailing zeros not counted, as the backend counts them) the field is `aria-invalid`, `event-create-amount-digits-error` (`data-max="6"`, `common.decimalPlacesExceeded`) shows under it and the submit button (`event-create-submit`) is disabled. On `EVENT_EXISTS` it shows `EventExistsPanel`: **Use this** (writes nothing), **Edit this** for manual events only (the form then saves that event by its `id`, `mode: "upsert"`), **Cancel**. The field then holds the id the response names (`results[0].event_ids[0]`), or the id of the event chosen with **Use this**. Any refusal other than `EVENT_EXISTS` shows as one sentence in the modal's error banner (`eventSaveErrorMessage()`, `lib/features/transactions/events/eventSaveError.ts`); a 400 `EVENT_TOO_MANY_DIGITS` has its own, `events.saveError.tooManyDigits`, which names the first event at fault (date and type), how many more there are, and the three maxima of its `params`: decimal places, significant digits and digits before the decimal point (`max_decimal_places`, `max_significant_digits`, `max_integer_digits`) |
 | `cost_basis_override` | `{code, amount} \| null` | Manual cost basis (see [WAC State](#wac-state)) |
 | `link_uuid` | `string \| null` | Pairing UUID; shown read-only when set |
 
@@ -75,7 +92,7 @@ Shown when the type's rules allow them:
 | Field | Type | Description |
 |-------|------|-------------|
 | `asset_id` | `number \| null` | Selected asset (`AssetSelect`); **New asset** opens a stacked `AssetModal` |
-| `quantity` | `string` | Exact decimal string, edited with `ExactQuantityInput` (built on `ExactDecimalInput`; at most 12 integer and 6 fraction digits); `'0'` when the type forbids a quantity |
+| `quantity` | `string` | Exact decimal string, edited with `ExactQuantityInput` (built on `ExactDecimalInput`; at most 15 integer and 10 fraction digits); `'0'` when the type forbids a quantity |
 
 ---
 
@@ -132,7 +149,7 @@ the implied rate (To ÷ From) and, in its tooltip, the market rate on the From d
 ### 📤 How the pair is submitted {: #pair-submission }
 
 `collectDualCreates()` calls `buildDualCreatePayloads('fx', …)`
-(`lib/utils/transactions/txPayloadHelpers.ts`), which returns two `FX_CONVERSION` items:
+(`lib/features/transactions/txPayloadHelpers.ts`), which returns two `FX_CONVERSION` items:
 
 | Field | From item | To item |
 |---|---|---|
@@ -169,15 +186,18 @@ The form checks locally only what it can know without the ledger:
   quantity unless the type forbids it; the form also needs a date, and for a pair the destination
   side ([Pair validation](#pair-validation)). Until then there is no automatic validation and
   **⚡ Validate now** stays disabled.
-- **Quantity** — `ExactQuantityInput` checks the syntax, the 12 + 6 digit budget and the type's
-  sign rule, and reports its validity (`onvaliditychange`); an invalid quantity disables the
-  footer button.
+- **Quantity** — `ExactQuantityInput` checks the syntax, the 15 + 10 digit budget (the 15 integer
+  digits, decision N63, and the 10 decimals the backend keeps for a quantity; zeros that do not
+  change the value are not counted: `0.10000000000` has one decimal, `007` one integer digit) and
+  the type's sign rule, and reports its validity (`onvaliditychange`); an invalid quantity
+  disables the footer button. A fraction past those 10 decimals is also said under the field
+  (`tx-form-quantity-digits-error`, `common.decimalPlacesExceeded`), and the value stays as typed.
 - **Cash sign** — for a type whose cash rule is `negative` the user types a magnitude and the
   payload builder negates it (`applySignRules`). An amount that still breaks the rule
   (`computeSignHint`) disables the footer button.
 - **Hints** — the single-layout cash editor always carries *💡 Total amount (not per share)*
   (`transactions.form.cashLabelTotal`). The quantity and cash editors also show the hint of the
-  type's sign rule (`signHintText()` → `signHintKey()` in `lib/utils/transactions/txFormFields.ts`:
+  type's sign rule (`signHintText()` → `signHintKey()` in `lib/features/transactions/form/txFormFields.ts`:
   *must be > 0*, *enter positive — auto-negated on save*, *must be 0*, *must be ≠ 0*). Negative
   quantity rules are auto-flipped like cash (`effectiveQtyRule`), so a `SELL` quantity is typed as
   a positive number.
@@ -194,7 +214,7 @@ then keeps only this row's issues plus the global ones.
 ## 💰 WAC State
 
 The cost-basis editor is `WacPreviewSection`
-(`frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte`). The form shows it where
+(`frontend/src/lib/features/transactions/wac/WacPreviewSection.svelte`). The form shows it where
 a cost basis applies: on the receiving side of a paired `TRANSFER`, and on an `ADJUSTMENT`. BUY and
 SELL do not show it.
 
@@ -203,23 +223,31 @@ SELL do not show it.
   once `wacCurrencyHint` holds a currency (the user's pick, the first WAC result's, or the one in
   the row's sentinel), the hint `{code, amount: '0'}` as override.
 - In Auto mode the backend writes the WAC into `cost_basis_override`
-  (`TransactionService._compute_wac_for_auto_items()` → `compute_wac_iterative()`, as of the row's
-  date): the WAC of the linked partner's broker for a create carrying `link_uuid` (a new `TRANSFER`
-  pair), otherwise of the row's own broker, without the row. When that broker has no other row of
+  (`TransactionService._compute_wac_for_auto_items()` → `compute_wac_iterative()`): for the
+  receiving side of a `TRANSFER` pair, the WAC of the partner's broker as of the partner's date,
+  without the partner's outgoing leg; otherwise the WAC of the row's own broker as of the row's
+  date, without the row. The batch's other Auto rows not yet costed are left out too, and the rows
+  are costed in date order (W-B67; see
+  [Inline Batch Auto Modes](../../../backend/transactions/wac.md#inline-batch-auto-modes)). When that broker has no other row of
   the asset up to that date — the transfer's own outgoing leg aside — the WAC is `0`, and the row
   is saved with a zero cost basis. That is by design (developer decision of 2026-10-09): the user
   corrects that transaction later if needed. Auto rows skip the required-cost-basis check
   (`_auto_mode_indices()`); split-linked adjustments and missing FX are covered in
   [WAC & Cost Basis](../../../backend/transactions/wac.md).
 - In Manual mode, a `TRANSFER` or `ADJUSTMENT` with a positive quantity and no
-  `cost_basis_override` (`TransactionService._requires_cost_basis()`) gets a `costBasisRequired`
-  issue (`validate_cost_basis()`, which skips only the creates that a promote consumes in the same
-  batch). Like any issue, it makes the batch `committed=False`, and `POST /transactions/commit`
-  rolls the whole batch back: the row is not saved. A free acquisition is entered as `0`.
+  `cost_basis_override` gets a `costBasisRequired` issue (`validate_cost_basis()`) when it is
+  created, and when an update changes its type, quantity, cost basis or its asset event link.
+  `TransactionService._requires_cost_basis()` reads which rows need one from `TX_TYPE_METADATA`,
+  the table `GET /transactions/types` serves (`cost_basis_required()` in
+  `backend/app/schemas/transactions/type_metadata.py`). Like any issue, it makes the batch
+  `committed=False`, and `POST /transactions/commit` rolls the whole batch back: the row is not
+  saved. A free acquisition is entered as `0`.
 - Known mismatch: for an `ADJUSTMENT` with a positive quantity, not in Auto mode and with an empty
   manual field, the form shows `transactions.costBasisOverride.warningAdjustment`
-  (`tx-form-cost-basis-warning`), which says the lot will be created with zero cost. The backend
-  does not create it: it rejects that row with `costBasisRequired`.
+  (`tx-form-cost-basis-warning`), which says the transaction cannot be saved without a cost basis.
+  That holds for a create, not for an update that leaves the type, quantity, cost basis and asset
+  event link alone: editing only the notes, tags or date of an older row stored without a cost
+  basis gets no `costBasisRequired`, and the row stays without one.
 - For validation, `upgradeAutoToDetail()` turns `'auto'` into `'auto-detail'`, so the response's
   `wac_results` carries the WAC with its qualifying transactions. Standalone, the form keeps that
   result in `formWacResult`; inside the bulk workspace it first reads the workspace's own result

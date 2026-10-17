@@ -10,9 +10,28 @@
         },
         "description": {
           "language": "Langue des noms et métadonnées de l'instrument.",
-          "codice_fondo": "Code interne du fonds Borsa Italiana (ex. 2FADB602822). Rempli automatiquement pour les fonds communs; active la valorisation par NAV. Laisser vide pour actions/obligations/ETF.",
+          "codice_fondo": "Code interne du fonds Borsa Italiana (ex. 2FADB602822). Rempli automatiquement pour les fonds communs; active la valorisation par NAV quand le fonds n'est pas dans l'API du marché XMIL. Laisser vide pour actions/obligations/ETF.",
           "mic": "MIC du marché (ex. ETLX pour EuroTLX, MOTX pour MOT). Rempli automatiquement depuis la recherche; dirige la page de l'instrument et les métadonnées vers le bon marché.",
           "platform": "Plateforme de négociation (ex. TLX pour EuroTLX). Remplie automatiquement depuis la recherche; requise par certains marchés pour résoudre la page de l'instrument."
+        }
+      }
+    }
+  },
+  "pluginSettings": {
+    "asset": {
+      "borsa_italiana": {
+        "label": {
+          "preferred_language": "Langue préférée"
+        },
+        "description": {
+          "preferred_language": "La recherche affiche chaque instrument dans cette seule langue, celle de son nom et de ses détails. Avec Les deux langues, l'italien d'abord, puis l'anglais."
+        },
+        "option": {
+          "preferred_language": {
+            "all": "Les deux langues",
+            "it": "🇮🇹 Italien",
+            "en": "🇬🇧 Anglais"
+          }
         }
       }
     }

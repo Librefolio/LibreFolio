@@ -52,9 +52,8 @@
         <button
             type="button"
             class="flex items-center gap-1.5 px-2 py-1 rounded-md text-[13px] font-medium
-                   bg-libre-green/10 text-libre-green hover:bg-libre-green/15
-                   dark:bg-green-400/10 dark:text-green-400 dark:hover:bg-green-400/15
-                   transition-colors cursor-pointer border border-transparent hover:border-libre-green/20 dark:hover:border-green-400/20"
+                   bg-lf-selected text-lf-link hover:bg-lf-checked/20 hover:text-lf-primary
+                   transition-colors cursor-pointer border border-transparent hover:border-lf-checked/20"
             onclick={() => onClearSelection?.()}
             title={$t('common.clearSelection')}
         >
@@ -68,9 +67,7 @@
                 type="button"
                 data-testid="selection-bar-action-{action.id}"
                 class="flex items-center justify-center w-7 h-7 rounded-md transition-colors
-                       {action.variant === 'danger'
-                    ? 'text-red-500 bg-gray-100 hover:bg-red-50 hover:text-red-600 dark:bg-slate-700 dark:text-red-400 dark:hover:bg-red-900/30'
-                    : 'text-gray-500 bg-gray-100 hover:bg-gray-200 hover:text-gray-700 dark:bg-slate-700 dark:text-gray-400 dark:hover:bg-slate-600 dark:hover:text-gray-200'}"
+                       {action.variant === 'danger' ? 'bg-lf-panel text-lf-danger hover:bg-lf-danger-soft hover:text-lf-danger-on-soft' : 'bg-lf-panel text-lf-muted hover:bg-lf-neutral hover:text-lf-secondary'}"
                 onclick={action.onClick}
                 title={getActionLabel(action)}
             >

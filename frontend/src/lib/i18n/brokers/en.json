@@ -33,7 +33,7 @@
     "cashBalances": "Cash Balances",
     "noCashBalances": "No cash positions",
     "confirmDelete": "Are you sure you want to delete this broker?",
-    "confirmDeleteWithTransactions": "This broker has {n} transactions. Force delete will remove all transactions. Continue?",
+    "confirmDeleteWithTransactions": "This broker has {n} transactions. Force delete will remove all of them. Assets this broker transferred to other brokers, shared ones included, stay there as an opening position at their transfer cost: those brokers' gain will also count what the assets gained before the transfer. Assets other brokers transferred to this one leave them at their average cost. Cash transfers with other brokers become deposits or withdrawals there. Continue?",
     "createFailed": "Failed to create broker",
     "updateFailed": "Failed to update broker",
     "assets": "{n} asset(s)",
@@ -128,7 +128,7 @@
       "shortLotLabel": "Short {date}",
       "detailTitle": "FIFO Lot Detail",
       "loadFailed": "Failed to load lot data",
-      "analysisFailed": "Lot analysis could not be reconstructed reliably (inconsistent quantities or transfers) — figures may be incomplete.",
+      "analysisFailed": "This asset's lots can't be rebuilt: some of its transactions don't add up. The lots, their timeline and the comparison are hidden; the average-cost lines below are not affected.",
       "combined": "Combined",
       "chartMarkers": {
         "legend": {
@@ -233,7 +233,8 @@
           "realizedPnl": "Realized P&L",
           "splitRatio": "Split ratio",
           "sourceBroker": "From",
-          "destinationBroker": "To"
+          "destinationBroker": "To",
+          "handedOver": "Value handed over"
         },
         "openingValue": "Opening Value",
         "cumulativeProceeds": "Cumulative proceeds"
@@ -266,9 +267,9 @@
       "totalPnl": "Total P&L",
       "tooltip": {
         "initialValue": "Initial value",
-        "shares": "shares",
-        "sharesOpenOutOf": "shares open out of",
-        "since": "Since"
+        "since": "Since",
+        "quantityClosed": "{original} → 0 {count, plural, one {share} other {shares}}",
+        "quantityOpen": "{count, plural, one {{open} share open out of {original}} other {{open} shares open out of {original}}}"
       },
       "footerTotals": "Totals",
       "closedOnly": "Closed",
@@ -283,7 +284,8 @@
       "yAxisAuto": "Auto",
       "yAxisFromZero": "From 0",
       "annualizedReturn": "Annualized",
-      "annualizedReturnTooltip": "Net annualized return (CAGR) of this single lot over its holding window, net of income and fees, for comparison across lots held for different durations."
+      "annualizedReturnTooltip": "Net annualized return (CAGR) of this single lot over its holding window, net of income and fees, for comparison across lots held for different durations.",
+      "analysisFailedFix": "Fix these transactions and the lots come back:"
     },
     "createdInSystem": "Created in System",
     "deleteBlockedTitle": "Cannot delete broker",

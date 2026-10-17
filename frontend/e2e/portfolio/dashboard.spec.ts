@@ -3,6 +3,7 @@ import {schemas} from '../../src/lib/api/generated';
 import {waitForSettled} from '../fixtures/app-events';
 import {login} from '../fixtures/auth-helpers';
 import {showChartTooltip} from '../fixtures/charts';
+import {focusHeaderControlByKeyboard} from '../fixtures/headerKeyboardFocus';
 import {TEST_USER} from '../fixtures/test-users';
 
 /**
@@ -187,87 +188,136 @@ test.describe('Dashboard charts and view matrix', () => {
         await expect(history).toHaveAttribute('data-chart-ready', 'true', {timeout: 15_000});
     });
 
-    test('Allocation by type carries a per-slice colour derived from its primary type', async ({page}) => {
-        // ECharts draws to a canvas, so a colour has no DOM to assert on. The
-        // component exposes its instance as `__lfChart` (same hook as
-        // PriceChartFull); reading the option is the only way to observe that the
-        // hierarchy actually reached the chart rather than merely compiling.
+    test('Allocation by type: each family in a colour of its own, the same in the pie and in the history (GR1)', async ({page}) => {
+        // GR1 of the designer's round 2 (D-T17): a category keeps one colour, by key and never by rank, so a
+        // family is the same colour in the pie («now») and in the history, whatever its rank in either. ECharts
+        // draws to a canvas, so a colour has no DOM to assert on: both charts expose their instance as
+        // `__lfChart` (same hook as PriceChartFull), and the option they were handed is the only place to read
+        // it. No colour is written here: the page draws in whichever theme it is in — read off <html> with each
+        // option — and the pie is compared with the history drawn under the same theme. Which colour a key has
+        // is pinned by the theme's unit tests (chartCategories), what a chart hands ECharts by its component tests.
         await page.goto('/dashboard');
         await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 15_000});
         await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
 
         const panel = page.getByTestId('allocation-panel');
         await expect(panel).toBeVisible({timeout: 15_000});
-        // Never assume the default tab — select it.
-        await page.getByTestId('allocation-tab-type').click();
+        // The view and the dimension persist per user (S4): select both, never assume a default.
+        const nowView = page.getByTestId('allocation-view-now');
+        await nowView.click();
+        await expect(nowView).toHaveAttribute('aria-pressed', 'true');
+        const typeTab = page.getByTestId('allocation-tab-type');
+        await typeTab.click();
+        await expect(typeTab).toHaveAttribute('aria-pressed', 'true');
 
-        type Slice = {rawName: string; value: number; color: string | null; groupSize: number | null; primaryKey: string | null; primaryTotal: number | null};
-        const read = async (): Promise<{palette: unknown; slices: Slice[]} | null> =>
+        type Arc = {series: string; rawName: string; primaryKey: string; ringRole: string | null; filler: boolean; color: string | null};
+        // The pie by type: the instance under the panel whose every arc names the family it belongs to — a
+        // sector pie names none, and the history chart draws lines.
+        const readPie = async (): Promise<{dark: boolean; arcs: Arc[]} | null> =>
             panel.evaluate((root) => {
                 for (const node of Array.from(root.querySelectorAll('*'))) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const chart = (node as any).__lfChart;
-                    if (!chart) continue;
-                    const option = chart.getOption();
+                    if (!chart || chart.isDisposed?.()) continue;
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const series = ((option.series as any[]) ?? [])[0];
-                    if (series?.type !== 'pie') continue; // the history chart lives here too
+                    const series = ((chart.getOption().series as any[]) ?? []).filter((entry) => entry?.type === 'pie');
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const data = series.flatMap((entry) => ((entry.data as any[]) ?? []).map((datum) => ({entry, datum})));
+                    if (data.length === 0 || data.some(({datum}) => typeof datum?.primaryKey !== 'string')) continue;
                     return {
-                        palette: option.color,
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        slices: ((series.data as any[]) ?? []).map((d) => ({
-                            rawName: String(d?.rawName ?? ''),
-                            value: Number(d?.value ?? 0),
-                            color: d?.itemStyle?.color ?? null,
-                            groupSize: d?.groupSize ?? null,
-                            primaryKey: d?.primaryKey ?? null,
-                            primaryTotal: d?.primaryTotal ?? null,
+                        dark: document.documentElement.classList.contains('dark'),
+                        arcs: data.map(({entry, datum}) => ({
+                            series: String(entry.id ?? 'pie'),
+                            rawName: String(datum.rawName ?? ''),
+                            primaryKey: String(datum.primaryKey),
+                            ringRole: datum.ringRole ?? null,
+                            filler: datum.filler === true || datum.ringRole === 'filler',
+                            color: typeof datum.itemStyle?.color === 'string' ? datum.itemStyle.color : null,
                         })),
                     };
                 }
                 return null;
             });
 
-        // Poll rather than sleep: the pie mounts when the tab flips, so the first
-        // read can legitimately land before the instance exists.
-        await expect.poll(async () => (await read())?.slices.length ?? 0, {timeout: 15_000}).toBeGreaterThan(0);
-        const option = (await read())!;
+        // Poll rather than sleep: the pie mounts when the tab flips, so the first read can land before it draws.
+        await expect.poll(async () => (await readPie())?.arcs.length ?? 0, {timeout: 15_000}).toBeGreaterThan(0);
+        const pie = (await readPie())!;
+        const theme = pie.dark ? 'dark' : 'light';
+        // A filler is the outer ring's invisible spacer, transparent by design: every other arc is seen.
+        const shown = pie.arcs.filter((arc) => !arc.filler);
 
-        // Option-level palette, grown to 14 so 13 possible primaries cannot wrap.
-        expect(Array.isArray(option.palette)).toBe(true);
-        expect((option.palette as string[]).length).toBe(14);
+        // Every arc a reader sees wears a #rrggbb of its own: none is left to a palette handed out by index.
+        expect(
+            shown.filter((arc) => !/^#[0-9a-f]{6}$/i.test(arc.color ?? '')).map((arc) => `${arc.series} ${arc.rawName}: ${arc.color}`),
+            `arcs without a colour of their own (${theme} theme)`,
+        ).toEqual([]);
 
-        for (const slice of option.slices) {
-            // Per-datum colour: proves buildAllocationHierarchy ran. Before this
-            // change slices had no itemStyle at all and inherited the palette by index.
-            expect(slice.color, `slice ${slice.rawName} has no own colour`).toMatch(/^#[0-9a-f]{6}$/i);
-            expect(slice.groupSize).toBeGreaterThanOrEqual(1);
-            // A group total can never be smaller than one of its members.
-            expect(slice.primaryTotal).toBeGreaterThanOrEqual(slice.value - 0.01);
+        // A family's arcs are contiguous on every ring: first-seen indices that never go back. An interleaving
+        // like [A, A, B, C, B] breaks the order, and is caught.
+        for (const series of [...new Set(pie.arcs.map((arc) => arc.series))]) {
+            const keys = pie.arcs.filter((arc) => arc.series === series).map((arc) => arc.primaryKey);
+            const firstSeen = keys.map((key) => keys.indexOf(key));
+            expect(firstSeen, `series ${series}: a family split around another: ${keys.join(', ')}`).toEqual([...firstSeen].sort((a, b) => a - b));
         }
 
-        // No two categories may share a colour — the failure mode the 12-entry
-        // palette produced by wrapping with `% 12`.
-        const colors = option.slices.map((s) => String(s.color).toLowerCase());
-        expect(new Set(colors).size).toBe(colors.length);
-
-        // Members of one primary must be contiguous, otherwise a shared hue reads
-        // as coincidence rather than kinship. Holds trivially while every group is
-        // a singleton, and becomes load-bearing as soon as subtypes exist in the data.
-        // Non-decreasing first-occurrence indices is exactly contiguity: an
-        // interleaving like [A, A, B, C, B] breaks the order, and is caught.
-        const primaries = option.slices.map((s) => s.primaryKey);
-        const firstSeen = primaries.map((p) => primaries.indexOf(p));
-        expect(firstSeen).toEqual([...firstSeen].sort((a, b) => a - b));
-
-        // Legacy pin, observed end to end: with no subtype present every group is a
-        // singleton, so the result must still be the plain value-descending order
-        // painted with the palette in order — exactly what shipped before.
-        if (option.slices.every((s) => s.groupSize === 1)) {
-            const values = option.slices.map((s) => s.value);
-            expect(values).toEqual([...values].sort((a, b) => b - a));
-            expect(colors).toEqual((option.palette as string[]).slice(0, colors.length).map((c) => c.toLowerCase()));
+        // The colour of each family: its base arc when the pie draws two rings, else its own slice — the arc whose
+        // type is the family itself. On the outer ring, the family's generic member wears it too.
+        const rings = pie.arcs.some((arc) => arc.ringRole === 'base');
+        const familyColour = new Map<string, string>();
+        for (const arc of shown.filter((candidate) => (rings ? candidate.ringRole === 'base' : candidate.rawName.toUpperCase() === candidate.primaryKey))) {
+            expect(familyColour.has(arc.primaryKey), `two arcs stand for the family ${arc.primaryKey}`).toBe(false);
+            familyColour.set(arc.primaryKey, (arc.color ?? '').toLowerCase());
         }
+        const families = [...new Set(shown.map((arc) => arc.primaryKey))];
+        expect(
+            families.filter((family) => !familyColour.has(family)),
+            'families with no arc of their own',
+        ).toEqual([]);
+        expect(
+            shown.filter((arc) => arc.ringRole === 'member' && arc.rawName.toUpperCase() === arc.primaryKey && (arc.color ?? '').toLowerCase() !== familyColour.get(arc.primaryKey)).map((arc) => arc.rawName),
+            'a generic member not in its family colour',
+        ).toEqual([]);
+
+        // Distinct families, distinct colours.
+        const listing = [...familyColour].map(([family, colour]) => `${family} ${colour}`).join(', ');
+        expect(new Set(familyColour.values()).size, `families sharing a colour (${theme} theme): ${listing}`).toBe(familyColour.size);
+
+        // The history of the same dimension: one series per family (D375), keyed by the family.
+        const history = page.getByTestId('allocation-history-chart');
+        const historyView = page.getByTestId('allocation-view-history');
+        await historyView.click();
+        await expect(historyView).toHaveAttribute('aria-pressed', 'true');
+        await expect(history).toBeVisible({timeout: 15_000});
+        await expect(history).toHaveAttribute('data-chart-ready', 'true', {timeout: 15_000});
+
+        const readHistory = async (): Promise<{dark: boolean; series: {id: string; color: string | null}[]} | null> =>
+            history.evaluate((node) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const chart = (node as any).__lfChart;
+                if (!chart || chart.isDisposed?.()) return null;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const series = (chart.getOption().series as any[]) ?? [];
+                return {
+                    dark: document.documentElement.classList.contains('dark'),
+                    series: series.map((entry) => {
+                        const color = entry?.itemStyle?.color ?? entry?.lineStyle?.color;
+                        return {id: String(entry?.id ?? ''), color: typeof color === 'string' ? color : null};
+                    }),
+                };
+            });
+        await expect.poll(async () => (await readHistory())?.series.length ?? 0, {timeout: 15_000}).toBeGreaterThan(0);
+        const drawnHistory = (await readHistory())!;
+        // Precondition: both charts were drawn under one theme, or their colours could not be compared.
+        expect(drawnHistory.dark, 'the theme changed between the pie and the history').toBe(pie.dark);
+
+        // Every family present in both charts, in one colour in both.
+        const inBoth = families.filter((family) => drawnHistory.series.some((entry) => entry.id === family));
+        expect(inBoth.length, `no family of the pie (${families.join(', ')}) is drawn in the history (${drawnHistory.series.map((entry) => entry.id).join(', ')})`).toBeGreaterThan(0);
+        const twoColours = inBoth.flatMap((family) => {
+            const historyColour = (drawnHistory.series.find((entry) => entry.id === family)?.color ?? '').toLowerCase();
+            return historyColour === familyColour.get(family) ? [] : [`${family}: pie ${familyColour.get(family)}, history ${historyColour || 'none'}`];
+        });
+        expect(twoColours, `families drawn in two colours (${theme} theme)`).toEqual([]);
     });
 
     test('Positions panel publishes its loading state through data-busy', async ({page}) => {
@@ -923,14 +973,14 @@ async function axisLabels(host: Locator, axis: 'xAxis' | 'yAxis', values: number
  * Flip the header's privacy toggle and wait for `host` to redraw under it.
  *
  * House style from privacy-masking.spec.ts: the header hides on scroll, so the
- * toggle is focused and the header proven pinned before the click; the state is
- * asserted on both sides. The renders counter is sampled before the click.
+ * toggle is reached by keyboard and the header proven pinned before the click; the
+ * state is asserted on both sides. The renders counter is sampled before the click.
  */
 async function setPrivacy(page: Page, on: boolean, host: Locator): Promise<void> {
     const toggle = page.getByTestId('privacy-toggle');
     await expect(toggle, 'privacy must start from the opposite state').toHaveAttribute('aria-pressed', String(!on));
     const before = await chartRenders(host);
-    await toggle.focus();
+    await focusHeaderControlByKeyboard(page, 'privacy-toggle');
     await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'pinned');
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', String(on));
@@ -941,7 +991,7 @@ async function setPrivacy(page: Page, on: boolean, host: Locator): Promise<void>
 async function restorePrivacyOff(page: Page): Promise<void> {
     const toggle = page.getByTestId('privacy-toggle');
     if ((await toggle.getAttribute('aria-pressed')) === 'true') {
-        await toggle.focus();
+        await focusHeaderControlByKeyboard(page, 'privacy-toggle');
         await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'pinned');
         await toggle.click();
     }

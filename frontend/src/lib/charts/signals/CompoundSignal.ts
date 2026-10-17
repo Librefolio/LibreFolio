@@ -15,6 +15,10 @@
  *
  * For detailed mathematical theory, see:
  * docs/financial-theory/technical-analysis/synthetic-benchmarks/compound.en.md
+ *
+ * @financial-math-exception A what-if curve: compound growth drawn from the annual rate and the offset the
+ * user enters, to compare with the series on screen. It is a hypothetical path, not a figure of the user's
+ * holdings, so it stays in the browser (developer docs, financial_math.md, rule 6).
  */
 
 import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';

@@ -88,7 +88,7 @@ at 300 on 3 April, the receiving side on 5 April:
 
 | Role | Path |
 |------|------|
-| `_auto_cost_source`, `_compute_wac_for_auto_items` | `backend/app/services/transaction_service.py` |
+| `_auto_cost_source`, `_compute_wac_for_auto_items` | `backend/app/services/transactions/auto_cost.py` |
 | The facade, `compute_wac_iterative` | `backend/app/services/portfolio_service.py` |
 | The average-cost function (unchanged) | `backend/app/services/financial_math/average_cost.py` |
 | P30–P35 | `backend/test_scripts/test_api/test_wac_inline.py` |

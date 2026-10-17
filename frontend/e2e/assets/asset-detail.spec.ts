@@ -17,6 +17,9 @@ import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetDetailPage, goToAssetsPage} from './assets-helpers';
 import {t} from '../fixtures/i18n-data';
 import {schemas} from '../../src/lib/api/generated';
+import {daysAgoIso} from '../fixtures/dates';
+import {optionsClosed} from '../fixtures/probe';
+import {overwriteCounts, overwriteWarningSentence, pageLanguage, recordSyncRequests, storedAssetPrices, type SyncPeriod} from '../fixtures/sync-overwrite';
 
 test.describe('Shared chart settings source contracts', () => {
     const fxPageSource = () => readFileSync(new URL('../../src/routes/(app)/fx/+page.svelte', import.meta.url), 'utf8');
@@ -100,13 +103,21 @@ async function mockDetailAssetWithGlobalTransactions(page: Page, assetId: number
  *
  * Kept as one helper because the "Asset Detail Page" suite and other sibling suites in
  * this file (e.g. the live price flash tests below) can share it.
+ *
+ * Y-33: the click is a cold client-side navigation, and SvelteKit changes the URL only
+ * once the detail route's chunk is imported — the slow part in a fresh context under
+ * load — so the URL gets its own 30 s ceiling and the root keeps 10 s for the render.
+ * On 17/10, at a 1-minute load of 93, one 10 s wait covering both expired with the page
+ * still on the list, while the same test passed alone in 4.1 s. The click is not
+ * retried: a swallowed click must fail here, on the URL.
  */
 async function goToSeededAssetDetail(page: import('@playwright/test').Page) {
     await goToAssetsPage(page);
     const card = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
     await expect(card, 'the seeded Apple asset must be on the list').toBeVisible({timeout: 10_000});
     await card.click();
-    await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
+    await expect(page, 'the card click navigates to the asset detail page').toHaveURL(/\/assets\/\d+(?:\?|$)/, {timeout: 30_000});
+    await expect(page.getByTestId('asset-detail-page'), 'the asset detail page renders once its URL has landed').toBeVisible({timeout: 10_000});
     await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
 }
 
@@ -142,6 +153,9 @@ async function expectAssetDetailChartCanvas(page: import('@playwright/test').Pag
 }
 
 test.describe('Asset Detail Page', () => {
+    // A ceiling, never a delay: above goToSeededAssetDetail's 30 s URL ceiling (Y-33), so a slow navigation can fail on the helper's own message, not the test timeout (Y-34).
+    test.describe.configure({timeout: 60_000});
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
     });
@@ -217,10 +231,15 @@ test.describe('Asset Detail Page', () => {
         await expect(toolbar).toBeVisible();
         await expect(toolbar.getByTestId('ai-export-button')).toBeVisible();
         await expect(page.getByTestId('risk-sync-button')).toHaveCount(0);
-        await expect(page.getByTestId('risk-refresh-button')).toHaveCount(0);
 
-        // The refresh *is* about the request: it must reach the server rather than
-        // be answered from the cache, so here the network is the subject.
+        // One Refresh per page (Y11, decision 48): the panel has none of its own,
+        // and the toolbar's reloads the risk through `refreshVersion`. That refresh
+        // *is* about the request: it must reach the server rather than be answered
+        // from the cache, so here the network is the subject. Pressed only once the
+        // panel's first base wave has landed: a forced question still joins one in
+        // flight for the same key instead of sending its own, and a first-wave
+        // request sent after the wait is armed would pass for the refresh's.
+        await expect(page.getByTestId('asset-detail-risk-panel').getByTestId('risk-analysis-panel'), "premise: the risk panel's first base wave never landed").toHaveAttribute('data-busy', 'false', {timeout: 60_000});
         const refreshedRiskRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/risk/query');
         await toolbar.getByTestId('asset-detail-refresh-btn').click();
         await refreshedRiskRequest;
@@ -282,7 +301,11 @@ test.describe('Asset Detail Page', () => {
         await page.getByTestId('signal-tree-group-risk').click();
         await expect(page.getByTestId('signal-tree-option-risk-drawdown')).toBeVisible();
         await expect(page.getByTestId('signal-tree-option-risk-rolling-volatility')).toBeVisible();
-        await expect(page.getByTestId('signal-tree-option-risk-rolling-return')).toBeVisible();
+        // Decision 29: ONE Rolling Return, in calendar days. The calendar one is offered and the
+        // observation-count one is gone from the catalog; its absence is read only once its risk
+        // siblings are on screen, so "not rendered yet" cannot pass for "removed".
+        await expect(page.getByTestId('signal-tree-option-asset-calendar-rolling-return')).toBeVisible();
+        await expect(page.getByTestId('signal-tree-option-risk-rolling-return')).toHaveCount(0);
         await expect(page.getByTestId('signal-tree-option-risk-rolling-sharpe')).toBeVisible();
         await page.getByTestId('signal-tree-option-risk-rolling-beta').click();
 
@@ -306,6 +329,72 @@ test.describe('Asset Detail Page', () => {
         }>;
         const betaSignal = requestBody.flatMap((item) => item.signals ?? []).find((signal) => signal.signal_code === 'RISK_ROLLING_BETA');
         expect(betaSignal?.params?.comparison_asset_id).toBeGreaterThan(0);
+    });
+
+    test('the calendar Rolling Return from the risk tree is queried with its 30-day window and shows no error', async ({page}) => {
+        // Raised for a cold navigation through goToSeededAssetDetail, slow under load, then one signal round-trip.
+        // The helper's waits are ceilings: this test timeout, not their sum, bounds the navigation.
+        test.setTimeout(60_000);
+        // Decision 29 published ASSET_CALENDAR_ROLLING_RETURN in the catalog. Until then it fed only the
+        // page's primary calendar mode (instance `asset-calendar-return`, driven by «calendar-return primary
+        // mode queries exact windows…»). Here it is the tree's overlay: another instance, on the seeded
+        // asset, against the real backend. Nothing is written server-side; the selection lives in this
+        // context's localStorage only.
+        const primaryCalendarInstanceId = 'asset-calendar-return';
+        await goToSeededAssetDetail(page);
+        const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
+        const signalsPanel = page.getByTestId('asset-detail-signals-panel');
+        if ((await signalsToggle.getAttribute('aria-expanded')) !== 'true') await signalsToggle.click();
+        await expect(signalsToggle).toHaveAttribute('aria-expanded', 'true');
+        await expect(signalsPanel).toBeVisible({timeout: 5_000});
+
+        await signalsPanel.getByTestId('signals-indicator-select-button').click();
+        const riskGroup = page.getByTestId('signal-tree-group-risk');
+        await expect(riskGroup).toBeVisible();
+        if ((await riskGroup.getAttribute('aria-expanded')) !== 'true') await riskGroup.click();
+        await expect(riskGroup).toHaveAttribute('aria-expanded', 'true');
+        // The option belongs to the risk group: it sits in the item list that group opens.
+        const calendarOption = riskGroup.locator('xpath=following-sibling::*[@role="group"][1]').getByTestId('signal-tree-option-asset-calendar-rolling-return');
+        await expect(calendarOption).toBeVisible();
+
+        type QuerySignal = {instance_id?: string; signal_code?: string; params?: {window_days?: unknown}};
+        type QueryItem = {signals?: QuerySignal[]};
+        const overlaySignalsOf = (body: unknown): QuerySignal[] => (Array.isArray(body) ? (body as QueryItem[]).flatMap((item) => item.signals ?? []).filter((signal) => signal.signal_code === 'ASSET_CALENDAR_ROLLING_RETURN' && signal.instance_id !== primaryCalendarInstanceId) : []);
+        const overlayResponse = page.waitForResponse(
+            (response) => {
+                const request = response.request();
+                if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
+                try {
+                    return overlaySignalsOf(request.postDataJSON()).length > 0;
+                } catch {
+                    return false;
+                }
+            },
+            {timeout: 20_000},
+        );
+        await calendarOption.click();
+        const response = await overlayResponse;
+
+        const [overlaySignal, ...otherOverlays] = overlaySignalsOf(response.request().postDataJSON());
+        expect(otherOverlays, 'one calendar overlay instance in the request').toEqual([]);
+        expect(overlaySignal.params?.window_days).toBe(30);
+        expect(response.ok(), `POST /api/v1/assets/prices/query answered ${response.status()}`).toBe(true);
+
+        // The selected signal's card is the tree's instance: its id is the request's instance_id.
+        const calendarCard = signalsPanel.locator('[data-testid^="signal-card-"][data-signal-type="asset-calendar-rolling-return"]');
+        await expect(calendarCard).toHaveCount(1);
+        await expect(calendarCard).toHaveAttribute('data-testid', `signal-card-${overlaySignal.instance_id}`);
+
+        // The backend computed it rather than refused it: a result for this instance, neither failed nor unavailable.
+        const payload = (await response.json()) as {items?: Array<{signals?: Array<{instance_id?: string; status?: string}>}>};
+        const overlayResult = payload.items?.flatMap((item) => item.signals ?? []).find((result) => result.instance_id === overlaySignal.instance_id);
+        expect(overlayResult?.status, 'status of the calendar overlay result').toMatch(/^(ok|partial)$/);
+
+        // Presence barrier for the absence below: the answer has been applied to the card (its spinner is gone),
+        // so "no error problem" speaks about the result rather than about a card still loading. A partial result
+        // may carry a warning (UNDEFINED_METRIC_WINDOW, a short warm-up); an error is what must not appear.
+        await expect(calendarCard.getByTestId('signal-loading')).toHaveCount(0);
+        await expect(calendarCard.locator('[data-testid="signal-issue"][data-severity="error"]')).toHaveCount(0);
     });
 
     // ========================================================================
@@ -2258,7 +2347,7 @@ test.describe('Asset Detail Page', () => {
             const responseItems = deferred?.outcome === 'i60h-main-omitted' ? items.filter((item) => item.asset_id !== assetId) : deferred?.outcome === 'i60h-ready-peer-omitted' ? items.filter((item) => item.asset_id !== readyPeer.id) : items;
             await route.fulfill({json: {items: responseItems}});
         });
-        await page.route('**/api/v1/assets/prices/current', async (route) => {
+        await page.route('**/api/v1/assets/prices/current*', async (route) => {
             await route.fulfill({json: {results: [], success_count: 0, errors: []}});
         });
 
@@ -2541,6 +2630,72 @@ test.describe('Asset Detail Page', () => {
             await expect(dateRangeEndInput).toHaveValue(range.end);
             await expect(chart).toHaveAttribute('data-calendar-range-days', String(range.spanDays));
             return mainResponse.request();
+        };
+
+        // Y11, developer decision 48: the toolbar's Refresh is disabled while a
+        // big request of the page is in flight — a refresh, a period, a signal
+        // change, and since N64 a mode or a calendar window — so it can never
+        // start a refresh beside one the test holds. The page's own Sync can:
+        // the reload after a sync (`handlePageSyncComplete` → `handleRefresh`,
+        // the very same refresh) holds no token (P3). Every item answers
+        // `skipped`: the run is not accepted, so no fixture flag moves (an
+        // accepted FX leg would set `priceComparisonSyncSucceeded` and clear
+        // the missing routes) and no portfolio write is reported. The dialog
+        // asks the exchange-rate provider catalogue when it opens, for icons
+        // (`getCurrencyGraph()`), and the backend builds that catalogue by
+        // asking the providers, some over the network: it is answered here,
+        // empty, from the first call on (a page route, so across reloads too).
+        // Returns with the dialog closed and the reload under way, its requests
+        // the caller's to hold and await; `settled()` waits until that reload
+        // has reached its metadata — the provider assignment `reloadMetadata`
+        // asks once `handleRefresh` is over.
+        let fxProviderCatalogAnswered = false;
+        const refreshThroughPageSync = async (): Promise<{settled: () => Promise<void>}> => {
+            if (nextAssetSyncStatusesById !== null || nextFxSyncStatusesBySlug !== null || deferredAssetSyncResponse !== null || deferredFxSyncResponse !== null || deferredFxSyncResponses.size > 0) {
+                throw new Error('refreshThroughPageSync needs the sync stubs at rest: no per-item status and no held answer');
+            }
+            if (!fxProviderCatalogAnswered) {
+                await page.route(
+                    (url) => url.pathname === '/api/v1/fx/providers',
+                    async (route) => {
+                        if (route.request().method() !== 'GET') return route.fallback();
+                        await route.fulfill({json: []});
+                    },
+                );
+                fxProviderCatalogAnswered = true;
+            }
+            const statusesBefore = {asset: nextAssetSyncStatus, fx: nextFxSyncStatus};
+            const assetSyncRequestsBefore = assetSyncRequestCount;
+            const metadataReload = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/assets/provider/assignments', {timeout: 60_000});
+            // Handled, so a scenario that fails before `settled()` leaves no rejection behind.
+            void metadataReload.catch(() => undefined);
+            nextAssetSyncStatus = 'skipped';
+            nextFxSyncStatus = 'skipped';
+            try {
+                const pageSyncTrigger = page.getByTestId('asset-detail-sync-btn');
+                await expect(pageSyncTrigger).toBeEnabled();
+                await pageSyncTrigger.click();
+                const pageSyncDialog = page.getByTestId('page-sync-modal');
+                await expect(pageSyncDialog).toBeVisible();
+                await pageSyncDialog.getByTestId('sync-modal-start').click();
+                const pageSyncOutcome = pageSyncDialog.getByTestId('sync-modal-results');
+                await expect(pageSyncOutcome).toBeVisible({timeout: 10_000});
+                // Every section has answered, and `onsynced` — the reload — has run.
+                await expect(pageSyncDialog.getByTestId('sync-modal-body')).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+                await expect(pageSyncOutcome, 'every item answered skipped: the run was not accepted').toHaveAttribute('data-success', '0');
+                expect(assetSyncRequestCount, 'the page sync asked the Asset stub once').toBe(assetSyncRequestsBefore + 1);
+                await pageSyncDialog.getByTestId('sync-modal-close').click();
+                await expect(pageSyncDialog).toBeHidden();
+            } finally {
+                nextAssetSyncStatus = statusesBefore.asset;
+                nextFxSyncStatus = statusesBefore.fx;
+            }
+            return {
+                settled: async () => {
+                    const response = await metadataReload;
+                    expect(response.ok(), 'the metadata reload after the page sync failed').toBe(true);
+                },
+            };
         };
 
         await expect(chart).toHaveAttribute('data-primary-mode', 'price');
@@ -3264,11 +3419,15 @@ test.describe('Asset Detail Page', () => {
         // peer/range/currency fingerprint. Changing the range starts a
         // successor which must be the only response allowed to publish runtime
         // points, event summaries, or FX diagnostics.
+        // The switch to Price runs its own load (N64, `asset-mode`) and the
+        // Refresh button waits for it: settled before the gate is armed, so the
+        // comparison the gate holds is always Refresh's own.
+        await pricePrimary.click();
+        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
+        await expect(refreshButton).toBeEnabled();
         const stalePriceComparisonGate = deferStalePriceComparisonResponse(longRange, true);
         const stalePriceComparisonRequestPromise = waitForPriceComparisonRequest(comparisonPeerIds, longRange, asset.currency);
         const stalePriceComparisonResponsePromise = waitForPriceComparisonResponse(comparisonPeerIds, longRange, asset.currency);
-        await pricePrimary.click();
-        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
         await refreshButton.click();
         const stalePriceComparisonRequest = await stalePriceComparisonRequestPromise;
         assertPriceComparisonRequest(stalePriceComparisonRequest.postDataJSON(), comparisonPeerIds, longRange, asset.currency);
@@ -3304,6 +3463,9 @@ test.describe('Asset Detail Page', () => {
         // comparison already in flight. Hold both generations so the first
         // stale payload can be released while its forced successor is still
         // pending, and count the two main/comparison request pairs exactly.
+        // The first generation is the reload after the page's own Sync — the
+        // same `handleRefresh`, with no token (P3) — since Refresh itself is
+        // disabled while a refresh it started is still in flight (Y11).
         const ninetyDayComparisonRangeKey = `${ninetyDayRange.start}|${ninetyDayRange.end}`;
         const sameFingerprintPriceQueriesBefore = priceQueryRequestCount;
         const sameFingerprintMainRequestsBefore = mainPriceRequestCount;
@@ -3315,7 +3477,7 @@ test.describe('Asset Detail Page', () => {
         const preForcedRefreshMainResponsePromise = waitForMainPriceResponse(ninetyDayRange);
         const preForcedRefreshComparisonRequestPromise = waitForPriceComparisonRequest(comparisonPeerIds, ninetyDayRange, asset.currency);
         const preForcedRefreshComparisonResponsePromise = waitForPriceComparisonResponse(comparisonPeerIds, ninetyDayRange, asset.currency);
-        await refreshButton.click();
+        const preForcedRefreshSync = await refreshThroughPageSync();
 
         const preForcedRefreshMainRequest = await preForcedRefreshMainRequestPromise;
         assertMainDateRange(preForcedRefreshMainRequest.postDataJSON(), ninetyDayRange);
@@ -3326,6 +3488,8 @@ test.describe('Asset Detail Page', () => {
         const preForcedRefreshComparisonRequest = await preForcedRefreshComparisonRequestPromise;
         assertPriceComparisonRequest(preForcedRefreshComparisonRequest.postDataJSON(), comparisonPeerIds, ninetyDayRange, asset.currency);
         await expect.poll(() => priceComparisonRequestCountsByRange.get(ninetyDayComparisonRangeKey) ?? 0).toBe(sameFingerprintRangeRequestsBefore + 1);
+        // The first generation is held, and Refresh can be pressed: nothing the
+        // page waits for is pending.
         await expect(refreshButton).toBeEnabled();
 
         const forcedRefreshSuccessorGate = deferNextPriceComparisonResponse();
@@ -3369,6 +3533,7 @@ test.describe('Asset Detail Page', () => {
         expect(calendarRequestCount).toBe(sameFingerprintCalendarRequestsBefore);
         priceComparisonRaceActive = false;
         await expectSuccessorPriceComparisonState();
+        await preForcedRefreshSync.settled();
 
         // The forced successor above has completed, and the focus round-trip
         // runs after its promise-settlement microtask clears the remembered
@@ -3812,6 +3977,9 @@ test.describe('Asset Detail Page', () => {
         // hold its main await, then let the older comparison inject runtime data
         // while the style editor replaces the persisted signal object. The
         // current owner must continue with exactly one forced successor.
+        // The refresh is the one the page's own Sync runs, the same
+        // `handleRefresh` with no token (P3): the held peer change keeps the
+        // Refresh button disabled (Y11), and a peer change has no untracked path.
         const cosmeticRefreshPriceQueriesBefore = priceQueryRequestCount;
         const cosmeticRefreshMainRequestsBefore = mainPriceRequestCount;
         const cosmeticRefreshComparisonRequestsBefore = priceComparisonRequestCount;
@@ -3828,8 +3996,7 @@ test.describe('Asset Detail Page', () => {
         const cosmeticRefreshMainRequestPromise = waitForMainPriceRequest(ninetyDayRange);
         const cosmeticRefreshMainResponsePromise = waitForMainPriceResponse(ninetyDayRange);
         const cosmeticRefreshComparisonRequestPromise = waitForPriceComparisonRequest(replacementPeerIds, ninetyDayRange, asset.currency);
-        await expect(refreshButton).toBeEnabled();
-        await refreshButton.click();
+        const cosmeticRefreshSync = await refreshThroughPageSync();
         const cosmeticRefreshMainRequest = await cosmeticRefreshMainRequestPromise;
         assertMainDateRange(cosmeticRefreshMainRequest.postDataJSON(), ninetyDayRange);
 
@@ -3874,6 +4041,7 @@ test.describe('Asset Detail Page', () => {
         expect(mainPriceRequestCount).toBe(cosmeticRefreshMainRequestsBefore + 1);
         expect(priceComparisonRequestCount).toBe(cosmeticRefreshComparisonRequestsBefore);
         await expect(readySignalCard.getByRole('button', {name: '📈3', exact: true})).toBeVisible();
+        await cosmeticRefreshSync.settled();
 
         const restoreCosmeticPeerResponsePromise = waitForPriceComparisonResponse(comparisonPeerIds, ninetyDayRange, asset.currency);
         await selectComparisonAsset(readySignalId, readyPeer.id);
@@ -7177,6 +7345,8 @@ test.describe('Asset Detail Page', () => {
         await expect(chart.getByTestId('asset-calendar-window-3m')).toHaveAttribute('aria-pressed', 'false');
         await expect(pageRoot).toHaveAttribute('data-busy', 'true');
         await expect(loadingNotice).toBeVisible();
+        // The 1Y window's load, still gated, holds the Refresh button (N64,
+        // `asset-calendar-window`): the stale refresh's end must not free it.
         await expect(refreshButton).toBeDisabled();
 
         const latestPartialResponsePromise = waitForCalendarResponse(365);
@@ -7388,6 +7558,11 @@ test.describe('Asset Detail Page', () => {
         // resolves the concrete range and auto-schedules one forced comparison
         // successor. handleRefresh() must join that owned successor rather
         // than issuing a second same-fingerprint request.
+        // The refresh is the one the page's own Sync runs, the same
+        // `handleRefresh` with no token (P3): the MAX period and both returns
+        // to Price above still wait on the gated concrete and provisional
+        // comparisons, so the Refresh button is disabled (Y11, N64), and
+        // releasing them first would lose what their late answers prove below.
         const maxRefreshPriceQueriesBefore = priceQueryRequestCount;
         const maxRefreshMainRequestsBefore = mainPriceRequestCount;
         const maxRefreshComparisonRequestsBefore = priceComparisonRequestCount;
@@ -7415,7 +7590,7 @@ test.describe('Asset Detail Page', () => {
         );
         const maxRefreshComparisonGate = deferNextPriceComparisonResponse();
         const maxRefreshComparisonRequestPromise = waitForPriceComparisonRequest(comparisonPeerIds, concreteMaxRange, asset.currency);
-        await refreshButton.click();
+        const maxRefreshSync = await refreshThroughPageSync();
         const maxRefreshMainRequest = await maxRefreshMainRequestPromise;
         expect(parseQueries(maxRefreshMainRequest.postDataJSON()).find((query) => query.asset_id === assetId)?.date_range).toEqual({
             start: '2000-01-01',
@@ -7475,6 +7650,7 @@ test.describe('Asset Detail Page', () => {
         await expect(pricePrimary).toBeFocused();
         await expect.poll(() => priceComparisonRequestCountsByRange.get(concreteMaxComparisonRangeKey) ?? 0).toBe(forcedConcreteMaxComparisonRequestCount + 2);
         await expect.poll(readChartComparisonLineLabels).toEqual(expect.arrayContaining(comparisonPeers.map((peer) => peer.display_name)));
+        await maxRefreshSync.settled();
 
         const concreteMaxCalendarGate = deferCalendarResponse(365, 'ready');
         const concreteMaxCalendarRequestPromise = waitForCalendarRequest(365);
@@ -8054,6 +8230,9 @@ test.describe('Asset Detail Page', () => {
 // time.
 // ============================================================================
 test.describe('Live price direction flash', () => {
+    // A ceiling, never a delay: above goToSeededAssetDetail's 30 s URL ceiling (Y-33), so a slow navigation can fail on the helper's own message, not the test timeout (Y-34).
+    test.describe.configure({timeout: 60_000});
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
     });
@@ -8062,12 +8241,12 @@ test.describe('Live price direction flash', () => {
      * Intercepts POST /api/v1/assets/prices/current and answers with
      * `price.value` (as of today) for every requested asset id. `price` is a
      * mutable box the test mutates between polls to simulate a new tick —
-     * every intercepted request (from either of the detail page's two live
-     * price pollers) reads whatever value is current at call time, so the
-     * mock stays correct regardless of call count/order.
+     * every intercepted request (from the detail page's single live price
+     * poller, every 30 s) reads whatever value is current at call time, so
+     * the mock stays correct regardless of call count/order.
      */
     async function mockCurrentPrice(page: import('@playwright/test').Page, price: {value: number}) {
-        await page.route('**/api/v1/assets/prices/current', async (route) => {
+        await page.route('**/api/v1/assets/prices/current*', async (route) => {
             const ids = (route.request().postDataJSON() as number[] | null) ?? [];
             const today = new Date().toISOString().slice(0, 10);
             await route.fulfill({
@@ -8089,7 +8268,6 @@ test.describe('Live price direction flash', () => {
     }
 
     test('first tick after load is neutral — no previous value to compare against', async ({page}) => {
-        test.setTimeout(20_000);
         const price = {value: 100};
         await mockCurrentPrice(page, price);
         await page.clock.install();
@@ -8103,7 +8281,6 @@ test.describe('Live price direction flash', () => {
     });
 
     test('an up-tick flashes green then decays back to neutral', async ({page}) => {
-        test.setTimeout(20_000);
         const price = {value: 100};
         await mockCurrentPrice(page, price);
         await page.clock.install();
@@ -8111,6 +8288,17 @@ test.describe('Live price direction flash', () => {
 
         const priceEl = page.getByTestId('asset-detail-live-price');
         await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral', {timeout: 5_000});
+        // Before any live poll the element shows the chart's last close (seeded
+        // Apple, ~185) and is already neutral: only the first live poll can show
+        // 100.00, so after this the previous value is 100.
+        await expect(priceEl).toHaveText('100.00', {timeout: 5_000});
+        // Pause the clock: running in real time, the ~1.3 s flash-decay timer fires by
+        // itself, and a stall of the page or the worker longer than that would hide the
+        // flash from the checks; paused, fastForward(30_000) fires the next poll and
+        // fastForward(1_500) the decay, deterministically. pauseAt refuses the past: page
+        // time + 5 s leaves room for the round trip and fires nothing (next poll ~30 s
+        // after the first, idle pause at 2 min, no decay timer while neutral).
+        await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 5_000);
 
         // New tick with a HIGHER value than the previous poll.
         price.value = 105;
@@ -8129,7 +8317,6 @@ test.describe('Live price direction flash', () => {
     });
 
     test('a down-tick flashes red then decays back to neutral', async ({page}) => {
-        test.setTimeout(20_000);
         const price = {value: 100};
         await mockCurrentPrice(page, price);
         await page.clock.install();
@@ -8137,6 +8324,17 @@ test.describe('Live price direction flash', () => {
 
         const priceEl = page.getByTestId('asset-detail-live-price');
         await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral', {timeout: 5_000});
+        // Before any live poll the element shows the chart's last close (seeded
+        // Apple, ~185) and is already neutral: only the first live poll can show
+        // 100.00, so after this the previous value is 100.
+        await expect(priceEl).toHaveText('100.00', {timeout: 5_000});
+        // Pause the clock: running in real time, the ~1.3 s flash-decay timer fires by
+        // itself, and a stall of the page or the worker longer than that would hide the
+        // flash from the checks; paused, fastForward(30_000) fires the next poll and
+        // fastForward(1_500) the decay, deterministically. pauseAt refuses the past: page
+        // time + 5 s leaves room for the round trip and fires nothing (next poll ~30 s
+        // after the first, idle pause at 2 min, no decay timer while neutral).
+        await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 5_000);
 
         // New tick with a LOWER value than the previous poll.
         price.value = 95;
@@ -8153,7 +8351,6 @@ test.describe('Live price direction flash', () => {
     });
 
     test('consecutive same-direction ticks each restart the flash', async ({page}) => {
-        test.setTimeout(20_000);
         const price = {value: 100};
         await mockCurrentPrice(page, price);
         await page.clock.install();
@@ -8161,6 +8358,17 @@ test.describe('Live price direction flash', () => {
 
         const priceEl = page.getByTestId('asset-detail-live-price');
         await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral', {timeout: 5_000});
+        // Before any live poll the element shows the chart's last close (seeded
+        // Apple, ~185) and is already neutral: only the first live poll can show
+        // 100.00, so after this the previous value is 100.
+        await expect(priceEl).toHaveText('100.00', {timeout: 5_000});
+        // Pause the clock: running in real time, the ~1.3 s flash-decay timer fires by
+        // itself, and a stall of the page or the worker longer than that would hide the
+        // flash from the checks; paused, fastForward(30_000) fires the next poll and
+        // fastForward(1_500) the decay, deterministically. pauseAt refuses the past: page
+        // time + 5 s leaves room for the round trip and fires nothing (next poll ~30 s
+        // after the first, idle pause at 2 min, no decay timer while neutral).
+        await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 5_000);
 
         price.value = 101;
         await page.clock.fastForward(30_000);
@@ -8248,7 +8456,7 @@ async function mockCacheHitEventsAsset(page: Page, assetId: number) {
     await page.route('**/api/v1/assets/query*', async (route) => {
         await route.fulfill({json: [asset]});
     });
-    await page.route('**/api/v1/assets/prices/current', async (route) => {
+    await page.route('**/api/v1/assets/prices/current*', async (route) => {
         await route.fulfill({json: {results: [], success_count: 0, errors: []}});
     });
     await page.route('**/api/v1/assets/prices/query', async (route) => {
@@ -8364,8 +8572,10 @@ test.describe('All-range event markers on a price-cache hit', () => {
         const card = page.getByTestId(`asset-card-${assetId}`);
         await expect(card).toBeVisible({timeout: 10_000});
         await card.click();
+        // The URL, then the root, each with its own ceiling — why: goToSeededAssetDetail's Y-33 paragraph.
+        await expect(page, 'the card click navigates to the detail page of this asset').toHaveURL(new RegExp(`/assets/${assetId}(?:\\?|$)`), {timeout: 30_000});
         const detail = page.getByTestId('asset-detail-page');
-        await expect(detail).toBeVisible({timeout: 10_000});
+        await expect(detail, 'the asset detail page renders once its URL has landed').toBeVisible({timeout: 10_000});
         await waitForSettled(detail, 20_000);
 
         const eventsOnly = await waitForDeliveredPriceQuery(log, detailMark, (entry) => entry.assetId === assetId && entry.includePrice === false && entry.includeEvents === true, 'the detail must reuse the list cache and ask only for events');
@@ -8419,5 +8629,620 @@ test.describe('All-range event markers on a price-cache hit', () => {
 
         // Red before the fix: the answer was discarded, so the chart kept the 1Y events.
         await expect.poll(readNotes, {message: 'the second All must bring the old dividend back', timeout: 10_000}).toEqual([oldNotes, recentNotes(firstPriceDate)].sort());
+    });
+});
+
+// ============================================================================
+// G-4 — Provider chip names the provider once its catalogue arrives
+// ============================================================================
+// The header chip renders `getAssetProviderName(assetInfo.provider_code)`, a
+// lookup in a plain Map filled from GET /api/v1/assets/provider. It reacts to
+// `assetInfo` alone, and the page fetches asset and catalogue in parallel: when
+// the asset wins, the chip is drawn with the raw code (`yfinance`) and never
+// redrawn, though the icon beside it does arrive. Gallery noise: one run shot
+// «Yahoo Finance», the next «yfinance».
+//
+// Left to the network the order is a coin toss. Holding every catalogue request
+// until the header shows the asset makes the losing order — asset first,
+// catalogue second — the only one possible; a fresh document guarantees the
+// module-level catalogue cache is empty, so there is a request to hold.
+//
+// Red before the fix: the chip stays on the code, and the last assertion times
+// out on `Received: "yfinance"`. Green once the name also reads
+// `$assetProvidersVersion`, which the catalogue bumps when it lands.
+// ============================================================================
+test.describe('Provider chip names the provider once its catalogue arrives', () => {
+    // The offline-fallback service worker is blocked so that every request of this block meets
+    // `page.route`, as in default-currency.spec.ts: a gate that could be stepped around would
+    // prove nothing. Local to this block; the shared config is untouched.
+    test.use({serviceWorkers: 'block'});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('the header chip trades the raw provider code for the catalogue name when the catalogue lands after the asset', async ({page}) => {
+        // A sign-in that may take most of the 30 s default on a loaded lane, then a fresh page load
+        // and a held request: at the default, a slow sign-in would turn the verdict into a test
+        // timeout instead of the chip assertion below. A ceiling, never a delay.
+        test.setTimeout(60_000);
+        const assetName = 'Apple Inc.';
+
+        // The asset, by its unique name, from the endpoint the page itself reads it from.
+        const lookup = await page.request.get(`/api/v1/assets/query?search=${encodeURIComponent(assetName)}`);
+        expect(lookup.ok(), `asset lookup failed (HTTP ${lookup.status()})`).toBe(true);
+        const matches = ((await lookup.json()) as Array<{id: number; display_name: string; provider_code?: string | null}>).filter((candidate) => candidate.display_name === assetName);
+        expect(matches, `exactly one seeded «${assetName}» — check populate_mock_data.py (populate_assets)`).toHaveLength(1);
+        const asset = matches[0];
+        const providerCode = asset.provider_code;
+        if (!providerCode) throw new Error(`«${assetName}» has no provider_code, so its header shows the Manual chip — check populate_mock_data.py (populate_asset_provider_assignments).`);
+
+        // The name the chip owes the user, from the real catalogue, parsed with the schema the app's
+        // zodios client applies: a catalogue the app rejects leaves every chip on its code for a
+        // reason that is not this defect.
+        const catalogueResponse = await page.request.get('/api/v1/assets/provider');
+        expect(catalogueResponse.ok(), `provider catalogue failed (HTTP ${catalogueResponse.status()})`).toBe(true);
+        const provider = schemas.FAProviderInfo.array()
+            .parse(await catalogueResponse.json())
+            .find((entry) => entry.code === providerCode);
+        if (!provider) throw new Error(`provider «${providerCode}» of «${assetName}» is missing from GET /api/v1/assets/provider — check the asset provider registry (backend/app/services/asset_source_providers/).`);
+        // Without a name that differs from the code, a stale chip and a resolved one read the same.
+        if (provider.name.trim() === '' || provider.name === providerCode) {
+            throw new Error(`provider «${providerCode}» is named «${provider.name}» in the catalogue, which is what a stale chip shows: this test would prove nothing — check provider_name in the asset provider registry (backend/app/services/asset_source_providers/).`);
+        }
+        // The chip is found by this icon, and the icon's arrival is the "catalogue applied" barrier.
+        const iconUrl = provider.icon_url;
+        if (!iconUrl) throw new Error(`provider «${providerCode}» has no icon_url, by which this test finds the chip — check get_icon in the asset provider registry (backend/app/services/asset_source_providers/).`);
+
+        // The gate. The exact path, not `**/assets/provider**`: that glob would also hold
+        // /assets/provider/assignments and /assets/provider/search, and `held` would stop being
+        // about the catalogue.
+        let held = 0;
+        let release = () => {};
+        const released = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        const isCatalogue = (url: URL) => url.pathname === '/api/v1/assets/provider';
+        const holdCatalogue: Parameters<Page['route']>[1] = async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            held += 1;
+            await released;
+            await route.continue();
+        };
+        // Answered here: the real poll asks the provider and upserts today's row on the shared asset.
+        const livePrice = '**/api/v1/assets/prices/current*';
+        const answerLivePrice: Parameters<Page['route']>[1] = (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}});
+        await page.route(isCatalogue, holdCatalogue);
+        await page.route(livePrice, answerLivePrice);
+
+        try {
+            // A fresh document, since the catalogue cache lives as long as one. Not
+            // goToAssetDetailPage(): its data-busy="false" cannot come while the catalogue is held.
+            await page.goto(`/assets/${asset.id}`, {waitUntil: 'domcontentloaded', timeout: 20_000});
+
+            // Barrier: the asset is drawn — chip included — while the catalogue is still held.
+            const info = page.getByTestId('asset-detail-header').getByTestId('asset-detail-info');
+            await expect(info, 'the header shows the asset while the provider catalogue is held').toBeVisible({timeout: 20_000});
+            await expect(info).toContainText(asset.display_name);
+            await expect.poll(() => held, {message: 'the page asked for the provider catalogue and the gate holds it; otherwise the order under test never happened', timeout: 5_000}).toBeGreaterThan(0);
+
+            release();
+            await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+            // The catalogue has been applied: the page takes the chip's icon from it once the load is over.
+            const iconSelector = `img[src=${JSON.stringify(iconUrl)}]`;
+            await expect(info.locator(iconSelector), 'the catalogue icon reaches the provider chip').toBeAttached({timeout: 5_000});
+
+            // The chip is the span holding the catalogue's own icon: no test id, class or position.
+            // An exact text rather than a header-wide toContainText, so it also says the label is not
+            // the raw code (name ≠ code, checked above). Provider names come from the backend
+            // registry, not from i18n: this is not an assertion on translated text.
+            const chip = info.locator('span', {has: page.locator(iconSelector)});
+            await expect(chip, `the provider chip names «${providerCode}» as the catalogue does, not by its raw code`).toHaveText(provider.name, {timeout: 5_000});
+        } finally {
+            // The routes stay until the page closes with the test, so the live-price answer outlives the asset page, whose
+            // poll would reach the provider and rewrite today's row of the shared asset. Leaving the page here instead would
+            // make the failure screenshot, taken after the test function, show about:blank.
+            release();
+        }
+    });
+});
+
+// ============================================================================
+// The page sync dialog's warning before it replaces stored prices (C-66, F-094)
+// ============================================================================
+
+/**
+ * The detail page's sync syncs this asset over the page's period — with any compared asset that has a provider, and
+ * the FX pairs the page converts through, in a section of their own — and a sync replaces what is stored in that
+ * period with the provider's values, manual edits included. Before the start the dialog says so, one warning per
+ * section. The asset section counts the page's own asset when the prices it shows in the period hold a stored row (a
+ * compared asset is not counted): `page-sync-modal-overwrite-warning` with `data-section="assets"`.
+ *
+ * The asset is Apple, the suite's known asset with price history, found by its unique name through the endpoint the
+ * page reads its prices from — which also verifies, rather than assumes, that it has a provider and stores prices in
+ * the period. The dialog is never started.
+ */
+test.describe('Asset detail — the page sync dialog warns before replacing stored prices (C-66)', () => {
+    // A ceiling, never a delay: the test reads every priced asset over its period before loading the detail page, and
+    // a describe's timeout also covers the sign-in below. Only the timeout is set: the file's parallel mode is
+    // inherited unchanged.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+        // The page polls live prices while its period reaches today: the user's today since Z-3 (`todayIso()`), the local
+        // calendar `daysAgoIso` reads too — the config sets no `timezoneId` — so a period ending yesterday never does. A
+        // poll would ask the provider and write the fresh quote as today's price of the shared asset: answered here,
+        // empty, so that «no provider is called, nothing is written» does not rest on the period's arithmetic. The
+        // warning reads the stored prices.
+        await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    });
+
+    test('the assets section counts this asset when its period holds stored prices', async ({page}) => {
+        const assetName = 'Apple Inc.';
+        const period: SyncPeriod = {start: daysAgoIso(30), end: daysAgoIso(1)};
+        const asset = (await storedAssetPrices(page, period)).find((target) => target.name === assetName);
+        if (!asset) throw new Error(`precondition: «${assetName}» is not an asset with a provider, so the page would not sync it — check populate_mock_data.py (populate_assets, populate_asset_provider_assignments)`);
+        if (asset.stored === 0) throw new Error(`precondition: «${assetName}» stores no price between ${period.start} and ${period.end} (${asset.shown} shown) — check populate_mock_data.py (populate_price_history)`);
+
+        const syncRequests = recordSyncRequests(page);
+        await goToAssetDetailPage(page, asset.id, period);
+        const syncButton = page.getByTestId('asset-detail-sync-btn');
+        // Enabled once the page has read the asset's provider assignment: a round trip of its own.
+        await expect(syncButton).toBeEnabled({timeout: 10_000});
+        await syncButton.click();
+
+        const modal = page.getByTestId('page-sync-modal');
+        await expect(modal).toBeVisible();
+        const scope = modal.getByTestId('sync-modal-count');
+        // The dialog syncs the page's period: the one the prices were read over.
+        await expect(scope).toContainText(period.start);
+        await expect(scope).toContainText(period.end);
+
+        const warning = modal.locator('[data-testid="page-sync-modal-overwrite-warning"][data-section="assets"]');
+        await expect(warning, 'one warning for the assets section').toHaveCount(1);
+        const {existing, total} = await overwriteCounts(warning);
+        expect(existing, 'the page counts its own asset, whose stored prices it shows').toBe(1);
+        expect(total, 'out of the assets the dialog syncs: this one, and any compared asset with a provider').toBeGreaterThanOrEqual(1);
+        expect(total, 'the assets section is part of what the dialog syncs').toBeLessThanOrEqual(Number(await scope.getAttribute('data-item-count')));
+        // The catalogue's sentence for these counts, in the page's language — led by the section's title when the FX
+        // section is active too, hence contained rather than equal.
+        await expect(warning).toContainText(overwriteWarningSentence(await pageLanguage(page), existing, total));
+
+        // Still before the start, and closed from there: the dialog is never started.
+        await expect(modal.getByTestId('sync-modal-results')).toHaveCount(0);
+        await modal.getByTestId('sync-modal-close').click();
+        await expect(modal).toBeHidden();
+        expect(syncRequests, 'no sync request left the page: no provider was called').toEqual([]);
+    });
+});
+
+// ============================================================================
+// X-R59, lot B — the price summary's Δ over the range comes from the backend
+// ============================================================================
+// Beside the date range the summary shows the change from the first point of the range to the price it shows: a
+// percent (`asset-price-summary-range-delta`) and an absolute change in parentheses (`asset-price-summary-range-delta-abs`).
+// The browser computes neither any more (`assetDetailRangeChange.ts`, `assetDetailLive.svelte.ts`):
+//   · the stored series' Δ is asked with `POST /assets/prices/period-changes`, one item {asset_id, as_of: the last day
+//     of the range, range_start: its first day, target_currency only when the chart is converted} — on load, on a
+//     change of range or display currency, and after a Refresh;
+//   · the live quote's Δ comes with the live poll, `POST /assets/prices/current?range_start=…` (with
+//     `&target_currency=` only when the summary converts the quote), and is the one shown whenever the summary shows
+//     the live price — never the series' beside a live price.
+//
+// Observed and answered through the network, on the synthetic EUR asset of `mockCacheHitEventsAsset` (600 daily closes
+// ending today; no provider, unless a test assigns it MOCKASSET): the period changes are fetched from the backend and
+// only this asset's `range_change` is replaced, with figures its closes could never give (they climb 0.10 a day, about
+// +4 % over the ranges used here) — so a Δ on screen comes from an answer or from nowhere. The live quote never reaches
+// the backend, which would store today's candle: it is answered here. Every route matches its path rather than a glob:
+// the poll now carries a query string, which an anchored glob such as `**/api/v1/assets/prices/current` does not
+// match. Nothing is written to the database, so there is nothing to clean up.
+//
+// Red before the cure: the summary's Δ carried no test id and was computed in the browser from the chart's points.
+// ============================================================================
+test.describe('Asset detail — the price summary shows the backend’s Δ over the range (X-R59, lot B)', () => {
+    // A ceiling, never a delay: a sign-in, a page load and the round trips each test waits for by name.
+    test.describe.configure({timeout: 60_000});
+
+    /** A change the routes answer (`change_ratio` a fraction, `change_abs` in the price's unit), and the figures the summary must show for it. */
+    type Figures = {changeRatio: string; changeAbs: string; percent: string; abs: string};
+    /** One item of a period-changes request as the page sent it (`FAPeriodChangesQueryItem`); a key it did not send reads null. */
+    type SeriesAsk = {assetId: number | null; asOf: string | null; rangeStart: string | null; targetCurrency: string | null};
+    /** One live poll as the page sent it: the asset ids of its body and the two parameters of its query. */
+    type LiveAsk = {assetIds: number[]; rangeStart: string | null; targetCurrency: string | null};
+    /** What this test's routes saw and answered. A handler records its errors: nobody awaits a route callback. */
+    type RangeDeltaTraffic = {seriesAsked: SeriesAsk[][]; seriesAnswered: number; liveAsked: LiveAsk[]; liveAnswered: number; failures: string[]};
+    type DayRange = {start: string; end: string};
+
+    /** The stored series' Δ the period changes are answered with: +42.42 % and (+12.34). */
+    const SERIES: Figures = {changeRatio: '0.4242', changeAbs: '12.34', percent: '+42.42', abs: '+12.34'};
+    /** The live quote's Δ in the asset's own currency: −13.13 % and (−7.77). */
+    const LIVE: Figures = {changeRatio: '-0.1313', changeAbs: '-7.77', percent: '-13.13', abs: '-7.77'};
+    /** The live quote's Δ in GBP, when the poll asks for it in GBP: +27.27 % and (+5.55). */
+    const LIVE_IN_GBP: Figures = {changeRatio: '0.2727', changeAbs: '5.55', percent: '+27.27', abs: '+5.55'};
+    /** The live quote, in the asset's EUR. */
+    const LIVE_PRICE = '123.45';
+    /** The same quote converted to GBP, at the rate of 2 `routeLiveConversion` answers. */
+    const LIVE_PRICE_IN_GBP = '246.90';
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    /** The backend's `range_change` for `figures`, measured from `referenceDate`; for none, all null — the backend's «no usable price». */
+    function rangeChangeOf(figures: Figures | null, referenceDate: string) {
+        return figures ? {reference_date: referenceDate, change_abs: figures.changeAbs, change_ratio: figures.changeRatio} : {reference_date: null, change_abs: null, change_ratio: null};
+    }
+
+    /** The live quote's Δ for the currency the poll asks it in: the asset's own (none asked), GBP, and none for any other. */
+    function liveFiguresFor(targetCurrency: string | null): Figures | null {
+        if (targetCurrency === null) return LIVE;
+        return targetCurrency === 'GBP' ? LIVE_IN_GBP : null;
+    }
+
+    /** A signed decimal such as `+12.34` as any of the four languages writes it: `+12.34` (English), `+12,34`; a minus may be `-` or `−`. */
+    function signedFigure(figure: string): string {
+        const parts = /^([+-])(\d+)\.(\d+)$/.exec(figure);
+        if (!parts) throw new Error(`signedFigure: ${figure} is not a signed decimal such as +12.34`);
+        return `${parts[1] === '+' ? '\\+' : '[-\\u2212]'}${parts[2]}[.,]${parts[3]}`;
+    }
+
+    /** The summary's percent, matched whole: `+42.42%` (English; Italian with a comma), `+42,42 %` (French, Spanish: a no-break space before the sign). */
+    function percentShown(figure: string): RegExp {
+        return new RegExp(`^\\s*${signedFigure(figure)}\\s?%\\s*$`);
+    }
+
+    /** The summary's absolute change, matched whole: `(+12.34)`, `(+12,34)`. */
+    function absShown(figure: string): RegExp {
+        return new RegExp(`^\\s*\\(${signedFigure(figure)}\\)\\s*$`);
+    }
+
+    /** The summary's price, matched whole: `123.45`, `123,45`. */
+    function priceShown(figure: string): RegExp {
+        const parts = /^(\d+)\.(\d+)$/.exec(figure);
+        if (!parts) throw new Error(`priceShown: ${figure} is not a decimal such as 123.45`);
+        return new RegExp(`^\\s*${parts[1]}[.,]${parts[2]}\\s*$`);
+    }
+
+    /** The price summary beside the date range: the price it shows, and the two halves of its Δ. */
+    function priceSummary(page: Page) {
+        return {
+            price: page.getByTestId('asset-detail-live-price'),
+            percent: page.getByTestId('asset-price-summary-range-delta'),
+            abs: page.getByTestId('asset-price-summary-range-delta-abs'),
+        };
+    }
+
+    /** The period-changes item the page owes `range`: its last day as `as_of`, its first as `range_start`, in `targetCurrency` or natively. */
+    function seriesAsk(assetId: number, range: DayRange, targetCurrency: string | null = null): SeriesAsk {
+        return {assetId, asOf: range.end, rangeStart: range.start, targetCurrency};
+    }
+
+    /** The live poll the page owes `range`: this asset, the first day of the range, in `targetCurrency` or natively. */
+    function liveAsk(assetId: number, range: DayRange, targetCurrency: string | null = null): LiveAsk {
+        return {assetIds: [assetId], rangeStart: range.start, targetCurrency};
+    }
+
+    /** The items of a period-changes request; an unreadable body reads as none. */
+    function seriesAsksOf(request: Request): SeriesAsk[] {
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return [];
+        }
+        if (!Array.isArray(body)) return [];
+        return body.map((raw: unknown) => {
+            const item = (raw !== null && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+            return {
+                assetId: typeof item.asset_id === 'number' ? item.asset_id : null,
+                asOf: typeof item.as_of === 'string' ? item.as_of : null,
+                rangeStart: typeof item.range_start === 'string' ? item.range_start : null,
+                targetCurrency: typeof item.target_currency === 'string' ? item.target_currency : null,
+            };
+        });
+    }
+
+    /** A live poll's asset ids (its body) and its `range_start` and `target_currency` (its query). */
+    function liveAskOf(request: Request): LiveAsk {
+        const query = new URL(request.url()).searchParams;
+        let body: unknown = null;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            body = null;
+        }
+        const assetIds = Array.isArray(body) ? body.filter((id: unknown): id is number => typeof id === 'number') : [];
+        return {assetIds, rangeStart: query.get('range_start'), targetCurrency: query.get('target_currency')};
+    }
+
+    /**
+     * Records and answers the two requests the summary's Δ comes from:
+     * - `POST /assets/prices/period-changes`: the backend's own answer, with this asset's `range_change` replaced by
+     *   `series()` — read when the request comes, so a test can change it between two requests;
+     * - `POST /assets/prices/current`: answered here and never sent on — the backend would store today's candle — with
+     *   the quote `LIVE_PRICE` and, when the poll asks a `range_start`, the Δ of `liveFiguresFor` its currency.
+     */
+    async function routeRangeDeltas(page: Page, assetId: number, series: () => Figures | null): Promise<RangeDeltaTraffic> {
+        const traffic: RangeDeltaTraffic = {seriesAsked: [], seriesAnswered: 0, liveAsked: [], liveAnswered: 0, failures: []};
+        await page.route(
+            (url) => url.pathname === '/api/v1/assets/prices/period-changes',
+            async (route) => {
+                try {
+                    const asks = seriesAsksOf(route.request());
+                    traffic.seriesAsked.push(asks);
+                    const response = await route.fetch();
+                    if (!response.ok()) {
+                        traffic.failures.push(`POST /assets/prices/period-changes: HTTP ${response.status()}: ${await response.text()}`);
+                        await route.fulfill({response});
+                        return;
+                    }
+                    const answer = (await response.json()) as {items?: Array<{asset_id?: number}>};
+                    const items = answer.items ?? [];
+                    if (!items.some((item) => item.asset_id === assetId)) {
+                        traffic.failures.push(`POST /assets/prices/period-changes: the answer holds no item for asset ${assetId}: ${JSON.stringify(answer)}`);
+                        await route.fulfill({response});
+                        return;
+                    }
+                    // A range_change answers a range_start: without one asked, the backend's answer is passed on as it is.
+                    const rangeStart = asks.find((ask) => ask.assetId === assetId)?.rangeStart;
+                    const answered = rangeStart ? items.map((item) => (item.asset_id === assetId ? {...item, range_change: rangeChangeOf(series(), rangeStart)} : item)) : items;
+                    await route.fulfill({response, json: {...answer, items: answered}});
+                } catch (error) {
+                    traffic.failures.push(`POST /assets/prices/period-changes: ${String(error)}`);
+                    await route.continue().catch(() => undefined);
+                } finally {
+                    traffic.seriesAnswered += 1;
+                }
+            },
+        );
+        await page.route(
+            (url) => url.pathname === '/api/v1/assets/prices/current',
+            async (route) => {
+                try {
+                    const ask = liveAskOf(route.request());
+                    traffic.liveAsked.push(ask);
+                    const rangeStart = ask.rangeStart;
+                    const today = daysAgoIso(0);
+                    await route.fulfill({
+                        json: {
+                            results: ask.assetIds.map((id) => ({
+                                asset_id: id,
+                                value: LIVE_PRICE,
+                                currency: 'EUR',
+                                as_of_date: today,
+                                source: 'mock',
+                                error: null,
+                                ...(rangeStart ? {range_change: rangeChangeOf(liveFiguresFor(ask.targetCurrency), rangeStart)} : {}),
+                            })),
+                            success_count: ask.assetIds.length,
+                        },
+                    });
+                } catch (error) {
+                    traffic.failures.push(`POST /assets/prices/current: ${String(error)}`);
+                    // Never sent on, even now: the backend would store today's candle.
+                    await route.fulfill({json: {results: [], success_count: 0, errors: []}}).catch(() => undefined);
+                } finally {
+                    traffic.liveAnswered += 1;
+                }
+            },
+        );
+        return traffic;
+    }
+
+    /**
+     * The provider assignment the page reads before it polls (Z-8): MOCKASSET, so the live poll runs whenever the range
+     * reaches today. The asset's list row keeps no provider code: the poll reads the assignment alone.
+     */
+    async function routeMockAssetAssignment(page: Page, assetId: number): Promise<void> {
+        await page.route(
+            (url) => url.pathname === '/api/v1/assets/provider/assignments',
+            async (route) => {
+                if (route.request().method() !== 'GET') {
+                    await route.fallback();
+                    return;
+                }
+                await route.fulfill({json: [{asset_id: assetId, provider_code: 'MOCKASSET', identifier: `SYNTH-${assetId}`, identifier_type: 'TICKER', provider_params: {}, last_fetch_at: null}]});
+            },
+        );
+    }
+
+    /**
+     * The configured FX routes (`GET /fx/providers/routes`), read by the page and by its currency selector: EUR-GBP, so
+     * the asset's EUR converts to GBP, and GBP-JPY, so that JPY is offered while EUR-JPY is not configured. The shared
+     * routes are neither read nor written.
+     */
+    async function routeFxRoutes(page: Page, traffic: RangeDeltaTraffic): Promise<void> {
+        const configured = (base: string, quote: string) => ({base, quote, priority: 1, chain_steps: [{from: base, to: quote, provider: 'MOCKFX'}], is_chain: false, providers_used: ['MOCKFX']});
+        await page.route(
+            (url) => url.pathname === '/api/v1/fx/providers/routes',
+            async (route) => {
+                if (route.request().method() !== 'GET') {
+                    traffic.failures.push(`${route.request().method()} /fx/providers/routes: the shared FX routes are not this test's to write`);
+                    await route.fulfill({status: 500, json: {detail: 'X-R59: no FX route is written here'}});
+                    return;
+                }
+                await route.fulfill({json: {items: [configured('EUR', 'GBP'), configured('GBP', 'JPY')]}});
+            },
+        );
+    }
+
+    /**
+     * The live quote's conversion to GBP (`POST /fx/currencies/convert`, one EUR amount on one day), at the rate of 2.
+     * Any other conversion goes on to the backend, which only reads its stored rates.
+     */
+    async function routeLiveConversion(page: Page): Promise<void> {
+        type ConvertAsk = {from_amount?: {code?: string; amount?: string}; to?: string; date_range?: {start?: string; end?: string}};
+        await page.route(
+            (url) => url.pathname === '/api/v1/fx/currencies/convert',
+            async (route) => {
+                let asks: ConvertAsk[] = [];
+                try {
+                    const body: unknown = route.request().postDataJSON();
+                    asks = Array.isArray(body) ? (body as ConvertAsk[]) : [];
+                } catch {
+                    asks = [];
+                }
+                const ask = asks.length === 1 ? asks[0] : undefined;
+                const day = ask?.date_range?.start;
+                const amount = ask?.from_amount?.amount;
+                if (ask?.from_amount?.code !== 'EUR' || ask.to !== 'GBP' || typeof day !== 'string' || ask.date_range?.end !== day || typeof amount !== 'string') {
+                    await route.fallback();
+                    return;
+                }
+                await route.fulfill({json: {results: [{from_amount: {code: 'EUR', amount}, to_amount: {code: 'GBP', amount: (Number(amount) * 2).toFixed(2)}, conversion_date: day, rate: '2'}], success_count: 1}});
+            },
+        );
+    }
+
+    /**
+     * Every period-changes request sent so far — at least `atLeast` — has been answered, and the page holds no big
+     * request any more: the series' Δ is loaded under `pageBusy`, which the Refresh button publishes as `data-busy`.
+     * The last answer is then the one on screen.
+     */
+    async function seriesAnswersApplied(page: Page, traffic: RangeDeltaTraffic, atLeast: number): Promise<void> {
+        await expect.poll(() => traffic.seriesAnswered, {message: `the page asks POST /assets/prices/period-changes (${atLeast} answered at least)`, timeout: 15_000}).toBeGreaterThanOrEqual(atLeast);
+        await expect.poll(() => traffic.seriesAsked.length - traffic.seriesAnswered, {message: 'every period-changes request the page sent has been answered', timeout: 15_000}).toBe(0);
+        await waitForSettled(page.getByTestId('asset-detail-refresh-btn'), 20_000);
+    }
+
+    /** Picks `code` in the summary's display-currency selector; returns once the selector shows it, closed. */
+    async function chooseDisplayCurrency(page: Page, code: string): Promise<void> {
+        // AssetPriceSummary passes its selector no test id: it is the only combobox of the filter row (PageToolbar draws
+        // the summary inside it), which is checked here rather than assumed.
+        const trigger = page.getByTestId('asset-detail-filter-bar').getByRole('combobox');
+        await expect(trigger, 'the display-currency selector is the only combobox of the filter row').toHaveCount(1);
+        await expect(trigger).toBeEnabled({timeout: 10_000});
+        // Every SearchSelect names its options `search-select-option-*`: none may be on screen before this one opens.
+        await optionsClosed(page);
+        await expect(async () => {
+            if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.press('ArrowDown');
+            expect(await trigger.getAttribute('aria-expanded')).toBe('true');
+        }).toPass({timeout: 5_000});
+        const option = page.getByTestId(`search-select-option-${code}`);
+        await expect(option, `${code} is offered: an end of a configured FX route`).toBeVisible({timeout: 5_000});
+        await option.click();
+        await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+        await expect(trigger).toContainText(code);
+        await optionsClosed(page);
+    }
+
+    test('X-R59 a range ending before today: the summary shows the period-changes Δ, asked from the range start on screen', async ({page}) => {
+        const assetId = 920_591;
+        // About two months ending ten days ago, seeded through the URL: the range on screen.
+        const range: DayRange = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        await mockCacheHitEventsAsset(page, assetId);
+        // A provider, so that the range alone keeps the live quote away: a poll would be answered with a quote and its own Δ.
+        await routeMockAssetAssignment(page, assetId);
+        const traffic = await routeRangeDeltas(page, assetId, () => SERIES);
+
+        await goToAssetDetailPage(page, String(assetId), range);
+        await seriesAnswersApplied(page, traffic, 1);
+        expect(traffic.failures, 'the routes answered every request they saw').toEqual([]);
+        expect(traffic.seriesAsked, 'each period-changes request asks this asset from the first day of the range on screen to its last, in its own currency').toEqual(traffic.seriesAsked.map(() => [seriesAsk(assetId, range)]));
+        expect(traffic.liveAsked, 'a range ending before today asks no live quote').toEqual([]);
+
+        const summary = priceSummary(page);
+        await expect(summary.price, 'the summary shows the last close of the range').toBeVisible();
+        await expect(summary.percent, 'change_ratio 0.4242, as a percent').toHaveText(percentShown(SERIES.percent), {timeout: 10_000});
+        await expect(summary.abs, 'change_abs 12.34').toHaveText(absShown(SERIES.abs), {timeout: 10_000});
+    });
+
+    test('X-R59 an asset without a provider: the summary shows the series Δ, and none once a Refresh is answered with a range_change all null', async ({page}) => {
+        const assetId = 920_592;
+        // Ending today, but without a provider (the backend holds no assignment for a synthetic asset): no live quote, so
+        // the Δ beside the price is the series'.
+        const range: DayRange = {start: daysAgoIso(60), end: daysAgoIso(0)};
+        let series: Figures | null = SERIES;
+        await mockCacheHitEventsAsset(page, assetId);
+        const traffic = await routeRangeDeltas(page, assetId, () => series);
+        const summary = priceSummary(page);
+        const refresh = page.getByTestId('asset-detail-refresh-btn');
+
+        await goToAssetDetailPage(page, String(assetId), range);
+        await seriesAnswersApplied(page, traffic, 1);
+        // Presence first: the Δ is drawn from an answer, so its absence below is an answer's doing, not a page that has not
+        // drawn it yet.
+        await expect(summary.price).toBeVisible();
+        await expect(summary.percent, 'change_ratio 0.4242, as a percent').toHaveText(percentShown(SERIES.percent), {timeout: 10_000});
+        await expect(summary.abs, 'change_abs 12.34').toHaveText(absShown(SERIES.abs), {timeout: 10_000});
+
+        // The Refresh asks again for the same asset, range and currency: the Δ on screen stays until the answer replaces it.
+        series = null;
+        const answeredBefore = traffic.seriesAnswered;
+        await expect(refresh).toBeEnabled({timeout: 10_000});
+        await refresh.click();
+        await seriesAnswersApplied(page, traffic, answeredBefore + 1);
+        expect(traffic.failures, 'the routes answered every request they saw').toEqual([]);
+        expect(traffic.seriesAsked, 'the load and the Refresh ask this asset over the range on screen, in its own currency').toEqual(traffic.seriesAsked.map(() => [seriesAsk(assetId, range)]));
+        expect(traffic.liveAsked, 'an asset without a provider asks no live quote').toEqual([]);
+
+        await expect(summary.price, 'the price stays').toBeVisible();
+        await expect(summary.percent, 'change_ratio null: no percent beside the price').toHaveCount(0);
+        await expect(summary.abs, 'change_abs null: no absolute change beside the price').toHaveCount(0);
+    });
+
+    test('X-R59 a range ending today with a live quote: the poll asks range_start, and the summary shows the quote’s Δ, not the series’', async ({page}) => {
+        const assetId = 920_593;
+        const range: DayRange = {start: daysAgoIso(60), end: daysAgoIso(0)};
+        await mockCacheHitEventsAsset(page, assetId);
+        await routeMockAssetAssignment(page, assetId);
+        const traffic = await routeRangeDeltas(page, assetId, () => SERIES);
+        const summary = priceSummary(page);
+
+        await goToAssetDetailPage(page, String(assetId), range);
+        // Both answers in, the series' applied: the page holds a Δ of each kind, and must show the quote's.
+        await seriesAnswersApplied(page, traffic, 1);
+        await expect.poll(() => traffic.liveAnswered, {message: 'the page polls the live quote of an asset with a provider, over a range ending today', timeout: 15_000}).toBeGreaterThan(0);
+        expect(traffic.failures, 'the routes answered every request they saw').toEqual([]);
+        expect(traffic.seriesAsked, 'the series’ Δ is asked as well, over the range on screen').toEqual(traffic.seriesAsked.map(() => [seriesAsk(assetId, range)]));
+        expect(traffic.liveAsked, 'every live poll asks the Δ from the first day of the range on screen, in the asset’s own currency').toEqual(traffic.liveAsked.map(() => liveAsk(assetId, range)));
+
+        await expect(summary.price, 'the summary shows the live quote').toHaveText(priceShown(LIVE_PRICE), {timeout: 10_000});
+        await expect(summary.percent, 'the quote’s change_ratio -0.1313, not the series’ 0.4242').toHaveText(percentShown(LIVE.percent), {timeout: 10_000});
+        await expect(summary.abs, 'the quote’s change_abs -7.77, not the series’ 12.34').toHaveText(absShown(LIVE.abs), {timeout: 10_000});
+    });
+
+    test('X-R59 another display currency: both requests ask the Δ in it when its FX pair is configured, neither when it is not', async ({page}) => {
+        // A ceiling, never a delay: two currency switches, each awaited through its own round trips.
+        test.setTimeout(90_000);
+        const assetId = 920_594;
+        const range: DayRange = {start: daysAgoIso(60), end: daysAgoIso(0)};
+        await mockCacheHitEventsAsset(page, assetId);
+        await routeMockAssetAssignment(page, assetId);
+        const traffic = await routeRangeDeltas(page, assetId, () => SERIES);
+        await routeFxRoutes(page, traffic);
+        await routeLiveConversion(page);
+        const summary = priceSummary(page);
+        const lastSeriesAsk = () => traffic.seriesAsked.at(-1) ?? null;
+        const lastLiveAsk = () => traffic.liveAsked.at(-1) ?? null;
+
+        // In the asset's own EUR first: neither request names a currency.
+        await goToAssetDetailPage(page, String(assetId), range);
+        await seriesAnswersApplied(page, traffic, 1);
+        expect(lastSeriesAsk(), 'in EUR the series’ Δ is asked natively').toEqual([seriesAsk(assetId, range)]);
+        await expect.poll(lastLiveAsk, {message: 'in EUR the live quote is asked natively', timeout: 15_000}).toEqual(liveAsk(assetId, range));
+        await expect(summary.percent, 'the quote’s own Δ').toHaveText(percentShown(LIVE.percent), {timeout: 10_000});
+
+        // GBP: the EUR-GBP pair is configured, so the chart is converted and the summary converts the quote.
+        await chooseDisplayCurrency(page, 'GBP');
+        await expect.poll(lastSeriesAsk, {message: 'in GBP the series’ Δ is asked in GBP', timeout: 15_000}).toEqual([seriesAsk(assetId, range, 'GBP')]);
+        await expect.poll(lastLiveAsk, {message: 'in GBP the live quote’s Δ is asked in GBP', timeout: 15_000}).toEqual(liveAsk(assetId, range, 'GBP'));
+        await seriesAnswersApplied(page, traffic, traffic.seriesAsked.length);
+        expect(traffic.failures, 'the routes answered every request they saw').toEqual([]);
+        await expect(summary.price, 'the quote converted to GBP').toHaveText(priceShown(LIVE_PRICE_IN_GBP), {timeout: 10_000});
+        await expect(summary.percent, 'the Δ answered in GBP').toHaveText(percentShown(LIVE_IN_GBP.percent), {timeout: 10_000});
+        await expect(summary.abs).toHaveText(absShown(LIVE_IN_GBP.abs), {timeout: 10_000});
+
+        // JPY: offered (an end of the GBP-JPY route), but EUR-JPY is not configured: nothing is converted, and neither
+        // request names a currency.
+        await chooseDisplayCurrency(page, 'JPY');
+        await expect.poll(lastSeriesAsk, {message: 'without the EUR-JPY pair the series’ Δ is asked natively', timeout: 15_000}).toEqual([seriesAsk(assetId, range)]);
+        await expect.poll(lastLiveAsk, {message: 'without the EUR-JPY pair the live quote’s Δ is asked natively', timeout: 15_000}).toEqual(liveAsk(assetId, range));
+        await seriesAnswersApplied(page, traffic, traffic.seriesAsked.length);
+        expect(traffic.failures, 'the routes answered every request they saw').toEqual([]);
+        await expect(summary.price, 'the quote left in EUR').toHaveText(priceShown(LIVE_PRICE), {timeout: 10_000});
+        await expect(summary.percent, 'the Δ answered natively').toHaveText(percentShown(LIVE.percent), {timeout: 10_000});
+        await expect(summary.abs).toHaveText(absShown(LIVE.abs), {timeout: 10_000});
     });
 });

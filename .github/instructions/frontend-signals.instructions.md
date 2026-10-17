@@ -46,8 +46,8 @@ local-only registry/factory APIs.
 
 1. Follow `mkdocs_src/docs/developer/architecture/patterns/signal_plugin_guide.md`.
 2. Implement the Python plugin under `backend/app/services/signal_plugins/` using
-   the contract in `base.py`; shared planning/execution belongs in
-   `backend/app/services/signal_service.py`.
+   the contract in `backend/app/services/signals/base.py`; shared planning and execution
+   belong in `backend/app/services/signals/planning.py` and `execution.py`.
 3. Add backend tests for discovery, contract validation, computation, warm-up, and
    output metadata.
 4. Add the plugin-declared frontend translation keys and MkDocs indicator docs when

@@ -105,11 +105,11 @@
                 <div class="flex min-w-0 items-start gap-2.5">
                     <PlannerBrokerIcon {broker} size={28} />
                     <div class="min-w-0 flex-1 space-y-0.5">
-                        <h4 class="min-w-0 font-semibold text-gray-900 dark:text-gray-100" data-testid="pac-planner-routing-title">
+                        <h4 class="min-w-0 font-semibold text-lf-primary" data-testid="pac-planner-routing-title">
                             <span use:scrollOnOverflow class={overflowScrollTextClass} title={broker.name}>{broker.name || '—'}</span>
                         </h4>
                         {#if broker.modes.length === 0}
-                            <p class="text-xs text-red-700 dark:text-red-300" data-testid="pac-planner-routing-broker-no-mode">
+                            <p class="text-xs text-lf-danger" data-testid="pac-planner-routing-broker-no-mode">
                                 {$t('tools.pacAllocator.planner.problems.brokerNoMode', {default: 'The Broker has no order mode.'})}
                             </p>
                         {:else}
@@ -144,17 +144,17 @@
                             <button type="button" class="flex w-full cursor-pointer items-center gap-2 p-2 text-left" aria-pressed={route.enabled} data-testid="pac-planner-route-enabled" onclick={() => (route.enabled = !route.enabled)}>
                                 <AssetIcon iconUrl={asset?.iconUrl} assetType={asset?.assetClass.toUpperCase()} altText="" size="sm" />
                                 <span class="min-w-0 flex-1">
-                                    <span class="block min-w-0 font-medium text-gray-900 dark:text-gray-100" data-testid="pac-planner-route-title">
+                                    <span class="block min-w-0 font-medium text-lf-primary" data-testid="pac-planner-route-title">
                                         <span use:scrollOnOverflow class={overflowScrollTextClass} title={title(asset)}>{title(asset) || '—'}</span>
                                     </span>
                                     {#if typeText(asset) !== ''}<span class="block {HINT}">{typeText(asset)}</span>{/if}
                                 </span>
-                                {#if mode}<span class="shrink-0 text-xs text-gray-600 dark:text-gray-300" data-testid="pac-planner-route-currency"><CurrencyCode code={mode.currency} /></span>{/if}
+                                {#if mode}<span class="shrink-0 text-xs text-lf-secondary" data-testid="pac-planner-route-currency"><CurrencyCode code={mode.currency} /></span>{/if}
                             </button>
 
                             {#if route.enabled && !mode}
                                 {#if missing !== ''}
-                                    <div class="mx-2 mb-2 space-y-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-900 sm:ml-10 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100" data-testid="pac-planner-route-mode-missing" data-currency={missing}>
+                                    <div class="mx-2 mb-2 space-y-2 rounded-md border border-lf-warning-line bg-lf-warning-soft p-2.5 text-sm text-lf-warning-on-soft sm:ml-10" data-testid="pac-planner-route-mode-missing" data-currency={missing}>
                                         <div class="flex flex-wrap items-center gap-x-1">
                                             <span>{$t('tools.pacAllocator.planner.route.modeMissing', {default: '{broker} has no order mode in {currency} yet', values: {broker: broker.name || '—', currency: missing}})}</span>
                                             <HelpTip
@@ -287,7 +287,7 @@
     {/if}
 
     {#each draft.fundingOnlyBrokers as broker (broker.key)}
-        <p class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400" data-testid="pac-planner-routing-funding-only">
+        <p class="flex items-center gap-2 text-sm text-lf-muted" data-testid="pac-planner-routing-funding-only">
             <PlannerBrokerIcon {broker} size={20} />
             {$t('tools.pacAllocator.planner.routing.fundingOnly', {default: '{name}: nothing is bought from this account', values: {name: broker.name || '—'}})}
         </p>

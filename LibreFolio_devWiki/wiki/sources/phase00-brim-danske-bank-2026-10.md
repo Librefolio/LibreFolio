@@ -67,7 +67,7 @@ the saved name · L7 a forced set plugin on an unreadable file · L8 `auto` fall
 | Step 8 mobile card | `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep8MobileCard.prompt.md` |
 | Step 9 stale frontend | `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep9StaleFrontend.prompt.md` |
 | Danske Bank plugin | `backend/app/services/brim_providers/broker_danske_bank/plugin.py` |
-| File preview (400 on a damaged workbook) | `backend/app/services/file_preview.py` |
+| File preview (400 on a damaged workbook) | `backend/app/services/files/file_preview.py` |
 | Plugin tests | `backend/test_scripts/test_external/test_brim_danske_bank.py` |
 | User doc | `mkdocs_src/docs/user/transactions/import/danske-bank.en.md` |
 | Developer doc | `mkdocs_src/docs/developer/backend/brim/danske_bank.md` |

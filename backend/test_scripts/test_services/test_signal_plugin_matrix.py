@@ -27,9 +27,9 @@ from backend.app.schemas.signals import (
     SignalVolumeKind,
     SignalWarningCode,
 )
-from backend.app.services.provider_registry import SignalPluginRegistry
-from backend.app.services.signal_plugins.base import SignalPlugin
-from backend.app.services.signal_service import SignalService
+from backend.app.services.signals.base import SignalPlugin
+from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.service import SignalService
 from backend.test_scripts.fixtures.signals.plugin_test_utils import (
     VISIBLE_POINTS,
     execution_context,
@@ -60,11 +60,14 @@ LEGACY_CODES = {
 RISK_CODES = {
     "RISK_DRAWDOWN",
     "RISK_ROLLING_BETA",
-    "RISK_ROLLING_RETURN",
     "RISK_ROLLING_SHARPE",
     "RISK_ROLLING_VOLATILITY",
 }
-ALL_CODES = LEGACY_CODES | RISK_CODES
+# Developer's decision 29 (CP-10a): ONE Rolling Return, measured in calendar days. The
+# observation-count RISK_ROLLING_RETURN is removed; the calendar plugin, until then executable
+# but catalog-hidden, takes its place in the public catalog.
+CALENDAR_CODE = "ASSET_CALENDAR_ROLLING_RETURN"
+ALL_CODES = LEGACY_CODES | RISK_CODES | {CALENDAR_CODE}
 CLOSE_ONLY_CODES = {
     "EMA",
     "SMA",
@@ -105,6 +108,10 @@ EXPECTED_SEMANTIC_IDS = {
     "AROON": (
         "aroon",
         ["aroon.up", "aroon.down", "aroon.oscillator"],
+    ),
+    "ASSET_CALENDAR_ROLLING_RETURN": (
+        "calendar_rolling_return",
+        ["calendar_rolling_return.value"],
     ),
     "ATR": ("average_true_range", ["average_true_range.value"]),
     "BOLLINGER": ("bollinger_bands", ["bollinger_bands.envelope"]),
@@ -156,10 +163,6 @@ EXPECTED_SEMANTIC_IDS = {
         "rolling_beta",
         ["rolling_beta.value"],
     ),
-    "RISK_ROLLING_RETURN": (
-        "rolling_compounded_return",
-        ["rolling_compounded_return.value"],
-    ),
     "RISK_ROLLING_SHARPE": (
         "rolling_sharpe_ratio",
         ["rolling_sharpe_ratio.value"],
@@ -186,17 +189,15 @@ DOCS_PATH_SHAPE = re.compile(r"(?:[a-z0-9][a-z0-9_-]*/)+")
 # Pinned so an edit cannot silently repoint a risk signal's in-app guide.
 EXPECTED_RISK_DOCS_PATHS = {
     "RISK_DRAWDOWN": "financial-theory/technical-analysis/risk-metrics/current-drawdown/",
-    "RISK_ROLLING_RETURN": "financial-theory/fundamentals/returns/",
     "RISK_ROLLING_VOLATILITY": "financial-theory/technical-analysis/risk-metrics/volatility/",
     "RISK_ROLLING_SHARPE": "financial-theory/technical-analysis/risk-metrics/sharpe-ratio/",
     "RISK_ROLLING_BETA": "financial-theory/technical-analysis/risk-metrics/beta-active-return/",
     "ASSET_CALENDAR_ROLLING_RETURN": "financial-theory/fundamentals/returns/",
 }
-CALENDAR_CODE = "ASSET_CALENDAR_ROLLING_RETURN"
 # Developer's decision of 30/09/2026: technical indicators compute on quote days
 # («SMA 200 = 200 sedute»). The calendar return keeps calendar windows by design
 # and the prepared risk signals already run on the prepared quote calendar, so
-# those six opt out.
+# those five opt out.
 QUOTE_DAY_CODES = LEGACY_CODES
 CALENDAR_INPUT_CODES = RISK_CODES | {CALENDAR_CODE}
 # The seventeen indicators change their numbers (major); the prepared risk
@@ -206,17 +207,23 @@ EXPECTED_IMPLEMENTATION_VERSIONS = {
     **dict.fromkeys(LEGACY_CODES, "2.0.0"),
     "RISK_DRAWDOWN": "1.2.0",
     "RISK_ROLLING_BETA": "1.1.0",
-    "RISK_ROLLING_RETURN": "1.1.0",
     "RISK_ROLLING_SHARPE": "1.1.0",
     "RISK_ROLLING_VOLATILITY": "1.1.0",
+    # Decision 29 publishes the calendar return without changing a single value: no bump.
     CALENDAR_CODE: "1.4.0",
 }
-# The unit and tooltip of every param, per plugin: (x-suffix, x-tooltip-key). An
-# indicator period counts sessions and says so; the calendar return and the rolling
-# risk windows keep days. The shared period tooltip moves to `sessionPeriod`
-# (`period` stays for the frontend Sine benchmark, where days are real); the
-# EMA, MACD/PPO and StochRSI period tooltips keep their own keys.
+# The unit and tooltip of every param, per plugin: (x-suffix, x-tooltip-key). Every
+# window names what it counts:
+# - an indicator period counts sessions. The shared period tooltip moves to
+#   `sessionPeriod` (`period` stays for the frontend Sine benchmark, where days are
+#   real); the EMA, MACD/PPO and StochRSI period tooltips keep their own keys;
+# - the rolling risk windows (beta, Sharpe, volatility) count prepared return
+#   observations (J-13: the label only, the calculation is unchanged), and keep the
+#   shared `riskWindow` tooltip, which already says so;
+# - the calendar Rolling Return counts calendar days (developer's decision 29), with
+#   a tooltip of its own.
 SESSION_PERIOD = ("sessions", "chartSettings.tooltips.sessionPeriod")
+RISK_WINDOW = ("observations", "signals.tooltips.riskWindow")
 MACD_PPO_PERIODS = {
     "fastPeriod": ("sessions", "chartSettings.tooltips.fastPeriod"),
     "slowPeriod": ("sessions", "chartSettings.tooltips.slowPeriod"),
@@ -246,11 +253,10 @@ EXPECTED_PARAM_UNITS = {
         "oversold": (None, "chartSettings.tooltips.oversold"),
     },
     "RISK_DRAWDOWN": {"full_history": (None, "signals.tooltips.riskFullHistory")},
-    "RISK_ROLLING_BETA": {"window": ("days", "signals.tooltips.riskWindow"), "comparison_asset_id": (None, "signals.tooltips.comparisonAsset")},
-    "RISK_ROLLING_RETURN": {"window": ("days", "signals.tooltips.riskWindow")},
-    "RISK_ROLLING_SHARPE": {"window": ("days", "signals.tooltips.riskWindow"), "risk_free_annual_rate": (None, "signals.tooltips.riskFreeAnnualRate")},
-    "RISK_ROLLING_VOLATILITY": {"window": ("days", "signals.tooltips.riskWindow")},
-    CALENDAR_CODE: {"window_days": ("days", "signals.tooltips.riskWindow")},
+    "RISK_ROLLING_BETA": {"window": RISK_WINDOW, "comparison_asset_id": (None, "signals.tooltips.comparisonAsset")},
+    "RISK_ROLLING_SHARPE": {"window": RISK_WINDOW, "risk_free_annual_rate": (None, "signals.tooltips.riskFreeAnnualRate")},
+    "RISK_ROLLING_VOLATILITY": {"window": RISK_WINDOW},
+    CALENDAR_CODE: {"window_days": ("days", "signals.riskRollingReturn.windowTooltip")},
 }
 # The four UI catalogues, merged from their sources (scripts/i18n_catalog.py) without the English fallback.
 I18N_LANGUAGES = ("en", "it", "fr", "es")
@@ -340,8 +346,9 @@ def test_registry_has_twenty_two_complete_definitions():
 
     # docs_path is what makes a signal's in-app guide button appear, so every
     # *registered* plugin must declare one. Walked through the registry, not
-    # list_definitions(), which omits catalog-hidden plugins such as
-    # ASSET_CALENDAR_ROLLING_RETURN. Each rule collects every offending code.
+    # list_definitions(), so that a catalog-hidden plugin cannot slip past the rule
+    # (there is none since decision 29, which published ASSET_CALENDAR_ROLLING_RETURN).
+    # Each rule collects every offending code.
     docs_paths = {code: SignalPluginRegistry.get_plugin(code).catalog_definition().docs_path for code in sorted(SignalPluginRegistry.list_plugin_codes())}
     without_docs_path = [code for code, docs_path in docs_paths.items() if not docs_path]
     assert not without_docs_path, f"signals without docs_path: {', '.join(without_docs_path)}"
@@ -356,12 +363,11 @@ def test_registry_has_twenty_two_complete_definitions():
 def test_all_plugin_outputs_declare_exact_aggregation_profile_matrix():
     definitions = {definition.signal_code: definition for definition in SignalPluginRegistry.list_definitions()}
 
-    for signal_code in sorted(ALL_CODES):
-        expected = SPECIAL_AGGREGATION_PROFILES.get(
-            signal_code,
-            SignalAggregationProfile.LAST_WITH_RANGE,
-        )
-        assert {output.aggregation_profile for output in definitions[signal_code].output_specs} == {expected}
+    # One dict against another, so a plugin missing from the catalog or left over in it
+    # reads as a difference of values, plugin by plugin.
+    declared = {code: {output.aggregation_profile for output in definition.output_specs} for code, definition in definitions.items()}
+    expected = {code: {SPECIAL_AGGREGATION_PROFILES.get(code, SignalAggregationProfile.LAST_WITH_RANGE)} for code in ALL_CODES}
+    assert declared == expected
 
     drawdown = definitions["RISK_DRAWDOWN"].output_specs
     assert len(drawdown) == 1
@@ -391,10 +397,10 @@ def test_asset_only_field_rich_plugins_allow_partial_contiguous_input():
 
 
 def test_every_registered_plugin_declares_whether_it_computes_on_quote_days():
-    """T9 — True by default; the calendar return and the five prepared risk signals opt out."""
+    """T9 — True by default; the calendar return and the four prepared risk signals opt out."""
     assert getattr(SignalPlugin, "computes_on_quote_days", None) is True
     registered = set(SignalPluginRegistry.list_plugin_codes())
-    assert registered == ALL_CODES | {CALENDAR_CODE}
+    assert registered == ALL_CODES
     declared = {code: getattr(SignalPluginRegistry.get_plugin(code), "computes_on_quote_days", "<not declared>") for code in sorted(registered)}
 
     assert {code for code, value in declared.items() if value is True} == QUOTE_DAY_CODES, declared
@@ -430,8 +436,8 @@ def test_every_registered_plugin_has_its_param_units_pinned():
 
 
 @pytest.mark.parametrize("signal_code", sorted(EXPECTED_PARAM_UNITS))
-def test_period_params_declare_sessions_or_days_and_their_tooltip(signal_code):
-    """An indicator period is a number of sessions; the calendar return and the rolling risk windows are days."""
+def test_period_params_declare_their_unit_and_tooltip(signal_code):
+    """An indicator period counts sessions; the rolling risk windows count prepared return observations (J-13); the calendar Rolling Return counts calendar days (decision 29)."""
     assert _declared_param_units(signal_code) == EXPECTED_PARAM_UNITS[signal_code]
 
 
@@ -439,8 +445,15 @@ def test_every_param_tooltip_and_word_unit_is_translated_in_the_four_catalogs():
     """The pinned keys and the declared ones alike, so a key renamed in the plugins is checked too."""
     units = [unit for code in EXPECTED_PARAM_UNITS for unit in (*EXPECTED_PARAM_UNITS[code].values(), *_declared_param_units(code).values())]
     keys = {tooltip for _suffix, tooltip in units if tooltip} | {f"signals.units.{suffix}" for suffix, _tooltip in units if suffix and WORD_UNIT.fullmatch(suffix)}
-    # Premise: both word units and the moved tooltip are among the keys checked.
-    assert {"signals.units.days", "signals.units.sessions", "chartSettings.tooltips.sessionPeriod"} <= keys
+    # Premise: the three word units (sessions, observations, days) and the two tooltips that
+    # moved (the shared session period, the calendar window's own) are among the keys checked.
+    assert {
+        "signals.units.days",
+        "signals.units.sessions",
+        "signals.units.observations",
+        "chartSettings.tooltips.sessionPeriod",
+        "signals.riskRollingReturn.windowTooltip",
+    } <= keys
     catalogs = {language: load_catalog(language, fallback=False) for language in I18N_LANGUAGES}
 
     untranslated = {language: sorted(key for key in keys if not (isinstance(text := _translation(catalog, key), str) and text.strip())) for language, catalog in catalogs.items()}

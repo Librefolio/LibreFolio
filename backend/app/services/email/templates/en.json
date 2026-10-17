@@ -1,0 +1,48 @@
+{
+  "common": {
+    "greeting": "Hello $username,",
+    "greeting_anonymous": "Hello,",
+    "button_fallback": "If the button does not work, copy this address into your browser:",
+    "footer": "This message was sent automatically by LibreFolio from $instance."
+  },
+  "password_reset": {
+    "subject": "Reset your LibreFolio password",
+    "intro": "We received a request to reset the password of your account on $instance.",
+    "action": "Choose a new password",
+    "expiry": "The link works only once and expires in $duration.",
+    "ignore": "If you did not ask for it, you can ignore this email: your password stays the same."
+  },
+  "invite": {
+    "subject": "You are invited to LibreFolio",
+    "intro": "$inviter invites you to create an account on $instance.",
+    "intro_anonymous": "You have been invited to create an account on $instance.",
+    "admin_role": "Your account will be an administrator of the instance.",
+    "action": "Create your account",
+    "expiry": "The invitation works only once and expires in $duration.",
+    "ignore": "If you were not expecting this invitation, you can ignore this email."
+  },
+  "email_verification": {
+    "subject": "Confirm your email address",
+    "intro": "Confirm that this email address belongs to your account on $instance.",
+    "action": "Confirm my email address",
+    "expiry": "The link works only once and expires in $duration.",
+    "ignore": "If you did not create an account, you can ignore this email."
+  },
+  "admin_setup": {
+    "subject": "Set up your LibreFolio administrator account",
+    "intro": "Your LibreFolio instance $instance is ready: choose the password of your administrator account to start using it.",
+    "action": "Set my password",
+    "expiry": "The link works only once and expires in $duration.",
+    "ignore": "If you were not expecting this email, you can ignore it."
+  },
+  "test": {
+    "subject": "LibreFolio test email",
+    "intro": "This is a test email sent from $instance.",
+    "outro": "If you are reading it, LibreFolio can send emails."
+  },
+  "email_changed": {
+    "subject": "The email address of your LibreFolio account changed",
+    "intro": "The email address of your account on $instance was changed. This message goes to the address it had before.",
+    "advice": "If you made this change, there is nothing to do. If you did not, someone may be using your account: change your password at once if you can still sign in, and tell the administrator of $instance."
+  }
+}

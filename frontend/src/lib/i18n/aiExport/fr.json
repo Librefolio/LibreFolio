@@ -303,6 +303,7 @@
           "description": "Union dédupliquée de tous les jeux de données FX applicables."
         }
       }
-    }
+    },
+    "tooManyPriceDays": "Cette exportation lirait trop de jours de prix. Choisissez une période plus courte."
   }
 }

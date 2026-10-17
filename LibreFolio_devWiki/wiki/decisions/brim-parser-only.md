@@ -75,7 +75,7 @@ No BRIM-specific commit API exists.
 
 | Role | Path |
 |------|------|
-| BRIM abstract base | `backend/app/services/brim_provider.py` |
+| BRIM abstract base | `backend/app/services/brim/brim_provider.py` |
 | BRIM schemas | `backend/app/schemas/brim.py` |
 | BRIM API | `backend/app/api/v1/brokers.py` |
 

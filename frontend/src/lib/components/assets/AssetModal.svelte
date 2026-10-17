@@ -15,46 +15,48 @@
     import {onDestroy, untrack} from 'svelte';
     import {zodiosApi} from '$lib/api';
     import {debug} from '$lib/debug';
-    import {ChevronDown, ChevronRight, ExternalLink, Info, Loader2, Minus, Plus, RefreshCw, Search, Trash2, Upload, X} from 'lucide-svelte';
+    import {ChevronDown, ChevronRight, Search, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
-    import {AssetTypeSelect, CurrencySearchSelect} from '$lib/components/ui/select';
     import AssetSearchAutocomplete from './AssetSearchAutocomplete.svelte';
-    import AssetIcon from './AssetIcon.svelte';
+    import AssetModalDetails from './AssetModalDetails.svelte';
+    import AssetModalFooter from './AssetModalFooter.svelte';
+    import AssetModalImportNotices from './AssetModalImportNotices.svelte';
+    import AssetModalIdentifiers from './AssetModalIdentifiers.svelte';
+    import AssetModalProvider from './AssetModalProvider.svelte';
+    import AssetModalSelectionPrompts from './AssetModalSelectionPrompts.svelte';
     import ProviderAssignmentSection from './ProviderAssignmentSection.svelte';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import ProviderComparisonModal from './ProviderComparisonModal.svelte';
     import type {DiffItem} from './ProviderComparisonModal.svelte';
-    import IdentifierPrimaryChooser from './IdentifierPrimaryChooser.svelte';
     import type {IdentifierChoice} from './IdentifierPrimaryChooser.svelte';
     import AssetCurrencyChangeModal from './AssetCurrencyChangeModal.svelte';
     import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
-    import TagInput from '$lib/components/ui/input/TagInput.svelte';
     import {getIndexColor} from '$lib/utils/colors';
-    import DataTable from '$lib/components/table/DataTable.svelte';
-    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
-    import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
-    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {probeRateLimitMessage} from './resolveProviderError';
     import {userSettings} from '$lib/stores/app/settings';
     import {get} from 'svelte/store';
     import {trySave} from '$lib/utils/trySave';
-    import {ASSET_TYPES, IDENTIFIER_TYPES, isFamilyOnlyProposal} from '$lib/utils/assetTypes';
-    import {generateUUID} from '$lib/utils/core/uuid';
-    import {columnsToIdentifierRows, identifierRowsToColumns, nextAvailableIdentifierType, fieldToIdType} from './assetIdentifiers';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {wipeRefusalMessage} from './currencyChangeErrors';
+    import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
+    import {columnsToIdentifierRows, fieldToIdType, identifierValue, withIdentifier, mergeOtherIdentifierValues, withElectedPrimary} from './assetIdentifiers';
+    import {searchResultAssetType, searchResultIdentifier, searchResultProviderParams} from './assetSearchSelection';
+    import {compareMetadata, type ComparisonAction, type ComparisonSnapshot} from './assetMetadataComparison';
     import {isCurrencyChangeBlockedMessage, parseCurrencyChangeBlocker} from './currencyBlocker';
-    import {normalizeQuoteBaseQuantity, normalizeDistribution, sameDistribution, buildClassificationParams, buildClassificationPatch, type ClassificationParams} from './assetPayload';
+    import {buildClassificationParams, buildCreateItem, buildPatchItem, buildProviderAssignItem, type AssetFormFields, type ClassificationParams, type ProviderAssignment} from './assetPayload';
     import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, shouldSeedBondQuoteBase, computeHasProvider, computeProviderDirty, groupImportNotices} from './assetFormState';
     import {ensureAssetProvidersCached, getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
+    import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
     import {mergeAssets, invalidateAfterMutation} from '$lib/stores/reference/assetStore';
     import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {createProviderProbeState, providerConfigurationKey, type ProviderConfiguration, type ProviderRequestTicket} from './providerProbeState.svelte';
     import {decideComparison, identifierQuestion, type IdentifierQuestion} from './providerComparisonQueue';
 
-    import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
     // Types
     // =========================================================================
@@ -156,7 +158,11 @@
         importNotices?: Array<{kind: string; reason: string}>;
         /** Asset-global only; contextual creation keeps its existing plain success toast. */
         linkCreatedAsset?: boolean;
-        oncreated?: (assetId: number) => void;
+        /** The asset exists. `detail.syncing`: its one price sync started, and `onsynced` will tell how it ended. */
+        oncreated?: (assetId: number, detail?: {syncing: boolean}) => void;
+        /** The one price sync after a creation ended (O-20): its result for the asset, or null when the request failed.
+         * Never called when no sync starts (no provider, or its assignment failed). */
+        onsynced?: (assetId: number, result: AssetCreateSyncResult | null) => void;
         onupdated?: () => void;
         onclose?: () => void;
     }
@@ -177,6 +183,7 @@
         importNotices = [],
         linkCreatedAsset = false,
         oncreated,
+        onsynced,
         onupdated,
         onclose,
     }: Props = $props();
@@ -379,6 +386,18 @@
     let searchResultSelected = $state(false);
     /** True once the user explicitly picks a currency in the form (manual intent). */
     let currencyUserSet = $state(false);
+    /** The currency and the type a blank create form starts with (resetForm): the report of a search names them only
+     * once they say something about the asset (P20). */
+    let blankCurrency = $state('');
+    let blankAssetType = $state('');
+    /** What the form holds, for the report of a search that found nothing useful (P20): its identifiers, and the
+     * currency and the type once they say something about the asset — an edit, an import's prefill, the user's choice,
+     * or not the blank form's default. No other data leaves. */
+    let searchReportContext = $derived({
+        currency: editMode || !!prefillData?.currency || currencyUserSet || currency !== blankCurrency ? currency : null,
+        assetType: editMode || !!prefillData?.asset_type || assetType !== blankAssetType ? assetType : null,
+        identifiers: identifierRows.filter((row) => row.value.trim() !== '').map((row) => ({type: row.type, value: row.value})),
+    });
 
     // Dirty tracking — snapshot of initial form to detect unsaved changes
     let initialSnapshot = $state('');
@@ -416,12 +435,6 @@
     /** A price is quoted per N units, and half a unit is not a quotation base. */
     let quoteBaseQuantityError = $derived(quoteBaseQuantityErrorKey(quoteBaseQuantity));
 
-    /** Drops the decimals the user typed, once they have moved on. */
-    function truncateQuoteBaseQuantity() {
-        if (!Number.isFinite(quoteBaseQuantity)) return;
-        const truncated = Math.trunc(quoteBaseQuantity);
-        if (truncated !== quoteBaseQuantity) quoteBaseQuantity = truncated;
-    }
     let isValid = $derived(displayName.trim().length > 0 && !quoteBaseQuantityInvalid);
     let hasProvider = $derived(computeHasProvider(providerNoProvider, providerCode, providerIdentifier, providerIdentifierType));
 
@@ -479,30 +492,8 @@
 
     // =========================================================================
     // Helpers — Identifier rows ↔ DB columns conversion
-    // (pure logic lives in ./assetIdentifiers.ts)
+    // (pure logic lives in ./assetIdentifiers.ts; the table and its row edits in ./AssetModalIdentifiers.svelte)
     // =========================================================================
-
-    function addIdentifierRow() {
-        // OTHER (soft identifiers) is managed via the tag/badge input below, so the table
-        // only adds fixed single-valued types. If all are already used, do nothing.
-        const availableType = nextAvailableIdentifierType(identifierRows);
-        if (!availableType) return;
-        markManualField(`identifier_${availableType.toLowerCase()}`);
-        identifierRows = [...identifierRows, {id: generateUUID(), type: availableType, value: ''}];
-    }
-
-    function updateIdentifierRow(id: string, field: 'type' | 'value', val: string) {
-        const current = identifierRows.find((row) => row.id === id);
-        if (current) markManualField(`identifier_${current.type.toLowerCase()}`);
-        if (field === 'type') markManualField(`identifier_${val.toLowerCase()}`);
-        identifierRows = identifierRows.map((r) => (r.id === id ? {...r, [field]: val} : r));
-    }
-
-    function removeIdentifierRow(id: string) {
-        const current = identifierRows.find((row) => row.id === id);
-        if (current) markManualField(`identifier_${current.type.toLowerCase()}`);
-        identifierRows = identifierRows.filter((r) => r.id !== id);
-    }
 
     /** Handle image picker change — empty string means remove */
     function handleImagePickerChange(url: string) {
@@ -527,72 +518,8 @@
 
     /** Get identifier value by type from rows */
     function getIdentifierByType(type: string): string {
-        return identifierRows.find((r) => r.type === type)?.value ?? '';
+        return identifierValue(identifierRows, type);
     }
-
-    // =========================================================================
-    // Identifier DataTable columns
-    // =========================================================================
-
-    let idTypeOptions = $derived(IDENTIFIER_TYPES.filter((t) => t !== 'OTHER').map((t) => ({value: t, label: t})));
-
-    // OTHER (soft identifiers) are rendered as tag badges, not table rows.
-    let identifierRowsFixed = $derived(identifierRows.filter((r) => r.type !== 'OTHER'));
-    let otherIdentifiers = $derived(
-        identifierRows
-            .filter((r) => r.type === 'OTHER')
-            .map((r) => (typeof r.value === 'string' ? r.value : String(r.value ?? '')))
-            .filter((v) => v.trim().length > 0),
-    );
-
-    /** Replace all OTHER rows from the tag/badge input (fixed-type rows untouched). */
-    function setOtherIdentifiers(vals: string[]) {
-        markManualField('identifier_other');
-        const fixed = identifierRows.filter((r) => r.type !== 'OTHER');
-        const others = vals.map((v) => ({id: generateUUID(), type: 'OTHER', value: v}));
-        identifierRows = [...fixed, ...others];
-    }
-
-    let identifierColumns = $derived.by<DTColumnDef<IdentifierRow>[]>(() => [
-        {
-            id: 'type',
-            header: () => $t('assets.provider.identifierType'),
-            type: 'custom' as const,
-            cell: (row: IdentifierRow) => ({
-                type: 'editable-select' as const,
-                value: row.type,
-                options: idTypeOptions,
-                onchange: (newVal: string) => updateIdentifierRow(row.id, 'type', newVal),
-            }),
-            sortable: false,
-            filterable: false,
-            width: 110,
-        },
-        {
-            id: 'value',
-            header: () => $t('assets.provider.identifier'),
-            type: 'custom' as const,
-            cell: (row: IdentifierRow) => ({
-                type: 'editable-text' as const,
-                value: row.value,
-                placeholder: 'US0378331005, AAPL, ...',
-                onchange: (newVal: string) => updateIdentifierRow(row.id, 'value', newVal),
-            }),
-            sortable: false,
-            filterable: false,
-            width: 250,
-        },
-    ]);
-
-    let identifierRowActions: DTRowAction<IdentifierRow>[] = $derived([
-        {
-            id: 'delete',
-            icon: X,
-            label: () => $t('common.remove'),
-            variant: 'danger',
-            onClick: (row) => removeIdentifierRow(row.id),
-        },
-    ]);
 
     // =========================================================================
     // Lifecycle — Populate in edit mode
@@ -682,6 +609,8 @@
         displayName = '';
         currency = get(userSettings)?.base_currency ?? 'EUR';
         assetType = 'STOCK';
+        blankCurrency = currency;
+        blankAssetType = assetType;
         iconUrl = null;
         quoteBaseQuantity = 1;
         quoteBaseQuantityTouched = false;
@@ -791,26 +720,19 @@
         let question: IdentifierQuestion | null = null;
         // Auto-fill form
         displayName = result.display_name || displayName;
-        if (result.asset_type) assetType = (ASSET_TYPES as readonly string[]).includes(result.asset_type.toUpperCase()) ? result.asset_type.toUpperCase() : 'OTHER';
+        if (result.asset_type) assetType = searchResultAssetType(result.asset_type);
         if (result.currency) currency = result.currency;
 
         // Auto-fill identifier based on identifier_type
-        const idType = (result.identifier_type ?? '').toUpperCase();
-        if (idType && result.identifier) {
-            const existing = identifierRows.find((r) => r.type === idType);
-            const incoming = String(result.identifier).trim();
-            const current = (existing?.value ?? '').trim();
-            if (existing && current !== '' && current.toUpperCase() !== incoming.toUpperCase()) {
-                // Two codes of the same type, both legitimate: don't pick for the user.
-                // The provider link below is established regardless — the search did its job;
-                // only the *identity* question is deferred to the chooser.
-                askIdentifierPrimary(idType, incoming, current, result.provider_code);
-                question = identifierQuestion(idType, [incoming, current]);
-            } else if (existing) {
-                identifierRows = identifierRows.map((r) => (r.type === idType ? {...r, value: incoming} : r));
-            } else {
-                identifierRows = [...identifierRows, {id: generateUUID(), type: idType, value: incoming}];
-            }
+        const identifier = searchResultIdentifier(identifierRows, result.identifier_type, result.identifier);
+        if (identifier.kind === 'conflict') {
+            // Two codes of the same type, both legitimate: don't pick for the user.
+            // The provider link below is established regardless — the search did its job;
+            // only the *identity* question is deferred to the chooser.
+            askIdentifierPrimary(identifier.type, identifier.incoming, identifier.current, result.provider_code);
+            question = identifierQuestion(identifier.type, [identifier.incoming, identifier.current]);
+        } else if (identifier.kind === 'rows') {
+            identifierRows = identifier.rows;
         }
 
         // Auto-fill provider
@@ -818,14 +740,9 @@
         providerIdentifier = result.identifier;
         providerIdentifierType = result.identifier_type;
         providerNoProvider = false;
-        // Carry over provider_params from search result (e.g. language, currency).
-        // Provider-supplied params take priority; currency is added as fallback
-        // only when the provider didn't already include it.
-        const searchParams: Record<string, any> = {...(result.provider_params ?? {})};
-        if (result.currency && !('currency' in searchParams)) {
-            searchParams.currency = result.currency;
-        }
-        providerParams = Object.keys(searchParams).length > 0 ? searchParams : null;
+        // Carry over provider_params from search result (e.g. language, currency): the provider's own take priority,
+        // the result's currency is the fallback.
+        providerParams = searchResultProviderParams(result.provider_params, result.currency);
         resetDraftReads(result.provider_url ?? null);
         // After the reset, which clears the previous selection's questions: these are this one's.
         selectionQuestions = question ? [question] : [];
@@ -874,16 +791,12 @@
         const idType = identifierChoiceType;
         const primary = identifierChoicePrimary;
         if (!idType || !primary) return;
-        const alternates = identifierChoiceOptions.map((c) => c.value).filter((v) => v.toUpperCase() !== primary.toUpperCase());
-        const known = new Set(identifierRows.filter((r) => r.type === 'OTHER').map((r) => r.value.trim().toUpperCase()));
-        const rows = identifierRows.map((r) => (r.type === idType ? {...r, value: primary} : r));
-        for (const value of alternates) {
-            const key = value.toUpperCase();
-            if (known.has(key)) continue;
-            known.add(key);
-            rows.push({id: generateUUID(), type: 'OTHER', value});
-        }
-        identifierRows = rows;
+        identifierRows = withElectedPrimary(
+            identifierRows,
+            idType,
+            primary,
+            identifierChoiceOptions.map((c) => c.value),
+        );
         moreInfoExpanded = true;
         closeIdentifierPrimary();
     }
@@ -988,15 +901,9 @@
     // Ask Provider (metadata) — unified fetch + compare logic (C1+C2 refactoring)
     // =========================================================================
 
-    /** Helper: field name like 'identifier_ticker' → type 'TICKER' */
     /** Set or update an identifier row by type */
     function setIdentifierByType(type: string, val: string) {
-        const existing = identifierRows.find((r) => r.type === type);
-        if (existing) {
-            identifierRows = identifierRows.map((r) => (r.type === type ? {...r, value: val, autoFilled: true} : r));
-        } else {
-            identifierRows = [...identifierRows, {id: generateUUID(), type, value: val, autoFilled: true}];
-        }
+        identifierRows = withIdentifier(identifierRows, type, val);
     }
 
     /**
@@ -1006,17 +913,9 @@
      * Returns how many new rows were added.
      */
     function mergeOtherIdentifiers(raw: unknown): number {
-        const values = Array.isArray(raw) ? raw : raw != null ? [raw] : [];
-        const seen = new Set(identifierRows.filter((r) => r.type === 'OTHER').map((r) => (typeof r.value === 'string' ? r.value.trim() : String(r.value ?? '').trim())));
-        const additions: IdentifierRow[] = [];
-        for (const v of values) {
-            const s = (typeof v === 'string' ? v : String(v ?? '')).trim();
-            if (!s || seen.has(s)) continue;
-            seen.add(s);
-            additions.push({id: generateUUID(), type: 'OTHER', value: s, autoFilled: true});
-        }
-        if (additions.length > 0) identifierRows = [...identifierRows, ...additions];
-        return additions.length;
+        const merged = mergeOtherIdentifierValues(identifierRows, raw);
+        if (merged.added > 0) identifierRows = merged.rows;
+        return merged.added;
     }
 
     /**
@@ -1045,131 +944,16 @@
                 toasts.info($t('assets.identifiers.askProviderHint') + ' — no data from provider');
                 return;
             }
-            const pd = meta.patch_data;
-            const differences: DiffItem[] = [];
-            const missingFields: string[] = [];
-
-            // COVERAGE NOTE (branch): the two compare-helpers below and their call
-            // sites (~1029-1201) sit inside the async "Ask Provider" metadata flow.
-            // They mutate closure state (differences, autoFilledFields, the two
-            // distributions) as a side-effect of a live fetch+compare against a
-            // provider response. Their uncovered branches are the auto-fill /
-            // matched / differs three-way splits — reachable only by mocking a full
-            // provider metadata round-trip with three contrived response shapes.
-            // Left uncovered on purpose: extracting the decision would push
-            // offsetting dispatch branches back into this component (roughly
-            // coverage-neutral) while risking a real network path. The pure,
-            // testable half of this section (identifier reconciliation, payload
-            // building, notice grouping) already lives in the sibling .ts modules.
-            // --- Helper: compare a string field — auto-fill if empty, diff if different ---
-            function compareStringField(field: string, label: string, currentVal: string, providerVal: string | null | undefined) {
-                if (!providerVal) return;
-                const touched = manuallyChanged(field);
-                if (!currentVal && !touched) {
-                    setFieldValue(field, providerVal);
-                    autoFilledFields = new Set([...autoFilledFields, field]);
-                } else if (currentVal === providerVal || (field === 'asset_type' && isFamilyOnlyProposal(currentVal, providerVal))) {
-                    // A provider that only knows the family of the stored subtype (ETF for an
-                    // ETF_STOCK) agrees with it: no row, the subtype stays (K step 17, item 17).
-                    if (!touched) autoFilledFields = new Set([...autoFilledFields, field]);
-                } else {
-                    // Name/casing noise: the on-site search title and the metadata page title
-                    // differ only in case (e.g. "T-bond" vs "T-Bond") — same instrument, not a
-                    // real difference. Skip instead of showing a false diff.
-                    const isCaseOnly = currentVal.trim().toLowerCase() === providerVal.trim().toLowerCase();
-                    // Currency not explicitly chosen: on a fresh asset the search may leave the
-                    // currency unset, so the form still shows the base-currency default (e.g. EUR)
-                    // while the provider knows the real one (e.g. a USD-denominated EuroTLX bond).
-                    // The user never picked that value — auto-fill it rather than flag a fake diff.
-                    const isUnsetCurrencyDefault = field === 'currency' && !currencyUserSet;
-                    if (!touched && (isCaseOnly || isUnsetCurrencyDefault)) {
-                        setFieldValue(field, providerVal);
-                        autoFilledFields = new Set([...autoFilledFields, field]);
-                    } else {
-                        differences.push({field, label, type: 'string', currentValue: currentVal, providerValue: providerVal, selected: true});
-                    }
-                }
-            }
-
-            // --- Helper: compare a distribution — auto-fill if empty, diff if different ---
-            function compareDistribution(field: string, label: string, currentDist: Record<string, number>, providerDist: Record<string, number>) {
-                const hasCurrent = Object.keys(currentDist).length > 0;
-                const touched = manuallyChanged(field);
-                if (!hasCurrent && !touched) {
-                    if (field === 'sector_area') sectorDistribution = providerDist;
-                    else geographicDistribution = providerDist;
-                    autoFilledFields = new Set([...autoFilledFields, field]);
-                } else if (!sameDistribution(currentDist, providerDist)) {
-                    differences.push({field, label, type: 'distribution', currentValue: currentDist, providerValue: providerDist, selected: true});
-                } else if (!touched) {
-                    autoFilledFields = new Set([...autoFilledFields, field]);
-                }
-            }
-
-            // --- IDENTIFIERS (scope 'all' or 'identifiers') ---
-            if (scope === 'all' || scope === 'identifiers') {
-                for (const idType of IDENTIFIER_TYPES) {
-                    // OTHER is a JSON list of soft identifiers, not a scalar string — handled below.
-                    if (idType === 'OTHER') continue;
-                    const dbKey = `identifier_${idType.toLowerCase()}`;
-                    const provVal = pd[dbKey];
-                    if (provVal) {
-                        const currentVal = getIdentifierByType(idType);
-                        compareStringField(dbKey, idType, currentVal, provVal);
-                    }
-                }
-                // OTHER: merge each list element as its own row (additive, deduped) instead of
-                // routing the array through the string compare path.
-                if (!manuallyChanged('identifier_other') && mergeOtherIdentifiers(pd.identifier_other) > 0) {
-                    autoFilledFields = new Set([...autoFilledFields, 'identifier_other']);
-                }
-            }
-
-            // --- ASSET DETAILS (scope 'all' only) ---
-            if (scope === 'all') {
-                compareStringField('display_name', $t('common.name'), displayName, pd.display_name);
-                compareStringField('asset_type', $t('common.type'), assetType, pd.asset_type);
-                compareStringField('currency', $t('common.currency'), currency, pd.currency);
-            }
-
-            // --- CLASSIFICATION: description, sector, geographic ---
-            const cpData = pd.classification_params;
-
-            if (scope === 'all') {
-                if (cpData?.short_description) {
-                    const provDesc = cpData.short_description;
-                    // BRIM prefill (auto-populated identified-names, not user-typed): merge the
-                    // provider enrichment (head) with the identified-names prefill (tail) instead
-                    // of routing to the diff modal, so the rich description always lands even
-                    // though the import wizard pre-populated the field.
-                    if (!manuallyChanged('short_description') && descriptionFromPrefill && shortDescription.trim() && shortDescription.trim() !== provDesc.trim()) {
-                        const tail = shortDescription.trim();
-                        shortDescription = provDesc.includes(tail) ? provDesc : `${provDesc}\n\n${tail}`;
-                        descriptionFromPrefill = false;
-                        autoFilledFields = new Set([...autoFilledFields, 'short_description']);
-                    } else {
-                        compareStringField('short_description', 'Description', shortDescription, provDesc);
-                    }
-                }
-            }
-
-            if (scope === 'all' || scope === 'sector') {
-                if (cpData?.sector_area) {
-                    const provDist = normalizeDistribution(cpData.sector_area.distribution ?? cpData.sector_area);
-                    compareDistribution('sector_area', $t('common.sectorDistribution'), sectorDistribution, provDist);
-                } else {
-                    missingFields.push($t('common.sectorDistribution'));
-                }
-            }
-
-            if (scope === 'all' || scope === 'geographic') {
-                if (cpData?.geographic_area) {
-                    const provDist = normalizeDistribution(cpData.geographic_area.distribution ?? cpData.geographic_area);
-                    compareDistribution('geographic_area', $t('common.geoDistribution'), geographicDistribution, provDist);
-                } else {
-                    missingFields.push($t('common.geoDistribution'));
-                }
-            }
+            // The decision is pure (./assetMetadataComparison.ts); the writes are applied here, in order.
+            const {actions, differences, missingFields} = compareMetadata(meta.patch_data, comparisonSnapshot(), scope, manuallyChanged, {
+                name: $t('common.name'),
+                type: $t('common.type'),
+                currency: $t('common.currency'),
+                description: $t('common.description'),
+                sector: $t('common.sectorDistribution'),
+                geographic: $t('common.geoDistribution'),
+            });
+            for (const action of actions) applyComparisonAction(action);
 
             // --- RESULTS: consistent toast logic (Fix 3) ---
             if (missingFields.length > 0) {
@@ -1194,7 +978,8 @@
         } catch (e: any) {
             if (!open || saving || !providerProbe.isMetadataCurrent(request)) return;
             console.error(`Ask Provider (${scope}) failed:`, e);
-            toasts.error($t('common.errorOccurred'));
+            // The probe's own limit (X-R66) says when to try again; any other failure stays generic
+            toasts.error(probeRateLimitMessage(e, $t) ?? $t('common.errorOccurred'));
         } finally {
             providerProbe.finishMetadata(request);
         }
@@ -1224,6 +1009,44 @@
     /** Per-section "Ask Provider" — compares only the given section */
     function handleAskProviderSection(section: 'identifiers' | 'sector' | 'geographic') {
         fetchAndCompareMetadata(section);
+    }
+
+    /** The form values a metadata comparison reads (see ./assetMetadataComparison.ts). */
+    function comparisonSnapshot(): ComparisonSnapshot {
+        return {
+            identifiers: Object.fromEntries(IDENTIFIER_TYPES.filter((type) => type !== 'OTHER').map((type) => [type, getIdentifierByType(type)])),
+            displayName,
+            assetType,
+            currency,
+            currencyUserSet,
+            shortDescription,
+            descriptionFromPrefill,
+            sectorDistribution,
+            geographicDistribution,
+        };
+    }
+
+    /** Apply one write of a metadata comparison and mark its field auto-filled. */
+    function applyComparisonAction(action: ComparisonAction) {
+        switch (action.kind) {
+            case 'fill':
+                setFieldValue(action.field, action.value);
+                break;
+            case 'fillDistribution':
+                if (action.field === 'sector_area') sectorDistribution = action.value;
+                else geographicDistribution = action.value;
+                break;
+            case 'mergeDescription':
+                shortDescription = action.value;
+                descriptionFromPrefill = false;
+                break;
+            case 'mergeOther':
+                if (mergeOtherIdentifiers(action.values) === 0) return;
+                break;
+            case 'agree':
+                break;
+        }
+        autoFilledFields = new Set([...autoFilledFields, action.field]);
     }
 
     /** Generic setter used by comparison logic */
@@ -1381,26 +1204,20 @@
         saving = false;
     }
 
-    async function saveCreate() {
-        const normalizedQuoteBaseQuantity = normalizeQuoteBaseQuantity(quoteBaseQuantity);
-        // Build classification_params if any fields are set
-        const classificationParams = buildClassificationParams(shortDescription, sectorDistribution, geographicDistribution);
+    /** The form's values, as the save requests are built from them (./assetPayload.ts). */
+    function formFields(): AssetFormFields {
+        return {displayName, currency, assetType, iconUrl, quoteBaseQuantity, active, isBenchmark, userUrl: providerUserUrl, shortDescription, sectorDistribution, geographicDistribution, identifierRows};
+    }
 
+    /** The provider the save assigns to the asset. */
+    function providerAssignment(): ProviderAssignment {
+        return {code: providerCode, identifier: providerIdentifier, identifierType: providerIdentifierType, params: providerParams};
+    }
+
+    async function saveCreate() {
         // Step 1: Create asset
-        const createPayload = [
-            {
-                display_name: displayName.trim(),
-                currency: currency,
-                asset_type: assetType,
-                icon_url: iconUrl || undefined,
-                quote_base_quantity: normalizedQuoteBaseQuantity,
-                active: active,
-                is_benchmark: isBenchmark,
-                user_url: providerUserUrl || undefined,
-                classification_params: classificationParams,
-                ...identifierRowsToColumns(identifierRows),
-            },
-        ];
+        const createItem = buildCreateItem(formFields());
+        const createPayload = [createItem];
 
         const createResp = (await zodiosApi.create_assets_bulk_api_v1_assets_post(createPayload as any)) as any;
         const result = createResp?.results?.[0];
@@ -1408,28 +1225,20 @@
             throw new Error(result?.message || 'Failed to create asset');
         }
         const assetId = result.asset_id;
-        naLog(`created asset #${assetId} "${displayName.trim()}" type=${assetType} currency=${currency} qbq=${normalizedQuoteBaseQuantity} · identifiers: ${identifiersSummary()} · provider=${hasProvider ? providerCode : 'none'}`);
+        naLog(`created asset #${assetId} "${displayName.trim()}" type=${assetType} currency=${currency} qbq=${createItem.quote_base_quantity} · identifiers: ${identifiersSummary()} · provider=${hasProvider ? providerCode : 'none'}`);
 
         // Upsert the new asset into the shared cache so other pages
         // (transactions cell, AssetCard, AssetTable, …) reflect the entry
         // immediately. The BE response only carries `asset_id`; we merge the
         // fields the FE just submitted (no extra round-trip).
-        mergeAssets([{id: assetId, ...(createPayload[0] as Record<string, unknown>)}]);
+        mergeAssets([{id: assetId, ...(createItem as Record<string, unknown>)}]);
 
         // Step 2: Assign provider (separate try/catch — asset already created)
         // Skip assignment for scheduled_investment if no schedule is configured yet
         const skipProviderAssignment = providerCode === 'scheduled_investment' && (!providerParams || !providerParams.schedule?.length);
         if (hasProvider && !skipProviderAssignment) {
             try {
-                const assignPayload = [
-                    {
-                        asset_id: assetId,
-                        provider_code: providerCode,
-                        identifier: providerIdentifier,
-                        identifier_type: providerIdentifierType,
-                        provider_params: providerParams,
-                    },
-                ];
+                const assignPayload = [buildProviderAssignItem(assetId, providerAssignment())];
                 await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
             } catch (assignErr: any) {
                 console.error('Provider assignment failed after asset creation:', assignErr);
@@ -1446,20 +1255,29 @@
         const createdLabel = linkCreatedAsset ? entityDetailLinkHtml({kind: 'asset', id: assetId}, displayName) : escapeHtml(displayName);
         toasts.success($t('assets.modal.createSuccess', {values: {name: createdLabel}}));
         open = false;
-        oncreated?.(assetId);
+        const syncing = hasProvider && !skipProviderAssignment;
+        oncreated?.(assetId, {syncing});
 
-        // Trigger a full-history sync for new assets with a real data provider — fire-and-forget.
-        // Parametric providers (e.g. scheduled_investment) generate their own data and don't
-        // need a historical fetch. Errors are non-blocking (chart just stays empty until the
-        // next scheduled sync); we intentionally do NOT await this.
+        // The one price sync of a new asset with a provider (O-20): fire-and-forget, so the modal
+        // closes at once, and reported through `onsynced`, so the caller can show it and reload —
+        // the Assets page used to start a second sync of its own. Parametric providers (e.g.
+        // scheduled_investment) need it too: assigning one stores no price, the sync generates
+        // the series. Errors are non-blocking (the chart stays empty until the next sync).
         //
         // `start: 'resume'` is the backend sentinel for "the day after the last price I already
         // have, or the provider's full history if I have none". A just-created asset has none,
         // so this is a full-history fetch — expressed as the same rule every other auto-sync
         // uses, instead of a hardcoded date that silently truncates whatever precedes it.
-        if (hasProvider && !skipProviderAssignment && !isParametricProvider(providerCode)) {
+        if (syncing) {
             const end = new Date().toISOString().slice(0, 10);
-            void zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: 'resume', end}}]).catch((syncErr) => console.warn('Post-create full-history sync failed (non-blocking):', syncErr));
+            void zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: 'resume', end}}]).then(
+                (response) => onsynced?.(assetId, ((response as any)?.results?.[0] ?? null) as AssetCreateSyncResult | null),
+                // Only the request's failure: an error of the caller's handler must not report the sync a second time.
+                (syncErr) => {
+                    console.warn('Post-create full-history sync failed (non-blocking):', syncErr);
+                    onsynced?.(assetId, null);
+                },
+            );
         }
     }
 
@@ -1486,7 +1304,6 @@
     }
 
     async function saveEdit(assetId: number) {
-        const normalizedQuoteBaseQuantity = normalizeQuoteBaseQuantity(quoteBaseQuantity);
         // #R3-4 — for PARAMETRIC_GENERATION providers (e.g. scheduled_investment), if the
         // user changed `provider_params` intercept the save flow to show an explicit
         // regenerate confirmation. Confirming will: (1) PATCH/assign through the normal
@@ -1504,7 +1321,7 @@
 
         // Same interception for the *other* destructive parametric case: swapping the
         // provider away from a parametric one. The backend wipes the generated prices
-        // and events (asset_source.py, "provider changed"), and without that wipe the
+        // and events (services/assets/provider_management.py, "provider changed"), and without that wipe the
         // next sync would resume from the day after the last invented price and never
         // backfill the real past. Counts come from the two existing query endpoints —
         // a warning that cannot say how much it is about to destroy is not a warning.
@@ -1519,31 +1336,8 @@
             return; // wait for confirm; the modal will re-invoke saveEdit()
         }
 
-        // Build classification_params
-        const classificationParams = buildClassificationParams(shortDescription, sectorDistribution, geographicDistribution);
-        const classificationPatch = buildClassificationPatch(initialClassification, classificationParams);
-
-        // Step 1: Patch asset
-        const idCols = identifierRowsToColumns(identifierRows);
-        const patchItem = {
-            asset_id: assetId,
-            display_name: displayName.trim(),
-            currency: currency,
-            asset_type: assetType,
-            icon_url: iconUrl,
-            quote_base_quantity: normalizedQuoteBaseQuantity,
-            active: active,
-            is_benchmark: isBenchmark,
-            user_url: providerUserUrl || null,
-            ...(classificationPatch !== undefined ? {classification_params: classificationPatch} : {}),
-            identifier_isin: idCols.identifier_isin || null,
-            identifier_ticker: idCols.identifier_ticker || null,
-            identifier_cusip: idCols.identifier_cusip || null,
-            identifier_sedol: idCols.identifier_sedol || null,
-            identifier_figi: idCols.identifier_figi || null,
-            identifier_uuid: idCols.identifier_uuid || null,
-            identifier_other: idCols.identifier_other || null,
-        };
+        // Step 1: Patch asset (classification_params only when it changed since the modal opened)
+        const patchItem = buildPatchItem(assetId, formFields(), initialClassification);
         const patchPayload = [patchItem];
 
         // I.3 + R3-3 Policy D — PATCH returns a per-item failure with the structured
@@ -1592,20 +1386,40 @@
         // Step 2: Handle provider change
         if (providerNoProvider) {
             // Remove provider
-            await zodiosApi.remove_providers_bulk_api_v1_assets_provider_delete(undefined, {
-                queries: {asset_ids: [assetId]},
-            });
+            try {
+                await zodiosApi.remove_providers_bulk_api_v1_assets_provider_delete(undefined, {
+                    queries: {asset_ids: [assetId]},
+                });
+            } catch (removeErr: unknown) {
+                // X-R62: a removal refused because transactions are linked to the events the provider generated (or to
+                // one linked meanwhile) is said here, inline and in the user's language, as X-R49's refusal below; the
+                // modal stays open on the draft, whose 409 would otherwise read «duplicate name». Any other error goes on.
+                const refusal = wipeRefusalMessage(removeErr, $t, (iso) => formatDay(iso));
+                if (refusal === null) throw removeErr;
+                formError = refusal;
+                pendingSaveAssetId = null;
+                setTimeout(() => {
+                    document.querySelector('[data-form-error]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
+                }, 50);
+                return;
+            }
         } else if (hasProvider) {
-            const assignPayload = [
-                {
-                    asset_id: assetId,
-                    provider_code: providerCode,
-                    identifier: providerIdentifier,
-                    identifier_type: providerIdentifierType,
-                    provider_params: providerParams,
-                },
-            ];
-            await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
+            const assignPayload = [buildProviderAssignItem(assetId, providerAssignment())];
+            try {
+                await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
+            } catch (assignErr: unknown) {
+                // X-R49: a change refused because a split the provider generated has adjustments without a purchase cost
+                // is said here, inline and in the user's language, and the modal stays open (every way in: the regenerate
+                // and switch-away confirms, and the plain save, whose 409 would read «duplicate name»). Any other error goes on.
+                const refusal = wipeRefusalMessage(assignErr, $t, (iso) => formatDay(iso));
+                if (refusal === null) throw assignErr;
+                formError = refusal;
+                pendingSaveAssetId = null;
+                setTimeout(() => {
+                    document.querySelector('[data-form-error]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
+                }, 50);
+                return;
+            }
         }
 
         // #R3-4 — after a confirmed scheduled_investment regenerate, trigger an
@@ -1633,7 +1447,7 @@
                 // have, and fall back to the provider's full history when there is none.
                 //
                 // It covers the parametric regenerate without a special case, because the backend
-                // wipes every price row before this runs (asset_source.py: "params changed … wiped
+                // wipes every price row before this runs (services/assets/provider_management.py: "params changed … wiped
                 // N price row(s)") — nothing left to resume from, so 'resume' resolves to 'min' by
                 // itself. A provider change wipes nothing, so the old series stays and the new
                 // provider only fills the gap.
@@ -1692,9 +1506,9 @@
 
 <ModalBase {open} maxWidth="4xl" allowOverflow={true} onRequestClose={handleClose} {zIndex} testId="asset-modal">
     <!-- Header -->
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
-        <button type="button" onclick={handleClose} disabled={saving} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-lf-subtle">
+        <h2 class="text-lg font-semibold text-lf-primary">{title}</h2>
+        <button type="button" onclick={handleClose} disabled={saving} class="text-lf-muted hover:text-lf-secondary transition-colors">
             <X size={20} />
         </button>
     </div>
@@ -1706,36 +1520,19 @@
         <fieldset disabled={saving} class="min-w-0 px-6 py-4 space-y-5" data-testid="asset-modal-form" aria-busy={saving || askingProvider} data-busy={saving || askingProvider} data-snapshot-ready={initialSnapshot !== '' ? 'true' : 'false'} data-dirty={isDirty ? 'true' : 'false'}>
             <!-- Import advisory notices (wizard create context): amber banners grouped by kind. -->
             {#if !editMode && groupedNotices.length > 0}
-                <div class="space-y-2" data-testid="asset-import-notices">
-                    {#each groupedNotices as group (group.kind)}
-                        {@const _key = `assets.modal.importNotices.kind.${group.kind}`}
-                        {@const _label = $t(_key)}
-                        <div class="rounded-lg border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 space-y-1.5" data-testid="asset-import-notice">
-                            <div class="flex items-center gap-2 text-xs font-semibold text-amber-800 dark:text-amber-300">
-                                <span aria-hidden="true">⚠️</span>
-                                <span>{_label === _key ? $t('assets.modal.importNotices.kind.generic') : _label}</span>
-                            </div>
-                            <ul class="list-disc list-inside space-y-0.5 text-xs text-amber-700 dark:text-amber-200/90">
-                                {#each group.reasons as reason}
-                                    <li>{reason}</li>
-                                {/each}
-                            </ul>
-                            <p class="text-[11px] text-amber-600 dark:text-amber-300/70">{$t('assets.modal.importNotices.intro')}</p>
-                        </div>
-                    {/each}
-                </div>
+                <AssetModalImportNotices groups={groupedNotices} />
             {/if}
             <!-- Search Online -->
             <div use:guideAnchor={'asset.search'} data-testid="asset-tour-search">
                 {#if !editMode && initialSearchBadges.length > 0}
                     <!-- All three (title, badges, input) in one space-y-1.5 wrapper → uniform 6px gaps -->
                     <div class="space-y-1.5">
-                        <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        <div class="flex items-center gap-2 text-xs font-semibold text-lf-muted uppercase tracking-wider">
                             <Search size={12} />
                             <span>{$t('assets.modal.searchOnline')}</span>
                         </div>
                         <div class="flex flex-wrap items-center gap-1.5">
-                            <span class="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 shrink-0">
+                            <span class="flex items-center gap-1 text-xs text-lf-muted shrink-0">
                                 <Search size={11} class="opacity-60" />
                                 {$t('assets.modal.searchSuggestions')}:
                             </span>
@@ -1747,218 +1544,49 @@
                             {/each}
                         </div>
                         {#key activeSearchQuery}
-                            <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={activeSearchQuery} hideTitle={true} hints={searchHints} />
+                            <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={activeSearchQuery} hideTitle={true} hints={searchHints} reportContext={searchReportContext} />
                         {/key}
                     </div>
                 {:else}
                     {#key activeSearchQuery}
-                        <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} hints={searchHints} />
+                        <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} hints={searchHints} reportContext={searchReportContext} />
                     {/key}
                 {/if}
             </div>
 
-            <!-- Asset Details -->
-            <div class="space-y-3" use:guideAnchor={'asset.identity'} data-testid="asset-tour-identity">
-                <div class="flex items-center justify-between">
-                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        {$t('assets.modal.assetDetails')}
-                    </div>
-                    <!-- Ask Provider global button -->
-                    <button
-                        type="button"
-                        onclick={handleAskProvider}
-                        disabled={!hasProvider || askingProvider}
-                        data-testid="asset-modal-ask-provider"
-                        class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md
-                               bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
-                               text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600
-                               disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        title={!hasProvider ? $t('assets.identifiers.askProviderHint') : ''}
-                    >
-                        {#if askingProvider}
-                            <Loader2 size={12} class="animate-spin" />
-                        {:else}
-                            <RefreshCw size={12} />
-                        {/if}
-                        <span class="hidden sm:inline">{$t('assets.identifiers.askProvider')}</span>
-                    </button>
-                </div>
-
-                <!-- Grid: Icon on left, form fields on right -->
-                <div class="grid grid-cols-[auto_1fr] gap-4 items-center">
-                    <!-- Left: Icon (clickable) -->
-                    <!-- svelte-ignore a11y_click_events_have_key_events -->
-                    <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <div class="group relative cursor-pointer" onclick={() => (showImagePicker = true)} title={$t('uploads.selectIcon')}>
-                        <AssetIcon {iconUrl} {assetType} size="lg" />
-                        <div
-                            class="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100
-                                flex items-center justify-center transition-opacity"
-                        >
-                            <Upload class="text-white" size={16} />
-                        </div>
-                    </div>
-
-                    <!-- Right: Name+URL row, Type+Currency row (2×2 on desktop, column on mobile) -->
-                    <div class="space-y-3">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <!-- Display Name -->
-                            <div>
-                                <label for="asset-display-name" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                                    {$t('common.name')} *
-                                </label>
-                                <input
-                                    id="asset-display-name"
-                                    type="text"
-                                    bind:value={displayName}
-                                    oninput={() => markManualField('display_name')}
-                                    placeholder="Apple Inc."
-                                    data-testid="asset-modal-display-name"
-                                    aria-invalid={!displayName.trim()}
-                                    aria-describedby={!displayName.trim() ? 'asset-name-required' : undefined}
-                                    class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                           bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                           placeholder-gray-400 dark:placeholder-gray-500
-                                           focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
-                                />
-                                {#if !displayName.trim()}
-                                    <p id="asset-name-required" class="mt-1 text-xs text-amber-700 dark:text-amber-400" data-testid="asset-modal-name-required">
-                                        {$t('assets.modal.nameRequired')}
-                                    </p>
-                                {/if}
-                                {#if duplicateAssetName}
-                                    <Tooltip text={$t('assets.modal.duplicateNameTooltip', {values: {name: duplicateAssetName}})} position="bottom" maxWidth="300px">
-                                        <span data-testid="asset-modal-duplicate-warning" data-duplicate-name={duplicateAssetName} class="inline-flex items-center gap-1 mt-1 text-xs text-amber-600 dark:text-amber-400">
-                                            ⚠️ {$t('assets.modal.duplicateNameWarning', {values: {name: duplicateAssetName}})}
-                                        </span>
-                                    </Tooltip>
-                                {/if}
-                            </div>
-
-                            <!-- Asset Type -->
-                            <div>
-                                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                                    {$t('common.type')} *
-                                </span>
-                                <AssetTypeSelect bind:value={assetType} testId="asset-modal-type" onchange={() => markManualField('asset_type')} />
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <!-- Quote Base Quantity -->
-                            <div>
-                                <div class="flex items-center gap-1 mb-1">
-                                    <label for="asset-quote-base-quantity" class="block text-xs font-medium text-gray-500 dark:text-gray-400">
-                                        {$t('assets.modal.quoteBaseQuantity')} *
-                                    </label>
-                                    <Tooltip text={$t('assets.modal.quoteBaseTooltip')} position="bottom" maxWidth="280px">
-                                        <Info size={14} class="text-gray-400 cursor-help" />
-                                    </Tooltip>
-                                </div>
-                                <input
-                                    id="asset-quote-base-quantity"
-                                    type="number"
-                                    use:numericArrows
-                                    min="1"
-                                    step="1"
-                                    bind:value={quoteBaseQuantity}
-                                    oninput={() => (quoteBaseQuantityTouched = true)}
-                                    onblur={truncateQuoteBaseQuantity}
-                                    data-testid="asset-modal-quote-base-quantity"
-                                    class="w-full px-3 py-2 text-sm border rounded-lg
-                                           bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                           focus:outline-none focus:ring-2 {quoteBaseQuantityInvalid ? 'border-red-400 focus:ring-red-400/50 dark:border-red-500' : 'border-gray-200 dark:border-slate-600 focus:ring-libre-green/50 focus:border-libre-green'}"
-                                />
-                                {#if quoteBaseQuantityInvalid}
-                                    <p class="mt-1 text-[11px] text-red-600 dark:text-red-400" data-testid="asset-modal-quote-base-quantity-error">{$t(quoteBaseQuantityError)}</p>
-                                {/if}
-                                {#if assetType === 'BOND'}
-                                    <p class="mt-1 flex items-start gap-1 text-[11px] text-blue-600 dark:text-blue-300" data-testid="asset-modal-bond-qbq-hint">
-                                        <Info size={12} class="mt-0.5 shrink-0" />
-                                        <span>{$t('assets.modal.bondQuoteBaseHint')}</span>
-                                    </p>
-                                {/if}
-                            </div>
-
-                            <!-- Currency -->
-                            <div data-testid="asset-modal-currency-group">
-                                <div class="flex items-center gap-1 mb-1">
-                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{$t('common.currency')} *</span>
-                                    <Tooltip text={$t('assets.modal.currencyHelp')} interactiveChild maxWidth="360px">
-                                        <button type="button" class="text-gray-400 hover:text-blue-500 dark:hover:text-blue-400" aria-label={$t('assets.modal.currencyHelpLabel')} data-testid="asset-modal-currency-help">
-                                            <Info size={13} />
-                                        </button>
-                                    </Tooltip>
-                                </div>
-                                <CurrencySearchSelect
-                                    value={currency}
-                                    onchange={(v) => {
-                                        if (v) {
-                                            currency = v;
-                                            currencyUserSet = true;
-                                            markManualField('currency');
-                                        }
-                                    }}
-                                    maxVisibleItems={6}
-                                    compact={true}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- User URL -->
-            <div>
-                <label for="asset-user-url" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    {$t('assets.provider.userUrl')}
-                </label>
-                <div class="flex gap-1.5">
-                    <input
-                        id="asset-user-url"
-                        type="text"
-                        bind:value={providerUserUrl}
-                        placeholder="https://..."
-                        class="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                               placeholder-gray-400 dark:placeholder-gray-500
-                               focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
-                    />
-                    {#if providerUserUrl}
-                        <a href={providerUserUrl} target="_blank" rel="noopener noreferrer" class="shrink-0 flex items-center px-2 py-2 text-gray-400 hover:text-libre-green transition-colors">
-                            <ExternalLink size={14} />
-                        </a>
-                    {/if}
-                </div>
-            </div>
-
-            <!-- Description (short, always visible) -->
-            <div>
-                <label for="asset-description" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    {$t('common.description')}
-                </label>
-                <textarea
-                    id="asset-description"
-                    data-testid="asset-modal-description"
-                    bind:value={shortDescription}
-                    oninput={() => {
-                        descriptionFromPrefill = false;
-                        markManualField('short_description');
-                    }}
-                    rows={2}
-                    placeholder={$t('assets.modal.descriptionPlaceholder')}
-                    class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                           bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                           placeholder-gray-400 dark:placeholder-gray-500
-                           focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green resize-none"
-                ></textarea>
-            </div>
+            <AssetModalDetails
+                bind:displayName
+                bind:assetType
+                bind:quoteBaseQuantity
+                bind:quoteBaseQuantityTouched
+                bind:providerUserUrl
+                bind:shortDescription
+                {currency}
+                {iconUrl}
+                {hasProvider}
+                {askingProvider}
+                {duplicateAssetName}
+                {quoteBaseQuantityInvalid}
+                {quoteBaseQuantityError}
+                onmanualedit={markManualField}
+                onaskprovider={handleAskProvider}
+                onpickicon={() => (showImagePicker = true)}
+                oncurrencychange={(v) => {
+                    currency = v;
+                    currencyUserSet = true;
+                    markManualField('currency');
+                }}
+                ondescriptionedit={() => {
+                    descriptionFromPrefill = false;
+                    markManualField('short_description');
+                }}
+            />
 
             <!-- More Info (collapsible — Identifiers + Classification) -->
-            <div class="border border-gray-200 dark:border-slate-700 rounded-lg" use:guideAnchor={'asset.provider'} data-testid="asset-tour-provider">
+            <div class="border border-lf-subtle rounded-lg" use:guideAnchor={'asset.provider'} data-testid="asset-tour-provider">
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div
-                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer select-none"
+                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-lf-secondary bg-lf-panel hover:bg-lf-neutral transition-colors cursor-pointer select-none"
                     role="button"
                     tabindex="0"
                     data-testid="asset-modal-more-info"
@@ -1984,91 +1612,12 @@
                 </div>
 
                 {#if moreInfoExpanded}
-                    <div class="px-4 py-3 space-y-4 border-t border-gray-200 dark:border-slate-700">
-                        <!-- Sub-section: Identifiers -->
-                        <div class="space-y-2">
-                            <div class="flex items-center justify-between">
-                                <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                                    {$t('common.identifiers')}
-                                </div>
-                                <div class="flex items-center gap-1.5">
-                                    {#if identifierSelectedIds.length > 0}
-                                        <DataTableToolbar
-                                            selectedCount={identifierSelectedIds.length}
-                                            bulkActions={[
-                                                {
-                                                    id: 'delete',
-                                                    icon: Trash2,
-                                                    label: () => $t('assets.identifiers.deleteSelected'),
-                                                    variant: 'danger',
-                                                    onClick: handleIdentifierBulkDelete,
-                                                },
-                                            ]}
-                                            onClearSelection={() => {
-                                                identifierSelectedIds = [];
-                                            }}
-                                        />
-                                    {/if}
-                                    <button
-                                        type="button"
-                                        onclick={addIdentifierRow}
-                                        data-testid="asset-modal-add-identifier"
-                                        class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                                        title={$t('assets.identifiers.addIdentifier')}
-                                    >
-                                        <Plus size={10} /> <span class="hidden sm:inline">{$t('assets.identifiers.addIdentifier')}</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onclick={() => handleAskProviderSection('identifiers')}
-                                        disabled={!hasProvider || askingProvider}
-                                        class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                        title={$t('assets.identifiers.askProvider')}
-                                    >
-                                        {#if askingProvider}<Loader2 size={10} class="animate-spin" />{:else}<RefreshCw size={10} />{/if}
-                                        <span class="hidden sm:inline">{$t('assets.identifiers.askProvider')}</span>
-                                    </button>
-                                </div>
-                            </div>
-                            {#if identifierRowsFixed.length > 0}
-                                <DataTable
-                                    data={identifierRowsFixed}
-                                    columns={identifierColumns}
-                                    getRowId={(r) => r.id}
-                                    storageKey="asset-modal-identifiers"
-                                    enableSelection={true}
-                                    onSelectionChange={(ids) => {
-                                        identifierSelectedIds = ids;
-                                    }}
-                                    enablePagination={false}
-                                    enableColumnFilters={false}
-                                    enableSorting={false}
-                                    enableColumnResize={false}
-                                    enableColumnVisibility={false}
-                                    enableActions={true}
-                                    actionsColumnWidth="64px"
-                                    rowActions={identifierRowActions}
-                                    tableLayout="auto"
-                                />
-                            {:else}
-                                <div class="text-xs text-gray-400 italic py-1">{$t('assets.identifiers.askProviderHint')}</div>
-                            {/if}
-
-                            <!-- OTHER / soft identifiers as removable tag badges -->
-                            <div class="space-y-1 pt-1">
-                                <div class="flex items-center gap-1">
-                                    <div class="text-[10px] font-medium text-gray-400">{$t('assets.identifiers.otherLabel')}</div>
-                                    <Tooltip text={$t('assets.identifiers.otherSeparatorsHint')} position="top" maxWidth="320px">
-                                        <Info size={12} class="text-gray-400 cursor-help" />
-                                    </Tooltip>
-                                </div>
-                                <TagInput value={otherIdentifiers} onchange={setOtherIdentifiers} placeholder={$t('assets.identifiers.otherPlaceholder')} />
-                            </div>
-                        </div>
+                    <div class="px-4 py-3 space-y-4 border-t border-lf-subtle">
+                        <AssetModalIdentifiers bind:rows={identifierRows} bind:selectedIds={identifierSelectedIds} {hasProvider} {askingProvider} onmanualedit={markManualField} onaskprovider={() => handleAskProviderSection('identifiers')} onbulkdelete={handleIdentifierBulkDelete} />
 
                         <!-- Sub-section: Classification -->
                         <div class="space-y-3">
-                            <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                            <div class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider">
                                 {$t('common.classification')}
                             </div>
 
@@ -2082,81 +1631,19 @@
                 {/if}
             </div>
 
-            <!-- Provider Assignment (collapsible) -->
-            <div class="border border-gray-200 dark:border-slate-700 rounded-lg">
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div
-                    data-testid="asset-modal-provider-header"
-                    data-expanded={providerExpanded}
-                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 transition-colors select-none {providerNoProvider ? '' : 'hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer'}"
-                    role="button"
-                    tabindex="0"
-                    onclick={() => {
-                        if (!providerNoProvider) providerExpanded = !providerExpanded;
-                    }}
-                    onkeydown={(e) => {
-                        if ((e.key === 'Enter' || e.key === ' ') && !providerNoProvider) {
-                            e.preventDefault();
-                            providerExpanded = !providerExpanded;
-                        }
-                    }}
-                >
-                    <div class="flex items-center gap-2" data-testid="asset-modal-provider-status" data-status={providerTestStatus}>
-                        {#if !providerNoProvider}
-                            {#if providerExpanded}
-                                <ChevronDown size={16} />
-                            {:else}
-                                <ChevronRight size={16} />
-                            {/if}
-                        {:else}
-                            <Minus size={16} class="text-gray-400" />
-                        {/if}
-                        <span>{$t('assets.provider.assignment')}</span>
-                        {#if providerTestStatus === 'passed'}
-                            <span class="text-green-500 text-xs ml-1">✅</span>
-                        {:else if providerTestStatus === 'failed'}
-                            <span class="text-red-500 text-xs ml-1">❌</span>
-                        {:else if providerTestStatus === 'testing'}
-                            <Loader2 size={12} class="animate-spin text-gray-400 ml-1" />
-                        {/if}
-                    </div>
-                    <!-- No Provider checkbox in header -->
-                    <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
-                        <input
-                            type="checkbox"
-                            id="no-provider-checkbox"
-                            data-testid="asset-modal-no-provider"
-                            checked={providerNoProvider}
-                            onchange={() => {
-                                providerNoProvider = !providerNoProvider;
-                                if (providerNoProvider) {
-                                    providerExpanded = false;
-                                }
-                                reconcileProviderContext();
-                            }}
-                            class="rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50"
-                        />
-                        <label for="no-provider-checkbox">{$t('assets.provider.noProvider')}</label>
-                    </div>
-                </div>
-
-                {#if providerExpanded && !providerNoProvider}
-                    <div class="px-4 py-3 border-t border-gray-200 dark:border-slate-700">
-                        <ProviderAssignmentSection
-                            bind:providerCode
-                            bind:identifier={providerIdentifier}
-                            bind:identifierType={providerIdentifierType}
-                            bind:providerParams
-                            {providerUrl}
-                            probeState={providerProbe}
-                            bind:noProvider={providerNoProvider}
-                            onchange={reconcileProviderContext}
-                            disabled={saving}
-                        />
-                    </div>
-                {/if}
-            </div>
+            <AssetModalProvider
+                bind:expanded={providerExpanded}
+                bind:noProvider={providerNoProvider}
+                bind:providerCode
+                bind:identifier={providerIdentifier}
+                bind:identifierType={providerIdentifierType}
+                bind:providerParams
+                {providerUrl}
+                probeState={providerProbe}
+                testStatus={providerTestStatus}
+                {saving}
+                onreconcile={reconcileProviderContext}
+            />
 
             <!-- Auto-assign info banner -->
             {#if searchResultSelected && hasProvider && !editMode}
@@ -2167,90 +1654,14 @@
 
             <!-- Error -->
             {#if formError}
-                <div data-form-error data-testid="asset-modal-form-error" class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
+                <div data-form-error data-testid="asset-modal-form-error" class="text-sm text-lf-danger-on-soft bg-lf-danger-soft px-4 py-2 rounded-lg">
                     {formError}
                 </div>
             {/if}
         </fieldset>
     </div>
 
-    <!-- Footer: switches and buttons share a row when they fit; on a phone the buttons wrap
-         under the switches (right-aligned), and each group can wrap in longer locales. Below `sm`
-         the switches fill their row, justified: each with its label and info is one piece, Active
-         on the left edge, Benchmark on the right one — also when it wraps. -->
-    <div class="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700">
-        <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
-                <Tooltip text={$t('assets.modal.activeTooltip')} position="top" maxWidth="320px">
-                    <Info size={14} class="text-gray-400 cursor-help shrink-0" />
-                </Tooltip>
-                <span id="asset-active-label" class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                    {active ? $t('common.active') : $t('assets.edit.status.inactive')}
-                </span>
-                <button
-                    type="button"
-                    role="switch"
-                    aria-checked={active}
-                    aria-labelledby="asset-active-label"
-                    data-testid="asset-active-toggle"
-                    disabled={saving}
-                    onclick={() => (active = !active)}
-                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {active ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
-                >
-                    <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform {active ? 'translate-x-6' : 'translate-x-1'}"></span>
-                </button>
-            </div>
-
-            <span class="mx-1 hidden h-5 w-px bg-gray-200 sm:block dark:bg-slate-700"></span>
-
-            <div class="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-                <Tooltip text={$t('assets.modal.benchmarkTooltip')} position="top" maxWidth="320px">
-                    <Info size={14} class="text-gray-400 cursor-help shrink-0" />
-                </Tooltip>
-                <span id="asset-benchmark-label" class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                    {$t('assets.modal.benchmark')}
-                </span>
-                <button
-                    type="button"
-                    role="switch"
-                    aria-checked={isBenchmark}
-                    aria-labelledby="asset-benchmark-label"
-                    data-testid="asset-benchmark-toggle"
-                    disabled={saving}
-                    onclick={() => (isBenchmark = !isBenchmark)}
-                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {isBenchmark ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
-                >
-                    <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform {isBenchmark ? 'translate-x-6' : 'translate-x-1'}"></span>
-                </button>
-            </div>
-        </div>
-
-        <div class="flex flex-wrap items-center justify-end gap-3 ml-auto">
-            <button
-                type="button"
-                onclick={handleClose}
-                disabled={saving}
-                data-testid="asset-modal-cancel"
-                class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-            >
-                {$t('common.cancel')}
-            </button>
-            {#if !tourPreview}
-                <button
-                    type="button"
-                    onclick={handleSave}
-                    disabled={!isValid || saving}
-                    data-testid="asset-modal-save"
-                    class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {#if saving}
-                        <Loader2 size={14} class="animate-spin" />
-                    {/if}
-                    <span>{editMode ? $t('assets.modal.saveChanges') : $t('assets.modal.createAsset')}</span>
-                </button>
-            {/if}
-        </div>
-    </div>
+    <AssetModalFooter bind:active bind:isBenchmark {saving} {isValid} {tourPreview} {editMode} oncancel={handleClose} onsave={handleSave} />
 </ModalBase>
 
 <!-- Confirmation: Save without test -->
@@ -2268,114 +1679,34 @@
     zIndex={zIndex + 20}
 />
 
-<!--
-  Provider vs report: which code leads.
-
-  Raised when a provider search returns an identifier of a type the form already holds with a
-  different value. Both are shown with their provenance; the loser becomes an alternate, so
-  nothing is destroyed — which is what keeps a dual-ISIN bond resolvable from either code.
--->
-{#if identifierChoiceOpen}
-    <ModalBase open={true} maxWidth="lg" onRequestClose={requestCloseIdentifierPrimary} zIndex={zIndex + 20}>
-        <div class="p-5 space-y-4" data-testid="asset-modal-identifier-primary">
-            <IdentifierPrimaryChooser
-                choices={identifierChoiceOptions}
-                assetName={displayName}
-                typeLabel={identifierChoiceType ?? undefined}
-                isIsin={identifierChoiceType === 'ISIN'}
-                providerName={identifierChoiceProvider ?? undefined}
-                bind:primary={identifierChoicePrimary}
-                testid="asset-modal-primary-chooser"
-            />
-            <div class="flex justify-end gap-2 pt-1">
-                <button type="button" class="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700" onclick={requestCloseIdentifierPrimary} data-testid="asset-modal-primary-cancel">
-                    {$t('assets.identifiers.primaryChooser.cancel')}
-                </button>
-                <button type="button" class="rounded bg-libre-green px-3 py-1.5 text-sm font-medium text-white hover:opacity-90" onclick={confirmIdentifierPrimary} data-testid="asset-modal-primary-confirm">
-                    {$t('assets.identifiers.primaryChooser.confirm')}
-                </button>
-            </div>
-        </div>
-    </ModalBase>
-{/if}
-
-<ConfirmModal
-    open={identifierChoiceDiscardOpen}
-    title={$t('assets.identifiers.primaryChooser.discardTitle')}
-    message={$t('assets.identifiers.primaryChooser.discardMessage')}
-    confirmText={$t('assets.identifiers.primaryChooser.discardConfirm')}
-    warning={true}
-    onConfirm={closeIdentifierPrimary}
-    onCancel={() => (identifierChoiceDiscardOpen = false)}
-    zIndex={zIndex + 40}
-/>
-
-<!-- Confirmation: Identifier change in edit mode -->
-<ConfirmModal
-    open={showIdentifierChangeConfirm}
-    title={$t('assets.confirm.identifierChanged')}
-    message={$t('assets.confirm.identifierChangedMessage')}
-    confirmText={$t('assets.confirm.confirmChange')}
-    warning={true}
-    onConfirm={() => {
+<AssetModalSelectionPrompts
+    {zIndex}
+    assetName={displayName}
+    choiceOpen={identifierChoiceOpen}
+    choiceType={identifierChoiceType}
+    choiceOptions={identifierChoiceOptions}
+    bind:choicePrimary={identifierChoicePrimary}
+    choiceProvider={identifierChoiceProvider}
+    bind:choiceDiscardOpen={identifierChoiceDiscardOpen}
+    onchoicerequestclose={requestCloseIdentifierPrimary}
+    onchoiceconfirm={confirmIdentifierPrimary}
+    onchoicediscard={closeIdentifierPrimary}
+    identifierChangeOpen={showIdentifierChangeConfirm}
+    onidentifierchangeconfirm={() => {
         showIdentifierChangeConfirm = false;
         if (pendingSearchResult) applySearchResult(pendingSearchResult);
         pendingSearchResult = null;
     }}
-    onCancel={() => {
+    onidentifierchangecancel={() => {
         showIdentifierChangeConfirm = false;
         pendingSearchResult = null;
     }}
-    zIndex={zIndex + 20}
+    reuseOpen={reuseModalOpen}
+    {reuseAllowKeyMerge}
+    {reuseExistingName}
+    onreuse={reuseExisting}
+    onreusedismiss={dismissReuse}
 />
-
-<!-- Reuse existing asset (wizard create): a search result's provider name matches an existing asset -->
-{#if reuseModalOpen}
-    <ModalBase maxWidth="max-w-md" onRequestClose={dismissReuse} open={reuseModalOpen} zIndex={zIndex + 20}>
-        <div class="flex items-center gap-3 px-5 py-4 border-b border-gray-200 dark:border-slate-700">
-            <Info class="text-amber-500 shrink-0" size={22} />
-            <h2 class="flex-1 text-lg font-semibold text-gray-900 dark:text-gray-100" data-testid="reuse-existing-title">
-                {$t('assets.modal.reuseExisting.title')}
-            </h2>
-            <button type="button" aria-label={$t('common.close')} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors" onclick={dismissReuse}>
-                <X size={20} />
-            </button>
-        </div>
-        <div class="px-5 py-4 text-sm text-gray-700 dark:text-gray-300" data-testid="reuse-existing-message">
-            <!-- Without the key merge there is no identifier to speak of: mentioning one
-                 would send the user looking for a choice this dialog does not offer. -->
-            {#if reuseAllowKeyMerge}
-                {$t('assets.modal.reuseExisting.message', {values: {name: reuseExistingName}})}
-            {:else}
-                {$t('assets.modal.reuseExisting.messagePlain', {values: {name: reuseExistingName}})}
-            {/if}
-        </div>
-        <div class="flex flex-col gap-2 px-5 py-4 border-t border-gray-200 dark:border-slate-700">
-            {#if reuseAllowKeyMerge}
-                <button type="button" data-testid="reuse-existing-add" class="w-full px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors" onclick={() => reuseExisting(true)}>
-                    {$t('assets.modal.reuseExisting.useAndAdd')}
-                </button>
-            {/if}
-            <button
-                type="button"
-                data-testid="reuse-existing-use"
-                class="w-full px-4 py-2 text-sm font-medium transition-colors {reuseAllowKeyMerge
-                    ? 'rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700'
-                    : 'rounded-lg bg-libre-green text-white hover:bg-libre-green/90'}"
-                onclick={() => reuseExisting(false)}
-            >
-                {#if reuseAllowKeyMerge}
-                    {$t('assets.modal.reuseExisting.useOnly')}
-                {:else}
-                    {$t('assets.modal.reuseExisting.use')}
-                {/if}
-            </button>
-            <button type="button" data-testid="reuse-existing-cancel" class="w-full px-4 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors" onclick={dismissReuse}>
-                {$t('assets.modal.reuseExisting.changeName')}
-            </button>
-        </div>
-    </ModalBase>
-{/if}
 
 <!-- Confirmation: Discard unsaved changes -->
 <ConfirmModal

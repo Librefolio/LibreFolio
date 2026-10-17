@@ -97,19 +97,19 @@ The single source of truth for all financial operations. Each transaction belong
 | `asset_id` | FK to asset — nullable for cash-only ops (DEPOSIT, WITHDRAWAL) |
 | `type` | `TransactionType` value: BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, FEE, TAX, ADJUSTMENT, TRANSFER, FX_CONVERSION, CASH_TRANSFER. A plain `VARCHAR(32)` with no `CHECK` constraint; databases created before 22/09/2026 still declare `VARCHAR(14)`, which SQLite does not enforce — see [Migrations](index.md#enum-column-length) |
 | `date` | Settlement date |
-| `quantity` | Signed asset delta (+in, −out). Default 0, NOT NULL |
-| `amount` | Signed cash delta (+in, −out). Default 0, NOT NULL |
+| `quantity` | Signed asset delta (+in, −out). Default 0, NOT NULL. `RealDecimal(22, 10)`: up to 15 digits before the decimal point (decision N63) and 10 decimal places, read back as written (see [Decimal Columns](index.md#decimal-columns)) |
+| `amount` | Signed cash delta (+in, −out). Default 0, NOT NULL. `RealDecimal(18, 6)`: up to 15 digits before the decimal point (decision N63) and 6 decimal places, read back as written (see [Decimal Columns](index.md#decimal-columns)) |
 | `currency` | ISO 4217 code — required when amount ≠ 0 |
 | `related_transaction_id` | Bidirectional self-FK for paired ops (TRANSFER, FX_CONVERSION, CASH_TRANSFER) |
 | `tags` | Comma-separated user tags |
 | `description` | Free-text |
-| `cost_basis_override` | Frozen per-unit cost for incoming seeded lots: receiving `TRANSFER`s, positive `ADJUSTMENT`s, imported snapshots, inheritances (see below) |
+| `cost_basis_override` | Frozen per-unit cost for incoming seeded lots: receiving `TRANSFER`s, positive `ADJUSTMENT`s, imported snapshots, inheritances (see below). A per-unit price, so `RealDecimal(24, 12)` like the prices: up to 12 digits before the decimal point and 12 decimal places, read back as written (see [Decimal Columns](index.md#decimal-columns)) |
 | `cost_basis_currency` | ISO currency code for `cost_basis_override`; nullable with the amount |
 | `asset_event_id` | FK to AssetEvent — links transaction to a global asset event |
 
 **Design rules:**
 
-- `quantity` and `amount` are **signed** and **NOT NULL** — enables simple `SUM()` for balance calculation
+- `quantity` and `amount` are **signed** and **NOT NULL** — a balance is the plain sum of the rows, done in Python by `financial_math`, never with an SQL `SUM()` (see [Decimal Columns](index.md#decimal-columns))
 - Paired transactions are **bidirectional** (A→B and B→A) using `DEFERRABLE INITIALLY DEFERRED` FK
 - `link_uuid` is accepted by create payloads only as transient batch correlation; it is not a `transactions` column
 - Tags are stored as CSV for simple `LIKE` queries without a join table
@@ -134,8 +134,8 @@ staged receiver row. A manual payload instead supplies the
 
 Batch promote is a separate boundary: `TXPromoteBatchItem` has no
 `cost_basis_mode`, and the promote stage does not calculate WAC. Its resolved
-per-unit value comes from `resolved_fields.cost_basis_override`, normally
-prepared by the frontend merge flow.
+per-unit value comes from `resolved_fields.cost_basis_override`, which only an API
+client sends: the merge dialogs send `description` and `tags` alone.
 
 See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)** for the full formula, transaction effects, and examples.
 
@@ -143,7 +143,7 @@ See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/technical-ana
 
 | Side | `cost_basis_override` |
 |------|----------------------|
-| Sender (qty < 0) | Not required; promote resolution explicitly clears it |
+| Sender (qty < 0) | Never required. A `TRANSFER` sender takes none: a promote clears it from that side, with or without `resolved_fields`. An `ADJUSTMENT` taking units out may carry one, at which the FIFO lots hand its units over; a split of a `TRANSFER` pair or a broker deletion writes the Auto cost of its own broker on the former sender (decision 47, see [Broker Deletion](../../backend/transactions/service.md#broker-deletion)) |
 | Receiver (qty > 0) | Required for `TRANSFER` and `ADJUSTMENT`; supplied manually, resolved by promote, or computed for a create/update auto mode |
 
 ### 🧮 How batch auto-WAC is staged
@@ -159,6 +159,10 @@ See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/technical-ana
 - `compute_wac_iterative()` reads the session-visible transaction history and
   returns the WAC; `_compute_wac_for_auto_items()` writes its per-unit amount and
   currency to `cost_basis_override` and `cost_basis_currency`.
+- After the Auto rows, the same stage gives the giving leg of each `TRANSFER` pair
+  the batch splits the Auto cost of its own broker (`_handover_cost()`), unless an
+  update of the batch gives it a cost (see
+  [Split & Promote](../../backend/transactions/split_promote.md#transfer-giving-leg)).
 - Missing FX data becomes a `wacFxUnavailable` batch issue instead of silently
   persisting an unresolved cost.
 - A split-linked `ADJUSTMENT` skips stored auto-WAC because the portfolio engine
@@ -187,7 +191,11 @@ BRIM plugins may set `cost_basis_override` directly when the source report alrea
 
 ## 💱 Currency & FX Integration
 
-The `currency` field in `transactions` is an **ISO 4217 string** (e.g., `EUR`, `USD`, `JPY`). There is **no foreign key** to an FX table — currencies are standard codes validated using `pycountry` + a crypto dictionary.
+The `currency` field in `transactions` is an **ISO 4217 string** (e.g., `EUR`, `USD`, `JPY`). There is **no foreign key** to an FX table — currencies are standard codes, validated with `pycountry` at the application layer:
+
+- **What a request writes** — a transaction's cash or cost basis, an asset's currency, a manual event, a manual FX rate or conversion route, a BRIM import, a user's base currency (E-19a) — must be an ISO 4217 alphabetic code (`iso_currency_code()` in `schemas/common.py`, E-18). Case and surrounding spaces do not matter (` eur ` is stored as `EUR`); a currency name (`Euro`), a numeric code (`978`) or a crypto ticker (`BTC`) is refused with a 422, which names the code the text stands for when there is one (`'840'`: USD; E-19a, `suggested_iso_currency()`).
+- **What is read back** is not checked again (`Currency.validate_code`, the lenient rule): a value stored by an earlier version still loads, lists and can be deleted.
+- **What is stored and not canonical** is reported, never changed (E-19a): a warning at every start and `./dev.py db currencies` ([admin guide](../../../admin/cli_tools.md), «Currency Codes That Are Not ISO Codes»; `services/platform/stored_currencies.py`, 14 places), and the BRIM gap-fix refuses to compare a broker whose cash holds such a code ([guide](../patterns/brim_plugin_guide.md)). The currency picker shows such a value with the ISO code it stands for, and the check of a backup for a restore warns `non_iso_currencies` when the archive holds one (E-19b1; `GET /utilities/currencies/suggest`, on `iso_currency_candidates()`, the rule behind `suggested_iso_currency()`).
 
 The dotted line in the ER diagram represents a **logical relationship**, not a relational one:
 

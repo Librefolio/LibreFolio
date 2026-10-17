@@ -59,7 +59,7 @@ L12 — E2E users are created as administrators.
 |------|------|
 | Plan, step 1 | `LibreFolio_developer_journal/Release_2/phases/34_accountAndIdReuse/plan-phase00AccountAndIdReuse.prompt.md` |
 | Plan, step 2 (last admin) | `LibreFolio_developer_journal/Release_2/phases/34_accountAndIdReuse/plan-phase00AccountAndIdReuseStep2LastAdmin.prompt.md` |
-| User service | `backend/app/services/user_service.py` |
+| User service | `backend/app/services/accounts/user_service.py` |
 | Post-migration fixes | `backend/app/db/post_migration/autoincrement.py` |
 | User CLI | `scripts/user_cli.py` |
 | Shared JWT secret | `dev.py` |

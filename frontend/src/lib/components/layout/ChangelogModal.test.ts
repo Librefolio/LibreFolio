@@ -233,6 +233,7 @@ import {tick} from 'svelte';
 import {get} from 'svelte/store';
 import ChangelogModal from './ChangelogModal.svelte';
 import {CHANGELOG_REMOTE_URL} from '$lib/features/changelog/changelog';
+import {instanceConfig, type InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {locale} from '$lib/i18n';
 import {zodiosApi} from '$lib/api';
 import type {UpdateCheckResult} from '$lib/features/update-check/updateCheck';
@@ -244,6 +245,9 @@ const GET_INFO = 'get_system_info_api_v1_system_info_get';
 
 /** The release the probe reports when "newer" is the programmed answer. */
 const RELEASE = {version: '1.2.4', tag: 'v1.2.4', url: 'https://example.com/release-1.2.4', name: 'Test release'};
+
+/** A self-hosted instance's answer to `GET /system/instance`: the only answer that shows the update check (F05, lot A9). */
+const SELFHOSTED: InstanceConfig = {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}};
 
 function deferred<T>() {
     let resolve!: (value: T) => void;
@@ -276,6 +280,16 @@ async function typeSearch(q: string) {
 
 beforeAll(async () => {
     await setupI18n();
+});
+
+// F05 (lot A9): the update check (`changelog-check-update`) is drawn only once the server has answered self-hosted.
+// These cases pin the modal as a self-hosted instance draws it — before the answer, after a failed request and on a
+// managed instance it is ChangelogModal.managed.test.ts —, so each starts from that answer: the real store, answered
+// through its own `load`, with no request and no module mock.
+beforeEach(async () => {
+    await instanceConfig.load({force: true, fetchConfig: () => Promise.resolve(SELFHOSTED)});
+    expect(instanceConfig.loaded, 'precondition: the instance configuration has loaded').toBe(true);
+    expect(instanceConfig.config.profile, 'precondition: a self-hosted instance').toBe('selfhosted');
 });
 
 beforeEach(() => {

@@ -90,7 +90,7 @@
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
         bind:this={editorElement}
-        class="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/10 dark:bg-amber-500/20 rounded-lg border border-amber-400/40 drp-trigger"
+        class="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-lf-warning-soft text-lf-warning-on-soft rounded-lg border border-lf-warning-line drp-trigger"
         role="group"
         data-valid={isDraftValid() ? 'true' : 'false'}
         onclick={(event) => event.stopPropagation()}
@@ -107,7 +107,7 @@
             {max}
             step="1"
             aria-invalid={!isDraftValid()}
-            class="zoom-guard-exempt w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            class="zoom-guard-exempt w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-lf-warning-on-soft focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
         <SimpleSelect value={draftUnit} {options} onchange={handleUnitChange} class="inline-block w-auto" dropdownPosition="auto" compact showChevron={false} testId={unitTestId} />
     </div>
@@ -118,7 +118,7 @@
         data-testid={buttonTestId}
         data-active={active ? 'true' : 'false'}
         class="drp-trigger px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-            {active ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+            {active ? 'bg-lf-warning text-lf-on-status shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
         onclick={toggleEditing}
     >
         {active ? `${amount}${selectedUnitLabel}` : customLabel}

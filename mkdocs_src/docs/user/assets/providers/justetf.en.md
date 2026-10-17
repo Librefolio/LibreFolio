@@ -22,15 +22,26 @@ It also brings each fund's description and its country and sector breakdowns.
 3. In `currency`, pick `EUR` (the default), `USD`, `CHF` or `GBP`: every price of the asset is
    stored in that currency.
 
-### 💱 Pick the Currency in Search
+### 💱 Pick the Currency in Search {: #search-currency }
 
 Each ETF appears four times in the results, once per currency: 🇪🇺 EUR, 🇺🇸 USD, 🇨🇭 CHF and
-🇬🇧 GBP. 👑 marks the fund's own currency, the one its NAV is computed in — not necessarily the one
-you trade in.
+🇬🇧 GBP — unless you chose a [preferred currency](#preferred-currency). 👑 marks the fund's own
+currency, the one its NAV is computed in — not necessarily the one you trade in. A line at the
+bottom of the results says so whenever a result shows 👑.
 
 justETF converts the USD, CHF and GBP prices with its own exchange rates. Is your reporting
 currency another one? Pick any of the four: LibreFolio converts with its own
 [exchange rates](../../fx/index.md).
+
+### ⭐ Your Preferred Currency {: #preferred-currency }
+
+Always pick the same currency? Choose it once as **Preferred currency**, under **JustETF** in
+**Settings › Plugins**, or with **Configure** next to the provider in the asset dialog. Your
+searches then show each ETF once, in that currency, with 👑 only on the funds computed in it.
+**All currencies**, the default, shows all four.
+
+It is a personal setting: it changes only your own searches, never a price or an asset you already
+have. See [Plugin Settings](../../settings/plugins.md#search-preferences).
 
 ## ⚠️ Limits
 
@@ -42,4 +53,5 @@ currency another one? Pick any of the four: LibreFolio converts with its own
 ## 🔗 Related
 
 - 🔌 **[Asset Providers](index.md)** — Compare the providers
+- 🧩 **[Plugin Settings](../../settings/plugins.md)** — Your preferred currency in search
 - 🛠️ **For developers: [JustETF Provider](../../../developer/backend/assets/provider_justetf.md)** — Live quotes, charts and caching

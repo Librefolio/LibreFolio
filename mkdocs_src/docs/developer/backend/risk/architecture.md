@@ -21,13 +21,13 @@ the first two is in [Risk UI](../../frontend/components/features/risk-lab.md).
 
 | Caller | Scope it sends | Entry point |
 |---|---|---|
-| Dashboard, **Risk** tab | `{kind: "portfolio", broker_ids}`: the brokers the user **owns** with a positive share, a share never set counting as 100% for the owner (`getOwnedBrokers()`, `stores/reference/brokerStore.ts:262`), whatever the broker filter. The panel mounts only once they are known: without `broker_ids` the backend would widen the scope to every broker the user can see, editor and viewer ones included (`routes/(app)/dashboard/+page.svelte:1032-1041`) | `levels/RiskLevelsPanel.svelte` |
+| Dashboard, **Risk** tab | `{kind: "portfolio", broker_ids}`: the brokers the user **owns** with a positive share, a share never set counting as 100% for the owner (`getOwnedBrokers()`, `stores/reference/brokerStore.ts:262`), whatever the broker filter. The panel mounts only once they are known: without `broker_ids` the backend would widen the scope to every broker the user can see, editor and viewer ones included (`routes/(app)/dashboard/+page.svelte:1101-1110`) | `levels/RiskLevelsPanel.svelte` |
 | Broker Detail, **Risk** tab | `{kind: "portfolio", broker_ids: [id]}` | `levels/RiskLevelsPanel.svelte` |
 | Assets page, **Correlation** tab (the *Asset Global* lab) | `{kind: "asset_set", asset_ids: [...]}` | `AssetSetRiskPanel.svelte` |
 | Asset Detail, **Risk & Scenarios** tab | `{kind: "asset", asset_id}` | `AssetRiskScenariosView.svelte` → `RiskAnalysisPanel.svelte` |
 | AI Export drawdown context | Portfolio, broker or asset; `drawdown_summary` only | `RiskService.execute()`, called in-process by `backend/app/services/ai_export/components/drawdown_context.py` |
 
-The Svelte paths are relative to `frontend/src/lib/components/risk/`. The AI Export side is
+The Svelte paths are relative to `frontend/src/lib/features/risk/`. The AI Export side is
 described in [AI Export Composition](../../architecture/patterns/ai_export_composition.md).
 
 ---
@@ -39,24 +39,30 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/api/v1/risk.py` | The four routes; maps scope errors to 403 and 404. |
 | `backend/app/schemas/risk.py` | Request, scope, result, metadata and output contracts, and every enum (`RiskMode`, `RiskResultStatus`, `RiskErrorCode`, `RiskOutputKind`, …). |
 | `backend/app/schemas/risk_scenarios.py` | Typed scenario catalogue contracts. |
-| `backend/app/services/risk/service.py` | `RiskService`: scope resolution, one series preparation, gates, per-analytic isolation, statuses, warning enrichment, eligibility verdicts. |
+| `backend/app/services/risk/service.py` | `RiskService`: `execute()` orchestrates a query through the five modules below (pre-flight, gates, per-analytic isolation, the `failed` envelope); `asset_eligibility()` gives the eligibility verdicts; `catalog()` lists the analytics. |
+| `backend/app/services/risk/plan.py` | `AnalyticPlan` — a requested analytic with its plugin and validated parameters — and the predicates on the kind of calculation it asks for (`is_historical_replay_plan()`, `is_hypothetical_plan()`, `is_geography_hypothetical_plan()`, `reads_the_twrr_alone()`). |
+| `backend/app/services/risk/scope.py` | The scope: access, holdings and weights (`load_scope_inputs()` into `ScopeInputs`), the asset lookups, the bulk price load (`prepare_asset_series()`), the exclusions (`scope_exclusions()`); `RiskScopeAccessError` and `RiskScopeNotFoundError`, which the API maps to 403 and 404. |
+| `backend/app/services/risk/replay.py` | A historical replay's own window and series (`prepare_historical_replay_context()`), and the shorter window it may suggest (`verified_replay_range()`). |
+| `backend/app/services/risk/results.py` | The execution context (`build_execution_context()`), the gate rules (`available_observations()`, `requires_valid_composition()`), the result envelopes and their metadata (`success_result()`, `unavailable_result()`, `result_metadata()`), the portfolio TWRR series (`portfolio_twrr_returns()`), the warnings and their asset names (`with_warning_asset_names()`). |
+| `backend/app/services/risk/data_quality.py` | The data-quality report a result is judged on (`plan_data_quality()`), its warnings (`data_quality_warnings()`), and the banner issues of an `asset_set` scope (`with_asset_set_quality_issues()`). |
 | `backend/app/services/risk/base.py` | The plugin contract: `RiskAnalytic`, `RiskExecutionContext`, `RiskComputation`, `RiskUnavailableError`, `RiskSeriesInputs`. |
 | `backend/app/services/risk/eligibility.py` | Per-asset window facts, analysis eligibility, replay coverage, common and suggested periods. |
 | `backend/app/services/risk/metrics.py` | Pure numeric primitives: volatility, Sharpe and Sortino, drawdown episodes, VaR/CVaR, correlation, risk contributions, buy-and-hold replay. |
 | `backend/app/services/risk/acquired.py` | Measures re-implemented from the Riskfolio-Lib catalogue in the project's sign conventions; the library is their test oracle, never a runtime dependency. |
 | `backend/app/services/risk/analytic_helpers.py` | Extraction helpers that turn a missing input into a declared refusal (`require_primary_returns`, `prepared_scope_series`, …). |
-| `backend/app/services/risk/signal_helpers.py` | Adapters reused by the five risk-family [signal plugins](../../architecture/patterns/signal_plugin_guide.md) (drawdown and rolling return, volatility, Sharpe, beta). |
+| `backend/app/services/signals/risk_adapters.py` | Adapters reused by the four risk-family [signal plugins](../../architecture/patterns/signal_plugin_guide.md) that read the prepared series (drawdown and rolling volatility, Sharpe, beta). |
 | `backend/app/services/risk/quant/` | The simulation and optimization boundary: engine request and result models, content-keyed caches, spawn worker pools, the QuantLib and Riskfolio workers, the NumPy block bootstrap. |
 | `backend/app/services/risk/scenario_catalog/` | Built-in YAML scenarios and the loader that runs at startup. |
 | `backend/app/services/risk_plugins/` | The analytics, one folder each: the code in `<analytic_code>/plugin.py`, the `risk.analytics.*` name and description in its `i18n/` fragment. |
-| `backend/app/services/provider_registry.py` | `RiskAnalyticRegistry` and the `register_plugin` decorator. |
-| `backend/app/services/series_preparation.py` | Joint calendar, target-currency conversion, simple returns, carried points. |
-| `backend/app/services/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
-| `backend/app/services/data_quality_thresholds.py` | Thresholds shared with the portfolio's data-quality banner. |
-| `backend/app/config.py` | `RISK_SIMULATION_*` and `RISK_OPTIMIZATION_*` worker settings. |
-| `frontend/src/lib/risk/riskRequest.ts` | Request builders and canonicalization. |
-| `frontend/src/lib/stores/risk/` | `riskStore` (session cache), `riskPanelController` (the plumbing behind every panel), `riskBenchmarkStore` (the shared benchmark). |
-| `frontend/src/lib/components/risk/` | Panels, levels, the lab, `BenchmarkSelect`, eligibility wording. |
+| `backend/app/services/risk/registry.py` | `RiskAnalyticRegistry`. |
+| `backend/app/services/provider_registry.py` | The `register_plugin` decorator and the folder discovery shared by every plugin registry. |
+| `backend/app/services/market_series.py` | Joint calendar, target-currency conversion, carried points. The simple returns (`float_price_return()`) and the observed annualization factor (`observed_annualization()`) come from `financial_math/returns.py` ([Financial Math Layer](../financial_math.md#package-map)). |
+| `backend/app/services/assets/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
+| `backend/app/services/platform/data_quality_thresholds.py` | Thresholds shared with the portfolio's data-quality banner. |
+| `backend/app/config/__init__.py` | `RISK_SIMULATION_*` and `RISK_OPTIMIZATION_*` worker settings. |
+| `frontend/src/lib/features/risk/riskRequest.ts` | Request builders and canonicalization. |
+| `frontend/src/lib/features/risk/` | `riskStore` (session cache), `riskPanelController` (the plumbing behind every panel), `riskBenchmarkStore` (the shared benchmark). |
+| `frontend/src/lib/features/risk/` | Panels, levels, the lab, `BenchmarkSelect`, eligibility wording. |
 
 ---
 
@@ -106,6 +112,19 @@ flowchart TD
     Result --> Store
 ```
 
+**The range first** (R13-SEC8-1b). The request's `date_range`, and a historical replay's
+`replay_range`, are walked day by day over prices, so `bounded_range()` (`risk/scope.py`) bounds
+them before anything reads them. The range ends by `latest_range_end()` (tomorrow,
+`utils/datetime_utils.py`). It starts no earlier than `range_span_floor()` of that end,
+`RANGE_SPAN_LIMIT_DAYS` (100 years) before it: the span limit of
+[X-R55](../assets/architecture.md#price-query-range-ceiling). The price query itself bounds only the
+end, and backward-fills a range from its start, so without this a price stored long ago would let a
+range starting just after it walk every day since. A start after that end moves to it,
+and a range already within bounds is left as it is. `execute()` bounds the request's range on entry,
+so the prices, the report, the context and the labels all read the same range; nothing in the
+response echoes the request's own range. A replay bounds its window in
+`prepare_historical_replay_context()` (see [Replay Coverage](#replay-coverage)).
+
 `RiskService.execute()` runs these steps for every `POST /query`:
 
 1. **Pre-flight, per analytic.** Each requested `analytic_code` is looked up in the registry and
@@ -113,15 +132,15 @@ flowchart TD
    not an HTTP error: that item comes back `unavailable` with `analytic_not_found`,
    `incompatible_scope`, `incompatible_mode` or `invalid_parameters` (the Pydantic messages go in
    `details.validation_errors`), and the other analytics still run.
-2. **Scope inputs** (`_load_scope_inputs`). An `asset` or `asset_set` scope is just its ids, with no
-   weights. A `portfolio` scope checks a requested `broker_ids` subset against the user's access
-   rows (an inaccessible broker → **403**), then reads one `PortfolioService.get_report()` for the
-   holdings, today's weights and the zero-return cash residual. `asset_ids` narrows a portfolio to
-   a *slice*: weights are renormalized to 100 % of the slice and no cash residual remains;
-   requested assets that are not held are dropped with a `slice_assets_not_held` warning, and a
-   slice that holds none of them → **404**. Negative asset values, a scope value that is not
-   positive, or holdings worth more than the scope (negative cash) are recorded as a composition
-   error.
+2. **Scope inputs** (`load_scope_inputs()` in `risk/scope.py`). An `asset` or `asset_set` scope is
+   just its ids, with no weights. A `portfolio` scope checks a requested `broker_ids` subset
+   against the user's access rows (an inaccessible broker → **403**), then reads one
+   `PortfolioService.get_report()` for the holdings, today's weights and the zero-return cash
+   residual. `asset_ids` narrows a portfolio to a *slice*: weights are renormalized to 100 % of the
+   slice and no cash residual remains; requested assets that are not held are dropped with a
+   `slice_assets_not_held` warning, and a slice that holds none of them → **404**. Negative asset
+   values, a scope value that is not positive, or holdings worth more than the scope (negative
+   cash) are recorded as a composition error.
 3. **Existence check.** A scope asset id that does not exist → **404**. A benchmark named by
    `comparison_asset_id` that does not exist only makes its own analytic `invalid_parameters`.
 4. **One preparation.** The market holiday table is awaited once; the prices of the scope assets
@@ -130,9 +149,10 @@ flowchart TD
    `prepare_asset_series_set()`, which converts them to the target currency and aligns them on one
    joint calendar. Every analytic of the request reads that same set, so their figures are
    commensurable; a benchmark joins that calendar too.
-5. **Execution context** (`_build_context`). A frozen, DB-free `RiskExecutionContext` carries the
-   prepared set, the scope's *primary* series and its basis (table below), the observed
-   annualization factor, coverage, data quality, exclusions, weights and cash weight.
+5. **Execution context** (`build_execution_context()` in `risk/results.py`). A frozen, DB-free
+   `RiskExecutionContext` carries the prepared set, the scope's *primary* series and its basis
+   (table below), the observed annualization factor, coverage, data quality, exclusions, weights
+   and cash weight.
 6. **Per-analytic gates.** A current-composition portfolio analytic that needs valid weights
    (`risk_contribution`, `stress`, `comparison`, `historical_var`, `simulation`) is refused with
    `data_unavailable` when the composition is invalid. A historical replay prepares its own window
@@ -142,10 +162,11 @@ flowchart TD
    synchronous `compute()` in a worker thread (`asyncio.to_thread`); `simulation` and
    `portfolio_optimization` override it to submit a job to a spawn worker pool
    ([Simulation and Optimization Workers](#quant)).
-8. **Result assembly** (`_success`). Context and plugin warnings are merged and deduplicated,
-   data-quality warnings are added, the status is chosen and the metadata built. The service then
-   names the assets every warning mentions and, for an `asset_set` scope, builds the data-quality
-   banner issues the lab shows.
+8. **Result assembly** (`success_result()` in `risk/results.py`). Context and plugin warnings are
+   merged and deduplicated, data-quality warnings are added, the status is chosen and the metadata
+   built. The service then names the assets every warning mentions (`with_warning_asset_names()`,
+   also in `risk/results.py`) and, for an `asset_set` scope, builds the data-quality banner issues
+   the lab shows (`with_asset_set_quality_issues()` in `risk/data_quality.py`).
 
 ### 📈 The Primary Series {: #primary-series }
 
@@ -168,7 +189,7 @@ their data-quality report is the one of the series they actually consumed.
 
 ### 🚦 The Observation Gate {: #observation-gate }
 
-`_available_observations()` decides what is counted against `min_observations`:
+`available_observations()`, in `risk/results.py`, decides what is counted against `min_observations`:
 
 - `correlation` is not gated here: the plugin applies its own per-pair floor and coverage
   (`min_observations` and `min_coverage` parameters) and marks the cells `insufficient`;
@@ -199,8 +220,11 @@ forbid `output`.
 
     A metric that is genuinely undefined for well-formed data is never raised. A Sharpe ratio over
     a series with zero volatility comes back as `None` with a `sharpe_undefined` warning
-    (`historical_kpi`); a correlation cell over a flat series is marked `RiskValueStatus.UNDEFINED`
-    (`correlation`). The rest of the result stays usable.
+    (`historical_kpi`); the gain that would recover a total loss comes back as `None` with a
+    `total_loss_no_recovery` warning, which does not degrade the result (`drawdown_summary`,
+    `asset_set_drawdown`; see [The Drawdown Episode](#drawdown-episode)); a correlation cell over a
+    flat series is marked `RiskValueStatus.UNDEFINED` (`correlation`). The rest of the result stays
+    usable.
 
     The generic `except Exception` branch of `RiskService.execute()` exists for bugs. It logs the
     exception with `logger.exception` (analytic code and error type) and answers
@@ -272,7 +296,7 @@ to the context's values when left at `None`.
 
 ### 🔌 Registration and Discovery {: #registry }
 
-`RiskAnalyticRegistry` (`backend/app/services/provider_registry.py`) specializes the shared plugin
+`RiskAnalyticRegistry` (`backend/app/services/risk/registry.py`) specializes the shared plugin
 registry described in [Registry Pattern](../../architecture/patterns/registry_pattern.md):
 
 - **Discovery** loads every analytic folder's `plugin.py`, as
@@ -314,12 +338,48 @@ one dimension) and `historical_replay` (a crisis window, with proxies and exclus
 `*_set` output kinds are lists of per-asset rows with no set-level figure: a selection has no
 weights, so there is nothing to aggregate.
 
+#### 📉 The Drawdown Episode {: #drawdown-episode }
+
+`drawdown_summary` (`RiskDrawdownOutput`) and `asset_set_drawdown` (one `RiskAssetSetDrawdownItem`
+per asset) publish the same episode, built by `drawdown_episodes()` in
+`backend/app/services/risk/metrics.py`: the current drawdown with its running peak and duration,
+and the maximum drawdown with its dates, recovery status (`no_drawdown`, `recovered` or `open`),
+duration and recovered fraction. Two of its fields are the gain that takes a value back to its
+peak, `-d / (1 + d)` for a drawdown `d` at or below zero (−20 % needs +25 %, −50 % needs +100 %).
+Both come from `required_recovery_return()` in `backend/app/services/financial_math/returns.py`,
+the one home of that formula ([Financial Math Layer](../financial_math.md)):
+
+- `remaining_to_peak_ratio` — the gain from the **current** value back to the running peak.
+  Required but nullable, `ge=0`: `0` when the current value is not underwater (a current drawdown
+  within `ZERO_TOLERANCE` of zero), `null` for a total loss, a current drawdown of −100 %.
+- `maximum_drawdown_trough_to_peak_ratio` — the gain from the **maximum** drawdown's trough back
+  to the peak before it, for an open episode and a recovered one alike: it describes the depth of
+  the fall, not its recovery. Optional (default `null`), `ge=0`: `0` with `no_drawdown`, where the
+  episode validator rejects a positive value, and `null` for a total loss, a maximum drawdown of
+  −100 %.
+
+A total loss is an undefined value, not a failure ([Result Statuses](#statuses)). When either
+ratio is `null`, the result also carries one `total_loss_no_recovery` warning, whose
+`message_i18n_key`, `risk.warnings.total_loss_no_recovery`, belongs to the shared warning
+vocabulary of the `risk` subsystem ([Warnings, Errors and Localization](#localization)). The
+warning sets `degrades_result=False`: the drawdown itself is exact, only the gain that would
+recover it is undefined, so on its own the warning leaves the result `ok`. `asset_set_drawdown`
+emits a single warning for the whole set, with its own key, `risk.warnings.total_loss_no_recovery_assets`:
+it lists the assets concerned in `details.asset_ids`, and the service turns them into the
+sentence's `count` and `names`. AI Export's drawdown sections (component version 2) keep such a
+result: they carry the `null` and the warning instead of failing
+([AI Export Composition](../../architecture/patterns/ai_export_composition.md#drawdown-risk-context)).
+
+The trough-to-peak field, the `null` of `remaining_to_peak_ratio` and the `total_loss_no_recovery`
+warning came with `algorithm_version` 1.2.0 of `drawdown_summary` and 1.1.0 of
+`asset_set_drawdown`; the numbers both analytics already reported did not change.
+
 ### 🔢 By Level {: #by-level }
 
 The frontend asks the four questions of the Dashboard and Broker Detail as levels L1–L4, and the
 lab on the Assets page as its own sections. Which component renders which result is presentation
 and may move; the request side is the contract: `buildBaseAnalytics()` in
-`frontend/src/lib/components/risk/riskAnalysisHelpers.ts` (the base waves) and
+`frontend/src/lib/features/risk/riskAnalysisHelpers.ts` (the base waves) and
 `LEVEL_ON_DEMAND_ANALYSES` in `riskPanelController.svelte.ts` (L3: `comparison`; L4: `stress`,
 `replay`, `simulation`).
 
@@ -342,7 +402,7 @@ and may move; the request side is the contract: `buildBaseAnalytics()` in
 
 ### 📐 Shared Thresholds {: #thresholds }
 
-`backend/app/services/data_quality_thresholds.py` holds the numbers that the portfolio's
+`backend/app/services/platform/data_quality_thresholds.py` holds the numbers that the portfolio's
 data-quality banner, the risk engine and the eligibility check must agree on:
 
 | Constant | Value | Used for |
@@ -359,7 +419,7 @@ behind stored carries is in [Data Quality](../../../financial-theory/technical-a
 
 Some price sources store a row for every calendar day, repeating Friday's close on weekends and
 on exchange holidays. Read as quotes, those rows would add zero-return observations to every
-joint calendar. `backend/app/services/market_calendar.py` defines the rule once, for risk and
+joint calendar. `backend/app/services/assets/market_calendar.py` defines the rule once, for risk and
 signals alike: **a row dated on a weekend or on a market holiday whose close equals exactly the
 close of the row before it is a carry, not a quote** (`is_market_closed_repeat`). A crypto asset
 that moves on a Saturday, or a genuinely flat weekday, stays a quote.
@@ -373,9 +433,9 @@ that moves on a Saturday, or a genuinely flat weekday, stays a quote.
   awaited by the first computation that needs it (`ensure_market_holidays`). A build has 120 s;
   after a failure, weekends alone apply for 10 minutes before the next attempt.
 - `RiskService` awaits the table once per request and passes it to every preparation.
-  `series_preparation.mark_market_closed_carries()` turns stored carries into carried points,
+  `market_series.mark_market_closed_carries()` turns stored carries into carried points,
   `eligibility.load_price_window_facts()` applies the same rule in SQL, and the signal price query
-  (`backend/app/services/asset_sources/price_query.py`) applies it when signals are requested.
+  (`backend/app/services/assets/price_query.py`) applies it when signals are requested.
 
 ### ✅ Analysis Eligibility {: #eligibility }
 
@@ -405,15 +465,23 @@ returns on the joint calendar of the whole selection.
 
 A [historical replay](../../../financial-theory/technical-analysis/risk-metrics/historical-replay.md)
 compares values at the two ends of a crisis window, so it prepares its **own** series over
-`replay_range` (`_prepare_historical_replay_context`). Before that preparation, every scope asset
-the user neither proxied nor excluded is checked with `replay_coverage()`. An asset that is not
-priced at both ends within the staleness threshold is excluded automatically
-(`no_prices_in_window`, `starts_after_window_start`, `stale_at_window_start`,
-`stale_at_window_end`, `missing_fx`) instead of blocking the replay, or of moving the joint
-baseline and shortening the replay of every other asset. When a shorter window would bring back
-the assets its edges exclude, the service proposes it (`suggested_replay_range`, verified by a
-second reading) and never applies it. `proxy_assets` and `excluded_assets` must belong to the
-scope, and every proxy must exist, or the replay is `invalid_parameters`.
+`replay_range` (`prepare_historical_replay_context()` in `risk/replay.py`), bounded first like the
+request's range ([The range first](#request-flow)). The bounded window drives everything below. The
+parameters keep the request, so `metadata.params` echoes it as asked, while `output.replay_range` states the
+window replayed, the bounded one, which `metadata.analyzed_range` narrows to the observations found (J-52,
+stress `3.0.1`). Before that
+preparation, every scope asset the user neither proxied nor excluded is checked with
+`replay_coverage()`. An asset that is not priced at both ends within the staleness threshold is
+excluded automatically (`no_prices_in_window`, `starts_after_window_start`,
+`stale_at_window_start`, `stale_at_window_end`, `missing_fx`) instead of blocking the replay, or of
+moving the joint baseline and shortening the replay of every other asset. When a shorter window
+would bring back the assets its edges exclude, the service proposes it (`suggested_replay_range`,
+verified by a second reading in `verified_replay_range()`) and never applies it. The proposal lies
+inside the bounded window, so applying it never walks further than the replay itself could: before
+the bound, a price stored at year 1 and a window reaching into the future made it propose a window
+starting at year 1. `proxy_assets`
+and `excluded_assets` must belong to the scope, and every proxy must exist, or the replay is
+`invalid_parameters`.
 
 ### 🚫 Exclusions and Warnings {: #exclusions }
 
@@ -427,7 +495,10 @@ prices, incomplete dates. Which results inherit an exclusion is described in
 
 For an `asset_set` scope the service also builds the `data_quality.issues` that the lab's
 data-quality banner renders with its *Sync* actions: one issue per category, with the same
-categories and actions as the Dashboard's banner. See [Data Quality Banner](../../frontend/data-quality-banner.md).
+categories and actions as the Dashboard's banner. It reads the configured FX routes with
+`load_configured_fx_pair_sets()` (`financial_math/portfolio/data_quality.py`), as the portfolio
+report does, so a missing pair falls in the same category on both banners. See
+[Data Quality Banner](../../frontend/data-quality-banner.md).
 
 ### 🗂️ Scenario Catalogue {: #scenario-catalog }
 
@@ -462,7 +533,7 @@ section, `quant/` paths are under `backend/app/services/risk/` and `risk_plugins
 | `block_length_days` | Automatic | 1 to 5 000 calendar days; block bootstrap only. |
 
 The five modes of the UI are pairs of `process` and `regime` (the block bootstrap with each regime,
-then GBM), listed in `frontend/src/lib/components/risk/levels/l4/simulationModes.ts` so that an
+then GBM), listed in `frontend/src/lib/features/risk/levels/l4/simulationModes.ts` so that an
 invalid pair cannot be built. A payload that names no `process` is read as `gbm` when it still uses
 the legacy names `sampling`, `paths` or `seed`, asks for `qmc` or carries a parametric seed, and as
 the block bootstrap otherwise.
@@ -497,15 +568,21 @@ All these checks run after the service's parameter validation and observation ga
 | Stochastic workload: paths × horizon × assets | 200 000 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
 | Bootstrap history: observations × assets | 250 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
 | Optimization returns: observations × assets | 2 000 000 | `quant/optimization_engine.py` | `unavailable` · `resource_limit` |
+| Prices of the scope, every analytic: assets × days of the period (or of a replay window) | `MAX_BULK_ITEM_DAYS = 1_000_000` (Z-25, lowered by R13-SEC9-2) | `assets/price_query.py`, raised as `BulkTooManyDaysError` and turned into the refusal by `risk/scope.py::prepare_asset_series` (J-50) | `unavailable` · `resource_limit`, remedy `period_or_assets`, for every analytic of the request (a replay window: that analytic only) |
 
-`simulation` builds every `resource_limit` with `_resource_limit()` (`risk_plugins/simulation/plugin.py`).
-The builders call it directly; the three engine budgets raise `SimulationResourceLimitError` in
+Every `resource_limit` with a remedy is built by `resource_limit_error()` (`risk/base.py`).
+`simulation`'s builders call it directly; the three engine budgets raise `SimulationResourceLimitError` in
 `quant/engine.py`, which the plugin catches around `run_simulation()` and re-raises through
-`_resource_limit()` with its `metric`, `actual` and `limit`. The refusal's `details` carry these
-three, plus the `remedy` that one table, `_REMEDY_BY_METRIC`, maps the metric to (`portfolio_cells`
-and `stochastic_cells` → `paths_or_horizon`, `history_cells` and `observations` → `period`,
-`assets` → `positions`, `sobol_dimension` → `horizon_or_sampling`). A metric missing from the table
-still answers `resource_limit`, with no `remedy`. The plugin checks the assets and the observations
+`resource_limit_error()` with its `metric`, `actual` and `limit`. The refusal's `details` carry these
+three, plus the `remedy` that one table, `REMEDY_BY_METRIC` (`risk/base.py`), maps the metric to
+(`portfolio_cells` and `stochastic_cells` → `paths_or_horizon`, `history_cells` and `observations` →
+`period`, `assets` → `positions`, `sobol_dimension` → `horizon_or_sampling`, `price_item_days` →
+`period_or_assets`). A metric missing from the table still answers `resource_limit`, with no `remedy`.
+The scope's price budget is the one limit outside the plugin: `prepare_asset_series()` refuses through
+the same builder with `metric` `price_item_days`, and `RiskService.execute()` answers every planned
+analytic with that refusal (J-50). No other module writes a `remedy`, so the remedies the backend can
+name are exactly the table's values: `test_risk_schemas.py` holds them equal to the frontend's
+`RESOURCE_LIMIT_DISPLAY_CODES`, and fails on a `remedy` written anywhere else in the risk packages. The plugin checks the assets and the observations
 itself, before it builds the request: the request's `asset_ids` and `historical_returns` carry the
 same ceilings as their `max_length`, but a pydantic `ValidationError` raised while the builder
 constructs it lands outside the plugin's `try`, where the service can only log a traceback and
@@ -532,12 +609,12 @@ every input that can change the result (for the bootstrap, the history through i
 `analytic_code@algorithm_version`. Pools are created lazily on first use and shut down by the
 application lifespan.
 
-| Setting (`backend/app/config.py`, environment variable of the same name) | Default | Effect |
+| Setting (`backend/app/config/__init__.py`, environment variable of the same name) | Default | Effect |
 |---|---|---|
 | `RISK_SIMULATION_WORKERS`, `RISK_OPTIMIZATION_WORKERS` | 1 (1–8) | Spawned processes per pool. |
 | `RISK_SIMULATION_QUEUE_CAPACITY`, `RISK_OPTIMIZATION_QUEUE_CAPACITY` | 2 (0–64) | Jobs that may wait; beyond workers + queue the answer is `worker_busy`. |
 | `RISK_SIMULATION_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_TIMEOUT_SECONDS` | 120 / 60 | Hard per-job timeout; beyond it the answer is `execution_timeout`. |
-| `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS` | 600 | Idle workers are stopped after this many seconds. |
+| `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS` | 600 (60 in the managed profile, see [`PROFILE_DEFAULTS`](../../architecture/settings.md)) | Idle workers are stopped after this many seconds. |
 
 ---
 
@@ -600,17 +677,17 @@ its own `risk.analytics.<name>.*` keys.
   `risk.warnings.*`) with `message_params`. For every warning whose `details` carry `asset_ids`
   (or a single `asset_id`), the service adds the display names as `names` and their `count` to the
   parameters. On the client, `warningSentence()`
-  (`frontend/src/lib/components/risk/levels/warningSentence.ts`) translates the key with those
+  (`frontend/src/lib/features/risk/levels/warningSentence.ts`) translates the key with those
   parameters, and falls back to the English `message` when the catalogue lacks the key or the ICU
   format fails: never a raw key, never a placeholder.
 - **Errors.** The UI words a refusal or a failure from `error.code` alone, except for a size
-  limit: `errorDisplayCode()` (`frontend/src/lib/components/risk/levels/errorDisplayCode.ts`,
+  limit: `errorDisplayCode()` (`frontend/src/lib/features/risk/levels/errorDisplayCode.ts`,
   re-exported from `levelHelpers.ts`) also reads `details.remedy`, and turns a `resource_limit`
   whose remedy it knows into the display code `resource_limit_<remedy>`. Any other code stays as
   it is, and an unknown remedy keeps the generic `risk.errors.resource_limit`. It has two
   callers: `resultErrorCodes()` in `levelHelpers.ts` (the four levels and the lab sections) and
   `RiskResultFrame.svelte` (Asset Detail). `translateErrorCode()`
-  (`frontend/src/lib/components/risk/levels/levelHelpers.ts`) reads `risk.errors.<code>` and falls
+  (`frontend/src/lib/features/risk/levels/levelHelpers.ts`) reads `risk.errors.<code>` and falls
   back to a generic sentence (`risk.errors.unknown` in the levels). The client-side
   `answer_discarded` code is worded the same way.
 - **Gate.** `test_risk_warnings_i18n.py` scans `backend/app/services/risk/` and
@@ -628,11 +705,11 @@ Panels change; the plumbing below them is the stable part.
 
 ### 🧾 Requests and the Session Cache {: #risk-store }
 
-- `frontend/src/lib/risk/riskRequest.ts` builds every request with `buildRiskQueryRequest()` and
+- `frontend/src/lib/features/risk/riskRequest.ts` builds every request with `buildRiskQueryRequest()` and
   `buildRiskAnalyticRequest()`. Requests are canonicalized — sorted scope ids, upper-case currency,
   sorted replay proxies and exclusions — and parsed with the generated Zod schema, so equivalent
   questions serialize identically.
-- `frontend/src/lib/stores/risk/riskStore.svelte.ts` caches the two catalogues, the query answers
+- `frontend/src/lib/features/risk/riskStore.svelte.ts` caches the two catalogues, the query answers
   and the eligibility verdicts for the session. A query key is the user id plus the canonical
   request, with one flight per key shared by every caller. `queryRisk()` answers in three ways: a
   response; a rejection, remembered only while there is no answer to fall back on; or `null`, a
@@ -650,7 +727,7 @@ How this store sits among the other caches is described in
 ### 🕹️ The Panel Controller {: #panel-controller }
 
 `createRiskPanelController(inputs, options)`
-(`frontend/src/lib/stores/risk/riskPanelController.svelte.ts`) is the plumbing behind every risk
+(`frontend/src/lib/features/risk/riskPanelController.svelte.ts`) is the plumbing behind every risk
 panel; it has no markup.
 
 - **Base waves.** It loads the analytics catalogue, then sends up to two requests, a `historical`
@@ -688,12 +765,12 @@ panel; it has no markup.
   reasons, the assets that cannot be measured over the page's period, asking `queryEligibility()`
   itself when it is given a period; and it publishes a stored choice that cannot be measured as
   `blocked`, so no page asks a comparison it would then have to drop.
-- `frontend/src/lib/components/risk/eligibility.ts` only reads and words the engine's verdicts. An
+- `frontend/src/lib/features/risk/eligibility.ts` only reads and words the engine's verdicts. An
   asset with no verdict — not asked yet, or the request failed — stays selectable.
 
 ### 🧱 Component Families {: #components }
 
-All under `frontend/src/lib/components/risk/`:
+All under `frontend/src/lib/features/risk/`:
 
 | Family | Entry | Mounted by |
 |---|---|---|
@@ -713,10 +790,11 @@ flight in the store. The lab never shows an amount of money: an asset set has no
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.risk import RiskMode, RiskOutputKind, RiskScopeKind
-from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import require_primary_returns
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext, RiskSeriesInputs
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class MyAnalyticParams(BaseModel):
@@ -809,12 +887,14 @@ class MyAnalytic(RiskAnalytic):
 
 !!! warning "Code-keyed decisions in the service"
 
-    `RiskService` still keys a few decisions on `analytic_code`. `_available_observations()` lists
-    the analytics that count the prepared set: an analytic that reads one series per asset must be
-    added there, or an `asset_set` scope, which has no primary series, is refused for insufficient
-    history before `compute()` ever runs. `_requires_valid_composition()` lists the
-    current-composition portfolio analytics that need valid weights. `stress` has its own branches
-    for the replay window and the hypothetical shock. Review all three for a new code.
+    The service still keys a few decisions on `analytic_code`. `available_observations()`
+    (`risk/results.py`) lists the analytics that count the prepared set: an analytic that reads one
+    series per asset must be added there, or an `asset_set` scope, which has no primary series, is
+    refused for insufficient history before `compute()` ever runs. `requires_valid_composition()`
+    (`risk/results.py`) lists the current-composition portfolio analytics that need valid weights.
+    `stress` has its own branches for the replay window and the hypothetical shock, recognized by
+    the predicates of `risk/plan.py` (`is_historical_replay_plan()`, `is_hypothetical_plan()`).
+    Review all three for a new code.
 
 ### 🧪 Where the Tests Are {: #tests }
 

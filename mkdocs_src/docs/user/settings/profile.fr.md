@@ -45,7 +45,7 @@ Le bouton **Changer le mot de passe** (toujours disponible, aucun déverrouillag
 2. Un **nouveau mot de passe** qui respecte toutes les règles : 8 caractères minimum, au moins une lettre majuscule, une lettre minuscule, un chiffre et un caractère spécial — et il doit être différent du mot de passe actuel
 3. La **confirmation** du nouveau mot de passe
 
-Après confirmation, votre session reste active — vous n'avez pas besoin de vous reconnecter.
+Après confirmation, votre session reste active — vous n'avez pas besoin de vous reconnecter. Tout autre appareil connecté à votre compte est déconnecté.
 
 ### 🗑️ Supprimer le compte
 

@@ -38,11 +38,11 @@ from backend.app.schemas.signals import (  # noqa: E402
     SignalThresholdCrossingRequest,
     SignalWarningCode,
 )
-from backend.app.services import market_calendar  # noqa: E402
-from backend.app.services.asset_source import AssetSourceManager  # noqa: E402
-from backend.app.services.asset_sources import price_query as price_query_module  # noqa: E402
-from backend.app.services.asset_sources.price_query import PriceQueryOperations  # noqa: E402
-from backend.app.services.provider_registry import SignalPluginRegistry  # noqa: E402
+from backend.app.services.assets import market_calendar  # noqa: E402
+from backend.app.services.assets import price_query as price_query_module  # noqa: E402
+from backend.app.services.assets.manager import AssetSourceManager  # noqa: E402
+from backend.app.services.assets.price_query import PriceQueryOperations  # noqa: E402
+from backend.app.services.signals.registry import SignalPluginRegistry  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -412,6 +412,8 @@ async def test_risk_beta_can_reuse_primary_as_comparison(
 async def test_risk_signal_uses_target_currency_prepared_returns(
     asset_signal_data,
 ):
+    # A prepared-series risk signal: the rolling volatility, since developer's decision 29 removed
+    # the observation-count RISK_ROLLING_RETURN that used to stand here.
     async with AsyncSession(
         get_async_engine(),
         expire_on_commit=False,
@@ -425,8 +427,8 @@ async def test_risk_signal_uses_target_currency_prepared_returns(
                         target_currency="JPY",
                         signals=[
                             SignalRequest(
-                                instance_id="return",
-                                signal_code="RISK_ROLLING_RETURN",
+                                instance_id="volatility",
+                                signal_code="RISK_ROLLING_VOLATILITY",
                                 params={"window": 2},
                             )
                         ],
@@ -1735,7 +1737,11 @@ async def test_a_full_history_plan_still_loads_from_the_first_price(
     asset_signal_data,
     served_market_holidays,
 ):
-    """T6 — guard: a full-history plan (drawdown) keeps loading the whole history."""
+    """T6 — guard: a full-history plan (drawdown) keeps loading the whole history.
+
+    Since Z-30 a full history starts at 1900-01-01 (``EARLIEST_RANGE_START``), not ``date.min``: a row stored before it
+    only seeds the fill. Nothing precedes the fixture's first row, never before 1900-01-01, so all 500 points still load.
+    """
     starts = spy_load_starts(monkeypatch)
 
     result = await signals_on_primary(
@@ -1746,7 +1752,7 @@ async def test_a_full_history_plan_still_loads_from_the_first_price(
         ],
     )
 
-    assert starts == [date.min]
+    assert starts == [date(1900, 1, 1)]
     sma = next(signal for signal in result.signals if signal.instance_id == "sma")
     assert sma.warmup.loaded_points == 500  # the whole fixture: nothing precedes its first row
 

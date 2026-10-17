@@ -10,7 +10,16 @@ The system is based on three key components:
 2. **Plugin Registry**: A central class that discovers and stores all available plugins (e.g., `AssetProviderRegistry`, `SignalPluginRegistry`, `ToolPluginRegistry`).
 3. **Registration Decorator**: `@register_provider` for provider systems or `@register_plugin` for non-provider plugin systems.
 
-The registries and both decorators live in `backend/app/services/provider_registry.py`. The one exception is `ToolPluginRegistry`, in `backend/app/services/tools/registry.py`, which builds on the same base class.
+Each family keeps its registry in its own runtime package:
+
+- `AssetProviderRegistry` in `backend/app/services/assets/registry.py`
+- `FXProviderRegistry` in `backend/app/services/fx/registry.py`
+- `BRIMProviderRegistry` in `backend/app/services/brim/registry.py`
+- `SignalPluginRegistry` in `backend/app/services/signals/registry.py`
+- `RiskAnalyticRegistry` in `backend/app/services/risk/registry.py`
+- `ToolPluginRegistry` in `backend/app/services/tools/registry.py`
+
+`backend/app/services/provider_registry.py` keeps what they share: the base classes `AbstractPluginRegistry` and `AbstractProviderRegistry`, the folder-per-plugin discovery (`PLUGIN_MODULE_NAME`), the registry errors, and both decorators.
 
 ### 🗺️ High-Level Flow
 
@@ -64,7 +73,7 @@ backend/app/services/<family>/
 
 - **`plugin.py`** holds the plugin class, its registration decorator and whatever else the plugin needs.
 - **`__init__.py`** holds the plugin's docstring and re-exports nothing, e.g. `"""FX provider ``ecb``: the code is in ``plugin.py``, which the registry loads; this package re-exports nothing."""`.
-- **Helpers.** A helper private to one plugin sits beside its `plugin.py` as `_*.py`. A helper shared by several plugins stays at the family root, as `_*.py` too: `brim_providers/_brim_io.py`, `_brim_output.py` and `_scalable.py`. The signal contract, `signal_plugins/base.py`, is the only other module a family root keeps.
+- **Helpers.** A helper private to one plugin sits beside its `plugin.py` as `_*.py`. A helper shared by several plugins stays at the family root, as `_*.py` too: `brim_providers/_brim_io.py`, `_brim_output.py` and `_scalable.py`. A contract lives in its family's runtime package, not beside the plugins: the signal contract is `services/signals/base.py`, so a family root keeps only `__init__.py` and its `_*.py` helpers.
 - **Data stays with the family**: the icons in the family's `static/`, served under `/api/v1/uploads/plugin/<brim|fx|asset>/…` by `serve_plugin_static` (`backend/app/api/v1/uploads.py`), and the BRIM sample exports in `brim_providers/sample_reports/`.
 - **Translations** live in the plugin's `i18n/` fragment: see [A Plugin's Translations](#plugin-translations).
 
@@ -93,13 +102,13 @@ Each plugin has a **space**, read from the metadata its registry publishes:
 | Family | The plugin's space | What its fragment holds |
 |---|---|---|
 | BRIM | `brimPlugins.<code>`, the code being the folder's name | `name` and `description` |
-| Asset | `assets.providerParams.<provider_code>` | `label.<param>` and `description.<param>` of its `params_schema` |
+| Asset | `assets.providerParams.<provider_code>` and `pluginSettings.asset.<provider_code>` | `label.<param>` and `description.<param>` of its `params_schema`; the texts of its [settings](plugin_settings.md#translations), `label.<field>`, `description.<field>` and `option.<field>.<value>` |
 | Signal | the parent of its `display_name_key` (`signals.rsi` for `signals.rsi.name`) | its name, description, output labels, reference levels and regions |
 | Risk | the parent of its `name_i18n_key` (`risk.analytics.historicalKpi`) | `name` and `description` (`correlation` also has `help`) |
 | Tool | exactly its `name_i18n_key` and `description_i18n_key` | those two keys (`tools.pacAllocator.name`, `.description`) |
-| FX | none | — |
+| FX | `pluginSettings.fx.<code>`, the code as the registry has it (`pluginSettings.fx.ECB`) | the texts of its settings, as for an asset plugin; no shipped FX provider has any |
 
-A key several plugins share belongs to none of them: `signals.reference.zero` (eight signal plugins) and `signals.riskRollingReturn.*` (the `rolling_return` and `calendar_rolling_return` signals) stay in the `charts` subsystem, and the `risk.warnings.*` vocabulary in the `risk` subsystem.
+A key several plugins share belongs to none of them: `signals.reference.zero` (seven signal plugins) and `signals.tooltips.riskWindow` (the window tooltip of the `rolling_volatility`, `rolling_sharpe` and `rolling_beta` signals) stay in the `charts` subsystem, and the `risk.warnings.*` vocabulary in the `risk` subsystem.
 
 ### ➕ Adding a Plugin's Keys {: #adding-plugin-keys }
 
@@ -113,17 +122,17 @@ Write the keys with `dev.py i18n`, which edits the sources in the four languages
 `--into` names the plugin's folder, `<family>/<plugin>`, which must already hold its `plugin.py`, and creates the fragment with the first key. `where` names the file that holds a key, or the one `add` would write it to. Without `--into`, `add` routes a new key by its deepest existing branch:
 
 - under the branch a plugin's keys share (`brimPlugins.broker_directa`, `signals.rsi`), to that plugin: a new field of an existing plugin;
-- under a branch that only plugins share — `brimPlugins.<new>`, `risk.analytics.<new>`, `assets.providerParams.<new>` — nowhere: it refuses and asks for `--into <family>/<plugin>`;
+- under a branch that only plugins share — `brimPlugins.<new>`, `risk.analytics.<new>`, `assets.providerParams.<new>`, `pluginSettings.asset.<new>` — nowhere: it refuses and asks for `--into <family>/<plugin>`. It refuses every new key of a plugin whose keys share no branch, too: Borsa Italiana's lie under `assets.providerParams.borsa_italiana` and `pluginSettings.asset.borsa_italiana`;
 - otherwise to the subsystem with the longest declared prefix, else to `base`.
 
-The last rule is why the first key of a **new signal or Tool** needs `--into`: without it, `signals.<new>.name` lands in the `charts` subsystem and `tools.<new>.name` in `tools`, and the ownership gate below fails. Passing `--into` for every key of a plugin is never wrong. `where` shows the target before anything is written, and `./dev.py i18n move <prefix> --into <family>/<plugin>` moves keys that landed in the wrong source.
+The last rule is why the first key of a **new signal or Tool** needs `--into`: without it, `signals.<new>.name` lands in the `charts` subsystem and `tools.<new>.name` in `tools`, and the ownership gate below fails. The same holds for the first settings key of an FX provider, which would land in the `pluginSettings` subsystem. Passing `--into` for every key of a plugin is never wrong. `where` shows the target before anything is written, and `./dev.py i18n move <prefix> --into <family>/<plugin>` moves keys that landed in the wrong source.
 
 ### 🛡️ The Ownership Gate {: #plugin-i18n-gate }
 
 `./dev.py test utils gate-plugin-i18n-ownership` reads the real registries and the catalogue's sources. A space is **exclusive** when exactly one plugin has it.
 
 - **R1**: every key in a fragment lies in its plugin's space.
-- **R2**: every key a plugin declares in its exclusive space lives in its fragment. The declared keys are `display_name_key`, `description_key`, `name_i18n_key`, `description_i18n_key`, the `label_key` and `description_key` of the outputs, reference levels and value regions, the parameters' `x-i18n-key` and `x-tooltip-key`, and the BRIM `name` and `description`.
+- **R2**: every key a plugin declares in its exclusive space lives in its fragment. The declared keys are `display_name_key`, `description_key`, `name_i18n_key`, `description_i18n_key`, the `label_key` and `description_key` of the outputs, reference levels and value regions, the parameters' `x-i18n-key` and `x-tooltip-key`, the BRIM `name` and `description`, and, for an asset or FX plugin, its `settings_fields`: each field's `label_key` and `description_key` and each option's `label_key`, read from the declaration dumped to plain data (a `default` is a value, never a key).
 - **R3**: no fragment key lies in another plugin's space, or is declared by another plugin.
 - **R4**: every catalogue key under an exclusive space lives in that plugin's fragment (Tools aside: R2 already holds their two keys).
 
@@ -148,7 +157,9 @@ The base class of every registry. Each subclass gets its own storage, discovery 
 | `auto_discover(cls)` | Scan plugin folder and import all modules, once |
 | `get_discovery_errors(cls)` | Import failures recorded by the discovery |
 
-A subclass specializes it through class-method hooks: `_get_plugin_folder()` (a folder under `backend/app/services/`), `_get_plugin_code_attr()` (default `plugin_code`), `_normalize_lookup_code()`, `_validate_plugin_class()`, `_ignored_module_stems()`, `_reject_duplicate_codes()`, and `_fail_on_discovery_errors()`.
+Outside test mode (`is_test_mode()` false, read at each call), a class whose `test_only` is `True` is withheld (`_withheld()`): `get_plugin()` returns `None`, so `get_plugin_instance()` and `get_provider_instance()` return `None` too, and `list_plugin_codes()` and `AbstractProviderRegistry.list_providers()` leave it out. These base methods are the only ones that withhold it, so only asset and FX plugins may set the flag: the BRIM, signal, risk and tool registries also serve their plugins through methods of their own that never ask `_withheld()`, the tool registry's own `get_plugin_instance()` among them — see [Test-Only Plugins](plugin_settings.md#test-only).
+
+A subclass specializes it through class-method hooks: `_get_plugin_folder()` (a folder under `backend/app/services/`), `_get_plugin_code_attr()` (default `plugin_code`), `_normalize_lookup_code()`, `_validate_plugin_class()`, `_ignored_module_stems()`, `_reject_duplicate_codes()`, `_fail_on_discovery_errors()`, and `settings_family()` (`asset` or `fx` for the registries whose plugins may declare settings, `None` otherwise).
 
 ### 📋 `AbstractProviderRegistry`
 
@@ -167,7 +178,7 @@ The specialization shared by the three provider registries (asset, FX, BRIM). It
 
 Each ABC base class (`AssetSourceProvider`, `FXRateProvider`, `BRIMProvider`) declares a no-op `shutdown()` method. Providers that hold persistent resources (e.g., background threads, WebSocket connections) override it to release them.
 
-At application shutdown, `main.py`'s lifespan calls:
+At application shutdown, the `providers` step of the lifespan (`SHUTDOWN_STEPS` in `backend/app/services/platform/app_lifespan.py`) calls:
 
 ```python
 AssetProviderRegistry.shutdown_all_providers()
@@ -195,11 +206,13 @@ The registries share the folder scan but differ in when they discover, how they 
 | Registry | Code attribute (lookup) | Discovery runs | Import failure | Duplicate code |
 |----------|-------------------------|----------------|----------------|----------------|
 | Asset, FX, BRIM | `provider_code` (exact) | First lookup. At startup, the background cache pre-warm walks the asset registry | Logged and recorded; the other modules stay registered | The class imported last replaces the earlier one |
-| `SignalPluginRegistry` | `signal_code` (trimmed, upper-cased) | Startup, in the `main.py` lifespan | Every later lookup raises `PluginDiscoveryError`, so the application does not start | `DuplicatePluginCodeError`, which fails that module's import |
+| `SignalPluginRegistry` | `signal_code` (trimmed, upper-cased) | Startup, in the `signal-plugins` step of the lifespan (`app_lifespan.py`) | Every later lookup raises `PluginDiscoveryError`, so the application does not start | `DuplicatePluginCodeError`, which fails that module's import |
 | `RiskAnalyticRegistry` | `analytic_code` (trimmed, lower-cased) | First risk catalogue request or analytic run | Every later lookup raises `PluginDiscoveryError` | `DuplicatePluginCodeError`, which fails that module's import |
 | `ToolPluginRegistry` | `services`: one definition per `ToolService.tool_code` | Startup, off the event loop (`asyncio.to_thread(ToolPluginRegistry.get_snapshot)`) | The module's claims are quarantined as `import_failed`; healthy services stay available | Every claimant is quarantined as `duplicate_code` |
 
 The signal and risk registries are strict in one more way: `register()` accepts only subclasses of their base class and calls its `validate_definition()`, so an invalid declaration fails at import. The Tool registry does not store classes as they register. It stages claims, expands each packaged class into its services, validates every service definition, and publishes one read-only, code-sorted snapshot; registration is closed afterwards. See [Tool plugins](tool_plugins.md#discovery-and-version-lifecycle).
+
+The shared `register()` also checks a plugin's settings declaration (`settings_fields`, see [Plugin Settings](plugin_settings.md)) against its family's rules, which only the asset and FX registries define, and reserves the environment variables of its fields for that plugin alone: an invalid declaration, a variable another plugin already reads, or any declaration in the BRIM, signal or risk registries raises `SettingsDeclarationError`, so the module's import fails and the plugin is not registered.
 
 `GET /api/v1/system/plugin-diagnostics` lists the import failures of the asset, FX, BRIM, and signal registries. Quarantined Tool services appear in `GET /api/v1/tools/diagnostics` instead.
 

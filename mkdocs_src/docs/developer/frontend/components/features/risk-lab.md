@@ -14,7 +14,7 @@ panel controller and the shared benchmark store are in
 the [Correlation Tab](../../../../user/assets/correlation.md) and
 [Risk Tab](../../../../user/dashboard/risk.md) user pages.
 
-Paths are relative to `frontend/src/lib/components/risk/` unless stated otherwise. The lab never shows an
+Paths are relative to `frontend/src/lib/features/risk/` unless stated otherwise. The lab never shows an
 amount of money: a selection has no weights.
 
 ---
@@ -23,7 +23,7 @@ amount of money: a selection has no weights.
 
 | Source | Responsibility |
 |---|---|
-| `frontend/src/routes/(app)/assets/+page.svelte` | Mounts the lab on the Correlation tab with the page's full asset list; hides the list filters there (l.1310); its toolbar's **Sync selection** and **Reload All** call the lab's `openSync()` and `reload()` (l.1509, l.1524); `onfitperiod` moves the toolbar range (l.1609-1614); `targetCurrency` is the instance default currency (l.1618). |
+| `frontend/src/routes/(app)/assets/+page.svelte` | Mounts the lab on the Correlation tab with the page's full asset list; hides the list filters there (l.1405); its toolbar's **Sync selection** and **Reload All** call the lab's `openSync()` and `reload()` (l.1604, l.1619); `onfitperiod` moves the toolbar range (l.1704-1709); `targetCurrency` is the instance default currency (l.1713). |
 | `AssetSetRiskPanel.svelte` | The lab: selection card, eligibility, holdings command, benchmark picker snippet, banner and notice, and the four sections (l.847-864). |
 | `assetSetSelection.ts` | Opening selection, persistence, bulk actions, `labBenchmarkId()`, `labL3Waits()`. |
 | `eligibility.ts` | Reads and words the engine's verdicts; batches; `fitPeriodOffer()`. |
@@ -114,10 +114,10 @@ API. Which analytics each section asks for is the table in
 
 - **Rates.** Every lab controller sends `appliedRiskFreePercent: 0` (`AssetSetCorrelationSection.svelte:72`,
   `AssetSetComparisonLevels.svelte:120`, l.136, `AssetSetReplaySection.svelte:84`), and the KPI and the
-  comparison send `target_annual_return: 0` (`riskAnalysisHelpers.ts:334`, l.368-371). The lab has no
+  comparison send `target_annual_return: 0` (`riskAnalysisHelpers.ts:336`, l.370-373). The lab has no
   control for either.
-- **Bad month.** `MONTHLY_VAR_HORIZON_DAYS = 30` calendar days (`riskAnalysisHelpers.ts:280`, used at
-  l.340). The engine turns them into observations at the observed frequency — about 21 on a
+- **Bad month.** `MONTHLY_VAR_HORIZON_DAYS = 30` calendar days (`riskAnalysisHelpers.ts:282`, used at
+  l.321 and l.342). The engine turns them into observations at the observed frequency — about 21 on a
   trading-day calendar, 30 on an every-day one — as explained in
   [Value at Risk](../../../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md#the-observation-count-is-not-the-history-length).
 - **One calendar per request.** The engine prepares one joint calendar per request from the scope, the
@@ -239,7 +239,7 @@ API. Which analytics each section asks for is the table in
 - **Frames.** `RiskLevelSection` keeps under each section only what did not come back
   (`levelErrorHealth()`, `levels/partialNotice.ts:49`), in an amber alert
   (`levels/RiskLevelSection.svelte:179`), plus `answer_discarded` (`ANSWER_DISCARDED_CODE`,
-  `frontend/src/lib/stores/risk/riskPanelController.svelte.ts:57`) once the controller's re-asks are exhausted — the
+  `frontend/src/lib/features/risk/riskPanelController.svelte.ts:57`) once the controller's re-asks are exhausted — the
   bound and the wording are in [The Panel Controller](../../../backend/risk/architecture.md#panel-controller).
   The section bodies offer **Retry** (`loadBase(true)`) when they have no figure to show, for example
   `AssetSetCorrelationSection.svelte:139`, l.153.
@@ -261,11 +261,11 @@ levels, L1–L4. The two hosts pass the same props with a different scope. What 
 
 | Host | Scope | What differs |
 |---|---|---|
-| `frontend/src/routes/(app)/dashboard/+page.svelte:1040-1054` | `broker_ids: ownedBrokerIds` (l.222): the brokers the user owns with a share above 0 (`getOwnedBrokers()`, `frontend/src/lib/stores/reference/brokerStore.ts:262`) | The broker filter is not applied: `subtitle` becomes `risk.dashboardFullPortfolio` while it is on (l.1048), and `scopeValue` is `null` then (l.1046), because the summary follows the filter. `assetIds` are the summary's holdings (l.1045). |
-| `frontend/src/routes/(app)/brokers/[id]/+page.svelte:680-694` | `broker_ids: [broker.id]` | `scopeValue` is that broker's net worth (l.686); `internalSubset` prints `risk.internalSubset` (l.688). |
+| `frontend/src/routes/(app)/dashboard/+page.svelte:1109-1123` | `broker_ids: ownedBrokerIds` (l.230): the brokers the user owns with a share above 0 (`getOwnedBrokers()`, `frontend/src/lib/stores/reference/brokerStore.ts:262`) | The broker filter is not applied: `subtitle` becomes `risk.dashboardFullPortfolio` while it is on (l.1117), and `scopeValue` is `null` then (l.1115), because the summary follows the filter. `assetIds` are the summary's holdings (l.1114). |
+| `frontend/src/routes/(app)/brokers/[id]/+page.svelte:753-767` | `broker_ids: [broker.id]` | `scopeValue` is that broker's net worth (l.759); `internalSubset` prints `risk.internalSubset` (l.761). |
 
-- **No owned broker, no request.** The Dashboard host mounts the panel only when `canAsk` (l.226);
-  otherwise it shows `common.noData` (l.1056), or a spinner while the brokers load (l.1059).
+- **No owned broker, no request.** The Dashboard host mounts the panel only when `canAsk` (l.234);
+  otherwise it shows `common.noData` (l.1125), or a spinner while the brokers load (l.1128).
 - **Waves.** The controller opts into `includeDrawdownSummary`, `includeMonthlyVar` and
   `includeCurrentCompositionRiskReturn` (`levels/RiskLevelsPanel.svelte:85-103`; the options are in
   [The Panel Controller](../../../backend/risk/architecture.md#panel-controller)). The historical wave
@@ -276,30 +276,41 @@ levels, L1–L4. The two hosts pass the same props with a different scope. What 
 ### 📉 How Much Can It Hurt? {: #dashboard-hurt }
 
 `levels/L1HowMuchItHurts.svelte`, over `historical_var` (two instances), `drawdown_summary` and
-`historical_kpi` (`L1_CODES`, `levels/RiskLevelsPanel.svelte:125`).
+`historical_kpi` (`L1_CODES`, `levels/RiskLevelsPanel.svelte:126`).
 
-- **Cards.** `buildHurtRows()` (`levels/levelHelpers.ts:374`) builds day → month → worst. The day and
-  month cards lead with the CVaR at 95 % (l.384); the VaR is computed as `secondaryLoss` but never drawn,
+- **Cards.** `buildHurtRows()` (`levels/levelHelpers.ts:368`) builds day → month → worst. The day and
+  month cards lead with the CVaR at 95 % (l.378); the VaR is computed as `secondaryLoss` but never drawn,
   and appears only as the histogram's cut. The 30-day horizon is the lab's: see [Requests](#requests),
-  *Bad month*. A rung whose analytic failed is omitted, never zero-filled (l.369).
-- **Worst fall.** Depth and duration come from `drawdown_summary`, falling back to `historical_kpi`
-  (`levelHelpers.ts:410`). The *recovery needed* line is `requiredRecovery()` (l.356: −50 % needs +100 %), drawn at
-  `L1HowMuchItHurts.svelte:169` and l.197.
-- **Current drawdown.** `buildCurrentDrawdown()` returns `null` at a peak (`levelHelpers.ts:437`), so the
-  card exists only below one (`L1HowMuchItHurts.svelte:190`).
+  *Bad month*. A rung whose analytic failed is omitted, never zero-filled (l.363).
+- **Worst fall.** The depth comes from `drawdown_summary`, falling back to `historical_kpi`
+  (`levelHelpers.ts:396-397`); the duration follows the depth's source (l.405), so the two never come
+  from different analytics. The *recovery needed* line is computed by the backend, not here:
+  `drawdown_summary`'s `maximum_drawdown_trough_to_peak_ratio` (`required_recovery_return()`,
+  `backend/app/services/financial_math/returns.py:239`: −50 % needs +100 %), read as it comes (l.408)
+  and only on the summary's own depth (`summaryDepth`, l.396) for a fall above 0. No fallback: a depth
+  from `historical_kpi` has no recovery. A total loss has none either: the backend leaves the ratio
+  `null` and states the `total_loss_no_recovery` warning, which does not degrade the result
+  ([The Drawdown Episode](../../../backend/risk/architecture.md#drawdown-episode)). The line is drawn at
+  `L1HowMuchItHurts.svelte:155`; a `null` omits it (l.152), as L1 omits every absent sub-measure.
+- **Current drawdown.** `buildCurrentDrawdown()` returns `null` at a peak (`levelHelpers.ts:435`), so the
+  card exists only below one (`L1HowMuchItHurts.svelte:176`). Its *recovery needed* line is the backend's
+  `remaining_to_peak_ratio`, read as it comes (`levelHelpers.ts:442`) and drawn at
+  `L1HowMuchItHurts.svelte:183`; it is `null` for a total loss, and the line is then omitted.
 - **Tail measures as second rows.** The worst realization sits under the day card; drawdown at risk and
-  conditional drawdown at risk under the worst fall (`L1HowMuchItHurts.svelte:174`, l.180; `buildTailMeasures()`,
-  `levels/l1/l1Helpers.ts:227`). The ulcer index is the caption of the underwater chart
-  (`levels/l1/UnderwaterChart.svelte:69`).
-- **Histogram.** `buildReturnHistogram()` (`l1Helpers.ts:136`) flags the bin holding the VaR cut
-  (`holdsCut`, l.92), drawn amber, and the bins wholly beyond it (`belowCut`, l.101), drawn red; the
-  straddling bin is neither (`levels/l1/ReturnHistogram.svelte:51`). A bar's `title` gives its range
-  (l.79).
-- **Money.** `lossMoney()` is `scopeValue` × loss (`L1HowMuchItHurts.svelte:86`), shown only for a
-  positive `scopeValue` (l.65): on the Dashboard, never while a broker filter is on.
+  conditional drawdown at risk under the worst fall (`L1HowMuchItHurts.svelte:161`, l.167, l.170;
+  `buildTailMeasures()`, `levels/l1/l1Helpers.ts:281`). The ulcer index is the caption of the underwater
+  chart (`levels/l1/UnderwaterChart.svelte:65-70`, value at l.67).
+- **Histogram.** `buildReturnHistogram()` (`l1Helpers.ts:138`) flags the bin holding the VaR cut
+  (`holdsCut`, l.94), drawn amber, and the bins wholly beyond it (`belowCut`, l.103), drawn red. The
+  straddling bin is the amber `holdsCut` one and is never counted as tail: its `belowCut` is false
+  (l.175-176), as stated at `levels/l1/ReturnHistogram.svelte:18` and applied by `barClass()` (l.40-43).
+  A bar's `title` gives its range (l.68).
+- **Money.** `lossMoney()` is `scopeValue` × loss (`L1HowMuchItHurts.svelte:72`), shown only for a
+  positive `scopeValue` (l.65): on the Dashboard, never while a broker filter is on; on Broker Detail,
+  over that broker's own net worth (`frontend/src/routes/(app)/brokers/[id]/+page.svelte:759`).
 - **Labels and links.** Each card prints a `technicalName` line
-  (`frontend/src/lib/components/ui/display/RiskMetricCard.svelte:107`, keys `risk.levels.l1.technical.*`)
-  and links its own metric page (`DOC_PATHS` and `TAIL_DOCS`, `L1HowMuchItHurts.svelte:117`, l.127).
+  (`frontend/src/lib/components/ui/display/RiskMetricCard.svelte:108`, keys `risk.levels.l1.technical.*`)
+  and links its own metric page (`DOC_PATHS` and `TAIL_DOCS`, `L1HowMuchItHurts.svelte:103`, l.113).
 
 ### 🧩 Diversification {: #dashboard-diversification }
 
@@ -407,7 +418,7 @@ current-composition `historical_kpi` and `asset_risk_return` and the on-demand `
 - **Refresh and retry.** There is no **Retry** button. The header's **Refresh** is `loadBase(true)`
   (`levels/RiskPanelHeader.svelte:98`); the Dashboard's own Refresh bumps `refreshVersion` (Dashboard host,
   l.695-698), which the controller turns into `loadBase(true)`
-  (`frontend/src/lib/stores/risk/riskPanelController.svelte.ts:647-656`). Re-asks, `answer_discarded`,
+  (`frontend/src/lib/features/risk/riskPanelController.svelte.ts:647-656`). Re-asks, `answer_discarded`,
   the page cache and `loadError` are in [The Panel Controller](../../../backend/risk/architecture.md#panel-controller).
   Here `onrefreshfailed` toasts `risk.states.loadFailed` (`RiskLevelsPanel.svelte:82`),
   `setTweenHydration()` stops cached cards from counting up (l.106), and `loadError` replaces the notice

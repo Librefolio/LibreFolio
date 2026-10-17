@@ -200,10 +200,10 @@
                         <div class="flex min-w-0 flex-1 basis-56 items-center gap-2.5">
                             <AssetIcon iconUrl={asset.iconUrl} assetType={asset.assetClass.toUpperCase()} altText="" size="md" />
                             <div class="min-w-0 flex-1">
-                                <h3 class="min-w-0 font-semibold text-gray-900 dark:text-gray-100" data-testid="pac-planner-asset-title">
+                                <h3 class="min-w-0 font-semibold text-lf-primary" data-testid="pac-planner-asset-title">
                                     <span use:scrollOnOverflow class={overflowScrollTextClass} title={title(asset)}>{title(asset) || '—'}</span>
                                 </h3>
-                                <p class="flex flex-wrap items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                <p class="flex flex-wrap items-center gap-1.5 text-xs text-lf-muted">
                                     <span data-testid="pac-planner-asset-type">{typeText(asset)}</span>
                                     {#if asset.origin === 'manual'}<OriginBadge origin="manual" testid="pac-planner-asset-origin" />{/if}
                                     {#if !asset.active}<span class={BADGE.warning}>{$t('tools.pacAllocator.planner.scope.inactive', {default: 'Inactive'})}</span>{/if}
@@ -224,7 +224,7 @@
                     </div>
 
                     <dl class="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 gap-y-2 text-sm">
-                        <dt class="text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})}</dt>
+                        <dt class="text-lf-muted">{$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})}</dt>
                         <dd class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                             {#if asset.priceManual && asset.price}
                                 <span class="flex flex-wrap items-center gap-2" data-testid="pac-planner-asset-price-manual">
@@ -237,7 +237,7 @@
                                 </span>
                             {:else if asset.price}
                                 <span class="flex flex-wrap items-center gap-2" data-testid="pac-planner-asset-price">
-                                    <span class="tabular-nums text-gray-900 dark:text-gray-100">
+                                    <span class="tabular-nums text-lf-primary">
                                         {$t(`${KEY}.priceLine`, {
                                             default: '{price} / {units} {count, plural, one {unit} other {units}}',
                                             values: {price: formatPlannerPricePlain(asset.price.amount, asset.price.currency), units: formatPlannerPlainDecimal(asset.price.quoteBaseQuantity), count: plannerPlainDecimalCount(asset.price.quoteBaseQuantity)},
@@ -253,7 +253,7 @@
                                 </span>
                             {:else if priceNotStored}
                                 <span class="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid="pac-planner-asset-no-price">
-                                    <span class="text-amber-800 dark:text-amber-200">{$t(`${KEY}.priceNotStored`, {default: 'LibreFolio has no stored price for this Asset: add one on its page, or switch to «Manual» and type it. In «Auto» it is read again just before the calculation.'})}</span>
+                                    <span class="text-lf-warning-on-soft">{$t(`${KEY}.priceNotStored`, {default: 'LibreFolio has no stored price for this Asset: add one on its page, or switch to «Manual» and type it. In «Auto» it is read again just before the calculation.'})}</span>
                                     {#if asset.sourceAssetId !== null}
                                         <a class={BUTTON_LINK} href="/assets/{asset.sourceAssetId}" target="_blank" rel="noopener noreferrer" data-testid="pac-planner-asset-open-page">
                                             {$t(`${KEY}.openAssetPage`, {default: 'Open the Asset page'})}<ExternalLink class="h-3.5 w-3.5" aria-hidden="true" />
@@ -261,7 +261,7 @@
                                     {/if}
                                 </span>
                             {:else}
-                                <span class="text-amber-800 dark:text-amber-200" data-testid="pac-planner-asset-no-price">{$t(`${KEY}.priceMissing`, {default: 'Price missing: it stays in the draft, the calculation will ask for it.'})}</span>
+                                <span class="text-lf-warning-on-soft" data-testid="pac-planner-asset-no-price">{$t(`${KEY}.priceMissing`, {default: 'Price missing: it stays in the draft, the calculation will ask for it.'})}</span>
                             {/if}
                             {#if asset.sourceAssetId !== null}
                                 <span class="ml-auto">
@@ -270,7 +270,7 @@
                             {/if}
                         </dd>
 
-                        <dt class="flex items-center gap-0.5 text-gray-500 dark:text-gray-400">
+                        <dt class="flex items-center gap-0.5 text-lf-muted">
                             {$t(`${KEY}.composition`, {default: 'Composition'})}
                             <HelpTip
                                 label={$t(`${KEY}.composition`, {default: 'Composition'})}
@@ -286,8 +286,8 @@
                                 {#each COMPOSITION_DIMENSIONS as dimension (dimension)}
                                     {@const rows = rowsOf(asset, dimension)}
                                     {@const whole = isWhole(rows)}
-                                    <p class="text-gray-900 dark:text-gray-100" data-testid="pac-planner-asset-dimension" data-dimension={dimension} data-state={rows.length > 0 ? 'set' : lacking.includes(dimension) ? 'not-stored' : 'missing'}>
-                                        <span class="text-gray-500 dark:text-gray-400">{dimensionName(dimension)}:</span>
+                                    <p class="text-lf-primary" data-testid="pac-planner-asset-dimension" data-dimension={dimension} data-state={rows.length > 0 ? 'set' : lacking.includes(dimension) ? 'not-stored' : 'missing'}>
+                                        <span class="text-lf-muted">{dimensionName(dimension)}:</span>
                                         {#if rows.length > 0}
                                             {rows
                                                 .slice(0, VISIBLE_CATEGORIES)
@@ -306,9 +306,9 @@
                                                 </Tooltip>
                                             {/if}
                                         {:else if lacking.includes(dimension)}
-                                            <span class="text-gray-500 dark:text-gray-400">{$t(`${KEY}.dimensionNotStored`, {default: 'no data in LibreFolio'})}</span>
+                                            <span class="text-lf-muted">{$t(`${KEY}.dimensionNotStored`, {default: 'no data in LibreFolio'})}</span>
                                         {:else}
-                                            <span class="text-gray-500 dark:text-gray-400">{$t(`${KEY}.dimensionNone`, {default: '{dimension, select, geography {not indicated} other {not indicated}}', values: {dimension}})}</span>
+                                            <span class="text-lf-muted">{$t(`${KEY}.dimensionNone`, {default: '{dimension, select, geography {not indicated} other {not indicated}}', values: {dimension}})}</span>
                                         {/if}
                                     </p>
                                 {/each}

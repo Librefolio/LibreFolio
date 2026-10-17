@@ -89,6 +89,6 @@ type PendingOp = {
 
 | Role | Path |
 |------|------|
-| WacPreviewSection (controlled) | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |
-| FormModal (mode state owner) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| BulkModal (_wacCache on PendingOp) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| WacPreviewSection (controlled) | `frontend/src/lib/features/transactions/wac/WacPreviewSection.svelte` |
+| FormModal (mode state owner) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
+| BulkModal (_wacCache on PendingOp) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |

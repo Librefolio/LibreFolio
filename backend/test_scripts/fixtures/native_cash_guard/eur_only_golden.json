@@ -231,6 +231,7 @@
           "stale_price_asset_ids": [],
           "total_pnl": "0E-8",
           "transaction_implied_asset_ids": [],
+          "transaction_implied_last_quote_dates": {},
           "unrealized_by_currency": {},
           "unrealized_gain_loss": "0E-8"
         },
@@ -308,6 +309,11 @@
             "IDX",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": null,
+            "IDX": null,
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "0E-9",
@@ -391,6 +397,9 @@
           "transaction_implied_asset_ids": [
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "19.7610000000",
@@ -414,8 +423,8 @@
               "broker_id": "A",
               "capital_contribution": "10000.00000000",
               "in_transit_contribution": "0",
-              "nav_contribution": "9962.514814266253152082548332",
-              "pnl_contribution": "-37.485185733746847917451668"
+              "nav_contribution": "9959.303314322439017345214541",
+              "pnl_contribution": "-40.696685677560982654785459"
             },
             "B": {
               "broker_id": "B",
@@ -432,16 +441,16 @@
               "pnl_contribution": "0"
             }
           },
-          "broker_nav_value": "13962.51481426625315208254833",
+          "broker_nav_value": "13959.30331432243901734521454",
           "by_geography": {
-            "Unknown": "2434.978814266253152082548332"
+            "Unknown": "2431.767314322439017345214541"
           },
           "by_sector": {
             "Liquidity": "11527.536000000",
-            "Unknown": "2434.978814266253152082548332"
+            "Unknown": "2431.767314322439017345214541"
           },
           "by_type": {
-            "ETF": "930.4078142662531520825483320",
+            "ETF": "927.1963143224390173452145406",
             "HOLD": "250.2500000",
             "Liquidity": "11527.536000000",
             "STOCK": "1254.3210000000"
@@ -457,23 +466,26 @@
           "in_transit_book_value": "0",
           "in_transit_cash_value": "0",
           "in_transit_market_value": "0",
-          "market_value": "2434.978814266253152082548332",
+          "market_value": "2431.767314322439017345214541",
           "missing_fx_pairs": [],
           "missing_price_asset_ids": [],
           "nav_complete": true,
-          "nav_value": "13962.51481426625315208254833",
+          "nav_value": "13959.30331432243901734521454",
           "open_cost_basis": "2472.464000000",
           "pnl_candle": {
-            "close": "-37.48518573374684791745167",
-            "high": "-37.485185733746847917451670",
-            "low": "-37.485185733746847917451670",
-            "open": "-37.485185733746847917451670"
+            "close": "-40.69668567756098265478546",
+            "high": "-40.696685677560982654785460",
+            "low": "-40.696685677560982654785460",
+            "open": "-40.696685677560982654785460"
           },
           "stale_price_asset_ids": [],
-          "total_pnl": "-37.48518573374684791745167",
+          "total_pnl": "-40.69668567756098265478546",
           "transaction_implied_asset_ids": [
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "19.7610000000",
@@ -481,12 +493,12 @@
               "unsplit": "0"
             },
             "IDR": {
-              "asset": "-57.2461857337468479174516681",
-              "fx": "1E-25",
+              "asset": "-57.0485883797172195664418480",
+              "fx": "-3.4090972978437630883436114",
               "unsplit": "0"
             }
           },
-          "unrealized_gain_loss": "-37.48518573374684791745167"
+          "unrealized_gain_loss": "-40.69668567756098265478546"
         },
         {
           "acquisition_funding": null,
@@ -557,6 +569,9 @@
           "transaction_implied_asset_ids": [
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "19.7610000000",
@@ -640,6 +655,9 @@
           "transaction_implied_asset_ids": [
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "19.7610000000",
@@ -724,6 +742,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "40.46400000",
@@ -808,6 +830,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "40.46400000",
@@ -892,6 +918,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "40.46400000",
@@ -978,6 +1008,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "40.46400000",
@@ -1065,6 +1099,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "40.46400000",
@@ -1120,8 +1158,8 @@
             "Liquidity": "11557.176000000",
             "STOCK": "781.20000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-12",
@@ -1152,6 +1190,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "40.46400000",
@@ -1207,8 +1249,8 @@
             "Liquidity": "11557.176000000",
             "STOCK": "520.80000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-13",
@@ -1239,6 +1281,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "26.97600000",
@@ -1294,8 +1340,8 @@
             "Liquidity": "11557.176000000",
             "STOCK": "520.80000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-14",
@@ -1326,6 +1372,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "26.97600000",
@@ -1381,8 +1431,8 @@
             "Liquidity": "11557.176000000",
             "STOCK": "520.80000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-15",
@@ -1414,6 +1464,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "26.97600000",
@@ -1469,8 +1523,8 @@
             "Liquidity": "11557.176000000",
             "STOCK": "651.00000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-16",
@@ -1502,6 +1556,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "157.17600000",
@@ -1557,8 +1615,8 @@
             "Liquidity": "11557.176000000",
             "STOCK": "651.00000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-17",
@@ -1590,6 +1648,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "157.17600000",
@@ -1613,8 +1675,8 @@
               "broker_id": "A",
               "capital_contribution": "9039.60000000",
               "in_transit_contribution": "0",
-              "nav_contribution": "9055.422314322439017345214541",
-              "pnl_contribution": "15.822314322439017345214541"
+              "nav_contribution": "9061.867638671960211160071550",
+              "pnl_contribution": "22.267638671960211160071550"
             },
             "B": {
               "broker_id": "B",
@@ -1631,22 +1693,22 @@
               "pnl_contribution": "-0.75"
             }
           },
-          "broker_nav_value": "13385.62231432243901734521454",
+          "broker_nav_value": "13392.06763867196021116007155",
           "by_geography": {
-            "Unknown": "1828.446314322439017345214541"
+            "Unknown": "1834.891638671960211160071550"
           },
           "by_sector": {
             "Liquidity": "11557.176000000",
-            "Unknown": "1828.446314322439017345214541"
+            "Unknown": "1834.891638671960211160071550"
           },
           "by_type": {
-            "ETF": "927.1963143224390173452145406",
+            "ETF": "933.6416386719602111600715502",
             "HOLD": "250.2500000",
             "Liquidity": "11557.176000000",
             "STOCK": "651.00000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-18",
@@ -1656,28 +1718,32 @@
           "in_transit_book_value": "0",
           "in_transit_cash_value": "0",
           "in_transit_market_value": "0",
-          "market_value": "1828.446314322439017345214541",
+          "market_value": "1834.891638671960211160071550",
           "missing_fx_pairs": [],
           "missing_price_asset_ids": [],
           "nav_complete": true,
-          "nav_value": "13385.62231432243901734521454",
+          "nav_value": "13392.06763867196021116007155",
           "open_cost_basis": "1731.728000000",
           "pnl_candle": {
-            "close": "-314.37768567756098265478546",
-            "high": "-314.377685677560982654785460",
-            "low": "-314.377685677560982654785460",
-            "open": "-314.377685677560982654785460"
+            "close": "-307.93236132803978883992845",
+            "high": "-307.932361328039788839928450",
+            "low": "-307.932361328039788839928450",
+            "open": "-307.932361328039788839928450"
           },
           "stale_price_asset_ids": [
             "EQ",
             "IDX",
             "MAN"
           ],
-          "total_pnl": "-314.37768567756098265478546",
+          "total_pnl": "-307.93236132803978883992845",
           "transaction_implied_asset_ids": [
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "157.17600000",
@@ -1685,12 +1751,12 @@
               "unsplit": "0"
             },
             "IDR": {
-              "asset": "-57.0485883797172195664418480",
-              "fx": "-3.4090972978437630883436114",
+              "asset": "-57.4451566685572182714541250",
+              "fx": "3.4327953405174294315256752",
               "unsplit": "0"
             }
           },
-          "unrealized_gain_loss": "96.71831432243901734521454"
+          "unrealized_gain_loss": "103.16363867196021116007155"
         },
         {
           "acquisition_funding": null,
@@ -1701,8 +1767,8 @@
               "broker_id": "A",
               "capital_contribution": "9039.60000000",
               "in_transit_contribution": "0",
-              "nav_contribution": "9055.422314322439017345214541",
-              "pnl_contribution": "15.822314322439017345214541"
+              "nav_contribution": "9061.867638671960211160071550",
+              "pnl_contribution": "22.267638671960211160071550"
             },
             "B": {
               "broker_id": "B",
@@ -1719,22 +1785,22 @@
               "pnl_contribution": "-0.75"
             }
           },
-          "broker_nav_value": "13385.62231432243901734521454",
+          "broker_nav_value": "13392.06763867196021116007155",
           "by_geography": {
-            "Unknown": "1828.446314322439017345214541"
+            "Unknown": "1834.891638671960211160071550"
           },
           "by_sector": {
             "Liquidity": "11557.176000000",
-            "Unknown": "1828.446314322439017345214541"
+            "Unknown": "1834.891638671960211160071550"
           },
           "by_type": {
-            "ETF": "927.1963143224390173452145406",
+            "ETF": "933.6416386719602111600715502",
             "HOLD": "250.2500000",
             "Liquidity": "11557.176000000",
             "STOCK": "651.00000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-19",
@@ -1744,28 +1810,32 @@
           "in_transit_book_value": "0",
           "in_transit_cash_value": "0",
           "in_transit_market_value": "0",
-          "market_value": "1828.446314322439017345214541",
+          "market_value": "1834.891638671960211160071550",
           "missing_fx_pairs": [],
           "missing_price_asset_ids": [],
           "nav_complete": true,
-          "nav_value": "13385.62231432243901734521454",
+          "nav_value": "13392.06763867196021116007155",
           "open_cost_basis": "1731.728000000",
           "pnl_candle": {
-            "close": "-314.37768567756098265478546",
-            "high": "-314.377685677560982654785460",
-            "low": "-314.377685677560982654785460",
-            "open": "-314.377685677560982654785460"
+            "close": "-307.93236132803978883992845",
+            "high": "-307.932361328039788839928450",
+            "low": "-307.932361328039788839928450",
+            "open": "-307.932361328039788839928450"
           },
           "stale_price_asset_ids": [
             "EQ",
             "IDX",
             "MAN"
           ],
-          "total_pnl": "-314.37768567756098265478546",
+          "total_pnl": "-307.93236132803978883992845",
           "transaction_implied_asset_ids": [
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "157.17600000",
@@ -1773,12 +1843,12 @@
               "unsplit": "0"
             },
             "IDR": {
-              "asset": "-57.0485883797172195664418480",
-              "fx": "-3.4090972978437630883436114",
+              "asset": "-57.4451566685572182714541250",
+              "fx": "3.4327953405174294315256752",
               "unsplit": "0"
             }
           },
-          "unrealized_gain_loss": "96.71831432243901734521454"
+          "unrealized_gain_loss": "103.16363867196021116007155"
         },
         {
           "acquisition_funding": null,
@@ -1821,8 +1891,8 @@
             "Liquidity": "11557.176000000",
             "STOCK": "655.35000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-20",
@@ -1851,6 +1921,9 @@
           "transaction_implied_asset_ids": [
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "161.52600000",
@@ -1906,8 +1979,8 @@
             "Liquidity": "11557.176000000",
             "STOCK": "655.35000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-21",
@@ -1936,6 +2009,9 @@
           "transaction_implied_asset_ids": [
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "161.52600000",
@@ -1959,8 +2035,8 @@
               "broker_id": "A",
               "capital_contribution": "9039.60000000",
               "in_transit_contribution": "0",
-              "nav_contribution": "9127.884177217398891845905502",
-              "pnl_contribution": "88.284177217398891845905502"
+              "nav_contribution": "9123.025826338639652677279305",
+              "pnl_contribution": "83.425826338639652677279305"
             },
             "B": {
               "broker_id": "B",
@@ -1977,22 +2053,22 @@
               "pnl_contribution": "-0.75"
             }
           },
-          "broker_nav_value": "13458.95417721739889184590550",
+          "broker_nav_value": "13454.09582633863965267727930",
           "by_geography": {
-            "Unknown": "1901.778177217398891845905502"
+            "Unknown": "1896.919826338639652677279305"
           },
           "by_sector": {
             "Liquidity": "11557.176000000",
-            "Unknown": "1901.778177217398891845905502"
+            "Unknown": "1896.919826338639652677279305"
           },
           "by_type": {
-            "ETF": "996.1781772173988918459055016",
+            "ETF": "991.3198263386396526772793053",
             "HOLD": "250.2500000",
             "Liquidity": "11557.176000000",
             "STOCK": "655.35000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-22",
@@ -2002,25 +2078,28 @@
           "in_transit_book_value": "0",
           "in_transit_cash_value": "0",
           "in_transit_market_value": "0",
-          "market_value": "1901.778177217398891845905502",
+          "market_value": "1896.919826338639652677279305",
           "missing_fx_pairs": [],
           "missing_price_asset_ids": [],
           "nav_complete": true,
-          "nav_value": "13458.95417721739889184590550",
+          "nav_value": "13454.09582633863965267727930",
           "open_cost_basis": "1731.728000000",
           "pnl_candle": {
-            "close": "-241.04582278260110815409450",
-            "high": "-241.045822782601108154094500",
-            "low": "-241.045822782601108154094500",
-            "open": "-241.045822782601108154094500"
+            "close": "-245.90417366136034732272070",
+            "high": "-245.904173661360347322720700",
+            "low": "-245.904173661360347322720700",
+            "open": "-245.904173661360347322720700"
           },
           "stale_price_asset_ids": [
             "MAN"
           ],
-          "total_pnl": "-241.04582278260110815409450",
+          "total_pnl": "-245.90417366136034732272070",
           "transaction_implied_asset_ids": [
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "161.52600000",
@@ -2028,12 +2107,12 @@
               "unsplit": "0"
             },
             "IDR": {
-              "asset": "5.0913818768814624143798264",
-              "fx": "3.4327953405174294315256752",
+              "asset": "5.0665512590448625180897250",
+              "fx": "-1.4007249204052098408104197",
               "unsplit": "0"
             }
           },
-          "unrealized_gain_loss": "170.05017721739889184590550"
+          "unrealized_gain_loss": "165.19182633863965267727930"
         },
         {
           "acquisition_funding": null,
@@ -2044,8 +2123,8 @@
               "broker_id": "A",
               "capital_contribution": "9039.60000000",
               "in_transit_contribution": "0",
-              "nav_contribution": "9127.884177217398891845905502",
-              "pnl_contribution": "88.284177217398891845905502"
+              "nav_contribution": "9123.025826338639652677279305",
+              "pnl_contribution": "83.425826338639652677279305"
             },
             "B": {
               "broker_id": "B",
@@ -2062,22 +2141,22 @@
               "pnl_contribution": "-0.75"
             }
           },
-          "broker_nav_value": "13458.95417721739889184590550",
+          "broker_nav_value": "13454.09582633863965267727930",
           "by_geography": {
-            "Unknown": "1901.778177217398891845905502"
+            "Unknown": "1896.919826338639652677279305"
           },
           "by_sector": {
             "Liquidity": "11557.176000000",
-            "Unknown": "1901.778177217398891845905502"
+            "Unknown": "1896.919826338639652677279305"
           },
           "by_type": {
-            "ETF": "996.1781772173988918459055016",
+            "ETF": "991.3198263386396526772793053",
             "HOLD": "250.2500000",
             "Liquidity": "11557.176000000",
             "STOCK": "655.35000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-23",
@@ -2087,25 +2166,28 @@
           "in_transit_book_value": "0",
           "in_transit_cash_value": "0",
           "in_transit_market_value": "0",
-          "market_value": "1901.778177217398891845905502",
+          "market_value": "1896.919826338639652677279305",
           "missing_fx_pairs": [],
           "missing_price_asset_ids": [],
           "nav_complete": true,
-          "nav_value": "13458.95417721739889184590550",
+          "nav_value": "13454.09582633863965267727930",
           "open_cost_basis": "1731.728000000",
           "pnl_candle": {
-            "close": "-241.04582278260110815409450",
-            "high": "-241.045822782601108154094500",
-            "low": "-241.045822782601108154094500",
-            "open": "-241.045822782601108154094500"
+            "close": "-245.90417366136034732272070",
+            "high": "-245.904173661360347322720700",
+            "low": "-245.904173661360347322720700",
+            "open": "-245.904173661360347322720700"
           },
           "stale_price_asset_ids": [
             "MAN"
           ],
-          "total_pnl": "-241.04582278260110815409450",
+          "total_pnl": "-245.90417366136034732272070",
           "transaction_implied_asset_ids": [
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "161.52600000",
@@ -2113,12 +2195,12 @@
               "unsplit": "0"
             },
             "IDR": {
-              "asset": "5.0913818768814624143798264",
-              "fx": "3.4327953405174294315256752",
+              "asset": "5.0665512590448625180897250",
+              "fx": "-1.4007249204052098408104197",
               "unsplit": "0"
             }
           },
-          "unrealized_gain_loss": "170.05017721739889184590550"
+          "unrealized_gain_loss": "165.19182633863965267727930"
         },
         {
           "acquisition_funding": null,
@@ -2129,8 +2211,8 @@
               "broker_id": "A",
               "capital_contribution": "9039.60000000",
               "in_transit_contribution": "0",
-              "nav_contribution": "9127.884177217398891845905502",
-              "pnl_contribution": "88.284177217398891845905502"
+              "nav_contribution": "9123.025826338639652677279305",
+              "pnl_contribution": "83.425826338639652677279305"
             },
             "B": {
               "broker_id": "B",
@@ -2147,22 +2229,22 @@
               "pnl_contribution": "-0.75"
             }
           },
-          "broker_nav_value": "13458.95417721739889184590550",
+          "broker_nav_value": "13454.09582633863965267727930",
           "by_geography": {
-            "Unknown": "1901.778177217398891845905502"
+            "Unknown": "1896.919826338639652677279305"
           },
           "by_sector": {
             "Liquidity": "11557.176000000",
-            "Unknown": "1901.778177217398891845905502"
+            "Unknown": "1896.919826338639652677279305"
           },
           "by_type": {
-            "ETF": "996.1781772173988918459055016",
+            "ETF": "991.3198263386396526772793053",
             "HOLD": "250.2500000",
             "Liquidity": "11557.176000000",
             "STOCK": "655.35000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-24",
@@ -2172,25 +2254,28 @@
           "in_transit_book_value": "0",
           "in_transit_cash_value": "0",
           "in_transit_market_value": "0",
-          "market_value": "1901.778177217398891845905502",
+          "market_value": "1896.919826338639652677279305",
           "missing_fx_pairs": [],
           "missing_price_asset_ids": [],
           "nav_complete": true,
-          "nav_value": "13458.95417721739889184590550",
+          "nav_value": "13454.09582633863965267727930",
           "open_cost_basis": "1731.728000000",
           "pnl_candle": {
-            "close": "-241.04582278260110815409450",
-            "high": "-241.045822782601108154094500",
-            "low": "-241.045822782601108154094500",
-            "open": "-241.045822782601108154094500"
+            "close": "-245.90417366136034732272070",
+            "high": "-245.904173661360347322720700",
+            "low": "-245.904173661360347322720700",
+            "open": "-245.904173661360347322720700"
           },
           "stale_price_asset_ids": [
             "MAN"
           ],
-          "total_pnl": "-241.04582278260110815409450",
+          "total_pnl": "-245.90417366136034732272070",
           "transaction_implied_asset_ids": [
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "161.52600000",
@@ -2198,12 +2283,12 @@
               "unsplit": "0"
             },
             "IDR": {
-              "asset": "5.0913818768814624143798264",
-              "fx": "3.4327953405174294315256752",
+              "asset": "5.0665512590448625180897250",
+              "fx": "-1.4007249204052098408104197",
               "unsplit": "0"
             }
           },
-          "unrealized_gain_loss": "170.05017721739889184590550"
+          "unrealized_gain_loss": "165.19182633863965267727930"
         },
         {
           "acquisition_funding": null,
@@ -2214,8 +2299,8 @@
               "broker_id": "A",
               "capital_contribution": "9039.60000000",
               "in_transit_contribution": "0",
-              "nav_contribution": "9127.884177217398891845905502",
-              "pnl_contribution": "88.284177217398891845905502"
+              "nav_contribution": "9123.025826338639652677279305",
+              "pnl_contribution": "83.425826338639652677279305"
             },
             "B": {
               "broker_id": "B",
@@ -2232,22 +2317,22 @@
               "pnl_contribution": "-0.75"
             }
           },
-          "broker_nav_value": "13458.95417721739889184590550",
+          "broker_nav_value": "13454.09582633863965267727930",
           "by_geography": {
-            "Unknown": "1901.778177217398891845905502"
+            "Unknown": "1896.919826338639652677279305"
           },
           "by_sector": {
             "Liquidity": "11557.176000000",
-            "Unknown": "1901.778177217398891845905502"
+            "Unknown": "1896.919826338639652677279305"
           },
           "by_type": {
-            "ETF": "996.1781772173988918459055016",
+            "ETF": "991.3198263386396526772793053",
             "HOLD": "250.2500000",
             "Liquidity": "11557.176000000",
             "STOCK": "655.35000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-25",
@@ -2257,25 +2342,28 @@
           "in_transit_book_value": "0",
           "in_transit_cash_value": "0",
           "in_transit_market_value": "0",
-          "market_value": "1901.778177217398891845905502",
+          "market_value": "1896.919826338639652677279305",
           "missing_fx_pairs": [],
           "missing_price_asset_ids": [],
           "nav_complete": true,
-          "nav_value": "13458.95417721739889184590550",
+          "nav_value": "13454.09582633863965267727930",
           "open_cost_basis": "1731.728000000",
           "pnl_candle": {
-            "close": "-241.04582278260110815409450",
-            "high": "-241.045822782601108154094500",
-            "low": "-241.045822782601108154094500",
-            "open": "-241.045822782601108154094500"
+            "close": "-245.90417366136034732272070",
+            "high": "-245.904173661360347322720700",
+            "low": "-245.904173661360347322720700",
+            "open": "-245.904173661360347322720700"
           },
           "stale_price_asset_ids": [
             "MAN"
           ],
-          "total_pnl": "-241.04582278260110815409450",
+          "total_pnl": "-245.90417366136034732272070",
           "transaction_implied_asset_ids": [
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "161.52600000",
@@ -2283,12 +2371,12 @@
               "unsplit": "0"
             },
             "IDR": {
-              "asset": "5.0913818768814624143798264",
-              "fx": "3.4327953405174294315256752",
+              "asset": "5.0665512590448625180897250",
+              "fx": "-1.4007249204052098408104197",
               "unsplit": "0"
             }
           },
-          "unrealized_gain_loss": "170.05017721739889184590550"
+          "unrealized_gain_loss": "165.19182633863965267727930"
         }
       ],
       "date_from": "2091-01-01",
@@ -2296,7 +2384,7 @@
       "end_state": {
         "capital_pool": {
           "A": "7607.426000000",
-          "B": "949.75000000",
+          "B": "950.50000000",
           "C": "2999.25"
         },
         "cumulative_cash": "11557.176000000",
@@ -2319,7 +2407,7 @@
         },
         "returns_pool": {
           "A": "0E-8",
-          "B": "0.7500000",
+          "B": "0",
           "C": "0"
         },
         "wac_pool_cost": {
@@ -2495,7 +2583,7 @@
           {
             "date": "2091-01-04",
             "total_pnl": {
-              "amount": "-37.485185733746847917451668",
+              "amount": "-40.696685677560982654785459",
               "code": "EUR"
             }
           },
@@ -2593,14 +2681,14 @@
           {
             "date": "2091-01-18",
             "total_pnl": {
-              "amount": "15.822314322439017345214541",
+              "amount": "22.267638671960211160071550",
               "code": "EUR"
             }
           },
           {
             "date": "2091-01-19",
             "total_pnl": {
-              "amount": "15.822314322439017345214541",
+              "amount": "22.267638671960211160071550",
               "code": "EUR"
             }
           },
@@ -2621,28 +2709,28 @@
           {
             "date": "2091-01-22",
             "total_pnl": {
-              "amount": "88.284177217398891845905502",
+              "amount": "83.425826338639652677279305",
               "code": "EUR"
             }
           },
           {
             "date": "2091-01-23",
             "total_pnl": {
-              "amount": "88.284177217398891845905502",
+              "amount": "83.425826338639652677279305",
               "code": "EUR"
             }
           },
           {
             "date": "2091-01-24",
             "total_pnl": {
-              "amount": "88.284177217398891845905502",
+              "amount": "83.425826338639652677279305",
               "code": "EUR"
             }
           },
           {
             "date": "2091-01-25",
             "total_pnl": {
-              "amount": "88.284177217398891845905502",
+              "amount": "83.425826338639652677279305",
               "code": "EUR"
             }
           }
@@ -3217,7 +3305,7 @@
           "code": "EUR"
         },
         "broker_nav_value": {
-          "amount": "13962.51481426625315208254833",
+          "amount": "13959.30331432243901734521454",
           "code": "EUR"
         },
         "capital_baseline": {
@@ -3243,27 +3331,27 @@
         "in_transit_cash_value": null,
         "in_transit_market_value": null,
         "market_value": {
-          "amount": "2434.978814266253152082548332",
+          "amount": "2431.767314322439017345214541",
           "code": "EUR"
         },
-        "mwrr_annualized": "-0.278340",
-        "mwrr_cumulative": "-0.002678",
+        "mwrr_annualized": "-0.298257",
+        "mwrr_cumulative": "-0.002907",
         "nav_value": {
-          "amount": "13962.51481426625315208254833",
+          "amount": "13959.30331432243901734521454",
           "code": "EUR"
         },
         "open_cost_basis": {
           "amount": "2472.464000000",
           "code": "EUR"
         },
-        "roi": "-0.002678",
+        "roi": "-0.002907",
         "total_pnl": {
-          "amount": "-37.48518573374684791745167",
+          "amount": "-40.69668567756098265478546",
           "code": "EUR"
         },
-        "twrr": "-0.002678",
+        "twrr": "-0.002907",
         "unrealized_gain_loss": {
-          "amount": "-37.48518573374684791745167",
+          "amount": "-40.69668567756098265478546",
           "code": "EUR"
         }
       },
@@ -3723,11 +3811,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -3783,11 +3871,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -3849,11 +3937,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -3915,11 +4003,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -3981,11 +4069,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -4041,11 +4129,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -4093,7 +4181,7 @@
           "code": "EUR"
         },
         "broker_nav_value": {
-          "amount": "13385.62231432243901734521454",
+          "amount": "13392.06763867196021116007155",
           "code": "EUR"
         },
         "capital_baseline": {
@@ -4101,11 +4189,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -4119,27 +4207,27 @@
         "in_transit_cash_value": null,
         "in_transit_market_value": null,
         "market_value": {
-          "amount": "1828.446314322439017345214541",
+          "amount": "1834.891638671960211160071550",
           "code": "EUR"
         },
-        "mwrr_annualized": "-0.389405",
-        "mwrr_cumulative": "-0.022715",
+        "mwrr_annualized": "-0.383127",
+        "mwrr_cumulative": "-0.022249",
         "nav_value": {
-          "amount": "13385.62231432243901734521454",
+          "amount": "13392.06763867196021116007155",
           "code": "EUR"
         },
         "open_cost_basis": {
           "amount": "1731.728000000",
           "code": "EUR"
         },
-        "roi": "-0.022947",
+        "roi": "-0.022477",
         "total_pnl": {
-          "amount": "-314.37768567756098265478546",
+          "amount": "-307.93236132803978883992845",
           "code": "EUR"
         },
-        "twrr": "-0.022971",
+        "twrr": "-0.022501",
         "unrealized_gain_loss": {
-          "amount": "96.71831432243901734521454",
+          "amount": "103.16363867196021116007155",
           "code": "EUR"
         }
       },
@@ -4153,7 +4241,7 @@
           "code": "EUR"
         },
         "broker_nav_value": {
-          "amount": "13385.62231432243901734521454",
+          "amount": "13392.06763867196021116007155",
           "code": "EUR"
         },
         "capital_baseline": {
@@ -4161,11 +4249,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -4179,27 +4267,27 @@
         "in_transit_cash_value": null,
         "in_transit_market_value": null,
         "market_value": {
-          "amount": "1828.446314322439017345214541",
+          "amount": "1834.891638671960211160071550",
           "code": "EUR"
         },
-        "mwrr_annualized": "-0.372606",
-        "mwrr_cumulative": "-0.022727",
+        "mwrr_annualized": "-0.366512",
+        "mwrr_cumulative": "-0.022262",
         "nav_value": {
-          "amount": "13385.62231432243901734521454",
+          "amount": "13392.06763867196021116007155",
           "code": "EUR"
         },
         "open_cost_basis": {
           "amount": "1731.728000000",
           "code": "EUR"
         },
-        "roi": "-0.022947",
+        "roi": "-0.022477",
         "total_pnl": {
-          "amount": "-314.37768567756098265478546",
+          "amount": "-307.93236132803978883992845",
           "code": "EUR"
         },
-        "twrr": "-0.022971",
+        "twrr": "-0.022501",
         "unrealized_gain_loss": {
-          "amount": "96.71831432243901734521454",
+          "amount": "103.16363867196021116007155",
           "code": "EUR"
         }
       },
@@ -4221,11 +4309,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -4281,11 +4369,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -4333,7 +4421,7 @@
           "code": "EUR"
         },
         "broker_nav_value": {
-          "amount": "13458.95417721739889184590550",
+          "amount": "13454.09582633863965267727930",
           "code": "EUR"
         },
         "capital_baseline": {
@@ -4341,11 +4429,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -4359,27 +4447,27 @@
         "in_transit_cash_value": null,
         "in_transit_market_value": null,
         "market_value": {
-          "amount": "1901.778177217398891845905502",
+          "amount": "1896.919826338639652677279305",
           "code": "EUR"
         },
-        "mwrr_annualized": "-0.263593",
-        "mwrr_cumulative": "-0.017450",
+        "mwrr_annualized": "-0.268161",
+        "mwrr_cumulative": "-0.017802",
         "nav_value": {
-          "amount": "13458.95417721739889184590550",
+          "amount": "13454.09582633863965267727930",
           "code": "EUR"
         },
         "open_cost_basis": {
           "amount": "1731.728000000",
           "code": "EUR"
         },
-        "roi": "-0.017595",
+        "roi": "-0.017949",
         "total_pnl": {
-          "amount": "-241.04582278260110815409450",
+          "amount": "-245.90417366136034732272070",
           "code": "EUR"
         },
-        "twrr": "-0.017619",
+        "twrr": "-0.017973",
         "unrealized_gain_loss": {
-          "amount": "170.05017721739889184590550",
+          "amount": "165.19182633863965267727930",
           "code": "EUR"
         }
       },
@@ -4393,7 +4481,7 @@
           "code": "EUR"
         },
         "broker_nav_value": {
-          "amount": "13458.95417721739889184590550",
+          "amount": "13454.09582633863965267727930",
           "code": "EUR"
         },
         "capital_baseline": {
@@ -4401,11 +4489,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -4419,27 +4507,27 @@
         "in_transit_cash_value": null,
         "in_transit_market_value": null,
         "market_value": {
-          "amount": "1901.778177217398891845905502",
+          "amount": "1896.919826338639652677279305",
           "code": "EUR"
         },
-        "mwrr_annualized": "-0.253362",
-        "mwrr_cumulative": "-0.017456",
+        "mwrr_annualized": "-0.257785",
+        "mwrr_cumulative": "-0.017808",
         "nav_value": {
-          "amount": "13458.95417721739889184590550",
+          "amount": "13454.09582633863965267727930",
           "code": "EUR"
         },
         "open_cost_basis": {
           "amount": "1731.728000000",
           "code": "EUR"
         },
-        "roi": "-0.017595",
+        "roi": "-0.017949",
         "total_pnl": {
-          "amount": "-241.04582278260110815409450",
+          "amount": "-245.90417366136034732272070",
           "code": "EUR"
         },
-        "twrr": "-0.017619",
+        "twrr": "-0.017973",
         "unrealized_gain_loss": {
-          "amount": "170.05017721739889184590550",
+          "amount": "165.19182633863965267727930",
           "code": "EUR"
         }
       },
@@ -4453,7 +4541,7 @@
           "code": "EUR"
         },
         "broker_nav_value": {
-          "amount": "13458.95417721739889184590550",
+          "amount": "13454.09582633863965267727930",
           "code": "EUR"
         },
         "capital_baseline": {
@@ -4461,11 +4549,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -4479,27 +4567,27 @@
         "in_transit_cash_value": null,
         "in_transit_market_value": null,
         "market_value": {
-          "amount": "1901.778177217398891845905502",
+          "amount": "1896.919826338639652677279305",
           "code": "EUR"
         },
-        "mwrr_annualized": "-0.243890",
-        "mwrr_cumulative": "-0.017462",
+        "mwrr_annualized": "-0.248177",
+        "mwrr_cumulative": "-0.017814",
         "nav_value": {
-          "amount": "13458.95417721739889184590550",
+          "amount": "13454.09582633863965267727930",
           "code": "EUR"
         },
         "open_cost_basis": {
           "amount": "1731.728000000",
           "code": "EUR"
         },
-        "roi": "-0.017595",
+        "roi": "-0.017949",
         "total_pnl": {
-          "amount": "-241.04582278260110815409450",
+          "amount": "-245.90417366136034732272070",
           "code": "EUR"
         },
-        "twrr": "-0.017619",
+        "twrr": "-0.017973",
         "unrealized_gain_loss": {
-          "amount": "170.05017721739889184590550",
+          "amount": "165.19182633863965267727930",
           "code": "EUR"
         }
       },
@@ -4513,7 +4601,7 @@
           "code": "EUR"
         },
         "broker_nav_value": {
-          "amount": "13458.95417721739889184590550",
+          "amount": "13454.09582633863965267727930",
           "code": "EUR"
         },
         "capital_baseline": {
@@ -4521,11 +4609,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -4539,27 +4627,27 @@
         "in_transit_cash_value": null,
         "in_transit_market_value": null,
         "market_value": {
-          "amount": "1901.778177217398891845905502",
+          "amount": "1896.919826338639652677279305",
           "code": "EUR"
         },
-        "mwrr_annualized": "-0.235095",
-        "mwrr_cumulative": "-0.017468",
+        "mwrr_annualized": "-0.239253",
+        "mwrr_cumulative": "-0.017820",
         "nav_value": {
-          "amount": "13458.95417721739889184590550",
+          "amount": "13454.09582633863965267727930",
           "code": "EUR"
         },
         "open_cost_basis": {
           "amount": "1731.728000000",
           "code": "EUR"
         },
-        "roi": "-0.017595",
+        "roi": "-0.017949",
         "total_pnl": {
-          "amount": "-241.04582278260110815409450",
+          "amount": "-245.90417366136034732272070",
           "code": "EUR"
         },
-        "twrr": "-0.017619",
+        "twrr": "-0.017973",
         "unrealized_gain_loss": {
-          "amount": "170.05017721739889184590550",
+          "amount": "165.19182633863965267727930",
           "code": "EUR"
         }
       }
@@ -4642,20 +4730,20 @@
         },
         {
           "close": {
-            "amount": "-37.48518573374684791745167",
+            "amount": "-40.69668567756098265478546",
             "code": "EUR"
           },
           "date": "2091-01-04",
           "high": {
-            "amount": "-37.485185733746847917451670",
+            "amount": "-40.696685677560982654785460",
             "code": "EUR"
           },
           "low": {
-            "amount": "-37.485185733746847917451670",
+            "amount": "-40.696685677560982654785460",
             "code": "EUR"
           },
           "open": {
-            "amount": "-37.485185733746847917451670",
+            "amount": "-40.696685677560982654785460",
             "code": "EUR"
           }
         },
@@ -4908,39 +4996,39 @@
         },
         {
           "close": {
-            "amount": "-314.37768567756098265478546",
+            "amount": "-307.93236132803978883992845",
             "code": "EUR"
           },
           "date": "2091-01-18",
           "high": {
-            "amount": "-314.377685677560982654785460",
+            "amount": "-307.932361328039788839928450",
             "code": "EUR"
           },
           "low": {
-            "amount": "-314.377685677560982654785460",
+            "amount": "-307.932361328039788839928450",
             "code": "EUR"
           },
           "open": {
-            "amount": "-314.377685677560982654785460",
+            "amount": "-307.932361328039788839928450",
             "code": "EUR"
           }
         },
         {
           "close": {
-            "amount": "-314.37768567756098265478546",
+            "amount": "-307.93236132803978883992845",
             "code": "EUR"
           },
           "date": "2091-01-19",
           "high": {
-            "amount": "-314.377685677560982654785460",
+            "amount": "-307.932361328039788839928450",
             "code": "EUR"
           },
           "low": {
-            "amount": "-314.377685677560982654785460",
+            "amount": "-307.932361328039788839928450",
             "code": "EUR"
           },
           "open": {
-            "amount": "-314.377685677560982654785460",
+            "amount": "-307.932361328039788839928450",
             "code": "EUR"
           }
         },
@@ -4984,84 +5072,84 @@
         },
         {
           "close": {
-            "amount": "-241.04582278260110815409450",
+            "amount": "-245.90417366136034732272070",
             "code": "EUR"
           },
           "date": "2091-01-22",
           "high": {
-            "amount": "-241.045822782601108154094500",
+            "amount": "-245.904173661360347322720700",
             "code": "EUR"
           },
           "low": {
-            "amount": "-241.045822782601108154094500",
+            "amount": "-245.904173661360347322720700",
             "code": "EUR"
           },
           "open": {
-            "amount": "-241.045822782601108154094500",
+            "amount": "-245.904173661360347322720700",
             "code": "EUR"
           }
         },
         {
           "close": {
-            "amount": "-241.04582278260110815409450",
+            "amount": "-245.90417366136034732272070",
             "code": "EUR"
           },
           "date": "2091-01-23",
           "high": {
-            "amount": "-241.045822782601108154094500",
+            "amount": "-245.904173661360347322720700",
             "code": "EUR"
           },
           "low": {
-            "amount": "-241.045822782601108154094500",
+            "amount": "-245.904173661360347322720700",
             "code": "EUR"
           },
           "open": {
-            "amount": "-241.045822782601108154094500",
+            "amount": "-245.904173661360347322720700",
             "code": "EUR"
           }
         },
         {
           "close": {
-            "amount": "-241.04582278260110815409450",
+            "amount": "-245.90417366136034732272070",
             "code": "EUR"
           },
           "date": "2091-01-24",
           "high": {
-            "amount": "-241.045822782601108154094500",
+            "amount": "-245.904173661360347322720700",
             "code": "EUR"
           },
           "low": {
-            "amount": "-241.045822782601108154094500",
+            "amount": "-245.904173661360347322720700",
             "code": "EUR"
           },
           "open": {
-            "amount": "-241.045822782601108154094500",
+            "amount": "-245.904173661360347322720700",
             "code": "EUR"
           }
         },
         {
           "close": {
-            "amount": "-241.04582278260110815409450",
+            "amount": "-245.90417366136034732272070",
             "code": "EUR"
           },
           "date": "2091-01-25",
           "high": {
-            "amount": "-241.045822782601108154094500",
+            "amount": "-245.904173661360347322720700",
             "code": "EUR"
           },
           "low": {
-            "amount": "-241.045822782601108154094500",
+            "amount": "-245.904173661360347322720700",
             "code": "EUR"
           },
           "open": {
-            "amount": "-241.045822782601108154094500",
+            "amount": "-245.904173661360347322720700",
             "code": "EUR"
           }
         }
       ]
     },
     "get_positions_contribution": {
-      "gross_gains": "74.7961772173988918459055015",
+      "gross_gains": "83.4258263386396526772793053",
       "gross_losses": "0",
       "other_effects": [
         {
@@ -5083,7 +5171,7 @@
           "broker_name": null,
           "category": "Other",
           "description": "Other / reconciliation residual",
-          "period_pnl": "-446.912000000000000000000002"
+          "period_pnl": "-446.912000000000000000000005"
         }
       ],
       "positions": [
@@ -5095,15 +5183,19 @@
           "asset_type": "STOCK",
           "broker_id": "A",
           "broker_name": "A",
-          "end_value": "524.280000000000",
+          "end_value": "524.28000000",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-02",
           "period_fees_taxes": "2.50000000",
+          "period_fees_taxes_percent": null,
           "period_income": "11.34000000",
-          "period_pnl": "66.272000000000",
+          "period_income_percent": null,
+          "period_pnl": "79.76000000",
           "period_pnl_percent": null,
           "period_realized_gain_loss": "26.97600000",
-          "period_unrealized_delta": "30.456000000000",
+          "period_realized_gain_loss_percent": null,
+          "period_unrealized_delta": "43.94400000",
+          "period_unrealized_delta_percent": null,
           "start_value": "0"
         },
         {
@@ -5114,15 +5206,19 @@
           "asset_type": "ETF",
           "broker_id": "A",
           "broker_name": "A",
-          "end_value": "996.1781772173988918459055015",
+          "end_value": "991.3198263386396526772793053",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-02",
           "period_fees_taxes": null,
+          "period_fees_taxes_percent": null,
           "period_income": null,
-          "period_pnl": "8.5241772173988918459055015",
+          "period_income_percent": null,
+          "period_pnl": "3.6658263386396526772793053",
           "period_pnl_percent": null,
           "period_realized_gain_loss": null,
-          "period_unrealized_delta": "8.5241772173988918459055015",
+          "period_realized_gain_loss_percent": null,
+          "period_unrealized_delta": "3.6658263386396526772793053",
+          "period_unrealized_delta_percent": null,
           "start_value": "0"
         },
         {
@@ -5133,15 +5229,19 @@
           "asset_type": "HOLD",
           "broker_id": "B",
           "broker_name": "B",
-          "end_value": null,
+          "end_value": "250.2500000",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-02",
           "period_fees_taxes": null,
+          "period_fees_taxes_percent": null,
           "period_income": null,
-          "period_pnl": null,
+          "period_income_percent": null,
+          "period_pnl": "0",
           "period_pnl_percent": null,
           "period_realized_gain_loss": null,
-          "period_unrealized_delta": null,
+          "period_realized_gain_loss_percent": null,
+          "period_unrealized_delta": "0",
+          "period_unrealized_delta_percent": null,
           "start_value": "0"
         },
         {
@@ -5152,15 +5252,19 @@
           "asset_type": "STOCK",
           "broker_id": "B",
           "broker_name": "B",
-          "end_value": null,
+          "end_value": "131.07000000",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-16",
           "period_fees_taxes": null,
+          "period_fees_taxes_percent": null,
           "period_income": null,
+          "period_income_percent": null,
           "period_pnl": null,
           "period_pnl_percent": null,
           "period_realized_gain_loss": null,
+          "period_realized_gain_loss_percent": null,
           "period_unrealized_delta": null,
+          "period_unrealized_delta_percent": null,
           "start_value": "0"
         }
       ],
@@ -5226,7 +5330,7 @@
           {
             "components": [
               {
-                "amount": "2434.978814266253152082548332",
+                "amount": "2431.767314322439017345214541",
                 "emoji": null,
                 "name": "Unknown",
                 "value": "100.00"
@@ -5380,7 +5484,7 @@
           {
             "components": [
               {
-                "amount": "1828.446314322439017345214541",
+                "amount": "1834.891638671960211160071550",
                 "emoji": null,
                 "name": "Unknown",
                 "value": "100.00"
@@ -5391,7 +5495,7 @@
           {
             "components": [
               {
-                "amount": "1828.446314322439017345214541",
+                "amount": "1834.891638671960211160071550",
                 "emoji": null,
                 "name": "Unknown",
                 "value": "100.00"
@@ -5424,7 +5528,7 @@
           {
             "components": [
               {
-                "amount": "1901.778177217398891845905502",
+                "amount": "1896.919826338639652677279305",
                 "emoji": null,
                 "name": "Unknown",
                 "value": "100.00"
@@ -5435,7 +5539,7 @@
           {
             "components": [
               {
-                "amount": "1901.778177217398891845905502",
+                "amount": "1896.919826338639652677279305",
                 "emoji": null,
                 "name": "Unknown",
                 "value": "100.00"
@@ -5446,7 +5550,7 @@
           {
             "components": [
               {
-                "amount": "1901.778177217398891845905502",
+                "amount": "1896.919826338639652677279305",
                 "emoji": null,
                 "name": "Unknown",
                 "value": "100.00"
@@ -5457,7 +5561,7 @@
           {
             "components": [
               {
-                "amount": "1901.778177217398891845905502",
+                "amount": "1896.919826338639652677279305",
                 "emoji": null,
                 "name": "Unknown",
                 "value": "100.00"
@@ -5518,13 +5622,13 @@
                 "amount": "11527.536000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "82.56"
+                "value": "82.58"
               },
               {
-                "amount": "2434.978814266253152082548332",
+                "amount": "2431.767314322439017345214541",
                 "emoji": null,
                 "name": "Unknown",
-                "value": "17.44"
+                "value": "17.42"
               }
             ],
             "date": "2091-01-04"
@@ -5756,13 +5860,13 @@
                 "amount": "11557.176000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "86.34"
+                "value": "86.30"
               },
               {
-                "amount": "1828.446314322439017345214541",
+                "amount": "1834.891638671960211160071550",
                 "emoji": null,
                 "name": "Unknown",
-                "value": "13.66"
+                "value": "13.70"
               }
             ],
             "date": "2091-01-18"
@@ -5773,13 +5877,13 @@
                 "amount": "11557.176000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "86.34"
+                "value": "86.30"
               },
               {
-                "amount": "1828.446314322439017345214541",
+                "amount": "1834.891638671960211160071550",
                 "emoji": null,
                 "name": "Unknown",
-                "value": "13.66"
+                "value": "13.70"
               }
             ],
             "date": "2091-01-19"
@@ -5824,13 +5928,13 @@
                 "amount": "11557.176000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "85.87"
+                "value": "85.90"
               },
               {
-                "amount": "1901.778177217398891845905502",
+                "amount": "1896.919826338639652677279305",
                 "emoji": null,
                 "name": "Unknown",
-                "value": "14.13"
+                "value": "14.10"
               }
             ],
             "date": "2091-01-22"
@@ -5841,13 +5945,13 @@
                 "amount": "11557.176000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "85.87"
+                "value": "85.90"
               },
               {
-                "amount": "1901.778177217398891845905502",
+                "amount": "1896.919826338639652677279305",
                 "emoji": null,
                 "name": "Unknown",
-                "value": "14.13"
+                "value": "14.10"
               }
             ],
             "date": "2091-01-23"
@@ -5858,13 +5962,13 @@
                 "amount": "11557.176000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "85.87"
+                "value": "85.90"
               },
               {
-                "amount": "1901.778177217398891845905502",
+                "amount": "1896.919826338639652677279305",
                 "emoji": null,
                 "name": "Unknown",
-                "value": "14.13"
+                "value": "14.10"
               }
             ],
             "date": "2091-01-24"
@@ -5875,13 +5979,13 @@
                 "amount": "11557.176000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "85.87"
+                "value": "85.90"
               },
               {
-                "amount": "1901.778177217398891845905502",
+                "amount": "1896.919826338639652677279305",
                 "emoji": null,
                 "name": "Unknown",
-                "value": "14.13"
+                "value": "14.10"
               }
             ],
             "date": "2091-01-25"
@@ -5963,19 +6067,19 @@
                 "amount": "11527.536000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "82.56"
+                "value": "82.58"
               },
               {
                 "amount": "1254.3210000000",
                 "emoji": null,
                 "name": "STOCK",
-                "value": "8.98"
+                "value": "8.99"
               },
               {
-                "amount": "930.4078142662531520825483320",
+                "amount": "927.1963143224390173452145406",
                 "emoji": null,
                 "name": "ETF",
-                "value": "6.66"
+                "value": "6.64"
               },
               {
                 "amount": "250.2500000",
@@ -6369,13 +6473,13 @@
                 "amount": "11557.176000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "86.34"
+                "value": "86.30"
               },
               {
-                "amount": "927.1963143224390173452145406",
+                "amount": "933.6416386719602111600715502",
                 "emoji": null,
                 "name": "ETF",
-                "value": "6.93"
+                "value": "6.97"
               },
               {
                 "amount": "651.00000000",
@@ -6398,13 +6502,13 @@
                 "amount": "11557.176000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "86.34"
+                "value": "86.30"
               },
               {
-                "amount": "927.1963143224390173452145406",
+                "amount": "933.6416386719602111600715502",
                 "emoji": null,
                 "name": "ETF",
-                "value": "6.93"
+                "value": "6.97"
               },
               {
                 "amount": "651.00000000",
@@ -6485,13 +6589,13 @@
                 "amount": "11557.176000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "85.87"
+                "value": "85.90"
               },
               {
-                "amount": "996.1781772173988918459055016",
+                "amount": "991.3198263386396526772793053",
                 "emoji": null,
                 "name": "ETF",
-                "value": "7.40"
+                "value": "7.37"
               },
               {
                 "amount": "655.35000000",
@@ -6514,13 +6618,13 @@
                 "amount": "11557.176000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "85.87"
+                "value": "85.90"
               },
               {
-                "amount": "996.1781772173988918459055016",
+                "amount": "991.3198263386396526772793053",
                 "emoji": null,
                 "name": "ETF",
-                "value": "7.40"
+                "value": "7.37"
               },
               {
                 "amount": "655.35000000",
@@ -6543,13 +6647,13 @@
                 "amount": "11557.176000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "85.87"
+                "value": "85.90"
               },
               {
-                "amount": "996.1781772173988918459055016",
+                "amount": "991.3198263386396526772793053",
                 "emoji": null,
                 "name": "ETF",
-                "value": "7.40"
+                "value": "7.37"
               },
               {
                 "amount": "655.35000000",
@@ -6572,13 +6676,13 @@
                 "amount": "11557.176000000",
                 "emoji": null,
                 "name": "Liquidity",
-                "value": "85.87"
+                "value": "85.90"
               },
               {
-                "amount": "996.1781772173988918459055016",
+                "amount": "991.3198263386396526772793053",
                 "emoji": null,
                 "name": "ETF",
-                "value": "7.40"
+                "value": "7.37"
               },
               {
                 "amount": "655.35000000",
@@ -6626,7 +6730,7 @@
             {
               "date": "2091-01-04",
               "total_pnl": {
-                "amount": "-37.485185733746847917451668",
+                "amount": "-40.696685677560982654785459",
                 "code": "EUR"
               }
             },
@@ -6724,14 +6828,14 @@
             {
               "date": "2091-01-18",
               "total_pnl": {
-                "amount": "15.822314322439017345214541",
+                "amount": "22.267638671960211160071550",
                 "code": "EUR"
               }
             },
             {
               "date": "2091-01-19",
               "total_pnl": {
-                "amount": "15.822314322439017345214541",
+                "amount": "22.267638671960211160071550",
                 "code": "EUR"
               }
             },
@@ -6752,28 +6856,28 @@
             {
               "date": "2091-01-22",
               "total_pnl": {
-                "amount": "88.284177217398891845905502",
+                "amount": "83.425826338639652677279305",
                 "code": "EUR"
               }
             },
             {
               "date": "2091-01-23",
               "total_pnl": {
-                "amount": "88.284177217398891845905502",
+                "amount": "83.425826338639652677279305",
                 "code": "EUR"
               }
             },
             {
               "date": "2091-01-24",
               "total_pnl": {
-                "amount": "88.284177217398891845905502",
+                "amount": "83.425826338639652677279305",
                 "code": "EUR"
               }
             },
             {
               "date": "2091-01-25",
               "total_pnl": {
-                "amount": "88.284177217398891845905502",
+                "amount": "83.425826338639652677279305",
                 "code": "EUR"
               }
             }
@@ -7185,11 +7289,30 @@
               "count": 1
             },
             "severity": "warning"
+          },
+          {
+            "affected_asset_ids": [],
+            "affected_asset_names": [],
+            "affected_fx_pairs": [],
+            "code": "TRANSFER_SHARE_MISMATCH",
+            "count": 2,
+            "cta_action": null,
+            "cta_target": null,
+            "domain": "portfolio",
+            "group_key": "transfer_share_mismatch",
+            "message_i18n_key": "dataQuality.transferShareMismatch",
+            "message_params": {
+              "count": 2
+            },
+            "severity": "info"
           }
         ],
         "missing_fx_pairs": [],
         "missing_price_assets": [],
-        "share_mismatch_warnings": [],
+        "share_mismatch_warnings": [
+          "Linked internal pair (tx:ct_out_A, tx:ct_in_B): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-12",
+          "Linked internal pair (tx:tr_out_A_EQ, tx:tr_in_B_EQ): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-16"
+        ],
         "stale_prices": [],
         "unresolved_fx_pairs": [],
         "unusable_assets": [],
@@ -7389,7 +7512,7 @@
             "code": "EUR"
           },
           "broker_nav_value": {
-            "amount": "13962.51481426625315208254833",
+            "amount": "13959.30331432243901734521454",
             "code": "EUR"
           },
           "capital_baseline": {
@@ -7415,27 +7538,27 @@
           "in_transit_cash_value": null,
           "in_transit_market_value": null,
           "market_value": {
-            "amount": "2434.978814266253152082548332",
+            "amount": "2431.767314322439017345214541",
             "code": "EUR"
           },
-          "mwrr_annualized": "-0.278340",
-          "mwrr_cumulative": "-0.002678",
+          "mwrr_annualized": "-0.298257",
+          "mwrr_cumulative": "-0.002907",
           "nav_value": {
-            "amount": "13962.51481426625315208254833",
+            "amount": "13959.30331432243901734521454",
             "code": "EUR"
           },
           "open_cost_basis": {
             "amount": "2472.464000000",
             "code": "EUR"
           },
-          "roi": "-0.002678",
+          "roi": "-0.002907",
           "total_pnl": {
-            "amount": "-37.48518573374684791745167",
+            "amount": "-40.69668567756098265478546",
             "code": "EUR"
           },
-          "twrr": "-0.002678",
+          "twrr": "-0.002907",
           "unrealized_gain_loss": {
-            "amount": "-37.48518573374684791745167",
+            "amount": "-40.69668567756098265478546",
             "code": "EUR"
           }
         },
@@ -7895,11 +8018,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -7955,11 +8078,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -8021,11 +8144,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -8087,11 +8210,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -8153,11 +8276,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -8213,11 +8336,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -8265,7 +8388,7 @@
             "code": "EUR"
           },
           "broker_nav_value": {
-            "amount": "13385.62231432243901734521454",
+            "amount": "13392.06763867196021116007155",
             "code": "EUR"
           },
           "capital_baseline": {
@@ -8273,11 +8396,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -8291,27 +8414,27 @@
           "in_transit_cash_value": null,
           "in_transit_market_value": null,
           "market_value": {
-            "amount": "1828.446314322439017345214541",
+            "amount": "1834.891638671960211160071550",
             "code": "EUR"
           },
-          "mwrr_annualized": "-0.389405",
-          "mwrr_cumulative": "-0.022715",
+          "mwrr_annualized": "-0.383127",
+          "mwrr_cumulative": "-0.022249",
           "nav_value": {
-            "amount": "13385.62231432243901734521454",
+            "amount": "13392.06763867196021116007155",
             "code": "EUR"
           },
           "open_cost_basis": {
             "amount": "1731.728000000",
             "code": "EUR"
           },
-          "roi": "-0.022947",
+          "roi": "-0.022477",
           "total_pnl": {
-            "amount": "-314.37768567756098265478546",
+            "amount": "-307.93236132803978883992845",
             "code": "EUR"
           },
-          "twrr": "-0.022971",
+          "twrr": "-0.022501",
           "unrealized_gain_loss": {
-            "amount": "96.71831432243901734521454",
+            "amount": "103.16363867196021116007155",
             "code": "EUR"
           }
         },
@@ -8325,7 +8448,7 @@
             "code": "EUR"
           },
           "broker_nav_value": {
-            "amount": "13385.62231432243901734521454",
+            "amount": "13392.06763867196021116007155",
             "code": "EUR"
           },
           "capital_baseline": {
@@ -8333,11 +8456,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -8351,27 +8474,27 @@
           "in_transit_cash_value": null,
           "in_transit_market_value": null,
           "market_value": {
-            "amount": "1828.446314322439017345214541",
+            "amount": "1834.891638671960211160071550",
             "code": "EUR"
           },
-          "mwrr_annualized": "-0.372606",
-          "mwrr_cumulative": "-0.022727",
+          "mwrr_annualized": "-0.366512",
+          "mwrr_cumulative": "-0.022262",
           "nav_value": {
-            "amount": "13385.62231432243901734521454",
+            "amount": "13392.06763867196021116007155",
             "code": "EUR"
           },
           "open_cost_basis": {
             "amount": "1731.728000000",
             "code": "EUR"
           },
-          "roi": "-0.022947",
+          "roi": "-0.022477",
           "total_pnl": {
-            "amount": "-314.37768567756098265478546",
+            "amount": "-307.93236132803978883992845",
             "code": "EUR"
           },
-          "twrr": "-0.022971",
+          "twrr": "-0.022501",
           "unrealized_gain_loss": {
-            "amount": "96.71831432243901734521454",
+            "amount": "103.16363867196021116007155",
             "code": "EUR"
           }
         },
@@ -8393,11 +8516,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -8453,11 +8576,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -8505,7 +8628,7 @@
             "code": "EUR"
           },
           "broker_nav_value": {
-            "amount": "13458.95417721739889184590550",
+            "amount": "13454.09582633863965267727930",
             "code": "EUR"
           },
           "capital_baseline": {
@@ -8513,11 +8636,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -8531,27 +8654,27 @@
           "in_transit_cash_value": null,
           "in_transit_market_value": null,
           "market_value": {
-            "amount": "1901.778177217398891845905502",
+            "amount": "1896.919826338639652677279305",
             "code": "EUR"
           },
-          "mwrr_annualized": "-0.263593",
-          "mwrr_cumulative": "-0.017450",
+          "mwrr_annualized": "-0.268161",
+          "mwrr_cumulative": "-0.017802",
           "nav_value": {
-            "amount": "13458.95417721739889184590550",
+            "amount": "13454.09582633863965267727930",
             "code": "EUR"
           },
           "open_cost_basis": {
             "amount": "1731.728000000",
             "code": "EUR"
           },
-          "roi": "-0.017595",
+          "roi": "-0.017949",
           "total_pnl": {
-            "amount": "-241.04582278260110815409450",
+            "amount": "-245.90417366136034732272070",
             "code": "EUR"
           },
-          "twrr": "-0.017619",
+          "twrr": "-0.017973",
           "unrealized_gain_loss": {
-            "amount": "170.05017721739889184590550",
+            "amount": "165.19182633863965267727930",
             "code": "EUR"
           }
         },
@@ -8565,7 +8688,7 @@
             "code": "EUR"
           },
           "broker_nav_value": {
-            "amount": "13458.95417721739889184590550",
+            "amount": "13454.09582633863965267727930",
             "code": "EUR"
           },
           "capital_baseline": {
@@ -8573,11 +8696,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -8591,27 +8714,27 @@
           "in_transit_cash_value": null,
           "in_transit_market_value": null,
           "market_value": {
-            "amount": "1901.778177217398891845905502",
+            "amount": "1896.919826338639652677279305",
             "code": "EUR"
           },
-          "mwrr_annualized": "-0.253362",
-          "mwrr_cumulative": "-0.017456",
+          "mwrr_annualized": "-0.257785",
+          "mwrr_cumulative": "-0.017808",
           "nav_value": {
-            "amount": "13458.95417721739889184590550",
+            "amount": "13454.09582633863965267727930",
             "code": "EUR"
           },
           "open_cost_basis": {
             "amount": "1731.728000000",
             "code": "EUR"
           },
-          "roi": "-0.017595",
+          "roi": "-0.017949",
           "total_pnl": {
-            "amount": "-241.04582278260110815409450",
+            "amount": "-245.90417366136034732272070",
             "code": "EUR"
           },
-          "twrr": "-0.017619",
+          "twrr": "-0.017973",
           "unrealized_gain_loss": {
-            "amount": "170.05017721739889184590550",
+            "amount": "165.19182633863965267727930",
             "code": "EUR"
           }
         },
@@ -8625,7 +8748,7 @@
             "code": "EUR"
           },
           "broker_nav_value": {
-            "amount": "13458.95417721739889184590550",
+            "amount": "13454.09582633863965267727930",
             "code": "EUR"
           },
           "capital_baseline": {
@@ -8633,11 +8756,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -8651,27 +8774,27 @@
           "in_transit_cash_value": null,
           "in_transit_market_value": null,
           "market_value": {
-            "amount": "1901.778177217398891845905502",
+            "amount": "1896.919826338639652677279305",
             "code": "EUR"
           },
-          "mwrr_annualized": "-0.243890",
-          "mwrr_cumulative": "-0.017462",
+          "mwrr_annualized": "-0.248177",
+          "mwrr_cumulative": "-0.017814",
           "nav_value": {
-            "amount": "13458.95417721739889184590550",
+            "amount": "13454.09582633863965267727930",
             "code": "EUR"
           },
           "open_cost_basis": {
             "amount": "1731.728000000",
             "code": "EUR"
           },
-          "roi": "-0.017595",
+          "roi": "-0.017949",
           "total_pnl": {
-            "amount": "-241.04582278260110815409450",
+            "amount": "-245.90417366136034732272070",
             "code": "EUR"
           },
-          "twrr": "-0.017619",
+          "twrr": "-0.017973",
           "unrealized_gain_loss": {
-            "amount": "170.05017721739889184590550",
+            "amount": "165.19182633863965267727930",
             "code": "EUR"
           }
         },
@@ -8685,7 +8808,7 @@
             "code": "EUR"
           },
           "broker_nav_value": {
-            "amount": "13458.95417721739889184590550",
+            "amount": "13454.09582633863965267727930",
             "code": "EUR"
           },
           "capital_baseline": {
@@ -8693,11 +8816,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -8711,27 +8834,27 @@
           "in_transit_cash_value": null,
           "in_transit_market_value": null,
           "market_value": {
-            "amount": "1901.778177217398891845905502",
+            "amount": "1896.919826338639652677279305",
             "code": "EUR"
           },
-          "mwrr_annualized": "-0.235095",
-          "mwrr_cumulative": "-0.017468",
+          "mwrr_annualized": "-0.239253",
+          "mwrr_cumulative": "-0.017820",
           "nav_value": {
-            "amount": "13458.95417721739889184590550",
+            "amount": "13454.09582633863965267727930",
             "code": "EUR"
           },
           "open_cost_basis": {
             "amount": "1731.728000000",
             "code": "EUR"
           },
-          "roi": "-0.017595",
+          "roi": "-0.017949",
           "total_pnl": {
-            "amount": "-241.04582278260110815409450",
+            "amount": "-245.90417366136034732272070",
             "code": "EUR"
           },
-          "twrr": "-0.017619",
+          "twrr": "-0.017973",
           "unrealized_gain_loss": {
-            "amount": "170.05017721739889184590550",
+            "amount": "165.19182633863965267727930",
             "code": "EUR"
           }
         }
@@ -8839,20 +8962,20 @@
           },
           {
             "close": {
-              "amount": "-37.48518573374684791745167",
+              "amount": "-40.69668567756098265478546",
               "code": "EUR"
             },
             "date": "2091-01-04",
             "high": {
-              "amount": "-37.485185733746847917451670",
+              "amount": "-40.696685677560982654785460",
               "code": "EUR"
             },
             "low": {
-              "amount": "-37.485185733746847917451670",
+              "amount": "-40.696685677560982654785460",
               "code": "EUR"
             },
             "open": {
-              "amount": "-37.485185733746847917451670",
+              "amount": "-40.696685677560982654785460",
               "code": "EUR"
             }
           },
@@ -9105,39 +9228,39 @@
           },
           {
             "close": {
-              "amount": "-314.37768567756098265478546",
+              "amount": "-307.93236132803978883992845",
               "code": "EUR"
             },
             "date": "2091-01-18",
             "high": {
-              "amount": "-314.377685677560982654785460",
+              "amount": "-307.932361328039788839928450",
               "code": "EUR"
             },
             "low": {
-              "amount": "-314.377685677560982654785460",
+              "amount": "-307.932361328039788839928450",
               "code": "EUR"
             },
             "open": {
-              "amount": "-314.377685677560982654785460",
+              "amount": "-307.932361328039788839928450",
               "code": "EUR"
             }
           },
           {
             "close": {
-              "amount": "-314.37768567756098265478546",
+              "amount": "-307.93236132803978883992845",
               "code": "EUR"
             },
             "date": "2091-01-19",
             "high": {
-              "amount": "-314.377685677560982654785460",
+              "amount": "-307.932361328039788839928450",
               "code": "EUR"
             },
             "low": {
-              "amount": "-314.377685677560982654785460",
+              "amount": "-307.932361328039788839928450",
               "code": "EUR"
             },
             "open": {
-              "amount": "-314.377685677560982654785460",
+              "amount": "-307.932361328039788839928450",
               "code": "EUR"
             }
           },
@@ -9181,84 +9304,84 @@
           },
           {
             "close": {
-              "amount": "-241.04582278260110815409450",
+              "amount": "-245.90417366136034732272070",
               "code": "EUR"
             },
             "date": "2091-01-22",
             "high": {
-              "amount": "-241.045822782601108154094500",
+              "amount": "-245.904173661360347322720700",
               "code": "EUR"
             },
             "low": {
-              "amount": "-241.045822782601108154094500",
+              "amount": "-245.904173661360347322720700",
               "code": "EUR"
             },
             "open": {
-              "amount": "-241.045822782601108154094500",
+              "amount": "-245.904173661360347322720700",
               "code": "EUR"
             }
           },
           {
             "close": {
-              "amount": "-241.04582278260110815409450",
+              "amount": "-245.90417366136034732272070",
               "code": "EUR"
             },
             "date": "2091-01-23",
             "high": {
-              "amount": "-241.045822782601108154094500",
+              "amount": "-245.904173661360347322720700",
               "code": "EUR"
             },
             "low": {
-              "amount": "-241.045822782601108154094500",
+              "amount": "-245.904173661360347322720700",
               "code": "EUR"
             },
             "open": {
-              "amount": "-241.045822782601108154094500",
+              "amount": "-245.904173661360347322720700",
               "code": "EUR"
             }
           },
           {
             "close": {
-              "amount": "-241.04582278260110815409450",
+              "amount": "-245.90417366136034732272070",
               "code": "EUR"
             },
             "date": "2091-01-24",
             "high": {
-              "amount": "-241.045822782601108154094500",
+              "amount": "-245.904173661360347322720700",
               "code": "EUR"
             },
             "low": {
-              "amount": "-241.045822782601108154094500",
+              "amount": "-245.904173661360347322720700",
               "code": "EUR"
             },
             "open": {
-              "amount": "-241.045822782601108154094500",
+              "amount": "-245.904173661360347322720700",
               "code": "EUR"
             }
           },
           {
             "close": {
-              "amount": "-241.04582278260110815409450",
+              "amount": "-245.90417366136034732272070",
               "code": "EUR"
             },
             "date": "2091-01-25",
             "high": {
-              "amount": "-241.045822782601108154094500",
+              "amount": "-245.904173661360347322720700",
               "code": "EUR"
             },
             "low": {
-              "amount": "-241.045822782601108154094500",
+              "amount": "-245.904173661360347322720700",
               "code": "EUR"
             },
             "open": {
-              "amount": "-241.045822782601108154094500",
+              "amount": "-245.904173661360347322720700",
               "code": "EUR"
             }
           }
         ]
       },
       "positions_contribution": {
-        "gross_gains": "74.7961772173988918459055015",
+        "gross_gains": "83.4258263386396526772793053",
         "gross_losses": "0",
         "other_effects": [
           {
@@ -9280,7 +9403,7 @@
             "broker_name": null,
             "category": "Other",
             "description": "Other / reconciliation residual",
-            "period_pnl": "-446.912000000000000000000002"
+            "period_pnl": "-446.912000000000000000000005"
           }
         ],
         "positions": [
@@ -9292,15 +9415,19 @@
             "asset_type": "STOCK",
             "broker_id": "A",
             "broker_name": "A",
-            "end_value": "524.280000000000",
+            "end_value": "524.28000000",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-02",
             "period_fees_taxes": "2.50000000",
+            "period_fees_taxes_percent": null,
             "period_income": "11.34000000",
-            "period_pnl": "66.272000000000",
+            "period_income_percent": null,
+            "period_pnl": "79.76000000",
             "period_pnl_percent": null,
             "period_realized_gain_loss": "26.97600000",
-            "period_unrealized_delta": "30.456000000000",
+            "period_realized_gain_loss_percent": null,
+            "period_unrealized_delta": "43.94400000",
+            "period_unrealized_delta_percent": null,
             "start_value": "0"
           },
           {
@@ -9311,15 +9438,19 @@
             "asset_type": "ETF",
             "broker_id": "A",
             "broker_name": "A",
-            "end_value": "996.1781772173988918459055015",
+            "end_value": "991.3198263386396526772793053",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-02",
             "period_fees_taxes": null,
+            "period_fees_taxes_percent": null,
             "period_income": null,
-            "period_pnl": "8.5241772173988918459055015",
+            "period_income_percent": null,
+            "period_pnl": "3.6658263386396526772793053",
             "period_pnl_percent": null,
             "period_realized_gain_loss": null,
-            "period_unrealized_delta": "8.5241772173988918459055015",
+            "period_realized_gain_loss_percent": null,
+            "period_unrealized_delta": "3.6658263386396526772793053",
+            "period_unrealized_delta_percent": null,
             "start_value": "0"
           },
           {
@@ -9330,15 +9461,19 @@
             "asset_type": "HOLD",
             "broker_id": "B",
             "broker_name": "B",
-            "end_value": null,
+            "end_value": "250.2500000",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-02",
             "period_fees_taxes": null,
+            "period_fees_taxes_percent": null,
             "period_income": null,
-            "period_pnl": null,
+            "period_income_percent": null,
+            "period_pnl": "0",
             "period_pnl_percent": null,
             "period_realized_gain_loss": null,
-            "period_unrealized_delta": null,
+            "period_realized_gain_loss_percent": null,
+            "period_unrealized_delta": "0",
+            "period_unrealized_delta_percent": null,
             "start_value": "0"
           },
           {
@@ -9349,15 +9484,19 @@
             "asset_type": "STOCK",
             "broker_id": "B",
             "broker_name": "B",
-            "end_value": null,
+            "end_value": "131.07000000",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-16",
             "period_fees_taxes": null,
+            "period_fees_taxes_percent": null,
             "period_income": null,
+            "period_income_percent": null,
             "period_pnl": null,
             "period_pnl_percent": null,
             "period_realized_gain_loss": null,
+            "period_realized_gain_loss_percent": null,
             "period_unrealized_delta": null,
+            "period_unrealized_delta_percent": null,
             "start_value": "0"
           }
         ],
@@ -9379,7 +9518,7 @@
       "summary": {
         "allocation_by_geography": [
           {
-            "amount": "1901.778177217398891845905502",
+            "amount": "1896.919826338639652677279305",
             "emoji": null,
             "name": "Unknown",
             "value": "100.00"
@@ -9388,15 +9527,15 @@
         "allocation_by_sector": [
           {
             "amount": "11557.176000000",
-            "emoji": "\ud83d\udcb5",
+            "emoji": "\ud83d\udcb0",
             "name": "Liquidity",
-            "value": "85.87"
+            "value": "85.90"
           },
           {
-            "amount": "1901.778177217398891845905502",
+            "amount": "1896.919826338639652677279305",
             "emoji": "\u2753",
             "name": "Unknown",
-            "value": "14.13"
+            "value": "14.10"
           }
         ],
         "allocation_by_type": [
@@ -9404,13 +9543,13 @@
             "amount": "11557.176000000",
             "emoji": null,
             "name": "Liquidity",
-            "value": "85.87"
+            "value": "85.90"
           },
           {
-            "amount": "996.1781772173988918459055016",
+            "amount": "991.3198263386396526772793053",
             "emoji": null,
             "name": "ETF",
-            "value": "7.40"
+            "value": "7.37"
           },
           {
             "amount": "655.35000000",
@@ -9430,7 +9569,7 @@
           "code": "EUR"
         },
         "broker_nav_value": {
-          "amount": "13458.95417721739889184590550",
+          "amount": "13454.09582633863965267727930",
           "code": "EUR"
         },
         "by_broker": [
@@ -9545,16 +9684,88 @@
                 "count": 1
               },
               "severity": "warning"
+            },
+            {
+              "affected_asset_ids": [],
+              "affected_asset_names": [],
+              "affected_fx_pairs": [],
+              "code": "TRANSFER_SHARE_MISMATCH",
+              "count": 2,
+              "cta_action": null,
+              "cta_target": null,
+              "domain": "portfolio",
+              "group_key": "transfer_share_mismatch",
+              "message_i18n_key": "dataQuality.transferShareMismatch",
+              "message_params": {
+                "count": 2
+              },
+              "severity": "info"
             }
           ],
           "missing_fx_pairs": [],
           "missing_price_assets": [],
-          "share_mismatch_warnings": [],
+          "share_mismatch_warnings": [
+            "Linked internal pair (tx:ct_out_A, tx:ct_in_B): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-12",
+            "Linked internal pair (tx:tr_out_A_EQ, tx:tr_in_B_EQ): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-16"
+          ],
           "stale_prices": [],
           "unresolved_fx_pairs": [],
           "unusable_assets": [],
           "warnings": []
         },
+        "holding_groups": [
+          {
+            "asset_type": null,
+            "broker_id": "A",
+            "gain_loss": {
+              "amount": "34.1218263386396526772793053",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0.02303228690445599102874244862"
+          },
+          {
+            "asset_type": "ETF",
+            "broker_id": "A",
+            "gain_loss": {
+              "amount": "3.6658263386396526772793053",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0.003711650374159019937426776280"
+          },
+          {
+            "asset_type": "STOCK",
+            "broker_id": "A",
+            "gain_loss": {
+              "amount": "30.45600000",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0.06167379471228615863141524106"
+          },
+          {
+            "asset_type": null,
+            "broker_id": "B",
+            "gain_loss": {
+              "amount": "0E-7",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0"
+          },
+          {
+            "asset_type": "HOLD",
+            "broker_id": "B",
+            "gain_loss": {
+              "amount": "0E-7",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0"
+          },
+          {
+            "asset_type": "STOCK",
+            "broker_id": "B",
+            "gain_loss": null,
+            "gain_loss_percent": null
+          }
+        ],
         "holdings": [
           {
             "allocation_percent": "27.64",
@@ -9747,20 +9958,20 @@
         "in_transit_book_value": null,
         "in_transit_market_value": null,
         "market_value": {
-          "amount": "1901.778177217398891845905502",
+          "amount": "1896.919826338639652677279305",
           "code": "EUR"
         },
         "missing_fx_pairs": [],
         "missing_price_assets": [],
-        "mwrr_annualized_percent": "-0.235095",
-        "mwrr_cumulative_percent": "-0.017468",
+        "mwrr_annualized_percent": "-0.239253",
+        "mwrr_cumulative_percent": "-0.017820",
         "mwrr_period_days": 24,
         "net_deposited_capital": {
           "amount": "13700.00000000",
           "code": "EUR"
         },
         "net_worth": {
-          "amount": "13458.95417721739889184590550",
+          "amount": "13454.09582633863965267727930",
           "code": "EUR"
         },
         "open_cost_basis": {
@@ -9796,11 +10007,11 @@
           "code": "EUR"
         },
         "period_other_result": {
-          "amount": "-446.912000000000000000000002",
+          "amount": "-446.912000000000000000000005",
           "code": "EUR"
         },
         "period_pnl": {
-          "amount": "-241.04582278260110815409450",
+          "amount": "-245.90417366136034732272070",
           "code": "EUR"
         },
         "period_realized_gain_loss": {
@@ -9824,7 +10035,7 @@
             "asset_currency": "IDR",
             "kind": "asset",
             "period_delta": {
-              "amount": "5.0913818768814624143798264",
+              "amount": "5.0665512590448625180897250",
               "code": "EUR"
             }
           },
@@ -9832,33 +10043,40 @@
             "asset_currency": "IDR",
             "kind": "fx",
             "period_delta": {
-              "amount": "3.4327953405174294315256752",
+              "amount": "-1.4007249204052098408104197",
               "code": "EUR"
             }
           }
         ],
         "period_unrealized_gain_loss_delta": {
-          "amount": "170.050177217398891845905502",
+          "amount": "165.191826338639652677279305",
           "code": "EUR"
         },
         "period_unrealized_gain_loss_end": {
-          "amount": "170.050177217398891845905502",
+          "amount": "165.191826338639652677279305",
           "code": "EUR"
         },
         "period_unrealized_gain_loss_start": {
           "amount": "0",
           "code": "EUR"
         },
-        "simple_roi_percent": "-0.017595",
+        "pnl_change_1d": {
+          "amount": "0E-23",
+          "code": "EUR"
+        },
+        "pnl_change_1d_vs_nav_percent": "0",
+        "pnl_change_1d_vs_total_pnl_percent": "0",
+        "simple_roi_percent": "-0.017949",
+        "timing_effect_percent": "0.000153",
         "total_deposited": {
           "amount": "14000.00000000",
           "code": "EUR"
         },
         "total_gain_loss": {
-          "amount": "-241.04582278260110815409450",
+          "amount": "-245.90417366136034732272070",
           "code": "EUR"
         },
-        "total_gain_loss_percent": "-0.01759458560456942395285361314",
+        "total_gain_loss_percent": "-0.01794920975630367498705990511",
         "total_invested": {
           "amount": "13700.00000000",
           "code": "EUR"
@@ -9867,9 +10085,9 @@
           "amount": "300.00000000",
           "code": "EUR"
         },
-        "twrr_percent": "-0.017619",
+        "twrr_percent": "-0.017973",
         "unrealized_gain_loss": {
-          "amount": "170.05017721739889184590550",
+          "amount": "165.19182633863965267727930",
           "code": "EUR"
         }
       }
@@ -9877,7 +10095,7 @@
     "get_summary": {
       "allocation_by_geography": [
         {
-          "amount": "1901.778177217398891845905502",
+          "amount": "1896.919826338639652677279305",
           "emoji": null,
           "name": "Unknown",
           "value": "100.00"
@@ -9886,15 +10104,15 @@
       "allocation_by_sector": [
         {
           "amount": "11557.176000000",
-          "emoji": "\ud83d\udcb5",
+          "emoji": "\ud83d\udcb0",
           "name": "Liquidity",
-          "value": "85.87"
+          "value": "85.90"
         },
         {
-          "amount": "1901.778177217398891845905502",
+          "amount": "1896.919826338639652677279305",
           "emoji": "\u2753",
           "name": "Unknown",
-          "value": "14.13"
+          "value": "14.10"
         }
       ],
       "allocation_by_type": [
@@ -9902,13 +10120,13 @@
           "amount": "11557.176000000",
           "emoji": null,
           "name": "Liquidity",
-          "value": "85.87"
+          "value": "85.90"
         },
         {
-          "amount": "996.1781772173988918459055016",
+          "amount": "991.3198263386396526772793053",
           "emoji": null,
           "name": "ETF",
-          "value": "7.40"
+          "value": "7.37"
         },
         {
           "amount": "655.35000000",
@@ -9928,7 +10146,7 @@
         "code": "EUR"
       },
       "broker_nav_value": {
-        "amount": "13458.95417721739889184590550",
+        "amount": "13454.09582633863965267727930",
         "code": "EUR"
       },
       "by_broker": [
@@ -10043,16 +10261,88 @@
               "count": 1
             },
             "severity": "warning"
+          },
+          {
+            "affected_asset_ids": [],
+            "affected_asset_names": [],
+            "affected_fx_pairs": [],
+            "code": "TRANSFER_SHARE_MISMATCH",
+            "count": 2,
+            "cta_action": null,
+            "cta_target": null,
+            "domain": "portfolio",
+            "group_key": "transfer_share_mismatch",
+            "message_i18n_key": "dataQuality.transferShareMismatch",
+            "message_params": {
+              "count": 2
+            },
+            "severity": "info"
           }
         ],
         "missing_fx_pairs": [],
         "missing_price_assets": [],
-        "share_mismatch_warnings": [],
+        "share_mismatch_warnings": [
+          "Linked internal pair (tx:ct_out_A, tx:ct_in_B): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-12",
+          "Linked internal pair (tx:tr_out_A_EQ, tx:tr_in_B_EQ): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-16"
+        ],
         "stale_prices": [],
         "unresolved_fx_pairs": [],
         "unusable_assets": [],
         "warnings": []
       },
+      "holding_groups": [
+        {
+          "asset_type": null,
+          "broker_id": "A",
+          "gain_loss": {
+            "amount": "34.1218263386396526772793053",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0.02303228690445599102874244862"
+        },
+        {
+          "asset_type": "ETF",
+          "broker_id": "A",
+          "gain_loss": {
+            "amount": "3.6658263386396526772793053",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0.003711650374159019937426776280"
+        },
+        {
+          "asset_type": "STOCK",
+          "broker_id": "A",
+          "gain_loss": {
+            "amount": "30.45600000",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0.06167379471228615863141524106"
+        },
+        {
+          "asset_type": null,
+          "broker_id": "B",
+          "gain_loss": {
+            "amount": "0E-7",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0"
+        },
+        {
+          "asset_type": "HOLD",
+          "broker_id": "B",
+          "gain_loss": {
+            "amount": "0E-7",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0"
+        },
+        {
+          "asset_type": "STOCK",
+          "broker_id": "B",
+          "gain_loss": null,
+          "gain_loss_percent": null
+        }
+      ],
       "holdings": [
         {
           "allocation_percent": "27.64",
@@ -10245,20 +10535,20 @@
       "in_transit_book_value": null,
       "in_transit_market_value": null,
       "market_value": {
-        "amount": "1901.778177217398891845905502",
+        "amount": "1896.919826338639652677279305",
         "code": "EUR"
       },
       "missing_fx_pairs": [],
       "missing_price_assets": [],
-      "mwrr_annualized_percent": "-0.235095",
-      "mwrr_cumulative_percent": "-0.017468",
+      "mwrr_annualized_percent": "-0.239253",
+      "mwrr_cumulative_percent": "-0.017820",
       "mwrr_period_days": 24,
       "net_deposited_capital": {
         "amount": "13700.00000000",
         "code": "EUR"
       },
       "net_worth": {
-        "amount": "13458.95417721739889184590550",
+        "amount": "13454.09582633863965267727930",
         "code": "EUR"
       },
       "open_cost_basis": {
@@ -10294,11 +10584,11 @@
         "code": "EUR"
       },
       "period_other_result": {
-        "amount": "-446.912000000000000000000002",
+        "amount": "-446.912000000000000000000005",
         "code": "EUR"
       },
       "period_pnl": {
-        "amount": "-241.04582278260110815409450",
+        "amount": "-245.90417366136034732272070",
         "code": "EUR"
       },
       "period_realized_gain_loss": {
@@ -10322,7 +10612,7 @@
           "asset_currency": "IDR",
           "kind": "asset",
           "period_delta": {
-            "amount": "5.0913818768814624143798264",
+            "amount": "5.0665512590448625180897250",
             "code": "EUR"
           }
         },
@@ -10330,33 +10620,40 @@
           "asset_currency": "IDR",
           "kind": "fx",
           "period_delta": {
-            "amount": "3.4327953405174294315256752",
+            "amount": "-1.4007249204052098408104197",
             "code": "EUR"
           }
         }
       ],
       "period_unrealized_gain_loss_delta": {
-        "amount": "170.050177217398891845905502",
+        "amount": "165.191826338639652677279305",
         "code": "EUR"
       },
       "period_unrealized_gain_loss_end": {
-        "amount": "170.050177217398891845905502",
+        "amount": "165.191826338639652677279305",
         "code": "EUR"
       },
       "period_unrealized_gain_loss_start": {
         "amount": "0",
         "code": "EUR"
       },
-      "simple_roi_percent": "-0.017595",
+      "pnl_change_1d": {
+        "amount": "0E-23",
+        "code": "EUR"
+      },
+      "pnl_change_1d_vs_nav_percent": "0",
+      "pnl_change_1d_vs_total_pnl_percent": "0",
+      "simple_roi_percent": "-0.017949",
+      "timing_effect_percent": "0.000153",
       "total_deposited": {
         "amount": "14000.00000000",
         "code": "EUR"
       },
       "total_gain_loss": {
-        "amount": "-241.04582278260110815409450",
+        "amount": "-245.90417366136034732272070",
         "code": "EUR"
       },
-      "total_gain_loss_percent": "-0.01759458560456942395285361314",
+      "total_gain_loss_percent": "-0.01794920975630367498705990511",
       "total_invested": {
         "amount": "13700.00000000",
         "code": "EUR"
@@ -10365,9 +10662,9 @@
         "amount": "300.00000000",
         "code": "EUR"
       },
-      "twrr_percent": "-0.017619",
+      "twrr_percent": "-0.017973",
       "unrealized_gain_loss": {
-        "amount": "170.05017721739889184590550",
+        "amount": "165.19182633863965267727930",
         "code": "EUR"
       }
     }
@@ -10551,8 +10848,8 @@
             "Liquidity": "12057.176000000",
             "STOCK": "781.20000000"
           },
-          "cash_from_contributed_capital": "12047.586000000",
-          "cash_from_generated_returns": "9.590000000",
+          "cash_from_contributed_capital": "12020.610000000",
+          "cash_from_generated_returns": "36.566000000",
           "cash_value": "12057.176000000",
           "cumulative_external_cash_flow": "14000.00000000",
           "date": "2091-01-08",
@@ -10580,6 +10877,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "40.46400000",
@@ -10635,8 +10936,8 @@
             "Liquidity": "11757.176000000",
             "STOCK": "781.20000000"
           },
-          "cash_from_contributed_capital": "11747.586000000",
-          "cash_from_generated_returns": "9.590000000",
+          "cash_from_contributed_capital": "11720.610000000",
+          "cash_from_generated_returns": "36.566000000",
           "cash_value": "11757.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-09",
@@ -10664,6 +10965,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "40.46400000",
@@ -10750,6 +11055,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "40.46400000",
@@ -10837,6 +11146,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "40.46400000",
@@ -10892,8 +11205,8 @@
             "Liquidity": "11557.176000000",
             "STOCK": "781.20000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-12",
@@ -10924,6 +11237,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "40.46400000",
@@ -10979,8 +11296,8 @@
             "Liquidity": "11557.176000000",
             "STOCK": "520.80000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-13",
@@ -11011,6 +11328,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "26.97600000",
@@ -11066,8 +11387,8 @@
             "Liquidity": "11557.176000000",
             "STOCK": "520.80000000"
           },
-          "cash_from_contributed_capital": "11556.426000000",
-          "cash_from_generated_returns": "0.750000000",
+          "cash_from_contributed_capital": "11557.176000000",
+          "cash_from_generated_returns": "0E-9",
           "cash_value": "11557.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-14",
@@ -11098,6 +11419,10 @@
             "EQ",
             "MAN"
           ],
+          "transaction_implied_last_quote_dates": {
+            "EQ": "2091-01-03",
+            "MAN": null
+          },
           "unrealized_by_currency": {
             "EUR": {
               "asset": "26.97600000",
@@ -11118,7 +11443,7 @@
       "end_state": {
         "capital_pool": {
           "A": "7607.426000000",
-          "B": "949.75000000",
+          "B": "950.50000000",
           "C": "2999.25"
         },
         "cumulative_cash": "11557.176000000",
@@ -11140,7 +11465,7 @@
         },
         "returns_pool": {
           "A": "0E-8",
-          "B": "0.7500000",
+          "B": "0",
           "C": "0"
         },
         "wac_pool_cost": {
@@ -11595,7 +11920,7 @@
           "amount": "1958.646314322439017345214541",
           "code": "EUR"
         },
-        "mwrr_annualized": "-0.000000",
+        "mwrr_annualized": "0.000000",
         "mwrr_cumulative": "0.000000",
         "nav_value": {
           "amount": "13715.82231432243901734521454",
@@ -11772,11 +12097,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -11793,8 +12118,8 @@
           "amount": "1958.646314322439017345214541",
           "code": "EUR"
         },
-        "mwrr_annualized": "0.000100",
-        "mwrr_cumulative": "0.000001",
+        "mwrr_annualized": "-0.736334",
+        "mwrr_cumulative": "-0.014503",
         "nav_value": {
           "amount": "13515.82231432243901734521454",
           "code": "EUR"
@@ -11832,11 +12157,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -11859,8 +12184,8 @@
           "amount": "1698.246314322439017345214541",
           "code": "EUR"
         },
-        "mwrr_annualized": "0.000200",
-        "mwrr_cumulative": "0.000003",
+        "mwrr_annualized": "-0.656175",
+        "mwrr_cumulative": "-0.014519",
         "nav_value": {
           "amount": "13515.82231432243901734521454",
           "code": "EUR"
@@ -11898,11 +12223,11 @@
           "code": "EUR"
         },
         "cash_from_contributed_capital": {
-          "amount": "11556.426000000",
+          "amount": "11557.176000000",
           "code": "EUR"
         },
         "cash_from_generated_returns": {
-          "amount": "0.750000000",
+          "amount": "0E-9",
           "code": "EUR"
         },
         "cash_value": {
@@ -12090,8 +12415,8 @@
       ]
     },
     "get_positions_contribution": {
-      "gross_gains": "3.2114999438141347373337914",
-      "gross_losses": "3.952200000000",
+      "gross_gains": "0",
+      "gross_losses": "13.48800000",
       "other_effects": [
         {
           "broker_id": null,
@@ -12110,16 +12435,20 @@
           "asset_type": "STOCK",
           "broker_id": "A",
           "broker_name": "A",
-          "end_value": "501.728400000000",
+          "end_value": "520.80000000",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-02",
           "period_fees_taxes": null,
+          "period_fees_taxes_percent": null,
           "period_income": null,
-          "period_pnl": "-3.952200000000",
-          "period_pnl_percent": "-0.0053",
+          "period_income_percent": null,
+          "period_pnl": "-13.48800000",
+          "period_pnl_percent": "-0.0173",
           "period_realized_gain_loss": null,
-          "period_unrealized_delta": "-3.952200000000",
-          "start_value": "752.592600000000"
+          "period_realized_gain_loss_percent": null,
+          "period_unrealized_delta": "-13.48800000",
+          "period_unrealized_delta_percent": "-0.0173",
+          "start_value": "781.20000000"
         },
         {
           "annualized_return": null,
@@ -12129,16 +12458,20 @@
           "asset_type": "ETF",
           "broker_id": "A",
           "broker_name": "A",
-          "end_value": "930.4078142662531520825483319",
+          "end_value": "927.1963143224390173452145406",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-02",
           "period_fees_taxes": null,
+          "period_fees_taxes_percent": null,
           "period_income": null,
-          "period_pnl": "3.2114999438141347373337914",
-          "period_pnl_percent": "0.0035",
+          "period_income_percent": null,
+          "period_pnl": "0E-25",
+          "period_pnl_percent": "0.0000",
           "period_realized_gain_loss": null,
-          "period_unrealized_delta": "3.2114999438141347373337914",
-          "start_value": "927.1963143224390173452145405"
+          "period_realized_gain_loss_percent": null,
+          "period_unrealized_delta": "0E-25",
+          "period_unrealized_delta_percent": "0.0000",
+          "start_value": "927.1963143224390173452145406"
         },
         {
           "annualized_return": null,
@@ -12148,16 +12481,20 @@
           "asset_type": "HOLD",
           "broker_id": "B",
           "broker_name": "B",
-          "end_value": null,
+          "end_value": "250.2500000",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-02",
           "period_fees_taxes": null,
+          "period_fees_taxes_percent": null,
           "period_income": null,
-          "period_pnl": null,
-          "period_pnl_percent": null,
+          "period_income_percent": null,
+          "period_pnl": "0",
+          "period_pnl_percent": "0.0000",
           "period_realized_gain_loss": null,
-          "period_unrealized_delta": null,
-          "start_value": null
+          "period_realized_gain_loss_percent": null,
+          "period_unrealized_delta": "0",
+          "period_unrealized_delta_percent": "0.0000",
+          "start_value": "250.2500000"
         }
       ],
       "unallocated": []
@@ -12775,11 +13112,29 @@
               "count": 1
             },
             "severity": "warning"
+          },
+          {
+            "affected_asset_ids": [],
+            "affected_asset_names": [],
+            "affected_fx_pairs": [],
+            "code": "TRANSFER_SHARE_MISMATCH",
+            "count": 1,
+            "cta_action": null,
+            "cta_target": null,
+            "domain": "portfolio",
+            "group_key": "transfer_share_mismatch",
+            "message_i18n_key": "dataQuality.transferShareMismatch",
+            "message_params": {
+              "count": 1
+            },
+            "severity": "info"
           }
         ],
         "missing_fx_pairs": [],
         "missing_price_assets": [],
-        "share_mismatch_warnings": [],
+        "share_mismatch_warnings": [
+          "Linked internal pair (tx:ct_out_A, tx:ct_in_B): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-12"
+        ],
         "stale_prices": [
           {
             "asset_id": "IDX",
@@ -12896,7 +13251,7 @@
             "amount": "1958.646314322439017345214541",
             "code": "EUR"
           },
-          "mwrr_annualized": "-0.000000",
+          "mwrr_annualized": "0.000000",
           "mwrr_cumulative": "0.000000",
           "nav_value": {
             "amount": "13715.82231432243901734521454",
@@ -13073,11 +13428,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -13094,8 +13449,8 @@
             "amount": "1958.646314322439017345214541",
             "code": "EUR"
           },
-          "mwrr_annualized": "0.000100",
-          "mwrr_cumulative": "0.000001",
+          "mwrr_annualized": "-0.736334",
+          "mwrr_cumulative": "-0.014503",
           "nav_value": {
             "amount": "13515.82231432243901734521454",
             "code": "EUR"
@@ -13133,11 +13488,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -13160,8 +13515,8 @@
             "amount": "1698.246314322439017345214541",
             "code": "EUR"
           },
-          "mwrr_annualized": "0.000200",
-          "mwrr_cumulative": "0.000003",
+          "mwrr_annualized": "-0.656175",
+          "mwrr_cumulative": "-0.014519",
           "nav_value": {
             "amount": "13515.82231432243901734521454",
             "code": "EUR"
@@ -13199,11 +13554,11 @@
             "code": "EUR"
           },
           "cash_from_contributed_capital": {
-            "amount": "11556.426000000",
+            "amount": "11557.176000000",
             "code": "EUR"
           },
           "cash_from_generated_returns": {
-            "amount": "0.750000000",
+            "amount": "0E-9",
             "code": "EUR"
           },
           "cash_value": {
@@ -13416,8 +13771,8 @@
         ]
       },
       "positions_contribution": {
-        "gross_gains": "3.2114999438141347373337914",
-        "gross_losses": "3.952200000000",
+        "gross_gains": "0",
+        "gross_losses": "13.48800000",
         "other_effects": [
           {
             "broker_id": null,
@@ -13436,16 +13791,20 @@
             "asset_type": "STOCK",
             "broker_id": "A",
             "broker_name": "A",
-            "end_value": "501.728400000000",
+            "end_value": "520.80000000",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-02",
             "period_fees_taxes": null,
+            "period_fees_taxes_percent": null,
             "period_income": null,
-            "period_pnl": "-3.952200000000",
-            "period_pnl_percent": "-0.0053",
+            "period_income_percent": null,
+            "period_pnl": "-13.48800000",
+            "period_pnl_percent": "-0.0173",
             "period_realized_gain_loss": null,
-            "period_unrealized_delta": "-3.952200000000",
-            "start_value": "752.592600000000"
+            "period_realized_gain_loss_percent": null,
+            "period_unrealized_delta": "-13.48800000",
+            "period_unrealized_delta_percent": "-0.0173",
+            "start_value": "781.20000000"
           },
           {
             "annualized_return": null,
@@ -13455,16 +13814,20 @@
             "asset_type": "ETF",
             "broker_id": "A",
             "broker_name": "A",
-            "end_value": "930.4078142662531520825483319",
+            "end_value": "927.1963143224390173452145406",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-02",
             "period_fees_taxes": null,
+            "period_fees_taxes_percent": null,
             "period_income": null,
-            "period_pnl": "3.2114999438141347373337914",
-            "period_pnl_percent": "0.0035",
+            "period_income_percent": null,
+            "period_pnl": "0E-25",
+            "period_pnl_percent": "0.0000",
             "period_realized_gain_loss": null,
-            "period_unrealized_delta": "3.2114999438141347373337914",
-            "start_value": "927.1963143224390173452145405"
+            "period_realized_gain_loss_percent": null,
+            "period_unrealized_delta": "0E-25",
+            "period_unrealized_delta_percent": "0.0000",
+            "start_value": "927.1963143224390173452145406"
           },
           {
             "annualized_return": null,
@@ -13474,16 +13837,20 @@
             "asset_type": "HOLD",
             "broker_id": "B",
             "broker_name": "B",
-            "end_value": null,
+            "end_value": "250.2500000",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-02",
             "period_fees_taxes": null,
+            "period_fees_taxes_percent": null,
             "period_income": null,
-            "period_pnl": null,
-            "period_pnl_percent": null,
+            "period_income_percent": null,
+            "period_pnl": "0",
+            "period_pnl_percent": "0.0000",
             "period_realized_gain_loss": null,
-            "period_unrealized_delta": null,
-            "start_value": null
+            "period_realized_gain_loss_percent": null,
+            "period_unrealized_delta": "0",
+            "period_unrealized_delta_percent": "0.0000",
+            "start_value": "250.2500000"
           }
         ],
         "unallocated": []
@@ -13500,7 +13867,7 @@
         "allocation_by_sector": [
           {
             "amount": "11557.176000000",
-            "emoji": "\ud83d\udcb5",
+            "emoji": "\ud83d\udcb0",
             "name": "Liquidity",
             "value": "87.19"
           },
@@ -13657,11 +14024,29 @@
                 "count": 1
               },
               "severity": "warning"
+            },
+            {
+              "affected_asset_ids": [],
+              "affected_asset_names": [],
+              "affected_fx_pairs": [],
+              "code": "TRANSFER_SHARE_MISMATCH",
+              "count": 1,
+              "cta_action": null,
+              "cta_target": null,
+              "domain": "portfolio",
+              "group_key": "transfer_share_mismatch",
+              "message_i18n_key": "dataQuality.transferShareMismatch",
+              "message_params": {
+                "count": 1
+              },
+              "severity": "info"
             }
           ],
           "missing_fx_pairs": [],
           "missing_price_assets": [],
-          "share_mismatch_warnings": [],
+          "share_mismatch_warnings": [
+            "Linked internal pair (tx:ct_out_A, tx:ct_in_B): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-12"
+          ],
           "stale_prices": [
             {
               "asset_id": "IDX",
@@ -13674,6 +14059,53 @@
           "unusable_assets": [],
           "warnings": []
         },
+        "holding_groups": [
+          {
+            "asset_type": null,
+            "broker_id": "A",
+            "gain_loss": {
+              "amount": "-33.4816856775609826547854594",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "-0.02260019094280237887757054739"
+          },
+          {
+            "asset_type": "ETF",
+            "broker_id": "A",
+            "gain_loss": {
+              "amount": "-60.4576856775609826547854594",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "-0.06121342664289415387857028818"
+          },
+          {
+            "asset_type": "STOCK",
+            "broker_id": "A",
+            "gain_loss": {
+              "amount": "26.97600000",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0.05462674961119751166407465008"
+          },
+          {
+            "asset_type": null,
+            "broker_id": "B",
+            "gain_loss": {
+              "amount": "0E-7",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0"
+          },
+          {
+            "asset_type": "HOLD",
+            "broker_id": "B",
+            "gain_loss": {
+              "amount": "0E-7",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0"
+          }
+        ],
         "holdings": [
           {
             "allocation_percent": "30.67",
@@ -13919,7 +14351,14 @@
           "amount": "-19.993685677560982654785459",
           "code": "EUR"
         },
+        "pnl_change_1d": {
+          "amount": "0E-23",
+          "code": "EUR"
+        },
+        "pnl_change_1d_vs_nav_percent": "0",
+        "pnl_change_1d_vs_total_pnl_percent": "0",
         "simple_roi_percent": "-0.014582",
+        "timing_effect_percent": "0.000053",
         "total_deposited": null,
         "total_gain_loss": {
           "amount": "-184.17768567756098265478546",
@@ -13953,7 +14392,7 @@
       "allocation_by_sector": [
         {
           "amount": "11557.176000000",
-          "emoji": "\ud83d\udcb5",
+          "emoji": "\ud83d\udcb0",
           "name": "Liquidity",
           "value": "87.19"
         },
@@ -14110,11 +14549,29 @@
               "count": 1
             },
             "severity": "warning"
+          },
+          {
+            "affected_asset_ids": [],
+            "affected_asset_names": [],
+            "affected_fx_pairs": [],
+            "code": "TRANSFER_SHARE_MISMATCH",
+            "count": 1,
+            "cta_action": null,
+            "cta_target": null,
+            "domain": "portfolio",
+            "group_key": "transfer_share_mismatch",
+            "message_i18n_key": "dataQuality.transferShareMismatch",
+            "message_params": {
+              "count": 1
+            },
+            "severity": "info"
           }
         ],
         "missing_fx_pairs": [],
         "missing_price_assets": [],
-        "share_mismatch_warnings": [],
+        "share_mismatch_warnings": [
+          "Linked internal pair (tx:ct_out_A, tx:ct_in_B): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-12"
+        ],
         "stale_prices": [
           {
             "asset_id": "IDX",
@@ -14127,6 +14584,53 @@
         "unusable_assets": [],
         "warnings": []
       },
+      "holding_groups": [
+        {
+          "asset_type": null,
+          "broker_id": "A",
+          "gain_loss": {
+            "amount": "-33.4816856775609826547854594",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "-0.02260019094280237887757054739"
+        },
+        {
+          "asset_type": "ETF",
+          "broker_id": "A",
+          "gain_loss": {
+            "amount": "-60.4576856775609826547854594",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "-0.06121342664289415387857028818"
+        },
+        {
+          "asset_type": "STOCK",
+          "broker_id": "A",
+          "gain_loss": {
+            "amount": "26.97600000",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0.05462674961119751166407465008"
+        },
+        {
+          "asset_type": null,
+          "broker_id": "B",
+          "gain_loss": {
+            "amount": "0E-7",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0"
+        },
+        {
+          "asset_type": "HOLD",
+          "broker_id": "B",
+          "gain_loss": {
+            "amount": "0E-7",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0"
+        }
+      ],
       "holdings": [
         {
           "allocation_percent": "30.67",
@@ -14372,7 +14876,14 @@
         "amount": "-19.993685677560982654785459",
         "code": "EUR"
       },
+      "pnl_change_1d": {
+        "amount": "0E-23",
+        "code": "EUR"
+      },
+      "pnl_change_1d_vs_nav_percent": "0",
+      "pnl_change_1d_vs_total_pnl_percent": "0",
       "simple_roi_percent": "-0.014582",
+      "timing_effect_percent": "0.000053",
       "total_deposited": null,
       "total_gain_loss": {
         "amount": "-184.17768567756098265478546",

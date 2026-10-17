@@ -442,11 +442,11 @@
     };
 </script>
 
-<div>
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('chartSettings.overlaySignals')}</h3>
+<div class="text-lf-primary">
+    <h3 class="text-sm font-semibold text-lf-secondary mb-2">{$t('chartSettings.overlaySignals')}</h3>
 
     {#if backendError}
-        <div class="mb-3 flex items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-200" data-testid="signal-backend-error">
+        <div class="mb-3 flex items-center justify-between gap-2 rounded-lg border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-xs text-lf-warning-on-soft" data-testid="signal-backend-error">
             <span class="flex items-center gap-1.5">
                 <AlertTriangle size={13} />
                 {backendError}
@@ -464,7 +464,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {#if indicatorGroups.length > 0}
                 <div>
-                    <span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">📊 {$t('chartSettings.categories.indicator')}</span>
+                    <span class="block text-[10px] font-semibold text-lf-muted uppercase mb-1">📊 {$t('chartSettings.categories.indicator')}</span>
                     <SignalTreeSelect
                         bind:value={indicatorSelect}
                         groups={indicatorGroups}
@@ -479,7 +479,7 @@
             {/if}
             {#if comparisonGroups.length > 0}
                 <div>
-                    <span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">💱 {$t('chartSettings.categories.comparison')}</span>
+                    <span class="block text-[10px] font-semibold text-lf-muted uppercase mb-1">💱 {$t('chartSettings.categories.comparison')}</span>
                     <SignalTreeSelect
                         bind:value={comparisonSelect}
                         groups={comparisonGroups}
@@ -495,7 +495,7 @@
             {/if}
             {#if benchmarkGroups.length > 0}
                 <div>
-                    <span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">📐 {$t('chartSettings.categories.benchmark')}</span>
+                    <span class="block text-[10px] font-semibold text-lf-muted uppercase mb-1">📐 {$t('chartSettings.categories.benchmark')}</span>
                     <SignalTreeSelect
                         bind:value={benchmarkSelect}
                         groups={benchmarkGroups}
@@ -513,7 +513,7 @@
     </div>
 
     {#if visibleSignals.length === 0}
-        <p class="text-xs text-gray-400 dark:text-gray-500 italic mb-3">
+        <p class="text-xs text-lf-muted italic mb-3">
             {$t('chartSettings.noSignals')}
         </p>
     {:else}
@@ -532,25 +532,25 @@
                         <div class="flex items-center justify-between gap-1">
                             <div class="flex items-center gap-1.5 min-w-0">
                                 <span class="text-sm flex-shrink-0">{typeInfo?.icon ?? '❓'}</span>
-                                <span class="text-xs font-medium text-gray-600 dark:text-gray-300 flex-shrink-0">{signalName}</span>
+                                <span class="text-xs font-medium text-lf-secondary flex-shrink-0">{signalName}</span>
                                 {#if signalFullName}
-                                    <span class="text-[10px] text-gray-400 dark:text-gray-500 truncate">{signalFullName}</span>
+                                    <span class="text-[10px] text-lf-muted truncate">{signalFullName}</span>
                                 {/if}
                                 {#if typeInfo?.docsPath}
                                     <DocsLink path={typeInfo.docsPath} label={signalDescText || signalName} math />
                                 {/if}
                                 {#if signalsLoading}
-                                    <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center text-gray-400 sm:my-0 sm:h-4 sm:w-4" data-testid="signal-loading">
+                                    <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center text-lf-muted sm:my-0 sm:h-4 sm:w-4" data-testid="signal-loading">
                                         <Loader2 size={14} class="animate-spin" />
                                     </span>
                                 {:else if issue}
                                     <Tooltip text={issue.message} position="top" maxWidth="min(34rem, calc(100vw - 16px))">
                                         {#if issue.severity === 'notice'}
-                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center text-gray-400 sm:my-0 sm:h-4 sm:w-4" data-testid="signal-issue" data-severity="notice" data-problem-code={issue.code}>
+                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center text-lf-muted sm:my-0 sm:h-4 sm:w-4" data-testid="signal-issue" data-severity="notice" data-problem-code={issue.code}>
                                                 <Info size={14} class="cursor-help" />
                                             </span>
                                         {:else}
-                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center sm:my-0 sm:h-4 sm:w-4 {issue.severity === 'error' ? 'text-red-500' : 'text-amber-500'}" data-testid="signal-issue" data-severity={issue.severity} data-problem-code={issue.code}>
+                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center sm:my-0 sm:h-4 sm:w-4 {issue.severity === 'error' ? 'text-lf-danger' : 'text-lf-warning'}" data-testid="signal-issue" data-severity={issue.severity} data-problem-code={issue.code}>
                                                 <AlertTriangle size={14} class="cursor-help" />
                                             </span>
                                         {/if}
@@ -561,7 +561,7 @@
                                 <!-- Summary badges (inline in title) -->
                                 {#if summary && summary.pointCount > 0}
                                     <Tooltip text={$t('chartSettings.badgePoints', {values: {n: summary.pointCount}})} position="top">
-                                        <span class="text-[10px] text-gray-400 dark:text-gray-500 px-1 py-0.5 bg-gray-100 dark:bg-slate-700 rounded cursor-help">
+                                        <span class="text-[10px] text-lf-muted px-1 py-0.5 bg-lf-panel rounded cursor-help">
                                             📈{summary.pointCount}
                                         </span>
                                     </Tooltip>
@@ -569,13 +569,13 @@
                                 {#if summary}
                                     {#each Object.entries(summary.eventCounts) as [evType, count]}
                                         <Tooltip text={$t(`chartSettings.${EVENT_BADGE_KEY[evType] ?? 'badgePoints'}`, {values: {n: count}})} position="top">
-                                            <span class="text-[10px] text-gray-400 dark:text-gray-500 px-1 py-0.5 bg-gray-100 dark:bg-slate-700 rounded cursor-help">
+                                            <span class="text-[10px] text-lf-muted px-1 py-0.5 bg-lf-panel rounded cursor-help">
                                                 {EVENT_EMOJI[evType] ?? '📊'}{count}
                                             </span>
                                         </Tooltip>
                                     {/each}
                                 {/if}
-                                <button type="button" data-testid={`signal-remove-${signal.id}`} class="p-1 rounded text-gray-400 hover:text-red-500 transition-colors" title={$t('chartSettings.removeSignal')} onclick={() => removeSignal(signal.id)}>
+                                <button type="button" data-testid={`signal-remove-${signal.id}`} class="p-1 rounded text-lf-muted hover:text-lf-danger transition-colors" title={$t('chartSettings.removeSignal')} onclick={() => removeSignal(signal.id)}>
                                     <Trash2 size={14} />
                                 </button>
                             </div>
@@ -589,12 +589,12 @@
                                         <SignalParamControl descriptor={desc} value={signal.params[desc.key]} affectsLabel={signalParamAffectsLabel(typeInfo, desc)} onchange={(value) => updateSignalParam(signal.id, desc.key, value)} />
                                     {:else}
                                         <div class="flex items-center gap-1.5" data-testid={`signal-param-${signal.id}-${desc.key}`}>
-                                            <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
+                                            <span class="text-[10px] text-lf-muted uppercase">
                                                 {$t(`chartSettings.params.${desc.key}`) !== `chartSettings.params.${desc.key}` ? $t(`chartSettings.params.${desc.key}`) : desc.label}
                                             </span>
                                             {#if desc.tooltip}
                                                 <Tooltip text={$t(desc.tooltip)} math position="top">
-                                                    <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+                                                    <Info size={12} class="text-lf-muted hover:text-lf-link cursor-help transition-colors" />
                                                 </Tooltip>
                                             {/if}
                                             {#if desc.type === 'number'}
@@ -606,11 +606,11 @@
                                                         min={desc.min}
                                                         max={desc.max}
                                                         step={desc.step}
-                                                        class="w-16 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                                        class="w-16 px-1.5 py-0.5 text-xs border border-lf-input rounded bg-lf-field text-lf-primary hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus"
                                                         oninput={(e) => updateSignalParam(signal.id, desc.key, Number(e.currentTarget.value))}
                                                     />
                                                     {#if desc.suffix}
-                                                        <span class="text-[10px] text-gray-400">{translateOr($t, `signals.units.${desc.suffix}`, desc.suffix)}</span>
+                                                        <span class="text-[10px] text-lf-muted">{translateOr($t, `signals.units.${desc.suffix}`, desc.suffix)}</span>
                                                     {/if}
                                                 </div>
                                             {:else if desc.type === 'select'}
@@ -653,8 +653,8 @@
                                                         </div>
                                                         <button
                                                             type="button"
-                                                            class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors
-                                                            {signal.params._inverted ? 'text-libre-green' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
+                                                            class="p-1 rounded-md transition-colors
+                                                            {signal.params._inverted ? 'text-lf-link' : 'text-lf-muted hover:bg-lf-hover hover:text-lf-secondary'}"
                                                             title={$t('common.swapDirection')}
                                                             onclick={() => updateSignalParam(signal.id, '_inverted', !signal.params._inverted)}
                                                         >
@@ -662,18 +662,12 @@
                                                         </button>
                                                         {#if onsyncpair}
                                                             {@const pairSlug = String(signal.params.pairSlug)}
-                                                            <button
-                                                                type="button"
-                                                                class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-blue-500 transition-colors"
-                                                                title={$t('common.sync')}
-                                                                disabled={syncingPairs.has(pairSlug)}
-                                                                onclick={() => handleSyncPairWithSpin(pairSlug)}
-                                                            >
+                                                            <button type="button" class="p-1 rounded-md hover:bg-lf-hover text-lf-muted hover:text-lf-primary transition-colors" title={$t('common.sync')} disabled={syncingPairs.has(pairSlug)} onclick={() => handleSyncPairWithSpin(pairSlug)}>
                                                                 <RotateCw size={12} class={syncingPairs.has(pairSlug) ? 'animate-spin' : ''} />
                                                             </button>
                                                         {/if}
                                                         {#if ondetailpair}
-                                                            <button type="button" class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors" title={$t('common.detail')} onclick={() => ondetailpair?.(String(signal.params.pairSlug))}>
+                                                            <button type="button" class="p-1 rounded-md hover:bg-lf-hover text-lf-muted hover:text-lf-primary transition-colors" title={$t('common.detail')} onclick={() => ondetailpair?.(String(signal.params.pairSlug))}>
                                                                 <ExternalLink size={12} />
                                                             </button>
                                                         {/if}
@@ -707,7 +701,7 @@
                                                                         {:else if info?.asset_type}
                                                                             <img src={getAssetTypeIconUrl(info.asset_type)} alt="" class="w-4 h-4 object-contain shrink-0" />
                                                                         {:else}
-                                                                            <BarChart3 size={14} class="text-gray-400 shrink-0" />
+                                                                            <BarChart3 size={14} class="text-lf-secondary shrink-0" />
                                                                         {/if}
                                                                         <span class="text-xs">{option.label}</span>
                                                                     </span>
@@ -720,7 +714,7 @@
                                                                         {:else if info?.asset_type}
                                                                             <img src={getAssetTypeIconUrl(info.asset_type)} alt="" class="w-4 h-4 object-contain shrink-0" />
                                                                         {:else}
-                                                                            <BarChart3 size={14} class="text-gray-400 shrink-0" />
+                                                                            <BarChart3 size={14} class="text-lf-muted shrink-0" />
                                                                         {/if}
                                                                         <span class="text-xs">{option.label}</span>
                                                                     </span>
@@ -731,7 +725,7 @@
                                                             {@const aid = Number(assetIdStr)}
                                                             <button
                                                                 type="button"
-                                                                class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-blue-500 transition-colors"
+                                                                class="p-1 rounded-md hover:bg-lf-hover text-lf-muted hover:text-lf-primary transition-colors"
                                                                 data-testid={`signal-sync-asset-${signal.id}`}
                                                                 title={$t('common.sync')}
                                                                 disabled={syncingAssetIds.has(aid)}
@@ -741,14 +735,14 @@
                                                             </button>
                                                         {/if}
                                                         {#if ondetailasset && assetIdStr}
-                                                            <button type="button" class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors" title={$t('common.detail')} onclick={() => ondetailasset?.(Number(assetIdStr))}>
+                                                            <button type="button" class="p-1 rounded-md hover:bg-lf-hover text-lf-muted hover:text-lf-primary transition-colors" title={$t('common.detail')} onclick={() => ondetailasset?.(Number(assetIdStr))}>
                                                                 <ExternalLink size={12} />
                                                             </button>
                                                         {/if}
                                                         {#if assetIdStr}
                                                             {@const currencyInfo = findAssetInfo(assetIdStr)}
                                                             {#if currencyInfo?.currency}
-                                                                <span class="text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 rounded font-mono">
+                                                                <span class="text-[10px] px-1.5 py-0.5 bg-lf-panel text-lf-muted rounded font-mono">
                                                                     {getCurrencyInfo(currencyInfo.currency).flag_emoji}
                                                                     {currencyInfo.currency}
                                                                 </span>
@@ -764,7 +758,7 @@
                                                                                 type="button"
                                                                                 data-testid={`signal-fx-create-${signal.id}`}
                                                                                 aria-label={`${$t('common.create')}: ${$t('assetDetail.fxPairMissing', {values: {base: fxBase, quote: fxQuote}})}`}
-                                                                                class="p-0.5 rounded text-amber-500 hover:text-amber-600 transition-colors"
+                                                                                class="p-0.5 rounded text-lf-warning hover:text-lf-warning-hover transition-colors"
                                                                                 onclick={() => oncreatefxpair?.(fxSlug)}
                                                                             >
                                                                                 <AlertTriangle size={12} />
@@ -776,14 +770,14 @@
                                                                                 type="button"
                                                                                 data-testid={`signal-fx-sync-${signal.id}`}
                                                                                 aria-label={`${$t('common.sync')}: ${fxSlug.replace('-', '/')}`}
-                                                                                class="p-0.5 rounded text-amber-500 hover:text-amber-600 transition-colors"
+                                                                                class="p-0.5 rounded text-lf-warning hover:text-lf-warning-hover transition-colors"
                                                                                 onclick={() => onsyncfxpair?.(fxSlug)}
                                                                             >
                                                                                 <RotateCw size={11} />
                                                                             </button>
                                                                         </Tooltip>
                                                                     {:else if fxExists}
-                                                                        <a href="/fx/{fxSlug}" data-testid={`signal-fx-detail-${signal.id}`} class="p-0.5 rounded text-gray-400 hover:text-libre-green transition-colors" title="FX {fxSlug.replace('-', '/')}">
+                                                                        <a href="/fx/{fxSlug}" data-testid={`signal-fx-detail-${signal.id}`} class="p-0.5 rounded text-lf-muted hover:text-lf-link transition-colors" title="FX {fxSlug.replace('-', '/')}">
                                                                             <Coins size={11} />
                                                                         </a>
                                                                     {/if}
@@ -801,7 +795,7 @@
                                                 <input
                                                     type="text"
                                                     value={getParamString(signal, desc.key)}
-                                                    class="w-24 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                                    class="w-24 px-1.5 py-0.5 text-xs border border-lf-input rounded bg-lf-field text-lf-primary hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus"
                                                     oninput={(e) => updateSignalParam(signal.id, desc.key, e.currentTarget.value)}
                                                 />
                                             {/if}
@@ -823,16 +817,16 @@
 
                         <!-- Local signal style strip. Backend components own their individual editors above. -->
                         {#if typeInfo?.source !== 'backend' && signal.signalType !== 'macd'}
-                            <div class="pt-1.5 border-t border-gray-100 dark:border-slate-700" data-testid={`signal-style-${signal.id}`}>
+                            <div class="pt-1.5 border-t border-lf-subtle" data-testid={`signal-style-${signal.id}`}>
                                 <SignalStyleEditor style={signal.style} onstylechange={(key, value) => updateSignalStyle(signal.id, key, value)} hideLineType={typeInfo?.source === 'local' && signal.signalType === 'rsi'} />
                             </div>
                         {/if}
 
                         <!-- MACD: simplified single color+line style (full MACD popover stays in modal for now) -->
                         {#if typeInfo?.source === 'local' && signal.signalType === 'macd'}
-                            <div class="flex items-center gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-700" data-testid={`signal-style-${signal.id}`}>
-                                <input type="color" value={signal.style.color} class="w-6 h-6 p-0 border border-gray-200 dark:border-slate-600 rounded cursor-pointer shrink-0" title={$t('chartSettings.macdLineColor')} oninput={(e) => updateSignalStyle(signal.id, 'color', e.currentTarget.value)} />
-                                <span class="text-[10px] text-gray-400 dark:text-gray-500">MACD</span>
+                            <div class="flex items-center gap-1.5 pt-1.5 border-t border-lf-subtle" data-testid={`signal-style-${signal.id}`}>
+                                <input type="color" value={signal.style.color} class="w-6 h-6 p-0 border border-lf-subtle rounded cursor-pointer shrink-0" title={$t('chartSettings.macdLineColor')} oninput={(e) => updateSignalStyle(signal.id, 'color', e.currentTarget.value)} />
+                                <span class="text-[10px] text-lf-muted">MACD</span>
                                 <SignalStyleEditor style={signal.style} onstylechange={(key, value) => updateSignalStyle(signal.id, key, value)} />
                             </div>
                         {/if}

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
 from backend.app.db.session import get_async_engine
-from backend.app.services import user_service
+from backend.app.services.accounts import user_service
 from backend.test_scripts.test_db_config import verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
@@ -17,7 +17,7 @@ from backend.test_scripts.test_utils import print_section, print_success
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
-SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
+SOLE_ADMIN_DELETE_DETAIL = {"error_code": "LAST_ADMIN", "message": "Cannot delete account: you are the last active administrator"}
 
 
 async def create_test_user(client: httpx.AsyncClient) -> str:
@@ -45,10 +45,7 @@ async def delete_current_test_user(
         f"{API_BASE}/auth/users/me",
         timeout=TIMEOUT,
     )
-    if (
-        response.status_code == 400
-        and response.json().get("detail") == SOLE_ADMIN_DELETE_DETAIL
-    ):
+    if response.status_code == 400 and response.json().get("detail") == SOLE_ADMIN_DELETE_DETAIL:
         is_test_db, _ = verify_test_database()
         assert is_test_db, "Refusing sole-admin cleanup outside the test database"
         async with AsyncSession(get_async_engine()) as session:
@@ -238,11 +235,7 @@ class TestPortfolioWAC:
                     timeout=TIMEOUT,
                 )
                 assert deleted.status_code == 200, deleted.text
-                deleted_row = next(
-                    row
-                    for row in deleted.json()["results"]
-                    if row["asset_id"] == asset_id
-                )
+                deleted_row = next(row for row in deleted.json()["results"] if row["asset_id"] == asset_id)
                 assert deleted_row["success"] is True
                 asset_deleted = True
 
@@ -250,12 +243,7 @@ class TestPortfolioWAC:
                     client,
                     [{"broker_id": broker_id, "asset_id": asset_id}],
                 )
-                missing_asset_result = next(
-                    row
-                    for row in result["results"]
-                    if row["broker_id"] == broker_id
-                    and row["asset_id"] == asset_id
-                )
+                missing_asset_result = next(row for row in result["results"] if row["broker_id"] == broker_id and row["asset_id"] == asset_id)
                 assert missing_asset_result["series"] == []
                 print_success("OK graceful empty")
             finally:
@@ -322,7 +310,7 @@ class TestPortfolioWAC:
 
 
 # ============================================================
-# Retyping the SPLIT event a split ADJUSTMENT links to (workstream I)
+# Retyping the SPLIT event a split ADJUSTMENT links to (workstream I; P-10, workstream J)
 # ============================================================
 #
 # The event editor may change the type of an event a transaction links to; the
@@ -337,9 +325,14 @@ class TestPortfolioWAC:
 #   row; otherwise a negative quantity is a REDUCTION, and a positive one is an
 #   acquisition costing its cost_basis_override, or an unknown cost when there is none.
 #
-# The two tests below pin that consequence down. Before the fix (108a2adf5) both
-# failed at the retype itself: the upsert point had no ``id`` field, so the request
-# was rejected with 422.
+# The unknown cost is the one consequence the developer refused (P-10, decision 27,
+# option A; lot CP-14a): a SPLIT whose linked incoming ADJUSTMENT has no cost cannot
+# be retyped (409 EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST) until the row is given one.
+# A3 pins the refusal and the retype once the cost is there; A4 the reverse split,
+# whose outgoing row never carries a cost and becomes a reduction, still allowed.
+#
+# Before the fix (108a2adf5) both tests failed at the retype itself: the upsert
+# point had no ``id`` field, so the request was rejected with 422.
 
 
 def _created_tx_id(result: dict, index: int = 0) -> int:
@@ -370,14 +363,67 @@ def _assert_point(points: dict[str, dict], day: str, *, effect: str, wac: str, p
     assert Decimal(str(point["pool_qty"])) == Decimal(pool_qty), point
 
 
-async def _retype_event(client: httpx.AsyncClient, asset_id: int, event_id: int, event_date: str, new_type: str, amount: str, currency: str = "EUR") -> None:
-    """Edit event ``event_id`` in place, by id, as the event editor does."""
-    resp = await client.post(
+async def _post_event_edit(client: httpx.AsyncClient, asset_id: int, event_id: int, event_date: str, new_type: str, amount: str, currency: str = "EUR") -> httpx.Response:
+    """Edit event ``event_id`` in place, by id, as the event editor does; the answer as it comes."""
+    return await client.post(
         f"{API_BASE}/assets/events",
         json=[{"asset_id": asset_id, "events": [{"id": event_id, "date": event_date, "type": new_type, "value": {"code": currency, "amount": amount}}]}],
         timeout=TIMEOUT,
     )
+
+
+async def _retype_event(client: httpx.AsyncClient, asset_id: int, event_id: int, event_date: str, new_type: str, amount: str, currency: str = "EUR") -> None:
+    """Edit event ``event_id`` in place, by id, as the event editor does: the edit must be accepted."""
+    resp = await _post_event_edit(client, asset_id, event_id, event_date, new_type, amount, currency)
     assert resp.status_code == 200, f"Retyping event {event_id} failed: {resp.status_code}: {resp.text}"
+
+
+def _decimal(value) -> Decimal | None:
+    return None if value is None else Decimal(str(value))
+
+
+def _missing_cost_basis_naming(quality: dict, asset_id: int) -> list[dict]:
+    """The MISSING_COST_BASIS issues of a data-quality report that name ``asset_id``."""
+    return [issue for issue in quality["issues"] if issue["code"] == "MISSING_COST_BASIS" and asset_id in issue["affected_asset_ids"]]
+
+
+async def _dashboard_missing_cost_basis(client: httpx.AsyncClient, broker_id: int, asset_id: int, *, quantity: str, wac: str) -> list[dict]:
+    """The Dashboard report's MISSING_COST_BASIS issues naming ``asset_id``: [] when none does.
+
+    Presence barrier first: the report holds the position at ``broker_id``, ``quantity`` units at an average cost of
+    ``wac`` EUR, and carries its data quality, so an empty answer comes from a report that saw the asset.
+    """
+    resp = await client.post(
+        f"{API_BASE}/portfolio/report",
+        json={"broker_ids": [broker_id], "target_currency": "EUR", "include_summary": True, "include_history": False, "include_allocation_history": False},
+        timeout=TIMEOUT,
+    )
+    assert resp.status_code == 200, f"Portfolio report failed: {resp.status_code}: {resp.text}"
+    report = resp.json()
+    position = [(_decimal(h["quantity"]), _decimal(h["wac_per_unit"])) for h in report["summary"]["holdings"] if h["asset_id"] == asset_id and h["broker_id"] == broker_id]
+    assert position == [(Decimal(quantity), Decimal(wac))], f"the Dashboard should hold {quantity} units of asset {asset_id} at broker {broker_id}, at an average cost of {wac}: {position}"
+    assert report["data_quality"] is not None, "the Dashboard report carries no data quality"
+    return _missing_cost_basis_naming(report["data_quality"], asset_id)
+
+
+async def _lots_missing_cost_basis(client: httpx.AsyncClient, broker_id: int, asset_id: int, *, quantity: str, wac: str) -> list[dict]:
+    """The lots analysis' MISSING_COST_BASIS issues naming ``asset_id``: [] when none does.
+
+    Presence barrier first: the broker's average-cost line ends on ``quantity`` units at ``wac`` EUR, and the analysis
+    carries its data quality (a missing cost is reported by the average-cost lines, hence BROKER_WAC_HISTORY).
+    """
+    resp = await client.post(
+        f"{API_BASE}/portfolio/lots/analysis",
+        json={"asset_id": asset_id, "broker_ids": [broker_id], "target_currency": "EUR", "requested_analyses": ["BROKER_WAC_HISTORY"]},
+        timeout=TIMEOUT,
+    )
+    assert resp.status_code == 200, f"Lots analysis failed: {resp.status_code}: {resp.text}"
+    lots = resp.json()
+    line = sorted((point for point in lots["broker_wac_history"] or [] if point["broker_id"] == broker_id), key=lambda point: point["date"])
+    assert line, f"the lots analysis draws no average-cost line for broker {broker_id}: {lots['broker_wac_history']}"
+    assert (_decimal(line[-1]["pool_qty"]), _decimal(line[-1]["wac"])) == (Decimal(quantity), Decimal(wac)), f"the lots' average-cost line should end on {quantity} units at {wac}: {line[-1]}"
+    assert lots["data_quality"] is not None, "the lots analysis carries no data quality"
+    return _missing_cost_basis_naming(lots["data_quality"], asset_id)
 
 
 async def _events_on_date(client: httpx.AsyncClient, asset_id: int, event_date: str) -> list[tuple[int, str]]:
@@ -518,23 +564,31 @@ class TestPortfolioWACSplit:
             assert Decimal(s[1]["wac"]) * Decimal(s[1]["pool_qty"]) == Decimal("1500")
             print_success("OK reverse split: 30@50 -> 15@100, cost 1500 preserved")
 
-    async def test_forward_split_relabelled_as_price_adjustment_becomes_an_unknown_cost_acquisition(self):
-        """Retyping a forward SPLIT to PRICE_ADJUSTMENT makes its +15 ADJUSTMENT 15 shares of UNKNOWN cost.
+    async def test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one(self):
+        """Retyping a forward SPLIT whose +15 ADJUSTMENT has no cost is refused (409); once the row has a cost, it is not.
 
         BUY 15 for 1500 EUR, SPLIT "2" on 2026-02-01, ADJUSTMENT +15 linked to it with
         cost_basis_mode auto. For a split-linked row, auto mode stores no cost_basis_override.
-        Before the retype the ADJUSTMENT rescales the pool: split_rescale, 30 shares, WAC 50.
+        While the event is a SPLIT, the ADJUSTMENT rescales the pool: split_rescale, 30 shares, WAC 50.
 
-        After the event becomes a PRICE_ADJUSTMENT, the ADJUSTMENT keeps its link but is no
-        longer split-linked. It is therefore an acquisition with no cost basis: effect
-        add_zero_cost (the preview's name for an add of unknown cost), and the pool's cost
-        becomes INCOMPLETE. The numbers shown do not move (30 shares, WAC 50, cost 1500), but
-        their meaning does: the 1500 now covers only the 15 bought shares, and the other 15
-        entered at a cost nobody knows. Nothing in this series tells the two cases apart.
+        Retyped to PRICE_ADJUSTMENT, the ADJUSTMENT would keep its link but stop being
+        split-linked: 15 shares acquired at a cost nobody knows (MISSING_COST_BASIS on the
+        Dashboard and in the lots). P-10 (decision 27, option A) refuses that retype: 409
+        EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST, its params naming the event, its date and the
+        costless ADJUSTMENT, and counting no hidden one (R13-SEC7: ``hidden_transactions_count``
+        0, the test's user owns the broker). Nothing changes: the SPLIT keeps its id and type, the ADJUSTMENT
+        has no cost, the pool is still 30 shares at WAC 50, and no view reports a missing cost.
 
+        Then the ADJUSTMENT is given a cost through the transactions API, 40 EUR a share.
+        Still split-linked, the row only rescales the pool (the cost is not read). The same
+        retype is now accepted, and the row becomes an acquisition at that known cost: add,
+        30 shares, WAC (1500 + 15 × 40) / 30 = 70, and no view reports a missing cost.
+
+        Before P-10: the first retype was accepted (200) and the +15 became an add of unknown
+        cost (add_zero_cost: the WAC kept reading 50 while 15 shares had entered at no known cost).
         Before the fix: failed at the retype itself, with 422 (the upsert point had no ``id`` field).
         """
-        print_section("Split A3: forward SPLIT retyped to PRICE_ADJUSTMENT")
+        print_section("Split A3: forward SPLIT retype refused while its ADJUSTMENT has no cost")
         async with httpx.AsyncClient() as client:
             broker_id, asset_id = await setup_env(client)
             user_id = await get_current_user_id(client)
@@ -564,14 +618,39 @@ class TestPortfolioWACSplit:
                 adj_tx_id = _created_tx_id(adj_result)
                 adj_tx = await _read_tx(client, adj_tx_id)
                 assert adj_tx["asset_event_id"] == event_id, adj_tx
-                # Precondition of the AFTER half: with an override the retyped row would be a
-                # costed acquisition ("add"), not an acquisition of unknown cost.
+                # Precondition: auto mode stored no cost on the split-linked row — the costless
+                # incoming link P-10 is about.
                 assert adj_tx["cost_basis_override"] is None, adj_tx
 
                 before = await _wac_points(client, broker_id, asset_id)
                 assert set(before) == {"2026-01-15", "2026-02-01"}, before
                 _assert_point(before, "2026-01-15", effect="add", wac="100", pool_qty="15")
                 _assert_point(before, "2026-02-01", effect="split_rescale", wac="50", pool_qty="30")
+
+                # 1. The retype is refused while the ADJUSTMENT has no cost, and nothing changes.
+                refused = await _post_event_edit(client, asset_id, event_id, "2026-02-01", "PRICE_ADJUSTMENT", "2")
+
+                assert refused.status_code == 409, f"retyping SPLIT {event_id} with a costless ADJUSTMENT linked: expected 409, got {refused.status_code}: {refused.text}"
+                detail = refused.json()["detail"]
+                assert detail["error_code"] == "EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST", detail
+                assert detail["params"] == {"asset_id": asset_id, "item_index": 0, "event_id": event_id, "date": "2026-02-01", "transaction_ids": [adj_tx_id], "hidden_transactions_count": 0}, detail
+                assert await _events_on_date(client, asset_id, "2026-02-01") == [(event_id, "SPLIT")]
+                kept_tx = await _read_tx(client, adj_tx_id)
+                assert (kept_tx["asset_event_id"], kept_tx["cost_basis_override"]) == (event_id, None), kept_tx
+                kept = await _wac_points(client, broker_id, asset_id)
+                assert set(kept) == {"2026-01-15", "2026-02-01"}, kept
+                _assert_point(kept, "2026-02-01", effect="split_rescale", wac="50", pool_qty="30")
+                assert await _dashboard_missing_cost_basis(client, broker_id, asset_id, quantity="30", wac="50") == []
+                assert await _lots_missing_cost_basis(client, broker_id, asset_id, quantity="30", wac="50") == []
+
+                # 2. With a cost on the ADJUSTMENT, the same retype is accepted: an acquisition at that cost.
+                await commit_batch(client, updates=[{"id": adj_tx_id, "cost_basis_mode": "manual", "cost_basis_override": {"code": "EUR", "amount": "40"}}])
+                costed_tx = await _read_tx(client, adj_tx_id)
+                assert costed_tx["asset_event_id"] == event_id, costed_tx
+                assert costed_tx["cost_basis_override"] is not None, costed_tx
+                assert (costed_tx["cost_basis_override"]["code"], _decimal(costed_tx["cost_basis_override"]["amount"])) == ("EUR", Decimal("40")), costed_tx
+                # Still split-linked: the row rescales the pool, and its new cost is not read.
+                _assert_point(await _wac_points(client, broker_id, asset_id), "2026-02-01", effect="split_rescale", wac="50", pool_qty="30")
 
                 await _retype_event(client, asset_id, event_id, "2026-02-01", "PRICE_ADJUSTMENT", "2")
 
@@ -580,8 +659,10 @@ class TestPortfolioWACSplit:
                 after = await _wac_points(client, broker_id, asset_id)
                 assert set(after) == {"2026-01-15", "2026-02-01"}, after
                 _assert_point(after, "2026-01-15", effect="add", wac="100", pool_qty="15")
-                _assert_point(after, "2026-02-01", effect="add_zero_cost", wac="50", pool_qty="30")
-                print_success("OK forward split retyped: +15 is now an unknown-cost add, 30@50 unchanged")
+                _assert_point(after, "2026-02-01", effect="add", wac="70", pool_qty="30")
+                assert await _dashboard_missing_cost_basis(client, broker_id, asset_id, quantity="30", wac="70") == []
+                assert await _lots_missing_cost_basis(client, broker_id, asset_id, quantity="30", wac="70") == []
+                print_success("OK forward split: retype refused (409) while the +15 had no cost; with 40 EUR a share it is an add, 30@70")
             finally:
                 problems = await _drop_wac_env(client, user_id=user_id, broker_id=broker_id, asset_id=asset_id)
         assert not problems, problems

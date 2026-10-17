@@ -69,7 +69,7 @@ and the conversion is planned at the triangle — [[decisions/pac-rounding-again
 | Role | Path |
 |------|------|
 | `ExactNumber` writer | `backend/app/services/pac_allocator/wire_numbers.py` |
-| Ledger row field | `backend/app/schemas/pac_allocator.py` |
+| Ledger row field | `backend/app/schemas/pac_allocator/rows.py` |
 | Coherence check | `backend/app/services/pac_allocator/normalize.py` |
 | Report | `backend/app/services/pac_allocator/planner_report.py` |
 | Adaptive display | `frontend/src/lib/features/tools/pac-allocator/planner/format.ts` |

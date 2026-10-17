@@ -8,7 +8,6 @@
     "password": "Password",
     "confirmPassword": "Confirm Password",
     "forgotPassword": "Forgot Password?",
-    "registerTitle": "Create an account",
     "noAccount": "Don't have an account?",
     "hasAccount": "Already have an account?",
     "registerHere": "Register here",
@@ -17,8 +16,7 @@
     "accountCreated": "Account created successfully! Please log in.",
     "registrationFailed": "Registration failed. Please try again.",
     "registrationDisabled": "New user registration is currently disabled by the administrator.",
-    "passwordRecovery": "Password Recovery",
-    "emailRecoveryNotAvailable": "Email recovery is not yet available. Please use the server terminal to reset your password.",
+    "emailRecoveryNotAvailable": "Email recovery is not available on this instance. Reset your password from the server terminal, or ask your administrator for a password-reset link.",
     "serverTerminalInstructions": "Run this command on the server:",
     "contactAdministrator": "Contact your system administrator if you don't have server access.",
     "backToLogin": "Back to Login",
@@ -29,7 +27,8 @@
       "invalidEmailDomain": "Email domain is not valid or cannot be used",
       "usernameTaken": "This username is already taken",
       "emailTaken": "This email is already registered",
-      "passwordTooWeak": "Password does not meet security requirements"
+      "passwordTooWeak": "Password does not meet security requirements",
+      "usernameNoAt": "The username cannot contain @: to sign in, you can always use your email address."
     },
     "passwordStrength": {
       "veryWeak": "Very Weak",
@@ -39,7 +38,7 @@
       "veryStrong": "Very Strong",
       "requirements": "Password requirements:",
       "rules": {
-        "minLength": "At least 8 characters",
+        "minLength": "At least {value} characters",
         "hasUppercase": "One uppercase letter",
         "hasLowercase": "One lowercase letter",
         "hasNumber": "One number",
@@ -53,6 +52,56 @@
     "invalidCredentials": "Invalid username or password",
     "invalidInput": "Invalid input",
     "loginFailed": "Login failed",
-    "accountDisabled": "This account is disabled: ask an administrator to enable it again."
+    "accountDisabled": "This account is disabled: ask an administrator to enable it again.",
+    "loginServerUnreachable": "The server is not responding: check your connection and try again in a moment.",
+    "loginServerError": "The server ran into an error: try again in a moment, and if it happens again, tell an administrator.",
+    "tooManyAttempts": "Too many login attempts: wait a few minutes and try again.",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "registrationInviteOnly": "This server accepts new accounts only through an invitation link. Ask an administrator for one.",
+    "userLimitReached": "This server has reached its maximum number of accounts. Contact the administrator.",
+    "invite": {
+      "notice": "You have been invited to this LibreFolio server: create your account.",
+      "adminNotice": "This invitation creates an administrator account."
+    },
+    "link": {
+      "expired": "This link has expired.",
+      "consumed": "This link has already been used.",
+      "revoked": "This link has been withdrawn.",
+      "unknown": "This link is not valid.",
+      "missing": "This link is incomplete: open it again from the message you received.",
+      "checkFailed": "The link could not be checked. Try again in a moment.",
+      "askAdmin": "Ask an administrator for a new link."
+    },
+    "resetPassword": {
+      "title": "Choose a new password",
+      "account": "Account:",
+      "submit": "Set the new password",
+      "done": "Your password has been changed: sign in with the new one.",
+      "failed": "The password could not be changed. Try again."
+    },
+    "setup": {
+      "title": "Set up your administrator account",
+      "intro": "Choose the password of the administrator account of this instance.",
+      "account": "Account:",
+      "submit": "Activate the account",
+      "failed": "The account could not be set up. Try again.",
+      "blocked": "This instance is blocked by its hosting provider: the account can be set up once it is unblocked.",
+      "newLinkHint": "Ask your hosting provider for a new link. On your own server, run «dev.py user setup-link»."
+    },
+    "notices": {
+      "openRegistration": "Registration is open and this instance is reachable from outside your local network: anyone who finds it can create an account.",
+      "openRegistrationLocked": "Registration is open, set by LIBREFOLIO_REGISTRATION, and this instance is reachable from outside your local network: anyone who finds it can create an account. Change the variable to close it.",
+      "openRegistrationAction": "Change who can sign up"
+    },
+    "instanceBlocked": "This instance is blocked by its hosting provider: try again once it is unblocked.",
+    "checks": {
+      "loginLimit": {
+        "ok": "Failed sign-ins are limited: after 10 in 15 minutes for one user name or email, or 50 from one address, the sign-in waits.",
+        "off": "The limit on failed sign-ins is off (LIBREFOLIO_LOGIN_LIMIT=off): passwords can be tried without pause. Turn it back on unless this is a test instance.",
+        "invalid": "LIBREFOLIO_LOGIN_LIMIT is set to «{value}», which is neither on nor off: the server will not start with it."
+      }
+    },
+    "askAdminToResetPassword": "Ask your administrator for a password-reset link: they can create one for your account."
   }
 }

@@ -33,7 +33,7 @@ from backend.app.schemas.portfolio import (
     WACSeriesPoint,
 )
 from backend.app.services.lots_analysis_service import LotsAnalysisService
-from backend.app.services.portfolio_allocation_source import (
+from backend.app.services.pac_allocator.source.portfolio_allocation_source import (
     PortfolioPlannerSourceAccessError,
     PortfolioPlannerSourceAssetNotFoundError,
     build_portfolio_planner_source,
@@ -230,7 +230,7 @@ async def get_portfolio_report(
     current_user: User = Depends(get_current_user),
 ) -> PortfolioReportResponse:
     """Return a complete portfolio report from a single engine run."""
-    from backend.app.services.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
+    from backend.app.services.platform.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
 
     # Resolve min/max sentinels before passing to service
     if body.date_range and body.date_range.has_sentinels():
@@ -258,7 +258,7 @@ async def get_lots_analysis(
     current_user: User = Depends(get_current_user),
 ) -> LotsAnalysisResponse:
     """Return a bulk FIFO lots analysis from a single FifoLotEngine run."""
-    from backend.app.services.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
+    from backend.app.services.platform.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
 
     # Resolve min/max sentinels before passing to service
     if body.date_range and body.date_range.has_sentinels():

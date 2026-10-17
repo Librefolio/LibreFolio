@@ -1,0 +1,3 @@
+# The key prefixes this subsystem owns, one per line (scripts/i18n_catalog.py, `dev.py i18n`).
+# A key belongs to the longest declared prefix; a plugin's i18n/ owns the exact keys it holds.
+liveUpdates

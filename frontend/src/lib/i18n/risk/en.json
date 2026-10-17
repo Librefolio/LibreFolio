@@ -302,7 +302,8 @@
       "resource_limit_paths_or_horizon": "This simulation is too large to run. Use fewer simulation paths or a shorter horizon.",
       "resource_limit_horizon_or_sampling": "This quasi-Monte Carlo simulation is too large to run. Shorten the horizon or choose Monte Carlo sampling.",
       "resource_limit_period": "This simulation is too large to run: the period holds too much history. Choose a shorter period.",
-      "resource_limit_positions": "A simulation can include at most 100 holdings, and this portfolio has more. Simulate a broker with fewer holdings instead."
+      "resource_limit_positions": "A simulation can include at most 100 holdings, and this portfolio has more. Simulate a broker with fewer holdings instead.",
+      "resource_limit_period_or_assets": "This analysis is too large to run: these assets cover too many days of prices. Choose a shorter period or fewer assets."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe is undefined because volatility is zero.",
@@ -339,7 +340,9 @@
       "historical_replay_excluded_stale_at_start": "No price in the {days} days before the replay window began: {names} — {treatment, select, zero_return_residual {weight counted as cash at zero return} other {left out of the replay}}.",
       "historical_replay_excluded_stale_at_end": "No price in the last {days} days of the replay window: {names} — {treatment, select, zero_return_residual {weight counted as cash at zero return} other {left out of the replay}}.",
       "historical_replay_mostly_excluded": "The result describes only part of your portfolio ({covered, number, percent}): the rest is left out of the replay.",
-      "assets_excluded_no_price_source": "{count, plural, one {# asset excluded} other {# assets excluded}} from the calculation: no price source is assigned and no price has ever been recorded — {names}."
+      "assets_excluded_no_price_source": "{count, plural, one {# asset excluded} other {# assets excluded}} from the calculation: no price source is assigned and no price has ever been recorded — {names}.",
+      "total_loss_no_recovery": "The value fell to zero: no gain can bring it back to its peak, so the recovery needed is not shown.",
+      "total_loss_no_recovery_assets": "{count, plural, one {# asset fell} other {# assets fell}} to zero: no gain can bring {count, plural, one {it} other {them}} back to the peak, so the recovery needed is not shown — {names}."
     },
     "assetDetail": {
       "overviewTab": "Overview",

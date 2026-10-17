@@ -8,7 +8,7 @@
         <link href="/icons/apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="theme-color" content="#1a4031" />
+        <meta name="theme-color" content="#1b4334" />
         <link href="/lf-flags.css" rel="stylesheet" />
         <title>LibreFolio</title>
         <script>
@@ -21,9 +21,10 @@
                 } catch (e) {}
                 var theme = stored === 'dark' ? 'dark' : stored === 'light' ? 'light' : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                 document.documentElement.classList.add(theme);
-                // PWA title bar matches sidebar (libre-green light / dark variant)
+                // PWA title bar: the green sidebar's --lf-surface-bar, the same in both themes (N2, D-T17, D-T24). Kept a pair,
+                // so a theme of its own stays one edit away; themeColorMeta.gate.test.ts reads the three copies.
                 var meta = document.querySelector('meta[name="theme-color"]');
-                if (meta) meta.setAttribute('content', theme === 'dark' ? '#156534' : '#1a4031');
+                if (meta) meta.setAttribute('content', theme === 'dark' ? '#1b4334' : '#1b4334');
             })();
             // Early PWA install prompt capture (before Svelte mounts)
             window.addEventListener('beforeinstallprompt', function (e) {
@@ -36,6 +37,22 @@
             }
         </script>
         <style>
+            /* Copies of lib/theme/tokens.css for the splash, which paints before the app's stylesheet loads. Scoped to
+               the splash so they never reach the app; themeColorMeta.gate.test.ts checks each --lf-* against
+               tokens.css, in both themes */
+            #app-splash {
+                --lf-surface-page: #f3f5f3;
+                --lf-surface-logo: #ffffff;
+                --lf-border-subtle: #d8e0dc;
+                --lf-focus: #236b4d;
+                --lf-shadow-card: color-mix(in oklab, #0d1110 7%, transparent);
+            }
+            html.dark #app-splash {
+                --lf-surface-page: #0d1110;
+                --lf-border-subtle: #222c28;
+                --lf-focus: #429e79;
+                --lf-shadow-card: color-mix(in oklab, #0d1110 40%, transparent);
+            }
             #app-splash {
                 position: fixed;
                 inset: 0;
@@ -44,7 +61,7 @@
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                background-color: #f5f4ef;
+                background-color: var(--lf-surface-page);
                 transition: opacity 0.3s ease;
             }
             #app-splash.fade-out {
@@ -56,12 +73,12 @@
                 height: 80px;
                 margin-bottom: 24px;
                 border-radius: 16px;
-                background: #ffffff;
+                background: var(--lf-surface-logo);
                 padding: 8px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                box-shadow: 0 2px 8px var(--lf-shadow-card);
             }
             .splash-logo img {
                 max-width: 100%;
@@ -71,8 +88,8 @@
             .splash-spinner {
                 width: 36px;
                 height: 36px;
-                border: 3px solid rgba(0, 0, 0, 0.1);
-                border-top-color: #1a4031;
+                border: 3px solid var(--lf-border-subtle);
+                border-top-color: var(--lf-focus);
                 border-radius: 50%;
                 animation: splash-spin 0.8s linear infinite;
             }
@@ -80,14 +97,6 @@
                 to {
                     transform: rotate(360deg);
                 }
-            }
-            /* Dark mode splash — applied via html.dark class set by anti-FOUC script */
-            html.dark #app-splash {
-                background-color: #0f172a;
-            }
-            html.dark .splash-spinner {
-                border-color: rgba(255, 255, 255, 0.1);
-                border-top-color: #86efac;
             }
         </style>
         %sveltekit.head%

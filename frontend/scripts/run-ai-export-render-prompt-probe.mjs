@@ -25,6 +25,8 @@ const vite = await createServer({
     configFile: false,
     appType: 'custom',
     logLevel: 'silent',
+    // No Svelte plugin: the probe's static imports reach no runes module, which a gate of `front-utility core-unit`
+    // keeps true (Z-20). A module that needs runes is imported lazily, through `import()`, and never on this path.
     plugins: [svelteKitRuntimeStubs],
     server: {middlewareMode: true},
     resolve: {

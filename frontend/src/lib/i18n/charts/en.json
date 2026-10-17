@@ -194,7 +194,8 @@
     "units": {
       "days": "days",
       "sessions": "sessions",
-      "percentPerYear": "%/yr"
+      "percentPerYear": "%/yr",
+      "observations": "observations"
     },
     "visual": {
       "components": "Components",
@@ -204,6 +205,10 @@
     "reference": {
       "zero": "Zero"
     },
+    "gapsJoined": {
+      "label": "gaps joined",
+      "warning": "Too many gaps to draw: the line joins them."
+    },
     "regions": {
       "oversoldDescription": "Lower extreme below the configured threshold.",
       "neutralDescription": "Central range between the configured thresholds.",
@@ -212,12 +217,6 @@
     "comparisonAsset": {
       "placeholder": "Select comparison asset",
       "loadError": "Assets could not be loaded."
-    },
-    "riskRollingReturn": {
-      "name": "Rolling Return",
-      "description": "Compounded price-only return over a rolling window.",
-      "output": "Return",
-      "outputDescription": "Compounded holding-period return, in percentage points."
     }
   }
 }

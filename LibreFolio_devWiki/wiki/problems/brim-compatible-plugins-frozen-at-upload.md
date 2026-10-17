@@ -47,7 +47,7 @@ form a report set they still have to be uploaded again together.
 
 | Role | Path |
 |------|------|
-| `detection_signature`, upload metadata, re-detection, per-broker sidecar lock | `backend/app/services/brim_provider.py` |
+| `detection_signature`, upload metadata, re-detection, per-broker sidecar lock | `backend/app/services/brim/brim_provider.py` |
 | Developer doc (lifecycle of `compatible_plugins`) | `mkdocs_src/docs/developer/backend/brim/architecture.md` |
 | Plugin guide | `mkdocs_src/docs/developer/architecture/patterns/brim_plugin_guide.md` |
 | Tests (signature, re-detection, sidecar races) | `backend/test_scripts/test_services/test_brim_parse_race.py` |

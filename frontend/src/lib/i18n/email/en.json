@@ -1,0 +1,151 @@
+{
+  "email": {
+    "tab": {
+      "label": "Email",
+      "title": "Email",
+      "intro": "LibreFolio can send emails through an SMTP server, set up by whoever runs the instance. Email is optional: without it, everything else works."
+    },
+    "state": {
+      "off": "Off",
+      "ready": "Ready",
+      "invalid": "Not working"
+    },
+    "off": {
+      "explanation": "No SMTP server is configured (LIBREFOLIO_SMTP_HOST), so nothing is sent: invitation and password-reset links are copied by hand. The guide explains how to set one up."
+    },
+    "invalid": {
+      "explanation": "Email stays off until the configuration is fixed: correct the variable, then restart LibreFolio."
+    },
+    "problems": {
+      "SMTP_HOST_INVALID": "{variable} is not a valid server name: write only the host name or the IP address, without scheme, port or path.",
+      "SMTP_TLS_INVALID": "{variable} must be starttls, tls or none.",
+      "SMTP_PORT_INVALID": "{variable} must be a whole number from 1 to 65535.",
+      "SMTP_FROM_MISSING": "{variable} is missing: the sender address is required.",
+      "SMTP_FROM_INVALID": "{variable} must be one address, such as noreply@example.com, optionally after a name, with the address in angle brackets.",
+      "SMTP_REPLY_TO_INVALID": "{variable} must be one address.",
+      "SMTP_MAX_PER_HOUR_INVALID": "{variable} must be a whole number of at least 1.",
+      "SMTP_PASSWORD_UNREADABLE": "The password file named by {variable} cannot be read.",
+      "SMTP_CREDENTIALS_INCOMPLETE": "{variable} is set alone: set both the SMTP user and its password, or neither.",
+      "unknown": "{variable} cannot be used."
+    },
+    "checks": {
+      "smtp": {
+        "off": "Email is off: no SMTP server is configured.",
+        "ok": "The SMTP configuration can be used.",
+        "invalid": "{variable} cannot be used ({problem}): email stays off until it is fixed."
+      },
+      "smtpEncryption": {
+        "ok": "Emails travel encrypted, or email is off.",
+        "localPlain": "Emails go unencrypted to a server of the local network.",
+        "plain": "Emails, their links and the SMTP password travel unencrypted to a server outside the local network: set LIBREFOLIO_SMTP_TLS to starttls or tls."
+      },
+      "links": {
+        "ok": "Emails can carry links: LIBREFOLIO_PUBLIC_URL is set, or email is off.",
+        "missing": "LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out.",
+        "invalid": "LIBREFOLIO_PUBLIC_URL cannot start a link: it needs http:// or https:// and a host name, with no user name, password, ? or #. No email with a link can go out."
+      }
+    },
+    "links": {
+      "base": "Links in emails start with {base}.",
+      "probe": {
+        "checking": "Checking from this device that this instance answers there…",
+        "match": "This instance answers there, from this device.",
+        "otherInstance": "From this device, another server answers at that address, not this instance. This check covers this device only: the cause may be its DNS or its network. If other devices see the same, the links in emails lead elsewhere: check LIBREFOLIO_PUBLIC_URL.",
+        "unreachable": "This device cannot reach this instance at that address. This check covers this device only: the cause may be its DNS or its network. If other devices cannot either, the links in emails will not open: check LIBREFOLIO_PUBLIC_URL.",
+        "insecure": "This page uses https:// while LIBREFOLIO_PUBLIC_URL starts with http://: this browser cannot check it, and the links in emails would travel unencrypted. Set it to the https:// address.",
+        "invalid": "This browser cannot read LIBREFOLIO_PUBLIC_URL as an address: the links in emails may not open. Check its value."
+      },
+      "recheck": "Check again"
+    },
+    "budget": {
+      "remaining": "{remaining} of {max} emails left this hour.",
+      "spent": "The hourly limit of {max} emails is reached: the next one can go in {minutes} min."
+    },
+    "test": {
+      "hint": "Send a test email to your own address to check the configuration.",
+      "button": "Send a test email",
+      "sending": "Sending…",
+      "sent": "Test email sent to your address: check your inbox, and the spam folder.",
+      "errors": {
+        "EMAIL_UNAVAILABLE": "Email is off or not working on this instance.",
+        "EMAIL_RATE_LIMITED": "The hourly email limit is reached: try again in {minutes} min.",
+        "EMAIL_RECIPIENT_INVALID": "The address of your account is not a valid email address.",
+        "generic": "The test email could not be sent."
+      }
+    },
+    "smtpErrors": {
+      "CONNECTION_FAILED": "LibreFolio cannot reach the SMTP server: check the host and the port.",
+      "TLS_FAILED": "The secure connection failed: check LIBREFOLIO_SMTP_TLS and the certificate of the server.",
+      "AUTH_FAILED": "The SMTP server refused the login: check the user and the password.",
+      "SENDER_REFUSED": "The SMTP server refused the sender address (LIBREFOLIO_SMTP_FROM).",
+      "RECIPIENT_REFUSED": "The SMTP server refused your address.",
+      "TIMEOUT": "The SMTP server did not answer in time.",
+      "SEND_FAILED": "The SMTP server did not take the message."
+    },
+    "loadError": "The state of email could not be read.",
+    "verification": {
+      "page": {
+        "checking": "Verifying your email address…",
+        "expired": "This link has expired. Sign in with your username and password: you will be offered a new link.",
+        "consumed": "This link has already been used. If your account is active, sign in.",
+        "revoked": "This link no longer works: sign in to ask for a new one.",
+        "unknown": "This link is not valid: open it again, whole, from the email. If it still fails, sign in to ask for a new one.",
+        "blocked": "This instance is blocked by its hosting provider, so the link cannot be checked now. Open it again once the instance is unblocked; if the link has expired by then, sign in to get a new one.",
+        "missing": "This link is incomplete: open it again from the email.",
+        "error": "The link could not be checked: try again."
+      },
+      "verified": "Your email address is verified, {username}: you can sign in.",
+      "loginRequired": "Your email address is not verified yet: open the link in the email we sent you, then sign in.",
+      "resend": "Send the link again",
+      "resending": "Sending…",
+      "resent": "A new link is on its way: check your inbox, and the spam folder. Older links no longer work.",
+      "resendErrors": {
+        "INVALID_CREDENTIALS": "The username or the password is not right: check them in the form above.",
+        "EMAIL_RATE_LIMITED": "Too many requests for now: try again in {minutes} min.",
+        "EMAIL_VERIFICATION_NOT_NEEDED": "Your account is already active: sign in.",
+        "USER_LIMIT_REACHED": "Your link has expired, and this instance is full now: ask its administrator.",
+        "ACCOUNT_DISABLED": "This account is disabled: ask the administrator of this instance.",
+        "unavailable": "The email cannot be sent right now: try again later, or ask the administrator of this instance.",
+        "generic": "The link could not be sent: try again."
+      },
+      "registered": "Account created. We sent you an email with a link to activate it: open it within 24 hours, then sign in.",
+      "signUpUnavailable": "Sign-up is not possible right now: this instance cannot send the verification email. Try again later, or ask its administrator.",
+      "settingNeedsEmail": "Needs an email with a link to go out: set up SMTP and LIBREFOLIO_PUBLIC_URL first (Settings › Administration › Email).",
+      "settingUnavailable": "Email verification needs an email with a link to go out, and none can go now: check Settings › Administration › Email."
+    },
+    "sendLink": {
+      "button": "Send by email",
+      "sending": "Sending…",
+      "toLabel": "Send to",
+      "toPlaceholder": "name@example.com",
+      "resetTarget": "The link goes to the email address of the account.",
+      "publicUrlHint": "The link in the email starts with the address set in LIBREFOLIO_PUBLIC_URL, which may differ from the one above.",
+      "sent": "Sent to {to}. Language: {language}.",
+      "errors": {
+        "EMAIL_UNAVAILABLE": "Email is off or not working on this instance.",
+        "EMAIL_LINKS_UNAVAILABLE": "Emails cannot carry links: LIBREFOLIO_PUBLIC_URL is not set, or cannot start a link.",
+        "EMAIL_LINK_INVALID": "This link no longer works: create a new one.",
+        "EMAIL_ACCOUNT_INACTIVE": "The account is not active: activate it before sending it a reset link.",
+        "EMAIL_RECIPIENT_REQUIRED": "Enter the address to send the invitation to.",
+        "EMAIL_RECIPIENT_NOT_ALLOWED": "A reset link goes only to the address of its account.",
+        "EMAIL_RECIPIENT_INVALID": "This is not one valid email address.",
+        "EMAIL_RATE_LIMITED": "The hourly email limit is reached: try again in {minutes} min.",
+        "RECIPIENT_REFUSED": "The SMTP server refused the recipient's address.",
+        "generic": "The email could not be sent."
+      },
+      "languageLabel": "Language of the email",
+      "languageInstance": "The instance's language"
+    },
+    "forgot": {
+      "label": "Username or email address",
+      "submit": "Email me a reset link",
+      "sending": "Sending…",
+      "accepted": "If an active account matches, its owner gets an email with a link to choose a new password. Check the inbox and the spam folder: the link works for 30 minutes.",
+      "errors": {
+        "unavailable": "This instance cannot send emails right now: ask its administrator.",
+        "EMAIL_RATE_LIMITED": "Too many requests for now: try again in {minutes} min.",
+        "generic": "The request could not be sent: try again."
+      }
+    }
+  }
+}

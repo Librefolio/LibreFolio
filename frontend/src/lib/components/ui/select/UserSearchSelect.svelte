@@ -66,8 +66,8 @@
                 {#if user.avatar_url}
                     <LazyImage src="{user.avatar_url}?img_preview=48x48" alt={user.username} circle />
                 {:else}
-                    <span class="w-full h-full bg-gray-200 dark:bg-slate-600 flex items-center justify-center rounded-full">
-                        <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{getAvatarInitial(user.username)}</span>
+                    <span class="w-full h-full bg-lf-neutral flex items-center justify-center rounded-full">
+                        <span class="text-[10px] font-semibold text-lf-muted">{getAvatarInitial(user.username)}</span>
                     </span>
                 {/if}
             </span>
@@ -81,12 +81,12 @@
                 {#if user.avatar_url}
                     <LazyImage src="{user.avatar_url}?img_preview=48x48" alt={user.username} circle />
                 {:else}
-                    <span class="w-full h-full bg-gray-200 dark:bg-slate-600 flex items-center justify-center rounded-full">
-                        <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{getAvatarInitial(user.username)}</span>
+                    <span class="w-full h-full bg-lf-neutral flex items-center justify-center rounded-full">
+                        <span class="text-[10px] font-semibold text-lf-muted">{getAvatarInitial(user.username)}</span>
                     </span>
                 {/if}
             </span>
-            <span class="truncate text-sm font-medium text-gray-700 dark:text-gray-200">{user.username}</span>
+            <span class="truncate text-sm font-medium text-lf-secondary">{user.username}</span>
         </div>
     {/snippet}
 </SearchSelect>

@@ -16,10 +16,10 @@ end-of-day balance replay, and builds the response. Since 2026-09-11 (SP16) `Tra
 ~50-line orchestrator; the work lives in named stages.
 
 ## Location
-- `backend/app/services/transaction_service.py` — `execute_batch()` (the orchestrator)
-- `backend/app/services/transaction_batch_context.py` — `TransactionBatchContext` (`from_inputs()`), the state the
+- `backend/app/services/transactions/transaction_service.py` — `execute_batch()` (the orchestrator)
+- `backend/app/services/transactions/transaction_batch_context.py` — `TransactionBatchContext` (`from_inputs()`), the state the
   stages share; `BalanceValidationError`
-- `backend/app/services/transaction_batch_stages.py` — the stages
+- `backend/app/services/transactions/transaction_batch_stages.py`, `backend/app/services/transactions/batch_edits.py`, `backend/app/services/transactions/batch_creates.py`, `backend/app/services/transactions/batch_costs.py` — the stages, by theme (split in 1.3)
 
 ## Key Interfaces — the order
 `parse_inputs` (lenient per-row parse, original indices kept — [[problems/pydantic-422-preemption]]) →
@@ -53,9 +53,9 @@ basis → balance replay → response*.
 
 | Role | Path |
 |------|------|
-| Orchestrator `execute_batch` | `backend/app/services/transaction_service.py` |
-| Shared context | `backend/app/services/transaction_batch_context.py` |
-| Stages | `backend/app/services/transaction_batch_stages.py` |
+| Orchestrator `execute_batch` | `backend/app/services/transactions/transaction_service.py` |
+| Shared context | `backend/app/services/transactions/transaction_batch_context.py` |
+| Stages | `backend/app/services/transactions/transaction_batch_stages.py`, `backend/app/services/transactions/batch_edits.py`, `backend/app/services/transactions/batch_creates.py`, `backend/app/services/transactions/batch_costs.py` |
 | Service tests | `backend/test_scripts/test_services/test_transaction_service.py` |
 | Validate API tests | `backend/test_scripts/test_api/test_transactions_validate.py` |
 | Developer doc (service) | `mkdocs_src/docs/developer/backend/transactions/service.md` |

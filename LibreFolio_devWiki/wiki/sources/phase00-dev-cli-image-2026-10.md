@@ -43,6 +43,6 @@ None of its own; backlog N-8 (a `PORT` from `.env` inside the container) comes f
 | Role | Path |
 |------|------|
 | Plan | `LibreFolio_developer_journal/Release_2/phases/35_devCliImage/plan-phase00DevCliImage.prompt.md` |
-| Forgot-password card | `frontend/src/lib/components/auth/ForgotPasswordCard.svelte` |
+| Forgot-password card | `frontend/src/lib/features/auth/ForgotPasswordCard.svelte` |
 | Test | `backend/test_scripts/test_utilities/test_dev_cli_image.py` |
 | Admin doc | `mkdocs_src/docs/admin/docker_advanced.en.md` |

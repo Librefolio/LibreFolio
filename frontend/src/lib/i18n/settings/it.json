@@ -3,7 +3,6 @@
     "profile": "Profilo",
     "preferences": "Preferenze",
     "about": "Informazioni",
-    "admin": "Amministrazione",
     "profileInfo": "Informazioni Profilo",
     "profileDescription": "Gestisci i dettagli del tuo account",
     "enableEditing": "Abilita modifica",
@@ -24,13 +23,14 @@
     "deleteAccountWarning": "Questa azione non può essere annullata. I broker di cui sei l'unico owner vengono eliminati con tutte le loro transazioni e i report importati, anche se li hai condivisi con visualizzatori o editor. Un broker con un altro owner resta a lui: viene rimosso solo il tuo accesso. Le tue impostazioni vengono eliminate.",
     "typeUsernameToConfirm": "Digita \"{username}\" per confermare",
     "deleteAccountPermanently": "Elimina Permanentemente",
-    "deleteAccountFailed": "Errore nell'eliminazione dell'account",
     "currentPassword": "Password Attuale",
     "newPassword": "Nuova Password",
     "confirmNewPassword": "Conferma Nuova Password",
     "passwordChanged": "Password modificata con successo",
     "passwordChangeFailed": "Errore nella modifica della password",
     "currentPasswordIncorrect": "La password attuale non è corretta",
+    "currentPasswordRequired": "Inserisci la password attuale per cambiare l'email",
+    "emailPasswordHint": "Per cambiare l'email inserisci la password attuale. Gli altri dispositivi verranno disconnessi.",
     "passwordsMustMatch": "Le password devono corrispondere",
     "passwordMustBeDifferent": "La nuova password deve essere diversa dalla precedente",
     "language": "Lingua",
@@ -80,7 +80,6 @@
     },
     "globalSettingNames": {
       "session_ttl_hours": "Durata Sessione",
-      "enable_registration": "Abilita Registrazione",
       "require_email_verification": "Richiedi Verifica Email",
       "max_file_upload_mb": "Dimensione Max Upload",
       "default_language": "Lingua Predefinita",
@@ -89,11 +88,11 @@
       "scheduler_history_sync_times": "Orari Sincronizzazione Storico",
       "scheduler_history_sync_days": "Giorni Sincronizzazione Storico",
       "scheduler_history_sync_horizon_days": "Orizzonte di Recupero",
-      "scheduler_enabled": "Scheduler Abilitato"
+      "scheduler_enabled": "Scheduler Abilitato",
+      "registration_mode": "Registrazione"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "Per quanto tempo una sessione utente rimane valida prima di richiedere un nuovo login",
-      "enable_registration": "Consenti ai nuovi utenti di creare account",
       "require_email_verification": "Richiedi verifica email per i nuovi account",
       "max_file_upload_mb": "Dimensione massima file consentita per gli upload",
       "default_currency": "Valuta predefinita per i nuovi utenti",
@@ -103,7 +102,8 @@
       "scheduler_current_price_frequency_minutes": "Ogni quanti minuti vengono aggiornati i prezzi correnti",
       "scheduler_history_sync_times": "Orari giornalieri in cui vengono sincronizzati i dati storici (nel fuso orario dello scheduler)",
       "scheduler_history_sync_days": "Giorni della settimana in cui vengono sincronizzati i dati storici",
-      "scheduler_history_sync_horizon_days": "Quanti giorni indietro cercare dati storici mancanti"
+      "scheduler_history_sync_horizon_days": "Quanti giorni indietro cercare dati storici mancanti",
+      "registration_mode": "Chi può creare un account: chiunque (aperta), solo chi ha un link d'invito (su invito) o nessuno (chiusa)."
     },
     "globalSettingUnits": {
       "session_ttl_hours": "ore",
@@ -161,7 +161,9 @@
           "last6h": "Ultime 6 ore",
           "last24h": "Ultime 24 ore",
           "last7d": "Ultimi 7 giorni",
-          "last30d": "Ultimi 30 giorni"
+          "last30d": "Ultimi 30 giorni",
+          "deferred": "Rimandato: fornitore in pausa",
+          "retryAt": "Nuovo tentativo alle {time}"
         },
         "status": {
           "title": "Stato Scheduler",
@@ -169,7 +171,9 @@
           "neverRun": "Mai eseguito",
           "details": "Dettagli…",
           "configure": "Configura…",
-          "configSummary": "Ogni {freq}min · {times} · {days}"
+          "configSummary": "Ogni {freq}min · {times} · {days}",
+          "retryAt": "Elementi in pausa ritentati alle {time}",
+          "nextAttemptAt": "Non riuscito: nuovo tentativo alle {time}"
         },
         "timezone": "Fuso orario",
         "timezoneChangeWarning": "Cambiare fuso mantiene invariati questi orari e giorni, ma cambia l'istante effettivo di esecuzione in UTC.",
@@ -216,6 +220,192 @@
       "confirmClearTitle": "Svuotare la cache {name}?",
       "confirmClearAllTitle": "Svuotare tutte le cache?",
       "confirmWarning": "Dopo lo svuotamento, il prossimo recupero di questi dati subirà rallentamenti paragonabili a un riavvio del server."
+    },
+    "registrationModes": {
+      "open": "Aperta",
+      "invite": "Su invito",
+      "disabled": "Chiusa"
+    },
+    "lockedByEnv": "Impostato sul server da {variable}: va cambiato lì.",
+    "users": "Utenti",
+    "usersTab": {
+      "title": "Utenti",
+      "usage": "{used} / {max} account",
+      "usageUnlimited": "{used} account",
+      "usageHint": "Contano gli account attivi e gli inviti aperti; gli account disattivati no.",
+      "billing": "Gestisci abbonamento",
+      "limitBanner": "L'istanza è piena: niente nuovi inviti finché non disattivi o elimini un account, o revochi un invito.",
+      "createdOn": "Creato il {date}",
+      "selfHint": "Questo è il tuo account. Gestiscilo da:",
+      "done": "Fatto",
+      "accounts": {
+        "title": "Account"
+      },
+      "badges": {
+        "you": "Tu",
+        "admin": "Admin",
+        "inactive": "Disattivato",
+        "protected": "Protetto",
+        "pendingSetup": "In attesa del setup"
+      },
+      "actions": {
+        "deactivate": "Disattiva",
+        "reactivate": "Riattiva",
+        "promote": "Rendi amministratore",
+        "demote": "Togli amministratore",
+        "resetLink": "Link per reimpostare la password",
+        "signOut": "Disconnetti ovunque",
+        "restartGuides": "Riavvia le guide",
+        "delete": "Elimina",
+        "cancelSetup": "Annulla il link di setup"
+      },
+      "reasons": {
+        "protected": "Questo account è protetto: nessuno può disattivarlo, declassarlo o eliminarlo.",
+        "lastAdmin": "È l'unico amministratore attivo: non si può disattivare né declassare.",
+        "limit": "L'istanza è piena: libera un posto per riattivarlo.",
+        "demoteFirst": "Un amministratore va declassato prima di poterlo eliminare.",
+        "pendingSetup": "Aspetta il suo setup: fino ad allora mantiene il suo ruolo."
+      },
+      "confirm": {
+        "deactivate": {
+          "title": "Disattivare {username}?",
+          "message": "L'account non può più accedere e tutte le sessioni si chiudono. I suoi broker e le sue transazioni restano: potrai riattivarlo.",
+          "confirm": "Disattiva"
+        },
+        "promote": {
+          "title": "Rendere {username} amministratore?",
+          "message": "Gli amministratori gestiscono l'istanza: impostazioni, utenti e inviti.",
+          "confirm": "Rendi amministratore"
+        },
+        "demote": {
+          "title": "Togliere i diritti di amministratore a {username}?",
+          "message": "L'account resta, come utente normale, e le sue sessioni si chiudono.",
+          "confirm": "Togli"
+        },
+        "signOut": {
+          "title": "Disconnettere {username} ovunque?",
+          "message": "Tutte le sessioni dell'account si chiudono: dovrà accedere di nuovo su ogni dispositivo.",
+          "confirm": "Disconnetti"
+        },
+        "restartGuides": {
+          "title": "Riavviare le guide di {username}?",
+          "message": "L'introduzione e le guide delle pagine ricompaiono, come per un account nuovo.",
+          "confirm": "Riavvia"
+        },
+        "revokeInvite": {
+          "title": "Revocare l'invito per {email}?",
+          "message": "Il link smette subito di funzionare.",
+          "confirm": "Revoca"
+        },
+        "cancelSetup": {
+          "title": "Annullare il link di setup di {username}?",
+          "message": "Il link già consegnato smette di funzionare. L'account resta in attesa del suo setup: un link nuovo arriva da «dev.py user setup-link» sul server, o dal tuo fornitore.",
+          "confirm": "Annulla il link"
+        }
+      },
+      "errors": {
+        "LAST_ADMIN": "L'ultimo amministratore attivo non si può disattivare né declassare.",
+        "USER_LIMIT_REACHED": "L'istanza è piena: prima libera un posto (disattiva o elimina un account, o revoca un invito).",
+        "REGISTRATION_DISABLED": "La registrazione è chiusa: non si possono creare inviti.",
+        "ACCOUNT_PROTECTED": "Questo account è protetto: nessuno può disattivarlo, declassarlo o eliminarlo.",
+        "SELF_DELETION": "Il tuo account si elimina dalla scheda Profilo.",
+        "DEMOTE_FIRST": "Un amministratore va declassato prima di poterlo eliminare.",
+        "NOT_FOUND": "Questo account non esiste più: la lista si ricarica.",
+        "DELETION_FAILED": "L'eliminazione non è riuscita: non è stato eliminato niente.",
+        "INVALID_INPUT": "Controlla i dati inseriti: l'indirizzo email potrebbe non essere valido.",
+        "generic": "L'azione non è riuscita. Riprova.",
+        "load": "Non è stato possibile caricare gli account.",
+        "PENDING_SETUP": "Questo amministratore aspetta il suo setup: da qui non si può né riattivare né retrocedere.",
+        "SETUP_COMPLETED": "Questo amministratore ha completato il suo setup nel frattempo: non è stato cambiato nulla.",
+        "LAST_ADMIN_DELETION": "Sei l'ultimo amministratore attivo: rendi amministratore un altro account prima di eliminare il tuo."
+      },
+      "invite": {
+        "button": "Invita",
+        "blocked": "La registrazione è chiusa, e con lei gli inviti: si cambia nelle impostazioni globali.",
+        "blockedLocked": "La registrazione è chiusa sul server da {variable}, e con lei gli inviti.",
+        "title": "Invita qualcuno",
+        "emailLabel": "Email (facoltativa)",
+        "emailHint": "Solo come promemoria: il link funziona per chiunque lo apra.",
+        "adminLabel": "Amministratore",
+        "adminHint": "L'account che crea gestisce l'istanza.",
+        "create": "Crea il link",
+        "ready": "Condividi questo link: funziona una volta sola, per 7 giorni."
+      },
+      "invites": {
+        "title": "Inviti aperti",
+        "empty": "Nessun invito aperto.",
+        "noEmail": "Senza email",
+        "dates": "Creato il {created} · scade il {expires}",
+        "revoke": "Revoca"
+      },
+      "reset": {
+        "title": "Link per reimpostare la password di {username}",
+        "message": "Un link monouso per impostare una nuova password, valido 30 minuti. I link creati prima per questo account smettono di funzionare.",
+        "create": "Crea il link",
+        "ready": "Condividi questo link con {username}: funziona una volta sola."
+      },
+      "toasts": {
+        "signedOut": "{username} è stato disconnesso ovunque.",
+        "guidesRestarted": "Le guide di {username} ripartono da capo.",
+        "resetLinkCreated": "Link di reimpostazione creato per {username}.",
+        "setupCancelled": "Il link di setup di {username} non funziona più."
+      },
+      "pendingSetupHint": "Questo account amministratore si attiva con il suo link di setup. Se il link è perso, esegui «dev.py user setup-link» sul server, o chiedi al tuo fornitore."
+    },
+    "linkShare": {
+      "addressLabel": "Indirizzo del server",
+      "addressHint": "Cambialo se i tuoi utenti raggiungono LibreFolio a un altro indirizzo.",
+      "linkLabel": "Link",
+      "copy": "Copia",
+      "copied": "Link copiato.",
+      "expires": "Valido fino al {date}.",
+      "probe": {
+        "checking": "Verifico che a questo indirizzo risponda questo LibreFolio…",
+        "match": "A questo indirizzo risponde questa istanza.",
+        "mismatch": "A questo indirizzo risponde qualcosa, ma non questa istanza: controllalo prima di condividere.",
+        "unverifiable": "Non è stato possibile verificare l'indirizzo da questo browser: puoi comunque condividere il link.",
+        "invalid": "Inserisci un indirizzo che inizi con http:// o https://, senza ? né #."
+      }
+    },
+    "accountDeletion": {
+      "titleAdmin": "Elimina {username}",
+      "warningAdmin": "Non si può annullare. I broker di cui questo account è l'unico proprietario vengono eliminati con tutte le transazioni e i file; da quelli condivisi sparisce solo il suo accesso.",
+      "deactivateTitle": "Disattivare invece?",
+      "deactivateText": "Disattivare tiene tutti i broker e le transazioni e si può annullare: l'account semplicemente non può più accedere.",
+      "deactivateAction": "Disattiva",
+      "loading": "Verifico cosa porterebbe via l'eliminazione…",
+      "brokersDeleted": "Eliminati, con tutte le transazioni e i file:",
+      "noBrokersDeleted": "Nessun broker viene eliminato.",
+      "brokersLeft": "Broker condivisi che restano (sparisce solo l'accesso):",
+      "transactions": "{count, plural, =0 {nessuna transazione} one {# transazione} other {# transazioni}}",
+      "unpaired": "{count, plural, one {# transazione su un altro broker è metà di un trasferimento con questi broker} other {# transazioni su altri broker sono metà di trasferimenti con questi broker}}. {count, plural, one {Resta} other {Restano}}, senza l'altra metà: gli asset ricevuti da questi broker diventano una posizione d'apertura al loro costo di trasferimento, e i giroconti diventano depositi o prelievi.",
+      "irreversible": "Non si può annullare.",
+      "previewFailed": "Non è stato possibile caricare cosa porterebbe via l'eliminazione.",
+      "deletedSelf": "Il tuo account è stato eliminato.",
+      "deletedAdmin": "{username} eliminato, con {count, plural, =0 {nessun broker} one {# broker} other {# broker}}.",
+      "roles": {
+        "OWNER": "Proprietario",
+        "EDITOR": "Editor",
+        "VIEWER": "Lettore"
+      }
+    },
+    "administration": "Amministrazione",
+    "tooManyPasswordAttempts": "Troppe password sbagliate: aspetta qualche minuto e riprova.",
+    "securityTab": {
+      "title": "Controlli di sicurezza",
+      "description": "Come è configurata questa istanza, controllata quando apri le Impostazioni: prima ciò che richiede la tua attenzione. «Controlla di nuovo» la rilegge.",
+      "allClear": "Niente richiede la tua attenzione.",
+      "passed": "{count, plural, one {# controllo superato} other {# controlli superati}}",
+      "loadError": "Non è stato possibile caricare i controlli di sicurezza.",
+      "retry": "Riprova",
+      "refresh": "Controlla di nuovo",
+      "openEmail": "Apri la scheda Email",
+      "openPlugins": "Apri le impostazioni dei plugin",
+      "severity": {
+        "error": "Errore",
+        "warning": "Avviso",
+        "info": "Informazione"
+      }
     }
   }
 }

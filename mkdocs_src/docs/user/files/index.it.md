@@ -41,7 +41,7 @@ Qui trovi gli **avatar** degli utenti, le **icone** dei broker e qualsiasi **imm
     <img class="gallery-img" data-category="files" data-name="brim-tab" alt="Scheda Report del broker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Questi sono gli estratti conto esportati dai tuoi broker, in attesa di essere importati o già importati. Vedi i report di ogni broker a cui puoi accedere, come Proprietario, Editor o Visualizzatore.
+Questi sono gli estratti conto esportati dai tuoi broker, in attesa di essere importati o già importati. Vedi i report di ogni broker a cui puoi accedere, come Proprietario, Editor o Visualizzatore. I report che una versione precedente di LibreFolio ha salvato senza broker compaiono solo qui: agli amministratori, e a chi li ha caricati quando LibreFolio ha registrato chi è stato.
 
 La colonna **Stato** ti dice in che situazione si trova ogni file:
 

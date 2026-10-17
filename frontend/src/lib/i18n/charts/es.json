@@ -194,7 +194,8 @@
     "units": {
       "days": "días",
       "sessions": "sesiones",
-      "percentPerYear": "%/año"
+      "percentPerYear": "%/año",
+      "observations": "observaciones"
     },
     "visual": {
       "components": "Componentes",
@@ -204,6 +205,10 @@
     "reference": {
       "zero": "Cero"
     },
+    "gapsJoined": {
+      "label": "huecos unidos",
+      "warning": "Demasiados huecos para dibujar: la línea los une."
+    },
     "regions": {
       "oversoldDescription": "Extremo inferior por debajo del umbral configurado.",
       "neutralDescription": "Rango central entre los umbrales configurados.",
@@ -212,12 +217,6 @@
     "comparisonAsset": {
       "placeholder": "Seleccionar activo de comparación",
       "loadError": "No se pudieron cargar los activos."
-    },
-    "riskRollingReturn": {
-      "name": "Rendimiento móvil",
-      "description": "Rendimiento compuesto solo del precio sobre una ventana móvil.",
-      "output": "Rendimiento",
-      "outputDescription": "Rendimiento compuesto del periodo de tenencia, en puntos porcentuales."
     }
   }
 }

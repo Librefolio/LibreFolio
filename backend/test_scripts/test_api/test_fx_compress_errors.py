@@ -1,6 +1,6 @@
-"""Tests for _compress_convert_errors in fx.py API module."""
+"""Tests for _compress_convert_errors in the FX API currencies module (api/v1/fx/currencies.py)."""
 
-from backend.app.api.v1.fx import _compress_convert_errors
+from backend.app.api.v1.fx.currencies import _compress_convert_errors
 
 
 class TestCompressConvertErrors:

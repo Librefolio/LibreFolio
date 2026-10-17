@@ -65,14 +65,14 @@
                             <strong>{$t('import.csv.currencyReminder', {values: {currency: currencyLabel}})}</strong>
                         </p>
                     {/if}
-                    <p><strong>{$t('import.csv.labelMinimum')}:</strong> <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">date;currency;close</code></p>
-                    <p><strong>{$t('import.csv.labelExtended')}:</strong> <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">date;currency;close;open;high;low;volume</code></p>
+                    <p><strong>{$t('import.csv.labelMinimum')}:</strong> <code class="bg-lf-neutral/50 px-1 rounded">date;currency;close</code></p>
+                    <p><strong>{$t('import.csv.labelExtended')}:</strong> <code class="bg-lf-neutral/50 px-1 rounded">date;currency;close;open;high;low;volume</code></p>
                     <p class="text-[11px] opacity-80">
-                        {@html $t('import.csv.separatorHint', {values: {sep: '<code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">;</code>'}})}
+                        {@html $t('import.csv.separatorHint', {values: {sep: '<code class="bg-lf-neutral/50 px-1 rounded">;</code>'}})}
                     </p>
                     <p class="text-[11px] opacity-80">{$t('import.csv.extraColumnsIgnored')}</p>
                 </div>
-                <button class="p-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 shrink-0" onclick={openDocs} title="Open documentation" type="button">
+                <button class="p-1 text-lf-info hover:text-lf-info-on-soft shrink-0" onclick={openDocs} title="Open documentation" type="button">
                     <BookOpen size={16} />
                 </button>
             </div>
@@ -82,11 +82,11 @@
     {#snippet helpContent()}
         <p class="font-semibold">Price CSV Format</p>
         <p>Each row represents a daily price point. Only <code>date</code>, <code>currency</code>, and <code>close</code> are required.</p>
-        <pre class="bg-white/50 dark:bg-slate-800/50 rounded p-2 text-xs font-mono">date;currency;close
+        <pre class="bg-lf-card/50 rounded p-2 text-xs font-mono">date;currency;close
 2024-01-15;USD;145.50
 2024-01-16;USD;146.10</pre>
         <p class="text-xs mt-1">Extended format with optional columns:</p>
-        <pre class="bg-white/50 dark:bg-slate-800/50 rounded p-2 text-xs font-mono">date;currency;close;open;high;low;volume
+        <pre class="bg-lf-card/50 rounded p-2 text-xs font-mono">date;currency;close;open;high;low;volume
 2024-01-15;USD;145.50;144.00;146.20;143.80;1500000
 2024-01-16;USD;146.10;;;;1200000</pre>
         <ul class="list-disc list-inside space-y-1 text-xs">

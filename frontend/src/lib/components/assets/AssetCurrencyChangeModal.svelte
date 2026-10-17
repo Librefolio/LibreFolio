@@ -33,6 +33,8 @@
     import {_ as t} from '$lib/i18n';
     import {buildAssetSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {extractErrorMessage} from '$lib/utils/trySave';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {wipeRefusalMessage} from './currencyChangeErrors';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
 
@@ -156,7 +158,8 @@
             // user can retry or cancel; surface the detail via toast.
             const msg = extractErrorMessage(err, 'unknown error');
             console.error('[currency-change] flow failed', msg, err);
-            toasts.error(`${$t('assetDetail.currencyChange.failed')}: ${msg}`);
+            // X-R48: a wipe refused for splits whose adjustments have no cost is said in the user's language.
+            toasts.error(wipeRefusalMessage(err, tr, (iso) => formatDay(iso)) ?? `${$t('assetDetail.currencyChange.failed')}: ${msg}`);
         } finally {
             inProgress = false;
             progressStep = null;
@@ -171,29 +174,29 @@
 </script>
 
 {#if open && blocker}
-    <ModalBase {open} {zIndex} maxWidth="lg" closeOnBackdropClick={false} closeOnEscape={false} testId="currency-change-modal" labelledBy="currency-change-title" contentClass="border-2 border-red-300 dark:border-red-700">
+    <ModalBase {open} {zIndex} maxWidth="lg" closeOnBackdropClick={false} closeOnEscape={false} testId="currency-change-modal" labelledBy="currency-change-title" tone="danger">
         <!-- Header -->
-        <div class="flex items-center gap-3 px-5 py-4 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800">
-            <AlertTriangle class="text-red-600 dark:text-red-400 flex-shrink-0" size={22} />
-            <h2 id="currency-change-title" class="text-base font-semibold text-red-700 dark:text-red-300">
+        <div class="flex items-center gap-3 px-5 py-4 bg-lf-danger-soft border-b border-lf-danger-line">
+            <AlertTriangle class="text-lf-danger flex-shrink-0" size={22} />
+            <h2 id="currency-change-title" class="text-base font-semibold text-lf-danger-on-soft">
                 {$t('assetDetail.currencyChange.title', {values: {from: blocker.from, to: blocker.to}})}
             </h2>
-            <button type="button" class="ml-auto p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50" onclick={handleCancel} disabled={inProgress} aria-label={$t('common.cancel')} data-testid="currency-change-close-x">
+            <button type="button" class="ml-auto p-1 rounded text-lf-danger hover:bg-lf-danger-line transition-colors disabled:opacity-50" onclick={handleCancel} disabled={inProgress} aria-label={$t('common.cancel')} data-testid="currency-change-close-x">
                 <X size={18} />
             </button>
         </div>
 
         <!-- Body -->
         <div class="px-5 py-4 space-y-4 text-sm overflow-y-auto">
-            <p class="text-gray-700 dark:text-gray-200">
+            <p class="text-lf-secondary">
                 {$t('assetDetail.currencyChange.bodyIntro')}
             </p>
-            <p class="text-red-700 dark:text-red-300 font-medium">
+            <p class="text-lf-danger font-medium">
                 {$t('assetDetail.currencyChange.bodyCaveat')}
             </p>
 
             <!-- What will be wiped / disconnected (R3-3 Policy D) -->
-            <ul class="text-xs text-slate-700 dark:text-slate-300 bg-red-50/60 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-md p-3 space-y-1 list-disc list-inside">
+            <ul class="text-xs text-lf-primary bg-lf-danger-soft/60 border border-lf-danger-line rounded-md p-3 space-y-1 list-disc list-inside">
                 {#if blocker.prices > 0}
                     <li data-testid="currency-change-summary-prices">{$t('assetDetail.currencyChange.summaryPrices', {values: {n: blocker.prices, oldest: blocker.oldest, newest: blocker.newest}})}</li>
                 {/if}
@@ -205,7 +208,7 @@
                     </li>
                 {/if}
                 {#if blocker.linkedTx > 0}
-                    <li class="font-medium text-red-700 dark:text-red-300" data-testid="currency-change-summary-linkedtx">
+                    <li class="font-medium text-lf-danger-on-soft" data-testid="currency-change-summary-linkedtx">
                         {$t('assetDetail.currencyChange.summaryLinkedTx', {values: {n: blocker.linkedTx}})}
                     </li>
                 {/if}
@@ -222,15 +225,15 @@
             {/if}
 
             <!-- Backup section — R3-3b: prices + events -->
-            <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
-                <div class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">
+            <div class="rounded-md border border-lf-subtle bg-lf-panel p-3">
+                <div class="text-xs font-semibold text-lf-secondary mb-2">
                     {$t('assetDetail.currencyChange.backupTitle')}
                 </div>
                 <div class="flex gap-2 flex-wrap">
                     {#if blocker.prices > 0}
                         <button
                             type="button"
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-lf-card border border-lf-input rounded hover:bg-lf-neutral text-lf-secondary transition-colors"
                             onclick={() => exportBackup('prices', 'csv')}
                             disabled={inProgress}
                             data-testid="currency-change-export-prices-csv"
@@ -240,7 +243,7 @@
                         </button>
                         <button
                             type="button"
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-lf-card border border-lf-input rounded hover:bg-lf-neutral text-lf-secondary transition-colors"
                             onclick={() => exportBackup('prices', 'json')}
                             disabled={inProgress}
                             data-testid="currency-change-export-prices-json"
@@ -252,7 +255,7 @@
                     {#if totalEvents > 0}
                         <button
                             type="button"
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-lf-card border border-lf-input rounded hover:bg-lf-neutral text-lf-secondary transition-colors"
                             onclick={() => exportBackup('events', 'csv')}
                             disabled={inProgress}
                             data-testid="currency-change-export-events-csv"
@@ -262,7 +265,7 @@
                         </button>
                         <button
                             type="button"
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-lf-card border border-lf-input rounded hover:bg-lf-neutral text-lf-secondary transition-colors"
                             onclick={() => exportBackup('events', 'json')}
                             disabled={inProgress}
                             data-testid="currency-change-export-events-json"
@@ -276,10 +279,10 @@
         </div>
 
         <!-- Footer -->
-        <div class="flex justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30">
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-lf-subtle bg-lf-panel">
             {#if inProgress && progressStep}
-                <span class="mr-auto flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300" data-testid="currency-change-progress-step">
-                    <span class="inline-block h-3 w-3 rounded-full border-2 border-slate-400 border-t-transparent animate-spin"></span>
+                <span class="mr-auto flex items-center gap-2 text-xs text-lf-secondary" data-testid="currency-change-progress-step">
+                    <span class="inline-block h-3 w-3 rounded-full border-2 border-lf-muted border-t-transparent animate-spin"></span>
                     {#if progressStep === 'wipe'}
                         {$t('assetDetail.currencyChange.progressWipe', {values: {prices: blocker.prices, events: totalEvents, linkedTx: blocker.linkedTx}})}
                     {:else if progressStep === 'patch'}
@@ -289,10 +292,10 @@
                     {/if}
                 </span>
             {/if}
-            <button type="button" class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50" onclick={handleCancel} disabled={inProgress} data-testid="currency-change-cancel">
+            <button type="button" class="px-4 py-2 text-sm bg-lf-neutral text-lf-secondary rounded hover:bg-lf-input/30 transition-colors disabled:opacity-50" onclick={handleCancel} disabled={inProgress} data-testid="currency-change-cancel">
                 {$t('common.cancel')}
             </button>
-            <button type="button" class="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" onclick={handleConfirm} disabled={inProgress} data-testid="currency-change-confirm">
+            <button type="button" class="px-4 py-2 text-sm bg-lf-danger-solid hover:bg-lf-danger-hover text-lf-on-danger-solid rounded font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" onclick={handleConfirm} disabled={inProgress} data-testid="currency-change-confirm">
                 {inProgress ? $t('assetDetail.currencyChange.working') : $t('assetDetail.currencyChange.confirm')}
             </button>
         </div>

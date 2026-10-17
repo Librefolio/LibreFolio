@@ -1,5 +1,6 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {focusHeaderControlByKeyboard} from '../fixtures/headerKeyboardFocus';
 import {findAcrossPages} from '../fixtures/paging';
 import {TEST_USER} from '../fixtures/test-users';
 
@@ -153,13 +154,13 @@ async function expectAmountsClear(scope: Locator, clear: string[], what: string)
  * Flip privacy from the header, asserting the state before and after.
  *
  * The header slides away on scroll (`Header.svelte`), and pages scroll themselves — the lots
- * panel scrolls into view once it has drawn. A focused header control pins the header in
- * place (`handleFocusIn`), so the click cannot land where the toggle *was*.
+ * panel scrolls into view once it has drawn. A header control reached by keyboard pins the header
+ * in place (`handleFocusIn`), so the click cannot land where the toggle *was*.
  */
 async function flipPrivacy(page: Page, on: boolean): Promise<void> {
     const toggle = page.getByTestId('privacy-toggle');
     await expect(toggle, 'privacy must start from the opposite state').toHaveAttribute('aria-pressed', String(!on));
-    await toggle.focus();
+    await focusHeaderControlByKeyboard(page, 'privacy-toggle');
     await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'pinned');
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', String(on));
@@ -171,7 +172,7 @@ async function followNav(page: Page, navTestId: string, url: RegExp): Promise<vo
     // Layout, not timing: the burger is rendered below the lg breakpoint only, and the page
     // has hydrated by the time this runs.
     if (await burger.isVisible()) {
-        await burger.focus();
+        await focusHeaderControlByKeyboard(page, 'mobile-menu-toggle');
         await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'pinned');
         await burger.click();
         await expect(page.getByTestId('app-header')).toHaveAttribute('data-sidebar-open', 'true');

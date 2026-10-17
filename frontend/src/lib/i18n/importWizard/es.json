@@ -42,7 +42,7 @@
     "reparseSingle": "Reanalizar",
     "previewFile": "Vista previa del archivo",
     "txCount": "{n} transacciones en {k} archivos",
-    "assetsCount": "{n} activos únicos, {m} por resolver",
+    "assetsCount": "{n, plural, one {# activo único} other {# activos únicos}}, {m} por resolver",
     "likelyDuplicates": "{n} duplicados probables",
     "viewDetail": "Ver Detalle",
     "detailTitle": "Detalle Análisis — {file}",
@@ -504,7 +504,14 @@
       "scalable_deposit_file": "Es la exportación de la cuenta remunerada de Scalable: léela con el plugin {plugin_name}.",
       "scalable_broker_file": "Es la exportación de la cuenta de valores de Scalable: léela con el plugin {plugin_name}.",
       "scalable_prime_file": "Es la exportación propia de Scalable de la cuenta de valores: léela con el plugin {plugin_name}.",
-      "scalable_mixed_file": "El archivo mezcla la cuenta de valores y la cuenta remunerada: exporta las dos cuentas por separado."
+      "scalable_mixed_file": "El archivo mezcla la cuenta de valores y la cuenta remunerada: exporta las dos cuentas por separado.",
+      "csv_only": "El plugin {plugin_name} solo lee archivos .csv.",
+      "file_unreadable": "No se pudo leer el archivo.",
+      "no_header_row": "El archivo no tiene fila de encabezado.",
+      "missing_columns": "{count, plural, one {No se encontró la columna obligatoria {columns} en el encabezado del CSV.} other {No se encontraron las columnas obligatorias {columns} en el encabezado del CSV.}}",
+      "no_movement_rows": "El archivo no tiene filas de movimientos.",
+      "degiro_csv_only": "Solo se lee la exportación CSV: descarga el Extracto de cuenta en formato CSV.",
+      "degiro_not_account_statement": "Esto no es un Extracto de cuenta de DEGIRO: se esperan 12 columnas, con el ISIN en quinta posición, columnas de importe sin nombre en novena y undécima posición, y fechas en formato DD-MM-AAAA."
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "En estas filas falta, o no se puede leer, una fecha, un importe, una divisa, las participaciones o el valor.",

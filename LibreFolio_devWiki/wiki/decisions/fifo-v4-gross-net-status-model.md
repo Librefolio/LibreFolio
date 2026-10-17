@@ -38,6 +38,7 @@ replay failure vs. a local economic/orphan issue).
     DEGRADED, because they don't invalidate the rest of the result.
 - **UI reaction to FAILED**: hide all data vs. **"warn but show"** — chosen show: the frontend renders a
   failure banner but still displays whatever data is available, rather than blocking the view.
+  **Superseded on 2026-10-17** by N81 (option A, J-12): see «Revision» below.
 - **Net-column visibility**: always show net columns by default vs. **dynamic default based on `hasNetCosts`**
   (only show them when at least one row actually has allocated costs) — chosen dynamic, to match the existing
   `asset-income` column convention and avoid clutter on portfolios with no fees/taxes. This surfaced a real bug
@@ -60,6 +61,36 @@ quantitative corruption. Net table columns default to visible only when relevant
 - An empty lots-analysis result migrates from the old global `UNAVAILABLE` to `COMPLETE` with `lots=[]` — a
   visible semantic change for any code branching on the old empty-state value.
 - `LotsAnalysisPanel.svelte` must keep rendering data under FAILED, not just show a blocking error state.
+  (Until 2026-10-17; see «Revision».)
+
+## Revision — 2026-10-17: a FAILED analysis explains and hides (N81, option A; J-12)
+
+**Why it changed.** "Warn but show" drew the lots of a replay that had failed. W's test-author found the case (V-3,
+mirror case, confirmed by J on 15/10): an orphan outgoing TRANSFER is skipped by the replay (`TRANSFER_PAIR_MISSING`),
+so the lot kept 10 units open, worth 300 with a P&L of 100, while the position and the average-cost lines said 6.
+A red line saying «figures may be incomplete» did not stop a non-expert user from reading those figures.
+
+**The decision** (the coordinator's N81, option A; the developer's D1–D3, 17/10):
+- **Backend (J).** On FAILED the response's lot-derived sections are null: lots, Gantt segments, custody history,
+  lot events, value, return and performance histories, income events, economic allocation groups, `price_history`
+  (it is per lot), and the asset's orphan income, fees and taxes. What stays: the broker and combined average-cost
+  histories (they come from the average cost, not from FIFO), `quote_base_quantity`, the metadata and
+  `data_quality`. Each blocking issue (a code of `_QUANTITATIVE_FAILURE_CODES`) carries `transaction_date` and
+  `fails_analysis: true`; on FAILED only the blocking issues and the gaps of the average-cost lines are kept. AI
+  Export carries only the blocking `failure_codes`.
+- **Panel (Y).** On FAILED the panel takes no lot-derived section, even from an answer cached before the change; the
+  first chart keeps only the average-cost lines (no market line: it is the union of the per-lot price points), and
+  the Gantt, the table and the comparison are not drawn. `LotAnalysisFailedNotice` explains, then lists one row per
+  (code, transaction): the day, the broker's name from the panel's broker list (`#<id>` only for a broker the list
+  lacks; both callers pass a list that covers the analysis scope), the message, and a
+  button to `/transactions?highlight=<id>`. The way in is `transaction_id` only: `related_transaction_id` may name a
+  partner leg the user cannot see. The `fails_analysis` flag decides what goes to the notice, so the frontend keeps no
+  copy of the code list; the banner keeps the rest.
+- **Left out**: a lot-free market-price series, so a FAILED chart could keep its price line (backlog Y-30, for J).
+
+**What it costs.** A FAILED asset shows no lot until its transactions are fixed. The two halves must reach the target
+branch together: a panel without the backend half finds no flagged issue, so its notice lists nothing and the
+blocking issues fall back to the banner.
 
 ## Related
 - [[concepts/gross-net-dual-reporting]]
@@ -78,6 +109,9 @@ quantitative corruption. Net table columns default to visible only when relevant
 | Net-column visibility fix | `.../v4-fee_tax_integration/post-implementation-review-v5.md` §2; `review-checklist-v5.md` D1 |
 | Public DTO | `backend/app/schemas/portfolio.py` |
 | Engine | `backend/app/services/financial_math/fifo/engine.py` |
-| Frontend table | `frontend/src/lib/components/brokers/lots/UnifiedLotsTable.svelte` |
-| Frontend panel (FAILED banner) | `frontend/src/lib/components/brokers/lots/LotsAnalysisPanel.svelte` |
+| Frontend table | `frontend/src/lib/features/brokers/lots/UnifiedLotsTable.svelte` |
+| Frontend panel (FAILED: explain and hide, since 2026-10-17) | `frontend/src/lib/features/brokers/lots/LotsAnalysisPanel.svelte` |
+| Failure notice and its helpers | `frontend/src/lib/features/brokers/lots/LotAnalysisFailedNotice.svelte`, `frontend/src/lib/features/brokers/lots/lotDataQualityHelpers.ts` |
+| Blocking codes | `backend/app/services/financial_math/fifo/models.py` (`_QUANTITATIVE_FAILURE_CODES`) |
+| N81 / J-12 record | `LibreFolio_developer_journal/Release_2/Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md` §«J-12, la metà del pannello» |
 | User-facing doc | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.en.md` §"Costs & Net Metrics" → "Gross vs net" |

@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency, DateRangeModel, SafeDecimal, StrictModel
-from backend.app.schemas.transactions import TXCreateItem
+from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.utils.datetime_utils import UTCDateTime
 
 # =============================================================================
@@ -173,6 +173,12 @@ class BRIMFileInfo(StrictModel):
     derived_from: List[BRIMDerivedRef] = Field(default_factory=list, description="For a combined file: the originals it was built from")
     combined_into: List[str] = Field(default_factory=list, description="For an original file: the combined files built from it")
     combine_is_stale: bool = Field(default=False, description="True if a combined file was built by an older plugin version")
+
+
+class BRIMFileListItem(BRIMFileInfo):
+    """A file of ``GET /api/v1/brokers/import/files``, with what the current user may do with it (decision 36 of release 1.3)."""
+
+    can_delete: bool = Field(..., description="Whether the current user may delete the file: EDITOR or OWNER of its broker, the uploader of a file with no broker, or an administrator")
 
 
 # =============================================================================

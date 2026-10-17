@@ -6,7 +6,7 @@
  */
 
 import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
-import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPrice} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 
 export interface FxConversionInfo {
@@ -115,20 +115,20 @@ export function buildFxTooltipData(info: FxConversionInfo, fxPoint: FxDataPoint 
  */
 export function buildFxTooltipHtml(data: FxTooltipData, t: (key: string, opts?: any) => string): string {
     let html = `<div class="space-y-1">`;
-    html += `<div><span class="text-gray-400">${t('transactions.fxInfo.impliedRate')}:</span> <strong>${formatFixed(data.impliedRate, 4)}</strong></div>`;
+    html += `<div><span class="text-lf-muted-on-inverse">${t('transactions.fxInfo.impliedRate')}:</span> <strong>${formatPrice(data.impliedRate, {minDecimals: 4})}</strong></div>`;
     if (data.marketRate != null) {
-        html += `<div><span class="text-gray-400">${t('transactions.fxInfo.marketRate')}:</span> ${formatFixed(data.marketRate, 4)}`;
+        html += `<div><span class="text-lf-muted-on-inverse">${t('transactions.fxInfo.marketRate')}:</span> ${formatPrice(data.marketRate, {minDecimals: 4})}`;
         if (data.staleDays != null && data.staleDays > 0) {
-            html += ` <span class="text-amber-400">⚠️ ${t('transactions.fxInfo.stale', {values: {days: data.staleDays}})}</span>`;
+            html += ` <span class="text-lf-warning-on-inverse">⚠️ ${t('transactions.fxInfo.stale', {values: {days: data.staleDays}})}</span>`;
         }
-        if (data.marketDate) html += ` <span class="text-gray-500">(${data.marketDate})</span>`;
+        if (data.marketDate) html += ` <span class="text-lf-muted-on-inverse">(${data.marketDate})</span>`;
         html += `</div>`;
         if (data.spread) {
             const sign = data.spread.absolute >= 0 ? '+' : '';
-            html += `<div><span class="text-gray-400">${t('transactions.fxInfo.spread')}:</span> ${formatFixed(data.spread.absolute, 4, {signed: true})} (${formatPercent(data.spread.percent)})</div>`;
+            html += `<div><span class="text-lf-muted-on-inverse">${t('transactions.fxInfo.spread')}:</span> ${formatPrice(data.spread.absolute, {minDecimals: 4, signed: true})} (${formatPercent(data.spread.percent)})</div>`;
         }
     } else {
-        html += `<div class="text-gray-500 italic">${t('transactions.fxInfo.marketNotAvailable')}</div>`;
+        html += `<div class="text-lf-muted-on-inverse italic">${t('transactions.fxInfo.marketNotAvailable')}</div>`;
     }
     html += `</div>`;
     return html;

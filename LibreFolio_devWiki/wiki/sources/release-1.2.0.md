@@ -2,7 +2,7 @@
 title: "Release 1.2.0 (2026-10-14): what it brings, the decisions of its cycle, what it leaves open, how it was verified"
 category: source
 source_type: release
-status: ready-for-tag
+status: released
 date_ingested: 2026-10-13
 original_path: CHANGELOG.md
 tags: [release, release-1.2, changelog, features, decisions, open-problems, verification, backlog]
@@ -15,9 +15,8 @@ related:
 
 # Source: release 1.2.0
 
-> **Released on 2026-10-14, ready for the tag.** Every count on this page is the state of `dev_release2` at
-> `a28beed92`. Two rows of the last table — the tagged commit and the release pipeline's run — exist only after
-> publication: **the next ingest fills them**.
+> **Released on 2026-10-14**: tag `v1.2.0` on `cf00fac7d` (`main`), the same tree as `a3fe2eb04` on `dev_release2`.
+> Every count on this page is the state of `dev_release2` at `a28beed92`.
 
 ## Summary
 
@@ -45,7 +44,7 @@ Security), **32 🔄 Changed** and **7 ⚠️ Breaking changes**, under the head
 | | |
 |---|---|
 | Version | 1.2.0 |
-| Tag | `v1.2.0`, 2026-10-14 — the tagged commit is recorded by the next ingest |
+| Tag | `v1.2.0`, 2026-10-14, on `cf00fac7d` — the merge of PR #46 (`dev` into `main`) |
 | Previous release | `v1.1.0`, 2026-09-07 |
 | Database | one Alembic revision, `004_release_1_2_0_schema` (benchmark flag, widened taxonomy, onboarding progress); at the first start an existing database rebuilds six tables so that ids are never reused — [[problems/reused-ids-after-delete]] |
 | AI Export | at most one version step per component over 1.1.0 — [[decisions/ai-export-version-bump-once-per-release]] |
@@ -183,7 +182,7 @@ stay `planned` ([[features/F-077]], [[features/F-079]], [[features/F-081]], [[fe
 
 ### To fill at the tag
 
-Filled on 2026-10-14. The last two rows exist only once the release is published: **the next ingest fills them**.
+Filled on 2026-10-14; the last two rows after the publication.
 
 | Item | State |
 |---|---|
@@ -193,8 +192,8 @@ Filled on 2026-10-14. The last two rows exist only once the release is published
 | Gallery | green: 251 passed, 0 failed, 1 skipped (2026-10-13, `baabbf7a2`); the nine groups changed by I's lot 52, 20 of 20; the allocation and positions groups after I-M30, 10 of 10 (2026-10-14, `bae15c3cf`) |
 | First pipeline after the push (the dirty version) | done: run 77, on PR #42's merge into `main`, reports `v1.1.0-1648-g1ee978788`, no `-dirty` — question 11 closed ([[problems/release-shots-show-dirty-version]]) |
 | CHANGELOG counts and header date at the tag | done: `## [1.2.0] - 2026-10-14`; 25 ✨ (27 sub-items), 152 🐛 in 13 groups, 32 🔄, 7 ⚠️ at `a28beed92` |
-| The tagged commit (SHA) | *empty until publication — filled by the next ingest* |
-| The release pipeline's run | *empty until publication — filled by the next ingest* |
+| The tagged commit (SHA) | `cf00fac7d` on `main`, the merge of PR #46; its tree is the tree of `a3fe2eb04` on `dev_release2`. The GitHub release was published at 09:07 UTC |
+| The release pipeline's run | run 38540086298, «Release v1.2.0»: success, finished at 10:40 UTC. Images `1.2.0`, `1.2.0-light` and `latest` on GHCR, their `docker pull` lines appended to the GitHub release, the docs site deployed from `cf00fac7d` |
 
 ## Source files
 

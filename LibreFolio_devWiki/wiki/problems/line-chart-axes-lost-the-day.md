@@ -58,8 +58,12 @@ etichette» and «Sì, procedi; e sistema anche il percorso non compatto nello s
 - Pin label sequences, not single labels: the tests replay the developer's case on the real ECharts in SSR and assert
   there is no identical consecutive pair and that the day is present.
 - An ECharts default label never meets the app's language: give every axis a formatter.
-- Still open, low priority (backlog section I, item 47-1, «Sotto zoom gli assi a categoria perdono le etichette»): under
-  zoom, category axes lose their labels — a defect older than this work.
+- Under zoom, category axes lost their labels (backlog 47-1, a defect older than this work): the compact `interval`
+  was computed on all the points, and no `dataZoom` handler recomputed it. Closed in 1.3 by workstream Y, lot Y8
+  (2026-10-15): the policy takes the visible count (`visibleCount`, read from the zoom event by
+  `visiblePointCountFromZoom`, never from `getOption()`), and `LineChart`, `CandlestickChart` and `PriceChartFull`
+  merge `categoryAxisLabelPatch()` once the gesture settles. The patch always carries `interval: 'auto'`, because a
+  `setOption` merge keeps the previous window's step ([[concepts/echarts-chart-gotchas]]).
 
 ## Source files
 
@@ -67,8 +71,10 @@ etichette» and «Sì, procedi; e sistema anche il percorso non compatto nello s
 |------|------|
 | Axis policy and formatters | `frontend/src/lib/components/charts/responsiveXAxis.ts` |
 | Tests (sequences on the real ECharts) | `frontend/src/lib/components/charts/chartCoreHelpers.test.ts` |
-| Growth chart | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
+| Growth chart | `frontend/src/lib/features/dashboard/GrowthChart.svelte` |
 | Line and price charts | `frontend/src/lib/components/charts/LineChart.svelte` |
-| Allocation history | `frontend/src/lib/components/dashboard/AllocationHistoryChart.svelte` |
-| Lots charts (formatter replaced) | `frontend/src/lib/components/brokers/lots/LotWacPriceChart.svelte` |
+| Zoomed category axes (47-1), with `LineChart` | `frontend/src/lib/components/charts/CandlestickChart.svelte`, `frontend/src/lib/components/charts/PriceChartFull.svelte` |
+| Lot Y8 (47-1) | `LibreFolio_developer_journal/Release_2/Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md` |
+| Allocation history | `frontend/src/lib/features/dashboard/AllocationHistoryChart.svelte` |
+| Lots charts (formatter replaced) | `frontend/src/lib/features/brokers/lots/LotWacPriceChart.svelte` |
 | Journal | `LibreFolio_developer_journal/Release_2/Phase_0/47_chartAxisDayLabels/plan-phase00ChartAxisDayLabels.prompt.md` |

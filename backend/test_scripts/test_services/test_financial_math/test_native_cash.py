@@ -27,6 +27,11 @@ Section 11 (``exchange_results`` and ``CONVERSION_DUST``) is red until step F-W.
 is read inside the tests as ``native_cash.CONVERSION_DUST`` and never imported at module level,
 so before F-W those tests fail at run time with an AttributeError while every other test in
 this file still collects and runs.
+
+Section 12 (R13-SEC8-2) pins which days a currency's unit rate is asked on: every day from
+``max(first movement, 1900-01-01)``, and before that floor only the foreign movements' own days, so a
+balance counted before 1900 keeps a rate. The floor ``EARLIEST_RANGE_START`` is written as a literal
+(the name is new).
 """
 
 from __future__ import annotations
@@ -887,7 +892,7 @@ def _signed_income_tx(tx_id: int, day: str, tx_type: str, amount: str, *, asset_
 class TestFlowsPortedFromTheEngine:
     """The engine accumulator tests that F-2 retired from the builder, asked of the module: same histories, same numbers.
 
-    A builder frame ``[frame_start, date_to]`` is the flows window ``(frame_start - 1 day, date_to]``.
+    A builder run ``[date_from, date_to]`` is the flows window ``(date_from - 1 day, date_to]``.
     """
 
     @pytest.mark.asyncio
@@ -955,7 +960,7 @@ class TestFlowsPortedFromTheEngine:
 
     @pytest.mark.asyncio
     async def test_signed_income_correction_before_the_window_is_not_a_flow_of_it(self, forbidden_fx):
-        """Port of ``test_signed_income.py`` ``test_negative_correction_before_frame_start_carries_into_frame`` (frame 2025-01-05..06)."""
+        """Port of ``test_signed_income.py`` ``test_negative_correction_before_date_from_carries_into_the_first_state`` (states 2025-01-05..06)."""
         print_section("9 — port: correction before the window")
         cash = await _eur_native_cash([_signed_income_tx(1, "2025-01-01", "DEPOSIT", "1000"), _signed_income_tx(2, "2025-01-02", "DIVIDEND", "-30")])
 
@@ -1284,3 +1289,98 @@ class TestExchangeResults:
         assert isinstance(native_cash.CONVERSION_DUST, Decimal)
         assert native_cash.CONVERSION_DUST == Decimal("1e-9")
         print_success(f"{native_cash.CONVERSION_DUST}")
+
+
+# =============================================================================
+# 12 — the unit requests start at the floor (R13-SEC8-2)
+# =============================================================================
+
+#: ``EARLIEST_RANGE_START`` (utils/datetime_utils.py) as a literal: the name is new in R13-SEC8-2.
+_FLOOR = date(1900, 1, 1)
+_BEFORE_THE_FLOOR = date(1890, 1, 1)
+_RATES_UNTIL = date(1900, 1, 10)
+
+
+def _days_from(first: date, count: int) -> list[date]:
+    return [date.fromordinal(first.toordinal() + offset) for offset in range(count)]
+
+
+def _unit_days(fx: FakeFx, currency: str) -> list[date]:
+    """The days of the double's first call on which ``currency``'s unit rate was asked, in request order."""
+    return [day for code, amount, _to, day in _batch(fx) if code == currency and amount == "1"]
+
+
+class TestUnitRequestsStartAtTheFloor:
+    """A currency's unit rate is asked on every day from ``max(its first movement, the floor)`` to ``rates_until``, and
+    before the floor on each of its movements' own days only (R13-SEC8-2, MEDIUM, DoS): a foreign movement stored
+    before 1900 no longer asks one rate for every day since its own date — what it asks is bounded by the movements, not
+    by the days. The movement's own amount is still converted at its own date: it is replayed exactly."""
+
+    @pytest.mark.asyncio
+    async def test_a_movement_before_the_floor_asks_its_own_day_then_from_the_floor(self, monkeypatch):
+        """USD 100 on 1890-01-01, rates until 1900-01-10: the amount at 1890-01-01, then eleven unit requests — the
+        movement's own day, 1890-01-01, then 1900-01-01 to 1900-01-10. HEAD 94e170ae1: 3 662, every day from 1890-01-01."""
+        print_section("12 — a USD movement of 1890: its own day, then unit requests from 1900-01-01")
+        fx = install_fx(monkeypatch, {("USD", "EUR"): {_BEFORE_THE_FLOOR: "0.50", _FLOOR: "0.90"}})
+
+        result = await compute_native_cash(object(), [movement(_BEFORE_THE_FLOOR, "USD", "100")], report_currency="EUR", rates_until=_RATES_UNTIL)
+
+        assert len(fx.calls) == 1
+        assert _batch(fx)[0] == ("USD", "100", "EUR", _BEFORE_THE_FLOOR), "the movement's own amount, at its own date"
+        expected = [_BEFORE_THE_FLOOR, *_days_from(_FLOOR, 10)]
+        units = _unit_days(fx, "USD")
+        assert units == expected, f"{len(units)} USD unit requests, from {units[0] if units else None}"
+        assert _strs(result.converted) == ["50.00"]
+        assert sorted(result.unit_rates) == [("USD", day) for day in expected]
+        print_success("the amount at 1890-01-01, unit rates on 1890-01-01 and from 1900-01-01")
+
+    @pytest.mark.asyncio
+    async def test_each_movement_before_the_floor_asks_its_own_day_and_nothing_else_before_it(self, monkeypatch):
+        """USD 100 on 1890-01-01, USD -30 on 1895-03-01, rates until 1900-01-03: both movements' days, then 1900-01-01
+        to 1900-01-03 — no other day before the floor. HEAD: every day from 1890-01-01. A request of the first movement's
+        day alone would leave the 1895 balance read at the 1890 rate."""
+        print_section("12 — two USD movements before the floor: both their days, nothing else before it")
+        fx = install_fx(monkeypatch, {("USD", "EUR"): {_BEFORE_THE_FLOOR: "0.50", date(1895, 3, 1): "0.60", _FLOOR: "0.90"}})
+        movements = [movement(_BEFORE_THE_FLOOR, "USD", "100"), movement(date(1895, 3, 1), "USD", "-30", transaction_type="WITHDRAWAL")]
+
+        await compute_native_cash(object(), movements, report_currency="EUR", rates_until=date(1900, 1, 3))
+
+        assert len(fx.calls) == 1
+        assert _unit_days(fx, "USD") == [_BEFORE_THE_FLOOR, date(1895, 3, 1), *_days_from(_FLOOR, 3)]
+        print_success("1890-01-01, 1895-03-01, then 1900-01-01 to 1900-01-03")
+
+    @pytest.mark.asyncio
+    async def test_currencies_starting_on_or_after_the_floor_keep_their_first_movement(self, monkeypatch):
+        """GUARD (green on HEAD too): USD 100 on 1900-01-01 itself and GBP 50 on 1900-01-05, rates until 1900-01-06 —
+        each currency from its own first movement: GBP 1900-01-05 and 1900-01-06, USD 1900-01-01 to 1900-01-06. A
+        floor applied to every currency would ask GBP from 1900-01-01."""
+        print_section("12 — first movements on or after the floor: unchanged")
+        fx = install_fx(monkeypatch, {("USD", "EUR"): {_FLOOR: "0.90"}, ("GBP", "EUR"): {_FLOOR: "1.20"}})
+        movements = [movement(_FLOOR, "USD", "100"), movement(date(1900, 1, 5), "GBP", "50", broker_id=B)]
+
+        await compute_native_cash(object(), movements, report_currency="EUR", rates_until=date(1900, 1, 6))
+
+        assert len(fx.calls) == 1
+        assert (_unit_days(fx, "GBP"), _unit_days(fx, "USD")) == (_days_from(date(1900, 1, 5), 2), _days_from(_FLOOR, 6))
+        print_success("GBP from 1900-01-05, USD from 1900-01-01")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("day", [date(1890, 6, 1), date(1899, 12, 31)], ids=["mid-1890", "the-day-before-the-floor"])
+    async def test_a_balance_counted_before_the_floor_is_valued_between_its_movement_and_the_floor(self, monkeypatch, day):
+        """GUARD: a USD rate stored since 1880 (0.50; 0.90 from the floor) answers the 1890 movement of USD 100 and its
+        own day's unit rate. On a day between the movement and the floor ``value_at`` is 50.00 (100 at 0.50, carried),
+        and ``exchange_results(day, 1900-01-10)`` 40.00 (90.00 - 50.00) — numbers, no ValueError.
+
+        HEAD: green (every day's unit rate is asked, so the day reads 0.50). A floor-only clamp — unit rates from
+        1900-01-01 alone, without the movements' own days — leaves a counted balance with no rate on or before the day:
+        ``_foreign_value`` raises ``ValueError: no USD/EUR rate on or before …``, a 500 once the Dashboard passes such a
+        period start to ``exchange_results``. This test guards against that clamp."""
+        print_section(f"12 — a USD balance of 1890 valued on {day}")
+        install_fx(monkeypatch, {("USD", "EUR"): {date(1880, 1, 1): "0.50", _FLOOR: "0.90"}})
+
+        cash = await compute_native_cash(object(), [movement(_BEFORE_THE_FLOOR, "USD", "100")], report_currency="EUR", rates_until=_RATES_UNTIL)
+
+        assert _strs(cash.converted) == ["50.00"], "precondition: the 1890 movement is converted, so its balance is counted"
+        assert _str_dict(cash.value_at(day)) == {A: "50.00"}
+        assert _str_dict(cash.exchange_results(day, _RATES_UNTIL)) == {A: "40.00"}
+        print_success(f"value 50.00 on {day}, exchange result 40.00 to {_RATES_UNTIL}")

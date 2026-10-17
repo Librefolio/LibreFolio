@@ -6,6 +6,9 @@ tags: ["source-code", "v0.9.0", "remotion", "ui", "gallery"]
 
 # Source Code v0.9.0 Batch
 
+> **Note (2026-10-14):** the video project has since left this repository — see [[entities/video-promo-remotion]].
+> This page describes v0.9.0 as it was.
+
 ## Summary
 Ingest of the newly created and modified source files up to commit `3622c2c03` (v0.9.0). This includes the newly bootstrapped Remotion project for the Video Promo, an interactive pros/cons slider in the MkDocs homepage, and the overhaul of the E2E gallery generation script to support Phase 7 and 8 features.
 

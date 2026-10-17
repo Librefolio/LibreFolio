@@ -42,20 +42,20 @@
         }
     > = {
         warning: {
-            container: 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-200/60',
-            icon: 'text-amber-500 dark:text-amber-500/50',
+            container: 'bg-lf-warning-soft border-lf-warning-line text-lf-warning-on-soft',
+            icon: 'text-lf-warning',
         },
         info: {
-            container: 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800/40 text-blue-700 dark:text-blue-200/60',
-            icon: 'text-blue-500 dark:text-blue-400/50',
+            container: 'bg-lf-info-soft border-lf-info-line text-lf-info-on-soft',
+            icon: 'text-lf-info',
         },
         error: {
-            container: 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-200/60',
-            icon: 'text-red-500 dark:text-red-400/50',
+            container: 'bg-lf-danger-soft border-lf-danger-line text-lf-danger-on-soft',
+            icon: 'text-lf-danger',
         },
         success: {
-            container: 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-200/60',
-            icon: 'text-emerald-500 dark:text-emerald-400/50',
+            container: 'bg-lf-success-soft border-lf-success-line text-lf-success-on-soft',
+            icon: 'text-lf-success',
         },
     };
 

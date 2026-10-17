@@ -41,11 +41,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import date as Date
+from decimal import Decimal
 from enum import StrEnum
 
 from pydantic import Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel, OpenDateRangeModel, StrictModel
 from backend.app.schemas.portfolio import DataQualityStatus
 from backend.app.schemas.risk import (
@@ -70,9 +72,12 @@ from backend.app.services.ai_export.components.technical_shared import (
 )
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError
-from backend.app.services.date_sentinel import resolve_date_sentinels
+from backend.app.services.financial_math.returns import float_price_return
+from backend.app.services.platform.date_sentinel import resolve_date_sentinels
 from backend.app.services.risk.metrics import drawdown_episodes
 from backend.app.services.risk.service import RiskService
+
+logger = get_logger(__name__)
 
 # Canonical Risk analytic delegated to by every drawdown context component.
 _DRAWDOWN_ANALYTIC_CODE = "drawdown_summary"
@@ -108,6 +113,11 @@ REASON_INSUFFICIENT_OBSERVED_PRICES = "insufficient_observed_prices"
 REASON_INVALID_OBSERVED_PRICES = "invalid_observed_prices"
 
 
+def _is_total_loss(current_drawdown_ratio: float | None) -> bool:
+    """A drawdown at -1: everything lost, so ``remaining_to_peak_ratio`` is None (Risk ``total_loss_no_recovery``)."""
+    return current_drawdown_ratio is not None and current_drawdown_ratio <= -1
+
+
 class DrawdownContextPayload(StrictModel):
     """Renderer-neutral current/maximum drawdown episode context for one AI Export scope.
 
@@ -118,6 +128,9 @@ class DrawdownContextPayload(StrictModel):
     (sourced verbatim from `RiskDrawdownOutput`) is present; on
     ``unavailable``/``failed`` every metric is ``None`` and ``reason_code`` /
     ``message`` explain why, so an optional analysis section degrades honestly.
+    One success field may be ``None``: ``remaining_to_peak_ratio`` after a total
+    loss (``current_drawdown_ratio`` at -1), which no finite gain recovers; the
+    Risk warning ``total_loss_no_recovery`` travels in ``warnings`` (v2).
     """
 
     status: DrawdownContextStatus
@@ -197,7 +210,7 @@ class DrawdownContextPayload(StrictModel):
     def _validate_success(self) -> None:  # noqa: C901 — flat status invariant raises
         if self.reason_code is not None or self.message is not None:
             raise ValueError("successful drawdown context must not carry reason_code/message")
-        missing = [name for name in self._SUCCESS_REQUIRED_FIELDS if getattr(self, name) is None]
+        missing = [name for name in self._SUCCESS_REQUIRED_FIELDS if getattr(self, name) is None and not (name == "remaining_to_peak_ratio" and _is_total_loss(self.current_drawdown_ratio))]
         if missing:
             raise ValueError(f"successful drawdown context requires fields: {missing}")
         if self.available_end < self.available_start:
@@ -445,19 +458,21 @@ class PortfolioAssetDrawdownRow(StrictModel):
 
     @model_validator(mode="after")
     def _validate_row(self) -> PortfolioAssetDrawdownRow:
-        metric_fields = (
+        other_metrics = (
             self.calculation_basis,
             self.calculation_currency,
             self.data_quality_status,
             self.current_drawdown_ratio,
             self.maximum_drawdown_ratio,
             self.maximum_drawdown_recovery_status,
-            self.remaining_to_peak_ratio,
             self.available_start,
             self.available_end,
         )
+        metric_fields = (*other_metrics, self.remaining_to_peak_ratio)
+        # A total loss has no finite recovery gain: its remaining_to_peak_ratio is None (v2).
+        required_fields = other_metrics if _is_total_loss(self.current_drawdown_ratio) else metric_fields
         if self.status in {DrawdownContextStatus.OK, DrawdownContextStatus.PARTIAL}:
-            if self.reason_code is not None or any(value is None for value in metric_fields):
+            if self.reason_code is not None or any(value is None for value in required_fields):
                 raise ValueError("available asset drawdown rows require all metrics and no reason_code")
             if self.n_observations < 2:
                 raise ValueError("available asset drawdown rows require at least two observations")
@@ -473,13 +488,13 @@ class PortfolioAssetDrawdownSnapshotPayload(StrictModel):
     rows: tuple[PortfolioAssetDrawdownRow, ...]
 
 
-def _observed_price_points(result, *, start: Date, end: Date) -> tuple[tuple[Date, float], ...]:
+def _observed_price_points(result, *, start: Date, end: Date) -> tuple[tuple[Date, Decimal], ...]:
     if result is None or coherent_price_currency(result) is None:
         return ()
-    return tuple((point.date, float(point.close)) for point in result.prices if start <= point.date <= end and (point.backward_fill_info is None or point.backward_fill_info.days_back == 0))
+    return tuple((point.date, point.close) for point in result.prices if start <= point.date <= end and (point.backward_fill_info is None or point.backward_fill_info.days_back == 0))
 
 
-def _asset_drawdown_row(*, asset_id: int, points: tuple[tuple[Date, float], ...], scope: BuildScope, calculation_currency: str | None) -> PortfolioAssetDrawdownRow:
+def _asset_drawdown_row(*, asset_id: int, points: tuple[tuple[Date, Decimal], ...], scope: BuildScope, calculation_currency: str | None) -> PortfolioAssetDrawdownRow:
     if len(points) < 2 or calculation_currency is None:
         return PortfolioAssetDrawdownRow(
             asset_id=asset_id,
@@ -495,12 +510,24 @@ def _asset_drawdown_row(*, asset_id: int, points: tuple[tuple[Date, float], ...]
             n_observations=len(points),
         )
 
-    returns = tuple(current_value / previous_value - 1 for (_, previous_value), (_, current_value) in zip(points, points[1:], strict=False))
-    report = drawdown_episodes(
-        returns,
-        dates=tuple(point_date for point_date, _ in points[1:]),
-        baseline_date=points[0][0],
-    )
+    # The return path of the Risk series (market_series): the asset's row and its drawdown_summary agree.
+    returns = tuple(float_price_return(previous_value, current_value) for (_, previous_value), (_, current_value) in zip(points, points[1:], strict=False))
+    try:
+        report = drawdown_episodes(
+            returns,
+            dates=tuple(point_date for point_date, _ in points[1:]),
+            baseline_date=points[0][0],
+        )
+    except ValueError:
+        # The episode maths refused the series — e.g. a one-step fall beyond ~2**53 takes the float wealth to 0. Like
+        # an undeclared Risk failure: logged, reported as ours (failed), and only this asset's row, not the section.
+        logger.exception("Asset drawdown snapshot row failed", asset_id=asset_id)
+        return PortfolioAssetDrawdownRow(
+            asset_id=asset_id,
+            status=DrawdownContextStatus.FAILED,
+            reason_code=REASON_RISK_ERROR,
+            n_observations=len(points),
+        )
     requested_days = max(1, (scope.period_end - scope.period_start).days)
     available_days = max(0, (points[-1][0] - points[0][0]).days)
     coverage_ratio = min(1.0, available_days / requested_days)
@@ -550,7 +577,7 @@ async def _build_portfolio_asset_drawdown_snapshot(
 
 PORTFOLIO_DRAWDOWN_SUMMARY_COMPONENT = ComponentSpec(
     component_id="portfolio.drawdown_summary",
-    version=1,
+    version=2,
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=DrawdownContextPayload,
     builder=_build_portfolio_drawdown,
@@ -559,7 +586,7 @@ PORTFOLIO_DRAWDOWN_SUMMARY_COMPONENT = ComponentSpec(
 
 PORTFOLIO_ASSET_DRAWDOWN_SNAPSHOT_COMPONENT = ComponentSpec(
     component_id="portfolio.asset_drawdown_snapshot",
-    version=1,
+    version=2,
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioAssetDrawdownSnapshotPayload,
     builder=_build_portfolio_asset_drawdown_snapshot,
@@ -569,7 +596,7 @@ PORTFOLIO_ASSET_DRAWDOWN_SNAPSHOT_COMPONENT = ComponentSpec(
 
 BROKER_DRAWDOWN_SUMMARY_COMPONENT = ComponentSpec(
     component_id="broker.drawdown_summary",
-    version=1,
+    version=2,
     domains=frozenset({Domain.BROKER}),
     output_model=DrawdownContextPayload,
     builder=_build_broker_drawdown,
@@ -578,7 +605,7 @@ BROKER_DRAWDOWN_SUMMARY_COMPONENT = ComponentSpec(
 
 ASSET_DRAWDOWN_SUMMARY_COMPONENT = ComponentSpec(
     component_id="asset.drawdown_summary",
-    version=1,
+    version=2,
     domains=frozenset({Domain.ASSET}),
     output_model=DrawdownContextPayload,
     builder=_build_asset_drawdown,

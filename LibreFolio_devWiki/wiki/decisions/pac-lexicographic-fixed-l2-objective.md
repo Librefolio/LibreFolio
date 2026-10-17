@@ -72,7 +72,7 @@ wins.
 | Objective stages | `backend/app/services/pac_allocator/objectives.py` |
 | Constraints and the L2 epigraph | `backend/app/services/pac_allocator/constraints.py` |
 | Cascade | `backend/app/services/pac_allocator/solver.py` |
-| Policy literal on the wire | `backend/app/schemas/pac_allocator.py` |
+| Policy literal on the wire | `backend/app/schemas/pac_allocator/request.py` |
 | Policy tests | `backend/test_scripts/test_services/test_pac_planner_policies.py` |
 | Policies design (§4) | `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/plan-phase00PacRebalancerPolicies.prompt.md` |
 | MathematicalCore design | `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/plan-phase00PacRebalancerMathematicalCore.prompt.md` |

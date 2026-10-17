@@ -53,11 +53,13 @@ $$
 \text{Required gain} = \frac{1}{1 + DD} - 1 = \frac{-DD}{1 + DD}
 $$
 
-The two forms are the same expression — the second is the first with the fraction combined — and [Max Drawdown](max-drawdown.md) explains the asymmetry this creates, with the worked values.
+The two forms are the same expression — the second is the first with the fraction combined — and [Max Drawdown](max-drawdown.md) explains the asymmetry this creates, with the worked values. The second form is the one evaluated: on a small drawdown it keeps the gain precise, where the first loses digits by subtracting $1$ from a number very close to $1$. The remaining-to-peak figure and the [trough-to-peak gain](max-drawdown.md#recovery-time) of the maximum drawdown are computed by one shared function, so the two can never follow different formulas.
+
+A total loss has no finite recovery gain: at $DD = -100\%$ the denominator $1 + DD$ is zero. The remaining-to-peak figure is then left without a number rather than given an infinite one, and the result carries a warning that says why.
 
 !!! warning "The same formula, applied to a different question"
 
-    That asymmetry is a general lesson, and it is taught on the maximum drawdown page. The quantity computed here applies it to the **current** drawdown instead, and the difference is not cosmetic:
+    That asymmetry is a general lesson, and it is taught on the maximum drawdown page. The quantity computed here applies it to the **current** drawdown, while the trough-to-peak gain applies it to the **maximum** drawdown, and the difference is not cosmetic:
 
     - applied to the **maximum**, it is a historical statement — *how much it would have taken to recover, at the worst point ever reached*;
     - applied to the **current** drawdown, it is a present one — *how much it takes to recover from where the portfolio stands today*.

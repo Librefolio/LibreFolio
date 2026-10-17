@@ -34,7 +34,9 @@
  * The same outer beforeEach installs {@link guardGalleryOffline} on every page: no gallery scenario reaches a real
  * price or exchange-rate provider, or writes a price. The section of that name below lists every endpoint of the API
  * client that would, and what the gallery answers instead (galleryOfflineData.ts). Nor does any scenario reach a
- * third-party host — the PDF viewer's CDN, Google Fonts —: the gallery must work without the network.
+ * third-party host — the PDF viewer's CDN, Google Fonts —: the gallery must work without the network. The guard lasts as
+ * long as the app does: at the end of a test the page leaves for about:blank before its routes are dropped
+ * ({@link leaveGalleryPage}).
  *
  * ## Favicon images, gallery-wide
  *
@@ -43,7 +45,7 @@
  * SNB icons. So the same beforeEach also installs {@link keepFaviconImagesLoading}, which keeps them loading.
  */
 
-import type {APIResponse, Route, TestInfo} from '@playwright/test';
+import type {APIResponse, Dialog, Route, TestInfo} from '@playwright/test';
 import {expect, type APIRequestContext, type Locator, type Page} from './playwright';
 import {waitForParseVerdict, waitForSettled} from './app-events';
 import {GALLERY_LOCALES} from './galleryLocale';
@@ -195,14 +197,13 @@ export async function createGalleryBroker(api: APIRequestContext, account: Galle
  * every file of a broker the test created, which held none when it was created, so all of them are
  * the test's; the forced broker delete would drop them anyway), its brokers, forced, and itself.
  *
- * The page leaves first, so the wizard does not react while its files go away. The request
- * context signs in as the account: it has its own cookie jar, so the page's session is untouched.
+ * The page leaves first, for about:blank, so the wizard does not react while its files go away — and
+ * only then are its routes dropped, the offline guard's among them ({@link leaveGalleryPage}): no app
+ * document may live without the guard. A page that cannot leave keeps its routes until it closes. The
+ * request context signs in as the account: it has its own cookie jar, so the page's session is untouched.
  */
 export async function cleanupGalleryAccount(page: Page, request: APIRequestContext, account: GalleryAccount): Promise<void> {
-    if (!page.isClosed()) {
-        await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
-        await page.goto('about:blank').catch(() => undefined);
-    }
+    await leaveGalleryPage(page, `the cleanup of ${account.user.username}`);
     const failures: string[] = [];
     try {
         const signedIn = await request.post(`${API}/auth/login`, {data: {username: account.user.username, password: account.user.password}});
@@ -394,7 +395,7 @@ const PROVIDER_CATALOGUE = `${API}/fx/providers`;
 const PROVIDER_SEARCH = `${API}/assets/provider/search`;
 const PROVIDER_SEARCH_STREAM = `${API}/assets/provider/search/stream`;
 const PROVIDER_CALLS = new Set([`${API}/assets/prices/sync`, `${API}/assets/provider/refresh`, `${API}/assets/provider/probe`, `${API}/fx/currencies/sync`]);
-/** What each provider reports, as the search stream does for a provider that raised (asset_sources/search.py). */
+/** What each provider reports, as the search stream does for a provider that raised (services/assets/search.py). */
 const OFFLINE_SEARCH_ERROR = 'provider not reached: the gallery runs offline';
 
 /**
@@ -450,7 +451,8 @@ async function offlinePricesById(page: Page, guard: GalleryOfflineGuard): Promis
 /**
  * Keep every page of the test from reaching a provider ({@link GalleryOfflineGuard} says what is answered, and how).
  * Installed by the gallery's outer beforeEach, before any sign-in; a test reads it with {@link galleryOfflineGuard},
- * and the outer afterEach fails the test on any sync or problem it recorded ({@link expectGalleryOffline}).
+ * and the outer afterEach leaves the page before it drops the guard ({@link leaveGalleryPage}), then fails the test on
+ * any sync or problem it recorded ({@link expectGalleryOffline}).
  */
 export async function guardGalleryOffline(page: Page): Promise<GalleryOfflineGuard> {
     const guard: GalleryOfflineGuard = {livePrices: 'fixture', livePolls: 0, pricedPolls: 0, pricedAssets: new Map(), catalogueReads: 0, searches: 0, releaseProbes: 0, syncs: [], thirdParty: [], problems: []};
@@ -584,6 +586,77 @@ export function expectGalleryOffline(page: Page): void {
     expect(guard.problems, "the gallery's offline guard could not answer as designed").toEqual([]);
 }
 
+/** How long leaving for about:blank may take: nothing is fetched, so only a page that does not answer runs into it. */
+const LEAVE_TIMEOUT = 10_000;
+
+/**
+ * Leave the page for about:blank, then drop its routes — the offline guard's among them. In that order, so that the guard
+ * outlives the app's last document: on about:blank no app code is left to ask anything. Dropped first, the routes left the
+ * app running unguarded until the page closed, and its live-price poll (`POST /assets/prices/current`: every 30 s on the
+ * Assets list and on an asset's page, which also asks once a minute after a 5 s warm-up) reached the backend, which asks
+ * the asset's provider and writes today's candle. On 14/10 one tick in that window rewrote Apple's from Yahoo in the lane's
+ * database, and every Apple-dependent shot of that run after it changed.
+ *
+ * Once the page has left, the routes still go with `ignoreErrors`: a handler running for a request of the document just
+ * left — a listing hideGalleryTempData filters, which reads through `page.request` — would otherwise throw when the context
+ * closes, against whichever test that is. A page that could not leave keeps its routes until the fixture closes it, and the
+ * log says so, naming `who` (⚠️): an error thrown by a handler late is a smaller harm than a provider reached. A closed page
+ * has neither a document nor routes.
+ */
+export async function leaveGalleryPage(page: Page, who: string): Promise<void> {
+    if (page.isClosed()) return;
+    // A page may ask before it is left: the PAC planner cancels a 'leave' while its draft is dirty (A8), and SvelteKit then
+    // raises the browser's beforeunload dialog. Accepted: the test is over, nothing is committed, and the draft goes with the
+    // context anyway — leaving is what keeps the guard honest. Answered here, for the goto only, rather than left to
+    // Playwright, whose documentation dismisses every dialog — which would cancel the leave — while 1.61's code accepts a
+    // beforeunload. A listener takes Playwright's answer over for every dialog, so any other kind is dismissed, as by default.
+    const answer = (dialog: Dialog): void => {
+        (dialog.type() === 'beforeunload' ? dialog.accept() : dialog.dismiss()).catch(() => undefined);
+    };
+    page.on('dialog', answer);
+    try {
+        await page.goto('about:blank', {timeout: LEAVE_TIMEOUT});
+    } catch (error) {
+        const reason = (error instanceof Error ? error.message : String(error)).split('\n')[0];
+        if (!page.isClosed()) console.log(`  ⚠️ ${who}: the page could not leave for about:blank (${reason}): its routes stay, the offline guard with them, until the page closes`);
+        return;
+    } finally {
+        page.off('dialog', answer);
+    }
+    // The page forgets its routes, and tells their handlers to keep quiet, before it tells the browser: only that last part
+    // can fail, on a page closed meanwhile.
+    await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+}
+
+/** The attachment {@link attachPageSnapshotOnFailure} adds to a failed test: its page as the test left it. */
+const PAGE_SNAPSHOT_ATTACHMENT = 'page-snapshot-before-leave';
+
+/** How long that snapshot may take: it is evidence, and the hooks of a failed test do not wait long for it. */
+const PAGE_SNAPSHOT_TIMEOUT = 5_000;
+
+/**
+ * When the test failed, write its page as the test left it — the accessibility snapshot error-context.md gives
+ * (`page.ariaSnapshot({mode: 'ai'})`) — into the test's output folder, next to error-context.md, and attach it, before the
+ * hooks leave the page ({@link leaveGalleryPage}). Playwright takes its own for error-context.md only after the hooks, when
+ * the context closes: by then the page is on about:blank. (The failure screenshot is taken before the hooks, and still
+ * shows the app.) Once per test — the inner afterEach of a test that owns an account and the outer one both call it — and
+ * only from an app document. Best effort: a page that cannot be read adds nothing, and the test's own error stays the verdict.
+ */
+export async function attachPageSnapshotOnFailure(page: Page, testInfo: TestInfo): Promise<void> {
+    if (testInfo.status === testInfo.expectedStatus && testInfo.errors.length === 0) return;
+    if (page.isClosed() || page.url() === 'about:blank') return;
+    if (testInfo.attachments.some((attachment) => attachment.name === PAGE_SNAPSHOT_ATTACHMENT)) return;
+    const url = page.url();
+    try {
+        const snapshot = await page.ariaSnapshot({mode: 'ai', timeout: PAGE_SNAPSHOT_TIMEOUT});
+        const file = testInfo.outputPath(`${PAGE_SNAPSHOT_ATTACHMENT}.md`);
+        writeFileSync(file, `# Page snapshot before the gallery left the page\n\n- URL: ${url}\n\n\`\`\`yaml\n${snapshot}\n\`\`\`\n`);
+        await testInfo.attach(PAGE_SNAPSHOT_ATTACHMENT, {contentType: 'text/markdown', path: file});
+    } catch {
+        // Evidence, not a verdict: the test's own error says what failed.
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Favicon images: kept loading while routes are installed
 // ---------------------------------------------------------------------------
@@ -686,7 +759,8 @@ export async function keepFaviconImagesLoading(page: Page): Promise<void> {
  * /favicon.ico holds it with the gallery's query, set through `setAttribute` and through the `src` property, and reads
  * it back as it was written, through `getAttribute` and the property. The stored value is read from the attribute node,
  * which the fix leaves alone. The images belong to a document of their own, which has no window, so nothing loads. A
- * page still on about:blank never loaded a document for the script to run in; a closed page has none.
+ * page on about:blank has no app document to read: it never loaded one, or it has left it ({@link leaveGalleryPage}) —
+ * so the outer afterEach reads this before the page leaves. A closed page has none.
  */
 export async function expectFaviconImagesLoading(page: Page): Promise<void> {
     if (page.isClosed() || page.url() === 'about:blank') return;
@@ -1053,8 +1127,8 @@ export async function expectUncovered(target: Locator, what: string): Promise<vo
         .toBe(true);
 }
 
-/** Every kind of toast the app shows: ToastContainer renders each as `toast-{variant}`. */
-const ANY_TOAST = ['success', 'error', 'warning', 'info'].map((variant) => `[data-testid="toast-${variant}"]`).join(', ');
+/** Every kind of toast the app shows: ToastContainer renders each as `toast-{variant}`. Also galleryShot.ts's wait for them to leave. */
+export const ANY_TOAST = ['success', 'error', 'warning', 'info'].map((variant) => `[data-testid="toast-${variant}"]`).join(', ');
 
 /**
  * Close the success toasts on screen through their own ✕, and wait until they have slid out. A success

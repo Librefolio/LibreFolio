@@ -12,7 +12,7 @@ $$
 \boxed{\mathrm{PnL}_{\text{period}} = \mathrm{NAV}(t_1)-\mathrm{NAV}(t_0)-\Delta \mathrm{CapitalBaseline}_{[t_0,t_1]}}
 $$
 
-The baseline delta comes from `cumulative_external_cash_flow`, so it includes cash flows and priced in-kind ADJUSTMENT/TRANSFER capital.
+The baseline delta comes from `cumulative_external_cash_flow`, so it includes cash flows and priced in-kind ADJUSTMENT/TRANSFER capital. An outgoing ADJUSTMENT with a cost basis takes out the value it hands over, converted at its date ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)).
 
 ---
 
@@ -24,8 +24,8 @@ $$
 
 | Component | Definition |
 |-----------|-----------|
-| $\Delta\mathrm{UGL}$ | Change in unrealized gain/loss over the period — for assets priced in another currency, including the exchange-rate effect on their historical cost |
-| Realized | Sum of (sell proceeds − historical cost of the units sold) for SELLs in period; proceeds are converted at the sale date |
+| $\Delta\mathrm{UGL}$ | Change in unrealized gain/loss over the period: market value − open cost basis of the positions held at each boundary, securities in transit left out ([the period unrealized](index.md#two-unrealized-figures)) — for assets priced in another currency, including the exchange-rate effect on their historical cost |
+| Realized | Sum of (proceeds − historical cost of the units given up) for the SELLs in period and the outgoing ADJUSTMENTs with a cost basis, whose proceeds are the value they hand over; proceeds are converted at the transaction's date ([Portfolio Engine — §8](index.md#8-realized-gain-loss)) |
 | Income | DIVIDEND + INTEREST in period |
 | FeesTaxes | FEE + TAX in period |
 | Other | What closes the identity: the exchange result on cash held in another currency (FX on cash) plus a residual |
@@ -47,7 +47,7 @@ The residual holds what neither the four components nor the exchange result on c
 - the exchange-rate move of cash while it travels between two brokers: in transit, it belongs to no broker's balance;
 - the cost of a currency exchange, at one broker or across two: −1,000 USD worth €920 at the day's rate, exchanged into +€900, gives −€20, which is neither a fee nor a sale;
 - the value of assets travelling between two brokers on a boundary day;
-- a sale left out of Realized because its proceeds could not be converted or its position's cost is incomplete.
+- a sale left out of Realized because its proceeds could not be converted, or a sale or an outgoing ADJUSTMENT left out because its position's cost is incomplete.
 
 ### 💵 FX on Cash {: #fx-on-cash }
 
@@ -104,7 +104,7 @@ $$
 
 For a mark quoted in $A$, $\mathrm{MV}_A(t) = \frac{q}{qbq} \cdot \mathrm{mark}_A(t) \cdot r_A(t)$, so the asset effect is the assets' own change in their currency, translated at the day's rate: $E^{\text{asset}}_A(t) = \bigl(\frac{q}{qbq} \cdot \mathrm{mark}_A(t) - \mathrm{Cost}^{A}_A(t)\bigr)\, r_A(t)$. The exchange-rate effect is zero on the day of each purchase. For $A = C^*$, $r = 1$ and $\mathrm{Cost}^{A} = \mathrm{Cost}^{*}$: the exchange-rate effect vanishes, and assets already in the report currency have an asset effect only.
 
-A position in a currency $A \neq C^*$ that cannot be split on day $t$ — no market value, no rate $r_A(t)$, or a cost incomplete in either currency — adds its whole $\mathrm{MV} - \mathrm{Cost}^{*}$ (with $\mathrm{MV} = 0$ when it has no market value) to an **unsplit** part $E^{\text{unsplit}}_A(t)$ instead. Positions in $C^*$ always count in the asset effect.
+A position in a currency $A \neq C^*$ that cannot be split on day $t$ — no market value, no rate $r_A(t)$, or a cost incomplete in either currency — adds its whole $\mathrm{MV} - \mathrm{Cost}^{*}$ (with $\mathrm{MV} = 0$ when it has no market value) to an **unsplit** part $E^{\text{unsplit}}_A(t)$ instead. Positions in $C^*$ always count in the asset effect. A position valued at its cost because its asset has no mark at all ([Portfolio Engine — §3](index.md#3-position-state)) has $\mathrm{MV} = \mathrm{Cost}^{*}$ and adds to no part: splitting it would invent an asset effect and an exchange-rate effect of opposite sign.
 
 The period rows are the changes between the period's two boundary states — the last state on or before $t_0$ (zero if there is none) and the state at $t_1$ —, the same two states as $\Delta\mathrm{UGL}$:
 
@@ -147,7 +147,20 @@ $$
 \mathcal{P} = \text{positions with BUY/SELL/ADJUSTMENT/TRANSFER activity or boundary quantity}
 $$
 
+A position's start and end values are the portfolio's own valuation of it at the end of $t_0$ and of $t_1$, the two states of $\Delta\mathrm{UGL}$ ([Portfolio Engine — §3](index.md#3-position-state)):
+
+- its mark ([§2](index.md#2-valuation-price)): a market quote, or else a BUY/SELL price, a trade price being restated through any later split;
+- its cost basis, for a holding whose asset has no mark at all (`ESTIMATED_AT_COST`);
+- converted at the exchange rate of the boundary day itself.
+
+The rows therefore add up to the portfolio: when every row is known, $\sum_{(a,b)} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL}$, and the rows plus the other period effects — unallocated income and costs, FX on cash, the residual — close $\mathrm{PnL}_{\text{period}}$. Other holds no valuation difference. Dust aside: a row counts a residual of $10^{-5}$ units or fewer as not held, the portfolio values it ([§7](index.md#7-period-contribution)).
+
+- **Internal transfer.** A security moved between two of your brokers inside the period splits its result: the sending broker's row answers for the units until they arrive, the receiving broker's from their arrival, and the total is unchanged. A transfer already in transit at $t_0$, or still in transit at $t_1$, keeps the plain boundary values ([§7](index.md#7-period-contribution)).
+- **Unknown values.** A position held at a boundary whose unrealized gain/loss is unknown there — a missing exchange rate, an incomplete cost — has an unknown $\Delta\mathrm{UGL}(a,b)$, never the known side minus zero.
+
 Annualized period return clamps its window start to the later of the requested start and the oldest open lot date. It uses $|\mathrm{StartValue}|$ as annualization base, falling back to end cost basis for positions opened mid-period. See [Net Annualized Return](net-annualized-return.md).
+
+A position closed in the period — nothing left at $t_1$ — annualizes differently: on the historical cost of the units that left it in the period — sold, or moved to another broker of the scope — over the time it was held inside it, from the later of $t_0$ and its first opening to the day its last units left. Its period percentage keeps $|\mathrm{StartValue}|$ as base. See [Net Annualized Return — Positions Closed in the Period](net-annualized-return.md#closed-in-period).
 
 🔗 See **[Portfolio Engine — §7 Period Contribution](index.md#7-period-contribution)** for details.
 

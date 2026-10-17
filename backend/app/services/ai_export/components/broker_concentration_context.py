@@ -53,6 +53,7 @@ from backend.app.services.ai_export.components.resources import BROKER_REPORT_RE
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError
+from backend.app.services.financial_math.weights import concentration
 
 # Whole-portfolio (unfiltered) report resource used only by the comparator. It is
 # a *different* cache slot from `broker.report` (the broker-filtered load), so the
@@ -88,19 +89,15 @@ def _require_broker_scope(context: BuildContext) -> BuildScope:
 def concentration_metrics(summary: PortfolioSummary | None) -> tuple[Decimal | None, Decimal | None, int]:
     """Largest position weight and Herfindahl points over the *entire* holding set.
 
-    Mirrors `broker_financial._concentration_metrics` exactly (no top-N
-    truncation) so the context/comparator numbers reconcile 1:1 with the frozen
+    The same function as `broker_financial._concentration_metrics`,
+    `financial_math.weights.concentration` (no top-N truncation), so the
+    context/comparator numbers reconcile 1:1 with the frozen
     `broker.allocation_concentration` section.
     """
     if summary is None:
         return None, None, 0
-    weights = [holding.nav_weight_percent for holding in summary.holdings if holding.nav_weight_percent is not None]
-    position_count = len(summary.holdings)
-    if not weights:
-        return None, None, position_count
-    largest = max(abs(weight) for weight in weights)
-    herfindahl = sum(weight * weight for weight in weights)
-    return largest, herfindahl, position_count
+    largest, herfindahl = concentration(holding.nav_weight_percent for holding in summary.holdings if holding.nav_weight_percent is not None)
+    return largest, herfindahl, len(summary.holdings)
 
 
 def _holding_native_currency(holding: PortfolioHolding) -> str | None:

@@ -1,0 +1,17 @@
+/*
+ * Media components: the uploader's image icon.
+ *
+ * Component colour tokens (plan 55, workstream R, R-3): the colours that the components' <style> blocks used
+ * to write by hand, one name per role. `-dark` twins feed the components' `.dark` rules, which stay where
+ * they are. Same look as before by construction:
+ * - every value is the exact text the production build emitted for the original literal (esbuild turns
+ *   `white` into `#fff` and `rgb(0 0 0 / 0.1)` into `#0000001a`, but leaves custom properties untouched);
+ * - the original spelling follows in a comment when it differs.
+ * The rest of the media components read the colour roles (AF, 16/10/2026). The image icon's blue stays here: it is a
+ * category (one colour per file type), not a state, and waits for the categorical roles.
+ */
+:root {
+    /* FileUploader.svelte */
+    --lf-cmp-file-uploader-image-icon-text: #3b82f6;
+    --lf-cmp-file-uploader-image-icon-text-dark: #60a5fa;
+}

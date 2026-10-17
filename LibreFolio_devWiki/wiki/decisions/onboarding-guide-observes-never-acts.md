@@ -69,8 +69,8 @@ the coachmark (`allowedModalDepth`).
 | Step table and target listening | `frontend/src/lib/features/onboarding/components/OnboardingOverlayHost.svelte` |
 | Anchor action | `frontend/src/lib/features/onboarding/guideAnchors.svelte.ts` |
 | Anchor action test | `frontend/src/lib/features/onboarding/guideAnchors.test.ts` |
-| Wizard wiring | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| Bulk hand-off | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| Wizard wiring | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
+| Bulk hand-off | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | Inert shell | `frontend/src/routes/(app)/+layout.svelte` |
 | Unwired previews | `frontend/src/lib/features/onboarding/onboardingTourSurfaces.svelte.ts` |
 | Authoring rules | `.github/skills/onboarding-tools/onboarding-guide/SKILL.md` |

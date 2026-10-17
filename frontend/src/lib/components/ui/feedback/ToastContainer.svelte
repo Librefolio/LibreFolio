@@ -12,13 +12,9 @@
     import {toasts, type ToastVariant} from '$lib/stores/app/toastStore.svelte';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {AlertCircle, AlertTriangle, CheckCircle, Info, X} from 'lucide-svelte';
+    import {STATUS_TONES} from '$lib/theme/toneClasses';
 
-    const variantStyles: Record<ToastVariant, string> = {
-        success: 'bg-emerald-600 text-white',
-        error: 'bg-red-600 text-white',
-        warning: 'bg-amber-500 text-white',
-        info: 'bg-blue-500 text-white',
-    };
+    const variantStyles: Record<ToastVariant, string> = STATUS_TONES.toast;
 
     const variantIcons: Record<ToastVariant, typeof AlertTriangle> = {
         success: CheckCircle,
@@ -96,13 +92,13 @@
                         <Icon size={15} class="shrink-0 mt-0.5" />
                         <span class="flex-1 whitespace-pre-line text-left">{@html sanitizeHtml(toast.message)}</span>
                     </div>
-                    <button class="shrink-0 p-0.5 rounded hover:bg-white/20 transition-colors absolute top-1.5 right-1.5" onclick={() => toasts.dismiss(toast.id)} aria-label="Dismiss" data-testid="toast-dismiss">
+                    <button class="shrink-0 p-0.5 rounded hover:bg-lf-on-status/20 transition-colors absolute top-1.5 right-1.5" onclick={() => toasts.dismiss(toast.id)} aria-label="Dismiss" data-testid="toast-dismiss">
                         <X size={12} />
                     </button>
                 </div>
                 {#if toast.duration > 0}
-                    <div class="h-0.5 w-full bg-white/15">
-                        <div class="h-full bg-white/40 toast-countdown-bar" style="animation-duration: {toast.duration}ms"></div>
+                    <div class="h-0.5 w-full bg-lf-on-status/15">
+                        <div class="h-full bg-lf-on-status/40 toast-countdown-bar" style="animation-duration: {toast.duration}ms"></div>
                     </div>
                 {/if}
             </div>

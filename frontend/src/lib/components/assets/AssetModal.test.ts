@@ -28,7 +28,9 @@
  *   - positioning. jsdom returns zeros for every `getBoundingClientRect`, so a
  *     layout assertion would only measure the absence of a layout engine.
  *   - the online-search flow (`AssetSearchAutocomplete`) — covered by its own
- *     component test.
+ *     component test. One exception, at the end of the file: AssetModal hands
+ *     both of its searches the form (`reportContext`), and the report link of a
+ *     search that found nothing must name what the form says (P20).
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
@@ -69,11 +71,19 @@ vi.mock('$lib/stores/app/toastStore.svelte', () => ({
 vi.mock('$lib/stores/reference/assetStore', () => ({mergeAssets: vi.fn(), invalidateAfterMutation: vi.fn()}));
 
 import AssetModal from './AssetModal.svelte';
+import type {ComponentProps} from 'svelte';
 import {get} from 'svelte/store';
 import {zodiosApi} from '$lib/api';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
+import {isParametricProvider} from '$lib/utils/providerHelpers';
+import {DEFAULT_INSTANCE_CONFIG, instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+import {GITHUB_NEW_ISSUE_URL} from './assetSearchReport';
+
+/** The creation callbacks, typed from the component: the contract under test (O-20). */
+type OnCreated = NonNullable<ComponentProps<typeof AssetModal>['oncreated']>;
+type OnSynced = NonNullable<ComponentProps<typeof AssetModal>['onsynced']>;
 
 // --- Helpers ------------------------------------------------------------
 const createFn = () => vi.mocked(zodiosApi.create_assets_bulk_api_v1_assets_post as never) as ReturnType<typeof vi.fn>;
@@ -248,7 +258,8 @@ describe('AssetModal — create submit', () => {
         await waitFor(() => expect(saveBtn()).toBeEnabled());
         await fireEvent.click(saveBtn());
 
-        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(42));
+        // No provider: no price sync starts (O-20).
+        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(42, {syncing: false}));
         expect(createFn()).toHaveBeenCalledWith([
             expect.objectContaining({
                 display_name: 'Apple Inc.',
@@ -365,12 +376,12 @@ describe('AssetModal — opt-in creation success links', () => {
         expect(toasts.info).not.toHaveBeenCalled();
     }
 
-    async function mountCreation(id: number, name: string, linkCreatedAsset?: boolean) {
+    async function mountCreation(id: number, name: string, linkCreatedAsset?: boolean, onsynced?: OnSynced) {
         vi.mocked(zodiosApi.create_assets_bulk_api_v1_assets_post).mockResolvedValueOnce(createdResponse(id, name));
-        const oncreated = vi.fn<(assetId: number) => void>();
+        const oncreated = vi.fn<OnCreated>();
         const goto = vi.spyOn(navigation, 'goto');
         const hrefBefore = window.location.href;
-        render(AssetModal, {open: true, oncreated, ...(linkCreatedAsset === undefined ? {} : {linkCreatedAsset})});
+        render(AssetModal, {open: true, oncreated, ...(linkCreatedAsset === undefined ? {} : {linkCreatedAsset}), ...(onsynced ? {onsynced} : {})});
         await waitForForm();
         await fill('asset-modal-display-name', name);
         await waitFor(() => expect(nameInput()).toHaveValue(name));
@@ -378,8 +389,12 @@ describe('AssetModal — opt-in creation success links', () => {
         return {oncreated, goto, hrefBefore};
     }
 
-    async function expectCreationClosed(oncreated: (assetId: number) => void, id: number) {
-        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(id));
+    /**
+     * `oncreated` received exactly `expected`: after a creation, the id and whether its one price sync started —
+     * `[id, {syncing}]` (O-20); after a failed provider assignment, the id alone — `[id]`.
+     */
+    async function expectCreationClosed(oncreated: OnCreated, expected: Parameters<OnCreated>) {
+        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(...expected));
         await waitFor(() => expect(screen.queryByTestId('asset-modal-form')).toBeNull());
         expect(oncreated).toHaveBeenCalledTimes(1);
     }
@@ -414,7 +429,7 @@ describe('AssetModal — opt-in creation success links', () => {
 
         await fireEvent.click(saveBtn());
 
-        await expectCreationClosed(oncreated, id);
+        await expectCreationClosed(oncreated, [id, {syncing: false}]);
         const content = toastMarkup('success');
         const anchor = within(content).getByTestId('toast-asset-link');
         expect(anchor).toBeInstanceOf(HTMLAnchorElement);
@@ -437,7 +452,7 @@ describe('AssetModal — opt-in creation success links', () => {
 
         await fireEvent.click(saveBtn());
 
-        await expectCreationClosed(oncreated, id);
+        await expectCreationClosed(oncreated, [id, {syncing: false}]);
         const content = toastMarkup('success');
         expect(content).toHaveTextContent(name);
         expect(content.getElementsByTagName('a')).toHaveLength(0);
@@ -456,7 +471,7 @@ describe('AssetModal — opt-in creation success links', () => {
 
         await fireEvent.click(saveBtn());
 
-        await expectCreationClosed(oncreated, id);
+        await expectCreationClosed(oncreated, [id, {syncing: false}]);
         const content = toastMarkup('success');
         expect(content).toHaveTextContent(name);
         expect(content.getElementsByTagName('img')).toHaveLength(0);
@@ -495,7 +510,7 @@ describe('AssetModal — opt-in creation success links', () => {
 
             await saveWithUntestedProvider();
 
-            await expectCreationClosed(oncreated, id);
+            await expectCreationClosed(oncreated, [id, {syncing: true}]);
             expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
             expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledWith([{asset_id: id, provider_code: PROVIDER_CODE, identifier: PROVIDER_IDENTIFIER, identifier_type: 'TICKER', provider_params: null}]);
             expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
@@ -526,7 +541,8 @@ describe('AssetModal — opt-in creation success links', () => {
 
         await saveWithUntestedProvider();
 
-        await expectCreationClosed(oncreated, id);
+        // The assignment failure reports the id alone: no sync starts (O-20).
+        await expectCreationClosed(oncreated, [id]);
         expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
         const content = toastMarkup('warning');
         expect(content).toHaveTextContent(name);
@@ -577,6 +593,173 @@ describe('AssetModal — opt-in creation success links', () => {
         expect(zodiosApi.create_assets_bulk_api_v1_assets_post).not.toHaveBeenCalled();
         expect(zodiosApi.patch_assets_bulk_api_v1_assets_patch).toHaveBeenCalledWith([expect.objectContaining({asset_id: id, display_name: 'Owned edited name'})]);
         expect(goto).not.toHaveBeenCalled();
+    });
+
+    // =====================================================================
+    // O-20: the modal owns the one price sync of a creation. `oncreated(id, {syncing})` says whether it
+    // started, `onsynced(id, result)` how it ended — the asset's result, or null when the request failed —
+    // so the Assets page shows it and reloads instead of starting a second sync of its own.
+    // No sync, no `onsynced`.
+    // =====================================================================
+    describe('the one price sync of a creation (O-20)', () => {
+        const SCHEDULED = 'scheduled_investment';
+        const scheduledProviderFixture: Awaited<ReturnType<typeof zodiosApi.list_providers_api_v1_assets_provider_get>> = [
+            {
+                code: SCHEDULED,
+                name: 'Owned scheduled investment',
+                description: 'Synthetic parametric provider metadata; no network implementation',
+                kind: 'parametric_generation',
+                supports_search: false,
+                // The real plugin's schema: no field of its own, the schedule editor instead.
+                params_schema: [{key: '_ui_component', type: 'ui_component', required: false, description: 'Custom editor: ScheduledInvestmentEditor', default: SCHEDULED}],
+                accepted_identifier_types: ['AUTO_GENERATED'],
+            },
+        ];
+
+        afterEach(() => {
+            // Back to the module mock's own answer (`() => false`) for every later test.
+            vi.mocked(isParametricProvider).mockReset();
+        });
+
+        it('reports the sync through onsynced(assetId, results[0]) once it has answered, never before', async () => {
+            const id = 4207;
+            const name = 'Owned synced asset';
+            vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(providerFixture);
+            vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mockResolvedValueOnce({
+                results: [{asset_id: id, success: true, message: '[[assigned-response]]'}],
+                success_count: 1,
+            });
+            let finishSync!: (response: SyncResponse) => void;
+            const pendingSync = new Promise<SyncResponse>((resolve) => {
+                finishSync = resolve;
+            });
+            const result = {asset_id: id, status: 'partial' as const, points_fetched: 5, points_changed: 3, inserted_count: 2, updated_count: 1, errors: ['[[sync-note]]']};
+            const syncResponse: SyncResponse = {results: [result], success_count: 1};
+            vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).mockReturnValueOnce(pendingSync);
+            const onsynced = vi.fn<OnSynced>();
+            try {
+                const {oncreated} = await mountCreation(id, name, true, onsynced);
+                await chooseProviderWithoutProbing();
+
+                await saveWithUntestedProvider();
+
+                await expectCreationClosed(oncreated, [id, {syncing: true}]);
+                expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
+                // The request is out and unanswered: the sync has started, it has not ended.
+                expect(onsynced).not.toHaveBeenCalled();
+
+                finishSync(syncResponse);
+                await waitFor(() => expect(onsynced).toHaveBeenCalledWith(id, result));
+                expect(onsynced).toHaveBeenCalledTimes(1);
+                expect(oncreated).toHaveBeenCalledTimes(1);
+                // Reported, not announced: the caller owns the sync's toast, the modal only its creation's.
+                expectOnlySuccessToast();
+            } finally {
+                // Always settle the test-owned promise, even after an assertion fails.
+                finishSync(syncResponse);
+                await pendingSync;
+            }
+        });
+
+        it('reports a failed sync request through onsynced(assetId, null)', async () => {
+            const id = 4208;
+            const name = 'Owned sync-failed asset';
+            vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(providerFixture);
+            vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mockResolvedValueOnce({
+                results: [{asset_id: id, success: true, message: '[[assigned-response]]'}],
+                success_count: 1,
+            });
+            const syncError = new Error('[[sync-request-failed]]');
+            vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).mockRejectedValueOnce(syncError);
+            // The failure is logged and swallowed (non-blocking): silenced here, and checked below.
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const onsynced = vi.fn<OnSynced>();
+            const {oncreated} = await mountCreation(id, name, true, onsynced);
+            await chooseProviderWithoutProbing();
+
+            await saveWithUntestedProvider();
+
+            await expectCreationClosed(oncreated, [id, {syncing: true}]);
+            await waitFor(() => expect(onsynced).toHaveBeenCalledWith(id, null));
+            expect(onsynced).toHaveBeenCalledTimes(1);
+            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
+            expect(warn).toHaveBeenCalledWith(expect.any(String), syncError);
+            expectOnlySuccessToast();
+        });
+
+        it('starts no sync without a provider: oncreated(assetId, {syncing: false}) and no onsynced', async () => {
+            const id = 4209;
+            const name = 'Owned provider-less asset';
+            const onsynced = vi.fn<OnSynced>();
+            const {oncreated} = await mountCreation(id, name, true, onsynced);
+
+            await fireEvent.click(saveBtn());
+
+            await expectCreationClosed(oncreated, [id, {syncing: false}]);
+            // The sync, when there is one, is requested in the same synchronous step that calls oncreated: no
+            // request now is none ever, and onsynced only answers a request.
+            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).not.toHaveBeenCalled();
+            expect(onsynced).not.toHaveBeenCalled();
+        });
+
+        it('starts no sync when the provider assignment fails: oncreated(assetId) alone and no onsynced', async () => {
+            const id = 4210;
+            const name = 'Owned unassigned asset';
+            vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(providerFixture);
+            vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mockRejectedValueOnce(new Error('[[assignment-failed]]'));
+            const onsynced = vi.fn<OnSynced>();
+            const {oncreated} = await mountCreation(id, name, true, onsynced);
+            await chooseProviderWithoutProbing();
+
+            await saveWithUntestedProvider();
+
+            await expectCreationClosed(oncreated, [id]);
+            // Presence first: the assignment was attempted, and failed — the reason there is no sync.
+            expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
+            // oncreated is the last step of that path: no request now is none ever.
+            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).not.toHaveBeenCalled();
+            expect(onsynced).not.toHaveBeenCalled();
+        });
+
+        it('syncs a parametric provider too: scheduled_investment with a schedule posts the sync from resume, {syncing: true}', async () => {
+            const id = 4211;
+            const name = 'Owned scheduled asset';
+            // The real classification: the sync used to be skipped exactly because this said true.
+            vi.mocked(isParametricProvider).mockImplementation((code) => code === SCHEDULED);
+            vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(scheduledProviderFixture);
+            vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mockResolvedValueOnce({
+                results: [{asset_id: id, success: true, message: '[[assigned-response]]'}],
+                success_count: 1,
+            });
+            const result = {asset_id: id, status: 'ok' as const, points_fetched: 31, points_changed: 31};
+            vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).mockResolvedValueOnce({results: [result], success_count: 1});
+            const onsynced = vi.fn<OnSynced>();
+            const {oncreated} = await mountCreation(id, name, true, onsynced);
+
+            // Its identifier is generated (AUTO_GENERATED is its only type) and its parameters are the schedule
+            // editor's: the first period it adds is the schedule this creation carries.
+            expect(screen.queryByTestId('provider-code-select-button')).toBeNull();
+            await fireEvent.click(screen.getByTestId('asset-modal-provider-header'));
+            await fireEvent.click(await screen.findByTestId('provider-code-select-button'));
+            await fireEvent.click(await screen.findByTestId(`provider-option-${SCHEDULED}`));
+            await waitFor(() => expect(screen.queryByTestId(`provider-option-${SCHEDULED}`)).toBeNull());
+            await fireEvent.click(await screen.findByTestId('schedule-add-first-period'));
+            await waitFor(() => expect(screen.getByTestId('schedule-status')).toHaveAttribute('data-valid', 'true'));
+            await waitFor(() => expect(saveBtn()).toBeEnabled());
+
+            await saveWithUntestedProvider();
+
+            await expectCreationClosed(oncreated, [id, {syncing: true}]);
+            // Precondition, verified: assigned WITH its schedule — without one the assignment, and the sync, are skipped.
+            expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
+            const assignment = vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mock.calls[0]?.[0]?.[0];
+            expect(assignment).toMatchObject({asset_id: id, provider_code: SCHEDULED, identifier_type: 'AUTO_GENERATED'});
+            expect(assignment?.provider_params?.schedule, 'the assignment carries the schedule the editor built').toHaveLength(1);
+            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
+            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledWith([{asset_id: id, date_range: {start: 'resume', end: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)}}]);
+            await waitFor(() => expect(onsynced).toHaveBeenCalledWith(id, result));
+            expect(onsynced).toHaveBeenCalledTimes(1);
+        });
     });
 });
 
@@ -647,7 +830,7 @@ describe('AssetModal — prefill (create wizard)', () => {
         await waitFor(() => expect(screen.getByTestId('asset-modal-more-info')).toHaveAttribute('data-expanded', 'true'));
 
         await fireEvent.click(saveBtn());
-        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(99));
+        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(99, {syncing: false}));
         expect(createFn()).toHaveBeenCalledWith([expect.objectContaining({display_name: 'Apple Inc.', identifier_isin: 'US0378331005'})]);
     });
 
@@ -674,7 +857,7 @@ describe('AssetModal — prefill (create wizard)', () => {
         expect(screen.getByTestId('asset-modal-more-info')).toHaveAttribute('data-expanded', 'false');
 
         await fireEvent.click(saveBtn());
-        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(101));
+        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(101, {syncing: false}));
         expect(createFn()).toHaveBeenCalledWith([
             expect.objectContaining({
                 display_name: 'Vanguard FTSE',
@@ -814,5 +997,178 @@ describe('AssetModal — the description placeholder speaks the UI language', ()
             currentLanguage.set('en');
             await setupI18n('en');
         }
+    });
+});
+
+// =========================================================================
+// P20 (workstream X, sub-lot 3): the report of a search carries the form. Both <AssetSearchAutocomplete> calls —
+// with the import's search badges and without — get `reportContext={{currency, assetType, identifiers}}`, the
+// identifiers being the rows with a value. The form is prefilled as the import wizard does, the search it opens
+// with (`initialSearchQuery`) finds nothing, and the report link of that search must name what the form says. The
+// instance is the real `instanceConfig`, answered in `beforeEach` without a request: a self-hosted instance with no
+// support address, the one that falls back to a public GitHub issue (N61). The link is that issue, whose body is
+// decoded from the href.
+//
+// What the form says, never what it merely defaults to (16/10/2026): a blank create form starts at the user's base
+// currency (EUR here: this file has no user settings) and at STOCK, and naming those hands support a hint nobody gave.
+// So the currency is named in edit mode, or when the prefill had one, or the user chose one, or it is not the blank
+// form's; the type in edit mode, or when the prefill had one, or it is not STOCK. Identifiers as before.
+describe('AssetModal — the report of a search carries the form (P20)', () => {
+    type ProviderList = Awaited<ReturnType<typeof zodiosApi.list_providers_api_v1_assets_provider_get>>;
+    const SEARCH_PROVIDER = 'fixture_search_source';
+    const QUERY = 'Owned unfindable fund';
+    const searchable: ProviderList = [
+        {
+            code: SEARCH_PROVIDER,
+            name: 'Owned search source',
+            description: 'Synthetic searchable provider metadata; no network implementation',
+            kind: 'online_scraper',
+            supports_search: true,
+            params_schema: [],
+            accepted_identifier_types: ['ISIN', 'TICKER'],
+        },
+    ];
+
+    // N61: with no support address the report falls back to GitHub only on a self-hosted instance whose configuration
+    // has loaded. The store's own `load`, with an answer instead of the request: no module mock, the store as it runs.
+    beforeEach(async () => {
+        await instanceConfig.load({force: true, fetchConfig: async () => ({profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}, support_url: null})});
+        expect(instanceConfig.loaded, 'precondition: the instance configuration has loaded').toBe(true);
+        expect(instanceConfig.config.profile, 'precondition: a self-hosted instance').toBe('selfhosted');
+    });
+
+    afterEach(async () => {
+        // The defaults again for whatever runs next. `loaded` has no way back to false; no other block of this file reads it.
+        await instanceConfig.load({force: true, fetchConfig: async () => DEFAULT_INSTANCE_CONFIG});
+    });
+
+    /** The streamed search's Response, replaying `events` as SSE `data:` lines (as AssetSearchAutocomplete.test.ts does). */
+    function streamedSearch(events: unknown[]) {
+        const encoder = new TextEncoder();
+        const chunks = events.map((event) => encoder.encode(`data: ${JSON.stringify(event)}\n`));
+        let next = 0;
+        return {
+            ok: true,
+            body: {
+                getReader: () => ({
+                    read: async () => (next < chunks.length ? {done: false, value: chunks[next++]} : {done: true, value: undefined}),
+                    cancel: vi.fn(),
+                }),
+            },
+        };
+    }
+
+    it.each([
+        {call: 'the search without badges', initialSearchBadges: []},
+        {call: 'the search under the import badges', initialSearchBadges: [{label: `Name: ${QUERY}`, value: QUERY}]},
+    ])('$call: the report link names the currency, the type and the identifier of the form', async ({initialSearchBadges}) => {
+        vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(searchable);
+        // The streamed search finds nothing; any other request gets this file's default answer.
+        const search = vi.fn(async (url: string) => (String(url).includes('/assets/provider/search/stream') ? streamedSearch([{event: 'provider_results', provider_code: SEARCH_PROVIDER, results: []}, {event: 'done'}]) : new Response(null, {status: 503})));
+        vi.stubGlobal('fetch', search);
+        render(AssetModal, {
+            open: true,
+            editMode: false,
+            prefillData: {display_name: QUERY, currency: 'CHF', asset_type: 'ETF', identifier_isin: 'IE00BK5BQT80'},
+            initialSearchQuery: QUERY,
+            initialSearchBadges,
+            oncreated: vi.fn(),
+        });
+        await waitForForm();
+
+        // Precondition, verified: the search ran, with the query the modal opened with, and found nothing.
+        await waitFor(() => expect(screen.getByTestId('asset-search-results')).toHaveAttribute('data-state', 'empty'), {timeout: 3_000});
+        const streamed = search.mock.calls.map(([url]) => String(url)).filter((url) => url.includes('/assets/provider/search/stream'));
+        expect(streamed.at(-1)).toContain(`q=${encodeURIComponent(QUERY)}`);
+
+        const link = await waitFor(() => screen.getByTestId('asset-search-report'));
+        const url = new URL(link.getAttribute('href') ?? '');
+        expect(`${url.origin}${url.pathname}`).toBe(GITHUB_NEW_ISSUE_URL);
+        const lines = (url.searchParams.get('body') ?? '').split('\n');
+        expect(lines).toContain(`Search: ${QUERY}`);
+        expect(lines.filter((line) => line.startsWith('In the form:'))).toEqual(['In the form: currency CHF, type ETF, ISIN IE00BK5BQT80']);
+    });
+
+    /** The online search finds nothing; any other request gets this file's default answer. */
+    function searchFindingNothing(): void {
+        vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(searchable);
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (url: string) => (String(url).includes('/assets/provider/search/stream') ? streamedSearch([{event: 'provider_results', provider_code: SEARCH_PROVIDER, results: []}, {event: 'done'}]) : new Response(null, {status: 503}))),
+        );
+    }
+
+    /** Types `query` into the form's online search, as a user does: in edit mode it opens empty and searches nothing. */
+    async function searchFor(query: string): Promise<void> {
+        const box = document.querySelector<HTMLElement>('[data-search-autocomplete]');
+        expect(box, 'the form shows its online search').not.toBeNull();
+        await fireEvent.input(within(box!).getByRole('textbox'), {target: {value: query}});
+    }
+
+    /** The report of the search for `query` once it has found nothing: its body, line by line, decoded from the link. */
+    async function reportOfEmptySearch(query: string): Promise<string[]> {
+        await waitFor(() => expect(screen.getByTestId('asset-search-results')).toHaveAttribute('data-state', 'empty'), {timeout: 3_000});
+        const link = await waitFor(() => screen.getByTestId('asset-search-report'));
+        const url = new URL(link.getAttribute('href') ?? '');
+        expect(`${url.origin}${url.pathname}`).toBe(GITHUB_NEW_ISSUE_URL);
+        const lines = (url.searchParams.get('body') ?? '').split('\n');
+        expect(lines, 'the report of this very search').toContain(`Search: ${query}`);
+        return lines;
+    }
+
+    const formLines = (lines: string[]): string[] => lines.filter((line) => line.startsWith('In the form:'));
+
+    it('(c) a blank create form: no «In the form:» line — no identifier, and a currency and a type nobody chose are no hint', async () => {
+        searchFindingNothing();
+        render(AssetModal, {open: true, editMode: false, initialSearchQuery: QUERY, oncreated: vi.fn()});
+        await waitForForm();
+
+        const lines = await reportOfEmptySearch(QUERY);
+
+        expect(formLines(lines), 'the blank form’s EUR and STOCK are defaults, not what the user said').toEqual([]);
+        // Nothing in its place either: the providers are followed straight by the line of the app.
+        const app = lines.findIndex((line) => line.startsWith('LibreFolio '));
+        expect(app, 'the report names the app that wrote it').toBeGreaterThan(0);
+        expect(lines[app - 1]).toBe(`- ${SEARCH_PROVIDER}: 0 results`);
+    });
+
+    it('(d) edit mode: the asset’s own currency and type are named — STOCK too, the blank default, because the asset has it', async () => {
+        searchFindingNothing();
+        render(AssetModal, {
+            open: true,
+            editMode: true,
+            editData: {id: 7, display_name: 'Tesla Inc.', currency: 'USD', asset_type: 'STOCK', quote_base_quantity: 1, active: true},
+            onupdated: vi.fn(),
+        });
+        await waitForForm();
+        await waitFor(() => expect(nameInput()).toHaveValue('Tesla Inc.'));
+
+        await searchFor(QUERY);
+
+        const lines = await reportOfEmptySearch(QUERY);
+        expect(formLines(lines), 'the asset has no identifier: currency and type only').toEqual(['In the form: currency USD, type STOCK']);
+    });
+
+    it('(e) a blank create form whose type the user changed: that type is named, and still no currency', async () => {
+        searchFindingNothing();
+        render(AssetModal, {open: true, editMode: false, oncreated: vi.fn()});
+        await waitForForm();
+
+        // The type picker, driven as a user does: open it, open the ETF family, pick its generic member.
+        const field = screen.getByTestId('asset-modal-type');
+        const trigger = screen.getByTestId('asset-modal-type-button');
+        await fireEvent.click(trigger);
+        await fireEvent.click(within(field).getByTestId('asset-type-tree-group-ETF'));
+        await fireEvent.click(within(field).getByTestId('asset-type-tree-option-ETF'));
+        await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+        // Precondition, verified: the form holds ETF — the closed picker shows that type's picture, and only it.
+        const pictures = trigger.querySelectorAll('img');
+        expect(pictures, 'the closed type select shows exactly one picture, the one of the selected type').toHaveLength(1);
+        expect(pictures[0]).toHaveAttribute('src', '/icons/asset-types/etf.png');
+
+        await searchFor(QUERY);
+
+        const lines = await reportOfEmptySearch(QUERY);
+        expect(formLines(lines), 'the type the user chose; the currency is still the blank form’s').toEqual(['In the form: type ETF']);
     });
 });

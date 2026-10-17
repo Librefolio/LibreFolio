@@ -1,0 +1,1468 @@
+<script lang="ts">
+    import {onMount, tick} from 'svelte';
+    import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {attachChartReady} from '$lib/utils/chartReady';
+    import {z} from 'zod';
+    import {schemas} from '$lib/api';
+    import {_} from '$lib/i18n';
+    import {CHART_ANIMATION_CONFIG, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
+    import {buildDataZoom, getChartZoomWindow} from '$lib/components/charts/chartCoreHelpers';
+    import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
+    import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, scheduleFirstRenderStabilityFix, setupTooltipAutoHide, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
+    import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
+    import {aggregateLineSeries, cascadeResolution, chooseInitialResolution, computeDensity, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
+    import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+    import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {translateOr} from '$lib/utils/core/translateOr';
+    import {parseDisplayDate} from '$lib/utils/core/formatAxisDate';
+    import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
+    import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
+    import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
+    import {safeDecimal} from '$lib/types';
+    import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
+    import {resolveBrokerName} from './lotChartShared';
+    import {withAlpha} from '$lib/theme/colorAlpha';
+    import {
+        aggregateReturnPoints as aggregateReturnPointsOf,
+        aggregateValuePoints,
+        buildBucketInfos,
+        comprehensiveValue,
+        buildZoomWindowForRange as sharedBuildZoomWindowForRange,
+        computeAutoYAxisRange,
+        computeBucketCounts as sharedComputeBucketCounts,
+        findPointAtOrBefore,
+        formatAxisAmount,
+        formatAxisCurrency as sharedFormatAxisCurrency,
+        formatAxisPercent,
+        incomeEventColor as sharedIncomeEventColor,
+        logicalRangeFromBuckets,
+        lotColor as sharedLotColor,
+        lotIdFromSeriesId,
+        parseTimeMs,
+        parseValueSeriesPoint,
+        pnlWithIncome,
+        pointKey,
+        safeValueSource,
+        seriesValue,
+        tooltipBucketInfo,
+        tooltipRawDate,
+        tooltipTimestamp,
+        tooltipXValue,
+        type AggregateReturnPoint,
+        type AggregatedValuePoint,
+        type LotValueSeriesPoint,
+    } from './lotComparisonChartHelpers';
+    import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {themed} from '$lib/theme/themePair';
+    import {CHART_GAIN_LOSS, chartNeutrals, LOT_COMPARISON_COLORS} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+
+    type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
+    type LotValueHistoryPoint = z.infer<typeof schemas.LotValueHistoryPoint>;
+    type LotReturnHistoryPoint = z.infer<typeof schemas.LotReturnHistoryPoint>;
+    type ChartMode = 'value' | 'return';
+    type LotValueSource = 'MARKET_PRICE' | 'ESTIMATED_AT_COST';
+    type ReturnUnit = 'abs' | 'pct';
+
+    export type LotIncomeEvent = {
+        type: 'DIVIDEND' | 'INTEREST';
+        date: string;
+        broker_id: number | null;
+        /** `null` when the income has no rate to the target currency. */
+        amount: string | null;
+        lot_ids: number[];
+    };
+
+    interface Props {
+        selectedLots: ReadonlyArray<LotSummarySchema>;
+        valueHistory: ReadonlyArray<LotValueHistoryPoint>;
+        returnHistory: ReadonlyArray<LotReturnHistoryPoint>;
+        brokers: ReadonlyArray<BrokerLike>;
+        currency: string;
+        xAxisRange: {min: string; max: string} | null;
+        incomeEvents?: ReadonlyArray<LotIncomeEvent>;
+    }
+
+    interface LotModel {
+        lotId: number;
+        label: string;
+        valueSource: LotValueSource | null;
+    }
+
+    interface LotReturnSeriesPoint {
+        date: string;
+        totalReturn: number | null;
+        relativeReturn: number | null;
+    }
+
+    type ChartSeriesPoint = ReturnType<typeof namedPoint> & {
+        bucketStart?: string;
+        bucketEnd?: string;
+        resolution?: ChartResolution;
+        sourcePointCount?: number;
+    };
+
+    const LOT_COMPARISON_SET_OPTION_OPTS: {notMerge: boolean; replaceMerge: string[]} = {
+        notMerge: false,
+        replaceMerge: ['series', 'xAxis', 'yAxis', 'legend', 'dataZoom'],
+    };
+
+    /**
+     * Empirically confirmed ECharts 6.0.0 bug (r2-hover-lines-disappear-per-lot): with the
+     * chart-level `tooltip.trigger:'axis'` (needed for the Aggregate mode's "all values at this
+     * date" tooltip, which works correctly), hovering ANYWHERE on the chart makes every
+     * *individual per-lot* line series (different lots open on different dates, so their data
+     * arrays start/stop at different points) vanish completely — not just their tooltip marker,
+     * the whole rendered line — for as long as the tooltip is open. Reproduced deterministically
+     * (exact same date, `chartInstance.convertToPixel`-computed hover position) and ruled out by
+     * elimination, one candidate at a time, via a live-debuggable chart instance:
+     * `emphasis`/`blur` config (incl. `emphasis:{disabled:true}`), `z`/`zlevel`, `stack` removal,
+     * normalizing every series to one shared date backbone with explicit `null`s, `connectNulls`,
+     * `hoverLayerThreshold`, `clip`, `sampling`/`large`/`progressive`, `animation`, dropping the
+     * per-point `name` field, the `renderer` (canvas vs `svg` — same bug in both, so it is not a
+     * canvas dirty-rect/hover-layer repaint artifact), and every `tooltip.axisPointer.type`
+     * (`line`/`shadow`/`cross`/`none`). The ONLY thing that fixes it is giving the per-lot line
+     * series their OWN `tooltip.trigger:'item'` (confirmed live): ECharts merges this with the
+     * chart-level tooltip config, so these series just fall out of the axis-trigger tooltip
+     * computation that corrupts their rendering, while still using the same formatter/theme when
+     * hovered directly (the shared formatter below already normalizes a single item's `params`
+     * into a 1-element array). The visible trade-off is minor: hovering a specific per-lot line
+     * shows only that lot's tooltip instead of joining the shared axis tooltip, but the lines
+     * never disappear again — a clear net win over the alternative (rewriting the whole tooltip
+     * as fully custom, non-native DOM to sidestep axis-trigger entirely).
+     */
+    const PER_LOT_LINE_TOOLTIP_OVERRIDE: {trigger: 'item'} = {trigger: 'item'};
+
+    /**
+     * Hidden full-range line that participates in the chart-level axis tooltip so the shared
+     * "values at this date" infobox fires even when EVERY visible series carries the
+     * PER_LOT_LINE_TOOLTIP_OVERRIDE above (return mode with a single plotted lot / no aggregate
+     * return series). Without it those modes have no axis-trigger series left, so the axis tooltip
+     * never fires and no infobox appears (r2 fix4). It is opacity-0 / symbol:'none' so it never
+     * paints, and every tooltip builder filters it out by this id so it contributes no row.
+     */
+    const AXIS_TRIGGER_ANCHOR_ID = 'axis-trigger-anchor';
+
+    /**
+     * Empty scatter overlay that renders the "position dot" on each visible per-lot line at the
+     * hovered date (r3 fix5). The per-lot lines carry PER_LOT_LINE_TOOLTIP_OVERRIDE (item trigger),
+     * so ECharts never draws a native axisPointer symbol on them; we drive this overlay manually
+     * from the `updateAxisPointer` event and clear it on `globalout`. Kept out of the tooltip and
+     * legend; per-point color matches each lot's line.
+     */
+    const PER_LOT_HOVER_DOTS_ID = 'per-lot-hover-dots';
+
+    /** Income (dividend/interest) "|" markers series id — filtered out of the legend and axis tooltip. */
+    const LOT_INCOME_MARKER_SERIES_ID = 'lot-income-markers';
+    const AGGREGATE_RETURN_SERIES_ID = 'return-aggregate';
+
+    let {selectedLots = [], valueHistory = [], returnHistory = [], brokers = [], currency, xAxisRange = null, incomeEvents = []}: Props = $props();
+
+    let mode = $state<ChartMode>('value');
+    let valueYFromZero = $state(false);
+    let returnYFromZero = $state(false);
+    let returnUnit = $state<ReturnUnit>('abs');
+    let currentResolution: ChartResolution = $state('daily');
+    let chartContainer: HTMLDivElement | undefined = $state(undefined);
+    let chartInstance: echarts.ECharts | undefined = undefined;
+    // Up only while chartInstance holds a full option (the LineChart guard). init() and clear() leave a model
+    // without a grid, and the lazy x-axis patch merged into it throws on `axisBuilder` in ECharts' next frame.
+    let chartOptionSet = false;
+    let responsiveXAxisCompact = false;
+    let resizeAnimationFrame: number | null = null;
+    let lastObservedChartSize: {width: number; height: number} | null = null;
+    // The one caller that reads the entry: it thresholds sub-pixel jitter off the
+    // observed content box and resizes ECharts to that exact size (rAF-coalesced),
+    // rather than letting ECharts re-measure. `entry` is the forwarded first
+    // ResizeObserverEntry — see createResizeWatcher.
+    const resizeWatcher = createResizeWatcher((entry) => {
+        if (!entry) return;
+
+        const width = Math.round(entry.contentRect.width * 100) / 100;
+        const height = Math.round(entry.contentRect.height * 100) / 100;
+        if (width <= 0 || height <= 0) return;
+        if (lastObservedChartSize && Math.abs(lastObservedChartSize.width - width) < 0.5 && Math.abs(lastObservedChartSize.height - height) < 0.5) return;
+
+        lastObservedChartSize = {width, height};
+        if (resizeAnimationFrame != null) return;
+
+        resizeAnimationFrame = requestAnimationFrame(() => {
+            resizeAnimationFrame = null;
+            if (!chartInstance || !lastObservedChartSize) return;
+            chartInstance.resize(lastObservedChartSize);
+            const policy = buildLotXAxisPolicy();
+            const wasCompact = responsiveXAxisCompact;
+            responsiveXAxisCompact = policy.compact;
+            if (policy.axisLabel) {
+                if (chartOptionSet) chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+            } else if (wasCompact) {
+                renderChart();
+            }
+            scheduleResolutionSync();
+        });
+    });
+    let darkModeObserver: MutationObserver | null = null;
+    let tooltipCleanup: (() => void) | null = null;
+    let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
+    let isDark = $state(false);
+    /** Bumped by the Designer Lab's colour edits (C4): the chart's roles are read again at the next draw. */
+    let chartColorsRevision = $state(0);
+    /** The neutrals of the chart (B4), read on its own element: again when the theme or a Lab colour changes. */
+    let neutrals = $derived.by(() => {
+        void chartColorsRevision;
+        return chartNeutrals(isDark, chartContainer);
+    });
+    let needsInitialLayoutStabilityPass = false;
+    let lastHoverDotAxisValue: number | null = null;
+    let zoomWindow = $state<{start: number; end: number} | null>(null);
+    let resolutionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastResolutionSourceSignature: string | null = null;
+
+    /** Local name for this chart's numeric unwrap. Delegates to the shared
+     *  `safeDecimal`: the body used to be copied five times, and two of those
+     *  copies went through `safeString`, which answers `null` for a value that
+     *  is already a number. */
+    const parseNumber = (value: unknown): number | null => safeDecimal(value);
+
+    function syncTheme() {
+        if (typeof document === 'undefined') return;
+        isDark = isDarkTheme();
+    }
+
+    // `parseDisplayDate` rather than `new Date`: the values here are bare
+    // `YYYY-MM-DD` days from the API, and `new Date('2024-03-15')` is midnight
+    // UTC — which renders as 14 March for every user west of Greenwich.
+    function formatShortDate(value: string): string {
+        const date = parseDisplayDate(value);
+        if (!date) return value;
+        return date.toLocaleDateString(uiLocale(), {day: '2-digit', month: '2-digit', year: '2-digit'});
+    }
+
+    function formatLongDate(value: number | string): string {
+        const date = parseDisplayDate(value);
+        if (!date) return String(value);
+        return date.toLocaleDateString(uiLocale(), {year: 'numeric', month: 'short', day: 'numeric'});
+    }
+
+    /** This chart's numbers are already percentages, hence scale 1 (the default). */
+    const formatPercent = (value: number): string => sharedFormatPercent(value);
+
+    /** Money for the absolute-return axis; masks the number under privacy, keeps the currency. */
+    const formatAxisCurrency = (value: number): string => sharedFormatAxisCurrency(value, currency);
+
+    /** Wrapper: passes the reactive `isDark` to the shared deterministic lot color. */
+    const lotColor = (lotId: number): string => sharedLotColor(lotId, isDark);
+
+    const brokerName = (brokerId: number | null): string => resolveBrokerName(brokerId, brokers);
+
+    /** Wrapper: passes the reactive `isDark` to the shared income-event color. */
+    const incomeEventColor = (type: LotIncomeEvent['type']): string => sharedIncomeEventColor(type, isDark);
+
+    function lotLabel(openingDate: string, direction: 'LONG' | 'SHORT'): string {
+        const dateLabel = formatShortDate(openingDate);
+        if (direction === 'SHORT') {
+            const translated = $_('brokers.lots.shortLotLabel', {values: {date: dateLabel}});
+            return !translated || translated === 'brokers.lots.shortLotLabel' ? `Short ${dateLabel}` : translated;
+        }
+        const translated = $_('brokers.lots.lotLabel', {values: {date: dateLabel}});
+        return !translated || translated === 'brokers.lots.lotLabel' ? `Lot ${dateLabel}` : translated;
+    }
+
+    function valueEstimatedLineColor(): string {
+        return themed(LOT_COMPARISON_COLORS.estimatedValue, isDark);
+    }
+
+    function aggregateReturnColor(): string {
+        return themed(LOT_COMPARISON_COLORS.aggregateReturn, isDark);
+    }
+
+    function returnTooltipLotId(param: any): number | null {
+        const fromId = lotIdFromSeriesId(param, 'return-');
+        if (fromId != null) return fromId;
+        const name = String(param?.seriesName ?? '');
+        return visibleLots.find((lot) => lot.label === name || name === returnSeriesName(lot.label))?.lotId ?? null;
+    }
+
+    function isInternalTooltipSeries(param: any): boolean {
+        const id = String(param?.seriesId ?? '');
+        return id === AXIS_TRIGGER_ANCHOR_ID || id === PER_LOT_HOVER_DOTS_ID || id === LOT_INCOME_MARKER_SERIES_ID;
+    }
+
+    function applyCurrentZoomWindow() {
+        if (!chartInstance) return;
+        const window = getChartZoomWindow(chartInstance);
+        if (window) zoomWindow = window;
+    }
+
+    function resetResolutionState(): void {
+        currentResolution = 'daily';
+        zoomWindow = null;
+    }
+
+    function lineDataPoint(date: string, value: number | null | undefined): LineDataPoint | null {
+        if (value == null || !Number.isFinite(value)) return null;
+        return {date, value};
+    }
+
+    function pointBucketMeta(point: LineDataPoint): {bucketStart: string; bucketEnd: string; resolution: ChartResolution; sourcePointCount?: number} {
+        const meta = point as Partial<{bucketStart: string; bucketEnd: string; resolution: ChartResolution; sourcePointCount: number}>;
+        return {
+            bucketStart: typeof meta.bucketStart === 'string' ? meta.bucketStart : point.date,
+            bucketEnd: typeof meta.bucketEnd === 'string' ? meta.bucketEnd : point.date,
+            resolution: meta.resolution ?? 'daily',
+            sourcePointCount: meta.sourcePointCount,
+        };
+    }
+
+    function toChartSeriesPoints(points: LineDataPoint[], resolution: ChartResolution = currentResolution): ChartSeriesPoint[] {
+        return aggregateLineSeries(points, resolution).map((point) => {
+            const meta = pointBucketMeta(point);
+            return {
+                ...namedPoint(point.date, point.value),
+                ...meta,
+            };
+        });
+    }
+
+    /** Wrapper: counts daily/weekly/monthly buckets over the component's reactive
+     *  `resolutionSourceDates`. */
+    const computeBucketCounts = (startDate: string, endDate: string): {dailyCount: number; weeklyCount: number; monthlyCount: number} => sharedComputeBucketCounts(resolutionSourceDates, startDate, endDate);
+
+    function plotWidthPx(): number {
+        return chartInstance?.getWidth() ?? chartContainer?.clientWidth ?? 0;
+    }
+
+    function getLogicalRangeFromChart(): {startDate: string; endDate: string} | null {
+        if (resolutionSourceDates.length === 0) return null;
+        const buckets = buildBucketInfos(resolutionSourceDates, currentResolution);
+        if (buckets.length === 0) return null;
+
+        const window = chartInstance ? getChartZoomWindow(chartInstance) : zoomWindow;
+        if (window) zoomWindow = window;
+        return logicalRangeFromBuckets(buckets, window?.start ?? 0, window?.end ?? 100);
+    }
+
+    /** Wrapper: builds the zoom window over the component's reactive `resolutionSourceDates`. */
+    const buildZoomWindowForRange = (resolution: ChartResolution, startDate: string, endDate: string): {start: number; end: number} => sharedBuildZoomWindowForRange(resolutionSourceDates, resolution, startDate, endDate);
+
+    function syncInitialResolution(): void {
+        if (currentResolution !== 'daily' || zoomWindow || resolutionSourceDates.length === 0) return;
+
+        const startDate = resolutionSourceDates[0];
+        const endDate = resolutionSourceDates[resolutionSourceDates.length - 1];
+        const counts = computeBucketCounts(startDate, endDate);
+        const width = plotWidthPx();
+        if (computeDensity(counts.dailyCount, width) <= 0) return;
+
+        currentResolution = chooseInitialResolution(counts, width);
+    }
+
+    function syncResolutionToViewport(): void {
+        if (!chartInstance || resolutionSourceDates.length === 0) return;
+
+        const logicalRange = getLogicalRangeFromChart();
+        if (!logicalRange) return;
+
+        const counts = computeBucketCounts(logicalRange.startDate, logicalRange.endDate);
+        const width = plotWidthPx();
+        if (computeDensity(counts.dailyCount, width) <= 0) return;
+
+        const targetResolution = cascadeResolution(currentResolution, counts, width);
+        if (targetResolution === currentResolution) return;
+
+        currentResolution = targetResolution;
+        zoomWindow = buildZoomWindowForRange(targetResolution, logicalRange.startDate, logicalRange.endDate);
+        renderChart();
+    }
+
+    function scheduleResolutionSync(): void {
+        if (resolutionDebounceTimer) clearTimeout(resolutionDebounceTimer);
+        resolutionDebounceTimer = setTimeout(() => {
+            resolutionDebounceTimer = null;
+            syncResolutionToViewport();
+        }, 200);
+    }
+
+    function handleDataZoom(): void {
+        applyCurrentZoomWindow();
+        scheduleResolutionSync();
+    }
+
+    function formatTooltipMonth(date: string): string {
+        const [year, month] = date.split('-').map(Number);
+        return new Intl.DateTimeFormat(uiLocale(), {
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'UTC',
+        }).format(new Date(Date.UTC(year, month - 1, 1)));
+    }
+
+    function buildTooltipBucketHeader(params: any[], fallbackDate: number | string, theme: ReturnType<typeof buildTooltipTheme>): string {
+        const bucket = tooltipBucketInfo(params);
+        if (!bucket || bucket.resolution === 'daily') return buildTooltipHeader(escapeHtml(formatLongDate(fallbackDate)), theme.textColor);
+
+        // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
+        const span = bucketSpanUpTo(bucket.date, bucket);
+        const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml($_('chart.tooltip.valueAt', {values: {date: formatLongDate(span.bucketEnd)}}))}</div>`;
+        if (bucket.resolution === 'weekly') {
+            const label = $_('chart.tooltip.weekRange', {values: {start: formatLongDate(span.bucketStart), end: formatLongDate(span.bucketEnd)}});
+            return `${buildTooltipHeader(escapeHtml(label), theme.textColor)}${contextLine}`;
+        }
+
+        const month = formatTooltipMonth(span.bucketEnd);
+        const label = $_('chart.tooltip.monthLabel', {values: {month}});
+        return `${buildTooltipHeader(escapeHtml(label), theme.textColor)}${contextLine}`;
+    }
+
+    const modeLabels = $derived.by(() => ({
+        value: translateOr($_, 'common.value', 'Value'),
+        return: translateOr($_, 'brokers.lots.modeReturn', 'Return'),
+        valueTitle: translateOr($_, 'brokers.lots.valueComparisonTitle', 'Value of selected lots'),
+        returnTitle: translateOr($_, 'brokers.lots.returnComparisonTitle', 'Return from opening date'),
+        residualValue: translateOr($_, 'brokers.lots.aggregateResidualValue', 'Residual value'),
+        residualValueEstimatedAtCost: translateOr($_, 'brokers.lots.aggregateResidualValueEstimatedAtCost', 'Residual value estimated at cost'),
+        saleProceeds: translateOr($_, 'brokers.lots.aggregateSaleProceeds', 'Sale proceeds'),
+        cumulativeIncome: translateOr($_, 'brokers.lots.aggregateCumulativeIncome', 'Cumulative income'),
+        comprehensiveValue: translateOr($_, 'brokers.lots.aggregateComprehensiveValue', 'Comprehensive value'),
+        aggregateOpeningValue: translateOr($_, 'brokers.lots.aggregateOpeningValue', 'Opening value'),
+        aggregateReturn: translateOr($_, 'brokers.lots.aggregateReturn', 'Aggregate return'),
+        fifoPnl: translateOr($_, 'brokers.lots.fifoPnl', 'FIFO P&L'),
+        totalPnl: translateOr($_, 'brokers.lots.totalPnl', 'Total P&L'),
+        totalReturn: translateOr($_, 'brokers.lots.totalReturn', 'Total return'),
+        yAuto: translateOr($_, 'brokers.lots.yAxisAuto', 'Auto'),
+        yFromZero: translateOr($_, 'brokers.lots.yAxisFromZero', 'From 0'),
+        returnUnitAbs: translateOr($_, 'brokers.lots.returnUnitAbs', 'Abs'),
+        returnUnitPercent: translateOr($_, 'brokers.lots.returnUnitPercent', '%'),
+        returnPctUndefined: translateOr($_, 'brokers.lots.returnPctUndefined', 'Not definable (opening value ≤ 0)'),
+        openReturn: translateOr($_, 'brokers.lots.openReturn', 'Open Return'),
+        selectLots: translateOr($_, 'brokers.lots.selectLotsToCompare', 'Select one or more lots to compare'),
+        noVisibleLots: translateOr($_, 'brokers.lots.noVisibleLots', 'No visible lots in chart'),
+        noData: translateOr($_, 'common.noData', 'No data'),
+        estimatedAtCostLegend: translateOr($_, 'brokers.lots.estimatedAtCostLegend', 'Dashed neutral lines use value estimated at cost.'),
+        incomeDividend: translateOr($_, 'brokers.lots.incomeMarkerDividend', 'Dividend'),
+        incomeInterest: translateOr($_, 'brokers.lots.incomeMarkerInterest', 'Interest'),
+        incomeType: translateOr($_, 'brokers.lots.incomeMarkerType', 'Type'),
+        incomeDate: translateOr($_, 'brokers.lots.incomeMarkerDate', 'Transaction date'),
+        incomeBroker: translateOr($_, 'brokers.lots.incomeMarkerBroker', 'Broker'),
+        incomeAmount: translateOr($_, 'brokers.lots.incomeMarkerAmount', 'Amount'),
+        incomeLotCount: translateOr($_, 'brokers.lots.incomeMarkerLotCount', 'Lots involved'),
+    }));
+
+    const lotModels = $derived.by(() => {
+        const models = selectedLots.map((lot) => ({
+            lotId: lot.lot_id,
+            direction: lot.direction,
+            openingDate: lot.opening_date,
+            baseLabel: lotLabel(lot.opening_date, lot.direction),
+            valueSource: safeValueSource(lot.value_source),
+        }));
+
+        const labelCounts = new Map<string, number>();
+        for (const model of models) labelCounts.set(model.baseLabel, (labelCounts.get(model.baseLabel) ?? 0) + 1);
+
+        return models.map((model) => ({
+            lotId: model.lotId,
+            label: (labelCounts.get(model.baseLabel) ?? 0) > 1 ? `${model.baseLabel} · #${model.lotId}` : model.baseLabel,
+            valueSource: model.valueSource,
+        })) satisfies LotModel[];
+    });
+
+    const visibleLots = $derived.by(() => lotModels);
+
+    const hasEstimatedAtCostLots = $derived.by(() => visibleLots.some((lot) => lot.valueSource === 'ESTIMATED_AT_COST'));
+
+    const incomeMarkerEvents = $derived.by(() =>
+        (incomeEvents ?? []).filter((event): event is LotIncomeEvent => (event?.type === 'DIVIDEND' || event?.type === 'INTEREST') && !!event.date).sort((left, right) => left.date.localeCompare(right.date) || left.type.localeCompare(right.type) || (left.broker_id ?? -1) - (right.broker_id ?? -1)),
+    );
+
+    const valuePointsByLotId = $derived.by(() => {
+        const grouped = new Map<number, LotValueSeriesPoint[]>();
+        for (const point of valueHistory) {
+            const existing = grouped.get(point.lot_id);
+            const datum: LotValueSeriesPoint = parseValueSeriesPoint(point);
+            if (existing) existing.push(datum);
+            else grouped.set(point.lot_id, [datum]);
+        }
+        for (const points of grouped.values()) {
+            points.sort((left, right) => left.date.localeCompare(right.date));
+        }
+        return grouped;
+    });
+
+    const valuePointByLotDate = $derived.by(() => {
+        const byLotDate = new Map<string, LotValueSeriesPoint>();
+        for (const [lotId, points] of valuePointsByLotId.entries()) {
+            for (const point of points) {
+                byLotDate.set(pointKey(lotId, point.date), point);
+            }
+        }
+        return byLotDate;
+    });
+
+    const aggregatedValuePoints = $derived.by((): AggregatedValuePoint[] =>
+        aggregateValuePoints(
+            visibleLots.map((lot) => lot.lotId),
+            valuePointsByLotId,
+        ),
+    );
+
+    const returnPointsByLotId = $derived.by(() => {
+        const grouped = new Map<number, LotReturnSeriesPoint[]>();
+        for (const point of returnHistory) {
+            const existing = grouped.get(point.lot_id);
+            const datum = {
+                date: point.date,
+                totalReturn: parseNumber(point.total_return),
+                relativeReturn: parseNumber(point.relative_return),
+            } satisfies LotReturnSeriesPoint;
+            if (existing) existing.push(datum);
+            else grouped.set(point.lot_id, [datum]);
+        }
+        for (const points of grouped.values()) {
+            points.sort((left, right) => left.date.localeCompare(right.date));
+        }
+        return grouped;
+    });
+
+    const lotOpeningValueById = $derived.by(() => {
+        const values = new Map<number, number>();
+        for (const lot of visibleLots) {
+            const firstValuePoint = valuePointsByLotId.get(lot.lotId)?.[0];
+            values.set(lot.lotId, firstValuePoint?.originalCost ?? 0);
+        }
+        return values;
+    });
+
+    const returnAbsLotsWithData = $derived.by(() => visibleLots.filter((lot) => (valuePointsByLotId.get(lot.lotId)?.length ?? 0) > 0));
+
+    const returnPctLotsWithData = $derived.by(() =>
+        visibleLots.filter((lot) => {
+            const openingValue = lotOpeningValueById.get(lot.lotId) ?? 0;
+            return openingValue > 0 && (returnPointsByLotId.get(lot.lotId)?.some((point) => point.totalReturn != null) ?? false);
+        }),
+    );
+
+    const returnPctUndefinedLots = $derived.by(() =>
+        visibleLots.filter((lot) => {
+            const hasData = (valuePointsByLotId.get(lot.lotId)?.length ?? 0) > 0 || (returnPointsByLotId.get(lot.lotId)?.length ?? 0) > 0;
+            return hasData && (lotOpeningValueById.get(lot.lotId) ?? 0) <= 0;
+        }),
+    );
+
+    const activeReturnLotsWithData = $derived.by(() => (returnUnit === 'pct' ? returnPctLotsWithData : returnAbsLotsWithData));
+
+    const aggregateReturnPoints = $derived.by((): AggregateReturnPoint[] => {
+        if (returnAbsLotsWithData.length < 1 && returnPctLotsWithData.length < 1) return [];
+        return aggregateReturnPointsOf(
+            returnAbsLotsWithData.map((lot) => lot.lotId),
+            new Set(returnPctLotsWithData.map((lot) => lot.lotId)),
+            valuePointsByLotId,
+        );
+    });
+
+    const aggregateReturnSeriesPoints = $derived.by(() => aggregateReturnPoints.map((point) => lineDataPoint(point.date, returnUnit === 'pct' ? (point.totalReturn == null ? null : point.totalReturn * 100) : point.pnlWithIncome)).filter((point): point is LineDataPoint => point != null));
+
+    const showAggregateReturn = $derived(activeReturnLotsWithData.length >= 1 && aggregateReturnSeriesPoints.length > 0);
+
+    const resolutionSourceDates = $derived.by(() => {
+        const dates = new Set<string>();
+
+        if (mode === 'value') {
+            for (const point of aggregatedValuePoints) dates.add(point.date);
+        } else if (returnUnit === 'pct') {
+            for (const point of aggregateReturnPoints) {
+                if (point.totalReturn != null) dates.add(point.date);
+            }
+            for (const lot of returnPctLotsWithData) {
+                for (const point of returnPointsByLotId.get(lot.lotId) ?? []) {
+                    if (point.totalReturn != null) dates.add(point.date);
+                }
+            }
+        } else {
+            for (const point of aggregateReturnPoints) dates.add(point.date);
+            for (const lot of returnAbsLotsWithData) {
+                for (const point of valuePointsByLotId.get(lot.lotId) ?? []) dates.add(point.date);
+            }
+        }
+
+        return Array.from(dates).sort((left, right) => left.localeCompare(right));
+    });
+
+    const resolutionSourceSignature = $derived(`${mode}|${returnUnit}|${xAxisRange?.min ?? ''}|${xAxisRange?.max ?? ''}|${resolutionSourceDates.join('|')}`);
+
+    const emptyMessage = $derived.by(() => {
+        if (selectedLots.length === 0) return modeLabels.selectLots;
+        if (visibleLots.length === 0) return modeLabels.noVisibleLots;
+
+        if (mode === 'value') {
+            return aggregatedValuePoints.length > 0 ? '' : modeLabels.noData;
+        }
+
+        return activeReturnLotsWithData.length > 0 ? '' : modeLabels.noData;
+    });
+
+    const chartTitle = $derived.by(() => {
+        if (mode === 'value') return modeLabels.valueTitle;
+        return modeLabels.returnTitle;
+    });
+
+    function incomeEventTypeLabel(type: LotIncomeEvent['type']): string {
+        return type === 'DIVIDEND' ? modeLabels.incomeDividend : modeLabels.incomeInterest;
+    }
+
+    /** A distribution's total; «—» when it has no rate to the target currency. */
+    function formatIncomeEventAmount(amount: string | null): string {
+        const parsed = parseNumber(amount);
+        return parsed == null ? '—' : formatCurrencyAmountPlain(parsed, currency, {showSign: true});
+    }
+
+    function buildIncomeEventTooltip(event: LotIncomeEvent | null): string {
+        if (!event) return '';
+        const theme = buildTooltipTheme(isDark);
+        const rows = [
+            buildTooltipRow(escapeHtml(modeLabels.incomeType), escapeHtml(incomeEventTypeLabel(event.type)), incomeEventColor(event.type)),
+            buildTooltipRow(escapeHtml(modeLabels.incomeDate), escapeHtml(formatLongDate(event.date))),
+            buildTooltipRow(escapeHtml(modeLabels.incomeBroker), escapeHtml(brokerName(event.broker_id))),
+            buildTooltipRow(escapeHtml(modeLabels.incomeAmount), escapeHtml(formatIncomeEventAmount(event.amount))),
+            buildTooltipRow(escapeHtml(modeLabels.incomeLotCount), escapeHtml(String(event.lot_ids?.length ?? 0))),
+        ];
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(incomeEventTypeLabel(event.type)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
+    }
+
+    function returnSeriesUnitLabel(): string {
+        return returnUnit === 'pct' ? modeLabels.returnUnitPercent : modeLabels.returnUnitAbs;
+    }
+
+    function returnSeriesName(label: string): string {
+        return `${label} (${returnSeriesUnitLabel()})`;
+    }
+
+    function returnDisplayValue(value: number): string {
+        return returnUnit === 'pct' ? formatPercent(value) : formatCurrencyAmountPlain(value, currency, {showSign: true});
+    }
+
+    function returnValueForLotAt(lotId: number, timestampMs: number): number | null {
+        if (returnUnit === 'pct') {
+            if ((lotOpeningValueById.get(lotId) ?? 0) <= 0) return null;
+            const point = findPointAtOrBefore(returnPointsByLotId.get(lotId) ?? [], timestampMs);
+            return point?.totalReturn == null ? null : point.totalReturn * 100;
+        }
+
+        const point = findPointAtOrBefore(valuePointsByLotId.get(lotId) ?? [], timestampMs);
+        return point ? pnlWithIncome(point) : null;
+    }
+
+    /** Income "|" markers (rect 2×16px) sitting on the relevant line at each distribution date:
+     *  - value mode: one marker on the aggregate comprehensive-value line.
+     *  - return mode: one marker per involved lot at its total-return line height.
+     * Coloured by type (dividend/interest). */
+    function buildIncomeMarkerData(): Array<{value: [string, number]; incomeEvent: LotIncomeEvent; itemStyle: {color: string; opacity: number}}> {
+        const data: Array<{value: [string, number]; incomeEvent: LotIncomeEvent; itemStyle: {color: string; opacity: number}}> = [];
+        for (const event of incomeMarkerEvents) {
+            const timestamp = parseTimeMs(event.date);
+            if (timestamp == null) continue;
+            const color = incomeEventColor(event.type);
+            if (mode === 'value') {
+                const agg = findPointAtOrBefore(aggregatedValuePoints, timestamp);
+                const y = agg ? comprehensiveValue(agg) : null;
+                if (y != null) data.push({value: [event.date, y], incomeEvent: event, itemStyle: {color, opacity: 0.95}});
+            } else if (mode === 'return') {
+                for (const lotId of event.lot_ids ?? []) {
+                    if (!visibleLots.some((lot) => lot.lotId === lotId)) continue;
+                    const y = returnValueForLotAt(lotId, timestamp);
+                    if (y == null) continue;
+                    data.push({value: [event.date, y], incomeEvent: event, itemStyle: {color, opacity: 0.95}});
+                }
+            }
+        }
+        return data;
+    }
+
+    function buildIncomeMarkerSeries(): echarts.SeriesOption | undefined {
+        if (incomeMarkerEvents.length === 0) return undefined;
+        const data = buildIncomeMarkerData();
+        if (data.length === 0) return undefined;
+        return {
+            id: LOT_INCOME_MARKER_SERIES_ID,
+            name: LOT_INCOME_MARKER_SERIES_ID,
+            type: 'scatter',
+            symbol: 'rect',
+            symbolSize: [2, 16],
+            clip: true,
+            z: 8,
+            zlevel: 0,
+            data,
+            emphasis: {scale: 1.4},
+            tooltip: {
+                trigger: 'item',
+                formatter: (param: any) => buildIncomeEventTooltip((param?.data?.incomeEvent ?? null) as LotIncomeEvent | null),
+            },
+        } as echarts.SeriesOption;
+    }
+
+    function attachIncomeMarkers(series: echarts.SeriesOption[]): echarts.SeriesOption[] {
+        const markerSeries = buildIncomeMarkerSeries();
+        if (!markerSeries) return series;
+        return [...series, markerSeries];
+    }
+
+    function seriesDataDateRange(series: echarts.SeriesOption[]): [string, string] | null {
+        let min: string | null = null;
+        let max: string | null = null;
+        for (const item of series) {
+            const data = (item as {data?: unknown[]}).data;
+            if (!Array.isArray(data)) continue;
+            for (const raw of data) {
+                const x = Array.isArray((raw as {value?: unknown[]})?.value) ? (raw as {value: unknown[]}).value[0] : Array.isArray(raw) ? (raw as unknown[])[0] : null;
+                if (typeof x !== 'string' || x.trim() === '') continue;
+                if (min == null || x < min) min = x;
+                if (max == null || x > max) max = x;
+            }
+        }
+        return min != null && max != null ? [min, max] : null;
+    }
+
+    /** Every distinct x-date present in the given series, sorted ascending. Used to build a DENSE
+     * axis-trigger anchor so the shared infobox + per-lot hover dots fire at every plotted date
+     * (with a time axis, a 2-point anchor only snaps near its endpoints). */
+    function seriesDataDates(series: echarts.SeriesOption[]): string[] {
+        const dates = new Set<string>();
+        for (const item of series) {
+            const data = (item as {data?: unknown[]}).data;
+            if (!Array.isArray(data)) continue;
+            for (const raw of data) {
+                const x = Array.isArray((raw as {value?: unknown[]})?.value) ? (raw as {value: unknown[]}).value[0] : Array.isArray(raw) ? (raw as unknown[])[0] : null;
+                if (typeof x !== 'string' || x.trim() === '') continue;
+                dates.add(x);
+            }
+        }
+        return Array.from(dates).sort((left, right) => left.localeCompare(right));
+    }
+
+    /** Prepend the hidden axis-trigger anchor (see AXIS_TRIGGER_ANCHOR_ID) only when no visible
+     * series is left to drive the chart-level axis tooltip — i.e. every series opted out via the
+     * per-lot item-trigger override. No-op otherwise, so value mode keeps its native axis
+     * tooltip untouched. */
+    function ensureAxisTriggerAnchor(series: echarts.SeriesOption[]): echarts.SeriesOption[] {
+        const hasAxisSeries = series.some((item) => {
+            const trigger = (item as {tooltip?: {trigger?: string}}).tooltip?.trigger;
+            const data = (item as {data?: unknown[]}).data;
+            return trigger !== 'item' && Array.isArray(data) && data.length > 0;
+        });
+        if (hasAxisSeries) return series;
+
+        const anchorDates = seriesDataDates(series);
+        let anchorData: Array<ReturnType<typeof namedPoint>>;
+        if (anchorDates.length > 0) {
+            anchorData = anchorDates.map((date) => namedPoint(date, 0));
+        } else {
+            const range = xAxisRange ? ([xAxisRange.min, xAxisRange.max] as [string, string]) : seriesDataDateRange(series);
+            if (!range) return series;
+            anchorData = [namedPoint(range[0], 0), namedPoint(range[1], 0)];
+        }
+
+        const anchor: echarts.SeriesOption = {
+            id: AXIS_TRIGGER_ANCHOR_ID,
+            name: AXIS_TRIGGER_ANCHOR_ID,
+            type: 'line',
+            data: anchorData,
+            showSymbol: false,
+            symbol: 'none',
+            connectNulls: false,
+            lineStyle: {opacity: 0, width: 0},
+            itemStyle: {opacity: 0},
+            emphasis: {disabled: true},
+            z: 0,
+            zlevel: 0,
+        };
+        return [anchor, ...series];
+    }
+
+    function buildReturnIndividualTooltipRows(timestampMs: number, excludedLotIds: ReadonlySet<number>): string[] {
+        const rows = activeReturnLotsWithData
+            .map((lot) => {
+                if (excludedLotIds.has(lot.lotId)) return null;
+                const value = returnValueForLotAt(lot.lotId, timestampMs);
+                if (value == null) return null;
+                return buildTooltipRow(escapeHtml(lot.label), escapeHtml(returnDisplayValue(value)), lotColor(lot.lotId));
+            })
+            .filter((row): row is string => row != null);
+
+        if (returnUnit === 'pct') {
+            for (const lot of returnPctUndefinedLots) {
+                if (excludedLotIds.has(lot.lotId)) continue;
+                rows.push(buildTooltipRow(escapeHtml(lot.label), escapeHtml(modeLabels.returnPctUndefined), themed(LOT_COMPARISON_COLORS.undefinedReturn, isDark)));
+            }
+        }
+
+        return rows;
+    }
+
+    function buildAggregateReturnTooltipRows(timestampMs: number): string[] {
+        if (!showAggregateReturn) return [];
+        const point = findPointAtOrBefore(aggregateReturnPoints, timestampMs);
+        if (!point) return [];
+        const rawValue = returnUnit === 'pct' ? (point.totalReturn == null ? null : point.totalReturn * 100) : point.pnlWithIncome;
+        if (rawValue == null) return [];
+        const value = returnDisplayValue(rawValue);
+        return [buildTooltipRow(escapeHtml(modeLabels.aggregateReturn), escapeHtml(value), aggregateReturnColor())];
+    }
+
+    function buildValueTooltip(params: any[]): string {
+        if (params.length === 0) return '';
+        const theme = buildTooltipTheme(isDark);
+        const rawDate = tooltipRawDate(params);
+        const realParams = params.filter((param) => !isInternalTooltipSeries(param));
+        const axisRows = realParams
+            .map((param) => {
+                const value = seriesValue(param);
+                if (value == null) return null;
+                return buildTooltipRow(escapeHtml(String(param.seriesName ?? '')), escapeHtml(formatCurrencyAmountPlain(value, currency)), typeof param.color === 'string' ? param.color : undefined);
+            })
+            .filter((row): row is string => row != null);
+
+        if (axisRows.length === 0) return '';
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipBucketHeader(params, rawDate, theme)}${buildTooltipDivider(theme.border)}${axisRows.join('')}</div>`;
+    }
+
+    function buildReturnTooltip(params: any[]): string {
+        if (params.length === 0) return '';
+        const theme = buildTooltipTheme(isDark);
+        const rawDate = tooltipRawDate(params);
+        const timestamp = tooltipTimestamp(params);
+        const realParams = params.filter((param) => !isInternalTooltipSeries(param));
+        const excludedLotIds = new Set(realParams.map(returnTooltipLotId).filter((lotId): lotId is number => lotId != null));
+        const blocks = realParams
+            .map((param) => {
+                const lotId = returnTooltipLotId(param);
+                const lot = lotId == null ? null : visibleLots.find((item) => item.lotId === lotId);
+                if (!lot) return null;
+                const value = seriesValue(param);
+                if (value == null) return null;
+                const paramTimestamp = parseTimeMs(tooltipXValue(param));
+                if (paramTimestamp == null) return null;
+
+                const color = typeof param.color === 'string' ? param.color : lotColor(lot.lotId);
+                const returnPoint = findPointAtOrBefore(returnPointsByLotId.get(lot.lotId) ?? [], paramTimestamp);
+                const valuePoint = findPointAtOrBefore(valuePointsByLotId.get(lot.lotId) ?? [], paramTimestamp);
+                if (returnUnit === 'pct' && (!returnPoint || returnPoint.totalReturn == null)) return null;
+                if (returnUnit === 'abs' && !valuePoint) return null;
+
+                const pointDate = (returnUnit === 'pct' ? returnPoint?.date : valuePoint?.date) ?? String(tooltipXValue(param));
+                const exactValuePoint = valuePointByLotDate.get(pointKey(lot.lotId, pointDate)) ?? valuePoint;
+                const headlineLabel = returnUnit === 'pct' ? modeLabels.totalReturn : modeLabels.totalPnl;
+                const headlineValue = returnDisplayValue(value);
+                const rows: string[] = [buildTooltipRow(escapeHtml(headlineLabel), escapeHtml(headlineValue), color)];
+
+                if (returnPoint?.relativeReturn != null) {
+                    rows.push(buildTooltipRow(escapeHtml(modeLabels.openReturn), escapeHtml(formatPercent(returnPoint.relativeReturn * 100))));
+                }
+                if (exactValuePoint) {
+                    rows.push(buildTooltipRow(escapeHtml(modeLabels.residualValue), escapeHtml(formatCurrencyAmountPlain(exactValuePoint.openValue, currency))));
+                    rows.push(buildTooltipRow(escapeHtml(modeLabels.saleProceeds), escapeHtml(formatCurrencyAmountPlain(exactValuePoint.proceeds, currency))));
+                    rows.push(
+                        buildTooltipRow(
+                            escapeHtml(modeLabels.fifoPnl),
+                            `<span style="color:${exactValuePoint.pnl >= 0 ? themed(CHART_GAIN_LOSS.portfolio.gain, isDark) : themed(CHART_GAIN_LOSS.portfolio.loss, isDark)}">${escapeHtml(formatCurrencyAmountPlain(exactValuePoint.pnl, currency, {showSign: true}))}</span>`,
+                        ),
+                    );
+                }
+
+                return `${buildTooltipHeader(escapeHtml(`${lot.label} · ${formatLongDate(pointDate)}`), theme.textColor)}${rows.join('')}`;
+            })
+            .filter((block): block is string => block != null);
+        const aggregateRows = timestamp == null ? [] : buildAggregateReturnTooltipRows(timestamp);
+        const individualRows = timestamp == null ? [] : buildReturnIndividualTooltipRows(timestamp, excludedLotIds);
+        const tooltipBlocks = [...(aggregateRows.length > 0 ? [aggregateRows.join('')] : []), ...blocks, ...(individualRows.length > 0 ? [individualRows.join('')] : [])];
+
+        if (tooltipBlocks.length === 0) return '';
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipBucketHeader(params, rawDate, theme)}${buildTooltipDivider(theme.border)}${tooltipBlocks.join(buildTooltipDivider(theme.border))}</div>`;
+    }
+
+    function buildValueSeries(): echarts.SeriesOption[] {
+        const residualColor = themed(LOT_COMPARISON_COLORS.residual, isDark);
+        const proceedsColor = themed(LOT_COMPARISON_COLORS.proceeds, isDark);
+        const incomeColor = themed(LOT_COMPARISON_COLORS.income, isDark);
+        const originalCostColor = themed(LOT_COMPARISON_COLORS.originalCost, isDark);
+        const estimatedValueColor = valueEstimatedLineColor();
+        const residualLineColor = hasEstimatedAtCostLots ? estimatedValueColor : residualColor;
+        const residualSeriesName = hasEstimatedAtCostLots ? modeLabels.residualValueEstimatedAtCost : modeLabels.residualValue;
+        const aggregateTotalColor = hasEstimatedAtCostLots ? estimatedValueColor : themed(LOT_COMPARISON_COLORS.aggregateTotal, isDark);
+        const aggregateLineType = hasEstimatedAtCostLots ? 'dashed' : 'solid';
+        const residualData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.openValue)).filter((point): point is LineDataPoint => point != null));
+        const proceedsData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.proceeds)).filter((point): point is LineDataPoint => point != null));
+        const incomeData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.income)).filter((point): point is LineDataPoint => point != null));
+        const comprehensiveData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, comprehensiveValue(point))).filter((point): point is LineDataPoint => point != null));
+        const openingData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.originalCost)).filter((point): point is LineDataPoint => point != null));
+
+        const series: echarts.SeriesOption[] = [
+            {
+                id: 'value-residual',
+                name: residualSeriesName,
+                type: 'line',
+                stack: 'value-aggregate',
+                data: residualData,
+                showSymbol: false,
+                symbol: 'none',
+                connectNulls: false,
+                smooth: false,
+                lineStyle: {width: 1.8, color: residualLineColor, type: aggregateLineType},
+                areaStyle: {color: withAlpha(residualLineColor, isDark ? 0.4 : 0.22)},
+                itemStyle: {color: residualLineColor},
+                emphasis: {scale: false, focus: 'none'},
+                blur: {lineStyle: {opacity: 1}, itemStyle: {opacity: 1}, areaStyle: {opacity: isDark ? 0.4 : 0.22}},
+                z: 3,
+                zlevel: 0,
+            },
+            {
+                id: 'value-proceeds',
+                name: modeLabels.saleProceeds,
+                type: 'line',
+                stack: 'value-aggregate',
+                data: proceedsData,
+                showSymbol: false,
+                symbol: 'none',
+                connectNulls: false,
+                smooth: false,
+                lineStyle: {width: 1.8, color: proceedsColor},
+                areaStyle: {color: withAlpha(proceedsColor, isDark ? 0.42 : 0.26)},
+                itemStyle: {color: proceedsColor},
+                emphasis: {scale: false, focus: 'none'},
+                blur: {lineStyle: {opacity: 1}, itemStyle: {opacity: 1}, areaStyle: {opacity: isDark ? 0.42 : 0.26}},
+                z: 1,
+                zlevel: 0,
+            },
+            {
+                id: 'value-income',
+                name: modeLabels.cumulativeIncome,
+                type: 'line',
+                stack: 'value-aggregate',
+                data: incomeData,
+                showSymbol: false,
+                symbol: 'none',
+                connectNulls: false,
+                smooth: false,
+                lineStyle: {width: 1.8, color: incomeColor},
+                areaStyle: {color: withAlpha(incomeColor, isDark ? 0.36 : 0.2)},
+                itemStyle: {color: incomeColor},
+                emphasis: {scale: false, focus: 'none'},
+                blur: {lineStyle: {opacity: 1}, itemStyle: {opacity: 1}, areaStyle: {opacity: isDark ? 0.36 : 0.2}},
+                z: 1,
+                zlevel: 0,
+            },
+            {
+                id: 'value-comprehensive',
+                name: modeLabels.comprehensiveValue,
+                type: 'line',
+                data: comprehensiveData,
+                showSymbol: false,
+                connectNulls: false,
+                smooth: false,
+                lineStyle: {width: 2.6, color: aggregateTotalColor, type: aggregateLineType},
+                itemStyle: {color: aggregateTotalColor},
+                emphasis: {scale: false, focus: 'none'},
+                blur: {lineStyle: {opacity: 1}, itemStyle: {opacity: 1}},
+                z: 5,
+                zlevel: 0,
+            },
+            {
+                id: 'value-opening',
+                name: modeLabels.aggregateOpeningValue,
+                type: 'line',
+                data: openingData,
+                showSymbol: false,
+                connectNulls: false,
+                smooth: false,
+                lineStyle: {width: 2.2, color: originalCostColor},
+                itemStyle: {color: originalCostColor},
+                emphasis: {scale: false, focus: 'none'},
+                blur: {lineStyle: {opacity: 1}, itemStyle: {opacity: 1}},
+                z: 4,
+                zlevel: 0,
+            },
+        ];
+
+        return attachIncomeMarkers(series);
+    }
+
+    function buildReturnSeries(): echarts.SeriesOption[] {
+        const series: echarts.SeriesOption[] = [];
+
+        if (showAggregateReturn) {
+            const color = aggregateReturnColor();
+            series.push({
+                id: AGGREGATE_RETURN_SERIES_ID,
+                name: returnSeriesName(modeLabels.aggregateReturn),
+                type: 'line',
+                data: toChartSeriesPoints(aggregateReturnSeriesPoints),
+                showSymbol: false,
+                symbol: 'none',
+                connectNulls: false,
+                smooth: false,
+                lineStyle: {width: 2.4, color},
+                areaStyle: {color: withAlpha(color, isDark ? 0.18 : 0.14), origin: 0},
+                itemStyle: {color},
+                emphasis: {scale: false, focus: 'none'},
+                blur: {lineStyle: {opacity: 1}, itemStyle: {opacity: 1}, areaStyle: {opacity: isDark ? 0.18 : 0.14}},
+                z: 2,
+                zlevel: 0,
+            });
+        }
+
+        // Individual lot lines only when 2+ lots are plotted; with a single lot we show the
+        // aggregate area alone (R7.5) so the shape reads the P&L from 0 instead of a lone flat line.
+        if (activeReturnLotsWithData.length >= 2) {
+            for (const lot of activeReturnLotsWithData) {
+                const color = lotColor(lot.lotId);
+                const data =
+                    returnUnit === 'pct'
+                        ? toChartSeriesPoints((returnPointsByLotId.get(lot.lotId) ?? []).map((point) => lineDataPoint(point.date, point.totalReturn == null ? null : point.totalReturn * 100)).filter((point): point is LineDataPoint => point != null))
+                        : toChartSeriesPoints((valuePointsByLotId.get(lot.lotId) ?? []).map((point) => lineDataPoint(point.date, pnlWithIncome(point))).filter((point): point is LineDataPoint => point != null));
+                series.push({
+                    id: `return-${lot.lotId}`,
+                    name: returnSeriesName(lot.label),
+                    type: 'line',
+                    data,
+                    showSymbol: false,
+                    connectNulls: false,
+                    smooth: false,
+                    lineStyle: {width: 2.5, color},
+                    itemStyle: {color},
+                    emphasis: {scale: false, focus: 'none'},
+                    tooltip: PER_LOT_LINE_TOOLTIP_OVERRIDE,
+                    z: 6,
+                    zlevel: 0,
+                });
+            }
+        }
+
+        return attachIncomeMarkers(series);
+    }
+
+    const plottedBaseSeries = $derived.by(() => ensureAxisTriggerAnchor(mode === 'value' ? buildValueSeries() : buildReturnSeries()));
+
+    const autoYAxisRange = $derived.by(() => computeAutoYAxisRange(plottedBaseSeries));
+
+    /** Position dots for return-mode per-lot lines at a hovered date (r3 fix5). */
+    function buildPerLotHoverDotData(axisValueMs: number): Array<{value: [number, number]; itemStyle: {color: string}}> {
+        const dots: Array<{value: [number, number]; itemStyle: {color: string}}> = [];
+        if (mode !== 'return' || activeReturnLotsWithData.length < 2) return dots;
+
+        for (const lot of activeReturnLotsWithData) {
+            const y = returnValueForLotAt(lot.lotId, axisValueMs);
+            if (y == null) continue;
+            dots.push({value: [axisValueMs, y], itemStyle: {color: lotColor(lot.lotId)}});
+        }
+        return dots;
+    }
+
+    function emptyHoverDotsSeries(): echarts.SeriesOption {
+        return {
+            id: PER_LOT_HOVER_DOTS_ID,
+            name: PER_LOT_HOVER_DOTS_ID,
+            type: 'scatter',
+            data: [],
+            symbol: 'circle',
+            symbolSize: 9,
+            silent: true,
+            tooltip: {show: false},
+            animation: false,
+            legendHoverLink: false,
+            itemStyle: {borderColor: neutrals.lots.markerRing, borderWidth: 1.5},
+            emphasis: {disabled: true},
+            z: 12,
+            zlevel: 0,
+        };
+    }
+
+    function updateHoverDots(axisValueMs: number | null): void {
+        if (!chartInstance) return;
+        if (axisValueMs === lastHoverDotAxisValue) return;
+        lastHoverDotAxisValue = axisValueMs;
+        const data = axisValueMs == null ? [] : buildPerLotHoverDotData(axisValueMs);
+        chartInstance.setOption({series: [{id: PER_LOT_HOVER_DOTS_ID, data}]});
+    }
+
+    function handleUpdateAxisPointer(event: any): void {
+        const axesInfo = Array.isArray(event?.axesInfo) ? event.axesInfo : [];
+        const xInfo = axesInfo.find((info: any) => info?.axisDim === 'x');
+        const rawValue = xInfo?.value;
+        const axisValueMs = typeof rawValue === 'number' ? rawValue : parseTimeMs(rawValue);
+        updateHoverDots(axisValueMs);
+    }
+
+    function handleChartGlobalOut(): void {
+        updateHoverDots(null);
+    }
+
+    function buildOption(): echarts.EChartsOption | null {
+        if (emptyMessage) return null;
+        syncInitialResolution();
+
+        const theme = buildTooltipTheme(isDark);
+        const gridColors = buildGridColors(isDark);
+        const baseSeries = plottedBaseSeries;
+        const legendData = baseSeries.map((item) => (item as {name?: unknown}).name).filter((name): name is string => typeof name === 'string' && name !== AXIS_TRIGGER_ANCHOR_ID && name !== PER_LOT_HOVER_DOTS_ID && name !== LOT_INCOME_MARKER_SERIES_ID);
+        const axisFallbackRange = seriesDataDateRange(baseSeries);
+        const axisDateRange = xAxisRange ?? (axisFallbackRange ? {min: axisFallbackRange[0], max: axisFallbackRange[1]} : null);
+        const xAxisPolicy = buildLotXAxisPolicy(axisDateRange);
+        responsiveXAxisCompact = xAxisPolicy.compact;
+        return {
+            ...CHART_ANIMATION_CONFIG,
+            // With `containLabel: true`, `left` is only the empty inset BEFORE the y labels
+            // (ECharts adds the label width itself). 24 px left a visible empty strip on a phone
+            // (developer review, 2026-09-29): 10 px keeps the labels off the card edge. `right` holds
+            // half the widest time label past the last tick (plan 52): a px base does not follow the
+            // width, so the resize leaves it alone.
+            grid: {
+                top: 62,
+                right: timeAxisGridRight({
+                    width: chartContainer?.clientWidth ?? 0,
+                    values: axisDateRange ? [axisDateRange.min, axisDateRange.max] : [],
+                    locale: uiLocale(),
+                    base: 18,
+                    measure: axisLabelMeasure(chartInstance, 12),
+                }),
+                bottom: 34,
+                left: 10,
+                containLabel: true,
+            },
+            legend: {
+                show: true,
+                type: 'scroll',
+                data: legendData,
+                top: 4,
+                left: 'center',
+                right: 8,
+                itemWidth: 10,
+                itemHeight: 10,
+                itemGap: 12,
+                pageIconColor: gridColors.textColor,
+                pageTextStyle: {color: gridColors.textColor},
+                textStyle: {
+                    color: gridColors.textColor,
+                    fontSize: 11,
+                },
+            },
+            tooltip: {
+                trigger: 'axis',
+                position: tooltipPositionSide,
+                backgroundColor: theme.bg,
+                borderColor: theme.border,
+                textStyle: {color: theme.textColor},
+                axisPointer: {
+                    type: 'line',
+                    snap: false,
+                    lineStyle: {color: gridColors.gridColor, width: 1},
+                },
+                formatter: (params: any) => {
+                    const items = Array.isArray(params) ? params : [params];
+                    if (mode === 'value') return buildValueTooltip(items);
+                    return buildReturnTooltip(items);
+                },
+            },
+            xAxis: {
+                type: 'time',
+                ...(xAxisRange ? {min: xAxisRange.min, max: xAxisRange.max} : {}),
+                ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
+                axisLine: {lineStyle: {color: gridColors.gridColor}},
+                axisTick: {show: false},
+                splitLine: {show: false},
+                axisLabel: {
+                    color: gridColors.textColor,
+                    hideOverlap: true,
+                    formatter: xAxisPolicy.formatter,
+                    ...(xAxisPolicy.axisLabel ?? {}),
+                },
+            },
+            yAxis: {
+                type: 'value',
+                ...(mode === 'value' && valueYFromZero
+                    ? {min: 0, scale: false}
+                    : mode === 'return' && returnYFromZero
+                      ? {min: (v: {min: number}) => Math.min(0, v.min), max: (v: {max: number}) => Math.max(0, v.max), scale: true}
+                      : autoYAxisRange
+                        ? {min: autoYAxisRange.min, max: autoYAxisRange.max, scale: true}
+                        : {scale: true}),
+                axisLine: {show: false},
+                axisTick: {show: false},
+                splitLine: {lineStyle: {color: gridColors.gridColor}},
+                axisLabel: {
+                    color: gridColors.textColor,
+                    formatter: (value: number) => (mode === 'return' ? (returnUnit === 'pct' ? formatAxisPercent(value) : formatAxisCurrency(value)) : formatAxisAmount(value)),
+                },
+            },
+            series: [...baseSeries, emptyHoverDotsSeries()],
+            dataZoom: buildDataZoom([0]).map((zoom) => (zoomWindow ? {...zoom, start: zoomWindow.start, end: zoomWindow.end} : zoom)),
+        };
+    }
+
+    function buildLotXAxisPolicy(range: {min: number | string; max: number | string} | null = xAxisRange): ReturnType<typeof buildResponsiveXAxisPolicy> {
+        return buildResponsiveXAxisPolicy({
+            width: chartContainer?.clientWidth ?? 0,
+            values: range ? [range.min, range.max] : [],
+            locale: uiLocale(),
+            axisType: 'time',
+            horizontalPadding: 42,
+        });
+    }
+
+    function resetResizeObserverState() {
+        if (resizeAnimationFrame != null) {
+            cancelAnimationFrame(resizeAnimationFrame);
+            resizeAnimationFrame = null;
+        }
+        lastObservedChartSize = null;
+    }
+
+    function setupResizeObserver() {
+        resizeWatcher.observe(chartContainer);
+    }
+
+    function renderChart() {
+        if (!chartContainer) return;
+
+        syncTheme();
+
+        if (chartInstance && chartInstance.getDom() !== chartContainer) {
+            tooltipCleanup?.();
+            resizeWatcher.disconnect();
+            resetResizeObserverState();
+            dataZoomTouchPanHandle?.dispose();
+            dataZoomTouchPanHandle = null;
+            chartInstance.off('datazoom', handleDataZoom);
+            chartInstance.off('updateAxisPointer', handleUpdateAxisPointer);
+            chartInstance.getZr()?.off('globalout', handleChartGlobalOut);
+            chartInstance.dispose();
+            chartInstance = undefined;
+        }
+
+        if (!chartInstance) {
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
+            chartOptionSet = false;
+            attachChartReady(chartInstance, chartContainer, 'lot-comparison');
+            needsInitialLayoutStabilityPass = true;
+            setupResizeObserver();
+            tooltipCleanup?.();
+            tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
+            dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
+            chartInstance.on('datazoom', handleDataZoom);
+            chartInstance.on('updateAxisPointer', handleUpdateAxisPointer);
+            chartInstance.getZr().on('globalout', handleChartGlobalOut);
+        }
+
+        lastHoverDotAxisValue = null;
+        const option = buildOption();
+        if (!option) {
+            chartInstance.clear();
+            chartOptionSet = false;
+            return;
+        }
+
+        chartInstance.setOption(option, LOT_COMPARISON_SET_OPTION_OPTS);
+        chartOptionSet = true;
+        if (needsInitialLayoutStabilityPass) {
+            needsInitialLayoutStabilityPass = false;
+            scheduleFirstRenderStabilityFix(chartInstance, chartContainer);
+        }
+    }
+
+    onMount(() => {
+        syncTheme();
+        darkModeObserver = onThemeClassChange(() => {
+            syncTheme();
+            renderChart();
+        });
+        const chartColors = onChartColorsChange(() => {
+            chartColorsRevision += 1;
+            renderChart();
+        });
+
+        return () => {
+            tooltipCleanup?.();
+            darkModeObserver?.disconnect();
+            chartColors.disconnect();
+            resizeWatcher.disconnect();
+            resetResizeObserverState();
+            dataZoomTouchPanHandle?.dispose();
+            dataZoomTouchPanHandle = null;
+            if (resolutionDebounceTimer) clearTimeout(resolutionDebounceTimer);
+            resolutionDebounceTimer = null;
+            chartInstance?.off('datazoom', handleDataZoom);
+            chartInstance?.off('updateAxisPointer', handleUpdateAxisPointer);
+            chartInstance?.getZr()?.off('globalout', handleChartGlobalOut);
+            chartInstance?.dispose();
+        };
+    });
+
+    $effect(() => {
+        void selectedLots;
+        void valueHistory;
+        void returnHistory;
+        void brokers;
+        void currency;
+        void incomeEvents;
+        void mode;
+        void valueYFromZero;
+        void returnYFromZero;
+        void returnUnit;
+        void currentResolution;
+        void xAxisRange;
+        void lotModels;
+        void visibleLots;
+        void hasEstimatedAtCostLots;
+        void incomeMarkerEvents;
+        void valuePointsByLotId;
+        void aggregatedValuePoints;
+        void returnPointsByLotId;
+        void lotOpeningValueById;
+        void returnAbsLotsWithData;
+        void returnPctLotsWithData;
+        void returnPctUndefinedLots;
+        void activeReturnLotsWithData;
+        void aggregateReturnPoints;
+        void aggregateReturnSeriesPoints;
+        void showAggregateReturn;
+        void plottedBaseSeries;
+        void autoYAxisRange;
+        void resolutionSourceDates;
+        void resolutionSourceSignature;
+        void emptyMessage;
+        void uiLocale();
+        // ECharts calls the axis formatters outside this effect, so the privacy flag they read
+        // is not tracked there: read it here, or toggling privacy leaves the axis as it was.
+        void isPrivacyEnabled();
+
+        if (resolutionSourceSignature !== lastResolutionSourceSignature) {
+            lastResolutionSourceSignature = resolutionSourceSignature;
+            resetResolutionState();
+        }
+
+        if (!chartContainer) return;
+
+        tick().then(() => {
+            renderChart();
+        });
+    });
+</script>
+
+<div class="flex w-full flex-col gap-3 rounded-xl border border-lf-subtle bg-lf-card text-lf-primary p-4 shadow-sm shadow-lf-shadow-card" data-testid="lot-comparison-chart">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h3 class="text-sm font-semibold text-lf-secondary">
+            {chartTitle}
+        </h3>
+
+        <div class="ml-auto flex w-full flex-col items-end gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+            <div class="order-last flex flex-wrap items-center justify-end gap-2 sm:order-none">
+                {#if mode === 'value'}
+                    <div class="flex overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium" data-testid="lot-comparison-value-yaxis-toggle">
+                        <button
+                            type="button"
+                            class="px-3 py-1 transition-colors {!valueYFromZero ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            onclick={() => (valueYFromZero = false)}
+                            aria-pressed={!valueYFromZero}
+                            data-testid="lot-comparison-value-yaxis-auto"
+                        >
+                            {modeLabels.yAuto}
+                        </button>
+                        <button
+                            type="button"
+                            class="border-l border-lf-subtle px-3 py-1 transition-colors {valueYFromZero ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            onclick={() => (valueYFromZero = true)}
+                            aria-pressed={valueYFromZero}
+                            data-testid="lot-comparison-value-yaxis-zero"
+                        >
+                            {modeLabels.yFromZero}
+                        </button>
+                    </div>
+                {:else}
+                    <div class="flex overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium" data-testid="lot-comparison-return-abs-pct-toggle">
+                        <button
+                            type="button"
+                            class="px-3 py-1 transition-colors {returnUnit === 'abs' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            onclick={() => (returnUnit = 'abs')}
+                            aria-pressed={returnUnit === 'abs'}
+                            data-testid="lot-comparison-return-abs"
+                        >
+                            {modeLabels.returnUnitAbs}
+                        </button>
+                        <button
+                            type="button"
+                            class="border-l border-lf-subtle px-3 py-1 transition-colors {returnUnit === 'pct' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            onclick={() => (returnUnit = 'pct')}
+                            aria-pressed={returnUnit === 'pct'}
+                            data-testid="lot-comparison-return-pct"
+                        >
+                            {modeLabels.returnUnitPercent}
+                        </button>
+                    </div>
+
+                    <div class="flex overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium" data-testid="lot-comparison-return-yaxis-toggle">
+                        <button
+                            type="button"
+                            class="px-3 py-1 transition-colors {!returnYFromZero ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            onclick={() => (returnYFromZero = false)}
+                            aria-pressed={!returnYFromZero}
+                            data-testid="lot-comparison-return-yaxis-auto"
+                        >
+                            {modeLabels.yAuto}
+                        </button>
+                        <button
+                            type="button"
+                            class="border-l border-lf-subtle px-3 py-1 transition-colors {returnYFromZero ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            onclick={() => (returnYFromZero = true)}
+                            aria-pressed={returnYFromZero}
+                            data-testid="lot-comparison-return-yaxis-zero"
+                        >
+                            {modeLabels.yFromZero}
+                        </button>
+                    </div>
+                {/if}
+            </div>
+
+            <div class="order-first flex overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium sm:order-none" data-testid="lot-comparison-mode-toggle">
+                <button type="button" class="px-3 py-1 transition-colors {mode === 'value' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}" onclick={() => (mode = 'value')} aria-pressed={mode === 'value'} data-testid="lot-comparison-mode-value">
+                    {modeLabels.value}
+                </button>
+                <button
+                    type="button"
+                    class="border-l border-lf-subtle px-3 py-1 transition-colors {mode === 'return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                    onclick={() => (mode = 'return')}
+                    aria-pressed={mode === 'return'}
+                    data-testid="lot-comparison-mode-return"
+                >
+                    {modeLabels.return}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {#if selectedLots.length === 0}
+        <div class="flex h-80 items-center justify-center rounded-lg border border-dashed border-lf-subtle px-6 text-center text-sm text-lf-muted" data-testid="lot-comparison-empty">
+            {modeLabels.selectLots}
+        </div>
+    {:else}
+        <div class="relative h-80 w-full">
+            <div class="pointer-events-none absolute left-2 top-2 z-10">
+                <ResolutionBadge resolution={currentResolution} />
+            </div>
+            {#if emptyMessage}
+                <div class="absolute inset-0 z-10 flex items-center justify-center text-center text-sm text-lf-muted">
+                    {emptyMessage}
+                </div>
+            {/if}
+
+            <div bind:this={chartContainer} class="h-full w-full" class:invisible={!!emptyMessage} data-testid="lot-comparison-echart"></div>
+        </div>
+        {#if mode === 'value' && hasEstimatedAtCostLots}
+            <p class="flex items-center gap-2 text-[11px] text-lf-muted" data-testid="lot-comparison-estimated-at-cost-legend">
+                <span class="h-0 w-8 border-t border-dashed border-slate-500 dark:border-slate-400"></span>
+                <span>{modeLabels.estimatedAtCostLegend}</span>
+            </p>
+        {/if}
+    {/if}
+</div>

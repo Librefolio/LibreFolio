@@ -98,14 +98,14 @@ section «🔁 Import flow & asset identity (post-beta)», line «Instrument uni
 | Similarity engine | `frontend/src/lib/utils/assetSimilarity.ts` |
 | Grouping and overrides | `frontend/src/lib/utils/assetGrouping.ts` |
 | Identifier ordering | `frontend/src/lib/utils/assetIdentifiers.ts` |
-| Unify step | `frontend/src/lib/components/transactions/import/AssetGroupStep.svelte` |
+| Unify step | `frontend/src/lib/features/transactions/import/AssetGroupStep.svelte` |
 | Primary chooser | `frontend/src/lib/components/assets/IdentifierPrimaryChooser.svelte` |
 | Merge dialog | `frontend/src/lib/components/assets/AssetMergeModal.svelte` |
 | Picker (D4) | `frontend/src/lib/components/ui/select/AssetSelect.svelte` |
-| Duplicate notice in the wizard | `frontend/src/lib/utils/transactions/importResolutionHelpers.ts` |
-| Candidate search | `backend/app/services/brim_provider.py` |
-| Merge endpoint | `backend/app/api/v1/assets.py` |
-| Merge service | `backend/app/services/asset_sources/crud.py` |
+| Duplicate notice in the wizard | `frontend/src/lib/features/transactions/import/importResolutionHelpers.ts` |
+| Candidate search | `backend/app/services/brim/brim_provider.py` |
+| Merge endpoint | `backend/app/api/v1/assets/crud.py` |
+| Merge service | `backend/app/services/assets/crud.py` |
 | Merge tests | `backend/test_scripts/test_db/test_asset_merge.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md` |
 | Developer docs | `mkdocs_src/docs/developer/frontend/components/features/asset-identity.md` |

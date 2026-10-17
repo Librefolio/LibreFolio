@@ -9,38 +9,28 @@ from decimal import Decimal
 
 from babel.numbers import get_currency_precision
 
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator.base import PlannerIssueCode, PlannerMoneyInput
+from backend.app.schemas.pac_allocator.exact import ExactNumber as WireExactNumber
+from backend.app.schemas.pac_allocator.exact import ExactRatio as WireExactRatio
+from backend.app.schemas.pac_allocator.exact import FiniteDecimal
+from backend.app.schemas.pac_allocator.issues import CurrencyIssueParam, IdIssueParam, PlannerIssue, PlannerIssueParam, PlannerIssuePath, TextIssueParam
+from backend.app.schemas.pac_allocator.request import (
     AmountFeeCap,
-    CurrencyIssueParam,
     DomainAssetIdentity,
     DomainBrokerIdentity,
     DomainCopyProvenance,
-    FiniteDecimal,
-    IdIssueParam,
     ManualProvenance,
     MonetaryAmountCapability,
     MonetaryAmountMinimum,
     NoOrderCap,
     NotionalOrderCap,
     PacPlannerRequest,
-    PlannerIssue,
-    PlannerIssueCode,
-    PlannerIssueParam,
-    PlannerIssuePath,
-    PlannerMoneyInput,
     PlannerOrderRouteInput,
     RebalancerInvestAndSellRequest,
     RebalancerInvestOnlyRequest,
     RebalancerPlannerRequest,
-    TextIssueParam,
     WholeQuantityCapability,
     WholeQuantityMinimum,
-)
-from backend.app.schemas.pac_allocator import (
-    ExactNumber as WireExactNumber,
-)
-from backend.app.schemas.pac_allocator import (
-    ExactRatio as WireExactRatio,
 )
 from backend.app.services.pac_allocator.issues import (
     PlannerAvailability,
@@ -446,9 +436,12 @@ class _PlannerV2Normalizer:
         selected = self.money(item.selected, field_path("cash", "cash", item.cash_id, "selected"))
         if item.available.currency != item.selected.currency:
             self.issue("allocation.currency_mismatch", field_path("cash", "cash", item.cash_id, "selected"))
-        if available < ExactRatio(0) or selected < ExactRatio(0):
-            self.issue("allocation.negative_cash_unsupported", field_path("cash", "cash", item.cash_id, "available"))
-        elif selected > available:
+        negative = False
+        for amount, field in ((available, "available"), (selected, "selected")):
+            if amount < ExactRatio(0):
+                self.issue("allocation.negative_cash_unsupported", field_path("cash", "cash", item.cash_id, field))
+                negative = True
+        if not negative and selected > available:
             self.issue("allocation.cash_selection_invalid", field_path("cash", "cash", item.cash_id, "selected"))
 
     def validate_contribution(self, item) -> None:

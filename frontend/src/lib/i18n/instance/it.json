@@ -1,0 +1,64 @@
+{
+  "instance": {
+    "notices": {
+      "label": "Avvisi dell'istanza"
+    },
+    "checks": {
+      "jwtSecret": {
+        "ok": "Le sessioni sono firmate con una chiave impostata dall'amministratore.",
+        "ephemeral": "Nessuna chiave di firma delle sessioni è impostata: ogni riavvio disconnette tutti gli utenti.",
+        "short": "La chiave di firma delle sessioni da {source} è lunga {length} caratteri: usane almeno {minimum}, casuali.",
+        "unreadable": "La chiave di firma delle sessioni non si può leggere: {reason}"
+      },
+      "secretsSetTwice": {
+        "ok": "Ogni segreto è impostato in un solo posto.",
+        "found": "Impostati sia direttamente sia da file: {variables}. Vince il valore diretto e il file viene ignorato."
+      },
+      "instanceKey": {
+        "ok": "La chiave d'istanza è utilizzabile.",
+        "unusable": "La chiave d'istanza non è utilizzabile: {reason}",
+        "permissions": "{path} è accessibile ad altri utenti: la cartella dovrebbe essere 0700 e il file 0600."
+      },
+      "sessionCookie": {
+        "ok": "Il cookie di sessione è Secure ogni volta che il browser usa HTTPS.",
+        "never": "Il cookie di sessione viaggia anche su HTTP in chiaro (SESSION_COOKIE_SECURE=never)."
+      },
+      "clientAddress": {
+        "ok": "Dall'avvio del server nessuna richiesta è passata da un proxy di cui LibreFolio non si fida.",
+        "untrustedProxy": "Le richieste passano da un reverse proxy di cui LibreFolio non si fida ({headers}): i limiti per indirizzo del visitatore non si applicano. Elenca il proxy in FORWARDED_ALLOW_IPS, oppure indica in LIBREFOLIO_CLIENT_IP_HEADER l'header che imposta.",
+        "publicForwarding": "Header di inoltro da un indirizzo pubblico ignorati ({headers}). Se un proxy con un indirizzo pubblico inoltra le richieste, elencalo in FORWARDED_ALLOW_IPS; altrimenti non c'è nulla da fare."
+      },
+      "frameProtection": {
+        "on": "Solo le pagine di LibreFolio possono mostrarlo in un frame.",
+        "offSelfHosted": "Le pagine a un altro indirizzo, come le tue dashboard, possono mostrare LibreFolio in un frame: il default di un'installazione tua.",
+        "offManaged": "La protezione dai frame è spenta nel profilo managed: qualunque sito può mostrare LibreFolio in un frame. Accendi LIBREFOLIO_FRAME_PROTECTION, come fa per default il profilo managed."
+      },
+      "cspReportOnly": {
+        "on": "Le pagine dell'app hanno una Content-Security-Policy in sola segnalazione: il browser elenca nella console ciò che bloccherebbe, e non blocca nulla.",
+        "offSelfHosted": "Nessuna Content-Security-Policy in sola segnalazione: il default di un'installazione tua.",
+        "offManaged": "La Content-Security-Policy in sola segnalazione è spenta nel profilo managed: i browser non elencano nulla di ciò che bloccherebbe. Accendi LIBREFOLIO_CSP_REPORT_ONLY, come fa per default il profilo managed."
+      },
+      "logLevel": {
+        "ok": "Il livello di log è adatto alla produzione.",
+        "verbose": "Il livello di log è {log_level}: il log registra dettagli operativi; in produzione basta INFO."
+      },
+      "pluginSecrets": {
+        "ok": "I segreti dei plugin salvati si possono leggere con la chiave d'istanza.",
+        "unreadable": "{count, plural, one {# segreto dei plugin salvato non si può leggere con la chiave d'istanza: inseriscilo di nuovo in Impostazioni → Plugin, o ripristina la chiave d'istanza con cui è stato salvato.} other {# segreti dei plugin salvati non si possono leggere con la chiave d'istanza: inseriscili di nuovo in Impostazioni → Plugin, o ripristina la chiave d'istanza con cui sono stati salvati.}}"
+      },
+      "testMode": {
+        "off": "La modalità di test è spenta.",
+        "testLane": "La modalità di test è accesa, in una corsia del runner dei test.",
+        "outsideTestLane": "La modalità di test è accesa fuori dal runner dei test: sono disponibili i fornitori di dati fatti per i test, i dati stanno in {data_dir} e il file .env non viene letto. Togli LIBREFOLIO_TEST_MODE."
+      }
+    },
+    "block": {
+      "title": "Questa istanza è bloccata",
+      "adminDescription": "Il fornitore che ospita l'istanza l'ha bloccata, per esempio perché l'abbonamento non è pagato. Regolarizza con il fornitore per sbloccarla.",
+      "userDescription": "Il fornitore che ospita l'istanza l'ha bloccata, per esempio perché l'abbonamento non è pagato. Chiedi all'amministratore un backup dei tuoi dati.",
+      "deletionDate": "L'istanza e i suoi dati verranno cancellati il {date}.",
+      "manageSubscription": "Gestisci abbonamento",
+      "backupTitle": "Conserva una copia dei dati"
+    }
+  }
+}

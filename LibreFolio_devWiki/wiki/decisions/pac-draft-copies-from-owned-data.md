@@ -63,7 +63,7 @@ The contract frozen on 2026-09-16 (Step 4, «copie dominio»), with the review r
 | Role | Path |
 |------|------|
 | Endpoint | `backend/app/api/v1/portfolio_api.py` |
-| Snapshot service (owner check, saved facts) | `backend/app/services/portfolio_allocation_source.py` |
+| Snapshot service (owner check, saved facts) | `backend/app/services/pac_allocator/source/portfolio_allocation_source.py` |
 | Snapshot DTOs | `backend/app/schemas/portfolio.py` |
 | Planner client and copy merge | `frontend/src/lib/features/tools/pac-allocator/planner/source.ts`, `frontend/src/lib/features/tools/pac-allocator/planner/copies.ts` |
 | Stale-answer guard | `frontend/src/lib/features/tools/pac-allocator/planner/sourceLoad.svelte.ts` |

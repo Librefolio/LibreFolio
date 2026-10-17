@@ -239,6 +239,78 @@ describe('timeSeriesAggregation', () => {
         }
     });
 
+    // -------------------------------------------------------------------------
+    // aggregateSumSeries and missing points (I-01)
+    // -------------------------------------------------------------------------
+    //
+    // `missing: true` means "the point exists but its value is unavailable" (LineDataPoint):
+    // its `value` is a placeholder, not a flow. Summed as if it were one, a bucket adds a
+    // number nobody measured (999 below stands for that placeholder), and the bucket also
+    // inherits `missing` from its LAST point, so one unavailable day at the end of a week
+    // blanks a week that did have flows. The contract: the sum adds only the points that are
+    // not missing; a bucket is missing only when ALL its points are, and then its value is 0;
+    // otherwise the bucket point carries no truthy `missing`, whatever its last point was.
+    // Dates: Mon 2026-07-20 .. Sun 2026-07-26 is one ISO week.
+
+    it('aggregateSumSeries leaves a missing LAST point out of the weekly sum, and the bucket is not missing (I-01)', () => {
+        const points = [pt('2026-07-20', 10), pt('2026-07-22', 20), pt('2026-07-24', 999, {missing: true})];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        // Precondition: one ISO week, so one bucket holds the three points.
+        expect(result).toHaveLength(1);
+        expect(result[0] as BucketedPoint).toMatchObject({bucketStart: '2026-07-20', bucketEnd: '2026-07-26'});
+        // Soft: the two defects are independent, and the red names both.
+        expect.soft(result[0].value, 'only the points that are not missing are summed').toBe(30);
+        expect.soft(result[0].missing, 'two of three points have a value: the bucket is not missing').toBeFalsy();
+    });
+
+    it('aggregateSumSeries leaves a missing point in the MIDDLE of a weekly bucket out of the sum (I-01)', () => {
+        const points = [pt('2026-07-20', 10), pt('2026-07-22', 999, {missing: true}), pt('2026-07-24', 20)];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        expect(result).toHaveLength(1);
+        expect(result[0].value, 'only the points that are not missing are summed').toBe(30);
+        expect(result[0].missing).toBeFalsy();
+    });
+
+    it('aggregateSumSeries reports a weekly bucket whose points are ALL missing as missing, with value 0 (I-01)', () => {
+        const points = [pt('2026-07-21', 5, {missing: true}), pt('2026-07-25', 7, {missing: true})];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        expect(result).toHaveLength(1);
+        expect({value: result[0].value, missing: result[0].missing}, 'no point has a value: the bucket is missing, and its value is 0, not the placeholders summed').toEqual({value: 0, missing: true});
+    });
+
+    it('aggregateSumSeries applies the same rule per monthly bucket: a month with values sums them, an all-missing month is missing at 0 (I-01)', () => {
+        const points = [
+            // July 2026: two flows, and an unavailable last day.
+            pt('2026-07-03', 40),
+            pt('2026-07-15', 2),
+            pt('2026-07-31', 999, {missing: true}),
+            // August 2026: nothing measured.
+            pt('2026-08-10', 11, {missing: true}),
+            pt('2026-08-20', 13, {missing: true}),
+        ];
+
+        const result = aggregateSumSeries(points, 'monthly');
+
+        // Precondition: two calendar months, two buckets.
+        expect(result.map((point) => (point as BucketedPoint).bucketStart)).toEqual(['2026-07-01', '2026-08-01']);
+        expect(result.map((point) => ({value: point.value, missing: point.missing ?? false}))).toEqual([
+            {value: 42, missing: false},
+            {value: 0, missing: true},
+        ]);
+    });
+
+    it('aggregateSumSeries still returns the ORIGINAL array by reference at daily resolution when it holds missing points (I-01 guard)', () => {
+        const points = [pt('2026-07-20', 10), pt('2026-07-21', 999, {missing: true})];
+
+        expect(aggregateSumSeries(points, 'daily')).toBe(points);
+    });
+
     // =========================================================================
     // aggregateOHLCV
     // =========================================================================

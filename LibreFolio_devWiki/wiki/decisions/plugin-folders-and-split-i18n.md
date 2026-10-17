@@ -26,6 +26,10 @@ related:
 > U-2 (a catalogue built from sources) and U-3 (one catalogue per subsystem and plugin) are later steps of plan 45, and
 > `frontend/src/lib/i18n/` still holds one catalogue per language.
 
+*Update 2026-10-17 (CP-10b):* the signal contract left the family root for `services/signals/base.py`, the signals
+runtime package. A family root now keeps only `__init__.py` and its `_*.py` helpers, and the layout gate no longer
+allows a `base.py` there.
+
 > **Update (train 71, 2026-10-12, at `c57acf510`): U-2 is in the code — the catalogue is built from its sources.**
 > `1b31f9057` («feat(i18n): build the catalogue from its sources»):
 >

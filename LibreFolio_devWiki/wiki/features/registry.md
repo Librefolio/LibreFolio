@@ -226,7 +226,8 @@
 > **C-64, the status check of 2026-10-12**: F-048 had shipped in 1.0.0 and is `documented`. The ten `planned` rows and
 > the three `idea` rows were checked against the code and stay as they are: none is in 1.2 (F-108 has its contract
 > only; F-090 has parts built under F-051, its provider-change modal and reverse lookup are not — C-65; F-094's sync
-> dialogs exist, the warning on existing data is C-66).
+> dialogs exist, the warning on existing data is C-66). *2026-10-15*: F-090's reverse lookup was built (C-65b,
+> `5e96df752`), and the provider-change modal (C-65a) keeps it `planned`.
 
 | Domain | Total | implemented/documented | in-progress | planned | idea | superseded |
 |--------|-------|----------------------|-------------|---------|------|------------|

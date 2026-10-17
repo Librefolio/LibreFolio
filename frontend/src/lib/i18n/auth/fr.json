@@ -8,7 +8,6 @@
     "password": "Mot de passe",
     "confirmPassword": "Confirmer le mot de passe",
     "forgotPassword": "Mot de passe oublié ?",
-    "registerTitle": "Créer un compte",
     "noAccount": "Vous n'avez pas de compte ?",
     "hasAccount": "Vous avez déjà un compte ?",
     "registerHere": "Inscrivez-vous ici",
@@ -17,8 +16,7 @@
     "accountCreated": "Compte créé avec succès ! Veuillez vous connecter.",
     "registrationFailed": "L'inscription a échoué. Veuillez réessayer.",
     "registrationDisabled": "L'inscription de nouveaux utilisateurs est actuellement désactivée par l'administrateur.",
-    "passwordRecovery": "Récupération du mot de passe",
-    "emailRecoveryNotAvailable": "La récupération par email n'est pas encore disponible. Veuillez utiliser le terminal du serveur pour réinitialiser votre mot de passe.",
+    "emailRecoveryNotAvailable": "La récupération par email n'est pas disponible sur cette instance. Réinitialisez votre mot de passe depuis le terminal du serveur, ou demandez à votre administrateur un lien de réinitialisation.",
     "serverTerminalInstructions": "Exécutez cette commande sur le serveur :",
     "contactAdministrator": "Contactez votre administrateur système si vous n'avez pas accès au serveur.",
     "backToLogin": "Retour à la connexion",
@@ -29,7 +27,8 @@
       "invalidEmailDomain": "Le domaine email n'est pas valide ou ne peut pas être utilisé",
       "usernameTaken": "Ce nom d'utilisateur est déjà pris",
       "emailTaken": "Cet email est déjà enregistré",
-      "passwordTooWeak": "Le mot de passe ne répond pas aux exigences de sécurité"
+      "passwordTooWeak": "Le mot de passe ne répond pas aux exigences de sécurité",
+      "usernameNoAt": "Le nom d'utilisateur ne peut pas contenir @ : pour vous connecter, vous pouvez toujours utiliser votre adresse e-mail."
     },
     "passwordStrength": {
       "veryWeak": "Très Faible",
@@ -39,7 +38,7 @@
       "veryStrong": "Très Fort",
       "requirements": "Exigences du mot de passe :",
       "rules": {
-        "minLength": "Au moins 8 caractères",
+        "minLength": "Au moins {value} caractères",
         "hasUppercase": "Une lettre majuscule",
         "hasLowercase": "Une lettre minuscule",
         "hasNumber": "Un chiffre",
@@ -53,6 +52,56 @@
     "invalidCredentials": "Nom d'utilisateur ou mot de passe incorrect",
     "invalidInput": "Données non valides",
     "loginFailed": "La connexion a échoué",
-    "accountDisabled": "Ce compte est désactivé : demandez à un administrateur de le réactiver."
+    "accountDisabled": "Ce compte est désactivé : demandez à un administrateur de le réactiver.",
+    "loginServerUnreachable": "Le serveur ne répond pas : vérifiez votre connexion et réessayez dans un instant.",
+    "loginServerError": "Le serveur a rencontré une erreur : réessayez dans un instant et, si cela se reproduit, prévenez un administrateur.",
+    "tooManyAttempts": "Trop de tentatives de connexion : patientez quelques minutes et réessayez.",
+    "showPassword": "Afficher le mot de passe",
+    "hidePassword": "Masquer le mot de passe",
+    "registrationInviteOnly": "Ce serveur n'accepte de nouveaux comptes que par un lien d'invitation. Demandez-en un à un administrateur.",
+    "userLimitReached": "Ce serveur a atteint son nombre maximal de comptes. Contactez l'administrateur.",
+    "invite": {
+      "notice": "Vous avez reçu une invitation pour ce serveur LibreFolio : créez votre compte.",
+      "adminNotice": "Cette invitation crée un compte administrateur."
+    },
+    "link": {
+      "expired": "Ce lien a expiré.",
+      "consumed": "Ce lien a déjà été utilisé.",
+      "revoked": "Ce lien a été révoqué.",
+      "unknown": "Ce lien n'est pas valide.",
+      "missing": "Ce lien est incomplet : ouvrez-le à nouveau depuis le message que vous avez reçu.",
+      "checkFailed": "Impossible de vérifier le lien. Réessayez dans un instant.",
+      "askAdmin": "Demandez un nouveau lien à un administrateur."
+    },
+    "resetPassword": {
+      "title": "Choisissez un nouveau mot de passe",
+      "account": "Compte :",
+      "submit": "Définir le nouveau mot de passe",
+      "done": "Votre mot de passe a été modifié : connectez-vous avec le nouveau.",
+      "failed": "Le mot de passe n'a pas pu être modifié. Réessayez."
+    },
+    "setup": {
+      "title": "Configurez votre compte administrateur",
+      "intro": "Choisissez le mot de passe du compte administrateur de cette instance.",
+      "account": "Compte :",
+      "submit": "Activer le compte",
+      "failed": "Le compte n'a pas pu être configuré. Réessayez.",
+      "blocked": "Cette instance est bloquée par son hébergeur : le compte pourra être configuré une fois l'instance débloquée.",
+      "newLinkHint": "Demandez un nouveau lien à votre hébergeur. Sur votre propre serveur, lancez « dev.py user setup-link »."
+    },
+    "notices": {
+      "openRegistration": "L'inscription est ouverte et cette instance est joignable depuis l'extérieur de votre réseau local : n'importe qui la trouvant peut créer un compte.",
+      "openRegistrationLocked": "L'inscription est ouverte, fixée par LIBREFOLIO_REGISTRATION, et cette instance est joignable depuis l'extérieur de votre réseau local : n'importe qui la trouvant peut créer un compte. Modifiez la variable pour la fermer.",
+      "openRegistrationAction": "Changer qui peut s'inscrire"
+    },
+    "instanceBlocked": "Cette instance est bloquée par son hébergeur : réessayez une fois qu'elle sera débloquée.",
+    "checks": {
+      "loginLimit": {
+        "ok": "Les connexions échouées sont limitées : après 10 en 15 minutes pour un nom d'utilisateur ou un e-mail, ou 50 depuis une adresse, la connexion attend.",
+        "off": "La limite des connexions échouées est désactivée (LIBREFOLIO_LOGIN_LIMIT=off) : les mots de passe peuvent être essayés sans pause. Réactivez-la, sauf s'il s'agit d'une instance de test.",
+        "invalid": "LIBREFOLIO_LOGIN_LIMIT vaut « {value} », ni on ni off : le serveur ne démarre pas avec cette valeur."
+      }
+    },
+    "askAdminToResetPassword": "Demandez à votre administrateur un lien de réinitialisation du mot de passe : il peut en créer un pour votre compte."
   }
 }

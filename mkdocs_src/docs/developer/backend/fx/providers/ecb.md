@@ -7,7 +7,7 @@
 | **API Endpoint** | `https://data-api.ecb.europa.eu/service/data/EXR/` |
 | **API Format** | JSON (SDMX) |
 | **API Key** | Not required |
-| **Currencies** | Discovered at runtime by `get_supported_currencies()`: on 2026-10-08, 29 published daily and 44 plus EUR in the history |
+| **Currencies** | Discovered at runtime by `get_supported_currencies()`: on 2026-10-08, 29 published daily and 44 plus EUR in the history. `GET /fx/providers` caches the list for 24 h (`backend/app/services/fx/catalog.py`) |
 | **Update Frequency** | Daily, ~16:00 CET on ECB business days |
 | **Historical Data** | Available from 1999 |
 | **API Docs** | [ECB Data Portal API](https://data.ecb.europa.eu/help/api/overview) |
@@ -20,6 +20,7 @@ The European Central Bank publishes daily reference exchange rates for the Euro 
 - **Frequency**: `D` (Daily)
 - **Series**: `SP00` (Spot rate)
 - **Quotation**: Rates are "1 EUR = X foreign currency" — stored directly in LibreFolio's format.
+- **Too many requests**: an HTTP 429, on the rates or on the currency list, raises `FXRateLimitedError` with the response's `Retry-After`. `fetch_rates()` asks for one currency at a time (the ECB's bot protection reacts to parallel requests) and stops at the first refusal: the whole call is refused, and the core pauses the provider ([Paused Providers](../configuration.md#paused-providers)).
 
 ### 💰 Supported Currencies
 

@@ -7,29 +7,38 @@
     import {Plus, Upload, Pencil, Copy, Trash2, RefreshCw, Link2, Unlink} from 'lucide-svelte';
 
     import {zodiosApi} from '$lib/api';
-    import {commitTransactions} from '$lib/utils/transactions/txCommitApi';
-    import {ensureAssetsLoaded} from '$lib/stores/reference/assetStore';
+    import {commitTransactions} from '$lib/features/transactions/txCommitApi';
+    import {commitRefusalMessage} from '$lib/features/transactions/commitRefusal';
+    import type {ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
+    import {ensureAssetsLoaded, getAllAssets} from '$lib/stores/reference/assetStore';
     import {ensureBrokersLoaded, getAccessibleBrokers, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
-    import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
+    import {ensurePluginIconsLoaded, getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
-    import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/stores/transactions/transactionTypeStore';
+    import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/features/transactions/transactionTypeStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
-    import {PromoteMergeModal, TransactionActionModal, TransactionBulkModal, TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
+    import PromoteMergeModal from '$lib/features/transactions/bulk/PromoteMergeModal.svelte';
+    import TransactionActionModal from '$lib/features/transactions/TransactionActionModal.svelte';
+    import TransactionBulkModal from '$lib/features/transactions/bulk/TransactionBulkModal.svelte';
+    import TransactionFormModal from '$lib/features/transactions/form/TransactionFormModal.svelte';
+    import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
+    import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
+    import {loadPartnerRows, loadEventTooltipMap} from '$lib/features/transactions/loadTransactionRows';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {canEditBroker, canEditPaired} from '$lib/stores/reference/brokerStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
-    import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/stores/transactions/txStore.svelte';
+    import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/features/transactions/txStore.svelte';
     import {invalidate as invalidatePortfolioCache} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {applyTransactionColumnFilters, buildTransactionsFiltersUrl, parseTransactionFilters, toTransactionColumnFilters, type TransactionFilterMap} from './filterState';
-    import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
+    import type {TXReadItem, AssetEvent} from '$lib/features/transactions/types';
 
     // =========================================================================
     // Types (local, derived from generated.ts shapes)
@@ -167,8 +176,11 @@
         // tooltip) render with the proper "$ 🇺🇸 USD" format instead of the
         // bare-code fallback. `$currencyStoreVersion` is referenced inside
         // the cell builders so they re-render once data arrives.
-        await Promise.all([ensureTypesLoaded(), loadBrokers(), ensureCurrenciesLoaded($currentLanguage)]);
-        await reload();
+        // The first load holds the page's Refresh button (Y11): the reference lists, then the transactions.
+        await pageBusy.track('tx-first-load', async () => {
+            await Promise.all([ensureTypesLoaded(), loadBrokers(), ensureCurrenciesLoaded($currentLanguage)]);
+            await reload();
+        });
         urlInitialized = true;
         onboardingGuide.maybeStartContextual('transactions_page_guide');
     });
@@ -195,7 +207,7 @@
         syncUrl();
     });
 
-    function openBulk(intent: import('$lib/components/transactions/modals/TransactionBulkModal.svelte').WorkspaceIntent) {
+    function openBulk(intent: import('$lib/features/transactions/bulk/TransactionBulkModal.svelte').WorkspaceIntent) {
         if (onboardingGuide.active?.flow === 'transactions_page_guide') {
             onboardingGuide.dismissHost();
         }
@@ -228,7 +240,7 @@
     // Bulk modal (unified batch editor on DataTable).
     let bulkOpen = $state(false);
     /** Declarative intent for BulkModal — replaces bulkInitial/autoOpenForm/initialStatus. */
-    let bulkIntent = $state<import('$lib/components/transactions/modals/TransactionBulkModal.svelte').WorkspaceIntent | undefined>(undefined);
+    let bulkIntent = $state<import('$lib/features/transactions/bulk/TransactionBulkModal.svelte').WorkspaceIntent | undefined>(undefined);
 
     // B1-17: Selection-based promote (replaces PromotePairWizardModal).
     let promoteConfirmOpen = $state(false);
@@ -292,7 +304,7 @@
     }
     function handleFormCommitted() {
         formOpen = false;
-        void reload({soft: true});
+        void pageBusy.track('tx-reload', () => reload({soft: true}));
     }
     function handleBulkCommitted(resp: unknown) {
         bulkOpen = false;
@@ -320,7 +332,7 @@
                 toasts.success(`✅ ${mainMsg}${body}`);
             }
         }
-        void reload({soft: true});
+        void pageBusy.track('tx-reload', () => reload({soft: true}));
     }
 
     // =========================================================================
@@ -399,6 +411,20 @@
         }
     }
 
+    /** What a refusal's reasons name (brokers, assets), resolved as the bulk editor resolves them (W-B39). */
+    function issueContext(): ResolverContext {
+        return {
+            brokers: brokers as unknown as Array<{id: number; name: string}>,
+            assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
+            getBrokerIconHtml: (brokerId: number) =>
+                getBrokerIconHtmlById(brokerId, brokers as any[], {
+                    width: 16,
+                    height: 16,
+                    style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
+                }),
+        };
+    }
+
     async function confirmPromote() {
         if (!promoteTarget) return;
         // Direct commit (no merge needed — fields identical)
@@ -419,9 +445,10 @@
                 promoteTarget = null;
                 promoteMergeData = null;
                 clearSelection();
-                await reload({soft: true});
+                await pageBusy.track('tx-reload', () => reload({soft: true}));
             } else {
-                console.error('[promote] commit failed:', result.issues);
+                // W-B39: a refusal says why; the confirmation stays open.
+                toasts.error(commitRefusalMessage(result, $_('transactions.promote.failed') || 'Promote failed', $_, issueContext()));
             }
         } finally {
             promoting = false;
@@ -449,9 +476,10 @@
                 splitConfirmTx = null;
                 splitConfirmPartner = null;
                 clearSelection();
-                await reload({soft: true});
+                await pageBusy.track('tx-reload', () => reload({soft: true}));
             } else {
-                console.error('[split] commit failed:', result.issues);
+                // W-B39: a refusal says why; the confirmation stays open.
+                toasts.error(commitRefusalMessage(result, $_('transactions.split.failed') || 'Split failed', $_, issueContext()));
             }
         } finally {
             splitting = false;
@@ -707,17 +735,17 @@
     });
 </script>
 
-<div class="space-y-6" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="transactions-page">
+<div class="space-y-6 text-lf-primary" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="transactions-page">
     <!-- Header -->
     <div class="flex items-center justify-between flex-wrap gap-4">
         <div use:guideAnchor={'transactions.page.overview'} data-testid="transactions-page-overview-guide-target">
-            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+            <h2 class="text-lg font-semibold text-lf-secondary flex items-center gap-2">
                 {$_('transactions.title')}
                 {#if mainRows.length > 0}
-                    <span data-testid="tx-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{mainRows.length}</span>
+                    <span data-testid="tx-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-lf-selected text-lf-link">{mainRows.length}</span>
                 {/if}
             </h2>
-            <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('transactions.subtitle')}</p>
+            <p class="text-lf-muted text-sm">{$_('transactions.subtitle')}</p>
         </div>
         <div class="flex items-center gap-2 ml-auto">
             {#if selectedRows.length > 0}
@@ -736,31 +764,27 @@
                 <ColumnVisibilityToggle tableRef={transactionsTableComponent?.getTableRef()} />
             </div>
             <button
-                class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all disabled:opacity-50"
+                class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all disabled:opacity-50"
                 data-testid="tx-refresh-button"
                 title={$_('transactions.refresh') || 'Refresh from server'}
                 aria-label={$_('transactions.refresh') || 'Refresh from server'}
-                disabled={loading}
+                disabled={pageBusy.busy}
+                data-busy={pageBusy.busy ? 'true' : 'false'}
                 onclick={() => {
                     // Reset column filters, selection, and URL filter state before reloading.
                     transactionsTableComponent?.resetFilters();
                     clearSelection();
                     filters = {...filters, types: undefined, tags: undefined, broker_id: undefined, asset_id: undefined, without_asset: undefined, date_start: undefined, date_end: undefined, cash: undefined, page: 1};
-                    void reload();
+                    void pageBusy.track('tx-refresh', () => reload());
                 }}
             >
-                <RefreshCw size={15} class={loading ? 'animate-spin' : ''} />
+                <RefreshCw size={15} class={pageBusy.busy ? 'animate-spin' : ''} />
             </button>
-            <button
-                class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-                data-testid="tx-import-button"
-                use:guideAnchor={'transactions.page.import'}
-                onclick={onImportFromBroker}
-            >
+            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" data-testid="tx-import-button" use:guideAnchor={'transactions.page.import'} onclick={onImportFromBroker}>
                 <Upload size={15} />
                 <span class="hidden sm:inline">{$_('common.import')}</span>
             </button>
-            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="tx-add-button" use:guideAnchor={'transactions.page.add'} onclick={onAddTransaction}>
+            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-all" data-testid="tx-add-button" use:guideAnchor={'transactions.page.add'} onclick={onAddTransaction}>
                 <Plus size={15} />
                 <span class="hidden sm:inline">{$_('transactions.addTransaction')}</span>
             </button>
@@ -768,15 +792,15 @@
     </div>
 
     {#if loading}
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-gray-700" data-testid="tx-loading">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
-                <RefreshCw class="text-libre-green animate-spin" size={32} />
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle" data-testid="tx-loading">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-selected rounded-full mb-4">
+                <RefreshCw class="text-lf-link animate-spin" size={32} />
             </div>
-            <p class="text-gray-500 dark:text-gray-400">{$_('common.loading')}</p>
+            <p class="text-lf-muted">{$_('common.loading')}</p>
         </div>
     {:else if error}
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4" data-testid="tx-error">
-            <p class="text-red-700 dark:text-red-400 text-sm">{error}</p>
+        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-xl p-4" data-testid="tx-error">
+            <p class="text-lf-danger-on-soft text-sm">{error}</p>
         </div>
     {:else}
         <TransactionsTable

@@ -3,7 +3,6 @@
     "profile": "Profile",
     "preferences": "Preferences",
     "about": "About",
-    "admin": "Admin",
     "profileInfo": "Profile Information",
     "profileDescription": "Manage your account details",
     "enableEditing": "Enable editing",
@@ -24,13 +23,14 @@
     "deleteAccountWarning": "This action cannot be undone. The brokers you are the only owner of are deleted with all their transactions and imported reports, even if you shared them with viewers or editors. A broker with another owner stays with them: only your access is removed. Your settings are deleted.",
     "typeUsernameToConfirm": "Type \"{username}\" to confirm",
     "deleteAccountPermanently": "Delete Permanently",
-    "deleteAccountFailed": "Failed to delete account",
     "currentPassword": "Current Password",
     "newPassword": "New Password",
     "confirmNewPassword": "Confirm New Password",
     "passwordChanged": "Password changed successfully",
     "passwordChangeFailed": "Failed to change password",
     "currentPasswordIncorrect": "Current password is incorrect",
+    "currentPasswordRequired": "Enter your current password to change your email",
+    "emailPasswordHint": "To change your email, enter your current password. Your other devices will be signed out.",
     "passwordsMustMatch": "Passwords must match",
     "passwordMustBeDifferent": "New password must be different from current",
     "language": "Language",
@@ -80,7 +80,6 @@
     },
     "globalSettingNames": {
       "session_ttl_hours": "Session Duration",
-      "enable_registration": "Enable Registration",
       "require_email_verification": "Require Email Verification",
       "max_file_upload_mb": "Max File Upload Size",
       "default_language": "Default Language",
@@ -89,11 +88,11 @@
       "scheduler_history_sync_times": "History Sync Times",
       "scheduler_history_sync_days": "History Sync Days",
       "scheduler_history_sync_horizon_days": "Lookback Horizon",
-      "scheduler_enabled": "Scheduler Enabled"
+      "scheduler_enabled": "Scheduler Enabled",
+      "registration_mode": "Registration"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "How long a user session remains valid before requiring re-login",
-      "enable_registration": "Allow new users to create accounts",
       "require_email_verification": "Require email verification for new accounts",
       "max_file_upload_mb": "Maximum file size allowed for uploads",
       "default_currency": "Default currency for new users",
@@ -103,7 +102,8 @@
       "scheduler_current_price_frequency_minutes": "How often current prices are refreshed (in minutes)",
       "scheduler_history_sync_times": "Times of day when historical data is synced (in the scheduler timezone)",
       "scheduler_history_sync_days": "Days of the week when historical data is synced",
-      "scheduler_history_sync_horizon_days": "How many days back to look for missing historical data"
+      "scheduler_history_sync_horizon_days": "How many days back to look for missing historical data",
+      "registration_mode": "Who can create an account: anyone (open), only people with an invitation link (by invitation), or nobody (closed)."
     },
     "globalSettingUnits": {
       "session_ttl_hours": "hours",
@@ -161,7 +161,9 @@
           "last6h": "Last 6 hours",
           "last24h": "Last 24 hours",
           "last7d": "Last 7 days",
-          "last30d": "Last 30 days"
+          "last30d": "Last 30 days",
+          "deferred": "Deferred: provider paused",
+          "retryAt": "Retry at {time}"
         },
         "status": {
           "title": "Scheduler Status",
@@ -169,7 +171,9 @@
           "neverRun": "Never run yet",
           "details": "Details…",
           "configure": "Configure…",
-          "configSummary": "Every {freq}min · {times} · {days}"
+          "configSummary": "Every {freq}min · {times} · {days}",
+          "retryAt": "Paused items retried at {time}",
+          "nextAttemptAt": "Failed: next attempt at {time}"
         },
         "timezone": "Timezone",
         "timezoneChangeWarning": "Changing the timezone keeps these clock times and weekdays unchanged, but changes the actual UTC execution instant.",
@@ -216,6 +220,192 @@
       "confirmClearTitle": "Clear cache {name}?",
       "confirmClearAllTitle": "Clear all caches?",
       "confirmWarning": "After clearing, the next fetch of this data will experience slowdowns comparable to a server restart."
+    },
+    "registrationModes": {
+      "open": "Open",
+      "invite": "By invitation",
+      "disabled": "Closed"
+    },
+    "lockedByEnv": "Set on the server by {variable}: change it there.",
+    "users": "Users",
+    "usersTab": {
+      "title": "Users",
+      "usage": "{used} / {max} accounts",
+      "usageUnlimited": "{used} accounts",
+      "usageHint": "Active accounts and open invitations take a place; deactivated accounts do not.",
+      "billing": "Manage subscription",
+      "limitBanner": "The instance is full: no new invitation until you deactivate or delete an account, or revoke an invitation.",
+      "createdOn": "Created {date}",
+      "selfHint": "This is your account. Manage it from:",
+      "done": "Done",
+      "accounts": {
+        "title": "Accounts"
+      },
+      "badges": {
+        "you": "You",
+        "admin": "Admin",
+        "inactive": "Deactivated",
+        "protected": "Protected",
+        "pendingSetup": "Waiting for setup"
+      },
+      "actions": {
+        "deactivate": "Deactivate",
+        "reactivate": "Reactivate",
+        "promote": "Make administrator",
+        "demote": "Remove administrator",
+        "resetLink": "Password-reset link",
+        "signOut": "Sign out everywhere",
+        "restartGuides": "Restart the guides",
+        "delete": "Delete",
+        "cancelSetup": "Cancel setup link"
+      },
+      "reasons": {
+        "protected": "This account is protected: nobody can deactivate, demote or delete it.",
+        "lastAdmin": "It is the only active administrator: it cannot be deactivated or demoted.",
+        "limit": "The instance is full: free a place to reactivate it.",
+        "demoteFirst": "An administrator must be demoted before it can be deleted.",
+        "pendingSetup": "It waits for its setup: it keeps its role until then."
+      },
+      "confirm": {
+        "deactivate": {
+          "title": "Deactivate {username}?",
+          "message": "The account can no longer sign in and every session ends. Its brokers and transactions stay: you can reactivate it later.",
+          "confirm": "Deactivate"
+        },
+        "promote": {
+          "title": "Make {username} an administrator?",
+          "message": "Administrators manage the instance: its settings, its users and its invitations.",
+          "confirm": "Make administrator"
+        },
+        "demote": {
+          "title": "Remove the administrator rights of {username}?",
+          "message": "The account stays, as a regular user, and its sessions end.",
+          "confirm": "Remove"
+        },
+        "signOut": {
+          "title": "Sign {username} out everywhere?",
+          "message": "Every session of the account ends: it must sign in again on each device.",
+          "confirm": "Sign out"
+        },
+        "restartGuides": {
+          "title": "Restart the guides of {username}?",
+          "message": "The introduction and the page guides show again, as for a new account.",
+          "confirm": "Restart"
+        },
+        "revokeInvite": {
+          "title": "Revoke the invitation for {email}?",
+          "message": "The link stops working at once.",
+          "confirm": "Revoke"
+        },
+        "cancelSetup": {
+          "title": "Cancel the setup link of {username}?",
+          "message": "The link already handed over stops working. The account keeps waiting for its setup: a new link comes from «dev.py user setup-link» on the server, or from your hosting provider.",
+          "confirm": "Cancel the link"
+        }
+      },
+      "errors": {
+        "LAST_ADMIN": "The last active administrator can be neither deactivated nor demoted.",
+        "USER_LIMIT_REACHED": "The instance is full: free a place first (deactivate or delete an account, or revoke an invitation).",
+        "REGISTRATION_DISABLED": "Registration is closed: no invitation can be created.",
+        "ACCOUNT_PROTECTED": "This account is protected: nobody can deactivate, demote or delete it.",
+        "SELF_DELETION": "Delete your own account from the Profile tab.",
+        "DEMOTE_FIRST": "An administrator must be demoted before it can be deleted.",
+        "NOT_FOUND": "This account no longer exists: the list is reloaded.",
+        "DELETION_FAILED": "The deletion failed: nothing was deleted.",
+        "INVALID_INPUT": "Check what you entered: the e-mail address may not be valid.",
+        "generic": "The action failed. Try again.",
+        "load": "The accounts could not be loaded.",
+        "PENDING_SETUP": "This administrator waits for its setup: it can be neither reactivated nor demoted here.",
+        "SETUP_COMPLETED": "This administrator completed its setup in the meantime: nothing was changed.",
+        "LAST_ADMIN_DELETION": "You are the last active administrator: make another account an administrator before deleting yours."
+      },
+      "invite": {
+        "button": "Invite",
+        "blocked": "Registration is closed, so invitations are too: change it in the global settings.",
+        "blockedLocked": "Registration is closed on the server by {variable}, so invitations are too.",
+        "title": "Invite someone",
+        "emailLabel": "E-mail (optional)",
+        "emailHint": "For your reference only: the link works for whoever opens it.",
+        "adminLabel": "Administrator",
+        "adminHint": "The account it creates manages the instance.",
+        "create": "Create the link",
+        "ready": "Share this link: it works once, for 7 days."
+      },
+      "invites": {
+        "title": "Open invitations",
+        "empty": "No open invitation.",
+        "noEmail": "No e-mail",
+        "dates": "Created {created} · expires {expires}",
+        "revoke": "Revoke"
+      },
+      "reset": {
+        "title": "Password-reset link for {username}",
+        "message": "A single-use link to set a new password, valid 30 minutes. The links created before for this account stop working.",
+        "create": "Create the link",
+        "ready": "Share this link with {username}: it works once."
+      },
+      "toasts": {
+        "signedOut": "{username} is signed out everywhere.",
+        "guidesRestarted": "The guides of {username} start again.",
+        "resetLinkCreated": "Reset link created for {username}.",
+        "setupCancelled": "The setup link of {username} no longer works."
+      },
+      "pendingSetupHint": "This administrator account activates through its setup link. If the link is lost, run «dev.py user setup-link» on the server, or ask your hosting provider."
+    },
+    "linkShare": {
+      "addressLabel": "Server address",
+      "addressHint": "Change it if your users reach LibreFolio at another address.",
+      "linkLabel": "Link",
+      "copy": "Copy",
+      "copied": "Link copied.",
+      "expires": "Valid until {date}.",
+      "probe": {
+        "checking": "Checking that this LibreFolio answers at this address…",
+        "match": "This instance answers at this address.",
+        "mismatch": "Something answers at this address, but not this instance: check it before sharing.",
+        "unverifiable": "This address could not be checked from this browser: you can still share the link.",
+        "invalid": "Enter an address that starts with http:// or https://, without ? or #."
+      }
+    },
+    "accountDeletion": {
+      "titleAdmin": "Delete {username}",
+      "warningAdmin": "This cannot be undone. The brokers this account is the only owner of are deleted with all their transactions and files; from the shared ones only its access goes.",
+      "deactivateTitle": "Deactivate instead?",
+      "deactivateText": "Deactivating keeps every broker and transaction and can be undone: the account just can no longer sign in.",
+      "deactivateAction": "Deactivate",
+      "loading": "Checking what the deletion would take…",
+      "brokersDeleted": "Deleted, with all their transactions and files:",
+      "noBrokersDeleted": "No broker is deleted.",
+      "brokersLeft": "Shared brokers that stay (only the access goes):",
+      "transactions": "{count, plural, =0 {no transactions} one {# transaction} other {# transactions}}",
+      "unpaired": "{count, plural, one {# transaction on another broker is half of a transfer with these brokers} other {# transactions on other brokers are halves of transfers with these brokers}}. {count, plural, one {It stays} other {They stay}}, without the other half: assets received from these brokers become an opening position at their transfer cost, and cash transfers become deposits or withdrawals.",
+      "irreversible": "This cannot be undone.",
+      "previewFailed": "What the deletion would take could not be loaded.",
+      "deletedSelf": "Your account was deleted.",
+      "deletedAdmin": "{username} deleted, with {count, plural, =0 {no broker} one {# broker} other {# brokers}}.",
+      "roles": {
+        "OWNER": "Owner",
+        "EDITOR": "Editor",
+        "VIEWER": "Viewer"
+      }
+    },
+    "administration": "Administration",
+    "tooManyPasswordAttempts": "Too many wrong passwords: wait a few minutes and try again.",
+    "securityTab": {
+      "title": "Security checks",
+      "description": "How this instance is configured, checked when Settings opens: what needs your attention comes first. «Check again» reads it anew.",
+      "allClear": "Nothing needs your attention.",
+      "passed": "{count, plural, one {# check passed} other {# checks passed}}",
+      "loadError": "The security checks could not be loaded.",
+      "retry": "Try again",
+      "refresh": "Check again",
+      "openEmail": "Open the Email tab",
+      "openPlugins": "Open the plugin settings",
+      "severity": {
+        "error": "Error",
+        "warning": "Warning",
+        "info": "Information"
+      }
     }
   }
 }

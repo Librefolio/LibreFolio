@@ -32,8 +32,8 @@ Three rules it enforces:
 
 from __future__ import annotations
 
-from backend.app.schemas.pac_allocator import ExactMoney, ExactNumber, ExactPrice, FiniteDecimal
-from backend.app.schemas.pac_allocator import ExactRatio as WireExactRatio
+from backend.app.schemas.pac_allocator.exact import ExactMoney, ExactNumber, ExactPrice, FiniteDecimal
+from backend.app.schemas.pac_allocator.exact import ExactRatio as WireExactRatio
 from backend.app.services.pac_allocator.numeric import ExactRatio
 
 __all__ = [

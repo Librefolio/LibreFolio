@@ -1,6 +1,6 @@
 # 📂 Filesystem Structure
 
-LibreFolio keeps everything it stores in one **data directory**: the database, uploaded files, broker reports and logs. Its layout is all you need to know for backups and maintenance.
+LibreFolio keeps everything it stores in one **data directory**: the database, uploaded files, broker reports, logs and the instance key. Its layout is all you need to know for backups and maintenance.
 
 | Installation | Data directory |
 | --- | --- |
@@ -22,8 +22,11 @@ backend/data/
 │   │   ├── ✅ parsed/                # Reports read successfully
 │   │   └── ❌ failed/                # Reports that could not be read
 │   ├── 📝 logs/                      # Application log files
+│   ├── 💾 backups/                   # Archives written by ./dev.py backup create
 │   ├── 🎭 scenario_catalog/          # Optional: your own stress scenarios
-│   └── 📋 scheduler_state.json       # Last run of the scheduled syncs
+│   ├── 🔐 secrets/                   # Created when LibreFolio first needs the key
+│   │   └── 🔑 instance.key           # The instance key: back it up, never change it
+│   └── 📋 scheduler_state.json       # Scheduled syncs: last run, pending retry
 │
 └── 🧪 test/                          # Test data (completely isolated)
     ├── 🗃️ sqlite/app.db
@@ -79,6 +82,14 @@ A report moves from `uploaded/` to `parsed/` or `failed/`, so its original file 
     - **Troubleshooting**: `LOG_LEVEL=DEBUG` — see what the system is deciding
     - **Deep FX/price debugging**: `LOG_LEVEL=TRACE` — see every individual data point
 
+### 🔐 `secrets/`
+
+- 🔑 `instance.key` holds the [instance key](configuration.md#instance-key), the secret from which LibreFolio derives its encryption keys. LibreFolio creates it the first time it needs the key. After that, a missing `instance.key` looks the same as a first use: LibreFolio creates a new key, and what the old one encrypted can no longer be read.
+- 🔒 Only the user that runs LibreFolio can open the folder and the file: the folder is `0700`, the file `0600`. Keep them that way, and owned by that user: otherwise the [start log](configuration.md#startup-checks) has a warning, or an error when LibreFolio itself cannot open them.
+- ⛔ Never edit, replace or delete the `instance.key` in use: what was encrypted with it could no longer be read. If it is damaged, or if LibreFolio has already replaced a lost one with a new key, stop LibreFolio and put your copy back before anyone enters a plugin secret again: see [The Instance Key](configuration.md#instance-key).
+- ♻️ When you restore the data directory, put `secrets/` back with it before you start LibreFolio again. Never start LibreFolio on restored data without its `secrets/`.
+- ⚙️ When the key comes from `LIBREFOLIO_INSTANCE_KEY` or `LIBREFOLIO_INSTANCE_KEY_FILE`, LibreFolio does not use this folder.
+
 🔗 For developers: [Data directory on disk](../developer/architecture/database/index.md#data-directory) — every file, its format and the code that writes it, `scenario_catalog/` included.
 
 ---
@@ -94,6 +105,8 @@ The other variables, and the `.env` file, are described in [Configuration](confi
 
 ## 💾 Backup
 
+The recommended way is a backup archive, made while LibreFolio keeps running: see [Backup, Restore and Moving Your Instance](backup_restore.md). From the command line, `./dev.py backup create` writes one zip archive of the database, the uploaded files, the broker reports and your own stress scenarios, by default into the data directory's `backups/` folder: see [Back Up the Instance](cli_tools.md#backup), and [Back Up with Docker](cli_tools.md#backup-docker) for the command in the container. It leaves out `secrets/`, which you back up as [What to Back Up](#what-to-back-up) explains, unless you make it [secure](backup_restore.md#secure) (`--encrypt`): a secure archive carries the instance key LibreFolio generated. Copying the data directory by hand, below, is the alternative.
+
 ### 📦 Simple Backup
 
 The easiest way to back up LibreFolio is to copy the entire data directory:
@@ -102,6 +115,8 @@ The easiest way to back up LibreFolio is to copy the entire data directory:
 # Stop the server first (to ensure database consistency)
 cp -r backend/data/prod/ /path/to/backup/librefolio-$(date +%Y%m%d)/
 ```
+
+This copy, like the Docker one below, also takes `backups/`, with every archive `backup create` wrote there: delete the ones you no longer need first, or leave the folder out.
 
 ### 🐳 Docker Backup
 
@@ -123,7 +138,7 @@ docker compose start librefolio
 
     With Docker, the database is `./LibreFolio-data/sqlite/app.db`. This copies the database only: copy the folders below as usual.
 
-### ✅ What to Back Up
+### ✅ What to Back Up {: #what-to-back-up }
 
 At minimum, back up:
 
@@ -131,5 +146,12 @@ At minimum, back up:
 2. **`custom-uploads/`** — User-uploaded files (avatars, documents)
 3. **`broker_reports/`** — The original broker reports, in case you need to import them again
 4. **`scenario_catalog/`** — Your own stress scenarios, if you added any
+5. **`secrets/`** — The instance key, if LibreFolio has created it
 
-If storage is limited, `sqlite/app.db` alone keeps all the structured data: files and reports can be uploaded again if you still have them.
+!!! warning "🔑 Keep `secrets/` with the data, and keep it private"
+
+    Back up `secrets/` together with the database, and keep the copies as private as the database itself. Never change or delete the instance key once in use: what was encrypted with it could no longer be read. When you restore, put `secrets/` back with the data before you start LibreFolio.
+
+    Only the user that runs LibreFolio can open `secrets/`. The same goes for `backups/`, made at the first backup, and `.restore/`, made the first time an archive is checked for a restore: LibreFolio creates both as `0700`, and the archives in `backups/` as `0600`. If `cp` reports `Permission denied` in one of them, for example with Docker when your host user is not the container's, copy as root and keep the permissions: `sudo cp -a`. Deleting an old archive from `backups/` fails the same way: use `sudo rm`.
+
+If storage is limited, keep at least `sqlite/app.db`, which holds all the structured data, and the small `secrets/` folder: files and reports can be uploaded again if you still have them.

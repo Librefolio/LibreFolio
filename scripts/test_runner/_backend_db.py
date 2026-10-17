@@ -77,7 +77,7 @@ def _db_create_body(verbose: bool = False) -> bool:
     print_info("The backend server is NOT used in this test")
 
     # The precondition is checked *before* the destructive step, not by the
-    # migration that follows it. `dev.sh db:upgrade` refuses to run while a
+    # migration that follows it. `dev.py db upgrade` refuses to run while a
     # server holds the test port — correct, but by then the file would already be
     # gone, and the run would continue against a database with no tables.
     # Measured on `all-backend`: 13 failures and 116 `no such table: users`
@@ -218,14 +218,113 @@ def db_autoincrement_schema(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "AUTOINCREMENT schema tests", verbose=verbose)
 
 
+def db_post_migration_event_types(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the post-migration fix event_types, and the row-count changes a fix declares, on temporary databases at head (E1c)."""
+    print_section("DB Test: Post-Migration Fix — Event Types")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: declared row-count changes checked exactly, event types corrected when trimming and upper-casing makes them valid, deleted otherwise with their transactions unlinked, outcome and checks, dry run and its warning, one log line per row, rollback")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_post_migration_event_types.py", test_names)
+    return run_command(cmd, "Post-migration event types tests", verbose=verbose)
+
+
 def db_post_migration(verbose: bool = False, test_names: list = None) -> bool:
     """Test the post-migration fixes on temporary databases (a 1.1 install upgraded to head)."""
     print_section("DB Test: Post-Migration Fixes")
     print_info("This test works on temporary databases and data dirs only: the test database is not touched")
-    print_info("Testing: detection, backup, AUTOINCREMENT conversion, orphan broker folders, rollback, dry run, offline script, concurrent runs, duration in the log")
+    print_info("Testing: detection, backup, AUTOINCREMENT conversion, orphan broker folders, rollback, dry run, offline script, concurrent runs, duration in the log, lock file (no link followed, created 0o600)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_post_migration.py", test_names)
     return run_command(cmd, "Post-migration fix tests", verbose=verbose)
+
+
+def db_post_migration_orphan_pairs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the post-migration fix orphan_pair_halves on temporary databases at head (N1b-2)."""
+    print_section("DB Test: Post-Migration Fix — Orphan Pair Halves")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: lone halves converted as a split leaves them, giving TRANSFER legs and unreadable rows left, outcome and checks, dry run and its warning, one log line per row, rollback")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_post_migration_orphan_pairs.py", test_names)
+    return run_command(cmd, "Post-migration orphan pair halves tests", verbose=verbose)
+
+
+def db_migration_005(verbose: bool = False, test_names: list = None) -> bool:
+    """Test migration 005_accounts_invites on temporary databases: a new one, and a populated 1.2 install."""
+    print_section("DB Test: Migration 005 (accounts)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: revision and single head, users columns and account_tokens at head, models = migration, 1.2 install upgraded, downgrade without cascade, interrupted upgrade")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_005_accounts.py", test_names)
+    return run_command(cmd, "Migration 005 tests", verbose=verbose)
+
+
+def db_migration_006(verbose: bool = False, test_names: list = None) -> bool:
+    """Test migration 006_registration_mode on temporary databases: enable_registration becomes registration_mode, and back."""
+    print_section("DB Test: Migration 006 (registration mode)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: revision and single head, the conversion as the app read the boolean, the way back, metadata, idempotence, no other row, a 1.1 install at head")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_006_registration.py", test_names)
+    return run_command(cmd, "Migration 006 tests", verbose=verbose)
+
+
+def db_migration_007(verbose: bool = False, test_names: list = None) -> bool:
+    """Test migration 007_plugin_settings on temporary databases: the two plugin settings tables, up and down."""
+    print_section("DB Test: Migration 007 (plugin settings)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: revision and single head, the two tables with their CHECKs, uniques and foreign keys, models = migration, a populated install upgraded, downgrade, idempotence both ways")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_007_plugin_settings.py", test_names)
+    return run_command(cmd, "Migration 007 tests", verbose=verbose)
+
+
+def db_migration_008(verbose: bool = False, test_names: list = None) -> bool:
+    """Test migration 008_registration_invite_default on temporary databases: an install with accounts and no registration row stays open."""
+    print_section("DB Test: Migration 008 (registration default)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: revision and single head, open written only for accounts without a row, an existing row untouched, no accounts no row, idempotence, a no-op downgrade, a 1.1 install at head")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_008_registration_default.py", test_names)
+    return run_command(cmd, "Migration 008 tests", verbose=verbose)
+
+
+def db_migration_009(verbose: bool = False, test_names: list = None) -> bool:
+    """Test migration 009_email_unique_ignoring_case on temporary databases: one account per address, whatever its A–Z case."""
+    print_section("DB Test: Migration 009 (email unique regardless of case)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: revision and single head, the index on lower(email) as the models build it, a refusal that names accounts and no address and writes nothing, the set-email remedy, downgrade, idempotence, a 1.1 install")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_009_email_case.py", test_names)
+    return run_command(cmd, "Migration 009 tests", verbose=verbose)
+
+
+def db_migration_010(verbose: bool = False, test_names: list = None) -> bool:
+    """Test migration 010_provider_reported_currency on temporary databases: the provider's own quote currency (Z-32)."""
+    print_section("DB Test: Migration 010 (provider reported currency)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: revision and single head, asset_provider_assignments.reported_currency as the models build it, a populated install kept row by row, the downgrade, both ways idempotent")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_010_reported_currency.py", test_names)
+    return run_command(cmd, "Migration 010 tests", verbose=verbose)
+
+
+def db_migration_011(verbose: bool = False, test_names: list = None) -> bool:
+    """Test migration 011_provider_exchange_timezone on temporary databases: the exchange's timezone and the mark of the Yahoo rows dated by UTC (Z-33)."""
+    print_section("DB Test: Migration 011 (provider exchange timezone)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: revision and single head, asset_provider_assignments.exchange_timezone as the models build it, the 'legacy-utc' mark on the yfinance assignments, a populated install kept row by row, the restore upgrade, the downgrade, both ways idempotent")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_011_exchange_timezone.py", test_names)
+    return run_command(cmd, "Migration 011 tests", verbose=verbose)
+
+
+def db_session_pragmas(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the pragmas every SQLAlchemy engine's connection gets (set_sqlite_pragma, H-51): trusted_schema off first, the schema reset last."""
+    print_section("DB Test: Session Pragmas (trusted_schema off)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: trusted_schema 0 on sync and async connections, an archive's DEFAULT calling SQLAlchemy's Python regexp or floor refused at the insert and a CHECK calling regexp at the first statement, built-ins and top-level SQL unchanged, the other pragmas as before")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_session_pragmas.py", test_names)
+    return run_command(cmd, "Session pragma tests", verbose=verbose)
 
 
 def db_numeric_truncation(verbose: bool = False, test_names: list = None) -> bool:
@@ -270,8 +369,11 @@ def db_all(verbose: bool = False) -> bool:
     from ._registry import TEST_REGISTRY
 
     db_order = [
+        "post-migration-event-types",  # temporary databases only: needs none of the steps below
+        "session-pragmas",  # temporary databases only too
         "create", "validate", "numeric-truncation", "populate", "populate-reset", "autoincrement-schema", "post-migration",
-        "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
+        "post-migration-orphan-pairs",
+        "migration-005", "migration-006", "migration-007", "migration-008", "migration-009", "migration-010", "migration-011", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
         ]
 
     tests = []
@@ -337,9 +439,47 @@ Note: No backend server required. Tests operate directly on test DB.
     add_test(cat, "autoincrement-schema", db_autoincrement_schema, name="AUTOINCREMENT Schema",
              desc="A fresh schema, the models and create_all give AUTOINCREMENT exactly to the census tables",
              prereq="None (temporary databases)")
-    add_test(cat, "post-migration", db_post_migration, name="Post-Migration Fixes",
-             desc="Ordered fixes after alembic upgrade head: AUTOINCREMENT conversion, orphan broker folders, rollback",
+    add_test(cat, "post-migration-event-types", db_post_migration_event_types, name="Post-Migration Event Types",
+             desc="event_types: asset event types corrected when trimming and upper-casing makes them valid, deleted otherwise with their transactions unlinked; declared row-count changes checked exactly; dry run, log lines, rollback",
              prereq="None (temporary databases)")
+    add_test(cat, "post-migration", db_post_migration, name="Post-Migration Fixes",
+             desc="Ordered fixes after alembic upgrade head: AUTOINCREMENT conversion, orphan broker folders, rollback; the run lock refuses a symlink and is created 0o600; B-36 (17): table names a database brings quoted (x\"y, a\" WHERE 1 --): the pending fix applied, its row counts holding them, no OperationalError",
+             prereq="None (temporary databases)")
+    add_test(cat, "post-migration-orphan-pairs", db_post_migration_orphan_pairs, name="Post-Migration Orphan Pair Halves",
+             desc="orphan_pair_halves: the lone halves older broker deletions left become standalone rows; giving TRANSFER legs and unreadable rows left; dry run, log lines, rollback",
+             prereq="None (temporary databases)")
+    # PURE: every database is a private file under tmp_path. Alembic runs in-process with -x sqlalchemy.url= pointing at
+    # it, and a connect listener refuses any other file while it runs: no lane database, no server, nothing shared.
+    add_test(cat, "migration-005", db_migration_005, name="Migration 005 Accounts",
+             desc="005_accounts_invites: users columns and account_tokens at head, models = migration, a 1.2 install upgraded, downgrade without cascade",
+             prereq="None (temporary databases)", isolation="pure")
+    # PURE, as migration-005, whose in-process Alembic harness it reuses: private files under tmp_path only.
+    add_test(cat, "migration-006", db_migration_006, name="Migration 006 Registration Mode",
+             desc="006_registration_mode: enable_registration → registration_mode as the app read it (open iff true/1/yes/on), and back; metadata, idempotence, no other row",
+             prereq="None (temporary databases)", isolation="pure")
+    # PURE, as migration-005 and 006, whose in-process Alembic harness it reuses: private files under tmp_path only.
+    add_test(cat, "migration-007", db_migration_007, name="Migration 007 Plugin Settings",
+             desc="007_plugin_settings: the two tables with their CHECKs, uniques, CASCADE and SET NULL; models = migration; a populated 006 install kept; downgrade and idempotence both ways",
+             prereq="None (temporary databases)", isolation="pure")
+    # PURE, as migration-005 to 007, whose in-process Alembic harness it reuses: private files under tmp_path only.
+    add_test(cat, "migration-008", db_migration_008, name="Migration 008 Registration Default",
+             desc="008_registration_invite_default: registration_mode open where accounts exist without the row; an existing row untouched; nothing without accounts; idempotent; downgrade a no-op",
+             prereq="None (temporary databases)", isolation="pure")
+    # PURE, as migration-005 to 008: private files under tmp_path only; the set-email remedy runs in-process on them.
+    add_test(cat, "migration-009", db_migration_009, name="Migration 009 Email Unique Regardless of Case",
+             desc="009_email_unique_ignoring_case: ux_users_email_lower on lower(email); stops naming accounts by id and username, never an address, and writes nothing; set-email clears it; downgrade drops the index; idempotent",
+             prereq="None (temporary databases)", isolation="pure")
+    # PURE, as migration-005 to 009: private files under tmp_path only.
+    add_test(cat, "migration-010", db_migration_010, name="Migration 010 Provider Reported Currency",
+             desc="010_provider_reported_currency (Z-32): asset_provider_assignments.reported_currency VARCHAR(8) NULL, added and dropped in place (no batch: no foreign-key action); every row kept; idempotent both ways",
+             prereq="None (temporary databases)", isolation="pure")
+    # PURE, as migration-005 to 010: private files under tmp_path only.
+    add_test(cat, "migration-011", db_migration_011, name="Migration 011 Provider Exchange Timezone",
+             desc="011_provider_exchange_timezone (Z-33): asset_provider_assignments.exchange_timezone VARCHAR(64) NULL, 'legacy-utc' on the yfinance assignments still NULL; added and dropped in place; every row kept; the restore upgrade marks too; idempotent both ways",
+             prereq="None (temporary databases)", isolation="pure")
+    add_test(cat, "session-pragmas", db_session_pragmas, name="Session Pragmas",
+             desc="H-51: set_sqlite_pragma (db/session.py, every SQLAlchemy engine of the process) turns trusted_schema off first and resets the schema last (writable_schema=RESET, read again once SQLAlchemy has registered its Python regexp and floor): an archive's DEFAULT calling regexp or floor refused at the insert, a CHECK calling regexp at the first statement, instead of running them; built-ins in the schema (lower() of ux_users_email_lower), a database at the head and top-level SQL unchanged; foreign_keys, WAL and busy_timeout as before; sync and async engines",
+             prereq="None (temporary databases)", isolation="pure")
     add_test(cat, "asset-merge", db_asset_merge, name="Asset Merge",
              desc="Fold a duplicate asset into another (FK migration policies)", prereq="Database created",
              tests="12 merge tests")

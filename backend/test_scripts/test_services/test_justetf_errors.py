@@ -10,7 +10,13 @@ so every assertion is on an exact value.
 Covered: library-unavailable, wrong identifier type, the EUR real-time quote
 path, the USD chart-fallback path, price-not-found, fetch failures, history with
 dividend events and intraday OHL enrichment, search (4 currency variants) and
-its failure, param validation, and metadata assembly / failure.
+its failure, param validation, and metadata assembly / failure. And «too many
+requests» (X-RL X3): the library reports a 429 only in its ``RuntimeError``
+text, and each of the four handlers turns it into ``AssetRateLimitedError``
+while a 500 keeps its old handling. And the user's preferred currency (CP11a):
+the declaration of the user select ``preferred_currency``, and search keeping
+each fund's one row in that currency (👑 only on the fund's own), or the 4 rows
+in ``SUPPORTED_CURRENCIES`` order without a preference, bound or not.
 """
 
 from __future__ import annotations
@@ -24,9 +30,11 @@ import pytest
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
-from backend.app.services.asset_source import AssetSourceError
 from backend.app.services.asset_source_providers.justetf import plugin as je
 from backend.app.services.asset_source_providers.justetf.plugin import JustETFProvider
+from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError
+from backend.app.services.plugin_settings.contract import BoundSettings
+from backend.app.services.plugin_settings.fields import SettingScope, SettingType
 
 # Captured at import, before the autouse fixture swaps in the no-op stub, so the
 # real function's early-return can be exercised directly.
@@ -259,6 +267,75 @@ async def test_search_error(monkeypatch):
     assert exc.value.error_code == "SEARCH_ERROR"
 
 
+# ── search: the user's preferred currency (CP11a) ───────────────────────────
+
+#: Three funds of three native currencies, the first being _overview_df's: (ISIN, name, native currency).
+_FUNDS = (
+    ("IE00B5BMR087", "iShares Core S&P 500", "USD"),
+    ("IE00B53L3W79", "iShares Core EURO STOXX 50", "EUR"),
+    ("IE0005042456", "iShares Core FTSE 100", "GBP"),
+)
+
+
+def _funds_df() -> pd.DataFrame:
+    """_overview_df's fund, then two more of other native currencies: all three match «iShares Core»."""
+    others = pd.DataFrame(
+        {"name": [name for _isin, name, _ccy in _FUNDS[1:]], "ticker": ["CSX5", "ISF"], "wkn": ["A0YEDH", "A0YEDF"], "currency": [ccy for _isin, _name, ccy in _FUNDS[1:]]},
+        index=[isin for isin, _name, _ccy in _FUNDS[1:]],
+    )
+    return pd.concat([_overview_df(), others])
+
+
+def _bound(**values) -> JustETFProvider:
+    """A provider with these settings bound, as the core binds them before a search."""
+    provider = JustETFProvider()
+    provider.bind_settings(BoundSettings(JustETFProvider.settings_fields, values, {}))
+    return provider
+
+
+def _rows(currencies) -> list[tuple[str, str, str]]:
+    """``(identifier, currency, display_name)`` of each fund in each currency, fund by fund: 👑 on the fund's own."""
+    flags = JustETFProvider.CURRENCY_FLAGS
+    return [(isin, ccy, f"{flags[ccy]}{'👑' if ccy == native else ''} {name}") for isin, name, native in _FUNDS for ccy in currencies]
+
+
+def test_preferred_currency_is_one_user_select_of_all_and_the_four_currencies():
+    (declared,) = JustETFProvider.settings_fields
+
+    assert (declared.key, declared.type, declared.scope, declared.secret, declared.required, declared.default) == ("preferred_currency", SettingType.SELECT, SettingScope.USER, False, False, "all")
+    assert declared.option_values == ("all", *JustETFProvider.SUPPORTED_CURRENCIES)
+    assert (declared.label_key, declared.description_key) == ("pluginSettings.asset.justetf.label.preferred_currency", "pluginSettings.asset.justetf.description.preferred_currency")
+    assert [option.label_key for option in declared.options] == ["pluginSettings.asset.justetf.option.preferred_currency.all", None, None, None, None], "a currency needs no translation"
+    assert [option.label for option in declared.options[1:]] == [f"{JustETFProvider.CURRENCY_FLAGS[ccy]} {ccy}" for ccy in JustETFProvider.SUPPORTED_CURRENCIES]
+
+
+@pytest.mark.parametrize("currency", ["EUR", "GBP"])
+@pytest.mark.asyncio
+async def test_search_with_a_preferred_currency_keeps_one_row_per_fund_in_it(monkeypatch, currency):
+    """Each fund once, in the preferred currency; the 👑 only on the fund whose own currency it is."""
+    monkeypatch.setattr(je, "load_overview", _funds_df, raising=False)
+
+    items = await _bound(preferred_currency=currency).search("iShares Core")
+
+    assert [(item["identifier"], item["currency"], item["display_name"]) for item in items] == _rows((currency,))
+    assert [item["identifier"] for item in items if "👑" in item["display_name"]] == [isin for isin, _name, native in _FUNDS if native == currency], "barrier: one fund crowned, the others not"
+    assert all(item["identifier_type"] == IdentifierType.ISIN and item["type"] == "ETF" for item in items)
+
+
+@pytest.mark.parametrize("bound", [True, False], ids=["all-bound", "unbound"])
+@pytest.mark.asyncio
+async def test_search_without_a_preference_keeps_the_four_rows_of_each_fund(monkeypatch, bound):
+    """``all`` bound, or an instance nobody configured (its default, ``all``): the 4 rows of each fund, in
+    ``SUPPORTED_CURRENCIES`` order."""
+    monkeypatch.setattr(je, "load_overview", _funds_df, raising=False)
+    provider = _bound(preferred_currency="all") if bound else JustETFProvider()
+
+    items = await provider.search("iShares Core")
+
+    assert provider.settings.get("preferred_currency") == "all"
+    assert [(item["identifier"], item["currency"], item["display_name"]) for item in items] == _rows(JustETFProvider.SUPPORTED_CURRENCIES)
+
+
 # ── validate_params ─────────────────────────────────────────────────────────
 
 
@@ -439,6 +516,72 @@ async def test_metadata_unknown_sector_maps_to_other(monkeypatch):
     result = await _provider().fetch_asset_metadata("IE00B4L5Y983", IdentifierType.ISIN)
     assert result is not None
     assert result.classification_params.sector_area is not None
+
+
+# ── «too many requests» (X-RL X3): the library says it only in its message ──
+
+ISIN = "IE00B4L5Y983"
+#: The two texts justetf_scraping raises for a status that is not 200 (helpers.assert_response_status_ok, etf_profile).
+_HELPERS_TEXT = "Got status {status} when requesting {name}.\nError page saved to '{name}-error-page.html'."
+_PROFILE_TEXT = "Failed to fetch ETF page for {isin}: status {status}"
+
+#: handler → (the library function it calls, the call, what a non-429 failure gives: an error code, or None returned)
+_HANDLERS = {
+    "current": ("load_raw_chart", lambda p: p.get_current_value(ISIN, IdentifierType.ISIN, {"currency": "USD"}), "FETCH_ERROR"),
+    "history": ("load_chart", lambda p: p.get_history_value(ISIN, IdentifierType.ISIN, {"currency": "USD"}, date(2026, 1, 1), date(2026, 1, 31)), "FETCH_ERROR"),
+    "search": ("load_overview", lambda p: p.search("S&P 500"), "SEARCH_ERROR"),
+    "metadata": ("get_etf_overview", lambda p: p.fetch_asset_metadata(ISIN, IdentifierType.ISIN, {"currency": "EUR"}), None),
+}
+
+
+def _failing(error: Exception, calls: list[int]):
+    """A library function that fails with ``error`` whatever its arguments, counting its calls."""
+
+    def fail(*_args, **_kwargs):
+        calls.append(1)
+        raise error
+
+    return fail
+
+
+def _library_text(handler: str, status: int) -> str:
+    """The text the library raises for ``status`` on the path ``handler`` takes."""
+    if handler == "metadata":
+        return _PROFILE_TEXT.format(isin=ISIN, status=status)
+    return _HELPERS_TEXT.format(status=status, name="chart" if handler in ("current", "history") else "overview")
+
+
+@pytest.mark.parametrize("handler", list(_HANDLERS))
+@pytest.mark.asyncio
+async def test_a_429_from_the_library_is_a_refusal_in_every_handler(monkeypatch, handler):
+    """Each of the four handlers raises ``AssetRateLimitedError`` from the library's ``RuntimeError``: no ``FETCH_ERROR``, no ``None``."""
+    function, call, _other = _HANDLERS[handler]
+    calls: list[int] = []
+    library_error = RuntimeError(_library_text(handler, 429))
+    monkeypatch.setattr(je, function, _failing(library_error, calls), raising=False)
+
+    with pytest.raises(AssetRateLimitedError) as refused:
+        await call(_provider())
+
+    assert (refused.value.error_code, refused.value.retry_after) == ("RATE_LIMITED", None)
+    assert refused.value.__cause__ is library_error
+    assert len(calls) == 1, "a refusal is never retried by the plugin"
+
+
+@pytest.mark.parametrize("handler", list(_HANDLERS))
+@pytest.mark.asyncio
+async def test_another_status_from_the_library_keeps_its_old_handling(monkeypatch, handler):
+    """The same text with status 500: the handler's own error code, or ``None`` for metadata — never ``RATE_LIMITED``."""
+    function, call, other = _HANDLERS[handler]
+    monkeypatch.setattr(je, function, _failing(RuntimeError(_library_text(handler, 500)), []), raising=False)
+
+    if other is None:
+        assert await call(_provider()) is None
+        return
+    with pytest.raises(AssetSourceError) as failed:
+        await call(_provider())
+    assert not isinstance(failed.value, AssetRateLimitedError)
+    assert failed.value.error_code == other
 
 
 if __name__ == "__main__":

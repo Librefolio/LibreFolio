@@ -3,7 +3,6 @@
     "profile": "Profil",
     "preferences": "Préférences",
     "about": "À propos",
-    "admin": "Administration",
     "profileInfo": "Informations du Profil",
     "profileDescription": "Gérez les détails de votre compte",
     "enableEditing": "Activer la modification",
@@ -24,13 +23,14 @@
     "deleteAccountWarning": "Cette action est irréversible. Les courtiers dont vous êtes le seul propriétaire sont supprimés avec toutes leurs transactions et les rapports importés, même si vous les avez partagés avec des lecteurs ou des éditeurs. Un courtier qui a un autre propriétaire lui reste : seul votre accès est supprimé. Vos paramètres sont supprimés.",
     "typeUsernameToConfirm": "Tapez \"{username}\" pour confirmer",
     "deleteAccountPermanently": "Supprimer Définitivement",
-    "deleteAccountFailed": "Échec de la suppression du compte",
     "currentPassword": "Mot de Passe Actuel",
     "newPassword": "Nouveau Mot de Passe",
     "confirmNewPassword": "Confirmer le Nouveau Mot de Passe",
     "passwordChanged": "Mot de passe modifié avec succès",
     "passwordChangeFailed": "Échec de la modification du mot de passe",
     "currentPasswordIncorrect": "Le mot de passe actuel est incorrect",
+    "currentPasswordRequired": "Saisissez votre mot de passe actuel pour changer d'e-mail",
+    "emailPasswordHint": "Pour changer d'e-mail, saisissez votre mot de passe actuel. Vos autres appareils seront déconnectés.",
     "passwordsMustMatch": "Les mots de passe doivent correspondre",
     "passwordMustBeDifferent": "Le nouveau mot de passe doit être différent de l'actuel",
     "language": "Langue",
@@ -80,7 +80,6 @@
     },
     "globalSettingNames": {
       "session_ttl_hours": "Durée de Session",
-      "enable_registration": "Activer l'Inscription",
       "require_email_verification": "Vérification Email Requise",
       "max_file_upload_mb": "Taille Max Téléversement",
       "default_language": "Langue par Défaut",
@@ -89,11 +88,11 @@
       "scheduler_history_sync_times": "Horaires de Synchronisation Historique",
       "scheduler_history_sync_days": "Jours de Synchronisation Historique",
       "scheduler_history_sync_horizon_days": "Horizon de Récupération",
-      "scheduler_enabled": "Planificateur Activé"
+      "scheduler_enabled": "Planificateur Activé",
+      "registration_mode": "Inscription"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "Durée de validité d'une session utilisateur avant reconnexion",
-      "enable_registration": "Autoriser les nouveaux utilisateurs à créer des comptes",
       "require_email_verification": "Exiger la vérification email pour les nouveaux comptes",
       "max_file_upload_mb": "Taille maximale des fichiers autorisée pour les téléversements",
       "default_currency": "Devise par défaut pour les nouveaux utilisateurs",
@@ -103,7 +102,8 @@
       "scheduler_current_price_frequency_minutes": "Fréquence de mise à jour des prix actuels (en minutes)",
       "scheduler_history_sync_times": "Heures auxquelles les données historiques sont synchronisées (dans le fuseau horaire du planificateur)",
       "scheduler_history_sync_days": "Jours de la semaine pendant lesquels les données historiques sont synchronisées",
-      "scheduler_history_sync_horizon_days": "Nombre de jours en arrière pour chercher les données historiques manquantes"
+      "scheduler_history_sync_horizon_days": "Nombre de jours en arrière pour chercher les données historiques manquantes",
+      "registration_mode": "Qui peut créer un compte : tout le monde (ouverte), seulement les personnes qui ont un lien d'invitation (sur invitation), ou personne (fermée)."
     },
     "globalSettingUnits": {
       "session_ttl_hours": "heures",
@@ -161,7 +161,9 @@
           "last6h": "Dernières 6 heures",
           "last24h": "Dernières 24 heures",
           "last7d": "Derniers 7 jours",
-          "last30d": "Derniers 30 jours"
+          "last30d": "Derniers 30 jours",
+          "deferred": "Reporté : fournisseur en pause",
+          "retryAt": "Nouvel essai à {time}"
         },
         "status": {
           "title": "État du Planificateur",
@@ -169,7 +171,9 @@
           "neverRun": "Jamais exécuté",
           "details": "Détails…",
           "configure": "Configurer…",
-          "configSummary": "Toutes les {freq}min · {times} · {days}"
+          "configSummary": "Toutes les {freq}min · {times} · {days}",
+          "retryAt": "Éléments en pause réessayés à {time}",
+          "nextAttemptAt": "Échec : nouvel essai à {time}"
         },
         "timezone": "Fuseau horaire",
         "timezoneChangeWarning": "Changer de fuseau horaire conserve ces heures et jours inchangés, mais modifie l'instant d'exécution UTC réel.",
@@ -216,6 +220,192 @@
       "confirmClearTitle": "Vider le cache {name} ?",
       "confirmClearAllTitle": "Vider tous les caches ?",
       "confirmWarning": "Après le vidage, la prochaine récupération de ces données subira des ralentissements comparables à un redémarrage du serveur."
+    },
+    "registrationModes": {
+      "open": "Ouverte",
+      "invite": "Sur invitation",
+      "disabled": "Fermée"
+    },
+    "lockedByEnv": "Défini sur le serveur par {variable} : modifiez-le là-bas.",
+    "users": "Utilisateurs",
+    "usersTab": {
+      "title": "Utilisateurs",
+      "usage": "{used} / {max} comptes",
+      "usageUnlimited": "{used} comptes",
+      "usageHint": "Les comptes actifs et les invitations ouvertes occupent une place ; les comptes désactivés non.",
+      "billing": "Gérer l'abonnement",
+      "limitBanner": "L'instance est pleine : aucune nouvelle invitation tant que vous ne désactivez ou ne supprimez pas un compte, ou ne révoquez pas une invitation.",
+      "createdOn": "Créé le {date}",
+      "selfHint": "C'est votre compte. Gérez-le depuis :",
+      "done": "Terminé",
+      "accounts": {
+        "title": "Comptes"
+      },
+      "badges": {
+        "you": "Vous",
+        "admin": "Admin",
+        "inactive": "Désactivé",
+        "protected": "Protégé",
+        "pendingSetup": "En attente de configuration"
+      },
+      "actions": {
+        "deactivate": "Désactiver",
+        "reactivate": "Réactiver",
+        "promote": "Nommer administrateur",
+        "demote": "Retirer administrateur",
+        "resetLink": "Lien de réinitialisation",
+        "signOut": "Déconnecter partout",
+        "restartGuides": "Relancer les guides",
+        "delete": "Supprimer",
+        "cancelSetup": "Annuler le lien de configuration"
+      },
+      "reasons": {
+        "protected": "Ce compte est protégé : personne ne peut le désactiver, le rétrograder ou le supprimer.",
+        "lastAdmin": "C'est le seul administrateur actif : il ne peut être ni désactivé ni rétrogradé.",
+        "limit": "L'instance est pleine : libérez une place pour le réactiver.",
+        "demoteFirst": "Un administrateur doit être rétrogradé avant d'être supprimé.",
+        "pendingSetup": "Il attend sa configuration : il garde son rôle jusque-là."
+      },
+      "confirm": {
+        "deactivate": {
+          "title": "Désactiver {username} ?",
+          "message": "Le compte ne peut plus se connecter et toutes ses sessions se ferment. Ses brokers et transactions restent : vous pourrez le réactiver.",
+          "confirm": "Désactiver"
+        },
+        "promote": {
+          "title": "Nommer {username} administrateur ?",
+          "message": "Les administrateurs gèrent l'instance : ses réglages, ses utilisateurs et ses invitations.",
+          "confirm": "Nommer administrateur"
+        },
+        "demote": {
+          "title": "Retirer les droits d'administrateur de {username} ?",
+          "message": "Le compte reste, comme utilisateur ordinaire, et ses sessions se ferment.",
+          "confirm": "Retirer"
+        },
+        "signOut": {
+          "title": "Déconnecter {username} partout ?",
+          "message": "Toutes les sessions du compte se ferment : il devra se reconnecter sur chaque appareil.",
+          "confirm": "Déconnecter"
+        },
+        "restartGuides": {
+          "title": "Relancer les guides de {username} ?",
+          "message": "L'introduction et les guides des pages s'affichent à nouveau, comme pour un nouveau compte.",
+          "confirm": "Relancer"
+        },
+        "revokeInvite": {
+          "title": "Révoquer l'invitation pour {email} ?",
+          "message": "Le lien cesse de fonctionner immédiatement.",
+          "confirm": "Révoquer"
+        },
+        "cancelSetup": {
+          "title": "Annuler le lien de configuration de {username} ?",
+          "message": "Le lien déjà remis cesse de fonctionner. Le compte reste en attente de sa configuration : un nouveau lien s'obtient avec « dev.py user setup-link » sur le serveur, ou auprès de votre hébergeur.",
+          "confirm": "Annuler le lien"
+        }
+      },
+      "errors": {
+        "LAST_ADMIN": "Le dernier administrateur actif ne peut être ni désactivé ni rétrogradé.",
+        "USER_LIMIT_REACHED": "L'instance est pleine : libérez d'abord une place (désactivez ou supprimez un compte, ou révoquez une invitation).",
+        "REGISTRATION_DISABLED": "Les inscriptions sont fermées : aucune invitation ne peut être créée.",
+        "ACCOUNT_PROTECTED": "Ce compte est protégé : personne ne peut le désactiver, le rétrograder ou le supprimer.",
+        "SELF_DELETION": "Supprimez votre propre compte depuis l'onglet Profil.",
+        "DEMOTE_FIRST": "Un administrateur doit être rétrogradé avant d'être supprimé.",
+        "NOT_FOUND": "Ce compte n'existe plus : la liste est rechargée.",
+        "DELETION_FAILED": "La suppression a échoué : rien n'a été supprimé.",
+        "INVALID_INPUT": "Vérifiez votre saisie : l'adresse e-mail n'est peut-être pas valide.",
+        "generic": "L'action a échoué. Réessayez.",
+        "load": "Impossible de charger les comptes.",
+        "PENDING_SETUP": "Cet administrateur attend sa configuration : il ne peut être ni réactivé ni rétrogradé ici.",
+        "SETUP_COMPLETED": "Cet administrateur a terminé sa configuration entre-temps : rien n'a été modifié.",
+        "LAST_ADMIN_DELETION": "Vous êtes le dernier administrateur actif : nommez administrateur un autre compte avant de supprimer le vôtre."
+      },
+      "invite": {
+        "button": "Inviter",
+        "blocked": "Les inscriptions sont fermées, et les invitations avec elles : modifiez-le dans les réglages globaux.",
+        "blockedLocked": "Les inscriptions sont fermées sur le serveur par {variable}, et les invitations avec elles.",
+        "title": "Inviter quelqu'un",
+        "emailLabel": "E-mail (facultatif)",
+        "emailHint": "Pour mémoire seulement : le lien fonctionne pour quiconque l'ouvre.",
+        "adminLabel": "Administrateur",
+        "adminHint": "Le compte qu'elle crée gère l'instance.",
+        "create": "Créer le lien",
+        "ready": "Partagez ce lien : il fonctionne une seule fois, pendant 7 jours."
+      },
+      "invites": {
+        "title": "Invitations ouvertes",
+        "empty": "Aucune invitation ouverte.",
+        "noEmail": "Sans e-mail",
+        "dates": "Créée le {created} · expire le {expires}",
+        "revoke": "Révoquer"
+      },
+      "reset": {
+        "title": "Lien de réinitialisation du mot de passe pour {username}",
+        "message": "Un lien à usage unique pour définir un nouveau mot de passe, valable 30 minutes. Les liens créés auparavant pour ce compte cessent de fonctionner.",
+        "create": "Créer le lien",
+        "ready": "Partagez ce lien avec {username} : il fonctionne une seule fois."
+      },
+      "toasts": {
+        "signedOut": "{username} est déconnecté partout.",
+        "guidesRestarted": "Les guides de {username} recommencent.",
+        "resetLinkCreated": "Lien de réinitialisation créé pour {username}.",
+        "setupCancelled": "Le lien de configuration de {username} ne fonctionne plus."
+      },
+      "pendingSetupHint": "Ce compte administrateur s'active par son lien de configuration. Si le lien est perdu, lancez « dev.py user setup-link » sur le serveur, ou demandez à votre hébergeur."
+    },
+    "linkShare": {
+      "addressLabel": "Adresse du serveur",
+      "addressHint": "Modifiez-la si vos utilisateurs accèdent à LibreFolio par une autre adresse.",
+      "linkLabel": "Lien",
+      "copy": "Copier",
+      "copied": "Lien copié.",
+      "expires": "Valable jusqu'au {date}.",
+      "probe": {
+        "checking": "Vérification que ce LibreFolio répond à cette adresse…",
+        "match": "Cette instance répond à cette adresse.",
+        "mismatch": "Quelque chose répond à cette adresse, mais pas cette instance : vérifiez-la avant de partager.",
+        "unverifiable": "Cette adresse n'a pas pu être vérifiée depuis ce navigateur : vous pouvez quand même partager le lien.",
+        "invalid": "Saisissez une adresse commençant par http:// ou https://, sans ? ni #."
+      }
+    },
+    "accountDeletion": {
+      "titleAdmin": "Supprimer {username}",
+      "warningAdmin": "C'est irréversible. Les brokers dont ce compte est le seul propriétaire sont supprimés avec toutes leurs transactions et fichiers ; des brokers partagés, seul son accès disparaît.",
+      "deactivateTitle": "Désactiver plutôt ?",
+      "deactivateText": "La désactivation garde tous les brokers et transactions et peut être annulée : le compte ne peut simplement plus se connecter.",
+      "deactivateAction": "Désactiver",
+      "loading": "Vérification de ce que la suppression emporterait…",
+      "brokersDeleted": "Supprimés, avec toutes leurs transactions et fichiers :",
+      "noBrokersDeleted": "Aucun broker n'est supprimé.",
+      "brokersLeft": "Brokers partagés qui restent (seul l'accès disparaît) :",
+      "transactions": "{count, plural, =0 {aucune transaction} one {# transaction} other {# transactions}}",
+      "unpaired": "{count, plural, one {# transaction sur un autre broker est la moitié d'un transfert avec ces brokers} other {# transactions sur d'autres brokers sont des moitiés de transferts avec ces brokers}}. {count, plural, one {Elle reste} other {Elles restent}}, sans l'autre moitié : les actifs reçus de ces brokers deviennent une position d'ouverture à leur coût de transfert, et les virements de liquidités deviennent des dépôts ou des retraits.",
+      "irreversible": "Cette action est irréversible.",
+      "previewFailed": "Impossible de charger ce que la suppression emporterait.",
+      "deletedSelf": "Votre compte a été supprimé.",
+      "deletedAdmin": "{username} supprimé, avec {count, plural, =0 {aucun broker} one {# broker} other {# brokers}}.",
+      "roles": {
+        "OWNER": "Propriétaire",
+        "EDITOR": "Éditeur",
+        "VIEWER": "Lecteur"
+      }
+    },
+    "administration": "Administration",
+    "tooManyPasswordAttempts": "Trop de mots de passe erronés : patientez quelques minutes et réessayez.",
+    "securityTab": {
+      "title": "Contrôles de sécurité",
+      "description": "La configuration de cette instance, vérifiée à l'ouverture des Paramètres : ce qui demande votre attention vient en premier. « Vérifier à nouveau » la relit.",
+      "allClear": "Rien ne demande votre attention.",
+      "passed": "{count, plural, one {# contrôle réussi} other {# contrôles réussis}}",
+      "loadError": "Les contrôles de sécurité n'ont pas pu être chargés.",
+      "retry": "Réessayer",
+      "refresh": "Vérifier à nouveau",
+      "openEmail": "Ouvrir l'onglet E-mail",
+      "openPlugins": "Ouvrir les réglages des plugins",
+      "severity": {
+        "error": "Erreur",
+        "warning": "Avertissement",
+        "info": "Information"
+      }
     }
   }
 }

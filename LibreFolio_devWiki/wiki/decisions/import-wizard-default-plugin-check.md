@@ -74,12 +74,12 @@ only report sets.
 
 | Role | Path |
 |------|------|
-| `cannot_parse_detail`, `check_file_with_plugin` | `backend/app/services/brim_provider.py` |
+| `cannot_parse_detail`, `check_file_with_plugin` | `backend/app/services/brim/brim_provider.py` |
 | `BRIMRefusal`, `BRIMPluginCheck` | `backend/app/schemas/brim.py` |
 | The `plugin-check` endpoint | `backend/app/api/v1/brokers.py` |
-| `findDefaultPluginMismatch`, `resolveParseRefusalMessage` | `frontend/src/lib/utils/brim/defaultPluginCheck.ts` |
-| The modal | `frontend/src/lib/components/transactions/modals/ImportBrokerMismatchModal.svelte` |
-| `reviewDefaultPluginMismatches`, `step1Continuing` | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
+| `findDefaultPluginMismatch`, `resolveParseRefusalMessage` | `frontend/src/lib/features/transactions/import/defaultPluginCheck.ts` |
+| The modal | `frontend/src/lib/features/transactions/import/ImportBrokerMismatchModal.svelte` |
+| `reviewDefaultPluginMismatches`, `step1Continuing` | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
 | Contract tests | `backend/test_scripts/test_external/test_brim_providers.py` |
 | E2E | `frontend/e2e/transactions/tx-import-broker-mismatch.spec.ts` |
 | BRIM guide, «Saying why with a code» | `mkdocs_src/docs/developer/architecture/patterns/brim_plugin_guide.md` |

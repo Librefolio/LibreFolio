@@ -33,7 +33,7 @@
     "cashBalances": "Saldi di Cassa",
     "noCashBalances": "Nessuna posizione di cassa",
     "confirmDelete": "Sei sicuro di voler eliminare questo broker?",
-    "confirmDeleteWithTransactions": "Questo broker ha {n} transazioni. L'eliminazione forzata rimuoverà tutte le transazioni. Continuare?",
+    "confirmDeleteWithTransactions": "Questo broker ha {n} transazioni. L'eliminazione forzata le rimuoverà tutte. Gli asset che questo broker ha trasferito ad altri broker, anche condivisi, restano lì come posizione d'apertura al loro costo di trasferimento: il guadagno di quei broker conterà anche quanto gli asset avevano guadagnato prima del trasferimento. Gli asset che altri broker hanno trasferito a questo ne escono al loro costo medio. I giroconti con altri broker lì diventano depositi o prelievi. Continuare?",
     "createFailed": "Errore nella creazione del broker",
     "updateFailed": "Errore nell'aggiornamento del broker",
     "assets": "{n} asset",
@@ -128,7 +128,7 @@
       "shortLotLabel": "Short {date}",
       "detailTitle": "Dettaglio Lotti FIFO",
       "loadFailed": "Impossibile caricare i dati dei lotti",
-      "analysisFailed": "L'analisi dei lotti non è stata ricostruita in modo affidabile (quantità o trasferimenti incoerenti) — i valori potrebbero essere incompleti.",
+      "analysisFailed": "I lotti di questo asset non si possono ricostruire: alcune sue transazioni non tornano. Lotti, cronologia e confronto sono nascosti; le linee del costo medio qui sotto non ne risentono.",
       "combined": "Combinato",
       "chartMarkers": {
         "legend": {
@@ -233,7 +233,8 @@
           "realizedPnl": "P&L realizzato",
           "splitRatio": "Rapporto split",
           "sourceBroker": "Da",
-          "destinationBroker": "A"
+          "destinationBroker": "A",
+          "handedOver": "Valore ceduto"
         },
         "openingValue": "Valore apertura",
         "cumulativeProceeds": "Incassi cumulati"
@@ -266,9 +267,9 @@
       "totalPnl": "P&L complessivo",
       "tooltip": {
         "initialValue": "Valore iniziale",
-        "shares": "quote",
-        "sharesOpenOutOf": "quote aperte su",
-        "since": "Dal"
+        "since": "Dal",
+        "quantityClosed": "{original} → 0 {count, plural, one {quota} other {quote}}",
+        "quantityOpen": "{count, plural, one {{open} quota aperta su {original}} other {{open} quote aperte su {original}}}"
       },
       "footerTotals": "Totali",
       "closedOnly": "Chiusi",
@@ -283,7 +284,8 @@
       "yAxisAuto": "Auto",
       "yAxisFromZero": "Da 0",
       "annualizedReturn": "Annualizzato",
-      "annualizedReturnTooltip": "Rendimento netto annualizzato (CAGR) del singolo lotto sulla sua durata di detenzione, al netto di proventi e spese, per confrontare lotti tenuti per periodi diversi."
+      "annualizedReturnTooltip": "Rendimento netto annualizzato (CAGR) del singolo lotto sulla sua durata di detenzione, al netto di proventi e spese, per confrontare lotti tenuti per periodi diversi.",
+      "analysisFailedFix": "Correggi queste transazioni e i lotti tornano:"
     },
     "createdInSystem": "Creato nel Sistema",
     "deleteBlockedTitle": "Impossibile eliminare il broker",

@@ -3,9 +3,6 @@ site_url: https://librefolio.github.io/LibreFolio/
 repo_url: https://github.com/Librefolio/LibreFolio
 repo_name: Librefolio/LibreFolio
 
-exclude_docs: |
-  POC_UX/**
-
 # Anchor validation — one half of a two-part partition, not a duplicate.
 #
 #   MkDocs (here)  owns links *inside* the docs tree (markdown → markdown). It resolves
@@ -178,11 +175,14 @@ plugins:
             "⚙️ Settings": "⚙️ Impostazioni"
             Profile: Profilo
             User Preferences: Preferenze Utente
+            Plugins: Plugin
             About: Informazioni
             "🛠️ Admin Manual": "🛠️ Manuale Admin"
             "CLI Admin Tools": "Strumenti CLI di amministrazione"
             Global Settings: Impostazioni Globali
+            "Users & Invitations": "Utenti e inviti"
             Filesystem Structure: Struttura Filesystem
+            Backup, Restore & Moving: Backup, ripristino e trasloco
             Advanced Docker: Docker Avanzato
             Host Installation: Installazione su Host
             Expose Securely: Esporre in Sicurezza
@@ -313,6 +313,7 @@ plugins:
             "🐳 Deployment & Exposure": "🐳 Installazione ed esposizione"
             "⚙️ System Configuration": "⚙️ Configurazione di sistema"
             "Environment Variables": "Variabili d'ambiente"
+            "Email": "Email"
             "🧹 Maintenance & Operations": "🧹 Manutenzione e operazioni"
             "Dividend": "Dividendo"
             "Interest": "Interessi"
@@ -421,12 +422,15 @@ plugins:
             "⚙️ Settings": "⚙️ Paramètres"
             Profile: Profil
             User Preferences: Préférences Utilisateur
+            Plugins: Plugins
             About: À propos
             Borsa Italiana: Borsa Italiana
             "🛠️ Admin Manual": "🛠️ Manuel Admin"
             "CLI Admin Tools": "Outils CLI d'administration"
             Global Settings: Paramètres Globaux
+            "Users & Invitations": "Utilisateurs et invitations"
             Filesystem Structure: Structure du Système de Fichiers
+            Backup, Restore & Moving: Sauvegarde, restauration et déménagement
             Advanced Docker: Docker Avancé
             Host Installation: Installation sur l'Hôte
             Expose Securely: Exposer en Sécurité
@@ -557,6 +561,7 @@ plugins:
             "🐳 Deployment & Exposure": "🐳 Installation et exposition"
             "⚙️ System Configuration": "⚙️ Configuration du système"
             "Environment Variables": "Variables d'environnement"
+            "Email": "E-mail"
             "🧹 Maintenance & Operations": "🧹 Maintenance et opérations"
             "Dividend": "Dividende"
             "Interest": "Intérêt"
@@ -665,12 +670,15 @@ plugins:
             "⚙️ Settings": "⚙️ Configuración"
             Profile: Perfil
             User Preferences: Preferencias de Usuario
+            Plugins: Plugins
             About: Acerca de
             Borsa Italiana: Borsa Italiana
             "🛠️ Admin Manual": "🛠️ Manual de Admin"
             "CLI Admin Tools": "Herramientas CLI de administración"
             Global Settings: Configuración Global
+            "Users & Invitations": "Usuarios e invitaciones"
             Filesystem Structure: Estructura del Sistema de Archivos
+            Backup, Restore & Moving: Copia de seguridad, restauración y traslado
             Advanced Docker: Docker Avanzado
             Host Installation: Instalación en Host
             Expose Securely: Exponer en Seguridad
@@ -801,6 +809,7 @@ plugins:
             "🐳 Deployment & Exposure": "🐳 Instalación y exposición"
             "⚙️ System Configuration": "⚙️ Configuración del sistema"
             "Environment Variables": "Variables de entorno"
+            "Email": "Correo"
             "🧹 Maintenance & Operations": "🧹 Mantenimiento y operaciones"
             "Dividend": "Dividendo"
             "Interest": "Interés"
@@ -952,6 +961,7 @@ nav:
           - Overview: user/settings/index.md
           - Profile: user/settings/profile.md
           - User Preferences: user/settings/preferences.md
+          - Plugins: user/settings/plugins.md
           - About: user/settings/about.md
       - 🧩 Misc:
           - Image Crop: user/misc/image-crop.md
@@ -962,11 +972,16 @@ nav:
           - Advanced Docker: admin/docker_advanced.md
           - Expose Securely: admin/service_exposure.md
           - Check Connection Security: admin/connection_checks.md
+          - Hosting for Others: admin/hosting_providers.md
+          - Sleep and Wake: admin/sleep_wake.md
       - ⚙️ System Configuration:
           - Environment Variables: admin/configuration.md
+          - Email: admin/email.md
           - Global Settings: admin/settings.md
+          - Users & Invitations: admin/users.md
       - 🧹 Maintenance & Operations:
           - CLI Admin Tools: admin/cli_tools.md
+          - Backup, Restore & Moving: admin/backup_restore.md
           - Filesystem Structure: admin/filesystem.md
   - 📚 Financial Theory:
       - Overview: financial-theory/index.md
@@ -1105,6 +1120,7 @@ nav:
                   - BRIM Plugin Guide: developer/architecture/patterns/brim_plugin_guide.md
                   - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
                   - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
+                  - Plugin Settings: developer/architecture/patterns/plugin_settings.md
                   - Signal Plugin Guide: developer/architecture/patterns/signal_plugin_guide.md
                   - Tool Plugin Guide: developer/architecture/patterns/tool_plugins.md
               - 🧠 AI Export:
@@ -1166,6 +1182,7 @@ nav:
                   - BOE Tech: developer/backend/fx/providers/boe.md
                   - SNB Tech: developer/backend/fx/providers/snb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
+          - "📧 Email (SMTP)": developer/backend/email.md
           - "🧮 Financial Math Layer": developer/backend/financial_math.md
           - "📉 Risk Engine": developer/backend/risk/architecture.md
       - 🎨 Frontend Development:
@@ -1184,6 +1201,7 @@ nav:
               - Pages: developer/frontend/pages/index.md
           - "🎨 Design System & UI":
               - Styling: developer/frontend/styling.md
+              - Designer Lab: developer/frontend/designer-lab.md
               - 🧩 Components:
                   - Overview: developer/frontend/components/index.md
                   - 🏗️ Core UI:

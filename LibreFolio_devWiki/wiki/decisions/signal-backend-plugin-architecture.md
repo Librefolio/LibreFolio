@@ -46,11 +46,11 @@ The July brainstorm that put the signals first in Release 2: [[sources/release2-
 | Role | Path |
 |------|------|
 | Canonical contracts | `backend/app/schemas/signals.py` |
-| Signal orchestration | `backend/app/services/signal_service.py` |
+| Signal orchestration | `backend/app/services/signals/service.py` (façade), `planning.py`, `execution.py`, `validation.py` |
 | Plugin registry | `backend/app/services/provider_registry.py` |
 | Production plugins | `backend/app/services/signal_plugins/` |
-| Asset adapter | `backend/app/services/asset_source.py` |
-| FX adapter | `backend/app/api/v1/fx.py` |
+| Asset adapter | `backend/app/services/assets/price_query.py` |
+| FX adapter | `backend/app/api/v1/fx/currencies.py` |
 | Frontend catalog/renderer | `frontend/src/lib/charts/signals/catalogMapper.ts`, `backendRenderer.ts` |
 | Bulk request/result mapping | `frontend/src/lib/charts/signals/requestBuilder.ts`, `resultMapper.ts` |
 | Execution plan | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/plan-phase00SignalsBackendMigrationImplementation.prompt.md` |

@@ -7,7 +7,7 @@ A **Day Count Convention** determines how interest accrues over time for a varie
 
 ## 🔧 Usage in LibreFolio
 
-Day count conventions are actively used by the **Scheduled Investment** asset source provider for synthetic yield calculations. The function `calculate_day_count_fraction()` lives in the provider module itself (`backend/app/services/asset_source_providers/scheduled_investment/plugin.py`), implements all four conventions, and returns a `Decimal` time fraction used in interest accrual computations.
+Day count conventions are actively used by the **Scheduled Investment** asset source provider for synthetic yield calculations. The function `calculate_day_count_fraction()` lives in the financial-math home (`backend/app/services/financial_math/interest.py`), implements all four conventions, and returns a `Decimal` time fraction on which the Scheduled Investment provider builds its interest accrual.
 
 The default convention is **ACT/365**.
 

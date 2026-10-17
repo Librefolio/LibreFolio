@@ -33,7 +33,7 @@
     "cashBalances": "Saldos de Efectivo",
     "noCashBalances": "Sin posiciones de efectivo",
     "confirmDelete": "¿Estás seguro de que quieres eliminar este bróker?",
-    "confirmDeleteWithTransactions": "Este bróker tiene {n} transacciones. La eliminación forzada eliminará todas las transacciones. ¿Continuar?",
+    "confirmDeleteWithTransactions": "Este bróker tiene {n} transacciones. La eliminación forzada las eliminará todas. Los activos que este bróker transfirió a otros brókers, incluidos los compartidos, quedan allí como posición de apertura a su coste de transferencia: la ganancia de esos brókers contará también lo que los activos ganaron antes de la transferencia. Los activos que otros brókers transfirieron a este salen de ellos a su coste medio. Las transferencias de fondos con otros brókers se convierten allí en depósitos o retiros. ¿Continuar?",
     "createFailed": "Error al crear el bróker",
     "updateFailed": "Error al actualizar el bróker",
     "assets": "{n} activo(s)",
@@ -128,7 +128,7 @@
       "shortLotLabel": "Short {date}",
       "detailTitle": "Detalle de Lotes FIFO",
       "loadFailed": "Error al cargar los datos de los lotes",
-      "analysisFailed": "El análisis de lotes no se pudo reconstruir de forma fiable (cantidades o transferencias incoherentes) — los valores pueden estar incompletos.",
+      "analysisFailed": "Los lotes de este activo no se pueden reconstruir: algunas de sus transacciones no cuadran. Los lotes, su cronología y la comparación están ocultos; las líneas del coste medio de abajo no se ven afectadas.",
       "combined": "Combinado",
       "chartMarkers": {
         "legend": {
@@ -233,7 +233,8 @@
           "realizedPnl": "P&L realizado",
           "splitRatio": "Ratio de desdoblamiento",
           "sourceBroker": "Desde",
-          "destinationBroker": "Hacia"
+          "destinationBroker": "Hacia",
+          "handedOver": "Valor cedido"
         },
         "openingValue": "Valor de apertura",
         "cumulativeProceeds": "Ingresos acumulados"
@@ -266,9 +267,9 @@
       "totalPnl": "P&L total",
       "tooltip": {
         "initialValue": "Valor inicial",
-        "shares": "participaciones",
-        "sharesOpenOutOf": "participaciones abiertas de",
-        "since": "Desde el"
+        "since": "Desde el",
+        "quantityClosed": "{original} → 0 {count, plural, one {participación} other {participaciones}}",
+        "quantityOpen": "{count, plural, one {{open} participación abierta de {original}} other {{open} participaciones abiertas de {original}}}"
       },
       "footerTotals": "Totales",
       "closedOnly": "Cerrados",
@@ -283,7 +284,8 @@
       "yAxisAuto": "Auto",
       "yAxisFromZero": "Desde 0",
       "annualizedReturn": "Anualizado",
-      "annualizedReturnTooltip": "Rendimiento neto anualizado (CAGR) de este lote individual durante su periodo de tenencia, neto de ingresos y gastos, para comparar lotes mantenidos durante distintas duraciones."
+      "annualizedReturnTooltip": "Rendimiento neto anualizado (CAGR) de este lote individual durante su periodo de tenencia, neto de ingresos y gastos, para comparar lotes mantenidos durante distintas duraciones.",
+      "analysisFailedFix": "Corrige estas transacciones y los lotes volverán:"
     },
     "createdInSystem": "Creado en el Sistema",
     "deleteBlockedTitle": "No se puede eliminar el bróker",

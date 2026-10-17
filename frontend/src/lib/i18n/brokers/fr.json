@@ -33,7 +33,7 @@
     "cashBalances": "Soldes de Trésorerie",
     "noCashBalances": "Aucune position de trésorerie",
     "confirmDelete": "Êtes-vous sûr de vouloir supprimer ce courtier ?",
-    "confirmDeleteWithTransactions": "Ce courtier a {n} transactions. La suppression forcée supprimera toutes les transactions. Continuer ?",
+    "confirmDeleteWithTransactions": "Ce courtier a {n} transactions. La suppression forcée les supprimera toutes. Les actifs que ce courtier a transférés vers d'autres courtiers, y compris partagés, y restent comme position d'ouverture à leur coût de transfert : le gain de ces courtiers comptera aussi ce que les actifs avaient gagné avant le transfert. Les actifs que d'autres courtiers ont transférés vers celui-ci les quittent à leur coût moyen. Les virements avec d'autres courtiers y deviennent des dépôts ou des retraits. Continuer ?",
     "createFailed": "Échec de la création du courtier",
     "updateFailed": "Échec de la mise à jour du courtier",
     "assets": "{n} actif(s)",
@@ -128,7 +128,7 @@
       "shortLotLabel": "Short {date}",
       "detailTitle": "Détail des Lots FIFO",
       "loadFailed": "Échec du chargement des données de lots",
-      "analysisFailed": "L'analyse des lots n'a pas pu être reconstruite de manière fiable (quantités ou transferts incohérents) — les valeurs peuvent être incomplètes.",
+      "analysisFailed": "Les lots de cet actif ne peuvent pas être reconstruits : certaines de ses transactions ne concordent pas. Les lots, leur chronologie et la comparaison sont masqués ; les lignes du coût moyen ci-dessous ne sont pas concernées.",
       "combined": "Combiné",
       "chartMarkers": {
         "legend": {
@@ -233,7 +233,8 @@
           "realizedPnl": "P&L réalisé",
           "splitRatio": "Ratio de split",
           "sourceBroker": "De",
-          "destinationBroker": "Vers"
+          "destinationBroker": "Vers",
+          "handedOver": "Valeur cédée"
         },
         "openingValue": "Valeur d'ouverture",
         "cumulativeProceeds": "Produits cumulés"
@@ -266,9 +267,9 @@
       "totalPnl": "P&L total",
       "tooltip": {
         "initialValue": "Valeur initiale",
-        "shares": "parts",
-        "sharesOpenOutOf": "parts ouvertes sur",
-        "since": "Depuis le"
+        "since": "Depuis le",
+        "quantityClosed": "{original} → 0 {count, plural, one {part} other {parts}}",
+        "quantityOpen": "{count, plural, one {{open} part ouverte sur {original}} other {{open} parts ouvertes sur {original}}}"
       },
       "footerTotals": "Totaux",
       "closedOnly": "Fermés",
@@ -283,7 +284,8 @@
       "yAxisAuto": "Auto",
       "yAxisFromZero": "Depuis 0",
       "annualizedReturn": "Annualisé",
-      "annualizedReturnTooltip": "Rendement net annualisé (TCAC) de ce lot unique sur sa durée de détention, net des revenus et frais, pour comparer des lots détenus sur des durées différentes."
+      "annualizedReturnTooltip": "Rendement net annualisé (TCAC) de ce lot unique sur sa durée de détention, net des revenus et frais, pour comparer des lots détenus sur des durées différentes.",
+      "analysisFailedFix": "Corrigez ces transactions et les lots reviennent :"
     },
     "createdInSystem": "Créé dans le Système",
     "deleteBlockedTitle": "Impossible de supprimer le courtier",

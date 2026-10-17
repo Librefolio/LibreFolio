@@ -28,6 +28,12 @@ All tests are executed through `dev.py`:
 ./dev.py test api all --list
 ```
 
+Test names go only to the actions that take them, which `./dev.py test <category> --help` marks
+`[TEST_NAME]`. `all`, `db create`, `db populate` and most Vitest unit actions (such as
+`front-fx fx-unit`) take none: a name after one of them stops the command with exit code 2 before
+it does anything, even with `--list` — after `all`, name the action instead
+(`./dev.py test services <action> test_foo`).
+
 The action is required, `--list` included: `all` lists the whole category, an action name narrows
 the list to that action (on a backend category, to the first test file the action runs). On a
 backend category `--list` runs `pytest --collect-only` and prints the test names grouped by file and
@@ -43,18 +49,19 @@ Playwright spec files (Vitest files are not listed).
 | `--cov-clean-backend` | Together with `--coverage`, clean Python coverage from backend tests (`htmlcov-backend/` + `.coverage_data/backend`) |
 | `--cov-clean-backend-e2e` | Together with `--coverage`, clean Python coverage collected during E2E runs (`htmlcov-backend-e2e/` + `.coverage_data/frontend`) |
 | `--cov-clean-js` | Clean JS/Svelte coverage (`coverage-js/`). Manual utility only — a `--coverage js` run cleans it by itself |
-| `--workers N\|auto` | Run isolation-safe backend units in parallel; the same number sets the Playwright workers, capped at half the logical cores. Default `1` — the serial path, unchanged. `auto` is half the cores |
+| `--workers N\|auto` | Run isolation-safe backend units in parallel, for a whole category or suite only: naming one action, or filtering by test name (pytest `-k`, which only a named action takes), keeps them serial. The same number sets the Playwright workers, capped at half the logical cores. Default `1` — the serial path, unchanged. `auto` is half the cores |
 | `--fail-fast` | Stop handing out work after the first red. The default runs everything and reports every failure |
 | `--resume` | Continue from the last failure: skip the tests the run cache records as passed and run the rest (see *Run cache and timing campaign* below) |
 | `--fresh-run` | Delete the run cache before starting, and open a new timing campaign. Without a category it only deletes the cache |
 | `--run-status` | Print the run cache (per suite, the tests passed and where the last run stopped) and exit without running anything |
 | `--log-file PATH` | Tee the full run output (build, pytest and Playwright output included) to `PATH` while still printing it. An existing file is overwritten |
-| `--log-dir PATH` | One log file per test unit. Defaults to `.testLog`; `--log-dir ""` turns it off |
+| `--log-dir PATH` | One log file per test unit, plus `shared-backend.log`, the shared test backend's output for the whole run: when a backend start fails, the runner prints the last 30 lines that start wrote. Defaults to `.testLog`; `--log-dir ""` turns it off |
 | `--no-consolidate` | Keep one invocation per action. By default a whole category or suite is grouped: one pytest invocation per backend category (`db` and `external` keep one per action) and, per frontend category, one vitest run plus one Playwright run per project selection (desktop only, or desktop and mobile), split into batches of 8 specs under JS coverage |
 | `--no-shared-server` | Do not start the one test backend the run shares: each pytest process and each Playwright run that needs a server starts its own, and the `--workers` parallel pass keeps only the units that touch neither database nor server. Slower — an escape hatch |
 | `--assume-scoped` | Experiment for the `--workers` parallel pass of backend categories: every pytest unit counts as parallel-safe, whatever isolation class the catalogue gives it, except the units with a written `exclusive_because`. No effect at one worker or with `--no-shared-server`. The reds are the work list, not a regression |
 | `--test-port PORT` / `--port PORT` | Port of this run's test backend. Defaults to `TEST_PORT`, then `6041` — see [Isolated Runtime Lanes](#isolated-runtime-lanes) |
 | `--data-dir PATH` | Test data root of this run. Defaults to `LIBREFOLIO_TEST_DATA_DIR`, then `backend/data/test` — see [Isolated Runtime Lanes](#isolated-runtime-lanes) |
+| `--lane-setting NAME=VALUE` | A setting of this run's instance, repeatable: only `LIBREFOLIO_PROFILE`, `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY`. None by default: the instance's defaults — see [Lane Settings](#lane-settings) |
 
 !!! note "Where the flags go"
 
@@ -117,6 +124,14 @@ runs tests at the same time needs a different one — on the command line, or as
 that worktree's `.env`. If you set `LIBREFOLIO_TEST_DATA_DIR` to an absolute path, give each
 worktree a different one as well.
 
+A lane runs on the instance's defaults. Of the checkout's `.env` and of the shell it keeps only
+the ports, the production data directory, `HOST`, the log level, the version a release job froze
+and every `LIBREFOLIO_TEST_*` name (`kept_in_a_test_lane()` in `scripts/cli_base.py`); every other
+setting of the instance (secrets, profile, block, mail, accounts, plugins) is removed from its
+environment, and in test mode `Settings` does not read `.env` either. A test that needs a setting
+sets it itself — see
+[Security → Test lanes and the instance's configuration](../architecture/security.md#test-lanes-and-the-instances-configuration).
+
 ```bash
 # A second worktree, testing while another one uses the default lane (6041)
 ./dev.py test --test-port 6141 api all
@@ -137,6 +152,53 @@ only when `/api/v1/system/test-lane-health` echoes that identity in the
 `X-LibreFolio-Test-Lane` header, and the shared test server refuses to start on a port that
 another process already holds: it never reuses or terminates another lane's server. The
 contract is covered by `./dev.py test utils runtime-isolation`.
+
+#### Lane Settings {: #lane-settings }
+
+A lane may set three settings of its own instance with `--lane-setting NAME=VALUE`:
+`LIBREFOLIO_PROFILE`, `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY`
+(`TEST_LANE_SETTABLE` in `scripts/cli_base.py`). They are what a hosting provider's instance runs
+with, so the suite can meet the managed profile, its frame protection and its report-only content
+security policy for real. Nothing else can be set this way: never a secret, a port, a data
+directory or one of the runner's own names.
+
+```bash
+# The cloud smoke on a lane of its own, in the managed profile (on any lane, it runs only when named)
+./dev.py test --test-port 6181 --data-dir /tmp/lane-h --lane-setting LIBREFOLIO_PROFILE=managed front-utility cloud-smoke
+
+# Repeatable: the managed profile with its frame protection off
+./dev.py test --lane-setting LIBREFOLIO_PROFILE=managed --lane-setting LIBREFOLIO_FRAME_PROTECTION=false front-utility auth
+```
+
+- **Checked first.** One option per setting, before the category like every flag of
+  `./dev.py test`. `parse_lane_settings()` checks them before the environment is touched: each
+  item `NAME=VALUE`, a name of the three, given once, with a value that is not empty and holds no
+  `;` and no line break. Anything else stops the run with an error that names the item. The value
+  itself (`selfhosted` or `managed`, a boolean for the two switches) is checked by the instance,
+  when it reads its settings.
+- **Set after the cleanup, then handed down.** `configure_test_runtime()` sets them once it has
+  removed the developer's settings, and exports `LIBREFOLIO_TEST_LANE_SETTINGS`: the `NAME=VALUE`
+  pairs sorted by name and joined by `;`. That name is under the kept `LIBREFOLIO_TEST_*` prefix,
+  so the variable travels down the lane's process tree (the runner, Playwright,
+  `dev.py server --test`, uvicorn's workers), and each nested `configure_test_runtime()` sets the
+  settings again after its own cleanup. Playwright's `webServer` (`WEB_SERVER_ENV` in
+  `frontend/playwright.config.ts`) passes the variable on only when it is set.
+- **From the command line only.** A `LIBREFOLIO_TEST_LANE_SETTINGS` line in the checkout's `.env`
+  stops the run, with or without `--lane-setting` and under `pipenv run` too, with an error that
+  names `--lane-setting` and `.env`: a forgotten line would silently change every lane of the
+  checkout. A run's children never read `.env` (`PIPENV_DONT_LOAD_ENV=1`, set by
+  `configure_test_runtime()` and by Playwright's `webServer`), so they keep applying the settings
+  they inherited.
+- **Shown.** The runner prints them in one info line: `Test lane settings: LIBREFOLIO_PROFILE=managed`.
+- **A manual test server.** `./dev.py server --test --lane-setting LIBREFOLIO_PROFILE=managed`
+  starts one with the same settings. Without `--test`, `--lane-setting` stops the command with
+  exit code 1, before any build.
+
+A managed lane is still a test lane: test mode is on, with its test-only providers and the test
+users, whose passwords are in `frontend/e2e/fixtures/test-users.ts`. The managed profile refuses
+test mode only outside a test lane, and the lane identity above makes every process of the run
+one: see [Security → Configuration Checks](../architecture/security.md#configuration-checks).
+`./dev.py test utils runtime-isolation` covers the lane settings too.
 
 ### 🔍 Provider Filter Flags (external, all, all-backend)
 
@@ -166,7 +228,7 @@ Frontend test categories support additional flags (`--headed`, `--debug`, `--ui`
 
 ## 📋 Test Categories
 
-LibreFolio organizes tests into **15 categories** — seven backend, eight frontend — grouped by layer:
+LibreFolio organizes tests into **16 categories** — seven backend, nine frontend — grouped by layer:
 
 | Category | Command | What It Tests |
 |----------|---------|---------------|
@@ -185,6 +247,7 @@ LibreFolio organizes tests into **15 categories** — seven backend, eight front
 | **Front-Transaction** | `./dev.py test front-transaction all` | Transaction modals, table, bulk operations, WAC, import wizard (Playwright) + payload and commit helpers (Vitest) |
 | **Front-Portfolio** | `./dev.py test front-portfolio all` | Dashboard charts, banners, page cache, privacy masking, risk analysis (Playwright) + portfolio and risk stores (Vitest) |
 | **Front-AI-Export** | `./dev.py test front-ai-export all` | AI Export panel, catalog, session memory, contracts (Playwright) + AI Export and signal units (Vitest) |
+| **Front-Designer-Lab** | `./dev.py test front-designer-lab all` | Designer Lab: live preview in another tab, element picker, neutrality (Playwright) + Lab units (Vitest) |
 
 ### 🏃 Meta Categories
 
@@ -192,7 +255,7 @@ LibreFolio organizes tests into **15 categories** — seven backend, eight front
 |---------------|---------|--------------|
 | **All** | `./dev.py test all` | All backend + frontend tests |
 | **All Backend** | `./dev.py test all-backend` | All backend tests (external → e2e) |
-| **All Frontend** | `./dev.py test all-frontend` | All frontend tests (front-utility → front-ai-export) |
+| **All Frontend** | `./dev.py test all-frontend` | All frontend tests (front-utility → front-designer-lab) |
 
 ---
 
@@ -254,6 +317,7 @@ without a walkthrough page list their actions with `./dev.py test <category> -h`
 - **Front-Transaction** (`./dev.py test front-transaction all`) — Tests the Transactions module: bulk and form modals, transactions table, split and promote, WAC, import wizard.
 - **Front-Portfolio** (`./dev.py test front-portfolio all`) — Tests the Dashboard and the risk views: charts, data-quality banners, page cache, privacy masking, risk analysis.
 - **Front-AI-Export** (`./dev.py test front-ai-export all`) — Tests AI Export: panel, catalog, session memory, public contracts.
+- **Front-Designer-Lab** (`./dev.py test front-designer-lab all`) — Tests the debug-only [Designer Lab](../frontend/designer-lab.md): live preview in another tab, element picker, neutrality of the idle client.
 
 !!! info "Frontend tests require a running server"
 
@@ -440,11 +504,16 @@ writes `.coverage.<pid>` before the process exits.
 
     SIGTERM is only half the story: Playwright falls back to **SIGKILL** once the
     `gracefulShutdown.timeout` expires. Flushing the coverage data file takes real
-    time, and the default 5 s was not always enough — when it wasn't, the run lost
+    time, and the original 5 s was not always enough — when it wasn't, the run lost
     **all** backend coverage and reported only a terse
     `No .coverage.* files found!` at the end, which looks like a configuration
     problem rather than a race.
 
     The timeout is therefore widened to **30 s whenever `COVERAGE_BACKEND` is set**,
-    and left at 5 s otherwise (outside coverage there is nothing to flush, so a slow
-    shutdown would only waste time).
+    and is 10 s otherwise: the server has its own shutdown budget
+    (`LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`, 8 s by default), and the window gives it
+    that plus a margin. The runner's shared backend gets the same two windows
+    (`SHUTDOWN_GRACE_COVERAGE` and `SHUTDOWN_GRACE_PLAIN` in
+    `scripts/test_runner/_server.py`), so outside coverage its
+    `Shared backend ignored SIGTERM` warning means that the server broke its own
+    budget.

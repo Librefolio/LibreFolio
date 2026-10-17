@@ -21,9 +21,14 @@ step G.5): see the section «THE REFUSAL SAYS WHY».
 A move also races the detection of a file's plugins, which step 5 of workstream L
 (item 8) runs again on read when the plugin catalogue changed, and every metadata
 write of a broker now takes that broker's lock: see the last section of this file.
+
+That lock's file is never a link, and is its owner's alone (Z-28): a symbolic link
+at its path is refused with ``OSError`` as the lock is entered, and the file the
+lock creates gives group and others nothing — see the end of the last section.
 """
 
 import json
+import stat
 import subprocess
 import sys
 import threading
@@ -35,7 +40,7 @@ import pytest
 
 from backend.app.config import get_version
 from backend.app.schemas.brim import BRIMCombinedTable, BRIMDerivedRef, BRIMFileInfo, BRIMFileStatus, BRIMParseOutput
-from backend.app.services import brim_provider
+from backend.app.services.brim import brim_provider
 
 
 class _MovingPlugin:
@@ -205,20 +210,23 @@ def test_relocated_path_reports_none_when_the_file_never_moved(store):
 # =============================================================================
 #
 # The developer's decision, verbatim: «Correggi dentro G con il metodo opzionale (Consigliato)».
-# When the guard refuses a file, its message is ``Plugin '{code}' cannot parse file '{name}'``,
+# When the guard refuses a file, its message is ``Plugin '{plugin}' cannot parse file '{name}'``,
 # followed by ``: {reason}`` when the plugin says why: ``BRIMProvider.cannot_parse_reason``, an
 # optional method that the guard reads with ``getattr`` and asks only after ``can_parse`` answered
 # False, about the path it checked last (the relocated one when the file moved). ``None`` or an
 # empty sentence adds nothing, not even the colon. A duck-typed plugin without the method, or a
 # method that raises, leaves the plain message: always this ``ValueError``, never another exception.
-# ``{name}`` is the stored file's name, ``{file_id}{ext}``, which G.5 does not change.
+# Since workstream W, lot K2a (backlog L6), the message names the plugin and the file as the user
+# knows them: ``{plugin}`` is the plugin's ``provider_name`` (a duck-typed plugin without one is
+# named by its code), ``{name}`` the name the file was uploaded with (``get_file_info(file_id).filename``),
+# no longer the stored ``{file_id}{ext}``. The phrase "cannot parse file" stays.
 
 GENERIC_CSV_CODE = "broker_generic_csv"
 
 
-def _plain_refusal(stored: Path) -> str:
-    """The guard's message when the plugin has nothing to add, about the stored file ``stored``."""
-    return f"Plugin '{GENERIC_CSV_CODE}' cannot parse file '{stored.name}'"
+def _plain_refusal(plugin_name: str, info: BRIMFileInfo) -> str:
+    """The guard's message when the plugin has nothing to add: the plugin by ``plugin_name``, the file by the name ``info`` was uploaded with."""
+    return f"Plugin '{plugin_name}' cannot parse file '{info.filename}'"
 
 
 class _RefusingPlugin:
@@ -227,10 +235,12 @@ class _RefusingPlugin:
     ``reason`` is a sentence or ``None``, a callable of the path, or an exception to raise. The
     paths the guard checks and the paths it asks the reason about are recorded, so a test can tell
     whether the guard asked, and where. ``mover`` as in ``_HonestPlugin``: the first check moves
-    that file uploaded → parsed, the way a neighbour's parse would.
+    that file uploaded → parsed, the way a neighbour's parse would. Like every registered plugin it
+    has a ``provider_name``, distinct from the code it stands in for: the guard names it by it.
     """
 
     plugin_version = "1.0.0"
+    provider_name = "Refusing stand-in"
 
     def __init__(self, reason=None, mover: str | None = None):
         self.reason = reason
@@ -272,9 +282,9 @@ def test_the_refusal_says_why_when_the_plugin_knows(store, monkeypatch):
 
     refusal = _refusal(info.file_id, plugin, monkeypatch)
 
-    assert str(refusal) == f"{_plain_refusal(stored)}: some reason"
     assert plugin.reasons_asked == [stored], "the reason is asked once, about the file the guard checked"
     assert plugin.paths_read == []
+    assert str(refusal) == f"{_plain_refusal(plugin.provider_name, info)}: some reason"
 
 
 @pytest.mark.parametrize("reason", [None, ""], ids=["none", "empty-sentence"])
@@ -286,25 +296,29 @@ def test_the_refusal_stays_plain_when_the_plugin_has_nothing_to_add(store, monke
 
     refusal = _refusal(info.file_id, plugin, monkeypatch)
 
-    assert str(refusal) == _plain_refusal(stored)
     assert plugin.reasons_asked == [stored], "the guard never asked the plugin why it refuses the file"
+    assert str(refusal) == _plain_refusal(plugin.provider_name, info)
 
 
 def test_a_plugin_without_the_method_keeps_the_plain_refusal(store, monkeypatch):
-    """A guard, green before G.5 too: the method is read with ``getattr``, never an ``AttributeError``.
+    """The method is read with ``getattr``, never an ``AttributeError`` (a guard written at G.5, green before it too).
 
     ``test_a_plugin_that_genuinely_cannot_read_the_format_still_fails`` matches a fragment of the
     message; this pins all of it, so a stray suffix for a plugin without the method fails.
+
+    The same double has no ``provider_name`` either, and this is the one test that pins the fallback
+    of lot K2a (L6): a duck-typed plugin without a name is named by the code it was asked with,
+    never an ``AttributeError`` there either. The file is still named as it was uploaded.
     """
     info = _upload()
-    stored = brim_provider.get_file_path(info.file_id)
     plugin = _HonestPlugin()
     plugin.can_parse = lambda file_path: False
     assert not hasattr(plugin, "cannot_parse_reason"), "premise: this double predates G.5"
+    assert not hasattr(plugin, "provider_name"), "premise: this double has no provider_name, so the guard can name it only by its code"
 
     refusal = _refusal(info.file_id, plugin, monkeypatch)
 
-    assert str(refusal) == _plain_refusal(stored)
+    assert str(refusal) == _plain_refusal(GENERIC_CSV_CODE, info)
 
 
 @pytest.mark.parametrize(
@@ -320,14 +334,16 @@ def test_a_reason_that_raises_leaves_the_plain_refusal(store, monkeypatch, failu
 
     refusal = _refusal(info.file_id, plugin, monkeypatch)
 
-    assert str(refusal) == _plain_refusal(stored)
     assert plugin.reasons_asked == [stored], "the guard never asked the plugin why it refuses the file"
+    assert str(refusal) == _plain_refusal(plugin.provider_name, info)
 
 
 def test_the_reason_is_asked_where_the_guard_looked_last(store, monkeypatch):
-    """The file moves uploaded → parsed under the check, and the plugin refuses it at both addresses: the reason comes from the relocated one."""
+    """The file moves uploaded → parsed under the check, and the plugin refuses it at both addresses: the reason comes from the relocated one.
+
+    The file is named as it was uploaded after the move too: its metadata moved with it.
+    """
     info = _upload()
-    stored = brim_provider.get_file_path(info.file_id)
     plugin = _RefusingPlugin(reason=lambda file_path: f"refused in {file_path.parent.parent.name}", mover=info.file_id)
 
     refusal = _refusal(info.file_id, plugin, monkeypatch)
@@ -335,21 +351,26 @@ def test_the_reason_is_asked_where_the_guard_looked_last(store, monkeypatch):
     assert len(plugin.checked) == 2, "premise: the guard checked the stale path, then the relocated one"
     stale, relocated = plugin.checked
     assert (stale.parent.parent.name, relocated.parent.parent.name) == (BRIMFileStatus.UPLOADED.value, BRIMFileStatus.PARSED.value), "premise: the file moved uploaded → parsed under the check"
-    assert str(refusal) == f"{_plain_refusal(stored)}: refused in {BRIMFileStatus.PARSED.value}"
     assert plugin.reasons_asked == [relocated]
+    assert str(refusal) == f"{_plain_refusal(plugin.provider_name, info)}: refused in {BRIMFileStatus.PARSED.value}"
 
 
 def test_the_generic_csv_names_the_required_columns_a_file_misses(store):
-    """The real plugin through the guard: an uploaded CSV whose header is ``amount,description`` names neither ``date`` nor ``type``."""
+    """The real plugin through the guard: an uploaded CSV whose header is ``amount,description`` names neither ``date`` nor ``type``.
+
+    Named by its ``provider_name``, the file by the name it was uploaded with (K2a, L6).
+    """
     info = _upload(b"amount,description\n10,first\n20,second\n")
     assert GENERIC_CSV_CODE not in info.compatible_plugins, f"premise: the generic CSV does not offer itself for this file: {info.compatible_plugins}"
+    plugin = brim_provider.BRIMProviderRegistry.get_provider_instance(GENERIC_CSV_CODE)
+    assert plugin is not None and plugin.provider_name not in ("", GENERIC_CSV_CODE), f"premise: the generic CSV is registered, with a name that is not its code: {plugin and plugin.provider_name!r}"
 
     with pytest.raises(ValueError) as refusal:
         brim_provider.parse_file(info.file_id, GENERIC_CSV_CODE, broker_id=1)
 
     message = str(refusal.value)
-    assert message.startswith(f"Plugin '{GENERIC_CSV_CODE}' cannot parse file '"), message
     assert message.endswith("': required columns 'date' and 'type' not found in the CSV header"), f"the refusal does not say which columns are missing: {message!r}"
+    assert message == f"{_plain_refusal(plugin.provider_name, info)}: required columns 'date' and 'type' not found in the CSV header"
 
 
 # =============================================================================
@@ -377,6 +398,13 @@ def test_the_generic_csv_names_the_required_columns_a_file_misses(store):
 # - ``_broker_metadata_lock(broker_id)``: per broker, re-entrant on its thread, exclusive across processes through
 #   ``fcntl.flock`` on ``<broker reports>/.locks/broker_<id>.lock`` (``broker_none.lock`` without a broker), released
 #   on exceptions, and taken by every metadata write of the broker.
+# - Z-28 (RED until the cure), as the backup and scheduler locks: the lock file is opened with ``os.open(<lock>, O_RDWR |
+#   O_CREAT | O_NOFOLLOW, 0o600)`` and the descriptor ``flock``ed, as before. A symbolic link at its path — dangling, or
+#   to an existing file — makes ``broker_metadata_lock`` raise ``OSError`` as it is entered: the block never runs,
+#   nothing is created or changed behind the link, the link stays, and nothing is left on the thread — once the link is
+#   gone it takes and releases the lock as before. A lock file it creates gives group and others nothing (0o600, which
+#   the umask can only narrow). Today ``open(<lock>, "a+")`` follows the link, creating a dangling one's target, and
+#   creates the file 0o666 less the umask (0o644 under the usual 0o022).
 #
 # The tests that need the signature pin it with ``raising=False``: each fails on the behaviour it pins, not on the
 # missing name, which ``test_the_detection_signature_is_the_app_version`` pins alone. Every wait is bounded: a
@@ -1003,3 +1031,112 @@ def test_a_metadata_write_waits_for_the_broker_lock(store, monkeypatch, write):
     assert not (returned_while_held or changed_while_held), f"{write} did not wait for broker 1's lock, held by another thread (returned: {returned_while_held}, sidecars changed: {changed_while_held})"
     assert call.error is None, f"{write} failed once the lock was released: {call.trace}"
     landed(call.result)
+
+
+# ----------------------------------------------------------------------------- the lock file is never a link, and is its owner's alone (Z-28)
+#
+# Nothing here holds a broker lock while the lock under test is entered: its ``flock`` waits, and no test may hang on
+# it. The umask is left alone: it can only narrow 0o600, so the mode is pinned as "owner read and write, nothing for
+# group and others", never as an exact value.
+
+BEHIND_THE_LINK = b"not a lock file: behind a symbolic link\n"
+BEHIND_THE_LINK_MODE = 0o644
+LINKS = ("dangling", "to-an-existing-file")
+# What a probe process (``_probe``) finds behind the link once the lock refused it: no file, or a file nobody holds.
+PROBED_BEHIND = {"dangling": "no lock file", "to-an-existing-file": "free"}
+OWNER_RW = 0o600
+GROUP_AND_OTHERS = 0o077
+
+
+def _link_at(lock_file: Path, behind: Path, kind: str) -> Path:
+    """A symbolic link at ``lock_file``, to ``behind/never-created`` (``dangling``) or to ``behind/existing-file`` (``BEHIND_THE_LINK``, mode ``BEHIND_THE_LINK_MODE``): its target.
+
+    The dangling link's folder exists, so a lock that follows the link creates its target there rather than fail on a
+    missing folder: a ``FileNotFoundError`` is an ``OSError`` too, and would pass for the refusal.
+    """
+    behind.mkdir(parents=True)
+    target = behind / ("never-created" if kind == "dangling" else "existing-file")
+    if kind != "dangling":
+        target.write_bytes(BEHIND_THE_LINK)
+        target.chmod(BEHIND_THE_LINK_MODE)
+    lock_file.symlink_to(target)
+    return target
+
+
+def _what_is_at(path: Path) -> tuple:
+    """What is at ``path`` itself, never following a link: ``("absent",)``, ``("link", <target>)`` or ``("file", <bytes>, <mode>)``."""
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return ("absent",)
+    if stat.S_ISLNK(info.st_mode):
+        return ("link", str(path.readlink()))
+    return ("file", path.read_bytes(), oct(stat.S_IMODE(info.st_mode)))
+
+
+def _mode_bits(path: Path) -> tuple:
+    """``path`` itself, never following a link: ``(its ls-style mode, its owner's read and write bits, its group's and others' bits)``."""
+    mode = path.lstat().st_mode
+    return stat.filemode(mode), oct(stat.S_IMODE(mode) & OWNER_RW), oct(stat.S_IMODE(mode) & GROUP_AND_OTHERS)
+
+
+def _enter_the_lock(broker_id: Optional[int]) -> tuple:
+    """Enter ``broker_metadata_lock(broker_id)`` once, on this thread: ``(the OSError it raised or None, whether the block ran)``."""
+    ran: List[bool] = []
+    try:
+        with brim_provider.broker_metadata_lock(broker_id):
+            ran.append(True)
+    except OSError as error:
+        return error, bool(ran)
+    return None, bool(ran)
+
+
+@pytest.mark.parametrize("kind", LINKS)
+def test_a_symbolic_link_at_the_lock_file_is_refused_and_leaves_nothing_behind(store, kind):
+    """Z-28 (RED): with a symbolic link at ``.locks/broker_1.lock``, ``broker_metadata_lock(1)`` raises ``OSError`` as it is entered, and the block never runs.
+
+    Behind a dangling link nothing is created; an existing file behind it keeps its bytes and its mode and is not left
+    locked; the link is still there, to the same target. Nor is anything left on the thread (no depth, no handle):
+    once the link is gone, the same thread takes the lock — a regular lock file, held for another process — and
+    releases it, and so does another thread. Today ``open(<lock>, "a+")`` follows the link — creating a dangling one's
+    target —, locks the file behind it and runs the block: no ``OSError``.
+    """
+    lock_file = _lock_file(store, 1)
+    lock_file.parent.mkdir(parents=True)
+    target = _link_at(lock_file, store / "behind-the-link", kind)
+    behind, link = _what_is_at(target), _what_is_at(lock_file)
+
+    error, ran = _enter_the_lock(1)
+
+    assert error is not None and not ran, f"broker_metadata_lock(1) followed the symbolic link {lock_file.name} -> {target}: raised {error!r}, the block ran: {ran}; behind the link: {behind[0]}, now {_what_is_at(target)[0]}"
+    assert _what_is_at(target) == behind, f"{type(error).__name__}, but behind the link {behind[0]} is now {_what_is_at(target)[0]}: the lock followed it"
+    assert _probe(target) == PROBED_BEHIND[kind], "nothing behind the link is left locked"
+    assert _what_is_at(lock_file) == link, f"the link is left as it was: {link}, now {_what_is_at(lock_file)}"
+
+    lock_file.unlink()
+    with brim_provider.broker_metadata_lock(1):
+        inside = (_what_is_at(lock_file)[0], _probe(lock_file))
+    after = _probe(lock_file)
+    other = _Threaded("broker-1-after-a-refused-link", lambda: _take_and_release(1))
+    other.thread.start()
+    other.finish("another thread still waits for broker 1's lock after a link was refused")
+
+    assert (inside, after, other.outcome) == (("file", "held"), "free", ("returned", True)), f"once the link is gone the lock works as before (this thread: a regular lock file, held, then free; another thread: taken and released): {(inside, after, other.outcome)} {other.trace}"
+
+
+def test_the_lock_file_the_broker_lock_creates_is_its_owners_alone(store):
+    """Z-28 (RED): the first ``broker_metadata_lock(1)`` of a store creates ``.locks/broker_1.lock``, a regular file its owner reads and writes, with nothing for group and others.
+
+    Created 0o600, which the umask can only narrow, so only those bits are pinned, and the umask is left alone. Today
+    ``open(<lock>, "a+")`` creates it 0o666 less the umask: 0o644 under the usual 0o022, readable by every user of the
+    machine. Under a umask that already takes everything from group and others the defect cannot show, and this passes
+    either way.
+    """
+    lock_file = _lock_file(store, 1)
+    assert _what_is_at(lock_file) == ("absent",), "setup: no lock file in a new store"
+
+    error, ran = _enter_the_lock(1)
+
+    assert (error, ran) == (None, True), f"barrier: the block ran, so the lock was taken and its file created: {error!r}"
+    filemode, owner, others = _mode_bits(lock_file)
+    assert (filemode[0], owner, others) == ("-", oct(OWNER_RW), oct(0)), f"{lock_file.name} was created {filemode}: a regular file its owner reads and writes, group and others nothing (0o600, which the umask can only narrow)"

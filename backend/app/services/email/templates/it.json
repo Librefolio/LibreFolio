@@ -1,0 +1,48 @@
+{
+  "common": {
+    "greeting": "Ciao $username,",
+    "greeting_anonymous": "Ciao,",
+    "button_fallback": "Se il pulsante non funziona, copia questo indirizzo nel browser:",
+    "footer": "Questo messaggio è stato inviato automaticamente da LibreFolio, da $instance."
+  },
+  "password_reset": {
+    "subject": "Reimposta la password di LibreFolio",
+    "intro": "Abbiamo ricevuto una richiesta di reimpostare la password del tuo account su $instance.",
+    "action": "Scegli una nuova password",
+    "expiry": "Il link funziona una sola volta e scade tra $duration.",
+    "ignore": "Se non l'hai chiesto tu, ignora questa email: la tua password resta quella di prima."
+  },
+  "invite": {
+    "subject": "Un invito per LibreFolio",
+    "intro": "$inviter ti invita a creare un account su $instance.",
+    "intro_anonymous": "Hai ricevuto un invito a creare un account su $instance.",
+    "admin_role": "Il tuo account sarà un amministratore dell'istanza.",
+    "action": "Crea il tuo account",
+    "expiry": "L'invito funziona una sola volta e scade tra $duration.",
+    "ignore": "Se non ti aspettavi questo invito, ignora questa email."
+  },
+  "email_verification": {
+    "subject": "Conferma il tuo indirizzo email",
+    "intro": "Conferma che questo indirizzo email appartiene al tuo account su $instance.",
+    "action": "Conferma il mio indirizzo email",
+    "expiry": "Il link funziona una sola volta e scade tra $duration.",
+    "ignore": "Se non hai creato un account, ignora questa email."
+  },
+  "admin_setup": {
+    "subject": "Configura il tuo account amministratore di LibreFolio",
+    "intro": "La tua istanza LibreFolio $instance è pronta: scegli la password del tuo account amministratore per iniziare a usarla.",
+    "action": "Imposta la mia password",
+    "expiry": "Il link funziona una sola volta e scade tra $duration.",
+    "ignore": "Se non ti aspettavi questa email, ignorala."
+  },
+  "test": {
+    "subject": "Email di prova di LibreFolio",
+    "intro": "Questa è un'email di prova inviata da $instance.",
+    "outro": "Se la stai leggendo, LibreFolio riesce a spedire email."
+  },
+  "email_changed": {
+    "subject": "L'indirizzo email del tuo account LibreFolio è cambiato",
+    "intro": "L'indirizzo email del tuo account su $instance è stato cambiato. Questo messaggio va all'indirizzo che aveva prima.",
+    "advice": "Se il cambio l'hai fatto tu, non devi fare niente. Se no, qualcuno potrebbe usare il tuo account: cambia subito la password, se riesci ancora ad accedere, e avvisa l'amministratore di $instance."
+  }
+}

@@ -53,35 +53,6 @@ Pulsante nel frontend (modale "nuova versione") che fa aggiornare e riavviare il
 
 ---
 
-## 📧 Server email — verifica account, inviti, recupero password (da P2-1)
-
-**Data aggiunta**: 3 Settembre 2026
-**Status**: 📋 FUTURO — non prioritario; nel frattempo l'opzione `require_email_verification` è marcata come placeholder (read-only + badge "coming soon") nella UI admin
-**Origine**: audit 08_newCleanAndDocumentation_audit (P2-1) + decisione utente 03/09/2026
-
-### Obiettivo
-
-Connettere LibreFolio a un server email (SMTP configurabile dalle impostazioni admin) e
-costruirci sopra tre funzioni:
-
-1. **Verifica email** — rende vera l'opzione `require_email_verification` (oggi placeholder:
-   la chiave esiste ma nessuna verifica avviene).
-2. **Link di invito** — un admin genera un invito via email; utile soprattutto quando la
-   registrazione libera dalla pagina di login è disattivata (l'utente si registra solo
-   tramite invito).
-3. **Recupero password via email** — reset self-service invece del reset manuale admin.
-
-### Note
-
-- Configurazione SMTP nelle impostazioni globali (host, porta, auth, mittente) con
-  test di connessione stile "Test Configuration" dei provider.
-- Il flusso invito/reset richiede token monouso a scadenza (tabella dedicata o
-  riuso del pattern dei settings con TTL).
-- Valutare dipendenza: `aiosmtplib` (async, non blocca l'event loop — regola Async I/O).
-- Fino a questo task, nessuna promessa UI sulla verifica email (P2-1 chiuso come placeholder).
-
----
-
 ## 🔗 Suggerimento eventi collegabili nella bulk modal (da P2-6)
 
 **Data aggiunta**: 3 Settembre 2026
@@ -167,7 +138,7 @@ i rendimenti giornalieri, non i prezzi.
 - `StressParams.proxy_assets` (`backend/app/services/risk_plugins/stress/plugin.py`) accetta fino a 100 coppie
   `{asset_id, proxy_asset_id}`. Il sostituto deve essere diverso dall'originale, e un asset non può essere sostituito
   ed escluso insieme. L'unica politica dichiarata è `manual_proxy_or_exclude` (`schemas/risk_scenarios.py`).
-- `RiskService._prepare_historical_replay_context` (`backend/app/services/risk/service.py`) controlla due cose: che gli
+- `prepare_historical_replay_context` (`backend/app/services/risk/replay.py`, da CP-9a) controlla due cose: che gli
   asset sostituiti siano nello scope e che i sostituti esistano. L'asset sostituito salta l'esclusione automatica. Per
   tutta la finestra il replay usa i rendimenti del sostituto: `proxy_series_usage: "returns_only"`, e non c'è nessuna
   giunzione con la storia propria dell'asset.
@@ -195,7 +166,7 @@ i rendimenti giornalieri, non i prezzi.
   confermata dall'utente.
 - ⚠️ **Un buco da verificare con un test prima di riaprire.** La copertura del sostituto non passa per
   `replay_coverage`, che gira solo sugli asset senza sostituto (`own_ids` in
-  `_prepare_historical_replay_context`; `own_ids` e `replay_coverage` sono nel ramo della famiglia Risk ed entrano in
+  `prepare_historical_replay_context`; `own_ids` e `replay_coverage` sono nel ramo della famiglia Risk ed entrano in
   `dev_release2` con la sua integrazione). Un sostituto quotato dopo l'inizio della finestra entrerebbe quindi nella
   serie congiunta. Il commento sull'esclusione automatica, nello stesso metodo, spiega cosa succede allora: un asset
   che parte tardi sposta la base del replay e lo accorcia per tutti gli altri. Il sostituto andrà controllato con la
@@ -204,7 +175,7 @@ i rendimenti giornalieri, non i prezzi.
 **Quando riprenderlo.** Quando un utente chiede di rigiocare una crisi con asset più giovani della crisi stessa.
 L'ordine: prima la regola del sostituto sensato e la diagnostica, poi il buco della copertura, poi l'interfaccia.
 
-**Riferimenti**: `stress/plugin.py` (`StressParams`, `_historical`); `service.py` (`_prepare_historical_replay_context`);
+**Riferimenti**: `stress/plugin.py` (`StressParams`, `_historical`); `risk/replay.py` (`prepare_historical_replay_context`);
 `schemas/risk.py` (`RiskHistoricalReplayProxyAsset`, `RiskHistoricalReplayAudit`); la guida
 `mkdocs_src/docs/financial-theory/technical-analysis/risk-metrics/historical-replay.en.md`; D372 in
 `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md`.
@@ -250,7 +221,7 @@ Senza benchmark persistente e dichiarato, riesporli riproduce il problema attual
 ### Riferimenti
 
 - `backend/app/services/risk_plugins/comparison/plugin.py`
-- `frontend/src/lib/components/risk/RiskAnalysisPanel.svelte` (sezione comparison)
+- `frontend/src/lib/features/risk/RiskAnalysisPanel.svelte` (sezione comparison)
 
 ---
 
@@ -437,6 +408,10 @@ resta fuori scope in modo permanente.
 ---
 
 ## 📈 Gestione Stock Splits nel Calcolo FIFO
+
+> **✅ Superata (14/10/2026, verifica di J per la 1.3)**: il motore FIFO applica gli split come eventi dell'asset
+> collegati alle rettifiche (`backend/app/services/financial_math/fifo/engine.py`, `_apply_split`), senza un tipo di
+> transazione SPLIT. La voce resta come storia della scelta.
 
 **Data aggiunta**: 10 Giugno 2026
 **Priority**: Bassa (P4)
@@ -867,7 +842,7 @@ stabilizza: a quel punto «dichiarato e non usato» smette di essere una fase
 normale dello sviluppo e torna a essere il segnale che è.
 
 **Terzo caso, un campo che non può più portare informazione** (02/10/2026): `fx_cost` della riga d'ordine del
-PAC (`PlannerBuyOrderRow.fx_cost` in `backend/app/schemas/pac_allocator.py`, costruito sempre a zero in
+PAC (`PlannerBuyOrderRow.fx_cost` in `backend/app/schemas/pac_allocator/rows.py`, costruito sempre a zero in
 `backend/app/services/pac_allocator/planner_report.py`, letto dal client dei Tool). Dopo la decisione del
 developer del 02/10 sugli FX nel PAC (nessuna commissione di conversione oltre lo spread) vale sempre 0 e non avrà
 mai un altro valore. Va tolto dal contratto: cambia il contratto e la versione del Tool, quindi non in questo
@@ -1114,7 +1089,7 @@ da quando parte lo schedule.
 
 ### File candidati (quando si apre il ticket)
 
-- `backend/app/schemas/assets.py` — `FAInterestRatePeriod`,
+- `backend/app/schemas/assets/scheduled_investment.py` — `FAInterestRatePeriod`,
   nuovo enum `CouponAnchor`.
 - `backend/app/services/asset_source_providers/scheduled_investment/plugin.py`
   — Step 3/4 rifattorizzati.
@@ -1488,7 +1463,7 @@ cambio è osservabile ovunque**, perché il formattatore del denaro è usato in 
 Il pacchetto `T4` del round 2 non è mai partito. Prima di aprirlo ho contato i siti:
 
 ```
-frontend/src/lib/components/risk/     26  toFixed
+frontend/src/lib/features/risk/     26  toFixed
 tutto il resto dell'app              139  toFixed
                                     ─────
                                      165
@@ -1953,6 +1928,16 @@ guida del segnale e che su mobile sparisce è un difetto: è stato assegnato a K
   segnali di rischio**.
 - Nelle zone dove sono oggi, descrivere la scheda e mettere i link ai segnali.
 
+## 📈 Grafici da un video di analisi del portafoglio
+
+**Data aggiunta**: 27 Luglio 2026 (era `idee_per_grafici.md` nella radice, spostato qui il 14/10/2026) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
+
+### Contesto
+Usare come base i grafici mostrati in questo video: https://www.youtube.com/watch?v=B6mLq6UUTWw
+
+### Azione Futura
+Analizzarli, poi implementarne alcuni o tutti.
+
 ## 📈 Scala logaritmica nei grafici
 
 **Data aggiunta**: 30 Settembre 2026 (appunto del 26/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
@@ -2050,7 +2035,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
     l'ultimo;
   - il resolver `AssetPriceSeries` (`backend/app/services/financial_math/price_marks.py:146`), che con `bisect`
     trova l'ultima osservazione ≤ data.
-- `get_prices_bulk` (`backend/app/services/asset_sources/price_query.py:149`), il corrispettivo di
+- `get_prices_bulk` (`backend/app/services/assets/price_query.py:149`), il corrispettivo di
   `convert_bulk` per i prezzi, ha già la finestra con minimo e massimo.
 
 ### Azione Futura
@@ -2159,30 +2144,6 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 - Usarla nei calcoli di rischio/rendimento: livelli della Dashboard, pagina del broker, laboratorio di Asset Global.
 - Quando arriva: togliere la riga «solo prezzi» dall'interfaccia, l'avviso dal manuale e il TODO dal codice.
 
-## 🔑 Sessioni — il cambio della password non chiude le sessioni già aperte
-
-**Data aggiunta**: 9 Ottobre 2026 · **Status**: ⏳ IN ATTESA — da ragionarci in seguito · **Priorità**: Bassa
-
-### Contesto
-- Reperto dell'onda 3 della doc inglese (Q, 08/10/2026), verificato sul codice. Il login emette un JWT senza stato nel
-  cookie `session`, con la durata presa dalle impostazioni globali; a ogni richiesta `get_current_user`
-  (`backend/app/api/v1/auth.py`) controlla la firma, la scadenza e `is_active`, ma non sa nulla dei cambi di password.
-- Quindi, dopo un cambio della password (dall'utente o con `user reset` dell'admin), una sessione già aperta, anche
-  rubata, resta valida fino alla sua scadenza.
-- Mitigazioni di oggi: la scadenza della sessione; un riavvio senza `JWT_SECRET` fisso invalida tutte le sessioni.
-- Decisione del developer (09/10/2026), testuale: «ora non è prioritario e a suo tempo avevamo già accettato che questa
-  cosa succedesse, non sono certo di volerla risolvere, ci devo pensare». **Prima di qualsiasi lavoro va ragionato se
-  risolverlo.**
-
-### Azione Futura
-- Decidere se il comportamento va cambiato.
-- Se sì, le strade già individuate:
-  - un numero di versione del token per utente (colonna e migrazione), copiato nel JWT e incrementato a ogni cambio
-    password; il controllo costa poco, perché `get_current_user` ricarica già l'utente a ogni richiesta;
-  - in alternativa, un `password_changed_at` confrontato con l'emissione del token;
-  - una lista di revoca (più costosa, e non serve per questo caso).
-- Da coordinare con l'accesso OIDC (#27), che tocca lo stesso punto.
-
 ## 🔀 PAC/Rebalancer — un solo passo di cambio per broker e coppia
 
 **Data aggiunta**: 9 Ottobre 2026 · **Status**: ⏳ IN ATTESA — **da fare con urgenza insieme al Rebalancer** ·
@@ -2190,7 +2151,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 
 ### Contesto
 - Reperto della gallery (M, 09/10/2026) e analisi di D (opzione «e»): le decisioni di cambio sono una per rotta d'ordine
-  × valuta del pool (`backend/app/services/pac_allocator/evaluator.py`, `constraints.py`), quindi il piano può contenere
+  × valuta del pool (`backend/app/services/pac_allocator/evaluation/bounds.py`, `constraints.py`), quindi il piano può contenere
   più conversioni separate della stessa coppia sullo stesso broker, che il report poi somma (`planner_report.py`).
 - Con la regola «arrotondamento sempre contro il piano» (crediti per difetto, debiti per eccesso, 1.2) queste
   conversioni spezzate non creano più valore, ma allungano il piano e lo rendono meno leggibile.

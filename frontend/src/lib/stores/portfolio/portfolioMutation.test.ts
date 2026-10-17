@@ -178,3 +178,150 @@ describe('portfolio mutation listeners (page cache, phase 1)', () => {
         expect(second.mock.calls[0][0]).toMatchObject({kind: 'refresh'});
     });
 });
+
+/**
+ * The price catch-up signal (workstream Z, lot Z-13).
+ *
+ * When the server has caught up on prices and updated something, `priceRefresh` (lot Z5) tells the portfolio views.
+ * Until now it sent «Aggiorna»'s `{kind: 'refresh'}`: the caches turned stale, but no page on screen could tell that
+ * signal from the one its own «Aggiorna» sends, so the open Dashboard kept the old figures until reloaded. The bus gets
+ * a signal of its own, `notifyPricesCaughtUp()` → `{kind: 'prices'}`, dispatched like the others: to every listener,
+ * once, a listener that throws keeping none of the others from hearing it. `requestPortfolioRefresh()` stays
+ * `{kind: 'refresh'}`, and a write stays `{kind: 'mutation', …}`.
+ *
+ * Red first: `notifyPricesCaughtUp` is not exported yet. It is read by name from the module, so its absence fails each
+ * case below with the contract in the message — not the whole file at import — and the type check of this file does
+ * not depend on the export landing first.
+ */
+describe('the price catch-up signal (Z-13)', () => {
+    function listen(name: string) {
+        const listener = vi.fn();
+        const stop = registerPortfolioMutationListener(`portfolioMutation.test:prices:${name}`, listener);
+        onTestFinished(stop);
+        return {listener, stop};
+    }
+
+    function pricesSignal(): () => void {
+        const notifyPricesCaughtUp = (portfolioMutation as unknown as {notifyPricesCaughtUp?: () => void}).notifyPricesCaughtUp;
+        expect(typeof notifyPricesCaughtUp, 'portfolioMutation exports no notifyPricesCaughtUp(): the end of a price catch-up can only send «Aggiorna»’s signal, and no page on screen can tell it apart to reload').toBe('function');
+        return notifyPricesCaughtUp!;
+    }
+
+    function refreshSignal(): () => void {
+        const requestPortfolioRefresh = (portfolioMutation as unknown as {requestPortfolioRefresh?: () => void}).requestPortfolioRefresh;
+        expect(typeof requestPortfolioRefresh, 'portfolioMutation no longer exports requestPortfolioRefresh(): «Aggiorna» lost its signal').toBe('function');
+        return requestPortfolioRefresh!;
+    }
+
+    it('notifyPricesCaughtUp() calls every listener once with exactly {kind: "prices"}', () => {
+        const notifyPricesCaughtUp = pricesSignal();
+        const first = listen('every-a').listener;
+        const second = listen('every-b').listener;
+
+        notifyPricesCaughtUp();
+
+        expect(first).toHaveBeenCalledTimes(1);
+        expect(second).toHaveBeenCalledTimes(1);
+        expect(first.mock.calls[0][0], 'the price catch-up must arrive as {kind: "prices"} and nothing else: the pages reload on that kind, the stores mark stale on any').toEqual({kind: 'prices'});
+        expect(second.mock.calls[0][0]).toEqual({kind: 'prices'});
+    });
+
+    it('keeps the three signals apart: «Aggiorna» stays refresh, the catch-up is prices, a write stays mutation', () => {
+        const notifyPricesCaughtUp = pricesSignal();
+        const requestPortfolioRefresh = refreshSignal();
+        const {listener} = listen('kinds');
+
+        requestPortfolioRefresh();
+        notifyPricesCaughtUp();
+        notify('POST', '/api/v1/transactions/commit');
+
+        expect(
+            listener.mock.calls.map(([signal]) => signal),
+            'a page that reloads on the price catch-up must not reload on «Aggiorna» (which reloads by itself, forced) nor on a write: the three kinds must stay distinct',
+        ).toEqual([{kind: 'refresh'}, {kind: 'prices'}, {kind: 'mutation', method: 'POST', path: '/api/v1/transactions/commit'}]);
+    });
+
+    it('a listener that throws on the price catch-up keeps none of the others from hearing it, and is reported', () => {
+        const notifyPricesCaughtUp = pricesSignal();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        onTestFinished(() => consoleError.mockRestore());
+        const before = listen('throws-before').listener;
+        const failing = listen('throws').listener;
+        failing.mockImplementation(() => {
+            throw new Error('synthetic: a page listener failed');
+        });
+        const after = listen('throws-after').listener;
+
+        expect(() => notifyPricesCaughtUp(), 'a failing listener made the signal throw: priceRefresh would end its check with an error').not.toThrow();
+
+        expect(before).toHaveBeenCalledTimes(1);
+        expect(failing).toHaveBeenCalledTimes(1);
+        expect(after, 'a listener registered after the failing one never heard the price catch-up').toHaveBeenCalledTimes(1);
+        expect(after.mock.calls[0][0]).toEqual({kind: 'prices'});
+        expect(consoleError, 'the failure was swallowed without a trace').toHaveBeenCalled();
+    });
+
+    it('a listener removed before the signal does not hear it (a page destroyed before the catch-up ends)', () => {
+        const notifyPricesCaughtUp = pricesSignal();
+        const kept = listen('kept').listener;
+        const removed = listen('removed');
+
+        removed.stop();
+        notifyPricesCaughtUp();
+
+        expect(removed.listener, 'a removed listener still heard the price catch-up: a destroyed page would reload').not.toHaveBeenCalled();
+        expect(kept, 'premise: the signal was sent').toHaveBeenCalledTimes(1);
+    });
+});
+
+/**
+ * The Δ columns' read (workstream X, lot X-R53, MF-P2).
+ *
+ * The Assets and FX lists stop computing their fixed-period changes (1D … 5Y) in the browser and ask the backend for
+ * them on every load: `POST /assets/prices/period-changes` and `POST /fx/currencies/period-changes`. Both are reads — a
+ * POST only because a bulk body does not fit in a query string — so neither may reach the listeners: counted as a
+ * write, every visit to the Assets list would mark the Dashboard, Risk and lots answers stale and have them refreshed in
+ * background, after a request that changed nothing.
+ *
+ * Red first: every POST under `/api/v1/assets/prices` but `/query` and `/sync` is a write today, so the asset read is
+ * one, whatever its answer. The rest are guards, green before and after: the FX read already falls through every rule,
+ * `/query` stays a read, and the writes under `/api/v1/assets/prices` stay writes — the exception must not widen into the
+ * prefix rule.
+ */
+describe('the period changes are reads, not writes (X-R53)', () => {
+    /** An answer of `POST /assets/prices/period-changes` (`FAPeriodChangesResponse`): one asset. */
+    const assetAnswer = {items: [{asset_id: 6, as_of: '2026-10-16', currency: 'USD', periods: [{key: '1D', days: 1, change_ratio: '0.0125'}], errors: []}]};
+    /** An answer of `POST /fx/currencies/period-changes` (`FXPeriodChangesResponse`): one pair. */
+    const fxAnswer = {items: [{base: 'EUR', quote: 'USD', as_of: '2026-10-16', periods: [{key: '1D', days: 1, change_ratio: '0.0125', inverse_change_ratio: '-0.0123'}], errors: []}]};
+
+    it.each([
+        ['POST', '/api/v1/assets/prices/period-changes'],
+        ['post', 'http://librefolio.local/api/v1/assets/prices/period-changes?x=1'],
+        ['POST', '/api/v1/assets/prices/period-changes/'],
+    ])('%s %s — the Assets list’s Δ columns — is not a portfolio mutation', (method, url) => {
+        expect(classify(method, url, assetAnswer), `${method} ${url} reads the Δ columns of the Assets list: as a write, every visit to the list marks the Dashboard, Risk and lots answers stale`).toBe(false);
+        expect(classify(method, url), 'nor without its answer: a read is a read whatever it answered').toBe(false);
+    });
+
+    it('no listener hears the Δ columns being read, while a write still reaches them', () => {
+        const listener = vi.fn();
+        onTestFinished(registerPortfolioMutationListener('portfolioMutation.test:period-changes', listener));
+
+        notify('POST', '/api/v1/assets/prices/period-changes', assetAnswer);
+        notify('POST', '/api/v1/fx/currencies/period-changes', fxAnswer);
+        expect(listener, 'reading the Δ columns reached the listeners: every list load would refresh the Dashboard, Risk and lots answers').not.toHaveBeenCalled();
+
+        // The control: the same listener hears a write of the same family, so the silence above is the rule's.
+        notify('POST', '/api/v1/assets/prices', {results: [], success_count: 0, errors: []});
+        expect(listener, 'premise: the listener is live').toHaveBeenCalledTimes(1);
+        expect(listener.mock.calls[0][0]).toMatchObject({kind: 'mutation', method: 'POST', path: '/api/v1/assets/prices'});
+    });
+
+    it('guards: the FX read is no write either, /query stays a read, the writes under /api/v1/assets/prices stay writes', () => {
+        expect(classify('POST', '/api/v1/fx/currencies/period-changes', fxAnswer), 'the FX list’s Δ columns').toBe(false);
+        expect(classify('POST', '/api/v1/assets/prices/query'), 'the price read of the lists and the charts').toBe(false);
+        expect(classify('POST', '/api/v1/assets/prices'), 'storing prices (the data editor’s save)').toBe(true);
+        expect(classify('DELETE', '/api/v1/assets/prices'), 'deleting prices').toBe(true);
+        expect(classify('POST', '/api/v1/assets/prices/current'), 'today’s live price, which writes today’s candle (E1)').toBe(true);
+    });
+});

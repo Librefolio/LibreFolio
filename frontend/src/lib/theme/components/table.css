@@ -1,0 +1,15 @@
+/*
+ * Tables: what is left of the component colour tokens of R-3 (plan 55), at parity with the legacy look.
+ *
+ * The data tables (DataTable and its cells, header, filter, pagination, toolbar), the period effects table and
+ * CompactCashCell moved to the colour roles of tokens.css (T, 16/10). Left here: the categorical row tints of
+ * RiskReturnLevel, the portfolio and the benchmark (the designer's point 2.5).
+ * `-dark` twins feed the components' `.dark` rules; the original spelling follows a value in a comment.
+ */
+:root {
+    /* RiskReturnLevel.svelte */
+    --lf-cmp-risk-return-row-portfolio-bg: #0284c71a; /* rgb(2 132 199 / 0.1) */
+    --lf-cmp-risk-return-row-portfolio-bg-dark: #38bdf824; /* rgb(56 189 248 / 0.14) */
+    --lf-cmp-risk-return-row-benchmark-bg: #d977061a; /* rgb(217 119 6 / 0.1) */
+    --lf-cmp-risk-return-row-benchmark-bg-dark: #fbbf2424; /* rgb(251 191 36 / 0.14) */
+}

@@ -116,7 +116,7 @@ export interface SourceCurrentWeight {
     asset_id: string;
     held: boolean;
     weight: string | null;
-    valuation_source: 'MARKET_PRICE' | 'LAST_TRADE_PRICE' | 'MISSING' | null;
+    valuation_source: 'MARKET_PRICE' | 'LAST_TRADE_PRICE' | 'ESTIMATED_AT_COST' | 'MISSING' | null;
     valuation_reference_date: string | null;
     valuation_days_before_requested: number | null;
     valuation_stale: boolean;
@@ -287,7 +287,7 @@ function mapResponse(raw: RawResponse): PlannerSource {
                           asset_id: row.asset_id,
                           held: row.held,
                           weight: text(row.weight),
-                          valuation_source: row.valuation_source === 'MARKET_PRICE' || row.valuation_source === 'LAST_TRADE_PRICE' || row.valuation_source === 'MISSING' ? row.valuation_source : null,
+                          valuation_source: row.valuation_source === 'MARKET_PRICE' || row.valuation_source === 'LAST_TRADE_PRICE' || row.valuation_source === 'ESTIMATED_AT_COST' || row.valuation_source === 'MISSING' ? row.valuation_source : null,
                           valuation_reference_date: text(row.valuation_reference_date),
                           valuation_days_before_requested: integer(row.valuation_days_before_requested),
                           valuation_stale: row.valuation_stale,

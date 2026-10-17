@@ -63,11 +63,11 @@ Backend BRIM plugins emit `field_todos` inside `BRIMParseResponse` for each row 
 
 | Role | Path |
 |------|------|
-| Import Wizard Modal | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| Bulk editor (banners, save gate) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| Todo wording resolver | `frontend/src/lib/utils/transactions/resolveBrimNotice.ts` |
-| Parse merge (`field_todos` → `ImportTodo`) | `frontend/src/lib/utils/transactions/importMerge.ts` |
-| Todo clearing | `frontend/src/lib/utils/transactions/bulkTodos.ts` |
+| Import Wizard Modal | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
+| Bulk editor (save gate; the banners in `frontend/src/lib/features/transactions/bulk/TxBulkBanners.svelte`) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| Todo wording resolver | `frontend/src/lib/features/transactions/resolveBrimNotice.ts` |
+| Parse merge (`field_todos` → `ImportTodo`) | `frontend/src/lib/features/transactions/import/importMerge.ts` |
+| Todo clearing | `frontend/src/lib/features/transactions/bulk/bulkTodos.ts` |
 | BRIM API schemas | `backend/app/schemas/brim.py` |
 | BRIM parse API | `backend/app/api/v1/brokers.py` |
 | Coinbase plugin (example) | `backend/app/services/brim_providers/broker_coinbase/plugin.py` |

@@ -1,0 +1,4790 @@
+// @vitest-environment jsdom
+/**
+ * GrowthChart — a lazily-arriving input must never be answered from a memo built
+ * before that input existed (regression, G1b family).
+ *
+ * WHAT BROKE. `getResolutionData()` memoises the whole per-resolution aggregation in
+ * `resolutionCache`, keyed by `resolution` — ONE dimension — while the value it stores
+ * depends on eleven reactive inputs. Invalidation happened only through
+ * `if (history !== lastHistoryRef) resetResolutionState()`. Several of those inputs are
+ * fetched lazily and therefore land AFTER the first render:
+ *
+ *   1. the user switches to P&L → candles;
+ *   2. `getResolutionData()` runs while `pnlCandles` is still undefined and caches an
+ *      entry whose candle points are all `'-'` gap sentinels;
+ *   3. the fetch lands and the render effect wakes (it does depend on `pnlCandles`);
+ *   4. `getResolutionData()` returns the SAME cached entry — 93 gaps, forever, surviving
+ *      every re-entry into the submode.
+ *
+ * WHY THIS TEST IS SHAPED THE WAY IT IS. The defect is invisible to any test that sets
+ * up its final state: render with `pnlCandles` already present and the broken code passes.
+ * What has to be encoded is ARRIVAL ORDER, so every case below mounts with the input
+ * ABSENT, proves the memo was populated in that state (`0` real values against a series
+ * array of the expected shape — a negative with a presence barrier in front of it, never
+ * a bare "nothing rendered"), delivers the input, proves a render actually followed, and
+ * only then asserts the aggregated output carries real data.
+ *
+ * WHY IT IS PARAMETERISED. `pnlCandles` is the instance; the defect is the class. Every
+ * member of `aggregationInputs` that the caller fills in asynchronously is exposed to the
+ * same stale entry, so all six are driven through the same arrival sequence. A seventh
+ * lazily-fetched prop added tomorrow belongs in the table, not in a new file.
+ *
+ * WHAT IS MOCKED, AND WHAT IS NOT. Only the ECharts module, replaced by a recorder that
+ * captures the options handed to it (jsdom has no canvas, and rendering pixels is not the
+ * subject), and the source of the interface locale, `uiLocale()`, which stays the real one unless
+ * a D23 case forces sv-SE through it (`forceInterfaceLocale`, M-18). The component under test is
+ * the real `GrowthChart`: real props, real runes,
+ * real `$derived` bundle, real memo, real render effect, real aggregation helpers. The
+ * assertion reads GrowthChart's own output — the series data it hands to the chart — which
+ * is precisely what the stale entry corrupted.
+ *
+ * WHAT IS DELIBERATELY NOT ASSERTED. Series NAMES for the built-in dimensions: they come
+ * from `$_(...)` and the UI ships in EN/IT/FR/ES. The fixed-slot ORDER of
+ * `buildChartUpdateSeries` is the contract those tests use instead (it documents itself as
+ * "Fixed 6-slot order matches buildFullSeries's matching index reads exactly"). Broker
+ * series ARE matched by name, because those names are values this test supplied as props.
+ *
+ * THE REST OF THE FILE. Eight smaller subjects share the same recorder: privacy masking
+ * of the axis and tooltip formatters (S2a), the one form of every signed tooltip amount in
+ * the locale's glyphs (D23, D23b), persistence of the mode and the P&L submode (S5), the
+ * synthetic-candle caption (S9), the grid's left inset (developer review, 2026-09-29), the
+ * ladder x axis of the Candles and Income submodes (S7) — calendar buckets (06/10/2026), the
+ * partial and in-progress ones, the rung offer at measured plot widths, the labels named by the
+ * start of their period and turned 45° together when one does not fit (07/10/2026) — with the rung the ladder
+ * opens on (B12: k4 G2, Income on 1M), the ICU syntax of the ladder labels' two catalogue keys in
+ * the four catalogues (S7a), the money axis ticks: distinct, in the locale's glyphs, with the edge the
+ * chart fixes left unlabelled and blank, so the grid does not measure it (S7b: D18, D23, D25, k4 G1),
+ * and the purchase value of the Income submode: one name for its two halves, their total in
+ * the tooltip, each half in its Abs colour (S8: R11, D26).
+ * Every figure is written in the interface locale (M-18): `uiLocale()`, en-US under the English UI
+ * on jsdom's en-US browser whatever the host, so the expectations are built in it; the last
+ * describe mounts the chart under an Italian UI.
+ * Each describe states its own reasons.
+ */
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+
+/**
+ * The ECharts stand-in: a recorder, not a renderer.
+ *
+ * It answers every call `GrowthChart` and its chart helpers make on an instance
+ * (`attachChartReady` → `on`, `setupTooltipAutoHide` → `dispatchAction`,
+ * `attachDataZoomTouchPan` → `getOption`, `scheduleFirstRenderStabilityFix` →
+ * `isDisposed`/`resize`, `renderChart` → `getDom`/`getWidth`) and keeps every `setOption`
+ * payload so a test can read what the component decided to draw.
+ *
+ * `getDom()` returns the element `init()` was handed, which is what keeps `renderChart`
+ * on its normal path: it disposes and re-inits only when the instance's DOM no longer
+ * matches the bound container. One mount therefore means exactly one instance, and the
+ * tests assert that.
+ *
+ * `format.getTextRect` is the measure the ladder axis sizes its label box with (M‴, 08/10/2026):
+ * `FAKE_TEXT_PX_PER_CHAR` px a character, and every font it is asked in is kept in `measuredFonts`.
+ */
+const {chartInstances, echartsModule, fakeGeometry, measuredFonts, DEFAULT_PLOT_WIDTH_PX, FAKE_FONT_FAMILY, FAKE_TEXT_PX_PER_CHAR} = vi.hoisted(() => {
+    interface SetOptionCall {
+        option: Record<string, unknown>;
+        opts: unknown;
+    }
+
+    interface GridRect {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    }
+
+    interface FakeChart {
+        setOptionCalls: SetOptionCall[];
+        setOption: (option: Record<string, unknown>, opts?: unknown) => void;
+        getOption: () => Record<string, unknown>;
+        getWidth: () => number;
+        getHeight: () => number;
+        getDom: () => unknown;
+        on: (event: string, handler: () => void) => void;
+        off: (event: string, handler: () => void) => void;
+        dispatchAction: () => void;
+        resize: () => void;
+        isDisposed: () => boolean;
+        dispose: () => void;
+        /** Calls every handler registered with `on(event, …)`, as ECharts does when the user acts (S7). */
+        emit: (event: string) => void;
+        /** Puts a window in the chart's own state, where ECharts keeps it after a user zoom (S7). */
+        setZoom: (start: number, end: number) => void;
+        /**
+         * Present only while `fakeGeometry.measured` is on: the laid-out grid `syncPlotGeometry` reads, and the global
+         * option's `get(path)`, which answers the text family the ladder measures its labels in (M‴).
+         */
+        getModel?: () => {getComponent: (type: string) => {coordinateSystem: {getRect: () => GridRect}} | undefined; get: (path: string | readonly string[]) => unknown};
+    }
+
+    const chartInstances: FakeChart[] = [];
+
+    /** The global text family the measured chart answers. WHY recognisable: a label measured in any other font shows in the diff. */
+    const FAKE_FONT_FAMILY = 'LF Test Sans';
+    /** The fake measure's width of one character, in px. WHY a round number: the expected box is then 7 × a text's length. */
+    const FAKE_TEXT_PX_PER_CHAR = 7;
+    /** Every font `format.getTextRect` was asked in, in call order. Reset before every case. */
+    const measuredFonts: string[] = [];
+    /** What the measured chart's global option holds: ECharts' `textStyle`, its family only. */
+    const GLOBAL_OPTION: Record<string, unknown> = {textStyle: {fontFamily: FAKE_FONT_FAMILY}};
+
+    /** `get(path)` on the global option, as ECharts' Model reads it: an array of keys, or a string split on dots. */
+    function getGlobal(path: string | readonly string[]): unknown {
+        const keys = typeof path === 'string' ? path.split('.') : path;
+        let node: unknown = GLOBAL_OPTION;
+        for (const key of keys) node = node != null && typeof node === 'object' ? (node as Record<string, unknown>)[key] : undefined;
+        return node;
+    }
+
+    /** Plot width reported to the resolution ladder. 40 daily buckets over 1200px is a
+     *  density of 0.033 bucket/px, far under the 1.3 high-density threshold, so the
+     *  chart stays at 'daily' and one bucket means one day — no aggregation tier in the
+     *  middle of an assertion about aggregation inputs. */
+    const PLOT_WIDTH_PX = 1200;
+
+    /**
+     * The laid-out grid, OPT-IN (S7). WHY: every other case keeps today's fake, with no `getModel`,
+     * so `syncPlotGeometry` reads nothing, the plot width stays 0 and every rung of the ladder
+     * stays offered. Off by default and reset after every case. On, the grid is a plot of
+     * `plotWidthPx` at x 40 of the 1200 px chart: 527 px unless a case sets one of the widths
+     * measured on the dashboard (the S7 offer cases), so 40 px of room on the left and the rest
+     * of the 1160 on the right.
+     */
+    const DEFAULT_PLOT_WIDTH_PX = 527;
+    const fakeGeometry = {measured: false, plotWidthPx: DEFAULT_PLOT_WIDTH_PX};
+    const MEASURED_GRID: GridRect = {x: 40, y: 20, width: DEFAULT_PLOT_WIDTH_PX, height: 300};
+
+    function createFakeChart(dom: unknown): FakeChart {
+        const handlers = new Map<string, Set<() => void>>();
+        let merged: Record<string, unknown> = {};
+        let disposed = false;
+
+        const chart: FakeChart = {
+            setOptionCalls: [],
+            setOption(option, opts) {
+                chart.setOptionCalls.push({option, opts});
+                merged = {...merged, ...option};
+            },
+            // ECharts normalises a single dataZoom object into an array; `getZoomPercent()`
+            // reads `option.dataZoom?.[0]`, so the stand-in has to normalise it too.
+            getOption: () => {
+                const zoom = merged.dataZoom;
+                return {...merged, dataZoom: zoom == null ? [] : Array.isArray(zoom) ? zoom : [zoom]};
+            },
+            getWidth: () => PLOT_WIDTH_PX,
+            getHeight: () => 360,
+            getDom: () => dom,
+            on(event, handler) {
+                const bucket = handlers.get(event) ?? new Set<() => void>();
+                bucket.add(handler);
+                handlers.set(event, bucket);
+            },
+            off(event, handler) {
+                handlers.get(event)?.delete(handler);
+            },
+            dispatchAction: () => {},
+            resize: () => {},
+            isDisposed: () => disposed,
+            dispose: () => {
+                disposed = true;
+            },
+            emit(event) {
+                // A copy: a handler that unregisters itself must not make its neighbour skip.
+                for (const handler of [...(handlers.get(event) ?? [])]) handler();
+            },
+            setZoom(start, end) {
+                merged = {...merged, dataZoom: [{start, end}]};
+            },
+        };
+
+        if (fakeGeometry.measured) {
+            chart.getModel = () => ({
+                getComponent: (type: string) => (type === 'grid' ? {coordinateSystem: {getRect: () => ({...MEASURED_GRID, width: fakeGeometry.plotWidthPx})}} : undefined),
+                get: getGlobal,
+            });
+        }
+
+        chartInstances.push(chart);
+        return chart;
+    }
+
+    return {
+        chartInstances,
+        echartsModule: {
+            init: (dom: unknown) => createFakeChart(dom),
+            // WHY: `vi.mock` throws on any export its factory leaves out, and the ladder reads `echarts.format` to measure a label.
+            format: {
+                getTextRect(text: string, font: string) {
+                    measuredFonts.push(font);
+                    return {x: 0, y: 0, width: text.length * FAKE_TEXT_PX_PER_CHAR, height: 14};
+                },
+            },
+        },
+        fakeGeometry,
+        measuredFonts,
+        DEFAULT_PLOT_WIDTH_PX,
+        FAKE_FONT_FAMILY,
+        FAKE_TEXT_PX_PER_CHAR,
+    };
+});
+
+vi.mock('echarts', () => echartsModule);
+
+/**
+ * The interface locale as the chart reads it: the real `uiLocale()`, unless a case forces another one
+ * (M-18). A case forces it BEFORE it mounts (`forceInterfaceLocale`), so the chart is drawn in it
+ * however it reads the source; the file-level `afterEach` lifts it. A plain object, not a store:
+ * forcing it redraws nothing, which is the reason the cases force it before they mount.
+ */
+const {interfaceLocale} = vi.hoisted(() => ({interfaceLocale: {forced: undefined as string | undefined}}));
+
+vi.mock('$lib/stores/app/uiLocale', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('$lib/stores/app/uiLocale')>();
+    return {...actual, uiLocale: () => interfaceLocale.forced ?? actual.uiLocale()};
+});
+
+import {flushSync, tick} from 'svelte';
+import {get} from 'svelte/store';
+import {addMessages, dictionary, getMessageFormatter, waitLocale} from 'svelte-i18n';
+import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {OVERFLOW_MARQUEE_SELECTOR} from '$lib/actions/scrollOnOverflow';
+import {_, locale, SUPPORTED_LOCALES, type SupportedLocale} from '$lib/i18n';
+import en from '$lib/i18n/en.json';
+import es from '$lib/i18n/es.json';
+import fr from '$lib/i18n/fr.json';
+import itCatalogue from '$lib/i18n/it.json';
+import {currentLanguage} from '$lib/stores/app/language';
+import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {uiLocale} from '$lib/stores/app/uiLocale';
+import {timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
+import type {PortfolioAcquisitionFundingSeries, PortfolioBrokerPnlHistory, PortfolioCostHistorySeries, PortfolioDepositHistorySeries, PortfolioHistoryPoint, PortfolioIncomeHistorySeries, PortfolioPnlCandlePoint, PortfolioPnlCandleSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
+import {formatPercent} from '$lib/utils/core/formatPercent';
+import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
+import {CATEGORY_SEQUENCE, categoryColor} from '$lib/theme/chartCategories';
+import {notifyChartColorsChange} from '$lib/theme/themeMode';
+import GrowthChart from './GrowthChart.svelte';
+
+/**
+ * An in-memory `localStorage`, the same shape as ExposureTable.test.ts.
+ *
+ * Without it the persistence cases would prove nothing. Node 26 leaves the global unusable
+ * unless the process runs with `--localstorage-file`, and `getUserStorage` swallows that and
+ * returns the default. The component reads the keys at mount, not at import, so installing
+ * the stub here, after the imports, is early enough.
+ *
+ * `storageWrites` is the call log. Part of the contract is WHEN a key is written (on a click,
+ * never on mount), and the final content cannot show that.
+ */
+const storage = new Map<string, string>();
+const storageWrites: Array<[key: string, value: string]> = [];
+vi.stubGlobal('localStorage', {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+        storageWrites.push([key, value]);
+        storage.set(key, value);
+    },
+    removeItem: (key: string) => void storage.delete(key),
+});
+
+/**
+ * The two keys, written out as the literals that live in users' browsers.
+ *
+ * They are deliberately NOT rebuilt through `getUserStorageKey()`. Dashboard and Broker detail
+ * share each key, and real browsers already hold values under it, so a rename would silently
+ * drop every saved preference. A test that derived the key from the same code would follow the
+ * rename and stay green. The scope is `anon` because jsdom has no logged-in user.
+ */
+const MODE_KEY = 'lf_anon_dashboard-growth-mode';
+const SUBMODE_KEY = 'lf_anon_dashboard-growth-pnl-submode';
+
+// =============================================================================
+// Fixtures
+// =============================================================================
+
+const DAY_COUNT = 40;
+/**
+ * The calendar period a day falls in on a rung of the candle-width ladder, as a key, by the suffix
+ * of the rung's test id (`growth-candle-width-1w` → `1w`).
+ *
+ * The ladder's buckets are calendar periods (developer's decision of 06/10/2026, which replaced
+ * D16-ii's plain day counts): `1w` an ISO week from Monday, `2w` a pair of weeks counted from
+ * Monday 1969-12-29, `3d` a run of three days counted from 1970-01-01, `1m`, `3m`, `6m` and `1y` a
+ * month, a quarter, a half and a year. Written here from that rule with the calendar's own fields
+ * (`getUTCDay`, `getUTCMonth`), never through the component's bucket module, so a count it gives
+ * is an independent oracle.
+ *
+ * The Income submode is driven by the ladder: a bar is a SUM over its bucket, not one day, so
+ * how many bars the 40 days make depends on the rung Income opens on. k4 G2 decides that rung:
+ * 1M, where it used to be 1W, the lowest rung offered (every entry into Income opens on 1M,
+ * clamped into the offered rungs — and jsdom reports no plot width, so every rung stays
+ * offered). The memo cases are not about that rule, so they count the bars of the rung ON
+ * SCREEN: they hold whichever rung Income opens on, and B12 (S7) pins the opening itself.
+ *
+ * Derived rather than written down: hard-coding 2 would pin one opening rule and say nothing
+ * about where the number came from, so a change of rule would leave a number that is wrong
+ * without being obviously wrong.
+ */
+function calendarPeriodKey(iso: string, rung: string): string {
+    const date = new Date(`${iso}T00:00:00Z`);
+    const day = date.getTime() / 86_400_000;
+    // Whole weeks from Monday 1969-12-29 (day -3) to the Monday of this day's week.
+    const week = (day - ((date.getUTCDay() + 6) % 7) + 3) / 7;
+    const year = date.getUTCFullYear();
+    const month0 = date.getUTCMonth();
+    const keys: Record<string, string> = {
+        '1d': iso,
+        '3d': `triple ${Math.floor(day / 3)}`,
+        '1w': `week ${week}`,
+        '2w': `pair ${Math.floor(week / 2)}`,
+        '1m': `${year} month ${month0}`,
+        '3m': `${year} quarter ${Math.floor(month0 / 3)}`,
+        '6m': `${year} half ${Math.floor(month0 / 6)}`,
+        '1y': `${year}`,
+    };
+    const key = keys[rung];
+    if (key === undefined) throw new Error(`${rung} is not a rung of the ladder`);
+    return key;
+}
+
+/** How many buckets the 40 days make at the rung pressed on screen: the calendar periods they touch. Fails unless exactly one rung of the ladder is pressed. */
+function bucketsAtPressedRung(): number {
+    const pressed = screen
+        .queryAllByTestId(/^growth-candle-width-/)
+        .filter((button) => button.getAttribute('aria-pressed') === 'true')
+        .map((button) => (button.getAttribute('data-testid') ?? '').replace('growth-candle-width-', ''));
+    expect(pressed, 'exactly one rung of the ladder is pressed').toHaveLength(1);
+    return new Set(DATES.map((date) => calendarPeriodKey(date, pressed[0]))).size;
+}
+
+const DATES: string[] = Array.from({length: DAY_COUNT}, (_, index) => new Date(Date.UTC(2026, 0, 1 + index)).toISOString().slice(0, 10));
+
+const eur = (amount: number) => ({code: 'EUR', amount: amount.toFixed(2)});
+
+/**
+ * ONE array instance, shared by every render in this file, and never rebuilt.
+ *
+ * This is load-bearing rather than tidy: `GrowthChart` clears `resolutionCache` exactly
+ * when `history !== lastHistoryRef`. Handing it a fresh array on the arrival step would
+ * reset the cache as a side effect, the stale entry would never be consulted, and the
+ * whole file would pass against the broken code while proving nothing.
+ */
+const HISTORY: PortfolioHistoryPoint[] = DATES.map((date, index) => ({
+    date,
+    cash_value: eur(1_000 + index),
+    market_value: eur(10_000 + index * 100),
+    nav_value: eur(11_000 + index * 100),
+    capital_baseline: eur(10_500),
+    book_asset_like: eur(9_000 + index * 50),
+    cash_from_contributed_capital: eur(800),
+    cash_from_generated_returns: eur(200 + index),
+    total_pnl: eur(500 + index * 100),
+    twrr: (index * 0.001).toFixed(6),
+    mwrr_cumulative: (index * 0.0012).toFixed(6),
+    roi: (index * 0.0009).toFixed(6),
+}));
+
+const PNL_CANDLES: PortfolioPnlCandleSeries = {
+    hypothetical: true,
+    points: DATES.map((date, index) => ({
+        date,
+        open: eur(500 + index * 100),
+        high: eur(560 + index * 100),
+        low: eur(480 + index * 100),
+        close: eur(540 + index * 100),
+    })),
+};
+
+const BROKER_NAMES = ['Lazy Broker A', 'Lazy Broker B'] as const;
+
+const BROKER_PNL_HISTORY: PortfolioBrokerPnlHistory[] = BROKER_NAMES.map((broker_name, brokerIndex) => ({
+    broker_id: brokerIndex + 1,
+    broker_name,
+    points: DATES.map((date, index) => ({date, total_pnl: eur(200 + brokerIndex * 100 + index * 10)})),
+}));
+
+const INCOME_HISTORY: PortfolioIncomeHistorySeries = {
+    points: DATES.map((date, index) => ({date, dividend: eur(12 + index), interest: eur(3 + index)})),
+    missing_fx_pairs: [],
+};
+
+const COST_HISTORY: PortfolioCostHistorySeries = {
+    points: DATES.map((date, index) => ({date, cost: eur(-(4 + index))})),
+    missing_fx_pairs: [],
+};
+
+const DEPOSIT_HISTORY: PortfolioDepositHistorySeries = {
+    points: DATES.map((date, index) => ({date, deposit: eur(150 + index)})),
+    missing_fx_pairs: [],
+};
+
+const ACQUISITION_FUNDING: PortfolioAcquisitionFundingSeries = {
+    points: DATES.map((date, index) => ({date, from_new_capital: eur(90 + index), from_reinvested: eur(45 + index)})),
+};
+
+/** HISTORY with every return value removed, which the % toggle reads as "no % data". A new
+ *  array is fine here, because no case that uses it depends on the memo's identity check. */
+const NO_PCT_HISTORY: PortfolioHistoryPoint[] = HISTORY.map((point) => ({...point, twrr: null, mwrr_cumulative: null, roi: null}));
+
+/** Passed explicitly as a prop: the currency code is a value this file supplies, not UI text. */
+const BASE_CURRENCY = 'EUR';
+
+/** Every data prop the candle-width ladder reads, for one period: the S7 cases mount them together. */
+interface LadderFixture {
+    history: PortfolioHistoryPoint[];
+    pnlCandles: PortfolioPnlCandleSeries;
+    incomeHistory: PortfolioIncomeHistorySeries;
+    costHistory: PortfolioCostHistorySeries;
+    depositHistory: PortfolioDepositHistorySeries;
+    acquisitionFunding: PortfolioAcquisitionFundingSeries;
+}
+
+/** `count` consecutive ISO days from a UTC date: WHY, the S7 closings are counted by hand on this calendar. */
+function isoDays(year: number, month0: number, day1: number, count: number): string[] {
+    return Array.from({length: count}, (_day, index) => new Date(Date.UTC(year, month0, day1 + index)).toISOString().slice(0, 10));
+}
+
+/** The 40-day fixtures' per-day formulas over another calendar. WHY: every sum an S7 case expects stays derivable by hand from them. */
+function buildLadderFixture(dates: string[]): LadderFixture {
+    return {
+        history: dates.map((date, index) => ({
+            date,
+            cash_value: eur(1_000 + index),
+            market_value: eur(10_000 + index * 100),
+            nav_value: eur(11_000 + index * 100),
+            capital_baseline: eur(10_500),
+            book_asset_like: eur(9_000 + index * 50),
+            cash_from_contributed_capital: eur(800),
+            cash_from_generated_returns: eur(200 + index),
+            total_pnl: eur(500 + index * 100),
+            twrr: (index * 0.001).toFixed(6),
+            mwrr_cumulative: (index * 0.0012).toFixed(6),
+            roi: (index * 0.0009).toFixed(6),
+        })),
+        pnlCandles: {
+            hypothetical: true,
+            points: dates.map((date, index) => ({date, open: eur(500 + index * 100), high: eur(560 + index * 100), low: eur(480 + index * 100), close: eur(540 + index * 100)})),
+        },
+        incomeHistory: {points: dates.map((date, index) => ({date, dividend: eur(12 + index), interest: eur(3 + index)})), missing_fx_pairs: []},
+        costHistory: {points: dates.map((date, index) => ({date, cost: eur(-(4 + index))})), missing_fx_pairs: []},
+        depositHistory: {points: dates.map((date, index) => ({date, deposit: eur(150 + index)})), missing_fx_pairs: []},
+        acquisitionFunding: {points: dates.map((date, index) => ({date, from_new_capital: eur(90 + index), from_reinvested: eur(45 + index)}))},
+    };
+}
+
+/**
+ * The S7 periods. Each is ONE shared instance, built once, for the reason the `HISTORY` docblock
+ * gives: `GrowthChart` resets its caches and its window exactly when `history !== lastHistoryRef`,
+ * so an accidental new array would be a trigger of its own.
+ *
+ * - 40 days (Thu 2026-01-01..Mon 02-09): the existing instances, reused as they are. 1W gives seven
+ *   calendar weeks: the week of Mon Dec 29, cut at Jan 1 (4 of 7 days), five whole ones, and the week
+ *   of Feb 9, one day in when read on Feb 9.
+ * - 730 days (2024-10-01..2026-09-30): long enough for a measured 527 px plot to drop the narrow
+ *   rungs, and for the 1M window [18..23] (April to September 2026) and its 2W and 3M counterparts.
+ * - 90 days (2026-01-01..03-31): three whole calendar months at 1M, no partial bucket.
+ * - 93 days (2026-01-01..04-03): four months at 1M, April covering 3 of 30 days — partial once April
+ *   is over, the month in progress before.
+ */
+const FIXTURE_40: LadderFixture = {history: HISTORY, pnlCandles: PNL_CANDLES, incomeHistory: INCOME_HISTORY, costHistory: COST_HISTORY, depositHistory: DEPOSIT_HISTORY, acquisitionFunding: ACQUISITION_FUNDING};
+const FIXTURE_730 = buildLadderFixture(isoDays(2024, 9, 1, 730));
+const FIXTURE_90 = buildLadderFixture(isoDays(2026, 0, 1, 90));
+const FIXTURE_93 = buildLadderFixture(isoDays(2026, 0, 1, 93));
+
+/** The props of one mount on `fixture`. WHY: the currency is a value this file supplies, never left to a default. */
+const ladderProps = (fixture: LadderFixture) => ({...fixture, baseCurrency: BASE_CURRENCY});
+
+/**
+ * Three days for the privacy cases.
+ *
+ * Every amount has two decimals, and none of them could appear inside a date header
+ * (`2026-01-01`), so the header can neither satisfy nor defeat a check that a formatted amount
+ * is ABSENT. Day 0 is a gain and day 1 a loss, so the P&L-total row carries a sign on both
+ * sides of zero. Day 0's NAV, 1234.56, needs both a grouping separator and two decimals. The
+ * figures agree with each other (NAV = cash + market value, cash = the two pools,
+ * P&L = NAV − baseline), so no amount looks like a special case.
+ */
+const MONEY_HISTORY: PortfolioHistoryPoint[] = [
+    {date: DATES[0], cash_value: eur(358.02), market_value: eur(876.54), nav_value: eur(1_234.56), capital_baseline: eur(1_000.25), book_asset_like: eur(876.54), cash_from_contributed_capital: eur(210.87), cash_from_generated_returns: eur(147.15), total_pnl: eur(234.31)},
+    {date: DATES[1], cash_value: eur(346.91), market_value: eur(1_998.76), nav_value: eur(2_345.67), capital_baseline: eur(3_702.91), book_asset_like: eur(1_998.76), cash_from_contributed_capital: eur(246.8), cash_from_generated_returns: eur(100.11), total_pnl: eur(-1_357.24)},
+    {date: DATES[2], cash_value: eur(412.33), market_value: eur(2_087.45), nav_value: eur(2_499.78), capital_baseline: eur(3_702.91), book_asset_like: eur(2_087.45), cash_from_contributed_capital: eur(246.8), cash_from_generated_returns: eur(165.53), total_pnl: eur(-1_203.13)},
+];
+
+/**
+ * Candles for the same three days. Day 1 opens and peaks above zero, then closes and bottoms
+ * below it.
+ *
+ * Day 0 opens at `-0.00`. That is a real serialisation: a Decimal that rounds a tiny loss to
+ * zero keeps its sign. It is written as a literal because `eur(-0)` would print `'0.00'`
+ * (`toFixed` drops the sign of a negative zero).
+ */
+const MONEY_CANDLES: PortfolioPnlCandleSeries = {
+    hypothetical: true,
+    points: [
+        {date: DATES[0], open: {code: 'EUR', amount: '-0.00'}, high: eur(250.75), low: eur(-10.5), close: eur(234.31)},
+        {date: DATES[1], open: eur(123.45), high: eur(234.56), low: eur(-98.76), close: eur(-12.34)},
+        {date: DATES[2], open: eur(-12.34), high: eur(60.02), low: eur(-20.48), close: eur(56.78)},
+    ],
+};
+
+/** One broker point per day, point `i` on day `i`, so a tooltip reads a broker by the day's index. */
+const brokerPoints = (totals: Array<{code: string; amount: string}>) => totals.map((total_pnl, index) => ({date: DATES[index], total_pnl}));
+
+/**
+ * Two brokers under the same three days: the overlay needs at least two. Their P&L adds up to the
+ * portfolio's on every day, and between them they carry every sign a signed row can print. Broker A
+ * gains on days 0 and 2 and sits at `-0.00` on day 1, the same real serialisation as the candle's
+ * open. Broker B loses on every day.
+ */
+const MONEY_BROKER_PNL: PortfolioBrokerPnlHistory[] = [
+    {broker_id: 11, broker_name: 'Money Broker A', points: brokerPoints([eur(312.5), {code: 'EUR', amount: '-0.00'}, eur(45.67)])},
+    {broker_id: 12, broker_name: 'Money Broker B', points: brokerPoints([eur(-78.19), eur(-1_357.24), eur(-1_248.8)])},
+];
+
+/** Their names, in overlay order: values this file supplies, not UI text. */
+const MONEY_BROKER_NAMES = MONEY_BROKER_PNL.map((broker) => broker.broker_name);
+
+/**
+ * The Income submode's flows over the same three days. Its floor is a week, so the three days are
+ * ONE bar, and every row it prints is a sum.
+ *
+ * Between them the rows print every outcome of a signed amount: gains (dividend, deposit, new
+ * capital), a loss (a fee on day 1), an exact zero (nothing reinvested, printed because new capital
+ * was), and a zero that exists only after rounding. Interest is 0.10 + 0.20 − 0.30, which binary
+ * floating point sums to 5.55e-17, not 0: a sign decided on the raw value would print it `+0.00`.
+ */
+const MONEY_INCOME: PortfolioIncomeHistorySeries = {
+    points: [
+        {date: DATES[0], dividend: eur(12.34), interest: eur(0.1)},
+        {date: DATES[1], dividend: eur(0), interest: eur(0.2)},
+        {date: DATES[2], dividend: eur(5), interest: eur(-0.3)},
+    ],
+    missing_fx_pairs: [],
+};
+const MONEY_COSTS: PortfolioCostHistorySeries = {points: [{date: DATES[1], cost: eur(-4.56)}], missing_fx_pairs: []};
+const MONEY_DEPOSITS: PortfolioDepositHistorySeries = {points: [{date: DATES[2], deposit: eur(150)}], missing_fx_pairs: []};
+const MONEY_ACQUISITION: PortfolioAcquisitionFundingSeries = {points: [{date: DATES[0], from_new_capital: eur(90), from_reinvested: eur(0)}]};
+
+// =============================================================================
+// Reading what GrowthChart decided to draw
+// =============================================================================
+
+interface SeriesUpdate {
+    name: string;
+    data: unknown[];
+}
+
+/** The series array of the most recent `setOption` that carried one — the full rebuild
+ *  on a mode switch and the partial `{name, data}` update on a data change both do. */
+function renderedSeries(): SeriesUpdate[] {
+    expect(chartInstances).toHaveLength(1);
+    const call = [...chartInstances[0].setOptionCalls].reverse().find((entry) => Array.isArray(entry.option.series));
+    if (!call) throw new Error('GrowthChart never handed a series array to ECharts');
+    return call.option.series as SeriesUpdate[];
+}
+
+function setOptionCount(): number {
+    expect(chartInstances).toHaveLength(1);
+    return chartInstances[0].setOptionCalls.length;
+}
+
+/**
+ * The number a line/bar datum carries. On the time axis a datum is a `SeriesPoint`,
+ * `{value: [date, number | null], …}`. WHY widened (S7): on the ladder's category axis it may be
+ * a plain number, `[date, n]` or `{value: n, …}`, and the cases read the value, not the shape, so
+ * one reader serves the code before and after the fix.
+ */
+function pointValue(datum: unknown): number | null {
+    if (typeof datum === 'number') return datum;
+    if (Array.isArray(datum)) return datum.length === 2 ? ((datum[1] as number | null) ?? null) : null;
+    if (datum == null || typeof datum !== 'object') return null;
+    const value = (datum as {value?: unknown}).value;
+    if (typeof value === 'number') return value;
+    return Array.isArray(value) ? ((value[1] as number | null) ?? null) : null;
+}
+
+function nonNullPoints(series: SeriesUpdate | undefined): number {
+    return (series?.data ?? []).filter((datum) => pointValue(datum) != null).length;
+}
+
+/** For the sparse flow dimensions (income, costs, deposits, acquisition) a date with no
+ *  data is rendered as 0 — that 0 is this family's gap sentinel, so "arrived" means
+ *  "carries a value that is neither null nor 0". */
+function nonZeroPoints(series: SeriesUpdate | undefined): number {
+    return (series?.data ?? []).filter((datum) => {
+        const value = pointValue(datum);
+        return value != null && value !== 0;
+    }).length;
+}
+
+/**
+ * A candle's `[open, close, low, high]` quad, or null. WHY: today a candle is a flat quad; the S7
+ * fix may wrap it as `{value: quad, itemStyle}` to mark a partial bucket, and the cases read the
+ * quad, not the wrapper.
+ */
+function quadOf(datum: unknown): number[] | null {
+    const raw = Array.isArray(datum) ? datum : datum != null && typeof datum === 'object' ? (datum as {value?: unknown}).value : undefined;
+    return Array.isArray(raw) && raw.length === 4 && raw.every((component) => typeof component === 'number' && Number.isFinite(component)) ? (raw as number[]) : null;
+}
+
+/** A candlestick datum is either a real `[open, close, low, high]` quad (flat, or wrapped in
+ *  `{value}`) or ECharts' `'-'` empty-value sentinel, which is exactly what the stale entry was
+ *  full of. */
+function realCandleQuads(series: SeriesUpdate | undefined): number {
+    return (series?.data ?? []).filter((datum) => quadOf(datum) != null).length;
+}
+
+function brokerSeries(series: SeriesUpdate[]): SeriesUpdate[] {
+    return series.filter((entry) => (BROKER_NAMES as readonly string[]).includes(entry.name));
+}
+
+// =============================================================================
+// Reading the full option: the formatters, and what they print
+// =============================================================================
+
+/** ECharts calls an axis label formatter as `formatter(value, index)`, index 0 the lowest tick (k4 G1); most cases pass the value alone, as before. */
+type AxisFormatter = (value: number, index?: number) => string;
+type TooltipFormatter = (params: Array<{dataIndex: number}>) => string;
+
+/**
+ * The part of a full rebuild that the privacy, persistence, caption and axis cases read. `min`
+ * stays `unknown`: it is a callback in most views and an explicit `undefined` in Income (D25),
+ * so a case proves which before it calls it.
+ */
+interface FullOption {
+    yAxis: {min?: unknown; axisLabel: {formatter: AxisFormatter; showMinLabel?: boolean}};
+    tooltip: {formatter: TooltipFormatter};
+    series: Array<{type?: string; name?: string}>;
+}
+
+/**
+ * The full rebuilds recorded from call `since` onwards.
+ *
+ * `applyFullOption` issues the only `setOption` that carries both `yAxis` and `tooltip`. The
+ * partial data update sends `{name, data}` series, and the resize path sends `xAxis` alone.
+ * The full rebuild is also where the formatters live. Read them from the call log, never from
+ * `getOption()`: the fake merges shallowly, so the merged view cannot tell which call installed
+ * what.
+ */
+function fullOptionsSince(since: number): FullOption[] {
+    expect(chartInstances).toHaveLength(1);
+    return chartInstances[0].setOptionCalls
+        .slice(since)
+        .map((call) => call.option)
+        .filter((option) => option.yAxis != null && option.tooltip != null) as unknown as FullOption[];
+}
+
+function latestFullOption(): FullOption {
+    const options = fullOptionsSince(0);
+    if (options.length === 0) throw new Error('GrowthChart never handed a full option to ECharts');
+    return options[options.length - 1];
+}
+
+function seriesTypes(option: FullOption): Array<string | undefined> {
+    return option.series.map((entry) => entry.type);
+}
+
+/**
+ * What each view draws on a full rebuild, listed by series type. The shape tells the views
+ * apart without reading a translated series name. The P&L line here is its three fixed slots,
+ * with no broker overlay; with one, wait through `waitForPnlLineWithBrokers` instead.
+ */
+const FRAME = {
+    abs: ['line', 'line', 'line', 'line', 'line'],
+    pnlLine: ['line', 'line', 'line'],
+    candles: ['candlestick'],
+    income: ['bar', 'bar', 'bar', 'bar', 'bar', 'bar'],
+};
+
+/** Waits until the latest full rebuild draws `frame`, and returns it. */
+async function waitForFrame(frame: string[]): Promise<FullOption> {
+    await waitFor(() => expect(seriesTypes(latestFullOption())).toEqual(frame), {timeout: 5_000});
+    return latestFullOption();
+}
+
+/** Waits for a full rebuild recorded after call `since`, and returns the latest one. */
+async function fullOptionAfter(since: number): Promise<FullOption> {
+    await waitFor(() => expect(fullOptionsSince(since).length).toBeGreaterThan(0), {timeout: 5_000});
+    const options = fullOptionsSince(since);
+    return options[options.length - 1];
+}
+
+/**
+ * Waits for the P&L line with its broker overlay, and returns it.
+ *
+ * The overlay appends one line per broker after the three fixed slots, so two brokers make five
+ * lines: the Abs frame too. The broker names, which this file supplies, tell the two apart.
+ */
+async function waitForPnlLineWithBrokers(names: readonly string[]): Promise<FullOption> {
+    const frame = [...FRAME.pnlLine, ...names.map(() => 'line')];
+    await waitFor(
+        () => {
+            const option = latestFullOption();
+            expect(seriesTypes(option)).toEqual(frame);
+            expect(option.series.slice(FRAME.pnlLine.length).map((entry) => entry.name)).toEqual(names);
+        },
+        {timeout: 5_000},
+    );
+    return latestFullOption();
+}
+
+interface AmountFormat {
+    /** As `fmtCurrency(v, true)`: `+` on a gain, and no sign on anything that rounds to zero. */
+    signed?: boolean;
+    /** An explicit locale. `undefined` is the interface locale (M-18), as it is for the component. */
+    locale?: string;
+}
+
+/**
+ * The tooltip's number format, produced by the same call `fmtCurrency` makes. The expected string
+ * therefore follows the locale instead of hard-coding one, sign included: the sign is whatever
+ * that locale writes. A negative zero prints as zero, which is the contract, not a detail of the
+ * call. Without a locale, the interface locale, read when the expectation is built.
+ */
+const formatAmount = (value: number, {signed = false, locale}: AmountFormat = {}) => (value === 0 ? 0 : value).toLocaleString(locale ?? uiLocale(), {minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: signed ? 'exceptZero' : 'auto'});
+
+/** A sign at the start of a formatted number, bidi marks included: the part `maskFormattedNumber` keeps outside the mask. */
+const LEADING_SIGN = /^[\p{Cf}+\-\u2212]*/u;
+const leadingSign = (formatted: string) => LEADING_SIGN.exec(formatted)?.[0] ?? '';
+
+/** What one tooltip amount prints: the currency, then the number. With privacy on only the digits
+ *  go; the currency and the sign stay readable (D8). */
+function expectedAmount(value: number, {masked = false, ...format}: AmountFormat & {masked?: boolean} = {}): string {
+    const formatted = formatAmount(value, format);
+    return `${BASE_CURRENCY} ${masked ? `${leadingSign(formatted)}${PRIVACY_PLACEHOLDER}` : formatted}`;
+}
+
+/** A locale whose minus is U+2212 MINUS SIGN, where the four interface languages write a hyphen. */
+const SWEDISH = 'sv-SE';
+
+/**
+ * Draws the next mount in `locale`, forced as the interface locale (M-18): call it BEFORE the mount,
+ * so the chart is drawn in it whether it reads the source when it builds the option or when ECharts
+ * calls a formatter. `undefined` gives the real source back; the file-level `afterEach` does so too.
+ *
+ * WHY it replaced the old `inLocale`, a spy on `Number.prototype.toLocaleString`: that forced the
+ * browser's default locale, which no figure reads any more. The one source every figure reads is
+ * the interface locale, so that is where a locale the four UI languages do not write is forced.
+ */
+function forceInterfaceLocale(locale: string | undefined): void {
+    interfaceLocale.forced = locale;
+}
+
+/**
+ * The number a money axis label prints before its k/M suffix, from the same call the axis
+ * formatter makes on the SCALED value: -5000 prints as `-5`, then `k` (S7b). A negative zero
+ * prints as zero, which is the contract, not a detail of the call. The expected sign of an axis
+ * label comes from here, never from a literal (D23). `locale` defaults to the interface locale.
+ */
+const axisNumber = (scaled: number, locale = uiLocale()) => (scaled === 0 ? 0 : scaled).toLocaleString(locale, {maximumSignificantDigits: 15});
+
+interface TooltipRow {
+    label: string;
+    value: string;
+}
+
+/** Text as a user reads it from HTML the component builds with raw `$_()` output (row labels, headers):
+ *  an expected label goes through the same parser as the tooltip it is compared with. A translation the
+ *  component escapes, such as the partial-bucket line, reads as written instead. */
+function htmlText(html: string): string {
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    return host.textContent ?? '';
+}
+
+/**
+ * A calendar day as a tooltip header writes it in `localeTag` (plan 52, C2): short month, numeric day and year,
+ * read at LOCAL midnight the way the app reads a calendar day. WHY test-side: an expected date never comes from
+ * the formatter under test, so a wrong option or a wrong locale in the product cannot also be in the oracle.
+ */
+function dayIn(iso: string, localeTag: string): string {
+    const [year, month, date] = iso.split('-').map(Number);
+    return new Date(year, month - 1, date).toLocaleDateString(localeTag, {year: 'numeric', month: 'short', day: 'numeric'});
+}
+
+/** A calendar day in the interface locale the chart is drawn in. WHY: the header follows the interface language, never the browser's. */
+const uiDay = (iso: string) => dayIn(iso, uiLocale());
+
+/**
+ * The label/value rows of a tooltip, as elements.
+ *
+ * Every amount row GrowthChart emits has the shape `<div><span>label</span><b>value</b></div>`,
+ * whether it comes from `buildTooltipRow` or from the inline P&L rows. The header, the formula
+ * hint and the dividers do not have that shape. Parsing rows instead of matching substrings
+ * stops a check on one row from being satisfied by another.
+ */
+function tooltipRowElements(html: string): Array<{label: Element; value: HTMLElement}> {
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    return Array.from(host.children).flatMap((row) => {
+        const [label, value] = Array.from(row.children);
+        return row.children.length === 2 && label.tagName === 'SPAN' && value instanceof HTMLElement && value.tagName === 'B' ? [{label, value}] : [];
+    });
+}
+
+/** The label/value rows of a tooltip, as the user reads them. */
+function tooltipRows(html: string): TooltipRow[] {
+    return tooltipRowElements(html).map(({label, value}) => ({label: label.textContent ?? '', value: value.textContent ?? ''}));
+}
+
+/**
+ * The label of one half of the Income purchase value, as the user reads it: `↳ `, then the key's
+ * text (S8, R11). WHY a helper: the halves are indented under the purchase value, so their row
+ * no longer reads as their key alone, and every case must build that label the same way.
+ */
+const subRowLabel = (labelKey: string) => htmlText(`↳ ${get(_)(labelKey)}`);
+
+/**
+ * The value of the one row labelled by `labelKey`, with the label resolved through i18n as the
+ * component resolves it. `readAs` builds a label that is more than the key's text, such as
+ * `subRowLabel` (S8).
+ */
+function rowValue(rows: TooltipRow[], labelKey: string, readAs: (key: string) => string = (key) => htmlText(get(_)(key))): string {
+    const label = readAs(labelKey);
+    const matching = rows.filter((row) => row.label === label);
+    expect(matching, `exactly one tooltip row labelled ${labelKey}`).toHaveLength(1);
+    return matching[0].value;
+}
+
+/** The Abs tooltip rows that print a bare amount, by label key. The P&L-total row also
+ *  carries a sign, so it is checked separately. */
+const ABS_PLAIN_ROWS = ['dashboard.navValue', 'dashboard.capitalBaselineTooltip', 'dashboard.assetsAtCostTooltip', 'dashboard.cashFromGeneratedReturns', 'dashboard.cashFromContributedCapital'];
+
+/** Every amount the Abs tooltip prints for a day, parsed as the component parses it. */
+const absAmounts = (point: PortfolioHistoryPoint) => [point.nav_value, point.capital_baseline, point.total_pnl, point.book_asset_like, point.cash_from_generated_returns, point.cash_from_contributed_capital].map((money) => Number(money.amount));
+
+/** Every amount the candle tooltip prints for a bucket. */
+const candleAmounts = (point: PortfolioPnlCandlePoint) => [point.open, point.close, point.high, point.low].map((money) => Number(money.amount));
+
+const MODE_TOGGLES = ['growth-toggle-eur', 'growth-toggle-pct', 'growth-toggle-pnl'];
+const SUBMODE_TOGGLES = ['growth-pnl-submode-line', 'growth-pnl-submode-candles', 'growth-pnl-submode-income'];
+
+/** Which buttons of a segmented toggle are pressed. Read from `aria-pressed` (the state a
+ *  screen reader announces), never from the active colour class. Returning a list instead of
+ *  a boolean makes "exactly this one" a single assertion. */
+function pressedAmong(testIds: string[]): string[] {
+    return testIds.filter((id) => screen.getByTestId(id).getAttribute('aria-pressed') === 'true');
+}
+
+/** The writes made to the two persisted keys, in order. */
+function persistedWrites(): Array<[string, string]> {
+    return storageWrites.filter(([key]) => key === MODE_KEY || key === SUBMODE_KEY);
+}
+
+// =============================================================================
+// The class of lazily-arriving inputs
+// =============================================================================
+
+interface LazyInputCase {
+    /** The prop, named as the component declares it. */
+    prop: string;
+    /** The P&L submode that renders this input. */
+    submode: 'line' | 'candles' | 'income';
+    /** Series count in that submode while the input is still absent — the presence
+     *  barrier that makes the "0 real values" assertion mean something. */
+    seriesWhileAbsent: number;
+    /** The props update that delivers the input. */
+    arrival: Record<string, unknown>;
+    /** How many real (non-sentinel) values the input should put on the chart, given the Income buckets on screen (the other submodes ignore them). */
+    expectedRealValues: (incomeBuckets: number) => number;
+    /** Reads that count out of the rendered series. */
+    countRealValues: (series: SeriesUpdate[]) => number;
+}
+
+const LAZY_INPUTS: LazyInputCase[] = [
+    {
+        prop: 'pnlCandles',
+        submode: 'candles',
+        // Candlestick only: the broker overlay needs >= 2 brokers, and this case has none.
+        seriesWhileAbsent: 1,
+        arrival: {pnlCandles: PNL_CANDLES},
+        // One candle per day: Candles open on their lowest rung, 1D (B12).
+        expectedRealValues: () => DAY_COUNT,
+        countRealValues: (series) => realCandleQuads(series[0]),
+    },
+    {
+        prop: 'brokerPnlHistory',
+        submode: 'line',
+        // Fixed slots: total-positive, total-negative, dashed reference. Broker lines are
+        // appended after them, so while the prop is absent there are exactly three.
+        seriesWhileAbsent: 3,
+        arrival: {brokerPnlHistory: BROKER_PNL_HISTORY},
+        expectedRealValues: () => 2 * DAY_COUNT,
+        countRealValues: (series) => brokerSeries(series).reduce((total, entry) => total + nonNullPoints(entry), 0),
+    },
+    {
+        prop: 'incomeHistory',
+        submode: 'income',
+        seriesWhileAbsent: 6,
+        arrival: {incomeHistory: INCOME_HISTORY},
+        // Two series (dividend, interest), each one bar per bucket.
+        expectedRealValues: (buckets) => 2 * buckets,
+        // Slots 0 and 1 of the income submode's fixed 6-slot order: dividend, interest.
+        countRealValues: (series) => nonZeroPoints(series[0]) + nonZeroPoints(series[1]),
+    },
+    {
+        prop: 'costHistory',
+        submode: 'income',
+        seriesWhileAbsent: 6,
+        arrival: {costHistory: COST_HISTORY},
+        expectedRealValues: (buckets) => buckets,
+        // Slot 2: costs (FEE+TAX, signed negative).
+        countRealValues: (series) => nonZeroPoints(series[2]),
+    },
+    {
+        prop: 'depositHistory',
+        submode: 'income',
+        seriesWhileAbsent: 6,
+        arrival: {depositHistory: DEPOSIT_HISTORY},
+        expectedRealValues: (buckets) => buckets,
+        // Slot 3: deposit size.
+        countRealValues: (series) => nonZeroPoints(series[3]),
+    },
+    {
+        prop: 'acquisitionFunding',
+        submode: 'income',
+        seriesWhileAbsent: 6,
+        arrival: {acquisitionFunding: ACQUISITION_FUNDING},
+        // Two series (new capital, reinvested), each one bar per bucket.
+        expectedRealValues: (buckets) => 2 * buckets,
+        // Slots 4 and 5: the new-capital / reinvested funding split.
+        countRealValues: (series) => nonZeroPoints(series[4]) + nonZeroPoints(series[5]),
+    },
+];
+
+// =============================================================================
+
+beforeAll(async () => {
+    await setupI18n();
+});
+
+beforeEach(() => {
+    chartInstances.length = 0;
+    measuredFonts.length = 0;
+    // Every mount starts from the defaults by construction. The memo cases click the toggles
+    // too, and every click is now a real write.
+    storage.clear();
+    storageWrites.length = 0;
+});
+
+afterEach(() => {
+    // WHY: the measured grid and its width are opt-in per case (S7), and a case that installed fake
+    // timers or pinned the day, and failed before its own `finally`, must not hand them to the next one.
+    fakeGeometry.measured = false;
+    fakeGeometry.plotWidthPx = DEFAULT_PLOT_WIDTH_PX;
+    vi.useRealTimers();
+    // A forced interface locale is module state too (M-18): whatever case forced it, it ends with that case.
+    forceInterfaceLocale(undefined);
+});
+
+describe('GrowthChart aggregation memo', () => {
+    it.each(LAZY_INPUTS)('rebuilds the P&L $submode aggregation when $prop arrives after the memo was populated without it', async ({prop, submode, seriesWhileAbsent, arrival, expectedRealValues, countRealValues}) => {
+        const onRequestPnlCandles = vi.fn();
+        const {getByTestId, rerender} = render(GrowthChart, {
+            props: {history: HISTORY, onRequestPnlCandles},
+        });
+
+        // 1. Mounted with the lazily-arriving input ABSENT. The first render already
+        //    memoises the 'daily' entry — the poisoning happens before any interaction.
+        await waitFor(() => expect(chartInstances).toHaveLength(1), {timeout: 5_000});
+
+        // 2. Enter the submode that reads this input, and let the memo answer there too.
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await fireEvent.click(getByTestId(`growth-pnl-submode-${submode}`));
+        await waitFor(() => expect(renderedSeries()).toHaveLength(seriesWhileAbsent), {timeout: 5_000});
+
+        //    The series exist and are empty of real values: a negative assertion with the
+        //    positive one standing in front of it, so "absent" can never be read off a
+        //    chart that simply had not rendered yet.
+        expect(countRealValues(renderedSeries())).toBe(0);
+
+        // 3. The fetch lands. Sample the render counter BEFORE delivering it, so the
+        //    barrier below proves a render happened AFTER the arrival, not merely that
+        //    some render happened at some point.
+        const rendersBeforeArrival = setOptionCount();
+        await rerender(arrival);
+        await waitFor(() => expect(setOptionCount()).toBeGreaterThan(rendersBeforeArrival), {timeout: 5_000});
+
+        // 4. The aggregation must now carry the data that arrived — not the entry cached
+        //    while it did not exist. In Income, one value per bar of the rung on screen, and
+        //    every series draws exactly those bars.
+        const incomeBuckets = submode === 'income' ? bucketsAtPressedRung() : 0;
+        if (submode === 'income') expect(renderedSeries().map((entry) => entry.data.length)).toEqual(renderedSeries().map(() => incomeBuckets));
+        expect(countRealValues(renderedSeries())).toBe(expectedRealValues(incomeBuckets));
+
+        // The lazy-fetch callback is part of the candles contract: activating the submode
+        // with no data must ask for it exactly once, which is also what makes step 2 above
+        // a faithful reproduction of the user's path into the bug.
+        if (prop === 'pnlCandles') expect(onRequestPnlCandles).toHaveBeenCalled();
+    });
+});
+
+// =============================================================================
+// S2a — privacy masking of the axis and tooltip formatters
+// =============================================================================
+
+/**
+ * The formatters are closures inside the option builder. The only way to reach them is
+ * through the option GrowthChart hands to ECharts, and that is also exactly what ECharts calls
+ * when it paints an axis label or a tooltip.
+ *
+ * They read the privacy flag when CALLED, not when built. So "this formatter masks" does not
+ * show that the chart redraws on a toggle. The toggle case checks instead that a NEW full
+ * option arrives, because ECharts only re-runs a formatter when it is handed an option.
+ */
+describe('GrowthChart privacy masking (S2a)', () => {
+    // The flag is module state shared by every case in the file. Whoever switches it on
+    // switches it off, whatever the outcome of the case.
+    afterEach(() => setPrivacyEnabled(false));
+
+    const MASKED_AMOUNT = `${BASE_CURRENCY} ${PRIVACY_PLACEHOLDER}`;
+    /** A masked loss on an unsigned row: the currency, the locale's minus, the mask. The minus
+     *  comes from the same call the component makes, never from a literal (D23). */
+    const MASKED_NEGATIVE = expectedAmount(-1, {masked: true});
+
+    /**
+     * What every money axis label must print with privacy on: the mask, and on a loss the
+     * interface locale's minus kept outside it (D8, D23). The minus comes from the same call the
+     * axis formatter makes. Under sv-SE it is the glyph D23 is about, so the case pins it as a
+     * literal.
+     */
+    function expectMaskedMoneyAxis(format: AxisFormatter, minus: string) {
+        const values = [20_000, -5_000, 0];
+        const labels = values.map((value) => format(value));
+        expect(labels).toEqual([PRIVACY_PLACEHOLDER, `${minus}${PRIVACY_PLACEHOLDER}`, PRIVACY_PLACEHOLDER]);
+        // The property itself, whatever the placeholder looks like: no digit and no k/M
+        // suffix, because `•••k` would still reveal the order of magnitude (D8).
+        for (const label of labels) expect(label).not.toMatch(/[0-9kM]/);
+    }
+
+    /** The interface locales a masked axis is read in: the real one, and sv-SE forced, whose minus is U+2212. Titles stay under Vitest's 40-character cut. */
+    const AXIS_LOCALES = [
+        {title: 'interface locale, en-US here', forced: undefined, minus: undefined},
+        {title: 'sv-SE forced, U+2212', forced: SWEDISH, minus: '\u2212'},
+    ];
+
+    it.each(AXIS_LOCALES)("masks the money axis labels in Abs and P&L line: no digit, no k/M suffix, the locale's minus kept outside — $title", async ({forced, minus}) => {
+        // WHY: with privacy on, the axis ticks are the one place a masked chart would still
+        // print the scale of the portfolio (20k, 1.3M). Catches the mask dropped from the
+        // compact label, or the suffix moving outside it (`mask(n) + 'k'`). Catches too a minus
+        // written by hand in front of the mask instead of the locale's own (D23): the four
+        // interface languages write a hyphen, so only sv-SE as the interface locale tells them apart.
+        // Why (re-pin, M-18 CP2): sv-SE used to be forced by patching the browser's default locale
+        // around the read; the chart now writes in the interface locale, so sv-SE is forced through
+        // that source, before the mount.
+        forceInterfaceLocale(forced);
+        // Preconditions: the interface locale writes a minus on a loss, so the masked loss is about
+        // one; forced, this Node has Swedish locale data and writes U+2212 there, so the locale
+        // cannot fall back to a hyphen in silence.
+        const localeMinus = leadingSign(axisNumber(-5));
+        expect(localeMinus).toMatch(/[-\u2212]/);
+        if (minus !== undefined) expect(localeMinus).toBe(minus);
+        setPrivacyEnabled(true);
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+
+        const absOption = await waitForFrame(FRAME.abs);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+        expectMaskedMoneyAxis(absOption.yAxis.axisLabel.formatter, localeMinus);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        const pnlOption = await waitForFrame(FRAME.pnlLine);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pnl']);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        expectMaskedMoneyAxis(pnlOption.yAxis.axisLabel.formatter, localeMinus);
+    });
+
+    it('leaves the % axis labels readable: a return is not an amount', async () => {
+        // WHY: over-masking is also a defect. A masked return axis would make the % view
+        // useless under privacy without hiding anything personal. Catches `maskable`
+        // wrapped around the % branch of the axis formatter.
+        setPrivacyEnabled(true);
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+
+        // Barrier: privacy really is on in this render, because the money axis is masked.
+        const absOption = await waitForFrame(FRAME.abs);
+        expect(absOption.yAxis.axisLabel.formatter(20_000)).toBe(PRIVACY_PLACEHOLDER);
+
+        // Precondition: HISTORY carries return series, so the % view can be reached.
+        expect(getByTestId('growth-toggle-pct')).toBeEnabled();
+        const before = setOptionCount();
+        await fireEvent.click(getByTestId('growth-toggle-pct'));
+        const pctOption = await fullOptionAfter(before);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+
+        // Why (re-pin, M-18 CP2): the % label is no longer `toFixed`'s; it follows the interface
+        // locale like every figure. In en-US, the interface locale here, it reads as it always did.
+        expect(pctOption.yAxis.axisLabel.formatter(12.3)).toBe('12.3%');
+    });
+
+    it('masks every tooltip amount in the Abs, P&L-total and candle rows, keeping the currency and the sign readable', async () => {
+        // WHY: the tooltip is where the exact figures are shown. Catches `maskable` dropped
+        // from `fmtCurrency`, and any row that formats an amount by another route. The
+        // P&L-total row builds its own markup around `fmtCurrency`, which is why it is
+        // checked on its own. Decision D8 keeps the sign outside the mask, so the sign is
+        // asserted here, not merely tolerated: a mask that swallowed it fails here.
+        setPrivacyEnabled(true);
+        const {getByTestId} = render(GrowthChart, {props: {history: MONEY_HISTORY, pnlCandles: MONEY_CANDLES, baseCurrency: BASE_CURRENCY}});
+
+        const absOption = await waitForFrame(FRAME.abs);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+        // Day 0 is a gain and day 1 a loss. The P&L-total row prints the currency, then the sign,
+        // then the mask: `EUR +•••` and `EUR -•••` (D23b). The minus is the locale's (D23), so the
+        // sign is taken from the same call the component makes: a literal would pin one locale's
+        // glyph. A sign printed before the currency, the old `+EUR •••`, fails here.
+        for (const index of [0, 1]) {
+            const sign = leadingSign(formatAmount(Number(MONEY_HISTORY[index].total_pnl.amount), {signed: true}));
+            // Precondition: the day carries a sign, so the check below is about one.
+            expect(sign, `day ${index} is a gain or a loss`).not.toBe('');
+            const html = absOption.tooltip.formatter([{dataIndex: index}]);
+            const rows = tooltipRows(html);
+            expect(rowValue(rows, 'dashboard.totalPnl')).toBe(`${BASE_CURRENCY} ${sign}${PRIVACY_PLACEHOLDER}`);
+            for (const key of ABS_PLAIN_ROWS) expect(rowValue(rows, key), key).toBe(MASKED_AMOUNT);
+            // The check cannot be "no digit at all": the date header legitimately has digits.
+            for (const amount of absAmounts(MONEY_HISTORY[index])) expect(html).not.toContain(formatAmount(Math.abs(amount)));
+        }
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        const candleOption = await waitForFrame(FRAME.candles);
+        const html = candleOption.tooltip.formatter([{dataIndex: 1}]);
+        const rows = tooltipRows(html);
+        // Precondition: the locale writes a sign on a loss, so a masked loss is not a masked gain.
+        expect(MASKED_NEGATIVE).not.toBe(MASKED_AMOUNT);
+        expect(rowValue(rows, 'dataEditor.col.open')).toBe(MASKED_AMOUNT);
+        expect(rowValue(rows, 'dataEditor.col.high')).toBe(MASKED_AMOUNT);
+        expect(rowValue(rows, 'dataEditor.col.close')).toBe(MASKED_NEGATIVE);
+        expect(rowValue(rows, 'dataEditor.col.low')).toBe(MASKED_NEGATIVE);
+        for (const amount of candleAmounts(MONEY_CANDLES.points[1])) expect(html).not.toContain(formatAmount(Math.abs(amount)));
+    });
+
+    it('with privacy off, prints the amounts as before: compact axis, locale tooltip, no minus on a negative zero', async () => {
+        // WHY: masking must be a pure overlay. With the flag off, not one character of
+        // today's output may change. Catches a masking change that leaks into the OFF path:
+        // a different sign test (`Object.is(v, -0)`, `1 / v < 0`) that prints `-0`, a changed
+        // compaction step, or changed `toLocaleString` options. The signed P&L total is pinned
+        // in its one form, `EUR +234.31` / `EUR -1,357.24` (D23b), so a sign written by hand
+        // again in front of the currency (`+EUR 234.31`) fails here too.
+        expect(isPrivacyEnabled()).toBe(false);
+        // Precondition: the fixture really carries a negative zero, as the component parses it.
+        expect(Object.is(Number(MONEY_CANDLES.points[0].open.amount), -0)).toBe(true);
+
+        const {getByTestId} = render(GrowthChart, {props: {history: MONEY_HISTORY, pnlCandles: MONEY_CANDLES, baseCurrency: BASE_CURRENCY}});
+        const absOption = await waitForFrame(FRAME.abs);
+
+        // The axis labels format their number through the locale (S7b), so their literals are
+        // pinned in en-US, the interface locale here (M-18), which the precondition checks — never
+        // against this machine's locale. These four print as they always did; the labels S7b
+        // changed (`1.5k`, `1M`) are pinned in its own describe. Why (re-pin, M-18 CP2): the read
+        // used to run under a patched browser locale, which no figure reads any more.
+        expect(uiLocale(), 'the interface locale the literals are written in').toBe('en-US');
+        const axis = absOption.yAxis.axisLabel.formatter;
+        expect([-5_000, 1_300_000, 0, -0].map((value) => axis(value))).toEqual(['-5k', '1.3M', '0', '0']);
+
+        const absRows = tooltipRows(absOption.tooltip.formatter([{dataIndex: 0}]));
+        expect(rowValue(absRows, 'dashboard.navValue')).toBe(`${BASE_CURRENCY} ${formatAmount(1_234.56)}`);
+        // Day 0 is a gain and day 1 a loss: the P&L total is the currency, then the sign the
+        // locale writes, then the digits.
+        for (const index of [0, 1]) {
+            const pnl = Number(MONEY_HISTORY[index].total_pnl.amount);
+            // Precondition: the day carries a sign, so the check below is about one.
+            expect(leadingSign(formatAmount(pnl, {signed: true})), `day ${index} is a gain or a loss`).not.toBe('');
+            const rows = tooltipRows(absOption.tooltip.formatter([{dataIndex: index}]));
+            expect(rowValue(rows, 'dashboard.totalPnl'), `day ${index}`).toBe(expectedAmount(pnl, {signed: true}));
+        }
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        const candleOption = await waitForFrame(FRAME.candles);
+        const candleRows = tooltipRows(candleOption.tooltip.formatter([{dataIndex: 0}]));
+        expect(rowValue(candleRows, 'dataEditor.col.open')).toBe(`${BASE_CURRENCY} ${formatAmount(0)}`);
+        // The OHLC rows are unsigned: a loss carries the locale's minus after the currency, a
+        // gain carries no `+`.
+        const dayOne = tooltipRows(candleOption.tooltip.formatter([{dataIndex: 1}]));
+        expect(rowValue(dayOne, 'dataEditor.col.close')).toBe(expectedAmount(Number(MONEY_CANDLES.points[1].close.amount)));
+        expect(rowValue(dayOne, 'dataEditor.col.open')).toBe(expectedAmount(Number(MONEY_CANDLES.points[1].open.amount)));
+    });
+
+    it('redraws with a new full option when privacy is toggled, in both directions', async () => {
+        // WHY: ECharts runs a formatter only while painting, and paints only when it is
+        // handed an option. A formatter that reads the flag live is not enough on its own:
+        // the labels on screen would stay as they were. Catches the render effect losing its
+        // dependency on the flag, or the full-rebuild condition losing its `masked` term. In
+        // that case the redraw would be a partial update, which carries no formatter at all.
+        render(GrowthChart, {props: {history: HISTORY}});
+        const clear = await waitForFrame(FRAME.abs);
+        expect(clear.yAxis.axisLabel.formatter(20_000)).toBe('20k');
+
+        const beforeOn = setOptionCount();
+        setPrivacyEnabled(true);
+        const masked = await fullOptionAfter(beforeOn);
+        expect(masked.yAxis.axisLabel.formatter(20_000)).toBe(PRIVACY_PLACEHOLDER);
+
+        const beforeOff = setOptionCount();
+        setPrivacyEnabled(false);
+        const unmasked = await fullOptionAfter(beforeOff);
+        expect(unmasked.yAxis.axisLabel.formatter(20_000)).toBe('20k');
+    });
+});
+
+// =============================================================================
+// D23, D23b — one form for every signed tooltip amount, in the locale's glyphs
+// =============================================================================
+
+/**
+ * Every signed tooltip amount has ONE form: the currency, then the sign, then the digits, with
+ * the sign coming out of the same Intl call as the digits (D23b). `EUR +234.31`,
+ * `EUR -1,357.24`, and `EUR 0.00` for anything that prints as zero, a negative zero or a float
+ * residue included. With privacy on only the digits go: `EUR +•••`, `EUR -•••`, `EUR •••` (D8).
+ *
+ * Four row families print a signed amount, each with its own markup: the Abs P&L total, the
+ * P&L line (the total and one row per broker), the broker rows under a candle, and every row of
+ * the Income submode. The OHLC rows under a candle print the same kind of amount unsigned. Each
+ * case walks all of them on one mount, so a family that builds its sign by another route cannot
+ * hide behind one that does not.
+ *
+ * The minus is the locale's (D23), and the locale is the interface's (M-18). The four interface
+ * languages write a hyphen, the very character a hand-written sign would use, so in them alone a
+ * hard-coded `-` would pass unseen. The Swedish cases force sv-SE, whose minus is U+2212, as the
+ * interface locale — through its one source, `uiLocale()`, before the mount — and pin that glyph
+ * as a literal: the glyph is the subject of D23, not a translated text. Why (re-pin, M-18 CP2):
+ * they used to force it by patching `Number.prototype.toLocaleString`, the browser's default
+ * locale, which no figure reads any more.
+ */
+describe('GrowthChart signed tooltip amounts (D23, D23b)', () => {
+    // The flag is module state shared by every case in the file. Whoever switches it on
+    // switches it off, whatever the outcome of the case.
+    afterEach(() => setPrivacyEnabled(false));
+
+    /** One amount row a tooltip must print. */
+    interface AmountRow {
+        /** The label as the user reads it: an i18n label resolved as the component resolves it, or a broker name. */
+        label: string;
+        amount: number;
+        /** Printed through `fmtCurrency(v, true)`: `+` on a gain, no sign on a zero. */
+        signed: boolean;
+    }
+
+    interface View {
+        title: string;
+        /** The locale forced as the interface locale. None keeps the real one, en-US here. */
+        locale?: string;
+        /** The minus that locale writes, as a literal, when the case pins the glyph. */
+        minus?: string;
+        masked: boolean;
+    }
+
+    const VIEWS: View[] = [
+        {title: 'interface locale, in the clear', masked: false},
+        {title: 'interface locale, masked', masked: true},
+        {title: 'sv-SE forced (U+2212), in the clear', locale: SWEDISH, minus: '\u2212', masked: false},
+        {title: 'sv-SE forced (U+2212), masked', locale: SWEDISH, minus: '\u2212', masked: true},
+    ];
+
+    const labelOf = (key: string) => htmlText(get(_)(key));
+    const money = (field: {amount: string}) => Number(field.amount);
+    /** Whether an amount prints as zero at two decimals, whatever its sign. A signed row prints it with no sign. */
+    const printsAsZero = (amount: number) => formatAmount(Math.abs(amount)) === formatAmount(0);
+
+    /** One Income bar: a sparse daily series summed over the three days in date order, as the component folds it. */
+    function barSum<P extends {date: string}>(points: P[], read: (point: P) => {amount: string}): number {
+        return MONEY_HISTORY.reduce((sum, {date}) => {
+            const point = points.find((entry) => entry.date === date);
+            return sum + (point ? money(read(point)) : 0);
+        }, 0);
+    }
+
+    /**
+     * Precondition of the Income checks, measured on the sum the component drew: the interest bar
+     * is not zero, yet it prints as zero. It is the row that a sign or a colour decided on the raw
+     * value, instead of on what the row prints, would treat as a gain.
+     */
+    function expectDrawnInterestResidue(): void {
+        const interestBars = renderedSeries().filter((series) => series.name === get(_)('transactions.types.INTEREST'));
+        expect(interestBars, 'one interest series').toHaveLength(1);
+        expect(interestBars[0].data, 'the three days are one Income bar').toHaveLength(1);
+        const interest = pointValue(interestBars[0].data[0]);
+        if (interest == null) throw new Error('the interest bar carries no value');
+        expect(interest, 'the drawn interest is a float residue, not an exact zero').not.toBe(0);
+        expect(printsAsZero(interest), `interest ${interest} prints as zero`).toBe(true);
+    }
+
+    /** The Abs tooltip of one day: the signed P&L total among five unsigned amounts. */
+    const absRows = (point: PortfolioHistoryPoint): AmountRow[] => [
+        {label: labelOf('dashboard.navValue'), amount: money(point.nav_value), signed: false},
+        {label: labelOf('dashboard.capitalBaselineTooltip'), amount: money(point.capital_baseline), signed: false},
+        {label: labelOf('dashboard.totalPnl'), amount: money(point.total_pnl), signed: true},
+        {label: labelOf('dashboard.assetsAtCostTooltip'), amount: money(point.book_asset_like), signed: false},
+        {label: labelOf('dashboard.cashFromGeneratedReturns'), amount: money(point.cash_from_generated_returns), signed: false},
+        {label: labelOf('dashboard.cashFromContributedCapital'), amount: money(point.cash_from_contributed_capital), signed: false},
+    ];
+
+    /** The broker rows of one day: signed, each labelled by its broker's name. */
+    const brokerRows = (index: number): AmountRow[] => MONEY_BROKER_PNL.map((broker) => ({label: broker.broker_name, amount: money(broker.points[index].total_pnl), signed: true}));
+
+    /** The P&L line tooltip of one day: the total, then the brokers. */
+    const pnlLineRows = (index: number): AmountRow[] => [{label: labelOf('dashboard.totalPnl'), amount: money(MONEY_HISTORY[index].total_pnl), signed: true}, ...brokerRows(index)];
+
+    /** The candle tooltip of one day: open, close, high and low unsigned, then the brokers signed. */
+    function candleRows(index: number): AmountRow[] {
+        const candle = MONEY_CANDLES.points[index];
+        return [
+            {label: labelOf('dataEditor.col.open'), amount: money(candle.open), signed: false},
+            {label: labelOf('dataEditor.col.close'), amount: money(candle.close), signed: false},
+            {label: labelOf('dataEditor.col.high'), amount: money(candle.high), signed: false},
+            {label: labelOf('dataEditor.col.low'), amount: money(candle.low), signed: false},
+            ...brokerRows(index),
+        ];
+    }
+
+    /** The Income tooltip of the one bar, every row signed. The fixtures give costs and deposit a
+     *  value, and new capital one, which is what brings in the purchase-value group: the bold
+     *  purchase value, then its two `↳` halves (new capital, reinvested). */
+    function incomeRows(): AmountRow[] {
+        const dividend = barSum(MONEY_INCOME.points, (point) => point.dividend);
+        const interest = barSum(MONEY_INCOME.points, (point) => point.interest);
+        // Why (re-pin, S8): R11 heads the two acquisition rows with the purchase value, their
+        // sum, and indents them under it as `↳ ` rows, so the bar prints 8 rows instead of 7. The
+        // rows still pin every Income amount in its one signed form, the exact zero of nothing
+        // reinvested included.
+        const newCapital = barSum(MONEY_ACQUISITION.points, (point) => point.from_new_capital);
+        const reinvested = barSum(MONEY_ACQUISITION.points, (point) => point.from_reinvested);
+        return [
+            {label: labelOf('transactions.types.DIVIDEND'), amount: dividend, signed: true},
+            {label: labelOf('transactions.types.INTEREST'), amount: interest, signed: true},
+            {label: labelOf('assets.distribution.total'), amount: dividend + interest, signed: true},
+            {label: labelOf('dashboard.feesAndTaxes'), amount: barSum(MONEY_COSTS.points, (point) => point.cost), signed: true},
+            {label: labelOf('transactions.types.DEPOSIT'), amount: barSum(MONEY_DEPOSITS.points, (point) => point.deposit), signed: true},
+            {label: labelOf('dashboard.bookValue'), amount: newCapital + reinvested, signed: true},
+            {label: subRowLabel('dashboard.pnlAcqNewCapital'), amount: newCapital, signed: true},
+            {label: subRowLabel('dashboard.pnlAcqReinvested'), amount: reinvested, signed: true},
+        ];
+    }
+
+    /**
+     * Checks one tooltip against the rows it must print, and nothing else.
+     *
+     * The rows are compared whole, label and value, with values derived from the same call the
+     * component makes. Then the sign is checked as characters: none on a zero, `+` only on a
+     * signed gain, and the literal minus where the case pins one. That second half does not go
+     * through the helper that builds the expectation, so a defect shared by the helper and the
+     * component cannot hide there.
+     */
+    function expectTooltip(html: string, rows: AmountRow[], view: View, where: string) {
+        const printed = tooltipRows(html);
+        const wanted = rows.map((row) => ({label: row.label, value: expectedAmount(row.amount, {signed: row.signed, locale: view.locale, masked: view.masked})}));
+        expect(printed, where).toEqual(expect.arrayContaining(wanted));
+        expect(printed, `${where}: no row beyond these`).toHaveLength(wanted.length);
+
+        const minus = view.minus ?? leadingSign(formatAmount(-1, {locale: view.locale}));
+        for (const row of rows) {
+            const value = printed.find((entry) => entry.label === row.label)?.value ?? '';
+            const what = `${where}, ${row.label}`;
+            if (printsAsZero(row.amount)) {
+                expect(value, `${what}: a zero carries no sign`).toBe(`${BASE_CURRENCY} ${view.masked ? PRIVACY_PLACEHOLDER : formatAmount(0, {locale: view.locale})}`);
+                continue;
+            }
+            const head = `${BASE_CURRENCY} ${row.amount < 0 ? minus : row.signed ? '+' : ''}`;
+            if (view.masked) {
+                expect(value, `${what}: the currency, the sign, the mask`).toBe(`${head}${PRIVACY_PLACEHOLDER}`);
+                expect(html, `${what}: no digits under the mask`).not.toContain(formatAmount(Math.abs(row.amount), {locale: view.locale}));
+            } else {
+                expect(value.slice(0, head.length), `${what}: the currency, then the sign`).toBe(head);
+                expect(value.slice(head.length), `${what}: the digits right after the sign`).toMatch(/^\d/);
+            }
+        }
+    }
+
+    it.each(VIEWS)('prints every signed row as currency, sign, digits, and every OHLC row unsigned: $title', async (view) => {
+        // WHY: D23b gives the four signed families one form, and D23 gives the sign to the
+        // locale. Catches, family by family: the sign moved back in front of the currency; a
+        // hand-written ASCII `-` (the Swedish cases) or a hard-coded U+2212 (the interface
+        // locale's cases) in place of the locale's minus; a `+` or `-` on a zero, whether a
+        // negative zero or a float residue whose sign was decided before rounding; `-0.00` on an
+        // unsigned row; a signed row printed unsigned, or an OHLC row printed signed; and, masked,
+        // a mask that swallows the sign or the currency.
+        if (view.minus !== undefined) {
+            // Precondition: this Node has the forced locale's data and writes its minus. Without
+            // it the locale would fall back in silence and the glyph checks would prove nothing.
+            expect(leadingSign(formatAmount(-1, {locale: view.locale})), `${view.locale} writes its own minus`).toBe(view.minus);
+        }
+        // The case's locale is the interface locale of this mount: forced before it, or the real one.
+        forceInterfaceLocale(view.locale);
+        setPrivacyEnabled(view.masked);
+        const {getByTestId} = render(GrowthChart, {
+            props: {history: MONEY_HISTORY, brokerPnlHistory: MONEY_BROKER_PNL, pnlCandles: MONEY_CANDLES, incomeHistory: MONEY_INCOME, costHistory: MONEY_COSTS, depositHistory: MONEY_DEPOSITS, acquisitionFunding: MONEY_ACQUISITION, baseCurrency: BASE_CURRENCY},
+        });
+
+        const walked: AmountRow[] = [];
+        /** Reads the tooltip of one bucket, drawn in the case's locale, and checks it against `rows`. */
+        const expectBucket = (option: FullOption, dataIndex: number, rows: AmountRow[], where: string) => {
+            expectTooltip(option.tooltip.formatter([{dataIndex}]), rows, view, where);
+            walked.push(...rows);
+        };
+
+        // (a) Abs: the P&L total, one bucket per day.
+        const absOption = await waitForFrame(FRAME.abs);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+        MONEY_HISTORY.forEach((point, index) => expectBucket(absOption, index, absRows(point), `Abs, day ${index}`));
+
+        // (b) P&L line: the total and one row per broker.
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        const lineOption = await waitForPnlLineWithBrokers(MONEY_BROKER_NAMES);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pnl']);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        for (const index of MONEY_HISTORY.keys()) expectBucket(lineOption, index, pnlLineRows(index), `P&L line, day ${index}`);
+
+        // (c) Candles, one per day at the ladder's lowest rung: the brokers under the OHLC rows.
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        const candleOption = await waitForFrame(FRAME.candles);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-candles']);
+        for (const index of MONEY_CANDLES.points.keys()) expectBucket(candleOption, index, candleRows(index), `candles, day ${index}`);
+
+        // (d) Income: the three days are one bar, and every row of it is signed.
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        const incomeOption = await waitForFrame(FRAME.income);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        // The interest row is the one a sign decided before rounding would print `+0.00`.
+        expectDrawnInterestResidue();
+        expectBucket(incomeOption, 0, incomeRows(), 'Income');
+
+        // The walk met every outcome a row can print, so none of the checks above was vacuous.
+        const signed = walked.filter((row) => row.signed);
+        expect(
+            signed.some((row) => row.amount > 0 && !printsAsZero(row.amount)),
+            'a signed gain',
+        ).toBe(true);
+        expect(
+            signed.some((row) => row.amount < 0 && !printsAsZero(row.amount)),
+            'a signed loss',
+        ).toBe(true);
+        expect(
+            signed.some((row) => printsAsZero(row.amount)),
+            'a signed zero',
+        ).toBe(true);
+        expect(
+            walked.some((row) => !row.signed && row.amount < 0 && !printsAsZero(row.amount)),
+            'an unsigned loss',
+        ).toBe(true);
+    });
+
+    it('paints a row that prints as zero in the neutral colour, a float residue like an exact zero, never as a gain', async () => {
+        // WHY: a row that prints `EUR 0.00` with no sign is neither a gain nor a loss, and its
+        // colour must not say otherwise. The Income bar's interest is a float residue (5.55e-17):
+        // it prints as zero, so it must be painted like the exact zero next to it (nothing
+        // reinvested), not in the colour of a gain. Catches the colour decided on the raw value
+        // again (`v === 0`), which paints `EUR 0.00` green. The colours are compared with one
+        // another, never with a literal: the palette is the component's to choose. Neither the
+        // mask nor the locale enters the colour, so one render in the clear is enough.
+        expect(isPrivacyEnabled()).toBe(false);
+        const {getByTestId} = render(GrowthChart, {
+            props: {history: MONEY_HISTORY, incomeHistory: MONEY_INCOME, costHistory: MONEY_COSTS, depositHistory: MONEY_DEPOSITS, acquisitionFunding: MONEY_ACQUISITION, baseCurrency: BASE_CURRENCY},
+        });
+        await waitForFrame(FRAME.abs);
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await waitForFrame(FRAME.pnlLine);
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        const option = await waitForFrame(FRAME.income);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+
+        expectDrawnInterestResidue();
+        expect(
+            barSum(MONEY_ACQUISITION.points, (point) => point.from_reinvested),
+            'nothing reinvested: an exact zero',
+        ).toBe(0);
+        const html = option.tooltip.formatter([{dataIndex: 0}]);
+        // Both rows print the same zero, so only their colour can still tell them apart.
+        const zero = expectedAmount(0, {signed: true});
+        expect(rowValue(tooltipRows(html), 'transactions.types.INTEREST')).toBe(zero);
+        // Why (re-pin, S8): R11 indents the reinvested half under the purchase value, so its row
+        // reads `↳ ` before the key's text and both reads below go through `subRowLabel`. The case
+        // still proves that an exact zero and a float residue that print alike are painted alike.
+        expect(rowValue(tooltipRows(html), 'dashboard.pnlAcqReinvested', subRowLabel)).toBe(zero);
+
+        /** The colour of a row's value: its `<b>`'s own, which jsdom normalises (`#…` reads back as `rgb(…)`). */
+        const colourOf = (labelKey: string, readAs: (key: string) => string = labelOf) => {
+            const matching = tooltipRowElements(html).filter(({label}) => label.textContent === readAs(labelKey));
+            expect(matching, `exactly one tooltip row labelled ${labelKey}`).toHaveLength(1);
+            return matching[0].value.style.color;
+        };
+        const neutral = colourOf('dashboard.pnlAcqReinvested', subRowLabel);
+        const gain = colourOf('transactions.types.DIVIDEND');
+        const loss = colourOf('dashboard.feesAndTaxes');
+        // Preconditions: three real colours, all different. A palette that painted every row
+        // alike would otherwise pass the check below without deciding anything.
+        expect(neutral, 'the exact zero has a colour').not.toBe('');
+        expect(neutral, 'the zero colour is not the gain colour').not.toBe(gain);
+        expect(neutral, 'the zero colour is not the loss colour').not.toBe(loss);
+        expect(gain, 'the gain colour is not the loss colour').not.toBe(loss);
+
+        expect(colourOf('transactions.types.INTEREST'), 'a float residue that prints EUR 0.00 is painted as a zero, not as a gain').toBe(neutral);
+    });
+});
+
+// =============================================================================
+// S5 — persistence of the mode and the P&L submode
+// =============================================================================
+
+/**
+ * The Abs/%/P&L mode and the P&L submode survive a reload through two per-user localStorage
+ * keys. They are written when the user clicks and read once, at mount. Every case mounts from
+ * an empty stub (cleared in the file-level `beforeEach`), so the defaults are the defaults by
+ * construction, not by the order the cases happen to run in.
+ */
+describe('GrowthChart mode persistence (S5)', () => {
+    it('draws the restored P&L Income submode on the very first frame', async () => {
+        // WHY: a restore that lands after the first render shows the user a line chart that
+        // then jumps to bars. Catches a submode that starts at its default and is restored
+        // only after the first frame, or not at all.
+        storage.set(MODE_KEY, 'pnl');
+        storage.set(SUBMODE_KEY, 'income');
+        render(GrowthChart, {props: {history: HISTORY}});
+
+        await waitFor(() => expect(setOptionCount()).toBeGreaterThan(0), {timeout: 5_000});
+        const [first] = chartInstances[0].setOptionCalls;
+        // The first call is a full rebuild: it is the frame the user sees first.
+        expect(fullOptionsSince(0)[0]).toBe(first.option);
+        expect(seriesTypes(first.option as unknown as FullOption)).toEqual(FRAME.income);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pnl']);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+    });
+
+    it('falls back to Abs and to the line submode when the stored values are not recognised', async () => {
+        // WHY: the keys live in users' browsers and outlive the code that wrote them. A value
+        // from an older build, or a hand-edited one, must land on the defaults and not on a
+        // view nothing can draw. Catches the loss of the whitelist in readStoredMode or
+        // readStoredSubmode.
+        storage.set(MODE_KEY, 'garbage');
+        storage.set(SUBMODE_KEY, 'garbage');
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+
+        // The drawn frame and the pressed button must agree: both say Abs.
+        await waitForFrame(FRAME.abs);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await waitForFrame(FRAME.pnlLine);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+    });
+
+    it('shows Abs for a restored % view whose history has no % data, without overwriting the stored choice', async () => {
+        // WHY: the % button is disabled without % data, so a restored % view would stay
+        // selected on a disabled button, over a chart with nothing to draw. But the choice
+        // belongs to the user, and it must come back when a history with returns does.
+        // Catches the fallback being dropped, or being done through selectMode, which
+        // persists.
+        storage.set(MODE_KEY, 'pct');
+        const {getByTestId, rerender} = render(GrowthChart, {props: {history: [], loading: true}});
+        // Barrier: the stored % really was restored. Otherwise "Abs after the load" would be
+        // the default, not a fallback.
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+
+        // The Dashboard's own shape: `loading` clears together with the history arriving.
+        await rerender({history: NO_PCT_HISTORY, loading: false});
+        await waitForFrame(FRAME.abs);
+        // Precondition: the component itself sees no % data in this history.
+        expect(getByTestId('growth-toggle-pct')).toBeDisabled();
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+        expect(storage.get(MODE_KEY)).toBe('pct');
+        expect(persistedWrites()).toEqual([]);
+    });
+
+    it('keeps a mode the user clicked while loading, even when the restored % view had no data', async () => {
+        // WHY: the % fallback runs once, after the first completed load. A user who has
+        // already chosen by then must not be overruled by it. Catches selectMode no longer
+        // disarming the pending check.
+        storage.set(MODE_KEY, 'pct');
+        const {getByTestId, rerender} = render(GrowthChart, {props: {history: [], loading: true}});
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pnl']);
+
+        await rerender({history: NO_PCT_HISTORY, loading: false});
+        await fullOptionAfter(0);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pnl']);
+        expect(seriesTypes(latestFullOption())).toEqual(FRAME.pnlLine);
+    });
+
+    it('writes the per-user keys on click only, never on mount', async () => {
+        // WHY: the stored value must be the user's last explicit choice. A mount that writes
+        // would turn a default, or the display-only % fallback, into a saved preference.
+        // Catches a renamed key (which silently drops every saved preference), persistence
+        // moved into an effect (which writes on mount), or a click that no longer persists.
+        storage.set(SUBMODE_KEY, 'income');
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+
+        await waitForFrame(FRAME.abs);
+        expect(persistedWrites()).toEqual([]);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        // The restored submode is live, so the empty log above means "restored and not
+        // rewritten", not "never read".
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        expect(storage.get(MODE_KEY)).toBe('pnl');
+
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        expect(storage.get(SUBMODE_KEY)).toBe('candles');
+        expect(persistedWrites()).toEqual([
+            [MODE_KEY, 'pnl'],
+            [SUBMODE_KEY, 'candles'],
+        ]);
+    });
+});
+
+// =============================================================================
+// I-03 — the % view over a history without % data, after every load
+// =============================================================================
+
+/**
+ * The % button is disabled while the history carries no return (`mwrr_cumulative`, `twrr` and `roi`
+ * all null), so a % view left on over such a history sits on a disabled button, above a chart with
+ * nothing to draw. Until now this was checked once, for a % view restored from storage at mount (S5
+ * above): a % view the USER chose stayed on when a period or broker change brought a history without
+ * returns. The rule after the fix holds after every completed load (`loading` false):
+ *
+ * - a % view over a history without % data falls back to Abs, for display only: the stored mode stays
+ *   `pct`, and nothing but the user's own click writes it;
+ * - the component remembers the fallback, so the % view comes back with the next history that has
+ *   returns, unless the user chose another mode meanwhile: then the user's choice wins, Abs included.
+ *
+ * A period or broker change is driven as the Dashboard drives it: the next history replaces the previous
+ * one with `loading` false throughout (`historyLoading` is true only while there is no history at all).
+ * Observed through the toggles' `aria-pressed` and the % button's `disabled`, never a colour class.
+ */
+describe('GrowthChart % view without % data, after every load (I-03)', {timeout: 30_000}, () => {
+    /** Mounts over HISTORY, which has returns, and turns the % view on by a click: the user's own choice, persisted. */
+    async function mountWithChosenPct() {
+        const view = render(GrowthChart, {props: {history: HISTORY}});
+        await waitForFrame(FRAME.abs);
+        // Precondition: HISTORY carries returns, so the % view can be chosen.
+        expect(view.getByTestId('growth-toggle-pct')).toBeEnabled();
+        await fireEvent.click(view.getByTestId('growth-toggle-pct'));
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+        expect(storage.get(MODE_KEY), 'the click persisted the choice').toBe('pct');
+        return view;
+    }
+
+    /**
+     * Hands the chart the next history with `loading` false: a period or broker change, one completed load.
+     * Barrier: the % button already reflects that history, so a pressed state read after this is the state
+     * that follows the load, not the one before it.
+     */
+    async function loadHistory(rerender: (props: {history: PortfolioHistoryPoint[]; loading: boolean}) => Promise<void>, history: PortfolioHistoryPoint[]): Promise<void> {
+        await rerender({history, loading: false});
+        await tick();
+        const pctData = history.some((point) => point.mwrr_cumulative != null || point.twrr != null || point.roi != null);
+        expect(screen.getByTestId('growth-toggle-pct').hasAttribute('disabled'), `barrier: the % button is ${pctData ? 'enabled' : 'disabled'} for the history just loaded`).toBe(!pctData);
+    }
+
+    it('falls back to Abs when a history without % data replaces the one the user chose % on, keeping the stored choice', async () => {
+        // WHY: today only a % view RESTORED at mount falls back; one the user clicked stays pressed on a
+        // disabled button after a period or broker change. Catches the fallback still being a one-shot
+        // for the restored view, or being done through selectMode, which persists.
+        const {rerender} = await mountWithChosenPct();
+
+        await loadHistory(rerender, NO_PCT_HISTORY);
+
+        expect(pressedAmong(MODE_TOGGLES), 'a % view over a history without % data falls back to Abs').toEqual(['growth-toggle-eur']);
+        // The drawn frame agrees with the pressed button.
+        await waitForFrame(FRAME.abs);
+        // Display only: the stored mode is still the user's %, and the only write is the user's own click.
+        expect(storage.get(MODE_KEY)).toBe('pct');
+        expect(persistedWrites()).toEqual([[MODE_KEY, 'pct']]);
+    });
+
+    it('returns to % when a later history has % data again and the user chose nothing meanwhile', async () => {
+        // WHY: the fallback is a display state, not a decision; the user's % comes back with the returns.
+        // Catches a fallback that forgets the % view, or that writes Abs where the % view is read from.
+        const {rerender} = await mountWithChosenPct();
+        await loadHistory(rerender, NO_PCT_HISTORY);
+        // Barrier: the fallback happened, so what follows is a return from it.
+        expect(pressedAmong(MODE_TOGGLES), 'precondition: the % view fell back to Abs').toEqual(['growth-toggle-eur']);
+
+        await loadHistory(rerender, HISTORY);
+
+        expect(pressedAmong(MODE_TOGGLES), 'the history has % data again: the % view returns').toEqual(['growth-toggle-pct']);
+        expect(persistedWrites()).toEqual([[MODE_KEY, 'pct']]);
+    });
+
+    it.each(['growth-toggle-eur', 'growth-toggle-pnl'])('keeps %s, clicked during the fallback, when % data comes back: the user’s choice wins', async (toggle) => {
+        // WHY: a click during the fallback is a decision, Abs included although it is already pressed;
+        // an automatic return would overrule it. Catches a return that ignores what happened meanwhile.
+        const {rerender} = await mountWithChosenPct();
+        await loadHistory(rerender, NO_PCT_HISTORY);
+        expect(pressedAmong(MODE_TOGGLES), 'precondition: the % view fell back to Abs').toEqual(['growth-toggle-eur']);
+
+        await fireEvent.click(screen.getByTestId(toggle));
+        expect(pressedAmong(MODE_TOGGLES)).toEqual([toggle]);
+
+        await loadHistory(rerender, HISTORY);
+
+        expect(pressedAmong(MODE_TOGGLES), 'the user chose during the fallback: no automatic return to %').toEqual([toggle]);
+        expect(storage.get(MODE_KEY)).toBe(toggle === 'growth-toggle-eur' ? 'eur' : 'pnl');
+    });
+
+    it('brings a % view restored from storage back to % too, once a history with % data follows the one without', async () => {
+        // WHY: S5 pins the restored view's fallback; the return is the same rule, whoever chose %.
+        // Catches the one-shot check that is disarmed for good after the first completed load.
+        storage.set(MODE_KEY, 'pct');
+        const {rerender} = render(GrowthChart, {props: {history: [], loading: true}});
+        // Barrier: the stored % really was restored.
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+        await loadHistory(rerender, NO_PCT_HISTORY);
+        expect(pressedAmong(MODE_TOGGLES), 'precondition (S5): the restored % view fell back to Abs').toEqual(['growth-toggle-eur']);
+
+        await loadHistory(rerender, HISTORY);
+
+        expect(pressedAmong(MODE_TOGGLES), 'the history has % data again: the restored % view returns').toEqual(['growth-toggle-pct']);
+        expect(persistedWrites()).toEqual([]);
+    });
+
+    it('leaves the % view alone while a load is in progress over an empty history (guard)', async () => {
+        // WHY: an empty history while `loading` is no answer yet: the button is disabled because nothing has
+        // arrived, not because the returns are missing. Green today; catches a check that runs before the
+        // load completes and flips the view in the middle of every reload.
+        const {rerender} = await mountWithChosenPct();
+
+        await rerender({history: [], loading: true});
+        // Barrier: the chart holds the empty history, which leaves the % button nothing to enable it.
+        expect(screen.getByTestId('growth-toggle-pct')).toBeDisabled();
+        expect(pressedAmong(MODE_TOGGLES), 'no load has completed: the mode does not flip').toEqual(['growth-toggle-pct']);
+
+        await loadHistory(rerender, HISTORY);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+        expect(persistedWrites()).toEqual([[MODE_KEY, 'pct']]);
+    });
+});
+
+// =============================================================================
+// S9 — the synthetic-candle caption
+// =============================================================================
+
+describe('GrowthChart synthetic-candle caption (S9)', () => {
+    const CAPTION = 'growth-pnl-candles-hypothetical-label';
+
+    it('shows the synthetic-candle caption in the candles submode only, as a marquee line carrying the resolved disclosure', async () => {
+        // WHY: the candles are synthetic (cross-asset highs and lows are hypothetical), and
+        // this caption is their only disclosure, because the tooltip carries none. It must
+        // appear with the candles and nowhere else. It must keep the marker the marquee
+        // looks for, so that on a narrow screen it scrolls instead of being cut off. Catches
+        // the caption dropped, shown in the wrong submode, or losing the marquee marker.
+        const expected = get(_)('dashboard.pnlCandlesHypotheticalShort');
+        // An unresolved key comes back as the key itself, and two copies of it would match.
+        expect(expected).not.toBe('dashboard.pnlCandlesHypotheticalShort');
+
+        const {getByTestId, queryAllByTestId} = render(GrowthChart, {props: {history: HISTORY, pnlCandles: PNL_CANDLES}});
+        await waitForFrame(FRAME.abs);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        expect(queryAllByTestId(CAPTION)).toHaveLength(0);
+
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-candles']);
+        const caption = getByTestId(CAPTION);
+        expect(caption.matches(OVERFLOW_MARQUEE_SELECTOR)).toBe(true);
+        expect(caption.textContent).toBe(expected);
+
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        expect(queryAllByTestId(CAPTION)).toHaveLength(0);
+    });
+});
+
+// =============================================================================
+// The grid's left inset (developer review, 2026-09-29)
+// =============================================================================
+
+/**
+ * With `containLabel: true`, `grid.left` is the OUTER inset: ECharts draws the y labels inside
+ * it. It used to be a 52 px constant shared with the floating overlays, so 52 px stood empty
+ * before the labels. The overlays now read the laid-out grid back (`syncPlotGeometry` →
+ * `plotLeftPx`), so nothing needs a fixed gutter any more.
+ */
+describe('GrowthChart grid left inset (developer review, 2026-09-29)', () => {
+    /** `FullOption` leaves the grid out: only this describe reads it. */
+    type WithGrid = FullOption & {grid?: {left?: unknown; containLabel?: unknown}};
+
+    /** The two properties the decision is about, on one full rebuild. */
+    function expectLeftInset(option: FullOption, view: string) {
+        const grid = (option as WithGrid).grid;
+        expect(grid?.left, `${view}: grid.left`).toBe('3%');
+        expect(grid?.containLabel, `${view}: grid.containLabel`).toBe(true);
+    }
+
+    it('insets the grid by 3% with containLabel, so the y labels start near the edge, with no fixed px gutter before them', async () => {
+        // WHY: developer review, 2026-09-29, from a phone on P&L/Income: too much empty space
+        // on the left of the chart. Catches a px constant put back into `grid.left` (the old 52
+        // can never be '3%'), or `containLabel` dropped, which would squeeze the labels into the
+        // 3% and clip them. Right, top and bottom are not part of that decision: not asserted.
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+        expectLeftInset(await waitForFrame(FRAME.abs), 'Abs');
+
+        // The view the review was made on.
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        expectLeftInset(await waitForFrame(FRAME.income), 'P&L Income');
+    });
+});
+
+/**
+ * Plan 52, C1: `containLabel` reserves the x labels' height, never the half-width a centred label overhangs past the
+ * plot's right edge, so on a phone the last time label was cut («Oct 2» for «Oct 20»). The time axis now widens
+ * `grid.right` to half its widest label plus 2 px when that beats '4%'; the ladder submodes keep '4%'.
+ */
+describe('GrowthChart grid right inset for the last time label (plan 52, C1)', () => {
+    /** `FullOption` leaves the grid and the x axis out: only this describe reads them. */
+    type WithTimeAxis = FullOption & {grid?: {right?: unknown}; xAxis?: {axisLabel?: {formatter?: (value: number, index?: number, extra?: {time?: {level?: number}; level?: number}) => string}}};
+
+    /** Every local midnight from the day before `first` to the day after `last` ('YYYY-MM-DD'): the ticks the axis can label. Stepped by calendar day, so a DST change neither drops nor doubles one. */
+    function midnightsAround(first: string, last: string): Date[] {
+        const [firstYear, firstMonth, firstDay] = first.split('-').map(Number);
+        const [lastYear, lastMonth, lastDay] = last.split('-').map(Number);
+        const stop = new Date(lastYear, lastMonth - 1, lastDay + 1).getTime();
+        const days: Date[] = [];
+        for (let day = new Date(firstYear, firstMonth - 1, firstDay - 1); day.getTime() <= stop; day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)) days.push(day);
+        return days;
+    }
+
+    it('widens grid.right in Abs to half of every label the emitted time formatter can draw plus 2px, measured in the 14px axis font (D1)', async () => {
+        // WHY: the user-visible defect. jsdom's 0 px width is a phone (compact, and '4%' of it is 0 px), where the last label
+        // spilled past the chart. The bound comes from the formatter ECharts is handed, not from the helper's own list, and
+        // the fake measure is FAKE_TEXT_PX_PER_CHAR px a character.
+        render(GrowthChart, {props: {history: HISTORY}});
+        const option = (await waitForFrame(FRAME.abs)) as WithTimeAxis;
+        const right = option.grid?.right;
+        const formatter = option.xAxis?.axisLabel?.formatter;
+
+        expect(typeof right, 'grid.right is an inset in px, no longer the 4% base').toBe('number');
+        if (typeof formatter !== 'function') throw new Error('The Abs time axis carries no label formatter');
+        const texts = midnightsAround(DATES[0], DATES[DATES.length - 1])
+            .flatMap((day) => [0, 1].map((level) => formatter(day.getTime(), 0, {time: {level}, level})))
+            .filter((text) => text !== '');
+        expect(texts.length, 'precondition: the formatter names the midnights of the axis').toBeGreaterThan(0);
+        for (const text of texts) expect(right as number, `"${text}" overhangs half its width past its tick`).toBeGreaterThanOrEqual(Math.ceil((text.length * FAKE_TEXT_PX_PER_CHAR) / 2) + 2);
+        expect(right).toBe(timeAxisGridRight({width: 0, values: DATES, locale: uiLocale(), base: '4%', measure: (text) => text.length * FAKE_TEXT_PX_PER_CHAR}));
+        expect(measuredFonts.length, 'the labels were measured through echarts.format.getTextRect').toBeGreaterThan(0);
+        expect(
+            measuredFonts.filter((font) => !font.startsWith('14px ')),
+            'fonts other than the 14px axis font',
+        ).toEqual([]);
+    });
+
+    it('keeps grid.right at 4% in P&L Candles, whose ladder category axis the time inset does not concern (D2)', async () => {
+        // WHY: a guard. The ladder submodes are not affected by the defect, and their full rebuild must not inherit an inset
+        // sized for time labels.
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY, pnlCandles: PNL_CANDLES}});
+        await waitForFrame(FRAME.abs);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        const option = (await waitForFrame(FRAME.candles)) as WithTimeAxis;
+
+        expect(option.grid?.right).toBe('4%');
+    });
+});
+
+// =============================================================================
+// S7 — the ladder x axis of the Candles and Income submodes
+// =============================================================================
+
+/**
+ * Under the candle-width ladder a bucket is a CALENDAR period (developer's decision of 06/10/2026, which
+ * replaces D16-ii's day counts anchored at the last day): `1W` an ISO week from Monday, `1M` a month from
+ * the 1st, `3M`, `6M` and `1Y` a quarter, a half and a year; `3D` and `2W` fixed runs counted from
+ * 1970-01-01 and from Monday 1969-12-29, so their edges never move. A bucket is one period the series
+ * touches, and its category on the axis — its closing date — is the last day of it the series holds.
+ *
+ * Two kinds of bucket are not like the others. A period that is over and that the series covers only in
+ * part — cut at the start of the range, or at the end of a range that ended in the past — is `partial`:
+ * drawn translucent, its tooltip saying how many of its days it holds. The period that has not ended by
+ * today is `current`: drawn whole, because its missing days are the future, its tooltip saying how far it
+ * has got — except a one-day period, which has nothing in progress to report. A period cut at the start
+ * that is also current is partial. Both submodes sit on one category
+ * axis whose labels and separators the planner (`growthLadderAxis.ts`) decides, and the user's window
+ * survives a zoom, a rung change and a redraw of the same period.
+ *
+ * TODAY IS PINNED. Which period is current depends on the day the chart is read (`todayIso()`, the user's
+ * local calendar), so every case states its today — by default the fixture's last day, the day the
+ * dashboard would serve that window. `pinToday` fakes `Date` alone, never the timers `waitFor` polls on,
+ * at local noon, which is that calendar day whatever the timezone; the file's `afterEach`
+ * (`vi.useRealTimers()`) undoes it. B13 moves the day mid-case, past a period's end, to prove the
+ * component's ladder memo is keyed on it.
+ *
+ * The two explanations are translations inside the tooltip's HTML, so they reach the user as written,
+ * never as markup (the S7 XSS rule): the B5 escape block swaps in a markup-looking catalogue message for
+ * each of them.
+ *
+ * Every expected value is derived by hand from the fixtures' per-day formulas and the calendar, and was
+ * cross-checked with an independent computation outside this repository; none comes from running the
+ * planner or the bucket module.
+ *
+ * The labels follow the developer's label contract of 07/10/2026, which replaces the texts of D4 and D4-bis
+ * (the separators stay D4's). Each bucket is named by the START of its calendar period, as its tooltip header
+ * is. On a day scale the first label carries its month and the year shows only where it changes; on a month
+ * scale the first label and each new year carry the year. When one label does not fit side by side, all of
+ * them turn 45°, and only when even turned they do not fit are they thinned. The day and month strings
+ * (`Dec 29`, `Apr`) are Intl output in the file's locale (en) on this machine's ICU, which
+ * `growthLadderAxis.test.ts` checks first (A0): dates this file chose, not UI translations. The quarter and
+ * the year form are translations, so every case resolves them through i18n (`quarterLabel`, `withYear`) and
+ * never types them; S7a guards their ICU syntax in the four catalogues.
+ *
+ * The rung offer (B7, B8) is pinned where the developer's table of 06/10/2026 fixes it: the dashboard's
+ * preset windows on that day, at the plot widths measured on the dashboard that day — 484, 573 and 734 px
+ * at 1280, 1440 and 1728 px windows, 279 px on a 390 px phone. Income needs three bars of 4.5 px in a
+ * bucket, with 30% of the slot between buckets and 10% of a bar between its columns; a candle body 2.5 px;
+ * both at least three buckets, counted on the calendar.
+ *
+ * Opening pick (k4 G2): Candles open on the lowest rung the geometry can draw. Every entry into
+ * Income — mounted on it, switched to it from the line, from Candles or from another view — opens on
+ * 1M, clamped into the offered rungs (if 1M is not offered, the offered rung nearest it), and a rung
+ * the user picks there holds until Income is left. Without the measured grid every rung is offered,
+ * so Candles open on 1D and Income on 1M. B12 pins that rule; every other case that names a rung
+ * presses it and waits for it to read as pressed, so no case but B12 depends on the opening pick.
+ */
+// WHY the 30 s budget: a case chains several 5 s waits, and a red `waitFor` must be able to exhaust
+// its own timeout and rethrow the case's assertion instead of dying on the test timeout.
+describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
+    // The flag is module state shared by every case in the file. Whoever switches it on
+    // switches it off, whatever the outcome of the case (as S2a does).
+    afterEach(() => setPrivacyEnabled(false));
+
+    /** The two submodes on the ladder, and the rungs (the test-id suffixes). WHY: a typo in a case is a type error, not a 5 s timeout. */
+    type Submode = 'candles' | 'income';
+    type Rung = '1d' | '3d' | '1w' | '2w' | '1m' | '3m' | '6m' | '1y';
+
+    /** Both ladder submodes. WHY: every defect shows on both, and a fix on one alone must stay red. */
+    const SUBMODES: Array<{title: string; submode: Submode}> = [
+        {title: 'Candles', submode: 'candles'},
+        {title: 'Income', submode: 'income'},
+    ];
+
+    /** How many series each submode draws, from its frame. WHY: "no bucket marked" is stated per series, independently of what rendered. */
+    const SERIES_COUNT: Record<Submode, number> = {candles: FRAME.candles.length, income: FRAME.income.length};
+
+    /**
+     * The 40 days (Thu 2026-01-01 .. Mon 02-09) at 1W: seven ISO weeks. Bucket 0 is the week of Mon Dec 29, cut
+     * at Jan 1 (4 of 7 days); 1..5 are whole; 6 is the week of Mon Feb 9, in progress on Feb 9 (1 of 7 days).
+     * WHY a literal: the calendar, counted by hand, is the oracle.
+     */
+    const WEEK_CLOSINGS_40 = ['2026-01-04', '2026-01-11', '2026-01-18', '2026-01-25', '2026-02-01', '2026-02-08', '2026-02-09'];
+    const WEEK_BUCKETS_40 = WEEK_CLOSINGS_40.length;
+    /** 1M on the 40 days: January (whole) and February (in progress on the 9th). */
+    const MONTH_BUCKETS_40 = 2;
+    /** 2W on the 40 days: the pairs from Mon Dec 29 (cut at Jan 1), Jan 12, Jan 26, and Feb 9 (in progress). */
+    const PAIR_BUCKETS_40 = 4;
+
+    /** 730 days (2024-10-01 .. 2026-09-30) at 1M: 24 calendar months, October 2024 to September 2026. */
+    const MONTH_BUCKETS_730 = 24;
+    /** Their closings, each month's last day. WHY a literal: the calendar is the oracle. */
+    const MONTH_CLOSINGS_730 = [
+        '2024-10-31',
+        '2024-11-30',
+        '2024-12-31',
+        '2025-01-31',
+        '2025-02-28',
+        '2025-03-31',
+        '2025-04-30',
+        '2025-05-31',
+        '2025-06-30',
+        '2025-07-31',
+        '2025-08-31',
+        '2025-09-30',
+        '2025-10-31',
+        '2025-11-30',
+        '2025-12-31',
+        '2026-01-31',
+        '2026-02-28',
+        '2026-03-31',
+        '2026-04-30',
+        '2026-05-31',
+        '2026-06-30',
+        '2026-07-31',
+        '2026-08-31',
+        '2026-09-30',
+    ];
+    /** The 730 days at 3M: eight quarters, Q4 2024 to Q3 2026, each closing on its quarter's last day. WHY a literal: the calendar is the oracle. */
+    const QUARTER_CLOSINGS_730 = ['2024-12-31', '2025-03-31', '2025-06-30', '2025-09-30', '2025-12-31', '2026-03-31', '2026-06-30', '2026-09-30'];
+    /** The window the B9–B11 cases zoom to: buckets 18..23, April to September 2026, each closing on its month's last day. WHY a literal: the calendar is the oracle. */
+    const MONTH_WINDOW_FIRST = 18;
+    const MONTH_WINDOW_CLOSINGS = ['2026-04-30', '2026-05-31', '2026-06-30', '2026-07-31', '2026-08-31', '2026-09-30'];
+    /** The zoom start whose left edge is bucket 18 of 0..23. WHY: ECharts rounds `pct / 100 × (n − 1)` to a bucket, so this is the window [18..23]. */
+    const MONTH_WINDOW_START = (MONTH_WINDOW_FIRST / (MONTH_BUCKETS_730 - 1)) * 100;
+
+    /**
+     * The dashboard's preset windows on 2026-10-06, the day of the developer's offer table, each ending that
+     * day. WHY built once: `GrowthChart` resets its caches whenever the history array changes identity.
+     */
+    const WINDOW_FIXTURES = {
+        '1M': buildLadderFixture(isoDays(2026, 8, 6, 31)),
+        '3M': buildLadderFixture(isoDays(2026, 6, 6, 93)),
+        '6M': buildLadderFixture(isoDays(2026, 3, 6, 184)),
+        '9M': buildLadderFixture(isoDays(2026, 0, 6, 274)),
+        YTD: buildLadderFixture(isoDays(2026, 0, 1, 279)),
+        '1Y': buildLadderFixture(isoDays(2025, 9, 6, 366)),
+    } as const;
+    type PresetWindow = keyof typeof WINDOW_FIXTURES;
+
+    /** The GrowthChart plot widths measured on the dashboard (P&L) on 06/10/2026, by viewport. WHY: the offer is a function of the plot, so these are the widths the developer's table speaks of. */
+    const MEASURED_PLOT_PX = {desktop1280: 484, desktop1440: 573, desktop1728: 734, phone390: 279} as const;
+
+    /** What a missing callback reads as in a failure diff. WHY: a named sentinel keeps the red on the assertion, not on a TypeError. */
+    const NOT_A_FUNCTION = 'not a function';
+
+    /** The last day of a fixture. WHY: the dashboard serves a window that ends today, so that is the today a case reads on unless it says otherwise. */
+    const lastDayOf = (fixture: LadderFixture) => fixture.history[fixture.history.length - 1].date;
+
+    /**
+     * Pins the day `todayIso()` reads to `iso`: `Date` alone is faked, at local noon. WHY: which period is
+     * current is a function of today; faking only `Date` leaves the timers `waitFor` polls on real, and noon is
+     * the same calendar day in every timezone. The precondition reads the local day the way the component does.
+     */
+    function pinToday(iso: string) {
+        vi.useFakeTimers({toFake: ['Date']});
+        vi.setSystemTime(new Date(`${iso}T12:00:00`));
+        const now = new Date();
+        const localDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        expect(localDay, `precondition: the clock reads ${iso} in the local calendar`).toBe(iso);
+    }
+
+    /**
+     * Runs `body` with `setTimeout` faked as well, today still pinned. WHY: a zoom's 200 ms debounce is driven on
+     * the fake clock, and the case's day must not fall back to the real one halfway through (vitest carries the
+     * faked now into the new clock, and back).
+     */
+    async function onFakeTimeouts(body: () => Promise<void>) {
+        vi.useFakeTimers({toFake: ['Date', 'setTimeout', 'clearTimeout']});
+        try {
+            await body();
+        } finally {
+            vi.useFakeTimers({toFake: ['Date']});
+        }
+    }
+
+    /** Pins today, mounts on `fixture` and walks into a ladder submode (Abs, then P&L, then the submode). WHY: the path a user takes, one full frame at a time, on a stated day. */
+    async function enterLadderView(fixture: LadderFixture, submode: Submode, today = lastDayOf(fixture)) {
+        pinToday(today);
+        const view = render(GrowthChart, {props: ladderProps(fixture)});
+        await waitForFrame(FRAME.abs);
+        await fireEvent.click(view.getByTestId('growth-toggle-pnl'));
+        await fireEvent.click(view.getByTestId(`growth-pnl-submode-${submode}`));
+        await waitForFrame(submode === 'candles' ? FRAME.candles : FRAME.income);
+        return view;
+    }
+
+    /** Presses a rung and waits until it reads as pressed. WHY: no case may depend on the rung the chart opened on. */
+    async function pressRung(rung: Rung) {
+        const id = `growth-candle-width-${rung}`;
+        await fireEvent.click(screen.getByTestId(id));
+        await waitFor(() => expect(screen.getByTestId(id).getAttribute('aria-pressed')).toBe('true'), {timeout: 5_000});
+    }
+
+    /** Waits until every series of the latest rendered series array has `count` buckets. WHY: proves the pressed rung has actually been drawn. */
+    async function waitForBuckets(count: number) {
+        await waitFor(
+            () => {
+                const series = renderedSeries();
+                expect(series.length).toBeGreaterThan(0);
+                expect(series.map((entry) => entry.data.length)).toEqual(series.map(() => count));
+            },
+            {timeout: 5_000},
+        );
+    }
+
+    /** Enters `submode` on `fixture` on `today`, presses `rung` and waits for its `buckets`. WHY: the common opening, settled on facts the case states. */
+    async function openRung(fixture: LadderFixture, submode: Submode, rung: Rung, buckets: number, today = lastDayOf(fixture)) {
+        const view = await enterLadderView(fixture, submode, today);
+        await pressRung(rung);
+        await waitForBuckets(buckets);
+        return view;
+    }
+
+    /** True when a datum is drawn faded: an `itemStyle.opacity` strictly between 0 and 1. WHY: translucent is the decided look of a partial bucket. */
+    function isMarkedPartial(datum: unknown): boolean {
+        if (datum == null || typeof datum !== 'object' || Array.isArray(datum)) return false;
+        const opacity = (datum as {itemStyle?: {opacity?: unknown}}).itemStyle?.opacity;
+        return typeof opacity === 'number' && opacity > 0 && opacity < 1;
+    }
+
+    /** The indices of the buckets a series draws faded. WHY: a list makes "bucket 0 and no other" one assertion. */
+    function markedBuckets(series: SeriesUpdate): number[] {
+        return series.data.flatMap((datum, index) => (isMarkedPartial(datum) ? [index] : []));
+    }
+
+    /** The tooltip of bucket `index`. WHY: the formatter reads live state, so the latest full option answers for the rung on screen. */
+    function ladderTooltip(index: number): string {
+        return latestFullOption().tooltip.formatter([{dataIndex: index}]);
+    }
+
+    /** Tooltip HTML parsed into a detached host. WHY: lines are read as elements, never matched as substrings. */
+    function tooltipHost(html: string): HTMLDivElement {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        return host;
+    }
+
+    /** The text of the first top-level element. WHY: `buildTooltipHeader` emits the header as the first `<div>`. */
+    function tooltipHeaderText(html: string): string | null {
+        return tooltipHost(html).firstElementChild?.textContent ?? null;
+    }
+
+    /** The text of every top-level `<div>`. WHY: "exactly one partial line" is then a count on this list. */
+    function topLevelDivTexts(html: string): string[] {
+        return Array.from(tooltipHost(html).children)
+            .filter((child) => child.tagName === 'DIV')
+            .map((child) => child.textContent ?? '');
+    }
+
+    /** A key the file resolves through i18n, as the user reads it. WHY: the rung letters are translations; an unresolved key must fail here, not as a confusing diff. */
+    function resolved(key: string): string {
+        const text = htmlText(get(_)(key));
+        expect(text, `${key} resolves in the file locale`).not.toBe(key);
+        return text;
+    }
+
+    /**
+     * A ladder label's year form as the axis prints it: `dashboard.pnlAxisWithYear` resolved with the values the
+     * component must pass, never a literal. WHY: the form is a translation (en `Jan 5 '26`, it `5 gen 26`); the
+     * label and the two-digit year inside it are Intl output, chosen by the case. Not through `htmlText`: an axis
+     * label is canvas text, so the user reads `$_()` output as it is.
+     */
+    function withYear(label: string, year: string): string {
+        const text = get(_)('dashboard.pnlAxisWithYear', {values: {label, year}});
+        if (text === 'dashboard.pnlAxisWithYear') throw new Error('dashboard.pnlAxisWithYear does not resolve in the file locale');
+        return text;
+    }
+
+    /** A quarter as the axis prints it: `dashboard.pnlAxisQuarter` resolved, never a literal. WHY: `Q4` is English, `T4` the three other locales. */
+    function quarterLabel(quarter: 1 | 2 | 3 | 4): string {
+        const text = get(_)('dashboard.pnlAxisQuarter', {values: {quarter}});
+        if (text === 'dashboard.pnlAxisQuarter') throw new Error('dashboard.pnlAxisQuarter does not resolve in the file locale');
+        return text;
+    }
+
+    /** The two lines a ladder bucket can carry under its header. WHY: a typo in a key is a type error. */
+    type BucketLineKey = 'chart.tooltip.partialBucket' | 'chart.tooltip.currentBucket';
+    const PARTIAL_LINE: BucketLineKey = 'chart.tooltip.partialBucket';
+    const CURRENT_LINE: BucketLineKey = 'chart.tooltip.currentBucket';
+
+    /**
+     * A bucket line as the user reads it, resolved through i18n with the values the component must pass, never a
+     * literal. WHY `htmlText`: the component escapes these lines, so the user reads the resolved text as written,
+     * and `htmlText` returns that same text while the catalogue entry holds no markup or entities, as in all four
+     * locales today. The markup case is B5's escape block (`withBucketMessage`).
+     */
+    function bucketLine(key: BucketLineKey, days: number, total: number): string {
+        const text = get(_)(key, {values: {days, total}});
+        if (text === key) throw new Error(`${key} does not resolve in the file locale`);
+        return htmlText(text);
+    }
+
+    /** Any line of `key`, whatever its numbers. WHY: an absence check must not be defeated by a line carrying other numbers. Built through `htmlText`, as `bucketLine` is. */
+    function bucketLinePattern(key: BucketLineKey): RegExp {
+        const text = htmlText(get(_)(key, {values: {days: 'DAYSSLOT', total: 'TOTALSLOT'}}));
+        if (!text.includes('DAYSSLOT') || !text.includes('TOTALSLOT')) throw new Error(`${key} did not take its values: ${text}`);
+        const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`^${escaped.replace('DAYSSLOT', '\\d+').replace('TOTALSLOT', '\\d+')}$`);
+    }
+
+    /** The lines of `key` under the header of bucket `index`. WHY: "once" and "never" are then counts on one list. */
+    function linesAt(index: number, key: BucketLineKey): string[] {
+        const pattern = bucketLinePattern(key);
+        return topLevelDivTexts(ladderTooltip(index)).filter((text) => pattern.test(text));
+    }
+
+    /** Both lines of every bucket in `indices`. WHY: one assertion states the whole ladder, so a line on the wrong bucket shows beside the missing one. */
+    function bucketLines(indices: number[]): Array<{partial: string[]; current: string[]}> {
+        return indices.map((index) => ({partial: linesAt(index, PARTIAL_LINE), current: linesAt(index, CURRENT_LINE)}));
+    }
+
+    /** `0 .. count − 1`. */
+    const indicesTo = (count: number) => Array.from({length: count}, (_unused, index) => index);
+
+    /** The part of an x axis this describe reads. WHY: `FullOption` leaves the x axis out; only S7 reads it. */
+    interface XAxisOption {
+        type?: unknown;
+        data?: unknown;
+        axisLabel?: {formatter?: unknown; interval?: unknown; rotate?: unknown; width?: unknown; lineHeight?: unknown};
+        splitLine?: {interval?: unknown};
+    }
+
+    /**
+     * The height of one turned label's row across its text, in px: the unit the label contract thins turned labels by
+     * (07/10/2026), 14.3 since M‴ (08/10/2026). WHY not 14: with every label boxed (B6d), ECharts hides an edge label whose
+     * box meets its neighbour's, and in Chromium a 14 px line is 14.28 px tall, so the pitch across must exceed it.
+     */
+    const LABEL_ROW_PX = 14.3;
+
+    /**
+     * The thinning step of a turned axis: the smallest k with k · slot · sin 45° ≥ one label row, so two drawn labels,
+     * k buckets apart, are a full row apart across their slant. WHY computed: it is the contract's formula, not a pin.
+     */
+    function rotatedStep(slotPx: number): number {
+        let step = 1;
+        while (step * slotPx * Math.SQRT1_2 < LABEL_ROW_PX) step += 1;
+        return step;
+    }
+
+    /** ECharts' category-axis callbacks: `formatter(value, index)`, `interval(index, value)`. WHY: the cases call them the way ECharts does. */
+    type LabelFormatter = (value: string, index: number) => string;
+    type IntervalCallback = (index: number, value: string) => boolean;
+
+    /** The x axis of one option, object or array. WHY: ECharts accepts both, and the component may send either. */
+    function xAxisOf(option: Record<string, unknown>): XAxisOption | undefined {
+        const axis = option.xAxis;
+        return (Array.isArray(axis) ? axis[0] : axis) as XAxisOption | undefined;
+    }
+
+    /** The x axis of the latest call whose x axis carries `key`. WHY: the axis arrives in pieces, a full option and then `{xAxis}`-only re-plans. */
+    function latestXAxisWith(key: 'axisLabel' | 'data'): XAxisOption | undefined {
+        expect(chartInstances).toHaveLength(1);
+        const calls = chartInstances[0].setOptionCalls;
+        for (let index = calls.length - 1; index >= 0; index -= 1) {
+            const axis = xAxisOf(calls[index].option);
+            if (axis?.[key] != null) return axis;
+        }
+        return undefined;
+    }
+
+    /** The texts an axis draws: the formatter's answer on each bucket its interval shows. WHY: the label box is sized on these, read from the axis itself. */
+    function drawnTexts(axis: XAxisOption | undefined, closings: readonly string[]): string[] {
+        const format = fn<LabelFormatter>(axis?.axisLabel?.formatter);
+        const showLabel = fn<IntervalCallback>(axis?.axisLabel?.interval);
+        if (format === null || showLabel === null) return [];
+        return closings.flatMap((date, index) => (showLabel(index, date) === true ? [String(format(date, index))] : []));
+    }
+
+    /** The box the fake measure makes for `texts`: as wide as the longest. WHY: the fake measures `FAKE_TEXT_PX_PER_CHAR` px a character. */
+    const boxWidthOf = (texts: readonly string[]) => FAKE_TEXT_PX_PER_CHAR * Math.max(0, ...texts.map((text) => text.length));
+
+    /** `value` when it is a function, else null. WHY: an axis may carry a number or nothing where the planner puts a callback. */
+    function fn<T>(value: unknown): T | null {
+        return typeof value === 'function' ? (value as T) : null;
+    }
+
+    /** Calls `call`, turning a throw into a labelled value. WHY: a callback not written for these arguments must show in the diff, not replace it. */
+    function attempt<T>(call: () => T): T | string {
+        try {
+            return call();
+        } catch (error) {
+            return `threw: ${error instanceof Error ? error.message : String(error)}`;
+        }
+    }
+
+    /** Zooms the way a user does, on the fake clock. WHY: ECharts' own state first, then the event, then well past the 200 ms debounce. */
+    async function zoomOnFakeClock(start: number, end: number) {
+        expect(chartInstances).toHaveLength(1);
+        chartInstances[0].setZoom(start, end);
+        chartInstances[0].emit('dataZoom');
+        await vi.advanceTimersByTimeAsync(1_000);
+        await tick();
+    }
+
+    /** B9's zoom onto buckets [18..23], without its call counts. WHY: the opening of B10 and B11 must not assert what B9 pins. */
+    async function zoomToMonthWindow() {
+        await onFakeTimeouts(() => zoomOnFakeClock(MONTH_WINDOW_START, 100));
+    }
+
+    /** Measured grid, 730 days at 1M (24 buckets), window [18..23]. WHY: the one state B10 and B11 start from. */
+    async function openMonthWindow(submode: Submode) {
+        fakeGeometry.measured = true;
+        const view = await openRung(FIXTURE_730, submode, '1m', MONTH_BUCKETS_730);
+        await zoomToMonthWindow();
+        return view;
+    }
+
+    /** One `dataZoom` entry, fields unknown. WHY: a missing or non-numeric start must show in the diff, not be assumed. */
+    interface ZoomEntry {
+        start?: unknown;
+        end?: unknown;
+    }
+
+    /** The first entry of a `dataZoom`, object or array. WHY: `getZoomPercent()` reads `dataZoom[0]`, the window ECharts keeps. */
+    function firstZoomOf(raw: unknown): ZoomEntry | undefined {
+        return (Array.isArray(raw) ? raw[0] : raw) as ZoomEntry | undefined;
+    }
+
+    /** Waits for the first call after `since` that carries a `dataZoom`, and returns its first entry. WHY: the redraw barrier, without which "kept" could be read before the component reacts. */
+    async function firstZoomAfter(since: number): Promise<ZoomEntry | undefined> {
+        let found: ZoomEntry | undefined;
+        await waitFor(
+            () => {
+                expect(chartInstances).toHaveLength(1);
+                const call = chartInstances[0].setOptionCalls.slice(since).find((entry) => entry.option.dataZoom != null);
+                expect(call, `a setOption call carrying dataZoom after call ${since}`).toBeDefined();
+                found = firstZoomOf(call?.option.dataZoom);
+            },
+            {timeout: 5_000},
+        );
+        return found;
+    }
+
+    /** A window as the bucket at its left edge, and its right edge. WHY: the cases state windows in buckets, with ECharts' own rounding. */
+    function zoomBucket(zoom: ZoomEntry | undefined, lastIndex: number): {startBucket: unknown; end: unknown} {
+        return {startBucket: typeof zoom?.start === 'number' ? Math.round((zoom.start / 100) * lastIndex) : zoom?.start, end: zoom?.end};
+    }
+
+    /** The rungs the ladder offers, by test id. WHY: an offered rung is a button; a rung the geometry cannot draw is removed, not disabled. */
+    function rungsOffered(): string[] {
+        return screen.queryAllByTestId(/^growth-candle-width-/).map((button) => button.getAttribute('data-testid') ?? '');
+    }
+
+    /** Test ids of `rungs`, in ladder order. */
+    const rungIds = (rungs: readonly Rung[]) => rungs.map((rung) => `growth-candle-width-${rung}`);
+
+    // --- B1-B3: a bucket is a calendar period ---------------------------------------------------
+
+    it('B1 Candles, 40 days, 1W: each candle spans its calendar week — bucket 0 Thu Jan 1..Sun Jan 4, bucket 5 Feb 2..8, bucket 6 the week in progress, Feb 9 alone', async () => {
+        // WHY: decision (a), a week runs Monday to Sunday whatever day the series starts or ends on. The quads come by hand
+        // from open 500+100i, close 540+100i, low 480+100i, high 560+100i: first open, last close, lowest low, highest high.
+        await openRung(FIXTURE_40, 'candles', '1w', WEEK_BUCKETS_40);
+        const [candles] = renderedSeries();
+        expect([0, 5, 6].map((index) => quadOf(candles.data[index]))).toEqual([
+            [500, 840, 480, 860],
+            [3700, 4340, 3680, 4360],
+            [4400, 4440, 4380, 4460],
+        ]);
+    });
+
+    it('B2 Income, 40 days, 1W: each bar sums the days its calendar week holds, on each of the six series', async () => {
+        // WHY: decision (a) on sums: bucket 0 adds days 0..3 (dividend 4 × 12 + 0+1+2+3 = 54), bucket 5 days 32..38
+        // (7 × 12 + 245 = 329), bucket 6 day 39 alone (12 + 39 = 51) — the week in progress holds what has happened.
+        await openRung(FIXTURE_40, 'income', '1w', WEEK_BUCKETS_40);
+        // Fixed slot order: dividend, interest, costs, deposit, new capital, reinvested.
+        expect(renderedSeries().map((entry) => [0, 5, 6].map((index) => pointValue(entry.data[index])))).toEqual([
+            [54, 329, 51],
+            [18, 266, 42],
+            [-22, -273, -43],
+            [606, 1295, 189],
+            [366, 875, 129],
+            [186, 560, 84],
+        ]);
+    });
+
+    it.each(SUBMODES)('B3 $title, 40 days, 1W: the tooltip header names the rung and the calendar week, days the series lacks included', async ({submode}) => {
+        // WHY: decision (d), the header is the period the bucket stands for: bucket 0 is the week of Mon Dec 29 although
+        // the series starts on Jan 1, and bucket 6 the week of Feb 9 to 15 although today is its first day. Plan 52, C2:
+        // the edges are written in the interface language, never as raw ISO.
+        await openRung(FIXTURE_40, submode, '1w', WEEK_BUCKETS_40);
+        const week = resolved('datePicker.granularity.weeksShort');
+        expect([0, 5, 6].map((index) => tooltipHeaderText(ladderTooltip(index)))).toEqual([`1${week} - ${uiDay('2025-12-29')} → ${uiDay('2026-01-04')}`, `1${week} - ${uiDay('2026-02-02')} → ${uiDay('2026-02-08')}`, `1${week} - ${uiDay('2026-02-09')} → ${uiDay('2026-02-15')}`]);
+    });
+
+    it.each(SUBMODES)('B3 $title, 40 days, 1M: the header is the calendar month — February to its 28th, although the series stops on the 9th', async ({submode}) => {
+        // WHY: decision (d) on the rung users read most: a month is named by its own edges, not by the days with data.
+        // Plan 52, C2: the edges are written in the interface language.
+        await openRung(FIXTURE_40, submode, '1m', MONTH_BUCKETS_40);
+        const month = resolved('datePicker.granularity.monthsShort');
+        expect([0, 1].map((index) => tooltipHeaderText(ladderTooltip(index)))).toEqual([`1${month} - ${uiDay('2026-01-01')} → ${uiDay('2026-01-31')}`, `1${month} - ${uiDay('2026-02-01')} → ${uiDay('2026-02-28')}`]);
+    });
+
+    it('B3 Candles, 40 days, 1W: "value at" names the last day with data — Feb 9 for the week in progress, never a day still to come', async () => {
+        // WHY: decision (d), a closing level exists only on a day with data. The week of bucket 6 runs to Feb 15, which
+        // has not happened; the cut week of bucket 0 ends on a day the series holds. Plan 52, C2: that day is written
+        // in the interface language, so the slot below matches any text and the "value at" line is still found once.
+        await openRung(FIXTURE_40, 'candles', '1w', WEEK_BUCKETS_40);
+        const valueAt = (date: string) => htmlText(get(_)('chart.tooltip.valueAt', {values: {date}}));
+        const slot = valueAt('DATESLOT');
+        if (!slot.includes('DATESLOT')) throw new Error(`chart.tooltip.valueAt did not take its date: ${slot}`);
+        const anyValueAt = new RegExp(`^${slot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('DATESLOT', '.+')}$`);
+        expect([0, 6].map((index) => topLevelDivTexts(ladderTooltip(index)).filter((text) => anyValueAt.test(text)))).toEqual([[valueAt(uiDay('2026-01-04'))], [valueAt(uiDay('2026-02-09'))]]);
+    });
+
+    it('B3 Candles, 40 days, 1D: a one-day bucket keeps its plain date as the header', async () => {
+        // WHY: decision (d), a day has no span to print; the period form is for wider rungs. Plan 52, C2: the day is
+        // written in the interface language.
+        await openRung(FIXTURE_40, 'candles', '1d', DAY_COUNT);
+        expect([0, DAY_COUNT - 1].map((index) => tooltipHeaderText(ladderTooltip(index)))).toEqual([uiDay('2026-01-01'), uiDay('2026-02-09')]);
+    });
+
+    // --- B4-B5: a partial period is marked and explained; the period in progress is not marked ---
+
+    it('B4 Candles, 40 days: no candle marked at 1D; at 1W only bucket 0, the week cut at Jan 1 — not bucket 6, the week in progress', async () => {
+        // WHY: decision (a). A period that is over and cut is not comparable, so it is faded; the week in progress misses
+        // only the future, so it is drawn whole. At 1D every day is whole: none is cut, today's included.
+        await openRung(FIXTURE_40, 'candles', '1d', DAY_COUNT);
+        expect(renderedSeries().map(markedBuckets), '1D: no candle marked').toEqual(Array.from({length: SERIES_COUNT.candles}, () => []));
+        await pressRung('1w');
+        await waitForBuckets(WEEK_BUCKETS_40);
+        expect(renderedSeries().map(markedBuckets), '1W: bucket 0 marked, no other').toEqual(Array.from({length: SERIES_COUNT.candles}, () => [0]));
+    });
+
+    it('B4 Income, 40 days, 1W: bucket 0 is marked on each of the six series, the week in progress on none', async () => {
+        // WHY: every bar of the cut week under-counts, so every series must say so; the week in progress is not weak, it is unfinished.
+        await openRung(FIXTURE_40, 'income', '1w', WEEK_BUCKETS_40);
+        expect(renderedSeries().map(markedBuckets)).toEqual(Array.from({length: SERIES_COUNT.income}, () => [0]));
+    });
+
+    it.each(SUBMODES)('B4 $title, 1M, ranges read on 2026-05-15: nothing marked on 90 days (three whole months, all over); on 93 days only bucket 3, April, over and cut on the 3rd', async ({submode}) => {
+        // WHY: decision (a), the mark follows the calendar and today. A range that ended in the past cuts its last month,
+        // and once that month is over the cut is a gap in the series, not the future.
+        const view = await openRung(FIXTURE_90, submode, '1m', 3, '2026-05-15');
+        expect(renderedSeries().map(markedBuckets), '90 days: every month whole').toEqual(Array.from({length: SERIES_COUNT[submode]}, () => []));
+
+        // One deferred render per effect run: wait for it before pressing, so the press acts on the 93 days.
+        const since = setOptionCount();
+        await view.rerender(ladderProps(FIXTURE_93));
+        await waitFor(() => expect(chartInstances[0].setOptionCalls.slice(since).some((call) => Array.isArray(call.option.series))).toBe(true), {timeout: 5_000});
+        await pressRung('1m');
+        await waitForBuckets(4);
+        expect(renderedSeries().map(markedBuckets), '93 days: bucket 3 marked, no other').toEqual(Array.from({length: SERIES_COUNT[submode]}, () => [3]));
+    });
+
+    it.each(SUBMODES)('B4 $title, 93 days, 1M, read on 2026-04-03, its last day: April is the month in progress, and nothing is marked', async ({submode}) => {
+        // WHY: decision (a), `current` follows today, not the last day with data: the same three days of April are a whole
+        // bucket while April runs. Catches a mark decided by the series alone.
+        await openRung(FIXTURE_93, submode, '1m', 4, '2026-04-03');
+        expect(renderedSeries().map(markedBuckets)).toEqual(Array.from({length: SERIES_COUNT[submode]}, () => []));
+    });
+
+    it.each(SUBMODES)('B4 $title, 9M window on 2026-10-06, 1Y: the year in progress is cut at Jan 6, so it is partial — faded, its line saying 274 of 365 days, not in progress', async ({submode}) => {
+        // WHY: decision (a)'s tie-break. The days of 2026 before the window are history the chart does not hold, not the
+        // future: the bucket is not comparable although its year is still running, so the partial mark and line win over
+        // the in-progress ones. (Without the measured grid every rung is offered, 1Y's single bucket included.)
+        await openRung(WINDOW_FIXTURES['9M'], submode, '1y', 1);
+        expect({marked: renderedSeries().map(markedBuckets), lines: bucketLines([0])}).toEqual({marked: Array.from({length: SERIES_COUNT[submode]}, () => [0]), lines: [{partial: [bucketLine(PARTIAL_LINE, 274, 365)], current: []}]});
+    });
+
+    /** The lines of the seven weeks of the 40 days: the cut week says 4 of 7, the week in progress 1 of 7, the whole weeks nothing. */
+    const weekLines40 = () => indicesTo(WEEK_BUCKETS_40).map((index) => ({partial: index === 0 ? [bucketLine(PARTIAL_LINE, 4, 7)] : [], current: index === WEEK_BUCKETS_40 - 1 ? [bucketLine(CURRENT_LINE, 1, 7)] : []}));
+
+    it('B5 Candles, 40 days: at 1D no line on any day, today included; at 1W the cut week says 4 of 7 days and the week in progress 1 of 7, once each', async () => {
+        // WHY: the tooltip is where the user learns why a candle is short or unfinished: once, with the bucket's own
+        // counts, and never on a whole bucket. A one-day period has nothing in progress to report, so today's 1D candle
+        // carries no line (developer, 06/10/2026: «Togli la riga per 1D»); the 1W half is the positive control, the line
+        // still on the wider period in progress.
+        await openRung(FIXTURE_40, 'candles', '1d', DAY_COUNT);
+        expect(bucketLines(indicesTo(DAY_COUNT)), '1D: no line on any day, today included').toEqual(indicesTo(DAY_COUNT).map(() => ({partial: [], current: []})));
+
+        await pressRung('1w');
+        await waitForBuckets(WEEK_BUCKETS_40);
+        expect(bucketLines(indicesTo(WEEK_BUCKETS_40)), '1W').toEqual(weekLines40());
+    });
+
+    it('B5 Income, 40 days, 1W: the cut week says 4 of 7 days and the week in progress 1 of 7, once each; the whole weeks say nothing', async () => {
+        // WHY: the Income header drops "value at" (a bar is a sum), so these lines are the one place the two odd weeks are explained.
+        await openRung(FIXTURE_40, 'income', '1w', WEEK_BUCKETS_40);
+        expect(bucketLines(indicesTo(WEEK_BUCKETS_40))).toEqual(weekLines40());
+    });
+
+    it.each(
+        SUBMODES.flatMap(({title, submode}) => [
+            {title, submode, today: '2026-05-15', state: 'over', partial: true},
+            {title, submode, today: '2026-04-03', state: 'in progress', partial: false},
+        ]),
+    )('B5 $title, 93 days, 1M, read on $today: April ($state) says 3 of 30 days once, on the line of its state, and no other bucket says anything', async ({submode, today, partial}) => {
+        // WHY: the counts are the bucket's own (3 days of a 30-day month), and which line carries them is decided by
+        // today: the same April is a partial month once it is over, and the month in progress before.
+        await openRung(FIXTURE_93, submode, '1m', 4, today);
+        const april = bucketLine(partial ? PARTIAL_LINE : CURRENT_LINE, 3, 30);
+        expect(bucketLines(indicesTo(4))).toEqual([...indicesTo(3).map(() => ({partial: [], current: []})), {partial: partial ? [april] : [], current: partial ? [] : [april]}]);
+    });
+
+    /** The plain word that opens a swapped-in message. WHY: it finds the line whatever the component did to the rest of it, so a red shows what the user read. */
+    const LINE_MARKER = 'S7-ESCAPE-LOCK';
+
+    /** A bucket line that is markup if read as HTML: an entity and a tag around the two values. WHY: a translation is data, so both must reach the user as the characters written here. */
+    const MARKUP_LOOKING_LINE = `${LINE_MARKER} &lt;b&gt; {days}/{total} <i>x</i>`;
+
+    /**
+     * Runs `body` while the current locale's `key` reads `message`, then puts the catalogue's own text back and
+     * proves it. WHY: the catalogue is module state shared by every case in the file, so whoever swaps a message
+     * restores it, whatever the outcome of the case (as with the privacy flag); `body` is synchronous, so no
+     * scheduled render can run while the swap is in place.
+     */
+    function withBucketMessage(key: BucketLineKey, message: string, body: () => void) {
+        const localeCode = get(locale);
+        if (!localeCode) throw new Error('no current locale: setupI18n() has not run');
+        const leaf = key.split('.')[2];
+        // The catalogue's own leaf, read along the same nested path the swap writes.
+        const source = () => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), get(dictionary)[localeCode]);
+        const resolvedText = () => get(_)(key, {values: {days: 5, total: 7}});
+        const original = source();
+        if (typeof original !== 'string') throw new Error(`${key} is not a string in the ${localeCode} catalogue`);
+        const before = resolvedText();
+        addMessages(localeCode, {chart: {tooltip: {[leaf]: message}}});
+        try {
+            body();
+        } finally {
+            addMessages(localeCode, {chart: {tooltip: {[leaf]: original}}});
+            expect({source: source(), resolved: resolvedText()}, `the ${localeCode} catalogue is restored`).toEqual({source: original, resolved: before});
+        }
+    }
+
+    it.each(
+        SUBMODES.flatMap(({title, submode}) => [
+            {title, submode, key: PARTIAL_LINE, index: 0, days: 4},
+            {title, submode, key: CURRENT_LINE, index: WEEK_BUCKETS_40 - 1, days: 1},
+        ]),
+    )('B5 $title, 40 days, 1W: the $key line of bucket $index shows its translation as written, never as markup', async ({submode, key, index, days}) => {
+        // WHY: the tooltip is HTML handed to ECharts and a translation is data, so an entity or a tag in either line must
+        // reach the user as text, on both return paths of the ladder header (Candles add "value at", Income does not).
+        await openRung(FIXTURE_40, submode, '1w', WEEK_BUCKETS_40);
+        withBucketMessage(key, MARKUP_LOOKING_LINE, () => {
+            const written = get(_)(key, {values: {days, total: 7}});
+            expect(written, 'precondition: the swapped-in message resolves, values in, markup untouched').toBe(MARKUP_LOOKING_LINE.replace('{days}', String(days)).replace('{total}', '7'));
+            expect(
+                topLevelDivTexts(ladderTooltip(index)).filter((text) => text.includes(LINE_MARKER)),
+                'exactly one line, shown as written',
+            ).toEqual([written]);
+        });
+    });
+
+    // --- B6-B8: one category axis, labelled by the planner, and an honest offer ----------------
+
+    it('B6 Income, 40 days, measured, 1W: the category axis carries the seven closings, names each week by its Monday side by side, labels each one and draws each separator', async () => {
+        // WHY: defects 2 and 3, and the label contract of 07/10/2026: the axis names each bucket by the start of its
+        // calendar period, as the tooltip header does. Weeks start on Monday, so the first week — partial, the data start
+        // on Thu Jan 1 — is named by its Monday, Dec 29; the year appears only where it changes (Jan 5, the first Monday
+        // of 2026), never on the first label of a day scale; Feb 9 is the Monday of the week in progress. Seven labels on
+        // 527 px leave at least 12.3 px between neighbours, over the 8 px minimum, so they stay side by side (rotate 0)
+        // and every one is drawn. Day and month texts are Intl output in the file's locale, dates chosen here; the year
+        // form is a translation, resolved through i18n.
+        fakeGeometry.measured = true;
+        await openRung(FIXTURE_40, 'income', '1w', WEEK_BUCKETS_40);
+        const expectedLabels = ['Dec 29', withYear('Jan 5', '26'), '12', '19', '26', 'Feb 2', '9'];
+        await waitFor(
+            () => {
+                const labelled = latestXAxisWith('axisLabel');
+                const format = fn<LabelFormatter>(labelled?.axisLabel?.formatter);
+                const showLabel = fn<IntervalCallback>(labelled?.axisLabel?.interval);
+                const showSeparator = fn<IntervalCallback>(labelled?.splitLine?.interval);
+                expect({
+                    data: latestXAxisWith('data')?.data ?? null,
+                    labels: WEEK_CLOSINGS_40.map((date, index) => (format ? attempt(() => format(date, index)) : NOT_A_FUNCTION)),
+                    rotate: labelled?.axisLabel?.rotate,
+                    labelShown: WEEK_CLOSINGS_40.map((date, index) => (showLabel ? attempt(() => showLabel(index, date)) : NOT_A_FUNCTION)),
+                    separatorShown: WEEK_CLOSINGS_40.map((date, index) => (showSeparator ? attempt(() => showSeparator(index, date)) : NOT_A_FUNCTION)),
+                }).toEqual({
+                    data: WEEK_CLOSINGS_40,
+                    labels: expectedLabels,
+                    rotate: 0,
+                    labelShown: WEEK_CLOSINGS_40.map(() => true),
+                    separatorShown: WEEK_CLOSINGS_40.map(() => true),
+                });
+            },
+            {timeout: 5_000},
+        );
+    });
+
+    it.each(SUBMODES)('B6b $title, 730 days, measured, 3M: eight quarters named by the catalogue, the first and each new year with the year form, side by side', async ({submode}) => {
+        // WHY: the label contract of 07/10/2026 on a month scale. A quarter is the catalogue's own name for it
+        // (`dashboard.pnlAxisQuarter`), and the first label and each new year carry the year form
+        // (`dashboard.pnlAxisWithYear`): Q4 '24 · Q1 '25 · Q2 · Q3 · Q4 · Q1 '26 · Q2 · Q3 in English, so no quarter is
+        // read without its year. Catches a component that does not hand the planner its rung and the two catalogue texts:
+        // the planner has no quarter of its own to print. Eight labels on 527 px leave at least 15.5 px between
+        // neighbours, so they stay side by side (rotate 0) and every one is drawn. Both submodes: 527 px offers 3M to
+        // both (B8).
+        fakeGeometry.measured = true;
+        await openRung(FIXTURE_730, submode, '3m', QUARTER_CLOSINGS_730.length);
+        const expectedLabels = [withYear(quarterLabel(4), '24'), withYear(quarterLabel(1), '25'), quarterLabel(2), quarterLabel(3), quarterLabel(4), withYear(quarterLabel(1), '26'), quarterLabel(2), quarterLabel(3)];
+        await waitFor(
+            () => {
+                const labelled = latestXAxisWith('axisLabel');
+                const format = fn<LabelFormatter>(labelled?.axisLabel?.formatter);
+                const showLabel = fn<IntervalCallback>(labelled?.axisLabel?.interval);
+                expect({
+                    data: latestXAxisWith('data')?.data ?? null,
+                    labels: QUARTER_CLOSINGS_730.map((date, index) => (format ? attempt(() => format(date, index)) : NOT_A_FUNCTION)),
+                    rotate: labelled?.axisLabel?.rotate,
+                    labelShown: QUARTER_CLOSINGS_730.map((date, index) => (showLabel ? attempt(() => showLabel(index, date)) : NOT_A_FUNCTION)),
+                }).toEqual({
+                    data: QUARTER_CLOSINGS_730,
+                    labels: expectedLabels,
+                    rotate: 0,
+                    labelShown: QUARTER_CLOSINGS_730.map(() => true),
+                });
+            },
+            {timeout: 5_000},
+        );
+    });
+
+    /** What the formatter answers for the buckets the axis does not draw, when the check passes. WHY a sentinel: one `toEqual` reads the whole axis, and a failing check shows its evidence in place of this. */
+    const WIDEST_DRAWN_TEXT = 'one widest drawn text';
+
+    it('B6c Candles, 730 days, measured 279 px plot (a 390 px phone), 1M: 24 months cannot sit side by side, so every label turns 45° and every second one is drawn, counted back from the last; an undrawn bucket formats as the widest drawn text', async () => {
+        // WHY: the label contract of 07/10/2026 — «riguardo la rotazione, ruotata 1, ruotano tutte, per uniformità». When
+        // one label does not fit side by side, all of them turn 45°; only when even turned they do not fit are they
+        // thinned, to every k-th bucket, k the smallest with k · slot · sin 45° ≥ one 14.3 px row (M‴, 08/10/2026), counted
+        // from the last bucket so a pan does not move them. A slot is 279 / 24 = 11.6 px here, 8.2 px across a turned
+        // label, so k = 2 (16.4 ≥ 14.3), as it was with the 14 px row. The left-edge rule (a label
+        // whose estimated slant would leave the canvas on the left gets no text, and the first label's year form passes
+        // to the next) may drop the first candidate — the plot has 40 px on its left — and no other. An undrawn bucket
+        // answers the formatter with the widest drawn text: ECharts' legacy containLabel measures the labels through the
+        // formatter on a sample of the categories (one every ⌈n/40⌉) without reading `interval`, so a sample made only of
+        // undrawn buckets answered with '' would reserve the height of an empty label, and the turned labels would run off
+        // the bottom of the canvas. The texts are the contract's on the drawn buckets: each compares with the previous
+        // DRAWN one, so the first drawn label carries the year. Candles only: Income is not offered 1M on this plot (bars
+        // of 2.5 px, under 4.5) and never thins (its smallest slot, 20.6 px, holds a turned row: 20.6 · sin 45° = 14.5 ≥ 14.3).
+        fakeGeometry.measured = true;
+        fakeGeometry.plotWidthPx = MEASURED_PLOT_PX.phone390;
+        await enterLadderView(FIXTURE_730, 'candles');
+        // Precondition: the measured plot is in force (1D and 3D are gone, B8's arithmetic) and it offers 1M.
+        await waitFor(() => expect(rungsOffered()).toEqual(rungIds(['1w', '2w', '1m', '3m', '6m', '1y'])), {timeout: 5_000});
+        await pressRung('1m');
+        await waitForBuckets(MONTH_BUCKETS_730);
+
+        const step = rotatedStep(MEASURED_PLOT_PX.phone390 / MONTH_BUCKETS_730);
+        expect(step, 'precondition: on this plot even turned labels do not fit in every slot').toBe(2);
+        const candidates = indicesTo(MONTH_BUCKETS_730).filter((index) => (MONTH_BUCKETS_730 - 1 - index) % step === 0);
+        // The odd buckets, November 2024 to September 2026, each compared with the previous drawn one.
+        const candidateTexts = [withYear('Nov', '24'), withYear('Jan', '25'), 'Mar', 'May', 'Jul', 'Sep', 'Nov', withYear('Jan', '26'), 'Mar', 'May', 'Jul', 'Sep'];
+        expect(candidates.length, 'precondition: one text per candidate').toBe(candidateTexts.length);
+        const textOf = new Map(candidates.map((index, position) => [index, candidateTexts[position]]));
+        await waitFor(
+            () => {
+                const labelled = latestXAxisWith('axisLabel');
+                const format = fn<LabelFormatter>(labelled?.axisLabel?.formatter);
+                const showLabel = fn<IntervalCallback>(labelled?.axisLabel?.interval);
+                const texts = MONTH_CLOSINGS_730.map((date, index) => (format ? attempt(() => format(date, index)) : NOT_A_FUNCTION));
+                const flags = MONTH_CLOSINGS_730.map((date, index) => (showLabel ? attempt(() => showLabel(index, date)) : NOT_A_FUNCTION));
+                const shown = indicesTo(MONTH_BUCKETS_730).filter((index) => flags[index] === true);
+                const shownTexts = shown.map((index) => texts[index]);
+                const longestShown = Math.max(0, ...shownTexts.map((text) => text.length));
+                const widestShown = shownTexts.filter((text) => text.length === longestShown);
+                const unshownTexts = [
+                    ...new Set(
+                        indicesTo(MONTH_BUCKETS_730)
+                            .filter((index) => !shown.includes(index))
+                            .map((index) => texts[index]),
+                    ),
+                ];
+                const fallbackIsWidest = unshownTexts.length === 1 && unshownTexts[0] !== '' && widestShown.includes(unshownTexts[0]);
+                // Only the first candidate may be dropped, by the left-edge rule; every other one is drawn.
+                const expectedShown = shown[0] === candidates[0] ? candidates : candidates.slice(1);
+                expect({
+                    data: latestXAxisWith('data')?.data ?? null,
+                    rotate: labelled?.axisLabel?.rotate,
+                    shown: showLabel ? shown : NOT_A_FUNCTION,
+                    shownTexts,
+                    unshownFormatAs: fallbackIsWidest ? WIDEST_DRAWN_TEXT : {unshownTexts, widestShown},
+                }).toEqual({
+                    data: MONTH_CLOSINGS_730,
+                    rotate: 45,
+                    shown: expectedShown,
+                    shownTexts: expectedShown.map((index) => textOf.get(index)),
+                    unshownFormatAs: WIDEST_DRAWN_TEXT,
+                });
+            },
+            {timeout: 5_000},
+        );
+    });
+
+    it("B6d Candles, 730 days, measured 279 px plot, 1M: the turned axis boxes every label as wide as the widest drawn one, measured in the chart's own 14 px font, one line tall", async () => {
+        // WHY: option M‴ of 08/10/2026. ECharts' legacy containLabel reserves the band under the axis by measuring a
+        // sample of the labels (one every ⌈n/40⌉, `interval` unread), and a turned label is as tall as it is wide: a long
+        // label at an unsampled index ran below the band into the legend. With `axisLabel.width` W and a `lineHeight`,
+        // every label gets an invisible W × line box, every sampled one measures W, and the band holds them all. W is the
+        // widest DRAWN label as the chart paints it: `echarts.format.getTextRect` in the axis' 14 px font, whose family is
+        // the chart's global textStyle (the axis label sets none of its own). The fake measures 7 px a character and
+        // answers the family 'LF Test Sans', so a box sized on undrawn buckets, or measured in another font, shows here.
+        // B6c's geometry: turned, every second month drawn.
+        fakeGeometry.measured = true;
+        fakeGeometry.plotWidthPx = MEASURED_PLOT_PX.phone390;
+        await enterLadderView(FIXTURE_730, 'candles');
+        await waitFor(() => expect(rungsOffered()).toEqual(rungIds(['1w', '2w', '1m', '3m', '6m', '1y'])), {timeout: 5_000});
+        await pressRung('1m');
+        await waitForBuckets(MONTH_BUCKETS_730);
+        await waitFor(
+            () => {
+                const labelled = latestXAxisWith('axisLabel');
+                const drawn = drawnTexts(labelled, MONTH_CLOSINGS_730);
+                expect({
+                    rotate: labelled?.axisLabel?.rotate,
+                    thinned: drawn.length > 0 && drawn.length < MONTH_BUCKETS_730,
+                    width: labelled?.axisLabel?.width,
+                    lineHeight: labelled?.axisLabel?.lineHeight,
+                    fonts: [...new Set(measuredFonts)],
+                }).toEqual({rotate: 45, thinned: true, width: boxWidthOf(drawn), lineHeight: 14, fonts: [`14px ${FAKE_FONT_FAMILY}`]});
+            },
+            {timeout: 5_000},
+        );
+    });
+
+    it.each(SUBMODES)('B6e $title, 730 days, measured, 3M: side by side, the axis carries no box', async ({submode}) => {
+        // WHY: M‴ boxes turned labels only. Flat labels are one line tall whatever their text, so the sample containLabel
+        // measures already gives the band, and a box would only change the room ECharts sees between neighbours. The full
+        // render replaces the whole x axis, so it may leave the two keys undefined: null and undefined both read as no box
+        // here. The {xAxis}-only update merges, and must say null (B9b). Green before the fix: it guards the fix.
+        fakeGeometry.measured = true;
+        await openRung(FIXTURE_730, submode, '3m', QUARTER_CLOSINGS_730.length);
+        await waitFor(
+            () => {
+                const labelled = latestXAxisWith('axisLabel');
+                expect({
+                    rotate: labelled?.axisLabel?.rotate,
+                    drawn: drawnTexts(labelled, QUARTER_CLOSINGS_730).length,
+                    width: labelled?.axisLabel?.width ?? null,
+                    lineHeight: labelled?.axisLabel?.lineHeight ?? null,
+                }).toEqual({rotate: 0, drawn: QUARTER_CLOSINGS_730.length, width: null, lineHeight: null});
+            },
+            {timeout: 5_000},
+        );
+    });
+
+    it('B7 Income full option: a category axis; dividend, interest and costs in one stack, deposit alone, the two funding series in another; 30% between buckets, 10% between the columns of one', async () => {
+        // WHY: defects 3 and 4, and decision (c) of 06/10/2026: bars on a time axis change width with every zoom step, and
+        // gaps that are all alike make the columns of neighbouring buckets run together («se sono tutte attaccate non si
+        // capisce nulla»), so the gap between buckets is three times the gap between the columns of one.
+        await enterLadderView(FIXTURE_40, 'income');
+        const option = latestFullOption() as unknown as Record<string, unknown> & {series: Array<{stack?: unknown; barGap?: unknown; barCategoryGap?: unknown}>};
+        const NONE = 'none';
+        expect({
+            xAxisType: xAxisOf(option)?.type,
+            stack: option.series.map((entry) => entry.stack ?? NONE),
+            barGap: option.series.map((entry) => entry.barGap ?? NONE),
+            barCategoryGap: option.series.map((entry) => entry.barCategoryGap ?? NONE),
+        }).toEqual({
+            xAxisType: 'category',
+            // Fixed slot order: dividend, interest, costs, deposit, new capital, reinvested.
+            stack: ['income', 'income', 'income', NONE, 'acquisition', 'acquisition'],
+            barGap: Array.from({length: SERIES_COUNT.income}, () => '10%'),
+            barCategoryGap: Array.from({length: SERIES_COUNT.income}, () => '30%'),
+        });
+    });
+
+    it.each([
+        {plotWidthPx: 843, barPx: 4.498, offered: ['2w', '1m', '3m'] as Rung[]},
+        {plotWidthPx: 844, barPx: 4.503, offered: ['1w', '2w', '1m', '3m'] as Rung[]},
+    ])('B7 Income, YTD on 2026-10-06 (41 calendar weeks), measured $plotWidthPx px: the declared gaps make a weekly bar $barPx px, and the offer draws the line at 4.5 px', async ({plotWidthPx, barPx, offered}) => {
+        // WHY: decision (c), the offer's arithmetic is the drawing's. A bar is slot × (1 − category gap) / (3 + 2 × bar gap),
+        // with the gaps read from the six series as ECharts will, and a rung is offered while that bar is at least 4.5 px:
+        // the 41 ISO weeks of YTD (2025-12-29 to 2026-10-11) cross that line between 843 and 844 px. Catches an offer that
+        // assumes other gaps than the series declare, another minimum bar, or day counts (ceil(279 / 7) = 40 weeks would
+        // offer 1W at 843 px, 4.61 px a bar).
+        fakeGeometry.measured = true;
+        fakeGeometry.plotWidthPx = plotWidthPx;
+        await enterLadderView(WINDOW_FIXTURES.YTD, 'income');
+        const percent = (value: unknown) => (typeof value === 'string' && /^\d+%$/.test(value) ? Number(value.slice(0, -1)) / 100 : Number.NaN);
+        await waitFor(
+            () => {
+                const series = (latestFullOption() as unknown as {series: Array<{barGap?: unknown; barCategoryGap?: unknown}>}).series;
+                const weeklyBar = ((plotWidthPx / 41) * (1 - percent(series[0]?.barCategoryGap))) / (3 + 2 * percent(series[0]?.barGap));
+                // The offer is complete once it reflects the measured plot: 6M and 1Y (two and one buckets) are gone.
+                expect({weeklyBarPx: Math.round(weeklyBar * 1000) / 1000, offered: rungsOffered()}).toEqual({weeklyBarPx: barPx, offered: rungIds(offered)});
+            },
+            {timeout: 5_000},
+        );
+    });
+
+    /**
+     * The developer's table of 06/10/2026: the Income rungs offered on each preset window at each measured plot.
+     * WHY literals: they are the decision's own figures — three bars of 4.5 px in a bucket (a slot of at least
+     * 20.57 px) and at least three buckets, counted on the calendar. The finest offered rung is the table's
+     * "minimum Income rung".
+     */
+    const INCOME_OFFER_TABLE: Array<{preset: PresetWindow; plot: keyof typeof MEASURED_PLOT_PX; offered: Rung[]}> = [
+        {preset: '1M', plot: 'desktop1280', offered: ['1w', '2w']},
+        {preset: '1M', plot: 'desktop1440', offered: ['1w', '2w']},
+        {preset: '1M', plot: 'desktop1728', offered: ['1w', '2w']},
+        {preset: '1M', plot: 'phone390', offered: ['1w', '2w']},
+        {preset: '3M', plot: 'desktop1280', offered: ['1w', '2w', '1m']},
+        {preset: '3M', plot: 'desktop1440', offered: ['1w', '2w', '1m']},
+        {preset: '3M', plot: 'desktop1728', offered: ['1w', '2w', '1m']},
+        {preset: '3M', plot: 'phone390', offered: ['2w', '1m']},
+        {preset: '6M', plot: 'desktop1280', offered: ['2w', '1m', '3m']},
+        {preset: '6M', plot: 'desktop1440', offered: ['1w', '2w', '1m', '3m']},
+        {preset: '6M', plot: 'desktop1728', offered: ['1w', '2w', '1m', '3m']},
+        {preset: '6M', plot: 'phone390', offered: ['1m', '3m']},
+        {preset: '9M', plot: 'desktop1280', offered: ['2w', '1m', '3m']},
+        {preset: '9M', plot: 'desktop1440', offered: ['2w', '1m', '3m']},
+        {preset: '9M', plot: 'desktop1728', offered: ['2w', '1m', '3m']},
+        {preset: '9M', plot: 'phone390', offered: ['1m', '3m']},
+        {preset: 'YTD', plot: 'desktop1280', offered: ['2w', '1m', '3m']},
+        {preset: 'YTD', plot: 'desktop1440', offered: ['2w', '1m', '3m']},
+        {preset: 'YTD', plot: 'desktop1728', offered: ['2w', '1m', '3m']},
+        {preset: 'YTD', plot: 'phone390', offered: ['1m', '3m']},
+        {preset: '1Y', plot: 'desktop1280', offered: ['1m', '3m', '6m']},
+        {preset: '1Y', plot: 'desktop1440', offered: ['2w', '1m', '3m', '6m']},
+        {preset: '1Y', plot: 'desktop1728', offered: ['2w', '1m', '3m', '6m']},
+        {preset: '1Y', plot: 'phone390', offered: ['1m', '3m', '6m']},
+    ];
+
+    it.each(INCOME_OFFER_TABLE.map((row) => ({...row, px: MEASURED_PLOT_PX[row.plot], finest: row.offered[0]})))('B8 Income, $preset window on 2026-10-06, $plot plot ($px px): offers $offered, the finest $finest, and presses one of them', async ({preset, px, offered}) => {
+        // WHY: decision (c) at the geometries it was taken on. At nine months 1W makes 40 bars of 12–18 px, too narrow, and
+        // 2W 21 of 23–35 px (desktop) — «a 9 mesi, 2S mi paiono strette ma sono più accettabili»; on a phone only months fit.
+        // Which offered rung opens is B12's subject, so here exactly one of them is pressed.
+        fakeGeometry.measured = true;
+        fakeGeometry.plotWidthPx = px;
+        await enterLadderView(WINDOW_FIXTURES[preset], 'income');
+        await waitFor(() => expect({offered: rungsOffered(), pressed: pressedAmong(rungsOffered()).length}).toEqual({offered: rungIds(offered), pressed: 1}), {timeout: 5_000});
+    });
+
+    it.each([
+        {title: 'Income', submode: 'income' as Submode, offered: ['1m', '3m', '6m', '1y'] as Rung[]},
+        {title: 'Candles', submode: 'candles' as Submode, offered: ['1w', '2w', '1m', '3m', '6m', '1y'] as Rung[]},
+    ])('B8 $title, 730 days, measured 527 px plot: offers $offered — 1Y draws three calendar years, 2024, 2025 and 2026', async ({submode, offered}) => {
+        // WHY: the offer counts the buckets the ladder draws. 2024-10-01..2026-09-30 touches three calendar years, so 1Y has
+        // its three bodies; 730 / 365 days made two. Candle bodies need 2.5 px (3D: 244 bodies of 2.16 px), Income bars
+        // 4.5 px (2W: 53 buckets, bars of 2.17 px).
+        fakeGeometry.measured = true;
+        await enterLadderView(FIXTURE_730, submode);
+        await waitFor(() => expect({offered: rungsOffered(), pressed: pressedAmong(rungsOffered()).length}).toEqual({offered: rungIds(offered), pressed: 1}), {timeout: 5_000});
+    });
+
+    it('B8 Candles, 9M window on 2026-10-06, 1440 px plot (573 px): offers 3D to 3M — 274 daily bodies of 2.09 px do not fit, 92 triples do', async () => {
+        // WHY: the candles keep their own floor, 2.5 px a body, on the same calendar counts: 1D is the only rung below it
+        // here, and 6M and 1Y (two halves, one year) are under three bodies.
+        fakeGeometry.measured = true;
+        fakeGeometry.plotWidthPx = MEASURED_PLOT_PX.desktop1440;
+        await enterLadderView(WINDOW_FIXTURES['9M'], 'candles');
+        await waitFor(() => expect({offered: rungsOffered(), pressed: pressedAmong(rungsOffered()).length}).toEqual({offered: rungIds(['3d', '1w', '2w', '1m', '3m']), pressed: 1}), {timeout: 5_000});
+    });
+
+    // --- B9-B11: the user's window is kept ------------------------------------------------------
+
+    it.each(SUBMODES)('B9 $title, 730 days, measured, 1M: a zoom re-plans the labels once, as an {xAxis}-only update that turns them back side by side, and the same zoom again does not', async ({submode}) => {
+        // WHY: defects 2 and 6, the labels must follow the visible window [18..23], April to September 2026, each month
+        // named by itself and the first visible one with its year (the label contract of 07/10/2026, on a month scale);
+        // the update must not carry dataZoom (it would fight the gesture), and an unchanged plan must not redraw. The 24
+        // months of the whole range were turned 45° (a 22 px slot holds no month side by side); six months have room, and
+        // the partial update must say rotate 0 itself — ECharts merges an {xAxis}-only option into the axis it holds, so
+        // a rotate left out would keep the 45°.
+        fakeGeometry.measured = true;
+        await openRung(FIXTURE_730, submode, '1m', MONTH_BUCKETS_730);
+        expect(chartInstances).toHaveLength(1);
+        const chart = chartInstances[0];
+        const expectedLabels = [withYear('Apr', '26'), 'May', 'Jun', 'Jul', 'Aug', 'Sep'];
+        await onFakeTimeouts(async () => {
+            const rotateBeforeZoom = latestXAxisWith('axisLabel')?.axisLabel?.rotate;
+            const before = chart.setOptionCalls.length;
+            await zoomOnFakeClock(MONTH_WINDOW_START, 100);
+            expect(vi.getTimerCount(), 'no timer pending 1000 ms after the zoom').toBe(0);
+            const added = chart.setOptionCalls.slice(before);
+            expect(added, 'exactly one new setOption call after the zoom').toHaveLength(1);
+            const format = fn<LabelFormatter>(xAxisOf(added[0].option)?.axisLabel?.formatter);
+            expect({
+                rotateBeforeZoom,
+                keys: Object.keys(added[0].option),
+                labels: MONTH_WINDOW_CLOSINGS.map((date, offset) => (format ? attempt(() => format(date, MONTH_WINDOW_FIRST + offset)) : NOT_A_FUNCTION)),
+                rotate: xAxisOf(added[0].option)?.axisLabel?.rotate,
+            }).toEqual({rotateBeforeZoom: 45, keys: ['xAxis'], labels: expectedLabels, rotate: 0});
+
+            const afterFirst = chart.setOptionCalls.length;
+            await zoomOnFakeClock(MONTH_WINDOW_START, 100);
+            expect(vi.getTimerCount(), 'no timer pending 1000 ms after the repeated zoom').toBe(0);
+            expect(chart.setOptionCalls.slice(afterFirst), 'no new setOption call for the same window').toHaveLength(0);
+        });
+    });
+
+    it.each(SUBMODES)('B9b $title, 730 days, measured, 1M: the turned axis carries its box, and the {xAxis}-only update that lays the labels flat clears it with present nulls', async ({submode}) => {
+        // WHY: M‴ of 08/10/2026 on the partial path. The 24 months on 527 px are turned (B9) and boxed (B6d); the zoom onto
+        // [18..23] lays six months flat in ONE {xAxis}-only update, and ECharts merges that option into the axis it holds:
+        // a width left out would keep the turned box around flat labels. So the update must carry both keys, null.
+        fakeGeometry.measured = true;
+        await openRung(FIXTURE_730, submode, '1m', MONTH_BUCKETS_730);
+        expect(chartInstances).toHaveLength(1);
+        const chart = chartInstances[0];
+        await onFakeTimeouts(async () => {
+            const turned = latestXAxisWith('axisLabel');
+            const drawn = drawnTexts(turned, MONTH_CLOSINGS_730);
+            expect({
+                rotate: turned?.axisLabel?.rotate,
+                drawn: drawn.length > 0,
+                width: turned?.axisLabel?.width,
+                lineHeight: turned?.axisLabel?.lineHeight,
+            }).toEqual({rotate: 45, drawn: true, width: boxWidthOf(drawn), lineHeight: 14});
+            const before = chart.setOptionCalls.length;
+            await zoomOnFakeClock(MONTH_WINDOW_START, 100);
+            const added = chart.setOptionCalls.slice(before);
+            expect(added, 'precondition: exactly one new setOption call after the zoom (B9)').toHaveLength(1);
+            const flat = xAxisOf(added[0].option)?.axisLabel;
+            expect({keys: Object.keys(added[0].option), rotate: flat?.rotate}, 'precondition: the update is {xAxis}-only and flat (B9)').toEqual({keys: ['xAxis'], rotate: 0});
+            expect(flat).toHaveProperty('width', null);
+            expect(flat).toHaveProperty('lineHeight', null);
+        });
+    });
+
+    it.each([
+        {title: 'Candles', submode: 'candles' as Submode, rung: '2w' as Rung, lastIndex: 52, startBucket: 39},
+        {title: 'Income', submode: 'income' as Submode, rung: '3m' as Rung, lastIndex: 7, startBucket: 6},
+    ])('B10 $title, 730 days, measured: from 1M on [18..23], pressing $rung puts the window on the bucket that holds its first day, 2026-04-01', async ({submode, rung, lastIndex, startBucket}) => {
+        // WHY: defect 6, a rung change must keep what the user was looking at. The window starts on April 1, which 2W holds
+        // in the pair of Mar 23..Apr 5 (bucket 39 of 0..52) and 3M in the second quarter (bucket 6 of 0..7). Income cannot
+        // draw 2W on this plot (53 bars of 2.2 px, decision (c)), so it presses the quarter.
+        await openMonthWindow(submode);
+        const since = setOptionCount();
+        await pressRung(rung);
+        expect(zoomBucket(await firstZoomAfter(since), lastIndex)).toEqual({startBucket, end: 100});
+    });
+
+    /** Runs `trigger` on the [18..23] window and checks that the redraw keeps it, in the call and in the chart. WHY: the one check the three B11 triggers share. */
+    async function expectWindowKeptAcross(trigger: () => unknown) {
+        expect(chartInstances).toHaveLength(1);
+        const chart = chartInstances[0];
+        const lastIndex = MONTH_BUCKETS_730 - 1;
+        expect(zoomBucket(firstZoomOf(chart.getOption().dataZoom), lastIndex), 'precondition: the window is [18..23]').toEqual({startBucket: MONTH_WINDOW_FIRST, end: 100});
+        const since = chart.setOptionCalls.length;
+        await trigger();
+        const call = zoomBucket(await firstZoomAfter(since), lastIndex);
+        expect({call, chart: zoomBucket(firstZoomOf(chart.getOption().dataZoom), lastIndex)}).toEqual({call: {startBucket: MONTH_WINDOW_FIRST, end: 100}, chart: {startBucket: MONTH_WINDOW_FIRST, end: 100}});
+    }
+
+    it('B11 Income, 730 days, 1M on [18..23]: the privacy toggle keeps the window', async () => {
+        // WHY: defect 6, the privacy toggle redraws the whole option, and that redraw threw the user's window away.
+        await openMonthWindow('income');
+        await expectWindowKeptAcross(() => setPrivacyEnabled(true));
+    });
+
+    it('B11 Income, 730 days, 1M on [18..23]: a re-fetch of the same period keeps the window', async () => {
+        // WHY: defect 6, a sync hands a NEW history array with the same dates: the period (first|last date) is unchanged, so the window must be too.
+        const view = await openMonthWindow('income');
+        await expectWindowKeptAcross(() => view.rerender({history: FIXTURE_730.history.map((point) => ({...point}))}));
+    });
+
+    it('B11 Income, 730 days, 1M on [18..23]: a locale change keeps the window', async () => {
+        // WHY: defect 6, switching the UI language redraws the labels, and must not move the window.
+        await openMonthWindow('income');
+        try {
+            await expectWindowKeptAcross(async () => {
+                locale.set('it');
+                await waitLocale('it');
+            });
+        } finally {
+            locale.set('en');
+            await waitLocale('en');
+        }
+    });
+
+    it('B11 control, Income, 730 days, 1M on [18..23]: a history of another period resets the window to the whole range', async () => {
+        // WHY: gives the three B11 cases their teeth: a new period must NOT keep the old window, so "kept" cannot come from a component that never resets.
+        const view = await openMonthWindow('income');
+        const since = setOptionCount();
+        await view.rerender({history: FIXTURE_730.history.slice(30)});
+        const zoom = await firstZoomAfter(since);
+        expect({start: zoom?.start, end: zoom?.end}).toEqual({start: 0, end: 100});
+    });
+
+    // --- B12: the rung the ladder opens on (k4 G2) ----------------------------------------------
+
+    /** Waits until `rung` is the one rung pressed and every series draws `buckets` buckets. WHY both: the pressed button is what the user reads, the buckets what the chart draws. */
+    async function expectOnRung(rung: Rung, buckets: number) {
+        await waitFor(
+            () => {
+                const series = renderedSeries();
+                expect(series.length, 'a series array was drawn').toBeGreaterThan(0);
+                expect({pressed: pressedAmong(rungsOffered()), buckets: series.map((entry) => entry.data.length)}).toEqual({pressed: [`growth-candle-width-${rung}`], buckets: series.map(() => buckets)});
+            },
+            {timeout: 5_000},
+        );
+    }
+
+    it('B12 Income, 40 days, entered from the line: opens on 1M, which every rung being offered leaves unclamped', async () => {
+        // WHY: k4 G2 (developer, 05/10/2026: «facciamo che il bucket di default è 1M»). A week of personal cash
+        // flow is mostly empty bars; a month is the bucket a reader compares. Catches the ladder's own opening
+        // rule, the lowest offered rung (1W here), left on Income.
+        await enterLadderView(FIXTURE_40, 'income');
+        // Precondition: 1M is offered, so no clamp is in play.
+        expect(rungsOffered()).toContain('growth-candle-width-1m');
+        await expectOnRung('1m', MONTH_BUCKETS_40);
+    });
+
+    it('B12 Income, 40 days, entered from Candles: opens on 1M on every entry, whichever rung the candles were on', async () => {
+        // WHY: k4 G2, "every entry into Income". Switching Candles ↔ Income keeps the width today, so Income
+        // inherits the candles' rung: climbed from their 1D to its 1W floor, or kept as it was from 3M. Catches
+        // the width carried over, and a floor raised to 1M instead of an opening (3M sits above it and would
+        // be kept).
+        const view = await enterLadderView(FIXTURE_40, 'candles');
+        await fireEvent.click(view.getByTestId('growth-pnl-submode-income'));
+        await waitForFrame(FRAME.income);
+        await expectOnRung('1m', MONTH_BUCKETS_40);
+
+        await fireEvent.click(view.getByTestId('growth-pnl-submode-candles'));
+        await waitForFrame(FRAME.candles);
+        await pressRung('3m');
+        await waitForBuckets(1);
+        await fireEvent.click(view.getByTestId('growth-pnl-submode-income'));
+        await waitForFrame(FRAME.income);
+        await expectOnRung('1m', MONTH_BUCKETS_40);
+    });
+
+    it('B12 Income, 40 days, restored from the persisted submode: opens on 1M from its first frame', async () => {
+        // WHY: k4 G2, "mounting on Income". The persisted submode (S5) brings a user straight into Income,
+        // and the first frame must already be the month: weeks first would flash, then jump. Catches the
+        // opening applied on a click only, or only after a first draw.
+        storage.set(MODE_KEY, 'pnl');
+        storage.set(SUBMODE_KEY, 'income');
+        pinToday(lastDayOf(FIXTURE_40));
+        render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+        await waitForFrame(FRAME.income);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        await expectOnRung('1m', MONTH_BUCKETS_40);
+        const [first] = fullOptionsSince(0) as unknown as Array<{series: SeriesUpdate[]}>;
+        expect(
+            first.series.map((entry) => entry.data.length),
+            'the first frame draws the 1M buckets',
+        ).toEqual(first.series.map(() => MONTH_BUCKETS_40));
+    });
+
+    it('B12 Income, 40 days, re-entered from another view: opens on 1M again, not on the rung it was left on', async () => {
+        // WHY: k4 G2, "or from another mode". Leaving P&L for Abs leaves Income, so coming back is a new entry.
+        // Catches the rung kept across the round trip, which the ladder does today because it reconciles only
+        // while it is on screen.
+        const view = await enterLadderView(FIXTURE_40, 'income');
+        await pressRung('3m');
+        await waitForBuckets(1);
+        await fireEvent.click(view.getByTestId('growth-toggle-eur'));
+        await waitForFrame(FRAME.abs);
+        await fireEvent.click(view.getByTestId('growth-toggle-pnl'));
+        await waitForFrame(FRAME.income);
+        // Precondition: P&L comes back on Income, the submode the user left it on.
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        await expectOnRung('1m', MONTH_BUCKETS_40);
+    });
+
+    it('B12 Income, 40 days, measured 527 px plot: 1M makes two bars, under three, so it is not offered, and Income opens on 2W, the offered rung nearest it', async () => {
+        // WHY: k4 G2's clamp. A short history cannot draw three monthly bars and the ladder never offers what it
+        // cannot draw (B8), so the opening takes the offered rung nearest 1M: the offered rungs are contiguous,
+        // so here the highest below it. Catches the ladder's own opening (1W, the lowest offered), and a 1M
+        // drawn although it is not offered.
+        fakeGeometry.measured = true;
+        await enterLadderView(FIXTURE_40, 'income');
+        // Precondition: the measured plot offers 1W and 2W only (1M: 2 bars; 3M and up: 1).
+        await waitFor(() => expect(rungsOffered()).toEqual(rungIds(['1w', '2w'])), {timeout: 5_000});
+        await expectOnRung('2w', PAIR_BUCKETS_40);
+    });
+
+    it('B12 Income, 1M window on 2026-10-06, 1440 px plot (573 px): September and October are two months, under three, so Income opens on 2W, the offered rung nearest 1M', async () => {
+        // WHY: the developer's table on the shortest preset — «1M → 1W everywhere, Income opens on 2W there» — and
+        // the clamp on calendar counts: 2026-09-06..10-06 touches two months but four pairs of weeks.
+        fakeGeometry.measured = true;
+        fakeGeometry.plotWidthPx = MEASURED_PLOT_PX.desktop1440;
+        await enterLadderView(WINDOW_FIXTURES['1M'], 'income');
+        await waitFor(() => expect(rungsOffered()).toEqual(rungIds(['1w', '2w'])), {timeout: 5_000});
+        await expectOnRung('2w', 4);
+    });
+
+    it.each([
+        {title: 'Candles open on their finest drawable rung, 3D (92 triples)', submode: 'candles' as Submode, rung: '3d' as Rung, buckets: 92},
+        {title: 'Income opens on 1M (ten months), above 2W, its finest', submode: 'income' as Submode, rung: '1m' as Rung, buckets: 10},
+    ])('B12 9M window on 2026-10-06, 1440 px plot (573 px): $title', async ({submode, rung, buckets}) => {
+        // WHY: both opening rules on the measured offer of B8 — Candles from 3D, Income from 2W, 1M drawable in both.
+        // Catches Income opening on its lowest drawable rung (2W), and Candles moved off theirs.
+        fakeGeometry.measured = true;
+        fakeGeometry.plotWidthPx = MEASURED_PLOT_PX.desktop1440;
+        await enterLadderView(WINDOW_FIXTURES['9M'], submode);
+        await expectOnRung(rung, buckets);
+    });
+
+    it('B12 Candles, 40 days: open on their lowest offered rung, 1D without the measured grid', async () => {
+        // WHY: k4 G2 moves Income's opening only; Candles keep theirs, the finest detail the geometry can
+        // honour. Catches the 1M opening applied to every entry into the ladder.
+        await enterLadderView(FIXTURE_40, 'candles');
+        await expectOnRung('1d', DAY_COUNT);
+    });
+
+    it('B12 Income, 40 days: a rung the user picks holds across redraws — the privacy toggle, a re-fetch of the same period — while Income stays on screen', async () => {
+        // WHY: k4 G2 opens Income on 1M and stops there: inside Income the user's pick holds until they leave
+        // it. Catches an opening that fires on every draw rather than on an entry: the full rebuild of the
+        // privacy toggle, or a re-fetch (a new history array of the same period), would throw the pick away.
+        const view = await enterLadderView(FIXTURE_40, 'income');
+        await pressRung('2w');
+        await expectOnRung('2w', PAIR_BUCKETS_40);
+
+        const beforePrivacy = setOptionCount();
+        setPrivacyEnabled(true);
+        await fullOptionAfter(beforePrivacy);
+        await expectOnRung('2w', PAIR_BUCKETS_40);
+
+        const beforeRefetch = setOptionCount();
+        await view.rerender({history: FIXTURE_40.history.map((point) => ({...point}))});
+        await waitFor(() => expect(chartInstances[0].setOptionCalls.slice(beforeRefetch).some((call) => Array.isArray(call.option.series))).toBe(true), {timeout: 5_000});
+        await expectOnRung('2w', PAIR_BUCKETS_40);
+    });
+
+    // --- B13: the ladder memo knows the day -----------------------------------------------------
+
+    /** Mon 2026-09-07 .. Sun 10-04: four whole ISO weeks, the last one ending on a Sunday. WHY built once: B13 must redraw on the very same inputs. */
+    const FOUR_WEEKS_TO_SUNDAY = buildLadderFixture(isoDays(2026, 8, 7, 28));
+
+    /** What the last bucket shows: its line under the header (`null` for none), and whether it is drawn faded. */
+    interface LastBucketShows {
+        line: {key: BucketLineKey; days: number; total: number} | null;
+        faded: boolean;
+    }
+
+    const B13_CASES: Array<{title: string; submode: Submode; fixture: LadderFixture; rung: Rung; buckets: number; yesterday: string; today: string; before: LastBucketShows; after: LastBucketShows}> = [
+        {
+            title: 'Candles, 1W, four weeks to Sun Oct 4, read on that Sunday and then on Monday Oct 5: the week Sep 28..Oct 4 drops «In progress: 7 of 7 days» and stays unfaded, a whole week now over',
+            submode: 'candles',
+            fixture: FOUR_WEEKS_TO_SUNDAY,
+            rung: '1w',
+            buckets: 4,
+            yesterday: '2026-10-04',
+            today: '2026-10-05',
+            before: {line: {key: CURRENT_LINE, days: 7, total: 7}, faded: false},
+            after: {line: null, faded: false},
+        },
+        {
+            title: 'Income, 1M, the 93 days to Apr 3, read on Apr 30 and then on May 1: April turns from «In progress: 3 of 30 days», unfaded, to «Partial: 3 of 30 days», faded',
+            submode: 'income',
+            fixture: FIXTURE_93,
+            rung: '1m',
+            buckets: 4,
+            yesterday: '2026-04-30',
+            today: '2026-05-01',
+            before: {line: {key: CURRENT_LINE, days: 3, total: 30}, faded: false},
+            after: {line: {key: PARTIAL_LINE, days: 3, total: 30}, faded: true},
+        },
+    ];
+
+    it.each(B13_CASES)('B13 $title', async ({submode, fixture, rung, buckets, yesterday, today, before, after}) => {
+        // WHY: whether a period is in progress is a function of the day, and the ladder memo answers a redraw on the same
+        // inputs from its cache. A page left open past midnight redraws — a privacy toggle, a resize, a rung press — with no
+        // new history; a memo keyed on the inputs alone kept yesterday's «In progress» line, and withheld the mark a cut
+        // period earns once it is over.
+        await openRung(fixture, submode, rung, buckets, yesterday);
+        const last = buckets - 1;
+        const shows = () => ({lines: bucketLines([last]), faded: renderedSeries().map((series) => markedBuckets(series).includes(last))});
+        const expected = ({line, faded}: LastBucketShows) => {
+            const text = line === null ? [] : [bucketLine(line.key, line.days, line.total)];
+            return {lines: [{partial: line?.key === PARTIAL_LINE ? text : [], current: line?.key === CURRENT_LINE ? text : []}], faded: Array.from({length: SERIES_COUNT[submode]}, () => faded)};
+        };
+        expect(shows(), `precondition, on ${yesterday}: the last bucket is the period in progress`).toEqual(expected(before));
+
+        // Midnight passes; the inputs stay the very same object. The redraw must read the new day.
+        pinToday(today);
+        const since = setOptionCount();
+        setPrivacyEnabled(true);
+        await fullOptionAfter(since);
+        expect(
+            renderedSeries().map((entry) => entry.data.length),
+            'the redraw drew the same buckets',
+        ).toEqual(renderedSeries().map(() => buckets));
+        expect(shows(), `on ${today}`).toEqual(expected(after));
+    });
+});
+
+// =============================================================================
+// S7a — the ladder axis catalogue keys: every locale takes its values (the ICU apostrophe trap)
+// =============================================================================
+
+/**
+ * The ladder axis prints two catalogue texts (S7, the label contract of 07/10/2026): `dashboard.pnlAxisQuarter`
+ * names a quarter, and `dashboard.pnlAxisWithYear` adds the two-digit year to a label. Both are ICU MessageFormat,
+ * and ICU reads an apostrophe as a quote. The English year form prints one apostrophe (`Oct '25`), so the catalogue
+ * must write it doubled, `{label} ''{year}`. Written once, `{label} '{year}` opens a quoted literal that swallows the
+ * placeholder, and the axis prints `Oct {year}`: a text that resolves, so no missing-key fallback warns anyone.
+ *
+ * The guard formats each locale's two messages through the runtime's own compiler, with sentinel values, and asks
+ * that every value arrived and no brace is left. It asserts nothing about the wording: a translator may reorder the
+ * parts or drop the apostrophe. Its predicate is proved on the trap itself first.
+ *
+ * Green by construction: the four catalogues already hold the right texts, and the guard keeps them so.
+ * `getMessageFormatter` ignores its locale argument (its memo keys on the text alone, see catalogIcuLocale.test.ts),
+ * so a text compiles with the locale current at its first use. Harmless here: neither message holds a plural, a
+ * number, a date or a time, and substitution does not depend on the locale.
+ */
+describe('GrowthChart ladder axis catalogue keys (S7a: the ICU apostrophe trap)', () => {
+    /** Typed on the app's locale list, so a fifth locale without a catalogue here fails `front check` (as in catalogIcuLocale.test.ts). */
+    const CATALOGUES: Record<SupportedLocale, unknown> = {en, it: itCatalogue, fr, es};
+
+    /** Values no catalogue text contains, so finding them in the output proves they were substituted. */
+    const YEAR_FORM_VALUES = {label: 'LABELSLOT', year: 'YEARSLOT'};
+    const QUARTER_VALUES = {quarter: 4};
+
+    /** The message at a dotted key of a catalogue, or why there is none. WHY: a missing key must fail as itself, not as a formatting error. */
+    function messageAt(catalogue: unknown, dottedKey: string): string {
+        const node = dottedKey.split('.').reduce<unknown>((current, part) => (current !== null && typeof current === 'object' ? (current as Record<string, unknown>)[part] : undefined), catalogue);
+        return typeof node === 'string' ? node : `missing: ${dottedKey}`;
+    }
+
+    /** A message as the runtime formats it, or why it could not. WHY: the runtime's compiler is the oracle, and a throw must show in the assertion instead of aborting it. */
+    function formatWith(message: string, localeCode: string, values: Record<string, string | number>): string {
+        try {
+            const text = getMessageFormatter(message, localeCode).format(values);
+            return typeof text === 'string' ? text : `not a string: ${JSON.stringify(text)}`;
+        } catch (error) {
+            return `threw: ${error instanceof Error ? error.message : String(error)}`;
+        }
+    }
+
+    /** Every value reached the text and no placeholder is left. WHY: a quoted placeholder prints as itself, braces included. */
+    function tookValues(text: string, values: Record<string, string | number>): boolean {
+        return Object.values(values).every((value) => text.includes(String(value))) && !/[{}]/.test(text);
+    }
+
+    it('S7a control: the predicate rejects a year form whose single apostrophe quotes the placeholder, and accepts the doubled one', () => {
+        // WHY: gives the guard its teeth. ICU reads `'{` as the start of a quoted literal, so `{label} '{year}` prints the
+        // placeholder as text; `''` is one printed apostrophe, so `{label} ''{year}` prints it and substitutes the year.
+        // Both messages are written here, not catalogue texts.
+        const single = formatWith("{label} '{year}", 'en', YEAR_FORM_VALUES);
+        const doubled = formatWith("{label} ''{year}", 'en', YEAR_FORM_VALUES);
+        expect({single, singleAccepted: tookValues(single, YEAR_FORM_VALUES), doubled, doubledAccepted: tookValues(doubled, YEAR_FORM_VALUES)}).toEqual({
+            single: 'LABELSLOT {year}',
+            singleAccepted: false,
+            doubled: "LABELSLOT 'YEARSLOT",
+            doubledAccepted: true,
+        });
+    });
+
+    it.each([...SUPPORTED_LOCALES])('S7a %s: dashboard.pnlAxisWithYear and dashboard.pnlAxisQuarter take their values', (localeCode) => {
+        // WHY: the ICU apostrophe trap, locale by locale. Green by construction today; a red names the locale and shows
+        // what its axis would print.
+        const catalogue = CATALOGUES[localeCode];
+        const yearForm = formatWith(messageAt(catalogue, 'dashboard.pnlAxisWithYear'), localeCode, YEAR_FORM_VALUES);
+        const quarter = formatWith(messageAt(catalogue, 'dashboard.pnlAxisQuarter'), localeCode, QUARTER_VALUES);
+        expect({yearForm: tookValues(yearForm, YEAR_FORM_VALUES), quarter: tookValues(quarter, QUARTER_VALUES)}, `${localeCode} prints the year form as ${JSON.stringify(yearForm)} and the quarter as ${JSON.stringify(quarter)}`).toEqual({yearForm: true, quarter: true});
+    });
+});
+
+// =============================================================================
+// S7b — the money axis ticks: distinct, in the locale's glyphs, the fixed edge unlabelled
+// =============================================================================
+
+/**
+ * Every money view (Abs, P&L line, Candles, Income) labels its y axis through one formatter,
+ * chosen when the full option is built. Three decisions shape it, and each has its cases.
+ *
+ * D18, distinct ticks. ECharts can space ticks half a thousand apart, and a formatter that
+ * rounded the scaled value to whole thousands printed `5k 6k 6k 7k 7k 8k 8k`. Two ticks shared
+ * each label, so the scale seemed to jump. A label prints the scaled value exactly (`5.5k`,
+ * `1.25M`), and a whole value with no decimals (`2k`, `1M`).
+ *
+ * D23, the locale's glyphs. The number and its minus come from one Intl call in the interface
+ * locale (M-18), so a Swedish axis writes `−1,5k`, with U+2212 and a decimal comma. A minus
+ * written by hand is a hyphen in every locale, and the four interface languages write a hyphen
+ * too. So the Swedish case forces sv-SE as the interface locale, before the mount, and pins that
+ * glyph as a literal: the glyph is the subject. Every other literal here is pinned in en-US, the
+ * interface locale of this file, which the cases check.
+ *
+ * D25, the edge the chart fixes. The axis `min` is a callback that leaves 8% of the range below
+ * the data, and ECharts labels that edge with its raw value: exact formatting would print it as
+ * `-4.152k`. Decision B hides that one label and keeps the edge where it is. Income draws bars,
+ * so it keeps ECharts' default instead: an axis that includes zero, like any bar chart, and no
+ * hidden label. Its two keys are present and `undefined`, never omitted. The full rebuild
+ * replaces `series` and `xAxis` but MERGES `yAxis` into the previous one, so an omitted key would
+ * keep the line's callback and hidden label after a switch to Income.
+ *
+ * k4 G1 (developer review, 05/10/2026), the edge measured anyway. Hidden is not enough:
+ * `grid.containLabel` still measures the hidden edge label, and D18 prints the raw edge in full
+ * (`55,588k` where a tick reads `55k`), so the Abs and P&L plots started further right than their
+ * labels needed — 82 px instead of 55 on real ECharts 6 at 800×300. ECharts calls the formatter as
+ * `formatter(value, index)`, the lowest tick at index 0, so in every view with the computed edge
+ * that label is blank, masked or not, while every other tick, and a call with the value alone (as
+ * the S2a cases make), print as before. Income keeps its index-0 label: there it is a real tick.
+ */
+// WHY the 30 s budget: a case walks several views, each behind a 5 s wait, and a red `waitFor`
+// must be able to exhaust its own timeout and rethrow the case's assertion instead of dying on
+// the test timeout (as S7 does).
+describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000}, () => {
+    // The flag is module state shared by every case in the file. Whoever switches it on
+    // switches it off, whatever the outcome of the case (as S2a does).
+    afterEach(() => setPrivacyEnabled(false));
+
+    /** Tick sequences ECharts lays out on a money axis, with what each must print in en-US. WHY literals: the exact labels are the subject, in the interface locale the reads check. */
+    const TICKS_EN = [
+        {values: [5_000, 5_500, 6_000, 6_500, 7_000, 7_500, 8_000], labels: ['5k', '5.5k', '6k', '6.5k', '7k', '7.5k', '8k']},
+        {values: [1_000, 1_500, 2_000, 2_500], labels: ['1k', '1.5k', '2k', '2.5k']},
+        {values: [900, 950, 1_000, 1_050], labels: ['900', '950', '1k', '1.05k']},
+        {values: [1_000_000, 1_250_000, 1_500_000, 1_750_000, 2_000_000], labels: ['1M', '1.25M', '1.5M', '1.75M', '2M']},
+        {values: [-3_000, -1_500, 0, 1_500, 3_000], labels: ['-3k', '-1.5k', '0', '1.5k', '3k']},
+    ];
+
+    /**
+     * Reads labels written in en-US, the interface locale of this file (M-18): the English UI on
+     * jsdom's en-US browser, whatever the host. WHY a precondition rather than a forced locale: it
+     * names the locale every en-US literal below is about, and a red here is about the harness, not
+     * the chart. Why (re-pin, M-18 CP2): the reads used to run under a patched browser locale
+     * (`inLocale('en-US', …)`), which no figure reads any more.
+     */
+    function readInEnUs<T>(read: () => T): T {
+        expect(uiLocale(), 'the interface locale the en-US literals are written in').toBe('en-US');
+        return read();
+    }
+
+    /** What `format` prints for each sequence in en-US, and whether those labels are distinct. WHY both: the literals pin this formatting, the property holds for any that replaces it. */
+    function readTicks(format: AxisFormatter, sequences: Array<{values: number[]}>) {
+        return readInEnUs(() =>
+            sequences.map(({values}) => {
+                const labels = values.map((value) => format(value));
+                return {labels, distinct: new Set(labels).size === labels.length};
+            }),
+        );
+    }
+
+    /** `-0` as written. WHY: `String(-0)` is `'0'`, which would hide which zero a line of the diff is about. */
+    const show = (value: number) => (Object.is(value, -0) ? '-0' : String(value));
+
+    /** What ECharts hands an axis `min` callback: the extent of the data on that axis. */
+    type AxisMin = (extent: {min: number; max: number}) => number;
+
+    /** The extent the edge cases hand the callback. WHY: data from -3200 to 8700 leaves an edge no tick lands on. */
+    const EXTENT = {min: -3_200, max: 8_700};
+
+    /** What a callback edge reads as in a failure diff. WHY: a named sentinel keeps the red on the assertion, not on a TypeError. */
+    const NOT_A_CALLBACK = 'not a callback';
+
+    /** The lower edge of the y axis on one full rebuild: whether `min` is a callback, where it puts the edge on `EXTENT`, and whether that edge is labelled. */
+    function lowerEdgeOf(option: FullOption) {
+        const {min, axisLabel} = option.yAxis;
+        return {
+            minIsCallback: typeof min === 'function',
+            edge: typeof min === 'function' ? (min as AxisMin)(EXTENT) : NOT_A_CALLBACK,
+            showMinLabel: axisLabel.showMinLabel,
+        };
+    }
+
+    /** The lower edge every view but Income must keep. WHY a literal: floor(-3200 - 11900 × 0.08) = -4152, counted by hand, is the oracle that the edge did not move. */
+    const FIXED_EDGE = {minIsCallback: true, edge: -4_152, showMinLabel: false};
+
+    it('D18: prints every tick of a money axis exactly, so no two ticks share a label, in Abs and in the P&L line', async () => {
+        // WHY: D18. `toFixed(0)` on thousands printed `5k 6k 6k 7k 7k 8k 8k` for ticks half a
+        // thousand apart, and `toFixed(1)` on millions printed `1.3M` for 1.25M: the axis
+        // repeated labels, and the ones it kept sat at the wrong values. Catches any rounding of
+        // the scaled value to a fixed number of decimals. The P&L line is a separate full
+        // rebuild: one sequence proves it hands ECharts the same money formatter, not an older
+        // one.
+        expect(isPrivacyEnabled()).toBe(false);
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+
+        const absOption = await waitForFrame(FRAME.abs);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+        const abs = readTicks(absOption.yAxis.axisLabel.formatter, TICKS_EN);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        const lineOption = await waitForFrame(FRAME.pnlLine);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        const pnlLine = readTicks(lineOption.yAxis.axisLabel.formatter, TICKS_EN.slice(0, 1));
+
+        const expected = TICKS_EN.map(({labels}) => ({labels, distinct: true}));
+        expect({abs, pnlLine}).toEqual({abs: expected, pnlLine: expected.slice(0, 1)});
+    });
+
+    it('D18: prints a whole scaled value with no decimals (2k, 20k, 1M, 900), and a zero or a negative zero as 0', async () => {
+        // WHY: exact formatting must not swing to the other extreme. `1.0M` pads a label that
+        // reads no differently without it, and a negative zero printed `-0` invents a loss on the
+        // zero line. Catches `toFixed(1)` kept on the millions, a fixed minimum of decimals, and
+        // a zero test that lets `-0` through to `toLocaleString`.
+        expect(isPrivacyEnabled()).toBe(false);
+        render(GrowthChart, {props: {history: HISTORY}});
+        const axis = (await waitForFrame(FRAME.abs)).yAxis.axisLabel.formatter;
+
+        const singles = readInEnUs(() => [2_000, 20_000, 1_000_000, 1_300_000, 900, -5_000, 0, -0].map((value) => `${show(value)} → ${axis(value)}`));
+        expect(singles).toEqual(['2000 → 2k', '20000 → 20k', '1000000 → 1M', '1300000 → 1.3M', '900 → 900', '-5000 → -5k', '0 → 0', '-0 → 0']);
+    });
+
+    it("D23: writes the interface locale's minus and decimal comma on the money axis, in the clear and masked: U+2212 in sv-SE", async () => {
+        // WHY: D23 on the axis. A minus written by hand is a hyphen in every locale, and the four
+        // interface languages write a hyphen too, so no case in them can tell the two apart. With
+        // sv-SE as the interface locale the digits turn Swedish either way, the sign only if it
+        // comes out of the same call. Catches a hand-written `-` in the clear label and in front of
+        // the mask, and a decimal point written by hand where the locale writes a comma. The glyphs
+        // are literals on purpose: they are the subject.
+        // Why (re-pin, M-18 CP2): sv-SE used to be forced by patching `Number.prototype.toLocaleString`
+        // around the read; it is now forced as the interface locale, before the mount.
+        forceInterfaceLocale(SWEDISH);
+        // Precondition: this Node has Swedish locale data and writes U+2212 there. Without it the
+        // locale would fall back in silence and the check would prove nothing.
+        expect(leadingSign(axisNumber(-5, SWEDISH))).toBe('\u2212');
+        expect(isPrivacyEnabled()).toBe(false);
+        render(GrowthChart, {props: {history: HISTORY}});
+        const clearAxis = (await waitForFrame(FRAME.abs)).yAxis.axisLabel.formatter;
+        const clear = [-5_000, -1_500, 1_500, -0].map((value) => clearAxis(value));
+
+        const beforeOn = setOptionCount();
+        setPrivacyEnabled(true);
+        const maskedAxis = (await fullOptionAfter(beforeOn)).yAxis.axisLabel.formatter;
+        const masked = [-5_000, 1_500, 0].map((value) => maskedAxis(value));
+
+        expect({clear, masked}).toEqual({
+            clear: ['\u22125k', '\u22121,5k', '1,5k', '0'],
+            masked: [`\u2212${PRIVACY_PLACEHOLDER}`, PRIVACY_PLACEHOLDER, PRIVACY_PLACEHOLDER],
+        });
+    });
+
+    it('D25: keeps the lower edge where it was and hides its label, in Abs, P&L line, Candles and %', async () => {
+        // WHY: D25, decision B. ECharts labels the edge a `min` callback fixes with its raw
+        // value, which the exact labels of D18 would print as `-4.152k` under a round scale.
+        // Catches that label left shown in any of the four views. Catches too the opposite fix,
+        // the callback dropped or changed, which would move the edge: the axis would start from
+        // a nice number, or hug the data. One builder serves all four views, so walking them all
+        // catches a condition that hides the label in some views only. Income, the one view whose
+        // edge goes, is the next case.
+        expect(isPrivacyEnabled()).toBe(false);
+        const {getByTestId} = render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+
+        const abs = lowerEdgeOf(await waitForFrame(FRAME.abs));
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        const pnlLine = lowerEdgeOf(await waitForFrame(FRAME.pnlLine));
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        const candles = lowerEdgeOf(await waitForFrame(FRAME.candles));
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-candles']);
+
+        // % comes last: it draws three lines, the P&L line's frame, so entering it from the
+        // candles leaves no earlier option it could be mistaken for. Its barrier is its own
+        // formatter, whose label reads the same in every locale.
+        expect(getByTestId('growth-toggle-pct')).toBeEnabled();
+        await fireEvent.click(getByTestId('growth-toggle-pct'));
+        await waitFor(() => expect(latestFullOption().yAxis.axisLabel.formatter(12.3)).toBe('12.3%'), {timeout: 5_000});
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+        const pct = lowerEdgeOf(latestFullOption());
+
+        expect({abs, pnlLine, candles, pct}).toEqual({abs: FIXED_EDGE, pnlLine: FIXED_EDGE, candles: FIXED_EDGE, pct: FIXED_EDGE});
+    });
+
+    it("D25: Income hands ECharts min and showMinLabel present as undefined, so the yAxis merge cannot keep the line's edge, and the line gets both back", async () => {
+        // WHY: D25 for bars. Bars stand on zero, so Income keeps ECharts' default axis, which
+        // includes zero. The trap is the merge: the full rebuild merges `yAxis` into the previous
+        // option, so an Income option that merely OMITS `min` and `showMinLabel` keeps the
+        // line's callback and hidden label in the chart. On real ECharts 6, line then bars gave an
+        // extent of [-888, 12000] with the keys omitted, and [0, 12000] with them set to
+        // `undefined`. The recorder merges shallowly and cannot show that, so the guard is on the
+        // recorded option itself: both keys PRESENT, with the value `undefined`. A bare
+        // `toBeUndefined()` would pass on the omitted keys, the very defect. The walk enters
+        // Income from the line, the path where the merge leaks, then returns to the line, which
+        // must get its callback and hidden label back.
+        expect(isPrivacyEnabled()).toBe(false);
+        const {getByTestId} = render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+        await waitForFrame(FRAME.abs);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        const line = await waitForFrame(FRAME.pnlLine);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        // Precondition: the view Income is entered from has a callback the merge could keep.
+        expect(typeof line.yAxis.min).toBe('function');
+
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        const income = await waitForFrame(FRAME.income);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        // Soft, so one red names both keys.
+        expect.soft(income.yAxis).toHaveProperty('min', undefined);
+        expect.soft(income.yAxis.axisLabel).toHaveProperty('showMinLabel', undefined);
+
+        await fireEvent.click(getByTestId('growth-pnl-submode-line'));
+        const back = await waitForFrame(FRAME.pnlLine);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        expect(lowerEdgeOf(back)).toEqual(FIXED_EDGE);
+    });
+
+    // --- k4 G1: the edge label is blank, so containLabel measures nothing there -----------------
+
+    /** Privacy off, then on. WHY: the blank must hold over the mask too, and the mask must not leak past it. */
+    const PRIVACY = [
+        {title: 'in the clear', masked: false},
+        {title: 'masked', masked: true},
+    ];
+
+    /** Edges a computed `min` can hand the label: below zero, a large raw value D18 prints in full (`55.588M`), zero, and a return. */
+    const EDGES = [-4_152, 55_588_000, 0, 12.3];
+
+    /** What a masked money label prints in en-US: the minus outside the mask (D8), nothing else. */
+    const maskedMoney = (value: number) => (value < 0 ? `-${PRIVACY_PLACEHOLDER}` : PRIVACY_PLACEHOLDER);
+
+    /**
+     * The y-axis formatter of each view whose axis has the computed edge — Abs, P&L line, Candles, % —
+     * walked as the D25 case walks them, with the edge proven a callback in each. WHY: one walk per mount,
+     * so the privacy flag set before the mount is the one every formatter is built under.
+     */
+    async function edgeFormatters(): Promise<Array<{view: string; format: AxisFormatter}>> {
+        const {getByTestId} = render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+        const views: Array<{view: string; format: AxisFormatter}> = [];
+        const take = (view: string, option: FullOption) => {
+            // Barrier: this view's axis has the computed edge, the one whose label is the subject.
+            expect(typeof option.yAxis.min, `${view}: the lower edge is a callback`).toBe('function');
+            views.push({view, format: option.yAxis.axisLabel.formatter});
+        };
+        take('Abs', await waitForFrame(FRAME.abs));
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        take('P&L line', await waitForFrame(FRAME.pnlLine));
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        take('Candles', await waitForFrame(FRAME.candles));
+        // % last, as in D25: its frame is the P&L line's, so its own formatter is its barrier.
+        await fireEvent.click(getByTestId('growth-toggle-pct'));
+        await waitFor(() => expect(latestFullOption().yAxis.axisLabel.formatter(12.3)).toBe('12.3%'), {timeout: 5_000});
+        take('%', latestFullOption());
+        return views;
+    }
+
+    it.each(PRIVACY)('k4 G1: prints nothing at tick index 0, the edge, in Abs, P&L line, Candles and % — $title', async ({masked}) => {
+        // WHY: developer review, 05/10/2026: an empty band left of the Abs and P&L plots. D25 hides the edge
+        // label, but containLabel still measures it, at its full D18 width; a label blank at index 0 measures
+        // nothing, whatever the edge. Catches the edge still formatted at index 0, in any of the four views,
+        // in the clear or masked — the mask (`-•••`) is as wide as a label that is not empty.
+        setPrivacyEnabled(masked);
+        const views = await edgeFormatters();
+        const read = Object.fromEntries(views.map(({view, format}) => [view, readInEnUs(() => EDGES.map((edge) => format(edge, 0)))]));
+        expect(read).toEqual(Object.fromEntries(views.map(({view}) => [view, EDGES.map(() => '')])));
+    });
+
+    it.each(PRIVACY)('k4 G1: prints every tick from index 1 on exactly as before — $title (green today and after the fix)', async ({masked}) => {
+        // WHY: the blank is the edge's alone; every other tick keeps D18's exact label, D23's glyphs and D8's
+        // mask. Catches a rule that blanks more than index 0 (`index <= 1`, an inverted test), or that formats
+        // the other ticks another way.
+        setPrivacyEnabled(masked);
+        const views = await edgeFormatters();
+        const PCT_TICKS = [-0.6, 0, 1.2, 12.3];
+        const sequencesOf = (view: string) => (view === '%' ? [PCT_TICKS] : TICKS_EN.map(({values}) => values));
+        const read = Object.fromEntries(views.map(({view, format}) => [view, readInEnUs(() => sequencesOf(view).map((values) => values.map((value, offset) => format(value, offset + 1))))]));
+        const money = masked ? TICKS_EN.map(({values}) => values.map(maskedMoney)) : TICKS_EN.map(({labels}) => labels);
+        expect(read).toEqual({Abs: money, 'P&L line': money, Candles: money, '%': [['-0.6%', '0.0%', '1.2%', '12.3%']]});
+    });
+
+    it.each(PRIVACY)('k4 G1: a call with the value alone prints the edge as before, the % edge grouped in en-US (M-18) — $title', async ({masked}) => {
+        // WHY: the index is ECharts' second argument, and the older callers — the S2a and S7b cases among them
+        // — pass the value alone. Catches an index that defaults to 0 and blanks every such call.
+        // Why (re-pin, M-18 CP2): the % edge is written by `formatPercent` in the interface locale, en-US
+        // here, which groups from 1,000: `-4152.0%` and `55588000.0%` become `-4,152.0%` and `55,588,000.0%`.
+        setPrivacyEnabled(masked);
+        const views = await edgeFormatters();
+        const VALUES = [-4_152, 55_588_000, 0];
+        const read = Object.fromEntries(views.map(({view, format}) => [view, readInEnUs(() => VALUES.map((value) => format(value)))]));
+        const money = masked ? VALUES.map(maskedMoney) : ['-4.152k', '55.588M', '0'];
+        expect(read).toEqual({Abs: money, 'P&L line': money, Candles: money, '%': ['-4,152.0%', '55,588,000.0%', '0.0%']});
+    });
+
+    it.each(PRIVACY)('k4 G1: Income keeps the label of its tick index 0, a real tick on an axis that stands on zero — $title (green today and after the fix)', async ({masked}) => {
+        // WHY: Income has no computed edge (D25): its lowest tick is a round value — zero, or the deepest cost
+        // bar — and a reader needs it. Catches the blank applied to every view.
+        setPrivacyEnabled(masked);
+        const {getByTestId} = render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+        await waitForFrame(FRAME.abs);
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await waitForFrame(FRAME.pnlLine);
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        const income = await waitForFrame(FRAME.income);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        // Barrier: Income's axis has no computed edge, so its index 0 is not the edge G1 blanks.
+        expect(income.yAxis).toHaveProperty('min', undefined);
+        const VALUES = [0, -30, -5_000, 1_500];
+        const labels = readInEnUs(() => VALUES.map((value) => income.yAxis.axisLabel.formatter(value, 0)));
+        expect(labels).toEqual(masked ? VALUES.map(maskedMoney) : ['0', '-30', '-5k', '1.5k']);
+    });
+});
+
+// =============================================================================
+// S8 — the purchase value in the Income submode (R11, D26)
+// =============================================================================
+
+/**
+ * The Income submode's acquisition column is the purchase value, the KPI card's own figure
+ * (`dashboard.bookValue`), split by the money that paid for it: new capital, then reinvested
+ * returns (R11, D2 = A).
+ *
+ * One name. Both halves carry the purchase value's name, so the legend lists it once and one
+ * click on it hides or shows both, as the P&L line's two halves share one total. Neither half's
+ * own label reaches the legend.
+ *
+ * One total. The tooltip prints the purchase value in bold, then each half under it as a `↳ `
+ * row, every amount signed like the rest of Income (D23b). The total is the sum of what the two
+ * bars draw.
+ *
+ * One colour per kind of money (D26). Each half is painted in the colour its money has in the
+ * Abs view: new capital in the KPI blue of the purchase cost (`dashboard.assetsAtCost`), the
+ * reinvested returns in the colour of `dashboard.cashFromGeneratedReturns`. The colours are read
+ * from the Abs option of the same mount, never written down: the palette is the component's to
+ * choose, and the agreement of the two views is the contract.
+ *
+ * WHY names are asserted here, where the file header says they are not: the shared name IS the
+ * subject. Every name is the `get(_)` of its key in the locale the component renders in, never
+ * English text. Series names and legend entries are compared raw, as ECharts receives them, and
+ * tooltip labels as the user reads them, through `htmlText`.
+ */
+// WHY the 30 s budget: a case chains several 5 s waits, and a red `waitFor` must be able to
+// exhaust its own timeout and rethrow the case's assertion instead of dying on the test timeout
+// (as S7 and S7b do).
+describe('GrowthChart Income purchase value (S8: R11, D26)', {timeout: 30_000}, () => {
+    /**
+     * New capital and reinvested returns on two of the three money days, so the one Income bar is
+     * a sum on both halves: 500 + 400 and 100 + 200. Whole amounts, none of them zero, and the two
+     * halves differ, so a swap cannot pass: the subject is the total and which half is which, not
+     * the sign of a zero (D23 covers that, on `MONEY_ACQUISITION`, which stays as it is).
+     */
+    const PURCHASE_FUNDING: PortfolioAcquisitionFundingSeries = {
+        points: [
+            {date: DATES[0], from_new_capital: eur(500), from_reinvested: eur(100)},
+            {date: DATES[2], from_new_capital: eur(400), from_reinvested: eur(200)},
+        ],
+    };
+    /** What the one bar sums each half to, and the two together, counted by hand from `PURCHASE_FUNDING`. */
+    const NEW_CAPITAL = 900;
+    const REINVESTED = 300;
+    const PURCHASE_VALUE = 1_200;
+
+    /** The parts of a full rebuild this describe reads. WHY local: the shared `FullOption` has no stack, colour or legend, and only S8 reads them. */
+    interface PurchaseValueOption extends Omit<FullOption, 'series'> {
+        series: Array<{type?: string; name?: string; stack?: string; itemStyle?: {color?: string}; data?: unknown[]}>;
+        legend?: {data?: unknown[]};
+    }
+
+    const labelOf = (key: string) => htmlText(get(_)(key));
+
+    /** A colour as jsdom reads it back from a `style`, where `#rrggbb` becomes `rgb(…)`. WHY: a tooltip row's colour reads back normalised and an option's as written, so both sides go through here. */
+    function cssColour(colour: string | undefined): string {
+        const probe = document.createElement('div');
+        probe.style.color = colour ?? '';
+        return probe.style.color;
+    }
+
+    /**
+     * Mounts the three money days with `PURCHASE_FUNDING`, opens on Abs, walks to P&L, then to
+     * Income, and returns the full rebuild of each end. Every step waits for its own frame and
+     * reads its toggle as pressed, so neither option can be mistaken for the other.
+     */
+    async function openIncome(): Promise<{abs: PurchaseValueOption; income: PurchaseValueOption}> {
+        // The amounts are read in the clear. The flag is module state, and the cases that switch it on switch it off.
+        expect(isPrivacyEnabled()).toBe(false);
+        const {getByTestId} = render(GrowthChart, {
+            props: {history: MONEY_HISTORY, incomeHistory: MONEY_INCOME, costHistory: MONEY_COSTS, depositHistory: MONEY_DEPOSITS, acquisitionFunding: PURCHASE_FUNDING, baseCurrency: BASE_CURRENCY},
+        });
+        const abs: PurchaseValueOption = await waitForFrame(FRAME.abs);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await waitForFrame(FRAME.pnlLine);
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        const income: PurchaseValueOption = await waitForFrame(FRAME.income);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        return {abs, income};
+    }
+
+    /** The options that carry a series array, recorded from call `since` onwards: full rebuilds and partial updates alike. */
+    function seriesCallsSince(since: number): Array<Record<string, unknown>> {
+        expect(chartInstances).toHaveLength(1);
+        return chartInstances[0].setOptionCalls
+            .slice(since)
+            .map((call) => call.option)
+            .filter((option) => Array.isArray(option.series));
+    }
+
+    /** The one tooltip row labelled `label`, as elements: its label `<span>`, and the `<div>` that carries the row's colour. */
+    function rowOf(html: string, label: string): {span: Element; row: HTMLElement} {
+        const matching = tooltipRowElements(html).filter((entry) => entry.label.textContent === label);
+        expect(matching, `exactly one tooltip row labelled ${label}`).toHaveLength(1);
+        const row = matching[0].label.parentElement;
+        if (row == null) throw new Error(`the row labelled ${label} has no element around it`);
+        return {span: matching[0].label, row};
+    }
+
+    it('names both acquisition halves after the purchase value, in the one acquisition stack, on the full rebuild', async () => {
+        // WHY: R11. The two halves are one quantity, the purchase value, split by where its money
+        // came from, so both carry its name. Catches a half that keeps its own label, which also
+        // lists it in the legend apart from the other, and a half that leaves the acquisition
+        // stack, which would draw it as a column of its own. `openIncome` waits for the Income
+        // frame, so slots 4 and 5 are the last two of six bars.
+        const {income} = await openIncome();
+        const purchaseValue = get(_)('dashboard.bookValue');
+        expect(income.series.slice(4).map(({name, stack}) => ({name, stack}))).toEqual([
+            {name: purchaseValue, stack: 'acquisition'},
+            {name: purchaseValue, stack: 'acquisition'},
+        ]);
+    });
+
+    it('keeps the shared name on the partial update that draws funding arriving after Income is on screen', async () => {
+        // WHY: R11 on the other path. Data that arrives in the view on screen is drawn by the
+        // partial update, which sends every slot's name with its data and is built apart from the
+        // full rebuild. Catches that path still naming the halves apart, so the bars would carry
+        // names the legend does not list. The funding arrives after Income is drawn, as the
+        // dashboard's lazy fetch delivers it, which is what makes the update partial.
+        const {getByTestId, rerender} = render(GrowthChart, {props: {history: HISTORY}});
+        await waitFor(() => expect(chartInstances).toHaveLength(1), {timeout: 5_000});
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        await waitForFrame(FRAME.income);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        // Presence barrier: the six slots are drawn, and the acquisition ones carry nothing yet.
+        const drawnBefore = renderedSeries();
+        expect(drawnBefore).toHaveLength(6);
+        expect(nonZeroPoints(drawnBefore[4]) + nonZeroPoints(drawnBefore[5]), 'no funding before it arrives').toBe(0);
+
+        // Sampled BEFORE the arrival, so the update read below is one recorded after it.
+        const before = setOptionCount();
+        await rerender({acquisitionFunding: ACQUISITION_FUNDING});
+        let update: SeriesUpdate[] = [];
+        await waitFor(
+            () => {
+                const calls = seriesCallsSince(before);
+                expect(calls.length, 'a series update after the arrival').toBeGreaterThan(0);
+                const latest = calls[calls.length - 1];
+                // Partial: series without the axis and the tooltip that only a full rebuild carries.
+                expect(latest.yAxis, 'a partial update: no y axis').toBeUndefined();
+                expect(latest.tooltip, 'a partial update: no tooltip').toBeUndefined();
+                update = latest.series as SeriesUpdate[];
+                expect(update).toHaveLength(6);
+                expect(nonZeroPoints(update[4]), 'new capital arrived').toBeGreaterThan(0);
+                expect(nonZeroPoints(update[5]), 'reinvested arrived').toBeGreaterThan(0);
+            },
+            {timeout: 5_000},
+        );
+
+        const purchaseValue = get(_)('dashboard.bookValue');
+        expect(update.slice(4).map((series) => series.name)).toEqual([purchaseValue, purchaseValue]);
+    });
+
+    it('lists the purchase value once in the Income legend, after the other four columns, and neither half under its own label', async () => {
+        // WHY: R11 with the legend code left as it is. The legend lists each distinct series name
+        // in slot order, so the shared name is what makes the purchase value one entry, which
+        // hides or shows both halves at once. Catches a half named apart, which lists its own
+        // label and toggles alone, and an acquisition slot moved ahead of the other columns.
+        const {income} = await openIncome();
+        const legend = income.legend?.data;
+        expect(legend).toEqual(['transactions.types.DIVIDEND', 'transactions.types.INTEREST', 'dashboard.feesAndTaxes', 'transactions.types.DEPOSIT', 'dashboard.bookValue'].map((key) => get(_)(key)));
+        expect(
+            legend?.filter((entry) => entry === get(_)('dashboard.bookValue')),
+            'the purchase value, once',
+        ).toHaveLength(1);
+        expect(legend).not.toContain(get(_)('dashboard.pnlAcqNewCapital'));
+        expect(legend).not.toContain(get(_)('dashboard.pnlAcqReinvested'));
+    });
+
+    it('prints the purchase value in bold as the total of its halves, then new capital and reinvested under it, all signed', async () => {
+        // WHY: R11 in the tooltip. The purchase value is the figure a user compares with the KPI
+        // card, so it is printed whole, in bold like the income total, with each half under it as
+        // a `↳ ` row. Catches a missing total, a total of one half only, the halves swapped or
+        // printed away from their total, a half printed unsigned, and a total set like its halves.
+        const {income} = await openIncome();
+        const html = income.tooltip.formatter([{dataIndex: 0}]);
+        const rows = tooltipRows(html);
+        const purchaseValue = labelOf('dashboard.bookValue');
+        expect(
+            rows.filter((row) => row.label === purchaseValue),
+            'exactly one purchase-value row',
+        ).toHaveLength(1);
+        const head = rows.findIndex((row) => row.label === purchaseValue);
+        expect(rows.slice(head, head + 3), 'the purchase value, then its two halves, in a row').toEqual([
+            {label: purchaseValue, value: expectedAmount(PURCHASE_VALUE, {signed: true})},
+            {label: subRowLabel('dashboard.pnlAcqNewCapital'), value: expectedAmount(NEW_CAPITAL, {signed: true})},
+            {label: subRowLabel('dashboard.pnlAcqReinvested'), value: expectedAmount(REINVESTED, {signed: true})},
+        ]);
+
+        /** How a row's label is set: the tags right under its `<span>`, and the text of the first. */
+        const setting = (label: string) => {
+            const {span} = rowOf(html, label);
+            return {tags: Array.from(span.children, (child) => child.tagName), text: span.firstElementChild?.textContent ?? null};
+        };
+        // Precondition: the income total is set as one bold label, the form the purchase value takes.
+        const total = labelOf('assets.distribution.total');
+        expect(setting(total), 'the income total is bold').toEqual({tags: ['B'], text: total});
+        expect(setting(purchaseValue), 'the purchase value is bold, like the income total').toEqual({tags: ['B'], text: purchaseValue});
+        expect(setting(subRowLabel('dashboard.pnlAcqNewCapital')), 'new capital is not').toEqual({tags: [], text: null});
+        expect(setting(subRowLabel('dashboard.pnlAcqReinvested')), 'reinvested is not').toEqual({tags: [], text: null});
+    });
+
+    it('prints as the purchase value the sum of the two acquisition bars it draws', async () => {
+        // WHY: the tooltip and the bars must tell one story. The total is checked against the
+        // values the recorder received for the two acquisition bars, not against the fixture, so
+        // it holds whatever the bucketing makes of the days. Catches a total folded from other
+        // values than the bars draw, or from one bar only.
+        const {income} = await openIncome();
+        const [drawnNew, drawnReinvested] = income.series.slice(4).map((series, index) => {
+            expect(series.data, `slot ${4 + index}: the three days are one Income bar`).toHaveLength(1);
+            return pointValue(series.data?.[0]);
+        });
+        if (drawnNew == null || drawnReinvested == null) throw new Error('an acquisition bar carries no value');
+        // Preconditions: both halves draw something, so neither alone can pass for the sum.
+        expect(drawnNew, 'new capital is drawn').not.toBe(0);
+        expect(drawnReinvested, 'reinvested is drawn').not.toBe(0);
+
+        const rows = tooltipRows(income.tooltip.formatter([{dataIndex: 0}]));
+        expect(rowValue(rows, 'dashboard.bookValue')).toBe(expectedAmount(drawnNew + drawnReinvested, {signed: true}));
+    });
+
+    it('paints each half in the colour its money has in Abs, on its bar and on its tooltip row (D26)', async () => {
+        // WHY: D26. The purchase value has one colour across the app, the KPI blue, so the new
+        // capital that paid for it keeps that blue, and the reinvested returns keep the colour the
+        // returns have in Abs. Catches new capital left in the contributed-capital colour, the two
+        // colours swapped, and a tooltip row painted apart from its bar.
+        const {abs, income} = await openIncome();
+        /** The colour of the one Abs series named after `labelKey`. */
+        const absColour = (labelKey: string) => {
+            const matching = abs.series.filter((series) => series.name === get(_)(labelKey));
+            expect(matching, `exactly one Abs series named ${labelKey}`).toHaveLength(1);
+            return matching[0].itemStyle?.color ?? '';
+        };
+        const purchaseCost = absColour('dashboard.assetsAtCost');
+        const returns = absColour('dashboard.cashFromGeneratedReturns');
+        // Preconditions: two real colours, and different ones. One colour everywhere would pass every check below.
+        expect(purchaseCost, 'the purchase cost has a colour in Abs').not.toBe('');
+        expect(returns, 'the returns have a colour in Abs').not.toBe('');
+        expect(purchaseCost, 'two different colours').not.toBe(returns);
+
+        const bars = income.series.slice(4).map((series) => series.itemStyle?.color);
+        expect(bars, 'new capital in the purchase-cost blue, then reinvested in the returns colour').toEqual([purchaseCost, returns]);
+
+        // Each `↳` row in its bar's colour. The row reads back normalised, so the bar's colour goes through `cssColour` too.
+        const html = income.tooltip.formatter([{dataIndex: 0}]);
+        const barColours = bars.map((colour) => cssColour(colour));
+        expect(
+            barColours.every((colour) => colour !== ''),
+            'the bar colours read back as CSS colours',
+        ).toBe(true);
+        expect(['dashboard.pnlAcqNewCapital', 'dashboard.pnlAcqReinvested'].map((key) => rowOf(html, subRowLabel(key)).row.style.color)).toEqual(barColours);
+    });
+});
+
+// =============================================================================
+// C2 (plan 47) — the broker set changing under the P&L line
+// =============================================================================
+
+/**
+ * With two or more brokers in scope, the P&L line draws one line per broker after its three fixed
+ * slots, and its legend lists them. A new broker scope reaches GrowthChart as a new
+ * `brokerPnlHistory` while that view is on screen.
+ *
+ * WHAT BREAKS. A data change in the view on screen goes through the partial update. That update
+ * sends `{name, data}` for each slot, with `replaceMerge: ['dataZoom']` only. ECharts merges those
+ * series into the ones it holds, by name and then by index, and only the full rebuild writes the
+ * legend's `data`. So:
+ *   - a broker that left stays drawn and listed;
+ *   - a broker swapped for another takes over its slot, while the legend keeps the old name;
+ *   - a broker that joined is a new series with no type, which ECharts drops ("Unknown series
+ *     undefined").
+ *
+ * WHAT IS ASSERTED, on the latest call that carries series after the change:
+ *   - The mechanism. The call is a full rebuild: it carries the y axis and the tooltip, which only
+ *     a rebuild carries. It replaces the series. Its broker lines and its legend name the new set.
+ *   - The behaviour. Every call this mount made is replayed in order on a REAL ECharts. Afterwards
+ *     the new brokers, and only they, are drawn and listed. The recorder cannot judge a merge, and
+ *     the merge is where the defect is, so ECharts' own merge does. It runs server-side
+ *     (`ssr: true`: no DOM, no tooltip DOM, no animation loop) and is reached past this file's mock
+ *     through `vi.importActual`.
+ *
+ * WHY A CONTROL. The partial update is what keeps a data refresh's smooth transition (see
+ * `CHART_SERIES_UPDATE_OPTS`), so the same brokers with new amounts must stay on it.
+ *
+ * Broker names are values this file supplies, so they are compared raw, and as sets.
+ */
+// WHY the 30 s budget: a red `waitFor` must be able to exhaust its own timeout and rethrow the
+// case's assertion, instead of dying on the test timeout (as S7, S7b and S8 do).
+describe('GrowthChart broker set changes under the P&L line (plan 47, C2)', {timeout: 30_000}, () => {
+    /** Three brokers this describe owns. Their names are unique, so no other fixture's broker can pass for one of them. */
+    const SWAP_BROKER_NAMES = ['Swap Broker A', 'Swap Broker B', 'Swap Broker C'] as const;
+    type SwapBrokerName = (typeof SWAP_BROKER_NAMES)[number];
+    const [BROKER_A, BROKER_B, BROKER_C] = SWAP_BROKER_NAMES;
+
+    /** Added to every amount by the control: a refresh of the same brokers, recognisable in the update it causes. */
+    const REFRESH_OFFSET = 1_000;
+
+    /**
+     * A NEW history for one broker on every call, so a re-sent set is never the same array. It has
+     * the shape of `BROKER_PNL_HISTORY`: one point a day over `DATES`, and the brokers 150 apart on
+     * every day.
+     */
+    function brokerPnl(name: SwapBrokerName, offset = 0): PortfolioBrokerPnlHistory {
+        const brokerIndex = SWAP_BROKER_NAMES.indexOf(name);
+        return {
+            broker_id: 31 + brokerIndex,
+            broker_name: name,
+            points: DATES.map((date, index) => ({date, total_pnl: eur(300 + brokerIndex * 150 + index * 10 + offset)})),
+        };
+    }
+
+    /** The brokers named among `entries` (series, or legend entries: a name, or `{name}`), as a set: sorted. */
+    function swapBrokersIn(entries: readonly unknown[]): string[] {
+        return entries
+            .map((entry) => (entry != null && typeof entry === 'object' ? (entry as {name?: unknown}).name : entry))
+            .filter((name): name is string => typeof name === 'string' && (SWAP_BROKER_NAMES as readonly string[]).includes(name))
+            .sort();
+    }
+
+    /** A legend's `data`. GrowthChart hands ECharts one legend object, and `getOption()` returns an array of them. */
+    function legendDataOf(legend: unknown): readonly unknown[] {
+        const first = Array.isArray(legend) ? legend[0] : legend;
+        const data = first != null && typeof first === 'object' ? (first as {data?: unknown}).data : undefined;
+        return Array.isArray(data) ? data : [];
+    }
+
+    interface RecordedCall {
+        option: Record<string, unknown>;
+        opts: unknown;
+    }
+
+    /** The latest recorded call from `since` onwards that carries a series array: a full rebuild or a partial update. */
+    function latestSeriesCallSince(since: number): RecordedCall | undefined {
+        expect(chartInstances).toHaveLength(1);
+        const calls = chartInstances[0].setOptionCalls.slice(since).filter((call) => Array.isArray(call.option.series));
+        return calls[calls.length - 1];
+    }
+
+    /** How a call asks ECharts to draw: a rebuild or a patch, whether it replaces the series, and the brokers it names. */
+    function mechanismOf(call: RecordedCall) {
+        const replaceMerge = call.opts != null && typeof call.opts === 'object' ? (call.opts as {replaceMerge?: unknown}).replaceMerge : undefined;
+        return {
+            fullRebuild: call.option.yAxis != null && call.option.tooltip != null,
+            replacesSeries: Array.isArray(replaceMerge) && replaceMerge.includes('series'),
+            brokerSeries: swapBrokersIn(call.option.series as unknown[]),
+            legendBrokers: swapBrokersIn(legendDataOf(call.option.legend)),
+        };
+    }
+
+    /** The real module's types, named inline so this describe stays self-contained. `vi.mock('echarts')` replaces values, not types. */
+    type RealECharts = typeof import('echarts');
+    type RealOption = import('echarts').EChartsCoreOption;
+    type RealSetOptionOpts = import('echarts').SetOptionOpts;
+
+    /** The real ECharts module. GrowthChart keeps drawing on this file's recorder; only the replay below uses this one. */
+    let realECharts: RealECharts;
+
+    beforeAll(async () => {
+        realECharts = await vi.importActual<RealECharts>('echarts');
+        // jsdom has no canvas. zrender asks for one for every text it measures, and jsdom logs "Not implemented" each
+        // time. ECharts' own hook for a runtime without a canvas takes the measure instead. It reaches only this real
+        // instance: GrowthChart, and every other case in this file, draw on the recorder.
+        realECharts.setPlatformAPI({measureText: (text: string) => ({width: text.length * FAKE_TEXT_PX_PER_CHAR})});
+    });
+
+    /**
+     * Replays every `setOption` this mount made, in order, on a real ECharts, and reads back the
+     * brokers it then holds: the series it would draw, and the entries of its legend.
+     */
+    function drawnByRealECharts(): {series: string[]; legend: string[]} {
+        expect(chartInstances).toHaveLength(1);
+        const chart = realECharts.init(null, undefined, {renderer: 'svg', ssr: true, width: 800, height: 400});
+        try {
+            for (const {option, opts} of chartInstances[0].setOptionCalls) chart.setOption(option as RealOption, opts as RealSetOptionOpts | undefined);
+            const held = chart.getOption();
+            return {series: swapBrokersIn((held.series as unknown[] | undefined) ?? []), legend: swapBrokersIn(legendDataOf(held.legend))};
+        } finally {
+            chart.dispose();
+        }
+    }
+
+    /**
+     * Mounts GrowthChart with `names` in scope and opens the P&L line. Returns once the line's full
+     * rebuild draws exactly those brokers, with the line submode pressed.
+     */
+    async function openPnlLineWith(names: readonly SwapBrokerName[]) {
+        const {getByTestId, rerender} = render(GrowthChart, {props: {history: HISTORY, brokerPnlHistory: names.map((name) => brokerPnl(name)), baseCurrency: BASE_CURRENCY}});
+        await waitFor(() => expect(chartInstances).toHaveLength(1), {timeout: 5_000});
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await waitForPnlLineWithBrokers(names);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        return {rerender};
+    }
+
+    interface BrokerSetChange {
+        change: string;
+        initial: SwapBrokerName[];
+        next: SwapBrokerName[];
+    }
+
+    const BROKER_SET_CHANGES: BrokerSetChange[] = [
+        // The last slot goes. The partial update names the other two, and ECharts keeps the third as it was.
+        {change: 'one of three brokers leaves', initial: [BROKER_A, BROKER_B, BROKER_C], next: [BROKER_A, BROKER_B]},
+        // Same count. The partial update renames the second slot, and the legend, which only a rebuild writes, keeps the old name.
+        {change: 'a broker is swapped for another', initial: [BROKER_A, BROKER_B], next: [BROKER_A, BROKER_C]},
+        // A slot ECharts does not hold. The partial update gives it a name and data but no type, and ECharts drops it.
+        {change: 'a third broker joins', initial: [BROKER_A, BROKER_B], next: [BROKER_A, BROKER_B, BROKER_C]},
+    ];
+
+    it.each(BROKER_SET_CHANGES)('draws and lists exactly the brokers in scope once the set changes under the P&L line: $change (plan 47, C2)', async ({initial, next}) => {
+        const {rerender} = await openPnlLineWith(initial);
+
+        // Sampled BEFORE the change, so the call read below is one recorded after it.
+        const before = setOptionCount();
+        await rerender({brokerPnlHistory: next.map((name) => brokerPnl(name))});
+
+        // One assertion for the mechanism and the behaviour together, so a red case shows both.
+        const inScope = [...next].sort();
+        await waitFor(
+            () => {
+                const call = latestSeriesCallSince(before);
+                if (call == null) throw new Error('GrowthChart handed ECharts no series after the broker set changed');
+                expect({...mechanismOf(call), drawn: drawnByRealECharts()}).toEqual({
+                    fullRebuild: true,
+                    replacesSeries: true,
+                    brokerSeries: inScope,
+                    legendBrokers: inScope,
+                    drawn: {series: inScope, legend: inScope},
+                });
+            },
+            {timeout: 5_000, interval: 250, onTimeout: (error) => error},
+        );
+    });
+
+    it('keeps the partial update when the same brokers come back with new amounts: a refresh is not a rebuild (plan 47, C2 control)', async () => {
+        const {rerender} = await openPnlLineWith([BROKER_A, BROKER_B]);
+
+        const before = setOptionCount();
+        const refreshed = [BROKER_A, BROKER_B].map((name) => brokerPnl(name, REFRESH_OFFSET));
+        await rerender({brokerPnlHistory: refreshed});
+
+        // Presence barrier: broker A's refreshed first day reached ECharts. Only then can "no rebuild" mean anything.
+        const refreshedFirstDay = Number(refreshed[0].points[0].total_pnl.amount);
+        await waitFor(
+            () => {
+                const brokerA = (latestSeriesCallSince(before)?.option.series as SeriesUpdate[] | undefined)?.find((entry) => entry.name === BROKER_A);
+                expect(pointValue(brokerA?.data[0]), 'broker A on the first day, refreshed').toBe(refreshedFirstDay);
+            },
+            {timeout: 5_000},
+        );
+        expect(fullOptionsSince(before), 'no full rebuild for the same brokers').toHaveLength(0);
+        const call = latestSeriesCallSince(before);
+        if (call == null) throw new Error('the barrier passed without a series update');
+        expect(mechanismOf(call)).toMatchObject({fullRebuild: false, brokerSeries: [BROKER_A, BROKER_B]});
+    });
+});
+
+// =============================================================================
+// M-18 — the figures in the interface language
+// =============================================================================
+
+/**
+ * M-18 CP2: every figure the chart writes follows the interface language.
+ *
+ * The money ticks (`scaled.toLocaleString(undefined, …)`) and the tooltip amounts (`fmtCurrency`,
+ * `toLocaleString(undefined, …)`) are written in the browser's locale; the % ticks (`${v.toFixed(1)}%`)
+ * and the % tooltip rows (`${Number(rawVal).toFixed(2)}%`) in no locale at all. An Italian on an en-US
+ * browser reads `-1.5k`, `EUR -1,357.24` and `12.3%`. Every figure is written in the interface language
+ * (the developer's decision M-18, 2026-10-12), through `uiLocale()`:
+ *
+ *   - money tick: the scaled value in the interface locale, then `k` or `M`;
+ *   - % tick: `formatPercent(v, {digits: 1, signed: false})`;
+ *   - tooltip amount: `fmtCurrency` in the interface locale, its sign out of the same call (D23);
+ *   - % tooltip row: `formatPercent(value, {signed: false})`.
+ *
+ * Fixtures. The Abs view on `MONEY_HISTORY`, whose tooltip rows are known day by day (day 0's NAV, day
+ * 1's loss); the % view on `HISTORY`, which carries returns. A % row is read with a series name and a
+ * value this file hands the formatter, as ECharts hands them.
+ *
+ * Expectations are built in an explicit locale. Each case runs twice: the English UI is the control,
+ * today's en-US text; the Italian UI is the subject. The `beforeAll` checks that Italian differs from
+ * English on every figure read.
+ *
+ * Language. Switched as LanguageSelector does — `currentLanguage.set`, which also drives svelte-i18n —
+ * before the mount; the `afterEach` puts English back.
+ */
+describe('GrowthChart figures in the interface language (M-18)', {timeout: 30_000}, () => {
+    /** The UI languages read, with the interface locale each gives on jsdom's en-US browser. */
+    const LANGUAGES = [
+        {lang: 'en', locale: 'en-US'},
+        {lang: 'it', locale: 'it'},
+    ] as const;
+
+    /** Money ticks of both scales, and zero. */
+    const MONEY_TICKS = [-1_500, 12_500, 1_300_000, 0];
+    /** % ticks: a return, a loss, zero. */
+    const PCT_TICKS = [12.34, -0.6, 0];
+    /** The % rows handed to the tooltip: series names this file supplies, values already in percent. */
+    const PCT_ROWS = [
+        {seriesName: 'Probe return A', value: 12.3456, color: '#111111'},
+        {seriesName: 'Probe return B', value: -3.21, color: '#222222'},
+    ];
+
+    /** Day 0's NAV and day 1's total P&L, a loss: the Abs tooltip amounts read. */
+    const NAV_DAY_0 = Number(MONEY_HISTORY[0].nav_value.amount);
+    const PNL_DAY_1 = Number(MONEY_HISTORY[1].total_pnl.amount);
+
+    /** What the Abs view must write in `locale`. */
+    function expectedAbs(locale: string) {
+        return {
+            moneyTicks: [`${axisNumber(-1.5, locale)}k`, `${axisNumber(12.5, locale)}k`, `${axisNumber(1.3, locale)}M`, axisNumber(0, locale)],
+            nav: expectedAmount(NAV_DAY_0, {locale}),
+            totalPnl: expectedAmount(PNL_DAY_1, {signed: true, locale}),
+        };
+    }
+
+    /** What the % view must write in `locale`. */
+    function expectedPct(locale: string) {
+        return {
+            pctTicks: PCT_TICKS.map((value) => formatPercent(value, {digits: 1, signed: false, locale})),
+            pctRows: PCT_ROWS.map(({value}) => formatPercent(value, {signed: false, locale})),
+        };
+    }
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+    async function switchLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    beforeAll(async () => {
+        // English was loaded by the file's own beforeAll; Italian joins it, so a switch never waits on a loader.
+        await waitLocale('it');
+        // Controls: this runtime has Italian data, so every figure read changes notation.
+        const [abs, pct] = [
+            [expectedAbs('en-US'), expectedAbs('it')],
+            [expectedPct('en-US'), expectedPct('it')],
+        ] as const;
+        expect(abs[1].moneyTicks[0], 'an Italian money tick differs from English').not.toBe(abs[0].moneyTicks[0]);
+        expect(abs[1].nav, 'an Italian amount differs from English').not.toBe(abs[0].nav);
+        expect(abs[1].totalPnl, 'an Italian signed amount differs from English').not.toBe(abs[0].totalPnl);
+        expect(pct[1].pctTicks[0], 'an Italian % tick differs from English').not.toBe(pct[0].pctTicks[0]);
+        expect(pct[1].pctRows[0], 'an Italian % row differs from English').not.toBe(pct[0].pctRows[0]);
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it.each(LANGUAGES)('$lang UI on an en-US browser: the money ticks and the tooltip amounts of the Abs view, in $locale', async ({lang, locale: interfaceTag}) => {
+        await switchLanguage(lang);
+        expect(uiLocale(), 'control: the interface locale').toBe(interfaceTag);
+        render(GrowthChart, {props: {history: MONEY_HISTORY, baseCurrency: BASE_CURRENCY}});
+        const option = await waitForFrame(FRAME.abs);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+
+        const expected = expectedAbs(interfaceTag);
+        const read = {
+            moneyTicks: MONEY_TICKS.map((value) => option.yAxis.axisLabel.formatter(value)),
+            nav: rowValue(tooltipRows(option.tooltip.formatter([{dataIndex: 0}])), 'dashboard.navValue'),
+            totalPnl: rowValue(tooltipRows(option.tooltip.formatter([{dataIndex: 1}])), 'dashboard.totalPnl'),
+        };
+        expect(read, spelled(expected)).toEqual(expected);
+    });
+
+    it.each(LANGUAGES)('$lang UI on an en-US browser: the % ticks and the % tooltip rows, in $locale', async ({lang, locale: interfaceTag}) => {
+        await switchLanguage(lang);
+        expect(uiLocale(), 'control: the interface locale').toBe(interfaceTag);
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+        await waitForFrame(FRAME.abs);
+
+        // Precondition: HISTORY carries return series, so the % view can be reached.
+        expect(getByTestId('growth-toggle-pct')).toBeEnabled();
+        const before = setOptionCount();
+        await fireEvent.click(getByTestId('growth-toggle-pct'));
+        const pctOption = await fullOptionAfter(before);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+
+        const rows = tooltipRows(pctOption.tooltip.formatter(PCT_ROWS.map((row) => ({dataIndex: 0, ...row}))));
+        const expected = expectedPct(interfaceTag);
+        const read = {
+            pctTicks: PCT_TICKS.map((value) => pctOption.yAxis.axisLabel.formatter(value)),
+            pctRows: PCT_ROWS.map(({seriesName}) => rows.find((row) => row.label === seriesName)?.value ?? `(no row labelled ${seriesName})`),
+        };
+        expect(read, spelled(expected)).toEqual(expected);
+    });
+});
+
+// =============================================================================
+// Plan 52, C2 — the tooltip header writes its dates in the interface language
+// =============================================================================
+
+/**
+ * Plan 52, C2: the cascade's tooltip header writes its dates in the interface language.
+ *
+ * `buildTooltipBucketHeader` prints the ISO day it is handed (defect 3a, there since v1.0.0): `2026-01-20` over a
+ * daily bucket, `Week 2022-03-07 – 2022-03-13` then `Value at 2022-03-13` over a weekly one, `Value at 2005-06-30`
+ * under a month. After C2 every date in the header is written by `formatDay`: short month, numeric day and year, in
+ * `uiLocale()`. Same keys, same periods, same lines in the same order; the month label is already localized and stays
+ * as it is. The cascade is the views the ladder does not own: Abs and % here.
+ *
+ * Closed periods only. Each case reads a bucket in the MIDDLE of its series, every day of it carrying data and the
+ * series running on past it: never the first bucket (the series may start inside it) nor the last (the period still
+ * running belongs to C3b and will change).
+ *
+ * Resolution. The fake chart is 1200 px wide (`getWidth`), and the cascade climbs a tier when that tier's buckets are
+ * more than 1.3 per px, and comes back under 0.8 (`DENSITY_THRESHOLDS.line`): read here, never changed.
+ *   - daily: FIXTURE_40, 40 days, 0.03 per px.
+ *   - weekly: 1700 consecutive days (Wed 2020-01-01..Mon 2024-08-26), 1.42 per px, over 1.3; their 244 weeks are 0.20
+ *     per px, so the cascade stays weekly.
+ *   - monthly: one Wednesday a week for 1700 weeks (1990-01-03..2022-07-27), plus every day of June 2005: 1725 days
+ *     (1.44 per px) and 1700 weeks (1.42 per px) are both over 1.3, so it climbs to the 391 months (0.33 per px) and
+ *     stays. June 2005 is covered day by day, so the last day of the month is a day with data.
+ * Each fixture is ONE instance, built once: a new `history` identity resets the chart's caches and its window.
+ *
+ * Expected texts. Every key is resolved through `get(_)` and read through `htmlText`, every day comes from `dayIn`,
+ * which never imports the product, and the month from `Intl` in the test. Each case ends on the negative oracle: no
+ * `YYYY-MM-DD` anywhere in the header.
+ */
+describe('GrowthChart — the tooltip header writes its dates in the interface language (plan 52, C2)', {timeout: 30_000}, () => {
+    /** A calendar period, its first and its last day. */
+    type Span = {start: string; end: string};
+
+    /** 1700 consecutive days. WHY so many: 1.42 days per px of the 1200 px fake, over the 1.3 that sends the cascade to weeks. */
+    const WEEKLY_FIXTURE = buildLadderFixture(isoDays(2020, 0, 1, 1700));
+    /** A Monday–Sunday week in the middle of WEEKLY_FIXTURE, two years in. */
+    const CLOSED_WEEK: Span = {start: '2022-03-07', end: '2022-03-13'};
+
+    /** One Wednesday a week for 1700 weeks. WHY: enough weeks to send the cascade past weekly, one day each. */
+    const WEDNESDAYS = isoDays(1990, 0, 3, 7 * 1700).filter((_day, index) => index % 7 === 0);
+    /** The Wednesdays, and every day of June 2005. WHY June day by day: a month whose last calendar day carries data. */
+    const MONTHLY_FIXTURE = buildLadderFixture([...new Set([...WEDNESDAYS, ...isoDays(2005, 5, 1, 30)])].sort());
+    /** A calendar month in the middle of MONTHLY_FIXTURE. */
+    const CLOSED_MONTH: Span = {start: '2005-06-01', end: '2005-06-30'};
+
+    /** A day in the middle of FIXTURE_40 (Thu 2026-01-01..Mon 02-09), which the cascade draws day by day. */
+    const DAILY_DAY: Span = {start: '2026-01-20', end: '2026-01-20'};
+
+    /** The non-English interface locale read. WHY a region tag: the dates must follow whatever the interface locale is. */
+    const ITALIAN = 'it-IT';
+
+    /** An ISO day. WHY: what no header line may hold once C2 is in, the negative oracle. */
+    const ISO_DAY = /\d{4}-\d{2}-\d{2}/;
+
+    /** A month as the month label writes it in `localeTag`: long month and year, read in UTC as `formatTooltipMonth` reads it. WHY test-side: the oracle never comes from the product. */
+    function monthIn(iso: string, localeTag: string): string {
+        const [year, month, date] = iso.split('-').map(Number);
+        return new Intl.DateTimeFormat(localeTag, {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(Date.UTC(year, month - 1, date)));
+    }
+
+    /** Every calendar day of `span`. WHY: "every day of it carries data" is then checked on the fixture, not assumed. */
+    function daysOf({start, end}: Span): string[] {
+        const [year, month, date] = start.split('-').map(Number);
+        return isoDays(year, month - 1, date, (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000 + 1);
+    }
+
+    /** Barrier: every day of `span` carries data in `fixture`. WHY: a header names the period's own edges only when the series covers it whole. */
+    function expectCovered(fixture: LadderFixture, span: Span): void {
+        expect(
+            fixture.history.map(({date}) => date).filter((date) => date >= span.start && date <= span.end),
+            `fixture: every day of ${span.start}..${span.end} carries data`,
+        ).toEqual(daysOf(span));
+    }
+
+    /** A key's text in today's language, as a header line reads. WHY: never a translated literal, and a key that does not resolve fails here instead of matching itself. */
+    function keyText(key: string, values: Record<string, string>): string {
+        const text = htmlText(get(_)(key, {values}));
+        expect(text, `${key} does not resolve`).not.toBe(key);
+        return text;
+    }
+
+    /** The first `count` top-level lines of a tooltip, as read. WHY: the header and its "value at" line are each one top-level `<div>`, ahead of every row. */
+    function headerLines(html: string, count: number): string[] {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        return Array.from(host.children)
+            .filter((child) => child.tagName === 'DIV')
+            .slice(0, count)
+            .map((child) => child.textContent ?? '');
+    }
+
+    /**
+     * The index of the bucket that stands for `span` at `resolution`, found by its edges and proved interior. WHY: never a
+     * position, and never the first or the last bucket, whose period the series may cut or that may still be running.
+     */
+    async function bucketIndex(span: Span, resolution: 'daily' | 'weekly' | 'monthly'): Promise<number> {
+        return waitFor(
+            () => {
+                const data = renderedSeries()[0]?.data ?? [];
+                const index = data.findIndex((datum) => (datum as {bucketStart?: unknown} | null)?.bucketStart === span.start);
+                expect(data[index], `the cascade draws the ${resolution} bucket ${span.start}..${span.end}`).toMatchObject({bucketStart: span.start, bucketEnd: span.end, resolution});
+                expect(index, 'not the first bucket').toBeGreaterThan(0);
+                expect(index, 'not the last bucket').toBeLessThan(data.length - 1);
+                return index;
+            },
+            {timeout: 5_000},
+        );
+    }
+
+    /** The tooltip of bucket `index`, as ECharts asks for it on a hover. WHY the latest full option: its formatter reads the live state. */
+    const tooltipAt = (index: number) => latestFullOption().tooltip.formatter([{dataIndex: index}]);
+
+    /** Mounts `fixture` and opens the view `toggle` names, proved pressed. WHY one route: every case reaches its view the same way. */
+    async function openView(fixture: LadderFixture, toggle: 'growth-toggle-eur' | 'growth-toggle-pct'): Promise<void> {
+        render(GrowthChart, {props: ladderProps(fixture)});
+        await waitForFrame(FRAME.abs);
+        if (toggle === 'growth-toggle-pct') {
+            // Precondition: the fixture carries return series, so the % view can be reached.
+            expect(screen.getByTestId(toggle)).toBeEnabled();
+            const before = setOptionCount();
+            await fireEvent.click(screen.getByTestId(toggle));
+            await fullOptionAfter(before);
+        }
+        expect(pressedAmong(MODE_TOGGLES)).toEqual([toggle]);
+    }
+
+    beforeAll(() => {
+        // The one literal of this describe: if the oracle does not write en-US as en-US, the environment is wrong, not the product.
+        expect(dayIn('2025-12-29', 'en-US'), 'environment: the date oracle writes en-US').toBe('Dec 29, 2025');
+        // Control: this runtime has Italian data, so the Italian case tells the interface locale from English.
+        expect(dayIn(CLOSED_WEEK.start, ITALIAN), 'an Italian day differs from English').not.toBe(dayIn(CLOSED_WEEK.start, 'en-US'));
+    });
+
+    it('Abs, daily: a one-day bucket in the middle of the series heads its tooltip with the day in the interface language', async () => {
+        // WHY: the plainest header, the day itself, was raw ISO since v1.0.0.
+        expectCovered(FIXTURE_40, DAILY_DAY);
+        await openView(FIXTURE_40, 'growth-toggle-eur');
+        const index = await bucketIndex(DAILY_DAY, 'daily');
+        const lines = headerLines(tooltipAt(index), 1);
+
+        expect(lines).toEqual([uiDay(DAILY_DAY.start)]);
+        expect(lines.join('\n')).not.toMatch(ISO_DAY);
+    });
+
+    it.each([
+        {view: 'Abs', toggle: 'growth-toggle-eur'},
+        {view: '%', toggle: 'growth-toggle-pct'},
+    ] as const)('$view, weekly: a closed Monday–Sunday week reads its edges and its "value at" day in the interface language', async ({toggle}) => {
+        // WHY: the week range and the "value at" line both carried ISO, and both cascade views share the header.
+        expectCovered(WEEKLY_FIXTURE, CLOSED_WEEK);
+        await openView(WEEKLY_FIXTURE, toggle);
+        const index = await bucketIndex(CLOSED_WEEK, 'weekly');
+        const lines = headerLines(tooltipAt(index), 2);
+
+        expect(lines).toEqual([keyText('chart.tooltip.weekRange', {start: uiDay(CLOSED_WEEK.start), end: uiDay(CLOSED_WEEK.end)}), keyText('chart.tooltip.valueAt', {date: uiDay(CLOSED_WEEK.end)})]);
+        expect(lines.join('\n')).not.toMatch(ISO_DAY);
+    });
+
+    it('Abs, monthly: a closed month keeps its month label, and its "value at" day, its last, is in the interface language', async () => {
+        // WHY: the month label was already localized and stays as it is; the "value at" line under it carried ISO.
+        expectCovered(MONTHLY_FIXTURE, CLOSED_MONTH);
+        await openView(MONTHLY_FIXTURE, 'growth-toggle-eur');
+        const index = await bucketIndex(CLOSED_MONTH, 'monthly');
+        const lines = headerLines(tooltipAt(index), 2);
+
+        expect(lines).toEqual([keyText('chart.tooltip.monthLabel', {month: monthIn(CLOSED_MONTH.start, uiLocale())}), keyText('chart.tooltip.valueAt', {date: uiDay(CLOSED_MONTH.end)})]);
+        expect(lines.join('\n')).not.toMatch(ISO_DAY);
+    });
+
+    it('Abs, weekly, it-IT interface locale: the dates follow the interface locale, not a hard-coded one', async () => {
+        // WHY: an English expectation alone would also pass with en-US hard-coded in the product.
+        forceInterfaceLocale(ITALIAN);
+        expect(uiLocale(), 'control: the interface locale').toBe(ITALIAN);
+        expectCovered(WEEKLY_FIXTURE, CLOSED_WEEK);
+        await openView(WEEKLY_FIXTURE, 'growth-toggle-eur');
+        const index = await bucketIndex(CLOSED_WEEK, 'weekly');
+        const lines = headerLines(tooltipAt(index), 2);
+
+        expect(lines).toEqual([keyText('chart.tooltip.weekRange', {start: dayIn(CLOSED_WEEK.start, ITALIAN), end: dayIn(CLOSED_WEEK.end, ITALIAN)}), keyText('chart.tooltip.valueAt', {date: dayIn(CLOSED_WEEK.end, ITALIAN)})]);
+        expect(lines.join('\n')).not.toMatch(ISO_DAY);
+    });
+});
+
+/**
+ * Plan 52, C3b: the cascade's running period sits on its last day with data.
+ *
+ * The defect, in the density cascade (Abs, %, P&L line; never the ladder, which owns Candles and Income). A weekly or
+ * monthly bucket is drawn at its CALENDAR end (the Sunday, the last day of the month), while `aggregateMetric` keys each
+ * aggregated value by the last day WITH DATA of its bucket. For a closed period the two are the same day. For the period
+ * still running they are not: the lookup misses, the point is null, the line stops one period early, the x axis ends on
+ * a day that has not happened yet, and the tooltip header names that day over a point with no value.
+ *
+ * The contract after the fix:
+ *   - A1, the point: a weekly or monthly bucket's point stands on the last history day inside it, with that day's
+ *     value. Its `bucketStart` and `bucketEnd` stay the calendar edges.
+ *   - A1, the header: the cascade header names the running bucket only up to that day.
+ *   - Z2, the zoom: the cascade reads and writes its window in TIME over the drawn x extent, which is how ECharts maps
+ *     a dataZoom percent on a time axis (pinned on the real ECharts in chartCoreHelpers.test.ts, plan 52 C3b).
+ *
+ * Fixtures, each ONE instance built once: a new `history` identity resets the chart's caches and its window. The fake
+ * chart is 1200 px wide, and the cascade climbs a tier over 1.3 buckets per px and comes back under 0.8.
+ *   - WEEKLY_RUNNING: 1702 consecutive days, Wed 2020-01-01..Wed 2024-08-28, 1.42 per px. Its 244 ISO weeks are 0.20
+ *     per px, so the cascade stays weekly. The last week, Mon 2024-08-26..Sun 09-01, is running: its last day with data
+ *     is Wed 08-28.
+ *   - MONTHLY_RUNNING: one Wednesday a week for 1700 weeks (1990-01-03..2022-07-27), plus every day of 2022-08-01..08-17.
+ *     1717 days and 1703 weeks are both over 1.3 per px and the 392 months are 0.33 per px, so the cascade climbs to
+ *     monthly and stays. The last month, August 2022, is running: its last day with data is Wed 08-17, and 08-31 is not
+ *     in the history.
+ *
+ * Expected on today's code: T1 and T2 (parts A and B) red, the defect itself. T3 and T4 (part C) green: today's weekly
+ * buckets are evenly spaced, so reading the window as a bucket index is reading it in time. They go red if A1 lands
+ * alone (the last weekly interval shrinks to three days) and green again once the window is read and written in time.
+ *
+ * Days are UTC day numbers, never local time. A series is found by the name the component gives it through its i18n
+ * key, as the Income cases do, never by its slot.
+ */
+describe('GrowthChart — the running period sits on its last day with data (plan 52, C3b)', {timeout: 30_000}, () => {
+    /** A cascade tier above the day. WHY a type: a running bucket is drawn at one of these two tiers, and a case tabled on another fails to compile. */
+    type Tier = 'weekly' | 'monthly';
+
+    /** A drawn cascade datum, `{value: [x, y], bucketStart, bucketEnd, resolution}`, its fields unknown. WHY unknown: a missing field must show in the diff, not be assumed. */
+    interface DrawnDatum {
+        value?: unknown;
+        bucketStart?: unknown;
+        bucketEnd?: unknown;
+        resolution?: unknown;
+    }
+
+    /** 1702 consecutive days. WHY so many: 1.42 days per px of the 1200 px fake sends the cascade to weeks, and the last week is cut on a Wednesday. */
+    const WEEKLY_RUNNING = buildLadderFixture(isoDays(2020, 0, 1, 1702));
+
+    /** One Wednesday a week for 1700 weeks. WHY: enough weeks to send the cascade past weekly, one day each. */
+    const WEDNESDAYS = isoDays(1990, 0, 3, 7 * 1700).filter((_day, index) => index % 7 === 0);
+    /** The Wednesdays, then every day of 2022-08-01..08-17. WHY: a month still running, its calendar end not in the history. */
+    const MONTHLY_RUNNING = buildLadderFixture([...new Set([...WEDNESDAYS, ...isoDays(2022, 7, 1, 17)])].sort());
+
+    /** Each fixture by tier: the history's last day, and the calendar edges of the running bucket that holds it. WHY one table: every case reads the same facts. */
+    const RUNNING = {
+        weekly: {fixture: WEEKLY_RUNNING, lastDay: '2024-08-28', start: '2024-08-26', end: '2024-09-01'},
+        monthly: {fixture: MONTHLY_RUNNING, lastDay: '2022-08-17', start: '2022-08-01', end: '2022-08-31'},
+    } as const;
+
+    /**
+     * The cascade views: the label key of the main line, how many series carry that name, and the value the history's
+     * day `index` has on it. WHY test-side: every value comes from `buildLadderFixture`'s formulas, never from the
+     * component.
+     */
+    const VIEWS = {
+        Abs: {mainKey: 'dashboard.navValue', mainCount: 1, valueAt: (index: number) => 11_000 + index * 100},
+        // `mwrr_cumulative` is written `(index · 0.0012).toFixed(6)` and drawn times 100, not rebased: day `index` reads `index · 0.12`.
+        '%': {mainKey: 'dashboard.mwrrCum', mainCount: 1, valueAt: (index: number) => index * 0.12},
+        // Two halves of the sign split carry the total P&L's name; every total is positive, so the value is in the positive one.
+        'P&L line': {mainKey: 'dashboard.totalPnl', mainCount: 2, valueAt: (index: number) => 500 + index * 100},
+    } as const;
+    /** A cascade view by name. WHY: the cases are tabled by view, and a name outside `VIEWS` fails to compile. */
+    type ViewName = keyof typeof VIEWS;
+
+    /** The UTC day number of an ISO day. WHY UTC: no time zone and no DST can move a day. */
+    const dayNumber = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / 86_400_000;
+
+    /** The ISO day a drawn datum stands on, its `value[0]`. WHY sliced: the day is what is compared, whatever instant the x may carry. */
+    function xOf(datum: unknown): string {
+        const value = (datum as DrawnDatum | null)?.value;
+        return Array.isArray(value) ? String(value[0]).slice(0, 10) : `no x in ${JSON.stringify(datum)}`;
+    }
+
+    /** The UTC day number a drawn datum stands on. WHY: the zoom cases map a percent to a day over the drawn x extent. */
+    const xDay = (datum: unknown) => dayNumber(xOf(datum));
+
+    /** The UTC days of the first and the last datum of a drawn series. WHY: a percent is read over the extent drawn, never an assumed one. */
+    function extentOf(data: readonly unknown[]): {x0: number; xN: number} {
+        return {x0: xDay(data[0]), xN: xDay(data[data.length - 1])};
+    }
+
+    /** The day a dataZoom percent stands for over an x extent. WHY: ECharts maps the percent linearly in time over the extent (Part D, chartCoreHelpers.test.ts). */
+    const dayAtPercent = (percent: number, {x0, xN}: {x0: number; xN: number}) => x0 + (percent / 100) * (xN - x0);
+
+    /** The percent a day stands for over an x extent, the inverse of `dayAtPercent`. WHY: the zoom cases choose their window in time. */
+    const percentAtDay = (day: number, {x0, xN}: {x0: number; xN: number}) => ((day - x0) / (xN - x0)) * 100;
+
+    /** A value rounded to 1e-6. WHY: the % value is a decimal string times 100 in binary floating point, and 1e-6 is far under its 0.12 step per day. */
+    const round6 = (value: number) => Math.round(value * 1e6) / 1e6;
+
+    /** The non-null values of drawn datums, each rounded to 1e-6. WHY non-null: the P&L line's two sign halves share every x, and only the half that holds the value is non-null there. */
+    const valuesOf = (data: readonly unknown[]) => data.map(pointValue).flatMap((value) => (value == null ? [] : [round6(value)]));
+
+    /** Asserts a mapped day is `expected` within 0.01 day. WHY 0.01: a window written on a bucket lands on its day, and the wrong bucket is a day or more away. */
+    function expectSameDay(actual: number, expected: number, what: string): void {
+        expect(Math.abs(actual - expected), `${what}: day ${actual} read, day ${expected} expected`).toBeLessThan(0.01);
+    }
+
+    /** How many ISO weeks, Monday to Sunday, `days` touch. WHY test-side: the weekly barrier counts the calendar, never the component's bucket module. */
+    function isoWeekCount(days: readonly string[]): number {
+        // Day 0, 1970-01-01, is a Thursday, so the Monday of day n is n - ((n + 3) mod 7).
+        return new Set(
+            days.map((iso) => {
+                const day = dayNumber(iso);
+                return day - ((((day + 3) % 7) + 7) % 7);
+            }),
+        ).size;
+    }
+
+    /** The series named after `labelKey`, as the component names them in today's language. WHY by name: a view's main line, never a slot. */
+    function seriesNamed(series: SeriesUpdate[], labelKey: string): SeriesUpdate[] {
+        return series.filter((entry) => entry.name === get(_)(labelKey));
+    }
+
+    /** Waits until every drawn series ends on the bucket starting on `lastStart`, at `resolution`, and returns them. WHY: the barrier of every case; series read before the cascade settles belong to another tier. */
+    async function settledSeries(resolution: 'daily' | Tier, lastStart: string): Promise<SeriesUpdate[]> {
+        return waitFor(
+            () => {
+                const series = renderedSeries();
+                expect(series.length, 'the chart draws series').toBeGreaterThan(0);
+                for (const entry of series) expect(entry.data[entry.data.length - 1], `the last datum of ${entry.name}`).toMatchObject({resolution, bucketStart: lastStart});
+                return series;
+            },
+            {timeout: 5_000},
+        );
+    }
+
+    /** The data of the one NAV line, once the cascade settles on `resolution` with its last bucket starting on `lastStart`. WHY: the zoom cases read the Abs main line. */
+    async function navData(resolution: 'daily' | Tier, lastStart: string): Promise<unknown[]> {
+        const nav = seriesNamed(await settledSeries(resolution, lastStart), 'dashboard.navValue');
+        expect(nav, 'one NAV line, by name').toHaveLength(1);
+        return nav[0].data;
+    }
+
+    /** The index of the drawn bucket that starts on `iso`. WHY: a bucket is found by its calendar edge, never by a hard-coded index. */
+    function bucketStarting(data: readonly unknown[], iso: string): number {
+        const index = data.findIndex((datum) => (datum as DrawnDatum | null)?.bucketStart === iso);
+        expect(index, `a drawn bucket starts on ${iso}`).toBeGreaterThanOrEqual(0);
+        return index;
+    }
+
+    /** The index of the drawn bucket whose calendar edges hold `iso`. WHY: the bucket around a date, found by its edges, never by a hard-coded index. */
+    function bucketHolding(data: readonly unknown[], iso: string): number {
+        const index = data.findIndex((datum) => {
+            const {bucketStart, bucketEnd} = (datum ?? {}) as DrawnDatum;
+            return typeof bucketStart === 'string' && typeof bucketEnd === 'string' && bucketStart <= iso && iso <= bucketEnd;
+        });
+        expect(index, `a drawn bucket holds ${iso}`).toBeGreaterThanOrEqual(0);
+        return index;
+    }
+
+    /** The window start, in percent, halfway in time between the points of buckets `k` and `k + 1`. WHY halfway: neither DST nor floating point decides which bucket the edge reads. */
+    function percentBetween(data: readonly unknown[], k: number): number {
+        return percentAtDay((xDay(data[k]) + xDay(data[k + 1])) / 2, extentOf(data));
+    }
+
+    /** A month as the month label writes it in `localeTag`: long month and year, read in UTC. WHY test-side: the oracle never comes from the product (copied from C2). */
+    function monthIn(iso: string, localeTag: string): string {
+        const [year, month, date] = iso.split('-').map(Number);
+        return new Intl.DateTimeFormat(localeTag, {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(Date.UTC(year, month - 1, date)));
+    }
+
+    /** A key's text in today's language, as a header line reads. WHY: never a translated literal, and a key that does not resolve fails here instead of matching itself (copied from C2). */
+    function keyText(key: string, values: Record<string, string>): string {
+        const text = htmlText(get(_)(key, {values}));
+        expect(text, `${key} does not resolve`).not.toBe(key);
+        return text;
+    }
+
+    /** The first `count` top-level lines of a tooltip, as read. WHY: the header and its "value at" line are each one top-level `<div>`, ahead of every row (copied from C2). */
+    function headerLines(html: string, count: number): string[] {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        return Array.from(host.children)
+            .filter((child) => child.tagName === 'DIV')
+            .slice(0, count)
+            .map((child) => child.textContent ?? '');
+    }
+
+    /** The tooltip of bucket `index`, as ECharts asks for it on a hover. WHY the latest full option: its formatter reads the live state (copied from C2). */
+    const tooltipAt = (index: number) => latestFullOption().tooltip.formatter([{dataIndex: index}]);
+
+    /** Mounts `fixture` and opens `view` the way a user does, proved pressed. WHY: every case reaches its view by one route, and the P&L submode is pressed, never assumed. */
+    async function openView(fixture: LadderFixture, view: ViewName): Promise<void> {
+        render(GrowthChart, {props: ladderProps(fixture)});
+        await waitForFrame(FRAME.abs);
+        if (view === '%') {
+            // Precondition: the fixture carries return series, so the % view can be reached.
+            expect(screen.getByTestId('growth-toggle-pct')).toBeEnabled();
+            const before = setOptionCount();
+            await fireEvent.click(screen.getByTestId('growth-toggle-pct'));
+            await fullOptionAfter(before);
+        } else if (view === 'P&L line') {
+            await fireEvent.click(screen.getByTestId('growth-toggle-pnl'));
+            await fireEvent.click(screen.getByTestId('growth-pnl-submode-line'));
+            await waitForFrame(FRAME.pnlLine);
+            expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        }
+        expect(pressedAmong(MODE_TOGGLES)).toEqual([{Abs: 'growth-toggle-eur', '%': 'growth-toggle-pct', 'P&L line': 'growth-toggle-pnl'}[view]]);
+    }
+
+    /** Runs `body` with `setTimeout` and `clearTimeout` faked, then gives the real timers back. WHY: the zoom's 200 ms debounce runs on the fake clock, and nothing here reads the date, so `Date` stays real. */
+    async function onFakeTimeouts(body: () => Promise<void>) {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+        try {
+            await body();
+        } finally {
+            vi.useRealTimers();
+        }
+    }
+
+    /** Zooms the way a user does, on the fake clock. WHY: ECharts' own state first, then the event, then well past the 200 ms debounce (copied from S7). */
+    async function zoomOnFakeClock(start: number, end: number) {
+        expect(chartInstances).toHaveLength(1);
+        chartInstances[0].setZoom(start, end);
+        chartInstances[0].emit('dataZoom');
+        await vi.advanceTimersByTimeAsync(1_000);
+        await tick();
+    }
+
+    /** One `dataZoom` entry, fields unknown. WHY: a missing or non-numeric edge must show in the diff, not be assumed (copied from S7). */
+    interface ZoomEntry {
+        start?: unknown;
+        end?: unknown;
+    }
+
+    /** The first entry of a `dataZoom`, object or array. WHY: `getZoomPercent()` reads `dataZoom[0]`, the window ECharts keeps (copied from S7). */
+    function firstZoomOf(raw: unknown): ZoomEntry | undefined {
+        return (Array.isArray(raw) ? raw[0] : raw) as ZoomEntry | undefined;
+    }
+
+    /** Waits for the first call after `since` that carries a `dataZoom`, and returns its first entry. WHY: the redraw barrier, without which the window could be read before the component writes it (copied from S7). */
+    async function firstZoomAfter(since: number): Promise<ZoomEntry | undefined> {
+        let found: ZoomEntry | undefined;
+        await waitFor(
+            () => {
+                expect(chartInstances).toHaveLength(1);
+                const call = chartInstances[0].setOptionCalls.slice(since).find((entry) => entry.option.dataZoom != null);
+                expect(call, `a setOption call carrying dataZoom after call ${since}`).toBeDefined();
+                found = firstZoomOf(call?.option.dataZoom);
+            },
+            {timeout: 5_000},
+        );
+        return found;
+    }
+
+    /** The numeric edges of a window the component wrote. WHY: a missing edge fails here, with the window in the message, instead of mapping NaN. */
+    function zoomEdges(zoom: ZoomEntry | undefined): {start: number; end: number} {
+        expect(typeof zoom?.start === 'number' && typeof zoom?.end === 'number', `a numeric window, got ${JSON.stringify(zoom)}`).toBe(true);
+        return {start: Number(zoom?.start), end: Number(zoom?.end)};
+    }
+
+    beforeAll(() => {
+        // WHY: every oracle below leans on the fixtures' arithmetic, so it is checked first: the last day of each sits inside its running bucket, before its calendar end.
+        for (const [tier, running] of Object.entries(RUNNING)) {
+            expect(running.fixture.history[running.fixture.history.length - 1].date, `${tier}: the last history day`).toBe(running.lastDay);
+            expect(running.start <= running.lastDay && running.lastDay < running.end, `${tier}: the last day is inside the running bucket, before its end`).toBe(true);
+        }
+        // The running week starts on a Monday: day 0, 1970-01-01, is a Thursday.
+        expect((dayNumber(RUNNING.weekly.start) + 3) % 7, 'weekly: the running bucket starts on a Monday').toBe(0);
+        // The running month's calendar end carries no data, so no lookup can find it by accident.
+        const endInHistory = MONTHLY_RUNNING.history.some(({date}) => date === RUNNING.monthly.end);
+        expect(endInHistory, 'monthly: the calendar end is not in the history').toBe(false);
+    });
+
+    it.each([
+        {tier: 'weekly', view: 'Abs'},
+        {tier: 'weekly', view: '%'},
+        {tier: 'weekly', view: 'P&L line'},
+        {tier: 'monthly', view: 'Abs'},
+        {tier: 'monthly', view: '%'},
+        {tier: 'monthly', view: 'P&L line'},
+    ] as const)('T1, $view, $tier: the running period is drawn on the last history day, with the value of that day', async ({tier, view}) => {
+        // WHY: A1. The running bucket stood on its calendar end, a day not yet lived, with no value: the line stopped a period early.
+        const running = RUNNING[tier];
+        await openView(running.fixture, view);
+        const series = await settledSeries(tier, running.start);
+        const main = seriesNamed(series, VIEWS[view].mainKey);
+        expect(main, `the ${view} main line, by name`).toHaveLength(VIEWS[view].mainCount);
+        const lasts = main.map((entry) => entry.data[entry.data.length - 1]);
+        const lastIndex = running.fixture.history.length - 1;
+
+        // Negative oracle: no series draws a day after the last day of the history.
+        expect.soft([...new Set(series.flatMap((entry) => entry.data.map(xOf)).filter((x) => x > running.lastDay))], 'drawn days after the last history day').toEqual([]);
+        // The point: on the last history day, with that day's value.
+        const drawn = {x: [...new Set(lasts.map(xOf))], values: valuesOf(lasts)};
+        expect.soft(drawn, 'the last point of the main line').toEqual({x: [running.lastDay], values: [round6(VIEWS[view].valueAt(lastIndex))]});
+        // The edges stay the calendar's.
+        for (const datum of lasts) expect.soft(datum, 'the last datum keeps the calendar edges').toMatchObject({bucketStart: running.start, bucketEnd: running.end, resolution: tier});
+    });
+
+    it.each([
+        {tier: 'weekly', view: 'Abs'},
+        {tier: 'weekly', view: '%'},
+        {tier: 'monthly', view: 'Abs'},
+    ] as const)('T2, $view, $tier: the tooltip header of the running period names it up to its last day with data', async ({tier, view}) => {
+        // WHY: A1's header. It named the calendar end, a day not yet lived, over a point with no value.
+        const running = RUNNING[tier];
+        await openView(running.fixture, view);
+        const main = seriesNamed(await settledSeries(tier, running.start), VIEWS[view].mainKey);
+        expect(main, `the ${view} main line, by name`).toHaveLength(1);
+        const last = bucketStarting(main[0].data, running.start);
+        expect(last, 'the running bucket is the last one drawn').toBe(main[0].data.length - 1);
+        const lines = headerLines(tooltipAt(last), 2);
+        const valueAt = keyText('chart.tooltip.valueAt', {date: uiDay(running.lastDay)});
+        const heading = tier === 'weekly' ? keyText('chart.tooltip.weekRange', {start: uiDay(running.start), end: uiDay(running.lastDay)}) : keyText('chart.tooltip.monthLabel', {month: monthIn(running.start, uiLocale())});
+
+        expect.soft(lines).toEqual([heading, valueAt]);
+        // Negative oracle: the calendar end, a day not yet lived, is nowhere in the header.
+        expect.soft(lines.join('\n'), 'the header names no day after the last one with data').not.toContain(uiDay(running.end));
+    });
+
+    it('T3, Abs, weekly → daily: a zoom-in window opens on the Monday of the week its left edge stands in', async () => {
+        // WHY: Z2, the reading side. A percent maps to time over the drawn extent: today 1701 evenly spaced days, so the
+        // halfway point (7k + 3.5) / 1701 reads index floor(… · 243) = k. With A1 alone the extent is 1697 days and the
+        // same instant reads floor((7k + 3.5) / 1697 · 243) = k + 1: the daily window would open a week late.
+        const running = RUNNING.weekly;
+        await openView(running.fixture, 'Abs');
+        const weekly = await navData('weekly', running.start);
+        // Fixture barrier: one drawn bucket per ISO week the history touches, counted on the calendar.
+        expect(weekly.length, 'one weekly bucket per ISO week of the history').toBe(isoWeekCount(running.fixture.history.map(({date}) => date)));
+        const k = bucketStarting(weekly, '2024-06-24');
+        expect(k, 'the week of Mon 2024-06-24 is the tenth bucket from the end').toBe(weekly.length - 10);
+
+        const since = setOptionCount();
+        await onFakeTimeouts(() => zoomOnFakeClock(percentBetween(weekly, k), 100));
+        const daily = await navData('daily', running.lastDay);
+        const zoom = zoomEdges(await firstZoomAfter(since));
+
+        expectSameDay(dayAtPercent(zoom.start, extentOf(daily)), dayNumber('2024-06-24'), 'window start');
+        expectSameDay(dayAtPercent(zoom.end, extentOf(daily)), dayNumber(running.lastDay), 'window end');
+    });
+
+    it('T4, Abs, daily → weekly: a zoom-out window starts and ends on the points of the weeks holding its edges', async () => {
+        // WHY: Z2, the writing side. Today the end is 240/243, over 1701 evenly spaced days day 1680, the point of the week
+        // of 2024-08-05. With A1 alone the extent is 1697 days: 240/243 · 1697 ≈ 1676.05, four days before that point,
+        // which then falls outside the window and is filtered away.
+        const running = RUNNING.weekly;
+        await openView(running.fixture, 'Abs');
+        const weekly = await navData('weekly', running.start);
+        await onFakeTimeouts(() => zoomOnFakeClock(percentBetween(weekly, bucketStarting(weekly, '2024-06-24')), 100));
+        const daily = await navData('daily', running.lastDay);
+        const dailyExtent = extentOf(daily);
+        // Precondition: the daily line spans the whole history, so 2020-02-20 is day 50 from its first day and 2024-08-07 day 1680.
+        expect([dailyExtent.x0, dailyExtent.xN], 'the daily extent').toEqual([dayNumber(running.fixture.history[0].date), dayNumber(running.lastDay)]);
+        expect([dayNumber('2020-02-20'), dayNumber('2024-08-07')], 'the two edge days').toEqual([dailyExtent.x0 + 50, dailyExtent.x0 + 1680]);
+
+        // Halfway between days 50 and 51, and between 1679 and 1680: the reader takes 2020-02-20..2024-08-07, 1631 days, 1.36 per px, over 1.3.
+        const since = setOptionCount();
+        await onFakeTimeouts(() => zoomOnFakeClock(percentAtDay(dailyExtent.x0 + 50.5, dailyExtent), percentAtDay(dailyExtent.x0 + 1679.5, dailyExtent)));
+        const back = await navData('weekly', running.start);
+        const zoom = zoomEdges(await firstZoomAfter(since));
+        const startDay = dayAtPercent(zoom.start, extentOf(back));
+        const endDay = dayAtPercent(zoom.end, extentOf(back));
+        const startPoint = xDay(back[bucketHolding(back, '2020-02-20')]);
+        const endPoint = xDay(back[bucketHolding(back, '2024-08-07')]);
+
+        expectSameDay(startDay, startPoint, 'window start, on the point of the week holding 2020-02-20');
+        expectSameDay(endDay, endPoint, 'window end, on the point of the week holding 2024-08-07');
+        expect(endPoint, 'the point of the week holding 2024-08-07 is inside the window').toBeLessThanOrEqual(endDay + 0.01);
+    });
+});
+
+// =============================================================================
+// C4 (DV, TD-1b) — a Designer Lab edit reaches the broker lines
+// =============================================================================
+
+/**
+ * With two or more brokers in scope, the P&L line draws one line per broker in the colours of the first eight asset types,
+ * by the broker's index (GR5), read through `categoryColor` at each draw (`growthBrokerColor`). A Designer Lab edit of a
+ * category colour (C3) must reach those lines when the Lab says the colours changed (C4, `notifyChartColorsChange`).
+ *
+ * WHAT BREAKS. A redraw in the same mode, theme, masking and series takes the data-only path, which keeps the line colours
+ * of the last full build: the edit would show at the next theme switch, not at the edit. So the chart answers the signal
+ * with a full rebuild.
+ *
+ * THE EDIT is published as the Lab publishes it, on `window.__lfDesignerLab`, behind the `__LF_DESIGNER_LAB__` switch, as
+ * in `chartCategories.test.ts`. Both are taken back by hand: `vi.unstubAllGlobals()` would also take back this file's
+ * `localStorage`. The colours are compared with `categoryColor` read before the edit — the table's — never copied.
+ */
+describe('GrowthChart broker lines follow a Designer Lab edit (C4, TD-1b)', {timeout: 30_000}, () => {
+    /** The edited colour: this file's own, in no table. */
+    const EDITED = '#7a1f5c';
+
+    /** The broker lines of a full option, line by line: the broker each one draws, and its line and item colours. */
+    function brokerLineColours(option: FullOption): string[] {
+        const lines = option.series.slice(FRAME.pnlLine.length) as Array<{name?: string; lineStyle?: {color?: string}; itemStyle?: {color?: string}}>;
+        return lines.map((line) => `${line.name}: line ${line.lineStyle?.color}, item ${line.itemStyle?.color}`);
+    }
+
+    /** The same, as expected: the line of broker `index` in `colours[index]`. */
+    function linesIn(colours: readonly string[]): string[] {
+        return BROKER_NAMES.map((name, index) => `${name}: line ${colours[index]}, item ${colours[index]}`);
+    }
+
+    it('rebuilds the P&L line in full on notifyChartColorsChange(): the line of the edited category takes the edited colour, the other keeps the table’s', async () => {
+        expect(document.documentElement.classList.contains('dark'), 'premise: the light theme').toBe(false);
+        // The table's colours, read before any edit: line i wears the i-th of the first eight asset types.
+        const keys = BROKER_NAMES.map((_name, index) => CATEGORY_SEQUENCE[index % CATEGORY_SEQUENCE.length]);
+        const table = keys.map((key) => categoryColor('type', key, false));
+        const editedKey = keys[1];
+        expect(new Set([...table, EDITED]).size, 'control: the lines and the edit, all distinct colours').toBe(table.length + 1);
+
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY, brokerPnlHistory: BROKER_PNL_HISTORY, baseCurrency: BASE_CURRENCY}});
+        await waitFor(() => expect(chartInstances).toHaveLength(1), {timeout: 5_000});
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        const drawn = await waitForPnlLineWithBrokers(BROKER_NAMES);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        expect(brokerLineColours(drawn), 'control: before any edit, each line in the table’s colour').toEqual(linesIn(table));
+
+        // Premise: under Vitest the switch is not defined and no hook is published, so deleting both restores what was found.
+        expect(Object.getOwnPropertyDescriptor(globalThis, '__LF_DESIGNER_LAB__'), 'premise: no define under Vitest').toBeUndefined();
+        expect(Object.getOwnPropertyDescriptor(globalThis, '__lfDesignerLab'), 'premise: no Lab hook published').toBeUndefined();
+        const hook = vi.fn((kind: string, key: string) => (kind === 'type' && key === editedKey ? EDITED : null));
+        vi.stubGlobal('__LF_DESIGNER_LAB__', true);
+        vi.stubGlobal('__lfDesignerLab', {categoryColor: hook});
+        try {
+            const before = setOptionCount();
+            // The edit alone redraws nothing: a colour is read when the option is built, and only the signal says it changed.
+            flushSync();
+            await tick();
+            expect(setOptionCount(), 'the chart redrew before the notification').toBe(before);
+            expect(brokerLineColours(latestFullOption()), 'control: before the notification, the table’s colours').toEqual(linesIn(table));
+
+            notifyChartColorsChange();
+
+            const rebuilt = await fullOptionAfter(before);
+            expect(brokerLineColours(rebuilt), 'the broker lines of the full rebuild').toEqual(linesIn(keys.map((key, index) => (key === editedKey ? EDITED : table[index]))));
+            expect(hook, 'the edit was read through the C3 hook, with the chart’s own arguments').toHaveBeenCalledWith('type', editedKey, false);
+        } finally {
+            Reflect.deleteProperty(globalThis, '__LF_DESIGNER_LAB__');
+            Reflect.deleteProperty(globalThis, '__lfDesignerLab');
+        }
+    });
+});

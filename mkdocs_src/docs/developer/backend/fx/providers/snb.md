@@ -7,7 +7,7 @@
 | **API Endpoint** | `https://data.snb.ch/api/cube` |
 | **API Format** | JSON — `/devkum/dimensions/en` (currency list), `/devkum/data/json/en` (rates) |
 | **API Key** | Not required |
-| **Currencies** | ~25, read from the dataset's dimensions at first use (e.g. USD, EUR, GBP, JPY, CNY, AUD, CAD, …) |
+| **Currencies** | ~25, read from the dataset's dimensions at first use (e.g. USD, EUR, GBP, JPY, CNY, AUD, CAD, …). `GET /fx/providers` caches the list for 24 h (`backend/app/services/fx/catalog.py`) |
 | **Dataset** | `devkum` — monthly averages (`M0`); month-end values (`M1`) are not used |
 | **Update Frequency** | Monthly, published around the 2nd business day of the following month |
 | **API Docs** | [SNB Data Portal — devkum](https://data.snb.ch/en/topics/ziredev/cube/devkum) |
@@ -16,9 +16,10 @@
 
 The Swiss National Bank provides exchange rates through their Data Portal API. The SNB offers **no daily-rate API**: the `devkum` dataset holds monthly averages, and the provider stores each one on the **1st of its month** to fit the daily-rate storage model.
 
-- **Currency map**: loaded once per process from the `dimensions` endpoint (class-level cache). Forward rates (`USD3M`, `USD6M`) and the SDR (`XDR1`) are skipped. If the call fails, the provider raises `FXServiceError` ("Cannot load SNB currency list").
+- **Currency map**: loaded once per process from the `dimensions` endpoint (class-level cache). Forward rates (`USD3M`, `USD6M`) and the SDR (`XDR1`) are skipped. If the call fails, the provider raises `FXServiceError` ("Cannot load SNB currency list"), or `FXRateLimitedError` for an HTTP 429.
 - **Request**: the filtered JSON endpoint with `dimSel=D0(M0),D1(…)` — only monthly averages, only the requested currencies — and `fromDate`/`toDate` in `YYYY-MM`.
 - **Quotation**: "X CHF per 1 (or 100) units of the foreign currency". The provider divides by the unit count and returns CHF per 1 unit; the FX service normalizes the direction for storage.
+- **Too many requests**: an HTTP 429, on the currency map or on the rates request, raises `FXRateLimitedError` with the response's `Retry-After`, and the core pauses the provider ([Paused Providers](../configuration.md#paused-providers)).
 
 ### 🔢 Multi-Unit Currency Handling
 

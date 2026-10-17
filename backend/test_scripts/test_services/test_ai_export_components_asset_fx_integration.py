@@ -16,7 +16,7 @@ convention as `test_ai_export_components_fx.py`): every Asset/FX raw resource
 loader touched here (`asset_resources.load_asset_metadata`/`load_asset_report`/
 `load_asset_lots`, `fx_core._load_asset_facts`/`_load_exposure_report`) runs a
 genuine SQL query, so a tableless in-memory session would not satisfy them.
-`AssetSourceManager.get_prices_bulk`/`backend.app.services.fx.convert_bulk`
+`AssetSourceManager.get_prices_bulk`/`backend.app.services.fx.conversion.convert_bulk`
 are never monkeypatched either - both already read directly from the real
 `PriceHistory`/`FxRate` tables (see `test_ai_export_components_fx.py`'s
 `_seed_warmup_anchor` convention, reused here): a single very old anchor row
@@ -85,7 +85,7 @@ from backend.app.services.ai_export.dependencies import (
     RequiredComponentBuildError,
     build_bucket_plan_for_scope,
 )
-from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService, _portfolio_l2_cache, _wac_cache
 from backend.app.utils.datetime_utils import utcnow
@@ -1127,7 +1127,7 @@ class TestAutomaticFxAndTechnicalCoverage:
         # MFI's shared volume-coverage gate (`validate_meaningful_volume_input`)
         # requires a sufficient *directly observed* (non-backward-filled)
         # fraction of the points MFI computes on - the sessions the service
-        # hands it (see `signal_plugins/base.py`). A native-currency asset
+        # hands it (see `signals/base.py`). A native-currency asset
         # (matching the scope's `target_currency`) avoids the FX-conversion
         # pass, whose converted quotes carry a backward-fill record whenever
         # the FX rate itself was carried: still sessions, but not "directly

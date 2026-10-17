@@ -4,13 +4,15 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {Briefcase, Plus, RefreshCw} from 'lucide-svelte';
-    import BrokerCard from '$lib/components/brokers/BrokerCard.svelte';
-    import BrokerDiscoveryCard from '$lib/components/brokers/BrokerDiscoveryCard.svelte';
-    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
-    import BrokerSharingModal from '$lib/components/brokers/BrokerSharingModal.svelte';
-    import DeleteBrokerDialog from '$lib/components/brokers/DeleteBrokerDialog.svelte';
+    import BrokerCard from '$lib/features/brokers/BrokerCard.svelte';
+    import BrokerDiscoveryCard from '$lib/features/brokers/BrokerDiscoveryCard.svelte';
+    import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
+    import BrokerSharingModal from '$lib/features/brokers/BrokerSharingModal.svelte';
+    import DeleteBrokerDialog from '$lib/features/brokers/DeleteBrokerDialog.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {refreshAllBrokers, getAllBrokers, getAccessibleBrokers, invalidateBroker} from '$lib/stores/reference/brokerStore';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
@@ -96,12 +98,13 @@
         // without this guard, a second concurrent loadBrokers() could fire and race the
         // first one while reassigning brokers/brokerBreakdownById mid-flight.
         if (brokers.length > 0 && !loading) {
-            void loadBrokers();
+            void pageBusy.track('brokers-currency', loadBrokers);
         }
     }
 
     onMount(async () => {
-        await loadBrokers();
+        // The first load holds the page's Refresh button (Y11).
+        await pageBusy.track('brokers-first-load', loadBrokers);
         onboardingGuide.maybeStartContextual('broker_page_guide');
     });
 
@@ -149,7 +152,8 @@
         };
     }
 
-    async function loadBrokers() {
+    /** `force` asks the cards' report again even when its cache is fresh: only the page's Refresh does (Y-14). */
+    async function loadBrokers(force = false) {
         loading = true;
         error = null;
         try {
@@ -172,7 +176,7 @@
             // for a long-lived portfolio and was previously fetched unconditionally,
             // its JSON.parse blocking the main thread long enough to make card clicks
             // feel unresponsive while it was in flight.
-            const report = brokerIds.length > 0 ? await fetchReport(brokerIds, undefined, undefined, targetCurrency, false, false, true, false, false) : null;
+            const report = brokerIds.length > 0 ? await fetchReport(brokerIds, undefined, undefined, targetCurrency, force, false, true, false, false) : null;
 
             const breakdowns = asBrokerBreakdowns((report?.summary as {by_broker?: unknown} | null)?.by_broker);
             brokerBreakdownById = Object.fromEntries(breakdowns.map((item) => [item.broker_id, item]));
@@ -189,6 +193,15 @@
         } finally {
             loading = false;
         }
+    }
+
+    /**
+     * «Aggiorna» recalculates everything, as on the Dashboard and a broker's page: every portfolio view is marked
+     * stale, then the list and the cards' report are asked again, the report forced (Y-14). Holds the button (Y11).
+     */
+    function handleRefresh() {
+        requestPortfolioRefresh();
+        return pageBusy.track('brokers-refresh', () => loadBrokers(true));
     }
 
     function openCreateModal() {
@@ -302,7 +315,7 @@
                     message: escapeHtml($_(transactionCount > 0 ? 'brokers.deletedWithTransactions' : 'brokers.deleted', {values: {name: target.name, count: transactionCount}})),
                 },
             });
-            await loadBrokers();
+            await pageBusy.track('brokers-reload', loadBrokers);
         } catch (e) {
             if (!isClientSessionCurrent(sessionGeneration)) return;
             notify({
@@ -331,27 +344,27 @@
     }
 
     async function handleCreated() {
-        await loadBrokers();
+        await pageBusy.track('brokers-reload', loadBrokers);
     }
 
     async function handleUpdated() {
-        await loadBrokers();
+        await pageBusy.track('brokers-reload', loadBrokers);
     }
 </script>
 
-<div class="space-y-6" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="brokers-page">
+<div class="space-y-6 text-lf-primary" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="brokers-page">
     <!-- Header: Title left, controls right. Round 14.1 bugfix: `lg:` is a VIEWPORT breakpoint
          (1024px) — wraps unconditionally below that width regardless of whether the actual
          header row has room. Plain `flex-wrap` reacts to the row's OWN available width instead
          (see fx/+page.svelte's equivalent header for the full note). -->
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div use:guideAnchor={'broker.page.overview'} data-testid="broker-page-overview-guide-target">
-            <h2 class="text-lg font-semibold text-gray-700">{$_('brokers.title')}</h2>
-            <p class="text-gray-500 text-sm">{$_('brokers.subtitle')}</p>
+            <h2 class="text-lg font-semibold text-lf-secondary">{$_('brokers.title')}</h2>
+            <p class="text-lf-muted text-sm">{$_('brokers.subtitle')}</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2 justify-end">
-            <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400" use:guideAnchor={'broker.page.currency'} data-testid="broker-page-currency">
+            <div class="flex items-center gap-1.5 text-xs text-lf-muted" use:guideAnchor={'broker.page.currency'} data-testid="broker-page-currency">
                 <span class="whitespace-nowrap">{$_('common.currency')}:</span>
                 <div class="w-28">
                     <CurrencySearchSelect
@@ -362,16 +375,16 @@
                         placeholder={baseCurrency}
                         onchange={() => {
                             targetCurrencyManuallySet = true;
-                            void loadBrokers();
+                            void pageBusy.track('brokers-currency', loadBrokers);
                         }}
                     />
                 </div>
             </div>
 
-            <button class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50" data-testid="brokers-refresh" disabled={loading} on:click={loadBrokers} title="Refresh">
-                <RefreshCw class={loading ? 'animate-spin' : ''} size={18} />
+            <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors disabled:opacity-50" data-testid="brokers-refresh" data-busy={pageBusy.busy ? 'true' : 'false'} disabled={pageBusy.busy} on:click={handleRefresh} title="Refresh">
+                <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={18} />
             </button>
-            <button class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="add-broker-button" use:guideAnchor={'broker.page.add'} on:click={openCreateModal}>
+            <button class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-all" data-testid="add-broker-button" use:guideAnchor={'broker.page.add'} on:click={openCreateModal}>
                 <Plus size={18} />
                 <span class="hidden sm:inline">{$_('brokers.addBroker')}</span>
             </button>
@@ -379,32 +392,32 @@
     </div>
 
     {#if loading && brokers.length === 0 && inaccessibleBrokers.length === 0}
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700" use:guideAnchor={'broker.page.views'} data-testid="broker-page-views">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
-                <RefreshCw class="text-libre-green animate-spin" size={32} />
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle" use:guideAnchor={'broker.page.views'} data-testid="broker-page-views">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-selected rounded-full mb-4">
+                <RefreshCw class="text-lf-link animate-spin" size={32} />
             </div>
-            <p class="text-gray-500 dark:text-gray-400">{$_('common.loading')}</p>
+            <p class="text-lf-muted">{$_('common.loading')}</p>
         </div>
     {:else if error}
-        <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-red-100" use:guideAnchor={'broker.page.views'} data-testid="broker-page-views">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
-                <Briefcase class="text-red-600" size={32} />
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-danger-line" use:guideAnchor={'broker.page.views'} data-testid="broker-page-views">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-danger-soft rounded-full mb-4">
+                <Briefcase class="text-lf-danger" size={32} />
             </div>
-            <h3 class="text-lg font-semibold text-gray-700 mb-2">{$_('common.error')}</h3>
-            <p class="text-gray-500 mb-4">{error}</p>
-            <button on:click={loadBrokers} class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors">
+            <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$_('common.error')}</h3>
+            <p class="text-lf-muted mb-4">{error}</p>
+            <button on:click={() => pageBusy.track('brokers-retry', () => loadBrokers())} class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors">
                 {$_('common.retry')}
             </button>
         </div>
     {:else}
         {#if brokers.length === 0}
-            <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100" use:guideAnchor={'broker.page.views'} data-testid="broker-page-views">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-                    <Briefcase class="text-blue-600" size={32} />
+            <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle" use:guideAnchor={'broker.page.views'} data-testid="broker-page-views">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-info-soft rounded-full mb-4">
+                    <Briefcase class="text-lf-info" size={32} />
                 </div>
-                <h3 class="text-lg font-semibold text-gray-700 mb-2">{$_('brokers.noBrokers')}</h3>
-                <p class="text-gray-500 mb-4">{$_('brokers.noBrokersMessage')}</p>
-                <button on:click={openCreateModal} class="inline-flex items-center space-x-2 px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all">
+                <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$_('brokers.noBrokers')}</h3>
+                <p class="text-lf-muted mb-4">{$_('brokers.noBrokersMessage')}</p>
+                <button on:click={openCreateModal} class="inline-flex items-center space-x-2 px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-all">
                     <Plus size={18} />
                     <span>{$_('brokers.addBroker')}</span>
                 </button>
@@ -420,7 +433,7 @@
         {#if inaccessibleBrokers.length > 0}
             <section class="space-y-4" data-testid="brokers-other-existing">
                 <div>
-                    <h3 class="text-base font-semibold text-gray-700 dark:text-gray-200">{$_('brokers.otherExisting')}</h3>
+                    <h3 class="text-base font-semibold text-lf-secondary">{$_('brokers.otherExisting')}</h3>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

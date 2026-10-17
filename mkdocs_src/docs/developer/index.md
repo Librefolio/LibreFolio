@@ -54,6 +54,7 @@ Set up your local development environment and learn the daily workflow:
     - 🔀 [FX Configuration & Routing](backend/fx/configuration.md) — Chain routing algorithm
     - 🔌 [FX Providers](backend/fx/providers/index.md) — ECB, FED, BOE, SNB technical details
 - 📉 **[Risk Engine](backend/risk/architecture.md)** — Bulk risk analytics behind `/api/v1/risk`: plugin catalogue, eligibility verdicts, simulation and optimization in spawned worker pools
+- 📧 **[Email Service (SMTP)](backend/email.md)** — Optional transactional email: configuration from the environment only, SMTP transport, hourly budget, messages in four languages, configuration checks
 - 🗃️ **[Database Schema](architecture/database/index.md)** — SQLite schema split by subsystem (Users, Brokers, Assets, FX)
 
 ---

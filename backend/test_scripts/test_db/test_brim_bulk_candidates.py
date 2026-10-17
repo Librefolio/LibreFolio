@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Asset, AssetType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brim import BRIMMatchConfidence
-from backend.app.services.brim_provider import search_asset_candidates, search_asset_candidates_bulk
+from backend.app.services.brim.brim_provider import search_asset_candidates, search_asset_candidates_bulk
 
 
 @pytest_asyncio.fixture

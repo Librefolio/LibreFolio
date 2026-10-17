@@ -55,8 +55,8 @@ In the table view each panel is a table with its own pages; resizing, moving or 
 
 ## 🔄 Keep prices up to date
 
-- **Sync All** opens a window where **Start Sync** downloads the latest prices of every asset that has a provider; **Reload All** reloads the list from what LibreFolio has stored. On the **[Correlation](correlation.md)** tab they become **Sync selection**, which also downloads the exchange rates that convert the selected assets, and **Reload All**, which recomputes every analysis.
-- **Live prices** — while this page or an asset's page is open and the date range ends today, prices refresh by themselves every now and then. A price turns green when it went up since the previous refresh, red when it went down; when the market is closed you see the last close, uncoloured.
+- **Sync All** opens a window where **Start Sync** downloads the latest prices of every asset that has a provider; **Reload All** reloads the list from what LibreFolio has stored. When the period already holds stored prices for some of the assets, the window says so before you start: the sync replaces them with the provider's values, your manual edits included. On the **[Correlation](correlation.md)** tab they become **Sync selection**, which also downloads the exchange rates that convert the selected assets, and **Reload All**, which recomputes every analysis.
+- **Live prices** — while the date range ends today, prices refresh by themselves: every minute on this page, every 30 seconds on an asset's page. A price turns green when it went up since the previous refresh, red when it went down; when the market is closed you see the last close, uncoloured. To spare the server and the price providers, refreshing pauses while the browser tab is in the background, and after two minutes without using the page: then a small **Updates paused** label shows at the top of the page. There is nothing to click: as soon as you come back to the tab, move the mouse or press a key, prices refresh again on their own.
 - **In the background**, the server refreshes prices on a schedule your administrator sets ([Market Data Scheduler](../../admin/settings.md#market-data-scheduler)). The Dashboard shows the stored prices.
 
 ## 🖱️ Act on one asset
@@ -66,13 +66,15 @@ Each card has its own buttons; in the table, the **⋮** at the end of a row, or
 - **Sync** — downloads the asset's prices for the selected period. It needs a provider, and the table also blocks it for an archived asset.
 - **Reload** — reloads its prices from what LibreFolio has stored.
 - **Merge with…** — folds a duplicate into another asset, which keeps everything ([Create & Edit](create-edit.md)).
-- **Delete** — removes an asset that no transaction uses.
+- **Delete** — removes an asset that no transaction uses, with its provider, prices and events (dividends, splits…).
 
 In the table, tick several rows to **Sync**, **Reload** or **Delete** them together.
 
 ??? warning "🗑️ When an asset cannot be deleted"
 
     An asset is not deleted while **any** transaction uses it, even one in a broker you cannot see. The result shows how many transactions use it, with a **Transactions** link filtered to that asset. That page shows only the brokers you can access, so it may list fewer transactions than the count.
+
+    When the list already counts transactions for the asset, its confirmation opens straight on that result, with no **Delete** button: there is nothing to confirm. Otherwise the result appears after you confirm, and LibreFolio still checks before deleting.
 
 ## 🧭 Features
 

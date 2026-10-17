@@ -71,10 +71,10 @@ Plan 37, §8, and its steps 11, 12b and 12f:
 
 | Role | Path |
 |------|------|
-| `newRowSuggestId`, `mixedPromotePairs`, `importableSuggestions`, `assetQuantitiesCancel` | `frontend/src/lib/utils/transactions/promoteSuggest.ts` |
-| `cashAmountsCancel` | `frontend/src/lib/utils/transactions/promoteHelpers.ts` |
-| The editor | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| «Merge all» | `frontend/src/lib/components/transactions/modals/PromoteAllModal.svelte` |
-| Vitest | `frontend/src/lib/utils/transactions/promoteSuggest.test.ts` |
+| `newRowSuggestId`, `mixedPromotePairs`, `importableSuggestions`, `assetQuantitiesCancel` | `frontend/src/lib/features/transactions/bulk/promoteSuggest.ts` |
+| `cashAmountsCancel` | `frontend/src/lib/features/transactions/bulk/promoteHelpers.ts` |
+| The editor | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| «Merge all» | `frontend/src/lib/features/transactions/bulk/PromoteAllModal.svelte` |
+| Vitest | `frontend/src/lib/features/transactions/bulk/promoteSuggest.test.ts` |
 | E2E: same session, separate sessions, reminder, merge all | `frontend/e2e/transactions/tx-import-scalable-transfers.spec.ts` |
 | E2E: the cost check on promotes | `frontend/e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` |

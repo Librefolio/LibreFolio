@@ -366,8 +366,9 @@ class TestMWRRSeries:
         if series[1].mwrr is not None and p2_oneshot.mwrr is not None:
             assert series[1].mwrr == pytest.approx(p2_oneshot.mwrr, abs=Decimal("0.001"))
 
-    def test_cold_start_matches_warm_start_on_clean_data(self):
-        """Cold-start and warm-start produce same results when no contamination."""
+    def test_every_point_equals_the_single_solve_on_its_prefix(self):
+        """MF-K1, one root policy (replaces the warm/cold comparison): the point of each snapshot is
+        ``calculate_mwrr`` on the same data up to that snapshot — same date, same rate."""
         navs = [
             NAVSnapshot(date(2025, 1, 1), Decimal("10000")),
             NAVSnapshot(date(2025, 6, 1), Decimal("10500")),
@@ -375,19 +376,20 @@ class TestMWRRSeries:
         ]
         cfs = [CashFlowInput(date(2025, 6, 1), Decimal("-1000"))]
 
-        warm = calculate_mwrr_series(navs, cfs, use_warm_start=True)
-        cold = calculate_mwrr_series(navs, cfs, use_warm_start=False)
-        assert len(warm) == len(cold) == 2
-        for w, c in zip(warm, cold, strict=True):
-            if w.mwrr is not None and c.mwrr is not None:
-                assert w.mwrr == pytest.approx(c.mwrr, abs=Decimal("0.01"))
+        series = calculate_mwrr_series(navs, cfs)
+        assert len(series) == 2
+        for index, point in enumerate(series, start=1):
+            single = calculate_mwrr(cfs, navs[0].nav, navs[index].nav, navs[0].date, navs[index].date)
+            assert single.mwrr is not None
+            assert point == single
 
-    def test_warm_start_guard_prevents_contamination(self):
+    def test_a_loud_start_does_not_reach_the_last_point(self):
         """Large deposit on day 1 should not produce extreme cumulative at end.
 
         This replicates the boundary bug: date_from lands on a deposit day,
         synthetic CF creates a large initial NAV, first-day return annualizes to extreme.
-        The warm-start guard should prevent propagation.
+        MF-K1: every point starts from 0.1, so each is the single solve on its prefix and the
+        last one is the summary's.
         """
 
         # Simulate: period starts with NAV=26000, steady growth to 27000 over 90 days
@@ -398,16 +400,23 @@ class TestMWRRSeries:
         # One deposit on day 30
         cfs = [CashFlowInput(date(2025, 1, 1) + timedelta(days=30), Decimal("-500"))]
 
-        series = calculate_mwrr_series(navs, cfs, use_warm_start=True)
+        series = calculate_mwrr_series(navs, cfs)
         # Summary MWRR for same data
         summary = calculate_mwrr(cfs, navs[0].nav, navs[-1].nav, navs[0].date, navs[-1].date)
 
-        # The series last point should be close to summary (within 100bp)
-        if series and series[-1].mwrr is not None and summary.mwrr is not None:
-            assert abs(float(series[-1].mwrr) - float(summary.mwrr)) < 1.0, f"Series last ({series[-1].mwrr}) diverged from summary ({summary.mwrr})"
+        assert len(series) == 90
+        assert summary.mwrr is not None
+        assert series[-1] == summary, f"Series last ({series[-1].mwrr}) diverged from summary ({summary.mwrr})"
+        for index, point in enumerate(series, start=1):
+            assert point == calculate_mwrr(cfs, navs[0].nav, navs[index].nav, navs[0].date, navs[index].date), f"point {point.date}"
 
-    def test_cold_start_mode(self):
-        """use_warm_start=False should never propagate prev_guess."""
+    def test_a_loud_first_point_does_not_steer_the_next(self):
+        """MF-K1: no point inherits the previous point's rate as its starting guess.
+
+        The first point is loud (+0.38 % in one day, about +306 % annualized); the next, 90 days in,
+        is a moderate root. Each has one amount in and one out (the deposit of the first date is
+        already inside the first NAV), so each has a closed form: (out / in) ** (365 / days) − 1.
+        """
 
         navs = [
             NAVSnapshot(date(2025, 1, 1), Decimal("26000")),
@@ -416,12 +425,16 @@ class TestMWRRSeries:
         ]
         cfs = [CashFlowInput(date(2025, 1, 1), Decimal("-26000"))]
 
-        cold = calculate_mwrr_series(navs, cfs, use_warm_start=False)
-        assert len(cold) == 2
-        # With cold start, each point starts from 0.1 → should find moderate root for day 90
-        if cold[-1].mwrr is not None:
-            # For 90-day period with ~3.8% total return, annualized should be moderate
-            assert abs(float(cold[-1].mwrr)) < 2.0, f"Cold-start produced extreme rate: {cold[-1].mwrr}"
+        series = calculate_mwrr_series(navs, cfs)
+        assert len(series) == 2
+        for index, point in enumerate(series, start=1):
+            assert point == calculate_mwrr(cfs, navs[0].nav, navs[index].nav, navs[0].date, navs[index].date)
+        assert series[0].mwrr is not None
+        assert abs(float(series[0].mwrr) - ((26100 / 26000) ** 365 - 1)) <= 1e-6
+        # For 90-day period with ~3.8% total return, annualized should be moderate
+        assert series[-1].mwrr is not None
+        assert abs(float(series[-1].mwrr)) < 2.0, f"Extreme rate at the end: {series[-1].mwrr}"
+        assert abs(float(series[-1].mwrr) - ((27000 / 26000) ** (365 / 90) - 1)) <= 1e-6
 
 
 # ---------------------------------------------------------------------------

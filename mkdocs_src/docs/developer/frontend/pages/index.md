@@ -6,7 +6,8 @@
 
 Application pages and routing structure. All authenticated routes are under `(app)/`. The build is
 a static SPA: SSR is off in the root `+layout.ts` (FastAPI serves the static files), and only the
-login page is prerendered.
+login page is prerendered; the other routes, the public link pages included, are served through the
+SPA fallback.
 
 ## 🗺️ Page Structure
 
@@ -17,6 +18,12 @@ frontend/src/routes/
 ├── +page.svelte              # Login page (public)
 ├── +page.ts                  # prerender = true
 ├── +error.svelte             # Error page
+├── invite/
+│   └── +page.svelte          # Invitation link page (public, /invite#token=…)
+├── reset-password/
+│   └── +page.svelte          # Password-reset link page (public, /reset-password#token=…)
+├── setup/
+│   └── +page.svelte          # Setup link page of the initial administrator (public, /setup#token=…)
 ├── (app)/                    # Authenticated routes
 │   ├── +layout.svelte        # App shell: auth check, bootstrap/onboarding gate, sidebar, header, guide host
 │   ├── +layout.ts            # ssr = false, prerender = false
@@ -57,10 +64,24 @@ frontend/src/routes/
 ### 🔐 Login Page (`/`)
 
 - Public access
-- **LoginCard** / **RegisterCard** / **ForgotPasswordCard** (card-style, not modals)
+- **LoginCard** / **RegisterCard** / **ForgotPasswordCard** (card-style, not modals), inside
+  `AuthPageFrame`
+- **Register here** only while the instance accepts anyone (`registration_mode` `open`), or while it
+  has no account yet (`first_account_open`: the first account can be created in any mode)
 - Animated background with waves and chart lines
 - Redirect to dashboard after login
 - User preferences (language, theme) applied on login
+
+### 🔗 Account Link Pages (`/invite`, `/reset-password`, `/setup`)
+
+- Public access, not prerendered: the SPA fallback serves them
+- The token of the link travels in the fragment (`#token=…`) and leaves the address bar on load
+- `/invite` opens **RegisterCard** in invitation mode; `/reset-password` opens
+  **ResetPasswordCard**; `/setup`, the setup link of the initial administrator, opens
+  **SetupCard**; a link that cannot be used shows **LinkStatusCard**
+- `/invite` and `/reset-password` end on the login page, with a success message; `/setup` signs the
+  administrator in and goes to `/dashboard`
+- Details: [Account Link Pages](../components/features/auth.md#link-pages)
 
 ### 👋 Welcome (`/welcome`)
 
@@ -95,11 +116,17 @@ frontend/src/routes/
     - the start-of-period carets come from `period_market_value_start`, `period_book_value_start`
       and the first history point's `cash_value`; the Cash tooltip from the last history point's
       `cash_from_contributed_capital` / `cash_from_generated_returns`
-    - the day-change lines are computed in the browser from the last two history points: Δ of
-      `total_pnl`, divided by the previous `|total_pnl|` (Card 1) or `|nav_value|` (Card 2); a zero
-      base drops the percentage, and fewer than two points drops the line
-    - the timing effect is `mwrr_cumulative_percent − twrr_percent` in pp, labelled neutral below
-      0.05 pp; its colour intensity saturates at 3 pp
+    - the day-change lines read `pnl_change_1d`: the Total P&L's change from the calendar day
+      before the valuation date (`date_to`, else today) to it, from the engine's daily states;
+      null for a portfolio born on the valuation date. Card 1 shows it with its share
+      `pnl_change_1d_vs_total_pnl_percent`, Card 2 only the share `pnl_change_1d_vs_nav_percent`:
+      fractions of the day before's `|total_pnl|` and `|nav_value|`, with the change's sign, null
+      on a zero base. A null change drops Card 1's line, a null share its percentage (on Card 2,
+      the whole line); neither line is derived from `history`
+    - the timing effect reads `timing_effect_percent`, the backend's
+      `mwrr_cumulative_percent − twrr_percent` (null when either is missing), shown ×100 in pp:
+      `—` with no label when null, labelled neutral below 0.05 pp; its colour intensity saturates
+      at 3 pp
     - each card's help icon is a `DocsLink` to `user/dashboard/kpi-cards/#card-1-period-pl`,
       `#card-2-returns` and `#card-3-net-worth`: keep these explicit anchors in every language
 - **Positions tab** — `PositionsPanel`, also mounted on the broker detail Positions tab:
@@ -111,7 +138,21 @@ frontend/src/routes/
       broker detail page; the Period view's Status filter is a hidden-by-default enum column of
       `ContributionTable`, not a panel toggle, and `PerformanceChart` shows an Open / Closed badge
     - `positions_contribution` is fetched apart, on demand: `PositionsPanel` asks for it the first
-      time the Period view is shown; a cached copy shows at once and is refreshed when stale
+      time the Period view is shown; a cached copy shows at once and is refreshed when stale; a
+      failed request is asked again at most three times, 2, 4 and 8 s later
+      ([Lazy sections after a failure](../state/domain-state.md#lazy-report-retry))
+    - `ExposureTreemap`'s type and broker tooltips take their G/L and G/L % from
+      `summary.holding_groups`, passed by `PositionsPanel` as `holdingGroups` (only holdings with a
+      known value and G/L count): the group of the same `(broker_id, asset_type)`, `asset_type`
+      null for the whole broker. A group not sent, or sent without `gain_loss`, reads
+      **Unrealized P&L** `—`; tile areas and NAV weights still add up the holdings' own
+      `current_value` and `nav_weight_percent`
+    - `PerformanceChart` computes no return: it shows the backend's fractions of `|start_value|`,
+      rounded to 4 decimals and ×100 for display only — `period_pnl_percent` beside `period_pnl`
+      (the bar label and the tooltip's **Period P&L** row), and `period_unrealized_delta_percent`,
+      `period_realized_gain_loss_percent`, `period_income_percent` and `period_fees_taxes_percent`
+      beside the tooltip's four component rows (`period_fees_taxes_percent` is positive, a cost,
+      and shown negative). A null fraction shows no return
     - the lots panel opens from the **Analyze Lots** row action (⋮) or the right-click menu of
       every view — there is no plain-click trigger — and is mirrored in `?asset=<id>`;
       `LotsAnalysisPanel` renders inline below, with a slide transition, and scrolls itself into
@@ -222,7 +263,9 @@ frontend/src/routes/
 - Upload interface with:
     - Image files → **ImageEditModal** (crop, rotate, flip)
     - Non-image files → **FileEditModal** (rename)
-- Copy link, download, delete actions
+- Copy link, download, delete actions; delete only on the files the user may delete (`can_delete`)
+- Static Resources: a **Visibility** column (common or personal) and the switch between the two, see
+  [Scope of uploaded files](../components/core-ui/file-upload.md#scope-flow)
 - File thumbnails via `?img_preview=` API
 
 ### ⚙️ Settings (`/settings`)
@@ -231,12 +274,28 @@ frontend/src/routes/
     <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="Settings Page" style="width: 100%; display: block;">
 </div>
 
-- **4 tabs**: Profile, Preferences, About, Admin (global settings); `?tab=` selects one
-- **ProfileTab**: Avatar editing via AssetPickerModal, username display
+- **Tabs** from the tab registry (`SETTINGS_TABS` and `SETTINGS_TAB_GROUPS`, see
+  [Settings Components](../components/features/settings.md#tab-registry)): Profile, Preferences,
+  Plugins and About, then the **Administration** group on the right, whose tabs show in a second
+  bar: Global Settings, read by everyone, and Users, Backup, Email and Security, which only a
+  superuser sees (a regular user's group opens Global Settings directly, without a second bar).
+  `?tab=<id>` opens a tab the user can see, from the first render, inside its group for a member;
+  `?tab=administration` opens the group's first tab; an unknown or hidden id is ignored, and a value
+  is applied once, so a page update that keeps it does not take back a tab the user clicked. The
+  Security tab's badge, summed on Administration, counts the security checks that need attention
+- **ProfileTab**: Avatar editing via AssetPickerModal, username and email editing, account
+  deletion through `AccountDeletionDialog`
 - **PreferencesTab**: Language, currency, theme, and the Onboarding category (guide replays —
   see [Settings Components](../components/features/settings.md))
 - **GlobalSettingsTab**: visible to every user, editable only by a superuser, behind an edit lock
 - **AboutTab**: Version info (from Git tag), system info
+- **UsersTab**: superusers only — the accounts of the instance and the open invitations, with the
+  invitation, reset-link and deletion dialogs (see
+  [Settings Components](../components/features/settings.md#userstab))
+- **SecurityTab**: superusers only — the configuration checks of the instance
+  (`GET /security/checks`) and the browser's open-registration check, most severe first, with
+  **Check again** and the passed checks folded below (see
+  [Settings Components](../components/features/settings.md#securitytab))
 - **PasswordChangeModal** from profile
 - Mobile responsive with dropdown category selector
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -31,6 +32,7 @@ from backend.app.schemas.signals import (
     SignalStatus,
     SignalWarningCode,
 )
+from backend.app.services import signal_plugins as signal_plugins_package
 from backend.app.services.risk.metrics import (
     annualized_sharpe,
     annualized_volatility,
@@ -41,7 +43,6 @@ from backend.app.services.risk.metrics import (
     sample_variance,
     underwater_drawdown,
 )
-from backend.app.services.signal_plugins.base import SignalUnavailableError
 from backend.app.services.signal_plugins.calendar_rolling_return.plugin import (
     CalendarRollingReturnParams,
     CalendarRollingReturnPlugin,
@@ -50,14 +51,10 @@ from backend.app.services.signal_plugins.drawdown.plugin import (
     DrawdownParams,
     DrawdownPlugin,
 )
-from backend.app.services.signal_plugins.rolling_return.plugin import (
-    RollingReturnParams,
-    RollingReturnPlugin,
-)
-from backend.app.services.signal_service import (
-    SignalPreparedSeriesBundle,
-    SignalService,
-)
+from backend.app.services.signals import risk_adapters as signal_helpers
+from backend.app.services.signals.base import SignalUnavailableError
+from backend.app.services.signals.execution import SignalPreparedSeriesBundle
+from backend.app.services.signals.service import SignalService
 
 
 def _dates(count: int) -> list[date]:
@@ -166,7 +163,10 @@ def test_risk_metrics_match_hand_derived_formulas():
 
 
 @pytest.mark.asyncio
-async def test_signal_service_computes_five_risk_plugins_from_prepared_series():
+async def test_signal_service_computes_four_risk_plugins_from_prepared_series():
+    """The prepared-series risk signals, all four in one batch. RISK_ROLLING_RETURN was the fifth
+    until developer's decision 29 (CP-10a): the one Rolling Return is now the calendar plugin, which
+    reads no prepared series and is exercised in the I10 section below."""
     dates = _dates(7)
     primary_prices = [100.0, 110.0, 99.0, 118.8, 112.86, 129.789, 119.40588]
     comparison_prices = [
@@ -197,11 +197,6 @@ async def test_signal_service_computes_five_risk_plugins_from_prepared_series():
             params={"window": 2},
         ),
         SignalRequest(
-            instance_id="return",
-            signal_code="RISK_ROLLING_RETURN",
-            params={"window": 2},
-        ),
-        SignalRequest(
             instance_id="sharpe",
             signal_code="RISK_ROLLING_SHARPE",
             params={"window": 2, "risk_free_annual_rate": 0.0},
@@ -220,7 +215,7 @@ async def test_signal_service_computes_five_risk_plugins_from_prepared_series():
         prepared_series_bundle=bundle,
     )
 
-    assert [result.status for result in results] == [SignalStatus.OK] * 5
+    assert [result.status for result in results] == [SignalStatus.OK] * 4
     assert all(result.risk_metadata is not None for result in results)
     assert all(result.data_quality is not None for result in results)
     assert results[-1].risk_metadata.comparison_asset_id == 2
@@ -228,17 +223,13 @@ async def test_signal_service_computes_five_risk_plugins_from_prepared_series():
     assert results[0].series[0].points[-1].value == pytest.approx(-8.0)
     assert isinstance(results[0].series[0], SignalAreaSeries)
 
-    rolling_return = results[2].series[0].points
-    assert rolling_return[-1].value == pytest.approx(5.8)
-    assert len(rolling_return) == 4
-
 
 @pytest.mark.asyncio
 async def test_prepared_risk_signals_keep_the_carried_days_of_their_joint_calendar():
     """Quote-day filtering is for the indicators (developer's decision of 30/09/2026).
 
     A prepared risk signal computes on its joint calendar, where a day quoted by the comparison
-    carries the primary's last price. The five prepared plugins opt out of quote days and the
+    carries the primary's last price. The four prepared plugins opt out of quote days and the
     service never filters their input: the carried day stays in the input and in the output.
     """
     dates = _dates(7)
@@ -256,7 +247,6 @@ async def test_prepared_risk_signals_keep_the_carried_days_of_their_joint_calend
     requests = [
         SignalRequest(instance_id="drawdown", signal_code="RISK_DRAWDOWN"),
         SignalRequest(instance_id="volatility", signal_code="RISK_ROLLING_VOLATILITY", params={"window": 2}),
-        SignalRequest(instance_id="return", signal_code="RISK_ROLLING_RETURN", params={"window": 2}),
         SignalRequest(instance_id="sharpe", signal_code="RISK_ROLLING_SHARPE", params={"window": 2, "risk_free_annual_rate": 0.0}),
         SignalRequest(instance_id="beta", signal_code="RISK_ROLLING_BETA", params={"window": 2, "comparison_asset_id": 2}),
     ]
@@ -270,11 +260,15 @@ async def test_prepared_risk_signals_keep_the_carried_days_of_their_joint_calend
 
     # Premise: the carried day reaches the service as a carried point, not as a quote.
     assert primary.valuations.points[3].is_price_carried_forward is True
-    assert [result.status for result in results] == [SignalStatus.OK] * 5, [(result.instance_id, result.error) for result in results]
+    assert [result.status for result in results] == [SignalStatus.OK] * 4, [(result.instance_id, result.error) for result in results]
     for result in results:
         assert [point.date for point in result.series[0].points] == dates[3:], result.instance_id
-    carried_return = next(point for point in results[2].series[0].points if point.date == carried_day)
-    assert carried_return.value == pytest.approx((99.0 / 110.0 - 1) * 100)
+    by_id = {result.instance_id: result for result in results}
+    carried_drawdown = next(point for point in by_id["drawdown"].series[0].points if point.date == carried_day)
+    assert carried_drawdown.value == pytest.approx((99.0 / 110.0 - 1) * 100)
+    # The carried day's own zero return is inside the two-return window that ends on it.
+    carried_volatility = next(point for point in by_id["volatility"].series[0].points if point.date == carried_day)
+    assert carried_volatility.value == pytest.approx(abs((99.0 / 110.0 - 1) - (99.0 / 99.0 - 1)) / math.sqrt(2) * math.sqrt(365.0) * 100)
 
 
 @pytest.mark.asyncio
@@ -441,13 +435,13 @@ def test_drawdown_full_history_default_and_opt_out():
 
 def test_prepare_plan_marks_full_history_when_any_computation_declares_it():
     """A drawdown request in a mixed batch flips the plan-level flag; the fetch
-    path (asset_source.get_prices_bulk) reads exactly this flag to decide
+    path (assets.price_query.get_prices_bulk) reads exactly this flag to decide
     between full-history load and points-derived warm-up days."""
     context = _context(_dates(7))
     plan = SignalService().prepare_plan(
         [
             SignalRequest(instance_id="drawdown", signal_code="RISK_DRAWDOWN"),
-            SignalRequest(instance_id="return", signal_code="RISK_ROLLING_RETURN", params={"window": 2}),
+            SignalRequest(instance_id="volatility", signal_code="RISK_ROLLING_VOLATILITY", params={"window": 2}),
         ],
         context,
     )
@@ -455,7 +449,7 @@ def test_prepare_plan_marks_full_history_when_any_computation_declares_it():
 
     # Same batch without the drawdown → no full-history requirement.
     plan_without = SignalService().prepare_plan(
-        [SignalRequest(instance_id="return", signal_code="RISK_ROLLING_RETURN", params={"window": 2})],
+        [SignalRequest(instance_id="volatility", signal_code="RISK_ROLLING_VOLATILITY", params={"window": 2})],
         context,
     )
     assert plan_without.requires_full_history is False
@@ -1188,33 +1182,122 @@ async def test_visible_range_without_enough_calendar_history_is_unavailable():
     assert result.series == []
 
 
-def test_legacy_rolling_return_defaults_and_contract_are_untouched():
-    """RISK_ROLLING_RETURN still counts OBSERVATIONS, defaults to window=30 and
-    stays publicly catalogued. I10 adds a plugin; it does not migrate this one."""
-    context = _context(_dates(7))
+# =============================================================================
+# Developer's decision 29 (CP-10a) — ONE Rolling Return, measured in calendar days
+#
+# RISK_ROLLING_RETURN compounded N observations of the prepared series; the
+# calendar plugin above compares prices N calendar days apart. Two rolling
+# returns that disagree on what "30" means are one too many: the observation
+# plugin goes, with its helper, and the calendar plugin is catalogued.
+# =============================================================================
 
-    assert RollingReturnParams().window == 30
-    assert RollingReturnPlugin.default_params() == {"window": 30}
-    assert RollingReturnPlugin.signal_code == "RISK_ROLLING_RETURN"
-    assert RollingReturnPlugin.catalog_visible is True
-    assert RollingReturnPlugin.semantic_id == "rolling_compounded_return"
-    assert [spec.key for spec in RollingReturnPlugin.output_specs] == ["rolling_return"]
-    window_schema = RollingReturnParams.model_json_schema()["properties"]["window"]
-    assert window_schema["default"] == 30
-    assert window_schema["minimum"] == 1
-    assert window_schema["maximum"] == 500
-    assert window_schema["type"] == "integer"
+REMOVED_SIGNAL_CODE = "RISK_ROLLING_RETURN"
 
-    requirement = RollingReturnPlugin.warmup_requirement(RollingReturnParams(), context)
-    assert requirement.minimum_points == 31
-    assert requirement.stabilization_points == 0
-    assert requirement.total_points == 31
-    assert requirement.full_history is False
-    assert RollingReturnPlugin.warmup_requirement(RollingReturnParams(window=2), context).total_points == 3
+
+def test_the_one_rolling_return_is_the_calendar_one():
+    """The calendar plugin is now public, still counts calendar days and keeps its 30-day default.
+
+    Its window gets an explicit, inclusive floor of one day (``ge=1``, no longer ``gt=0``: the same
+    validation for strict integers) and still no ceiling, because the asset page sends long custom
+    windows. Publishing it changes no value, so its implementation version does not move.
+    """
+    window_schema = CalendarRollingReturnParams.model_json_schema()["properties"]["window_days"]
+    bounds = {key: window_schema[key] for key in ("minimum", "exclusiveMinimum", "maximum", "exclusiveMaximum") if key in window_schema}
+
+    assert CalendarRollingReturnPlugin.catalog_visible is True
+    assert bounds == {"minimum": 1}
+    assert CalendarRollingReturnPlugin.signal_code == CALENDAR_SIGNAL_CODE
+    assert CalendarRollingReturnPlugin.computes_on_quote_days is False
+    assert CalendarRollingReturnPlugin.implementation_version == "1.4.0"
+    assert CalendarRollingReturnPlugin.default_params() == {"window_days": 30}
+    assert [spec.key for spec in CalendarRollingReturnPlugin.output_specs] == [CALENDAR_SERIES_KEY]
+
+
+def test_the_observation_count_rolling_return_and_its_helper_are_gone():
+    """The plugin folder leaves the tree, and so does ``rolling_compounded_return_values``, dead code
+    that only that plugin called. A ``__pycache__`` git leaves behind does not count: discovery skips
+    a folder holding neither ``__init__.py`` nor ``plugin.py``."""
+    folder = Path(signal_plugins_package.__file__).parent / "rolling_return"
+    # Premise: the path is built where the plugin folders really are.
+    assert (folder.parent / "calendar_rolling_return" / "plugin.py").is_file()
+
+    assert {name: (folder / name).exists() for name in ("__init__.py", "plugin.py")} == {"__init__.py": False, "plugin.py": False}
+    assert hasattr(signal_helpers, "rolling_compounded_return_values") is False
+    assert "rolling_compounded_return_values" not in signal_helpers.__all__
 
 
 @pytest.mark.asyncio
-async def test_partial_and_unavailable_calendar_siblings_do_not_hide_legacy_result():
+async def test_asking_for_the_removed_rolling_return_fails_as_any_unknown_code():
+    """A saved chart or an old client that still asks for RISK_ROLLING_RETURN gets from SignalService
+    what any unknown code gets: a FAILED result with ``unknown_signal``, no availability, no series,
+    the params it sent echoed back — and its siblings compute untouched. Pinned against a code that
+    never existed, so "as any unknown code" is a comparison, not a description."""
+    points = _daily_points(CALENDAR_START, [100.0 + offset for offset in range(40)])
+    context = _calendar_context([point.date for point in points], 30)
+
+    results = await SignalService().compute(
+        [
+            SignalRequest(instance_id="removed", signal_code=REMOVED_SIGNAL_CODE, params={"window": 30}),
+            SignalRequest(instance_id="never-existed", signal_code="DOES_NOT_EXIST", params={"window": 30}),
+            SignalRequest(instance_id="calendar", signal_code=CALENDAR_SIGNAL_CODE, params={"window_days": 30}),
+        ],
+        points,
+        context,
+    )
+    by_id = {result.instance_id: result for result in results}
+
+    def unknown_shape(result) -> dict:
+        """The result with its own identity taken out: what is left must not depend on the code asked for."""
+        payload = result.model_dump(mode="json")
+        del payload["instance_id"], payload["signal_code"]
+        if payload.get("error"):
+            payload["error"]["message"] = payload["error"]["message"].replace(result.signal_code, "<code>")
+        return payload
+
+    removed = by_id["removed"]
+    assert (removed.status, removed.error.code if removed.error else None) == (SignalStatus.FAILED, SignalErrorCode.UNKNOWN_SIGNAL)
+    assert removed.availability is None
+    assert removed.series == []
+    assert removed.normalized_params == {"window": 30}
+    assert unknown_shape(removed) == unknown_shape(by_id["never-existed"])
+    assert by_id["calendar"].status == SignalStatus.OK
+
+
+def test_calendar_values_stay_the_exact_decimal_price_return_in_percent():
+    """GUARD (CP-10a): moving the formula into ``financial_math.returns.price_return`` changes no value, to the bit.
+
+    The calendar tests above compare with ``pytest.approx``. This one pins every available point of the
+    I10 discriminating scenario (weekends carry Friday, window of 7 calendar days) exactly: the plugin
+    divides the two Decimal closes, subtracts one, multiplies by a hundred and converts to float once, at
+    the end. A float division would stay within ``approx`` and still move bits, so a premise first proves
+    that this scenario tells the two arithmetics apart.
+    """
+    points = _weekday_observed_points(CALENDAR_START, 40)
+    by_date = {point.date: point for point in points}
+    series = _calendar_series(_calendar_compute(points, window_days=7))
+    available = [point for point in series.points if point.value is not None]
+
+    def decimal_percent(point) -> float:
+        reference = by_date[point.provenance.reference_target_date]
+        return float((by_date[point.date].close / reference.close - Decimal("1")) * Decimal("100"))
+
+    def float_percent(point) -> float:
+        reference = by_date[point.provenance.reference_target_date]
+        return (float(by_date[point.date].close) / float(reference.close) - 1) * 100
+
+    # Premise: a whole scenario, every point of it available, and one that tells Decimal from float.
+    assert len(available) == len(series.points) == 33
+    assert any(decimal_percent(point) != float_percent(point) for point in available)
+
+    assert [point.value for point in available] == [decimal_percent(point) for point in available]
+    assert _point_on(series, date(2026, 1, 17)).value == float((Decimal("115") / Decimal("108") - Decimal("1")) * Decimal("100"))
+
+
+@pytest.mark.asyncio
+async def test_partial_and_unavailable_calendar_siblings_do_not_change_a_prepared_risk_result():
+    """A calendar return that is partial or unavailable shares the batch with a prepared risk signal and
+    leaves it exactly as it computes alone. The prepared sibling was RISK_ROLLING_RETURN until decision 29;
+    the rolling volatility reads the same prepared series."""
     dates = _dates(160)
     prices = [100.0 + offset for offset in range(len(dates))]
     history_start = min(dates)
@@ -1227,7 +1310,7 @@ async def test_partial_and_unavailable_calendar_siblings_do_not_hide_legacy_resu
         series_sets={None: _prepared_set(_prepared_series(1, dates, prices))},
     )
     # Calendar input is independently sparse before the selected range. The
-    # prepared legacy series remains complete and factual.
+    # prepared series remains complete and factual.
     price_points = [point for point in _price_points(dates, prices) if point.date != missing_reference_date]
     context = SignalExecutionContext(
         domain=SignalDomain.ASSET,
@@ -1235,9 +1318,9 @@ async def test_partial_and_unavailable_calendar_siblings_do_not_hide_legacy_resu
         source_reference="calendar-sibling-fixture",
         target_currency="EUR",
     )
-    legacy_request = SignalRequest(
-        instance_id="return",
-        signal_code="RISK_ROLLING_RETURN",
+    prepared_request = SignalRequest(
+        instance_id="volatility",
+        signal_code="RISK_ROLLING_VOLATILITY",
         params={"window": 2},
     )
     partial_calendar_request = SignalRequest(
@@ -1252,14 +1335,14 @@ async def test_partial_and_unavailable_calendar_siblings_do_not_hide_legacy_resu
     )
 
     solo = await SignalService().compute(
-        [legacy_request],
+        [prepared_request],
         price_points,
         context,
         prepared_series_bundle=bundle,
     )
     mixed = await SignalService().compute(
         [
-            legacy_request,
+            prepared_request,
             partial_calendar_request,
             unavailable_calendar_request,
         ],
@@ -1268,19 +1351,20 @@ async def test_partial_and_unavailable_calendar_siblings_do_not_hide_legacy_resu
         prepared_series_bundle=bundle,
     )
 
-    solo_return = next(result for result in solo if result.instance_id == "return")
-    mixed_return = next(result for result in mixed if result.instance_id == "return")
+    solo_prepared = next(result for result in solo if result.instance_id == "volatility")
+    mixed_prepared = next(result for result in mixed if result.instance_id == "volatility")
     partial_calendar = next(result for result in mixed if result.instance_id == "calendar-partial")
     unavailable_calendar = next(result for result in mixed if result.instance_id == "calendar-unavailable")
 
-    solo_payload = solo_return.model_dump(mode="json")
-    mixed_payload = mixed_return.model_dump(mode="json")
+    solo_payload = solo_prepared.model_dump(mode="json")
+    mixed_payload = mixed_prepared.model_dump(mode="json")
     solo_payload["risk_metadata"]["computed_at"] = "<runtime>"
     mixed_payload["risk_metadata"]["computed_at"] = "<runtime>"
     assert mixed_payload == solo_payload
-    assert mixed_return.status == SignalStatus.OK
-    legacy_series = next(item for item in mixed_return.series if item.key == "rolling_return")
-    assert _point_on(legacy_series, history_end).value == pytest.approx(((259.0 / 258.0) * (258.0 / 257.0) - 1) * 100)
+    assert mixed_prepared.status == SignalStatus.OK
+    prepared_series = next(item for item in mixed_prepared.series if item.key == "rolling_volatility")
+    # Two daily returns, 258/257 - 1 and 259/258 - 1, annualized on the 365-day factor of a daily calendar.
+    assert _point_on(prepared_series, history_end).value == pytest.approx(abs((259.0 / 258.0 - 1) - (258.0 / 257.0 - 1)) / math.sqrt(2) * math.sqrt(365.0) * 100)
 
     assert partial_calendar.status == SignalStatus.PARTIAL
     assert partial_calendar.availability.reason_code == SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC

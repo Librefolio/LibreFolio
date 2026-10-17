@@ -26,8 +26,8 @@ other's results.
 
 Related plan: ``plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md``
               §G.6c (G-batch1).
-Related spec: ``backend/app/services/asset_source.py::get_current_prices_bulk``
-              (L2756+, F.2/F.3 persist block L2877+).
+Related spec: ``backend/app/services/assets/price_query.py::get_current_prices_bulk``
+              (F.2/F.3 persist block).
 """
 
 from datetime import date, timedelta
@@ -41,11 +41,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.config import get_settings
 from backend.app.db.models import PriceHistory, ProviderInputType
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.assets import FAAssetCreateItem, FABulkAssetCreateResponse
+from backend.app.schemas.assets.assets import FAAssetCreateItem, FABulkAssetCreateResponse
 from backend.app.schemas.prices import FAPricePoint, FAUpsert
 from backend.app.schemas.provider import FAProviderAssignmentItem
-from backend.app.services.asset_source import AssetSourceManager
-from backend.app.services.asset_sources.core import _asset_current_cache
+from backend.app.services.assets.core import _asset_current_cache
+from backend.app.services.assets.manager import AssetSourceManager
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success, unique_id
 

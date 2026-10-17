@@ -1,0 +1,4 @@
+# The key prefixes this subsystem owns, one per line (scripts/i18n_catalog.py, `dev.py i18n`).
+# A key belongs to the longest declared prefix; a plugin's i18n/ owns the exact keys it holds.
+# The plugins' own settings texts live in their fragments: pluginSettings.asset.<code>.*, pluginSettings.fx.<code>.*.
+pluginSettings

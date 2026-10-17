@@ -13,6 +13,7 @@
     import {_} from '$lib/i18n';
     import {Check, FileIcon, Loader2, RefreshCw, X} from 'lucide-svelte';
     import {formatBytes, uploadFile} from '$lib/utils/files/upload';
+    import type {UploadScope} from '$lib/types';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
@@ -20,6 +21,8 @@
     export let open: boolean = false;
     export let file: File | null = null;
     export let uploadOnComplete: boolean = true;
+    /** Who sees the renamed file once uploaded: the Files page passes personal; without it the backend decides */
+    export let scope: UploadScope | undefined = undefined;
     /** Z-index for modal stacking (default 60 = second-level modal) */
     export let zIndex: number = 60;
 
@@ -113,7 +116,7 @@
             }
 
             // Upload to backend
-            const uploadedUrl = await uploadFile(renamedFile);
+            const uploadedUrl = await uploadFile(renamedFile, undefined, scope);
 
             dispatch('complete', {url: uploadedUrl, file: renamedFile});
         } catch (err) {
@@ -227,11 +230,7 @@
         align-items: center;
         justify-content: space-between;
         padding: 1rem 1.5rem;
-        border-bottom: 1px solid #e5e7eb;
-    }
-
-    :global(.dark) .modal-header {
-        border-bottom-color: #374151;
+        border-bottom: 1px solid var(--lf-border-subtle);
     }
 
     .header-actions {
@@ -248,15 +247,15 @@
         height: 32px;
         border-radius: 0.5rem;
         border: none;
-        background: rgba(245, 158, 11, 0.1);
-        color: #f59e0b;
+        background: var(--lf-warning-soft);
+        color: var(--lf-warning);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .restore-btn:hover {
-        background: rgba(245, 158, 11, 0.2);
-        color: #d97706;
+        background: var(--lf-warning-line);
+        color: var(--lf-warning-on-soft);
     }
 
     .modal-title {
@@ -265,12 +264,8 @@
         gap: 0.5rem;
         font-size: 1.125rem;
         font-weight: 600;
-        color: #111827;
+        color: var(--lf-text-primary);
         margin: 0;
-    }
-
-    :global(.dark) .modal-title {
-        color: #f3f4f6;
     }
 
     .close-btn {
@@ -282,19 +277,14 @@
         border-radius: 0.5rem;
         border: none;
         background: transparent;
-        color: #6b7280;
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .close-btn:hover {
-        background: #f3f4f6;
-        color: #374151;
-    }
-
-    :global(.dark) .close-btn:hover {
-        background: #374151;
-        color: #d1d5db;
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-secondary);
     }
 
     .modal-body {
@@ -311,22 +301,14 @@
     }
 
     .info-label {
-        color: #6b7280;
+        color: var(--lf-text-muted);
         font-weight: 500;
     }
 
     .info-value {
-        color: #374151;
+        color: var(--lf-text-secondary);
         font-family: monospace;
         font-size: 0.75rem;
-    }
-
-    :global(.dark) .info-label {
-        color: #9ca3af;
-    }
-
-    :global(.dark) .info-value {
-        color: #e5e7eb;
     }
 
     .filename-editor {
@@ -338,11 +320,7 @@
     .filename-label {
         font-size: 0.8125rem;
         font-weight: 500;
-        color: #374151;
-    }
-
-    :global(.dark) .filename-label {
-        color: #d1d5db;
+        color: var(--lf-text-secondary);
     }
 
     .filename-input-group {
@@ -353,27 +331,21 @@
         flex: 1;
         padding: 0.5rem 0.75rem;
         font-size: 0.875rem;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-border-input);
         border-right: none;
         border-radius: 0.375rem 0 0 0.375rem;
-        background: white;
-        color: #374151;
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
         outline: none;
         transition: border-color 0.15s;
     }
 
+    .filename-input::placeholder {
+        color: var(--lf-text-placeholder);
+    }
+
     .filename-input:focus {
-        border-color: #1a4031;
-    }
-
-    :global(.dark) .filename-input {
-        background: #374151;
-        border-color: #4b5563;
-        color: #f3f4f6;
-    }
-
-    :global(.dark) .filename-input:focus {
-        border-color: #10b981;
+        border-color: var(--lf-focus);
     }
 
     .file-extension {
@@ -381,31 +353,20 @@
         align-items: center;
         padding: 0.5rem 0.75rem;
         font-size: 0.875rem;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-border-input);
         border-radius: 0 0.375rem 0.375rem 0;
-        background: #f3f4f6;
-        color: #6b7280;
+        background: var(--lf-surface-panel);
+        color: var(--lf-text-muted);
         font-family: monospace;
-    }
-
-    :global(.dark) .file-extension {
-        background: #4b5563;
-        border-color: #4b5563;
-        color: #9ca3af;
     }
 
     .error-message {
         padding: 0.75rem 1rem;
-        background-color: #fef2f2;
-        border: 1px solid #fecaca;
+        background-color: var(--lf-danger-soft);
+        border: 1px solid var(--lf-danger-line);
         border-radius: 0.5rem;
-        color: #dc2626;
+        color: var(--lf-danger-on-soft);
         font-size: 0.875rem;
-    }
-
-    :global(.dark) .error-message {
-        background-color: rgba(220, 38, 38, 0.1);
-        border-color: rgba(220, 38, 38, 0.3);
     }
 
     .modal-footer {
@@ -413,13 +374,8 @@
         justify-content: flex-end;
         gap: 0.75rem;
         padding: 1rem 1.5rem;
-        border-top: 1px solid #e5e7eb;
-        background: #f9fafb;
-    }
-
-    :global(.dark) .modal-footer {
-        background: #111827;
-        border-top-color: #374151;
+        border-top: 1px solid var(--lf-border-subtle);
+        background: var(--lf-surface-panel);
     }
 
     .btn {
@@ -441,38 +397,23 @@
     }
 
     .btn-primary {
-        background: #1a4031;
-        color: white;
+        background: var(--lf-action);
+        color: var(--lf-on-action);
     }
 
     .btn-primary:hover:not(:disabled) {
-        background: #143326;
-    }
-
-    :global(.dark) .btn-primary {
-        background: #10b981;
-    }
-
-    :global(.dark) .btn-primary:hover:not(:disabled) {
-        background: #059669;
+        background: var(--lf-action-hover);
     }
 
     .btn-secondary {
-        background: #e5e7eb;
-        color: #374151;
+        background: var(--lf-surface-card);
+        color: var(--lf-text-secondary);
+        box-shadow: inset 0 0 0 1px var(--lf-border-subtle);
     }
 
     .btn-secondary:hover:not(:disabled) {
-        background: #d1d5db;
-    }
-
-    :global(.dark) .btn-secondary {
-        background: #374151;
-        color: #d1d5db;
-    }
-
-    :global(.dark) .btn-secondary:hover:not(:disabled) {
-        background: #4b5563;
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     :global(.animate-spin) {
@@ -508,21 +449,13 @@
         margin: 0;
         font-size: 1.125rem;
         font-weight: 600;
-        color: #d97706;
-    }
-
-    :global(.dark) .confirm-header h3 {
-        color: #fbbf24;
+        color: var(--lf-warning);
     }
 
     .confirm-message {
-        color: #6b7280;
+        color: var(--lf-text-muted);
         margin-bottom: 1.5rem;
         line-height: 1.5;
-    }
-
-    :global(.dark) .confirm-message {
-        color: #9ca3af;
     }
 
     .confirm-actions {
@@ -532,12 +465,12 @@
     }
 
     .btn-warning {
-        background: #f59e0b;
-        color: white;
+        background: var(--lf-warning);
+        color: var(--lf-on-status);
         border: none;
     }
 
     .btn-warning:hover {
-        background: #d97706;
+        background: var(--lf-warning-hover);
     }
 </style>

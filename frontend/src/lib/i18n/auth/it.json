@@ -8,7 +8,6 @@
     "password": "Password",
     "confirmPassword": "Conferma Password",
     "forgotPassword": "Password dimenticata?",
-    "registerTitle": "Crea un account",
     "noAccount": "Non hai un account?",
     "hasAccount": "Hai già un account?",
     "registerHere": "Registrati qui",
@@ -17,8 +16,7 @@
     "accountCreated": "Account creato con successo! Effettua l'accesso.",
     "registrationFailed": "Registrazione fallita. Riprova.",
     "registrationDisabled": "La registrazione di nuovi utenti è al momento disabilitata dall'amministratore.",
-    "passwordRecovery": "Recupero Password",
-    "emailRecoveryNotAvailable": "Il recupero via email non è ancora disponibile. Utilizza il terminale del server per reimpostare la password.",
+    "emailRecoveryNotAvailable": "Il recupero via email non è disponibile su questa istanza. Reimposta la password dal terminale del server, oppure chiedi al tuo amministratore un link per reimpostarla.",
     "serverTerminalInstructions": "Esegui questo comando sul server:",
     "contactAdministrator": "Contatta l'amministratore di sistema se non hai accesso al server.",
     "backToLogin": "Torna al Login",
@@ -29,7 +27,8 @@
       "invalidEmailDomain": "Il dominio email non è valido o non può essere usato",
       "usernameTaken": "Questo nome utente è già in uso",
       "emailTaken": "Questa email è già registrata",
-      "passwordTooWeak": "La password non soddisfa i requisiti di sicurezza"
+      "passwordTooWeak": "La password non soddisfa i requisiti di sicurezza",
+      "usernameNoAt": "Il nome utente non può contenere @: per accedere puoi sempre usare il tuo indirizzo email."
     },
     "passwordStrength": {
       "veryWeak": "Molto Debole",
@@ -39,7 +38,7 @@
       "veryStrong": "Molto Forte",
       "requirements": "Requisiti password:",
       "rules": {
-        "minLength": "Almeno 8 caratteri",
+        "minLength": "Almeno {value} caratteri",
         "hasUppercase": "Una lettera maiuscola",
         "hasLowercase": "Una lettera minuscola",
         "hasNumber": "Un numero",
@@ -53,6 +52,56 @@
     "invalidCredentials": "Nome utente o password non validi",
     "invalidInput": "Dati non validi",
     "loginFailed": "Accesso non riuscito",
-    "accountDisabled": "Questo account è disattivato: chiedi a un amministratore di riattivarlo."
+    "accountDisabled": "Questo account è disattivato: chiedi a un amministratore di riattivarlo.",
+    "loginServerUnreachable": "Il server non risponde: controlla la connessione e riprova tra un momento.",
+    "loginServerError": "Il server ha riscontrato un errore: riprova tra un momento e, se succede di nuovo, avvisa un amministratore.",
+    "tooManyAttempts": "Troppi tentativi di accesso: aspetta qualche minuto e riprova.",
+    "showPassword": "Mostra password",
+    "hidePassword": "Nascondi password",
+    "registrationInviteOnly": "Questo server accetta nuovi account solo tramite un link d'invito. Chiedine uno a un amministratore.",
+    "userLimitReached": "Questo server ha raggiunto il numero massimo di account. Contatta l'amministratore.",
+    "invite": {
+      "notice": "Hai ricevuto un invito per questo server LibreFolio: crea il tuo account.",
+      "adminNotice": "Questo invito crea un account amministratore."
+    },
+    "link": {
+      "expired": "Questo link è scaduto.",
+      "consumed": "Questo link è già stato usato.",
+      "revoked": "Questo link è stato revocato.",
+      "unknown": "Questo link non è valido.",
+      "missing": "Questo link è incompleto: aprilo di nuovo dal messaggio che hai ricevuto.",
+      "checkFailed": "Non è stato possibile verificare il link. Riprova tra poco.",
+      "askAdmin": "Chiedi un nuovo link a un amministratore."
+    },
+    "resetPassword": {
+      "title": "Scegli una nuova password",
+      "account": "Account:",
+      "submit": "Imposta la nuova password",
+      "done": "La password è stata cambiata: accedi con quella nuova.",
+      "failed": "Non è stato possibile cambiare la password. Riprova."
+    },
+    "setup": {
+      "title": "Configura il tuo account amministratore",
+      "intro": "Scegli la password dell'account amministratore di questa istanza.",
+      "account": "Account:",
+      "submit": "Attiva l'account",
+      "failed": "Non è stato possibile configurare l'account. Riprova.",
+      "blocked": "Questa istanza è bloccata dal suo fornitore: l'account si potrà configurare quando sarà sbloccata.",
+      "newLinkHint": "Chiedi un nuovo link al tuo fornitore. Sul tuo server, esegui «dev.py user setup-link»."
+    },
+    "notices": {
+      "openRegistration": "La registrazione è aperta e questa istanza è raggiungibile da fuori dalla tua rete locale: chiunque la trovi può crearsi un account.",
+      "openRegistrationLocked": "La registrazione è aperta, fissata da LIBREFOLIO_REGISTRATION, e questa istanza è raggiungibile da fuori dalla tua rete locale: chiunque la trovi può crearsi un account. Cambia la variabile per chiuderla.",
+      "openRegistrationAction": "Cambia chi può registrarsi"
+    },
+    "instanceBlocked": "Questa istanza è bloccata dal suo fornitore: riprova quando sarà sbloccata.",
+    "checks": {
+      "loginLimit": {
+        "ok": "Gli accessi sbagliati sono limitati: dopo 10 in 15 minuti per un nome utente o un'email, o 50 da un indirizzo, l'accesso aspetta.",
+        "off": "Il limite degli accessi sbagliati è spento (LIBREFOLIO_LOGIN_LIMIT=off): le password si possono provare senza pause. Riaccendilo, a meno che questa non sia un'istanza di prova.",
+        "invalid": "LIBREFOLIO_LOGIN_LIMIT vale «{value}», che non è né on né off: il server non si avvia con questo valore."
+      }
+    },
+    "askAdminToResetPassword": "Chiedi all'amministratore un link per reimpostare la password: può crearne uno per il tuo account."
   }
 }

@@ -182,13 +182,13 @@
     }
 </script>
 
-<div class="relative" data-testid="tag-input-wrapper">
-    <div class="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg min-h-[38px] {disabled ? 'opacity-60 cursor-not-allowed' : ''}" data-testid="tag-input-container">
+<div class="relative text-lf-primary" data-testid="tag-input-wrapper">
+    <div class="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-lf-field border border-lf-input rounded-lg min-h-[38px] {disabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-lf-input-hover'}" data-testid="tag-input-container">
         {#each value as tag, i}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <span
-                class="tag-chip inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded cursor-pointer transition-all {i === focusedTagIndex ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-slate-800' : ''}"
+                class="tag-chip inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded cursor-pointer transition-all {i === focusedTagIndex ? 'ring-2 ring-lf-focus ring-offset-1 ring-offset-lf-field' : ''}"
                 style={getStringBadgeStyle(tag)}
                 data-testid={`tag-chip-${i}`}
                 onclick={() => handleChipClick(i)}
@@ -215,7 +215,7 @@
                 bind:this={inputEl}
                 type="text"
                 autocomplete="off"
-                class="flex-1 min-w-[5rem] bg-transparent text-xs outline-none"
+                class="flex-1 min-w-[5rem] bg-transparent text-xs text-lf-primary outline-none placeholder:text-lf-placeholder"
                 {placeholder}
                 bind:value={inputBuffer}
                 onkeydown={handleKeydown}
@@ -229,7 +229,7 @@
                 data-testid="tag-input-field"
             />
             {#if availableTags.length > 0}
-                <button type="button" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0 p-0.5" onclick={toggleDropdown} data-testid="tag-input-toggle" aria-label="Toggle tag suggestions">
+                <button type="button" class="text-lf-muted hover:text-lf-secondary shrink-0 p-0.5" onclick={toggleDropdown} data-testid="tag-input-toggle" aria-label="Toggle tag suggestions">
                     <ChevronDown size={14} class={dropdownOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
                 </button>
             {/if}
@@ -238,11 +238,11 @@
 
     {#if dropdownOpen && suggestions.length > 0 && !disabled}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg" data-testid="tag-input-dropdown" role="listbox">
+        <div class="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto bg-lf-card border border-lf-raised rounded-lg shadow-lg shadow-lf-shadow" data-testid="tag-input-dropdown" role="listbox">
             {#each suggestions as suggestion, idx}
                 <button
                     type="button"
-                    class="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 transition-colors {idx === highlightedIndex ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}"
+                    class="w-full text-left px-3 py-1.5 text-xs text-lf-secondary transition-colors {idx === highlightedIndex ? 'bg-lf-selected' : 'hover:bg-lf-hover'}"
                     onmousedown={(e) => {
                         e.preventDefault();
                         handleSuggestionClick(suggestion);
@@ -261,11 +261,11 @@
 
 <style>
     .tag-chip {
-        background: var(--badge-bg, #e2e8f0);
-        color: var(--badge-text, #334155);
+        background: var(--badge-bg, var(--lf-surface-neutral));
+        color: var(--badge-text, var(--lf-text-secondary));
     }
     :global(.dark) .tag-chip {
-        background: var(--badge-dark-bg, #334155);
-        color: var(--badge-dark-text, #e2e8f0);
+        background: var(--badge-dark-bg, var(--lf-surface-neutral));
+        color: var(--badge-dark-text, var(--lf-text-secondary));
     }
 </style>

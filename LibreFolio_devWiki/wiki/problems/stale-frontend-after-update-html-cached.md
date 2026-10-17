@@ -25,9 +25,11 @@ build, still cached as immutable. Nothing told the browser to ask again.
 ## Solution (2026-10-08, `333bfc985`)
 
 Every HTML document of a build is served with `Cache-Control: no-cache, must-revalidate` (`REVALIDATE_HTML`,
-`_revalidated_file()` in `backend/app/main.py`): the browser revalidates the entry point on each load and picks up a
-new build at once. The `/_app` chunks stay `public, max-age=31536000, immutable` — their names change with their
-content, so caching them forever is safe.
+`_revalidated_file()` in `backend/app/services/platform/static_site.py`): the browser revalidates the entry point on each load and picks up a
+new build at once. The chunks under `/_app/immutable/` stay `public, max-age=31536000, immutable` — their names change
+with their content, so caching them forever is safe. Since CP7b-1 of 1.3.0 they are the only ones: every other file of
+`/_app` (`env.js`, `version.json`), whose name does not change with its content, gets `no-cache, must-revalidate` like
+the HTML, on its 304 too (`ImmutableStaticFiles`).
 
 ## Prevention
 
@@ -43,5 +45,5 @@ Bug reports after upgrades that could not be reproduced on a fresh browser; a mi
 
 | Role | Path |
 |------|------|
-| `REVALIDATE_HTML`, `_revalidated_file`, immutable `/_app` | `backend/app/main.py` |
+| `REVALIDATE_HTML`, `_revalidated_file`, `ImmutableStaticFiles` (immutable `/_app/immutable/`, the rest of `/_app` revalidated) | `backend/app/services/platform/static_site.py` |
 | Plan (Step 9) | `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep9StaleFrontend.prompt.md` |

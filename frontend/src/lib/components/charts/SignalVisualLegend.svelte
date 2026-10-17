@@ -6,6 +6,7 @@
     import {resolveVisualSignalStyle, type SignalConfig, type SignalDefinition, type SignalStyle, type SignalVisualComponent, type SignalVisualPartition} from '$lib/charts/signals';
     import {humanizeKey} from '$lib/utils/text';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
+    import {SIGNAL_COLORS} from '$lib/theme/chartTheme';
 
     interface Props {
         definition: SignalDefinition;
@@ -115,9 +116,9 @@
 {#snippet componentPreview(component: SignalVisualComponent, style: SignalStyle, customized: boolean)}
     {#if component.kind === 'bar'}
         <svg width="34" height="14" viewBox="0 0 34 14" aria-hidden="true" class="shrink-0">
-            <rect x="3" y="5" width="6" height="7" rx="1" fill={customized ? style.color : '#16a34a'} />
-            <rect x="14" y="2" width="6" height="10" rx="1" fill={customized ? style.color : '#16a34a'} />
-            <rect x="25" y="7" width="6" height="5" rx="1" fill={customized ? style.color : '#dc2626'} />
+            <rect x="3" y="5" width="6" height="7" rx="1" fill={customized ? style.color : SIGNAL_COLORS.legendBarPreview.up} />
+            <rect x="14" y="2" width="6" height="10" rx="1" fill={customized ? style.color : SIGNAL_COLORS.legendBarPreview.up} />
+            <rect x="25" y="7" width="6" height="5" rx="1" fill={customized ? style.color : SIGNAL_COLORS.legendBarPreview.down} />
         </svg>
     {:else if component.kind === 'band'}
         <svg width="34" height="14" viewBox="0 0 34 14" aria-hidden="true" class="shrink-0">
@@ -130,22 +131,22 @@
 {/snippet}
 
 {#if visibleComponents.length > 0 || partitions.length > 0}
-    <div class="space-y-2 border-t border-gray-100 pt-2 dark:border-slate-700" data-testid="signal-visual-legend">
+    <div class="space-y-2 border-t border-lf-subtle pt-2" data-testid="signal-visual-legend">
         {#if visibleComponents.length > 0}
             <div class="space-y-1.5">
-                <span class="block text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                <span class="block text-[9px] font-semibold uppercase tracking-wide text-lf-muted">
                     {$t('signals.visual.components')}
                 </span>
                 <div class="grid gap-2" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));">
                     {#each visibleComponents as { component, index } (component.key)}
                         {@const effectiveStyle = componentStyle(component, index)}
                         {@const customized = Boolean(config.componentStyles?.[component.key])}
-                        <div class="min-w-0 rounded-md bg-gray-50 p-2 dark:bg-slate-700/60" data-testid="signal-component-style-{component.key}">
-                            <div class="mb-1.5 flex min-w-0 items-center gap-1.5 text-[10px] text-gray-600 dark:text-gray-300">
+                        <div class="min-w-0 rounded-md bg-lf-panel p-2" data-testid="signal-component-style-{component.key}">
+                            <div class="mb-1.5 flex min-w-0 items-center gap-1.5 text-[10px] text-lf-secondary">
                                 {@render componentPreview(component, effectiveStyle, customized)}
                                 <span class="min-w-0 flex-1 truncate font-medium">{componentLabel(component)}</span>
                                 <Tooltip text={componentDescription(component)} position="top">
-                                    <Info size={11} class="shrink-0 text-gray-400" />
+                                    <Info size={11} class="shrink-0 text-lf-muted" />
                                 </Tooltip>
                             </div>
                             <SignalStyleEditor style={effectiveStyle} simplified={component.kind !== 'line'} hideLineType={component.kind === 'bar'} hideWidth={component.kind === 'bar'} onstylechange={(key, value) => updateComponentStyle(component, index, key, value)} />
@@ -158,18 +159,18 @@
         {#if partitionGroups.length > 0}
             {#each partitionGroups as group (group.componentKey)}
                 <div class="space-y-1.5">
-                    <span class="block text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                    <span class="block text-[9px] font-semibold uppercase tracking-wide text-lf-muted">
                         {$t('signals.visual.zonesFor', {values: {component: group.componentLabel}})}
                     </span>
                     <div class="grid gap-2" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));">
                         {#each group.partitions as partition (partition.key)}
                             {@const effectiveStyle = partitionStyle(partition)}
-                            <div class="min-w-0 rounded-md bg-gray-50 p-2 dark:bg-slate-700/60" data-testid="signal-partition-style-{partition.key}">
-                                <div class="mb-1.5 flex min-w-0 items-center gap-1.5 text-[10px] text-gray-600 dark:text-gray-300">
+                            <div class="min-w-0 rounded-md bg-lf-panel p-2" data-testid="signal-partition-style-{partition.key}">
+                                <div class="mb-1.5 flex min-w-0 items-center gap-1.5 text-[10px] text-lf-secondary">
                                     {@render linePreview(effectiveStyle)}
                                     <span class="min-w-0 flex-1 truncate font-medium">{partitionLabel(partition)}</span>
                                     <Tooltip text={partitionDescription(partition)} position="top">
-                                        <Info size={11} class="shrink-0 text-gray-400" />
+                                        <Info size={11} class="shrink-0 text-lf-muted" />
                                     </Tooltip>
                                 </div>
                                 <SignalStyleEditor style={effectiveStyle} simplified onstylechange={(key, value) => updatePartitionStyle(partition, key, value)} />

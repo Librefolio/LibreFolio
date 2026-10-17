@@ -41,11 +41,9 @@ from backend.app.schemas.signals import (
     SignalValueRegion,
     SignalWarmupRequirement,
 )
-from backend.app.services.provider_registry import (
-    SignalPluginRegistry,
-    register_plugin,
-)
-from backend.app.services.signal_plugins.base import SignalPlugin
+from backend.app.services.provider_registry import register_plugin
+from backend.app.services.signals.base import SignalPlugin
+from backend.app.services.signals.registry import SignalPluginRegistry
 
 
 class StochRsiSignalParams(BaseModel):

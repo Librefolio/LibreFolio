@@ -50,6 +50,7 @@ from backend.app.schemas.brim import (
     BRIMDuplicateCheckRequest,
     BRIMDuplicateReport,
     BRIMFileInfo,
+    BRIMFileListItem,
     BRIMFileStatus,
     BRIMGapFixRequest,
     BRIMGapFixResponse,
@@ -81,25 +82,40 @@ from backend.app.schemas.brokers import (
     BRUpdateItem,
 )
 from backend.app.schemas.uploads import FilePreviewResponse
-from backend.app.services import brim_gap_fix, brim_provider, brim_report_sets
-from backend.app.services.brim_parse_pool import parse_file_offloaded
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
-from backend.app.services.brim_report_sets import BRIMSetError, BRIMSetIncomplete
-from backend.app.services.broker_service import BROKER_NAME_RECOVERY, BrokerService
-from backend.app.services.file_preview import (
+from backend.app.services.accounts.global_settings_service import get_max_upload_mb
+from backend.app.services.brim import brim_gap_fix, brim_provider, brim_report_sets
+from backend.app.services.brim.brim_parse_pool import parse_file_offloaded
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
+from backend.app.services.brim.brim_report_sets import BRIMSetError, BRIMSetIncomplete
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brokers.broker_service import BROKER_NAME_RECOVERY, BrokerService
+from backend.app.services.files.file_preview import (
     FilePreviewLinks,
     UnsupportedPreviewError,
     build_image_preview_url,
     build_preview_response,
 )
-from backend.app.services.global_settings_service import get_max_upload_mb
-from backend.app.services.provider_registry import BRIMProviderRegistry
 
 logger = get_logger(__name__)
 
 broker_router = APIRouter(prefix="/brokers", tags=["BR (Broker)"])
 
 brim_router = APIRouter(prefix="/import", tags=["BR Import"])
+
+# Report types a browser may display in place. HTML, SVG, XML and every other type are always served as a download.
+INLINE_SAFE_MEDIA_TYPES = frozenset(
+    {
+        "application/pdf",
+        "application/json",
+        "text/plain",
+        "text/csv",
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+        "image/bmp",
+    }
+)
 
 
 async def _get_brim_file_with_access(
@@ -110,19 +126,40 @@ async def _get_brim_file_with_access(
     min_role: Optional[UserRole] = None,
     denied_detail: str = "Access denied",
 ) -> BRIMFileInfo:
-    """Load a BRIM file and validate broker access when needed."""
+    """Load a BRIM file and check that the current user may reach it (decision 36 of release 1.3).
+
+    A file of a broker needs a role on that broker (``min_role`` when given); a file with no broker, uploaded by an
+    older version, only its uploader. An administrator reaches every file; anyone else gets 403. An id that is not the
+    UUID an upload gives is a 404 before any lookup (W-B4).
+    """
+    if not _is_brim_file_id(file_id):
+        raise HTTPException(status_code=404, detail="File not found")
     # Off the event loop: reading a sidecar may detect the file's plugins again (item 8), which reads the file.
     file_info = await asyncio.to_thread(brim_provider.get_file_info, file_id)
     if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
 
-    if file_info.target_broker_id and not current_user.is_superuser:
-        broker_service = BrokerService(session)
-        role = await broker_service._check_user_access(file_info.target_broker_id, current_user.id, min_role=min_role)
-        if role is None:
+    if not current_user.is_superuser:
+        if file_info.target_broker_id is not None:
+            broker_service = BrokerService(session)
+            role = await broker_service._check_user_access(file_info.target_broker_id, current_user.id, min_role=min_role)
+            if role is None:
+                raise HTTPException(status_code=403, detail=denied_detail)
+        elif file_info.uploaded_by_user_id != current_user.id:
             raise HTTPException(status_code=403, detail=denied_detail)
 
     return file_info
+
+
+def _is_brim_file_id(file_id: str) -> bool:
+    """Whether ``file_id`` is a file id as an upload writes it: a UUID in its canonical lower-case form (W-B4).
+
+    Upper-case is refused too: on a case-insensitive disk it would still find the file.
+    """
+    try:
+        return str(uuid.UUID(file_id)) == file_id
+    except ValueError:
+        return False
 
 
 # =============================================================================
@@ -254,6 +291,7 @@ async def get_broker_summary(
     broker_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
+    as_of: Optional[date] = Query(None, description="The user's today (YYYY-MM-DD); the server date when omitted. Cash, holdings and their average cost count the transactions dated up to that day; prices are the latest known."),
     session: AsyncSession = Depends(get_session_generator),
 ) -> BRSummary:
     """
@@ -280,7 +318,7 @@ async def get_broker_summary(
         raise HTTPException(status_code=403, detail="Only superusers can use as_user_id parameter")
 
     service = BrokerService(session)
-    result = await service.get_summary(broker_id, user_id=current_user.id, as_user_id=as_user_id)
+    result = await service.get_summary(broker_id, user_id=current_user.id, as_user_id=as_user_id, as_of=as_of)
 
     if not result:
         raise HTTPException(status_code=404, detail=f"Broker {broker_id} not found")
@@ -414,8 +452,8 @@ async def list_broker_access(
     """
     List all users with access to a broker.
 
-    Any user with access to the broker can view the access list.
-    Superusers can view any broker's access list.
+    Any authenticated user can read the access list of any existing broker, email addresses included; a broker that
+    does not exist answers 404.
     """
     service = BrokerService(session)
     broker = await service.get_by_id(
@@ -452,10 +490,10 @@ async def bulk_update_broker_access(
 
     Rules:
     - Only OWNERs (or superusers) can call this endpoint.
-    - At least one OWNER must remain after the operation.
+    - At least one OWNER must remain after the operation: nobody, the caller included, can remove or downgrade the
+      last one.
     - Only OWNERs can have share_percentage > 0.
     - Sum of all share_percentage values must be ≤ 1.0 (fraction, not percent).
-    - The calling user cannot remove themselves as the last OWNER.
     """
     if not items:
         raise HTTPException(status_code=422, detail="At least one access item is required")
@@ -634,19 +672,21 @@ async def upload_file(
     return file_info
 
 
-@brim_router.get("/files", response_model=List[BRIMFileInfo])
+@brim_router.get("/files", response_model=List[BRIMFileListItem])
 async def list_files(
     status: Optional[BRIMFileStatus] = Query(default=None, description="Filter by status: uploaded, imported, failed"),
     broker_ids: Optional[List[int]] = Query(default=None, description="Filter by broker IDs (repeated query params, e.g., ?broker_ids=1&broker_ids=2)"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
-) -> List[BRIMFileInfo]:
+) -> List[BRIMFileListItem]:
     """
     List all uploaded broker report files.
 
-    Optionally filter by status and/or broker IDs.
-    Non-superusers can only see files for brokers they have access to.
-    Results are sorted by upload time (newest first).
+    Optionally filter by status and/or broker IDs. With ``broker_ids`` the list holds only those brokers' files: the
+    files with no broker (uploaded by an older version) are listed only without that filter, on the Files page (W-B32).
+    Non-superusers see the files of the brokers they have a role on, and the files with no broker they uploaded
+    themselves (decision 36). Each item says whether the user may delete it (``can_delete``). Results are sorted by
+    upload time (newest first).
     """
     # Determine accessible broker IDs
     if current_user.is_superuser:
@@ -665,7 +705,17 @@ async def list_files(
             accessible_broker_ids = user_broker_ids
 
     # Off the event loop: listing reads every sidecar and may detect old files' plugins again (item 8).
-    return await asyncio.to_thread(brim_provider.list_files, status=status, broker_ids=accessible_broker_ids)
+    files = await asyncio.to_thread(brim_provider.list_files, status=status, broker_ids=accessible_broker_ids)
+    if broker_ids:
+        # A broker's list holds that broker's files only; list_files also keeps the ones with no broker (W-B32).
+        files = [file for file in files if file.target_broker_id is not None]
+    if current_user.is_superuser:
+        return [BRIMFileListItem(**file.model_dump(), can_delete=True) for file in files]
+
+    # A file with no broker, uploaded by an older version, is its uploader's only (decision 36).
+    files = [file for file in files if file.target_broker_id is not None or file.uploaded_by_user_id == current_user.id]
+    editable = set(await broker_service.get_accessible_broker_ids(current_user.id, min_role=UserRole.EDITOR))
+    return [BRIMFileListItem(**file.model_dump(), can_delete=file.target_broker_id in editable if file.target_broker_id is not None else True) for file in files]
 
 
 @brim_router.get("/files/{file_id}", response_model=BRIMFileInfo)
@@ -677,7 +727,8 @@ async def get_file(
     """
     Get details for a specific file.
 
-    User must have access to the file's broker.
+    Any role on the file's broker; a file with no broker (uploaded by an older version) only its uploader. The
+    administrator reaches every file; anyone else gets 403. An id that is not a UUID is a 404 (decision 36).
     """
     return await _get_brim_file_with_access(file_id, current_user, session)
 
@@ -692,7 +743,7 @@ async def get_brim_file_preview(
     """Get structured preview data for a BRIM file."""
     file_info = await _get_brim_file_with_access(file_id, current_user, session)
 
-    file_path = brim_provider.get_file_path(file_id)
+    file_path = await asyncio.to_thread(brim_provider.get_file_path, file_id)
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="File content not found")
 
@@ -731,7 +782,8 @@ async def delete_file(
     """
     Delete a file and its metadata.
 
-    Requires EDITOR or OWNER access on the file's broker.
+    Requires EDITOR or OWNER access on the file's broker; a file with no broker only its uploader or the
+    administrator may delete (decision 36).
     """
     await _get_brim_file_with_access(
         file_id,
@@ -760,21 +812,26 @@ async def download_file(
     Download a file by its ID.
 
     Returns the file content with appropriate headers for download.
-    Any user with access to the broker can download files (VIEWER+).
+    Any user with access to the broker can download files (VIEWER+); a file with no broker only its uploader and the
+    administrator (decision 36).
     """
     file_info = await _get_brim_file_with_access(file_id, current_user, session)
 
-    file_path = brim_provider.get_file_path(file_id)
+    file_path = await asyncio.to_thread(brim_provider.get_file_path, file_id)
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="File content not found")
 
     media_type = mimetypes.guess_type(file_info.filename)[0] or "application/octet-stream"
 
+    # Shown in the browser only when the type cannot carry active content; anything else is a download.
+    inline = not download and media_type in INLINE_SAFE_MEDIA_TYPES
+
     return FileResponse(
         path=file_path,
         filename=file_info.filename,
         media_type=media_type,
-        content_disposition_type="attachment" if download else "inline",
+        content_disposition_type="inline" if inline else "attachment",
+        headers={"X-Content-Type-Options": "nosniff"},
     )
 
 
@@ -863,7 +920,8 @@ async def parse_file(
     The user can review and modify the parsed transactions before
     sending them to POST /transactions endpoint.
 
-    Requires EDITOR or OWNER access on the file's broker.
+    Requires EDITOR or OWNER access on the file's broker, and on the request's ``broker_id``: the broker the parse
+    imports into and compares duplicates and report-set history against (decision 36). The administrator passes.
 
     If plugin_code is 'auto' (default), the system will automatically
     detect the best plugin based on file content analysis.
@@ -885,6 +943,9 @@ async def parse_file(
         min_role=UserRole.EDITOR,
         denied_detail="EDITOR or OWNER access required to parse files",
     )
+    # The broker the parse compares against (duplicates, report-set history) is read too: the caller must be its
+    # EDITOR or OWNER, as on /duplicates (decision 36: nobody works on the data of a broker they cannot see).
+    await _require_broker_editor(request.broker_id, current_user, session)
 
     # Determine plugin to use
     plugin_code = request.plugin_code

@@ -4,7 +4,7 @@ Small coverage tests for scheduler settings helpers.
 
 from datetime import UTC, datetime, time
 
-from backend.app.services.scheduler import settings as scheduler_settings
+from backend.app.services.platform.scheduler import settings as scheduler_settings
 
 
 class FixedWinterDateTime(datetime):

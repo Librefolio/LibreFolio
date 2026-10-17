@@ -11,17 +11,11 @@ from typing import Any, cast, get_args
 
 import pytest
 
-from backend.app.schemas.pac_allocator import (
-    PAC_PLAN_INPUT_ADAPTER,
-    REBALANCER_PLAN_INPUT_ADAPTER,
-    FiniteDecimal,
-    PlannerIssue,
-    PlannerIssueCode,
-    PlannerIssuePath,
-)
-from backend.app.schemas.pac_allocator import (
-    ExactRatio as WireExactRatio,
-)
+from backend.app.schemas.pac_allocator.base import PlannerIssueCode
+from backend.app.schemas.pac_allocator.exact import ExactRatio as WireExactRatio
+from backend.app.schemas.pac_allocator.exact import FiniteDecimal
+from backend.app.schemas.pac_allocator.issues import PlannerIssue, PlannerIssuePath
+from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, REBALANCER_PLAN_INPUT_ADAPTER
 from backend.app.services.pac_allocator.issues import (
     CANONICAL_ISSUE_CODES,
     W1_NORMALIZER_ISSUE_DEFINITIONS,
@@ -590,6 +584,94 @@ def test_key_range_checks_emit_frozen_codes_and_paths(
     assert issue.kind == "invalid"
     assert issue.severity == "error"
     assert _issue_wire_path(issue) == expected_path
+
+
+# C-76: each negative cash amount is reported on the field that holds it, so the
+# form points at the amount to fix; a selection above the available amount is
+# reported only when neither amount is negative, and zero is valid for both.
+CASH_AMOUNT_ISSUE_CODES = frozenset(
+    {
+        "allocation.negative_cash_unsupported",
+        "allocation.cash_selection_invalid",
+    }
+)
+
+CASH_AMOUNT_CASES = (
+    pytest.param(
+        "100",
+        "-1",
+        (("allocation.negative_cash_unsupported", "selected"),),
+        id="negative-selected",
+    ),
+    pytest.param(
+        "-1",
+        "0",
+        (("allocation.negative_cash_unsupported", "available"),),
+        id="negative-available",
+    ),
+    pytest.param(
+        "-1",
+        "-1",
+        (
+            ("allocation.negative_cash_unsupported", "available"),
+            ("allocation.negative_cash_unsupported", "selected"),
+        ),
+        id="both-negative",
+    ),
+    pytest.param(
+        "100",
+        "150",
+        (("allocation.cash_selection_invalid", "selected"),),
+        id="selection-above-available",
+    ),
+    pytest.param("100", "0", (), id="zero-selection"),
+    pytest.param("0", "0", (), id="zero-cash"),
+)
+
+
+def _mutate_cash_amounts(payload: JsonObject, available: str, selected: str) -> None:
+    cash = _find_row(
+        payload["existing_cash"],
+        "cash_id",
+        "cash-broker-one-eur",
+    )
+    cash["available"]["amount"] = available
+    cash["selected"]["amount"] = selected
+
+
+def _issue_order(issue: PlannerIssue) -> str:
+    return json.dumps(issue.model_dump(mode="json"), sort_keys=True)
+
+
+@pytest.mark.parametrize(
+    ("available", "selected", "expected"),
+    CASH_AMOUNT_CASES,
+)
+def test_cash_amount_issues_name_the_field_that_is_wrong(
+    available: str,
+    selected: str,
+    expected: tuple[tuple[PlannerIssueCode, str], ...],
+) -> None:
+    """A negative amount is reported on its own path: `available` when the
+    available amount is negative, `selected` when the amount to use is, one
+    issue each when both are. Every cash-amount issue the request produced is
+    compared, whole, with the normalizer's own definition of that code, so a
+    missing, extra or misplaced issue all fail here.
+    """
+    payload = _fixture(PAC_FIXTURE)
+    _mutate_cash_amounts(payload, available, selected)
+
+    result = _normalize_payload("pac", payload)
+
+    found = sorted(
+        (issue for issue in result.issues if issue.code in CASH_AMOUNT_ISSUE_CODES),
+        key=_issue_order,
+    )
+    wanted = sorted(
+        (_w1_issue(code, field_path("cash", "cash", "cash-broker-one-eur", field)) for code, field in expected),
+        key=_issue_order,
+    )
+    assert found == wanted
 
 
 def _inactive_custody_only_payload() -> JsonObject:

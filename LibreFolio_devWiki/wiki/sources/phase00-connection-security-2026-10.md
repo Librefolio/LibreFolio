@@ -46,6 +46,6 @@ client address — and, on the way, closed an account-enumeration leak in the lo
 | Plan | `LibreFolio_developer_journal/Release_2/phases/36_connectionSecurity/plan-phase00ConnectionSecurity.prompt.md` |
 | Verdict | `frontend/src/lib/utils/security/connectionSecurity.ts` |
 | Indicator | `frontend/src/lib/components/layout/ConnectionSecurityIndicator.svelte` |
-| Endpoint | `backend/app/api/v1/system.py` |
+| Endpoint | `backend/app/api/v1/system/connection.py` |
 | Login | `backend/app/api/v1/auth.py` |
 | User doc | `mkdocs_src/docs/user/connection-security.en.md` |

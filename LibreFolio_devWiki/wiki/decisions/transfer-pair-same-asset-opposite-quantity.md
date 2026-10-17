@@ -69,12 +69,12 @@ confirmed by a red test enters 1.2:
 
 | Role | Path |
 |------|------|
-| `_validate_linked_pair` | `backend/app/services/transaction_service.py` |
-| `findPromoteMatch` | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
-| `cashAmountsCancel` | `frontend/src/lib/utils/transactions/promoteHelpers.ts` |
-| `assetQuantitiesCancel` | `frontend/src/lib/utils/transactions/promoteSuggest.ts` |
-| The selection bar (`selectedForPromote`) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| `_validate_linked_pair` | `backend/app/services/transactions/validation.py` |
+| `findPromoteMatch` | `frontend/src/lib/features/transactions/transactionTypeStore.ts` |
+| `cashAmountsCancel` | `frontend/src/lib/features/transactions/bulk/promoteHelpers.ts` |
+| `assetQuantitiesCancel` | `frontend/src/lib/features/transactions/bulk/promoteSuggest.ts` |
+| The selection bar (`selectedForPromote`; its button in `frontend/src/lib/features/transactions/bulk/TxBulkToolbar.svelte`) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | R42a, R42b, G42 | `backend/test_scripts/test_api/test_transactions_batch_split_promote.py` |
-| The editor's rule, tested | `frontend/src/lib/stores/transactions/transactionTypeStore.test.ts` |
+| The editor's rule, tested | `frontend/src/lib/features/transactions/transactionTypeStore.test.ts` |
 | PC5 | `frontend/e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` |
 | Plan 42 | `LibreFolio_developer_journal/Release_2/Phase_0/42_promotePairChecks/plan-phase00PromotePairChecks.prompt.md` |

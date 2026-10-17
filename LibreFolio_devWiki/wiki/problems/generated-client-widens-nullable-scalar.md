@@ -7,6 +7,7 @@ tags: [frontend, api-client, openapi, zodios, typescript, risk, correlation, gen
 related:
   - problems/front-check-does-not-check-what-you-think
   - decisions/zodios-api-client
+  - domains/email
 ---
 
 # Problem: generated client widens a nullable scalar into a scalar-or-array union
@@ -64,12 +65,16 @@ Latent, not active: no endpoint currently returns an array there. The cost was a
 missing compile-time guard on a path where a malformed cell would have reached a chart
 renderer untyped.
 
+- 2026-10-15, workstream E: the same widening on `EmailStatusResponse` (plan 08 «E2.5»);
+  `emailApi.fetchEmailStatus()` narrows it once. Backlog E-2, deferred to 1.4:
+  [[domains/email]].
+
 ## Source files
 
 | Role | Path |
 |------|------|
 | Backend schema — the authority | `backend/app/schemas/risk.py` |
 | Emits the N x N matrix | `backend/app/services/risk_plugins/correlation/plugin.py` |
-| Narrows at the boundary | `frontend/src/lib/components/risk/correlationHelpers.ts` |
-| Consumer that previously trusted the wide type | `frontend/src/lib/components/risk/CorrelationHeatmap.svelte` |
+| Narrows at the boundary | `frontend/src/lib/features/risk/correlationHelpers.ts` |
+| Consumer that previously trusted the wide type | `frontend/src/lib/features/risk/CorrelationHeatmap.svelte` |
 | Existing post-generation fixup for a sibling problem | `frontend/scripts/fix-openapi-discriminators.mjs` |

@@ -36,11 +36,12 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMRefusal, BRIMValidationIssue
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -352,26 +353,37 @@ class GenericCSVBrokerProvider(BRIMProvider):
         """
         return self.cannot_parse_reason(file_path) is None
 
-    def cannot_parse_reason(self, file_path: Path) -> Optional[str]:
-        """Why ``can_parse`` refuses the file — the extension, an unreadable or empty file, or the required columns the header misses."""
+    def cannot_parse_detail(self, file_path: Path) -> Optional[BRIMRefusal]:
+        """Why ``can_parse`` refuses the file — the extension, an unreadable or empty file, or the required columns the header misses.
+
+        Each refusal carries a code the import wizard translates (``importWizard.parseRefusal.<code>``); the codes
+        ``file_unreadable``, ``no_header_row`` and ``missing_columns`` are shared with other plugins.
+        """
         if file_path.suffix.lower() != ".csv":
-            return "the Generic CSV reads only .csv files"
+            return BRIMRefusal(code="csv_only", message="the Generic CSV reads only .csv files", context={"plugin_code": self.provider_code})
 
         try:
             with self._open_text(file_path) as f:
                 reader = csv.reader(f, delimiter=self.detect_csv_delimiter(file_path))
                 header = next(reader, None)
         except Exception:
-            return "the file could not be read"
+            return BRIMRefusal(code="file_unreadable", message="the file could not be read")
         if not header:
-            return "the file has no header row"
+            return BRIMRefusal(code="no_header_row", message="the file has no header row")
         column_map = self._detect_columns(header)
         missing = [column for column in ("date", "type") if column not in column_map]
         if not missing:
             return None
         if len(missing) == 1:
-            return f"required column '{missing[0]}' not found in the CSV header"
-        return "required columns " + " and ".join(f"'{column}'" for column in missing) + " not found in the CSV header"
+            message = f"required column '{missing[0]}' not found in the CSV header"
+        else:
+            message = "required columns " + " and ".join(f"'{column}'" for column in missing) + " not found in the CSV header"
+        return BRIMRefusal(code="missing_columns", message=message, context={"columns": ", ".join(missing), "count": len(missing)})
+
+    def cannot_parse_reason(self, file_path: Path) -> Optional[str]:
+        """The English sentence of ``cannot_parse_detail``: ``None`` exactly when ``can_parse`` accepts the file."""
+        detail = self.cannot_parse_detail(file_path)
+        return detail.message if detail else None
 
     def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: header validation and per-row error handling, no nested logic
         """

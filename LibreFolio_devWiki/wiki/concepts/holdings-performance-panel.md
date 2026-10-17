@@ -112,7 +112,7 @@ independent of the Holdings/Performance renaming, but ships in the same refactor
 
 ## Where It Applies
 
-- `frontend/src/lib/components/dashboard/PositionsPanel.svelte` — tab container, wiring of all 5 components
+- `frontend/src/lib/features/dashboard/PositionsPanel.svelte` — tab container, wiring of all 5 components
 - `frontend/src/routes/(app)/dashboard/+page.svelte` — hosts the panel, feeds data from `portfolioStore`
 - `backend/app/services/portfolio_service.py` — `get_summary()`, `get_positions_contribution()`,
   `_compute_period_summary_metrics()`
@@ -124,12 +124,12 @@ independent of the Holdings/Performance renaming, but ships in the same refactor
 
 | Role | Path |
 |------|------|
-| Holdings table | `frontend/src/lib/components/dashboard/ExposureTable.svelte` |
-| Holdings chart | `frontend/src/lib/components/dashboard/ExposureTreemap.svelte` |
-| Performance table | `frontend/src/lib/components/dashboard/ContributionTable.svelte` |
-| Performance chart (new) | `frontend/src/lib/components/dashboard/PerformanceChart.svelte` |
-| Other period effects (new) | `frontend/src/lib/components/dashboard/OtherPeriodEffectsTable.svelte` |
-| Tab container | `frontend/src/lib/components/dashboard/PositionsPanel.svelte` |
+| Holdings table | `frontend/src/lib/features/dashboard/ExposureTable.svelte` |
+| Holdings chart | `frontend/src/lib/features/dashboard/ExposureTreemap.svelte` |
+| Performance table | `frontend/src/lib/features/dashboard/ContributionTable.svelte` |
+| Performance chart (new) | `frontend/src/lib/features/dashboard/PerformanceChart.svelte` |
+| Other period effects (new) | `frontend/src/lib/features/dashboard/OtherPeriodEffectsTable.svelte` |
+| Tab container | `frontend/src/lib/features/dashboard/PositionsPanel.svelte` |
 | Treemap zoom/pan guard | `frontend/src/lib/components/charts/echartsTreemapZoomGuard.ts` |
 | Service (date-aware wiring) | `backend/app/services/portfolio_service.py` |
 | Engine (position_states_end) | `backend/app/services/financial_math/portfolio/daily_state.py` |

@@ -45,13 +45,29 @@ import {GOLDEN_CASES, GOLDEN_FORMAT_VERSION, GOLDEN_FUNCTIONS, GOLDEN_RESOLUTION
 
 /**
  * Digest of the recorded entries, as captured from commit eba37ba41 — i.e. from
- * the pre-refactor implementation.
+ * the pre-refactor implementation — plus exactly one behaviour change accepted
+ * since, and nothing else:
+ *
+ *   I-01 — `aggregateSumSeries` and missing points. Introduced on purpose by
+ *   commit a25d09a69 and accepted here on 2026-10-16, after the printed drift
+ *   was read entry by entry. A missing point no longer adds to the sum, a
+ *   bucket with no present point is a gap (value 0, `missing: true`),
+ *   `sourcePointCount` counts the present points only, and `missing` is no
+ *   longer copied from the bucket's last point. Changed keys:
+ *     aggregateSumSeries|all-missing-values|weekly
+ *     aggregateSumSeries|all-missing-values|monthly
+ *     aggregateSumSeries|partial-missing-bucket|weekly
+ *     aggregateSumSeries|partial-missing-bucket|monthly
+ *   Only `sourcePointCount` and `missing` moved in them: every missing point in
+ *   this corpus carries value 0, so no recorded sum changed. Every other entry
+ *   is still the eba37ba41 record.
  *
  * DO NOT update this because the test went red. A mismatch means the recorded
  * behaviour and the current behaviour disagree, which is the single thing this
- * file exists to detect. Only change it together with a reviewed regeneration.
+ * file exists to detect. Only change it together with a reviewed regeneration,
+ * and record that change here the same way.
  */
-const GOLDEN_DIGEST = 'sha256:046dce7cee5eb24c9511b99835b5d649d0b6b0c0165954b479527e2e06aa097c';
+const GOLDEN_DIGEST = 'sha256:007e69d21f1b2a42f3529f434ffc970566e86eda0ebfff9d2061fba1a22f4fe0';
 
 /** Literals, not derived: a regeneration that quietly drops cases has to fail here. */
 const EXPECTED_CASE_COUNT = 23;

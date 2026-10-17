@@ -23,20 +23,13 @@ from typing import Any
 
 import pytest
 
-from backend.app.schemas.pac_allocator import PacPlannerRequest
-from backend.app.services.pac_allocator import evaluator as EV
+from backend.app.schemas.pac_allocator.request import PacPlannerRequest
 from backend.app.services.pac_allocator import models as pac_models
-from backend.app.services.pac_allocator.evaluator import (
-    ExactEvaluatorError,
-    ExactPolicyContractError,
-    ExactScenarioContractError,
-    _asset_broker_key,
-    _fx_debit_key,
-    build_exact_policy_view,
-    evaluate_exact_candidate,
-    exact_decision_id,
-    exact_scenario_fingerprint,
-)
+from backend.app.services.pac_allocator.evaluation import evaluator as EV
+from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError, ExactPolicyContractError, ExactScenarioContractError
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, fx_debit_key
+from backend.app.services.pac_allocator.evaluation.scenario import exact_scenario_fingerprint
 from backend.app.services.pac_allocator.ledger import (
     DuplicatePostingError,
     ExactLedgerError,
@@ -86,6 +79,8 @@ from backend.app.services.pac_allocator.numeric import ExactRatio
 
 R = ExactRatio
 ZERO = R(0)
+from backend.app.services.pac_allocator.evaluation.errors import ExactReplayRejectedError
+
 ONE = R(1)
 CENT = R(1, 100)
 AS_OF = date(2026, 9, 16)
@@ -1167,7 +1162,7 @@ def test_policy_view_exposes_complete_exact_vector_with_stable_ids() -> None:
 
     view = build_exact_policy_view(scenario)
 
-    fx_debit_id = exact_decision_id("fx_debit", _fx_debit_key("route:buy:usd", "EUR"))
+    fx_debit_id = exact_decision_id("fx_debit", fx_debit_key("route:buy:usd", "EUR"))
     expected = {
         exact_decision_id("funding_transfer", "route:funding:eur"),
         fx_debit_id,
@@ -1195,7 +1190,7 @@ def test_policy_view_exposes_complete_exact_vector_with_stable_ids() -> None:
 
 
 def test_policy_view_build_reaches_checkpointed_constraint_refs() -> None:
-    checkpoint = _ObserveIn("_build_constraint_refs")
+    checkpoint = _ObserveIn("build_constraint_refs")
 
     view = build_exact_policy_view(
         _pac_scenario(),
@@ -1964,15 +1959,15 @@ def test_same_local_capability_id_is_scoped_by_broker_for_tie_and_order() -> Non
 
 
 def test_asset_broker_key_is_collision_free_across_ambiguous_splits() -> None:
-    """Mandated regression (b): _asset_broker_key is the composite key used
+    """Mandated regression (b): asset_broker_key is the composite key used
     at the position-constraint ref/fact sites (formerly an ambiguous plain
     f"{asset_id}:{broker_id}" join). A naive join would produce the
     identical string "a:b:c" for both pairs below (the ':' separator could
     be reassigned across the asset_id/broker_id boundary); the
     length-prefixed scheme must keep them distinct.
     """
-    key_one = _asset_broker_key("a:b", "c")
-    key_two = _asset_broker_key("a", "b:c")
+    key_one = asset_broker_key("a:b", "c")
+    key_two = asset_broker_key("a", "b:c")
 
     assert key_one != key_two
     assert key_one == "3:a:b1:c"
@@ -2033,7 +2028,7 @@ def test_evaluation_tie_ids_and_quanta_align_with_policy_vector() -> None:
         # so a zero fx_debit avoids the confirmed
         # ExactFxEvaluation.route_id models.py bug entirely (no row is
         # ever produced for a zero-quanta pool currency).
-        exact_decision_id("fx_debit", _fx_debit_key("route:buy:usd", "EUR")): 0,
+        exact_decision_id("fx_debit", fx_debit_key("route:buy:usd", "EUR")): 0,
         exact_decision_id("buy_quantum", "route:buy:usd"): 1,
     }
     evaluation = evaluate_exact_candidate(
@@ -2826,7 +2821,7 @@ def test_direct_fx_replay_preserves_direction_and_spread() -> None:
     view = build_exact_policy_view(scenario)
     fx_debit_id = exact_decision_id(
         "fx_debit",
-        _fx_debit_key("route:buy:usd", "EUR"),
+        fx_debit_key("route:buy:usd", "EUR"),
     )
     candidate = _candidate(
         view,
@@ -2930,7 +2925,7 @@ def _planning_rate_replay(cross_rate: ExactRatio) -> ExactEvaluation:
             {
                 exact_decision_id(
                     "fx_debit",
-                    _fx_debit_key("route:buy:usd", "RON"),
+                    fx_debit_key("route:buy:usd", "RON"),
                 ): 10_000,
                 exact_decision_id("buy_quantum", "route:buy:usd"): 1,
             },
@@ -3051,12 +3046,12 @@ def test_multi_source_buy_shares_a_cash_pool_across_two_buys() -> None:
         {
             # route:buy:1 (2 units @ EUR99 = EUR198): GBP50 -> EUR99 +
             # USD25 -> EUR99, exactly covering its EUR198 cost.
-            exact_decision_id("fx_debit", _fx_debit_key("route:buy:1", "GBP")): 5_000,
-            exact_decision_id("fx_debit", _fx_debit_key("route:buy:1", "USD")): 2_500,
+            exact_decision_id("fx_debit", fx_debit_key("route:buy:1", "GBP")): 5_000,
+            exact_decision_id("fx_debit", fx_debit_key("route:buy:1", "USD")): 2_500,
             exact_decision_id("buy_quantum", "route:buy:1"): 2,
             # route:buy:2 (1 unit @ EUR99): GBP50 -> EUR99, sharing the same
             # GBP cash row already partly drawn by route:buy:1.
-            exact_decision_id("fx_debit", _fx_debit_key("route:buy:2", "GBP")): 5_000,
+            exact_decision_id("fx_debit", fx_debit_key("route:buy:2", "GBP")): 5_000,
             exact_decision_id("buy_quantum", "route:buy:2"): 1,
         },
     )
@@ -3905,7 +3900,7 @@ def test_multiroute_funding_sums_by_source_and_detects_overcommitment() -> None:
     assert source.transferred == R(11)
     assert source.remaining == R(-1)
     assert source.selected == source.transferred + source.remaining
-    # _source_reachability now floors an overcommitted (negative) remaining
+    # source_reachability now floors an overcommitted (negative) remaining
     # to effective_remaining = max(remaining, 0) = max(-1, 0) = 0 before
     # splitting it into reachable/trapped, so both are exactly zero here
     # (0 + 0 == max(-1, 0), matching ExactFundingSourceEvaluation's
@@ -4157,7 +4152,7 @@ def test_native_ledgers_and_accounting_identity_reconcile_all_fx_columns() -> No
     view = build_exact_policy_view(scenario)
     fx_debit_id = exact_decision_id(
         "fx_debit",
-        _fx_debit_key("route:buy:usd", "EUR"),
+        fx_debit_key("route:buy:usd", "EUR"),
     )
     evaluation = evaluate_exact_candidate(
         scenario,
@@ -4711,15 +4706,15 @@ def test_cancellation_callback_propagates_at_public_entry(entry: str) -> None:
 @pytest.mark.parametrize(
     "target",
     [
-        pytest.param("_build_constraint_refs", id="constraint-ref-loop"),
-        # NOTE: a "source-reachability-loop" case (target=_source_reachability)
+        pytest.param("build_constraint_refs", id="constraint-ref-loop"),
+        # NOTE: a "source-reachability-loop" case (target=source_reachability)
         # existed before this redesign. It is removed here, not merely
-        # reference-repaired: _source_reachability and its _can_reach_buy
-        # callee (evaluator.py ~733/716) contain no internal check_budget
+        # reference-repaired: source_reachability and its _can_reach_buy
+        # callee (evaluation/reachability.py) contain no internal check_budget
         # call, so cancellation can never be observed mid-function there no
         # matter how the scenario is shaped -- check_budget is only called by
         # _evaluate_funding's outer loops, before/after (never during) each
-        # _source_reachability call. This is a possible production gap
+        # source_reachability call. This is a possible production gap
         # (flagged out-of-scope in this session's final report), not a
         # test-side stale reference.
         pytest.param("_evaluate_orders", id="order-replay-loop"),
@@ -4743,7 +4738,7 @@ def test_cancellation_propagates_from_nontrivial_exact_loops(
     scenario = _funding_fx_scenario()
     checkpoint = _CancelIn(target)
 
-    if target == "_build_constraint_refs":
+    if target == "build_constraint_refs":
 
         def operation() -> object:
             return build_exact_policy_view(
@@ -4763,7 +4758,7 @@ def test_cancellation_propagates_from_nontrivial_exact_loops(
                     ): 15_000,
                     exact_decision_id(
                         "fx_debit",
-                        _fx_debit_key("route:buy:usd", "EUR"),
+                        fx_debit_key("route:buy:usd", "EUR"),
                     ): 100,
                     exact_decision_id(
                         "buy_quantum",
@@ -4811,7 +4806,7 @@ _TIE_PRICE = R(33335, 1000)  # 3 x 33.335 = 100.005, a buy debit posted at its c
 _BUY_A = exact_decision_id("buy_quantum", "route:buy:a")
 _BUY_B = exact_decision_id("buy_quantum", "route:buy:b")
 _FUND_EUR = exact_decision_id("funding_transfer", "route:funding:eur")
-_FX_EUR_TO_USD = exact_decision_id("fx_debit", _fx_debit_key("route:buy:usd", "EUR"))
+_FX_EUR_TO_USD = exact_decision_id("fx_debit", fx_debit_key("route:buy:usd", "EUR"))
 _BUY_USD = exact_decision_id("buy_quantum", "route:buy:usd")
 
 
@@ -4930,7 +4925,7 @@ def test_rounding_top_up_rejects_three_cents_over_two_rounded_postings() -> None
     assert _pool_ledger(evaluation, "broker:a").final_spendable == -R(3, 100)
     assert _pool_rounded_families(evaluation, "broker:a") == ["buy_debit", "buy_fee"]
 
-    with pytest.raises(EV.ExactReplayRejectedError):
+    with pytest.raises(ExactReplayRejectedError):
         EV.rounding_top_ups(scenario, evaluation)
 
 
@@ -4949,7 +4944,7 @@ def test_rounding_top_up_rejects_a_unit_the_cash_cannot_pay() -> None:
     assert _pool_ledger(evaluation, "broker:a").final_spendable == -ONE
     assert _pool_rounded_families(evaluation, "broker:a") == ["buy_debit", "buy_fee"]
 
-    with pytest.raises(EV.ExactReplayRejectedError):
+    with pytest.raises(ExactReplayRejectedError):
         EV.rounding_top_ups(scenario, evaluation)
 
 
@@ -4968,7 +4963,7 @@ def test_rounding_top_up_does_not_excuse_another_violation() -> None:
     assert _pool_ledger(evaluation, "broker:a").final_spendable == -CENT
     assert _pool_rounded_families(evaluation, "broker:a") == ["buy_debit"]
 
-    with pytest.raises(EV.ExactReplayRejectedError):
+    with pytest.raises(ExactReplayRejectedError):
         EV.rounding_top_ups(scenario, evaluation)
 
 
@@ -5050,7 +5045,7 @@ def test_rounding_top_up_threshold_is_per_pool_not_summed() -> None:
     assert _pool_ledger(evaluation, "broker:b").final_spendable == -R(2, 100)
     assert _pool_rounded_families(evaluation, "broker:b") == ["buy_debit"]
 
-    with pytest.raises(EV.ExactReplayRejectedError):
+    with pytest.raises(ExactReplayRejectedError):
         EV.rounding_top_ups(scenario, evaluation)
 
 
@@ -5102,7 +5097,7 @@ def test_rounding_top_up_rejects_three_cents_over_the_fx_pool_two_postings() -> 
     scenario, evaluation = _funding_fx_evaluation(8415)
     assert _pool_ledger(evaluation, "broker:destination", "USD").final_spendable == -R(3, 100)
 
-    with pytest.raises(EV.ExactReplayRejectedError):
+    with pytest.raises(ExactReplayRejectedError):
         EV.rounding_top_ups(scenario, evaluation)
 
 
@@ -5113,7 +5108,7 @@ def test_rounding_top_ups_reject_a_contract_invalid_candidate() -> None:
     assert evaluation.candidate_valid is False
     assert evaluation.conflict_codes == ("CANDIDATE_VIEW_MISMATCH",)
 
-    with pytest.raises(EV.ExactReplayRejectedError):
+    with pytest.raises(ExactReplayRejectedError):
         EV.rounding_top_ups(scenario, evaluation)
 
 
@@ -5187,7 +5182,7 @@ def test_rounding_top_ups_reject_a_negative_holding() -> None:
     short = replace(evaluation, holdings=(replace(holding, buy_quantity=ZERO, sell_quantity=ONE, final_quantity=-ONE),))
     assert short.conflict_codes == _CASH_ONLY_CODES
 
-    with pytest.raises(EV.ExactReplayRejectedError):
+    with pytest.raises(ExactReplayRejectedError):
         EV.rounding_top_ups(scenario, short)
 
 
@@ -5218,7 +5213,7 @@ def test_rounding_top_ups_reject_a_rounding_adjustment_beyond_its_bound() -> Non
     assert abs(accounting.rounding_adjustment) > accounting.rounding_bound
     assert accounting.shortfall + CENT >= -accounting.rounding_bound
 
-    with pytest.raises(EV.ExactReplayRejectedError):
+    with pytest.raises(ExactReplayRejectedError):
         EV.rounding_top_ups(scenario, fabricated)
 
 

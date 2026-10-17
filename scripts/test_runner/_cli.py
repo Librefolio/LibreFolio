@@ -14,7 +14,7 @@ from pathlib import Path
 
 import argcomplete
 
-from scripts.cli_base import configure_test_runtime
+from scripts.cli_base import TEST_LANE_SETTABLE, TEST_LANE_SETTINGS, configure_test_runtime
 from scripts.coverage_analysis import register_subparser as register_cov_parser
 from scripts.coverage_analysis import run_analysis as run_coverage_analysis
 
@@ -112,6 +112,11 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False, te
         else:
             print_error(f"--list not supported for category '{category}'")
             return True
+
+    # One action run on its own: its category's setup, when the action needs it (H-21). `all` runs it itself.
+    if action != "all" and not _common.ensure_category_setup(category):
+        print_error(f"{category}: its setup failed — {action} not run")
+        return False
 
     # Frontend categories (have ui, headed, debug flags + test_names)
     if category in _FRONTEND_CATEGORIES:
@@ -534,6 +539,14 @@ def _add_runtime_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Data root for this test lane (default: LIBREFOLIO_TEST_DATA_DIR or backend/data/test)",
     )
+    parser.add_argument(
+        "--lane-setting",
+        dest="lane_settings",
+        action="append",
+        metavar="NAME=VALUE",
+        default=None,
+        help=f"A setting of this lane's instance, repeatable (H-43): only {', '.join(sorted(TEST_LANE_SETTABLE))}",
+    )
 
 
 def _configure_runtime(args) -> bool:
@@ -542,6 +555,7 @@ def _configure_runtime(args) -> bool:
         port, data_dir = configure_test_runtime(
             port=getattr(args, "test_port", None),
             data_dir=getattr(args, "data_dir", None),
+            lane_settings=getattr(args, "lane_settings", None),
         )
     except ValueError as exc:
         print_error(str(exc))
@@ -549,6 +563,8 @@ def _configure_runtime(args) -> bool:
 
     if getattr(args, "test_port", None) is not None or getattr(args, "data_dir", None) is not None:
         print_info(f"Test runtime lane: port {port}, data {data_dir}")
+    if os.environ.get(TEST_LANE_SETTINGS):
+        print_info(f"Test lane settings: {os.environ[TEST_LANE_SETTINGS]}")
     return True
 
 
@@ -611,6 +627,13 @@ def _categories_in_scope(args) -> list:
     return [category] if category in TEST_REGISTRY else []
 
 
+def _single_pure_action(category: str, action: str | None) -> bool:
+    """One action of ``category`` run on its own, which the catalogue declares ``pure``: it opens no database (H-23)."""
+    from ._inventory import PURE, declared_isolation
+
+    return action not in (None, "all") and declared_isolation(category, action) == PURE
+
+
 def _run_exclusive_setups(args) -> bool:
     """Run the setups that own the database file, before the server ever starts.
 
@@ -623,9 +646,17 @@ def _run_exclusive_setups(args) -> bool:
     with ``database_file_owned_exclusively()`` wherever it is called from. What
     this adds is the knowledge of *which* setups are destructive, declared next to
     the category instead of discovered at the moment of damage.
+
+    One action run on its own that the catalogue declares ``pure`` opens no database: its category's setup is
+    skipped, and the lane's database is left as it is (H-23). A whole category, ``all`` and any other action still
+    run it, an action with no declared class included (``declared_isolation()``: the static scan does not count).
     """
+    action = getattr(args, "action", None)
     for category in _categories_in_scope(args):
         if not _common.setup_is_exclusive(category):
+            continue
+        if _single_pure_action(category, action):
+            print_info(f"{category}: {action} is pure, it opens no database: the category's setup is skipped and the lane's database is left as it is")
             continue
         if not _common.run_category_setup(category):
             print_error(f"{category}: setup failed before the shared backend — aborting")
@@ -731,8 +762,30 @@ def _timed_run(args, body):
             print(note)
 
 
+def _refused_test_names(args) -> str | None:
+    """Why the test names on this command line are refused, or ``None`` when nothing is (H-26).
+
+    An action registered with ``test_names=False`` (every ``all``, ``db create`` and ``db populate``, the Vitest units)
+    has nothing to hand them to: it used to drop them in silence and run whole. Both entries check this first, so a
+    refused command archives no log, opens no campaign and runs nothing, ``--list`` included.
+    """
+    names = getattr(args, "test_names", None)
+    category, action = getattr(args, "category", None), getattr(args, "action", None)
+    entry = TEST_REGISTRY.get(category, {}).get(action) if names else None
+    if not entry or entry.get("test_names", False):
+        return None
+    given = " ".join(names)
+    if action == "all":
+        return f"{category} all takes no test names (got: {given}): name the action — dev.py test {category} <action> {given}. The actions: dev.py test {category} --help"
+    return f"{category} {action} takes no test names (got: {given}): it runs whole, drop them. The actions that take names: dev.py test {category} --help"
+
+
 def _dispatch_test_command(args):
     """Dispatch test command from dev.py, optionally teeing the full log to a file."""
+    refusal = _refused_test_names(args)
+    if refusal:
+        print_error(refusal)
+        return 2
     log_file = getattr(args, "log_file", None)
     if log_file:
         with _common.tee_output(log_file):
@@ -903,13 +956,28 @@ def _parallel_classes(args, scope: str = None) -> tuple:
     return (PURE,)
 
 
+def _parallel_prepass_applies(args) -> bool:
+    """Whether the parallel pre-pass serves this invocation: a whole category or a whole suite (H-25).
+
+    The consolidated pre-passes' rule (``_backend_consolidation_scope``): naming one action, or filtering by test
+    name, keeps the serial 1:1 shape. Before it, ``--workers 2 services client-address`` ran the parallel-safe units
+    of the whole category, its setup included (an empty lane database), and a ``-k`` filter was ignored.
+    """
+    if getattr(args, "test_names", None):
+        return False
+    return getattr(args, "action", None) in (None, "all")
+
+
 def _run_parallel_prepass(args, workers: int, verbose: bool) -> tuple:
     """Run the isolation-safe units concurrently before the serial pass.
 
     Returns ``(ok, covered_actions)``. When nothing qualifies — a frontend
-    category, or ``--workers 1`` — this is a no-op and the run takes exactly
+    category, ``--workers 1``, one action or a test-name filter
+    (``_parallel_prepass_applies``) — this is a no-op and the run takes exactly
     the path it takes today.
     """
+    if not _parallel_prepass_applies(args):
+        return True, set()
     category = args.category
     if category in TEST_REGISTRY:
         # A single registry category: parallelise it only if it is a backend one.
@@ -1219,14 +1287,20 @@ def main():
 
     argcomplete.autocomplete(parser)
     args = parser.parse_args(normalize_coverage_argv(sys.argv[1:]))
+    refusal = _refused_test_names(args)
+    if refusal:
+        print_error(refusal)
+        return 2
 
     log_file = getattr(args, "log_file", None)
     if log_file:
         with _common.tee_output(log_file):
             print_info(f"📝 Full run log → {log_file}")
             _activate_log_dir(args)
-            rc = _timed_run(args, lambda: _main_body(parser, args))
-            _snapshot_log_dir_db()
+            try:
+                rc = _timed_run(args, lambda: _main_body(parser, args))
+            finally:
+                _snapshot_log_dir_db()
             print_info(f"📝 Full run log saved to {log_file}")
         return rc
     _activate_log_dir(args)

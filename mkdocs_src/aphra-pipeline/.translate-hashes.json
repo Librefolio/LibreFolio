@@ -46,11 +46,11 @@
     "last_translated": "2026-10-09T23:59:32.229943+00:00"
   },
   "user/fx/detail/data-editor.en.md": {
-    "md5": "1c25e4423c4aea6f53a81bd687f6312e",
+    "md5": "ec9fbd3a06e16971991d93da912c93f2",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-10-10T00:04:57.706035+00:00",
     "langs": {
@@ -63,7 +63,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Glossary/terminology consistency:** “L'Editor dati ti consente...” → “L'editor dati ti consente...”. The glossary mandates **editor dati**. Also, in Italian the word after the apostrophe should not be capitalized here because “editor” is not a proper noun at the start of the sentence.\n- **Grammar:** “Una data contrassegnata con ⚠️ e un numero di giorni non ha...” → “Una data contrassegnata con ⚠️ e con un numero di giorni non ha...”. The conjunction without a preposition makes the phrase ambiguous/unnatural.\n- **Semantic accuracy:** “gli altri pannelli si richiudono mentre modifichi” → “gli altri pannelli si ripiegano mentre modifichi”. “fold away” is better rendered as “si ripiegano”; “si richiudono” suggests closing again rather than folding away.\n- **Naturalness:** “Fai clic su 🗑️ su una riga” → “Fai clic sull'icona 🗑️ di una riga” or “Fai clic su 🗑️ in una riga”. The double “su… su” is awkward in Italian.\n- **Grammar/UI label:** “In **Dati importazione CSV**, trascina...” → “In **Dati di importazione CSV**, trascina...”. The preposition “di” is normally required; keep the original if that is the exact UI label.\n- **Clarity:** “⇄ la inverte e riscrive l'intestazione” → “⇄ inverte la direzione e riscrive l'intestazione”. The pronoun “la” is ambiguous; the source means flipping the direction/interpretation.\n- **Clarity:** “Un file nella direzione opposta alla pagina viene invertito per te” → “Un file nella direzione opposta a quella della pagina viene invertito automaticamente” or “...rispetto a quella della pagina...”. “alla pagina” alone is less precise, and “per te” is colloquial.\n- **Naturalness:** “Le righe si aggiungono all'editor: controllale” → “Le righe vengono aggiunte all'editor: esaminale” / “verificale”. “review” is closer to “esaminare” than “controllare”.\n- **Naturalness:** “Per il pieno controllo manuale” → “Per avere il pieno controllo manuale”. The infinitive construction is more idiomatic in Italian.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 185.2
+        "elapsed_s": 185.2,
+        "stamped_at": "2026-10-17T01:37:54.364618+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:04:57.705977+00:00",
@@ -74,7 +76,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Glossary violation — \"toggle\" must be \"interrupteur\", not \"commutateur\".**\n   Source: \"The ⚠️ switch at the top hides these days.\"\n   Current: \"Le commutateur ⚠️ en haut masque ces jours.\"\n   The glossary mandates \"toggle (on/off switch) → interrupteur\". Replace with: \"L'interrupteur ⚠️ en haut masque ces jours.\"\n\n2. **Grammar error in the bullet about repeated rates.**\n   Source: \"A date marked ⚠️ and a number of days has no rate of its own…\"\n   Current: \"Une date marquée ⚠️ et d'un nombre de jours n'a pas de taux propre…\" — the coordination is broken: \"marquée ⚠️\" and \"d'un nombre de jours\" do not share a valid construction.\n   Correct to something like: \"Une date marquée d'un ⚠️ et d'un nombre de jours n'a pas de taux propre (un week-end ou un jour férié) et répète le précédent.\"\n\n3. **Grammar error in the ⇄ bullet — \"l'inverse\" is not used as a verb.**\n   Source: \"…⇄ flips it and rewrites the header.\"\n   Current: \"…⇄ l'inverse et réécrit l'en-tête.\" — \"l'inverse\" is a noun, so the sentence has no verb for the subject ⇄.\n   Correct to: \"…⇄ inverse le sens et réécrit l'en-tête.\"\n\n4. **Ambiguity between the two distinct source UI labels \"Undo\" and \"Cancel\" — both rendered \"Annuler\".**\n   Source: \"**Undo** brings a row back until you save.\" and \"**Cancel** drops them.\"\n   Current: \"**Annuler** rétablit une ligne jusqu'à ce que vous enregistriez.\" and \"**Annuler** les abandonne.\"\n   These are two different buttons in the source and must not collapse into the same French label. Keep \"Annuler\" for Undo and use a distinct term for Cancel, e.g. \"**Fermer**\" (or \"**Abandonner**\"), applied consistently. Applying it also improves the next item.\n\n5. **Ambiguous antecedent in the Add Row description.**\n   Source: \"a row appears on the day after the last one, never later than today.\"\n   Current: \"une ligne apparaît le jour suivant la dernière, jamais plus tard qu'aujourd'hui.\" — \"la dernière\" has no clear referent.\n   Correct to: \"…le jour suivant la dernière ligne…\" (or \"le jour suivant le dernier jour\").\n\n6. **Awkward phrasing for \"in either order\".**\n   Source: \"The header must name this pair's two currencies, in either order.\"\n   Current: \"…dans un ordre ou l'autre.\" — unnatural in French.\n   Correct to: \"…dans n'importe quel ordre.\" or \"…dans l'un ou l'autre ordre.\"\n\n7. **Tense/register in the Undo sentence (minor but worth fixing together with item 4).**\n   Source: \"Undo brings a row back until you save.\"\n   Current: \"Annuler rétablit une ligne jusqu'à ce que vous enregistriez.\"\n   Prefer a natural form such as: \"Annuler rétablit une ligne jusqu'à l'enregistrement.\"\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 136.8
+        "elapsed_s": 136.8,
+        "stamped_at": "2026-10-17T01:37:54.364618+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:04:57.706038+00:00",
@@ -85,7 +89,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminología de FX:** la traducción usa sistemáticamente «tasa(s)» para «rate(s)». En el contexto de pares FX, son tipos de cambio y el glosario exige `exchange rate → tipo de cambio`; además, «tasa» suele asociarse a tasas de interés o impuestos. Conviene reemplazar por «tipo de cambio» (o «tipo» cuando sea una etiqueta corta de UI) y ajustar concordancias:\n  - «las tasas almacenadas de un par» → «los tipos de cambio almacenados de un par»\n  - «cargar muchas a la vez» → «cargar muchos a la vez»\n  - «**Editar tasas**» → «**Editar tipos de cambio**»\n  - «**Tasa**» (columna) → «**Tipo de cambio**» / «**Tipo**»\n  - «Cambiar tasas» → «Cambiar tipos de cambio»\n  - «Añadir una tasa» → «Añadir un tipo de cambio»\n  - «Editar una tasa» → «Editar un tipo de cambio»\n  - «Eliminar tasas» → «Eliminar tipos de cambio»\n  - «escribe la tasa» → «escribe el tipo de cambio»\n  - «Una tasa debe ser mayor que cero: una con valor cero, negativa o vacía se omite.» → «Un tipo de cambio debe ser mayor que cero: uno con valor cero, negativo o vacío se omite.»\n  - «cada tasa $r$» → «cada tipo de cambio $r$»\n  - «La tasa no es un número» → «El tipo de cambio no es un número»\n  - «cualquier tasa almacenada» → «cualquier tipo de cambio almacenado»\n  - «toma la tasa importada» → «toma el tipo de cambio importado»\n  Asegurar que las etiquetas de estado concuerden con el sustantivo elegido y sean consistentes: si se refieren a *tipo*, usar **Editado**, **Eliminado**, **Nuevo**; si se refieren a *fila/fecha*, mantener femenino pero sin mezclar.\n\n- **«marca decimal» no es idiomático.** En español se dice «separador decimal». Cambiar:\n  - «`.` o `,` como marca decimal» → «`.` o `,` como separador decimal»\n  - «`_` opcional para miles» → «`_` opcional para separar miles»\n\n- **Pronombre ambiguo en «⇄ la invierte».** Puede interpretarse como «la barra», pero el original se refiere a la dirección. Cambiar:\n  - «⇄ la invierte y reescribe el encabezado» → «⇄ invierte la dirección y reescribe el encabezado»\n\n- **Ambigüedad en «en la dirección opuesta a la página».** Cambiar a:\n  - «en la dirección opuesta a la de la página» o «en la dirección contraria a la de la página»\n\n- **«Las filas se unen al editor»** no expresa bien que se añaden al editor. Cambiar:\n  - «Las filas se unen al editor» → «Las filas se añaden al editor»\n\n- **Capitalización según glosario:** el glosario indica `data editor → editor de datos`; en mitad de frase no debe ir con mayúscula inicial. Cambiar:\n  - «El Editor de datos te permite...» → «El editor de datos te permite...»\n  El encabezado puede conservar mayúscula inicial por ser título.\n\n- **«Guardar (N) los escribe todos»**: «writes» aquí significa guardar, no escribir texto. Cambiar:\n  - «**Guardar (N)** los escribe todos» → «**Guardar (N)** los guarda todos»\n\n- **Puntuación menor:** sobran comas ante «y luego» en secuencias breves:\n  - «si es necesario, y luego escribe...» → «si es necesario y luego escribe...»\n  - «revísalas, y luego haz clic...» → «revísalas y luego haz clic...»\n  - «en la parte superior, y luego haz clic...» → «en la parte superior y luego haz clic...»\n  También, en contexto financiero, «bank holiday» se traduce mejor como «festivo bancario» que como genérico «día festivo».\n\n- **Estructura:** no se detectan problemas estructurales. Se conservan encabezados, tablas, bloques de código, admoniciones, bloques HTML, enlaces, emojis, matemáticas en línea y elementos no traducibles.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 185.8
+        "elapsed_s": 185.8,
+        "stamped_at": "2026-10-17T01:37:54.364618+00:00",
+        "stamped_by": "translate-stamp"
       }
     },
     "analysis": "[{\"name\": \"Data Editor\", \"keywords\": [\"LibreFolio UI Data Editor financial portfolio tracker edit rates\"]}, {\"name\": \"CSV Import\", \"keywords\": [\"CSV import financial data import UI LibreFolio\"]}, {\"name\": \"Edit Rates\", \"keywords\": [\"Edit Rates UI button exchange rate editor financial tracker\"]}, {\"name\": \"pair / currency pair\", \"keywords\": [\"currency pair FX financial definition pair exchange rate\"]}, {\"name\": \"stored rates / rates\", \"keywords\": [\"exchange rate stored rates historical FX rates financial data\"]}, {\"name\": \"FX\", \"keywords\": [\"FX foreign exchange acronym financial markets\"]}, {\"name\": \"chart\", \"keywords\": [\"financial chart rate chart UI chart LibreFolio\"]}, {\"name\": \"panels fold away\", \"keywords\": [\"UI panels collapse fold away interface behavior\"]}, {\"name\": \"Status\", \"keywords\": [\"rate status column UI Data Editor financial tracker\"]}, {\"name\": \"Original / Edited / Deleted / New\", \"keywords\": [\"rate status labels Original Edited Deleted New UI\"]}, {\"name\": \"weekend / bank holiday\", \"keywords\": [\"weekend bank holiday non-trading days market holiday FX\"]}, {\"name\": \"repeats the previous one\", \"keywords\": [\"rate carry forward previous rate non-trading day FX data\"]}, {\"name\": \"switch\", \"keywords\": [\"UI switch toggle control hide days financial editor\"]}, {\"name\": \"double-click / long-press\", \"keywords\": [\"UI interaction double-click long-press mobile desktop chart\"]}, {\"name\": \"Add Row\", \"keywords\": [\"Add Row UI button data editor table row\"]}, {\"name\": \"date picker\", \"keywords\": [\"date picker UI component financial data editor\"]}, {\"name\": \"bin\", \"keywords\": [\"trash bin delete icon UI row deletion\"]}, {\"name\": \"Undo\", \"keywords\": [\"Undo UI action revert row deletion editor\"]}, {\"name\": \"Preview line\", \"keywords\": [\"Preview line chart UI pending changes rates\"]}, {\"name\": \"Save (N) / Cancel\", \"keywords\": [\"Save Cancel UI buttons placeholder count data editor\"]}, {\"name\": \"Synced data\", \"keywords\": [\"synced data synchronization provider overwrite manual edits\"]}, {\"name\": \"sync\", \"keywords\": [\"sync data synchronization financial provider rates\"]}, {\"name\": \"provider\", \"keywords\": [\"data provider market data API financial rates provider\"]}, {\"name\": \"Provider Config\", \"keywords\": [\"Provider Config data source configuration LibreFolio\"]}, {\"name\": \"manual edits\", \"keywords\": [\"manual edits overwrite sync provider rates\"]}, {\"name\": \"Import CSV Data\", \"keywords\": [\"Import CSV Data modal dialog UI financial data\"]}, {\"name\": \"drop a file\", \"keywords\": [\"drag and drop file CSV upload UI import\"]}, {\"name\": \"direction\", \"keywords\": [\"currency pair direction quote direction EUR USD exchange rate\"]}, {\"name\": \"Import (N)\", \"keywords\": [\"Import button placeholder count CSV rows UI\"]}, {\"name\": \"header row\", \"keywords\": [\"CSV header row column names import format\"]}, {\"name\": \"Separator / Semicolon\", \"keywords\": [\"CSV separator semicolon delimiter import format\"]}, {\"name\": \"decimal mark / thousands\", \"keywords\": [\"decimal mark thousands separator number format locale CSV\"]}, {\"name\": \"EUR&gt;USD / EUR&lt;USD\", \"keywords\": [\"currency pair direction notation EUR USD inverse exchange rate\"]}, {\"name\": \"other way round\", \"keywords\": [\"inverse direction currency pair idiom other way round\"]}, {\"name\": \"flips / rewrites the header\", \"keywords\": [\"flip direction rewrite CSV header UI toggle\"]}, {\"name\": \"inverted / 1/r\", \"keywords\": [\"invert exchange rate reciprocal formula CSV import direction\"]}, {\"name\": \"Common errors\", \"keywords\": [\"CSV import validation errors messages financial data\"]}, {\"name\": \"Header currencies don't match\", \"keywords\": [\"CSV error header currencies mismatch currency pair import\"]}, {\"name\": \"Expected header / Missing required columns\", \"keywords\": [\"CSV error expected header missing columns import format\"]}, {\"name\": \"Invalid date format\", \"keywords\": [\"CSV error invalid date format YYYY-MM-DD import\"]}, {\"name\": \"Invalid number\", \"keywords\": [\"CSV error invalid number rate value import\"]}, {\"name\": \"Duplicate date\", \"keywords\": [\"CSV error duplicate date rate import validation\"]}, {\"name\": \"merge\", \"keywords\": [\"merge imported rows data editor existing dates financial import\"]}, {\"name\": \"selected period / period widens\", \"keywords\": [\"chart selected period period expansion saved rates\"]}, {\"name\": \"YYYY-MM-DD\", \"keywords\": [\"date format ISO 8601 YYYY-MM-DD CSV import\"]}, {\"name\": \"CSV\", \"keywords\": [\"CSV comma separated values file format import acronym\"]}, {\"name\": \"EUR, USD\", \"keywords\": [\"ISO 4217 currency codes EUR USD exchange rate pair\"]}, {\"name\": \"bar at the top\", \"keywords\": [\"UI bar banner top import direction indicator\"]}, {\"name\": \"drops them\", \"keywords\": [\"discard changes cancel UI idiomatic drops them\"]}, {\"name\": \"skipped\", \"keywords\": [\"validation skipped invalid rate zero negative empty\"]}]",
@@ -138,11 +144,11 @@
     "analysis_model": "deepseek-ai/DeepSeek-V4.1-Flash"
   },
   "user/fx/detail/measures.en.md": {
-    "md5": "da7930395af7a23765603e707c457580",
+    "md5": "97a0e4176f570467618dad4efd18b2b2",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-10-10T00:07:15.106328+00:00",
     "langs": {
@@ -155,7 +161,9 @@
         "critique": "<translation_critique>\n<improvements>\nLa struttura Markdown (heading, emoji, HTML, admonition, formula, link) è preservata correttamente. Le correzioni più impattanti riguardano terminologia e naturalezza:\n\n- **“Δ Ass” è problematico e non standard.**  \n  Testo attuale: `**Inizio**, **Fine**, **Δ Ass**, **Δ %** e **Δ%/anno**`.  \n  L’etichetta inglese `Δ Abs` indica la variazione assoluta. In italiano `Ass` non è una forma abbreviata standard e può risultare ambigua/infelice. Usare `**Δ Assoluto**` oppure, se si vuole mantenere un’etichetta UI, `**Δ Abs**`. Se si preferisce abbreviare: `**Δ Ass.**` con il punto.\n\n- **“tasso” nel contesto FX è ambiguo.**  \n  Testo attuale: `come si è mosso il tasso tra due punti del grafico`.  \n  In ambito FX, “tasso” da solo in italiano fa pensare più a un tasso d’interesse. Meglio: `come si è mosso il tasso di cambio tra due punti del grafico` oppure `come si è mosso il cambio...`. Anche `dal suo primo tasso all'ultimo` andrebbe reso con `dal primo tasso di cambio all'ultimo` o `dal primo all'ultimo valore del cambio`.\n\n- **“per la coppia” va precisato come “coppia FX”.**  \n  Testo attuale: `per la coppia e per ogni sovrapposizione sullo stesso asse`.  \n  Dato che il glossario impone `FX pair → coppia FX`, e il contesto è FX, è preferibile: `per la coppia FX e per ogni serie sovrapposta sullo stesso asse`. Questo rende anche “overlay” più naturale in italiano tecnico.\n\n- **“si capitalizza a circa il 68% annuo” è poco idiomatico.**  \n  Testo attuale: `un movimento dell'1% in 7 giorni si capitalizza a circa il 68% annuo`.  \n  Meglio: `un movimento dell'1% in 7 giorni equivale a circa il 68% annuo` oppure `corrisponde a circa il 68% su base annua`.\n\n- **“su 30 giorni o più” è ellittico.**  \n  Testo attuale: `È più significativo su 30 giorni o più`.  \n  Meglio: `È più significativo su periodi di almeno 30 giorni` oppure `Su periodi di 30 giorni o più è più significativo`.\n\n- **“modalità misura” è accettabile in UI, ma “modalità di misura” è più corretto grammaticalmente.**  \n  Testi attuali: `Attiva la modalità misura`; `la modalità misura si disattiva`.  \n  Versioni migliori: `Attiva la modalità di misura`; `la modalità di misura si disattiva`.\n\n- **“Le due date vengono messe in ordine per te” è troppo letterale.**  \n  Testo attuale: `Le due date vengono messe in ordine per te`.  \n  Meglio: `Le due date vengono ordinate automaticamente`.\n\n- **Verificare la coerenza dell’etichetta `Δ%/yr` / `Δ%/anno`.**  \n  La traduzione usa costantemente `**Δ%/anno**`, mentre la formula mantiene `\\Delta\\%_{yr}`. Se `Δ%/yr` è un’etichetta UI non tradotta, va mantenuta identica anche nel testo; se invece è localizzata, `Δ%/anno` va usata in modo uniforme anche nelle etichette delle schede.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 189.1
+        "elapsed_s": 189.1,
+        "stamped_at": "2026-10-17T03:12:43.610606+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:07:15.106072+00:00",
@@ -166,7 +174,9 @@
         "critique": "<translation_critique>\n<improvements>\nNo structural issues detected: headings, emojis, HTML block, admonition syntax, lists, formula, link target, and markdown formatting are preserved. No mandatory glossary violations found for the key mapped terms: measure→mesure, tooltip→infobulle, card→carte, event→événement.\n\n1. **\"une ligne en pointillés\"** — inaccurate for “a dashed line”. In French, *pointillés* means dotted, not dashed. Correct to **\"une ligne en tirets\"** or **\"une ligne discontinue\"**.\n\n2. Last tip: **\"Elle est surtout significative sur 30 jours ou plus.\"** The pronoun *Elle* is ambiguous and likely should refer to the metric/rate, not the preceding *variation*. Also, the English source is awkward, so the French should be clearer without adding translator notes. Suggested correction: **\"Cette mesure est surtout significative sur 30 jours ou plus.\"** or, if the intended sense is “most meaningful”, **\"Cette mesure est surtout pertinente sur 30 jours ou plus.\"**\n\n3. **\"comme une annonce de banque centrale\"** — more natural French requires an article: **\"comme l'annonce d'une banque centrale\"** or **\"comme une annonce d'une banque centrale\"**.\n\n4. **\"🗑️ supprime une mesure\"** — “removes one” means removes one of the existing measurements. More precise and idiomatic: **\"🗑️ en supprime une.\"**\n\n5. **\"dans sa propre couleur\"** — slightly unnatural. Prefer **\"avec sa propre couleur\"** or **\"d'une couleur qui lui est propre\"**.\n\n6. Optional terminology clarification: in the FX context, the first occurrence of **\"le taux\"** could be **\"le taux de change\"** if it refers to the exchange rate, aligning with the glossary mapping *exchange rate → taux de change*. Subsequent uses can remain **\"taux\"** for brevity.\n\n7. Consider **\"mode mesure\" → \"mode de mesure\"** if aiming for standard grammatical French. The UI shorthand *mode mesure* is acceptable, but *mode de mesure* is more natural.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 142.5
+        "elapsed_s": 142.5,
+        "stamped_at": "2026-10-17T03:12:43.610606+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:07:15.106380+00:00",
@@ -177,7 +187,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology / glossary mapping:** In this FX context, “rate” refers to the exchange rate, and the glossary mandates **exchange rate → tipo de cambio**. The translation uses “tasa” for the FX rate in three places. Correct these:\n  - “cómo se movió la tasa” → “cómo se movió el tipo de cambio”\n  - “la fecha y la tasa que seleccionaste” → “la fecha y el tipo de cambio que seleccionaste”\n  - “desde su primera tasa hasta su última” → “desde su primer tipo de cambio hasta el último”\n  Keep “tasa anual” for “yearly rate (CAGR)”, since that is not the FX exchange rate.\n- **Semantic accuracy:** “Las dos fechas se ordenan por ti.” means “are ordered by you”, not “for you”. Correct to:\n  - “Las dos fechas se ordenan automáticamente.”\n  If preserving the “for you” nuance is required, use “Las dos fechas se ordenan para ti.”, but the automatic reading best matches the source.\n- **Precision:** “It means most over 30 days or more.” is rendered as “Es más relevante en 30 días o más.” A more accurate rendering is:\n  - “Es más significativo en periodos de 30 días o más.”\n- **Naturalness:** “Permanecen hasta que abandonas la página.” is understandable but less idiomatic. Better:\n  - “Permanecen hasta que salgas de la página.”\n- **Minor phrasing:** “práctico en un teléfono” is slightly unnatural in Spanish UI copy. Better:\n  - “práctico en el móvil” or “útil en el teléfono”\n- **Optional context alignment:** In the FX context, “para el par” could be made more precise as “para el par FX”, aligning with the glossary entry **FX pair → par FX**.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 220.3
+        "elapsed_s": 220.3,
+        "stamped_at": "2026-10-17T03:12:43.610606+00:00",
+        "stamped_by": "translate-stamp"
       }
     },
     "analysis": "[{\"name\": \"Measures\", \"keywords\": [\"LibreFolio Measures panel chart UI financial portfolio tracker\"]}, {\"name\": \"Measures panel\", \"keywords\": [\"chart UI panel measures financial chart tool\"]}, {\"name\": \"Measures bar\", \"keywords\": [\"chart toolbar Measures bar UI financial chart\"]}, {\"name\": \"rate\", \"keywords\": [\"financial chart rate exchange rate FX rate price rate\"]}, {\"name\": \"change\", \"keywords\": [\"absolute change financial chart rate difference\"]}, {\"name\": \"change in %\", \"keywords\": [\"percentage change financial chart rate change formula\"]}, {\"name\": \"yearly rate\", \"keywords\": [\"annualized rate CAGR yearly return financial chart\"]}, {\"name\": \"FX\", \"keywords\": [\"FX foreign exchange acronym financial chart\"]}, {\"name\": \"FX Measures Panel\", \"keywords\": [\"FX Measures panel alt text chart screenshot UI\"]}, {\"name\": \"measure mode\", \"keywords\": [\"chart measure mode UI tool financial chart\"]}, {\"name\": \"Add measurement\", \"keywords\": [\"chart UI button Add measurement measure tool\"]}, {\"name\": \"Active — click chart\", \"keywords\": [\"UI status message Active click chart measure mode\"]}, {\"name\": \"start point\", \"keywords\": [\"chart measurement start point UI interaction\"]}, {\"name\": \"end point\", \"keywords\": [\"chart measurement end point UI interaction\"]}, {\"name\": \"dashed line follows the pointer\", \"keywords\": [\"chart UI dashed line pointer measurement preview\"]}, {\"name\": \"hint\", \"keywords\": [\"UI hint tooltip chart measurement date rate\"]}, {\"name\": \"put in order\", \"keywords\": [\"sort dates chronological order UI measurement\"]}, {\"name\": \"selected period\", \"keywords\": [\"chart selected period time range financial data\"]}, {\"name\": \"card\", \"keywords\": [\"UI card component measurement expand collapse\"]}, {\"name\": \"Expand it\", \"keywords\": [\"UI expand collapse card measurement details\"]}, {\"name\": \"Start\", \"keywords\": [\"chart measurement Start label UI\"]}, {\"name\": \"End\", \"keywords\": [\"chart measurement End label UI\"]}, {\"name\": \"Δ Abs\", \"keywords\": [\"delta absolute change financial chart formula\"]}, {\"name\": \"Δ %\", \"keywords\": [\"delta percentage change financial chart formula\"]}, {\"name\": \"Δ%/yr\", \"keywords\": [\"annualized percentage change CAGR formula financial chart\"]}, {\"name\": \"CAGR\", \"keywords\": [\"CAGR compound annual growth rate formula financial theory\"]}, {\"name\": \"pair\", \"keywords\": [\"currency pair FX pair asset pair chart overlay\"]}, {\"name\": \"overlay\", \"keywords\": [\"chart overlay technical indicator financial chart\"]}, {\"name\": \"same axis\", \"keywords\": [\"chart overlay same axis y-axis financial chart\"]}, {\"name\": \"calendar days\", \"keywords\": [\"calendar days day count finance annualized return formula\"]}, {\"name\": \"log returns\", \"keywords\": [\"log returns logarithmic returns financial theory compounding\"]}, {\"name\": \"compounding\", \"keywords\": [\"compounding annualized return financial theory short period\"]}, {\"name\": \"central bank announcement\", \"keywords\": [\"central bank announcement market event volatility financial chart\"]}, {\"name\": \"short periods\", \"keywords\": [\"short time horizon annualized return misleading finance\"]}, {\"name\": \"1 % move\", \"keywords\": [\"price move percentage change financial chart annualized\"]}, {\"name\": \"7 days compounds to about 68 % a year\", \"keywords\": [\"annualized return compounding short period example finance\"]}, {\"name\": \"over 30 days or more\", \"keywords\": [\"annualized return over 30 days financial meaningful period\"]}, {\"name\": \"It means most over 30 days or more\", \"keywords\": [\"ambiguous phrase annualized return meaningful over 30 days typo\"]}, {\"name\": \"hit the exact points\", \"keywords\": [\"chart zoom precision click exact point UI idiom\"]}, {\"name\": \"handy on a phone\", \"keywords\": [\"mobile friendly UI handy on phone idiom translation\"]}, {\"name\": \"with care\", \"keywords\": [\"read with care caution financial annualized return idiom\"]}, {\"name\": \"colour and style\", \"keywords\": [\"chart line color style solid dashed UI settings\"]}, {\"name\": \"Take a measurement\", \"keywords\": [\"UI action take measurement chart tool financial\"]}, {\"name\": \"Read a measurement\", \"keywords\": [\"interpret measurement chart UI financial panel\"]}, {\"name\": \"Several measurements\", \"keywords\": [\"multiple measurements chart UI financial tool\"]}, {\"name\": \"own colour\", \"keywords\": [\"measurement line color UI chart multiple measurements\"]}, {\"name\": \"🗑️ removes one\", \"keywords\": [\"delete measurement trash icon UI chart\"]}, {\"name\": \"leave the page\", \"keywords\": [\"navigate away page state UI chart measurements\"]}, {\"name\": \"Zoom in\", \"keywords\": [\"chart zoom in UI precision measurement\"]}, {\"name\": \"before and after an event\", \"keywords\": [\"market event before after price move financial chart\"]}, {\"name\": \"Returns &amp; Growth Rates — Financial Theory\", \"keywords\": [\"financial theory returns growth rates document title cross-reference\"]}, {\"name\": \"screenshot-container / gallery-img / data-category / data-name\", \"keywords\": [\"HTML CSS class attribute code identifier do not translate\"]}]",
@@ -463,7 +475,7 @@
     }
   },
   "user/brokers/index.en.md": {
-    "md5": "cca4cef05a0a21936c2ccc94c87caa78",
+    "md5": "dd496310fdb7789daab79926a56c811e",
     "langs_done": [
       "es",
       "fr",
@@ -483,7 +495,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 237.3,
-        "stamped_at": "2026-10-13T20:38:32.735359+00:00",
+        "stamped_at": "2026-10-15T08:03:12.300589+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -498,7 +510,7 @@
         "elapsed_s": 222.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=69, translated=70 (Δ+1)\n  L109: src=1 trn=2\n    EN: The Brokers page, the **Add Broker** form and the broker page each have a short contextual guide: replay them from [Sett\n    TR: La page **Courtiers**, le formulaire **Ajouter un courtier** et la page du courtier disposent chacun d'un bref guide con\n\nSOURCE_OUTLINE (for reference):\n  # 🏦 Brokers\n    ## ➕ Create a broker\n    ## ✏️ Edit or delete a broker\n    ## 🗂️ Inside a broker\n    ## 📈 Overview tab\n    ## 🔍 Positions tab\n    ## 📑 In this section",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-13T20:38:32.735359+00:00",
+        "stamped_at": "2026-10-15T08:03:12.300589+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -511,7 +523,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 260.4,
-        "stamped_at": "2026-10-13T20:38:32.735359+00:00",
+        "stamped_at": "2026-10-15T08:03:12.300589+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -941,7 +953,7 @@
     "last_translated": "2026-10-10T00:03:32.770989+00:00"
   },
   "admin/cli_tools.en.md": {
-    "md5": "02fa5f95cdc41b8961ee6f4f16d7d161",
+    "md5": "36e0f26441836ffc03994fcbc94ab3a6",
     "langs_done": [
       "es",
       "fr",
@@ -961,7 +973,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 241.3,
-        "stamped_at": "2026-10-13T02:46:07.033441+00:00",
+        "stamped_at": "2026-10-15T03:19:58.227025+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -974,7 +986,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 260.5,
-        "stamped_at": "2026-10-13T02:46:07.033441+00:00",
+        "stamped_at": "2026-10-15T03:19:58.227025+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -987,7 +999,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 199.9,
-        "stamped_at": "2026-10-13T02:46:07.033441+00:00",
+        "stamped_at": "2026-10-15T03:19:58.227025+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -1653,7 +1665,7 @@
     }
   },
   "user/assets/detail/data-editor.en.md": {
-    "md5": "da0ccfe0567dcd5dec49a596e4fdc1fd",
+    "md5": "d969879a1ae63b31b79eb2558daa0958",
     "langs_done": [
       "es",
       "fr",
@@ -1672,7 +1684,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Conflitto terminologico critico: \"Undo\" e \"Cancel\" sono entrambi tradotti con \"Annulla\".** Nel passo 2, \"**Undo** brings it back\" → \"**Annulla** la ripristina\"; nel passo 3, \"**Cancel** to drop them\" → \"**Annulla** per scartarle\". Due azioni distinte (ripristino di una riga vs. abbandono delle modifiche dell'intero editor) risultano identiche e ambigue per l'utente. Correggi differenziandole, ad es.:\n   - \"and **Undo** brings it back\" → \"e **Ripristina** la fa tornare\"\n   - \"or **Cancel** to drop them\" → \"oppure **Annulla** per scartarle\"\n\n2. **Uso transitivo errato di \"mancare\".** \"registrare un evento che il provider ha mancato\" è agrammaticale: \"mancare\" in italiano non è transitivo in questo senso. Correggi in: \"registrare un evento che il provider ha omesso / non ha fornito\".\n\n3. **Titolo della sezione \"Jump from the chart\" reso come \"Salta dal grafico\" è ambiguo** (può essere letto come \"skip from\"). Meglio: \"**Vai dal grafico**\" oppure \"**Salta al grafico**\" / \"**Passa dal grafico**\". Anche il verbo nel corpo (\"per saltare a quella data\") andrebbe armonizzato: \"per passare a quella data\".\n\n4. **\"at the top right of the chart\" → \"in alto a destra nel grafico\".** L'inglese è \"of the chart\" (del grafico), non \"in the chart\". Correggi in \"in alto a destra del grafico\".\n\n5. **Scostamento dal glossario per \"data editor → editor dati\".** Il glossario impone \"editor dati\" (minuscolo). Il testo usa \"Editor Dati\" con iniziali maiuscole nel corpo (\"L'Editor Dati ti permette…\"). Nei titoli la maiuscolizzazione è accettabile, ma nel testo corrente uniforma a \"l'editor dati\".\n\n6. **\"Mind two limits:\" → \"Attenzione a due limiti:\".** Formula innaturale in italiano. Preferisci \"Tieni presente due limiti:\" oppure \"Ci sono due limiti da tenere a mente:\".\n\n7. **\"where *n* counts your changes\" → \"dove *n* conta le tue modifiche\".** Traduzione letterale ma poco chiara. Meglio: \"dove *n* è il numero delle modifiche apportate\".\n\n8. **\"il salvataggio ti avvisa invece\" — posizione di \"invece\" innaturale.** Correggi in: \"invece il salvataggio ti avvisa\" oppure \"ma il salvataggio ti avvisa\".\n\n9. **\"le date sullo schermo\" è una resa troppo letterale di \"the dates on screen\".** Preferibile \"le date visualizzate\" / \"le date mostrate\".\n\n10. **\"Event types and their sources\" → \"Tipi di evento e le loro fonti\": sintassi leggermente rigida.** Meglio \"Tipi di evento e relative fonti\".\n\n11. **\"Tick several rows to delete them together\" → \"Seleziona più righe\".** Accettabile, ma \"Tick\" indica la spunta di caselle: \"Spunta più righe per eliminarle insieme\" è più preciso e coerente con il comportamento UI descritto.\n\n12. **\"Both close the editor and bring the other panels back; so does ✕, without saving.\"** Reso con \"Entrambi chiudono… lo fa anche ✕\". Corretto, ma \"Entrambi\" può risultare ambiguo quando preceduto da due pulsanti (\"Salva\" e \"Annulla\") e seguito dal riferimento a ✕. Valuta: \"Sia l'uno che l'altro chiudono l'editor…; lo stesso fa ✕, senza salvare\".\n\nNessun problema rilevato in merito a: preservazione dei blocchi di codice e del loro contenuto, mantenimento dell'HTML/`<div>`, ancoraggio `{#import-from-csv}` e relativi link, emoji, tabelle/tab (`=== \"Prezzi\"` / `=== \"Eventi\"`), e ai termini del glossario verificati (asset, provider, evento, dividendo, interesse, split, rettifica prezzo, scadenza, importo, obsoleto, interruttore, impostazioni, transazione).\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 101.2
+        "elapsed_s": 101.2,
+        "stamped_at": "2026-10-15T05:31:59.061100+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:06:33.673549+00:00",
@@ -1683,7 +1697,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Respecter le glossaire pour « stale »** : remplacer « lignes périmées » par « lignes obsolètes ».  \n   Source : « **Stale rows** are days without a price of their own… »  \n   Traduction actuelle : « Les **lignes périmées** sont des jours sans cours propre… »  \n   Correction : « Les **lignes obsolètes** sont des jours sans cours propre… ».\n\n2. **Respecter le glossaire pour « split »** : remplacer toutes les occurrences de « fractionnement » par « division ».  \n   Exemples :  \n   - « Fractionnement » → « Division » dans la liste des types.  \n   - « le ratio pour un fractionnement » → « le ratio pour une division ».  \n   - « lié à un fractionnement » → « lié à une division ».  \n   - « ne compte plus comme un fractionnement » → « ne compte plus comme une division ».  \n   Ne pas modifier la valeur de code `SPLIT`.\n\n3. **Respecter le glossaire pour « price adjustment »** : remplacer « Ajustement de cours » par « Ajustement de prix ».  \n   Exemples :  \n   - « Ajustement de cours ou Échéance » → « Ajustement de prix ou Échéance ».  \n   - « une fois que l'événement est un Ajustement de cours » → « une fois que l'événement est un Ajustement de prix ».  \n   Ne pas modifier la valeur de code `PRICE_ADJUSTMENT`.\n\n4. **Lever l’ambiguïté entre **Undo** et **Cancel****, tous deux rendus par « Annuler ».  \n   Source : « and **Undo** brings it back » et « or **Cancel** to drop them ».  \n   Traduction actuelle : « et **Annuler** la rétablit » et « ou sur **Annuler** pour les abandonner ».  \n   Correction recommandée : rendre **Undo** par **Rétablir** (ou le libellé d’interface équivalent) : « et **Rétablir** la remet » ; conserver **Annuler** pour **Cancel**.\n\n5. **Rendre « Jump from the chart » / « jump to that date » plus naturel** : « Sauter depuis le graphique » et « pour sauter à cette date » sont trop littéraux.  \n   Proposition : « Aller à une date depuis le graphique » et « pour accéder à cette date » (ou « pour aller à cette date »).\n\n6. **Utiliser les termes financiers français standards pour High/Low** si l’interface le permet :  \n   Source : « **Open**, **High**, **Low** and **Volume** ».  \n   Traduction actuelle : « **Ouverture**, **Haut**, **Bas** et **Volume** ».  \n   Proposition : « **Ouverture**, **Plus haut**, **Plus bas** et **Volume** ».\n\n7. **Minuscule en milieu de phrase** : « L'Éditeur de données » devrait être « L'éditeur de données », sauf s’il s’agit d’un titre officiel. Vérifier aussi la capitalisation des termes d’interface comme « Type », « Montant », etc., selon la convention retenue.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 157.8
+        "elapsed_s": 157.8,
+        "stamped_at": "2026-10-15T05:31:59.061100+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:06:33.673649+00:00",
@@ -1694,7 +1710,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Mandatory glossary violation: “split (corporate action)” must be translated as “desdoblamiento”.** The translation leaves “Split/split” in several places:\n  - `(Dividendo, Interés, Split, Ajuste de precio o Vencimiento)` → `(Dividendo, Interés, Desdoblamiento, Ajuste de precio o Vencimiento)`\n  - `el ratio para un split` → `el ratio para un desdoblamiento` (or more naturally: `la proporción de un desdoblamiento`)\n  - `un **Ajuste** vinculado a un split` → `un **Ajuste** vinculado a un desdoblamiento`\n  - `deja de contar como split` → `deja de contar como desdoblamiento`\n  Do not change the code value `SPLIT`, but all prose uses of “split” must follow the glossary.\n\n- **Agreement error in “Cuando hay alguna”.** The referent is plural (“filas obsoletas”), so this should be:\n  - `Cuando hay alguna, aparecen un contador ⚠️ y un interruptor` → `Cuando las hay, aparecen un contador ⚠️ y un interruptor` or `Cuando hay algunas, aparecen...`\n\n- **Awkward and potentially ambiguous sentence:** `Cambiar el Tipo de un evento al que otro de tus eventos tiene en esa fecha`.\n  A clearer rendering closer to the source is:\n  - `Cambiar el Tipo de un evento al que ya tiene otro de tus eventos en esa fecha...`\n  or\n  - `Cambiar el Tipo de un evento al de otro de tus eventos en esa fecha...`\n\n- **“se lee según el nuevo tipo” is too literal for “is read according to the new type.”** In this context, Spanish technical prose would use:\n  - `...permanece vinculada y se interpreta según el nuevo tipo...`\n\n- **“restauran los otros paneles” is less precise for “bring the other panels back.”** Better:\n  - `Ambos cierran el editor y vuelven a mostrar los otros paneles...`\n\n- **“Visualización de gráficos con marcadores de eventos” changes the singular source phrase.** Correct to:\n  - `Visualización del gráfico con marcadores de eventos`\n\n- **“Un precio guardado fuera de las fechas en pantalla amplía estas para incluirlo” is grammatically acceptable but unnatural.** Better:\n  - `Un precio guardado fuera de las fechas mostradas amplía el rango para incluirlo.`\n\n- **Minor omission in the long-press instruction:** `(o mantén pulsado en un teléfono)` loses the object “it”.\n  Better:\n  - `(o mantén pulsado sobre él en un teléfono)`\n\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 186.8
+        "elapsed_s": 186.8,
+        "stamped_at": "2026-10-15T05:31:59.061100+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -1791,11 +1809,11 @@
     }
   },
   "user/assets/detail/measures.en.md": {
-    "md5": "602da4d476683d9527339efbc3a229a2",
+    "md5": "bf90c63b790fe68009cb07703fc5042c",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-10-10T00:04:06.163600+00:00",
     "analysis": "[{\"name\": \"Measure tool\", \"keywords\": [\"LibreFolio measure tool\", \"financial chart measurement tool\", \"chart measure feature UI\"]}, {\"name\": \"Measures panel\", \"keywords\": [\"Measures panel UI\", \"chart measure panel\", \"financial chart tool panel\"]}, {\"name\": \"Add measurement\", \"keywords\": [\"Add measurement button\", \"UI action\", \"chart measure tool\"]}, {\"name\": \"start point / end point\", \"keywords\": [\"chart start point\", \"chart end point\", \"measure selection markers\", \"UI chart points\"]}, {\"name\": \"asset\", \"keywords\": [\"financial asset\", \"instrument\", \"security\", \"portfolio holding\"]}, {\"name\": \"comparison asset\", \"keywords\": [\"comparison asset\", \"benchmark asset\", \"peer asset\", \"financial comparison\"]}, {\"name\": \"moving average\", \"keywords\": [\"moving average\", \"MA\", \"technical indicator\", \"SMA\", \"EMA\"]}, {\"name\": \"price axis\", \"keywords\": [\"price axis\", \"y-axis\", \"price scale\", \"financial chart axis\"]}, {\"name\": \"Prices mode\", \"keywords\": [\"Prices mode chart\", \"price chart mode\", \"financial chart mode\"]}, {\"name\": \"Rolling Return\", \"keywords\": [\"rolling return\", \"rolling performance\", \"financial metric\", \"annualized return\", \"time window\"]}, {\"name\": \"Rolling Return mode\", \"keywords\": [\"Rolling Return mode\", \"rolling return chart\", \"financial chart mode\"]}, {\"name\": \"Returns &amp; Growth Rates\", \"keywords\": [\"financial returns\", \"growth rates\", \"investment returns\", \"rate of return\"]}, {\"name\": \"Δ Abs\", \"keywords\": [\"delta absolute difference\", \"absolute change\", \"financial chart measure\"]}, {\"name\": \"Δ %\", \"keywords\": [\"delta percent\", \"percentage change\", \"financial chart measure\"]}, {\"name\": \"Δ%/yr\", \"keywords\": [\"delta percent per year\", \"annualized percentage change\", \"CAGR\", \"financial chart measure\"]}, {\"name\": \"yearly rate\", \"keywords\": [\"annual rate\", \"yearly rate\", \"annualized return\", \"finance\"]}, {\"name\": \"calendar days\", \"keywords\": [\"calendar days\", \"date difference\", \"trading days vs calendar days\", \"financial annualization\"]}, {\"name\": \"Start and End values\", \"keywords\": [\"Start End values\", \"UI table columns\", \"chart measure table\"]}, {\"name\": \"summary line\", \"keywords\": [\"summary line\", \"table summary row\", \"total row\", \"UI table\"]}, {\"name\": \"percentage points\", \"keywords\": [\"percentage points\", \"pp\", \"difference between percentages\", \"financial change\"]}, {\"name\": \"pp\", \"keywords\": [\"pp abbreviation\", \"percentage points\", \"financial notation\"]}, {\"name\": \"rolling return over calendar days\", \"keywords\": [\"rolling return calendar days\", \"rolling return calculation\", \"finance\"]}, {\"name\": \"Signals\", \"keywords\": [\"trading signals\", \"technical analysis signals\", \"indicator signals\", \"chart overlays\"]}, {\"name\": \"Technical indicator overlays\", \"keywords\": [\"technical indicator overlay\", \"chart overlay\", \"indicators on chart\", \"technical analysis\"]}, {\"name\": \"Interactive Chart\", \"keywords\": [\"interactive chart\", \"chart feature\", \"financial chart UI\"]}, {\"name\": \"Chart controls\", \"keywords\": [\"chart controls\", \"UI controls\", \"chart toolbar\", \"financial chart\"]}, {\"name\": \"date range filtering\", \"keywords\": [\"date range filter\", \"chart date filtering\", \"UI filter\", \"financial chart\"]}, {\"name\": \"Take a measure\", \"keywords\": [\"take a measure phrase\", \"chart measurement\", \"idiomatic expression\", \"UI heading\"]}, {\"name\": \"handy on a phone\", \"keywords\": [\"handy on a phone idiom\", \"convenient mobile\", \"mobile usability\", \"UI phrasing\"]}, {\"name\": \"Measures are not saved\", \"keywords\": [\"unsaved measures\", \"state not persisted\", \"page reload\", \"UI state\"]}, {\"name\": \"reloading the page empties the panel\", \"keywords\": [\"page reload\", \"panel clears\", \"unsaved state\", \"UI behavior\"]}, {\"name\": \"keep separate measures\", \"keywords\": [\"separate measures\", \"independent mode state\", \"chart mode state\"]}, {\"name\": \"panel's header\", \"keywords\": [\"panel header\", \"UI header\", \"measure panel\", \"chart tool UI\"]}, {\"name\": \"expand the measure\", \"keywords\": [\"expand measure\", \"UI accordion\", \"chart measure details\", \"collapse expand UI\"]}, {\"name\": \"change its dates\", \"keywords\": [\"change dates\", \"edit measure dates\", \"UI date picker\", \"chart measure\"]}, {\"name\": \"converted chart\", \"keywords\": [\"currency conversion chart\", \"converted prices\", \"forex chart\", \"financial chart\"]}, {\"name\": \"in its own currency\", \"keywords\": [\"native currency\", \"currency denomination\", \"chart conversion\", \"financial data\"]}, {\"name\": \"line's unit\", \"keywords\": [\"series unit\", \"line unit\", \"chart axis unit\", \"financial chart\"]}]",
@@ -1810,7 +1828,9 @@
         "critique": "<translation_critique>\n<improvements>\nGlossary note: the mandatory mappings present in this page (`asset` → `asset`, `measure` → `misura`, `signal` → `segnale`) are respected. No structural breakage was detected in headings, links, HTML attributes, URLs, or code spans. The following are the most impactful corrections.\n\n1. **“Rolling Return” capitalization/terminology is inconsistent.** The translation uses `Rendimento Rolling` in headings/bold text but `rendimento rolling` in the body. In Italian, foreign adjectives like “rolling” are normally lowercase unless they are part of a fixed UI label. Correct to one consistent form:\n   - `## 📈 In modalità Rendimento Rolling` → `## 📈 In modalità Rendimento rolling`\n   - `**Prezzi** e **Rendimento Rolling**` → `**Prezzi** e **Rendimento rolling**`\n   - If `Rolling Return` is a fixed UI label that must remain English, then keep it unchanged everywhere instead.\n\n2. **Missing article in the link text.** `Rendimento rolling su giorni di calendario` is grammatically off. Correct to:\n   - `[Rendimento rolling su giorni di calendario]` → `[Rendimento rolling sui giorni di calendario]`\n\n3. **`Δ Ass` is an unclear/nonstandard abbreviation.** English `Δ Abs` means “absolute”; the Italian abbreviation should be `Δ Ass.` or the full `Δ Assoluto`. The current `Δ Ass` without punctuation is ambiguous and can be misread. Correct to:\n   - `**Δ Ass** — la differenza ...` → `**Δ Ass.** — la differenza ...`  \n   or, if space allows, `**Δ Assoluto** — la differenza ...`\n\n4. **Repeated “misura” makes the sentence awkward.** `**+ Aggiungi misura** nell'intestazione del pannello misura invece l'intero grafico` reads poorly because `misura` is both noun and verb. Correct to:\n   - `Il pulsante **+ Aggiungi misura** nell'intestazione del pannello, invece, misura l'intero grafico...`\n\n5. **`una seconda nella sua valuta` is elliptical.** Add `riga` for clarity:\n   - `(una seconda nella sua valuta quando il grafico è convertito)` → `(una seconda riga nella sua valuta quando il grafico è convertito)`\n\n6. **“tra di essi” in the opening sentence is slightly awkward.** The referent is unclear after mentioning both the asset and the lines. A smoother rendering:\n   - `Scegli due punti sul grafico e leggi la variazione dell'asset, e delle linee disegnate con esso, tra di essi.`  \n     → `Scegli due punti sul grafico e leggi la variazione dell'asset e delle linee disegnate con esso tra i due punti.`\n\n7. **Opening question construction is unnatural.** `risponde a *quanto è cambiato...*` is understandable but not idiomatic. A natural correction without adding translator notes:\n   - `Lo strumento Misure risponde a *quanto è cambiato tra questi due giorni?*`  \n     → `Lo strumento Misure risponde alla domanda: *quanto è cambiato tra questi due giorni?*`\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 163.4
+        "elapsed_s": 163.4,
+        "stamped_at": "2026-10-17T03:12:35.665621+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:04:06.163489+00:00",
@@ -1821,7 +1841,9 @@
         "critique": "<translation_critique>\n<improvements>\nThe translation is overall accurate, well-structured, and respects the glossary mappings (\"asset → actif\", \"measure → mesure\" are correctly applied). Structural elements — headings, emojis, HTML block, ordered/bullet lists, math expressions ($V_{end}-V_{start}$, $\\frac{V_{end}-V_{start}}{V_{start}}$, $(1+\\Delta\\%)^{365/d}-1$), URLs, file paths (chart.md, signals.md, returns.md#rolling-return-calendar), and HTML attributes (data-category, data-name) — are all preserved correctly. The improvements below focus on idiomatic French and a few wording precision points.\n\n1. Link text \"Rolling return over calendar days\" → \"Rendement glissant sur jours calendaires\"\n   The article is missing before \"jours\". Correct to: \"Rendement glissant sur les jours calendaires\".\n\n2. \"Contrôles du graphique\" (Chart controls)\n   In French UI vocabulary, \"contrôles\" commonly means \"checks/inspections\" rather than on-screen controls. Prefer: \"Commandes du graphique\" or, if the sense is settings, \"Réglages du graphique\". \"Commandes du graphique\" is the most idiomatic for \"chart controls\".\n\n3. \"et des lignes tracées avec lui\"\n   \"avec lui\" is slightly ambiguous (refers to \"actif\"). The English means \"lines drawn alongside/on the same chart as it\". Suggest a clearer phrasing: \"et des lignes qui y sont tracées\" or \"et des lignes tracées en même temps que lui\".\n\n4. \"recharger la page vide le panneau\"\n   The English gerund subject (\"reloading the page empties the panel\") is rendered with an infinitive subject, which is acceptable but slightly informal. A more natural/formal register consistent with the rest of the document: \"le rechargement de la page vide le panneau\".\n\n5. Verify the UI label \"Δ%/yr\" → \"Δ%/an\"\n   You translated the column title \"**Δ%/yr**\" as \"**Δ%/an**\" (consistent with translating **Start/End/Days** → **Début/Fin/Jours**). Confirm this matches the actual French UI of the application; if the app displays the literal string \"Δ%/yr\", keep it unchanged. If the localized UI uses \"Δ%/an\", the current rendering is correct.\n\n6. \"Pratique sur un téléphone\" (handy on a phone)\n   Acceptable, but \"Pratique sur mobile\" reads more naturally in French technical prose if no specific device is intended. Only change if \"phone\" is not a deliberate, narrow reference.\n\nNo translator's notes, footnotes, or added content have been introduced — this constraint is respected.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 189.9
+        "elapsed_s": 189.9,
+        "stamped_at": "2026-10-17T03:12:35.665621+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:04:06.163603+00:00",
@@ -1832,7 +1854,9 @@
         "critique": "<translation_critique>\n<improvements>\nThe translation is generally accurate, structurally sound (all headings, emojis, HTML blocks, math blocks, and URLs are preserved correctly), and consistent with the glossary mappings (measure → medida, asset → activo, signal → señal, dashboard → panel). Only a small number of actionable issues were found:\n\n1. **Lost referent in step 1** — \"the **Measures** panel opens below it\" is rendered as \"el panel **Medidas** se abre debajo\", dropping the pronoun \"it\" (= below the button). The Spanish sentence now looks like the panel opens \"below\" (nothing). Correct to: \"el panel **Medidas** se abre debajo de él.\"\n\n2. **\"Rolling return over calendar days\" (link title)** — rendered as \"Rentabilidad móvil en días naturales\". The English preposition \"over\" means \"measured across/over\" the calendar days, which is better conveyed by \"a lo largo de\" than \"en\". Suggested: \"Rentabilidad móvil a lo largo de los días naturales\" (or, more naturally, \"Rentabilidad móvil sobre días naturales\"). This is the anchor text of the glossary-relevant term \"rolling return\" and should read as a genuine descriptive phrase, not as a time-period label.\n\n3. **\"Pick two points\"** — translated as \"Selecciona dos puntos\". \"Pick\" (casual) vs \"select\" is a nuance; \"Elige dos puntos\" would better match the informal register used elsewhere (\"Haz clic…\"). Optional but improves tone consistency.\n\n4. **Imperative choice for \"expand the measure\"** — \"expande la medida\" is grammatically correct but \"despliega la medida\" is more idiomatic in Spanish UI language when referring to expanding a collapsed panel/card, and would be more consistent with the \"expand/colapsar\" convention. Suggested: \"despliega la medida para cambiar sus fechas.\"\n\n5. **\"handy on a phone\"** — \"práctico en un teléfono\" is fine, but \"práctico en el móvil\" reads more naturally in Spanish (the term \"móvil\" is already used in \"Rentabilidad móvil\"). Suggested: \"práctico en el móvil.\"\n\nNo terminology-glossary violations were detected, and no translator's notes or extraneous content were introduced.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 115.2
+        "elapsed_s": 115.2,
+        "stamped_at": "2026-10-17T03:12:35.665621+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -1885,7 +1909,7 @@
     }
   },
   "user/assets/index.en.md": {
-    "md5": "75048ee414885def633fa5c594c59b27",
+    "md5": "dd8e5487e328b993f8e8e163caec3f13",
     "langs_done": [
       "es",
       "fr",
@@ -1904,7 +1928,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminologia obbligatoria — provider → provider**: la traduzione usa sempre “fornitore”, ma il glossario impone “provider”. Correzioni richieste:\n  - “un fornitore di prezzi” → “un provider di prezzi”\n  - “ogni asset che ha un fornitore” → “ogni asset che ha un provider”\n  - “Richiede un fornitore” → “Richiede un provider”\n  - “collegalo a un fornitore di prezzi” → “collegalo a un provider di prezzi”\n\n- **Terminologia obbligatoria — settings → impostazioni**: “Settings” e “Chart Settings” non sono stati tradotti. Correzioni richieste:\n  - “**Settings** nella barra degli strumenti” → “**Impostazioni** nella barra degli strumenti”\n  - “[Chart Settings](../fx/chart-settings.md)” → “[Impostazioni grafico](../fx/chart-settings.md)” (URL invariato)\n\n- **Terminologia obbligatoria — viewer → visualizzatore**: “**Viewer**” deve diventare “**Visualizzatore**” in “I broker condivisi con te come **Editor** o **Viewer**...”.\n\n- **Terminologia obbligatoria — split → split**: “frazionamenti” è errato rispetto al glossario. Correzione:\n  - “dividendi, frazionamenti, interessi…” → “dividendi, split, interessi…”\n\n- **Terminologia obbligatoria — scheduled investment → investimento programmato**: “Scheduled Investment engine” non è tradotto. Correzione:\n  - “il motore Scheduled Investment” → “il motore di investimento programmato”\n\n- **Terminologia obbligatoria — live price → prezzo live**: “Live prices” e “[Live Prices]” devono usare “Prezzi live”. Correzioni:\n  - “**Live prices** — mentre questa pagina...” → “**Prezzi live** — mentre questa pagina...”\n  - “[Live Prices](...)” → “[Prezzi live](...)” (URL invariato)\n\n- **Terminologia obbligatoria — transaction → transazione**: il link **Transactions** va tradotto. Correzione:\n  - “con un link **Transactions** filtrato su quell'asset” → “con un link **Transazioni** filtrato su quell'asset”\n\n- **Terminologia obbligatoria — data editor → editor dati**: “l'editor dei dati” non segue la mappatura. Correzione:\n  - “l'editor dei dati e la classificazione” → “l'editor dati e la classificazione”\n\n- **Terminologia obbligatoria — sector distribution / geographic breakdown**: “ripartizione per settore e paese” va reso con i termini del glossario. Correzione:\n  - “una ripartizione per settore e paese, opzionale” → “una distribuzione settoriale e geografica, opzionale”\n\n- **Terminologia obbligatoria — tab → scheda**: il titolo “Correlation Tab” non usa “scheda”. Correzione:\n  - “### 🧪 [Correlation Tab](correlation.md)” → “### 🧪 [Scheda Correlazione](correlation.md)”\n\n- **Accuratezza semantica**: “conto di deposito” non è la traduzione corretta di “savings account”. Correzione:\n  - “un conto di deposito con interessi programmati” → “un conto di risparmio con interessi programmati”\n\n- **Grammatica e naturalezza**:\n  - “in fino a tre pannelli” → “in un massimo di tre pannelli”\n  - “Asset detenuti attualmente da nessuno” → “Asset che attualmente non sono detenuti da nessuno”\n  - “una posizione chiusa fino a un residuo trascurabile” → “una posizione ridotta a un residuo trascurabile”\n  - “Tassi di cambio valutario” → “Tassi di cambio” oppure “Tassi di cambio valutari”\n  - “potrebbe elencare meno transazioni del conteggio” → “potrebbe elencare meno transazioni rispetto al conteggio”\n  - “la tabella la blocca anche per un asset archiviato” → “la tabella blocca questa azione anche per un asset archiviato”\n  - “è salito dall'aggiornamento precedente” → “è salito rispetto all'aggiornamento precedente”\n  - “solo in percentuali” → “solo in percentuale”\n  - “finché **qualsiasi** transazione lo utilizza” → “finché **una qualsiasi** transazione lo utilizza” oppure “finché lo utilizza anche una sola transazione”\n  - “Lì, le frecce **‹ ›** scorrono gli asset” → “Lì, le frecce **‹ ›** permettono di scorrere gli asset”\n  - “i due pulsanti ... alternano tra schede” → “i due pulsanti ... consentono di alternare tra schede”\n\n- **Coerenza delle etichette di pagina/link**: molti titoli di pagina/feature restano in inglese mentre il corpo del testo li traduce o li spiega in italiano. Se l’obiettivo è una localizzazione completa, uniformare:\n  - “[Create & Edit](create-edit.md)” → “[Crea e modifica](create-edit.md)”\n  - “[Correlation Tab](correlation.md)” → “[Scheda Correlazione](correlation.md)”\n  - “[Asset Detail Page](detail/index.md)” → “[Pagina di dettaglio asset](detail/index.md)”\n  - “[Financial Theory — Asset Types](...)” → “[Teoria finanziaria — Tipi di asset](...)”\n  - “Stock, ETF, Bond, Crypto, etc.” → “Azioni, ETF, Obbligazioni, Criptovalute, ecc.”\n  - “[FX Rates](../fx/index.md)” → “[Tassi di cambio](../fx/index.md)”\n  - “[Live Prices](...)” → “[Prezzi live](...)”\n\n- **Coerenza delle etichette UI**: se le etichette dell’interfaccia vanno tradotte, uniformare anche:\n  - “l'elenco parte con i soli asset **Active**: attiva **Inactive**...” → “l'elenco parte con i soli asset **Attivi**: attiva **Inattivi**...” oppure, se si mantengono le etichette inglesi, “attiva il filtro **Inactive**”\n  - “**Your assets**”, “**Other users' assets**”, “**Watched**” nella tabella → “**I tuoi asset**”, “**Asset di altri utenti**”, “**Osservati**” (la traduzione del titolo usa già “osservati”)\n  - “solo grid view” → “solo nella vista griglia” se “Grid view” viene localizzato come “Vista griglia”\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 281.4
+        "elapsed_s": 281.4,
+        "stamped_at": "2026-10-15T13:50:51.316122+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:03:24.652130+00:00",
@@ -1915,7 +1941,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminologie obligatoire : `splits` → `divisions`.** Dans « dividendes, splits, intérêts… », remplacer par « dividendes, divisions, intérêts… ».\n- **Terminologie obligatoire : `settings` → `paramètres`.** « remplace les réglages propres à chaque actif » doit devenir « remplace les paramètres propres à chaque actif ». De même, le lien `Chart Settings` doit être « Paramètres du graphique » (glossaire : chart settings → paramètres du graphique), et non « Paramètres des graphiques ».\n- **Terminologie obligatoire : `live price(s)` → `prix live`.** Remplacer « **Prix en direct** » par « **Prix live** » dans la section de mise à jour des prix, et dans « Voir aussi » : « comment les pages interrogent les prix en direct » → « comment les pages interrogent les prix live ».\n- **Terminologie obligatoire : `scheduled investment` → `investissement programmé`.** « le moteur Scheduled Investment » doit être traduit, par exemple : « le moteur d’investissement programmé ».\n- **Ambiguïté sémantique : « la liste commence par les seuls actifs **Actif** ».** Cette formulation peut signifier que la liste débute par des actifs actifs, alors que le sens est « affiche initialement uniquement les actifs actifs ». Préférer : « au départ, la liste n’affiche que les actifs **Actif** » ou « la liste n’affiche d’abord que les actifs **Actif** ».\n- **Accord grammatical :** « redimensionner, déplacer ou masquer une colonne s’applique aux trois » doit être « redimensionner, déplacer ou masquer une colonne s’appliquent aux trois », ou reformulé : « ces opérations s’appliquent aux trois ».\n- **Cohérence des libellés d’interface dans le carrousel HTML :** `data-title=\"🔲 Vue en grille de cartes\"` et `data-title=\"📋 Vue en tableau de données\"` ne correspondent pas aux libellés du corps « **Vue grille** » et « **Vue tableau** ». Si ce sont des libellés visibles de l’interface, les aligner : utiliser « Vue grille » et « Vue tableau » partout, ou conserver la distinction du source de façon cohérente.\n- **Redondance stylistique :** « **Taux de change** — Taux de change des devises utilisés… » répète « taux de change ». Préférer « **Taux de change** — Taux utilisés pour la conversion entre devises » ou « Taux de change utilisés pour la conversion entre devises ».\n- **Cohérence terminologique secondaire :** « scheduled interest » est rendu par « intérêts planifiés » ; comme le glossaire traduit « scheduled investment » par « investissement programmé », envisager « intérêts programmés ».\n- **Améliorations stylistiques mineures :** « les graphiques d’actifs » se lirait mieux en « les graphiques des actifs » ou « les graphiques d’actif » ; dans l’avertissement, « n’importe quelle transaction » peut être renforcé par « la moindre transaction » pour rendre l’insistance de **any**.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 275.4
+        "elapsed_s": 275.4,
+        "stamped_at": "2026-10-15T13:50:51.316122+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:03:24.652474+00:00",
@@ -1926,7 +1954,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminología obligatoria — “Viewer”:** El glosario exige `viewer → lector`. La traducción usa `**Editor** o **Visor**`; debe corregirse a `**Editor** o **Lector**`.\n- **Terminología obligatoria — “split”:** El glosario exige `split (corporate action) → desdoblamiento`. La traducción mantiene `splits`; debe corregirse a `desdoblamientos`: `**eventos** — dividendos, desdoblamientos, intereses…`\n- **Terminología obligatoria — “historical replay”:** El glosario exige `historical replay → repetición histórica`. La traducción dice `reproducción histórica`; debe corregirse a `repetición histórica`.\n- **Terminología obligatoria — “scheduler”:** El glosario exige `scheduler → planificador`. La traducción usa `Programador de datos de mercado`; debe corregirse a `Planificador de datos de mercado`, manteniendo intacto el ancla `../../admin/settings.md#market-data-scheduler`.\n- **Terminología obligatoria — “Chart Settings”:** El glosario exige `chart settings → ajustes del gráfico`. La traducción usa `[Configuración de gráficos](../fx/chart-settings.md)`; debe corregirse a `[Ajustes del gráfico](../fx/chart-settings.md)`.\n- **Gramática/ colocación:** `con un enlace **Transacciones** filtrado a ese activo` suena poco natural. Debe ser `con un enlace **Transacciones** filtrado por ese activo`.\n- **Gramática/ colocación:** `una posición cerrada hasta un remanente insignificante` no refleja bien “closed down to a negligible leftover”. Debe ser `una posición reducida a un remanente insignificante`.\n- **Redundancia/ claridad:** `la lista comienza solo con activos **Activos**` es redundante y confuso. Debe ser `la lista comienza mostrando solo los **Activos**`.\n- **Coherencia de acción/UI:** La acción se describe como `fusiona un duplicado...`, pero la etiqueta es `**Combinar con…**`. Para mantener coherencia, conviene usar `**Fusionar con…** — fusiona un duplicado...`.\n- **Claridad:** `de 1S a 5A, que encaje en el rango` puede mejorarse como `de 1S a 5A, que quepa dentro del rango`.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 213.1
+        "elapsed_s": 213.1,
+        "stamped_at": "2026-10-15T13:50:51.316122+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -2023,7 +2053,7 @@
     }
   },
   "user/assets/providers/scheduled-investment.en.md": {
-    "md5": "d572a127a31272987b573ae309ddb970",
+    "md5": "4cb8cea69219824ac649ebbfbe2fb692",
     "langs_done": [
       "es",
       "fr",
@@ -2042,7 +2072,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Mandatory glossary term: `interest schedule` → `piano interessi`.** The translation uses `piano di interessi` / `Piano di Interessi` in several places. Replace as follows:\n  - `dal suo piano di interessi` → `dal suo piano interessi`\n  - `Editor del Piano di Interessi` → `Editor del piano interessi`\n  - `l'editor **Piano di Interessi**` → `l'editor **Piano interessi**`\n  - `calcolati dal tuo piano` → `calcolati dal tuo piano interessi` (for consistency when referring to the interest schedule)\n- **Mandatory glossary term: `price adjustment` → `rettifica prezzo`.** The event table currently has `**Adeguamento di Prezzo**`; it must be `**Rettifica prezzo**`. Corrected row:\n  `| **Rettifica prezzo** | Una svalutazione (negativa) o una rivalutazione (positiva) |`\n- **Translate descriptive text inside the LaTeX `\\text{}` block.** The formula leaves `Interest events` and `Price adjustments` in English. For terminology consistency, use:\n  `V(d) = V_0 + I(d) - \\sum \\text{Eventi di interesse} + \\sum \\text{Rettifiche prezzo}`\n- **Minor grammar/naturalness:** `Convenzioni di conteggio giorni` is missing a preposition. Correct to `Convenzioni di conteggio dei giorni`.\n- **Minor wording:** `linea uniforme` for `smooth line` is not precise. Consider `linea continua` or `linea fluida`, e.g. `scegli **Giornaliero** per una linea continua`.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 273.1
+        "elapsed_s": 273.1,
+        "stamped_at": "2026-10-17T03:12:54.292084+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:00:11.667822+00:00",
@@ -2053,7 +2085,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Terminologie obligatoire : « interest schedule » doit être « calendrier d’intérêts »**, pas « échéancier d’intérêts ». Remplacez toutes les occurrences :\n   - « son échéancier d’intérêts » → « son calendrier d’intérêts »\n   - « votre échéancier » / « le même échéancier » → « votre calendrier » / « le même calendrier »\n   - « l’éditeur **Échéancier d’Intérêts** » → « l’éditeur **Calendrier d’intérêts** »\n   - « l’ensemble de l’échéancier » → « l’ensemble du calendrier »\n   - « LibreFolio parcourt l’échéancier jour par jour » → « LibreFolio parcourt le calendrier jour par jour »\n   - Titre : « ## 📋 Éditeur d’Échéancier d’Intérêts » → « ## 📋 Éditeur de calendrier d’intérêts » (conservez l’ancre `{: #interest-schedule-editor }`).\n\n2. **Terminologie obligatoire : « scheduled investment » doit être « investissement programmé »**. Corrigez les majuscules et les noms de fournisseur :\n   - « Investissement Programmé » → « Investissement programmé »\n   - « Calculateur d’Investissement Programmé » → « Calculateur d’investissement programmé »\n   - « Fournisseur d’Investissement Programmé » → « Fournisseur d’investissement programmé »\n   - « Le fournisseur Investissement Programmé calcule… » → « Le fournisseur d’investissement programmé calcule… » (ou « Le fournisseur Investissement programmé… » si c’est un nom propre).\n\n3. **Terminologie obligatoire : « price adjustment » doit être « ajustement de prix »**. Dans le tableau des événements, « **Ajustement de Prix** » → « **Ajustement de prix** ». Le pluriel « Ajustements de prix » dans la formule est correct.\n\n4. **Majuscules françaises : éviter le Title Case anglais dans les libellés/headings**. Sauf libellé d’interface imposé, utilisez la casse de phrase :\n   - « **Valeur Initiale** » → « **Valeur initiale** »\n   - « **Type d’Intérêt** » → « **Type d’intérêt** »\n   - « **Décompte des Jours** » → « **Décompte des jours** »\n   - « **Ajouter la Première Période** » → « **Ajouter la première période** »\n   - « **Ajouter une Période** » → « **Ajouter une période** »\n   - « **Générer le Coupon** » → « **Générer le coupon** »\n   - « **Intérêts de Retard** » → « **Intérêts de retard** »\n   - « **Événements de l’Actif** » → « **Événements de l’actif** »\n   - « ## 🧮 Comment la Valeur est Calculée » → « ## 🧮 Comment la valeur est calculée »\n   - « **Ajouter un Événement** » → « **Ajouter un événement** »\n\n5. **« Provider Assignment »** : « **Attribution du Fournisseur** » est moins idiomatique pour une affectation. Préférez « **Affectation du fournisseur** » (et minuscule à « fournisseur » sauf s’il s’agit d’un libellé d’interface exact).\n\n6. **« Cochez-la » est ambigu** dans « **Générer le Coupon** | Cochez-la… ». Le référent n’est pas clair. Préférez « Cochez cette case pour… » pour correspondre à « Tick it… ».\n\n7. **« Chaque événement compte à partir de sa date »** est peu naturel. Préférez « Chaque événement est pris en compte à partir de sa date. »\n\n8. **Vérification finale de cohérence** : les liens, ancres, chemins, blocs mathématiques, tableaux, emojis et balises HTML sont globalement bien préservés. Les corrections prioritaires restent les points de terminologie obligatoire ci-dessus.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 246.0
+        "elapsed_s": 246.0,
+        "stamped_at": "2026-10-17T03:12:54.292084+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:00:11.667913+00:00",
@@ -2064,7 +2098,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Uso obligatorio de “calendario de intereses” para “interest schedule”.** El glosario exige `interest schedule → calendario de intereses`; la traducción usa sistemáticamente “programación de intereses” o “programación”. Debe corregirse en todas las apariciones:\n  - “calcula el valor de un activo a partir de su **programación de intereses**” → “calcula el valor de un activo a partir de su **calendario de intereses**”.\n  - “la misma **programación** siempre da los mismos valores” → “el mismo **calendario** siempre da los mismos valores”.\n  - Encabezado “## 📋 Editor de **programación de intereses**” → “## 📋 Editor de **calendario de intereses**”; mantener el ancla `{: #interest-schedule-editor }` sin cambios.\n  - “abre el editor **Programación de intereses**” → “abre el editor **Calendario de intereses**”.\n  - “la configuración para toda la **programación**” → “la configuración para todo el **calendario**”.\n  - “LibreFolio recorre la **programación** día a día” → “LibreFolio recorre el **calendario** día a día”.\n- **Mejora gramatical en la frase de apertura del editor.** “Elegir el proveedor en **Asignación de proveedor** abre el editor **Programación de intereses**” suena menos natural y arrastra el término incorrecto. Una versión corregida sería: “Al elegir el proveedor en **Asignación de proveedor** se abre el editor **Calendario de intereses**”. Esto no añade contenido nuevo, solo ajusta sintaxis y terminología obligatoria.\n- **Revisar “Interés por demora” si se busca la forma más habitual en español financiero.** Aunque no está en el glosario, “interés de demora” es más habitual que “interés por demora”. Si se decide cambiar, hay que hacerlo de forma consistente en “⚡ Interés por demora”, “interés por demora” y, si aplica, “tasa de demora”.\n- **No se detectan problemas estructurales de Markdown.** Se conservan encabezados, anclas, enlaces, rutas, tablas, bloques matemáticos, admonición `??? example`, emoji y atributos HTML. Las fórmulas traducen correctamente `Interest events` → `Eventos de interés` y `Price adjustments` → `Ajustes de precio`, en línea con el glosario (`price adjustment → ajuste de precio`).\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 276.9
+        "elapsed_s": 276.9,
+        "stamped_at": "2026-10-17T03:12:54.292084+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -2755,7 +2791,7 @@
     }
   },
   "financial-theory/technical-analysis/index.en.md": {
-    "md5": "d3f0511d347e136057007f0588dee183",
+    "md5": "18dfdafd2c34f5ab1ea1c49cb2b4d380",
     "langs_done": [
       "es",
       "fr",
@@ -2775,7 +2811,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 49.9,
-        "stamped_at": "2026-09-04T15:08:58.710965+00:00",
+        "stamped_at": "2026-10-17T17:04:20.193096+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -2788,7 +2824,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 50.3,
-        "stamped_at": "2026-09-04T15:08:58.710965+00:00",
+        "stamped_at": "2026-10-17T17:04:20.193096+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -2801,7 +2837,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 49.6,
-        "stamped_at": "2026-09-04T15:08:58.710965+00:00",
+        "stamped_at": "2026-10-17T17:04:20.193096+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -3757,7 +3793,7 @@
     }
   },
   "financial-theory/fundamentals/day-count.en.md": {
-    "md5": "bfa1db06c6c4f417a75fdbdacf5ec6da",
+    "md5": "bef2ffc66b8c397becaa8ab67d15ca72",
     "langs_done": [
       "es",
       "fr",
@@ -3767,15 +3803,15 @@
     "analysis_model": "deepseek/deepseek-v4-flash:free",
     "langs": {
       "it": {
-        "stamped_at": "2026-10-12T18:38:07.957651+00:00",
+        "stamped_at": "2026-10-17T01:46:43.140339+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
-        "stamped_at": "2026-10-12T18:38:07.957651+00:00",
+        "stamped_at": "2026-10-17T01:46:43.140339+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
-        "stamped_at": "2026-10-12T18:38:07.957651+00:00",
+        "stamped_at": "2026-10-17T01:46:43.140339+00:00",
         "stamped_by": "translate-stamp"
       }
     },
@@ -5332,7 +5368,7 @@
     }
   },
   "user/transactions/import/index.en.md": {
-    "md5": "34fd2e9e75d72373adb7cd16e492350f",
+    "md5": "52c28c5c760749d481573df4335f996d",
     "langs_done": [
       "es",
       "fr",
@@ -5352,7 +5388,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 184.8,
-        "stamped_at": "2026-10-12T10:53:12.220391+00:00",
+        "stamped_at": "2026-10-17T06:08:50.588319+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5365,7 +5401,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 142.0,
-        "stamped_at": "2026-10-12T10:53:12.220391+00:00",
+        "stamped_at": "2026-10-17T06:08:50.588319+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5378,13 +5414,13 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 126.6,
-        "stamped_at": "2026-10-12T10:53:12.220391+00:00",
+        "stamped_at": "2026-10-17T06:08:50.588319+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "user/transactions/form.en.md": {
-    "md5": "fed2a338f7cabc02ca25b1ecfffbf07e",
+    "md5": "1c64e717ce148c8da8fb5fcd85d43a8b",
     "langs_done": [
       "es",
       "fr",
@@ -5404,7 +5440,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 243.1,
-        "stamped_at": "2026-10-13T18:31:57.773028+00:00",
+        "stamped_at": "2026-10-15T01:38:10.321035+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5417,7 +5453,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 297.5,
-        "stamped_at": "2026-10-13T18:31:57.773028+00:00",
+        "stamped_at": "2026-10-15T01:38:10.321035+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5430,7 +5466,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 222.8,
-        "stamped_at": "2026-10-13T18:31:57.773028+00:00",
+        "stamped_at": "2026-10-15T01:38:10.321035+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6358,7 +6394,7 @@
     "analysis_model": "deepseek-ai/DeepSeek-V4.1-Flash"
   },
   "user/dashboard/kpi-cards.en.md": {
-    "md5": "715f106f11369133b6657ee96f7a9e32",
+    "md5": "86ef964ccd3014f9886d130d60948313",
     "langs_done": [
       "es",
       "fr",
@@ -6378,7 +6414,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 252.4,
-        "stamped_at": "2026-10-13T02:20:37.543145+00:00",
+        "stamped_at": "2026-10-17T13:59:45.832951+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6391,7 +6427,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 333.3,
-        "stamped_at": "2026-10-13T02:20:37.543145+00:00",
+        "stamped_at": "2026-10-17T13:59:45.832951+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6406,13 +6442,13 @@
         "elapsed_s": 219.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=70, translated=77 (Δ+7)\n  L67: src=0 trn=1\n    EN: During the period you bought 10 units for €400, when they were worth 500 USD. At the end of the period they are worth 55\n    TR: Durante el periodo compraste 10 unidades por €400, cuando valían 500 USD. Al final del periodo valen 550 USD, y 1 USD = \n  L90: src=1 trn=2\n    EN: - **TWRR** — how your asset choices performed, whatever the timing of your deposits → [TWRR](../../financial-theory/tech\n    TR: - **TWRR** — cómo rindieron tus elecciones de activos, independientemente del timing de tus **depósitos** → [TWRR](../..\n  L95: src=3 trn=5\n    EN: - **Favorable timing** (green): you tended to deposit before prices rose. **Unfavorable timing** (red): you tended to de\n    TR: - **Timing favorable** (verde): tendiste a **depositar** antes de que subieran los precios. **Timing desfavorable** (roj\n  L98: src=1 trn=2\n    EN: - **`—` means no value**: a return LibreFolio cannot compute for the period shows `—` instead of a number. The timing ef\n    TR: - **`—` significa sin valor**: una rentabilidad que LibreFolio no puede calcular para el periodo muestra `—` en lugar de\n  L122: src=1 trn=2\n    EN: - **Net Worth** — the big number: securities at market value, plus cash, plus anything in transit between your brokers →\n    TR: - **Patrimonio neto** — el número grande: valores a precio de mercado, más efectivo, más cualquier importe **en tránsito\n  L127: src=1 trn=2\n    EN: - **Deposited Capital (Period)** — deposits minus withdrawals in the period, green to the right and red to the left; hov\n    TR: - **Capital depositado (Periodo)** — **depósitos** menos retiros en el periodo, verde a la derecha y rojo a la izquierda\n\nSOURCE_OUTLINE (for reference):\n  # 💰 KPI Cards\n    ## 📉 Card 1 — Period P&L {: #card-1-period-pl }\n      ### 💱 Unrealized change by currency {: #unrealized-change-by-currency }\n    ## 📈 Card 2 — Returns {: #card-2-returns }\n    ## 💰 Card 3 — Net Worth {: #card-3-net-worth }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-13T02:20:37.543145+00:00",
+        "stamped_at": "2026-10-17T13:59:45.832951+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "user/dashboard/charts.en.md": {
-    "md5": "436647e55202365337ce462d3856b6a0",
+    "md5": "d441e03de61e06fd1fe61876d22ecb93",
     "langs_done": [
       "es",
       "fr",
@@ -6432,7 +6468,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 247.2,
-        "stamped_at": "2026-10-12T02:45:03.889334+00:00",
+        "stamped_at": "2026-10-15T17:45:23.899769+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6445,7 +6481,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 215.1,
-        "stamped_at": "2026-10-12T02:45:03.889334+00:00",
+        "stamped_at": "2026-10-15T17:45:23.899769+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6458,7 +6494,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 183.7,
-        "stamped_at": "2026-10-12T02:45:03.889334+00:00",
+        "stamped_at": "2026-10-15T17:45:23.899769+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6510,7 +6546,7 @@
     }
   },
   "user/transactions/import/how-to.en.md": {
-    "md5": "6477f1244645483cf479781e57db014d",
+    "md5": "5b3d315c551fa1ed8dea76cc68b1268d",
     "langs_done": [
       "es",
       "fr",
@@ -6530,7 +6566,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 167.7,
-        "stamped_at": "2026-10-12T20:06:19.905304+00:00",
+        "stamped_at": "2026-10-17T06:08:45.031967+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6545,7 +6581,7 @@
         "elapsed_s": 173.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=114, translated=115 (Δ+1)\n  L3: src=1 trn=2\n    EN: The **Import Wizard** turns the reports you download from your broker into transactions. You check\n    TR: L'**Assistant d'importation** transforme les rapports que vous téléchargez depuis votre courtier en transactions. Vous v\n  L4: src=1 trn=0\n    EN: what it read and settle its doubts; nothing is saved until you press **Save All**.\n    TR: \n  L9: src=0 trn=1\n    EN: \n    TR: 1. Exportez un rapport de transactions depuis votre courtier : sa page dans les **[Courtiers pris en charge](index.md)**\n  L10: src=1 trn=2\n    EN: 1. Export a transaction report from your broker: its page in **[Supported Brokers](index.md)** says\n    TR: 2. Sur la page **[Transactions](../index.md)**, cliquez sur **Importer** (:material-file-upload:).\n  L12: src=2 trn=1\n    EN: 2. On the **[Transactions](../index.md)** page, click **Import** (:material-file-upload:).\n    TR: 4. Cliquez sur **Importer N transactions** : les lignes s'ouvrent dans l'espace de travail groupé, pas encore enregistré\n  L13: src=0 trn=1\n    EN: 3. Drop the report into the wizard, assign it to its broker and follow the steps below.\n    TR: 5. Jetez-y un dernier coup d'œil et cliquez sur **Tout enregistrer**.\n  L14: src=1 trn=0\n    EN: 4. Click **Import N transactions**: the rows open in the bulk workspace, not saved yet.\n    TR: \n  L15: src=1 trn=0\n    EN: 5. Give them a last look and click **Save All**.\n    TR: <div class=\"lf-screenshot-carousel\" data-carousel=\"carousel-import-wizard\" data-carousel-interval=\"6000\" data-show-title\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 🧙 How to Import Transactions\n    ## 🚀 Step-by-Step Guide\n    ## 🧙 The Import Wizard Steps\n      ### 📤 Step 1: Upload\n        #### 🧭 A file in the wrong broker {: #wrong-broker }\n      ### 🗂️ Step 2: Select Files\n      ### 🧠 Step 3: Parse\n      ### 🧩 Steps that appear only when needed {: #only-when-needed }\n      ### 📦 Step 4: Review {: #review }\n        #### 🗂️ Match each security\n        #### 🚦 Read the status badges\n        #### ⛔ Rows before the broker's opening date {: #opening-date }\n        #### 📥 Import the rows\n      ### 💾 Save in the bulk workspace\n    ## 🧭 Guided First Import {: #guided-first-import }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-12T20:06:19.905304+00:00",
+        "stamped_at": "2026-10-17T06:08:45.031967+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6558,13 +6594,13 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 161.9,
-        "stamped_at": "2026-10-12T20:06:19.905304+00:00",
+        "stamped_at": "2026-10-17T06:08:45.031967+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "user/brokers/import.en.md": {
-    "md5": "2fb763ba0c961ce0566b7ad8fc2457b4",
+    "md5": "6327ae7e8e22b0ed577f885c09bd47fc",
     "langs_done": [
       "es",
       "fr",
@@ -6583,7 +6619,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Mandatory glossary deviation — “bulk workspace”**: The translation uses “Lo spazio di lavoro in blocco” in the link text `[Lo spazio di lavoro in blocco](../transactions/index.md#bulk-workspace)`. The glossary requires **bulk workspace → workspace bulk**. Correct this to: `[Il workspace bulk](../transactions/index.md#bulk-workspace)`.\n- **Mandatory glossary deviation — “broker report”**: In `(BRIM, il modulo di importazione dei report dei broker)`, the glossary requires **broker report → report del broker**. Change to `(BRIM, il modulo di importazione dei report del broker)` or, if treating it as a module name, `Modulo di importazione dei report del broker`.\n- **Grammar/syntax error**: `e [Contribuisci](../../community/contribute.md) il flusso di lavoro` is missing a verb in Italian and does not correctly render the English ellipsis “and [Contribute] the workflow”. Correct to: `e [Contribuisci](../../community/contribute.md) descrive il flusso di lavoro` (or `spiega il flusso di lavoro`).\n- **Terminology consistency — “workspace”**: Since the glossary mandates **workspace bulk**, the translation should not mix in “spazio di lavoro” for the product term “workspace”. Prefer consistent use of “workspace” throughout: `Lo spazio di lavoro delle transazioni` → `Il workspace delle transazioni`; `nello spazio di lavoro` → `nel workspace`; `allo spazio di lavoro` → `al workspace`.\n- **Semantic precision — “newest first”**: `dalla più recente` is understandable but incomplete. Better render the sorting explicitly: `dalla più recente alla più vecchia`.\n- **Natural Italian / article use**: `Caricare ed eliminare report richiede accesso come Proprietario o Editor al broker` should be `Caricare ed eliminare report richiede l'accesso come Proprietario o Editor al broker` or `richiede l'accesso al broker come Proprietario o Editor`.\n- **Minor fluency**: `La stessa procedura guidata si apre da **Importa** nella pagina [Transazioni]` is slightly awkward. Better: `La stessa procedura guidata si apre dalla voce **Importa** nella pagina [Transazioni]` or `dal pulsante **Importa**`.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 196.4
+        "elapsed_s": 196.4,
+        "stamped_at": "2026-10-16T05:55:24.763389+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-09T23:59:57.795830+00:00",
@@ -6594,7 +6632,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology (mandatory glossary)**: `l'**Assistant d'import**` should be `l'**Assistant d'importation**`. The glossary explicitly maps “import wizard” → “assistant d’importation”. Also adjust the expansion for consistency: `le module d'import des rapports de courtier` → `le module d'importation des rapports de courtier`.\n- **Terminology (mandatory glossary)**: `**Ensemble de rapports**` and `[Ensembles de rapports]` must use the glossary mapping “report set” → “lot de rapports”. Replace with `**Lot de rapports**` and `[Lots de rapports]`.\n- **Terminology (mandatory glossary)**: `[L'espace de travail en masse]` should be `[L'espace de travail groupé]`. The glossary maps “bulk workspace” → “espace de travail groupé”.\n- **Grammar**: `c'est ainsi que sont importés les banques` is incorrect because `banques` is feminine plural. Correct to `c'est ainsi que sont importées les banques` or rephrase as `c'est ainsi que l'on importe les banques`.\n- **Terminology consistency (recommended)**: If `form one set` refers to the report-set concept, use `forment un lot` instead of `forment un ensemble` to align with the mandatory `report set` → `lot de rapports` mapping.\n- **Minor consistency**: `Les propriétaires et les éditeurs` could be capitalized as `Les Propriétaires et les Éditeurs` when referring to role labels, matching the later `Propriétaire ou Éditeur`. This is not a glossary violation, but it improves UI-label consistency.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 263.2
+        "elapsed_s": 263.2,
+        "stamped_at": "2026-10-16T05:55:24.763389+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-09T23:59:57.795898+00:00",
@@ -6605,7 +6645,9 @@
         "critique": "<translation_critique>\n<improvements>\n\n1. **Pronombre ambiguo en la descripción del filtro de fechas**\n   - Texto actual: «Siempre muestra todo el historial del bróker: el rango de fechas de la barra de herramientas no lo filtra.»\n   - Problema: En el original, «it» remite a la lista/pestaña («does not filter it»), mientras que «lo» en español remite a «historial» (masculino), lo que cambia ligeramente el referente.\n   - Corrección sugerida: «Siempre muestra todo el historial del bróker: el rango de fechas de la barra de herramientas no la filtra.» (o reformular: «…no filtra la lista.»).\n\n2. **Inconsistencia en la capitalización de los roles**\n   - Texto actual (dos usos distintos): «Los propietarios y editores también disponen de…» y «…requiere acceso de Propietario o Editor al bróker.»\n   - Problema: El glosario fija `owner → propietario` y `editor → editor` en minúscula. La segunda aparición capitaliza los roles de forma injustificada.\n   - Corrección sugerida: «…requiere acceso de propietario o editor al bróker.»\n\n3. **Desviación del glosario en «broker report»**\n   - Texto actual: «(BRIM, el módulo de importación de informes de bróker)»\n   - Problema: El glosario especifica `broker report → informe del bróker`, no «informe de bróker».\n   - Corrección sugerida: «(BRIM, el módulo de importación de informes del bróker)».\n\n4. **Elipsis verbal poco clara en la lista de recursos**\n   - Texto actual: «la [Guía de plugins de BRIM](…) explica el contrato de plugins, y [Contribuir](…) el flujo de trabajo.»\n   - Problema: La elipsis de «explica/enlaza a» funciona en inglés, pero en español deja la segunda oración sin verbo y se lee forzada; puede interpretarse como si faltara texto.\n   - Corrección sugerida: «la [Guía de plugins de BRIM](…) explica el contrato de plugins, y en [Contribuir](…) se describe el flujo de trabajo.» (mismo contenido, sin notas añadidas).\n\n5. **«Encima de la lista» puede leerse como «sobre/en lo alto de»**\n   - Texto actual: «Encima de la lista encontrarás…»\n   - Problema: En español, «encima de» tiene un matiz físico que aquí induce a confusión; la colocación de los controles es inmediatamente superior en la interfaz.\n   - Corrección sugerida: «Por encima de la lista encontrarás…» o «Arriba de la lista encontrarás…».\n\n6. **Verbo «lista» como transitivo directo (estilístico, menor)**\n   - Texto actual: «La pestaña **Transacciones** de un bróker lista todas sus transacciones…»\n   - Problema: Es aceptable, pero menos idiomático que otras opciones en documentación técnica.\n   - Corrección sugerida: «…enumera todas sus transacciones…» o «…muestra todas sus transacciones…».\n\nNota positiva: se preservan correctamente los encabezados, los emoji (📥, ➕, 🔎, 🧙, 🧩, 🗂️), el bloque HTML con sus atributos, los enlaces relativos y el bloque `??? tip`, así como las negritas de las etiquetas de interfaz; además se respetan las correspondencias del glosario para `transaction`, `broker`, `import wizard`, `report set`, `bulk workspace` y `broker report` (salvo el punto 3).\n\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 191.3
+        "elapsed_s": 191.3,
+        "stamped_at": "2026-10-16T05:55:24.763389+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -8852,7 +8894,7 @@
     }
   },
   "user/settings/profile.en.md": {
-    "md5": "ee81e8e4a121b7c837aca32908b6312f",
+    "md5": "b0cde443d618717f39490115def47995",
     "langs_done": [
       "es",
       "fr",
@@ -8874,7 +8916,7 @@
         "elapsed_s": 810.3,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=25, translated=26 (Δ+1)\n  L17: src=1 trn=2\n    EN: Hover your avatar (while unlocked) and click the 📷 camera overlay to open the image picker: choose an existing image fro\n    TR: Passa il mouse sull'avatar (mentre la scheda è sbloccata) e fai clic sull'overlay della fotocamera 📷 per aprire il selet\n\nSOURCE_OUTLINE (for reference):\n  # 👤 Profile\n    ## 🔒 Edit Lock\n    ## 🖼️ Avatar\n    ## ✏️ Username, Email, Account Created\n    ## 🔐 Security\n      ### 🔑 Change Password\n      ### 🗑️ Delete Account\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-10T08:18:48.806263+00:00",
+        "stamped_at": "2026-10-15T03:20:01.011150+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -8887,7 +8929,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 649.1,
-        "stamped_at": "2026-10-10T08:18:48.806263+00:00",
+        "stamped_at": "2026-10-15T03:20:01.011150+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -8900,7 +8942,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 794.5,
-        "stamped_at": "2026-10-10T08:18:48.806263+00:00",
+        "stamped_at": "2026-10-15T03:20:01.011150+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -9422,7 +9464,7 @@
     }
   },
   "user/connection-security.en.md": {
-    "md5": "95e2f75069a6b18cd309088ec6762d57",
+    "md5": "ed3e331cb5c32ba2864c40db44850341",
     "langs_done": [
       "es",
       "fr",
@@ -9442,7 +9484,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 188.6,
-        "stamped_at": "2026-10-12T13:17:57.454941+00:00",
+        "stamped_at": "2026-10-15T03:20:03.517742+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -9455,7 +9497,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 281.6,
-        "stamped_at": "2026-10-12T13:17:57.454941+00:00",
+        "stamped_at": "2026-10-15T03:20:03.517742+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -9468,7 +9510,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 224.4,
-        "stamped_at": "2026-10-12T13:17:57.454941+00:00",
+        "stamped_at": "2026-10-15T03:20:03.517742+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -11382,6 +11424,32 @@
         "index": 17,
         "stamped_at": "2026-10-13T10:09:41.105355+00:00",
         "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "CHANGELOG.md#1.2.1": {
+    "md5": "7c6421137bc3fc41d9a23bc678bf5d44",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-10-14T17:22:03.938430+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-10-15T10:14:50.434407+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 0
+      },
+      "fr": {
+        "stamped_at": "2026-10-15T10:14:50.434407+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 0
+      },
+      "es": {
+        "stamped_at": "2026-10-15T10:14:50.434407+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 0
       }
     }
   }

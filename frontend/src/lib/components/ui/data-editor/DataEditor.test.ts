@@ -9,8 +9,9 @@
  * drive a toolbar button, a cell, or a row-action menu item, and assert the
  * *payload the parent receives*. That payload is the contract.
  *
- * What is deliberately left to the E2E suite: the date cell's embedded
- * SingleDatePicker (handleDateChange). CSV import is exercised here through a
+ * The date cell's embedded SingleDatePicker is opened here only to read which days
+ * a new row may take and to pick one (I-11d); the picker's own behaviour belongs to
+ * SingleDatePicker.test.ts. CSV import is exercised here through a
  * tiny caller-supplied snippet because the dated-vs-identified dispatch is pure
  * component state and needs no browser or backend.
  */
@@ -21,13 +22,16 @@ import {addMessages, waitLocale} from 'svelte-i18n';
 import {render, screen, fireEvent, setupI18n, waitFor, within} from '$test/component';
 import {_ as translate} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import DataEditor from './DataEditor.svelte';
 import type {ColumnDef, DataRow} from './DataEditorTypes';
 import CsvEditor from './CsvEditor.svelte';
-import type {CsvColumnDef, ParsedRow} from './CsvEditor.svelte';
+import type {CsvColumnDef, CsvIdentityDef, ParsedRow} from './CsvEditor.svelte';
+import DataImportModal from './DataImportModal.svelte';
 import DistributionDataImportModal from '$lib/components/assets/DistributionDataImportModal.svelte';
 import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
-import EventDataImportModal from '$lib/components/assets/EventDataImportModal.svelte';
+import EventDataImportModal, {unescapeFormulaText} from '$lib/components/assets/EventDataImportModal.svelte';
+import PriceDataImportModal from '$lib/components/assets/PriceDataImportModal.svelte';
 import DataEditorImportHarness from '$test/harness/DataEditorImportHarness.svelte';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
@@ -224,9 +228,9 @@ const CSV_COLUMNS: CsvColumnDef[] = [
     {key: 'amount', label: 'amount', type: 'number', required: true},
 ];
 
-async function parsedCsv(value: string, columns: CsvColumnDef[] = CSV_COLUMNS) {
+async function parsedCsv(value: string, columns: CsvColumnDef[] = CSV_COLUMNS, identity?: CsvIdentityDef) {
     const onvalidchange = vi.fn();
-    render(CsvEditor, {columns, value, onvalidchange});
+    render(CsvEditor, {columns, identity, value, onvalidchange});
     await waitFor(() => expect(onvalidchange).toHaveBeenCalled());
     return onvalidchange.mock.calls.at(-1) as [ParsedRow[], number, boolean];
 }
@@ -673,7 +677,127 @@ describe('DataEditor — an event import matches on date and type (importMatchKe
 
         expect(dirty.map(saved)).toEqual([{rowId: '101', status: 'edited', date: D, type: 'INTEREST', amount: 2}]);
     });
+
+    describe('the date picker of a new row (I-11d)', () => {
+        // A new row's date is picked in a SingleDatePicker whose calendar refuses every date another row holds —
+        // the row's own date excepted —, and `handleDateChange` refuses those dates a second time. For prices and
+        // FX rates, one row per date, that is the rule. For events it is not: one date holds a DIVIDEND and an
+        // INTEREST, yet a new DIVIDEND could not be moved to a day holding only an INTEREST. The contract, with
+        // `importMatchKeys`: a new row is refused only the dates of the other rows whose values for those keys
+        // equal its own, and its own date stays open; with no keys, every other row's date, as today.
+        //
+        // Read through the rendered calendar — a day is `calendar-day`, named by its `data-iso`, and disabled when
+        // refused — and through the dirty rows the parent receives once a day is picked. FREE_DAY, a day no row
+        // holds, is the control that the calendar refuses by rule and not because every day is closed.
+        //
+        // Red today: the new DIVIDEND's calendar refuses DAY_2, which holds only an INTEREST, and the row cannot
+        // move there.
+
+        /** Holds the original DIVIDEND — with rate rows, simply another row. */
+        const DAY_1 = '2024-03-04';
+        /** Holds the original INTEREST — with rate rows, simply another row. */
+        const DAY_2 = '2024-03-11';
+        /** The new row's day, and its rowId, as for a row added by the + button. */
+        const NEW_DAY = '2024-03-18';
+        /** No row holds it. */
+        const FREE_DAY = '2024-03-25';
+        const NEW: Partial<DataRow> = {status: 'appended', originalStatus: 'appended'};
+
+        /** An original DIVIDEND, an original INTEREST and a new DIVIDEND, each on its own day. */
+        const eventRows = (): DataRow[] => [eventRow('101', DAY_1, 'DIVIDEND', 1), eventRow('102', DAY_2, 'INTEREST', 2), eventRow(NEW_DAY, NEW_DAY, 'DIVIDEND', 3, NEW)];
+
+        function mountEvents(rows: DataRow[], importMatchKeys?: string[]) {
+            const onchange = vi.fn();
+            const {container} = render(DataEditor, {props: {columns: EVENT_COLS, rows, importMatchKeys, onchange}});
+            return {onchange, container};
+        }
+
+        /**
+         * The open calendar of row `rowId` — only a new row's date cell holds a picker. The picker's state is
+         * read before its button is clicked: the button toggles, and a blind click would close an open calendar.
+         */
+        async function calendarOf(container: HTMLElement, rowId: string): Promise<HTMLElement> {
+            const cell = container.querySelector<HTMLElement>(`tr[data-row-id="${rowId}"] td[data-column-id="date"]`);
+            if (!cell) throw new Error(`no date cell in row ${rowId}`);
+            const picker = within(cell).getByTestId('single-date-picker-root');
+            if (picker.getAttribute('data-open') !== 'true') await fireEvent.click(within(picker).getByTestId('single-date-picker-calendar-button'));
+            expect(picker, `the calendar of row ${rowId} is open`).toHaveAttribute('data-open', 'true');
+            return within(picker).getByTestId('single-date-picker-popover');
+        }
+
+        function dayOf(calendar: HTMLElement, iso: string): HTMLButtonElement {
+            const day = calendar.querySelector<HTMLButtonElement>(`[data-testid="calendar-day"][data-iso="${iso}"]`);
+            if (!day) throw new Error(`the calendar shows no ${iso}`);
+            return day;
+        }
+
+        /** Whether the calendar of row `rowId` refuses each of the four days. */
+        async function refusedDays(container: HTMLElement, rowId: string): Promise<Record<string, boolean>> {
+            const calendar = await calendarOf(container, rowId);
+            return Object.fromEntries([DAY_1, DAY_2, NEW_DAY, FREE_DAY].map((iso) => [iso, dayOf(calendar, iso).disabled]));
+        }
+
+        /** Click the day `iso` in the calendar of row `rowId`, as a user picks it. */
+        async function pickDay(container: HTMLElement, rowId: string, iso: string): Promise<void> {
+            await fireEvent.click(dayOf(await calendarOf(container, rowId), iso));
+        }
+
+        /** Every dirty set the parent received, each row by its status and date. */
+        const emitted = (onchange: ReturnType<typeof vi.fn>) => onchange.mock.calls.map(([dirty]) => (dirty as DataRow[]).map((r) => ({status: r.status, date: r.date})));
+
+        it('the calendar of a new DIVIDEND refuses the day of another DIVIDEND, not the day of an INTEREST, nor its own', async () => {
+            const {container} = mountEvents(eventRows(), ['type']);
+
+            expect(await refusedDays(container, NEW_DAY)).toEqual({[DAY_1]: true, [DAY_2]: false, [NEW_DAY]: false, [FREE_DAY]: false});
+        });
+
+        it('a new DIVIDEND picked onto the day of an INTEREST moves there: still new, and handed to the parent on that day', async () => {
+            const {onchange, container} = mountEvents(eventRows(), ['type']);
+
+            await pickDay(container, NEW_DAY, DAY_2);
+
+            expect((lastDirty(onchange) ?? []).map(savedNew)).toEqual([{status: 'appended', date: DAY_2, type: 'DIVIDEND', amount: 3}]);
+        });
+
+        it('a new DIVIDEND picked onto the day of another DIVIDEND stays where it is, while a free day takes it (guard)', async () => {
+            const {onchange, container} = mountEvents(eventRows(), ['type']);
+
+            await pickDay(container, NEW_DAY, DAY_1);
+            expect(onchange, 'the refused pick changed nothing').not.toHaveBeenCalled();
+
+            await pickDay(container, NEW_DAY, FREE_DAY);
+            expect(emitted(onchange), 'control: the same row does move, to a day no row holds').toEqual([[{status: 'appended', date: FREE_DAY}]]);
+        });
+
+        it.each([
+            {setup: 'rate rows, as for prices and FX', mountRows: () => mount([row(DAY_1, 1), row(DAY_2, 2), row(NEW_DAY, 3, NEW)])},
+            {setup: 'the event rows', mountRows: () => mountEvents(eventRows())},
+        ])('without importMatchKeys ($setup) every other row’s day stays refused, and a pick onto one changes nothing (guard)', async ({mountRows}) => {
+            const {onchange, container} = mountRows();
+
+            expect(await refusedDays(container, NEW_DAY)).toEqual({[DAY_1]: true, [DAY_2]: true, [NEW_DAY]: false, [FREE_DAY]: false});
+
+            await pickDay(container, NEW_DAY, DAY_2);
+            expect(onchange, 'the refused pick changed nothing').not.toHaveBeenCalled();
+
+            await pickDay(container, NEW_DAY, FREE_DAY);
+            expect(emitted(onchange), 'control: the same row does move, to a day no row holds').toEqual([[{status: 'appended', date: FREE_DAY}]]);
+        });
+    });
 });
+
+/** The events import modal, open, with a spy on what it hands on. */
+function eventImportModal() {
+    const onimport = vi.fn();
+    render(EventDataImportModal, {open: true, onimport});
+    return {onimport};
+}
+
+/** The rows handed to `onimport` by its single call. */
+function importedRows(onimport: ReturnType<typeof vi.fn>): ParsedRow[] {
+    expect(onimport).toHaveBeenCalledTimes(1);
+    return onimport.mock.calls[0][0] as ParsedRow[];
+}
 
 describe('EventDataImportModal — a file written by the events export imports back', () => {
     // `GET /api/v1/backup/asset/{id}/events?format=csv` (backend/app/api/v1/backup.py) writes this
@@ -681,18 +805,6 @@ describe('EventDataImportModal — a file written by the events export imports b
     // modal does not know. The modal requires `amount`; the column definition carries `value` as an
     // alias, looked up only when the `amount` label itself is absent.
     const EXPORT_HEADER = 'date;type;value;currency;source;provider_assignment_id;notes;created_at;updated_at';
-
-    function eventImportModal() {
-        const onimport = vi.fn();
-        render(EventDataImportModal, {open: true, onimport});
-        return {onimport};
-    }
-
-    /** The rows handed to `onimport` by its single call. */
-    function importedRows(onimport: ReturnType<typeof vi.fn>): ParsedRow[] {
-        expect(onimport).toHaveBeenCalledTimes(1);
-        return onimport.mock.calls[0][0] as ParsedRow[];
-    }
 
     it('accepts the export header verbatim and reads the amount from `value`', async () => {
         // Before the fix: "Missing required columns: amount", so every data row waits on the header.
@@ -722,6 +834,213 @@ describe('EventDataImportModal — a file written by the events export imports b
         const rows = importedRows(onimport);
         expect(rows).toHaveLength(1);
         expect(rows[0]).toMatchObject({kind: 'dated', date: '2026-03-16', values: {type: 'DIVIDEND', amount: 1.5}});
+    });
+});
+
+// =====================================================================================================================
+// B-39 — a formula-like text, escaped by the export, imports back as it was written (written red first)
+// =====================================================================================================================
+
+/*
+ * The series export writes a text a spreadsheet would run as a formula (one starting with `=`, `+`, `-`, `@`, a tab or
+ * a CR, after any apostrophes; a plain number never) with one more leading `'`. The events import drops exactly one
+ * again: the module script of EventDataImportModal.svelte exports `unescapeFormulaText(raw)`, and the modal's `notes`
+ * column parses with it (CsvEditor calls a string column's `parse` only for a non-empty, trimmed cell).
+ *
+ * Red today: the modal exports no `unescapeFormulaText`. Vite reads a missing export of a module it transforms as
+ * `undefined`, so each case of the function fails on its own call and the rest of this file runs as before; the
+ * modal's case is red because the `notes` column hands the apostrophe on.
+ */
+
+/** As the export writes it, then as the import must read it: exactly one leading apostrophe dropped. */
+const ONE_APOSTROPHE_DROPPED: Array<[string, string]> = [
+    ["'=1+1", '=1+1'],
+    ["'@x", '@x'],
+    ["'-2+3", '-2+3'],
+    ["'+cmd", '+cmd'],
+    ["''=x", "'=x"],
+    ["'''@y", "''@y"],
+    ["'\t=1", '\t=1'],
+    ["'\r=1", '\r=1'],
+];
+
+/** Texts the import leaves as they are: no apostrophe stands before a formula character. */
+const UNCHANGED: Array<[string, string]> = [
+    ['an apostrophe before a letter', "'hello"],
+    ['a formula with no apostrophe to drop', '=1'],
+    ['a plain number, which the export never escapes', '-1.5'],
+    ['an equals sign inside the text', 'a = b'],
+    ['two apostrophes and nothing after them', "''"],
+];
+
+/** The originals the export escapes, each written with one more leading apostrophe (its Python: `"'" + text`). */
+const ESCAPED_BY_THE_EXPORT: Array<[string, string]> = [
+    ['a formula', '=1+1'],
+    ['an at sign', '@x'],
+    ['a minus that starts no number', '-2+3'],
+    ['a plus', '+cmd'],
+    ['a formula behind one apostrophe', "'=x"],
+    ['an at sign behind two apostrophes', "''@y"],
+    ['a tab', '\t=1'],
+    ['a carriage return', '\r=1'],
+];
+
+describe('B-39 — unescapeFormulaText: the events import drops the one apostrophe the export added', () => {
+    it.each(ONE_APOSTROPHE_DROPPED)('%j → %j: one apostrophe dropped', (exported, expected) => {
+        expect(unescapeFormulaText(exported)).toBe(expected);
+    });
+
+    it.each(UNCHANGED)('%s (%j): unchanged', (_what, text) => {
+        expect(unescapeFormulaText(text)).toBe(text);
+    });
+
+    it.each(ESCAPED_BY_THE_EXPORT)('the round trip of %s (%j): exported with one more apostrophe, imported as the original', (_what, original) => {
+        expect(unescapeFormulaText(`'${original}`), 'export, then import').toBe(original);
+    });
+});
+
+describe('B-39 — EventDataImportModal: the notes column drops the apostrophe the export added', () => {
+    it('a note the export escaped imports back as it was written; a note it left alone stays as it is', async () => {
+        const {onimport} = eventImportModal();
+        // The header the events export writes (the case above), and three notes as it writes them.
+        const csv = [
+            'date;type;value;currency;source;provider_assignment_id;notes;created_at;updated_at',
+            "2026-03-15;DIVIDEND;0.37;USD;MANUAL;;'=1+1;2026-03-15T10:00:00;2026-03-15T10:00:00",
+            "2026-03-16;DIVIDEND;0.38;USD;MANUAL;;''@y;2026-03-16T10:00:00;2026-03-16T10:00:00",
+            "2026-03-17;DIVIDEND;0.39;USD;MANUAL;;'hello;2026-03-17T10:00:00;2026-03-17T10:00:00",
+        ].join('\r\n');
+        const confirm = await enterDistributionCsv(csv);
+
+        await expectImportValidation(confirm, {validRows: 3, errors: 0});
+        await fireEvent.click(confirm);
+
+        expect(importedRows(onimport)).toMatchObject([
+            {kind: 'dated', date: '2026-03-15', values: {notes: '=1+1'}},
+            {kind: 'dated', date: '2026-03-16', values: {notes: "'@y"}},
+            {kind: 'dated', date: '2026-03-17', values: {notes: "'hello"}},
+        ]);
+    });
+});
+
+describe('CSV import — two lines are duplicates only when their date and every matchKey value agree (I-11a)', () => {
+    // CsvEditor flags as duplicates — and leaves out of the import — every line that shares its date with another,
+    // whatever else the two lines say. For prices and FX rates, one row per date, that is the rule. For asset events
+    // it is not: a DIVIDEND and a SPLIT of one day were both dropped (the data editor's page states it as a limit).
+    // The contract: a column marked `matchKey` (CsvColumnDef) belongs to a line's identity, and two lines are
+    // duplicates only when their date — or identity value, in an identity editor — and the value of every matchKey
+    // column are equal. The events modal marks its `type`; prices, FX rates and distributions mark nothing, and
+    // keep one line per date.
+    //
+    // Read from what the editor and the modal publish — the rows handed on, the error count, the duplicate flag —,
+    // never from the message, whose wording of the key is free.
+    //
+    // Red today: the flag is ignored, so two lines that differ only in a matchKey column are duplicates, and the
+    // events modal drops a DIVIDEND and a SPLIT of one day.
+
+    const DAY = '2024-01-02';
+    const OTHER_DAY = '2024-01-09';
+
+    /** `tag` belongs to a line's identity, `amount` does not. */
+    const TAG_KEY: CsvColumnDef[] = [
+        {key: 'tag', label: 'tag', type: 'string', required: true, matchKey: true},
+        {key: 'amount', label: 'amount', type: 'number', required: true},
+    ];
+    /** Two matchKey columns: a line's identity takes both. */
+    const TAG_AND_CURRENCY_KEYS: CsvColumnDef[] = [
+        {key: 'tag', label: 'tag', type: 'string', required: true, matchKey: true},
+        {key: 'currency', label: 'currency', type: 'string', required: true, matchKey: true},
+        {key: 'amount', label: 'amount', type: 'number', required: true},
+    ];
+
+    it.each([
+        {
+            editor: 'a dated editor, one matchKey column',
+            columns: TAG_KEY,
+            identity: undefined,
+            csv: `date;tag;amount\n${DAY};A;1\n${DAY};B;2`,
+            expected: [
+                {kind: 'dated', date: DAY, values: {tag: 'A', amount: 1}, lineNumber: 2},
+                {kind: 'dated', date: DAY, values: {tag: 'B', amount: 2}, lineNumber: 3},
+            ],
+        },
+        {
+            editor: 'a dated editor, two matchKey columns, the second one differing',
+            columns: TAG_AND_CURRENCY_KEYS,
+            identity: undefined,
+            csv: `date;tag;currency;amount\n${DAY};A;USD;1\n${DAY};A;EUR;2`,
+            expected: [
+                {kind: 'dated', date: DAY, values: {tag: 'A', currency: 'USD', amount: 1}, lineNumber: 2},
+                {kind: 'dated', date: DAY, values: {tag: 'A', currency: 'EUR', amount: 2}, lineNumber: 3},
+            ],
+        },
+        {
+            editor: 'an identity editor, one matchKey column',
+            columns: TAG_KEY,
+            identity: {key: 'name', label: 'name'},
+            csv: 'name;tag;amount\nalpha;A;1\nalpha;B;2',
+            expected: [
+                {kind: 'identified', identity: 'alpha', values: {tag: 'A', amount: 1}, lineNumber: 2},
+                {kind: 'identified', identity: 'alpha', values: {tag: 'B', amount: 2}, lineNumber: 3},
+            ],
+        },
+    ])('$editor: two lines that differ in a matchKey value are both kept', async ({columns, identity, csv, expected}) => {
+        const [rows, errors, duplicates] = await parsedCsv(csv, columns, identity);
+
+        expect({rows, errors, duplicates}).toEqual({rows: expected, errors: 0, duplicates: false});
+    });
+
+    it.each([
+        {
+            lines: 'the same matchKey value, another amount',
+            columns: TAG_KEY,
+            csv: `date;tag;amount\n${DAY};A;1\n${DAY};A;2\n${OTHER_DAY};A;3`,
+            kept: {kind: 'dated', date: OTHER_DAY, values: {tag: 'A', amount: 3}, lineNumber: 4},
+        },
+        {
+            lines: 'no matchKey column, another value in a required string column',
+            columns: CSV_COLUMNS,
+            csv: `date;note;amount\n${DAY};x;1\n${DAY};y;2\n${OTHER_DAY};x;3`,
+            kept: {kind: 'dated', date: OTHER_DAY, values: {note: 'x', amount: 3}, lineNumber: 4},
+        },
+    ])('two lines of one date with $lines are still duplicates, both left out (guard)', async ({columns, csv, kept}) => {
+        const [rows, errors, duplicates] = await parsedCsv(csv, columns);
+
+        // The line of the other day is the control: duplicates leave out their own lines, not the whole paste.
+        expect({rows, errors, duplicates}).toEqual({rows: [kept], errors: 0, duplicates: true});
+    });
+
+    it('the events modal keeps a DIVIDEND and a SPLIT of one day, and hands both on with their types', async () => {
+        const {onimport} = eventImportModal();
+        const confirm = await enterDistributionCsv(`date;type;amount\n${DAY};DIVIDEND;0.37\n${DAY};SPLIT;2`);
+
+        await expectImportValidation(confirm, {validRows: 2, errors: 0, duplicates: false});
+        await fireEvent.click(confirm);
+
+        expect(importedRows(onimport)).toMatchObject([
+            {kind: 'dated', date: DAY, values: {type: 'DIVIDEND', amount: 0.37}},
+            {kind: 'dated', date: DAY, values: {type: 'SPLIT', amount: 2}},
+        ]);
+    });
+
+    it('the events modal still leaves out two DIVIDENDs of one day (guard)', async () => {
+        const {onimport} = eventImportModal();
+        const confirm = await enterDistributionCsv(`date;type;amount\n${DAY};DIVIDEND;0.37\n${DAY};DIVIDEND;0.41\n${OTHER_DAY};DIVIDEND;0.39`);
+
+        await expectImportValidation(confirm, {validRows: 1, errors: 0, duplicates: true});
+        await fireEvent.click(confirm);
+
+        expect(importedRows(onimport), 'only the line of the other day is handed on').toMatchObject([{kind: 'dated', date: OTHER_DAY, values: {type: 'DIVIDEND', amount: 0.39}}]);
+    });
+
+    it('the prices modal still leaves out two lines of one day in two currencies: the rule is matchKey, not any required string column (guard)', async () => {
+        const onimport = vi.fn();
+        render(PriceDataImportModal, {open: true, onimport});
+        const confirm = await enterDistributionCsv(`date;currency;close\n${DAY};USD;145.5\n${DAY};EUR;133.2\n${OTHER_DAY};USD;146.1`);
+
+        await expectImportValidation(confirm, {validRows: 1, errors: 0, duplicates: true});
+        await fireEvent.click(confirm);
+
+        expect(importedRows(onimport), 'only the line of the other day is handed on').toMatchObject([{kind: 'dated', date: OTHER_DAY, values: {currency: 'USD', close: 146.1}}]);
     });
 });
 
@@ -801,6 +1120,48 @@ describe('DataEditor — a value rendered into an html cell stays text (K step 1
     });
 });
 
+// ---------------------------------------------------------------------------
+// The marker locale — shared by the describes below that ask whether a label comes from the catalogue
+// ---------------------------------------------------------------------------
+// A private-use language where every key of the English catalogue, and each key a cure adds, reads as a
+// marker of itself (`⟦common.status⟧`, or `⟦key n=3⟧` for a message given values): a label the component
+// takes from the catalogue reads its marker, a literal written in the component reads as itself. That asks
+// whether the code uses the key, never what a language says; whether the four catalogues have the key is
+// asked of the JSON files (`catalogueGaps`). Each describe that switches to it puts English back after
+// every test.
+
+/** A private-use language (BCP 47 reserves qaa–qtz): Intl accepts it, and it is none of the app's catalogues. */
+const MARKER_LOCALE = 'qaa';
+/** The four shipped catalogues, by language. */
+const SHIPPED_CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+
+/** How a label reads in the marker locale: `⟦key⟧`, or `⟦key n=3⟧` for a message given values. */
+const marked = (key: string, values: Record<string, string | number> = {}): string => `⟦${[key, ...Object.entries(values).map(([name, value]) => `${name}=${value}`)].join(' ')}⟧`;
+
+/** The value behind a dotted key of a catalogue, if any. */
+const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+
+/** Every dotted key of a catalogue that holds a string. */
+function stringKeysOf(node: unknown, prefix = ''): string[] {
+    if (typeof node === 'string') return [prefix];
+    if (node === null || typeof node !== 'object') return [];
+    return Object.entries(node).flatMap(([part, child]) => stringKeysOf(child, prefix ? `${prefix}.${part}` : part));
+}
+
+/** Each of `keys` that some catalogue has no string for, with those catalogues: `{}` when all four have all of them. */
+function catalogueGaps(keys: readonly string[]): Record<string, string[]> {
+    const gaps = keys.map((key) => [key, Object.entries(SHIPPED_CATALOGUES).flatMap(([lang, catalogue]) => (typeof leafOf(catalogue, key) === 'string' ? [] : [lang]))] as const);
+    return Object.fromEntries(gaps.filter(([, langs]) => langs.length > 0));
+}
+
+/** Switch svelte-i18n to the marker locale: every key of the English catalogue reads as its marker, and so does every key of `added` — a key the cure adds, with the names of its values. */
+async function useMarkerLocale(added: Record<string, readonly string[]>): Promise<void> {
+    const messages: Record<string, string> = Object.fromEntries(stringKeysOf(en).map((key) => [key, marked(key)]));
+    for (const [key, names] of Object.entries(added)) messages[key] = marked(key, Object.fromEntries(names.map((name) => [name, `{${name}}`])));
+    addMessages(MARKER_LOCALE, messages);
+    await setupI18n(MARKER_LOCALE);
+}
+
 describe('DataEditor — the status column is labelled from the catalogues (P, item 8)', () => {
     // The status column (hidden until the column menu shows it) is English written in the code: the
     // header 'Status', the filter options 'Original', 'Edited', 'Deleted' and 'New', and a badge that
@@ -819,37 +1180,6 @@ describe('DataEditor — the status column is labelled from the catalogues (P, i
     //
     // Red today: header and menu read 'Status'; badges and options 'Original', 'Edited', 'Deleted' and
     // 'New'; no catalogue has `dataEditor.status`.
-
-    /** A private-use language (BCP 47 reserves qaa–qtz): Intl accepts it, and it is none of the app's catalogues. */
-    const MARKER_LOCALE = 'qaa';
-    const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
-
-    /** How a label reads in the marker locale: `⟦key⟧`, or `⟦key n=3⟧` for a message given values. */
-    const marked = (key: string, values: Record<string, string | number> = {}): string => `⟦${[key, ...Object.entries(values).map(([name, value]) => `${name}=${value}`)].join(' ')}⟧`;
-
-    /** The value behind a dotted key of a catalogue, if any. */
-    const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
-
-    /** Every dotted key of a catalogue that holds a string. */
-    function stringKeysOf(node: unknown, prefix = ''): string[] {
-        if (typeof node === 'string') return [prefix];
-        if (node === null || typeof node !== 'object') return [];
-        return Object.entries(node).flatMap(([part, child]) => stringKeysOf(child, prefix ? `${prefix}.${part}` : part));
-    }
-
-    /** Each of `keys` that some catalogue has no string for, with those catalogues: `{}` when all four have all of them. */
-    function catalogueGaps(keys: readonly string[]): Record<string, string[]> {
-        const gaps = keys.map((key) => [key, Object.entries(CATALOGUES).flatMap(([lang, catalogue]) => (typeof leafOf(catalogue, key) === 'string' ? [] : [lang]))] as const);
-        return Object.fromEntries(gaps.filter(([, langs]) => langs.length > 0));
-    }
-
-    /** Switch svelte-i18n to the marker locale: every key of the English catalogue reads as its marker, and so does every key of `added` — a key the cure adds, with the names of its values. */
-    async function useMarkerLocale(added: Record<string, readonly string[]>): Promise<void> {
-        const messages: Record<string, string> = Object.fromEntries(stringKeysOf(en).map((key) => [key, marked(key)]));
-        for (const [key, names] of Object.entries(added)) messages[key] = marked(key, Object.fromEntries(names.map((name) => [name, `{${name}}`])));
-        addMessages(MARKER_LOCALE, messages);
-        await setupI18n(MARKER_LOCALE);
-    }
 
     const STATUSES = ['original', 'edited', 'deleted', 'appended'] as const;
     type Status = (typeof STATUSES)[number];
@@ -921,6 +1251,177 @@ describe('DataEditor — the status column is labelled from the catalogues (P, i
 
         const said = Object.fromEntries(STATUSES.map((status) => [status, {badge: badges[status], option: options[status]}]));
         expect(said).toEqual(Object.fromEntries(STATUSES.map((status) => [status, {badge: marked(statusKey(status)), option: expect.stringContaining(marked(statusKey(status)))}])));
+    });
+});
+
+describe('DataEditor — the toolbar counters and the stale-rows switch are labelled from the catalogues (P-15, W part)', () => {
+    // The toolbar counts the rows the user has changed in English written in the code — «2 modified»,
+    // «1 deleted», «3 new» — and names the switch that hides the stale rows «Hide 2 stale rows», then
+    // «Show 2 stale rows»: the same English in Italian, French and Spanish, and read aloud by a screen
+    // reader. The contract: each counter reads `dataEditor.counter.<status>` (edited, deleted, appended)
+    // with `n` its number of rows; the switch is named `dataEditor.staleHide` while the stale rows show and
+    // `dataEditor.staleShow` once they are hidden — today's ternary — with `n` the number of stale rows.
+    //
+    // Read in the marker locale (above); control: the add-row button, already `common.addRow`, reads its
+    // marker. The counters have no handle of their own, so they are looked for among the texts the editor
+    // writes outside its grid, element by element: a red lists what the toolbar says instead.
+    //
+    // Red today: the counters read «2 modified», «1 deleted», «3 new»; the switch «Hide 2 stale rows», then
+    // «Show 2 stale rows»; no catalogue has the five keys.
+
+    const COUNTERS = [
+        {status: 'edited', key: 'dataEditor.counter.edited', n: 2},
+        {status: 'deleted', key: 'dataEditor.counter.deleted', n: 1},
+        {status: 'appended', key: 'dataEditor.counter.appended', n: 3},
+    ] as const;
+    const STALE_SHOW = 'dataEditor.staleShow';
+    const STALE_HIDE = 'dataEditor.staleHide';
+    /** The keys the cure adds, each given `n`. */
+    const ADDED_KEYS = [...COUNTERS.map(({key}) => key), STALE_SHOW, STALE_HIDE];
+
+    const squash = (text: string): string => text.replace(/\s+/g, ' ').trim();
+
+    beforeEach(async () => {
+        await useMarkerLocale(Object.fromEntries(ADDED_KEYS.map((key) => [key, ['n']])));
+    });
+
+    afterEach(async () => {
+        await setupI18n('en');
+    });
+
+    /** Mount `rows`, and check that the marker locale is live. */
+    function mountMarked(rows: DataRow[]): HTMLElement {
+        const {container} = mount(rows);
+        expect(screen.getByTestId('fx-data-add-row-btn'), 'control: a label the editor already takes from the catalogue reads its marker').toHaveTextContent(marked('common.addRow'));
+        return container;
+    }
+
+    /**
+     * One original row, then as many rows in each status as its counter will say: 2 edited, 1 deleted,
+     * 3 appended — three different numbers, so a counter handed another one's count is caught. Each row on
+     * its own day, its rowId, as for prices.
+     */
+    function countedRows(): DataRow[] {
+        let day = 0;
+        const nextDay = (): string => `2024-06-${String(++day).padStart(2, '0')}`;
+        return [row(nextDay()), ...COUNTERS.flatMap(({status, n}) => Array.from({length: n}, () => row(nextDay(), 1, {status, originalStatus: status === 'appended' ? 'appended' : 'original'})))];
+    }
+
+    /** What the editor writes outside its grid — its toolbar —, element by element: each element's own text. */
+    function textsOutsideGrid(): string[] {
+        return [...screen.getByTestId('data-editor-root').querySelectorAll('*')]
+            .filter((element) => element.closest('table') === null)
+            .map((element) => squash([...element.childNodes].map((node) => (node.nodeType === Node.TEXT_NODE ? (node.textContent ?? '') : '')).join('')))
+            .filter((text) => text !== '');
+    }
+
+    it('the four catalogues have the five new labels', () => {
+        expect(catalogueGaps(ADDED_KEYS), 'key → the catalogues with no string for it').toEqual({});
+    });
+
+    it('each counter reads dataEditor.counter.<status>, its n the number of rows in that status', () => {
+        mountMarked(countedRows());
+
+        expect(textsOutsideGrid(), 'what the editor writes outside its grid').toEqual(expect.arrayContaining(COUNTERS.map(({key, n}) => marked(key, {n}))));
+    });
+
+    it('the stale-rows switch is named dataEditor.staleHide while they show, dataEditor.staleShow once they are hidden, its n the number of stale rows', async () => {
+        const container = mountMarked([row('2024-06-10'), row('2024-06-01', 1, {staleDays: 5}), row('2024-06-02', 1, {staleDays: 3})]);
+        const toggle = within(screen.getByTestId('data-editor-stale-toggle')).getByRole('switch');
+        expect(toggle, 'premise: the stale rows show').toHaveAttribute('aria-checked', 'false');
+        const whileShown = toggle.getAttribute('aria-label');
+
+        await fireEvent.click(toggle);
+        await waitFor(() => expect(container.querySelector('tr[data-row-id="2024-06-01"]'), 'premise: the click hid the stale rows').toBeNull());
+        expect(toggle).toHaveAttribute('aria-checked', 'true');
+        const whileHidden = toggle.getAttribute('aria-label');
+
+        expect({whileShown, whileHidden}).toEqual({whileShown: marked(STALE_HIDE, {n: 2}), whileHidden: marked(STALE_SHOW, {n: 2})});
+    });
+});
+
+describe('DataImportModal — the help and close buttons are named from the catalogues (W-B8)', () => {
+    // The import modal's header names its two icon buttons in English written in the code: aria-label
+    // «Help» on the help toggle — whose title is already `csvImport.helpTitle` — and «Close» on ✕, the same
+    // English to a screen reader in Italian, French and Spanish. The contract: the help button is named
+    // `csvImport.helpTitle`, like its title, and the close button `common.close`; both keys exist.
+    //
+    // Read in the marker locale (above), on the events import modal: it gives help content and no header
+    // action, so its header holds exactly these two buttons. The help button is the one titled with the
+    // marker of `csvImport.helpTitle` — which is also the control that the locale is live —, and the close
+    // button is the other one, proved by what a click on it does.
+    //
+    // Red today: «Help» and «Close».
+
+    beforeEach(async () => {
+        await useMarkerLocale({});
+    });
+
+    afterEach(async () => {
+        await setupI18n('en');
+    });
+
+    it('the help button is named csvImport.helpTitle, the close button common.close', async () => {
+        const onclose = vi.fn();
+        render(EventDataImportModal, {open: true, onclose});
+        const buttons = within(await screen.findByTestId('data-import-modal-header')).getAllByRole('button');
+        expect(buttons, 'premise: the header holds the help button and the close button').toHaveLength(2);
+        const help = buttons.find((button) => button.getAttribute('title') === marked('csvImport.helpTitle'));
+        if (!help) throw new Error(`control: no header button is titled ${marked('csvImport.helpTitle')}: the help button lost its title, or the marker locale is not live (titles: ${JSON.stringify(buttons.map((button) => button.getAttribute('title')))})`);
+        const close = buttons.find((button) => button !== help);
+        if (!close) throw new Error('premise: the header holds a second button besides the help button');
+        const said = {help: help.getAttribute('aria-label'), close: close.getAttribute('aria-label')};
+
+        await fireEvent.click(close);
+        expect(onclose, 'premise: the other header button closes the modal').toHaveBeenCalledTimes(1);
+
+        expect(said).toEqual({help: marked('csvImport.helpTitle'), close: marked('common.close')});
+    });
+});
+
+describe('DataImportModal — the footer Cancel and the discard confirmation are named by test id (X-R9)', () => {
+    // The footer's Cancel button has no test id, and neither has the confirmation the modal raises before it throws
+    // away what the user typed: a spec reaches them only through their translated text, a selector the project
+    // forbids. The contract: Cancel is `data-import-cancel`; the discard confirmation — a ConfirmModal, which puts
+    // its `testId` on its header — is `data-import-discard-confirm`. What they do does not change: a clean modal
+    // closes at once; one holding typed data asks first, from Cancel as from ✕ (`data-import-modal-close`, already
+    // named), and the confirmation's confirm closes it.
+    //
+    // Red today: neither test id exists.
+
+    /** The generic import modal, open on two columns, with a spy on its close. */
+    function importModal() {
+        const onclose = vi.fn();
+        render(DataImportModal, {open: true, columns: CSV_COLUMNS, onclose});
+        return {onclose};
+    }
+
+    it('on a clean modal, data-import-cancel closes it at once, asking nothing', async () => {
+        const {onclose} = importModal();
+        expect(await screen.findByTestId('data-import-modal'), 'premise: the modal is open').toBeInTheDocument();
+
+        await fireEvent.click(screen.getByTestId('data-import-cancel'));
+
+        expect(onclose).toHaveBeenCalledTimes(1);
+        await waitFor(() => expect(screen.queryByTestId('data-import-modal')).toBeNull());
+        expect(screen.queryByTestId('confirm-modal-message'), 'no confirmation was raised').toBeNull();
+    });
+
+    it.each(['data-import-cancel', 'data-import-modal-close'])('on a modal holding typed data, %s asks first, in data-import-discard-confirm, whose confirm closes it', async (closeButton) => {
+        const {onclose} = importModal();
+        const confirm = await enterDistributionCsv('date;note;amount\n2024-01-02;typed;1');
+        await expectImportValidation(confirm, {validRows: 1, errors: 0}); // premise: the typed line reached the modal
+
+        await fireEvent.click(screen.getByTestId(closeButton));
+
+        expect(await screen.findByTestId('confirm-modal-message'), 'premise: a confirmation is on screen').toBeInTheDocument();
+        expect(screen.queryByTestId('data-import-discard-confirm'), 'the confirmation on screen is data-import-discard-confirm').not.toBeNull();
+        expect(onclose, 'nothing is thrown away before the user confirms').not.toHaveBeenCalled();
+        expect(screen.getByTestId('data-import-modal'), 'the import modal stays open behind it').toBeInTheDocument();
+
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+        expect(onclose).toHaveBeenCalledTimes(1);
+        await waitFor(() => expect(screen.queryByTestId('data-import-modal')).toBeNull());
     });
 });
 
@@ -1040,5 +1541,68 @@ describe('DataEditor — the date column and the numbers in the interface langua
         const titled = [...cellOf(container, STALE, 'date').querySelectorAll('[title]')];
         expect(titled, 'the stale row’s date cell carries one titled marker').toHaveLength(1);
         expect(titled[0].getAttribute('title')).toBe(expected);
+    });
+});
+
+/**
+ * C-97c-1 (decision D-C97c-1 of the coordinator, 17/10) — a readonly row's number keeps the digits a price needs.
+ *
+ * The number cell of a readonly row (in the app, an event a provider generated: its amount per share) is written with
+ * `Number(value).toLocaleString(uiLocale(), {maximumFractionDigits: 4})`, so a value of 0.000003457312 reads `0`. The
+ * contract: `formatPrice(Number(value), {minDecimals: 0, floorDecimals: 4})` — up to four decimals as today, more when
+ * the first four significant digits need them, never padded. Red: 0.000003457312 reads 0.000003457. Guards, green today
+ * and after: 1.5 reads 1.5, 1.23456 reads 1.2346.
+ *
+ * A cell is found by its header's position, as the blocks above do. English UI, set through the store: jsdom's browser
+ * is en-US, so the expectations are typed.
+ */
+describe('DataEditor — a readonly row’s number keeps the digits a price needs (C-97c-1, D-C97c-1)', () => {
+    /** One readonly row per value of the editable `rate` column. */
+    const TINY = '2026-02-02';
+    const ONE_DECIMAL = '2026-02-03';
+    const FIVE_DECIMALS = '2026-02-04';
+    const squash = (text: string | null | undefined): string => (text ?? '').replace(/\s+/g, ' ').trim();
+
+    /** DataTable marks the header, not the cell: the header's position names the cell of a row. */
+    function cellOf(container: HTMLElement, rowId: string, columnId: string): Element {
+        const header = container.querySelector(`th[data-testid="dt-header-${columnId}"]`);
+        const tr = container.querySelector(`tr[data-row-id="${rowId}"]`);
+        if (!header?.parentElement || !tr) throw new Error(`no ${columnId} header, or no row ${rowId}`);
+        const cell = tr.children[[...header.parentElement.children].indexOf(header)];
+        if (cell?.tagName !== 'TD') throw new Error(`no ${columnId} cell in row ${rowId}`);
+        return cell;
+    }
+
+    /** The English UI, set as LanguageSelector sets it: on jsdom's en-US browser it is written en-US. */
+    async function english(): Promise<void> {
+        currentLanguage.set('en');
+        await waitLocale('en');
+        await tick();
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+    }
+
+    /** The rate cell of each readonly row, once the three rows are drawn. */
+    async function readonlyRates(): Promise<Record<string, string>> {
+        const {container} = mount([row(TINY, 0.000003457312, {readonly: true}), row(ONE_DECIMAL, 1.5, {readonly: true}), row(FIVE_DECIMALS, 1.23456, {readonly: true})]);
+        await waitFor(() => [TINY, ONE_DECIMAL, FIVE_DECIMALS].forEach((rowId) => cellOf(container, rowId, 'rate')));
+        return Object.fromEntries([TINY, ONE_DECIMAL, FIVE_DECIMALS].map((rowId) => [rowId, squash(cellOf(container, rowId, 'rate').textContent)]));
+    }
+
+    it('0.000003457312 reads 0.000003457 — four significant digits, not 0', async () => {
+        await english();
+
+        expect((await readonlyRates())[TINY]).toBe('0.000003457');
+    });
+
+    it('guard: 1.5 reads 1.5 — no padding', async () => {
+        await english();
+
+        expect((await readonlyRates())[ONE_DECIMAL]).toBe('1.5');
+    });
+
+    it('guard: 1.23456 reads 1.2346 — four decimals, rounded', async () => {
+        await english();
+
+        expect((await readonlyRates())[FIVE_DECIMALS]).toBe('1.2346');
     });
 });

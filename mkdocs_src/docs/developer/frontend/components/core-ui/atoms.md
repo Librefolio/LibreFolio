@@ -86,7 +86,12 @@ A **drag-and-drop reorderable list** (`ui/OrderableList.svelte`).
 A **password field with visibility toggle** (eye icon).
 
 - Toggle between `type="password"` and `type="text"`
-- Eye / EyeOff icon from lucide-svelte
+- Eye / EyeOff icon from lucide-svelte, on a `type="button"` that never submits the form and is
+  disabled with the field
+- The eye button is named after what a press does: `aria-label` and `title` are
+  `$_('auth.showPassword')` while the field is masked, `$_('auth.hidePassword')` while it shows the
+  text. It is in the tab order, and has no `aria-pressed` on purpose: a toggle whose name changes
+  must not also report a pressed state (WAI-ARIA APG, Button pattern)
 - `autocomplete` (`current-password` by default, or `new-password`, `off`, `on`), `id` and `name`
   are passed to the input: password managers rely on them — see the
   [password-manager contract](../features/auth.md#password-manager-contract)
@@ -95,19 +100,23 @@ A **password field with visibility toggle** (eye icon).
 
 ---
 
-## 💪 PasswordStrength
+## 💪 PasswordStrength {: #passwordstrength }
 
 *Located in `lib/components/ui/input/`*
 
 A **password strength indicator** powered by `@zxcvbn-ts/core`.
 
-- Color-coded strength bar (red → orange → yellow → lime → green) with a label, from score 0
-  (very weak) to 4 (very strong)
-- With `showRules` (default), a checklist of the five rules: 8 characters, uppercase, lowercase,
-  number, special character
+- Strength bar with a label, from score 0 (very weak) to 4 (very strong), in three colours: danger,
+  warning, success
+- With `showRules` (default), a checklist of the
+  [password rules](../../../architecture/security.md#password-rules) the server publishes
+  (`GET /system/instance`), the five of release 1.3 until it answers, or of the rules a caller passes
+  in `rules`, such as a secure backup's; its bindable `valid` tells a form whether they all hold
 - Hidden while the password is empty
 
-**Used by**: [RegisterCard](../features/auth.md) (below password field), `PasswordChangeModal`.
+Details: [PasswordStrength](../features/auth.md#passwordstrength).
+
+**Used by**: [RegisterCard](../features/auth.md) (below password field), `ResetPasswordCard`, `PasswordChangeModal`, `BackupDownloadCard` (a secure backup's password, with `rules`).
 
 ---
 
@@ -119,15 +128,55 @@ A **decimal text field that never goes through a JavaScript number**.
 
 - `type="text"` with `inputmode="decimal"`: `,` and `.` both work as the decimal separator, and
   characters that can never belong to a number are filtered out while typing
+- A number pasted in scientific notation is read exactly, never stripped of its `e` (W-B66;
+  `filterDecimalInput`, and `normalizeDecimalInput` for every field that reads through it, in
+  `lib/utils/core/parseDecimalInput.ts`): a text that is wholly such a number, with `.` or `,` as
+  its decimal mark, is expanded to a plain decimal when its exponent is within ±100
+  (`MAX_DECIMAL_EXPONENT`, the backend's bound): `1e-8` → `0.00000001`, `1,5E+3` → `1500`. The
+  usual checks then apply to the result. Any other text holding an exponent — past ±100
+  (`3E+150`), or not wholly a number (`1e5x`, `1.234,5e2`) — stays as typed, invalid, with a
+  `<p>` after the field: `data-testid="<testid>-exponent-error"`, `data-max` 100, and
+  `common.decimalExponentOutOfRange` (*Write the number out in full…*). A text without an
+  exponent filters as before: a lone typed `e` is dropped, `EUR 12,34` gives `12,34`. Before, the
+  filter dropped the `e`, so a pasted `1e-8` became `18`, silently
 - `value` (bindable string) is the field text; on blur or Enter a valid value is rewritten in
-  canonical form (`.` separator, trailing zeros trimmed), then `oncommit` fires
+  canonical form (`.` separator, trailing zeros trimmed), then `oncommit` fires. An invalid value
+  stays as typed: never cut, never coerced on blur
 - Validation is exact: digit budget (`maxIntegerDigits`, `maxFractionDigits`, default 12 each),
-  `min`/`max` (strings, compared as exact decimals), `required`, `allowNegative`;
+  `min`/`max` (strings, compared as exact decimals with the value stripped of the zeros the budget
+  does not count, once the digits fit the budget: a longer value is invalid anyway, and comparing
+  the text would build a BigInt of every pasted digit, zeros included), `required`,
+  `allowNegative`;
   `onvaliditychange` reports `{normalized, empty, syntaxValid, requiredValid, digitsValid,
-  rangeValid, valid}`, and `externalInvalid` lets the parent mark it invalid
+  rangeValid, valid}`, and `externalInvalid` lets the parent mark it invalid. The digits are
+  counted as the backend counts them (`_digit_counts` in `backend/app/db/precision.py`; W-B64):
+  leading integer zeros and trailing fraction zeros are not digits of the value, so
+  `0.10000000000` has one decimal, `5.0` none and `007` one integer digit.
+  `decimalDigitCounts(value)` (`lib/utils/core/parseDecimalInput.ts`) gives these counts for a
+  canonical decimal, with the value without those zeros (`stripped`). So `0.10000000000` is valid
+  at `maxFractionDigits={10}`, `5.0` at `maxFractionDigits={0}` (the PAC priority fields; a blur
+  commits it as `5`) and `0000000000001.5` at the default 12 integer digits
+- A fraction longer than `maxFractionDigits`, its trailing zeros not counted, is flagged
+  (`digitsValid: false`, `aria-invalid`, red border) and also said under the field: a `<p>`
+  rendered right after the `<input>`, as its sibling, with
+  `data-testid="<testid>-digits-error"` (when `testid` is set), `data-max` set to the
+  budget, and a text that follows the budget (`common.decimalPlacesExceeded`, an ICU plural):
+  *Whole numbers only* for `maxFractionDigits={0}`, as in the PAC priority fields,
+  *At most 1 decimal place* for 1, *At most N decimal places* above. It is withdrawn as soon as
+  the value is back within the budget. Too many integer digits and the other limits are flagged
+  without a message. The field has no `maxlength`: the browser silently cut a longer paste down to
+  a number that looked valid
 - ↑/↓ step by `step` in exact decimal arithmetic, clamped to the bounds (to 0 without
   `allowNegative`); `accelerateOnHold` (default `false`) climbs by powers of ten while the key is
-  held
+  held. A value whose text fits the budget steps from that text, its typed places kept (`1.50` →
+  `2.50` at step 1); one whose text is longer, within the budget only because the zeros it starts
+  or ends with are not counted, steps from the value without them, so no BigInt is as long as the
+  text (`5.` followed by 40 000 zeros, ↑ at step 1 → `6`; W-B64). A value past the digit budget,
+  or a text kept for its exponent, is not stepped
+- The checks stay linear on a long paste: the regular expressions of `normalizeDecimalInput` and
+  `formatDecimalForDisplay` (`lib/utils/core/formatDecimal.ts`) and its trailing-zero strip used
+  to backtrack quadratically, about 3 s on a 40 000-character text, in the paster's own tab (W-B66);
+  `decimalDigitCounts` drops its zeros with two loops, never a `/0+$/`, for the same reason
 
 **Used by**: the PAC planner steps (targets, routing, fees, liquidity, prices).
 
@@ -142,11 +191,19 @@ A **decimal text field that never goes through a JavaScript number**.
 - `value` is always the normalized draft (`.` separator), while the text the user types stays in a
   private buffer: a parent echoing the value back never rewrites `1,20` into `1.20` mid-typing;
   `resetKey` forces the buffer to reload
+- A new value from the parent is shown in canonical form (`formatDecimalForDisplay`: `.`
+  separator, trailing zeros trimmed) when its digits fit the budget, counted as `ExactDecimalInput`
+  counts them: `0.10000000000` at `maxFractionDigits={10}` is shown `0.1` (W-B64). A value past
+  the budget is shown as given, and refused: formatting would cut it to fit
 - `signRule`: `positive`, `negative`, `nonzero`, `zero` or `any` (default) — a sign that breaks the
   rule makes the value invalid and the border red, a matching one turns it green
 - `accelerateOnHold` defaults to `true`
+- `testid` is passed to the inner field, so the message under it is `<testid>-digits-error`
 
-**Used by**: the quantity field of `TransactionFormModal`.
+**Used by**: the quantity field of `TransactionFormModal` (`tx-form-quantity`), with at most 15
+integer digits (the backend's limit for a quantity, decision N63) and 10 fraction digits (the 10
+decimals the backend keeps for a quantity), so a longer fraction shows
+`tx-form-quantity-digits-error`.
 
 ---
 

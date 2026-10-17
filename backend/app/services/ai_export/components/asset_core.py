@@ -81,6 +81,7 @@ from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.financial_math.valuation import compute_holding_value
+from backend.app.services.lots_analysis_service import analysis_failure_codes
 
 # =============================================================================
 # Static methodology text for asset.provenance (never user/provider content)
@@ -88,7 +89,11 @@ from backend.app.services.financial_math.valuation import compute_holding_value
 
 _VALUATION_SOURCE_SEMANTICS: tuple[AssetValuationSourceSemantic, ...] = (
     AssetValuationSourceSemantic(code="MARKET_PRICE", description="Valued at the latest observed market price, converted to the report's target currency."),
-    AssetValuationSourceSemantic(code="LAST_TRADE_PRICE", description="No market price was available; valued at the last observed transaction price (BUY, SELL or priced ADJUSTMENT) carried forward — a real trade, not an observed market return."),
+    AssetValuationSourceSemantic(code="LAST_TRADE_PRICE", description="No market price was available; valued at the last observed transaction price (BUY or SELL; an ADJUSTMENT is never a price) carried forward — a real trade, not an observed market return."),
+    AssetValuationSourceSemantic(
+        code="ESTIMATED_AT_COST",
+        description="No price at all (no market quote, no BUY or SELL): valued at the position's book cost in the report's target currency, the purchases converted at their own dates — an estimate, not a price; it carries no unit_price and no unrealized P&L.",
+    ),
     AssetValuationSourceSemantic(code="MISSING", description="No valuation could be determined by any hierarchy step; the position is excluded from valued totals."),
 )
 
@@ -345,7 +350,7 @@ async def _build_positions_by_broker(context: BuildContext, dependencies: Mappin
             quantity=h.quantity,
             valuation_source=h.valuation_source,
             wac_per_unit=h.wac_per_unit,
-            unit_price=(h.current_value / h.quantity if h.current_value is not None and h.quantity != 0 else None),
+            unit_price=(h.current_value / h.quantity if h.current_value is not None and h.quantity != 0 and h.valuation_source != "ESTIMATED_AT_COST" else None),
             current_value=h.current_value,
             unrealized_gain_loss=h.gain_loss,
             unrealized_gain_loss_percent=h.gain_loss_percent,
@@ -504,10 +509,12 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
     scope = context.scope
     assert scope is not None
     lots_response = await context.db_resource(ASSET_LOTS_RESOURCE, load_asset_lots(scope))
+    failed = lots_response.calculation_status == "FAILED"
 
     eligible_lots = []
     omitted_degraded_lot_count = 0
-    for lot in lots_response.lots or ():
+    # A FAILED reconstruction exports no lot: every figure of its replay would be wrong (J-12, N81).
+    for lot in () if failed else (lots_response.lots or ()):
         # Eligibility follows the shared FIFO status semantics
         # (`FifoEngineResult.get_lot_states()`): open/partial iff
         # `open_quantity != 0`, always retained regardless of `closing_date`.
@@ -543,8 +550,9 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
         start=1,
     ):
         custody = tuple(AssetLotCustodyRow(broker_id=slice_.broker_id, custody_type=slice_.custody_type, quantity=slice_.quantity) for slice_ in lot.current_custody)
-        # F6: market value of the lot at its opening date. The reference unit price (market quote at
-        # open, or the buy-price fallback used by the lots service) is quoted per quote_base_quantity
+        # F6: market value of the lot at its opening date. The reference unit price (a lot opened by an
+        # ADJUSTMENT: the home's mark on that day — a market quote or a BUY/SELL price, carried forward;
+        # otherwise the lot's own price, as the lots service resolves it) is quoted per quote_base_quantity
         # units, so the lot is valued like every holding: quantity / quote_base_quantity × price.
         # None when no reference exists.
         opening_market_value = compute_holding_value(lot.original_quantity, lot.reference_unit_price, lots_response.quote_base_quantity) if lot.reference_unit_price is not None else None
@@ -583,6 +591,8 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
         period=DateRangeModel(start=scope.period_start, end=scope.period_end),
         target_currency=lots_response.target_currency,
         cost_allocation_semantics="Lot fees and taxes include only costs deterministically allocated to this Asset's lots. Broker-level unallocated costs are not included and must not be interpreted as zero.",
+        lot_reconstruction_status=lots_response.calculation_status,
+        failure_codes=tuple(analysis_failure_codes(lots_response)),
         lots=tuple(rows),
         omitted_degraded_lot_count=omitted_degraded_lot_count,
         unavailable_amount_lot_count=sum(1 for row in rows if _has_unavailable_amount(row)),
@@ -625,7 +635,7 @@ ASSET_POSITION_SCOPE_SPEC = ComponentSpec(
 
 ASSET_PROVENANCE_SPEC = ComponentSpec(
     component_id="asset.provenance",
-    version=1,
+    version=2,  # v2 (J-17): an ADJUSTMENT is never a price; ESTIMATED_AT_COST semantics
     domains=frozenset({Domain.ASSET}),
     output_model=AssetProvenancePayload,
     builder=_build_provenance,
@@ -635,7 +645,7 @@ ASSET_PROVENANCE_SPEC = ComponentSpec(
 
 ASSET_POSITIONS_BY_BROKER_SPEC = ComponentSpec(
     component_id="asset.positions_by_broker",
-    version=1,
+    version=2,  # v2 (J-17): valuation_source may be ESTIMATED_AT_COST
     domains=frozenset({Domain.ASSET}),
     output_model=AssetPositionsByBrokerPayload,
     builder=_build_positions_by_broker,
@@ -682,7 +692,9 @@ def _has_unavailable_amount(row: AssetLotDetailRow) -> bool:
 
 ASSET_LOT_DETAIL_SPEC = ComponentSpec(
     component_id="asset.lot_detail",
-    version=3,  # v2 (F6): opening_reference_unit_price/_source + opening_market_value; v3 (B3b): unvalued amounts are null
+    # v2 (F6): opening_reference_unit_price/_source + opening_market_value; v3 (B3b): unvalued amounts are null;
+    # v4 (J-12): lot_reconstruction_status + failure_codes, and a FAILED reconstruction exports no lot
+    version=4,
     domains=frozenset({Domain.ASSET}),
     output_model=AssetLotDetailPayload,
     builder=_build_lot_detail,

@@ -52,7 +52,7 @@
 <DataImportModal bind:open {columns} {identity} {title} strict={true} {validateRows} onimport={handleImport} {onclose}>
     {#snippet headerActions()}
         <button
-            class="rounded p-1 text-gray-400 transition-colors hover:text-libre-green focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70"
+            class="rounded p-1 text-lf-muted transition-colors hover:text-lf-link focus:outline-none focus-visible:ring-2 focus-visible:ring-lf-focus/70"
             onclick={openDocs}
             type="button"
             title={$t('common.documentation')}

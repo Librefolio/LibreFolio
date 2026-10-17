@@ -194,7 +194,8 @@
     "units": {
       "days": "giorni",
       "sessions": "sedute",
-      "percentPerYear": "%/anno"
+      "percentPerYear": "%/anno",
+      "observations": "osservazioni"
     },
     "visual": {
       "components": "Componenti",
@@ -204,6 +205,10 @@
     "reference": {
       "zero": "Zero"
     },
+    "gapsJoined": {
+      "label": "vuoti uniti",
+      "warning": "Troppi vuoti da disegnare: la linea li unisce."
+    },
     "regions": {
       "oversoldDescription": "Estremo inferiore sotto la soglia configurata.",
       "neutralDescription": "Intervallo centrale tra le soglie configurate.",
@@ -212,12 +217,6 @@
     "comparisonAsset": {
       "placeholder": "Seleziona asset di confronto",
       "loadError": "Impossibile caricare gli asset."
-    },
-    "riskRollingReturn": {
-      "name": "Rendimento mobile",
-      "description": "Rendimento composto del solo prezzo su una finestra mobile.",
-      "output": "Rendimento",
-      "outputDescription": "Rendimento composto del periodo di detenzione, in punti percentuali."
     }
   }
 }

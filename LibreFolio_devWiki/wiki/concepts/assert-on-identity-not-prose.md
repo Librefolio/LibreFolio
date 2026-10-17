@@ -116,8 +116,8 @@ To prove that a label is not hardcoded, mount the component in a marker locale, 
 
 | Role | Path |
 |------|------|
-| Identity precedent — `data-error-key` | `frontend/src/lib/components/brokers/BrokerSharingPanel.svelte` (L379) |
-| Converted assertions | `frontend/src/lib/components/brokers/BrokerSharingPanel.test.ts` |
+| Identity precedent — `data-error-key` | `frontend/src/lib/features/brokers/BrokerSharingPanel.svelte` (L379) |
+| Converted assertions | `frontend/src/lib/features/brokers/BrokerSharingPanel.test.ts` |
 | Catalogue-comparison precedent | `frontend/src/lib/utils/files/imageCrop.test.ts` |
 | English catalogue | `frontend/src/lib/i18n/base/en.json` |
 | Rule as stated for the test author | `.github/agents/test-author.agent.md` — rule 5 |

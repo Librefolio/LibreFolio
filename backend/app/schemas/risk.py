@@ -15,6 +15,8 @@ from backend.app.schemas.risk_scenarios import (
     RiskScenarioDimension,
     RiskScenarioMissingHistoryPolicy,
 )
+from backend.app.services.financial_math.returns import observations_per_year  # MF-D3: a pure house function, no service
+from backend.app.utils.json_utils import ensure_json_safe
 
 
 class RiskDataFrequency(StrEnum):
@@ -511,7 +513,7 @@ class PreparedAssetSeriesSet(StrictModel):
         expected_days = (self.joint_return_dates[-1] - self.baseline_date).days
         if self.calendar_days != expected_days or self.calendar_days <= 0:
             raise ValueError("calendar_days must span baseline to final return")
-        expected_factor = self.n_observations * 365 / self.calendar_days
+        expected_factor = observations_per_year(self.n_observations, self.calendar_days)
         if self.annualization_factor is None or not math.isclose(self.annualization_factor, expected_factor, rel_tol=1e-12, abs_tol=1e-12):
             raise ValueError("annualization_factor must equal n_observations * 365 / calendar_days")
         return self
@@ -592,7 +594,7 @@ class RiskResultMetadata(StrictModel):
         else:
             if self.calendar_days <= 0:
                 raise ValueError("non-empty results require positive calendar_days")
-            expected_factor = self.n_observations * 365 / self.calendar_days
+            expected_factor = observations_per_year(self.n_observations, self.calendar_days)
             if self.annualization_factor is None or not math.isclose(self.annualization_factor, expected_factor, rel_tol=1e-12, abs_tol=1e-12):
                 raise ValueError("annualization_factor must equal n_observations * 365 / calendar_days")
         if self.mode == RiskMode.HISTORICAL and self.composition_policy is not None:
@@ -704,6 +706,12 @@ class RiskAnalyticRequest(StrictModel):
     instance_id: str = Field(..., min_length=1, max_length=80, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
     analytic_code: str = Field(..., min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
     parameters: Dict[str, JsonValue] = Field(default_factory=dict)
+
+    @field_validator("parameters", mode="before")
+    @classmethod
+    def validate_parameters_json(cls, value: object) -> object:
+        """A finite number wherever the parameters hold one (H-34): JsonValue alone lets a NaN or an Infinity through."""
+        return ensure_json_safe(value, "parameters")
 
 
 class RiskQueryRequest(StrictModel):
@@ -1298,7 +1306,12 @@ class RiskDrawdownOutput(StrictModel):
     maximum_drawdown_recovery_date: Optional[date] = None
     maximum_drawdown_duration_days: int = Field(..., ge=0)
     maximum_drawdown_recovered_ratio: Optional[FiniteFloat] = Field(None, ge=0, le=1)
-    remaining_to_peak_ratio: FiniteFloat = Field(..., ge=0)
+    maximum_drawdown_trough_to_peak_ratio: Optional[FiniteFloat] = Field(
+        None,
+        ge=0,
+        description="Gain needed to climb from the maximum drawdown's trough back to the peak before it (0.25 = +25 %); 0 without a drawdown, null for a total loss.",
+    )
+    remaining_to_peak_ratio: Optional[FiniteFloat] = Field(..., ge=0, description="Gain still needed to climb from the current value back to the running peak; 0 when not underwater, null for a total loss.")
     available_start: date
     available_end: date
     n_observations: int = Field(..., ge=0)
@@ -1319,6 +1332,8 @@ class RiskDrawdownOutput(StrictModel):
                 raise ValueError("no_drawdown must not expose episode dates")
             if self.maximum_drawdown_recovered_ratio is not None:
                 raise ValueError("no_drawdown must not expose a recovered ratio")
+            if self.maximum_drawdown_trough_to_peak_ratio is not None and self.maximum_drawdown_trough_to_peak_ratio > 0:
+                raise ValueError("no_drawdown must not expose a positive trough-to-peak ratio")
             if self.maximum_drawdown_duration_days != 0:
                 raise ValueError("no_drawdown must report a zero maximum duration")
         else:
@@ -1476,7 +1491,12 @@ class RiskAssetSetDrawdownItem(StrictModel):
     maximum_drawdown_recovery_date: Optional[date] = None
     maximum_drawdown_duration_days: int = Field(..., ge=0)
     maximum_drawdown_recovered_ratio: Optional[FiniteFloat] = Field(None, ge=0, le=1)
-    remaining_to_peak_ratio: FiniteFloat = Field(..., ge=0)
+    maximum_drawdown_trough_to_peak_ratio: Optional[FiniteFloat] = Field(
+        None,
+        ge=0,
+        description="Gain needed to climb from the maximum drawdown's trough back to the peak before it (0.25 = +25 %); 0 without a drawdown, null for a total loss.",
+    )
+    remaining_to_peak_ratio: Optional[FiniteFloat] = Field(..., ge=0, description="Gain still needed to climb from the current value back to the running peak; 0 when not underwater, null for a total loss.")
 
     @model_validator(mode="after")
     def validate_episode_contract(self) -> RiskAssetSetDrawdownItem:  # noqa: C901 — flat status-branch invariant raises
@@ -1489,6 +1509,8 @@ class RiskAssetSetDrawdownItem(StrictModel):
                 raise ValueError("no_drawdown must not expose episode dates")
             if self.maximum_drawdown_recovered_ratio is not None:
                 raise ValueError("no_drawdown must not expose a recovered ratio")
+            if self.maximum_drawdown_trough_to_peak_ratio is not None and self.maximum_drawdown_trough_to_peak_ratio > 0:
+                raise ValueError("no_drawdown must not expose a positive trough-to-peak ratio")
             if self.maximum_drawdown_duration_days != 0:
                 raise ValueError("no_drawdown must report a zero maximum duration")
             return self

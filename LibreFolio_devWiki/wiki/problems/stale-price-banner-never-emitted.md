@@ -23,7 +23,7 @@ related: [problems/fx-backward-fill-unbounded-stale-rates, features/F-054, featu
 - The cure could not simply forward the engine's flag: the engine's per-position `valuation_stale` means "the mark
   used for this valuation is more than `STALE_PRICE_THRESHOLD_DAYS` (7) days old" **whatever the mark is** — a real
   quote carried forward (`MARKET_PRICE`) **or a trade-derived mark** (`LAST_TRADE_PRICE`: the last BUY/SELL/priced
-  ADJUSTMENT). Forwarding it raw would have flagged every manual asset (crowdfunding, a held bond with no provider),
+  ADJUSTMENT). Since J-17 (2026-10-16) only BUY and SELL are marks: see [[decisions/adjustment-is-never-a-price]]. Forwarding it raw would have flagged every manual asset (crowdfunding, a held bond with no provider),
   which is valued at its last trade price by design, and would have double-reported provider assets with no quote at
   all, which `TRANSACTION_IMPLIED` already reports.
 
@@ -66,14 +66,14 @@ reports partial portfolio results while a filtered asset is stale.
 |------|------|
 | The D8 rule, `stale_prices_dto` | `backend/app/services/portfolio_service.py` |
 | `valuation_stale`, `STALE_PRICE` issue and CTA | `backend/app/services/financial_math/portfolio/daily_state.py`, `backend/app/services/financial_math/portfolio/data_quality.py` |
-| Threshold (7 days) | `backend/app/services/data_quality_thresholds.py` |
+| Threshold (7 days) | `backend/app/services/platform/data_quality_thresholds.py` |
 | `StalePriceAsset`, `DataQualityStatus` derivation | `backend/app/schemas/portfolio.py` |
-| Risk: stale assets → partial results | `backend/app/services/risk/service.py` |
-| Current price write-back | `backend/app/services/asset_sources/price_query.py` |
+| Risk: stale assets → partial results | `backend/app/services/risk/data_quality.py`, `backend/app/services/risk/results.py` |
+| Current price write-back | `backend/app/services/assets/price_query.py` |
 | Mock provider refusal | `backend/app/services/asset_source_providers/mockprov/plugin.py` |
 | Dashboard CTA branch | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | Banner (icon per CTA) | `frontend/src/lib/components/ui/feedback/DataQualityBanner.svelte` |
-| Lab action mapping | `frontend/src/lib/components/risk/syncTargets.ts` |
+| Lab action mapping | `frontend/src/lib/features/risk/syncTargets.ts` |
 | Service tests (`TestStalePriceDataQuality`) | `backend/test_scripts/test_services/test_financial/test_portfolio_service.py` |
 | Pure test (CTA) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_data_quality_report.py` |
 | E2E | `frontend/e2e/portfolio/stale-price-banner.spec.ts` |

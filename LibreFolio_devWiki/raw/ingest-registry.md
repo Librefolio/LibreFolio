@@ -820,3 +820,4 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/report-R-final-run-coverage-20261013.md` | `40576bdcd` | 2026-10-14 | R's final run → [[sources/release-1.2.0]], [[sources/r-full-run-coverage-2026-10-12]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `c44e2b0cd` | 2026-10-14 | C-79…C-84, M-30 closed, M-33 → [[sources/release-1.2.0]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` | `7b2cb679b` | 2026-10-14 | batch 45, the allocation re-shots → [[problems/gallery-fixture-normalizer-scaled-ratios]] |
+| `LibreFolio_developer_journal/Release_2/Phase_1/08_email/plan-phase01Email.prompt.md` | `0e0c14868` | 2026-10-16 | E0–E4b, E-5, E6.0–E6.7 → [[domains/email]] |

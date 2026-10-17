@@ -492,7 +492,7 @@ describe('Clipboard writes go through $lib/utils/clipboard.ts (C4, M-20 gate)', 
 
     it('reads every app source, components and modules alike, and no test file', () => {
         expect(isScanned(OWNER)).toBe(true);
-        expect(isScanned('src/lib/components/support/SocialShareModal.svelte')).toBe(true);
+        expect(isScanned('src/lib/features/support/SocialShareModal.svelte')).toBe(true);
         expect(isScanned('src/routes/(app)/dashboard/+page.svelte')).toBe(true);
         expect(isScanned('src/lib/stores/app/toastStore.svelte.ts')).toBe(true);
         expect(isScanned('src/service-worker.js')).toBe(true);
@@ -506,7 +506,7 @@ describe('Clipboard writes go through $lib/utils/clipboard.ts (C4, M-20 gate)', 
         expect(files.filter((file) => file.endsWith('.svelte')).length).toBeGreaterThan(250);
         expect(files.filter((file) => !file.endsWith('.svelte')).length).toBeGreaterThan(250);
         expect(files).toContain(OWNER);
-        expect(files).toContain('src/lib/components/support/SocialShareModal.svelte');
+        expect(files).toContain('src/lib/features/support/SocialShareModal.svelte');
         // The owner spells both transports: a scan that finds nothing there finds nothing anywhere.
         expect(new Set(hits.filter((hit) => hit.file === OWNER).map((hit) => hit.form))).toEqual(new Set([CLIPBOARD, EXEC_COPY]));
     });

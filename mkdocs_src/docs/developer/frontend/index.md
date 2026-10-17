@@ -31,11 +31,7 @@ frontend/
 │   └── lib/
 │       ├── api/          # API client (Zodios, generated from OpenAPI)
 │       ├── components/   # Reusable components
-│       │   ├── auth/     # LoginCard, RegisterCard, ForgotPasswordCard
-│       │   ├── brokers/  # Broker cards, forms, icon, import
-│       │   ├── files/    # FilesTable with DataTable
 │       │   ├── layout/   # Sidebar, Header, LanguageSelector
-│       │   ├── settings/ # Settings tabs (Profile, Preferences, Global, About)
 │       │   ├── table/    # DataTable suite (DataTable, toolbar, pagination, column filter, SelectionBar)
 │       │   └── ui/       # Generic UI atoms
 │       │       ├── input/    # PasswordInput, PasswordStrength
@@ -44,20 +40,37 @@ frontend/
 │       │       ├── select/   # SimpleSelect, SearchSelect + specialized selects
 │       │       ├── tabs/     # TabBar (used standalone and by PageToolbar)
 │       │       └── toolbar/  # PageToolbar — shared responsive shell (see Toolbar & Responsive Layout)
+│       ├── features/     # One folder per domain: its components, state and logic
+│       │   ├── ai-export/       # AI Export menu, options, snapshot client and prompt templates
+│       │   ├── auth/            # LoginCard, RegisterCard, ForgotPasswordCard
+│       │   ├── backup/          # Instance backup (admins): Backup tab, job and download card
+│       │   ├── brokers/         # Broker cards, forms, import, sharing and the FIFO lots views (lots/) with their store
+│       │   ├── changelog/       # Bundled CHANGELOG.md and its translations, split into chapters; the «What's new» modal and its store
+│       │   ├── dashboard/       # Dashboard panels and charts, view store and date-range controller
+│       │   ├── email/           # Email tab, address verification, password-reset and shared-link emails
+│       │   ├── files/           # Files table and grid, preview modal and file-set badges
+│       │   ├── instance/        # Instance config, profile helpers (selfHostedConfirmed, managedConfirmed), notices and blocked-instance page
+│       │   ├── legal/           # Legal notice of the instance: LegalNotice (full) and LegalLinks (one line)
+│       │   ├── live-updates/    # Activity-aware polling of live prices and its "Updates paused" pill
+│       │   ├── onboarding/      # Welcome setup, intro tour and contextual guides
+│       │   ├── plugin-settings/ # Plugins tab, Configure dialog and form for plugin-declared settings
+│       │   ├── risk/            # Risk panels, levels, stores and request logic
+│       │   ├── settings/        # Settings tab registry and tabs (Profile, Preferences, Global Settings, About, Users, Security)
+│       │   ├── support/         # Donation popup, social share, support links and donationsVisible()
+│       │   ├── tools/           # Tools hub, tool host and registry, PAC allocator tool
+│       │   └── update-check/    # New-release check and its modals (update available, ask an admin)
 │       ├── i18n/         # Internationalization (EN, IT, FR, ES)
 │       ├── stores/       # Store Client System (State Management)
 │       │   ├── app/          # auth, clientSession, settings, globalSettings, themeStore, language, privacyStore, toastStore, …
 │       │   ├── core/         # EntityStore, EditBuffer, TimeSeriesStore
 │       │   ├── reference/    # brokerStore, assetStore, currencyStore, countryStore, sectorStore, fxRoutesStore
-│       │   ├── portfolio/    # portfolioStore (report cache), portfolioMutation, lotsAnalysisStore, dashboardViewStore
-│       │   ├── risk/         # riskStore, riskBenchmarkStore, riskPanelController
+│       │   ├── portfolio/    # portfolioStore (report cache), portfolioMutation
 │       │   ├── transactions/ # txStore, transactionTypeStore
 │       │   ├── fx/           # fxCardInversionStore
 │       │   ├── files/        # imagePreviewCache
 │       │   ├── assetPriceStoreRegistry.ts     # Registry: price series per asset and currency
 │       │   ├── fxStoreRegistry.ts             # Registry: rate series per FX pair
 │       │   ├── dateRangeStore.svelte.ts       # Date range shared by the pages
-│       │   ├── dateRangeController.svelte.ts  # Per-page wiring of that date range
 │       │   ├── chartSettingsStore.svelte.ts   # Chart aesthetics and signal configs (localStorage)
 │       │   ├── currencyGraphStore.ts          # FX currency graph (session cache)
 │       │   └── signalCatalogStore.svelte.ts   # Signal catalog per domain (asset, FX)

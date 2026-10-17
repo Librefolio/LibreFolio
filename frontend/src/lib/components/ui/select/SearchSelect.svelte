@@ -407,7 +407,7 @@
     }
 </script>
 
-<div bind:this={containerRef} class="relative {className}" data-testid={testId}>
+<div bind:this={containerRef} class="relative text-lf-primary {className}" data-testid={testId}>
     <!-- Trigger Button / Inline Search -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -417,8 +417,8 @@
         aria-haspopup="listbox"
         class="w-full flex items-center justify-between {compact ? 'px-3 py-2 text-sm' : 'px-3 py-2'} border rounded-lg
                transition-all text-left gap-2
-               {disabled ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' : 'bg-white dark:bg-slate-700 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500 cursor-pointer'}
-               {isOpen ? 'ring-2 ring-libre-green border-libre-green' : ''}"
+               {disabled ? 'bg-lf-panel text-lf-muted cursor-not-allowed opacity-60' : 'bg-lf-field text-lf-primary cursor-pointer'}
+               {isOpen ? 'ring-2 ring-lf-focus border-lf-focus' : disabled ? 'border-lf-subtle' : 'border-lf-input hover:border-lf-input-hover'}"
         onclick={() => toggleDropdown()}
         onfocus={() => {
             triggerFocusedAt = Date.now();
@@ -431,7 +431,7 @@
     >
         {#if inlineSearch && isOpen}
             <!-- Inline search mode: show search icon + input in trigger -->
-            <Search size={14} class="text-gray-400 shrink-0" />
+            <Search size={14} class="text-lf-muted shrink-0" />
             <input
                 type="text"
                 bind:this={inputRef}
@@ -441,7 +441,7 @@
                     handleSearchKeydown(e);
                 }}
                 onclick={(e) => e.stopPropagation()}
-                class="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-gray-100"
+                class="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-lf-primary placeholder:text-lf-placeholder"
                 placeholder={$_('common.search')}
                 data-testid={testId ? `${testId}-search` : undefined}
             />
@@ -454,46 +454,46 @@
                 <div class="flex items-center space-x-2 min-w-0">
                     {#if selectedOption.icon && selectedOption.icon !== selectedOption.value}
                         {#if looksLikeUrl(selectedOption.icon)}
-                            <span class="shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded-lg overflow-hidden">
+                            <span class="shrink-0 w-9 h-9 flex items-center justify-center bg-lf-selected rounded-lg overflow-hidden">
                                 <img src={selectedOption.icon} alt="" class="w-7 h-7 object-contain" onerror={hideOnError} />
                             </span>
                         {:else}
-                            <span class="text-lg shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg font-medium emoji-flag">
+                            <span class="text-lg shrink-0 w-9 h-9 flex items-center justify-center bg-lf-selected text-lf-link rounded-lg font-medium emoji-flag">
                                 {selectedOption.icon}
                             </span>
                         {/if}
                     {/if}
                     <div class="min-w-0">
-                        <div class="font-medium text-gray-900 dark:text-gray-100">{selectedOption.value}</div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{selectedOption.label}</div>
+                        <div class="font-medium text-lf-primary">{selectedOption.value}</div>
+                        <div class="text-xs text-lf-muted truncate">{selectedOption.label}</div>
                     </div>
                 </div>
             {/if}
         {:else}
-            <span class="text-gray-400">{placeholder || $_('common.search')}</span>
+            <span class="text-lf-placeholder">{placeholder || $_('common.search')}</span>
         {/if}
-        <ChevronDown class="text-gray-400 shrink-0 transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />
+        <ChevronDown class="text-lf-muted shrink-0 transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />
     </div>
 
     <!-- Dropdown -->
     {#if isOpen}
-        <div class="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden" style={dropdownStyle}>
+        <div class="bg-lf-card border border-lf-raised rounded-lg shadow-lg shadow-lf-shadow overflow-hidden" style={dropdownStyle}>
             {#if !inlineSearch}
-                <div class="p-2 border-b border-gray-100 dark:border-slate-700">
+                <div class="p-2 border-b border-lf-subtle">
                     <div class="relative">
-                        <Search size={16} class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <Search size={16} class="absolute left-3 top-1/2 -translate-y-1/2 text-lf-muted" />
                         <input
                             bind:this={inputRef}
                             bind:value={searchQuery}
                             onkeydown={handleSearchKeydown}
                             type="text"
-                            class="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg
-                               focus:outline-none focus:ring-2 focus:ring-libre-green focus:border-libre-green"
+                            class="w-full pl-9 pr-8 py-2 text-sm border border-lf-input bg-lf-field text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover rounded-lg
+                               focus:outline-none focus:ring-2 focus:ring-lf-focus focus:border-lf-focus"
                             placeholder={$_('common.search')}
                             data-testid={testId ? `${testId}-search` : undefined}
                         />
                         {#if searchQuery}
-                            <button onclick={() => (searchQuery = '')} class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600" data-testid={testId ? `${testId}-search-clear` : undefined}>
+                            <button onclick={() => (searchQuery = '')} class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-lf-muted hover:text-lf-secondary" data-testid={testId ? `${testId}-search-clear` : undefined}>
                                 <X size={14} />
                             </button>
                         {/if}
@@ -504,17 +504,17 @@
             <!-- Options List -->
             <div bind:this={listRef} class="overflow-y-auto options-list" id={listboxId} role="listbox" aria-busy={loading} style="max-height: {dynamicMaxHeight}px">
                 {#if loading}
-                    <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <div class="px-4 py-8 text-center text-lf-muted">
                         {$_('common.loading')}
                     </div>
                 {:else if filteredOptions.length === 0}
-                    <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <div class="px-4 py-8 text-center text-lf-muted">
                         {$_('common.noData')}
                     </div>
                 {:else}
                     {#each filteredOptions as option, index (option.value)}
                         {#if option.header}
-                            <div class="px-4 pt-2.5 pb-1 text-[11px] font-semibold tracking-wide text-gray-400 uppercase select-none dark:text-gray-500" role="presentation" data-testid="search-select-header-{option.value}">
+                            <div class="px-4 pt-2.5 pb-1 text-[11px] font-semibold tracking-wide text-lf-muted uppercase select-none" role="presentation" data-testid="search-select-header-{option.value}">
                                 {option.label}
                             </div>
                         {:else}
@@ -527,7 +527,7 @@
                                 data-highlighted={index === highlightedIndex}
                                 class="w-full flex items-center space-x-3 px-4 py-2.5 text-left transition-colors
                                    {option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
-                                   {index === highlightedIndex ? 'bg-libre-green/30 dark:bg-libre-green dark:text-white highlighted' : 'hover:bg-gray-100 dark:hover:bg-slate-600'}"
+                                   {index === highlightedIndex ? 'bg-lf-selected highlighted' : 'hover:bg-lf-hover'}"
                             >
                                 {#if item}
                                     <div class="flex-1 min-w-0">
@@ -536,18 +536,18 @@
                                 {:else}
                                     {#if option.icon && option.icon !== option.value}
                                         {#if looksLikeUrl(option.icon)}
-                                            <span class="shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded-lg overflow-hidden">
+                                            <span class="shrink-0 w-9 h-9 flex items-center justify-center bg-lf-selected rounded-lg overflow-hidden">
                                                 <img src={option.icon} alt="" class="w-7 h-7 object-contain" onerror={hideOnError} />
                                             </span>
                                         {:else}
-                                            <span class="text-lg w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg shrink-0 font-medium emoji-flag">
+                                            <span class="text-lg w-9 h-9 flex items-center justify-center bg-lf-selected text-lf-link rounded-lg shrink-0 font-medium emoji-flag">
                                                 {option.icon}
                                             </span>
                                         {/if}
                                     {/if}
                                     <div class="min-w-0 flex-1">
-                                        <div class="font-mono text-sm text-gray-700 dark:text-gray-200">{option.value}</div>
-                                        <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{option.label}</div>
+                                        <div class="font-mono text-sm text-lf-secondary">{option.value}</div>
+                                        <div class="text-xs text-lf-muted truncate">{option.label}</div>
                                     </div>
                                 {/if}
                             </button>
@@ -561,7 +561,7 @@
                 {@const typed = searchQuery.trim()}
                 <button
                     type="button"
-                    class="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-libre-green hover:bg-libre-green/10 dark:hover:bg-libre-green/20 border-t border-gray-100 dark:border-slate-700 transition-colors"
+                    class="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-lf-link hover:bg-lf-selected border-t border-lf-subtle transition-colors"
                     onclick={(e) => {
                         e.stopPropagation();
                         const query = searchQuery.trim();
@@ -577,3 +577,11 @@
         </div>
     {/if}
 </div>
+
+<style>
+    /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15): inside the highlighted
+       option a muted caption, this component's own or a caller's snippet's, turns secondary. */
+    [data-highlighted='true'] :global(.text-lf-muted) {
+        color: var(--lf-text-secondary);
+    }
+</style>

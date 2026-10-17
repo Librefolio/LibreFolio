@@ -34,6 +34,6 @@ dropped by the developer (2026-09-02): `ddgs` is enough, and SearXNG would need 
 
 | Role | Path |
 |------|------|
-| Link finder (engine, region, backend settings) | `backend/app/services/web_link_finder.py` |
+| Link finder (engine, region, backend settings) | `backend/app/services/assets/web_link_finder.py` |
 | Tests | `backend/test_scripts/test_services/test_web_link_finder.py` |
 | Journal | `LibreFolio_developer_journal/Release_2/phases/04_webSearchEngine/README.md` |

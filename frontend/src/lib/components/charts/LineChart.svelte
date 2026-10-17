@@ -18,20 +18,25 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
+    import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, noteArrowMarkers, updateArrowRotations} from './lineChartHelpers';
+    import {toRgba} from '$lib/theme/colorAlpha';
     import {assignOverlaySignalAxes, buildSecondaryYAxes, computeRightMargin} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
     import {truncateName} from '$lib/utils/text';
-    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {buildResponsiveXAxisPolicy, categoryAxisLabelPatch, visiblePointCountFromZoom, ZOOM_LABEL_SETTLE_MS} from './responsiveXAxis';
+    import {clearTimer} from '$lib/utils/core/clearTimer';
+    import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {chartNeutrals, PRICE_SERIES} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Types
@@ -118,7 +123,7 @@
         showMiniAxis = false,
         lineColor,
         darkLineColor,
-        pendingColor = '#f59e0b',
+        pendingColor = PRICE_SERIES.pendingEditPoint,
         pendingData = [],
         onPointClick,
         viewMode = 'absolute',
@@ -149,6 +154,41 @@
     let needsInitialLayoutStabilityPass = false;
     let currentRenderedData: LineDataPoint[] = [];
     let responsiveXAxisCompact = false;
+    /** The last zoom window, and the timer that, once the gesture settles, re-spaces the x labels on it (47-1) and re-aims the arrow markers (Y-8). Plain variables: the teardown reads them. */
+    let lastZoomEvent: unknown = null;
+    let zoomLabelTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** How many of the drawn categories the last zoom left visible; undefined before any zoom. */
+    function zoomedCategoryCount(): number | undefined {
+        return visiblePointCountFromZoom(lastZoomEvent, currentRenderedData.length) ?? undefined;
+    }
+
+    function scheduleZoomedAxisLabels(event: unknown) {
+        lastZoomEvent = event;
+        zoomLabelTimer = clearTimer(zoomLabelTimer);
+        zoomLabelTimer = setTimeout(() => {
+            zoomLabelTimer = null;
+            applyZoomedAxisLabels();
+            // Once per gesture, never per tick: it reads getOption(), a deep copy of the whole option, and writes every series back (Y-8).
+            if (chartInstance) updateArrowRotations(chartInstance);
+        }, ZOOM_LABEL_SETTLE_MS);
+    }
+
+    /** Re-space the category labels on the zoomed window: the step is computed on all the points otherwise (47-1). */
+    function applyZoomedAxisLabels() {
+        if (!chartInstance || compact || currentRenderedData.length === 0) return;
+        const visibleCount = zoomedCategoryCount();
+        if (visibleCount === undefined) return;
+        const policy = buildResponsiveXAxisPolicy({
+            width: chartContainer.clientWidth,
+            values: currentRenderedData.map((point) => point.date),
+            locale: uiLocale(),
+            axisType: 'category',
+            visibleCount,
+        });
+        responsiveXAxisCompact = policy.compact;
+        chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
+    }
 
     const COMPACT_DENSITY_THRESHOLD = 1.3;
     const COMPACT_RESIZE_EPSILON_PX = 4;
@@ -167,15 +207,14 @@
     // =========================================================================
 
     onMount(() => {
-        const observer = new MutationObserver(() => {
+        const redraw = () => {
             if (chartContainer && data.length > 0) renderChart();
-        });
-        observer.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: ['class'],
-        });
+        };
+        const observer = onThemeClassChange(redraw);
+        const chartColors = onChartColorsChange(redraw);
         return () => {
             observer.disconnect();
+            chartColors.disconnect();
             cleanup();
         };
     });
@@ -208,6 +247,8 @@
         resizeObserver = null;
         chartOptionSet = false;
         currentRenderedData = [];
+        zoomLabelTimer = clearTimer(zoomLabelTimer);
+        lastZoomEvent = null;
         chartInstance?.dispose();
         chartInstance = null;
     }
@@ -271,16 +312,19 @@
                     values: currentRenderedData.map((point) => point.date),
                     locale: uiLocale(),
                     axisType: 'category',
+                    visibleCount: zoomedCategoryCount(),
                 });
                 const wasCompact = responsiveXAxisCompact;
                 responsiveXAxisCompact = policy.compact;
                 if (policy.axisLabel) {
-                    chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                    chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
                 } else if (wasCompact) {
                     renderChart();
                 }
             }
-            if (chartInstance) updateArrowRotations(chartInstance);
+            // Re-aimed once the resize settles, by the settle that re-spaces the labels, never on each callback: a re-aim
+            // deep-copies the whole option (Y-25)
+            scheduleZoomedAxisLabels(lastZoomEvent);
         } catch (_) {
             /* ignore coord errors during resize */
         }
@@ -344,7 +388,7 @@
         if (rect.width === 0 || rect.height === 0) return;
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
             attachChartReady(chartInstance, chartContainer, 'line');
             needsInitialLayoutStabilityPass = true;
 
@@ -357,13 +401,15 @@
                 });
             }
 
-            // Recompute arrow rotations when zoom changes (aspect ratio shifts)
-            chartInstance.on('dataZoom', () => {
-                if (chartInstance) updateArrowRotations(chartInstance);
+            // A zoom changes the pixel aspect: the x labels are re-spaced on the window, and the arrow markers re-aimed, once the
+            // gesture settles, never on each tick (47-1, Y-8)
+            chartInstance.on('dataZoom', (event: unknown) => {
+                scheduleZoomedAxisLabels(event);
             });
         }
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
+        const neutrals = chartNeutrals(isDark, chartContainer);
         const isPercentage = viewMode === 'percentage';
 
         const baseColor = isDark ? darkLineColor || DEFAULT_LINE_DARK : lineColor || DEFAULT_LINE_LIGHT;
@@ -436,7 +482,7 @@
                 symbolSize: 10,
                 itemStyle: {
                     color: pendingColor,
-                    borderColor: isDark ? '#1e293b' : '#ffffff',
+                    borderColor: neutrals.price.pendingEditPointRing,
                     borderWidth: 2,
                 },
                 z: 10,
@@ -498,7 +544,7 @@
                     ...(sType === 'area'
                         ? {
                               areaStyle: {
-                                  color: hexToRgba(signal.color, signal.fillOpacity ?? 0.2),
+                                  color: toRgba(signal.color, signal.fillOpacity ?? 0.2),
                                   origin: 0,
                               },
                           }
@@ -572,7 +618,7 @@
                 showSymbol: false,
                 sampling: 'lttb',
                 lineStyle: {
-                    color: isDark ? '#64748b' : '#9ca3af',
+                    color: neutrals.price.baseline,
                     type: 'dashed',
                     width: 1,
                 },
@@ -610,11 +656,30 @@
         for (const d of renderedData) {
             if (d.staleDays && d.staleDays > 0) staleLookup.set(d.date, d.staleDays);
         }
+        // Preserve user zoom state across re-renders (adding signals, toggling options).
+        // Without this, setOption({...}, true) replaces dataZoom and resets scroll position.
+        // Read before the axis policy, so the labels are spaced on the window about to be restored (47-1).
+        let savedZoom: {start: number; end: number} | null = null;
+        if (chartOptionSet && chartInstance) {
+            try {
+                const opt = chartInstance.getOption() as any;
+                if (opt?.dataZoom?.[0]) {
+                    const dz = opt.dataZoom[0];
+                    if (typeof dz.start === 'number' && typeof dz.end === 'number') {
+                        savedZoom = {start: dz.start, end: dz.end};
+                    }
+                }
+            } catch (_) {
+                /* ignore */
+            }
+        }
+        const restoredZoomCount = savedZoom && !compact ? visiblePointCountFromZoom(savedZoom, dates.length) : null;
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: rect.width,
             values: dates,
             locale: uiLocale(),
             axisType: 'category',
+            visibleCount: restoredZoomCount ?? undefined,
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
 
@@ -636,9 +701,9 @@
                 type: 'category',
                 data: dates,
                 show: !compact,
-                axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
+                axisLine: {lineStyle: {color: neutrals.priceAxis.line}},
                 axisLabel: {
-                    color: isDark ? '#94a3b8' : '#6b7280',
+                    color: neutrals.priceAxis.label,
                     fontSize: 11,
                     formatter: xAxisPolicy.formatter,
                     ...(xAxisPolicy.axisLabel ?? {}),
@@ -666,12 +731,12 @@
                         position: compact && showMiniAxis ? ('right' as const) : ('left' as const),
                         min: effectiveMin,
                         max: effectiveMax,
-                        axisLine: {show: !compact, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
+                        axisLine: {show: !compact, lineStyle: {color: neutrals.priceAxis.line}},
                         axisTick: {show: !compact},
                         splitNumber: compact && showMiniAxis ? 2 : undefined,
                         axisLabel: {
                             show: showYAxis,
-                            color: isDark ? '#94a3b8' : '#6b7280',
+                            color: neutrals.priceAxis.label,
                             fontSize: compact && showMiniAxis ? 9 : 11,
                             formatter: isPercentage
                                 ? (v: number) => formatPercent(v, {digits: 1, signed: false})
@@ -684,7 +749,7 @@
                         splitLine: {
                             show: showGridLines && showYAxis,
                             lineStyle: {
-                                color: isDark ? '#4b5563' : '#d1d5db',
+                                color: neutrals.priceAxis.gridLine,
                                 type: 'dashed' as const,
                                 opacity: compact && showMiniAxis ? 0.5 : 1,
                             },
@@ -701,9 +766,9 @@
                       appendToBody: true,
                       confine: true,
                       position: tooltipPositionSide,
-                      backgroundColor: isDark ? '#1e293b' : '#ffffff',
-                      borderColor: isDark ? '#334155' : '#e2e8f0',
-                      textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                      backgroundColor: neutrals.tooltip.box.background,
+                      borderColor: neutrals.tooltip.box.border,
+                      textStyle: {color: neutrals.tooltip.box.text, fontSize: 12},
                       formatter: (params: any) => {
                           const items = Array.isArray(params) ? params : [params];
                           if (!items.length) return '';
@@ -757,11 +822,11 @@
                               // Signals on non-primary axes have their own scale — show without % suffix
                               const valueSuffix = axisIdx === 0 ? suffix : '';
                               const axisLabel = signalAxisLabelMap.get(axisIdx);
-                              const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${escapeHtml(axisLabel)}]</span>` : '';
-                              html += `<br/>${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`;
+                              const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:${neutrals.tooltip.aside}">[${escapeHtml(axisLabel)}]</span>` : '';
+                              html += `<br/>${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${formatPrice(Number(value), {minDecimals: 4})}${valueSuffix}${axisNoteHtml}`;
                               const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                               if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
-                                  html += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
+                                  html += ` <span style="font-size:10px;color:${neutrals.tooltip.aside}">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
                               }
 
                               // For band signals, also show upper/lower in the tooltip
@@ -769,7 +834,7 @@
                               if (bandSignal?.bandData) {
                                   const dataIdx = bandSignal.data.findIndex((d) => d.date === date);
                                   if (dataIdx >= 0) {
-                                      html += `<br/><span style="padding-left:12px;font-size:11px;color:#94a3b8">${$t('chart.tooltip.upper')}: ${formatFixed(bandSignal.bandData.upper[dataIdx], 4)}${suffix} · ${$t('chart.tooltip.lower')}: ${formatFixed(bandSignal.bandData.lower[dataIdx], 4)}${suffix}</span>`;
+                                      html += `<br/><span style="padding-left:12px;font-size:11px;color:${neutrals.tooltip.aside}">${$t('chart.tooltip.upper')}: ${formatPrice(bandSignal.bandData.upper[dataIdx], {minDecimals: 4})}${suffix} · ${$t('chart.tooltip.lower')}: ${formatPrice(bandSignal.bandData.lower[dataIdx], {minDecimals: 4})}${suffix}</span>`;
                                   }
                               }
                           }
@@ -777,10 +842,10 @@
                           // Stale warning for main series
                           const staleDays = staleLookup.get(date);
                           if (staleDays !== undefined) {
-                              html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</span>`;
+                              html += `<br/><span style="color:${neutrals.tooltip.staleWarning};font-size:11px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</span>`;
                           }
                           if (isPercentage) {
-                              html += `<br/><span style="color:#94a3b8;font-size:10px">${$t('chart.tooltip.percentNote')}</span>`;
+                              html += `<br/><span style="color:${neutrals.tooltip.aside};font-size:10px">${$t('chart.tooltip.percentNote')}</span>`;
                           }
                           return html;
                       },
@@ -791,32 +856,9 @@
         // Single pass: render everything at once — no visualMap needed
         // (baseline coloring is handled by segmented series above)
 
-        // Preserve user zoom state across re-renders (adding signals, toggling options).
-        // Without this, setOption({...}, true) replaces dataZoom and resets scroll position.
-        let savedZoom: {start: number; end: number} | null = null;
-        if (chartOptionSet && chartInstance) {
-            try {
-                const opt = chartInstance.getOption() as any;
-                if (opt?.dataZoom?.[0]) {
-                    const dz = opt.dataZoom[0];
-                    if (typeof dz.start === 'number' && typeof dz.end === 'number') {
-                        savedZoom = {start: dz.start, end: dz.end};
-                    }
-                }
-            } catch (_) {
-                /* ignore */
-            }
-        }
-
         chartInstance.setOption(option, true);
+        noteArrowMarkers(chartInstance, option);
         chartOptionSet = true;
-
-        // Compute pixel-accurate arrow rotations after layout is established
-        updateArrowRotations(chartInstance);
-        if (needsInitialLayoutStabilityPass) {
-            needsInitialLayoutStabilityPass = false;
-            scheduleFirstRenderStabilityFix(chartInstance, chartContainer, updateArrowRotations);
-        }
 
         // Restore zoom position if the user had zoomed/panned
         if (savedZoom && !compact) {
@@ -825,6 +867,14 @@
                 start: savedZoom.start,
                 end: savedZoom.end,
             });
+        }
+
+        // Compute pixel-accurate arrow rotations after layout is established, on the zoom just restored: the restore's
+        // dataZoom event only schedules the settle, so aiming them before it left them on the whole axis until then (Y-8)
+        updateArrowRotations(chartInstance);
+        if (needsInitialLayoutStabilityPass) {
+            needsInitialLayoutStabilityPass = false;
+            scheduleFirstRenderStabilityFix(chartInstance, chartContainer, updateArrowRotations);
         }
     }
 </script>

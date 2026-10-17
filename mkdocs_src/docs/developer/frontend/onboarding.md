@@ -55,7 +55,7 @@ other fourteen are guided flows, declared in `ONBOARDING_GUIDE_CATALOG`
 *Kind* is descriptive. The catalogue itself knows three fields: `trigger` (`automatic` for the
 tour, `contextual` for every other guide), `completionMode: 'steps'` for the two step-managed
 flows, and `navigationMode: 'checkpoint'` for the bulk workspace. Every flow is at **version 1**
-in `ONBOARDING_FLOW_VERSIONS` (`backend/app/services/onboarding_service.py`).
+in `ONBOARDING_FLOW_VERSIONS` (`backend/app/services/accounts/onboarding_service.py`).
 
 ## 🏗️ Architecture {: #architecture }
 
@@ -87,7 +87,7 @@ Frontend paths below are relative to `frontend/src/`.
 | `lib/features/onboarding/onboardingGuideCatalog.ts` | Step ids and flow definitions |
 | `lib/features/onboarding/onboardingGuide.svelte.ts` | The engine, singleton `onboardingGuide`: start, step, finish, skip, replay, queue |
 | `lib/features/onboarding/guideAnchors.svelte.ts` | Anchor registry and the `guideAnchor` action |
-| `lib/features/onboarding/appBootstrap.svelte.ts` | Bootstrap loads and the Welcome redirect rule |
+| `lib/features/onboarding/appBootstrap.svelte.ts` | Bootstrap loads and the Welcome redirect rule; starts the open-registration warning |
 | `lib/features/onboarding/onboardingRouteSettlement.ts` | Applies the redirect, or starts the tour, once per settled route |
 | `lib/features/onboarding/components/OnboardingOverlayHost.svelte` | Presentation table of every step; renders the intro scene or the single coachmark |
 | `lib/features/onboarding/components/OnboardingCoachmark.svelte` | Measures the anchor; spotlight, pointer, panel placement, waiting and stalled states |
@@ -117,6 +117,14 @@ one state.
 | `degraded` | progress failed, but a completed or skipped Welcome was already loaded | the app, with `OnboardingBootstrapBanner` and its retry button |
 | `ready` | everything loaded | the app |
 
+Before the loaders, as soon as `load()` knows the user — right after its guard on the user id, and
+before it returns early for a user already loaded — it calls `startOpenRegistrationNotice()`, a
+dependency of `createAppBootstrap()` like the loaders. The default calls the
+[open-registration warning](components/features/auth.md#open-registration-notice)'s
+`startOpenRegistrationNotice()` without arguments and ignores the stop function it returns. So the
+warning starts even when a loader fails or hangs, and never without a user. Every `load()` may call
+it: only the first start watches.
+
 `appBootstrap.resolveDestination()` turns the requested path into a destination. While Welcome is
 **due** — or a Welcome replay is armed — every app route resolves to
 `/welcome?returnTo=<requested path>`; once it is not, `/welcome` resolves back to its `returnTo`,
@@ -136,7 +144,7 @@ layout shows `onboarding-redirecting`, never the requested page.
 `routes/(app)/welcome/+page.svelte` renders the form: language, base currency and avatar,
 pre-filled from the user's settings. A new account's settings row is created by its first
 `GET /api/v1/settings/user` (`get_or_create_user_settings` in
-`backend/app/services/settings_service.py`) from the instance defaults `default_language`,
+`backend/app/services/accounts/settings_service.py`) from the instance defaults `default_language`,
 `default_currency` and `default_theme`, so Welcome starts from the administrator's choices, as its
 hint says (`onboarding.welcome.defaultsHint`). Changing the language previews it immediately;
 skipping restores the saved one.
@@ -149,6 +157,11 @@ skipping restores the saved one.
 
 Every path ends in `onboardingGuide.maybeStartIntro(returnTo)`: the page then moves to
 `/dashboard` if the tour starts, and to `returnTo` otherwise.
+
+Under its card, `WelcomePage.svelte` shows the instance's legal notice,
+[`LegalNotice`](components/features/settings.md#legal-notice) (F09). It frames the page and is not
+part of the flow, with no anchor and no step: adding it changed no version in
+`ONBOARDING_FLOW_VERSIONS`, so the Welcome did not come back for anyone.
 
 ### 🎬 Intro tour {: #intro-tour }
 
@@ -360,24 +373,95 @@ documented in [Settings](components/features/settings.md).
 
 ## 🔕 Deferred popups {: #deferred-popups }
 
-The layout mounts `DeferredAppPopups.svelte`, which owns the popups nobody asked for: the donation
-prompt and the update-available modal. It holds them while a guide is active or any modal is open,
-and shows the next one when both are gone. A prompt the user did ask for — a manual update check,
+The layout mounts `DeferredAppPopups.svelte`, which owns the popups nobody asked for, one at a time
+and in this order: [What's new](#whats-new) (lot C-54), the donation prompt and the update-available
+modal. It holds them while a guide is active or any modal is open, and shows the next one when both
+are gone; the host says which one shows in `data-active-popup` (`whats-new`, `donation`, `update`
+or `none`). A prompt the user did ask for — a manual update check,
 shown with `updateAvailable.show(release, {requested: true})` — appears at once, above a guide or
 a modal.
 
 The backend decides the donation prompt at sign-in: `record_login_and_maybe_show_popup()`
-(`backend/app/services/donation_popup_service.py`) counts the login and sets `show_donation_popup`
-in the login response (`backend/app/api/v1/auth.py:112,146`). Counting from the last prompt, or
+(`backend/app/services/accounts/donation_popup_service.py`) counts the login and sets `show_donation_popup`
+in the login response (`login()` and `setup_admin()` in `backend/app/api/v1/auth.py`). Counting from the last prompt, or
 from the account's creation if there was none, it fires after `MAX_DAYS_WITHOUT_PROMPT` (60) days,
 or after `MIN_LOGINS_BETWEEN_PROMPTS` (10) sign-ins once `MIN_DAYS_BETWEEN_PROMPTS` (7) days have
-passed. `DonationPopupModal.svelte` has no close button and ignores backdrop clicks and
+passed. On a managed instance it never fires: `is_donation_popup_disabled()` is always true with
+`LIBREFOLIO_PROFILE=managed` (F05), and the login counters still advance
+(`./dev.py test services donation-managed`). Nor does the
+update-available modal come there by itself: the check at an administrator's sign-in probes only a
+self-hosted instance ([Container Image Check](../architecture/security.md#container-image-check)).
+`DonationPopupModal.svelte` has no close button and ignores backdrop clicks and
 <kbd>Esc</kbd> (`closeOnBackdropClick={false}`, `closeOnEscape={false}`): only **Buy Me a Coffee**
 and **Maybe later** dismiss it, and a share button opens the share dialog above it.
 
+### ✨ What's new since your last version {: #whats-new }
+
+After an update, each signed-in user sees once the chapters of the changelog released since the
+version whose changelog they saw last (lot C-54). It is the same in both profiles; on a managed
+instance, where no update check runs, it is how users hear of an update. The user's side: «What's
+new after an update» in [Changelog Modal](../../user/settings/about.md#changelog-modal).
+
+- **The backend says whether, and from which release.** `users.last_seen_version` holds a base
+  release `X.Y.Z` ([`USER`](../architecture/database/users_access.md#user)).
+  `whats_new_service.pending_for(user)` (`backend/app/services/accounts/whats_new_service.py`)
+  compares it with `current_release()`, the base release of `config.get_version()`: `release_of()`
+  reads `v1.3.0-7-gabc1234` and `1.3.0-rc1` as `1.3.0`, `1.3` as `1.3.0`, and finds no release in
+  `unknown`, `dev`, a bare hash or a base of `0.0.0`, which is how `get_git_version()` reports a
+  checkout with no tag (`v0.0.0-g<hash>`). Every answer that carries the user — `POST /auth/login`,
+  `GET /auth/me`, `POST /auth/register`, `PUT /auth/profile` and `POST /auth/setup` — puts the
+  result in `user.whats_new` (`WhatsNewRead`, `{since, release}`), through `_auth_user()` in
+  `backend/app/api/v1/auth.py`; `since` is null for a `NULL` column, an account from before the
+  feature, which sees the `release` chapter alone. `user.whats_new` is null when nothing is newer
+  than what the user saw, a downgrade included; when the running version names no release, a
+  checkout with no tag included, where `create_user()` therefore writes nothing; and
+  when `whats_new_disabled()` says so, a hidden switch like the donation prompt's (decision D-A7),
+  which the test lanes turn on ([Automated Setup](../test-walkthrough/front-overview.md#automated-setup)).
+- **A new account has nothing to catch up on.** `user_service.create_user()` writes the running
+  release into `last_seen_version`.
+- **Closing the window records it.** `POST /api/v1/auth/whats-new/seen` (`204`, a session required,
+  idempotent) calls `mark_seen()`, which writes the server's own running release, never a value from
+  the client, and logs *What's new seen* (`user_id`, `release`) when it changes the column. With
+  the running release unknown it writes nothing. It never goes backwards: it reads the account again
+  under SQLite's write lock, and a stored release as new as the running one or newer — a downgrade, an
+  older worker of a rolling update — stays as it is (E's note on C-54, WN-MONO and WNAPI-MONO).
+- **The app picks the chapters.** `whatsNewChapters(chapters, whatsNew)`
+  (`lib/features/changelog/whatsNew.ts`) keeps the released chapters of the bundled changelog with
+  `since < version ≤ release`, or the `release` chapter alone when `since` is null, never
+  `[Unreleased]`, in the changelog's order, newest first. Versions compare as numbers, with the
+  update check's `compareVersions()`.
+- **The store.** `whatsNew` (`lib/features/changelog/whatsNewStore.svelte.ts`) reads `user.whats_new`
+  from the auth store. `shouldShow` holds while a user is signed in, the window was not closed on
+  this page load, and at least one chapter matches: a `whats_new` that names no bundled chapter
+  shows nothing, and records nothing. `dismiss()` hides the window at once and posts; a failed
+  `POST` is only logged, and the window comes back at the next page load, since the server still
+  says it. The closed flag is reset when the client session ends (`registerClientSessionReset`).
+- **The window.** `WhatsNewModal.svelte` (`whats-new-modal`): the title `changelog.whatsNew.title`;
+  the intro `changelog.whatsNew.intro`, or `changelog.whatsNew.introRelease` with the version when
+  `since` is null; one `whats-new-chapter` per chapter, its version in `data-version`, in the
+  interface language when the bundle translates it (`localizedChangelog`, loaded as
+  `ChangelogModal` loads it), in English otherwise, with the pill `changelog.notTranslated`
+  (`whats-new-not-translated`); the Markdown rendered by `marked` and passed through
+  `sanitizeHtml()` at the `{@html}` sink itself, as the [`htmlSink` gate](../architecture/security.md#output-escaping)
+  requires; `whats-new-full-changelog` (`changelog.whatsNew.fullChangelog`), the changelog on
+  GitHub in a new tab, `rel="noopener noreferrer"`; `whats-new-close` (`changelog.whatsNew.close`,
+  *Got it*). Every close — the button, <kbd>Esc</kbd>, the backdrop — calls `dismiss()`. The window
+  uses colour roles only, and `ChangelogModal` is unchanged.
+- **Tests.** `./dev.py test services whats-new` (`test_services/test_whats_new_service.py`, WN-001
+  to WN-010: the base release, the switch, `pending_for()`, `create_user()`, `mark_seen()`) and
+  `./dev.py test api whats-new` (`test_api/test_whats_new_api.py`, WN-API-01 to WN-API-07,
+  in-process: `user.whats_new` in the answers, the `POST`). `./dev.py test front-utility core-unit`
+  runs `whatsNew.test.ts` (WN-01 to WN-11) and `whatsNewStore.test.ts` (WNS-00 to WNS-12),
+  `component-unit` runs `WhatsNewModal.test.ts` (WNM-01 to WNM-10), and `onboarding-component-unit`
+  runs `DeferredAppPopups.test.ts` (DAP-WN-01 to DAP-WN-05: first of the three, then the next one
+  once closed; held by a guide or a modal; under a requested update, interrupted and not dismissed).
+  `./dev.py test front-utility whats-new` (`frontend/e2e/layout/whats-new.spec.ts`, WNE-01 to
+  WNE-06, both profiles) answers `GET /auth/me` with the real response and its `user.whats_new`
+  replaced, and `POST /auth/whats-new/seen` itself, so it never writes a shared test user.
+
 ## 🗄️ Backend {: #backend }
 
-`backend/app/services/onboarding_service.py` holds the registry and the transitions:
+`backend/app/services/accounts/onboarding_service.py` holds the registry and the transitions:
 
 | Name | Role |
 |---|---|
@@ -387,6 +471,7 @@ and **Maybe later** dismiss it, and a share button opens the share dialog above 
 | `transition_onboarding_progress()` | Completes or skips a flow; on a step-managed flow, applies the status to every registered step |
 | `transition_onboarding_step_progress()` | Completes or skips one step, then recomputes its flow |
 | `complete_welcome_onboarding()` | Saves the Welcome settings and completes `welcome` in one transaction |
+| `reset_onboarding_progress()` | Puts every flow of a user, or one, back to `pending`, steps included, clearing `completed_at` and `skipped_at`; for administrators: `POST /api/v1/users/{user_id}/onboarding/reset` ([Administrator API](../architecture/access_control.md#admin-user-api)) and `./dev.py user reset-onboarding` |
 
 A step-managed flow stays `pending` until every registered step is terminal at the current
 version; it then becomes `skipped` if all its steps were skipped, and `completed` otherwise.
@@ -493,12 +578,12 @@ test, and provides `deleteDisposableUser()` to remove it at the end.
 | `backend/test_scripts/test_api/test_settings_api.py` | The endpoints, including the exact flow and step arrays of the progress read |
 | `backend/test_scripts/test_db/db_schema_validate.py` | Migration 004 and its grandfathered rows |
 | `backend/test_scripts/test_db/test_db_referential_integrity.py` | The canonical E2E users, completed on every flow and step |
-| `frontend/src/lib/stores/app/onboarding.test.ts` | Controller, API contract (`ONBOARDING_FLOWS` pinned by hand), storage keys, cross-tab drop, bootstrap |
+| `frontend/src/lib/stores/app/onboarding.test.ts` | Controller, API contract (`ONBOARDING_FLOWS` pinned by hand), storage keys, cross-tab drop, bootstrap, including the start of the open-registration warning (before the loaders, also when they fail, never without a user) |
 | `frontend/src/lib/features/onboarding/guideAnchors.test.ts` | Anchor registry and action |
 | `frontend/src/lib/features/onboarding/guideCopy.test.ts` | No step text announces another guide |
 | `frontend/src/lib/features/onboarding/onboardingRouteSettlement.test.ts` | Welcome redirect or tour start, exactly once |
 | `frontend/src/routes/(app)/layout.gate.test.ts` | The layout gate follows the bootstrap |
-| `frontend/src/lib/features/onboarding/components/*.test.ts` | Coachmark geometry and stalls, intro scene, replay section, deferred popups, Welcome |
+| `frontend/src/lib/features/onboarding/components/*.test.ts` | Coachmark geometry and stalls, intro scene, replay section, deferred popups, Welcome and its legal notice (`WelcomePage.legal.test.ts`) |
 | `frontend/e2e/onboarding-guides.spec.ts` | Broker, FX and Asset guides walked to completion on desktop and mobile; pause and resume across routes; positions across tabs and logout |
 | `frontend/e2e/onboarding-tour.spec.ts` | Intro-tour order and Transactions overview geometry, scroll clearance, the Import and Bulk step interplay |
 

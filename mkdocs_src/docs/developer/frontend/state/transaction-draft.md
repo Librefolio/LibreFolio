@@ -8,6 +8,8 @@ This document describes how LibreFolio manages the transient staging state of tr
 
 The staging state acts as a local in-memory sandbox where users can add, edit, clone, split, promote, and delete transactions. Rather than immediately saving changes, the operations are staged in the `TransactionBulkModal` as a list of operations. 
 
+The workspace is `TransactionBulkModal.svelte`. It owns the staging state, the validation and the commit, and renders its banners and its toolbar through `TxBulkBanners` and `TxBulkToolbar` (`frontend/src/lib/features/transactions/bulk/`), which read that state as props, write back only what they bind, and call the modal's handlers.
+
 ```mermaid
 ---
 config:
@@ -36,7 +38,7 @@ graph TD
 
 ## 🏷️ The `PendingOp` Tagged Union
 
-LibreFolio represents each staged row as a `PendingOp`. It is implemented as a TypeScript **discriminated (tagged) union** in `TransactionBulkModal.svelte` that separates metadata from pure transaction data fields (`DraftFields`).
+LibreFolio represents each staged row as a `PendingOp`. It is implemented as a TypeScript **discriminated (tagged) union**, declared with `DraftFields` in `features/transactions/bulk/txBulkTypes.ts` and held by `TransactionBulkModal.svelte`, that separates metadata from pure transaction data fields (`DraftFields`).
 
 ### State Schema
 
@@ -74,6 +76,31 @@ type PendingOp = (
 
 A linked pair is two ops: the visible row and a hidden partner whose `pairedWith` points to it.
 
+`quantity` and `cash.amount` are decimal strings held in the workspace's sign convention: a value
+whose type rule demands a negative — a `SELL`'s quantity; the cash of a `BUY`, a `WITHDRAWAL`, a
+`FEE` or a `TAX` — is held as its magnitude, and `applySignRules()` puts the sign back in every
+payload built for validate and commit (`buildCreatePayload()` and `buildUpdateDiff()`, in
+`lib/features/transactions/txPayloadHelpers.ts`). Every other value is held as given; under a
+`nonzero` rule, such as a `TRANSFER` leg's or an `ADJUSTMENT`'s quantity, its sign is information.
+The conversion is `magnitudeForRule(value, rule)` (same file, W-B65): under the `negative` rule a
+negative value becomes its magnitude, its digits exact, trailing zeros dropped, never in exponent
+notation (`-0.00000001` → `0.00000001`, `-0.020000` → `0.02`); anything else comes back as given —
+a magnitude, a zero, a text that is no plain decimal, any value of another rule. It is idempotent,
+and the inverse of `applySign()` on the `negative` rule. A saved row, or a clone of one, is read
+in through it (`fieldsFromTx`), its cash exactly, no longer through `Number`; an imported row
+takes the same convention in `txCreateItemToPendingOp`, which still reads its cash, whatever the
+rule, through `Number`.
+
+On **Apply** the Form pushes back a create-shaped payload, signed as a create is sent
+(`buildCreatePayload()`, or `buildDualCreatePayloads()` for a pair). `applyFormPayload()` copies it
+into the row's `DraftFields`, reads the signed quantity to derive `cost_basis_mode`, and as its
+last step brings the quantity and the cash back to the workspace's convention with
+`magnitudeForRule()`. Every Apply goes through it — a new row, an edited one, both halves of a
+pair — so an untouched Apply gives the quantity and the cash back as the row held them (W-B65).
+Before, the row kept the signed values: an untouched Apply on a one-satoshi `SELL` showed
+`-0.00000001` in its cell, and closing the workspace asked to discard, though the row stayed
+`original` (see *Derived Row Status* below).
+
 ---
 
 ## ⚡ Core Design Principles
@@ -90,6 +117,27 @@ Row status is calculated dynamically at runtime. It is never stored as an editab
 | `op.op === 'edit'` | `markedDelete === true` | `delete` | Row marked to be removed |
 | `op.op === 'edit'` | `fields` match `txStoreGet(txId)` | `original` | Unchanged row |
 | `op.op === 'edit'` | `fields` differ from `txStoreGet(txId)` | `edited` | Row has local modifications |
+
+The comparison goes through `collectUpdate()` → `buildUpdateDiff()`, which signs the draft and the
+saved row alike (`applySignRules()`) and compares their decimals exactly (`fieldEq()`): a
+magnitude held for a `negative` rule matches the signed value saved, so the sign convention never
+shows in the status.
+
+The close guard is stricter. Closing the workspace — ✕, **Cancel**, Escape or a click on the
+backdrop — goes through `requestClose()`, which first asks *Discard Changes?* when
+`hasUnsavedChanges()` finds that `serializeOps(ops)` differs from `initialOpsKey`, the key
+`serializeOps()` (`lib/features/transactions/bulk/bulkDisplay.ts`) took when the rows were seeded.
+The key is the JSON of every op, hidden partners included: its `DraftFields` as held (not through
+`applySignRules()`) and its other keys. It leaves out `tempId` and `createdSeq`, names `pairedWith`
+and `link_uuid` by the rows they point at, and sorts object keys, so a reset (`resetRow`,
+`resetAll`), which rebuilds the saved rows under new identities, reads no change. Unlike the
+status, it compares values as held: a signed value where the row held a magnitude is a change. And
+`JSON.stringify` keeps a key set to `null` but drops an absent one, so an Apply whose payload
+carries no WAC currency (`_wac_currency_hint: null`) deletes the op's `wacCurrencyHint`
+(`patchRowFromForm`, and the partner in `patchDualRowFromForm`) instead of writing `null`: both
+mean that the backend decides (`opToTxFields()` uses the hint only when it holds a currency), and
+a row starts without the key. Before W-B65 it wrote `null`, and every such Apply, even on a
+`DEPOSIT`, asked to discard.
 
 ---
 
@@ -117,7 +165,7 @@ The tagged union structure of `PendingOp` simplifies complex composite operation
 ### 💡 Promote suggestions {: #promote-suggestions }
 
 The workspace looks for the two halves of a transfer or an exchange and offers to promote them
-(`TransactionBulkModal.svelte`, with the pure helpers of `lib/utils/transactions/promoteSuggest.ts`):
+(`TransactionBulkModal.svelte`, with the pure helpers of `lib/features/transactions/bulk/promoteSuggest.ts`):
 
 * **The green banner** (`promote-suggest-banner`) lists `bannerSuggestions`: pairs of standalone
   rows that are both in the workspace — two new rows, two saved rows, or a new row and a saved one
@@ -142,7 +190,9 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   standalone saved rows and on the new rows that have a type, a broker, a date and an amount or a
   quantity, asked about under a negative id (`newRowSuggestId`). It uses the banner's *Max Δ days*
   window: the slider's value (`maxDeltaDays`) goes as `tolerance_days`, and the backend searches
-  each row's date ± that many days, so 0 means the same day only. The window is part of the search
+  each row's date ± that many days, so 0 means the same day only. A row dated at the calendar's
+  edge (0001-01-01, 9999-12-31) gets its window cut there (`shift_date()`, W-B71) and simply finds
+  nothing; it used to fail the whole search. The window is part of the search
   key, so moving the slider starts a new search, debounced like any other change. Each input also
   carries the row's `asset_event_id` (`TXPromoteSuggestInput`, where `null` or `0` means not
   linked): the backend skips, for a linked row, every rule whose target type refuses the link —
@@ -151,7 +201,14 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   from merging. The 💡 opens `TransactionPickerModal` on those candidates; once one is added, the
   banner offers the pair.
 * **Merge** (`promote-suggest-link-<idx>`) promotes one pair: `executePromote` at once, or
-  `PromoteMergeModal` first when the two rows differ in description or tags.
+  `PromoteMergeModal` first when the two rows differ in description or tags. Where the
+  descriptions differ, the dialog counts the merged one under its textarea
+  (`promote-merge-desc-counter`, `data-state` `ok` or `over`), in code points as Python's
+  `len()` counts them (`textLength()` and `TX_DESCRIPTION_MAX_LENGTH`, 500, in
+  `promoteHelpers.ts`). Past 500 — 500 itself fits — the textarea is `aria-invalid`, a message
+  names the limit (`promote-merge-desc-too-long`) and **Confirm promotion**
+  (`promote-merge-confirm`) is disabled: the backend would refuse the merged notes with
+  `string_too_long` (W-B70).
 * **Merge all (N)** (`promote-suggest-merge-all`, when `mergeAllPairs` holds more than one pair)
   opens `PromoteAllModal.svelte` (`promote-all-modal`), which asks one `PromoteAllStrategy` for every
   pair, `merge` preselected at each opening: `left` (*All left*, the description and tags of the
@@ -161,9 +218,14 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   shown), without any pair that shares a row with an earlier one: when two suggestions share a
   row, only the first is kept and the row is merged once. *N*, and the count the dialog shows, is
   `mergeAllPairs.length`: the pairs to merge, not the suggestions. `mergeAllSuggestions` then walks
-  `mergeAllPairs` and passes the chosen values to `executePromote` where a pair differs in
-  description or tags; it skips a pair whose rows no longer match a rule, or with a row already
-  merged (`isPaired`).
+  `mergeAllPairs`; it skips a pair whose rows no longer match a rule, or with a row already merged
+  (`isPaired`), and passes `executePromote` what `resolvePromoteAllFields(strategy, left, right)`
+  (`promoteHelpers.ts`) returns: `{}` when the two rows agree on description and tags, otherwise
+  the chosen side's values or both combined. With `merge`, a pair whose combined description would
+  pass 500 characters gets `null` instead: it is left unpromoted, for **Merge** and its dialog,
+  and never saved with one side's notes only. After the walk, `notify()` counts those pairs in a
+  warning toast (`transactions.promote.mergeAllLeftTooLong`) and the app event
+  `tx.bulk.promote-all.left-for-manual-merge`, detail `{pairs}` (W-B70).
 * **The save gate.** `requestCommit` first counts the suggestions nobody looked at
   (`unseenSuggestionCount`): the 💡 candidates until the picker has been opened once
   (`suggestPickerSeen`), and the banner's pairs until a click lands anywhere in the banner
@@ -177,7 +239,11 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
 `PromoteAllModal.test.ts` (Vitest, jsdom) pins the dialog: the three answers, *Combine* by default
 and again at every opening, and cancelling. `e2e/transactions/tx-import-scalable-transfers.spec.ts`
 runs the whole path on two Scalable exports: the banner's **Merge** (S1), the 💡 and a new + saved
-pair (S2), the save gate (S3) and **Merge all** (S4).
+pair (S2), the save gate (S3) and **Merge all** (S4). The 500-character limit (W-B70) is pinned by
+`promoteHelpers.test.ts` (`textLength()`, `resolvePromoteAllFields()`), `PromoteMergeModal.test.ts`
+(the counter and the disabled confirmation) and `e2e/transactions/tx-bulk-promote-cost-basis.spec.ts`
+(PC7: **Merge all** merges the pair that fits and leaves the one past it, with the toast and the app
+event).
 
 ---
 
@@ -275,7 +341,7 @@ Upon receiving the intent, `TransactionBulkModal` resolves the actual row data d
 When running a file import (`action: 'import'`), LibreFolio's backend BRIM parser plugins might accept a transaction but leave some fields incomplete if they cannot be computed automatically (e.g. cost basis on complex corporate mergers). These are returned to the frontend as a list of `field_todos` (`BRIMFieldTodo` schema).
 
 On the frontend, these are loaded into the bulk modal grid as an array of `ImportTodo` objects
-(`lib/utils/transactions/txPayloadHelpers.ts`) linked to the staging row:
+(`lib/features/transactions/txPayloadHelpers.ts`) linked to the staging row:
 
 ```typescript
 export interface ImportTodo {
@@ -305,7 +371,7 @@ export interface ImportTodo {
    with **Save anyway** and **Review**.
 5. **Resolution:** the user opens the row in the nested `TransactionFormModal` (double-click or the
    row action) and applies it. Applying re-checks the row's todos with `remainingTodos()`
-   (`lib/utils/transactions/bulkTodos.ts`): a todo is resolved when its field now holds a value.
+   (`lib/features/transactions/bulk/bulkTodos.ts`): a todo is resolved when its field now holds a value.
    A missing cost basis has a second answer: Auto (WAC) mode, where the backend computes the cost.
    Applying the form with **Auto** selected clears the "enter the cost" todo
    (`cost_basis_override`) even when Auto was already the mode, because `remainingTodos()` looks

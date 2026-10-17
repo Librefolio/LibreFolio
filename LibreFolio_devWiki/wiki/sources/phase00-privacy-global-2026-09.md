@@ -55,4 +55,4 @@ source scan sees).
 | Round 2 — post review | `LibreFolio_developer_journal/Release_2/phases/24_privacyGlobal/plan-phase00PrivacyGlobalRound2-PostReview.prompt.md` |
 | Masking primitives | `frontend/src/lib/utils/privacy/maskable.ts` |
 | Gate | `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` |
-| Risk formatter (repaired 2026-09-24) | `frontend/src/lib/components/risk/riskAnalysisHelpers.ts` |
+| Risk formatter (repaired 2026-09-24) | `frontend/src/lib/features/risk/riskAnalysisHelpers.ts` |

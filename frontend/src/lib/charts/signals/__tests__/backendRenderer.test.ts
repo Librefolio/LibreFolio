@@ -1,8 +1,12 @@
 import {describe, expect, it} from 'vitest';
 
+import {secondaryAxisSettingsKey} from '$lib/components/charts/chartCoreHelpers';
+
 import {renderBackendSignalResult as renderBackendSignalResultRaw} from '../backendRenderer';
-import {backendSignalSchemas, type BackendSignalResult} from '../backendTypes';
+import {backendSignalSchemas, type BackendSignalCatalogDefinition, type BackendSignalResult} from '../backendTypes';
+import {mapBackendSignalDefinition} from '../catalogMapper';
 import type {SignalConfig, SignalDefinition} from '../ChartSignal';
+import {createSignalConfig} from '../registry';
 
 const config: SignalConfig = {
     id: 'signal-instance',
@@ -469,5 +473,202 @@ describe('canonical backend signal renderer', () => {
 
         expect(outcome.signals).toEqual([]);
         expect(outcome.error).toBe('TA backend failed');
+    });
+});
+
+/**
+ * The calendar Rolling Return as an overlay (workstream J, CP-10a; developer's decision 29: ONE Rolling Return,
+ * measured in calendar days).
+ *
+ * Until decision 29 ASSET_CALENDAR_ROLLING_RETURN was hidden from the catalog and only fed the page's primary
+ * calendar mode, which reads its result through `extractCalendarReturnView`. Now the signal tree offers it, so its
+ * result also goes through this generic renderer, which had never been handed its shape: points that carry
+ * `value: null` with a non-`available` status, and a warning rather than an error when some of them could not be
+ * computed. The definition and the config are built the way the app builds them: the catalog entry through the
+ * mapper, the config as the tree creates it.
+ */
+const CALENDAR_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
+const CALENDAR_OUTPUT_KEY = 'calendar_return';
+const CALENDAR_WARNING_MESSAGE = 'One or more calendar-return points are unavailable';
+
+/** What `calendar_rolling_return/plugin.py` publishes: one RISK line in percent, on an independent axis of its own. */
+function calendarCatalogEntry(): BackendSignalCatalogDefinition {
+    return backendSignalSchemas.catalog.parse({
+        signal_code: CALENDAR_SIGNAL_CODE,
+        implementation_version: '1.4.0',
+        category: 'risk',
+        display_name_key: 'signals.riskRollingReturn.name',
+        description_key: 'signals.riskRollingReturn.description',
+        semantic_id: 'calendar_rolling_return',
+        semantic_description: 'Measures price-only return over an exact calendar-day window.',
+        icon: '↗️',
+        docs_path: 'financial-theory/fundamentals/returns/',
+        params_schema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+                window_days: {
+                    type: 'integer',
+                    minimum: 1,
+                    default: 30,
+                    'x-i18n-key': 'chartSettings.params.window',
+                    'x-control-order': 1,
+                    'x-suffix': 'days',
+                    'x-step': 1,
+                    'x-tooltip-key': 'signals.riskRollingReturn.windowTooltip',
+                },
+            },
+        },
+        default_params: {window_days: 30},
+        input_requirements: {price_fields: ['close'], data_policy: 'allow_partial_contiguous', minimum_coverage: 0},
+        output_specs: [
+            {
+                key: CALENDAR_OUTPUT_KEY,
+                label_key: 'signals.riskRollingReturn.output',
+                description_key: 'signals.riskRollingReturn.outputDescription',
+                semantic_id: 'calendar_rolling_return.value',
+                semantic_description: 'Price-only return from the resolved value exactly N calendar days earlier.',
+                unit: 'percentage',
+                axis: {key: CALENDAR_OUTPUT_KEY, role: 'independent'},
+                view_transform: 'none',
+                kind: 'line',
+                aggregation_profile: 'last_with_range',
+                supports_reference_levels: true,
+                default_reference_levels: [{key: 'zero', label_key: 'signals.reference.zero', semantic: 'No price-only gain or loss.', value: 0}],
+            },
+        ],
+        compatible_domains: ['asset'],
+    });
+}
+
+type CalendarPointStatus = 'available' | 'missing_reference' | 'invalid_current_price' | 'invalid_reference_price';
+
+/** One point as the plugin sends it: the return, and why there is one or not. */
+function calendarPoint(date: string, value: number | null, status: CalendarPointStatus, referenceTargetDate: string) {
+    const referenceResolved = status === 'available' || status === 'invalid_current_price';
+    return {
+        date,
+        value,
+        provenance: {
+            status,
+            reference_target_date: referenceTargetDate,
+            current_price_date: date,
+            current_price_days_back: 0,
+            reference_price_date: referenceResolved ? referenceTargetDate : null,
+            reference_price_days_back: referenceResolved ? 0 : null,
+        },
+    };
+}
+
+/**
+ * A partial result over five days: three computed returns (one of them exactly 0, which is a value and not a gap)
+ * and two that could not be computed, reported by the plugin's UNDEFINED_METRIC_WINDOW warning.
+ */
+function calendarResult(instanceId: string): BackendSignalResult {
+    return backendSignalSchemas.result.parse({
+        instance_id: instanceId,
+        signal_code: CALENDAR_SIGNAL_CODE,
+        status: 'partial',
+        series: [
+            {
+                key: CALENDAR_OUTPUT_KEY,
+                label_key: 'signals.riskRollingReturn.output',
+                description_key: 'signals.riskRollingReturn.outputDescription',
+                semantic_id: 'calendar_rolling_return.value',
+                semantic_description: 'Price-only return from the resolved value exactly N calendar days earlier.',
+                unit: 'percentage',
+                axis: {key: CALENDAR_OUTPUT_KEY, role: 'independent'},
+                view_transform: 'none',
+                kind: 'line',
+                reference_levels: [{key: 'zero', label_key: 'signals.reference.zero', semantic: 'No price-only gain or loss.', value: 0}],
+                points: [
+                    calendarPoint('2026-07-20', 4.25, 'available', '2026-06-20'),
+                    calendarPoint('2026-07-21', null, 'missing_reference', '2026-06-21'),
+                    calendarPoint('2026-07-22', 0, 'available', '2026-06-22'),
+                    calendarPoint('2026-07-23', null, 'invalid_reference_price', '2026-06-23'),
+                    calendarPoint('2026-07-24', -1.5, 'available', '2026-06-24'),
+                ],
+            },
+        ],
+        warnings: [
+            {
+                code: 'undefined_metric_window',
+                message: CALENDAR_WARNING_MESSAGE,
+                details: {unavailable_points: 2, reasons: {invalid_reference_price: 1, missing_reference: 1}},
+            },
+        ],
+    });
+}
+
+describe('calendar Rolling Return as a backend overlay', () => {
+    it('maps the published catalog entry to a risk definition whose one component is calendar_return', () => {
+        // Premise: the renderer finds each output's component in the definition, and throws without it.
+        const calendarDefinition = mapBackendSignalDefinition(calendarCatalogEntry());
+
+        expect(calendarDefinition.type).toBe('asset-calendar-rolling-return');
+        expect(calendarDefinition.indicatorGroup).toBe('risk');
+        expect(calendarDefinition.compatibleDomains).toEqual(['asset']);
+        expect(calendarDefinition.visualComponents?.map((component) => component.key)).toEqual([CALENDAR_OUTPUT_KEY]);
+        // The config the tree creates carries the default window, which is what the request sends.
+        expect(createSignalConfig(calendarDefinition, 0).params).toEqual({window_days: 30});
+    });
+
+    it('breaks the line at each point the backend sent without a value: a gap, never a 0, and an exact 0 stays a value', () => {
+        const calendarDefinition = mapBackendSignalDefinition(calendarCatalogEntry());
+        const calendarConfig = createSignalConfig(calendarDefinition, 0);
+        const result = calendarResult(calendarConfig.id);
+        // Premise: the two gaps reach the renderer as null values, each with the status that explains it.
+        const [sentSeries] = result.series ?? [];
+        if (!sentSeries || sentSeries.kind === 'band') throw new Error('the calendar result must carry one line series');
+        const gaps = sentSeries.points.flat().filter((point) => point.value === null);
+        expect(gaps.map((point) => ('provenance' in point ? point.provenance.status : 'no provenance'))).toEqual(['missing_reference', 'invalid_reference_price']);
+
+        // Percentage view: the calendar return is already a percentage (`view_transform: none`), so nothing is rebased.
+        const outcome = renderBackendSignalResultRaw(result, calendarConfig, {baseData, viewMode: 'percentage', definition: calendarDefinition});
+
+        // One run per stretch between two gaps, in date order (J-21). The exact 0 between the two gaps is a
+        // one-point run: a value in the data and the tooltip, joined to neither neighbour, as the page's own
+        // calendar comparison lines draw it (`connectNulls: false`).
+        expect(outcome.signals.map((rendered) => rendered.data)).toEqual([[{date: '2026-07-20', value: 4.25}], [{date: '2026-07-22', value: 0}], [{date: '2026-07-24', value: -1.5}]]);
+        const drawnDates = outcome.signals.flatMap((rendered) => rendered.data.map((point) => point.date));
+        expect(drawnDates).not.toContain('2026-07-21');
+        expect(drawnDates).not.toContain('2026-07-23');
+        const ids = outcome.signals.map((rendered) => rendered.id);
+        expect(ids.filter((id) => !id.startsWith(`${calendarConfig.id}:${CALENDAR_OUTPUT_KEY}:`))).toEqual([]);
+        expect(new Set(ids).size).toBe(ids.length);
+        for (const rendered of outcome.signals) {
+            expect(rendered).toMatchObject({seriesType: 'line', unit: 'percentage', aggregationProfile: 'last_with_range'});
+        }
+        // The zero line is drawn once: the first run carries the reference level, the others do not.
+        expect(outcome.signals.map((rendered) => rendered.referenceLevels?.map((level) => [level.key, level.value]))).toEqual([[['zero', 0]], undefined, undefined]);
+    });
+
+    it('puts the line on the independent calendar_return axis, the key its saved scale is stored under', () => {
+        const calendarDefinition = mapBackendSignalDefinition(calendarCatalogEntry());
+        const calendarConfig = createSignalConfig(calendarDefinition, 0);
+
+        const [rendered] = renderBackendSignalResultRaw(calendarResult(calendarConfig.id), calendarConfig, {baseData, viewMode: 'absolute', definition: calendarDefinition}).signals;
+
+        expect(rendered.axisKey).toBe(CALENDAR_OUTPUT_KEY);
+        expect(rendered.axisRole).toBe('independent');
+        // The key chartSettingsStore's version-3 migration moves a saved `independent:risk_return` scale to.
+        expect(secondaryAxisSettingsKey(rendered)).toBe('independent:calendar_return');
+    });
+
+    it('passes the UNDEFINED_METRIC_WINDOW warning on, as a warning of a partial result and not as an error', () => {
+        const calendarDefinition = mapBackendSignalDefinition(calendarCatalogEntry());
+        const calendarConfig = createSignalConfig(calendarDefinition, 0);
+        const result = calendarResult(calendarConfig.id);
+        // Premise: the only warning of the result is the plugin's own.
+        expect(result.warnings?.map((warning) => warning.code)).toEqual(['undefined_metric_window']);
+
+        const outcome = renderBackendSignalResultRaw(result, calendarConfig, {baseData, viewMode: 'absolute', definition: calendarDefinition});
+
+        // The outcome carries a warning's message, not its code.
+        expect(outcome.warnings).toEqual([CALENDAR_WARNING_MESSAGE]);
+        expect(outcome.status).toBe('partial');
+        expect(outcome.error).toBeNull();
+        // One run per stretch between the two unavailable days (J-21).
+        expect(outcome.signals).toHaveLength(3);
     });
 });

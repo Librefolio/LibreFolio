@@ -20,7 +20,13 @@ The Yahoo Finance provider fetches stock, ETF, crypto, and index prices using th
    the provider.
 2. Calls `ticker.info` — the Yahoo `quoteSummary` endpoint. Returns `regularMarketPrice`, `currency`, and `regularMarketTime` in a **single lightweight call**.
 3. Fallback price: `currentPrice` → `previousClose` (if `regularMarketPrice` is null).
-4. **No `history()` call at all** — current value polling never touches the chart API.
+4. `as_of_date` is the date of `regularMarketTime` in the exchange's timezone,
+   `info["exchangeTimezoneName"]`: UTC when Yahoo gives none or one `zoneinfo` does not know,
+   and the server's today without `regularMarketTime`. `FACurrentValue.exchange_timezone`
+   declares that timezone (`None` when unknown). Up to 1.2.1 the date was always UTC's, the day
+   before for the part of a session that falls before UTC midnight, such as Sydney's or
+   Auckland's (Z-33).
+5. **No `history()` call at all** — current value polling never touches the chart API.
 
 !!! warning "Avoid `history()` and `fast_info` for current price"
 
@@ -42,16 +48,37 @@ The public method now delegates its local work to focused helpers without changi
    - A finite range calls `ticker.history(start=start_date, end=end_date + 1 day)`, preserving
      LibreFolio's inclusive end date over yfinance's exclusive `end`.
    - Currency metadata falls back to `USD`.
+   - Otherwise the currency is Yahoo's own code (`ticker.info["currency"]`), passed on unchanged
+     as `FAHistoricalData.currency`: `GBp` for a London line quoted in pence. The price points and
+     the dividends carry `GBP` (their schemas upper-case the code) with the numbers in pence, and
+     the refresh keeps the raw code on the assignment
+     ([The Provider's Own Quote Currency](architecture.md#reported-currency)). Two guards in
+     `test_yahoo_finance_errors.py` pin both: no validator on that field, no conversion here.
+   - The exchange's timezone is the history index's own (yfinance localizes it to `tz_exchange`)
+     when `zoneinfo` knows it (`exchange_zone()`, `backend/app/utils/exchange_dates.py`); else
+     (an index without a zone, or with one `zoneinfo` does not know, such as the fixed offset
+     `UTC+02:00`) `ticker.info["exchangeTimezoneName"]` when `zoneinfo` knows it; `None` otherwise.
+     It is declared as `FAHistoricalData.exchange_timezone` (`Europe/Rome`), and the refresh keeps
+     it on the assignment ([The Exchange's Timezone](architecture.md#exchange-timezone)). The
+     fixed-offset fallback is pinned by the `an-unnamed-index-zone-falls-back-to-info` case of
+     `test_z33_history_declares_the_exchange_timezone` (`test_yahoo_finance_errors.py`).
    - Dividend and split series are acquired independently and best-effort; one failing does not
      suppress the other or the prices.
 2. **Map — `_map_history_prices()`**
-   - Yahoo index values are converted to UTC before extracting the calendar date.
+   - Each row takes the calendar date of its own index value (`_normalize_yahoo_date()`):
+     yfinance 1.7.0 stamps a daily bar, a dividend and a split at midnight in the exchange's
+     timezone (`scrapers/history.py`, `tz_localize(tz_exchange)`), so that date is the session's.
+     Up to 1.2.1 the plugin converted the index to UTC first, which gave the day before the
+     session for every exchange east of UTC: Milan all year, London in summer time, Tokyo
+     (Z-33). The rows stored that way are checked once, at the first refresh after the upgrade
+     ([The Exchange's Timezone](architecture.md#exchange-timezone)).
    - Rows are filtered to the requested inclusive range.
    - A row with `Close = NaN` is skipped. Optional `Open`, `High`, `Low`, or `Volume` NaNs
      become `None`.
    - The provider returns only actual trading days; the query layer performs backward fill.
 3. **Events — `_parse_dividend_events()` and `_parse_split_events()`**
-   - Positive in-range dividends and non-trivial in-range split ratios become typed asset events.
+   - Positive in-range dividends and non-trivial in-range split ratios become typed asset events,
+     dated by `_normalize_yahoo_date()` as the prices.
    - The two parsers are also isolated best-effort, so either event family can survive a failure
      in the other.
 
@@ -63,7 +90,7 @@ history uses `NO_DATA`, and malformed or unexpected Yahoo responses use `FETCH_E
 
     Yahoo's yfinance calls remain synchronous and direct. The provider does not call
     `asyncio.to_thread()`; the asset-source service invokes the whole provider coroutine through
-    `asset_sources.core._run_provider_in_thread()` in a dedicated thread with a new event loop.
+    `assets.core._run_provider_in_thread()` in a dedicated thread with a new event loop.
 
 ### 🔎 Search (`search`)
 
@@ -92,8 +119,9 @@ During sync, the provider generates:
 - **`SPLIT` events** from `ticker.splits` — split date + ratio value (e.g., `4.0` for a 4:1 split).
 
 Event acquisition and parsing are best-effort and independent. Events that are returned are
-persisted by `asset_sources/price_store.py::_upsert_asset_events()`, keyed by
-`provider_assignment_id`.
+persisted by `assets/event_store.py::_upsert_asset_events()`, keyed by
+`provider_assignment_id`. They are dated on the exchange's day, as the prices; those an older
+version stored a day early are re-dated once ([Asset Events](events.md#yahoo-redate)).
 
 ---
 
@@ -102,12 +130,12 @@ persisted by `asset_sources/price_store.py::_upsert_asset_events()`, keyed by
 | Owner / Cache | Key | TTL | Max Size | Purpose |
 |---|---|---|---|---|
 | **Core current value** | Provider code + identifier + identifier type (refresh also includes the provider-parameter hash) | 120 sec | 300 | Avoid repeated `ticker.info` calls during current-price polling and refresh. |
-| **Core history** | Provider code + identifier + identifier type + provider-parameter hash | 15 min | 500 | Reuse fetched date ranges during provider-driven refresh. |
+| **Core history** | Provider code + identifier + identifier type + provider-parameter hash | 15 min | 500 | Reuse fetched date ranges during provider-driven refresh; the entry also keeps the reported currency and exchange timezone. The one-time date check reads past it. |
 | **Core search query** | Provider code + normalized query | 15 min | 500 | Avoid repeating the same provider search. |
 | **Yahoo currency lookup** | `symbol` | 24 hours | 2000 | Cache the provider's `fast_info` currency sub-operation used by `search()`. |
 
 All are in-memory, per-process TTL caches created with `get_ttl_cache()`. The shared result caches
-are owned by `asset_sources/core.py`; Yahoo owns only its currency sub-operation cache.
+are owned by `assets/core.py`; Yahoo owns only its currency sub-operation cache.
 
 !!! info "No provider-level history cache"
 
@@ -129,9 +157,26 @@ are owned by `asset_sources/core.py`; Yahoo owns only its currency sub-operation
 
 ## ⚠️ Limitations
 
-- **Rate limits**: Yahoo Finance may throttle requests. No built-in rate limiter — rely on core sync Semaphore.
+- **Rate limits**: Yahoo Finance may refuse for too many requests. `_is_rate_limited()` recognises
+  yfinance's `YFRateLimitError` and, in any error message, «429» as a whole word, «too many requests»
+  or «rate limit»; `_yf_with_retry()` then raises `AssetRateLimitedError` at once, without retrying
+  in the thread, and search and metadata let it through instead of answering `[]` or `None`. The core
+  pauses the provider ([Provider Pauses](architecture.md#provider-pauses)); yfinance gives no
+  `Retry-After`, so the pause is the core's own. A false positive costs a pause of about a minute.
+  Other transient errors (timeouts, reset connections, `503`…) are still retried: at most three
+  attempts, 1.5 s and then 3 s apart.
 - **ISIN resolution**: Not all ISINs are resolvable by yfinance (depends on market coverage).
+- **Prices in pence**: a London line quoted in pence (`GBp`) is stored in pence as `GBP`. Its
+  holdings are right once the asset's quote base is 100, and the Dashboard warns until then
+  (`QUOTE_IN_MINOR_UNIT`, see [Data Quality Banner](../../frontend/data-quality-banner.md)); its
+  dividends stay in pence whatever the base.
 - **Data gaps**: Some tickers may have missing days or delayed data.
+- **Rows dated a day early by 1.2.1 or earlier**: the one-time check re-dates them; its
+  [limits](architecture.md#exchange-timezone-limits) list the rows it cannot reach, such as those
+  of an asset whose `yfinance` assignment was removed before it.
+- **Adjusted closes**: `ticker.history()` is called without `auto_adjust`, so yfinance's default
+  (`True`) applies: the stored OHLC are adjusted for dividends and splits as of each fetch, and
+  a row keeps the adjustment of the fetch that last wrote it (Z-35, open after 1.3).
 
 ---
 

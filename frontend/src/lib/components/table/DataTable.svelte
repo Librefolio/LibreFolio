@@ -13,19 +13,17 @@
 <script generics="T" lang="ts">
     import {onDestroy, onMount, untrack} from 'svelte';
     import {t} from '$lib/i18n';
-    import {formatBytes} from '$lib/utils/files/upload';
     import {getUserStorageKey} from '$lib/utils/storage';
-    import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
-    import {Ban, Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon, Info} from 'lucide-svelte';
+    import {Ban, Check, Filter} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import DataTablePagination from './DataTablePagination.svelte';
-    import DataTableColumnFilter from './DataTableColumnFilter.svelte';
+    import DataTableColumnHeader from './DataTableColumnHeader.svelte';
+    import DataTableCellContent from './DataTableCellContent.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
     import type {ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
-    import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {BulkAction, ColumnDef, ColumnWidthsState, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
-    import {compareRowsByColumn, formatCellDate, getColumnMinMax, getCurrencyMinMaxByCode, getCurrencyOptions, getEnumOptionsWithCounts, getMultiEnumOptions, getMultiEnumOptionsWithCounts, matchesColumnFilter} from './dataTableLogic';
+    import {compareRowsByColumn, matchesColumnFilter, reorderKeepingAbsent, withNewColumns} from './dataTableLogic';
     import {clearTimer} from '$lib/utils/core/clearTimer';
 
     interface Props {
@@ -238,7 +236,7 @@
     let pendingRowAction = $state<{action: RowAction<T>; row: T} | null>(null);
 
     // Resize state
-    let resizing = $state<{columnId: string; startX: number; startWidth: number} | null>(null);
+    let resizing = $state<{columnId: string; pointerId: number; startX: number; startWidth: number} | null>(null);
 
     // Highlighted row (set by navigateToRowId, cleared on user interaction)
     let highlightedRowId = $state<string | null>(null);
@@ -302,9 +300,6 @@
     /** Bound on the root `.datatable-container` so `navigateToRowId` can scope
      *  its DOM lookup to this instance only (Bugfix-4 §C15). */
     let containerEl: HTMLDivElement | null = null;
-
-    // Filter button refs (for fixed-position popover)
-    let filterBtnRefs = $state<Record<string, HTMLButtonElement | null>>({});
 
     // ============ Storage Helpers ============
 
@@ -427,29 +422,6 @@
 
     // ============ Helper Functions ============
 
-    /** Empty currency min/max map — extracted to avoid generic syntax `<string, …>` in
-     *  Svelte template `{@const}` blocks where `<` is parsed as an HTML tag. */
-    const EMPTY_CURRENCY_MIN_MAX: Map<string, {min: number; max: number}> = new Map();
-
-    function getColumnLabel(col: ColumnDef<T>): string {
-        return typeof col.header === 'function' ? col.header() : col.header;
-    }
-
-    function getColumnHeaderHtml(col: ColumnDef<T>): string | null {
-        if (!col.headerHtml) return null;
-        return typeof col.headerHtml === 'function' ? col.headerHtml() : col.headerHtml;
-    }
-
-    function getColumnTooltip(col: ColumnDef<T>): string | null {
-        if (!col.headerTooltip) return null;
-        return typeof col.headerTooltip === 'function' ? col.headerTooltip() : col.headerTooltip;
-    }
-
-    function getColumnTooltipUrl(col: ColumnDef<T>): string | null {
-        if (!col.headerTooltipUrl) return null;
-        return typeof col.headerTooltipUrl === 'function' ? col.headerTooltipUrl() : col.headerTooltipUrl;
-    }
-
     let headerTooltipLongPressTimer: ReturnType<typeof setTimeout> | null = null;
     let suppressHeaderTooltipClick = false;
 
@@ -489,13 +461,6 @@
         event.preventDefault();
         event.stopPropagation();
         suppressHeaderTooltipClick = false;
-    }
-
-    /** Handle image load error — hide image and show fallback */
-    function handleImageError(e: Event) {
-        const img = e.currentTarget as HTMLImageElement;
-        img.style.display = 'none';
-        img.nextElementSibling?.classList.remove('hidden');
     }
 
     // ============ Actions ============
@@ -701,8 +666,10 @@
     }
 
     function reorderColumns(newOrder: string[]) {
-        columnOrder = newOrder;
-        saveToStorage(getStorageKey('columnOrder'), newOrder);
+        // The chooser lists only the columns on screen: a column away now keeps its place after the one it followed (Y-27).
+        const order = reorderKeepingAbsent(columnOrder, newOrder, defaultColumnOrder);
+        columnOrder = order;
+        saveToStorage(getStorageKey('columnOrder'), order);
     }
 
     function applyColumnFilter(columnId: string, filter: FilterValue | null) {
@@ -718,38 +685,97 @@
     }
 
     // ============ Resize ============
+    // A handle answers Pointer Events, so a finger or a pen resizes a column like a mouse (D-Y18). The drag starts from
+    // the width the column is drawn at, and the drawn width follows the pointer (C-62): a table that shares its spare
+    // width among its columns (`tableLayout="auto"`, or a fixed table narrower than its box) draws a column wider than
+    // the width it is given, so the width written is corrected on the cell until the drawn one matches.
 
-    function startResize(columnId: string, event: MouseEvent) {
+    /** The header cell being resized: a plain variable, read only while dragging. */
+    let resizeCell: HTMLElement | null = null;
+
+    function startResize(columnId: string, event: PointerEvent) {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
         event.preventDefault();
         event.stopPropagation();
+        const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+        try {
+            handle?.setPointerCapture?.(event.pointerId);
+        } catch {
+            // A pointer the browser no longer tracks: the document listeners below still see its moves.
+        }
+        resizeCell = handle?.closest('th') ?? null;
         resizing = {
             columnId,
+            pointerId: event.pointerId,
             startX: event.clientX,
-            startWidth: columnWidths[columnId] || columns.find((c) => c.id === columnId)?.width || 150,
+            startWidth: resizeCell?.getBoundingClientRect().width || columnWidths[columnId] || columns.find((c) => c.id === columnId)?.width || 150,
         };
-        document.addEventListener('mousemove', handleResize);
-        document.addEventListener('mouseup', stopResize);
+        document.addEventListener('pointermove', handleResize);
+        document.addEventListener('pointerup', stopResize);
+        document.addEventListener('pointercancel', stopResize);
     }
 
-    function handleResize(event: MouseEvent) {
-        if (!resizing) return;
-        const col = columns.find((c) => c.id === resizing!.columnId);
+    function handleResize(event: PointerEvent) {
+        if (!resizing || event.pointerId !== resizing.pointerId) return;
+        const {columnId, startWidth, startX} = resizing;
+        const col = columns.find((c) => c.id === columnId);
         const minWidth = col?.minWidth ?? 50;
         const maxWidth = col?.maxWidth ?? 600;
-        const diff = event.clientX - resizing.startX;
-        const newWidth = Math.min(maxWidth, Math.max(minWidth, resizing.startWidth + diff));
-        columnWidths = {...columnWidths, [resizing.columnId]: newWidth};
+        const target = Math.min(maxWidth, Math.max(minWidth, startWidth + event.clientX - startX));
+        columnWidths = {...columnWidths, [columnId]: fitDrawnWidth(target, columnWidths[columnId] ?? target, minWidth, maxWidth)};
     }
 
-    function stopResize() {
+    /**
+     * The width to give the header cell being resized so that it is drawn `target` px wide. The cell is measured after
+     * each guess: the first scales the given width by drawn/given, the next ones are secant steps. On a table that draws
+     * every column at its given width (fixed, wider than its box) the first guess is exact.
+     */
+    function fitDrawnWidth(target: number, given: number, minWidth: number, maxWidth: number): number {
+        const cell = resizeCell;
+        if (!cell) return target;
+        const clamp = (width: number) => Math.min(maxWidth, Math.max(minWidth, width));
+        const draw = (width: number) => {
+            cell.style.width = `${width}px`;
+            cell.style.minWidth = `${width}px`;
+            return cell.getBoundingClientRect().width;
+        };
+        let previous = {width: given, drawn: cell.getBoundingClientRect().width};
+        let width = clamp(previous.drawn > 0 ? (given * target) / previous.drawn : target);
+        for (let step = 0; step < 4; step++) {
+            const drawn = draw(width);
+            if (Math.abs(drawn - target) < 0.5) break;
+            const slope = (drawn - previous.drawn) / (width - previous.width);
+            const next = clamp(Number.isFinite(slope) && slope > 0 ? width + (target - drawn) / slope : width + target - drawn);
+            previous = {width, drawn};
+            if (Math.abs(next - width) < 0.1) break;
+            width = next;
+        }
+        return Math.round(width * 10) / 10;
+    }
+
+    function stopResize(event?: PointerEvent) {
+        if (event && resizing && event.pointerId !== resizing.pointerId) return;
         if (resizing) {
             const finalWidth = columnWidths[resizing.columnId];
             saveToStorage(getStorageKey('columnWidths'), columnWidths);
             if (finalWidth != null) onColumnResize?.(resizing.columnId, finalWidth);
         }
+        endResize();
+    }
+
+    function endResize() {
         resizing = null;
-        document.removeEventListener('mousemove', handleResize);
-        document.removeEventListener('mouseup', stopResize);
+        resizeCell = null;
+        document.removeEventListener('pointermove', handleResize);
+        document.removeEventListener('pointerup', stopResize);
+        document.removeEventListener('pointercancel', stopResize);
+    }
+
+    /** A column's minimum width: the user's width once they resized it (its width differs from the default), so a table
+     *  laid out `auto` keeps it (C-62); otherwise the column's own minimum. */
+    function columnMinWidth(column: ColumnDef<T>): number {
+        const width = columnWidths[column.id];
+        return width != null && width !== defaultColumnWidths[column.id] ? width : column.minWidth || 60;
     }
 
     // ============ Lifecycle ============
@@ -761,10 +787,11 @@
 
         // Load only explicit user overrides; effective visibility is derived from the
         // live `hiddenByDefault` default merged with these overrides (see declaration).
+        // Every stored override is kept, a column absent now included: the Δ period columns
+        // arrive after the first render, and their choice must hold when they do (Y-27).
         const storedOverrides = loadFromStorage<VisibilityState | null>(getStorageKey('columnVisibilityOverrides'), null);
         if (storedOverrides) {
-            const validIds = new Set(columns.map((c) => c.id));
-            columnVisibilityOverrides = Object.fromEntries(Object.entries(storedOverrides).filter(([id]) => validIds.has(id)));
+            columnVisibilityOverrides = {...storedOverrides};
         }
 
         columnWidths = loadFromStorage(getStorageKey('columnWidths'), defaultColumnWidths);
@@ -786,6 +813,7 @@
     });
 
     onDestroy(cancelHeaderTooltipLongPress);
+    onDestroy(endResize);
 
     // Notify parent when filters change (for URL sync)
     $effect(() => {
@@ -803,57 +831,23 @@
         }
     });
 
-    // Sync column order/visibility/widths when columns change dynamically
-    // (e.g. delta period columns added/removed when date range changes)
+    // Sync column order/widths when columns change dynamically (e.g. the Δ period columns, which
+    // arrive once the backend lists them and change with the date range). A column absent now
+    // keeps its place, its visibility override and its width, so they hold when it comes back:
+    // only a column never seen is added, at its natural place, and nothing is pruned (Y-27).
+    // Visibility needs no handling: it is derived from each column's live `hiddenByDefault`
+    // plus the user's overrides.
     $effect(() => {
-        const currentIds = new Set(columns.map((c) => c.id));
-        const orderedIds = new Set(columnOrder);
-
-        // Detect new columns (not in current order)
-        const newIds = columns.filter((c) => !orderedIds.has(c.id)).map((c) => c.id);
-        // Remove stale columns (no longer in definition)
-        const filtered = columnOrder.filter((id) => currentIds.has(id));
-
-        if (newIds.length > 0 || filtered.length !== columnOrder.length) {
-            // Insert new columns at their correct position based on the columns array order
-            // (not appended at end). This ensures delta columns stay grouped and ordered.
-            for (const newId of newIds) {
-                const colIndex = columns.findIndex((c) => c.id === newId);
-                // Find the last column in filtered that precedes newId in columns order
-                let insertAfterIdx = -1;
-                for (let i = 0; i < filtered.length; i++) {
-                    const existingColIdx = columns.findIndex((c) => c.id === filtered[i]);
-                    if (existingColIdx !== -1 && existingColIdx < colIndex) insertAfterIdx = i;
-                }
-                filtered.splice(insertAfterIdx + 1, 0, newId);
-            }
-            columnOrder = filtered;
+        const nextOrder = withNewColumns(columnOrder, defaultColumnOrder);
+        if (nextOrder.length !== columnOrder.length) {
+            const newIds = nextOrder.filter((id) => !columnOrder.includes(id));
+            columnOrder = nextOrder;
             saveToStorage(getStorageKey('columnOrder'), columnOrder);
 
-            // Visibility for new columns needs no handling here: it is derived from each
-            // column's live `hiddenByDefault` plus user overrides. We only prune overrides
-            // that belong to columns which no longer exist, to keep storage tidy.
-            const nextOverrides = {...columnVisibilityOverrides};
-            let prunedOverrides = false;
-            for (const id of Object.keys(nextOverrides)) {
-                if (!currentIds.has(id)) {
-                    delete nextOverrides[id];
-                    prunedOverrides = true;
-                }
-            }
-            if (prunedOverrides) {
-                columnVisibilityOverrides = nextOverrides;
-                saveToStorage(getStorageKey('columnVisibilityOverrides'), columnVisibilityOverrides);
-            }
-
-            // Update widths for new columns
+            // A width for the new columns only: a column that comes back keeps the one it had.
             const updatedWidths = {...columnWidths};
             for (const id of newIds) {
-                const col = columns.find((c) => c.id === id);
-                updatedWidths[id] = col?.width ?? 150;
-            }
-            for (const id of Object.keys(updatedWidths)) {
-                if (!currentIds.has(id)) delete updatedWidths[id];
+                if (updatedWidths[id] === undefined) updatedWidths[id] = columns.find((c) => c.id === id)?.width ?? 150;
             }
             columnWidths = updatedWidths;
         }
@@ -963,6 +957,7 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         class="table-wrapper"
+        data-testid="dt-scroll"
         onkeydown={() => {
             highlightedRowId = null;
         }}
@@ -972,7 +967,7 @@
                 <tr>
                     <!-- Selection column (multi mode: checkboxes, single mode: no column header) -->
                     {#if effectiveSelectionMode === 'multi'}
-                        <th class="th-fixed th-select" style="width: {selectionColumnWidth};">
+                        <th class="th-fixed th-select" style="width: {selectionColumnWidth};" data-testid="dt-select-header">
                             <div class="flex items-center justify-center gap-1">
                                 <!-- data-state publishes the tri-state of the header checkbox so it can be
                                      observed without reading the icon's CSS class. -->
@@ -1014,131 +1009,35 @@
                             class:sortable={column.sortable !== false && enableSorting}
                             class:th-fixed={column.pinned != null}
                             class:th-pinned-right={column.pinned === 'right'}
-                            style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {column.minWidth || 60}px;{column.pinned === 'left' ? ' left: 0;' : column.pinned === 'right' ? ' right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
+                            style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {columnMinWidth(column)}px;{column.pinned === 'left' ? ' left: 0;' : column.pinned === 'right' ? ' right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
                         >
-                            <div class="header-content" style={column.align === 'center' ? 'justify-content:center' : column.align === 'right' ? 'justify-content:flex-end' : ''}>
-                                {#if getColumnTooltip(column)}
-                                    {@const tooltipText = getColumnTooltip(column) ?? ''}
-                                    <Tooltip text={tooltipText} position="top">
-                                        <button type="button" class="header-sort-btn" data-testid="dt-sort-{column.id}" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
-                                            {#if getColumnHeaderHtml(column)}
-                                                <span class="header-text">{@html getColumnHeaderHtml(column)}</span>
-                                            {:else}
-                                                <span class="header-text">{getColumnLabel(column)}</span>
-                                            {/if}
-                                            {#if column.sortable !== false && enableSorting}
-                                                <span class="sort-icon">
-                                                    {#if sortDir === 'asc'}
-                                                        <ChevronUp size={14} />
-                                                    {:else if sortDir === 'desc'}
-                                                        <ChevronDown size={14} />
-                                                    {:else}
-                                                        <ChevronsUpDown size={14} />
-                                                    {/if}
-                                                </span>
-                                            {/if}
-                                        </button>
-                                    </Tooltip>
-                                {:else}
-                                    <button type="button" class="header-sort-btn" data-testid="dt-sort-{column.id}" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
-                                        {#if getColumnHeaderHtml(column)}
-                                            <span class="header-text">{@html getColumnHeaderHtml(column)}</span>
-                                        {:else}
-                                            <span class="header-text">{getColumnLabel(column)}</span>
-                                        {/if}
-                                        {#if column.sortable !== false && enableSorting}
-                                            <span class="sort-icon">
-                                                {#if sortDir === 'asc'}
-                                                    <ChevronUp size={14} />
-                                                {:else if sortDir === 'desc'}
-                                                    <ChevronDown size={14} />
-                                                {:else}
-                                                    <ChevronsUpDown size={14} />
-                                                {/if}
-                                            </span>
-                                        {/if}
-                                    </button>
-                                {/if}
-
-                                <!-- Header tooltip info icon (only when no emoji/text tooltip) -->
-                                {#if getColumnTooltip(column) && getColumnTooltipUrl(column)}
-                                    {@const tooltipText = getColumnTooltip(column) ?? ''}
-                                    {@const tooltipUrl = getColumnTooltipUrl(column) ?? ''}
-                                    {#if column.headerTooltipLinkMode === 'gesture'}
-                                        <Tooltip text={tooltipText} position="top" math={tooltipText.includes('$')} interactiveChild={true}>
-                                            <button
-                                                type="button"
-                                                class="header-tooltip-icon header-tooltip-gesture"
-                                                aria-label={tooltipText}
-                                                aria-keyshortcuts="Shift+Enter"
-                                                data-testid={`dt-header-tooltip-${column.id}`}
-                                                onclick={handleHeaderTooltipGestureClick}
-                                                ondblclick={(event) => handleHeaderTooltipDblClick(event, tooltipUrl)}
-                                                onkeydown={(event) => handleHeaderTooltipKeydown(event, tooltipUrl)}
-                                                ontouchstart={() => handleHeaderTooltipTouchStart(tooltipUrl)}
-                                                ontouchend={cancelHeaderTooltipLongPress}
-                                                ontouchmove={cancelHeaderTooltipLongPress}
-                                                ontouchcancel={cancelHeaderTooltipLongPress}
-                                            >
-                                                <Info size={12} />
-                                            </button>
-                                        </Tooltip>
-                                    {:else}
-                                        <Tooltip text={tooltipText} position="top" math={tooltipText.includes('$')}>
-                                            <a href={tooltipUrl} target="_blank" rel="noopener noreferrer" class="header-tooltip-icon header-tooltip-link" data-testid={`dt-header-tooltip-${column.id}`} onclick={(e) => e.stopPropagation()}>
-                                                <Info size={12} />
-                                            </a>
-                                        </Tooltip>
-                                    {/if}
-                                {/if}
-
-                                <!-- Filter button -->
-                                {#if column.filterable !== false && enableColumnFilters}
-                                    <button bind:this={filterBtnRefs[column.id]} type="button" class="filter-btn" class:active={hasFilter} onclick={() => (openFilterColumnId = openFilterColumnId === column.id ? null : column.id)} data-testid={`col-filter-trigger-${column.id}`}>
-                                        <Filter size={12} />
-                                    </button>
-                                {/if}
-
-                                <!-- Resize handle -->
-                                {#if column.resizable !== false && enableColumnResize}
-                                    <!-- svelte-ignore a11y_no_static_element_interactions -->
-                                    <span class="resize-handle" class:resizing={resizing?.columnId === column.id} onmousedown={(e) => startResize(column.id, e)}></span>
-                                {/if}
-
-                                <!-- Filter popover -->
-                                {#if openFilterColumnId === column.id}
-                                    {@const minMax = column.type === 'number' || column.type === 'size' ? getColumnMinMax(column, boundaryData) : {min: 0, max: 100}}
-                                    {@const dynamicEnumOptions =
-                                        column.type === 'multi-enum'
-                                            ? column.enumOptions && column.enumOptions.length > 0
-                                                ? getMultiEnumOptionsWithCounts(column, data)
-                                                : getMultiEnumOptions(column, data)
-                                            : column.type === 'enum'
-                                              ? getEnumOptionsWithCounts(column, data)
-                                              : (column.enumOptions ?? [])}
-                                    {@const currencyOptions = column.type === 'currency-stack' ? (column.currencyOptions ?? getCurrencyOptions(column, data)) : []}
-                                    {@const currencyMinMaxByCode = column.type === 'currency-stack' ? getCurrencyMinMaxByCode(column, boundaryData) : EMPTY_CURRENCY_MIN_MAX}
-                                    <DataTableColumnFilter
-                                        type={column.type}
-                                        enumOptions={dynamicEnumOptions}
-                                        {currencyOptions}
-                                        {currencyMinMaxByCode}
-                                        numberMin={minMax.min}
-                                        numberMax={minMax.max}
-                                        integerOnly={column.integerOnly ?? false}
-                                        initialValue={columnFilters[column.id]}
-                                        onApply={(filter) => applyColumnFilter(column.id, filter)}
-                                        onClose={() => (openFilterColumnId = null)}
-                                        anchorElement={filterBtnRefs[column.id] ?? null}
-                                    />
-                                {/if}
-                            </div>
+                            <DataTableColumnHeader
+                                {column}
+                                {sortDir}
+                                {hasFilter}
+                                {enableSorting}
+                                {enableColumnFilters}
+                                {enableColumnResize}
+                                {resizing}
+                                {columnFilters}
+                                {data}
+                                {boundaryData}
+                                bind:openFilterColumnId
+                                {toggleSort}
+                                {applyColumnFilter}
+                                {startResize}
+                                {handleHeaderTooltipGestureClick}
+                                {handleHeaderTooltipDblClick}
+                                {handleHeaderTooltipKeydown}
+                                {handleHeaderTooltipTouchStart}
+                                {cancelHeaderTooltipLongPress}
+                            />
                         </th>
                     {/each}
 
                     <!-- Actions column -->
                     {#if showActionsColumn}
-                        <th class="{stickyActions ? 'th-fixed' : ''} th-actions" style="width: {actionsColumnWidth};">
+                        <th class="{stickyActions ? 'th-fixed' : ''} th-actions" style="width: {actionsColumnWidth};" data-testid="dt-actions-header">
                             {resolvedActionsLabel}
                         </th>
                     {/if}
@@ -1208,7 +1107,7 @@
                         >
                             <!-- Selection cell (multi mode only - shows checkboxes) -->
                             {#if effectiveSelectionMode === 'multi'}
-                                <td class="td-fixed td-select">
+                                <td class="td-fixed td-select" data-testid="dt-select-cell-{rowId}">
                                     <div class="flex items-center justify-center gap-1">
                                         {#if !isRowSelectable || isRowSelectable(row)}
                                             <button
@@ -1253,189 +1152,13 @@
                                     style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
                                     data-column-id={column.id}
                                 >
-                                    {#if typeof cellContent === 'string' || typeof cellContent === 'number'}
-                                        {cellContent}
-                                    {:else if cellContent && typeof cellContent === 'object' && 'type' in cellContent}
-                                        {#if cellContent.type === 'icon-text'}
-                                            <div class="cell-icon-text">
-                                                <div class="cell-icon-box">
-                                                    <cellContent.icon size={16} class={cellContent.iconClass || ''} />
-                                                </div>
-                                                <span>{cellContent.text}</span>
-                                            </div>
-                                        {:else if cellContent.type === 'badge'}
-                                            <span class="cell-badge {cellContent.variant}" class:custom-style={cellContent.customStyle} style={cellContent.customStyle || undefined} data-badge-variant={cellContent.variant}>{cellContent.text}</span>
-                                        {:else if cellContent.type === 'date'}
-                                            {formatCellDate(cellContent.value, cellContent.format, {today: $t('date.today') || 'Today', yesterday: $t('date.yesterday') || 'Yesterday'})}
-                                        {:else if cellContent.type === 'size'}
-                                            {formatBytes(cellContent.bytes)}
-                                        {:else if cellContent.type === 'link'}
-                                            <a href={cellContent.href} class="cell-link" target={cellContent.external ? '_blank' : undefined} rel={cellContent.external ? 'noopener noreferrer' : undefined}>
-                                                {cellContent.text}
-                                                {#if cellContent.external}
-                                                    <ExternalLink size={12} />
-                                                {/if}
-                                            </a>
-                                        {:else if cellContent.type === 'custom'}
-                                            {@const CustomComponent = cellContent.component}
-                                            <CustomComponent {...cellContent.props} />
-                                        {:else if cellContent.type === 'image'}
-                                            <div class="cell-image-text">
-                                                <div class="cell-image" class:circle={cellContent.circle} style="width:{cellContent.size || 32}px;height:{cellContent.size || 32}px;">
-                                                    <img src={cellContent.src} alt={cellContent.alt} width={cellContent.size || 32} height={cellContent.size || 32} loading="lazy" onerror={handleImageError} />
-                                                    <span class="image-fallback hidden">
-                                                        {#if cellContent.fallbackIcon}
-                                                            {@const FallbackIcon = cellContent.fallbackIcon}
-                                                            <FallbackIcon size={cellContent.size ? cellContent.size * 0.6 : 20} />
-                                                        {:else}
-                                                            <ImageIcon size={cellContent.size ? cellContent.size * 0.6 : 20} />
-                                                        {/if}
-                                                    </span>
-                                                </div>
-                                                {#if cellContent.text}
-                                                    <span class="cell-image-label">{cellContent.text}</span>
-                                                {/if}
-                                            </div>
-                                        {:else if cellContent.type === 'editable-number'}
-                                            <!-- type="text" + manual normalisation: a native number input is
-                                                 parsed against the browser locale, so "5,9" typed on an Italian
-                                                 keyboard arrives here as an empty string and the digits vanish
-                                                 as the user types. -->
-                                            <input
-                                                type="text"
-                                                inputmode="decimal"
-                                                autocomplete="off"
-                                                class="cell-editable-number"
-                                                value={cellContent.value ?? ''}
-                                                placeholder={cellContent.placeholder ?? ''}
-                                                oninput={(e) => {
-                                                    const typed = e.currentTarget.value;
-                                                    if (typed === '') {
-                                                        cellContent.onchange(null);
-                                                        return;
-                                                    }
-                                                    // Half-typed decimals ("5," / "5.") are left alone: committing
-                                                    // them would push a reformatted value back into the input and
-                                                    // eat the separator the user just pressed.
-                                                    if (typed.includes(',') || typed.endsWith('.')) return;
-                                                    let num = Number(normalizeDecimalInput(typed));
-                                                    if (!Number.isFinite(num)) return;
-                                                    if (cellContent.min !== undefined && num < cellContent.min) num = cellContent.min;
-                                                    if (cellContent.max !== undefined && num > cellContent.max) num = cellContent.max;
-                                                    cellContent.onchange(num);
-                                                }}
-                                                onblur={(e) => {
-                                                    const raw = normalizeDecimalInput(e.currentTarget.value);
-                                                    if (raw === '') {
-                                                        cellContent.onchange(null);
-                                                        return;
-                                                    }
-                                                    let num = Number(raw);
-                                                    if (!Number.isFinite(num)) return;
-                                                    if (cellContent.min !== undefined && num < cellContent.min) num = cellContent.min;
-                                                    if (cellContent.max !== undefined && num > cellContent.max) num = cellContent.max;
-                                                    e.currentTarget.value = String(num);
-                                                    cellContent.onchange(num);
-                                                }}
-                                                onkeydown={(e) => {
-                                                    if (e.key === 'Enter') {
-                                                        e.currentTarget.blur();
-                                                        return;
-                                                    }
-                                                    const stepped = decimalArrowStep(e, e.currentTarget.value, typeof cellContent.step === 'number' ? cellContent.step : 1);
-                                                    if (stepped === null) return;
-                                                    let num = Number(stepped);
-                                                    if (!Number.isFinite(num)) return;
-                                                    if (cellContent.min !== undefined && num < cellContent.min) num = cellContent.min;
-                                                    if (cellContent.max !== undefined && num > cellContent.max) num = cellContent.max;
-                                                    e.currentTarget.value = String(num);
-                                                    cellContent.onchange(num);
-                                                }}
-                                                onclick={(e) => e.stopPropagation()}
-                                            />
-                                        {:else if cellContent.type === 'editable-text'}
-                                            <input
-                                                type="text"
-                                                class="cell-editable-text"
-                                                value={cellContent.value}
-                                                placeholder={cellContent.placeholder ?? ''}
-                                                maxlength={cellContent.maxLength}
-                                                onblur={(e) => cellContent.onchange(e.currentTarget.value)}
-                                                onkeydown={(e) => {
-                                                    if (e.key === 'Enter') e.currentTarget.blur();
-                                                }}
-                                                onclick={(e) => e.stopPropagation()}
-                                            />
-                                        {:else if cellContent.type === 'editable-select'}
-                                            <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                            <!-- svelte-ignore a11y_no_static_element_interactions -->
-                                            <div class="cell-editable-select-wrapper" onclick={(e) => e.stopPropagation()}>
-                                                <SimpleSelect value={cellContent.value} options={cellContent.options} compact showChevron={false} dropdownPosition="auto" onchange={(v) => cellContent.onchange(v)} />
-                                            </div>
-                                        {:else if cellContent.type === 'editable-checkbox'}
-                                            <!-- svelte-ignore a11y_click_events_have_key_events -->
-                                            <!-- svelte-ignore a11y_no_static_element_interactions -->
-                                            <div class="cell-checkbox-wrapper flex justify-center" onclick={(e) => e.stopPropagation()}>
-                                                <button
-                                                    type="button"
-                                                    onclick={() => {
-                                                        if (!cellContent.disabled) cellContent.onchange(!cellContent.value);
-                                                    }}
-                                                    aria-label="Toggle"
-                                                    class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors
-                                                           {cellContent.value ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-slate-600'}
-                                                           {cellContent.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}"
-                                                    aria-pressed={cellContent.value}
-                                                    disabled={cellContent.disabled}
-                                                >
-                                                    <span
-                                                        class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform
-                                                             {cellContent.value ? 'translate-x-[18px]' : 'translate-x-[3px]'}"
-                                                    ></span>
-                                                </button>
-                                            </div>
-                                        {:else if cellContent.type === 'html'}
-                                            {#if cellContent.tooltip}
-                                                <Tooltip text={cellContent.tooltip.text ?? ''} html={cellContent.tooltip.html ?? ''} position={cellContent.tooltip.position ?? 'top'} maxWidth={cellContent.tooltip.maxWidth ?? '320px'}>
-                                                    {#if cellContent.onClick}
-                                                        <button
-                                                            type="button"
-                                                            class="cursor-pointer"
-                                                            data-testid={cellContent.testId}
-                                                            onclick={(event) => {
-                                                                event.stopPropagation();
-                                                                cellContent.onClick?.();
-                                                            }}
-                                                        >
-                                                            {@html cellContent.html}
-                                                        </button>
-                                                    {:else}
-                                                        <span>{@html cellContent.html}</span>
-                                                    {/if}
-                                                </Tooltip>
-                                            {:else if cellContent.onClick}
-                                                <button
-                                                    type="button"
-                                                    class="cursor-pointer"
-                                                    data-testid={cellContent.testId}
-                                                    onclick={(event) => {
-                                                        event.stopPropagation();
-                                                        cellContent.onClick?.();
-                                                    }}
-                                                >
-                                                    {@html cellContent.html}
-                                                </button>
-                                            {:else}
-                                                {@html cellContent.html}
-                                            {/if}
-                                        {/if}
-                                    {/if}
+                                    <DataTableCellContent {cellContent} />
                                 </td>
                             {/each}
 
                             <!-- Actions cell -->
                             {#if showActionsColumn}
-                                <td class="{stickyActions ? 'td-fixed' : ''} td-actions">
+                                <td class="{stickyActions ? 'td-fixed' : ''} td-actions" data-testid="dt-actions-cell-{rowId}">
                                     <div class="actions-row">
                                         {#if visibleRowActions.length > 0}
                                             <button
@@ -1475,41 +1198,7 @@
                                 class:td-pinned-right={column.pinned === 'right'}
                                 style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
                             >
-                                {#if typeof footerContent === 'string' || typeof footerContent === 'number'}
-                                    {footerContent}
-                                {:else if footerContent && typeof footerContent === 'object' && 'type' in footerContent && footerContent.type === 'html'}
-                                    {#if footerContent.tooltip}
-                                        <Tooltip text={footerContent.tooltip.text ?? ''} html={footerContent.tooltip.html ?? ''} position={footerContent.tooltip.position ?? 'top'} maxWidth={footerContent.tooltip.maxWidth ?? '320px'}>
-                                            {#if footerContent.onClick}
-                                                <button
-                                                    type="button"
-                                                    class="cursor-pointer"
-                                                    onclick={(event) => {
-                                                        event.stopPropagation();
-                                                        footerContent.onClick?.();
-                                                    }}
-                                                >
-                                                    {@html footerContent.html}
-                                                </button>
-                                            {:else}
-                                                <span>{@html footerContent.html}</span>
-                                            {/if}
-                                        </Tooltip>
-                                    {:else if footerContent.onClick}
-                                        <button
-                                            type="button"
-                                            class="cursor-pointer"
-                                            onclick={(event) => {
-                                                event.stopPropagation();
-                                                footerContent.onClick?.();
-                                            }}
-                                        >
-                                            {@html footerContent.html}
-                                        </button>
-                                    {:else}
-                                        {@html footerContent.html}
-                                    {/if}
-                                {/if}
+                                <DataTableCellContent cellContent={footerContent} />
                             </td>
                         {/each}
                         {#if showActionsColumn}
@@ -1565,38 +1254,25 @@
     .table-wrapper {
         overflow-x: auto;
         overflow-y: visible;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 8px;
-        background: white;
-    }
-
-    :global(.dark) .table-wrapper {
-        border-color: #334155;
-        background: #0f172a;
+        background: var(--lf-surface-card);
     }
 
     .datatable {
         width: 100%;
         border-collapse: collapse;
         table-layout: fixed;
-        background: white;
+        background: var(--lf-surface-card);
     }
 
     .datatable.layout-auto {
         table-layout: auto;
     }
 
-    :global(.dark) .datatable {
-        background: #0f172a;
-    }
-
     /* Header */
     thead {
-        background: #f8fafc;
-    }
-
-    :global(.dark) thead {
-        background: #1e293b;
+        background: var(--lf-surface-panel);
     }
 
     th {
@@ -1604,17 +1280,12 @@
         text-align: left;
         font-size: 0.75rem;
         font-weight: 600;
-        color: #64748b;
-        border-bottom: 1px solid #e2e8f0;
+        color: var(--lf-text-muted);
+        border-bottom: 1px solid var(--lf-border-subtle);
         white-space: nowrap;
         position: relative;
         text-transform: uppercase;
         letter-spacing: 0.025em;
-    }
-
-    :global(.dark) th {
-        color: #94a3b8;
-        border-bottom-color: #334155;
     }
 
     thead.sticky-header th {
@@ -1626,21 +1297,13 @@
 
     thead.sticky-header .th-fixed {
         z-index: 25;
-        background: #f8fafc;
-    }
-
-    :global(.dark) thead.sticky-header .th-fixed {
-        background: #1e293b;
+        background: var(--lf-surface-panel);
     }
 
     .th-fixed {
         position: sticky;
         z-index: 10;
-        background: #f8fafc;
-    }
-
-    :global(.dark) .th-fixed {
-        background: #1e293b;
+        background: var(--lf-surface-panel);
     }
 
     .th-pinned-right {
@@ -1670,74 +1333,11 @@
     }
 
     .th-data.sortable:hover {
-        background: #f1f5f9;
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-secondary);
     }
 
-    :global(.dark) .th-data.sortable:hover {
-        background: #334155;
-    }
-
-    .header-content {
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
-    }
-
-    .header-sort-btn {
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
-        background: none;
-        border: none;
-        padding: 0;
-        color: inherit;
-        font: inherit;
-        cursor: pointer;
-    }
-
-    .header-sort-btn:disabled {
-        cursor: default;
-    }
-
-    .sort-icon {
-        display: flex;
-        color: #94a3b8;
-    }
-
-    .header-tooltip-icon {
-        display: flex;
-        align-items: center;
-        color: #94a3b8;
-        cursor: pointer;
-        flex-shrink: 0;
-    }
-
-    :global(.dark) .header-tooltip-icon {
-        color: #64748b;
-    }
-
-    .header-tooltip-link {
-        text-decoration: none;
-        transition: color 0.15s;
-    }
-
-    .header-tooltip-gesture {
-        padding: 0;
-        border: 0;
-        background: transparent;
-        transition: color 0.15s;
-    }
-
-    .header-tooltip-link:hover,
-    .header-tooltip-gesture:hover {
-        color: #1a4031;
-    }
-
-    :global(.dark) .header-tooltip-link:hover,
-    :global(.dark) .header-tooltip-gesture:hover {
-        color: #4ade80;
-    }
-
+    /* The "show selected only" button of the selection header; the column headers carry their own copy (DataTableColumnHeader.svelte). */
     .filter-btn {
         display: flex;
         align-items: center;
@@ -1747,107 +1347,44 @@
         border: none;
         border-radius: 4px;
         background: transparent;
-        color: #94a3b8;
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .filter-btn:hover {
-        background: #e2e8f0;
-        color: #475569;
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-primary);
     }
 
     .filter-btn.active {
-        background: #1a4031;
-        color: white;
-    }
-
-    :global(.dark) .filter-btn:hover {
-        background: #475569;
-        color: #f1f5f9;
-    }
-
-    :global(.dark) .filter-btn.active {
-        background: #4ade80;
-        color: #0f172a;
-    }
-
-    .resize-handle {
-        position: absolute;
-        right: 0;
-        top: 0;
-        bottom: 0;
-        width: 6px;
-        background: transparent;
-        cursor: col-resize;
-        opacity: 0;
-        transition: opacity 0.15s;
-        z-index: 5;
-    }
-
-    th:hover .resize-handle {
-        opacity: 1;
-        background: #cbd5e1;
-    }
-
-    .resize-handle.resizing,
-    .resize-handle:active {
-        opacity: 1;
-        background: #1a4031;
-    }
-
-    :global(.dark) th:hover .resize-handle {
-        background: #475569;
-    }
-
-    :global(.dark) .resize-handle.resizing {
-        background: #4ade80;
+        background: var(--lf-checked);
+        color: var(--lf-on-checked);
     }
 
     /* Body */
     tbody tr {
-        background: white;
+        background: var(--lf-surface-card);
         transition: background 0.15s;
     }
 
-    :global(.dark) tbody tr {
-        background: #0f172a;
-    }
-
     tfoot tr {
-        background: #f8fafc;
-    }
-
-    :global(.dark) tfoot tr {
-        background: #1e293b;
+        background: var(--lf-surface-panel);
     }
 
     .td-footer {
-        border-top: 1px solid #e2e8f0;
+        border-top: 1px solid var(--lf-border-subtle);
         border-bottom: 0;
         font-weight: 700;
-        color: #334155;
-    }
-
-    :global(.dark) .td-footer {
-        border-top-color: #334155;
-        color: #e2e8f0;
+        color: var(--lf-text-primary);
     }
 
     tbody tr:hover {
-        background: #f8fafc;
-    }
-
-    :global(.dark) tbody tr:hover {
-        background: #1e293b;
+        background: var(--lf-surface-hover);
     }
 
     tbody :global(tr.selected) {
-        background: #eff6ff;
-    }
-
-    :global(.dark) tbody :global(tr.selected) {
-        background: #1e3a5f;
+        background: var(--lf-selected);
     }
 
     tbody :global(tr.clickable) {
@@ -1855,19 +1392,11 @@
     }
 
     tbody :global(tr.clickable):hover {
-        background: #f0fdf4;
-    }
-
-    :global(.dark) tbody :global(tr.clickable):hover {
-        background: #1a2e35;
+        background: color-mix(in oklab, var(--lf-selected) 50%, transparent);
     }
 
     tbody :global(tr.clickable.selected) {
-        background: #dcfce7;
-    }
-
-    :global(.dark) tbody :global(tr.clickable.selected) {
-        background: #14532d;
+        background: var(--lf-selected);
     }
 
     @keyframes pulse-highlight {
@@ -1880,57 +1409,42 @@
         }
     }
 
-    /* Highlighted row (navigateToRowId) — purple, highest priority */
+    /* Highlighted row (navigateToRowId): the selection tint, pulsing on a deeper one; highest priority */
     tbody :global(tr.highlighted) {
-        --highlight-base: #f3e8ff;
-        --highlight-peak: #e9d5ff;
-        background: #f3e8ff !important;
+        --highlight-base: var(--lf-selected);
+        --highlight-peak: color-mix(in oklab, var(--lf-checked) 20%, transparent);
+        background: var(--lf-selected) !important;
         animation: pulse-highlight 0.6s ease-in-out 3;
     }
 
     tbody :global(tr.highlighted):hover {
-        background: #f3e8ff !important;
-    }
-
-    :global(.dark) tbody :global(tr.highlighted) {
-        --highlight-base: rgba(147, 51, 234, 0.25);
-        --highlight-peak: rgba(147, 51, 234, 0.4);
-        background: rgba(147, 51, 234, 0.25) !important;
-    }
-
-    :global(.dark) tbody :global(tr.highlighted):hover {
-        background: rgba(147, 51, 234, 0.25) !important;
+        background: var(--lf-selected) !important;
     }
 
     :global(tr.highlighted) td {
-        border-bottom-color: #e9d5ff;
+        border-bottom-color: color-mix(in oklab, var(--lf-checked) 20%, transparent);
     }
 
-    /* Row whose lot-analysis panel is currently open (F9) — steady emerald
-       tint, no pulse (persistent state, not a navigation flash) */
+    /* Row whose lot-analysis panel is currently open (F9): the steady selection tint, no pulse (persistent
+       state, not a navigation flash) */
     tbody :global(tr.row-analyzed) {
-        background: #ecfdf5;
+        background: var(--lf-selected);
     }
 
     tbody :global(tr.row-analyzed):hover {
-        background: #d1fae5;
+        background: color-mix(in oklab, var(--lf-checked) 20%, transparent);
     }
 
-    :global(.dark) tbody :global(tr.row-analyzed) {
-        background: rgba(16, 185, 129, 0.15);
-    }
-
-    :global(.dark) tbody :global(tr.row-analyzed):hover {
-        background: rgba(16, 185, 129, 0.25);
-    }
-
-    :global(.dark) :global(tr.highlighted) td {
-        border-bottom-color: #7e22ce;
+    /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15): inside a selected,
+       highlighted or analyzed row, a muted caption, a cell's own or one an HtmlCell writes, turns secondary. */
+    tbody :global(tr.selected) :global(.text-lf-muted),
+    tbody :global(tr.highlighted) :global(.text-lf-muted),
+    tbody :global(tr.row-analyzed) :global(.text-lf-muted) {
+        color: var(--lf-text-secondary);
     }
 
     @media (prefers-reduced-motion: reduce) {
-        tbody :global(tr.highlighted),
-        :global(.dark) tbody :global(tr.highlighted) {
+        tbody :global(tr.highlighted) {
             animation: none;
         }
     }
@@ -1938,17 +1452,12 @@
     td {
         padding: 0.625rem 0.5rem;
         font-size: 0.875rem;
-        color: #475569;
-        border-bottom: 1px solid #f1f5f9;
+        color: var(--lf-text-primary);
+        border-bottom: 1px solid var(--lf-border-subtle);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         max-width: 0;
-    }
-
-    :global(.dark) td {
-        color: #e2e8f0;
-        border-bottom-color: #1e293b;
     }
 
     .td-data {
@@ -1956,12 +1465,12 @@
     }
 
     /* Allow SimpleSelect dropdown to overflow outside td */
-    td:has(.cell-editable-select-wrapper) {
+    td:has(:global(.cell-editable-select-wrapper)) {
         overflow: visible;
     }
 
     /* Ensure table rows with open SimpleSelect dropdown are on top */
-    tbody tr:has(.cell-editable-select-wrapper) {
+    tbody tr:has(:global(.cell-editable-select-wrapper)) {
         position: relative;
         z-index: 1;
     }
@@ -1993,78 +1502,18 @@
     .td-loading {
         text-align: center;
         padding: 3rem 2rem;
-        color: #94a3b8;
-        background: white;
+        color: var(--lf-text-muted);
+        background: var(--lf-surface-card);
         height: 230px;
         vertical-align: middle;
-    }
-
-    /* Image cell */
-    .cell-image-text {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        min-width: 0;
-    }
-
-    .cell-image-label {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        min-width: 0;
-        text-align: left;
-    }
-
-    .cell-image {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        border-radius: 0.25rem;
-        background: #f1f5f9;
-        flex-shrink: 0;
-        min-width: 0;
-    }
-
-    .cell-image.circle {
-        border-radius: 50%;
-    }
-
-    .cell-image img {
-        object-fit: cover;
-        display: block;
-    }
-
-    .cell-image .image-fallback {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #94a3b8;
-    }
-
-    .cell-image :global(.hidden) {
-        display: none !important;
-    }
-
-    :global(.dark) .cell-image {
-        background: #334155;
-    }
-
-    :global(.dark) .cell-image .image-fallback {
-        color: #64748b;
-    }
-
-    :global(.dark) .td-empty,
-    :global(.dark) .td-loading {
-        background: #0f172a;
     }
 
     .loading-spinner {
         display: inline-block;
         width: 1.5rem;
         height: 1.5rem;
-        border: 2px solid #e2e8f0;
-        border-top-color: #1a4031;
+        border: 2px solid var(--lf-surface-neutral);
+        border-top-color: var(--lf-link);
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
         margin-bottom: 0.5rem;
@@ -2084,13 +1533,8 @@
         width: 24px;
         height: 24px;
         margin: 0 auto;
-        color: #ef4444;
+        color: var(--lf-danger);
         opacity: 0.7;
-    }
-
-    :global(.dark) .disabled-select-icon {
-        color: #f87171;
-        opacity: 0.6;
     }
 
     .checkbox-btn {
@@ -2110,151 +1554,21 @@
         display: block;
         width: 16px;
         height: 16px;
-        border: 1px solid #cbd5e1;
+        border: 1px solid var(--lf-border-input);
         border-radius: 3px;
-        background: white;
-    }
-
-    :global(.dark) .check-box {
-        background: #0f172a;
-        border-color: #475569;
+        background: var(--lf-surface-field);
     }
 
     :global(.check-icon) {
-        color: #1a4031;
+        color: var(--lf-checked);
     }
 
     :global(.check-icon.checked) {
-        color: #1a4031;
+        color: var(--lf-checked);
     }
 
     :global(.check-icon.partial) {
-        color: #94a3b8;
-    }
-
-    :global(.dark) :global(.check-icon.checked) {
-        color: #4ade80;
-    }
-
-    /* Cell content types */
-    .cell-icon-text {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        min-width: 0;
-    }
-
-    .cell-icon-text :global(svg) {
-        flex-shrink: 0;
-    }
-
-    /* Fixed-size box for icon, matches .cell-image dimensions for column alignment */
-    .cell-icon-box {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        width: 32px;
-        height: 32px;
-        min-width: 32px;
-        color: #94a3b8;
-    }
-
-    :global(.dark) .cell-icon-box {
-        color: #64748b;
-    }
-
-    .cell-icon-text span {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        min-width: 0;
-        text-align: left;
-    }
-
-    .cell-badge {
-        display: inline-block;
-        padding: 0.125rem 0.5rem;
-        font-size: 0.75rem;
-        font-weight: 500;
-        border-radius: 9999px;
-    }
-
-    .cell-badge.default {
-        background: #f1f5f9;
-        color: #475569;
-    }
-
-    .cell-badge.success {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .cell-badge.warning {
-        background: #fef3c7;
-        color: #92400e;
-    }
-
-    .cell-badge.error {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .cell-badge.info {
-        background: #dbeafe;
-        color: #1e40af;
-    }
-
-    :global(.dark) .cell-badge.default {
-        background: #334155;
-        color: #e2e8f0;
-    }
-
-    :global(.dark) .cell-badge.success {
-        background: #14532d;
-        color: #86efac;
-    }
-
-    :global(.dark) .cell-badge.warning {
-        background: #78350f;
-        color: #fde68a;
-    }
-
-    :global(.dark) .cell-badge.error {
-        background: #7f1d1d;
-        color: #fecaca;
-    }
-
-    :global(.dark) .cell-badge.info {
-        background: #1e3a8a;
-        color: #bfdbfe;
-    }
-
-    /* Custom styled badge (e.g., broker colors) */
-    .cell-badge.custom-style {
-        background: var(--broker-bg, #f1f5f9);
-        color: var(--broker-text, #475569);
-    }
-
-    :global(.dark) .cell-badge.custom-style {
-        background: var(--broker-dark-bg, #334155);
-        color: var(--broker-dark-text, #e2e8f0);
-    }
-
-    .cell-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.25rem;
-        color: #1a4031;
-        text-decoration: none;
-    }
-
-    .cell-link:hover {
-        text-decoration: underline;
-    }
-
-    :global(.dark) .cell-link {
-        color: #4ade80;
+        color: var(--lf-text-muted);
     }
 
     /* Actions */
@@ -2272,7 +1586,7 @@
         border: 0;
         border-radius: 9999px;
         background: transparent;
-        color: #64748b;
+        color: var(--lf-text-muted);
         cursor: pointer;
         font-size: 1.25rem;
         line-height: 1;
@@ -2283,148 +1597,47 @@
 
     .row-actions-btn:hover,
     .row-actions-btn:focus-visible {
-        background: #e2e8f0;
-        color: #1a4031;
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-primary);
         outline: none;
     }
 
-    :global(.dark) .row-actions-btn {
-        color: #94a3b8;
-    }
-
-    :global(.dark) .row-actions-btn:hover,
-    :global(.dark) .row-actions-btn:focus-visible {
-        background: #334155;
-        color: #4ade80;
-    }
-
-    /* Responsive: hide sticky actions on mobile */
+    /* Phones: the pinned selection and actions columns scroll with the table, header and cells alike (D-Y17, C-38).
+       Each selector is one class more specific than the pin it undoes. A header cell keeps `position: sticky` and its
+       `top: 0`, so the header row still sticks inside its scroll area: only the horizontal pin goes. */
     @media (max-width: 768px) {
-        .th-actions,
-        .td-actions {
+        .datatable .td-select,
+        .datatable .td-actions {
             position: static;
+        }
+        .datatable .th-select,
+        .datatable .th-actions.th-fixed {
+            left: auto;
+            right: auto;
         }
     }
 
-    /* Editable number cell */
-    .cell-editable-number {
-        width: 100%;
-        max-width: 120px;
-        padding: 0.25rem 0.375rem;
-        font-size: 0.8125rem;
-        font-family: ui-monospace, monospace;
-        border: 1px solid #e2e8f0;
-        border-radius: 4px;
-        background: white;
-        color: #1e293b;
-        outline: none;
-        transition: border-color 0.15s;
-    }
-
-    .cell-editable-number:focus {
-        border-color: #1a4031;
-        box-shadow: 0 0 0 1px #1a403140;
-    }
-
-    :global(.dark) .cell-editable-number {
-        background: #0f172a;
-        border-color: #475569;
-        color: #e2e8f0;
-    }
-
-    :global(.dark) .cell-editable-number:focus {
-        border-color: #4ade80;
-        box-shadow: 0 0 0 1px #4ade8040;
-    }
-
-    /* Editable text cell */
-    .cell-editable-text {
-        width: 100%;
-        padding: 0.25rem 0.375rem;
-        font-size: 0.8125rem;
-        border: 1px solid #e2e8f0;
-        border-radius: 4px;
-        background: white;
-        color: #1e293b;
-        outline: none;
-        transition: border-color 0.15s;
-    }
-
-    .cell-editable-text:focus {
-        border-color: #1a4031;
-        box-shadow: 0 0 0 1px #1a403140;
-    }
-
-    :global(.dark) .cell-editable-text {
-        background: #0f172a;
-        border-color: #475569;
-        color: #e2e8f0;
-    }
-
-    :global(.dark) .cell-editable-text:focus {
-        border-color: #4ade80;
-        box-shadow: 0 0 0 1px #4ade8040;
-    }
-
-    /* Editable select cell (SimpleSelect wrapper) */
-    .cell-editable-select-wrapper {
-        width: 100%;
-        position: relative;
-        /* No z-index here: avoids creating a stacking context that would
-           trap the fixed-positioned dropdown below the sticky actions column */
-    }
-
-    /* When the dropdown is actually open (focus-within on the row),
-       the row z-index bump in tbody tr:focus-within handles visibility */
-
     /* Row status classes (used via getRowClass prop) */
     :global(tr.row-deleted) td {
-        background: rgba(239, 68, 68, 0.06) !important;
-        opacity: 0.55;
-    }
-
-    :global(.dark) :global(tr.row-deleted) td {
-        background: rgba(239, 68, 68, 0.2) !important;
+        background: var(--lf-danger-soft) !important;
         opacity: 0.55;
     }
 
     :global(tr.row-edited) td {
-        background: rgba(59, 130, 246, 0.06) !important;
-    }
-
-    :global(.dark) :global(tr.row-edited) td {
-        background: rgba(59, 130, 246, 0.2) !important;
+        background: var(--lf-info-soft) !important;
     }
 
     :global(tr.row-appended) td {
-        background: rgba(16, 185, 129, 0.06) !important;
-    }
-
-    :global(.dark) :global(tr.row-appended) td {
-        background: rgba(16, 185, 129, 0.2) !important;
+        background: var(--lf-success-soft) !important;
     }
 
     :global(tr.row-todo-blocker) td {
-        background: rgba(239, 68, 68, 0.08) !important;
-    }
-
-    :global(.dark) :global(tr.row-todo-blocker) td {
-        background: rgba(239, 68, 68, 0.22) !important;
+        background: var(--lf-danger-soft) !important;
     }
 
     :global(tr.row-stale) td {
-        background: rgba(245, 158, 11, var(--stale-opacity, 0.04)) !important;
-    }
-
-    :global(.dark) :global(tr.row-stale) td {
-        background: rgba(245, 158, 11, var(--stale-opacity, 0.08)) !important;
-    }
-
-    :global(tr.row-paired) td {
-        background: rgba(99, 102, 241, 0.06) !important;
-    }
-
-    :global(.dark) :global(tr.row-paired) td {
-        background: rgba(99, 102, 241, 0.15) !important;
+        /* The warning tint, deeper with the stale days: --stale-opacity runs 0.04–0.4 (DataEditor), so the row
+           reaches the whole tint at 0.4. */
+        background: color-mix(in oklab, var(--lf-warning-soft) calc(var(--stale-opacity, 0.04) * 250%), transparent) !important;
     }
 </style>

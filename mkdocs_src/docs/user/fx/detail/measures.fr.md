@@ -47,6 +47,9 @@ $$
 \Delta\%_{yr} = \left(\frac{P_{end}}{P_{start}}\right)^{365/d} - 1
 $$
 
+Il apparaît à partir de 30 jours : un intervalle plus court affiche `—`, comme partout dans LibreFolio. Une
+ligne qui part de 0 affiche `—` pour **Δ %** et **Δ%/an**.
+
 Voir [Rendements et taux de croissance — Théorie financière](../../../financial-theory/fundamentals/returns.md)
 pour les rendements logarithmiques et la capitalisation.
 
@@ -63,5 +66,5 @@ Elles restent jusqu'à ce que vous quittiez la page.
 
 - 🔍 **Zoomez** avant de cliquer, pour viser les points exacts.
 - 📰 Comparez l'évolution **avant et après un événement**, comme l'annonce d'une banque centrale.
-- ⚠️ Interprétez **Δ%/an** avec prudence sur les périodes courtes : une variation de 1 % en 7 jours
-  équivaut à environ 68 % par an. Cette mesure est surtout significative sur 30 jours ou plus.
+- ⚠️ **Δ%/an** attend 30 jours, car la capitalisation gonfle les mouvements courts : 1 % en 7 jours
+  donnerait environ 68 % par an.

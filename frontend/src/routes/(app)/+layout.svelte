@@ -2,9 +2,10 @@
     import {onMount} from 'svelte';
     import {browser} from '$app/environment';
     import {page} from '$app/stores';
-    import {afterNavigate, goto, preloadCode} from '$app/navigation';
+    import {afterNavigate, goto, onNavigate, preloadCode} from '$app/navigation';
     import {_, i18nLoading, initI18n} from '$lib/i18n';
     import {trackNavigation} from '$lib/stores/app/navigationStore';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {seedFromUrl} from '$lib/stores/dateRangeStore.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
     import {auth, isAuthenticated, isAuthInitialized, isSignOutRequested} from '$lib/stores/app/auth';
@@ -27,6 +28,10 @@
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {loginUrl} from '$lib/utils/internalPath';
     import ServerUnreachable from '$lib/components/layout/ServerUnreachable.svelte';
+    import InstanceNotices from '$lib/features/instance/components/InstanceNotices.svelte';
+    import InstanceBlockedPage from '$lib/features/instance/components/InstanceBlockedPage.svelte';
+    import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+    import {instanceBlock} from '$lib/features/instance/instanceBlock.svelte';
 
     // Sidebar state for mobile
     let sidebarOpen = false;
@@ -51,6 +56,12 @@
     let i18nBooted = false;
     $: if (!$i18nLoading) i18nBooted = true;
 
+    // The Refresh button waits for the big requests of its own page only (Y11): a new route drops the old page's
+    // tokens before the new page mounts. A change of parameter on the same route (asset 1 → asset 2) keeps them.
+    onNavigate((nav) => {
+        if (nav.from?.route.id !== nav.to?.route.id) pageBusy.reset();
+    });
+
     // Track SPA navigation depth for smart back-navigation
     afterNavigate((nav) => {
         const url = nav.to?.url;
@@ -63,6 +74,9 @@
 
     onMount(async () => {
         debug.log('AppLayout', 'onMount started');
+
+        // The public configuration of the instance: no session needed, and it never holds the start up
+        void instanceConfig.load();
 
         // Sync language store with i18n after mount
         currentLanguage.init();
@@ -225,25 +239,28 @@
 
 {#if !i18nBooted}
     <!-- Loading screen while the first translations load -->
-    <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900">
-        <div class="text-libre-green dark:text-green-400 text-xl">Loading...</div>
+    <div class="min-h-screen flex items-center justify-center bg-lf-app">
+        <div class="text-lf-link text-xl">Loading...</div>
     </div>
+{:else if $isAuthenticated && instanceBlock.blocked}
+    <!-- The hosting provider blocked this instance: the block page instead of the app, before its bootstrap -->
+    <InstanceBlockedPage onlogout={logout} />
 {:else if $isAuthenticated && appBootstrap.state === 'blocked'}
     <OnboardingBootstrapBlock error={appBootstrap.error} onretry={retryBootstrap} onlogout={logout} />
 {:else if $isAuthenticated && !appBootstrap.ready}
-    <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900" data-testid="app-bootstrap-loading">
-        <div class="text-libre-green dark:text-green-400 text-xl">{$_('common.loading')}</div>
+    <div class="min-h-screen flex items-center justify-center bg-lf-app" data-testid="app-bootstrap-loading">
+        <div class="text-lf-link text-xl">{$_('common.loading')}</div>
     </div>
 {:else if $isAuthenticated && !onboardingRouteReady}
-    <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900" data-testid="onboarding-redirecting">
-        <div class="text-libre-green dark:text-green-400 text-xl">{$_('common.loading')}</div>
+    <div class="min-h-screen flex items-center justify-center bg-lf-app" data-testid="onboarding-redirecting">
+        <div class="text-lf-link text-xl">{$_('common.loading')}</div>
     </div>
 {:else if $isAuthenticated && isWelcomeRoute}
-    <div class="min-h-screen bg-libre-beige dark:bg-slate-900" data-testid="welcome-shell">
+    <div class="min-h-screen bg-lf-app" data-testid="welcome-shell">
         <slot />
     </div>
 {:else if $isAuthenticated}
-    <div class="min-h-screen bg-libre-beige dark:bg-slate-900" inert={onboardingGuide.active?.flow === 'intro_tour'} data-guide-inert={onboardingGuide.active?.flow === 'intro_tour' ? 'true' : 'false'} data-testid="app-shell">
+    <div class="min-h-screen bg-lf-app" inert={onboardingGuide.active?.flow === 'intro_tour'} data-guide-inert={onboardingGuide.active?.flow === 'intro_tour' ? 'true' : 'false'} data-testid="app-shell">
         <!-- Sidebar -->
         <Sidebar bind:isOpen={sidebarOpen} bind:collapsed={sidebarCollapsed} />
 
@@ -257,6 +274,7 @@
                 {#if appBootstrap.state === 'degraded'}
                     <OnboardingBootstrapBanner error={appBootstrap.error} onretry={retryBootstrap} />
                 {/if}
+                <InstanceNotices />
                 <slot />
             </main>
         </div>
@@ -268,7 +286,7 @@
     <ServerUnreachable busy={authCheckBusy} onretry={() => void checkAuthAndStart()} />
 {:else}
     <!-- Loading while checking auth -->
-    <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900" data-testid="app-auth-checking">
-        <div class="text-libre-green dark:text-green-400 text-xl">Checking authentication...</div>
+    <div class="min-h-screen flex items-center justify-center bg-lf-app" data-testid="app-auth-checking">
+        <div class="text-lf-link text-xl">Checking authentication...</div>
     </div>
 {/if}

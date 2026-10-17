@@ -1,4 +1,9 @@
 @import 'tailwindcss';
+/* Colour roles (--lf-*) and their utilities (bg-lf-card, text-lf-muted…): the colours of migrated components. */
+@import './lib/theme/tokens.css';
+/* The colour gates hold class names as data, not interface: Tailwind must not generate CSS from them. */
+@source not '../scripts/theme';
+@source not './theme*.gate.test.ts';
 
 /* dark: variant uses html.dark class (set by anti-FOUC script in app.html) */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -119,7 +124,15 @@ textarea,
     display: none; /* Chrome, Safari, Opera */
 }
 
-/* ===== Theme System ===== */
+/* ===== Legacy theme system and dark remap (P1) =====
+   Components not yet migrated to the colour roles of lib/theme/tokens.css take their dark look from the rules below:
+   unlayered, several !important, so they beat the dark: classes those components write. Their values are frozen —
+   a component keeps today's look until it migrates. Retirement: a rule on a class goes in the change that brings the
+   class's last use to zero (src/themeTokens.gate.test.ts reports the dead ones); the structural rules, the --theme-*
+   variables and `html.dark body` go in the clean-up (B6).
+   The four structural rules (fields, placeholders, rounded containers, options) exempt every element that carries a
+   role utility (`-lf-` in its classes). `:where()` keeps their specificity unchanged, so a legacy element — scoped
+   component CSS included — renders exactly as before. */
 
 /* Light theme (default) */
 :root,
@@ -192,11 +205,6 @@ html.dark .bg-gray-100 {
     background-color: var(--theme-bg-tertiary) !important;
 }
 
-html.dark .text-gray-800,
-html.dark .text-gray-900 {
-    color: var(--theme-text-primary) !important;
-}
-
 html.dark .text-gray-600,
 html.dark .text-gray-700 {
     color: var(--theme-text-secondary) !important;
@@ -221,52 +229,27 @@ html.dark .hover\:bg-gray-100:hover {
     background-color: var(--theme-bg-hover) !important;
 }
 
-html.dark input,
-html.dark select,
-html.dark textarea {
+html.dark input:where(:not([class*='-lf-'])),
+html.dark select:where(:not([class*='-lf-'])),
+html.dark textarea:where(:not([class*='-lf-'])) {
     /* NO background override - let component styles work */
     border-color: #546175;
     color: var(--theme-text-primary);
 }
 
-html.dark input::placeholder,
-html.dark textarea::placeholder {
+html.dark input:where(:not([class*='-lf-']))::placeholder,
+html.dark textarea:where(:not([class*='-lf-']))::placeholder {
     color: var(--theme-text-tertiary);
-}
-
-/* Dark mode: Main background and beige areas */
-html.dark .bg-libre-beige {
-    background-color: var(--theme-bg-primary) !important;
-}
-
-html.dark .bg-surface-100 {
-    background-color: var(--theme-bg-secondary) !important;
-}
-
-/* Dark mode: Text colors on brand elements */
-html.dark .text-libre-dark {
-    color: var(--theme-text-primary) !important;
 }
 
 html.dark .text-libre-green {
     color: #39af50 !important; /* Lighter green for dark mode */
 }
 
-/* Dark mode: Cards and modals */
-html.dark .bg-white\/90,
-html.dark .bg-white\/95 {
-    background-color: rgba(30, 41, 59, 0.95) !important;
-}
-
 /* Dark mode: Rounded containers */
-html.dark .rounded-xl,
-html.dark .rounded-2xl {
+html.dark .rounded-xl:where(:not([class*='-lf-'])),
+html.dark .rounded-2xl:where(:not([class*='-lf-'])) {
     border-color: var(--theme-border-primary);
-}
-
-/* Dark mode: Hover states */
-html.dark .hover\:bg-gray-50:hover {
-    background-color: var(--theme-bg-hover) !important;
 }
 
 /* Dark mode: Focus rings */
@@ -274,8 +257,8 @@ html.dark .focus\:ring-libre-green:focus {
     --tw-ring-color: #4ade80;
 }
 
-/* Dark mode: Dropdown/Select options */
-html.dark option {
+/* Dark mode: Dropdown/Select options (those of a migrated select are exempt) */
+html.dark option:where(:not(select[class*='-lf-'] option)) {
     background-color: var(--theme-bg-secondary);
     color: var(--theme-text-primary);
 }
@@ -294,21 +277,17 @@ html.dark .bg-libre-green {
     background-color: #166534 !important; /* Darker green for better contrast */
 }
 
-/* Dark mode: AnimatedBackground (login page) */
-html.dark .animated-bg-gradient {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
-}
-
 /* ===== Live price flash (asset detail — AssetPriceSummary) =====
    One-shot flash-and-settle for the live price number: when a newly polled
    price differs from the previous poll, the text jumps to the direction's
    peak colour then eases back to the resting (neutral) colour over ~1.3s.
-   Peak colours mirror the emerald/red pair already used for the static delta
-   badge right next to this price (see AssetPriceSummary.svelte) and for
-   AssetCard's price tint on the assets list page, so all three agree.
+   The peak is the gain or loss role, the same as the static delta badge right
+   next to this price (see AssetPriceSummary.svelte) and AssetCard's price tint
+   on the assets list page, so all three agree; the rest is the secondary text
+   role, the price's own colour when it is not flashing. The roles follow the
+   theme by themselves (W3-b), so there is no dark override.
    One shared keyframe driven by CSS custom properties (same pattern as
-   `pulse-highlight`/`tinted-lot-highlight-pulse` above) — dark mode overrides
-   the peak/rest variables rather than duplicating the keyframe.
+   `pulse-highlight`/`tinted-lot-highlight-pulse` above).
    Restarting the animation on repeated same-direction ticks is the caller's
    job (Svelte `{#key}` re-keys the element) — this CSS only defines the look.
    Namespaced `lf-` (LibreFolio) to avoid clashing with other keyframes here. */
@@ -324,33 +303,20 @@ html.dark .animated-bg-gradient {
 .lf-price-flash-up,
 .lf-price-flash-down {
     animation: lf-price-flash 1.3s ease-out 1 forwards;
-    --lf-price-flash-rest: var(--color-gray-700);
+    --lf-price-flash-rest: var(--lf-text-secondary);
 }
 
 .lf-price-flash-up {
-    --lf-price-flash-peak: var(--color-emerald-600);
+    --lf-price-flash-peak: var(--lf-gain);
 }
 
 .lf-price-flash-down {
-    --lf-price-flash-peak: var(--color-red-500);
-}
-
-html.dark .lf-price-flash-up,
-html.dark .lf-price-flash-down {
-    --lf-price-flash-rest: var(--color-gray-200);
-}
-
-html.dark .lf-price-flash-up {
-    --lf-price-flash-peak: var(--color-emerald-400);
-}
-
-html.dark .lf-price-flash-down {
-    --lf-price-flash-peak: var(--color-red-400);
+    --lf-price-flash-peak: var(--lf-loss);
 }
 
 /* Reduced motion: plain colour swap communicating direction, no keyframe
    sweep. The JS-driven decay-to-neutral timer (same one used for the
-   animated case, in +page.svelte) removes the class again after the flash
+   animated case, in assetDetailLive.svelte.ts) removes the class again after the flash
    window regardless of this media query, so the colour still settles back
    on its own — just as an instant swap instead of an eased fade. */
 @media (prefers-reduced-motion: reduce) {

@@ -42,7 +42,7 @@ Replace with `POST /api/v1/fx/currencies/sync` accepting explicit **pair list** 
 
 | Role | Path |
 |------|------|
-| FX service (sync logic) | `backend/app/services/fx.py` |
+| FX service (sync logic) | `backend/app/services/fx/sync.py` |
 | FX providers directory | `backend/app/services/fx_providers/` |
 | DB model (FxConversionRoute) | `backend/app/db/models.py` |
 | mkdocs | `mkdocs_src/docs/developer/backend/fx/architecture.md` |

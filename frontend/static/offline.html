@@ -3,46 +3,74 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#1a4031" />
+    <meta name="theme-color" content="#1b4334" />
     <title>LibreFolio — Offline</title>
     <link href="/lf-flags.css" rel="stylesheet" />
     <style>
-        /* === Theme Variables === */
+        /* === Theme roles: copies of lib/theme/tokens.css. The page is served offline, without the app's stylesheet,
+           so it carries the roles it draws with; themeColorMeta.gate.test.ts checks each --lf-* below against
+           tokens.css, in both themes. === */
         :root {
-            --bg: #f5f4ef;
-            --text: #1f2937;
-            --text-muted: #6b7280;
-            --accent: #1a4031;
-            --accent-light: #9caf9c;
-            --btn-bg: #1a4031;
-            --btn-text: #ffffff;
-            --card-bg: rgba(255, 255, 255, 0.85);
-            --card-border: rgba(255, 255, 255, 0.3);
-            --card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
-            --toolbar-bg: rgba(255, 255, 255, 0.6);
-            --toolbar-border: rgba(0, 0, 0, 0.08);
-            --dropdown-bg: #ffffff;
-            --dropdown-border: #e5e7eb;
-            --dropdown-hover: #f9fafb;
-            --dropdown-active: rgba(26, 64, 49, 0.1);
+            --lf-surface-page: #f3f5f3;
+            --lf-surface-card: #fafbfa;
+            --lf-surface-hover: #e8ece9;
+            --lf-text-primary: #1c2420;
+            --lf-text-secondary: #4a5550;
+            --lf-border-subtle: #d8e0dc;
+            --lf-border-raised: #d8e0dc;
+            --lf-action: #1b4334;
+            --lf-action-hover: color-mix(in oklab, #1b4334 70%, #236b4d);
+            --lf-on-action: #fafbfa;
+            --lf-focus: #236b4d;
+            --lf-selected: color-mix(in oklab, #236b4d 12%, transparent);
+            --lf-danger: #c82838;
+            --lf-donate: #ae4e00;
+            --lf-donate-hover: #92400e;
+            --lf-shadow-raised: color-mix(in oklab, #0d1110 25%, transparent);
+            --lf-art-hill-1: color-mix(in oklab, #9caf9c 25%, transparent);
+            --lf-art-hill-2: color-mix(in oklab, #9caf9c 18%, transparent);
+            --lf-art-hill-3: color-mix(in oklab, #9caf9c 12%, transparent);
+            --lf-art-line: color-mix(in oklab, #1b4334 30%, transparent);
         }
         html.dark {
-            --bg: #11151c;
-            --text: #f1f5f9;
-            --text-muted: #94a3b8;
-            --accent: #4ade80;
-            --accent-light: #00ff9a;
-            --btn-bg: #4ade80;
-            --btn-text: #0f172a;
-            --card-bg: rgba(30, 41, 59, 0.85);
-            --card-border: rgba(51, 65, 85, 0.5);
-            --card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
-            --toolbar-bg: rgba(30, 41, 59, 0.6);
-            --toolbar-border: rgba(255, 255, 255, 0.08);
-            --dropdown-bg: #1e293b;
-            --dropdown-border: #334155;
-            --dropdown-hover: #334155;
-            --dropdown-active: rgba(74, 222, 128, 0.15);
+            --lf-surface-page: #0d1110;
+            --lf-surface-card: #151b19;
+            --lf-surface-hover: #1b2421;
+            --lf-text-primary: #edf2f0;
+            --lf-text-secondary: #9ba8a2;
+            --lf-border-subtle: #222c28;
+            --lf-border-raised: #2e3b36;
+            --lf-action: #215240;
+            --lf-action-hover: #28634e;
+            --lf-on-action: #edf2f0;
+            --lf-focus: #429e79;
+            --lf-selected: color-mix(in oklab, #429e79 12%, transparent);
+            --lf-danger: #ff7a86;
+            --lf-donate: #f59e0b;
+            --lf-donate-hover: #d97706;
+            --lf-shadow-raised: color-mix(in oklab, #0d1110 50%, transparent);
+            --lf-art-hill-1: #16221d;
+            --lf-art-hill-2: #121c18;
+            --lf-art-hill-3: #0f1714;
+            --lf-art-line: #3b5249;
+        }
+        /* The page's own names, on the roles: the same in both themes */
+        :root {
+            --bg: var(--lf-surface-page);
+            --text: var(--lf-text-primary);
+            --text-muted: var(--lf-text-secondary);
+            --accent: var(--lf-focus);
+            --btn-bg: var(--lf-action);
+            --btn-text: var(--lf-on-action);
+            --card-bg: var(--lf-surface-card);
+            --card-border: var(--lf-border-raised);
+            --card-shadow: 0 25px 50px -12px var(--lf-shadow-raised);
+            --toolbar-bg: color-mix(in oklab, var(--lf-surface-card) 60%, transparent);
+            --toolbar-border: var(--lf-border-subtle);
+            --dropdown-bg: var(--lf-surface-card);
+            --dropdown-border: var(--lf-border-raised);
+            --dropdown-hover: var(--lf-surface-hover);
+            --dropdown-active: var(--lf-selected);
         }
 
         /* === Base === */
@@ -92,20 +120,14 @@
             text-decoration: none;
         }
         .toolbar button:hover, .toolbar a:hover {
-            background: rgba(128, 128, 128, 0.15);
+            background: var(--dropdown-hover);
             color: var(--text);
         }
         .toolbar .coffee-link {
-            color: #d97706;
-        }
-        html.dark .toolbar .coffee-link {
-            color: #fbbf24;
+            color: var(--lf-donate);
         }
         .toolbar .coffee-link:hover {
-            color: #b45309;
-        }
-        html.dark .toolbar .coffee-link:hover {
-            color: #f59e0b;
+            color: var(--lf-donate-hover);
         }
         .toolbar .sep {
             width: 1px;
@@ -130,7 +152,7 @@
             transition: background 0.2s;
             color: var(--text-muted);
         }
-        .lang-btn:hover { background: rgba(128, 128, 128, 0.15); }
+        .lang-btn:hover { background: var(--dropdown-hover); }
         .lang-btn .flag { font-size: 1.25rem; line-height: 1; }
         .lang-btn .chevron {
             width: 14px;
@@ -148,7 +170,7 @@
             background: var(--dropdown-bg);
             border: 1px solid var(--dropdown-border);
             border-radius: 10px;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 10px 25px -5px var(--lf-shadow-raised);
             overflow: hidden;
             z-index: 100;
         }
@@ -186,21 +208,20 @@
             left: -5%;
             width: 110%;
             height: 60%;
-            background: linear-gradient(to top, var(--accent-light), transparent);
             transform-origin: bottom center;
         }
         .wave-1 {
-            opacity: 0.25;
+            background: linear-gradient(to top, var(--lf-art-hill-1), transparent);
             animation: wave1 12s ease-in-out infinite;
             clip-path: polygon(0% 100%, 0% 60%, 15% 55%, 30% 65%, 45% 50%, 60% 60%, 75% 45%, 90% 55%, 100% 40%, 100% 100%);
         }
         .wave-2 {
-            opacity: 0.18;
+            background: linear-gradient(to top, var(--lf-art-hill-2), transparent);
             animation: wave2 16s ease-in-out infinite;
             clip-path: polygon(0% 100%, 0% 70%, 20% 60%, 40% 70%, 60% 55%, 80% 65%, 100% 50%, 100% 100%);
         }
         .wave-3 {
-            opacity: 0.12;
+            background: linear-gradient(to top, var(--lf-art-hill-3), transparent);
             animation: wave3 20s ease-in-out infinite;
             clip-path: polygon(0% 100%, 0% 55%, 25% 65%, 50% 50%, 75% 60%, 100% 45%, 100% 100%);
         }
@@ -230,22 +251,23 @@
         }
         .chart-line {
             opacity: 0;
-            stroke: var(--accent);
+            stroke: var(--lf-art-line);
             stroke-dasharray: 2000;
             stroke-dashoffset: 2000;
         }
         .line-1 { animation: drawAndFade 12s ease-in-out infinite; }
         .line-2 { animation: drawAndFade 12s ease-in-out infinite; animation-delay: 4s; }
         .line-3 { animation: drawAndFade 12s ease-in-out infinite; animation-delay: 8s; }
+        /* The fade only: a line's strength is the alpha of --lf-art-line */
         @keyframes drawAndFade {
             0% { stroke-dashoffset: 2000; opacity: 0; }
-            5% { opacity: 0.15; }
+            5% { opacity: 1; }
             30% { stroke-dashoffset: 0; }
-            55% { opacity: 0.15; }
+            55% { opacity: 1; }
             60% { stroke-dashoffset: -2000; opacity: 0; }
         }
 
-        /* === Card (glassmorphism like login) === */
+        /* === Card (like the login card) === */
         .card {
             position: relative;
             z-index: 1;
@@ -304,7 +326,7 @@
             transition: opacity 0.2s, transform 0.1s;
             font-family: 'LF Flags', Inter, system-ui, sans-serif;
         }
-        .btn:hover { opacity: 0.9; }
+        .btn:hover { background: var(--lf-action-hover); }
         .btn:active { transform: scale(0.97); }
 
         /* === Status indicator with countdown === */
@@ -321,7 +343,7 @@
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: #ef4444;
+            background: var(--lf-danger);
             animation: blink 2s ease-in-out infinite;
         }
         @keyframes blink {
@@ -421,7 +443,7 @@
         <h1 id="title">Server Unreachable</h1>
         <p id="body">LibreFolio cannot connect to the server. Check your network connection or try again later.</p>
 
-        <button class="btn" onclick="location.reload()">
+        <button class="btn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="23 4 23 10 17 10"/>
                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -516,9 +538,9 @@
             document.documentElement.classList.toggle('dark', theme === 'dark');
             document.getElementById('icon-sun').style.display = theme === 'dark' ? 'none' : 'block';
             document.getElementById('icon-moon').style.display = theme === 'dark' ? 'block' : 'none';
-            // Update PWA title bar color
+            // PWA title bar: the green sidebar's --lf-surface-bar, the same in both themes (N2, D-T17, D-T24); kept a pair, as in app.html
             var meta = document.querySelector('meta[name="theme-color"]');
-            if (meta) meta.setAttribute('content', theme === 'dark' ? '#156534' : '#1a4031');
+            if (meta) meta.setAttribute('content', theme === 'dark' ? '#1b4334' : '#1b4334');
         }
 
         let currentTheme = getPreferredTheme();
@@ -529,6 +551,10 @@
             localStorage.setItem('librefolio-theme', currentTheme);
             applyTheme(currentTheme);
         });
+
+        // === Retry button ===
+        // A listener, never an inline handler: a Content-Security-Policy allows this script by its hash, no onclick (H-52)
+        document.getElementById('retry-text').closest('button').addEventListener('click', () => location.reload());
 
         // === Countdown + Auto-retry ===
         const RETRY_INTERVAL = 10;

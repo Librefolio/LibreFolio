@@ -199,21 +199,14 @@
         z-index: 9999;
         min-width: 180px;
         max-width: 280px;
-        background: white;
-        border: 1px solid #e2e8f0;
+        background: var(--lf-surface-card);
+        border: 1px solid var(--lf-border-raised);
         border-radius: 0.5rem;
         box-shadow:
-            0 10px 25px -5px rgb(0 0 0 / 0.1),
-            0 4px 6px -2px rgb(0 0 0 / 0.05);
+            0 10px 25px -5px var(--lf-shadow-raised),
+            0 4px 6px -2px var(--lf-shadow-raised);
         padding: 0.25rem 0;
         overflow: hidden;
-    }
-    :global(.dark) .context-menu {
-        background: #1e293b;
-        border-color: #334155;
-        box-shadow:
-            0 10px 25px -5px rgb(0 0 0 / 0.4),
-            0 4px 6px -2px rgb(0 0 0 / 0.2);
     }
     .context-item {
         display: flex;
@@ -224,42 +217,27 @@
         border: none;
         background: none;
         font-size: 0.8125rem;
-        color: #334155;
+        color: var(--lf-text-primary);
         cursor: pointer;
         text-align: left;
         transition: background-color 0.1s;
     }
-    :global(.dark) .context-item {
-        color: #e2e8f0;
-    }
     .context-item:hover:not(:disabled) {
-        background: #f1f5f9;
-    }
-    :global(.dark) .context-item:hover:not(:disabled) {
-        background: #334155;
+        background: var(--lf-surface-hover);
     }
     .context-item:disabled {
         opacity: 0.4;
         cursor: default;
     }
     .context-item.danger {
-        color: #dc2626;
-    }
-    :global(.dark) .context-item.danger {
-        color: #f87171;
+        color: var(--lf-danger);
     }
     .context-item.danger:hover:not(:disabled) {
-        background: #fef2f2;
-    }
-    :global(.dark) .context-item.danger:hover:not(:disabled) {
-        background: #450a0a;
+        background: var(--lf-danger-soft);
     }
     .context-separator {
         margin: 0.25rem 0;
         border: none;
-        border-top: 1px solid #e2e8f0;
-    }
-    :global(.dark) .context-separator {
-        border-top-color: #334155;
+        border-top: 1px solid var(--lf-border-subtle);
     }
 </style>

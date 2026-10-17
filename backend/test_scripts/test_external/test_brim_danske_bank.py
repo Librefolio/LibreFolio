@@ -52,8 +52,8 @@ import pytest
 from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.brim import COMBINED_REQUIRED_HEADERS, BRIMCombinedTable, BRIMCoverage, BRIMParseOutput, BRIMReportRole, BRIMSetShape, is_fake_asset_id
 from backend.app.schemas.common import DateRangeModel
-from backend.app.services.brim_provider import BRIMProvider, BRIMSetRequiredError, write_combined_csv
-from backend.app.services.provider_registry import BRIMProviderRegistry
+from backend.app.services.brim.brim_provider import BRIMProvider, BRIMSetRequiredError, write_combined_csv
+from backend.app.services.brim.registry import BRIMProviderRegistry
 
 # =============================================================================
 # CONSTANTS

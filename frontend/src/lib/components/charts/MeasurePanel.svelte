@@ -25,8 +25,9 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {ColumnDef, HtmlCell} from '$lib/components/table/types';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     // =========================================================================
     // Props
@@ -296,12 +297,13 @@
 
     function fmtValue(v: number): string {
         if (measurementUnit === 'percentage-points') return formatPercent(v, {signed: false});
-        if (Math.abs(v) >= 1) return formatFixed(v, 4);
-        return formatFixed(v, 6, {trim: true});
+        // C-97c: the decimals of today, and more when 4 significant digits need them (a price under 0.001).
+        if (Math.abs(v) >= 1) return formatPrice(v, {minDecimals: 4});
+        return formatPrice(v, {minDecimals: 0, floorDecimals: 6});
     }
 
     function fmtDelta(v: number): string {
-        return measurementUnit === 'percentage-points' ? formatPercent(v, {suffix: ' pp'}) : formatFixed(v, 4, {signed: true});
+        return measurementUnit === 'percentage-points' ? formatPercent(v, {suffix: ' pp'}) : formatPrice(v, {minDecimals: 4, signed: true});
     }
 
     function fmtPct(v: number): string {
@@ -309,10 +311,11 @@
     }
 
     function compactDelta(result: MeasurementResult): {
-        value: number;
+        value: number | null;
         label: string;
     } {
-        return measurementUnit === 'percentage-points' ? {value: result.deltaAbs, label: fmtDelta(result.deltaAbs)} : {value: result.deltaPct, label: fmtPct(result.deltaPct)};
+        if (measurementUnit === 'percentage-points') return {value: result.deltaAbs, label: fmtDelta(result.deltaAbs)};
+        return {value: result.deltaPct, label: result.deltaPct !== null ? fmtPct(result.deltaPct) : '—'};
     }
 
     function toggleExpand(id: string) {
@@ -332,14 +335,16 @@
         valueStart: number;
         valueEnd: number;
         deltaAbs: number;
-        deltaPct: number;
+        deltaPct: number | null;
         annualizedPct: number | null;
         days: number;
         isGhost?: boolean;
     }
 
-    function colorClass(v: number): string {
-        return v >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400';
+    /** Gain/loss colour of a signed figure; neutral for «—», since `null >= 0` is true in JS. */
+    function colorClass(v: number | null): string {
+        if (v === null) return 'text-lf-muted';
+        return v >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss;
     }
 
     function wrapGhost(html: string, isGhost?: boolean): HtmlCell {
@@ -365,7 +370,7 @@
             id: 'valueStart',
             header: () => $t('common.start'),
             type: 'number',
-            cell: (r) => wrapGhost(`<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueStart)}</span>`, r.isGhost),
+            cell: (r) => wrapGhost(`<span class="font-mono text-right text-lf-secondary">${fmtValue(r.valueStart)}</span>`, r.isGhost),
             getValue: (r) => r.valueStart,
             sortable: true,
             filterable: true,
@@ -375,7 +380,7 @@
             id: 'valueEnd',
             header: () => $t('common.end'),
             type: 'number',
-            cell: (r) => wrapGhost(`<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueEnd)}</span>`, r.isGhost),
+            cell: (r) => wrapGhost(`<span class="font-mono text-right text-lf-secondary">${fmtValue(r.valueEnd)}</span>`, r.isGhost),
             getValue: (r) => r.valueEnd,
             sortable: true,
             filterable: true,
@@ -395,8 +400,8 @@
             id: 'deltaPct',
             header: () => $t('measure.table.deltaPct'),
             type: 'number',
-            cell: (r) => wrapGhost(`<span class="font-mono ${colorClass(r.deltaPct)}">${fmtPct(r.deltaPct)}</span>`, r.isGhost),
-            getValue: (r) => r.deltaPct,
+            cell: (r) => (r.deltaPct !== null ? wrapGhost(`<span class="font-mono ${colorClass(r.deltaPct)}">${fmtPct(r.deltaPct)}</span>`, r.isGhost) : {type: 'html', html: '<span class="text-lf-muted">—</span>'}),
+            getValue: (r) => r.deltaPct ?? 0,
             sortable: true,
             filterable: true,
             width: 80,
@@ -406,7 +411,7 @@
             header: () => $t('measure.table.annualized'),
             type: 'number',
             headerTooltip: '$\\large (1 + \\Delta\\%)^{\\frac{365}{d}} - 1$',
-            cell: (r) => (r.annualizedPct !== null ? wrapGhost(`<span class="font-mono ${colorClass(r.annualizedPct)}">${fmtPct(r.annualizedPct)}</span>`, r.isGhost) : {type: 'html', html: '<span class="text-gray-400">—</span>'}),
+            cell: (r) => (r.annualizedPct !== null ? wrapGhost(`<span class="font-mono ${colorClass(r.annualizedPct)}">${fmtPct(r.annualizedPct)}</span>`, r.isGhost) : {type: 'html', html: '<span class="text-lf-muted">—</span>'}),
             getValue: (r) => r.annualizedPct ?? 0,
             sortable: true,
             filterable: true,
@@ -416,7 +421,7 @@
             id: 'days',
             header: () => $t('datePicker.granularity.days'),
             type: 'number',
-            cell: (row) => wrapGhost(`<span class="font-mono text-gray-500 dark:text-gray-400">${row.days}d</span>`, row.isGhost),
+            cell: (row) => wrapGhost(`<span class="font-mono text-lf-muted">${row.days}d</span>`, row.isGhost),
             getValue: (row) => row.days,
             sortable: true,
             filterable: true,
@@ -523,11 +528,11 @@
     }
 </script>
 
-<div class="space-y-3">
+<div class="space-y-3 text-lf-primary">
     <!-- Pending indicator -->
     {#if measureActive && pendingStartDate}
-        <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-3 py-1.5 border border-amber-200 dark:border-amber-800">
-            📍 {$t('measure.pending', {values: {startDate: pendingStartDate, startValue: pendingStartValue == null ? '' : formatFixed(pendingStartValue, 4)}})}
+        <div class="text-xs text-lf-warning-on-soft bg-lf-warning-soft rounded px-3 py-1.5 border border-lf-warning-line">
+            📍 {$t('measure.pending', {values: {startDate: pendingStartDate, startValue: pendingStartValue == null ? '' : formatPrice(pendingStartValue, {minDecimals: 4})}})}
         </div>
     {/if}
 
@@ -536,14 +541,14 @@
         <div class="space-y-2">
             {#each measurements as { measure, result }}
                 {@const isExpanded = expandedIds.has(measure.id)}
-                <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-visible">
+                <div class="rounded-lg border border-lf-subtle overflow-visible">
                     <!-- Card header: responsive layout (wide=1 row, tablet=2 rows via stacked DRP) -->
                     <div
-                        class="flex {isNarrow ? 'items-stretch' : 'items-center'} gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/50
-                                    hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                        class="flex {isNarrow ? 'items-stretch' : 'items-center'} gap-2 px-3 py-2 bg-lf-panel
+                                    hover:bg-lf-neutral transition-colors"
                     >
                         <!-- 1. Chevron -->
-                        <button type="button" class="flex items-center text-xs font-mono text-gray-600 dark:text-gray-300 shrink-0 self-center" onclick={() => toggleExpand(measure.id)}>
+                        <button type="button" class="flex items-center text-xs font-mono text-lf-secondary shrink-0 self-center" onclick={() => toggleExpand(measure.id)}>
                             <ChevronDown size={13} class="transition-transform shrink-0 {isExpanded ? 'rotate-180' : ''}" />
                         </button>
 
@@ -557,14 +562,14 @@
                         {:else}
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
                             <!-- svelte-ignore a11y_click_events_have_key_events -->
-                            <span class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 cursor-pointer self-center" onclick={() => toggleExpand(measure.id)}>
+                            <span class="flex items-center gap-2 text-xs font-mono text-lf-secondary cursor-pointer self-center" onclick={() => toggleExpand(measure.id)}>
                                 📏 {measure.params.startDate} → {measure.params.endDate}
                                 {#if result}
                                     {@const delta = compactDelta(result)}
-                                    <span class={delta.value >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
+                                    <span class={colorClass(delta.value)}>
                                         {delta.label}
                                     </span>
-                                    <span class="text-gray-400 dark:text-gray-500">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
+                                    <span class="text-lf-muted">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
                                 {/if}
                             </span>
                         {/if}
@@ -574,10 +579,10 @@
                             {#if result}
                                 {@const delta = compactDelta(result)}
                                 <div class="flex items-center gap-2 shrink-0 {isExpanded ? '' : 'hidden'}">
-                                    <span class="text-xs font-mono shrink-0 {delta.value >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                                    <span class="text-xs font-mono shrink-0 {colorClass(delta.value)}">
                                         {delta.label}
                                     </span>
-                                    <span class="text-xs font-mono text-gray-400 dark:text-gray-500 shrink-0">· {result.days}d</span>
+                                    <span class="text-xs font-mono text-lf-muted shrink-0">· {result.days}d</span>
                                 </div>
                             {/if}
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -597,7 +602,7 @@
                                 </div>
                             {/if}
                             <span
-                                class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors flex items-center justify-center"
+                                class="p-1 text-lf-muted hover:text-lf-danger rounded transition-colors flex items-center justify-center"
                                 role="button"
                                 tabindex="-1"
                                 title={$t('common.remove')}
@@ -621,7 +626,7 @@
                     {#if isExpanded}
                         <!-- Summary table (DataTable) -->
                         {#if result}
-                            <div class="border-t border-gray-200 dark:border-slate-600">
+                            <div class="border-t border-lf-subtle">
                                 <DataTable
                                     bind:this={measureTableRefs[measure.id]}
                                     data={buildSummaryRows(result, measure)}
@@ -644,7 +649,7 @@
             {/each}
         </div>
     {:else if !measureActive}
-        <p class="text-xs text-gray-400 dark:text-gray-500 italic">
+        <p class="text-xs text-lf-muted italic">
             {$t('measure.empty')}
         </p>
     {/if}

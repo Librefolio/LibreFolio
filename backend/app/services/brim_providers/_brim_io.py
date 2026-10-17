@@ -36,7 +36,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
-from backend.app.services.brim_provider import BRIMProvider
+from backend.app.services.brim.brim_provider import BRIMProvider
 
 try:
     import openpyxl

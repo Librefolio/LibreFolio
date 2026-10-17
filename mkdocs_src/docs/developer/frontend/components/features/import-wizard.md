@@ -5,6 +5,14 @@ uploads one or more broker files, the backend BRIM plugin parses each into draft
 transactions, and the wizard lets the user review, deduplicate and stage them before they
 land in the `TransactionBulkModal` editor.
 
+The modal owns the whole state machine — the step, the files, the parse results, the
+resolutions, every handler. Each step's markup is a component that reads that state as props,
+writes back only what it binds, and calls the modal's handlers: `UploadStep`, `SelectFilesStep`,
+`AnalyzeStep`, `DuplicatesStep`, `ReviewStep` and the `WizardFooter` (each step's Back, Continue
+and Import buttons), in `frontend/src/lib/features/transactions/import/`, with the types they
+share in `wizardTypes.ts` (`StepId` among them); the `assets`, `fix` and `gapFix` steps were
+already components, in `features/transactions/import/`.
+
 This page documents the two things that are easy to get wrong when working on it: **how we
 decide that two transactions are the same** and **the review UIs built on top of that
 decision**.
@@ -112,7 +120,7 @@ on `upload`.
 
 ### 🧮 The pure util and its tests
 
-`lib/utils/brim/defaultPluginCheck.ts` holds the two decisions, without state or I/O:
+`lib/features/transactions/import/defaultPluginCheck.ts` holds the two decisions, without state or I/O:
 
 | Function | Contract |
 |---|---|
@@ -139,7 +147,7 @@ nothing to say, leaves the reason out: the prompt still says where the file belo
 
 ### 🪟 The prompt: `ImportBrokerMismatchModal.svelte`
 
-`lib/components/transactions/modals/ImportBrokerMismatchModal.svelte`
+`lib/features/transactions/import/ImportBrokerMismatchModal.svelte`
 (`import-broker-mismatch-modal`), mounted by the wizard while `mismatchPrompt` is set. It takes the
 file's broker (`broker`, a `BrokerMismatchBroker`), that broker's default plugin (`defaultPlugin`,
 a `BrokerMismatchPlugin`) and the `targets` (`BrokerMismatchTarget`: a broker with its `plugin`).
@@ -194,9 +202,13 @@ Three namespaces, in the four catalogues:
   `cannotRead`, `reasonTitle`, `toLabel`, `canRead`, `targetMany`, `noTarget`, `noReader`, `move`,
   `keep`, `remove`, `moveFailed`, `removeFailed`;
 - `importWizard.parseRefusal.<code>` — the plugins' refusals by code, with the refusal's `context`
-  as parameters: today the four Scalable codes (`scalable_deposit_file`, `scalable_broker_file`,
-  `scalable_prime_file`, `scalable_mixed_file`), the first three with `{plugin_name}`. A refusal
-  whose code has no key is shown in the plugin's English;
+  as parameters: the four Scalable codes (`scalable_deposit_file`, `scalable_broker_file`,
+  `scalable_prime_file`, `scalable_mixed_file`), the first three with `{plugin_name}`; the shared
+  codes `csv_only` (with `{plugin_name}`), `file_unreadable`, `no_header_row`, `missing_columns`
+  (with `{columns}`, and a plural on `count`) and `no_movement_rows`; DEGIRO's `degiro_csv_only`
+  and `degiro_not_account_statement` (see
+  [Saying why with a code](../../../architecture/patterns/brim_plugin_guide.md#cannot-parse-detail)).
+  A refusal whose code has no key is shown in the plugin's English;
 - `brimPlugins.<code>.name` — every plugin name the prompt shows: the default plugin, the targets'
   plugins, the `noTarget` list, and the `{plugin_name}` of a refusal, which the backend writes in
   English and `resolveParseRefusalMessage` replaces from the refusal's `plugin_code`. The lookup is
@@ -209,7 +221,7 @@ Three namespaces, in the four catalogues:
 ## 🧩 Step components
 
 The conditional steps each have their own component, all under
-`lib/components/transactions/import/`. The two components that report sets add there —
+`lib/features/transactions/import/`. The two components that report sets add there —
 `ReportSetCard` (in `select`) and `GapFixStep` — are described in [Report sets](#report-sets).
 
 ### 🧬 `AssetGroupStep.svelte` — unify assets
@@ -253,7 +265,7 @@ Renders the rows a plugin booked but could not fully understand: `blocker` (red,
 `warning` (amber, advisory), grouped by the nature of the question so similar cases are settled
 together. Fee/tax rows have no quantity field and may legitimately carry **no asset at all**.
 
-Which rows enter the step is decided by the pure module `lib/utils/transactions/fixRowLifecycle.ts`.
+Which rows enter the step is decided by the pure module `lib/features/transactions/import/fixRowLifecycle.ts`.
 `isFixStepTodo` keeps three kinds of todo: a `blocker` on a field the duplicate comparison keys on
 (`DUP_RELEVANT_FIELDS`: `type`, `date`, `quantity`, `asset_id`, `cash`, `cash.amount`,
 `cash.code`), a `warning` on `asset_id` (a charge or income attached to no instrument), and a
@@ -313,10 +325,10 @@ The decisions live in two pure modules, tested without the component
 (`./dev.py test front-transaction tx-unit`); the wizard keeps the reactive state and the server
 calls:
 
-- `lib/utils/transactions/importReportSets.ts` — grouping, how a set is read (the choices the card
+- `lib/features/transactions/import/importReportSets.ts` — grouping, how a set is read (the choices the card
   offers, the memory of the last analysis, the set request), selection, analysis units, the card's
   timeline and the FilesTable badges;
-- `lib/utils/transactions/gapFixModel.ts` — the gap-fix requests and the view of the `gapFix` step.
+- `lib/features/transactions/import/gapFixModel.ts` — the gap-fix requests and the view of the `gapFix` step.
 
 | Function (`importReportSets.ts`) | Contract |
 |---|---|
@@ -726,6 +738,10 @@ The plugin catalogue is read once (the cache shared with `ImportPluginSelect`), 
 preview is requested once per list of members, with `setRequest`, so the server leaves out the same
 originals as the memory; a failed request only leaves the `incomplete` badge out.
 
+The table's other columns and actions, among them the `can_delete` gate on **Delete** (both types)
+and the **Visibility** column of `type === 'static'`, are in
+[FilesTable](../core-ui/file-upload.md#filestable).
+
 ---
 
 ## 🧬 Duplicate detection
@@ -774,9 +790,9 @@ Both frontend tiers are decided by `buildDedupKey` + `dedupKeysMatch`. The signa
 | Broker id | Same broker only |
 | Transaction type | `BUY` / `SELL` / `INTEREST` / … |
 | Date | Day granularity (first 10 chars) |
-| Quantity | Compared within `QUANTITY_TOLERANCE` (`0.0001`) |
-| Cash code + amount | Amount compared within `AMOUNT_TOLERANCE` (`0.01`) |
-| Per-unit cost override | Distinguishes cashless `ADJUSTMENT` legs booked at different prices (e.g. succession transfers) |
+| Quantity | `sameDedupQuantity`, the backend's rule (W-B51, W-B81): equal once both are rounded half-up to the decimals of the less precise one, and never more than `QUANTITY_TOLERANCE` (`0.0001`) apart. `0.00015` meets a stored `0.000153`; `0.00015123` and `0.00015098` stay apart. Read exactly from the decimal text, never as a float; a text that is no plain decimal forms no key, an empty one reads as `0` |
+| Cash code + amount | Amount within `AMOUNT_TOLERANCE` (`0.01`), computed exactly; an empty amount reads as `0` |
+| Per-unit cost override | Distinguishes cashless `ADJUSTMENT` legs booked at different prices (e.g. succession transfers); compared by `sameDedupQuantity` too |
 | Asset identity | ISIN / symbol / name / fake-id |
 
 !!! note "Description decides the tier, not the match"
@@ -911,7 +927,7 @@ one before merging. For a report set it also shows how the exports were matched
 
 The wizard is also one of the two places (with the intro tour) that drives
 `onboardingGuide.svelte.ts` — the `import_guide` flow, one of the fifteen versioned flows in
-`ONBOARDING_FLOW_VERSIONS` (`backend/app/services/onboarding_service.py`). Its nine step ids
+`ONBOARDING_FLOW_VERSIONS` (`backend/app/services/accounts/onboarding_service.py`). Its nine step ids
 (`IMPORT_GUIDE_STEP_IDS`, defined in `lib/features/onboarding/onboardingGuideCatalog.ts` and
 re-exported by `onboardingGuide.svelte.ts`) are `import.upload` / `select` / `analyze` / `assets` /
 `fix` / `duplicates` / `review` / `gapFix` / `bulk` — the first eight mirror `StepId` above 1:1,

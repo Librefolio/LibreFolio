@@ -15,7 +15,7 @@
 </script>
 
 {#if resolution !== 'daily'}
-    <span class="inline-flex items-center rounded-full border border-gray-200/70 bg-white/90 px-2 py-1 text-[11px] font-medium text-gray-600 shadow-sm dark:border-slate-600/70 dark:bg-slate-800/90 dark:text-slate-200" data-testid="chart-resolution-badge">
+    <span class="inline-flex items-center rounded-full border border-lf-subtle/70 bg-lf-card/90 px-2 py-1 text-[11px] font-medium text-lf-secondary shadow-sm" data-testid="chart-resolution-badge">
         {$t(LABEL_KEY[resolution])}
     </span>
 {/if}

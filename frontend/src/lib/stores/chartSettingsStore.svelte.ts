@@ -82,12 +82,12 @@ function deepClone<T>(obj: T): T {
     return JSON.parse(JSON.stringify(obj));
 }
 
-const STORAGE_VERSION = 2;
+const STORAGE_VERSION = 3;
 const STORAGE_BASE_KEY = 'chartSettingsStore';
 const STORAGE_WRITE_DELAY_MS = 250;
 
 interface PersistedChartSettings {
-    version: 1 | typeof STORAGE_VERSION;
+    version: typeof STORAGE_VERSION;
     globalSettings: ChartSettings;
     pairOverrides: Array<[string, ChartSettings]>;
 }
@@ -190,11 +190,58 @@ function sanitizeStoredSettings(value: unknown): ChartSettings {
     return sanitized;
 }
 
+// Version 3 (decision 29): the Rolling Return over N observations (RISK_ROLLING_RETURN) left the catalogue; a saved
+// one becomes the calendar Rolling Return (ASSET_CALENDAR_ROLLING_RETURN) over the same number of days.
+const REMOVED_ROLLING_RETURN_TYPE = 'risk-rolling-return';
+const CALENDAR_ROLLING_RETURN_TYPE = 'asset-calendar-rolling-return';
+const REMOVED_ROLLING_RETURN_AXIS = 'independent:risk_return';
+const CALENDAR_ROLLING_RETURN_AXIS = 'independent:calendar_return';
+
+function migrateRollingReturnSignal(signal: unknown): unknown {
+    if (!isRecord(signal) || signal.signalType !== REMOVED_ROLLING_RETURN_TYPE) return signal;
+    const migrated: Record<string, unknown> = {...signal, signalType: CALENDAR_ROLLING_RETURN_TYPE};
+    if (isRecord(signal.params) && 'window' in signal.params) {
+        const {window: observations, ...params} = signal.params;
+        migrated.params = {...params, window_days: observations};
+    }
+    if (isRecord(signal.componentStyles) && 'rolling_return' in signal.componentStyles) {
+        const {rolling_return: outputStyle, ...componentStyles} = signal.componentStyles;
+        migrated.componentStyles = {...componentStyles, calendar_return: outputStyle};
+    }
+    return migrated;
+}
+
+function migrateRollingReturnSettings(settings: unknown): unknown {
+    if (!isRecord(settings)) return settings;
+    const migrated: Record<string, unknown> = {...settings};
+    if (Array.isArray(settings.signals)) migrated.signals = settings.signals.map(migrateRollingReturnSignal);
+    const scales = settings.axisScales;
+    if (isRecord(scales) && isRecord(scales.secondary) && REMOVED_ROLLING_RETURN_AXIS in scales.secondary) {
+        const {[REMOVED_ROLLING_RETURN_AXIS]: scale, ...secondary} = scales.secondary;
+        migrated.axisScales = {...scales, secondary: CALENDAR_ROLLING_RETURN_AXIS in secondary ? secondary : {...secondary, [CALENDAR_ROLLING_RETURN_AXIS]: scale}};
+    }
+    return migrated;
+}
+
+/**
+ * Bring stored settings of an earlier version (1 or 2) to the current one, without touching the parsed input.
+ * Version 3 turns every saved observation Rolling Return into the calendar one; anything else passes as it is.
+ */
+export function migratePersistedChartSettings(parsed: unknown): unknown {
+    if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== 2)) return parsed;
+    return {
+        ...parsed,
+        version: STORAGE_VERSION,
+        globalSettings: migrateRollingReturnSettings(parsed.globalSettings),
+        pairOverrides: Array.isArray(parsed.pairOverrides) ? parsed.pairOverrides.map((entry) => (Array.isArray(entry) && entry.length === 2 ? [entry[0], migrateRollingReturnSettings(entry[1])] : entry)) : parsed.pairOverrides,
+    };
+}
+
 function parsePersistedSettings(raw: string | null): PersistedChartSettings | null {
     if (!raw) return null;
     try {
-        const parsed: unknown = JSON.parse(raw);
-        if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== STORAGE_VERSION)) return null;
+        const parsed: unknown = migratePersistedChartSettings(JSON.parse(raw));
+        if (!isRecord(parsed) || parsed.version !== STORAGE_VERSION) return null;
 
         const overrides = new Map<string, ChartSettings>();
         if (Array.isArray(parsed.pairOverrides)) {

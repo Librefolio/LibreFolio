@@ -30,16 +30,18 @@ from backend.app.schemas.risk import (
     RiskQueryResponse,
     RiskResultStatus,
 )
-from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )
 from backend.app.services.risk.scenario_catalog import (
     load_risk_scenario_catalog,
 )
-from backend.app.services.risk.service import (
+from backend.app.services.risk.scope import (
     RiskScopeAccessError,
     RiskScopeNotFoundError,
+)
+from backend.app.services.risk.service import (
     RiskService,
 )
 
@@ -501,7 +503,7 @@ async def test_risk_query_simulates_with_canonical_names_and_no_seed():
     exempted the whole suite from ever exercising the *default* engine, so a
     contradiction between the params validator (which forbids ``random_seed``
     under the block bootstrap) and the metadata validator (which used to
-    require it) reached ``_success`` and returned 500 with every green gate
+    require it) reached ``success_result`` and returned 500 with every green gate
     still green. This test is that missing composition: canonical field names,
     no seed supplied, default process.
     """

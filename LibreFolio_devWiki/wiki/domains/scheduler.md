@@ -10,7 +10,7 @@ mkdocs: "developer/backend/scheduler.md"
 
 > **Corrected 2026-10-09 (checked at `586a4f0ea`).** This page was written as a design ("under active development").
 > The scheduler shipped in Phase 08 ([[sources/phase08-scheduler-backend]], [[entities/market-data-scheduler]]): code in
-> `backend/app/services/scheduler/`, admin endpoints `GET /api/v1/settings/scheduler/state` and `/log`, configuration
+> `backend/app/services/platform/scheduler/`, admin endpoints `GET /api/v1/settings/scheduler/state` and `/log`, configuration
 > in the admin Global settings (`SchedulerConfigModal.svelte`). History-sync times are in the configured **scheduler
 > timezone**, not server time ([[decisions/scheduler-converts-at-decision]]). The narrative below is kept.
 
@@ -76,8 +76,8 @@ Once the scheduler is running, [[F-091]] Multi-Worker Cache Server (planned idea
 | Role | Path |
 |------|------|
 | Global settings API (scheduler config) | `backend/app/api/v1/settings.py` |
-| Global settings service | `backend/app/services/global_settings_service.py` |
-| Asset sync service (called by scheduler) | `backend/app/services/asset_source.py` |
-| FX sync service (called by scheduler) | `backend/app/services/fx.py` |
-| Scheduler module (planned) | `backend/app/services/scheduler/scheduler.py` (not yet created) |
+| Global settings service | `backend/app/services/accounts/global_settings_service.py` |
+| Asset sync service (called by scheduler) | `backend/app/services/assets/refresh.py` |
+| FX sync service (called by scheduler) | `backend/app/services/fx/sync.py` |
+| Scheduler module | `backend/app/services/platform/scheduler/scheduler.py` |
 | Settings page (admin) | `frontend/src/routes/(app)/settings/+page.svelte` |

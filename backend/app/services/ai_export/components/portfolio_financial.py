@@ -53,6 +53,7 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
     ContributionRow,
     EffectRow,
     FifoAssetSummaryRow,
+    FifoFailedReconstructionRow,
     FifoLotRow,
     PerformanceBucketRow,
     PositionRow,
@@ -61,6 +62,7 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
     build_performance_bucket_rows,
     build_uniform_performance_buckets,
     count_unavailable_amount_lots,
+    fifo_scope_totals,
     load_lots_results,
     load_portfolio_report,
     lot_is_eligible,
@@ -76,8 +78,8 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
     sort_fifo_lots,
     sort_positions,
     sort_unallocated,
+    split_failed_reconstructions,
     summarize_fifo_asset_rows,
-    total_fifo_residual_cost_basis,
 )
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
     load_asset_metadata as _load_asset_metadata,
@@ -86,7 +88,7 @@ from backend.app.services.ai_export.components.resources import PORTFOLIO_LOTS_R
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext
-from backend.app.services.financial_math.native_cash import CONVERSION_DUST
+from backend.app.services.financial_math.portfolio.period import is_reconciled, period_identity_residual
 
 _PORTFOLIO_FIFO_ASSET_METADATA_RESOURCE: ResourceKey[Mapping[int, Asset]] = ResourceKey("portfolio.fifo_asset_metadata", Mapping)
 
@@ -299,7 +301,7 @@ def _build_portfolio_provenance(context: BuildContext, dependencies: Mapping[str
         broker_scope=list(scope.broker_scope),
         engine_source="PortfolioCalculationEngine via a single PortfolioService.get_report call per request",
         fifo_methodology="FIFO lots are computed at runtime by FifoLotEngine via LotsAnalysisService; never persisted.",
-        valuation_semantics="wac_per_unit and open_cost_basis are the historical Weighted Average Cost in the target currency: each acquisition is converted at the exchange rate of its own date, so the cost does not move with later rates, and an acquisition recorded without a cost basis adds quantity at zero cost; realized P&L compares each sale's proceeds, converted at the sale date, with that cost. FIFO lot original_cost/residual_cost_basis are converted at the lot opening date. current_value/current_price/open_value are mark-to-market via the valuation hierarchy (MARKET_PRICE > LAST_TRADE_PRICE > MISSING) at the valuation date's rate, so unrealized P&L includes the exchange-rate effect.",
+        valuation_semantics="wac_per_unit and open_cost_basis are the historical Weighted Average Cost in the target currency: each acquisition is converted at the exchange rate of its own date, so the cost does not move with later rates, and an acquisition recorded without a cost basis adds quantity at zero cost; realized P&L compares each sale's proceeds, or the value an outgoing ADJUSTMENT hands over at its cost basis, converted at its date, with that cost. FIFO lot original_cost/residual_cost_basis are converted at the lot opening date. current_value/current_price/open_value are mark-to-market via the valuation hierarchy (MARKET_PRICE > LAST_TRADE_PRICE > ESTIMATED_AT_COST > MISSING) at the valuation date's rate, so unrealized P&L includes the exchange-rate effect; ESTIMATED_AT_COST (no market quote, no BUY or SELL) counts the book cost instead, with no current_price or unit_price and no unrealized P&L. An ADJUSTMENT is never a price.",
         notes=[
             ProvenanceNote(subject="currency", text=f"All monetary amounts are expressed in {scope.target_currency}."),
             ProvenanceNote(subject="period", text=f"Period is inclusive [{scope.period_start.isoformat()}, {scope.period_end.isoformat()}]; snapshot_as_of == period_end."),
@@ -486,11 +488,18 @@ async def _build_portfolio_reconciliation(context: BuildContext, dependencies: M
             summary.period_other_result,
         )
         if summary.period_pnl is not None and all(component is not None for component in components):
-            residual_amount = summary.period_pnl.amount - (summary.period_unrealized_gain_loss_delta.amount + summary.period_realized_gain_loss.amount + summary.period_income.amount - summary.period_fees_taxes.amount + summary.period_other_result.amount)
+            # J-14: the identity and its tolerance live in financial_math.portfolio.period; the summary closes the
+            # decomposition with period_other_result, so the residual is the rounding of converted amounts.
+            residual_amount = period_identity_residual(
+                summary.period_pnl.amount,
+                summary.period_unrealized_gain_loss_delta.amount,
+                summary.period_realized_gain_loss.amount,
+                summary.period_income.amount,
+                summary.period_fees_taxes.amount,
+                summary.period_other_result.amount,
+            )
             residual = Currency(code=currency_code, amount=residual_amount)
-            # A residual below CONVERSION_DUST is the rounding of Decimal arithmetic on converted
-            # amounts, not a gap: the summary closes the decomposition with period_other_result.
-            reconciled = abs(residual_amount) < CONVERSION_DUST
+            reconciled = is_reconciled(residual_amount)
     return PortfolioReconciliationPayload(
         period_start=scope.period_start,
         period_end=scope.period_end,
@@ -512,14 +521,19 @@ async def _build_portfolio_reconciliation(context: BuildContext, dependencies: M
 
 
 class PortfolioFifoSummaryPayload(PeriodBoundedModel):
+    """`asset_count` counts the Asset rows. An Asset whose lot reconstruction FAILED has no row: it is declared in
+    `failed_lot_reconstructions`, and the scope totals are `None` while one is (`fifo_scope_totals`)."""
 
     target_currency: CurrencyCode
     cost_allocation_semantics: str
     asset_count: int
-    total_open_lots: int
-    total_partial_lots: int
-    total_closed_lots: int
+    total_open_lots: int | None
+    total_partial_lots: int | None
+    total_closed_lots: int | None
     total_residual_cost_basis: Currency | None
+    # Always present, 0 included, like `unavailable_amount_lot_count`: the trace a reader needs to know the scope is whole.
+    failed_reconstruction_asset_count: int = Field(..., ge=0)
+    failed_lot_reconstructions: list[FifoFailedReconstructionRow] = Field(default_factory=list)
     assets: list[FifoAssetSummaryRow] = Field(default_factory=list)
 
 
@@ -527,8 +541,8 @@ async def _build_portfolio_fifo_summary(context: BuildContext, dependencies: Map
     scope = _require_portfolio_scope(context)
     currency_code = scope.target_currency
     lots_resource = await load_lots_results(context, scope, PORTFOLIO_LOTS_RESULTS_RESOURCE)
-    asset_ids = sorted(lots_resource.by_asset_id)
-    assets_meta = await _load_portfolio_asset_metadata(context, asset_ids)
+    assets_meta = await _load_portfolio_asset_metadata(context, sorted(lots_resource.by_asset_id))
+    asset_ids, failed_rows = split_failed_reconstructions(lots_resource, assets_meta)
     cutoff = scope.period_start
 
     eligible_by_asset = {asset_id: [lot for lot in (lots_resource.by_asset_id[asset_id].lots or []) if lot_is_eligible(lot, cutoff=cutoff)] for asset_id in asset_ids}
@@ -551,19 +565,15 @@ async def _build_portfolio_fifo_summary(context: BuildContext, dependencies: Map
         ]
         if lot_rows:
             rows.append(summarize_fifo_asset_rows(lot_rows))
-    total_open = sum(row.open_lot_count for row in rows)
-    total_partial = sum(row.partial_lot_count for row in rows)
-    total_closed = sum(row.closed_lot_count for row in rows)
     return PortfolioFifoSummaryPayload(
         period_start=scope.period_start,
         period_end=scope.period_end,
         target_currency=currency_code,
         cost_allocation_semantics="Fees and taxes are amounts deterministically allocated to FIFO lots. Broker-level unallocated costs are excluded and must be read from the portfolio fee/tax sections.",
         asset_count=len(rows),
-        total_open_lots=total_open,
-        total_partial_lots=total_partial,
-        total_closed_lots=total_closed,
-        total_residual_cost_basis=total_fifo_residual_cost_basis(rows, currency_code),
+        **fifo_scope_totals(rows, currency_code, failed_asset_count=len(failed_rows)),
+        failed_reconstruction_asset_count=len(failed_rows),
+        failed_lot_reconstructions=failed_rows,
         assets=rows,
     )
 
@@ -581,6 +591,9 @@ class PortfolioFifoLotsPayload(PeriodBoundedModel):
     # Always present, 0 included: a compact table drops a column that is null in every row,
     # so this count is the trace that those amounts are unavailable (a missing FX rate).
     unavailable_amount_lot_count: int = Field(..., ge=0)
+    # An Asset whose lot reconstruction FAILED exports no lot row: declared here, always present (J-12).
+    failed_reconstruction_asset_count: int = Field(..., ge=0)
+    failed_lot_reconstructions: list[FifoFailedReconstructionRow] = Field(default_factory=list)
     lots: list[FifoLotRow] = Field(default_factory=list)
 
 
@@ -591,8 +604,8 @@ async def _build_portfolio_fifo_lots(context: BuildContext, dependencies: Mappin
     # frozen catalog wiring; lots are (re)read from the same memoized
     # PORTFOLIO_LOTS_RESULTS_RESOURCE rather than reparsed from that envelope.
     lots_resource = await load_lots_results(context, scope, PORTFOLIO_LOTS_RESULTS_RESOURCE)
-    asset_ids = sorted(lots_resource.by_asset_id)
-    assets_meta = await _load_portfolio_asset_metadata(context, asset_ids)
+    assets_meta = await _load_portfolio_asset_metadata(context, sorted(lots_resource.by_asset_id))
+    asset_ids, failed_rows = split_failed_reconstructions(lots_resource, assets_meta)
     cutoff = scope.period_start
 
     eligible_by_asset: dict[int, list] = {}
@@ -625,6 +638,8 @@ async def _build_portfolio_fifo_lots(context: BuildContext, dependencies: Mappin
         cost_allocation_semantics="Lot fees and taxes include only deterministically allocated costs. Portfolio or Broker unallocated costs are excluded and must not be interpreted as recorded zero.",
         lot_count=len(rows),
         unavailable_amount_lot_count=count_unavailable_amount_lots(rows),
+        failed_reconstruction_asset_count=len(failed_rows),
+        failed_lot_reconstructions=failed_rows,
         lots=rows,
     )
 
@@ -644,7 +659,7 @@ PORTFOLIO_SUMMARY_COMPONENT = ComponentSpec(
 
 PORTFOLIO_POSITIONS_COMPONENT = ComponentSpec(
     component_id="portfolio.positions",
-    version=1,
+    version=2,  # v2 (J-17): a holding valued at cost has no unit_price
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioPositionsPayload,
     builder=_build_portfolio_positions,
@@ -663,7 +678,7 @@ PORTFOLIO_ALLOCATIONS_CASH_COMPONENT = ComponentSpec(
 
 PORTFOLIO_PROVENANCE_COMPONENT = ComponentSpec(
     component_id="portfolio.provenance",
-    version=2,
+    version=3,  # v3 (J-17): the valuation hierarchy includes ESTIMATED_AT_COST
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioProvenancePayload,
     builder=_build_portfolio_provenance,
@@ -709,7 +724,9 @@ PORTFOLIO_RECONCILIATION_COMPONENT = ComponentSpec(
 
 PORTFOLIO_FIFO_SUMMARY_COMPONENT = ComponentSpec(
     component_id="portfolio.fifo_summary",
-    version=2,  # v2 (B3b): unvalued lot amounts are null
+    # v2 (B3b): unvalued lot amounts are null; v3 (MF-E, T-B8): open value and unrealized P&L sum the same lots, and
+    # (J-12) a FAILED lot reconstruction is declared, never summed — still v3, at most +1 over v1.2.1
+    version=3,
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioFifoSummaryPayload,
     builder=_build_portfolio_fifo_summary,
@@ -718,7 +735,7 @@ PORTFOLIO_FIFO_SUMMARY_COMPONENT = ComponentSpec(
 
 PORTFOLIO_FIFO_LOTS_COMPONENT = ComponentSpec(
     component_id="portfolio.fifo_lots",
-    version=2,  # v2 (B3b): unvalued lot amounts are null
+    version=3,  # v2 (B3b): unvalued lot amounts are null; v3 (J-12): a FAILED lot reconstruction is declared, no lot row
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioFifoLotsPayload,
     builder=_build_portfolio_fifo_lots,

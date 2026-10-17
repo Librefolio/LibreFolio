@@ -1,7 +1,7 @@
 # 🛡️ Admin Manual
 
 This manual is for the people who install and run LibreFolio. Most administration happens from the
-command line, through environment variables, or in the app's **Admin** settings tab.
+command line, through environment variables, or in the app's **Settings › Administration** tabs.
 
 ---
 
@@ -12,13 +12,18 @@ command line, through environment variables, or in the app's **Admin** settings 
 - 🐳 **[Advanced Docker](docker_advanced.md)**: Containerized deployment using Docker Compose, volume bindings, and user GID/UID ownership configuration.
 - 🌐 **[Expose Securely](service_exposure.md)**: Securely expose your private LibreFolio instance over the internet.
 - 🔍 **[Check Connection Security](connection_checks.md)**: Verify that your users connect securely, and fix the session cookie or the reverse proxy when they do not.
+- 🏢 **[Hosting for Others](hosting_providers.md)**: Run LibreFolio for other people: the managed profile, the initial administrator, how to block an instance, backups for your hosting panel, the upload limit of a restore and your legal pages.
+- 💤 **[Sleep and Wake](sleep_wake.md)**: Let an unused Fly.io machine suspend itself, and wake it on a schedule: a hosting panel or a cron job brings prices and exchange rates up to date.
 
 ### ⚙️ System Configuration
 - 📝 **[Environment Variables](configuration.md)**: Full list of supported `.env` variables (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) and variable resolution precedence.
-- ⚙️ **[Global Settings](settings.md)**: Configure system-wide runtime settings (session TTL, upload limits, market data sync intervals).
+- 📧 **[Email](email.md)**: Optional SMTP email: the variables, the test email in Settings › Administration › Email, links sent by email, forgotten passwords, email verification, the notice of an email change, and what to check when it fails.
+- ⚙️ **[Global Settings](settings.md)**: Configure system-wide runtime settings (session TTL, upload limits, market data sync intervals), find your way in the **Administration** tabs of Settings, and read the **Security** checks of the instance.
+- 👥 **[Users & Invitations](users.md)**: Manage the accounts of the instance from the app's **Users** tab: invitations, password-reset links, administrator rights, deactivation and deletion.
 
 ### 🧹 Maintenance & Operations
-- 🛠️ **[CLI Admin Tools](cli_tools.md)**: How to use the `dev.py` script for administrative tasks (user management, database upgrades).
+- 🛠️ **[CLI Admin Tools](cli_tools.md)**: How to use the `dev.py` script for administrative tasks (user management, database upgrades, instance backups).
+- 💾 **[Backup, Restore & Moving](backup_restore.md)**: One archive with the whole instance: make it from Settings › Administration › Backup or the command line, check it, restore it, and move LibreFolio between a hosted instance and your own server.
 - 📂 **[Filesystem Structure](filesystem.md)**: Details on where databases, logs, uploads, and temporary folders are stored, and how to perform backups.
 
 ---
@@ -43,6 +48,9 @@ a **How to update** link to the [updating guide](../user/installation.md#updatin
 - To check right away, use **Check for updates** in the
   [changelog](../user/settings/about.md#changelog-modal): it reports errors, and versions you
   skipped too.
+- On an instance in the `managed` profile, run by a hosting provider, there is no check at all:
+  none at sign-in, and no **Check for updates** in the changelog. The provider updates the instance
+  ([Hosting for Others](hosting_providers.md#managed-profile)).
 
 ??? note "👥 Other users — when someone who is not an administrator checks"
 
@@ -82,6 +90,12 @@ JWT_SECRET=paste-the-generated-value-here
 
 Restart LibreFolio (with Docker Compose: `docker compose up -d`). Keep the key private: whoever
 knows it can forge a session.
+
+??? tip "🐳 Keep the key out of `.env` — `JWT_SECRET_FILE`"
+
+    Save the key in a file, such as a Docker secret, and set `JWT_SECRET_FILE` to its path instead of
+    `JWT_SECRET`, for example `JWT_SECRET_FILE=/run/secrets/jwt_secret`. The rules and a Docker
+    Compose example are in [Secrets](configuration.md#secrets).
 
 The workers of a single `./dev.py server --workers …` share one key on their own. How long a
 session lasts is the **Session Duration** in [Global Settings](settings.md). For the details, see

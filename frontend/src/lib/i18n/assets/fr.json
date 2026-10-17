@@ -56,7 +56,8 @@
       "progressWipe": "Suppression de {prices} prix + {events} événements et déconnexion de {linkedTx} transactions…",
       "wipeSuccess": "{prices} prix, {events} événements supprimés ; {linkedTx} transactions déconnectées",
       "bodyIntro": "Le changement de devise nécessite la suppression de toutes les données de marché stockées (voir le résumé ci-dessous). LibreFolio tentera ensuite de re-synchroniser les prix et événements depuis le fournisseur dans la nouvelle devise.",
-      "bodyCaveat": "Les transactions liées aux événements supprimés seront déconnectées — il est de votre responsabilité de les rattacher aux nouveaux événements si nécessaire."
+      "bodyCaveat": "Les transactions liées aux événements supprimés seront déconnectées — il est de votre responsabilité de les rattacher aux nouveaux événements si nécessaire.",
+      "splitAdjustmentsWithoutCost": "La devise n'a pas été changée : la division du {date} a {n, plural, one {# ajustement lié} many {# ajustements liés} other {# ajustements liés}} sans coût d'achat{hidden, plural, =0 {} one { (dont # chez un courtier que vous ne voyez pas)} many { (dont # chez des courtiers que vous ne voyez pas)} other { (dont # chez des courtiers que vous ne voyez pas)}}{more, plural, =0 {} one {, ainsi que # autre division} many {, ainsi que # autres divisions} other {, ainsi que # autres divisions}}. Changer la devise supprime les divisions, et ces unités compteraient comme achetées à un prix inconnu : donnez d'abord un coût d'achat aux ajustements."
     },
     "pricesInCurrency": "Prix en {currency}",
     "eventsInCurrency": "Événements en {currency}",
@@ -70,7 +71,8 @@
     },
     "notFound": "Actif n° {id} introuvable",
     "loadFailed": "Impossible de charger les informations de l'actif",
-    "pricesLoadFailed": "Impossible de charger les prix"
+    "pricesLoadFailed": "Impossible de charger les prix",
+    "manualChip": "Manuel"
   },
   "assets": {
     "create": "Nouvel actif",
@@ -98,15 +100,16 @@
     },
     "delete": {
       "confirmQuestion": "Supprimer \"{name}\" ?",
-      "confirmWarning": "Les assignations de fournisseurs et l'historique des prix seront supprimés. ⚠️",
+      "confirmWarning": "Les assignations de fournisseurs, l'historique des prix et les événements (dividendes, divisions…) seront supprimés. ⚠️",
       "toastOk": "{name} supprimé",
       "toastFailed": "Échec de suppression de {name}",
       "hasTransactions": "Impossible de supprimer \"{name}\" : des transactions existent",
       "bulkOk": "{n} actifs supprimés",
       "bulkPartial": "{failed} actifs non supprimés (ont des transactions)",
-      "bulkConfirmMessage": "Supprimer {n} actifs? Les assignations de fournisseurs et historique des prix seront supprimes.",
+      "bulkConfirmMessage": "Supprimer {n, plural, one {# actif} many {# actifs} other {# actifs}} ? Les assignations de fournisseurs, l'historique des prix et les événements (dividendes, divisions…) seront supprimés.",
       "resultDeleted": "supprimé",
-      "resultHasTransactions": "a des transactions existantes"
+      "resultHasTransactions": "a des transactions existantes",
+      "itemsLabel": "{count, plural, one {# actif} many {# actifs} other {# actifs}}"
     },
     "merge": {
       "title": "Fusionner des actifs",
@@ -213,7 +216,10 @@
       "currencyHelp": "Devise utilisée pour enregistrer les prix de cet actif.",
       "currencyHelpLabel": "À propos de la devise de l’actif",
       "nameRequired": "Saisissez le nom de l'actif pour continuer.",
-      "descriptionPlaceholder": "Brève description de l'actif…"
+      "descriptionPlaceholder": "Brève description de l'actif…",
+      "planSplitAdjustmentsWithoutCost": "Le fournisseur et ses paramètres n'ont pas été modifiés : la division du {date}, générée par le fournisseur, a {n, plural, one {# ajustement lié} many {# ajustements liés} other {# ajustements liés}} sans coût d'achat{hidden, plural, =0 {} one { (dont # chez un courtier que vous ne voyez pas)} many { (dont # chez des courtiers que vous ne voyez pas)} other { (dont # chez des courtiers que vous ne voyez pas)}}{more, plural, =0 {} one {, ainsi que # autre division} many {, ainsi que # autres divisions} other {, ainsi que # autres divisions}}. Modifier ces paramètres, ou le fournisseur, supprime les événements qu'il a générés, et ces unités compteraient comme achetées à un prix inconnu : donnez d'abord un coût d'achat aux ajustements.",
+      "providerRemovalLinkedTransactions": "Le fournisseur n'a pas été retiré : l'événement {type} du {date}, généré par le fournisseur, est lié à {n, plural, one {# transaction} many {# transactions} other {# transactions}}{hidden, plural, =0 {} one { (dont # chez un courtier que vous ne voyez pas)} many { (dont # chez des courtiers que vous ne voyez pas)} other { (dont # chez des courtiers que vous ne voyez pas)}}{more, plural, =0 {} one {, ainsi que # autre événement} many {, ainsi que # autres événements} other {, ainsi que # autres événements}}. Retirer le fournisseur supprime les événements qu'il a générés : déliez d'abord ces transactions.",
+      "providerRemovalConflict": "Le fournisseur n'a pas été retiré : des données renvoient encore aux événements qu'il a générés. Rechargez la page et réessayez."
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",
@@ -281,7 +287,8 @@
       "notTested": "Non testé",
       "totalTime": "Total",
       "copyErrorDetail": "Copier le détail de l'erreur",
-      "points": "{count, plural, one {{n} point} many {{n} points} other {{n} points}}"
+      "points": "{count, plural, one {{n} point} many {{n} points} other {{n} points}}",
+      "scopeNote": "Le test ne lit que les derniers jours : un nouvel actif reçoit tout son historique de prix à sa création."
     },
     "identifiers": {
       "askProvider": "Demander au Fournisseur",
@@ -325,7 +332,23 @@
       "placeholder": "Rechercher par nom, ticker, ISIN...",
       "searching": "Recherche en cours...",
       "timeout": "Recherche expirée. Veuillez réessayer.",
-      "rankHint": "Rang de recherche web (métarecherche sur plusieurs moteurs) — le premier résultat est la correspondance la plus probable"
+      "rankHint": "Rang de recherche web (métarecherche sur plusieurs moteurs) — le premier résultat est la correspondance la plus probable",
+      "notConfigured": "{provider} doit être configuré avant de pouvoir chercher",
+      "crownLegend": "👑 la devise du fonds",
+      "premiumBadge": "Premium",
+      "premiumEmpty": "Aucun résultat des sources premium.",
+      "communitySection": "Sources non premium (communauté) · {count, plural, one {# résultat} many {# résultats} other {# résultats}}",
+      "communityWarning": "Sources tierces : LibreFolio ne garantit ni leurs prix ni leurs données. Ce choix ne vaut que pour cet actif.",
+      "reportQuestion": "Vous ne le trouvez pas ?",
+      "reportAction": "Signalez-le-nous",
+      "reportVia": {
+        "mailto": "Ouvre votre messagerie avec les détails de cette recherche",
+        "page": "Ouvre la page d'assistance et copie les détails de cette recherche, à y coller",
+        "github": "Ouvre un ticket public sur GitHub avec les détails de cette recherche : relisez-le avant de l'envoyer"
+      },
+      "reportCopied": "Détails de la recherche copiés : collez-les dans la page d'assistance.",
+      "reportCopyFailed": "Impossible de copier les détails de la recherche : décrivez votre recherche sur la page d'assistance.",
+      "failed": "La recherche a échoué. Veuillez réessayer."
     },
     "comparison": {
       "title": "Comparaison des données du fournisseur",
@@ -373,13 +396,42 @@
     "typeSelect": {
       "searchPlaceholder": "Rechercher un type",
       "noMatches": "Aucun type correspondant"
+    },
+    "dataEditor": {
+      "saved": "Données de l'actif : {details}",
+      "pricesSaved": "{count, plural, one {# prix enregistré} many {# prix enregistrés} other {# prix enregistrés}}",
+      "pricesDeleted": "{count, plural, one {# prix supprimé} many {# prix supprimés} other {# prix supprimés}}",
+      "pricesSkipped": "{count, plural, one {# ligne ignorée (non valide)} many {# lignes ignorées (non valides)} other {# lignes ignorées (non valides)}}",
+      "eventsSaved": "{count, plural, one {# événement enregistré} many {# événements enregistrés} other {# événements enregistrés}}",
+      "pricesRefused": "{count, plural, one {# prix refusé} many {# prix refusés} other {# prix refusés}}"
     }
   },
   "events": {
-    "deleteSuccess": "{n} événement(s) supprimé(s)",
-    "deleteNotFound": "Événement(s) introuvable(s) : {ids}",
-    "deleteBlocked": "Suppression impossible : {n} événement(s) encore utilisé(s) par des transactions ({accessible} visibles par vous, {hidden} dans les portefeuilles d'autres utilisateurs)",
-    "fxBannerContext": "pour les événements dividendes/cash"
+    "deleteSuccess": "{n, plural, one {# événement supprimé} many {# événements supprimés} other {# événements supprimés}}",
+    "fxBannerContext": "pour les événements dividendes/cash",
+    "exists": {
+      "title": "Cet événement existe déjà",
+      "hint": "L'actif a déjà un événement de ce type à cette date : utilisez-le ou modifiez-le. Rien n'a été enregistré.",
+      "use": "Utiliser celui-ci",
+      "edit": "Modifier celui-ci",
+      "fromProvider": "Du fournisseur de données",
+      "manual": "Saisi manuellement",
+      "linked": "{n, plural, =0 {lié à aucune transaction} one {lié à # transaction} many {lié à # transactions} other {lié à # transactions}}",
+      "providerNotEditable": "Le fournisseur de données met à jour ses propres événements : celui-ci ne se modifie pas ici."
+    },
+    "saveError": {
+      "currencyMismatch": "Rien n'a été enregistré : l'événement du {date} ({type}) est en {currency}, mais l'actif est en {expected}. Convertissez son montant ou supprimez la ligne{more, plural, =0 {} one { (et # autre)} many { (et # autres)} other { (et # autres)}}.",
+      "keyConflict": "Rien n'a été enregistré : deux événements manuels de type {type} tomberaient le {date}. Changez la date ou le type de l'un d'eux.",
+      "notEditable": "Rien n'a été enregistré : l'un des événements n'existe plus ou ne peut pas être modifié ici. Rechargez les données et réessayez.",
+      "assetNotFound": "Rien n'a été enregistré : l'actif n'existe plus. Rechargez la page.",
+      "unknownType": "Rien n'a été enregistré : « {value} » (ligne du {date}) n'est pas un type d'événement. Utilisez DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT ou MATURITY_SETTLEMENT.",
+      "generic": "Rien n'a été enregistré : {message}",
+      "inUse": "Rien n'a été enregistré : l'événement {type} du {date} est lié à {n, plural, one {# transaction} many {# transactions} other {# transactions}} et ne peut pas être supprimé. Retirez d'abord le lien dans les transactions{more, plural, =0 {} one { (et # autre événement)} many { (et # autres événements)} other { (et # autres événements)}}.",
+      "notDeletable": "Rien n'a été enregistré : l'un des événements à supprimer n'existe plus ou ne peut pas être supprimé ici. Rechargez les données et réessayez.",
+      "tooManyDigits": "Rien n'a été enregistré : la valeur de l'événement {type} du {date}{more, plural, =0 {} one { (et # autre)} many { (et # autres)} other { (et # autres)}} a trop de chiffres. La valeur d'un événement a au maximum {max} décimales, {significant} chiffres significatifs et {integer} chiffres avant la virgule.",
+      "invalidSplitRatio": "Rien n'a été enregistré : l'événement {type} du {date}{more, plural, =0 {} one { (et # autre)} many { (et # autres)} other { (et # autres)}} a un rapport de {ratio}. Le rapport d'une division doit être un nombre supérieur à 0 : 2 pour une division 2 pour 1, 0,5 pour un regroupement 1 pour 2.",
+      "splitAdjustmentsWithoutCost": "Rien n'a été enregistré : l'événement {type} du {date} a {n, plural, one {# ajustement lié} many {# ajustements liés} other {# ajustements liés}} sans coût d'achat{hidden, plural, =0 {} one { (dont # chez un courtier que vous ne voyez pas)} many { (dont # chez des courtiers que vous ne voyez pas)} other { (dont # chez des courtiers que vous ne voyez pas)}}. Sans la division, ces unités compteraient comme achetées à un prix inconnu : donnez d'abord un coût d'achat aux ajustements, puis changez le type de l'événement."
+    }
   },
   "providerErrors": {
     "NO_DATA": "Aucune donnée disponible pour cet instrument chez le fournisseur.",
@@ -391,6 +443,14 @@
     "MISSING_PARAMS": "La configuration du fournisseur ne contient pas les paramètres requis.",
     "PARSE_ERROR": "La réponse du fournisseur n'a pas pu être analysée.",
     "SCRAPE_ERROR": "La page du fournisseur n'a pas pu être lue.",
-    "UNSUPPORTED_PAGE": "Le fournisseur a trouvé cet instrument mais sa page de marché n'est pas encore lisible. Ouvrez une issue sur GitHub (Librefolio/LibreFolio) en indiquant cet ISIN pour que le support soit ajouté."
+    "UNSUPPORTED_PAGE": "Le fournisseur a trouvé cet instrument mais sa page de marché n'est pas encore lisible. Ouvrez une issue sur GitHub (Librefolio/LibreFolio) en indiquant cet ISIN pour que le support soit ajouté.",
+    "RATE_LIMITED": "En pause pour trop de requêtes jusqu'à {time}",
+    "RATE_LIMITED_NO_TIME": "Trop de requêtes : réessayez plus tard",
+    "RATE_LIMITED_DAY": "En pause pour trop de requêtes jusqu'au {time}",
+    "NOT_CONFIGURED": "Ce fournisseur doit être configuré avant usage",
+    "PROVIDER_ERROR": "Le fournisseur a échoué : {detail}",
+    "PROBE_RATE_LIMITED": "Trop de vérifications : réessayez à {time}",
+    "PROBE_RATE_LIMITED_DAY": "Trop de vérifications : réessayez le {time}",
+    "PROBE_RATE_LIMITED_NO_TIME": "Trop de vérifications : réessayez dans une minute"
   }
 }

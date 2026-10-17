@@ -9,10 +9,11 @@
  *
  * The month label is asserted with an explicit locale so the expected string is
  * deterministic regardless of the machine's locale; without one it follows the
- * interface language (M-18), pinned in the last describe, which also writes the
- * tooltip delta in French.
+ * interface language (M-18), pinned in the M-18 describe, which also writes the
+ * tooltip delta in French. The last describe (C-97c-3): the tooltip's absolute
+ * delta keeps its significant digits.
  */
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 // The interface locale is the UI language regionalised by `navigator.language` (M-18). Node's tag
 // follows the host's ICU locale, so it is pinned to en-US — jsdom's own — before any import.
@@ -28,6 +29,7 @@ import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
 import es from '$lib/i18n/es.json';
 import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import type {LineDataPoint} from './LineChart.svelte';
@@ -41,6 +43,7 @@ import {
     computeGhostSeries,
     computeZoomWindow,
     countBuckets,
+    emptyCalendarReturnView,
     extractCalendarReturnView,
     extractCalendarReturnViewsByAsset,
     formatMonthLabel,
@@ -455,6 +458,40 @@ describe('calendarReturnWindow — the window presets are labelled from the cata
     });
 });
 
+describe('emptyCalendarReturnView: no points and no context, idle and without a problem unless told otherwise (exported for the asset page, FE5c)', () => {
+    it('defaults to an idle view with no points, an empty context map and no problem', () => {
+        const view = emptyCalendarReturnView();
+
+        expect(view).toEqual({state: 'idle', points: [], contextByDate: new Map(), problem: null});
+        expect(view.contextByDate).toBeInstanceOf(Map);
+    });
+
+    it.each(['idle', 'loading', 'ready', 'partial', 'unavailable', 'error'] as const)('keeps the given %s state, with no problem by default', (state) => {
+        expect(emptyCalendarReturnView(state)).toEqual({state, points: [], contextByDate: new Map(), problem: null});
+    });
+
+    it('keeps the given problem', () => {
+        const problem = extractCalendarReturnView([typedUnavailableCalendarResult('Every selected Calendar output is undefined.')], CALENDAR_INSTANCE_ID).problem;
+        expect(problem).toMatchObject({code: 'undefined_metric'});
+
+        const view = emptyCalendarReturnView('unavailable', problem);
+
+        expect(view.state).toBe('unavailable');
+        expect(view.problem).toBe(problem);
+        expect(view.points).toEqual([]);
+        expect(view.contextByDate.size).toBe(0);
+    });
+
+    it('returns fresh points and a fresh context map on every call', () => {
+        const first = emptyCalendarReturnView();
+        const second = emptyCalendarReturnView();
+
+        expect(second).not.toBe(first);
+        expect(second.points).not.toBe(first.points);
+        expect(second.contextByDate).not.toBe(first.contextByDate);
+    });
+});
+
 describe('extractCalendarReturnView', () => {
     it('maps a runtime-flat ready result without rebasing its percentage values', () => {
         const view = extractCalendarReturnView(
@@ -486,7 +523,7 @@ describe('extractCalendarReturnView', () => {
                 {key: 'another_series', points: [calendarPoint('2026-02-02', -999)]},
             ],
         });
-        const view = extractCalendarReturnView([{...requested, instance_id: 'another-instance'}, requested, {...requested, signal_code: 'RISK_ROLLING_RETURN'}], CALENDAR_INSTANCE_ID);
+        const view = extractCalendarReturnView([{...requested, instance_id: 'another-instance'}, requested, {...requested, signal_code: 'RISK_ROLLING_VOLATILITY'}], CALENDAR_INSTANCE_ID);
 
         expect(view.state).toBe('ready');
         expect(view.points.find((point) => point.date === '2026-02-02')).toMatchObject({
@@ -1451,25 +1488,41 @@ describe('buildDeltaHtml', () => {
         expect(html).toContain('(Δ -10.0000 / -10.00%)');
     });
 
-    it('reports a 0% relative delta when the first value is 0 (no divide-by-zero)', () => {
+    it('reports no relative delta when the first value is 0: the move is unknown, not 0% (J-44, N65)', () => {
         const html = buildDeltaHtml(10, 0, false);
-        // Why (re-pin, M-18 CP2): the relative delta goes through `formatPercent`, and a zero carries no
-        // `+` (CP1): `+0.00%` becomes `0.00%`. The absolute delta keeps its `+`: it is a gain.
-        expect(html).toContain('(Δ +10.0000 / 0.00%)');
+        // Red (J-44, N65): a change measured from a start of 0 has no percentage, so the relative delta
+        // reads «—» (U+2014), as the chart ruler's Δ% does since CP-14b (`changePct` in MeasureSignal.ts,
+        // the one copy of the rule). This test pinned `(Δ +10.0000 / 0.00%)` before — re-pinned by M-18
+        // CP2 for the zero's missing `+` — because the old code answers the division by zero with 0
+        // (`firstValue !== 0 ? … : 0`): a flat move that never happened. The absolute delta keeps its `+`:
+        // it is a gain.
+        expect(html).toContain('(Δ +10.0000 / —)');
+    });
+
+    it('colours a fall from a first value of 0 by the absolute delta: red, with no relative delta (J-44, N65)', () => {
+        const html = buildDeltaHtml(-10, 0, false);
+        // Red (J-44, N65): `(Δ -10.0000 / —)`. Before: `(Δ -10.0000 / 0.00%)`, the same 0 % as above. The red
+        // is already right today and must survive the change: with no percentage left, the sign of the
+        // absolute delta alone decides the colour.
+        expect(html).toContain('#ef4444');
+        expect(html).toContain('(Δ -10.0000 / —)');
     });
 });
 
 // ===========================================================================
-// buildStaleTooltipHtml — the amber staleness warning line(s)
+// buildStaleTooltipHtml — the staleness warning line(s), in the caller's warning colour
 // ===========================================================================
 
 describe('buildStaleTooltipHtml', () => {
+    /** The caller's warning colour — in the product the warning role, `chartNeutrals().tooltip.staleWarning` — one no table holds. */
+    const WARNING = '#a1b2c3';
+
     it('emits nothing when the point is not stale', () => {
-        expect(buildStaleTooltipHtml(undefined, undefined)).toBe('');
+        expect(buildStaleTooltipHtml(undefined, undefined, WARNING)).toBe('');
     });
 
     it('emits a single price-stale line when FX is fresh', () => {
-        const html = buildStaleTooltipHtml(3, 0);
+        const html = buildStaleTooltipHtml(3, 0, WARNING);
         expect(html).toContain('⚠');
         expect(html).toContain('Stale: 3d');
         // Only one warning line.
@@ -1477,22 +1530,37 @@ describe('buildStaleTooltipHtml', () => {
     });
 
     it('adds a second line when the FX rate is itself stale', () => {
-        const html = buildStaleTooltipHtml(3, 5);
+        const html = buildStaleTooltipHtml(3, 5, WARNING);
         expect(html).toContain('Stale: 3d');
         expect(html).toContain('FX rate: 5d old');
         expect(html.match(/⚠/g)).toHaveLength(2);
     });
 
     it('substitutes {days} into a provided (translated) template', () => {
-        const html = buildStaleTooltipHtml(4, 0, 'Vecchio: {days}g');
+        const html = buildStaleTooltipHtml(4, 0, WARNING, 'Vecchio: {days}g');
         expect(html).toContain('Vecchio: 4g');
         expect(html).not.toContain('Stale:');
     });
 
     it('substitutes {days} into both provided templates when FX is stale', () => {
-        const html = buildStaleTooltipHtml(4, 7, 'P {days}', 'FX {days}');
+        const html = buildStaleTooltipHtml(4, 7, WARNING, 'P {days}', 'FX {days}');
         expect(html).toContain('P 4');
         expect(html).toContain('FX 7');
+    });
+
+    it("draws every warning line in the caller's colour, and still emits nothing when the point is not stale", () => {
+        const cases = {
+            'price only': buildStaleTooltipHtml(3, 0, WARNING),
+            'price and FX': buildStaleTooltipHtml(3, 5, WARNING),
+            'translated templates': buildStaleTooltipHtml(4, 7, WARNING, 'P {days}', 'FX {days}'),
+        };
+        for (const [name, html] of Object.entries(cases)) {
+            const lines = html.match(/⚠/g)?.length ?? 0;
+            expect(lines, `${name} barrier: a warning line was emitted, so the colour count is about something`).toBeGreaterThan(0);
+            expect(html.split(`color:${WARNING}`).length - 1, `${name}: a warning line in another colour than the caller's — a colour of its own ignores the theme the caller read`).toBe(lines);
+        }
+        expect(buildStaleTooltipHtml(undefined, undefined, WARNING), 'a colour handed over must not make a line out of nothing').toBe('');
+        expect(buildStaleTooltipHtml(undefined, 5, WARNING), 'a stale FX rate alone is no stale point: no line, in any colour').toBe('');
     });
 });
 
@@ -1566,7 +1634,8 @@ describe('splitGhostLabel — the name and the currency apart, nothing cut (K st
  * interface's. Every figure follows the interface language (the developer's decision M-18, 2026-10-12):
  *
  *   - percentage view: `(Δ ${formatPercent(value)})`;
- *   - absolute view: `(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${formatPercent(deltaPct)})`;
+ *   - absolute view: `(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${formatPercent(deltaPct)})`, with «—» for
+ *     the relative part when the first value is 0 (N65, J-44: the move is unknown, not 0 %);
  *   - the colours stay derived from the sign, a zero green;
  *   - `formatMonthLabel(date)` defaults to the interface locale; an explicit locale still wins.
  *
@@ -1633,10 +1702,13 @@ describe('buildDeltaHtml and formatMonthLabel in the interface language (M-18)',
             {value: 2234.5, first: 1000, color: GREEN},
         ];
         // The two deltas as the helper computes them: the difference, and its share of the first value
-        // (0 when there is none).
+        // (none when the first value is 0, written «—»: the move is unknown, not 0 %).
+        // Red (J-44, N65) on the third case, {value: 10, first: 0}. Before: the share was 0, so the helper
+        // wrote `formatPercent(0, FR)`, a French 0 % for a move that has no percentage. The other three
+        // cases keep their percentage, computed as before.
         const expected = cases.map(({value, first, color}) => {
-            const deltaPct = first !== 0 ? ((value - first) / first) * 100 : 0;
-            return {color, text: `(Δ ${formatFixed(value - first, 4, {signed: true, ...FR})} / ${formatPercent(deltaPct, FR)})`};
+            const deltaPct = first !== 0 ? ((value - first) / first) * 100 : null;
+            return {color, text: `(Δ ${formatFixed(value - first, 4, {signed: true, ...FR})} / ${deltaPct === null ? '—' : formatPercent(deltaPct, FR)})`};
         });
         expect(expected[0].text, 'French differs from English').not.toBe('(Δ +10.0000 / +10.00%)');
 
@@ -1665,5 +1737,64 @@ describe('buildDeltaHtml and formatMonthLabel in the interface language (M-18)',
 
         await uiLanguage('fr');
         expect(formatMonthLabel('2024-01-15', 'de-DE')).toBe('Januar 2024');
+    });
+});
+
+/**
+ * C-97c-3 (decision D-C97c-1 of the coordinator, 17/10): a price on screen keeps its significant digits.
+ *
+ * In absolute view the main tooltip row ends on `(Δ abs / pct)`, and its absolute part is written with four fixed
+ * decimals, `formatFixed(deltaAbs, 4, {signed: true})`: on an asset priced in millionths a rise of 1.2e-7 — 3.47 % —
+ * reads `+0.0000`, a fall `-0.0000`. The contract: `formatPrice(deltaAbs, {minDecimals: 4, signed: true})` — still
+ * four decimals at least, a `+` on a rise and no sign on a zero, but as many as the first four significant digits need
+ * (`priceFractionDigits`, formatFixed.ts). The relative part and the colours are not touched.
+ *
+ * Reds: a rise and a fall of 1.2e-7 between two prices in millionths (today `+0.0000` and `-0.0000`). Guards, green
+ * today and after: a Δ of 1.5 (`+1.5000`), a flat move (`0.0000`, no sign), and the colours of the tiny moves. The
+ * absolute part is read off the suffix's text; English UI on the en-US browser this file pins, checked before each case:
+ * the expected digits are typed.
+ */
+describe('buildDeltaHtml — the absolute Δ keeps its significant digits (C-97c-3, D-C97c-1)', () => {
+    /** Two prices in millionths, 1.2e-7 apart (the float difference is 1.2000000000000012e-7). */
+    const LOW = 0.0000034573;
+    const HIGH = 0.0000035773;
+    const GREEN = '#10b981';
+    const RED = '#ef4444';
+
+    /** A delta suffix's colour, and its absolute and relative parts: `(Δ abs / pct)`. */
+    function partsOf(html: string): {color: string; abs: string; pct: string} {
+        const match = /color:\s*(#[0-9a-f]{3,8})[^>]*>\(Δ (\S+) \/ ([^)]*)\)</i.exec(html);
+        if (!match) throw new Error(`not a (Δ abs / pct) suffix: ${html}`);
+        return {color: match[1], abs: match[2], pct: match[3]};
+    }
+
+    beforeEach(() => {
+        // The expected digits are typed: the premise that the suffix is written en-US, checked.
+        expect(uiLocale(), 'control: an English UI on the en-US browser this file pins is written en-US').toBe('en-US');
+    });
+
+    it('a rise of 1.2e-7 on a price in millionths reads +0.00000012, not +0.0000', () => {
+        expect(partsOf(buildDeltaHtml(HIGH, LOW, false)).abs, 'the absolute Δ of a 3.47 % rise (today +0.0000)').toBe('+0.00000012');
+    });
+
+    it('a fall of 1.2e-7 on a price in millionths reads -0.00000012, not -0.0000', () => {
+        expect(partsOf(buildDeltaHtml(LOW, HIGH, false)).abs, 'the absolute Δ of a 3.35 % fall (today -0.0000)').toBe('-0.00000012');
+    });
+
+    it('guard: a Δ of 1.5 reads +1.5000 and a flat move 0.0000, with no sign — both with their relative part', () => {
+        expect({rise: partsOf(buildDeltaHtml(101.5, 100, false)), flat: partsOf(buildDeltaHtml(100, 100, false))}).toEqual({
+            rise: {color: GREEN, abs: '+1.5000', pct: formatPercent(1.5)},
+            flat: {color: GREEN, abs: '0.0000', pct: formatPercent(0)},
+        });
+    });
+
+    it('guard: the tiny moves keep their colours and their relative part — green and the percentage on the rise, red on the fall', () => {
+        const rise = partsOf(buildDeltaHtml(HIGH, LOW, false));
+        const fall = partsOf(buildDeltaHtml(LOW, HIGH, false));
+
+        expect({rise: [rise.color, rise.pct], fall: [fall.color, fall.pct]}).toEqual({
+            rise: [GREEN, formatPercent(((HIGH - LOW) / LOW) * 100)],
+            fall: [RED, formatPercent(((LOW - HIGH) / HIGH) * 100)],
+        });
     });
 });

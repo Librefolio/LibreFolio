@@ -18,14 +18,12 @@ from backend.app.schemas.risk import (
     RiskSimulationProcess,
     RiskSimulationRegime,
 )
-from backend.app.services.provider_registry import (
-    RiskAnalyticRegistry,
-    register_plugin,
-)
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,
     RiskUnavailableError,
+    resource_limit_error,
 )
 from backend.app.services.risk.metrics import calendar_days_to_observations
 from backend.app.services.risk.quant import (
@@ -46,30 +44,9 @@ from backend.app.services.risk.quant.spawn_worker import (
     SpawnWorkerRemoteError,
     SpawnWorkerTimeoutError,
 )
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 _DEFAULT_SEED = 123456
-
-# D379: every size limit is RESOURCE_LIMIT, and `remedy` names the setting that brings that limit
-# back within reach. One table, because "fewer paths or a shorter horizon" cures only the two path
-# budgets: the history needs a shorter period, the Sobol dimension ignores the paths, and no
-# setting shrinks the number of positions. The frontend turns a remedy it knows into a sentence;
-# a metric missing here still answers RESOURCE_LIMIT, without a remedy nobody has checked.
-_REMEDY_BY_METRIC = {
-    "portfolio_cells": "paths_or_horizon",
-    "stochastic_cells": "paths_or_horizon",
-    "history_cells": "period",
-    "observations": "period",
-    "assets": "positions",
-    "sobol_dimension": "horizon_or_sampling",
-}
-
-
-def _resource_limit(message: str, *, metric: str, actual: int, limit: int, **context: int) -> RiskUnavailableError:
-    details: dict[str, int | str] = {**context, "metric": metric, "actual": actual, "limit": limit}
-    remedy = _REMEDY_BY_METRIC.get(metric)
-    if remedy is not None:
-        details["remedy"] = remedy
-    return RiskUnavailableError(message, code=RiskErrorCode.RESOURCE_LIMIT, details=details)
 
 
 def _refuse_oversized_scope(asset_count: int) -> None:
@@ -80,7 +57,7 @@ def _refuse_oversized_scope(asset_count: int) -> None:
     that is only too big.
     """
     if asset_count > MAX_SIMULATION_ASSETS:
-        raise _resource_limit(
+        raise resource_limit_error(
             f"Simulation carries at most {MAX_SIMULATION_ASSETS} positions, and this scope holds {asset_count}",
             metric="assets",
             actual=asset_count,
@@ -285,7 +262,7 @@ class SimulationAnalytic(RiskAnalytic):
         except SimulationResourceLimitError as exc:
             # A budget refusal is about size, never about the parameters' validity: at the
             # defaults it refuses the 67th position.
-            raise _resource_limit(
+            raise resource_limit_error(
                 str(exc),
                 metric=exc.metric,
                 actual=exc.actual,
@@ -417,7 +394,7 @@ class SimulationAnalytic(RiskAnalytic):
         # The whole aligned history crosses the process boundary, so its length has the same
         # ceiling as the request's field. A shorter period holds fewer observations.
         if observations > MAX_HISTORY_OBSERVATIONS:
-            raise _resource_limit(
+            raise resource_limit_error(
                 f"Simulation history holds {observations} observations, above the supported maximum of {MAX_HISTORY_OBSERVATIONS}",
                 metric="observations",
                 actual=observations,
@@ -504,7 +481,7 @@ class SimulationAnalytic(RiskAnalytic):
         if params.sampling_method == RiskSamplingStrategy.QMC:
             dimension = len(estimates.asset_ids) * params.horizon_days
             if dimension > MAX_SOBOL_DIMENSION:
-                raise _resource_limit(
+                raise resource_limit_error(
                     f"QMC needs {dimension} Sobol dimensions ({len(estimates.asset_ids)} assets x {params.horizon_days} days), above the supported maximum of {MAX_SOBOL_DIMENSION}",
                     metric="sobol_dimension",
                     actual=dimension,

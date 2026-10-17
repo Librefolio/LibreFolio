@@ -1,0 +1,48 @@
+{
+  "common": {
+    "greeting": "Hola, $username:",
+    "greeting_anonymous": "Hola:",
+    "button_fallback": "Si el botón no funciona, copia esta dirección en tu navegador:",
+    "footer": "LibreFolio envió este mensaje automáticamente desde $instance."
+  },
+  "password_reset": {
+    "subject": "Restablece tu contraseña de LibreFolio",
+    "intro": "Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en $instance.",
+    "action": "Elegir una nueva contraseña",
+    "expiry": "El enlace funciona una sola vez y caduca en $duration.",
+    "ignore": "Si no lo has solicitado, ignora este correo: tu contraseña sigue siendo la misma."
+  },
+  "invite": {
+    "subject": "Una invitación a LibreFolio",
+    "intro": "$inviter te invita a crear una cuenta en $instance.",
+    "intro_anonymous": "Has recibido una invitación para crear una cuenta en $instance.",
+    "admin_role": "Tu cuenta será administradora de la instancia.",
+    "action": "Crear tu cuenta",
+    "expiry": "La invitación funciona una sola vez y caduca en $duration.",
+    "ignore": "Si no esperabas esta invitación, ignora este correo."
+  },
+  "email_verification": {
+    "subject": "Confirma tu dirección de correo",
+    "intro": "Confirma que esta dirección de correo pertenece a tu cuenta en $instance.",
+    "action": "Confirmar mi dirección de correo",
+    "expiry": "El enlace funciona una sola vez y caduca en $duration.",
+    "ignore": "Si no has creado ninguna cuenta, ignora este correo."
+  },
+  "admin_setup": {
+    "subject": "Configura tu cuenta de administrador de LibreFolio",
+    "intro": "Tu instancia de LibreFolio $instance está lista: elige la contraseña de tu cuenta de administrador para empezar a usarla.",
+    "action": "Establecer mi contraseña",
+    "expiry": "El enlace funciona una sola vez y caduca en $duration.",
+    "ignore": "Si no esperabas este correo, ignóralo."
+  },
+  "test": {
+    "subject": "Correo de prueba de LibreFolio",
+    "intro": "Este es un correo de prueba enviado desde $instance.",
+    "outro": "Si lo estás leyendo, LibreFolio puede enviar correos."
+  },
+  "email_changed": {
+    "subject": "La dirección de correo de tu cuenta de LibreFolio ha cambiado",
+    "intro": "La dirección de correo de tu cuenta en $instance se ha cambiado. Este mensaje va a la dirección que tenía antes.",
+    "advice": "Si hiciste tú el cambio, no tienes que hacer nada. Si no, puede que alguien esté usando tu cuenta: cambia tu contraseña enseguida si aún puedes iniciar sesión y avisa al administrador de $instance."
+  }
+}

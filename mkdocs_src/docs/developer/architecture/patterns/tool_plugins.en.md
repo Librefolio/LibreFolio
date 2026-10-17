@@ -46,8 +46,9 @@ Paths below are relative to the repository root.
 | `backend/app/api/v1/tools.py` | Bounded transport handlers, authentication dependencies, and disconnect handling. |
 | `backend/app/api/v1/router.py` | Inclusion of the Tool router in the API v1 router. |
 | `backend/app/api/v1/auth.py` | `get_current_user`, the authentication dependency used by all Tool routes. |
-| `backend/app/main.py` | API prefix mounting, off-event-loop catalogue initialization, and executor shutdown in the lifespan's `finally` block. |
-| `backend/app/services/provider_registry.py` | Shared discovery and `register_plugin`; existing domain base-class aliases are imported lazily. |
+| `backend/app/main.py` | API prefix mounting. |
+| `backend/app/services/platform/app_lifespan.py` | Off-event-loop catalogue initialization (the `tool-catalog` startup step), and executor shutdown in the lifespan's `finally` block (the `tool-executor` step of `FINALLY_STEPS`). |
+| `backend/app/services/provider_registry.py` | Shared discovery and `register_plugin`. |
 | `frontend/scripts/generate-tools-client.mjs` | Strict codec generation and the generated code/version-to-codec map. |
 | `frontend/src/lib/api/tool-contract-map.generated.ts` | Generated service identities, schema fingerprints, UI versions, and codecs. |
 | `frontend/src/lib/features/tools/contracts.ts` | Runtime catalogue validation, compiled-contract compatibility, and typed execution preparation. |
@@ -125,7 +126,7 @@ Discovery is transactional:
 4. Claims from failed imports cannot become usable partial registrations. Unrelated healthy definitions remain available.
 5. Publication creates a code-sorted, read-only service-definition mapping and a tuple of sanitized failures. New registration claims are closed after publication.
 
-Each expanded definition retains both the packaged class and its `ToolService`. Definition validation checks a concrete `ToolPlugin` class, synchronous computation, the zero-argument constructor signature, real adapters, schema validity, operation agreement, and the service's complete descriptor metadata. One invalid service is quarantined without hiding a healthy sibling service. The shared registry keeps its existing domain base-class aliases lazy; importing the registry is not permission for a Tool to import or use provider services.
+Each expanded definition retains both the packaged class and its `ToolService`. Definition validation checks a concrete `ToolPlugin` class, synchronous computation, the zero-argument constructor signature, real adapters, schema validity, operation agreement, and the service's complete descriptor metadata. One invalid service is quarantined without hiding a healthy sibling service. The shared registry module imports no domain base class; importing it is not permission for a Tool to import or use provider services.
 
 The schema fingerprint is SHA-256 over canonical JSON containing `input_schema`, `output_schema`, and sorted operation names. It is generated from the schemas, not supplied by a plugin author. Input schemas use Pydantic's **validation** mode; output schemas use **serialization** mode. Both include the Draft 2020-12 `$schema` declaration.
 
@@ -293,7 +294,7 @@ The following are the `ToolPlatformPolicy` defaults declared in `backend/app/sch
 | Request body / response body | 1 MiB / 1,088 KiB (four 256 KiB results plus a 64 KiB envelope reserve) |
 | Parameters per item / result per item | 128 KiB / 256 KiB |
 | JSON nesting depth | 32 |
-| Ingress / shared queue budget | 2 s / 5 s |
+| Compute ingress / shared queue budget | 2 s / 5 s |
 | Engine budget (one claimed engine window) | 30 s |
 | Hard job budget, including startup | 45 s |
 | Cooperative soft budget / output reserve | 44 s / 1 s |
@@ -307,13 +308,13 @@ A `ToolOperationPolicy` declares its own values. A field the plugin omits takes 
 
 For example, the `plan` operation of `PacAllocatorTool` (`backend/app/services/tool_plugins/pac_allocator/plugin.py`) declares 256 KiB of parameters and 512 KiB of results. The clamp caps them at the platform's 128 KiB and 256 KiB (`max_parameter_bytes` and `max_result_bytes` in `effective_operation`). Its time budgets equal the platform defaults (30 s engine, 44 s soft, 45 s hard, 5 s queue and cleanup, 59 s request, 65 s client), so its server bound has no slack: a request budget one millisecond lower would make the service unavailable.
 
-The catalogue and diagnostics routes run under a 20 s request budget. A compute request runs under the largest effective `request_timeout_ms` among its resolvable items (`ToolExecutor.batch_request_timeout_ms`), or 20 s when none resolves. The frontend Tool client applies the catalogue policy's `client_timeout_ms` to the compute request (`prepareToolRun` in `frontend/src/lib/features/tools/contracts.ts`); it remains a client transport budget, not a throughput or completion guarantee.
+The catalogue and diagnostics routes declare no request body, so they have no ingress phase (`ToolRoute` in `backend/app/api/v1/tools.py`): their 20 s request budget, capped by the platform `request_timeout_ms`, starts with the request and covers authentication. A compute request opens under the 2 s ingress window, which bounds receiving, decoding, and validating its envelope together with the dependencies resolved with it, authentication included. Its deadline then moves to the batch's request budget: the largest effective `request_timeout_ms` among its resolvable items (`ToolExecutor.batch_request_timeout_ms`), or 20 s when none resolves. The frontend Tool client applies the catalogue policy's `client_timeout_ms` to the compute request (`prepareToolRun` in `frontend/src/lib/features/tools/contracts.ts`); it remains a client transport budget, not a throughput or completion guarantee.
 
 Each job also runs under its `memory_limit_bytes`. On Linux, when the API process's own cgroup-v2 directory is writable and enables the memory controller for its children, every job gets a private child cgroup holding that hard limit (`cgroup_v2_hard`). Otherwise the supervisor sums the resident memory of the owned process tree while it waits for the worker, at most 50 ms apart (`process_tree_observed`); a non-POSIX host reports `unavailable`. A breach ends the item with `memory_limit`. The mode in use appears in diagnostics under `capabilities.memory` (`backend/app/services/tools/resources.py`).
 
 ### 📊 Timing metrics
 
-Per-item metrics are `queue_wait_ms`, `startup_ms`, `input_validation_ms`, `compute_ms`, `output_validation_ms`, `serialization_ms`, `execution_ms`, `cleanup_ms`, and `total_ms`. They are measured monotonic durations in milliseconds, not estimates derived from the requested budgets. An unobserved phase is `null`, not an invented zero. Once a started job has gone through cleanup, `resources.memory` adds its enforcement mode, its limit, and the peak observed bytes (`null` when nothing was observed).
+Per-item metrics are `queue_wait_ms`, `startup_ms`, `input_validation_ms`, `compute_ms`, `output_validation_ms`, `serialization_ms`, `execution_ms`, `cleanup_ms`, and `total_ms`. They are measured monotonic durations in milliseconds, not estimates derived from the requested budgets. An unobserved phase is `null`, not an invented zero. Once a started job has gone through cleanup, `resources.memory` adds its enforcement mode, its limit, and the peak observed bytes (`null` when nothing was observed). An item that ends with `worker_crashed` also carries `worker_exit_code`: the worker's own exit status, read before the cleanup that may signal it — an exit code, or the negative number of the signal that ended it (`-9` for SIGKILL, as the kernel's out-of-memory killer sends) — and `null` when the crash was seen while the worker still ran; every other outcome leaves it `null`. The executor also logs one warning, `Tool worker crashed`, with the execution id, the tool code, that exit status and the memory figures, never the item's input or output (J-19).
 
 The child measures its validation, computation, and serialization phases. The executor records queue wait from admission, startup through the accepted `ready` frame, execution from lane allocation until cleanup begins (so `execution_ms` already contains `startup_ms` and the child's phases), and cleanup duration. `total_ms` measures elapsed time from item admission to its recorded outcome, not from HTTP request arrival. For API calls, batch `server_processing_ms` runs from the start that `ToolRoute`'s bounded handler records, before the request body is read, until every item of the batch has an outcome; response encoding and network transport are outside it. Neither these timings nor result counts are a benchmark or SLA.
 

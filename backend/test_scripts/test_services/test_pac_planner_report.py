@@ -1,14 +1,14 @@
 """Contract tests for the PAC planner wire projection (Step 3, Stage 5a).
 
 ``planner_report.py`` re-expresses an already-exact evaluation as the frozen
-wire contract in ``schemas/pac_allocator.py``. It computes no economics; its
+wire contract of the ``schemas/pac_allocator/`` package. It computes no economics; its
 one piece of arithmetic is the exposure projection, and even there it only
 aggregates quantities the solve already decided. These tests lock the
 non-obvious properties of that projection — the ones a reader of the code
 could plausibly "simplify" away without a failing test to stop them:
 
 * **Exposure closes to exactly one by identity, never by normalisation.** The
-  schema validator (``_validate_weight_availability``), not the type union, is
+  schema validator (``validate_weight_availability``), not the type union, is
   the specification: with a nonzero denominator every weight must be available
   and the dimension must sum to *exactly* 1; with a zero denominator every
   weight must be unavailable carrying ``zero_final_invested``. The
@@ -34,6 +34,10 @@ could plausibly "simplify" away without a failing test to stop them:
   used to raise ``WireNumberTooLargeError`` and turn a sound plan into a
   failure. A repeating residual is an ``exact_ratio``; a terminating one, zero
   included, a ``finite_decimal``.
+* **A zero solver observation publishes as ``0``, whatever its float sign.**
+  SCIP reports its bounds as floats, and a float zero carries a sign; the
+  wire's fixed-decimal text refuses ``-0``, so that spelling would turn a
+  valid plan into a result that fails validation (C-75).
 
 The headline gate is a genuine end-to-end assembly: a real
 ``build_exact_policy_view -> compile -> solve -> replay -> conclude -> project``
@@ -58,24 +62,17 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from backend.app.schemas.pac_allocator import (
-    DeploymentUnavailable,
-    FiniteDecimal,
-    OptimalProvenProof,
-    PacIncumbentSolution,
-    PacPlannerReadyIncumbentResult,
-    PlannerFxAction,
-    SolverStatusWitness,
-    _exact_fraction,
-    _validate_weight_availability,
-)
-from backend.app.schemas.pac_allocator import (
-    ExactRatio as WireExactRatio,
-)
+from backend.app.schemas.pac_allocator.evidence import OptimalProvenProof, ReportedFloatingSolverEvidence, SolverStageEvidence, SolverStatusWitness
+from backend.app.schemas.pac_allocator.exact import ExactRatio as WireExactRatio
+from backend.app.schemas.pac_allocator.exact import FiniteDecimal, exact_fraction, validate_weight_availability
+from backend.app.schemas.pac_allocator.results import PacPlannerReadyIncumbentResult
+from backend.app.schemas.pac_allocator.rows import PlannerFxAction
+from backend.app.schemas.pac_allocator.solutions import DeploymentUnavailable, PacIncumbentSolution
 from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
-from backend.app.services.pac_allocator.evaluator import _fx_debit_key, build_exact_policy_view, evaluate_exact_candidate, exact_decision_id
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id, fx_debit_key
 from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactExposure
 from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import solve_policy_program
@@ -191,7 +188,7 @@ def _assert_schema_accepts_exposure(rows, final_invested: R) -> None:
     """Feed the emitted rows through the real schema validator.
 
     The validator is the specification, so this calls
-    ``_validate_weight_availability`` directly (plus the unconditional
+    ``validate_weight_availability`` directly (plus the unconditional
     ``target_weight`` closure the exposure projection validator imposes),
     exactly as the wire assembly would — a green here means the projection is
     emittable, not merely internally consistent.
@@ -201,9 +198,9 @@ def _assert_schema_accepts_exposure(rows, final_invested: R) -> None:
         dimensions.setdefault(row.dimension, []).append(row)
     total = Fraction(final_invested.numerator, final_invested.denominator)
     for dimension, dim_rows in dimensions.items():
-        target_sum = sum((_exact_fraction(row.target_weight) for row in dim_rows), Fraction())
+        target_sum = sum((exact_fraction(row.target_weight) for row in dim_rows), Fraction())
         assert target_sum == 1, f"{dimension} targets sum to {target_sum}, not 1"
-        _validate_weight_availability([row.final_weight for row in dim_rows], total, "zero_final_invested", f"{dimension} final exposure")
+        validate_weight_availability([row.final_weight for row in dim_rows], total, "zero_final_invested", f"{dimension} final exposure")
 
 
 def _build_primary_solution(scenario, view, evaluation, *, sequence: PR._SequenceAllocator | None = None) -> PacIncumbentSolution:
@@ -719,7 +716,7 @@ def _evaluate_multi_conversion(scenario):
     FX decision exists in the view and carried its quanta, so an override
     silently ignored by ``_evaluate`` cannot pass for a projection.
     """
-    fx_quanta = {exact_decision_id("fx_debit", _fx_debit_key(route_id, "EUR")): debit for route_id, debit in _MULTI_CONVERSION_FX_DEBITS.items()}
+    fx_quanta = {exact_decision_id("fx_debit", fx_debit_key(route_id, "EUR")): debit for route_id, debit in _MULTI_CONVERSION_FX_DEBITS.items()}
     view, evaluation = _evaluate(scenario, quanta={**_all_zero_quanta(scenario), **fx_quanta})
     assert evaluation.candidate_valid
     assert {(exact.order_route_id, exact.quanta) for exact in evaluation.fx} == set(_MULTI_CONVERSION_FX_DEBITS.items())
@@ -876,9 +873,9 @@ def test_rounding_top_ups_are_projected_not_recomputed() -> None:
     assert [row.model_dump(mode="json")["amount"] for row in rows] == ["0.01", "0.01"]
     usd, eur = rows
     assert (eur.valuation_amount.currency, eur.valuation_amount.value.kind) == ("EUR", "finite_decimal")
-    assert _exact_fraction(eur.valuation_amount.value) == Fraction(1, 100)
+    assert exact_fraction(eur.valuation_amount.value) == Fraction(1, 100)
     assert (usd.valuation_amount.currency, usd.valuation_amount.value.kind) == ("EUR", "exact_ratio")
-    assert _exact_fraction(usd.valuation_amount.value) == Fraction(1, 120)
+    assert exact_fraction(usd.valuation_amount.value) == Fraction(1, 120)
 
 
 # --------------------------------------------------------------------------
@@ -913,7 +910,7 @@ def test_ledger_rounding_delta_that_does_not_terminate_is_published_as_an_exact_
 
     assert isinstance(published, WireExactRatio), type(published).__name__
     assert published.display_authority == "non_authoritative"
-    assert _exact_fraction(published) == Fraction(-47, 21700)
+    assert exact_fraction(published) == Fraction(-47, 21700)
 
 
 @pytest.mark.parametrize(
@@ -1017,7 +1014,7 @@ def test_full_ready_incumbent_result_validates_end_to_end_with_uncategorised_ass
     assert len(sequences) == len(set(sequences))
 
     # The accounting identity closes exactly.
-    assert _exact_fraction(full.primary_solution.accounting.identity_delta.value) == Fraction(0)
+    assert exact_fraction(full.primary_solution.accounting.identity_delta.value) == Fraction(0)
 
 
 # --------------------------------------------------------------------------
@@ -1259,3 +1256,96 @@ def test_absolute_gap_stays_absent_when_the_stage_has_no_primal() -> None:
 
     row = _evidence_row(evidence, target)
     assert (row.status, row.primal, row.dual, row.absolute_gap, row.relative_gap) == ("unfinished", None, "7.770482487229448", None, None)
+
+
+# --------------------------------------------------------------------------
+# Solver robustness — a zero observation publishes as ``0`` whatever its
+# float sign, so a bound SCIP reports as ``-0.0`` cannot fail the wire
+# contract (C-75).
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("value", "nonnegative"),
+    [
+        pytest.param(-0.0, False, id="negative-zero-bound"),
+        pytest.param(0.0, False, id="positive-zero-bound"),
+        pytest.param(-0.0, True, id="negative-zero-gap"),
+    ],
+)
+def test_float_text_writes_a_zero_of_either_sign_as_zero(value: float, nonnegative: bool) -> None:
+    """A float zero carries a sign, and ``PlannerFixedDecimal`` refuses the
+    text ``-0``: a zero bound or gap is published as ``0``, whatever its sign.
+    """
+    assert PR._float_text(value, nonnegative=nonnegative) == "0"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(Decimal("-0"), id="negative-zero"),
+        pytest.param(Decimal("-0.000"), id="negative-zero-with-scale"),
+        pytest.param(Decimal("-0E+3"), id="negative-zero-with-positive-exponent"),
+        pytest.param(Decimal("0E-7"), id="zero-with-negative-exponent"),
+    ],
+)
+def test_decimal_text_writes_a_zero_of_any_sign_or_exponent_as_zero(value: Decimal) -> None:
+    """Every zero ``Decimal`` publishes as ``0``: no sign, no scale, no exponent."""
+    assert PR._decimal_text(value) == "0"
+
+
+@pytest.mark.parametrize(
+    ("primal", "dual"),
+    [
+        pytest.param(-0.0, 0.0, id="negative-zero-primal"),
+        pytest.param(0.0, -0.0, id="negative-zero-dual"),
+        pytest.param(-0.0, -0.0, id="negative-zero-both"),
+    ],
+)
+def test_a_negative_zero_bound_publishes_as_zero_and_the_evidence_validates(primal: float, dual: float) -> None:
+    """The defect as a user would meet it: a run whose every stage finished,
+    the last named one closing at zero on a bound SCIP reported as ``-0.0``.
+    The evidence is built the way the report builds it for a ready plan, so
+    each row is judged by ``SolverStageEvidence`` itself. A bound published as
+    ``-0`` makes that model refuse the row, and a valid plan comes back as a
+    result that fails validation.
+
+    The doctored stage keeps its finished status; its observations are read
+    the way ``solver._observe`` reads them, the absolute gap being the float
+    ``abs(primal - dual)`` and, the two bounds being equal, the relative gap
+    zero.
+    """
+    assert (primal, dual) == (0.0, 0.0) and "-0.0" in (str(primal), str(dual)), "PREMISE: both bounds are zero and at least one carries the negative sign"
+    scenario, view, result = _two_asset_full_run()
+    target = _last_named_stage(view, result)
+    closed = replace(target, primal=primal, dual=dual, absolute_gap=abs(primal - dual), relative_gap=0.0)
+    doctored = replace(result, stages=tuple(closed if stage.ordinal == target.ordinal else stage for stage in result.stages))
+
+    evidence = PR.build_solver_evidence(scenario, view, doctored)
+
+    row = _evidence_row(evidence, target)
+    assert (row.status, row.primal, row.dual, row.absolute_gap, row.relative_gap) == ("finished", "0", "0", "0", "0")
+    assert SolverStageEvidence.model_validate_json(row.model_dump_json()) == row
+    assert ReportedFloatingSolverEvidence.model_validate_json(evidence.model_dump_json()) == evidence
+
+
+@pytest.mark.parametrize(
+    ("value", "nonnegative", "expected"),
+    [
+        pytest.param(-1.5, False, "-1.5", id="negative-bound-keeps-its-sign"),
+        pytest.param(None, False, None, id="absent-observation-stays-absent"),
+        pytest.param(-1e-12, True, "0", id="tiny-negative-gap-is-zero"),
+    ],
+)
+def test_float_text_keeps_its_spelling_of_signed_and_absent_observations(value: float | None, nonnegative: bool, expected: str | None) -> None:
+    """Guards around the zero spelling: a negative bound keeps its sign, an
+    absent observation stays absent instead of becoming a measured zero, and
+    a tiny negative gap, solver noise around zero, is still published as
+    ``0``.
+    """
+    assert PR._float_text(value, nonnegative=nonnegative) == expected
+
+
+def test_tolerance_text_spells_a_float_tolerance_positionally() -> None:
+    """A SCIP tolerance such as ``1e-06`` is published positionally, as the wire pattern requires."""
+    assert PR._tolerance_text(1e-06) == "0.000001"

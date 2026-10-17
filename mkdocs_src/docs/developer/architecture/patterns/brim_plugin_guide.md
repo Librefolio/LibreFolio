@@ -2,7 +2,7 @@
 
 How to create a new **Broker Report Import Manager** plugin to support a new broker's CSV/Excel export format.
 
-**Base class**: `BRIMProvider` (in `backend/app/services/brim_provider.py`)
+**Base class**: `BRIMProvider` (in `backend/app/services/brim/brim_provider.py`)
 **Plugin folder**: `backend/app/services/brim_providers/<code>/` — the code in `plugin.py`, beside an `__init__.py` holding only its docstring (see [Auto-Discovery](#auto-discovery))
 **Registry**: `BRIMProviderRegistry`
 
@@ -63,7 +63,7 @@ graph TD
 
 **Phase 1** runs automatically when a file is uploaded — every registered plugin is asked if it can parse the file. Compatible plugins are listed for the user. It runs again, once per app version, when an original detected by another version is read: see [The lifecycle of `compatible_plugins`](#compatible-plugins-lifecycle).
 
-A file's `compatible_plugins` are what the import wizard offers for it, so `can_parse` must not claim a file that `parse` would refuse, fallback plugins included: the Generic CSV (`broker_generic_csv`, `detection_priority` 0) says `True` only for a `.csv` whose header row names both required columns, `date` and `type`, directly or through its multilingual aliases (`HEADER_MAPPINGS`: `data`, `fecha`, `datum`…; `tipo`, `operazione`, `action`…) — it used to claim any CSV with a header, then fail at parse. A file no plugin recognises is offered every plugin; parsing it with a single-file plugin whose `can_parse` says no answers 400 `Plugin '<code>' cannot parse file '<file_id><ext>'`, followed by `: <reason>` when the plugin says why ([`cannot_parse_reason`](#cannot-parse-reason)), and moves the file to `failed` with that message as its error.
+A file's `compatible_plugins` are what the import wizard offers for it, so `can_parse` must not claim a file that `parse` would refuse, fallback plugins included: the Generic CSV (`broker_generic_csv`, `detection_priority` 0) says `True` only for a `.csv` whose header row names both required columns, `date` and `type`, directly or through its multilingual aliases (`HEADER_MAPPINGS`: `data`, `fecha`, `datum`…; `tipo`, `operazione`, `action`…) — it used to claim any CSV with a header, then fail at parse. A file no plugin recognises is offered every plugin; parsing it with a single-file plugin whose `can_parse` says no answers 400 `Plugin '<name>' cannot parse file '<file name>'` — the plugin's `provider_name` and the name the file was uploaded with —, followed by `: <reason>` when the plugin says why ([`cannot_parse_reason`](#cannot-parse-reason)), and moves the file to `failed` with that message as its error.
 
 The rule has one **extension**: a plugin may claim a file it recognises as its own broker's even
 when it cannot import it, provided `parse` explains what is wrong — no transactions and one
@@ -119,7 +119,8 @@ version and evaluated again after an update:
   no `plugin_version` bump: that version covers what `parse` and `combine` output, not detection;
 - a `can_parse` that raises counts as `False` (`get_compatible_plugins` skips the plugin), and that
   answer is cached like any other until the next version — never raise;
-- in a development checkout the version is `git describe --tags --always --dirty`, read once per
+- in a development checkout the version is `git describe --tags --always --dirty`, unless
+  `LF_APP_VERSION` is set ([Version Stamps](../../docs/release-pipeline.md#version-stamps)), read once per
   process: an edited `can_parse` reaches the files already uploaded only once that string changes
   (a commit) and the server restarts — or upload the file again.
 
@@ -191,6 +192,37 @@ mandatory for every new plugin:
 - **Fake asset IDs.** Emit high positive fake asset IDs (keyed by ISIN/ticker) plus
   `BRIMExtractedAssetInfo` so the core can drive the asset-matching UI.
 
+### 🔢 Decimal places {: #decimal-places }
+
+Every figure a plugin emits must fit its `transactions` column (C-97; the types are in
+[Decimal Columns](../database/index.md#decimal-columns)): a `quantity` keeps 10 decimal
+places, a cash amount 6, a per-unit `cost_basis_override` 12 — the scale of the prices —
+and any of them at most 15 significant digits.
+
+- **Read from the file: never rounded.** A figure the report states goes in as written,
+  under the verbatim rule above. Over a limit, neither the plugin nor the import rounds
+  it: the batch refuses its row when the user saves it (`decimalPlacesExceeded` or
+  `significantDigitsExceeded`, with the maximum; decision D2, see
+  [Decimal limits](../../backend/transactions/service.md#decimal-limits)).
+- **Computed by the plugin: rounded, explicitly.** A figure the plugin derives can have
+  any number of decimals: a per-unit cost as a total divided by the quantity (`1000 / 3`),
+  a bond price divided by 100. Round it to its column where it is computed, with the one
+  helper `round_computed_value(value, model, column_name)` (`backend/app/db/precision.py`):
+  `ROUND_HALF_EVEN` to the scale of the model's column, then to 15 significant digits on a
+  `RealDecimal` column (decision D6). On such a column the rounding always brings the
+  result within the decimal places and the significant digits, but not within the third
+  limit, the digits before the decimal point (15 for a quantity and a cash amount,
+  decision N63; 12 for a per-unit cost), which no rounding brings back: the confirmation
+  refuses a value past them with `integerDigitsExceeded`. `broker_intesa/plugin.py` calls
+  it on the patrimonio seed's per-unit cost, `broker_credit_agricole/plugin.py` on the
+  per-unit cost of a bond received by succession, its price divided by 100.
+- **An exponent past ±100: refused while parsing.** `Currency` itself refuses an amount
+  whose exponent (`Decimal.adjusted()`) is outside ±100, whoever builds it
+  (`check_decimal_exponent()` in `backend/app/schemas/common.py`, R13-SEC7-3): a plugin
+  that builds such a `Currency` fails while it parses the file (pydantic's
+  `ValidationError`, a `ValueError`), not at confirmation. No real report comes near it:
+  no column takes more than 24 digits before the decimal point, or 12 after.
+
 ---
 
 ## 📋 ABC Methods
@@ -255,13 +287,15 @@ say.
 - **What it returns.** One short English sentence saying why `can_parse` refuses the file, with a
   lowercase start and no final period, because it completes the guard's message; `None` when
   there is nothing to add.
-- **What the user reads.** The guard's `Plugin '<code>' cannot parse file '<file_id><ext>'` (the
-  name LibreFolio stores the file under, not the user's file name) gains `: <reason>`. The API
-  answers 400 with that text, the file goes to `failed` with it as its `error_message`, and the
-  wizard's parse-error box shows it after the user's file name:
+- **What the user reads.** The guard's `Plugin '<name>' cannot parse file '<file name>'` gains
+  `: <reason>`. It names the plugin by its `provider_name` and the file by the name the user
+  uploaded it with, never by the plugin code or the `<file_id><ext>` LibreFolio stores it under; a
+  duck-typed plugin without `provider_name` is named by its code. The API answers 400 with that
+  text, the file goes to `failed` with it as its `error_message`, and the wizard's parse-error box
+  shows it after the user's file name:
 
     ```text
-    export.csv — Plugin 'broker_generic_csv' cannot parse file '<file_id>.csv': required column 'date' not found in the CSV header
+    export.csv — Plugin 'Generic CSV' cannot parse file 'export.csv': required column 'date' not found in the CSV header
     ```
 
 - **Cost and failure.** Keep it as cheap as `can_parse` and never raise. Without a reason — the
@@ -269,18 +303,20 @@ say.
   stays plain. If the method raises anyway, the guard logs the exception and keeps the plain
   message: still a 400, never a 500.
 
-The Generic CSV is the reference implementation. It checks, in this order:
+The Generic CSV is the reference implementation. It checks, in this order, and gives each refusal
+a [code](#cannot-parse-detail) too:
 
-| The file | `cannot_parse_reason` answers |
-|----------|-------------------------------|
-| has an extension other than `.csv` | `the Generic CSV reads only .csv files` |
-| cannot be read | `the file could not be read` |
-| is empty, or starts with an empty row | `the file has no header row` |
-| has a header row without `date`, `type` or both — no alias of `HEADER_MAPPINGS` matches | `required column 'date' not found in the CSV header`, the same with `'type'`, or `required columns 'date' and 'type' not found in the CSV header` |
-| has a header row naming both | `None` |
+| The file | `cannot_parse_reason` answers | `code` and `context` |
+|----------|-------------------------------|----------------------|
+| has an extension other than `.csv` | `the Generic CSV reads only .csv files` | `csv_only`, with its own `plugin_code` |
+| cannot be read | `the file could not be read` | `file_unreadable` |
+| is empty, or starts with an empty row | `the file has no header row` | `no_header_row` |
+| has a header row without `date`, `type` or both — no alias of `HEADER_MAPPINGS` matches | `required column 'date' not found in the CSV header`, the same with `'type'`, or `required columns 'date' and 'type' not found in the CSV header` | `missing_columns`, with `columns` (`date`, `type` or `date, type`) and `count` (1 or 2) |
+| has a header row naming both | `None` | — |
 
-Its `can_parse` is `return self.cannot_parse_reason(file_path) is None`, so the two can never
-disagree: build yours the same way when your refusals have causes worth naming. The suite holds
+Its `can_parse` is `return self.cannot_parse_reason(file_path) is None`, and the sentence is the
+`message` of its `cannot_parse_detail`, so the three can never disagree: build yours the same way
+when your refusals have causes worth naming. The suite holds
 every registered plugin to the contract: `test_every_plugin_answers_nothing_or_one_sentence`, in
 `backend/test_scripts/test_external/test_brim_providers.py` (`./dev.py test external brim-providers`),
 asks the method about every file of `sample_reports/` and about paths with nothing to read, and
@@ -341,8 +377,10 @@ unchanged. Override it when the user should read your reason in their own langua
   add. A `can_parse` that raises counts as `false`, and a `cannot_parse_detail` that raises leaves
   `refusal` empty: both are logged, never a 500. As in the parse guard, a refusal on a path that a
   concurrent parse has just moved is asked again on the new path.
-- **Access**: any user with access to the file's broker (VIEWER+), 403 otherwise. 404 for an
-  unknown file, an unknown plugin, or a file whose content is gone.
+- **Access**: any user with a role on the file's broker (VIEWER+), the uploader of a file with no
+  broker, and the administrator; 403 otherwise
+  ([Who reaches a report file](../../backend/brim/architecture.md#file-access)). 404 for an id that
+  is not a UUID, an unknown file, an unknown plugin, or a file whose content is gone.
 
 **In the import wizard.** Right after an upload, the wizard asks the endpoint about the broker's
 default import plugin. When that plugin refuses the file, the wizard shows the reason under *Notes
@@ -368,6 +406,44 @@ plugin that reads it (`_scalable.refusal`):
 `context` names the other plugin, as `plugin_code` and `plugin_name`. Any other file gets `None`:
 the two plugins give a reason only for Scalable's own exports.
 
+**Shared codes.** Some causes belong to no broker: the extension, a file that cannot be read, no
+header row, missing required columns, no movement rows. Their codes are shared: a plugin that
+refuses a file for one of these causes reuses the code, and its translation, instead of adding
+its own.
+
+| `code` | Given today by | `context` | English text |
+|--------|----------------|-----------|--------------|
+| `csv_only` | Generic CSV | `plugin_code` of the refusing plugin | The {plugin_name} plugin reads only .csv files. |
+| `file_unreadable` | Generic CSV, DEGIRO | empty | The file could not be read. |
+| `no_header_row` | Generic CSV | empty | The file has no header row. |
+| `missing_columns` | Generic CSV | `columns`, the names joined by `, `; `count`, an integer that picks the plural | Required column(s) {columns} not found in the CSV header. |
+| `no_movement_rows` | DEGIRO | empty | The file has no movement rows. |
+
+**Example: DEGIRO.** `broker_degiro` reads only the Account Statement exported as CSV. Besides the
+shared `file_unreadable` and `no_movement_rows`, it has two codes of its own, with an empty
+`context`: `degiro_csv_only`, for a file that is not a `.csv` (the message asks to download the
+Account Statement as CSV), and `degiro_not_account_statement`, for a CSV of another layout (12
+columns with the ISIN fifth, unnamed amount columns ninth and eleventh, dates as `DD-MM-YYYY`).
+Unlike its notices, which keep the language of the file (the tip *Warning language follows the
+input format*, below), a refusal is shown in the UI language: a file the plugin refuses has no
+language it recognised.
+
+**Where the translations live.** Every code is a key of `importWizard.parseRefusal`, in the import
+wizard's sources (`frontend/src/lib/i18n/importWizard/{en,it,fr,es}.json`), whether it is shared or
+a plugin's own: a plugin's fragment holds only its `brimPlugins.<code>` keys
+([The Ownership Gate](registry_pattern.md#plugin-i18n-gate)). Add one with the i18n tool, which finds
+the source from the prefix:
+
+```bash
+./dev.py i18n add "importWizard.parseRefusal.mybroker_xlsx_only" --en "…" --it "…" --fr "…" --es "…"
+```
+
+A message with a count is an ICU plural, and its text must differ between languages (*Locale-Sensitive
+ICU Messages*, in the [frontend i18n guide](../../frontend/i18n.md)). `TestGenericCSVRefusesWithACode` (`test_brim_providers.py`) and
+`TestRefusalCodes` (`test_brim_degiro.py`) pin the codes and contexts of the two plugins file by
+file; `defaultPluginCheck.test.ts` (`./dev.py test front-transaction tx-unit`) checks that every
+code has its key in the four languages.
+
 ### 🧰 Base-class helpers you should use
 
 Defined on `BRIMProvider` — call these instead of re-implementing:
@@ -377,7 +453,7 @@ Defined on `BRIMProvider` — call these instead of re-implementing:
 | `self._read_file_head(file_path, num_lines=15)` | `can_parse` | Reads the first N lines trying `TEXT_ENCODINGS` (module constant in `brim_provider.py`) in order: UTF-8 (with or without BOM), then Windows-1252, then Latin-1, which always decodes |
 | `self.detect_csv_delimiter(file_path)` | `parse` | Sniffs the delimiter (`,` `;` `\t`) via `csv.Sniffer` with a char-count fallback; reads the head with the same `TEXT_ENCODINGS` fallback |
 | `self._open_text(file_path, newline=None)` | `parse` (and `can_parse` when you must read the header with `csv`) | Drop-in replacement for `open(...)`: an in-memory text stream decoded with `TEXT_ENCODINGS`; `newline=""` keeps line endings for `csv` |
-| `self._create_transaction(row_num, transactions, validation_issues, context, **tx_fields)` | `parse` | Builds a `TXCreateItem`, appends on success, or records structured `BRIMValidationIssue`s on `ValidationError`. **Never** call `TXCreateItem(...)` directly. |
+| `self._create_transaction(row_num, transactions, validation_issues, context, **tx_fields)` | `parse` | Builds a `TXCreateItem`, appends on success, or records structured `BRIMValidationIssue`s on `ValidationError`: each with the error's `code` and message, the `field` of a field's error (a packed business rule's sub-errors name none), and `params` by the batch's rule, shared in `backend/app/utils/pydantic_errors.py` (`error_params()`, `loc_to_field()`; [Per-type rules](../../backend/transactions/service.md#per-type-rules)): every error's plain context, a business rule's `{type}` as a field's `{max_length: 500}`, and `null` when the context is not plain data (a `value_error`) or there is none (W-B70). **Never** call `TXCreateItem(...)` directly. |
 
 ---
 
@@ -387,10 +463,11 @@ Defined on `BRIMProvider` — call these instead of re-implementing:
 # backend/app/services/brim_providers/broker_mybroker/plugin.py
 
 from pathlib import Path
-from backend.app.services.brim_provider import BRIMProvider
-from backend.app.services.provider_registry import register_provider, BRIMProviderRegistry
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim.brim_provider import BRIMProvider
+from backend.app.services.provider_registry import register_provider
 from backend.app.schemas.brim import BRIMExtractedAssetInfo, BRIMParseOutput
-from backend.app.schemas.transactions import TXCreateItem
+from backend.app.schemas.transactions.transactions import TXCreateItem
 
 @register_provider(BRIMProviderRegistry)
 class MyBrokerProvider(BRIMProvider):
@@ -463,6 +540,12 @@ Restart the app: the `BRIMProviderRegistry` finds the folder, loads `plugin.py` 
   plugins, whose `plugin.py` files hold only their properties (the string literals R13 reads among
   them) and calls to it. A helper only your plugin uses goes in its folder, as `_*.py` beside
   `plugin.py`.
+- **Importing the plugin starts nothing**: no thread, no process and no connection at module
+  level, in `plugin.py` or in a helper it imports. Discovery also runs inside the BRIM parse pool's
+  forkserver, and every parse worker is a fork of it
+  ([Preload and warm-up](../../backend/brim/architecture.md#parse-pool-warm-up)): a thread there is
+  how deadlocks start, and the single-thread guard of `./dev.py test services brim-parse-pool`
+  fails when it finds one; a process or a connection would be inherited by every worker.
 - **Import and patch** the plugin's names from its `plugin` module,
   `backend.app.services.brim_providers.broker_mybroker.plugin`: the package re-exports nothing, so
   a test that patches the package fails ([Importing and Patching a Plugin](registry_pattern.md#plugin-imports)).
@@ -502,9 +585,10 @@ import structlog
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMAssetNotice, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 ```
@@ -565,7 +649,7 @@ transaction breaks these rules, so flip source signs as needed:
 
     The user reads the file's language only if the notice code has **no**
     `importWizard.brimNotice.<code>` key. The wizard resolves a notice with
-    `resolveBrimNoticeMessage` (`frontend/src/lib/utils/transactions/resolveBrimNotice.ts`):
+    `resolveBrimNoticeMessage` (`frontend/src/lib/features/transactions/resolveBrimNotice.ts`):
     a key, when it exists, replaces the plugin's message with the text in the UI language;
     without one, the plugin's `message` is shown as written. The `degiro_*` codes have no
     key on purpose, and `test_no_i18n_key_overrides_the_language_of_the_file`
@@ -604,16 +688,24 @@ transaction breaks these rules, so flip source signs as needed:
     factor of `quantity`.
 
     If your source only reports a **total** (e.g. Intesa's *"Controvalore di carico
-    fiscale €"*), divide it by the quantity first:
+    fiscale €"*), divide it by the quantity first, and round the quotient to the column
+    (see [Decimal places](#decimal-places)):
 
     ```python
-    unit_cost = (total_cost / qty).quantize(Decimal("0.000001"))
+    unit_cost = round_computed_value(total_cost / qty, Transaction, "cost_basis_override")
     cost_basis_override = Currency(code="EUR", amount=unit_cost)
     ```
 
     Bond nominal note: for bonds `quantity` is the face value (e.g. `50000`) and the seed
     per-unit cost lands near `1.0` — that is correct, the engine handles the /100 quote
     scaling elsewhere. Canonical example: `broker_intesa/plugin.py` (patrimonio seed).
+
+    A plugin sets a cost basis on these incoming seeds only: on any other row — a `BUY`, a
+    cash row, a `TRANSFER`'s giving leg — `_create_transaction()` refuses the row, a
+    `costBasisNotAllowed` validation issue instead of a transaction (rule 12b, W-B72, or
+    rule 12's `costBasisModeIncompatible` when the row names a `cost_basis_mode`; an
+    `ADJUSTMENT` taking units out may still carry its handover cost: see
+    [Per-type rules](../../backend/transactions/service.md#per-type-rules)).
 
 !!! tip "Matured-bond redemption: close at par, surplus → INTEREST"
 
@@ -693,15 +785,16 @@ gives them the same `link_uuid`; the batch turns the shared id into reciprocal
 `broker_degiro/plugin.py` is the first plugin to emit pairs (`_pair_fx_legs`, `_fx_pair`): Swissquote
 skips its conversion legs with a warning, and the Generic CSV refuses the paired types.
 
-**What the batch accepts** — `resolve_create_links` in `transaction_batch_stages.py`, with
-`_validate_linked_pair` and `_validate_pair_description_tags` in `transaction_service.py`:
+**What the batch accepts** — `resolve_create_links` in `batch_creates.py`, with
+`_validate_linked_pair` and `_validate_pair_description_tags` in `validation.py` (all in
+`backend/app/services/transactions/`):
 
 - exactly **two** creates per `link_uuid`: a leg alone, or a third one, is `linkUuidPairCount`;
 - the **same type** on both legs (`pairTypeMismatch`);
 - **two distinct brokers** for a `TRANSFER` or a `CASH_TRANSFER` (`pairSameBroker`); an
-  `FX_CONVERSION` may stay on one. Every row a plugin emits carries the one target `broker_id`
-  that `parse()` receives, so a transfer pair saved as the plugin emitted it is refused at this
-  check;
+  `FX_CONVERSION` must stay on **one** (`pairBrokerMismatch`). Every row a plugin emits carries
+  the one target `broker_id` that `parse()` receives, so a transfer pair saved as the plugin
+  emitted it is refused at this check, while an `FX_CONVERSION` pair saved the same way passes it;
 - for a `TRANSFER`, **one asset** on both legs (`pairAssetMismatch`) and **exactly opposite
   quantities** (`pairQuantityMismatch`, compared as `Decimal`, with no tolerance): what leaves
   one broker arrives at the other, so both legs carry the same quantity, rounded alike, with
@@ -739,7 +832,7 @@ and a **To** line in the bulk editor's markup (`renderFromToHtml` mirrors `rende
 row selects both legs (`setPairSelected`: its tick shows the pair as selected only when both
 legs are, and select all, deselect all and select visible move both legs too), only complete
 pairs reach the bulk editor, and each pair reaches it with a fresh `link_uuid`, the same for
-both legs (`frontend/src/lib/utils/transactions/importPairs.ts`, and `pairCellHtml.ts` beside
+both legs (`frontend/src/lib/features/transactions/import/importPairs.ts`, and `pairCellHtml.ts` beside
 it for the cell): the plugin's ids repeat whenever the same statement is parsed again, so two
 uploads of one statement would share them. The counters and the `Import {n} transactions`
 button count transactions, not rows, so a pair counts as two (`step4SelectedCount` and
@@ -923,7 +1016,7 @@ BRIMFieldTodo(
 
 !!! warning "Accrued interest is a `FEE`, never an `INTEREST`"
 
-    `schemas/transactions.py` rule 11 requires `cash > 0` for `INTEREST`, and accrued
+    `schemas/transactions/transactions.py` rule 11 requires `cash > 0` for `INTEREST`, and accrued
     interest paid on a purchase is money **leaving**. `FEE` is also the semantically right
     answer, not a workaround: accrued interest is not part of the security's cost — it comes
     back with the first gross coupon — and `FEE` is exactly the type the FIFO engine keeps
@@ -1029,6 +1122,8 @@ return info !== null && txDate !== '' && txDate < info.openedAt;
 
 Rows before the broker opening date are deselected and non-importable; rows on the opening day remain importable. The wizard offers **Edit broker date** and re-checks after broker data refresh.
 
+Do not filter a date range either: the import confirms through the transaction batch, which checks every row's date (`check_dates()`, night decision N74): from 1900-01-01 to today (UTC) one year on. A row outside it gets `dateOutOfRange` on `date` and the batch is not saved (see [Transaction dates](../../backend/transactions/service.md#transaction-dates)). Emit the date the report states, even one a few days ahead, such as a settlement date.
+
 ## 🔀 One plugin, several export formats
 
 A single broker often ships multiple export layouts (e.g. Revolut *invest* vs *crypto*).
@@ -1061,8 +1156,8 @@ other.
 
 Every default of the contract keeps a plugin single-file, so the existing plugins do not change.
 The reference implementation is `backend/app/services/brim_providers/broker_danske_bank/plugin.py`; the
-framework lives in `backend/app/services/brim_report_sets.py` (members, preview, combine, history
-start) and `backend/app/services/brim_gap_fix.py` (the corrections), the schemas in
+framework lives in `backend/app/services/brim/brim_report_sets.py` (members, preview, combine, history
+start) and `backend/app/services/brim/brim_gap_fix.py` (the corrections), the schemas in
 `backend/app/schemas/brim.py`, and the wizard side in
 [Import Wizard → Report sets](../../frontend/components/features/import-wizard.md#report-sets).
 
@@ -1153,16 +1248,20 @@ plugin has nothing to implement, but it is the contract every set lives in:
 A file taken out by mistake goes back when the set's plugin is chosen for it again
 ([Import Wizard → How a set is read](../../frontend/components/features/import-wizard.md#set-read-as)).
 
-All routes live under `/api/v1/brokers/import` and require EDITOR or OWNER access on the broker.
+All routes live under `/api/v1/brokers/import`. The upload, `/sets/preview`, `/sets/combine` and the
+parse require EDITOR or OWNER access on their broker (the parse on the file's broker and on the
+`broker_id` it imports into), and the administrator passes; `GET /files` lists only the files the
+caller may see ([Who reaches a report file](../../backend/brim/architecture.md#file-access)).
 
 - **`POST /upload`** takes an optional form field `batch_id`, a UUID (anything else is a 422),
   stored in the file's sidecar. The wizard sends one per session, the Files page and a broker's
   *Uploaded Reports* one per upload action, and *Upload the missing file* reuses the set's own.
   A file uploaded without one belongs to no set: the wizard lists it as a single file, and its
   parse answers that the exports must be uploaded together.
-- **`GET /files`** returns `BRIMFileInfo` with `batch_id`, `kind` (`original` or `combined`),
-  `derived_from` (`file_id`, `role`, `filename` and `deleted` of each original), `combined_into`
-  and `combine_is_stale`. **`GET /plugins`** returns the `report_roles` of each plugin.
+- **`GET /files`** returns `BRIMFileListItem` (`BRIMFileInfo` plus `can_delete`) with `batch_id`,
+  `kind` (`original` or `combined`), `derived_from` (`file_id`, `role`, `filename` and `deleted` of
+  each original), `combined_into` and `combine_is_stale`. **`GET /plugins`** returns the
+  `report_roles` of each plugin.
 - **`POST /sets/preview`** — body `BRIMSetRequest`
   `{broker_id, plugin_code, batch_id, exclude_file_ids}`, the last one defaulting to `[]` —
   collects the members with `collect_members` (the original, non-failed files of that batch and
@@ -1348,6 +1447,11 @@ The preview reads the same history: `before_history_segment` warns about a segme
 history (it will not be imported), and `covers_gap_fix` about an earlier `gap_fix` correction that
 falls inside a segment of the set (it must be removed by hand, or the cash counts twice).
 
+The days around H0 and around a role's coverage (H0's eve, the day after a correction, the eve of
+the period a role must cover) are moved with `shift_date()` (`utils/datetime_utils.py`), which holds
+them at the calendar's ends: a report dated 0001-01-01 or 9999-12-31 is read, its rows then refused
+at **Save All** like any date out of range (N74), instead of failing the whole parse (W-B71).
+
 ### 🏷️ Tags
 
 Every transaction of a report-set plugin carries `import` and its `history_tag` (the generic suite
@@ -1386,6 +1490,21 @@ never a proposal. The proposals are ordinary `TXCreateItem`s described as
 `Gap-fix <date> — <provider_name>: <what> at the end of the day, as stated by the bank`, and the
 bulk editor saves them like any other row. The endpoint accepts any registered plugin, since it
 only reads `history_tag` and `provider_name`.
+
+When a transaction of the broker dated up to a checkpoint's `as_of` (and not among
+`pending_delete_tx_ids`) holds a value that is no number — a quantity or an amount that reads
+`None`, which an older version or another tool left — LibreFolio's side cannot be summed: the
+endpoint answers **409** `{"code": "ledger_unreadable", "message": …}` instead of comparing a
+wrong balance with the bank, which would propose a correction duplicating the row it cannot read
+(`get_balances_at_end_of` raises `UnreadableLedgerError`, `brim_gap_fix` turns it into
+`BRIMLedgerUnreadable`; W-B74). The wizard shows the message in that broker's group.
+
+When those transactions hold a cash currency that is not a canonical ISO 4217 code — a name or a number an earlier
+version saved as written (`978`, `EURO`), or a code in another case (`eur`) — the endpoint answers the same **409**
+`ledger_unreadable`, naming at most five such codes, each with the code it stands for (`'978' (EUR)`): such a balance is
+a bucket of its own that the bank's `EUR` never meets, so the comparison would propose a correction for money already
+there (`_refuse_non_iso_cash` in `brim_gap_fix.py`, after the W-B74 check; E-19a). Only `Transaction.currency` counts:
+the cost basis is no cash.
 
 ### 🧪 Testing a report-set plugin {: #report-set-tests }
 
@@ -1579,21 +1698,13 @@ Then, reusing `<slug>` everywhere:
     </a>
     ```
 
-3. **Capacity table** — add one row per language in the `??? info "📊 Importer Capabilities"`
-   table of those same index files, **4-space indented** so it stays inside the admonition.
-   Columns are `Broker | Status | Format | Buy/Sell | Dividends | Deposits/Cash | Fees/Taxes | Notes`
-   (use ✅ / ❌ per capability):
-
-    ```markdown
-    | <img src="<favicon-url>" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **<Display>** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ✅ | <short note> |
-    ```
-4. **Nav** — add `- <Display>: user/transactions/import/<slug>.md` in `mkdocs_src/mkdocs.yml`
+3. **Nav** — add `- <Display>: user/transactions/import/<slug>.md` in `mkdocs_src/mkdocs.yml`
    under the right `📥 Import from Broker` subgroup, and add any new group/leaf title to the
    `nav_translations` of each non-English locale.
-5. **Validate** — `./dev.py mkdocs build` must report **no** `unrecognized relative link` /
+4. **Validate** — `./dev.py mkdocs build` must report **no** `unrecognized relative link` /
    `no such anchor`. Internal links use the `.md` form (`how-to.md`,
    `../../../community/contribute.md`), never trailing-slash paths.
-6. **Developer providers overview** — add one row for the broker to
+5. **Developer providers overview** — add one row for the broker to
    [Providers List](../../backend/brim/providers_list.md) (favicon, code, formats, status,
    notes) so the developer-side catalogue stays in sync.
 

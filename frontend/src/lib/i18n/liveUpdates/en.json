@@ -1,0 +1,9 @@
+{
+  "liveUpdates": {
+    "paused": "Updates paused",
+    "pausedHint": "Live prices refresh again as soon as you use the page.",
+    "priceRefresh": {
+      "running": "Updating prices…"
+    }
+  }
+}

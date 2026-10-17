@@ -29,7 +29,7 @@ every language — and the wizard learned to keep the two legs of a currency exc
 - **D2 exchange legs** are paired without the rate (group, currency, sign, adjacency). Rejected: the rate as a
   tie-breaker, word matching.
 - **D3** in the wizard, ticking one leg ticks its partner, and only complete pairs reach the editor
-  (`frontend/src/lib/utils/transactions/importPairs.ts`); "Select visible" also adds each row's hidden partner.
+  (`frontend/src/lib/features/transactions/import/importPairs.ts`); "Select visible" also adds each row's hidden partner.
 - **D4** notices in English and Dutch at least, plus the languages whose headers were verified; **D5** known rows that
   cannot be imported (product change, stock dividend, money-market fund) → one grouped warning; **D6** "Corporate
   Action Kosten" → a FEE with no asset; **D7** flatex-era withdrawals → a warning; **D8** DEGIRO's own
@@ -54,7 +54,7 @@ None of its own. Closing issue #35 at release is backlog P-7.
 |------|------|
 | Plan | `LibreFolio_developer_journal/Release_2/phases/31_brimDegiro/plan-phase00BrimDegiro.prompt.md` |
 | Plugin | `backend/app/services/brim_providers/broker_degiro/plugin.py` |
-| Wizard pairing | `frontend/src/lib/utils/transactions/importPairs.ts` |
+| Wizard pairing | `frontend/src/lib/features/transactions/import/importPairs.ts` |
 | Tests | `backend/test_scripts/test_external/test_brim_degiro.py` |
 | E2E | `frontend/e2e/transactions/tx-import-degiro.spec.ts` |
 | User doc | `mkdocs_src/docs/user/transactions/import/degiro.en.md` |

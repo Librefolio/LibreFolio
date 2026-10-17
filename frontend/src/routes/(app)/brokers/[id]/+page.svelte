@@ -3,7 +3,7 @@
      * Broker Detail Page — header + overview/positions/transactions tabs
      */
     import {get} from 'svelte/store';
-    import {onMount} from 'svelte';
+    import {onDestroy, onMount} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
@@ -12,23 +12,28 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
+    import {todayIso} from '$lib/utils/dateOnly';
     import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
-    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import BrokerImportFilesModal from '$lib/components/brokers/BrokerImportFilesModal.svelte';
-    import BrokerSharingPanel from '$lib/components/brokers/BrokerSharingPanel.svelte';
-    import LotsAnalysisPanel from '$lib/components/brokers/lots/LotsAnalysisPanel.svelte';
-    import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
-    import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
-    import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
-    import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
-    import RiskLevelsPanel from '$lib/components/risk/levels/RiskLevelsPanel.svelte';
+    import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
+    import BrokerImportFilesModal from '$lib/features/brokers/BrokerImportFilesModal.svelte';
+    import BrokerSharingPanel from '$lib/features/brokers/BrokerSharingPanel.svelte';
+    import LotsAnalysisPanel from '$lib/features/brokers/lots/LotsAnalysisPanel.svelte';
+    import KpiSection from '$lib/features/dashboard/KpiSection.svelte';
+    import AllocationPanel from '$lib/features/dashboard/AllocationPanel.svelte';
+    import GrowthChart from '$lib/features/dashboard/GrowthChart.svelte';
+    import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
+    import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import {TransactionFormModal, TransactionsTable, TransactionBulkModal, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
+    import TransactionFormModal from '$lib/features/transactions/form/TransactionFormModal.svelte';
+    import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
+    import TransactionBulkModal from '$lib/features/transactions/bulk/TransactionBulkModal.svelte';
+    import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
+    import {loadPartnerRows, loadEventTooltipMap} from '$lib/features/transactions/loadTransactionRows';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
+    import type {TXReadItem, AssetEvent} from '$lib/features/transactions/types';
     import type {FilterValue} from '$lib/components/table/types';
     import {buildTransactionsFiltersUrl, applyTransactionColumnFilters} from '../../transactions/filterState';
     import {
@@ -64,7 +69,9 @@
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {createLazyReportRetry} from '$lib/stores/portfolio/lazyReportRetry.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
@@ -91,6 +98,25 @@
     let allocationHistoryFromReport: AllocationHistoryDimensions | null = null;
     let positionsContribution: PositionsContribution | null = null;
     let contributionLoading = false;
+    // Y-24: a failed candles or contribution request is asked again at most three times, 2, 4 and 8 s later, then not
+    // until the scope changes or the user's Refresh (`handleRefresh`). Before, the contribution was asked again at
+    // once, without end, and the candles never again.
+    const candlesRetry = createLazyReportRetry();
+    const contributionRetry = createLazyReportRetry();
+    onDestroy(() => {
+        candlesRetry.dispose();
+        contributionRetry.dispose();
+    });
+    // The candles' loading flag must be a signal, as on the Dashboard: the loader's guard reads it inside GrowthChart's
+    // effect, which has to wake when a request ends — to ask for the scope on screen once an old scope's answer was
+    // dropped, or to wait for the retry after a failure (Y-24). The legacy compiler makes a `let` a signal only when a
+    // reactive statement or the template reads it.
+    $: void pnlCandlesLoading;
+
+    /** The scope of a lazy report section: this broker, the period and the currency. An answer of another scope is not applied, and a failure counts for its own scope only (Y-24). */
+    function reportScope(): string {
+        return `${data.brokerId}|${dateFrom}|${dateTo}|${targetCurrency}`;
+    }
 
     let editModalOpen = false;
     let importFilesModalOpen = false;
@@ -100,7 +126,7 @@
     /** Bulk workspace (create / import) — same engine as /transactions, pre-populated
      *  with this page's broker (still editable, never skips a step). */
     let bulkOpen = false;
-    let bulkIntent: import('$lib/components/transactions/modals/TransactionBulkModal.svelte').WorkspaceIntent | undefined = undefined;
+    let bulkIntent: import('$lib/features/transactions/bulk/TransactionBulkModal.svelte').WorkspaceIntent | undefined = undefined;
 
     function openImportTransactions() {
         bulkIntent = {action: 'import'};
@@ -219,7 +245,7 @@
         const hadLoadedData = portfolioSummary !== null || portfolioHistory.length > 0;
         targetCurrency = baseCurrency;
         // Guard with !reportLoading: see brokers/+page.svelte for the race this avoids.
-        if (hadLoadedData && !reportLoading) void loadOverview(true);
+        if (hadLoadedData && !reportLoading) void pageBusy.track('broker-currency', () => loadOverview(true));
     }
 
     $: aiExportLabels = buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'));
@@ -269,7 +295,8 @@
 
     onMount(async () => {
         void loadAiExportCompatibility();
-        await Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded(), ensureAssetsLoaded()]);
+        // The first load holds the page's Refresh button (Y11).
+        await pageBusy.track('broker-first-load', () => Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded(), ensureAssetsLoaded()]));
         if (broker) onboardingGuide.maybeStartContextual('broker_detail_guide');
     });
 
@@ -278,7 +305,8 @@
         error = null;
 
         try {
-            broker = (await zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: data.brokerId}})) as BrokerSummary;
+            // The cash and holdings of the user's today: a transaction dated later counts in none of them (W-B5)
+            broker = (await zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: data.brokerId}, queries: {as_of: todayIso()}})) as BrokerSummary;
         } catch (e) {
             console.error('Failed to load broker:', e);
             error = $_('brokers.loadFailed');
@@ -344,11 +372,19 @@
      * detail: total candle only", and the per-broker overlay is exactly what must not appear.
      */
     async function loadPnlCandles() {
-        if (pnlCandles || pnlCandlesLoading) return;
+        // Read before the first await, and `canAsk` before the other guards: GrowthChart's effect depends on all of them,
+        // so a request ending or a retry falling due wakes it (Y-24).
+        const askedScope = reportScope();
+        const allowed = candlesRetry.canAsk(askedScope);
+        if (pnlCandles || pnlCandlesLoading || !allowed) return;
         pnlCandlesLoading = true;
         try {
             // Only pnl_candles is read, so every other section is switched off.
             const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, false, false, false, false, false, {includePnlCandles: true});
+            // An answer of another scope is not this one's: the scope on screen asks for its own.
+            if (reportScope() !== askedScope) return;
+            if (report) candlesRetry.succeeded(askedScope);
+            else candlesRetry.failed(askedScope);
             pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
         } finally {
             pnlCandlesLoading = false;
@@ -356,11 +392,17 @@
     }
 
     async function loadContribution() {
-        if (!broker || positionsContribution || contributionLoading) return;
+        const askedScope = reportScope();
+        const allowed = contributionRetry.canAsk(askedScope);
+        if (!broker || positionsContribution || contributionLoading || !allowed) return;
         contributionLoading = true;
         try {
             // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
             const report = await fetchReport([broker.id], dateFrom || undefined, dateTo || undefined, targetCurrency, false, true, false, false, false);
+            if (reportScope() !== askedScope) return;
+            // The outcome is recorded before `finally` lets the flag go: the effect it wakes reads it (Y-24).
+            if (report) contributionRetry.succeeded(askedScope);
+            else contributionRetry.failed(askedScope);
             positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
         } finally {
             contributionLoading = false;
@@ -396,7 +438,7 @@
 
     // Lazy-load the full transaction history the first time the Transazioni tab is opened.
     $: if (activeTab === 'transazioni' && broker && !txLoaded && !txLoading) {
-        void loadTransactions();
+        void pageBusy.track('broker-transactions', () => loadTransactions());
     }
 
     function resolveMaxStartFromHistory() {
@@ -420,22 +462,42 @@
         dateTo = resolveDateSentinel(to);
         displayDateFrom = isMaxPending ? 'min' : dateFrom;
         setDateRange(from, to);
-        void loadOverview();
+        void pageBusy.track('broker-period', () => loadOverview());
     }
 
     async function handleRefresh() {
+        // The user's Refresh: the lazy sections may be asked again whatever failed before (Y-24).
+        candlesRetry.reset();
+        contributionRetry.reset();
         requestPortfolioRefresh();
         refreshVersion += 1;
-        await Promise.all([loadBroker(), loadOverview(true)]);
-        if (txLoaded) await loadTransactions(true);
+        await pageBusy.track('broker-refresh', async () => {
+            await Promise.all([loadBroker(), loadOverview(true)]);
+            if (txLoaded) await loadTransactions(true);
+        });
     }
 
+    /**
+     * The server caught up on prices and updated something (Z5, Z-13): the stale overview is asked again in
+     * background, without force, and the figures stay until the new ones land. `refreshVersion` and
+     * `requestPortfolioRefresh()` are the user's Refresh (Y11): the risk and lots panels keep their stale answers until
+     * they next load. Run after the dispatch, so every store has marked its answers stale first.
+     */
+    function reloadAfterPriceCatchUp() {
+        void loadOverview();
+    }
+    onMount(() =>
+        registerPortfolioMutationListener(`broker-page:${data.brokerId}:prices`, (signal) => {
+            if (signal.kind === 'prices') queueMicrotask(reloadAfterPriceCatchUp);
+        }),
+    );
+
     async function handleUpdated() {
-        await loadBroker();
+        await pageBusy.track('broker-reload', loadBroker);
     }
 
     async function handleRequestAllocationHistory() {
-        await loadOverview();
+        await pageBusy.track('broker-allocation-history', () => loadOverview());
     }
 
     // In the interface locale (M-18): the template passes `$uiLocaleStore`, read there so it is tracked.
@@ -461,9 +523,9 @@
     }
 </script>
 
-<div class="space-y-6" data-testid="broker-detail-page">
+<div class="space-y-6 text-lf-primary" data-testid="broker-detail-page">
     <div class="flex items-center space-x-4" use:guideAnchor={'broker.detail.header'} data-testid="broker-detail-header">
-        <button class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors" data-testid="broker-back-button" on:click={handleBack} title={$_('common.back')}>
+        <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors" data-testid="broker-back-button" on:click={handleBack} title={$_('common.back')}>
             <ArrowLeft size={20} />
         </button>
 
@@ -486,40 +548,40 @@
                             {#if role === 'OWNER'}<Crown size={13} />{:else if role === 'EDITOR'}<Pencil size={13} />{:else}<Eye size={13} />{/if}
                         </span>
                     {/if}
-                    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 truncate" data-testid="broker-name">{broker.name}</h1>
+                    <h1 class="text-2xl font-bold text-lf-primary truncate" data-testid="broker-name">{broker.name}</h1>
                 </div>
                 {#if broker.description}
-                    <p class="text-gray-500 dark:text-gray-400 text-sm truncate" data-testid="broker-description">{broker.description}</p>
+                    <p class="text-lf-muted text-sm truncate" data-testid="broker-description">{broker.description}</p>
                 {/if}
             </div>
 
             {#if safeString(broker.portal_url)}
-                <a href={safeString(broker.portal_url)} target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors flex-shrink-0" title={$_('brokers.openPortal')}>
+                <a href={safeString(broker.portal_url)} target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors flex-shrink-0" title={$_('brokers.openPortal')}>
                     <ExternalLink size={20} />
                 </a>
             {/if}
         {:else if !error}
             <div class="flex-1">
-                <div class="h-8 w-48 bg-gray-200 rounded animate-pulse"></div>
+                <div class="h-8 w-48 bg-lf-neutral rounded animate-pulse"></div>
             </div>
         {/if}
     </div>
 
     {#if loading && !broker}
-        <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
-                <RefreshCw class="text-libre-green animate-spin" size={32} />
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-selected rounded-full mb-4">
+                <RefreshCw class="text-lf-link animate-spin" size={32} />
             </div>
-            <p class="text-gray-500">{$_('common.loading')}</p>
+            <p class="text-lf-muted">{$_('common.loading')}</p>
         </div>
     {:else if error}
-        <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-red-100">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
-                <Briefcase class="text-red-600" size={32} />
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-danger-line">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-danger-soft rounded-full mb-4">
+                <Briefcase class="text-lf-danger" size={32} />
             </div>
-            <h3 class="text-lg font-semibold text-gray-700 mb-2">{$_('common.error')}</h3>
-            <p class="text-gray-500 mb-4">{error}</p>
-            <button on:click={handleRefresh} class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors">
+            <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$_('common.error')}</h3>
+            <p class="text-lf-muted mb-4">{error}</p>
+            <button on:click={handleRefresh} class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors">
                 {$_('common.retry')}
             </button>
         </div>
@@ -554,7 +616,7 @@
                      spread apart. Without the wrapper, justify-around treats them as 2 separate
                      flex children and splits them apart with a wide gap in between (same mistake
                      dashboard's equivalent row never had — compare its currency-override block). -->
-                <div class="flex items-center justify-around gap-1.5 text-xs text-gray-500 dark:text-gray-400 {filtersStacked ? 'w-full' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
+                <div class="flex items-center justify-around gap-1.5 text-xs text-lf-muted {filtersStacked ? 'w-full' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
                     <div class="flex items-center gap-1.5">
                         <span class="whitespace-nowrap">{$_('common.currency')}:</span>
                         <div class="w-28">
@@ -566,7 +628,7 @@
                                 placeholder={baseCurrency}
                                 onchange={() => {
                                     targetCurrencyManuallySet = true;
-                                    void loadOverview();
+                                    void pageBusy.track('broker-currency', () => loadOverview());
                                 }}
                             />
                         </div>
@@ -576,18 +638,14 @@
 
             {#snippet actions({showActionLabels})}
                 {#if canEdit}
-                    <button
-                        on:click={handleEdit}
-                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                        data-testid="broker-edit-button"
-                    >
+                    <button on:click={handleEdit} class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="broker-edit-button">
                         <Pencil size={14} />
                         {#if showActionLabels}<span>{$_('common.edit')}</span>{/if}
                     </button>
                 {/if}
                 <button
                     on:click={() => handleTabChange('info')}
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
                     data-testid="broker-share-button"
                     title={$_('brokers.sharing.title')}
                 >
@@ -596,12 +654,13 @@
                 </button>
                 <button
                     on:click={handleRefresh}
-                    disabled={loading || reportLoading}
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50"
+                    disabled={pageBusy.busy}
+                    data-busy={pageBusy.busy ? 'true' : 'false'}
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
                     title={$_('dashboard.syncData')}
                     data-testid="broker-refresh"
                 >
-                    <RefreshCw size={14} class={loading || reportLoading ? 'animate-spin' : ''} />
+                    <RefreshCw size={14} class={pageBusy.busy ? 'animate-spin' : ''} />
                     {#if showActionLabels}<span>{$_('dashboard.syncData')}</span>{/if}
                 </button>
 
@@ -626,8 +685,8 @@
 
                 <!-- Cash Balances — moved up right below the KPIs so the "economic position"
                      (NAV + Gain/Loss + Cash by currency) is visible together at a glance. -->
-                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="broker-cash-balances">
-                    <div class="flex items-center space-x-2 text-gray-700 dark:text-gray-200 mb-4">
+                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-cash-balances">
+                    <div class="flex items-center space-x-2 text-lf-secondary mb-4">
                         <Wallet size={20} />
                         <h2 class="font-semibold">{$_('brokers.cashBalances')}</h2>
                     </div>
@@ -635,19 +694,29 @@
                     {#if broker.cash_balances && broker.cash_balances.length > 0}
                         <div class="flex flex-wrap gap-2">
                             {#each [...broker.cash_balances].sort((a, b) => parseCurrencyAmount(b.amount) - parseCurrencyAmount(a.amount)) as balance}
-                                <span class="inline-flex items-center px-3 py-1.5 bg-gray-50 dark:bg-slate-700 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-100">
+                                <span class="inline-flex items-center px-3 py-1.5 bg-lf-panel rounded-lg text-sm font-medium text-lf-primary">
                                     <CurrencyAmount amount={parseCurrencyAmount(balance.amount)} code={balance.code} />
                                 </span>
                             {/each}
                         </div>
                     {:else}
-                        <p class="text-gray-400 dark:text-gray-500 text-sm italic py-4 text-center">{$_('brokers.noCashBalances')}</p>
+                        <p class="text-lf-muted text-sm italic py-4 text-center">{$_('brokers.noCashBalances')}</p>
                     {/if}
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                     <div class="lg:col-span-3">
-                        <GrowthChart history={portfolioHistory} {pnlCandles} onRequestPnlCandles={loadPnlCandles} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={reportLoading && portfolioHistory.length === 0} baseCurrency={targetCurrency || baseCurrency} />
+                        <GrowthChart
+                            history={portfolioHistory}
+                            {pnlCandles}
+                            onRequestPnlCandles={() => void pageBusy.join('broker-pnl-candles', loadPnlCandles)}
+                            {incomeHistory}
+                            {costHistory}
+                            {depositHistory}
+                            {acquisitionFunding}
+                            loading={reportLoading && portfolioHistory.length === 0}
+                            baseCurrency={targetCurrency || baseCurrency}
+                        />
                     </div>
                     <AllocationPanel
                         summary={portfolioSummary}
@@ -669,7 +738,7 @@
                     {contributionLoading}
                     assetsHref="/assets"
                     brokers={panelBrokers}
-                    onRequestContribution={loadContribution}
+                    onRequestContribution={() => void pageBusy.join('broker-contribution', loadContribution)}
                     onAnalyze={openAssetPanel}
                     analyzedAssetId={activeAssetId}
                 />
@@ -701,20 +770,11 @@
             <div class="space-y-4" data-testid="broker-transactions-tab">
                 <div class="flex flex-wrap items-center justify-between gap-2" data-testid="broker-transactions-actions">
                     <div class="flex items-center gap-2">
-                        <button
-                            class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-                            on:click={() => (importFilesModalOpen = true)}
-                            data-testid="broker-show-import-history"
-                        >
+                        <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" on:click={() => (importFilesModalOpen = true)} data-testid="broker-show-import-history">
                             <FileText size={15} />
                             <span class="hidden sm:inline">{$_('brokers.showImportHistory')}</span>
                         </button>
-                        <a
-                            href={transactionsPageUrl}
-                            class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-                            title={$_('brokers.viewInTransactionsHint')}
-                            data-testid="broker-view-in-transactions"
-                        >
+                        <a href={transactionsPageUrl} class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" title={$_('brokers.viewInTransactionsHint')} data-testid="broker-view-in-transactions">
                             <ArrowRightLeft size={15} />
                             <span class="hidden sm:inline">{$_('brokers.viewInTransactions')}</span>
                         </a>
@@ -722,15 +782,11 @@
                     <div class="flex items-center gap-2">
                         <ColumnVisibilityToggle tableRef={txTableComponent?.getTableRef()} />
                         {#if canEdit}
-                            <button
-                                class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-                                on:click={openImportTransactions}
-                                data-testid="broker-import-transactions"
-                            >
+                            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" on:click={openImportTransactions} data-testid="broker-import-transactions">
                                 <Upload size={15} />
                                 <span class="hidden sm:inline">{$_('common.import')}</span>
                             </button>
-                            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" on:click={openNewTransaction} data-testid="broker-new-transaction">
+                            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-all" on:click={openNewTransaction} data-testid="broker-new-transaction">
                                 <Plus size={15} />
                                 <span class="hidden sm:inline">{$_('transactions.addTransaction')}</span>
                             </button>
@@ -740,8 +796,8 @@
 
                 <div data-testid="broker-transactions">
                     {#if txLoading && !txLoaded}
-                        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-12 text-center">
-                            <RefreshCw class="text-libre-green animate-spin mx-auto" size={28} />
+                        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-12 text-center">
+                            <RefreshCw class="text-lf-link animate-spin mx-auto" size={28} />
                         </div>
                     {:else}
                         <TransactionsTable
@@ -769,45 +825,45 @@
             </div>
         {:else if activeTab === 'info'}
             <div class="grid grid-cols-1 xl:grid-cols-2 gap-4" data-testid="broker-info-tab">
-                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="broker-metadata">
-                    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-3">{$_('brokers.metadata')}</h3>
+                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-metadata">
+                    <h3 class="font-semibold text-lf-secondary mb-3">{$_('brokers.metadata')}</h3>
                     <div class="space-y-2 text-sm">
                         <div class="flex justify-between">
-                            <span class="text-gray-500 dark:text-gray-400">{$_('brokers.isActive')}</span>
-                            <span class="font-medium {broker.is_active ? 'text-green-600' : 'text-red-500'}">
+                            <span class="text-lf-muted">{$_('brokers.isActive')}</span>
+                            <span class="font-medium {broker.is_active ? 'text-lf-success' : 'text-lf-danger'}">
                                 {broker.is_active ? '✓ Active' : '✗ Closed'}
                             </span>
                         </div>
                         {#if safeString(broker.opened_at)}
                             <div class="flex justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">{$_('brokers.openedAt')}</span>
-                                <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.opened_at, $uiLocaleStore)}</span>
+                                <span class="text-lf-muted">{$_('brokers.openedAt')}</span>
+                                <span class="text-lf-secondary">{formatDate(broker.opened_at, $uiLocaleStore)}</span>
                             </div>
                         {/if}
                         <div class="flex justify-between">
-                            <span class="text-gray-500 dark:text-gray-400">{$_('brokers.allowOverdraft')}</span>
-                            <span class="font-medium {broker.allow_cash_overdraft ? 'text-green-600' : 'text-gray-400'}">
+                            <span class="text-lf-muted">{$_('brokers.allowOverdraft')}</span>
+                            <span class="font-medium {broker.allow_cash_overdraft ? 'text-lf-success' : 'text-lf-muted'}">
                                 {broker.allow_cash_overdraft ? '✓' : '✗'}
                             </span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-500 dark:text-gray-400">{$_('brokers.allowShorting')}</span>
-                            <span class="font-medium {broker.allow_asset_shorting ? 'text-green-600' : 'text-gray-400'}">
+                            <span class="text-lf-muted">{$_('brokers.allowShorting')}</span>
+                            <span class="font-medium {broker.allow_asset_shorting ? 'text-lf-success' : 'text-lf-muted'}">
                                 {broker.allow_asset_shorting ? '✓' : '✗'}
                             </span>
                         </div>
-                        <div class="flex justify-between border-t border-gray-100 dark:border-slate-700 pt-2 mt-2">
-                            <span class="text-gray-500 dark:text-gray-400">{$_('brokers.createdInSystem')}</span>
-                            <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.created_at, $uiLocaleStore)}</span>
+                        <div class="flex justify-between border-t border-lf-subtle pt-2 mt-2">
+                            <span class="text-lf-muted">{$_('brokers.createdInSystem')}</span>
+                            <span class="text-lf-secondary">{formatDate(broker.created_at, $uiLocaleStore)}</span>
                         </div>
                     </div>
 
                     {#if broker.total_value_base_currency}
                         {@const totalValue = safeCurrency(broker.total_value_base_currency)}
                         {#if totalValue}
-                            <div class="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
-                                <div class="text-sm text-gray-500 dark:text-gray-400">{$_('common.totalValue')}</div>
-                                <div class="text-2xl font-bold text-libre-green">
+                            <div class="mt-4 pt-4 border-t border-lf-subtle">
+                                <div class="text-sm text-lf-muted">{$_('common.totalValue')}</div>
+                                <div class="text-2xl font-bold text-lf-link">
                                     <CurrencyAmount amount={parseCurrencyAmount(totalValue.amount)} code={totalValue.code} />
                                 </div>
                             </div>
@@ -815,9 +871,9 @@
                     {/if}
                 </div>
 
-                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="broker-sharing-section">
-                    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
-                        <Users size={18} class="text-libre-green" />
+                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-sharing-section">
+                    <h3 class="font-semibold text-lf-secondary mb-3 flex items-center gap-2">
+                        <Users size={18} class="text-lf-link" />
                         {$_('brokers.sharing.title')}
                     </h3>
                     <BrokerSharingPanel brokerId={broker.id} readOnly={safeString(broker.user_role) !== 'OWNER'} onChanged={handleUpdated} bind:hasChanges={sharingHasChanges} />

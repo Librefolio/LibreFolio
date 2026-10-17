@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import re
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
+from types import SimpleNamespace
+from typing import NoReturn
 from uuid import uuid4
 
 import httpx
 import pytest
+from fastapi import FastAPI
 
 from backend.app.api.v1 import tools as tools_api
+from backend.app.api.v1.auth import get_current_user
 from backend.app.config import get_settings
 from backend.app.schemas.tools import (
     ToolCatalogResponse,
@@ -19,7 +23,12 @@ from backend.app.schemas.tools import (
     ToolComputeFailure,
     ToolDescriptor,
     ToolDiagnosticsResponse,
+    ToolDiscoveryFailure,
+    ToolMemoryCapability,
+    ToolPlatformPolicy,
+    ToolPoolResourceReservation,
     ToolPoolSnapshot,
+    ToolResourceCapabilities,
 )
 from backend.test_scripts.test_server_helper import _TestingServerManager
 
@@ -107,6 +116,7 @@ ITEM_METRICS_KEYS = {
     "cleanup_ms",
     "total_ms",
     "resources",
+    "worker_exit_code",
 }
 DIAGNOSTICS_KEYS = {
     "scope",
@@ -374,6 +384,217 @@ async def test_disconnect_cancels_compute_before_any_engine_start(
     assert entered.is_set()
     assert cancelled.is_set()
     assert engine_starts == []
+
+
+# ---------------------------------------------------------------------------
+# Request deadlines, in process. Each test builds its own app around the Tool
+# router and replaces the collaborators where the route reads them, so the only
+# clock that decides the outcome is the route's own deadline. No server, no DB.
+# ---------------------------------------------------------------------------
+
+IN_PROCESS_BASE_URL = "http://tools.test"
+CATALOG_PATH = "/api/v1/tools/catalog"
+DIAGNOSTICS_PATH = "/api/v1/tools/diagnostics"
+COMPUTE_PATH = "/api/v1/tools/compute"
+DEADLINE_EXCEEDED = {"detail": "Tool request deadline exceeded"}
+# The documented budget of the catalogue and diagnostics routes, capped by the
+# policy's request_timeout_ms (the default of ``_execution_request``).
+READ_BUDGET_MS = 20_000
+# A deadline in the wrong place is slow, not absent: a 503 that arrives only when
+# a 20 s budget runs out still looks bounded. The ceiling is far above the
+# 10-100 ms deadlines these tests configure and far below that budget, so it
+# tells the configured deadline apart from a fallback one.
+DEADLINE_CEILING_S = 5.0
+
+
+class _TransportExecutor:
+    """The executor surface the Tool routes read; reaching the compute path is recorded and refused."""
+
+    def __init__(self, policy: ToolPlatformPolicy) -> None:
+        self.policy = policy
+        self.runtime_id = f"runtime-{uuid4().hex}"
+        self.compute_path_calls: list[str] = []
+
+    def snapshot(self) -> ToolPoolSnapshot:
+        return ToolPoolSnapshot(
+            available=True,
+            active=0,
+            queued=0,
+            pending=0,
+            degraded_lanes=0,
+            completed=0,
+            failed=0,
+            resources=ToolPoolResourceReservation(
+                memory_capacity_bytes=self.policy.workers * self.policy.memory_limit_bytes,
+                memory_reserved_bytes=0,
+            ),
+        )
+
+    def resource_capabilities(self) -> ToolResourceCapabilities:
+        return ToolResourceCapabilities(memory=ToolMemoryCapability(mode="unavailable"))
+
+    def batch_request_timeout_ms(self, batch: ToolComputeBatchRequest) -> int:
+        self.compute_path_calls.append("batch_request_timeout_ms")
+        raise AssertionError("the compute path was entered although authentication never resolved")
+
+    async def compute(self, batch: ToolComputeBatchRequest, *, principal_key: str, request_started: float | None = None) -> ToolComputeBatchResponse:
+        self.compute_path_calls.append("compute")
+        raise AssertionError("the compute path was entered although authentication never resolved")
+
+
+def _install_transport_fakes(
+    monkeypatch: pytest.MonkeyPatch,
+    policy: ToolPlatformPolicy,
+) -> tuple[_TransportExecutor, dict[str, list[ToolPlatformPolicy]]]:
+    """Serve ``policy`` from a fake executor and record every catalogue build, per builder."""
+    executor = _TransportExecutor(policy)
+    builds: dict[str, list[ToolPlatformPolicy]] = {
+        "build_tool_catalog": [],
+        "effective_catalog_entries": [],
+    }
+
+    def build_tool_catalog(actual_policy: ToolPlatformPolicy) -> ToolCatalogResponse:
+        builds["build_tool_catalog"].append(actual_policy)
+        return ToolCatalogResponse(catalog_version="2", policy=actual_policy, items=[], unavailable=[])
+
+    def effective_catalog_entries(actual_policy: ToolPlatformPolicy) -> tuple[list[ToolDescriptor], tuple[ToolDiscoveryFailure, ...]]:
+        builds["effective_catalog_entries"].append(actual_policy)
+        return [], ()
+
+    monkeypatch.setattr(tools_api, "get_tool_executor", lambda: executor)
+    monkeypatch.setattr(tools_api, "build_tool_catalog", build_tool_catalog)
+    monkeypatch.setattr(tools_api, "effective_catalog_entries", effective_catalog_entries)
+    return executor, builds
+
+
+def _stalled_authentication(entries: list[str]) -> Callable[[], Awaitable[NoReturn]]:
+    """An authentication that never answers, so only the route's own deadline can end the request."""
+
+    async def authenticate() -> NoReturn:
+        entries.append("authenticate")
+        await asyncio.Event().wait()  # nobody sets it
+        raise AssertionError("unreachable: nobody sets this event")
+
+    return authenticate
+
+
+async def _request_tool_route(
+    authenticate: Callable[[], Awaitable[object]],
+    method: str,
+    path: str,
+    **request_kwargs: object,
+) -> httpx.Response:
+    """Send one request through a fresh app whose ``get_current_user`` is ``authenticate``."""
+    app = FastAPI()
+    app.include_router(tools_api.router, prefix="/api/v1")
+    app.dependency_overrides[get_current_user] = authenticate
+    ceiling = asyncio.timeout(DEADLINE_CEILING_S)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=IN_PROCESS_BASE_URL) as client:
+        try:
+            async with ceiling:
+                return await client.request(method, path, **request_kwargs)
+        except TimeoutError:
+            if not ceiling.expired():
+                raise
+            pytest.fail(f"{method} {path} was still unanswered after {DEADLINE_CEILING_S} s: the configured route deadline did not end it")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "response_model", "builder"),
+    [
+        pytest.param(CATALOG_PATH, ToolCatalogResponse, "build_tool_catalog", id="catalog"),
+        pytest.param(DIAGNOSTICS_PATH, ToolDiagnosticsResponse, "effective_catalog_entries", id="diagnostics"),
+    ],
+)
+async def test_read_routes_authenticate_within_their_own_budget_not_the_ingress_window(
+    monkeypatch,
+    path,
+    response_model,
+    builder,
+):
+    """A route without a request body has nothing to ingest: authentication spends its read budget.
+
+    FastAPI resolves ``get_current_user`` before the endpoint body moves the deadline to the
+    read budget. If the ingress window still covers that step, a slow authentication (cookie,
+    JWT, one database read under load) answers 503 "Tool request deadline exceeded" and the
+    catalogue is never built: the About plugin diagnostics panel breaks.
+    """
+    policy = ToolPlatformPolicy(ingress_timeout_ms=50)
+    read_budget_ms = min(READ_BUDGET_MS, policy.request_timeout_ms)
+    # The simulated cost of a slow collaborator, not a wait for a condition:
+    # five ingress windows, yet under 2 % of the read budget.
+    authentication_ms = 5 * policy.ingress_timeout_ms
+    assert authentication_ms * 50 <= read_budget_ms
+    _executor, builds = _install_transport_fakes(monkeypatch, policy)
+
+    async def slow_authentication() -> SimpleNamespace:
+        await asyncio.sleep(authentication_ms / 1000)
+        return SimpleNamespace(id=1)
+
+    response = await _request_tool_route(slow_authentication, "GET", path)
+
+    assert response.status_code == 200, f"GET {path} -> HTTP {response.status_code} {response.text}; {builder} calls: {len(builds[builder])}"
+    assert response_model.model_validate(response.json()).policy == policy
+    assert builds[builder] == [policy]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path",
+    [
+        pytest.param(CATALOG_PATH, id="catalog"),
+        pytest.param(DIAGNOSTICS_PATH, id="diagnostics"),
+    ],
+)
+async def test_read_route_is_still_bounded_by_its_request_budget(monkeypatch, path):
+    """Authentication outside the ingress window is still bounded: by ``request_timeout_ms``."""
+    policy = ToolPlatformPolicy(
+        ingress_timeout_ms=10,
+        queue_timeout_ms=10,
+        engine_timeout_ms=10,
+        soft_timeout_ms=20,
+        output_reserve_ms=10,
+        job_timeout_ms=30,
+        cleanup_timeout_ms=10,
+        response_reserve_ms=10,
+        request_timeout_ms=100,
+        client_timeout_ms=200,
+    )
+    _executor, builds = _install_transport_fakes(monkeypatch, policy)
+    authentications: list[str] = []
+
+    response = await _request_tool_route(_stalled_authentication(authentications), "GET", path)
+
+    assert response.status_code == 503, response.text
+    assert response.json() == DEADLINE_EXCEEDED
+    assert authentications == ["authenticate"]
+    assert builds == {"build_tool_catalog": [], "effective_catalog_entries": []}
+
+
+@pytest.mark.asyncio
+async def test_compute_keeps_its_ingress_window(monkeypatch):
+    """Compute carries a request body: its admission, authentication included, stays in the ingress window.
+
+    The default policy gives compute no budget shorter than 20 s once the endpoint runs, so
+    only the 50 ms ingress window can answer within the ceiling.
+    """
+    policy = ToolPlatformPolicy(ingress_timeout_ms=50)
+    executor, _builds = _install_transport_fakes(monkeypatch, policy)
+    envelope, _items = _unknown_envelope()
+    authentications: list[str] = []
+
+    response = await _request_tool_route(
+        _stalled_authentication(authentications),
+        "POST",
+        COMPUTE_PATH,
+        json=envelope,
+    )
+
+    assert response.status_code == 503, response.text
+    assert response.json() == DEADLINE_EXCEEDED
+    assert authentications == ["authenticate"]
+    assert executor.compute_path_calls == []
 
 
 @pytest.mark.asyncio

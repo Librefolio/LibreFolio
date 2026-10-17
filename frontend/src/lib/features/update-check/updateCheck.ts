@@ -20,6 +20,8 @@
  */
 
 import {zodiosApi} from '$lib/api';
+import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+import {selfHostedConfirmed} from '$lib/features/instance/profile';
 import {debug} from '$lib/debug';
 
 export interface NewerRelease {
@@ -230,8 +232,15 @@ export async function checkForUpdates(currentVersion: string, options: {force?: 
     return {...details, status: 'update-available'};
 }
 
-/** Automatic login checks stay silent unless an undismissed, pullable update exists. */
+/**
+ * Automatic login checks stay silent unless an undismissed, pullable update exists. Only a self-hosted instance, as
+ * the server says it, is probed: a managed one is updated by its operator (F05), so nothing is asked of GitHub or of
+ * the image registry and nothing is cached; and the configuration is awaited first, so a managed instance is never
+ * probed while its answer is in flight, nor when the request failed.
+ */
 export async function checkForNewerRelease(currentVersion: string, fetchFn?: typeof fetch, imageProbe?: ImageProbe): Promise<NewerRelease | null> {
+    await instanceConfig.load();
+    if (!selfHostedConfirmed()) return null;
     const result = await checkForUpdates(currentVersion, {}, fetchFn, imageProbe);
     return result.status === 'update-available' ? result.latest : null;
 }

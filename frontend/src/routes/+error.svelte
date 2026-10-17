@@ -7,13 +7,13 @@
 <AnimatedBackground />
 
 <div class="min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-md bg-libre-beige rounded-2xl shadow-2xl overflow-hidden">
-        <!-- Header verde -->
-        <div class="bg-libre-green p-6 flex flex-col items-center justify-center">
-            <div class="text-6xl text-white mb-2">
+    <div class="w-full max-w-md bg-lf-card text-lf-primary border border-lf-raised rounded-2xl shadow-2xl shadow-lf-shadow overflow-hidden">
+        <!-- Header (brand green) -->
+        <div class="bg-lf-brand p-6 flex flex-col items-center justify-center">
+            <div class="text-6xl text-lf-on-brand mb-2">
                 {$page.status}
             </div>
-            <div class="text-white text-lg font-semibold">
+            <div class="text-lf-on-brand text-lg font-semibold">
                 {#if $page.status === 404}
                     {$_('error.pageNotFound')}
                 {:else}
@@ -24,7 +24,7 @@
 
         <!-- Body -->
         <div class="p-8 text-center">
-            <p class="text-gray-600 mb-6">
+            <p class="text-lf-secondary mb-6">
                 {#if $page.status === 404}
                     {$_('error.pageNotFoundMessage')}
                 {:else}
@@ -33,10 +33,10 @@
             </p>
 
             <div class="flex flex-col space-y-3">
-                <a class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:opacity-90 transition-all text-center" href="/dashboard">
+                <a class="w-full bg-lf-action text-lf-on-action font-bold py-3 rounded-lg shadow-md hover:bg-lf-action-hover transition-all text-center" href="/dashboard">
                     {$_('error.goToDashboard')}
                 </a>
-                <a class="w-full border border-libre-green text-libre-green font-bold py-3 rounded-lg hover:bg-libre-green hover:text-white transition-all text-center" href="/">
+                <a class="w-full border border-lf-focus text-lf-link font-bold py-3 rounded-lg hover:bg-lf-action hover:text-lf-on-action transition-all text-center" href="/">
                     {$_('error.goToHome')}
                 </a>
             </div>

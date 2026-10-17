@@ -22,8 +22,9 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     interface Props {
         /** Last (closing) price */
@@ -91,30 +92,30 @@
             <div class="flex items-center gap-1.5">
                 {#key livePriceFlashToken}
                     <span
-                        class="font-mono text-lg font-semibold transition-colors duration-300 {livePriceDirection === 'up' ? 'lf-price-flash-up' : livePriceDirection === 'down' ? 'lf-price-flash-down' : 'text-gray-700 dark:text-gray-200'}"
+                        class="font-mono text-lg font-semibold transition-colors duration-300 {livePriceDirection === 'up' ? 'lf-price-flash-up' : livePriceDirection === 'down' ? 'lf-price-flash-down' : 'text-lf-secondary'}"
                         data-testid="asset-detail-live-price"
                         data-live-price-direction={livePriceDirection}
                     >
-                        {formatFixed(lastPrice, 2)}
+                        {formatPrice(lastPrice)}
                     </span>
                 {/key}
-                <span class="text-xs text-gray-400 dark:text-gray-500">{livePriceConversionFailed ? assetCurrency : displayCurrency}</span>
+                <span class="text-xs text-lf-muted">{livePriceConversionFailed ? assetCurrency : displayCurrency}</span>
                 {#if livePriceConversionFailed}
                     <Tooltip text={$t('assetDetail.livePriceConversionFailed', {values: {currency: assetCurrency}})} position="bottom">
-                        <span class="text-amber-500 dark:text-amber-400">
+                        <span class="text-lf-warning">
                             <AlertTriangle size={13} />
                         </span>
                     </Tooltip>
                 {/if}
                 {#if deltaAbs !== null}
-                    <span class="text-xs text-gray-400 dark:text-gray-500">
-                        ({formatFixed(deltaAbs, 2, {signed: true})})
+                    <span class="text-xs text-lf-muted" data-testid="asset-price-summary-range-delta-abs">
+                        ({formatPrice(deltaAbs, {signed: true})})
                     </span>
                 {/if}
             </div>
 
             {#if deltaPercent !== null}
-                <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}" data-testid="asset-price-summary-range-delta">
                     {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
                     {formatPercent(deltaPercent)}
                 </span>
@@ -129,7 +130,7 @@
              optional FX-pair-link icon stays a separate sibling (a distinct supplementary
              action, not part of the currency-selection control itself). -->
         <div class="flex items-center gap-1.5">
-            <span class="text-[10px] uppercase font-semibold text-gray-400 dark:text-gray-500 tracking-wider">
+            <span class="text-[10px] uppercase font-semibold text-lf-muted tracking-wider">
                 {$t('assetDetail.displayCurrency')}
             </span>
             <div class="w-32 sm:w-36">
@@ -151,7 +152,7 @@
                     onclick={() => {
                         if (fxPairUrl) goto(fxPairUrl);
                     }}
-                    class="inline-flex items-center justify-center p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-libre-green hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                    class="inline-flex items-center justify-center p-1.5 rounded-lg text-lf-muted hover:text-lf-link hover:bg-lf-hover transition-colors cursor-pointer"
                     data-testid="asset-detail-fx-pair-link"
                     aria-label={$t('assetDetail.openFxPair')}
                 >

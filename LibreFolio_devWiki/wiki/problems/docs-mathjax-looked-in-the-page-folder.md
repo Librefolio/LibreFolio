@@ -72,6 +72,6 @@ builds the site from scratch, so published images are not affected; a local serv
 | Regression spec (`front-utility docs-offline-math`) | `frontend/e2e/layout/docs-offline-math.spec.ts` |
 | Its registration in the runner | `scripts/test_runner/_frontend_utility.py` |
 | Docs rebuild check (`auto_build_mkdocs`) | `dev.py` |
-| How the backend serves the docs | `backend/app/main.py` |
+| How the backend serves the docs | `backend/app/services/platform/static_site.py` |
 | Journal (§14.6, §15) | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` |
 | Backlog (M-19, M-21) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |

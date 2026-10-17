@@ -185,8 +185,8 @@
 </script>
 
 {#if !onboarding.findFlow('welcome') || !settingsHydrated}
-    <div class="flex min-h-full items-center justify-center bg-libre-beige p-4 dark:bg-slate-950" aria-busy="true" data-testid="welcome-bootstrap-loading">
-        <p class="text-sm text-gray-600 dark:text-gray-300">
+    <div class="flex min-h-full items-center justify-center bg-lf-page p-4 text-lf-primary" aria-busy="true" data-testid="welcome-bootstrap-loading">
+        <p class="text-sm text-lf-secondary">
             {$_('common.loading')}
         </p>
     </div>

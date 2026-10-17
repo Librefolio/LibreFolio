@@ -141,9 +141,9 @@ open**: the rest of V-21, V-17's two runner points, V-18.
 | A1b: reserved pair for the twin | `frontend/e2e/fx/fx-detail.spec.ts` |
 | A2: disposable accounts | `frontend/e2e/settings.spec.ts` |
 | A3: read and restore the scheduler keys | `frontend/e2e/settings/scheduler.spec.ts` |
-| Theme option test ids | `frontend/src/lib/components/settings/SettingTheme.svelte` |
-| Select option test ids | `frontend/src/lib/components/settings/SettingSelect.svelte` |
-| About tab busy state | `frontend/src/lib/components/settings/tabs/AboutTab.svelte` |
+| Theme option test ids | `frontend/src/lib/features/settings/SettingTheme.svelte` |
+| Select option test ids | `frontend/src/lib/features/settings/SettingSelect.svelte` |
+| About tab busy state | `frontend/src/lib/features/settings/tabs/AboutTab.svelte` |
 | Transaction hygiene (one worker only) | `frontend/e2e/fixtures/playwright.ts` |
 | Disposable account helpers | `frontend/e2e/fixtures/onboarding-accounts.ts` |
 | `fullyParallel: true` | `frontend/playwright.config.ts` |

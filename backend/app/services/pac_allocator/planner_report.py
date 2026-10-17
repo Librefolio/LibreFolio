@@ -3,7 +3,7 @@
 Maps the exact domain — an ``ExactPlannerScenario`` plus the
 ``ExactEvaluation`` produced by replaying a candidate, plus ``solver.py``'s
 floating evidence and ``proof.py``'s conclusion — onto the frozen wire
-contract in ``schemas/pac_allocator.py``.
+contract of the ``schemas/pac_allocator/`` package.
 
 **This module computes no economics.** Every figure it publishes already
 exists, exact, on the evaluation; its job is to re-express those figures in
@@ -24,24 +24,17 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from backend.app.schemas.pac_allocator import (
-    AvailableExactNumber,
-    CanonicalKeyUnit,
-    ContributionFundingSourceRef,
-    CountUnit,
-    CurrencySpec,
-    DomainCopyProvenance,
+from backend.app.schemas.pac_allocator.base import PlannerNonNegativeMoneyInput, PlannerPositiveMoneyInput
+from backend.app.schemas.pac_allocator.evidence import CanonicalKeyUnit, CountUnit, OrdinalPenaltyUnit, ReportedFloatingSolverEvidence, SolverSettingEvidence, SolverStageEvidence, SolverToleranceEvidence, ValuationMoneySquaredUnit, ValuationMoneyUnit
+from backend.app.schemas.pac_allocator.exact import AvailableExactNumber, ExactFxRate, ExactMoney, UnavailableExactNumber
+from backend.app.schemas.pac_allocator.request import ContributionFundingSourceRef, CurrencySpec, DomainCopyProvenance, ExistingCashFundingSourceRef, ManualProvenance, PlannerProvenance
+from backend.app.schemas.pac_allocator.results import PacScenarioBasis, PlannerResultSnapshot
+from backend.app.schemas.pac_allocator.rows import (
     ExactEconomicQuantity,
-    ExactFxRate,
-    ExactMoney,
-    ExistingCashFundingSourceRef,
-    ManualProvenance,
     MonetaryAmountInstruction,
     ObjectiveStageResult,
-    OrdinalPenaltyUnit,
     PacAssetPlanRow,
     PacExposurePlanRow,
-    PacScenarioBasis,
     PlannerAccountingSummary,
     PlannerBuyOrderRow,
     PlannerCatalogAsset,
@@ -52,24 +45,13 @@ from backend.app.schemas.pac_allocator import (
     PlannerFundingAction,
     PlannerFxAction,
     PlannerLedgerRow,
-    PlannerNonNegativeMoneyInput,
     PlannerObjectiveResults,
-    PlannerPositiveMoneyInput,
-    PlannerProvenance,
-    PlannerResultSnapshot,
     PlannerRoundingTopUp,
     PlannerScenarioCounts,
-    ReportedFloatingSolverEvidence,
-    SolverSettingEvidence,
-    SolverStageEvidence,
-    SolverToleranceEvidence,
     TieBreakResult,
-    UnavailableExactNumber,
-    ValuationMoneySquaredUnit,
-    ValuationMoneyUnit,
     WholeQuantityInstruction,
 )
-from backend.app.services.pac_allocator.evaluator import exact_scenario_fingerprint
+from backend.app.services.pac_allocator.evaluation.scenario import exact_scenario_fingerprint
 from backend.app.services.pac_allocator.models import (
     ExactAsset,
     ExactEvaluation,
@@ -251,7 +233,7 @@ def build_exposure_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluat
 
     The schema leaves far less freedom here than it first appears, and the
     validator — not the type union — is the specification.
-    ``_validate_weight_availability`` admits exactly two worlds per dimension:
+    ``validate_weight_availability`` admits exactly two worlds per dimension:
     with a zero denominator *every* weight must be unavailable carrying
     ``zero_final_invested``, and otherwise *every* weight must be available,
     in ``[0, 1]``, and the dimension must **sum to exactly one**. So neither
@@ -1084,7 +1066,13 @@ def _published_gap(primal: str | None, dual: str | None, absolute_gap: float | N
 
 
 def _decimal_text(value: Decimal) -> str:
-    """Positional, canonical decimal text (no exponent, no trailing zeros)."""
+    """Positional, canonical decimal text (no exponent, no trailing zeros).
+
+    A zero of any sign or exponent is «0»: the wire pattern refuses «-0», and a
+    solver's -0.0 is the same observation as 0.0.
+    """
+    if value.is_zero():
+        return "0"
     text = format(value, "f")
     if "." in text:
         text = text.rstrip("0").rstrip(".")

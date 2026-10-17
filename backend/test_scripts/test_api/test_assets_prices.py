@@ -8,6 +8,8 @@ Tests for price-related endpoints:
 - POST /api/v1/assets/prices/sync - Refresh prices from providers
 """
 
+import time
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -16,7 +18,7 @@ import pytest
 
 from backend.app.config import get_settings
 from backend.app.db.models import IdentifierType, ProviderInputType
-from backend.app.schemas.assets import (
+from backend.app.schemas.assets.assets import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
 )
@@ -29,6 +31,7 @@ from backend.app.schemas.prices import (
     FAUpsert,
 )
 from backend.app.schemas.provider import FAProviderAssignmentItem
+from backend.app.utils.datetime_utils import latest_range_end
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
 
@@ -744,14 +747,18 @@ async def test_get_current_prices_empty_list(test_server):
 
 
 # ============================================================
-# Tests 15–17: I.9 — Currency mismatch hard-400 (Supersedes E.3)
+# Tests 15–17: I.9 — Currency mismatch hard reject (Supersedes E.3); 422 price_currency_mismatch since X-R71
 # ============================================================
 
 
 @pytest.mark.asyncio
-async def test_upsert_mismatch_single_row_rejects_400(test_server):
-    """I.9 Test 15: single row with mismatched currency → HTTP 400 hard reject."""
-    print_section("Test 15: I.9 — single mismatch rejects 400")
+async def test_upsert_mismatch_single_row_rejects_422(test_server):
+    """I.9 Test 15: single row with mismatched currency → HTTP 422 ``price_currency_mismatch`` hard reject (X-R71).
+
+    Contract: the detail names the asset, its currency (``expected``), the one given (``found``) and the date; ``count`` 1.
+    Red before X-R71: 400 with a string detail («Currency mismatch for asset …»).
+    """
+    print_section("Test 15: I.9 — single mismatch rejects 422")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
@@ -763,18 +770,25 @@ async def test_upsert_mismatch_single_row_rejects_400(test_server):
         prices = [FAPricePoint(date=today, close=Decimal("1.0"), currency="EUR")]
         upsert = FAUpsert(asset_id=asset_id, prices=prices)
         resp = await client.post(f"{API_BASE}/assets/prices", json=[upsert.model_dump(mode="json")], timeout=TIMEOUT)
-        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
-        body = resp.json()
-        assert "Currency mismatch" in body["detail"]
-        assert "USD" in body["detail"]
-        assert "EUR" in body["detail"]
-        print_success("  ✓ single EUR row on USD asset → 400 with Currency mismatch")
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
+        detail = resp.json()["detail"]
+        assert isinstance(detail, dict) and detail.get("code") == "price_currency_mismatch", detail
+        assert detail["items"] == [{"asset_id": asset_id, "expected": "USD", "found": ["EUR"], "dates": [today.isoformat()]}], detail
+        assert detail["count"] == 1, detail
+        print_success("  ✓ single EUR row on USD asset → 422 price_currency_mismatch")
+
+        # Cleanup
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
 
 
 @pytest.mark.asyncio
-async def test_upsert_mismatch_partial_rejects_entire_batch_400(test_server):
-    """I.9 Test 16: one mismatch in a batch of 3 → entire batch rejected with 400 (hard)."""
-    print_section("Test 16: I.9 — partial mismatch rejects entire batch 400")
+async def test_upsert_mismatch_partial_rejects_entire_batch_422(test_server):
+    """I.9 Test 16: one mismatch in a batch of 3 → entire batch rejected with 422 ``price_currency_mismatch`` (X-R71).
+
+    Contract: the detail names the asset, USD expected, GBP found, and the GBP day alone; ``count`` 1; nothing stored.
+    Red before X-R71: 400 with a string detail.
+    """
+    print_section("Test 16: I.9 — partial mismatch rejects entire batch 422")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
@@ -790,7 +804,11 @@ async def test_upsert_mismatch_partial_rejects_entire_batch_400(test_server):
         ]
         upsert = FAUpsert(asset_id=asset_id, prices=prices)
         resp = await client.post(f"{API_BASE}/assets/prices", json=[upsert.model_dump(mode="json")], timeout=TIMEOUT)
-        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}"
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
+        detail = resp.json()["detail"]
+        assert isinstance(detail, dict) and detail.get("code") == "price_currency_mismatch", detail
+        assert detail["items"] == [{"asset_id": asset_id, "expected": "USD", "found": ["GBP"], "dates": [(today - timedelta(days=1)).isoformat()]}], detail
+        assert detail["count"] == 1, detail
         # Verify NO rows were inserted (atomic reject)
         query_resp = await client.post(
             f"{API_BASE}/assets/prices/query",
@@ -801,6 +819,9 @@ async def test_upsert_mismatch_partial_rejects_entire_batch_400(test_server):
         # Should be empty or only the price points that were present before (none in this test)
         assert len(data["items"][0].get("prices", [])) == 0, "Batch should have been atomically rejected"
         print_success("  ✓ 1/3 mismatch rejected whole batch (atomic)")
+
+        # Cleanup
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
 
 
 @pytest.mark.asyncio
@@ -976,3 +997,214 @@ async def test_sync_and_current_price_provider_success_with_mockprov(test_server
         assert verify_resp.status_code == 200, verify_resp.text
         assert len(verify_resp.json()["items"][0]["prices"]) >= 1
         print_success("  ✓ Sync + current price wrappers succeeded with mock provider")
+
+
+# ============================================================
+# X-R55 (N75): a price query has a ceiling, the server's tomorrow
+# ============================================================
+#
+# get_prices_bulk used to backward-fill one point a day up to any requested end: 9999-12-31 meant about 2.9 million
+# points built and serialised by the lane's backend. These two cases go through the route. The unbounded sizes are
+# pinned at service level (services range-ceiling, RC-A06), behind a fuse: here a red guard on unbounded code must not
+# keep the shared backend's event loop busy for minutes, with every neighbour test of the run waiting on it.
+#
+# The ceiling is datetime_utils.latest_range_end(), tomorrow by the server's calendar (R13-SEC7-1's one helper). The
+# lane's server runs on this host, in this process's time zone: the test asks the same helper for the day it cuts at.
+
+EXTREME_SECONDS = 20.0  # a capped answer takes milliseconds; an unbounded one, minutes
+
+
+async def _create_ceiling_asset(client: httpx.AsyncClient) -> int:
+    """An asset of this test alone, in USD; the caller deletes it."""
+    item = FAAssetCreateItem(display_name=f"Range Ceiling {unique_id('RCEIL')}", currency="USD")
+    resp = await client.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
+    assert resp.status_code == 201, resp.text
+    return FABulkAssetCreateResponse(**resp.json()).results[0].asset_id
+
+
+async def _price_three_days_before(client: httpx.AsyncClient, asset_id: int, today: date) -> None:
+    """A close on each of the three days before ``today``: the last stored price is yesterday's."""
+    prices = [FAPricePoint(date=today - timedelta(days=back), close=Decimal(100 + back), currency="USD") for back in (3, 2, 1)]
+    resp = await client.post(f"{API_BASE}/assets/prices", json=[FAUpsert(asset_id=asset_id, prices=prices).model_dump(mode="json")], timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+async def test_query_end_after_tomorrow_stops_at_tomorrow(test_server):
+    """RC-API-01 (X-R55, N75): POST /assets/prices/query up to today+10 gives no point after the ceiling,
+    ``latest_range_end()``: tomorrow, by the server's calendar.
+
+    The last stored price is yesterday: the series is backward-filled up to the ceiling, and no further. The ceiling is
+    read before the request (the series must reach it) and after the answer (no point may pass it): a day turning
+    meanwhile only widens what is accepted.
+    Red before X-R55: points backward-filled up to today+10.
+    """
+    print_section("RC-API-01: price query clamped to tomorrow")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        asset_id = await _create_ceiling_asset(client)
+        try:
+            ceiling_before = latest_range_end()
+            today = ceiling_before - timedelta(days=1)
+            await _price_three_days_before(client, asset_id, today)
+            date_range = {"start": (today - timedelta(days=3)).isoformat(), "end": (today + timedelta(days=10)).isoformat()}
+            resp = await client.post(f"{API_BASE}/assets/prices/query", json=[{"asset_id": asset_id, "date_range": date_range}], timeout=TIMEOUT)
+            ceiling = latest_range_end()
+            assert resp.status_code == 200, resp.text
+            days = [date.fromisoformat(point["date"]) for point in resp.json()["items"][0]["prices"]]
+            late = [day for day in days if day > ceiling]
+            assert not late, f"{len(late)} points after the ceiling {ceiling}: {late[0]} … {late[-1]}"
+            assert days and days[-1] >= ceiling_before, f"the series should be backward-filled up to the ceiling {ceiling_before}: {days}"
+            print_success(f"  ✓ {len(days)} points, the last on {days[-1]}")
+        finally:
+            await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+async def test_query_extreme_end_is_bounded(test_server):
+    """RC-API-02 (X-R55, N75, guard): a query ending 9999-12-31 answers within EXTREME_SECONDS with no point after the
+    ceiling, ``latest_range_end()``: 9999-12-01 … 9999-12-31 lies wholly after it, so the item is empty, without error.
+
+    The start is not 0001-01-01 on purpose: on unbounded code that request makes the lane's shared backend build and
+    serialise about 2.9 million points, its event loop blocked for minutes and every neighbour test with it. This shape
+    costs unbounded code 31 points, and still fails it; 0001-01-01 … 9999-12-31 is pinned at service level (RC-A06).
+    Red before X-R55: 500 «date value out of range» — after its 31 backward-filled points the per-day walk stepped past
+    9999-12-31, the last day a date can hold, as every query ending there did (after 2.9 million points from today).
+    """
+    print_section("RC-API-02: price query ending 9999-12-31")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        asset_id = await _create_ceiling_asset(client)
+        try:
+            await _price_three_days_before(client, asset_id, latest_range_end() - timedelta(days=1))
+            query = [{"asset_id": asset_id, "date_range": {"start": "9999-12-01", "end": "9999-12-31"}}]
+            started = time.monotonic()
+            try:
+                resp = await client.post(f"{API_BASE}/assets/prices/query", json=query, timeout=EXTREME_SECONDS)
+            except httpx.TimeoutException:
+                pytest.fail(f"no answer within {EXTREME_SECONDS:.0f} s for a query ending 9999-12-31")
+            elapsed = time.monotonic() - started
+            ceiling = latest_range_end()
+            assert resp.status_code == 200, resp.text
+            assert elapsed < EXTREME_SECONDS, f"{elapsed:.1f} s"
+            (item,) = resp.json()["items"]
+            days = [date.fromisoformat(point["date"]) for point in item["prices"]]
+            late = [day for day in days if day > ceiling]
+            assert not late, f"{len(late)} points after the ceiling {ceiling}: {late[0]} … {late[-1]}"
+            assert (item["asset_id"], item["prices"], item["events"], item["errors"]) == (asset_id, [], [], [])
+            print_success(f"  ✓ empty item in {elapsed:.2f} s")
+        finally:
+            await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+# ============================================================
+# Z-25 (N77): a bulk price query has a cap on its items
+# ============================================================
+#
+# POST /assets/prices/query refuses more than MAX_BULK_ITEMS (1 000) items before reading anything: a 422 with a coded
+# detail. Its item-day budget (1 million, bulk_too_many_days) is pinned at service level only (services range-ceiling,
+# BL-A01…A07): over the real budget through the route, code without it would make the lane's shared backend fill
+# over a million points, the cost the cap exists to refuse.
+
+BULK_MAX_ITEMS = 1_000  # the contract's number (N77), written here and not read from the code under test
+
+
+@pytest.mark.asyncio
+async def test_query_more_than_1000_items_is_refused(test_server):
+    """BL-API-01 (Z-25, N77): 1 001 one-day items answer 422 ``{"code": "bulk_too_many_items", "message",
+    "max_items": 1000, "items": 1001}``.
+
+    The refusal comes before any read, so the asset id is never looked up, and nothing is written.
+    Red before Z-25: 200, the 1 001 items queried.
+    """
+    print_section("BL-API-01: price query of 1 001 items refused")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        query = [{"asset_id": 1, "date_range": {"start": "2025-06-18", "end": "2025-06-18"}} for _ in range(BULK_MAX_ITEMS + 1)]
+        resp = await client.post(f"{API_BASE}/assets/prices/query", json=query, timeout=TIMEOUT)
+        assert resp.status_code == 422, f"{resp.status_code}: {resp.text[:300]}"
+        detail = resp.json()["detail"]
+        assert isinstance(detail, dict) and detail.get("code") == "bulk_too_many_items", detail
+        assert isinstance(detail.get("message"), str) and detail["message"].strip(), detail
+        assert {key: value for key, value in detail.items() if key not in ("code", "message")} == {"max_items": BULK_MAX_ITEMS, "items": BULK_MAX_ITEMS + 1}
+        print_success(f"  ✓ 422 {detail['code']}: {detail['items']} items, at most {detail['max_items']}")
+
+
+# ============================================================
+# X-R65 (N83): a stored price is dated within [1900-01-01, the server's tomorrow]
+# ============================================================
+#
+# J's SEC8-1b: one price dated 0001-01-01 makes a backward fill or a risk replay walk about 740 000 days per asset.
+# POST /assets/prices checks every date against date_range_limits.stored_date_bounds() -- 1900-01-01 and
+# latest_range_end(), both included -- before any statement: one date outside refuses the whole request with a 422 and
+# writes nothing, for any asset of it. The frozen ceiling, the bounds themselves, the cap of ten and a provider's points
+# are pinned at service level (services asset-source-guards; services range-ceiling, RC-W); here the route on the lane's
+# server, at its real ceiling, read before the request and after the answer as RC-API-01 reads it. 1899-12-31, not
+# 0001-01-01: on code without the check the price is stored, and a walk from year one is what this lot prevents, not
+# something to start on the shared backend.
+
+STORED_FLOOR = "1900-01-01"  # the contract's floor (EARLIEST_RANGE_START), written here and not read from the code
+
+
+async def _create_bounds_asset(client: httpx.AsyncClient) -> int:
+    """An asset of this test alone, in USD, its name unique across workers; the caller deletes it."""
+    item = FAAssetCreateItem(display_name=f"Stored Bounds {unique_id('XR65')} {uuid.uuid4().hex[:8]}", currency="USD")
+    resp = await client.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
+    assert resp.status_code == 201, resp.text
+    return FABulkAssetCreateResponse(**resp.json()).results[0].asset_id
+
+
+async def _stored_price_days(client: httpx.AsyncClient, asset_id: int) -> list[str]:
+    """Every day the asset has a price on, whatever its date: the backup export reads the table, no range and no fill."""
+    resp = await client.get(f"{API_BASE}/backup/asset/{asset_id}/prices", params={"format": "json"}, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return [row["date"] for row in resp.json()["rows"]]
+
+
+@pytest.mark.asyncio
+async def test_upsert_outside_the_stored_bounds_is_refused_whole(test_server):
+    """RC-API-05 (X-R65, N83): POST /assets/prices with 1899-12-31 on one asset and a day past the ceiling on another,
+    each beside valid days, answers 422 ``{"code": "date_out_of_range", "message", "params": {"min": "1900-01-01",
+    "max": the ceiling}, "items": [{"asset_id": first, "dates": ["1899-12-31"]}, {"asset_id": second, "dates": [that
+    day]}], "count": 2}`` -- and neither asset has a price, not even on its valid days.
+
+    The ceiling is ``latest_range_end()``, read before the request and after the answer: ``max`` lies between them. The
+    day past it is 30 days on, past whatever the ceiling becomes meanwhile.
+    Red before X-R65: 200, the five prices stored -- 1899-12-31 and the day past the ceiling with them.
+    """
+    print_section("RC-API-05: price upsert outside the stored bounds refused")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        owned: list[int] = []
+        try:
+            owned.append(await _create_bounds_asset(client))
+            owned.append(await _create_bounds_asset(client))
+            first, second = owned
+            assert (await _stored_price_days(client, first), await _stored_price_days(client, second)) == ([], []), "barrier: a new asset holds prices"
+            ceiling_before = latest_range_end()
+            past_ceiling = ceiling_before + timedelta(days=30)
+            body = [
+                FAUpsert(asset_id=first, prices=[FAPricePoint(date=day, close=Decimal(close), currency="USD") for day, close in ((date(2020, 3, 2), "100"), (date(1899, 12, 31), "101"), (date(2020, 3, 3), "102"))]),
+                FAUpsert(asset_id=second, prices=[FAPricePoint(date=day, close=Decimal(close), currency="USD") for day, close in ((date(2020, 3, 2), "200"), (past_ceiling, "201"))]),
+            ]
+            resp = await client.post(f"{API_BASE}/assets/prices", json=[item.model_dump(mode="json") for item in body], timeout=TIMEOUT)
+            ceiling_after = latest_range_end()
+            assert resp.status_code == 422, f"{resp.status_code}: {resp.text[:400]}"
+            detail = resp.json()["detail"]
+            assert isinstance(detail, dict) and set(detail) == {"code", "message", "params", "items", "count"}, detail
+            assert detail["code"] == "date_out_of_range", detail
+            assert isinstance(detail["message"], str) and detail["message"].strip(), detail
+            assert set(detail["params"]) == {"min", "max"} and detail["params"]["min"] == STORED_FLOOR, detail
+            assert ceiling_before <= date.fromisoformat(detail["params"]["max"]) <= ceiling_after, f"max {detail['params']['max']} outside {ceiling_before} … {ceiling_after}"
+            assert detail["items"] == [{"asset_id": first, "dates": ["1899-12-31"]}, {"asset_id": second, "dates": [past_ceiling.isoformat()]}], detail
+            assert detail["count"] == 2, detail
+            assert await _stored_price_days(client, first) == []
+            assert await _stored_price_days(client, second) == []
+            print_success(f"  ✓ 422 {detail['code']}: {detail['count']} date(s), nothing stored")
+        finally:
+            if owned:
+                await client.delete(f"{API_BASE}/assets", params={"asset_ids": owned}, timeout=TIMEOUT)

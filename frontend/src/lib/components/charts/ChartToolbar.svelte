@@ -22,14 +22,12 @@
     let {chartType = 'line', viewMode = 'absolute', onChartTypeChange, onViewModeChange, disableCandlestick = false}: Props = $props();
 </script>
 
-<div class="flex flex-wrap items-center gap-2 text-sm">
+<div class="flex flex-wrap items-center gap-2 text-sm text-lf-primary">
     <!-- Chart Type Toggle -->
-    <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-        <button class="px-3 py-1.5 transition-colors {chartType === 'line' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" data-testid="chart-type-line" onclick={() => onChartTypeChange?.('line')}>
-            Line
-        </button>
+    <div class="flex rounded-lg border border-lf-subtle overflow-hidden">
+        <button class="px-3 py-1.5 transition-colors {chartType === 'line' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-hover'}" data-testid="chart-type-line" onclick={() => onChartTypeChange?.('line')}> Line </button>
         <button
-            class="px-3 py-1.5 transition-colors {chartType === 'candlestick' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}
+            class="px-3 py-1.5 transition-colors {chartType === 'candlestick' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-hover'}
                 {disableCandlestick ? 'opacity-50 cursor-not-allowed' : ''}"
             data-testid="chart-type-candlestick"
             disabled={disableCandlestick}
@@ -41,11 +39,11 @@
     </div>
 
     <!-- Divider -->
-    <div class="w-px h-6 bg-gray-200 dark:bg-slate-600 hidden sm:block"></div>
+    <div class="w-px h-6 bg-lf-subtle hidden sm:block"></div>
 
     <!-- View Mode Toggle -->
-    <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-        <button class="px-3 py-1.5 transition-colors {viewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" onclick={() => onViewModeChange?.('absolute')}> Abs </button>
-        <button class="px-3 py-1.5 transition-colors {viewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" onclick={() => onViewModeChange?.('percentage')}> % </button>
+    <div class="flex rounded-lg border border-lf-subtle overflow-hidden">
+        <button class="px-3 py-1.5 transition-colors {viewMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-hover'}" onclick={() => onViewModeChange?.('absolute')}> Abs </button>
+        <button class="px-3 py-1.5 transition-colors {viewMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-hover'}" onclick={() => onViewModeChange?.('percentage')}> % </button>
     </div>
 </div>

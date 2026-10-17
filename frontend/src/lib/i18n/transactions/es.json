@@ -93,7 +93,9 @@
       "eventPickerCreateNew": "Nuevo evento",
       "eventCreateTitle": "Crear evento para {asset}",
       "eventCreateAmountRequired": "El importe es obligatorio",
-      "eventCreateDateRequired": "La fecha es obligatoria"
+      "eventCreateDateRequired": "La fecha es obligatoria",
+      "fxDatesHint": "Las fechas 'De' y 'A' suelen coincidir: difieren cuando el bróker abona la nueva divisa otro día.",
+      "eventEditTitle": "Editar evento para {asset}"
     },
     "bulk": {
       "resetRow": "Restablecer fila",
@@ -188,7 +190,9 @@
       "concat": "Concatenar",
       "union": "Unión",
       "promoteSubtitle": "Seleccione la transacción de destino",
-      "target": "Destino"
+      "target": "Destino",
+      "descriptionTooLong": "La descripción combinada supera los {max} caracteres: acórtala para confirmar.",
+      "mergeAllLeftTooLong": "{count, plural, one {# pareja quedó} other {# parejas quedaron}} para combinar a mano: la descripción combinada superaría los {max} caracteres."
     },
     "validate": {
       "now": "Validar ahora",
@@ -237,7 +241,20 @@
       "costBasisRequired": "❌ <b>{type}</b> con cantidad positiva requiere un coste base. Use el modo <b>Auto</b> (PMC) o introduzca un valor <b>manual</b>.",
       "pairDeleteIncomplete": "Transacción vinculada: eliminar esta fila requiere eliminar también su contraparte (transacción n.º {partnerId}). Si la contraparte está en un bróker que no puedes editar, pide a su propietario que la elimine.",
       "pairQuantityMismatch": "Una transferencia debe sacar de un bróker la misma cantidad que ingresa en el otro (encontradas {qtyA} y {qtyB})",
-      "pairAssetMismatch": "Los dos lados de una transferencia deben ser el mismo activo"
+      "pairAssetMismatch": "Los dos lados de una transferencia deben ser el mismo activo",
+      "wacFxUnavailableSplit": "Las unidades que salen se valoran a su coste medio, que necesita el tipo de cambio {pairs}: sincroniza los tipos de cambio y vuelve a separar el par.",
+      "pairBrokerMismatch": "Los dos lados de un cambio de divisas deben estar en el mismo broker",
+      "cashNonzero": "{type} requiere un importe distinto de cero",
+      "decimalPlacesExceeded": "Como máximo {max} decimales",
+      "significantDigitsExceeded": "Como máximo {max} cifras significativas",
+      "integerDigitsExceeded": "Como máximo {max} cifras en la parte entera",
+      "dateOutOfRange": "Entre {min} y {max}",
+      "autoCostUnreadable": "Coste automático no disponible: {count, plural, one {# transacción usada} other {# transacciones usadas}} para el coste medio de este activo {count, plural, one {contiene} other {contienen}} un valor que no es un número. Introduce el coste a mano.",
+      "autoCostEmptyPool": "Coste automático no disponible: en esa fecha no había unidades de este activo que promediar. Introduce el coste a mano (0 si llegaron gratis).",
+      "autoCostUnknownPool": "Coste automático no disponible: las unidades de este activo que había en esa fecha no tienen un coste conocido que promediar. Introduce el coste a mano.",
+      "ledgerUnreadable": "No se pueden comprobar los saldos de {brokerName}: {count, plural, one {# de sus transacciones contiene} other {# de sus transacciones contienen}} un valor que no es un número. Pide al administrador que repare los datos.",
+      "costBasisNotAllowed": "❌ {type} no lleva coste base aquí: quítelo. Solo lo llevan las unidades que entran con un Ajuste o una Transferencia de Activos.",
+      "costBasisModeIncompatible": "❌ {type} no lleva coste base aquí, así que ningún modo Auto o Manual: quítelo."
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",
@@ -249,7 +266,8 @@
       "decimalParsing": "Debe ser un número válido",
       "intParsing": "Debe ser un número entero válido",
       "valueError": "Valor no válido",
-      "extraForbidden": "Campo no esperado"
+      "extraForbidden": "Campo no esperado",
+      "stringTooLong": "Como máximo {max_length} caracteres"
     },
     "fields": {
       "broker_id": "Broker",

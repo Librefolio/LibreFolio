@@ -89,7 +89,21 @@ const SAFE_CALL = /formatCurrencyAmountPlain|formatCurrencyAmountHtml|formatCurr
 const FORM_A = /style\s*:\s*['"]currency['"]/;
 const TEMPLATE_LITERAL = /`[^`]*`/g;
 const INTERPOLATION = /\$\{([^}]*)\}/g;
-const I18N_CALL = /\$_\(|\$t\(|label\(/;
+/**
+ * A translation call. An interpolation holding one is not counted as a numeric token: a message key is
+ * words, and `t('dashboard.totalPnl')` would otherwise pass for an amount through `total` and `pnl`.
+ *
+ * `$_(` and `$t(` are the components' translators, `t(` the one a helper receives as a parameter
+ * (`growthChartTooltip.ts`, Y-3), `label(` the `label(key, fallback)` some components wrap around them.
+ * `\bt\(` serves `$t(` too (`$` is not a word character), so `$t(` has no alternative of its own: one
+ * beside it would be dead, and deleting it would change nothing. The `\b` keeps out the calls whose name
+ * merely ends in `t` — `format(`, `fmt(`, `parseInt(`, `split(` — which, taken for translations, would
+ * blind the gate to the very formatters it looks for.
+ *
+ * The blind spot `t(` shares with `$_(` and the others: the token is set aside whole, so a translation
+ * call carrying an amount in its `values` is not counted either.
+ */
+const I18N_CALL = /\$_\(|\bt\(|label\(/;
 /**
  * What makes a number *money* rather than a percentage or a quantity.
  *
@@ -172,13 +186,13 @@ function scan(): Hit[] {
  */
 const REGISTRY: Site[] = [
     {
-        file: 'lib/components/risk/riskAnalysisHelpers.ts',
+        file: 'lib/features/risk/riskAnalysisHelpers.ts',
         snippet: "return maskCurrencyParts(new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2}).formatToParts(amount));",
         status: 'masked',
         why: 'The fifth currency formatter. Masked in the same expression by maskCurrencyParts, which hides the digits and keeps the currency and the sign; the two em-dash absence checks run before it.',
     },
     {
-        file: 'lib/components/brokers/lots/lotComparisonChartHelpers.ts',
+        file: 'lib/features/brokers/lots/lotComparisonChartHelpers.ts',
         snippet: "style: 'currency',",
         status: 'masked',
         why: 'formatAxisCurrency, the absolute-return axis of the lot comparison chart, extracted from the component. Its Intl exit goes through maskCurrencyParts; its fallback exit masks with maskFormattedNumber( and so is not a hit at all.',
@@ -190,19 +204,19 @@ const REGISTRY: Site[] = [
         why: 'Reads resolvedOptions().maximumFractionDigits and renders nothing. The known false positive of form A, kept registered so the next reader does not re-derive it.',
     },
     {
-        file: 'lib/components/dashboard/GrowthChart.svelte',
-        snippet: '`<div style="display:flex;justify-content:space-between;gap:16px;color:${pnlColor}"><span><b>${$_(\'dashboard.totalPnl\')}</b></span><b>${fmtCurrency(totalPnlVal, true)}</b></div>`',
+        file: 'lib/features/dashboard/growthChartTooltip.ts',
+        snippet: '`<div style="display:flex;justify-content:space-between;gap:16px;color:${pnlColor}"><span><b>${t(\'dashboard.totalPnl\')}</b></span><b>${fmtCurrency(totalPnlVal, true)}</b></div>`',
         status: 'masked',
-        why: "The P&L-total row of the Abs tooltip, a consumer of fmtCurrency that §1.8 did not list. fmtCurrency is masked at its definition in the same function, through maskFormattedNumber, which keeps the locale's sign outside the mask and masks the digits only (D8, D23b); the gate cannot follow a call into a local closure, so this row still matches through its totalPnlVal/pnlColor tokens. Unmasking the definition would bring the definition line back as an unregistered hit: the boundary is guarded by this gate, as for LotComparisonChart.formatAxisCurrency. The masking of this row is pinned behaviourally by GrowthChart.test.ts «masks every tooltip amount in the Abs, P&L-total and candle rows, keeping the currency and the sign readable».",
+        why: "The P&L-total row of the Abs tooltip, in buildGrowthTooltip (moved out of GrowthChart.svelte with the rest of the tooltip in FE6a), a consumer of fmtCurrency that §1.8 did not list. fmtCurrency is masked at its definition in that same function, through maskFormattedNumber, which keeps the locale's sign outside the mask and masks the digits only (D8, D23b); the gate cannot follow a call into a local closure, so this row still matches through its totalPnlVal/pnlColor tokens. Unmasking the definition would bring the definition line back as an unregistered hit: the boundary is guarded by this gate, as for LotComparisonChart.formatAxisCurrency. The masking of this row is pinned behaviourally by GrowthChart.test.ts «masks every tooltip amount in the Abs, P&L-total and candle rows, keeping the currency and the sign readable».",
     },
     {
-        file: 'lib/components/transactions/events/EventCreateMiniModal.svelte',
-        snippet: '`${formatFixed(amt, 2)} ${assetCurrency}`',
+        file: 'lib/features/transactions/events/EventCreateMiniModal.svelte',
+        snippet: '`${formatExactDecimal(amountText, {minFrac: 2, maxFrac: 6})} ${assetCurrency}`',
         status: 'public',
         why: "The success toast for a created asset event. Asset events are asset-level, not the user's (backend/app/db/models.py, class AssetEvent: «Events are NOT transactions — they describe what happens to the asset globally, not what happens in a user's portfolio»), so the amount is public under the 2026-09-22 rule. It was registered as unmasked until that rule existed.",
     },
     {
-        file: 'lib/components/transactions/events/AssetEventPicker.svelte',
+        file: 'lib/features/transactions/events/AssetEventPicker.svelte',
         snippet: "`${formatFixed(diff, 2, {signed: true})}${crossCurrency ? ' ≠' : ''}`",
         status: 'not-money',
         why: 'A cash delta rendered with no currency marker, used to rank candidate matches; it matches form B only through the crossCurrency flag, a boolean, beside the number. Judgement site in the class of MeasurePanel: catching it would mean chasing every decimal formatter (formatFixed, toFixed) over arbitrary numbers, and a gate that fires on arbitrary numbers is a gate someone switches off.',
@@ -215,9 +229,9 @@ const REGISTRY: Site[] = [
     },
     {
         file: 'lib/components/charts/PriceChartFull.svelte',
-        snippet: '`${currencyHtml}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`',
+        snippet: '`${currencyHtml}: ${formatPrice(Number(value), {minDecimals: 4})}${valueSuffix}${axisNoteHtml}`',
         status: 'public',
-        why: "The value part of a price-chart tooltip row (asset and FX detail): the price, or the percentage return, of an asset, an FX pair or an overlay signal at the hovered date — market data, never the user's holdings, so public by the rule that keeps prices, rates and percentages readable. It matches only since K step 16 (06/10) moved the currency badge out of the label and next to the value, so that a phone can shrink the label and keep both whole; before that the same value rendered as `${labelHtml}: ${Number(value).toFixed(4)}…` with no currency token beside it. Since M-18 (12/10) the value is written through formatFixed, the localized toFixed, in the interface language: the same figure, so the same status.",
+        why: "The value part of a price-chart tooltip row (asset and FX detail): the price, or the percentage return, of an asset, an FX pair or an overlay signal at the hovered date — market data, never the user's holdings, so public by the rule that keeps prices, rates and percentages readable. It matches only since K step 16 (06/10) moved the currency badge out of the label and next to the value, so that a phone can shrink the label and keep both whole; before that the same value rendered as `${labelHtml}: ${Number(value).toFixed(4)}…` with no currency token beside it. Since M-18 (12/10) the value is written through formatFixed, the localized toFixed, in the interface language, and since C-97c (17/10) through formatPrice, which keeps a small price's significant digits: the same figure, so the same status.",
     },
 ];
 
@@ -237,7 +251,7 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
         expect(hits.length).toBeGreaterThanOrEqual(REGISTRY.length);
         expect(hits.filter((h) => h.form === 'A').length).toBeGreaterThan(0);
         expect(hits.filter((h) => h.form === 'B').length).toBeGreaterThan(0);
-        expect(hits.map((h) => h.file)).toContain('lib/components/risk/riskAnalysisHelpers.ts');
+        expect(hits.map((h) => h.file)).toContain('lib/features/risk/riskAnalysisHelpers.ts');
     });
 
     it('registers every site that renders money outside the channel', () => {
@@ -289,7 +303,7 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
         expect(listOf('public')).toEqual([
             // one element per line: parallel removals must not touch the same line
             'lib/components/charts/PriceChartFull.svelte',
-            'lib/components/transactions/events/EventCreateMiniModal.svelte',
+            'lib/features/transactions/events/EventCreateMiniModal.svelte',
         ]);
     });
 
@@ -317,6 +331,33 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
             .map((h) => h.snippet);
 
         expect(branches).toEqual(['`${sign}${symbol}${compact}`', '`${sign}${compact} ${currency}`']);
+    });
+
+    it('reads a key translated with t( as words, and still reads fmt( and format( as numbers', () => {
+        // A regression test for the gate itself, not for the product (Y-3).
+        //
+        // A helper that receives the translator as a parameter calls it `t` (`growthChartTooltip.ts`), and
+        // I18N_CALL used to know only `$_(`, `$t(` and `label(`: a key like `t('dashboard.totalPnl')` passed
+        // for an amount through `total` and `pnl`. That error made the gate stricter, never blinder, but a
+        // form that miscounts its tokens no longer says what it means. The `\b` is the other half, and the
+        // one that matters for privacy: without it every call whose name ends in `t` (`fmt(`, `format(`)
+        // would pass for a translation, and the gate would go quiet on the formatters it exists to see.
+        // Dropping the `\b` leaves all eight real hits standing (measured 17/10), so this case is the only
+        // thing that would notice it gone.
+        //
+        // Synthetic lines through the real `scanLine`, as in the two-branch case above: no file owned by
+        // another workstream decides whether this still means anything.
+        const formB = (line: string): string[] =>
+            scanLine('fixture', line, 0)
+                .filter((h) => h.form === 'B')
+                .map((h) => h.snippet);
+        const keyBesideCurrency = "return `${t('dashboard.totalPnl')}: ${currency}`;";
+        const keyBesideAmount = "return `${t('dashboard.totalPnl')}: ${formatFixed(amount, 2)} ${currency}`;";
+        const namesEndingInT = 'const a = `${fmt(value)} ${currency}`, b = `${format(value)} ${currency}`;';
+
+        expect(formB(keyBesideCurrency), 'a translation key counted as an amount: I18N_CALL does not know t( as a translation call').toEqual([]);
+        expect(formB(keyBesideAmount), 'the amount beside a translated key went unseen: the exclusion reaches past the translation call').toEqual(["`${t('dashboard.totalPnl')}: ${formatFixed(amount, 2)} ${currency}`"]);
+        expect(formB(namesEndingInT), 'fmt( and format( taken for translators: I18N_CALL lost the \\b before t(').toEqual(['`${fmt(value)} ${currency}`', '`${format(value)} ${currency}`']);
     });
 
     it('gives every registered site a reason', () => {

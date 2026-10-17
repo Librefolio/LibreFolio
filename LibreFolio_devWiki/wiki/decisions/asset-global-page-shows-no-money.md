@@ -128,7 +128,7 @@ because the mask of `currencyFormat.ts` covers the number and leaves symbol, fla
 outside. That holds for `currencyFormat.ts` — **not on the laboratory's path**. `L4Replay`
 formats with the risk formatter, `formatCurrencyAmount` in `riskAnalysisHelpers.ts`, which
 under privacy returns `•••` **in place of the whole string**. Executed by F on 23/09:
-`npx vitest run src/lib/components/risk/riskAnalysisHelpers.test.ts -t "with global privacy on"`
+`npx vitest run src/lib/features/risk/riskAnalysisHelpers.test.ts -t "with global privacy on"`
 → 1 file passed, 7 tests, `.toBe(PRIVACY_PLACEHOLDER)`.
 
 | assertion | privacy off | privacy on, today |
@@ -169,18 +169,18 @@ stubs the eligibility engine and waits for every chip's verdict before asserting
 
 | Role | Path |
 |------|------|
-| The panel under the rule — mounts the three sections | `frontend/src/lib/components/risk/AssetSetRiskPanel.svelte` |
-| Rendered the money unguarded on 2026-09-05; since `bf34f3a0a` through `formatScopedCurrencyAmount` | `frontend/src/lib/components/risk/RiskAnalysisPanel.svelte` |
-| Em dash for absent amounts; `formatScopedCurrencyAmount` (scope guard); `formatCurrencyAmount` (whole-string privacy mask) | `frontend/src/lib/components/risk/riskAnalysisHelpers.ts` |
-| Pins the mask — `with global privacy on` | `frontend/src/lib/components/risk/riskAnalysisHelpers.test.ts` |
-| Passes `showMoney={false}` | `frontend/src/lib/components/risk/AssetSetReplaySection.svelte` |
-| Money sites behind `!showMoney`; formats with the risk formatter | `frontend/src/lib/components/risk/levels/l4/L4Replay.svelte` |
-| L1°/L3° arithmetic with no currency parameter | `frontend/src/lib/components/risk/assetSetLevels.ts` |
-| Asset-detail Risk tab — `RiskAnalysisPanel` on `scope.kind: 'asset'` | `frontend/src/lib/components/risk/AssetRiskScenariosView.svelte` |
+| The panel under the rule — mounts the three sections | `frontend/src/lib/features/risk/AssetSetRiskPanel.svelte` |
+| Rendered the money unguarded on 2026-09-05; since `bf34f3a0a` through `formatScopedCurrencyAmount` | `frontend/src/lib/features/risk/RiskAnalysisPanel.svelte` |
+| Em dash for absent amounts; `formatScopedCurrencyAmount` (scope guard); `formatCurrencyAmount` (whole-string privacy mask) | `frontend/src/lib/features/risk/riskAnalysisHelpers.ts` |
+| Pins the mask — `with global privacy on` | `frontend/src/lib/features/risk/riskAnalysisHelpers.test.ts` |
+| Passes `showMoney={false}` | `frontend/src/lib/features/risk/AssetSetReplaySection.svelte` |
+| Money sites behind `!showMoney`; formats with the risk formatter | `frontend/src/lib/features/risk/levels/l4/L4Replay.svelte` |
+| L1°/L3° arithmetic with no currency parameter | `frontend/src/lib/features/risk/assetSetLevels.ts` |
+| Asset-detail Risk tab — `RiskAnalysisPanel` on `scope.kind: 'asset'` | `frontend/src/lib/features/risk/AssetRiskScenariosView.svelte` |
 | Masks the number, keeps the currency; the only emitters of `.currency-symbol` | `frontend/src/lib/utils/currency/currencyFormat.ts` |
 | `privacy-toggle`, `aria-pressed` | `frontend/src/lib/components/ui/PrivacyToggle.svelte` |
 | The net — *prints no money, even when the API hands it some*; `pinPrivacyOff` | `frontend/e2e/portfolio/risk-lab.spec.ts` |
-| Empty values / null scope value for an asset set **and for a single asset** | `backend/app/services/risk/service.py` |
+| Empty values / null scope value for an asset set **and for a single asset** | `backend/app/services/risk/scope.py` |
 | Returns no amount without weights | `backend/app/services/risk_plugins/stress/plugin.py` |
 | F's plan — §1 (09 §1.6/§9.2), §3.1, F-1, F-1b | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/F-laboratorio-postmerge.md` |
 | The 22/09 sheet — §1.6, §3.11, §3.12, §9.2 | `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/09_reperti_analisi_statica_20260922.md` |

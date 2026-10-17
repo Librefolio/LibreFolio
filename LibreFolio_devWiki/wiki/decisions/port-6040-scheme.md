@@ -40,7 +40,7 @@ The **"60/40 rule"** — 60% equities, 40% bonds — is the iconic asset allocat
 
 | Role | Path |
 |------|------|
-| Config defaults | `backend/app/config.py` |
+| Config defaults | `backend/app/config/__init__.py` |
 | Docker compose | `docker-compose.yml` |
 | Dockerfile | `Dockerfile` |
 | Dev CLI | `dev.py` |

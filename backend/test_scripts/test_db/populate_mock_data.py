@@ -71,14 +71,16 @@ from backend.app.db import (
     UserRole,
     UserSettings,
 )
-from backend.app.db.models import UserOnboardingStepProgress
-from backend.app.services.auth_service import hash_password
-from backend.app.services.brim_provider import save_uploaded_file
+from backend.app.db.models import GlobalSetting, UserOnboardingStepProgress
+from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS
+from backend.app.services.accounts.auth_service import hash_password
+from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
+from backend.app.services.brim.brim_provider import save_uploaded_file
+from backend.app.services.files.static_uploads import get_uploads_dir, save_upload, seed_default_avatars
 from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
-from backend.app.services.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.services.static_uploads import get_uploads_dir, save_upload, seed_default_avatars
-from backend.app.services.transaction_service import BalanceValidationError, TransactionService
+from backend.app.services.transactions.transaction_batch_context import BalanceValidationError
+from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
 
 # Create engine AFTER setup_test_database() has set DATABASE_URL
@@ -190,6 +192,25 @@ def _stable_seed(*parts: object) -> int:
     """Return a deterministic RNG seed independent from Python hash randomization."""
     payload = "|".join(str(part) for part in parts).encode("utf-8")
     return int(hashlib.sha256(payload).hexdigest()[:16], 16)
+
+
+def open_lane_registration(session: Session) -> None:
+    """Registration open on the test database: the API and E2E tests register accounts of their own.
+
+    A new install starts by invitation (decision 36), and the server's startup seeding creates only the rows that are
+    missing: the row written here is the one it keeps.
+    """
+    key = "registration_mode"
+    default = GLOBAL_SETTINGS_DEFAULTS[key]
+    row = session.get(GlobalSetting, key)
+    if row is None:
+        session.add(GlobalSetting(key=key, value="open", value_type=default["type"], description=default.get("description"), updated_at=utcnow()))
+    else:
+        row.value = "open"
+        row.updated_at = utcnow()
+        session.add(row)
+    session.commit()
+    print("  ✅ Registration open on the test database (registration_mode = open)")
 
 
 def cleanup_all_tables(session: Session):
@@ -1039,7 +1060,7 @@ def populate_asset_provider_assignments(session: Session):
         ("S&P 500", "yfinance", "^GSPC", IdentifierType.TICKER, None),
         ("MSCI World Index", "yfinance", "URTH", IdentifierType.TICKER, None),
         # Scheduled Investment — BTP Italia with interest schedule.
-        # Schema: FAScheduledInvestmentSchedule (see schemas/assets.py). Periods
+        # Schema: FAScheduledInvestmentSchedule (see schemas/assets/scheduled_investment.py). Periods
         # must be contiguous + non-overlapping. `asset_events` is optional.
         # Config: DAILY maturation + generate_interest=False → smooth growing line
         # (no auto-coupon reset). Useful for visual regression testing and to
@@ -3869,6 +3890,7 @@ def main():  # noqa: C901 — sequential populate step driver
     with Session(engine) as session:
         try:
             cleanup_all_tables(session)
+            open_lane_registration(session)
 
             populate_brokers(session)
             populate_broker_user_access(session)  # Associate brokers with test users

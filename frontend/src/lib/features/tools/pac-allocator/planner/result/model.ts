@@ -335,7 +335,7 @@ export function ordersByBroker(orders: readonly PacOrderRow[]): {brokerId: strin
 
 // -- ledger, transposed (one column per Broker × currency) ----------------------------
 
-/** Every balance column, in the order of the ledger identity (`schemas/pac_allocator.py`, `PlannerLedgerRow`). */
+/** Every balance column, in the order of the ledger identity (`schemas/pac_allocator/rows.py`, `PlannerLedgerRow`). */
 export const LEDGER_FIELDS = ['initial_selected', 'funding_in', 'funding_out', 'fx_debit', 'fx_credit', 'gross_sell_credit', 'buy_debit', 'buy_fees', 'sell_fees', 'broker_withheld_tax', 'self_reserved_tax', 'rounding_delta', 'final_spendable', 'final_physical'] as const;
 
 export type LedgerField = (typeof LEDGER_FIELDS)[number];

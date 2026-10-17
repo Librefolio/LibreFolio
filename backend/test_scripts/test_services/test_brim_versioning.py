@@ -20,9 +20,9 @@ import shutil
 
 import pytest
 
-from backend.app.services import brim_provider
-from backend.app.services.brim_provider import BRIMFileStatus
-from backend.app.services.provider_registry import BRIMProviderRegistry
+from backend.app.services.brim import brim_provider
+from backend.app.services.brim.brim_provider import BRIMFileStatus
+from backend.app.services.brim.registry import BRIMProviderRegistry
 
 
 @pytest.fixture

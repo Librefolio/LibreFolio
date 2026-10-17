@@ -9,10 +9,12 @@ from datetime import date
 
 import numpy as np
 
+from backend.app.services.financial_math.returns import required_recovery_return
+
 ZERO_TOLERANCE = 1e-15
 """Absolute tolerance below which a dispersion statistic counts as exactly zero.
 
-Public because the vectorised rolling helpers in :mod:`backend.app.services.risk.signal_helpers`
+Public because the vectorised rolling helpers in :mod:`backend.app.services.signals.risk_adapters`
 must test the *same* threshold on the *same* statistic. A metric is undefined when its
 denominator vanishes, and the scalar and vectorised paths have to agree on where that
 boundary lies — otherwise one of them emits a number where the other emits ``None``,
@@ -45,6 +47,11 @@ class DrawdownEpisodeReport:
     ``(baseline_date, *dates)`` and has ``len(returns) + 1`` entries. Its first
     entry is the baseline and is always ``0.0`` by construction, which is why a
     caller rendering a dated series normally drops it.
+
+    ``remaining_to_peak_ratio`` (from the current drawdown) and
+    ``maximum_drawdown_trough_to_peak_ratio`` (from the maximum, open or recovered) are the gain that
+    takes a value back to its peak, from ``financial_math.returns.required_recovery_return``: ``0.0``
+    with nothing to recover, None for a total loss.
     """
 
     current_drawdown: float
@@ -57,7 +64,8 @@ class DrawdownEpisodeReport:
     maximum_drawdown_recovery_date: date | None
     maximum_drawdown_duration_days: int
     maximum_drawdown_recovered_ratio: float | None
-    remaining_to_peak_ratio: float
+    maximum_drawdown_trough_to_peak_ratio: float | None
+    remaining_to_peak_ratio: float | None
     available_start: date
     available_end: date
     n_observations: int
@@ -389,7 +397,7 @@ def drawdown_episodes(  # noqa: C901 — TODO(P2-refactor): episode state machin
     current_underwater = current_drawdown < -ZERO_TOLERANCE
     current_peak_date = grid_dates[peak_index]
     current_drawdown_duration_days = (grid_dates[last] - grid_dates[peak_index]).days if current_underwater else 0
-    remaining_to_peak_ratio = max(0.0, -current_drawdown / (1.0 + current_drawdown)) if current_underwater else 0.0
+    remaining_to_peak_ratio = required_recovery_return(current_drawdown) if current_underwater else 0.0
 
     best: tuple[int, int, int | None] | None = None
     best_depth = 0.0
@@ -411,6 +419,7 @@ def drawdown_episodes(  # noqa: C901 — TODO(P2-refactor): episode state machin
             maximum_drawdown_recovery_date=None,
             maximum_drawdown_duration_days=0,
             maximum_drawdown_recovered_ratio=None,
+            maximum_drawdown_trough_to_peak_ratio=0.0,
             remaining_to_peak_ratio=remaining_to_peak_ratio,
             available_start=observation_dates[0],
             available_end=observation_dates[-1],
@@ -450,6 +459,7 @@ def drawdown_episodes(  # noqa: C901 — TODO(P2-refactor): episode state machin
         maximum_drawdown_recovery_date=recovery_date,
         maximum_drawdown_duration_days=maximum_duration_days,
         maximum_drawdown_recovered_ratio=recovered_ratio,
+        maximum_drawdown_trough_to_peak_ratio=required_recovery_return(maximum_drawdown),
         remaining_to_peak_ratio=remaining_to_peak_ratio,
         available_start=observation_dates[0],
         available_end=observation_dates[-1],

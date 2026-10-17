@@ -280,7 +280,7 @@ that day's last `Saldo`, and the cash of every checkpoint becomes a verification
 
 ## 🧮 The `gap_fix` corrections
 
-`compute_gap_fix()` (`backend/app/services/brim_gap_fix.py`) is generic
+`compute_gap_fix()` (`backend/app/services/brim/brim_gap_fix.py`) is generic
 ([Plugin Guide → report sets](../../architecture/patterns/brim_plugin_guide.md#report-sets),
 [Import Wizard → Step gapFix](../../frontend/components/features/import-wizard.md#gapfix-step));
 with this plugin's truth points it gives:

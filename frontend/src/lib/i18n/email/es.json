@@ -1,0 +1,151 @@
+{
+  "email": {
+    "tab": {
+      "label": "Correo",
+      "title": "Correo",
+      "intro": "LibreFolio puede enviar correos a través de un servidor SMTP, configurado por quien gestiona la instancia. El correo es opcional: sin él, todo lo demás funciona."
+    },
+    "state": {
+      "off": "Desactivado",
+      "ready": "Listo",
+      "invalid": "No funciona"
+    },
+    "off": {
+      "explanation": "No hay ningún servidor SMTP configurado (LIBREFOLIO_SMTP_HOST), así que no se envía nada: los enlaces de invitación y de restablecimiento de la contraseña se copian a mano. La guía explica cómo configurar uno."
+    },
+    "invalid": {
+      "explanation": "El correo sigue desactivado hasta que se corrija la configuración: corrige la variable y reinicia LibreFolio."
+    },
+    "problems": {
+      "SMTP_HOST_INVALID": "{variable} no es un nombre de servidor válido: escribe solo el nombre del host o la dirección IP, sin esquema, puerto ni ruta.",
+      "SMTP_TLS_INVALID": "{variable} debe ser starttls, tls o none.",
+      "SMTP_PORT_INVALID": "{variable} debe ser un número entero de 1 a 65535.",
+      "SMTP_FROM_MISSING": "Falta {variable}: la dirección del remitente es obligatoria.",
+      "SMTP_FROM_INVALID": "{variable} debe ser una sola dirección, por ejemplo noreply@example.com, opcionalmente tras un nombre, con la dirección entre corchetes angulares.",
+      "SMTP_REPLY_TO_INVALID": "{variable} debe ser una sola dirección.",
+      "SMTP_MAX_PER_HOUR_INVALID": "{variable} debe ser un número entero de al menos 1.",
+      "SMTP_PASSWORD_UNREADABLE": "El archivo de la contraseña indicado por {variable} no se puede leer.",
+      "SMTP_CREDENTIALS_INCOMPLETE": "{variable} está definida sola: define tanto el usuario SMTP como su contraseña, o ninguno de los dos.",
+      "unknown": "{variable} no se puede usar."
+    },
+    "checks": {
+      "smtp": {
+        "off": "El correo está desactivado: no hay ningún servidor SMTP configurado.",
+        "ok": "La configuración SMTP se puede usar.",
+        "invalid": "{variable} no se puede usar ({problem}): el correo sigue desactivado hasta que se corrija."
+      },
+      "smtpEncryption": {
+        "ok": "Los correos viajan cifrados, o el correo está desactivado.",
+        "localPlain": "Los correos van sin cifrar a un servidor de la red local.",
+        "plain": "Los correos, sus enlaces y la contraseña SMTP viajan sin cifrar a un servidor fuera de la red local: pon LIBREFOLIO_SMTP_TLS en starttls o tls."
+      },
+      "links": {
+        "ok": "Los correos pueden llevar enlaces: LIBREFOLIO_PUBLIC_URL está definida, o el correo está desactivado.",
+        "missing": "LIBREFOLIO_PUBLIC_URL no está definida: el correo funciona, pero ninguno con enlace (contraseña olvidada, invitación, restablecimiento) puede salir.",
+        "invalid": "LIBREFOLIO_PUBLIC_URL no puede iniciar un enlace: necesita http:// o https:// y un nombre de host, sin nombre de usuario, contraseña, ? ni #. No puede salir ningún correo con enlace."
+      }
+    },
+    "links": {
+      "base": "Los enlaces de los correos empiezan por {base}.",
+      "probe": {
+        "checking": "Comprobando desde este dispositivo que esta instancia responde en esa dirección…",
+        "match": "Esta instancia responde en esa dirección, desde este dispositivo.",
+        "otherInstance": "Desde este dispositivo, en esa dirección responde otro servidor, no esta instancia. Esta comprobación solo vale para este dispositivo: la causa puede ser su DNS o su red. Si otros dispositivos ven lo mismo, los enlaces de los correos llevan a otro sitio: comprueba LIBREFOLIO_PUBLIC_URL.",
+        "unreachable": "Este dispositivo no consigue llegar a esta instancia en esa dirección. Esta comprobación solo vale para este dispositivo: la causa puede ser su DNS o su red. Si los demás dispositivos tampoco llegan, los enlaces de los correos no se abrirán: comprueba LIBREFOLIO_PUBLIC_URL.",
+        "insecure": "Esta página usa https://, mientras que LIBREFOLIO_PUBLIC_URL empieza por http://: este navegador no puede comprobarla, y los enlaces de los correos viajarían sin cifrar. Pon la dirección https://.",
+        "invalid": "Este navegador no consigue leer LIBREFOLIO_PUBLIC_URL como una dirección: los enlaces de los correos podrían no abrirse. Comprueba su valor."
+      },
+      "recheck": "Comprobar de nuevo"
+    },
+    "budget": {
+      "remaining": "Quedan {remaining} correos de {max} en esta hora.",
+      "spent": "Se ha alcanzado el límite de {max} correos por hora: el próximo podrá salir dentro de {minutes} min."
+    },
+    "test": {
+      "hint": "Envía un correo de prueba a tu dirección para comprobar la configuración.",
+      "button": "Enviar un correo de prueba",
+      "sending": "Enviando…",
+      "sent": "Correo de prueba enviado a tu dirección: revisa la bandeja de entrada y también el spam.",
+      "errors": {
+        "EMAIL_UNAVAILABLE": "El correo está desactivado o no funciona en esta instancia.",
+        "EMAIL_RATE_LIMITED": "Se ha alcanzado el límite de correos por hora: inténtalo de nuevo dentro de {minutes} min.",
+        "EMAIL_RECIPIENT_INVALID": "La dirección de tu cuenta no es una dirección de correo válida.",
+        "generic": "No se ha podido enviar el correo de prueba."
+      }
+    },
+    "smtpErrors": {
+      "CONNECTION_FAILED": "LibreFolio no consigue conectar con el servidor SMTP: comprueba el host y el puerto.",
+      "TLS_FAILED": "La conexión segura ha fallado: comprueba LIBREFOLIO_SMTP_TLS y el certificado del servidor.",
+      "AUTH_FAILED": "El servidor SMTP ha rechazado el inicio de sesión: comprueba el usuario y la contraseña.",
+      "SENDER_REFUSED": "El servidor SMTP ha rechazado la dirección del remitente (LIBREFOLIO_SMTP_FROM).",
+      "RECIPIENT_REFUSED": "El servidor SMTP ha rechazado tu dirección.",
+      "TIMEOUT": "El servidor SMTP no ha respondido a tiempo.",
+      "SEND_FAILED": "El servidor SMTP no ha aceptado el mensaje."
+    },
+    "loadError": "No se ha podido leer el estado del correo.",
+    "verification": {
+      "page": {
+        "checking": "Verificando tu dirección de correo…",
+        "expired": "Este enlace ha caducado. Inicia sesión con tu nombre de usuario y tu contraseña: se te ofrecerá un enlace nuevo.",
+        "consumed": "Este enlace ya se ha usado. Si tu cuenta está activa, inicia sesión.",
+        "revoked": "Este enlace ya no funciona: inicia sesión para pedir uno nuevo.",
+        "unknown": "Este enlace no es válido: vuelve a abrirlo completo desde el correo. Si sigue fallando, inicia sesión para pedir uno nuevo.",
+        "blocked": "Esta instancia está bloqueada por su proveedor de alojamiento, así que el enlace no se puede comprobar ahora. Ábrelo de nuevo cuando la instancia se desbloquee; si el enlace ha caducado para entonces, inicia sesión para obtener uno nuevo.",
+        "missing": "Este enlace está incompleto: vuelve a abrirlo desde el correo.",
+        "error": "No se pudo comprobar el enlace: inténtalo de nuevo."
+      },
+      "verified": "Tu dirección de correo está verificada, {username}: ya puedes iniciar sesión.",
+      "loginRequired": "Tu dirección de correo aún no está verificada: abre el enlace del correo que te enviamos y luego inicia sesión.",
+      "resend": "Enviar el enlace de nuevo",
+      "resending": "Enviando…",
+      "resent": "Un enlace nuevo está en camino: revisa tu bandeja de entrada y el spam. Los enlaces anteriores ya no funcionan.",
+      "resendErrors": {
+        "INVALID_CREDENTIALS": "El nombre de usuario o la contraseña no son correctos: revísalos en el formulario de arriba.",
+        "EMAIL_RATE_LIMITED": "Demasiadas solicitudes por ahora: inténtalo de nuevo en {minutes} min.",
+        "EMAIL_VERIFICATION_NOT_NEEDED": "Tu cuenta ya está activa: inicia sesión.",
+        "USER_LIMIT_REACHED": "Tu enlace ha caducado y esta instancia está completa ahora: pregunta a su administrador.",
+        "ACCOUNT_DISABLED": "Esta cuenta está desactivada: pregunta al administrador de esta instancia.",
+        "unavailable": "Ahora no se puede enviar el correo: inténtalo más tarde o pregunta al administrador de esta instancia.",
+        "generic": "No se pudo enviar el enlace: inténtalo de nuevo."
+      },
+      "registered": "Cuenta creada. Te hemos enviado un correo con un enlace para activarla: ábrelo en las próximas 24 horas y luego inicia sesión.",
+      "signUpUnavailable": "Ahora no es posible registrarse: esta instancia no puede enviar el correo de verificación. Inténtalo más tarde o pregunta a su administrador.",
+      "settingNeedsEmail": "Hace falta que pueda salir un correo con enlace: configura primero SMTP y LIBREFOLIO_PUBLIC_URL (Configuración › Administración › Correo).",
+      "settingUnavailable": "La verificación del correo necesita que pueda salir un correo con enlace, y ahora no puede: revisa Configuración › Administración › Correo."
+    },
+    "sendLink": {
+      "button": "Enviar por correo",
+      "sending": "Enviando…",
+      "toLabel": "Enviar a",
+      "toPlaceholder": "nombre@ejemplo.es",
+      "resetTarget": "El enlace va a la dirección de correo de la cuenta.",
+      "publicUrlHint": "El enlace del correo empieza por la dirección definida en LIBREFOLIO_PUBLIC_URL, que puede ser distinta de la de arriba.",
+      "sent": "Enviado a {to}. Idioma: {language}.",
+      "errors": {
+        "EMAIL_UNAVAILABLE": "El correo está apagado o no funciona en esta instancia.",
+        "EMAIL_LINKS_UNAVAILABLE": "Los correos no pueden llevar enlaces: LIBREFOLIO_PUBLIC_URL no está definida, o no puede iniciar un enlace.",
+        "EMAIL_LINK_INVALID": "Este enlace ya no funciona: crea uno nuevo.",
+        "EMAIL_ACCOUNT_INACTIVE": "La cuenta no está activa: actívala antes de enviarle un enlace de restablecimiento.",
+        "EMAIL_RECIPIENT_REQUIRED": "Escribe la dirección a la que enviar la invitación.",
+        "EMAIL_RECIPIENT_NOT_ALLOWED": "Un enlace de restablecimiento solo va a la dirección de su cuenta.",
+        "EMAIL_RECIPIENT_INVALID": "No es una sola dirección de correo válida.",
+        "EMAIL_RATE_LIMITED": "Se alcanzó el límite de correos por hora: inténtalo de nuevo en {minutes} min.",
+        "RECIPIENT_REFUSED": "El servidor SMTP ha rechazado la dirección del destinatario.",
+        "generic": "No se pudo enviar el correo."
+      },
+      "languageLabel": "Idioma del correo",
+      "languageInstance": "El idioma de la instancia"
+    },
+    "forgot": {
+      "label": "Nombre de usuario o dirección de correo",
+      "submit": "Enviarme un enlace de restablecimiento",
+      "sending": "Enviando…",
+      "accepted": "Si coincide una cuenta activa, su propietario recibe un correo con un enlace para elegir una contraseña nueva. Revisa la bandeja de entrada y el spam: el enlace funciona durante 30 minutos.",
+      "errors": {
+        "unavailable": "Ahora esta instancia no puede enviar correos: pregunta a su administrador.",
+        "EMAIL_RATE_LIMITED": "Demasiadas solicitudes por ahora: inténtalo de nuevo en {minutes} min.",
+        "generic": "No se pudo enviar la solicitud: inténtalo de nuevo."
+      }
+    }
+  }
+}

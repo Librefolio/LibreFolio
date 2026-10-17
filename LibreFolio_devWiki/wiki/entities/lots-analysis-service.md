@@ -2,7 +2,7 @@
 title: "Lots Analysis Service"
 category: entity
 type: service
-updated: 2026-10-12
+updated: 2026-10-17
 tags: [backend, fifo, lots, orchestration, fx, wac, average-cost, data-quality, financial-math]
 related:
   - entities/fifo-lot-engine
@@ -13,6 +13,7 @@ related:
   - decisions/financial-math-one-home
   - problems/fifo-income-silently-dropped-after-full-close
   - problems/zero-purchase-cost-foreign-asset-paid-in-report-currency
+  - problems/lots-failed-when-a-transfer-crossed-the-broker-scope
   - concepts/fifo-lot-tracking
 ---
 
@@ -47,7 +48,8 @@ T-1's cut, 1 172 at `5d0585595`), plus its math in `backend/app/services/financi
 - Maps engine `EconomicAllocationGroup`/`TargetOperationAllocation`/`EconomicLotAllocation` audit objects into
   the public DTO's inline 3-level audit shape (`backend/app/schemas/portfolio.py`).
 - Computes net summary and net history series from the engine's per-lot economic accumulators.
-- Maps internal `analysis_status` (`COMPLETE|DEGRADED|FAILED`) to the public `calculation_status` field.
+- Maps internal `analysis_status` (`COMPLETE|DEGRADED|FAILED`) to the public `calculation_status` field. **Since
+  2026-10-17 (J-12, N81)** a `FAILED` analysis withholds every lot figure — see Design Notes.
 - **WAC lines (since 2026-10-07):** `_compute_average_cost_lines()` makes **one** `compute_average_costs()` call — one
   position per broker plus `"__all__"` (every broker in scope pooled), in the analysis target currency,
   `asset_leg=False`. `average_cost_points()` (`financial_math/lots/average_cost_lines.py` since 2026-10-12, before a
@@ -85,6 +87,28 @@ T-1's cut, 1 172 at `5d0585595`), plus its math in `backend/app/services/financi
   rate are unavailable (`None`) from that date, the analysis turns `DEGRADED` and the pair is reported; never the
   native amount. The remaining fallbacks (summary fields, the Gantt `unit_price`, economic events, trade weights) were
   closed in B3b the same day (`59a7c3e2f`, "withhold pools without a rate").
+- **A FAILED replay withholds its figures (2026-10-17, J-12, decision N81 option A).** Until then a `FAILED` analysis
+  ("warn but show", 2026-07-22) returned the lots of a replay that no longer matched the account — a sale beyond the
+  quantity held left a lot of 4 open where 1 was held. Now, right after the engine, `shown_analyses` keeps only the WAC
+  lines (`_AVERAGE_COST_ANALYSES`: they come from the transactions, not the replay): every lot section, `price_history`
+  included (one series per lot), and the orphan totals are `None`. `data_quality` keeps the issues that fail the replay
+  and the WAC-line gaps of `_report_gaps()`, and drops the issues about withheld things (reference prices, the
+  `*_NO_ELIGIBLE_LOTS` orphans, `CURRENT_PRICE_ASSUMED_AT_COST`, the rates of the lot figures). Each failing issue gets
+  `transaction_date` and `fails_analysis: true` in `message_params`; its `transaction_id` is the row to fix — for a
+  transfer, the giving leg (`raw_transaction_ids[0]` in the engine, no longer the pair's id). The AI Export reads the
+  codes back with `analysis_failure_codes()` and declares the asset (`failed_lot_reconstructions`) instead of exporting
+  its lots. The panel half (Y) and the decision record: [[decisions/fifo-v4-gross-net-status-model]], revision 17/10.
+- **The performance history values the days at cost too (2026-10-17, J-33).** Since CP-7b (J-17 decision (a)) the value
+  and return histories valued a day with no observation on or before it at cost, but `build_performance_history()`
+  read a NAV only on a day with a mark: its first NAV was the first mark, the TWRR's base, so the move from cost to the
+  first price fell outside the TWRR chain while the ROI counted it, and a transfer on such a day emptied ROI and TWRR.
+  Now the NAV of those days is the open LONG fragments at cost (opening rate), and a transfer moves the cost of its
+  units (an edge leg: its cost basis in, the cost of the pieces it closes out; a re-run transfer: its pair's pieces).
+  A costless adjustment still counts 0 there, as in the value history: J-35 is the developer's open question.
+- **A transfer crossing the scope no longer fails the asset (2026-10-16/17).** J-10 (N76) reads a leg whose partner
+  sits outside the broker scope at the scope's edge ([[problems/lots-failed-when-a-transfer-crossed-the-broker-scope]]);
+  J-47 hands the engine the arriving leg dated after `date_to` (`_load_late_transfer_legs()`, `replay_until`), so a
+  transfer still in transit stays `IN_TRANSIT` instead of failing on `TRANSFER_PAIR_MISSING`.
 
 ## Source files
 
@@ -96,6 +120,8 @@ T-1's cut, 1 172 at `5d0585595`), plus its math in `backend/app/services/financi
 | WAC lines (since 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
 | Public DTO | `backend/app/schemas/portfolio.py` |
 | Service-level tests | `backend/test_scripts/test_services/test_financial/test_lots_analysis_service.py` |
+| FAILED withholding (J-12) | `backend/test_scripts/test_services/test_financial/test_lots_failed_analysis_withholding.py`, `backend/test_scripts/test_services/test_ai_export_fifo_failed_reconstruction.py` |
+| Scope edge (J-10) | `backend/app/services/financial_math/lots/scope_boundary.py` |
 | Pure tests (WAC lines and their gaps) | `backend/test_scripts/test_services/test_lots_analysis_pure.py` |
 | Lots WAC lines of the #32 case (L1–L3) | `backend/test_scripts/test_services/test_financial/test_portfolio_cost_currency.py` |
 | Developer docs | `mkdocs_src/docs/developer/backend/transactions/lots_analysis_service.md` |

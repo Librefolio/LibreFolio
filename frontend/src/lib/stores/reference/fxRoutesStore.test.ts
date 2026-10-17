@@ -5,7 +5,7 @@
  * what `getConfiguredCurrencySet()` returns. A currency belongs there when the user
  * can actually convert to it, and that is true only for the two ENDPOINTS of a
  * configured pair: syncing a chain stores the composed rate of its own pair
- * (`fx.py` inserts `FxRate` on `route.base/route.quote`), while the rates of its
+ * (`services/fx/sync.py` inserts `FxRate` on `route.base/route.quote`), while the rates of its
  * legs stay in memory. So the currency a chain passes through (GBP in
  * EUR→GBP→USD) is not convertible, and offering it lets the user pick a currency
  * whose every amount then fails to convert. It becomes convertible — and belongs
@@ -14,14 +14,13 @@
  * Node env. `$lib/api` is mocked: the route list is the whole input, owned by each
  * case. The store keeps module-level state, so every case imports a fresh module
  * (`vi.resetModules()`) instead of trusting a reset helper to clear everything.
+ *
+ * Importing the store's graph cold (down to the generated API schemas) overran a case's 5 s under load (X-R21):
+ * `beforeAll` does it once, on its own budget, and a case's fresh import then only re-evaluates.
+ * Each case mocks `$lib/api` with its own `listRoutes` (`vi.doMock`): a late load from an earlier case never counts here.
+ * `afterEach` awaits `vi.dynamicImportSettled()`, so no import still in flight binds the next case's mock.
  */
-import {beforeEach, describe, expect, it, vi} from 'vitest';
-
-const {listRoutes} = vi.hoisted(() => ({listRoutes: vi.fn()}));
-
-vi.mock('$lib/api', () => ({
-    zodiosApi: {list_routes_api_v1_fx_providers_routes_get: listRoutes},
-}));
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
 type Step = {from: string; to: string; provider: string};
 
@@ -47,9 +46,21 @@ const GBP_JPY_DIRECT = route('GBP', 'JPY', [{from: 'GBP', to: 'JPY', provider: '
 /** A MANUAL-only pair: rates are typed in by hand, the pair is still configured. */
 const CHF_EUR_MANUAL = route('CHF', 'EUR', [{from: 'CHF', to: 'EUR', provider: 'MANUAL'}], 999);
 
+/**
+ * Mocks `$lib/api` for the next fresh graph with a `listRoutes` of its own, answering exactly
+ * these routes. A store imported by an earlier case keeps the function it was bound to.
+ */
+function mockListRoutes(items: unknown[]) {
+    const listRoutes = vi.fn().mockResolvedValue({items});
+    vi.doMock('$lib/api', () => ({
+        zodiosApi: {list_routes_api_v1_fx_providers_routes_get: listRoutes},
+    }));
+    return listRoutes;
+}
+
 /** A fresh store module, loaded once from exactly these routes. */
 async function storeLoadedWith(items: unknown[]) {
-    listRoutes.mockResolvedValue({items});
+    const listRoutes = mockListRoutes(items);
     const store = await import('./fxRoutesStore');
     await store.ensureFxRoutesLoaded();
     // Positive control: the sets below come from this response, not from an empty
@@ -58,9 +69,20 @@ async function storeLoadedWith(items: unknown[]) {
     return store;
 }
 
+// The warm-up imports the very graph the cases import (`$lib/api` mocked the same way, so the real
+// client is never transformed). 60 s is a budget for the cold transform alone, as in GapFixStep and
+// ParseDetailModal. Its mock is never called, and the store it loads is discarded by the first reset.
+beforeAll(async () => {
+    mockListRoutes([]);
+    await import('./fxRoutesStore');
+}, 60_000);
+
 beforeEach(() => {
     vi.resetModules();
-    listRoutes.mockReset();
+});
+
+afterEach(async () => {
+    await vi.dynamicImportSettled();
 });
 
 describe('fxRoutesStore — getConfiguredCurrencySet() lists route endpoints only', () => {

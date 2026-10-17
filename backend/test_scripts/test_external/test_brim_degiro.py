@@ -18,6 +18,9 @@ What is pinned:
   ``;``) and the orders list (at least 16 columns, ``isin`` in the 4th); the other samples and
   the near misses refused; DEGIRO detected over the generic CSV; ``cannot_parse_reason``
   agreeing with ``can_parse`` (D8);
+- A2. the refusals with a code the import wizard translates (workstream W, lot K2a — backlog
+  C-70, part a): ``degiro_csv_only``, ``file_unreadable``, ``no_movement_rows`` and
+  ``degiro_not_account_statement``, each with the English sentence of D8 unchanged;
 - B. the two samples line by line: the Dutch collage (57 transactions, two notices) and the
   synthetic English statement (17 transactions, one notice), compared as multisets, never by
   position; dates, descriptions, tags, assets, notices and their evidence;
@@ -59,10 +62,10 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import pytest
 
 from backend.app.config import PROJECT_ROOT
-from backend.app.schemas.brim import BRIMNotice, BRIMParseOutput, is_fake_asset_id
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.provider_registry import BRIMProviderRegistry
+from backend.app.schemas.brim import BRIMNotice, BRIMParseOutput, BRIMRefusal, is_fake_asset_id
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
@@ -898,6 +901,152 @@ class TestRecognition:
         broken = [problem for path in paths if (problem := _reason_problem(plugin, path, accepted[path], labels[path]))]
 
         assert not broken, f"cannot_parse_reason breaks its contract on {len(broken)} of {len(paths)} path(s): {broken}"
+
+
+# =============================================================================
+# A2. THE REFUSALS CARRY A CODE THE WIZARD TRANSLATES (workstream W, lot K2a — backlog C-70, part a)
+# =============================================================================
+
+# The sentences of ``cannot_parse_reason`` (D8), which lot K2a keeps word for word, and the code each one is given.
+REASON_CSV_ONLY = "only the CSV export is read: download the Account Statement as CSV"
+REASON_UNREADABLE = "the file could not be read"
+REASON_NO_ROWS = "the file has no movement rows"
+REASON_NOT_A_STATEMENT = "this is not a DEGIRO Account Statement: expected 12 columns with the ISIN fifth, unnamed amount columns ninth and eleventh, and dates as DD-MM-YYYY"
+REFUSAL_CODES = {
+    REASON_CSV_ONLY: "degiro_csv_only",
+    REASON_UNREADABLE: "file_unreadable",
+    REASON_NO_ROWS: "no_movement_rows",
+    REASON_NOT_A_STATEMENT: "degiro_not_account_statement",
+}
+
+# A CSV of another layout: the generic CSV's own kind of file, a date and a type column.
+GENERIC_CSV_CASE = FileCase("generic-csv", "export.csv", b"date,type,amount\n2025-09-22,BUY,-1000.00\n2025-09-23,DEPOSIT,500.00\n", False)
+# The near misses of A that are a .csv with content, and the generic CSV: CSV files whose layout is not the Account Statement's.
+NOT_A_STATEMENT_CASES = [pytest.param(case, id=case.id) for case in (*RECOGNITION_CASES, GENERIC_CSV_CASE) if not case.accepted and case.name.lower().endswith(".csv") and case.content]
+
+
+def _oversized_cell_bytes() -> bytes:
+    """The English statement under a first line holding one cell longer than the ``csv`` module reads (``csv.field_size_limit()``).
+
+    The only file DEGIRO cannot read today: ``_read_file_head`` swallows every I/O error, so a missing file or a folder named like a
+    CSV reads as an empty head, refused for having no movement rows; the reader of the head raises on a cell like this one.
+    """
+    return b"x" * (csv.field_size_limit() + 1) + b"\r\n" + EN_STATEMENT
+
+
+def _k2a_files(folder: Path) -> List[Path]:
+    """The synthetic files of A2 that A does not write: another extension, a cell the reader refuses, a header alone, a generic CSV."""
+    files = {"xlsx-name/Account.xlsx": EN_STATEMENT, "txt-name/Account.txt": EN_STATEMENT, "oversized-cell/Account.csv": _oversized_cell_bytes(), "header-only/Account.csv": _statement_bytes(EN_HEADER, [])}
+    paths = []
+    for relative, content in files.items():
+        path = folder / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+        paths.append(path)
+    return [*paths, GENERIC_CSV_CASE.write(folder)]
+
+
+def _refusal_of(path: Path, reason: str) -> BRIMRefusal:
+    """DEGIRO's ``cannot_parse_detail`` about ``path``, after the premises: it refuses the file, with the sentence ``reason`` of D8."""
+    plugin = _plugin()
+    assert plugin.can_parse(path) is False, f"premise: DEGIRO refuses {path.name}"
+    assert plugin.cannot_parse_reason(path) == reason, f"premise: DEGIRO's English sentence about {path.name} is {reason!r}"
+
+    detail = plugin.cannot_parse_detail(path)
+
+    assert isinstance(detail, BRIMRefusal), f"DEGIRO answers {detail!r}, not a BRIMRefusal"
+    return detail
+
+
+class TestRefusalCodes:
+    """A2 — workstream W, lot K2a (backlog C-70, part a): DEGIRO refuses a file with a code the import wizard translates.
+
+    The wizard shows the refusal of the broker's default plugin in the UI language: ``importWizard.parseRefusal.<code>`` with the
+    refusal's context as values, else the plugin's English sentence (``resolveParseRefusalMessage``). DEGIRO overrides
+    ``cannot_parse_reason`` only, so today its refusal is the default one: that sentence without a code, in English for every user.
+
+    The contract: ``cannot_parse_detail(p)`` is None exactly when ``can_parse(p)``; otherwise its ``message`` is ``cannot_parse_reason(p)``,
+    the sentence of D8 unchanged, its ``context`` is empty, and its code follows the cause: another extension than ``.csv``,
+    ``degiro_csv_only``; a file the reader cannot read, ``file_unreadable``; fewer than two rows, ``no_movement_rows``; a CSV whose layout
+    is not the Account Statement's, ``degiro_not_account_statement``. The four keys, with the generic CSV's three, are checked in
+    ``frontend/src/lib/features/transactions/import/defaultPluginCheck.test.ts``.
+
+    Every input is a sample or is written in ``tmp_path``, and every code is written by hand. Red until DEGIRO gives its codes, but the guard.
+    """
+
+    @pytest.mark.parametrize("name", ["Account.xlsx", "Account.txt"])
+    def test_another_extension_is_degiro_csv_only(self, name: str, tmp_path: Path):
+        """The Account Statement itself, saved under another extension: only the extension is refused."""
+        path = tmp_path / name
+        path.write_bytes(EN_STATEMENT)
+
+        detail = _refusal_of(path, REASON_CSV_ONLY)
+
+        assert (detail.code, detail.message, detail.context) == ("degiro_csv_only", REASON_CSV_ONLY, {})
+
+    def test_a_file_the_reader_cannot_read_is_file_unreadable(self, tmp_path: Path):
+        path = tmp_path / "Account.csv"
+        path.write_bytes(_oversized_cell_bytes())
+
+        detail = _refusal_of(path, REASON_UNREADABLE)
+
+        assert (detail.code, detail.message, detail.context) == ("file_unreadable", REASON_UNREADABLE, {})
+
+    @pytest.mark.parametrize("content", [pytest.param(b"", id="empty-file"), pytest.param(_statement_bytes(EN_HEADER, []), id="header-only")])
+    def test_fewer_than_two_rows_is_no_movement_rows(self, content: bytes, tmp_path: Path):
+        path = tmp_path / "Account.csv"
+        path.write_bytes(content)
+
+        detail = _refusal_of(path, REASON_NO_ROWS)
+
+        assert (detail.code, detail.message, detail.context) == ("no_movement_rows", REASON_NO_ROWS, {})
+
+    @pytest.mark.parametrize("case", NOT_A_STATEMENT_CASES)
+    def test_a_csv_of_another_layout_is_degiro_not_account_statement(self, case: FileCase, tmp_path: Path):
+        """The near misses of A, and the generic CSV's own kind of file."""
+        path = case.write(tmp_path)
+
+        detail = _refusal_of(path, REASON_NOT_A_STATEMENT)
+
+        assert (detail.code, detail.message, detail.context) == ("degiro_not_account_statement", REASON_NOT_A_STATEMENT, {})
+
+    @pytest.mark.parametrize("case", ACCEPTED_CASES)
+    def test_a_file_it_reads_has_no_refusal(self, case: FileCase, tmp_path: Path):
+        """Guard, green before the change too: the Account Statement and the orders list, in any language, have no refusal."""
+        path = case.write(tmp_path)
+        plugin = _plugin()
+        assert plugin.can_parse(path) is True, f"premise: DEGIRO reads {case.id}"
+
+        assert plugin.cannot_parse_detail(path) is None
+
+    def test_every_refusal_carries_the_code_of_its_cause(self, tmp_path: Path):
+        """On every file of ``sample_reports/`` (recursive, every extension), every synthetic case of A and A2, a missing path and a folder
+        named like a CSV: no refusal exactly when ``can_parse``; otherwise the sentence of D8, the code ``REFUSAL_CODES`` gives it, an empty context."""
+        corpus = sorted(path for path in SAMPLE_DIR.rglob("*") if path.is_file())
+        synthetic = [*(case.write(tmp_path / "cases") for case in RECOGNITION_CASES), *_k2a_files(tmp_path / "k2a")]
+        paths = [*corpus, *synthetic, *_unreadable_paths(tmp_path / "unreadable")]
+        labels = {path: str(path.relative_to(SAMPLE_DIR) if path.is_relative_to(SAMPLE_DIR) else path.relative_to(tmp_path)) for path in paths}
+        plugin = _plugin()
+        answers = {path: (plugin.can_parse(path), plugin.cannot_parse_reason(path)) for path in paths}
+        causes = {REFUSAL_CODES[reason] for accepted, reason in answers.values() if not accepted and reason in REFUSAL_CODES}
+        # Positive controls: DEGIRO reads some of these files, and the others cover every cause, so no line of the table is vacuous.
+        assert any(accepted for accepted, _ in answers.values()), "premise: DEGIRO reads some of these files"
+        assert causes == set(REFUSAL_CODES.values()), f"premise: the refused files cover every cause, they cover {sorted(causes)}"
+
+        problems = []
+        for path in paths:
+            accepted, reason = answers[path]
+            detail = plugin.cannot_parse_detail(path)
+            answered = (detail.code, detail.message, detail.context) if isinstance(detail, BRIMRefusal) else detail
+            if accepted:
+                if detail is not None:
+                    problems.append(f"{labels[path]}: read, and yet refused with {answered!r}")
+            elif reason not in REFUSAL_CODES:
+                problems.append(f"{labels[path]}: a sentence this contract does not know, {reason!r}")
+            elif answered != (REFUSAL_CODES[reason], reason, {}):
+                problems.append(f"{labels[path]}: {answered!r}, expected {(REFUSAL_CODES[reason], reason, {})!r}")
+
+        assert not problems, f"{len(problems)} of {len(paths)} answer(s) of DEGIRO's cannot_parse_detail miss the code of their cause, the first ones: {problems[:3]}"
 
 
 # =============================================================================

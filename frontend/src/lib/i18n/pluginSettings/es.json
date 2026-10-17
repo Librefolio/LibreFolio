@@ -1,0 +1,71 @@
+{
+  "pluginSettings": {
+    "tab": {
+      "label": "Plugins",
+      "title": "Ajustes de los plugins",
+      "intro": "Lo que piden las fuentes de precios y de tipos de cambio. Los ajustes personales son solo tuyos; los de la instancia valen para todos, y solo un administrador los cambia.",
+      "empty": "Ningún plugin instalado pide ajustes."
+    },
+    "loadError": "No se pudieron cargar los ajustes de los plugins.",
+    "families": {
+      "asset": "Precios",
+      "fx": "Tipos de cambio"
+    },
+    "status": {
+      "configured": "Configurado",
+      "notConfigured": "Por configurar"
+    },
+    "scope": {
+      "user": "Personal",
+      "system": "Toda la instancia"
+    },
+    "configure": "Configurar",
+    "modal": {
+      "title": "Configurar {plugin}",
+      "none": "Este plugin no tiene ajustes."
+    },
+    "secret": {
+      "set": "Establecido",
+      "setOn": "Establecido el {date}",
+      "unset": "No establecido",
+      "unreadable": "Guardado, pero la clave de esta instancia no puede leerlo. Si un administrador puede volver a poner la clave anterior, eso va primero; si no, vuelve a introducirlo.",
+      "replace": "Reemplazar",
+      "clear": "Borrar",
+      "willClear": "Se borrará al guardar.",
+      "placeholder": "Introduce el valor",
+      "writeOnly": "Una vez guardado, no se vuelve a mostrar."
+    },
+    "field": {
+      "locked": "Definido por el servidor",
+      "lockedBy": "Definido por la variable del servidor {variable}",
+      "adminOnly": "Solo un administrador puede cambiarlo.",
+      "invalidEnv": "La variable del servidor que lo define no es válida: el plugin sigue sin configurar hasta que se corrija.",
+      "invalidEnvBy": "La variable del servidor {variable} no es válida: el plugin sigue sin configurar hasta que se corrija.",
+      "invalidStored": "El valor guardado ya no es válido: se aplica el predeterminado.",
+      "useDefault": "Usar el predeterminado",
+      "willUseDefault": "El valor guardado se borrará al guardar: se aplicará el predeterminado."
+    },
+    "problems": {
+      "required": "Introduce un valor",
+      "number": "Introduce un número",
+      "integer": "Introduce un número entero",
+      "below": "Al menos {limit}",
+      "above": "Como máximo {limit}",
+      "tooShort": "Al menos {limit} caracteres",
+      "tooLong": "Como máximo {limit} caracteres",
+      "option": "Elige una de las opciones"
+    },
+    "refusals": {
+      "UNKNOWN_FIELD": "Este ajuste ya no existe: recarga la página.",
+      "FORBIDDEN_SCOPE": "Solo un administrador puede cambiar este ajuste.",
+      "LOCKED_BY_ENV": "Lo define una variable del servidor: no se puede cambiar aquí.",
+      "INVALID_VALUE": "El valor no es válido para este ajuste."
+    },
+    "form": {
+      "refused": "No se guardó nada: revisa los ajustes de abajo.",
+      "conflict": "Estos ajustes cambiaron mientras tanto: se han recargado, guarda de nuevo.",
+      "keyUnavailable": "Los secretos no se pueden guardar: la clave de esta instancia no se puede usar (consulta las comprobaciones de la configuración).",
+      "saveFailed": "No se pudieron guardar los ajustes."
+    }
+  }
+}

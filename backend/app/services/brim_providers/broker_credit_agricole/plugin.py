@@ -81,7 +81,8 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import structlog
 
-from backend.app.db.models import TransactionType
+from backend.app.db.models import Transaction, TransactionType
+from backend.app.db.precision import round_computed_value
 from backend.app.schemas.brim import (
     FAKE_ASSET_ID_BASE,
     BRIMEvidence,
@@ -92,11 +93,12 @@ from backend.app.schemas.brim import (
     BRIMValidationIssue,
 )
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers import _brim_io as io
 from backend.app.services.brim_providers._brim_output import attach_maturity_notices
-from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
+from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -1071,7 +1073,9 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                 tx_type = TransactionType.ADJUSTMENT
                 final_qty = abs(qty) if qty is not None else Decimal("0")
                 if price is not None and final_qty > 0:
-                    unit_cost = (price / Decimal(100)) if _is_bond(name) else price
+                    # A bond's price is a percentage of its nominal: the per-unit cost is computed, so it is rounded
+                    # explicitly to what the column keeps (C-97, decision D6); another price is the file's, as read.
+                    unit_cost = round_computed_value(price / Decimal(100), Transaction, "cost_basis_override") if _is_bond(name) else price
                     cost_override = Currency(code=currency, amount=unit_cost)
                     cost_basis_mode = "manual"
                 cash = None

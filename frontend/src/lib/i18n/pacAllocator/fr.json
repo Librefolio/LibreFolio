@@ -196,7 +196,8 @@
           "weight": "Poids",
           "subtitle": "Combien pèse aujourd’hui chacun de ces actifs chez les courtiers cochés, en ne comptant que ces actifs : ensemble, ils font 100 %. Les liquidités et les autres actifs que vous détenez ne comptent pas.",
           "changeColumn": "Cible",
-          "confirmApply": "Remplacer"
+          "confirmApply": "Remplacer",
+          "valuedAtCost": "valorisé au coût · aucun prix"
         },
         "fx": {
           "intro": "Les taux dont le calcul a besoin, un pour chaque paire de devises en jeu. « Auto » utilise le taux enregistré dans LibreFolio, « Manuel » un taux à vous.",
@@ -425,7 +426,11 @@
           "structureInvalid": "Un champ ne respecte pas le contrat du planificateur : {path}.",
           "targetInvalid": "La cible n’est pas un nombre à partir de 0.",
           "targetTotalNotHundred": "Le total des cibles est de {total} %, il doit être de 100 % (contrôle).",
-          "valuationCurrencyMissing": "La devise de valorisation est manquante."
+          "valuationCurrencyMissing": "La devise de valorisation est manquante.",
+          "selectedNegative": "« Montant à utiliser » ne peut pas être négatif.",
+          "declaredNegative": "« Liquidités déclarées » ne peut pas être négatif.",
+          "contributionAmountNegative": "Le montant du versement ne peut pas être négatif.",
+          "modeStepNotPositive": "Le pas d’ordre doit être supérieur à zéro."
         },
         "removal": {
           "cash": "Ligne de liquidités {broker} · {currency}",
@@ -451,8 +456,8 @@
             "finalShare": "Part après le plan",
             "targetShareHelp": "La part que vous avez choisie pour cet actif à l’étape Cibles.",
             "finalShareHelp": "La part de l’actif dans la valeur de tous ces actifs après le plan. Comparez-la à la part cible pour voir comment l’équilibre entre les actifs change.",
-            "targetValueHelp": "Ce que vaudrait l’actif avec exactement sa part cible : part cible × base des cibles (déjà investi dans ces actifs plus les liquidités utilisables).",
-            "finalValueHelp": "Ce que vaut l’actif après le plan : les unités que vous aviez plus celles achetées, au prix coté et, si nécessaire, au taux de l’étape Change."
+            "targetValueHelp": "Ce que vaudrait l’actif avec exactement sa part cible : part cible × base des cibles. Dans un PAC, qui part de zéro, la base est constituée des liquidités utilisables.",
+            "finalValueHelp": "Ce que vaut l’actif après le plan : les unités que le plan achète, au prix coté et, si nécessaire, au taux de l’étape Change. Dans un PAC, qui part de zéro, ce montant est égal à la valeur achetée."
           },
           "badges": {
             "decimalVerified": "Vérifié en Decimal",

@@ -13,7 +13,7 @@ from sqlalchemy import delete
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.api.v1 import fx as fx_api
+from backend.app.api.v1.fx import currencies as fx_api
 from backend.app.config import get_settings
 from backend.app.db.models import FxRate
 from backend.app.db.session import get_async_engine

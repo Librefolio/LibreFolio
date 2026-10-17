@@ -36,12 +36,15 @@
         assets: AssetSyncItem[];
         /** FX pair slugs to sync (only configured ones) */
         fxPairs: string[];
+        /** The assets and pairs whose shown data already holds a stored row in the range: the dialog warns (C-66). */
+        assetsWithDataInRange?: number[];
+        fxPairsWithDataInRange?: string[];
         /** Called after all syncs complete */
         onsynced: (detail: PageSyncCompletion) => void;
         onclose: () => void;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, assets, fxPairs, onsynced, onclose}: Props = $props();
+    let {open = $bindable(), dateStart, dateEnd, assets, fxPairs, assetsWithDataInRange = [], fxPairsWithDataInRange = [], onsynced, onclose}: Props = $props();
 
     let syncModalBase: SyncModalBase | undefined = $state(undefined);
     let acceptedInCurrentRun = false;
@@ -152,6 +155,7 @@
             targetIds: assetTargetIds,
             resultRow: assetResultRow,
             countLabel: $t('assets.sync.assetsCount') ?? 'assets',
+            existingIds: assetsWithDataInRange.map(String),
         },
         {
             id: 'fx',
@@ -160,6 +164,7 @@
             targetIds: fxPairs,
             resultRow: fxResultRow,
             countLabel: $t('fx.sync.pairsCount') ?? 'pairs',
+            existingIds: fxPairsWithDataInRange,
         },
     ]);
 </script>
@@ -205,7 +210,7 @@
     <span class="inline-flex items-center gap-0.5 whitespace-nowrap">
         <span class="emoji-flag">{getCurrencyInfo(pairBase).flag_emoji}</span>
         {pairBase}
-        <ArrowLeftRight size={10} class="shrink-0 text-gray-400" />
+        <ArrowLeftRight size={10} class="shrink-0 text-lf-muted" />
         <span class="emoji-flag">{getCurrencyInfo(pairQuote).flag_emoji}</span>
         {pairQuote}
     </span>
@@ -224,7 +229,7 @@
                 {/if}
             </span>
             {#if i < chain.length - 1}
-                <span class="text-gray-400 text-[8px]">→</span>
+                <span class="text-lf-muted text-[8px]">→</span>
             {/if}
         {/each}
     </span>

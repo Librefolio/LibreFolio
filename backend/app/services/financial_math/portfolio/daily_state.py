@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import bisect
 from collections import defaultdict
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -11,13 +13,12 @@ from decimal import Decimal
 import structlog
 
 from backend.app.db.models import Transaction, TransactionType
-from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.financial_math.average_cost import (
     AverageCost,
     CostEffect,
     CostStep,
 )
-from backend.app.services.financial_math.native_cash import NativeCash
+from backend.app.services.financial_math.native_cash import NativeCash, change_days
 from backend.app.services.financial_math.portfolio.classifier import _CASH_LINKED_TYPES, _LINKED_TYPES
 from backend.app.services.financial_math.portfolio.models import (
     AcquisitionFundingContribution,
@@ -26,6 +27,7 @@ from backend.app.services.financial_math.portfolio.models import (
     DailyPortfolioState,
     DailyPositionState,
     EngineEndState,
+    InternalAssetTransfer,
     InTransitInterval,
     PnlCandleContribution,
     PortfolioCalculationResult,
@@ -38,6 +40,8 @@ from backend.app.services.financial_math.portfolio.models import (
 )
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.valuation import compute_holding_value
+from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 
 logger = structlog.get_logger(__name__)
 
@@ -54,9 +58,64 @@ def _cumulative_split_ratio(history: SplitHistory, reference_date: date_type, va
     return ratio, adjusted
 
 
+def _calendar(first: date_type, last: date_type) -> list[date_type]:
+    """Every day from ``first`` to ``last``, both included."""
+    return [first + timedelta(days=offset) for offset in range((last - first).days + 1)]
+
+
+def _valued_at_cost(cost_value: Decimal) -> ValuationResult:
+    """A holding with no price at all, counted at its book cost: a declared estimate, not a price (J-17)."""
+    return ValuationResult(
+        market_value=cost_value,
+        source=ValuationSource.ESTIMATED_AT_COST,
+        effective_unit_price=None,
+        effective_currency=None,
+        reference_date=None,
+        reference_unit_price=None,
+        reference_currency=None,
+    )
+
+
 # =============================================================================
 # DAILY STATE BUILDER — Pure function, no I/O
 # =============================================================================
+
+
+def _move_linked_cash(ctxn: ClassifiedTransaction, amount: Decimal, K: dict[int, Decimal], R: dict[int, Decimal], transfer_splits: dict[int, tuple[Decimal, Decimal]] | None) -> None:
+    """The pools of one leg of a linked-internal cash transfer or currency conversion (J2, D-MF4).
+
+    The departure leaves R first, then K, and records its ``(from R, amount)`` by its id; the arrival brings back what
+    the departure took from each pool. The two legs' amounts can differ — a conversion's spread, the rate move while the
+    cash travels, two brokers owned at different shares — and the engine's P&L already counts that gap (no leg is an
+    external flow): it is booked as a result, a gain to R, a loss out of R first and then of K, as a FEE.
+    An arrival whose departure is unknown arrives in K.
+    """
+    zero = Decimal("0")
+    tx = ctxn.tx
+    bid = tx.broker_id
+    if tx.amount < 0:
+        from_r = min(amount, max(R[bid], zero))
+        R[bid] -= from_r
+        K[bid] -= amount - from_r
+        if transfer_splits is not None and tx.id is not None:
+            transfer_splits[tx.id] = (from_r, amount)
+    elif tx.amount > 0:
+        departure = transfer_splits.pop(ctxn.paired_tx.id, None) if transfer_splits is not None and ctxn.paired_tx is not None else None
+        if departure is None or departure[1] == zero:
+            K[bid] += amount
+            return
+        from_r, sent = departure
+        K[bid] += sent - from_r
+        R[bid] += from_r + (amount - sent)
+        if R[bid] < zero:
+            K[bid] += R[bid]
+            R[bid] = zero
+
+
+def _is_linked_cash_arrival(ctxn: ClassifiedTransaction) -> bool:
+    """The incoming leg of a linked-internal CASH_TRANSFER or FX_CONVERSION."""
+    tx = ctxn.tx
+    return ctxn.classification == "linked_internal" and tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION) and tx.amount is not None and tx.amount > 0
 
 
 class DailyStateBuilder:
@@ -88,7 +147,7 @@ class DailyStateBuilder:
         target_currency: str,
         date_from: date_type,
         date_to: date_type,
-        frame_start: date_type | None = None,
+        period_start: date_type | None = None,
         split_linked_tx_ids: set[int] | None = None,
         split_history: dict[int, SplitHistory] | None = None,
         mark_series: dict[int, AssetPriceSeries] | None = None,
@@ -120,9 +179,11 @@ class DailyStateBuilder:
         # needed but could not get (pair "FROM/TO" -> dates). Reset by build().
         self._cost_cursor: dict[tuple[int, int], int] = {}
         self._missing_fx: dict[str, set[date_type]] = defaultdict(set)
-        # frame_start: first day to emit DailyPortfolioState. Before this = pre-frame (accounting only).
-        # None → same as date_from (no pre-frame, full evaluation from start).
-        self.frame_start = frame_start if frame_start is not None else date_from
+        # period_start: the day whose end the position_states_start snapshot is taken at (MF-A: the start of the
+        # caller's period, while the states run from date_from). None → date_from.
+        self.period_start = period_start if period_start is not None else date_from
+        # The first day replayed: date_from, or an earlier movement's date (set by build()).
+        self._replay_from = date_from
         self.split_history: dict[int, SplitHistory] = {}
         for asset_id, history in (split_history or {}).items():
             unique_by_event_id: dict[int, SplitRecord] = {}
@@ -149,13 +210,12 @@ class DailyStateBuilder:
         # off ordinary reports unless requested" convention.
         self.compute_acquisition_funding = compute_acquisition_funding
 
-    def build(self) -> PortfolioCalculationResult:  # noqa: C901 — TODO(P2-refactor): monolithic daily-replay engine; extract pre-frame/frame stages
-        """Build daily states for [frame_start, date_to] + position snapshots + period accumulators.
+    def build(self) -> PortfolioCalculationResult:  # noqa: C901 — TODO(P2-refactor): monolithic daily-replay engine; extract the day's stages
+        """Build daily states for [date_from, date_to] + position snapshots + period accumulators.
 
-        Architecture (pre-frame / frame split):
-        - Pre-frame [date_from, frame_start): update accumulators only (cash, qty, cost pools, K/R/W).
-          No market evaluation, no FX lookups for prices, no state emission.
-        - Frame [frame_start, date_to]: full daily evaluation + DailyPortfolioState emission.
+        One replay, with the same rules every day, from the earliest movement (or date_from) to date_to: a movement
+        dated before date_from is replayed like any other — cash, quantities, cost pools, capital and the K/R/W pools —
+        and only the states from date_from on are emitted. A day nothing changes on carries the previous state.
         """
         zero = Decimal("0")
 
@@ -211,7 +271,7 @@ class DailyStateBuilder:
             ecf_by_date_by_broker[(flow_date, receiver_bid)] += flow_value
             internal_flow_dates.add(flow_date)
 
-        # ── 4. Accumulators (shared across pre-frame and frame) ──
+        # ── 4. Accumulators ──
         states: list[DailyPortfolioState] = []
         cumulative_cash = zero
         cumulative_ecf = zero
@@ -228,197 +288,53 @@ class DailyStateBuilder:
         K: dict[int, Decimal] = defaultdict(lambda: zero)  # capital pool per broker
         R: dict[int, Decimal] = defaultdict(lambda: zero)  # returns pool per broker
         W: Decimal = zero  # withdrawn returns (global, exits system)
+        # J2: the K/R split of each linked cash departure, by its transaction id, until its arrival takes it up.
+        transfer_splits: dict[int, tuple[Decimal, Decimal]] = {}
         # Position state snapshots
         position_states_start: list[DailyPositionState] = []
         position_states_end: list[DailyPositionState] = []
-        is_first_frame_day = True
         # Universe of broker ids in this scope — used to fan out the date-only
         # cash/ECF aggregates above into their per-broker components below.
         all_broker_ids: set[int] = {ctxn.tx.broker_id for ctxn in self.classified_txs}
 
-        # ── 5. PRE-FRAME: [date_from, frame_start) — accounting only ──
-        # Process all transaction days before frame_start: update cash, qty, cost pools, ECF.
-        # No market evaluation, no DailyPortfolioState emission. A day the rate of a held
-        # foreign currency changes is replayed too: its cash is revalued.
-        preframe_fx_days = set(self.native_cash.rate_change_days(None, self.frame_start - timedelta(days=1)))
-        preframe_tx_dates = sorted(d for d in (set(cash_deltas.keys()) | set(position_txs_by_date.keys()) | set(ecf_by_date.keys()) | internal_flow_dates | preframe_fx_days) if d < self.frame_start)
-        for day in preframe_tx_dates:
-            cumulative_cash += cash_deltas.get(day, zero)
-            cumulative_ecf += ecf_by_date.get(day, zero)
-            for bid in all_broker_ids:
-                cumulative_cash_by_broker[bid] += cash_deltas_by_broker.get((day, bid), zero)
-                cumulative_ecf_by_broker[bid] += ecf_by_date_by_broker.get((day, bid), zero)
-            # Exchange result on foreign cash: after the day's cash, before its pool rules
-            if day in preframe_fx_days:
-                for exchange_result in self._revalue_foreign_cash(day, cumulative_cash_by_broker, K, R):
-                    cumulative_cash += exchange_result
-            # Pre-frame 3-pool per-broker: process all tx types
-            for ctxn in all_txs_by_date.get(day, []):
-                tx = ctxn.tx
-                bid = tx.broker_id
-                if tx.amount is None or tx.amount == 0 or tx.currency is None:
-                    continue
-                amt = self._convert_movement(abs(tx.amount), tx.currency, tx.date)
-                if amt is None:
-                    continue
-                amt = amt * ctxn.share
-                if tx.type == TransactionType.DEPOSIT:
-                    restore = min(amt, W)
-                    R[bid] += restore
-                    W -= restore
-                    K[bid] += amt - restore
-                elif tx.type == TransactionType.WITHDRAWAL:
-                    from_k = min(amt, max(K[bid], zero))
-                    K[bid] -= from_k
-                    remaining = amt - from_k
-                    from_r = min(remaining, max(R[bid], zero))
-                    R[bid] -= from_r
-                    W += from_r
-                elif tx.type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
-                    # Signed: preserve a legacy negative correction (plan §4.4). `amt` is
-                    # abs(tx.amount) converted through the same (sign-agnostic) FX rate —
-                    # flip its sign to match the original tx.amount instead of re-querying.
-                    signed_amt = amt if tx.amount >= 0 else -amt
-                    R[bid] += signed_amt
-                elif tx.type in (TransactionType.FEE, TransactionType.TAX):
-                    R[bid] -= amt
-                    if R[bid] < zero:
-                        K[bid] += R[bid]
-                        R[bid] = zero
-                elif tx.type == TransactionType.BUY and tx.asset_id:
-                    from_r = min(amt, max(R[bid], zero))
-                    R[bid] -= from_r
-                    K[bid] -= amt - from_r
-                elif tx.type == TransactionType.SELL and tx.asset_id:
-                    # Pre-frame sells: approximate all proceeds to K (WAC not tracked yet in pre-frame for sell cost basis)
-                    K[bid] += amt
-                elif tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION):
-                    # Linked-internal cash transfer: move pools from src to dst
-                    if ctxn.classification == "linked_internal" and tx.amount < 0:
-                        # Departure leg (negative amount = outflow)
-                        from_r = min(amt, max(R[bid], zero))
-                        R[bid] -= from_r
-                        from_k = amt - from_r
-                        K[bid] -= from_k
-                        # Arrival leg will add these back to paired broker
-                    elif ctxn.classification == "linked_internal" and tx.amount > 0:
-                        # Arrival leg (positive amount = inflow)
-                        # Approximate: add to K (can't track exact split without buffering)
-                        K[bid] += amt
-            # Replay the position txs against their average-cost steps
-            day_pos_txs = position_txs_by_date.get(day)
-            if day_pos_txs:
-                additions = [c for c in day_pos_txs if c.tx.quantity and c.tx.quantity > 0]
-                reductions = [c for c in day_pos_txs if c.tx.quantity and c.tx.quantity < 0]
-                for ctxn in additions + reductions:
-                    tx = ctxn.tx
-                    key = (tx.asset_id, tx.broker_id)
-                    tx_qty = tx.quantity * ctxn.share
-                    cumulative_qty[key] += tx_qty
-                    previous = cost_pool.get(key)
-                    step = self._next_cost_step(key, tx, tx_qty)
-                    if step is None:
-                        continue
-                    cost_pool[key] = step
-                    if tx.id in self.split_linked_tx_ids:
-                        continue
-                    transfer_capital = self._transfer_leg_capital(ctxn, tx_qty)
-                    if transfer_capital is not None:
-                        cumulative_ecf += transfer_capital
-                        cumulative_ecf_by_broker[tx.broker_id] += transfer_capital
-                    if tx.quantity > 0:
-                        if step.effect == CostEffect.ADD and self._is_capital_adjustment(tx):
-                            cumulative_ecf += step.cost_report_change
-                            cumulative_ecf_by_broker[tx.broker_id] += step.cost_report_change
-                    else:
-                        removed = -step.cost_report_change
-                        if self._is_capital_adjustment(tx):
-                            cumulative_ecf -= removed
-                            cumulative_ecf_by_broker[tx.broker_id] -= removed
-                        if tx.type == TransactionType.SELL:
-                            realized_sales.append(self._realized_sale(ctxn, tx_qty, removed, previous))
+        # ── 5. The days: from the earliest movement (or date_from) to date_to; states emitted from date_from ──
+        movement_days = set(all_txs_by_date) | set(ecf_by_date) | internal_flow_dates
+        self._replay_from = min([self.date_from, *movement_days])
+        frame_fx_days = set(self.native_cash.rate_change_days(self._replay_from, self.date_to))
+        dirty_days = self._collect_dirty_days(set(cash_deltas) | set(position_txs_by_date) | set(ecf_by_date) | internal_flow_dates, set(position_txs_by_date), frame_fx_days)
+        ordered_dirty_days = sorted(dirty_days)
 
-        # ── 6. FRAME: [frame_start, date_to] — full daily evaluation ──
-        # Build dirty_days for frame range only
-        dirty_days: set[date_type] = set()
-        for d in cash_deltas.keys():
-            if d >= self.frame_start:
-                dirty_days.add(d)
-        for d in position_txs_by_date.keys():
-            if d >= self.frame_start:
-                dirty_days.add(d)
-        for d in ecf_by_date.keys():
-            if d >= self.frame_start:
-                dirty_days.add(d)
-        for d in internal_flow_dates:
-            if d >= self.frame_start:
-                dirty_days.add(d)
-        # A rate change of a held foreign currency revalues its cash
-        frame_fx_days = set(self.native_cash.rate_change_days(self.frame_start, self.date_to))
-        dirty_days.update(frame_fx_days)
-        for interval in self.in_transit_intervals:
-            if interval.start_date >= self.frame_start:
-                dirty_days.add(interval.start_date)
-            if interval.end_date >= self.frame_start:
-                dirty_days.add(interval.end_date)
-            if interval.end_date < self.date_to and interval.end_date + timedelta(days=1) >= self.frame_start:
-                dirty_days.add(interval.end_date + timedelta(days=1))
-        for prices in self.price_map.values():
-            prev_price = None
-            for dt, close, _ in prices:
-                if dt < self.frame_start:
-                    prev_price = close
-                    continue
-                if prev_price is not None and close != prev_price:
-                    dirty_days.add(dt)
-                elif prev_price is None:
-                    dirty_days.add(dt)
-                prev_price = close
-        for history in self.split_history.values():
-            dirty_days.update(split.date for split in history if self.frame_start <= split.date <= self.date_to)
-        dirty_days.add(self.frame_start)
-
-        current = self.frame_start
+        previous_state: DailyPortfolioState | None = None
+        current = self._replay_from
         while current <= self.date_to:
             # Day skipping: if this day is stationary (no tx, ecf, price change, or
             # in-transit boundary), reuse the previous state with updated date.
-            if current not in dirty_days and states:
-                prev = states[-1]
-                states.append(
-                    DailyPortfolioState(
-                        date=current,
-                        cash_value=prev.cash_value,
-                        market_value=prev.market_value,
-                        broker_nav_value=prev.broker_nav_value,
-                        in_transit_cash_value=prev.in_transit_cash_value,
-                        in_transit_asset_market_value=prev.in_transit_asset_market_value,
-                        in_transit_market_value=prev.in_transit_market_value,
-                        nav_value=prev.nav_value,
-                        open_cost_basis=prev.open_cost_basis,
-                        in_transit_asset_cost_basis=prev.in_transit_asset_cost_basis,
-                        in_transit_book_value=prev.in_transit_book_value,
-                        book_value=prev.book_value,
-                        unrealized_gain_loss=prev.unrealized_gain_loss,
-                        external_cash_flow=zero,
-                        cumulative_external_cash_flow=prev.cumulative_external_cash_flow,
-                        book_asset_like=prev.book_asset_like,
-                        cash_from_contributed_capital=prev.cash_from_contributed_capital,
-                        cash_from_generated_returns=prev.cash_from_generated_returns,
-                        total_pnl=prev.total_pnl,
-                        by_type=dict(prev.by_type),
-                        by_sector=dict(prev.by_sector),
-                        by_geography=dict(prev.by_geography),
-                        missing_price_asset_ids=set(prev.missing_price_asset_ids),
-                        missing_fx_pairs=set(prev.missing_fx_pairs),
-                        stale_price_asset_ids=set(prev.stale_price_asset_ids),
-                        transaction_implied_asset_ids=set(prev.transaction_implied_asset_ids),
-                        nav_complete=prev.nav_complete,
-                        broker_contributions=dict(prev.broker_contributions),
-                        pnl_candle=prev.pnl_candle,
-                        acquisition_funding=None,
-                        unrealized_by_currency=dict(prev.unrealized_by_currency),
-                    )
+            if current not in dirty_days and previous_state is not None:
+                if current < self.date_from:
+                    # R13-SEC8: nothing is emitted before date_from, and a quiet day only carries the state: on to the
+                    # next dirty day (date_from is one). A row stored centuries back costs its dirty days, not a walk.
+                    position = bisect.bisect_right(ordered_dirty_days, current)
+                    current = ordered_dirty_days[position] if position < len(ordered_dirty_days) else self.date_to + timedelta(days=1)
+                    continue
+                # The containers are copied, never shared between two days' states.
+                previous_state = replace(
+                    previous_state,
+                    date=current,
+                    external_cash_flow=zero,
+                    by_type=dict(previous_state.by_type),
+                    by_sector=dict(previous_state.by_sector),
+                    by_geography=dict(previous_state.by_geography),
+                    missing_price_asset_ids=set(previous_state.missing_price_asset_ids),
+                    missing_fx_pairs=set(previous_state.missing_fx_pairs),
+                    stale_price_asset_ids=set(previous_state.stale_price_asset_ids),
+                    transaction_implied_asset_ids=set(previous_state.transaction_implied_asset_ids),
+                    transaction_implied_last_quote_dates=dict(previous_state.transaction_implied_last_quote_dates),
+                    broker_contributions=dict(previous_state.broker_contributions),
+                    acquisition_funding=None,
+                    unrealized_by_currency=dict(previous_state.unrealized_by_currency),
                 )
+                if current >= self.date_from:
+                    states.append(previous_state)
                 current += timedelta(days=1)
                 continue
 
@@ -451,6 +367,11 @@ class DailyStateBuilder:
             day_additions = [c for c in day_all_txs if c.tx.quantity and c.tx.quantity > 0 and c.tx.asset_id]
             day_reductions = [c for c in day_all_txs if c.tx.quantity and c.tx.quantity < 0 and c.tx.asset_id]
             day_non_position = [c for c in day_all_txs if not (c.tx.quantity and c.tx.quantity != 0 and c.tx.asset_id)]
+            # J2: a linked cash arrival takes up its departure's K/R split, so it comes after a departure of the same day.
+            day_ids = {c.tx.id for c in day_non_position}
+            same_day_arrivals = [c for c in day_non_position if _is_linked_cash_arrival(c) and c.paired_tx is not None and c.paired_tx.id in day_ids]
+            if same_day_arrivals:
+                day_non_position = [c for c in day_non_position if c not in same_day_arrivals] + same_day_arrivals
 
             for ctxn in day_additions + day_reductions + day_non_position:
                 tx = ctxn.tx
@@ -477,7 +398,7 @@ class DailyStateBuilder:
                     # Lot 41 (D2/D5): a TRANSFER leg with no internal partner is in-kind
                     # capital at market value. Not in ecf_today: the daily
                     # external_cash_flow stays cash-only, as for the in-kind ADJUSTMENT.
-                    transfer_capital = self._transfer_leg_capital(ctxn, tx_qty)
+                    transfer_capital = self._transfer_leg_capital(ctxn, tx_qty, step)
                     if transfer_capital is not None:
                         cumulative_ecf += transfer_capital
                         cumulative_ecf_by_broker[bid] += transfer_capital
@@ -494,13 +415,17 @@ class DailyStateBuilder:
                         if tx.type == TransactionType.SELL:
                             realized_sales.append(self._realized_sale(ctxn, tx_qty, sell_cb_target, previous))
 
-                        # In-kind ADJUSTMENT-out (no cash proceeds): capital distribution.
-                        # Remove the cost from the capital baseline (mirror of the in-kind
-                        # contribution on ADJUSTMENT-in) so total P&L keeps tracking
-                        # unrealized instead of dumping the book into "Other".
-                        if self._is_capital_adjustment(tx):
-                            cumulative_ecf -= sell_cb_target
-                            cumulative_ecf_by_broker[bid] -= sell_cb_target
+                        # In-kind ADJUSTMENT-out (no cash proceeds): capital distribution of the value it hands over,
+                        # converted at the rate of its date (J-24, the developer's rule), the mirror of the in-kind
+                        # contribution on ADJUSTMENT-in; the difference from the historical cost the pool gives up is
+                        # realized, as for a SELL. Without a rate the realized is unknown and the capital takes the
+                        # historical cost, as before J-24.
+                        if self._is_capital_adjustment(tx) and step is not None:
+                            handed_over = self._handed_over_value(ctxn, tx_qty)
+                            distributed = handed_over if handed_over is not None else sell_cb_target
+                            cumulative_ecf -= distributed
+                            cumulative_ecf_by_broker[bid] -= distributed
+                            realized_sales.append(self._realized_disposal(ctxn, tx_qty, sell_cb_target, previous, handed_over))
 
                         # 3-pool per-broker: SELL → K[bid] += cost_basis, R[bid] += gain
                         if amount_target is not None:
@@ -513,59 +438,13 @@ class DailyStateBuilder:
 
                         continue  # skip the generic 3-pool rules below
 
-                # ── 3-pool per-broker for non-SELL txs ──
+                # ── 3-pool per-broker for the other movements ──
                 if amount_target is None:
                     continue
-
-                bid = tx.broker_id
-
-                if tx.type == TransactionType.DEPOSIT:
-                    restore = min(amount_target, W)
-                    R[bid] += restore
-                    W -= restore
-                    K[bid] += amount_target - restore
-
-                elif tx.type == TransactionType.WITHDRAWAL:
-                    from_k = min(amount_target, max(K[bid], zero))
-                    K[bid] -= from_k
-                    remaining = amount_target - from_k
-                    from_r = min(remaining, max(R[bid], zero))
-                    R[bid] -= from_r
-                    W += from_r
-
-                elif tx.type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
-                    # Signed: preserve a legacy negative correction (plan §4.4). `amount_target`
-                    # is abs(tx.amount) converted through the same (sign-agnostic) FX rate —
-                    # flip its sign to match the original tx.amount instead of re-querying.
-                    signed_amount_target = amount_target if tx.amount >= 0 else -amount_target
-                    R[bid] += signed_amount_target
-
-                elif tx.type in (TransactionType.FEE, TransactionType.TAX):
-                    R[bid] -= amount_target
-                    if R[bid] < zero:
-                        K[bid] += R[bid]
-                        R[bid] = zero
-
-                elif tx.type == TransactionType.BUY and tx.asset_id:
-                    from_r = min(amount_target, max(R[bid], zero))
-                    R[bid] -= from_r
-                    K[bid] -= amount_target - from_r
-                    if self.compute_acquisition_funding:
-                        day_acq_from_r += from_r
-                        day_acq_from_k += amount_target - from_r
-
-                elif tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION):
-                    # Linked-internal: pool transfer between brokers
-                    if ctxn.classification == "linked_internal" and tx.amount < 0:
-                        # Departure leg: R exits first, then K
-                        from_r = min(amount_target, max(R[bid], zero))
-                        R[bid] -= from_r
-                        from_k = amount_target - from_r
-                        K[bid] -= from_k
-                    elif ctxn.classification == "linked_internal" and tx.amount > 0:
-                        # Arrival leg: receives from paired broker
-                        # Approximate: proportional to departure (use K as default)
-                        K[bid] += amount_target
+                W, buy_from_k, buy_from_r = self._apply_pool_rule(ctxn, amount_target, K, R, W, transfer_splits)
+                if self.compute_acquisition_funding:
+                    day_acq_from_r += buy_from_r
+                    day_acq_from_k += buy_from_k
 
             # 4c. Market value per asset (after all txs for the day are processed)
             market_value = zero
@@ -577,6 +456,7 @@ class DailyStateBuilder:
             stale: set[int] = set()
             missing_fx: set[str] = set()
             implied: set[int] = set()
+            implied_last_quotes: dict[int, date_type | None] = {}
             # G1b — synthetic P&L candles (plan §4.3): sum every held asset's resolved daily OHLC
             # contribution (flat open=high=low=close=market_value when no intraday range is known,
             # never a guess). A MISSING valuation makes the whole day's candle unavailable, mirroring
@@ -592,7 +472,7 @@ class DailyStateBuilder:
             for (asset_id, position_broker_id), qty in cumulative_qty.items():
                 if qty <= 0:
                     continue
-                valuation = self._market_value_for(asset_id, qty, current, compute_ohlc=self.compute_candles)
+                valuation = self._value_held_position(asset_id, position_broker_id, qty, current, cost_pool, compute_ohlc=self.compute_candles)
                 if valuation.market_value is not None:
                     market_value += valuation.market_value
                     market_value_by_broker[position_broker_id] += valuation.market_value
@@ -611,10 +491,12 @@ class DailyStateBuilder:
                     missing_fx.add(valuation.missing_fx_pair)
                 if valuation.source == ValuationSource.LAST_TRADE_PRICE:
                     implied.add(asset_id)
+                    series = self.mark_series.get(asset_id)
+                    implied_last_quotes[asset_id] = series.last_market_date(current) if series is not None else None
                 position_cost = cost_pool.get((asset_id, position_broker_id))
                 position_cost_report = position_cost.cost_report_for(qty) if position_cost is not None else zero
                 open_cost_basis += position_cost_report
-                self._add_unrealized_part(unrealized_parts, asset_id, qty, valuation.market_value, position_cost_report, position_cost, current)
+                self._add_unrealized_part(unrealized_parts, asset_id, qty, valuation.market_value, position_cost_report, position_cost, current, at_cost=valuation.source == ValuationSource.ESTIMATED_AT_COST)
 
             # 4d. In-transit values. `it_by_broker` is attributed to each interval's
             # departure-broker (cash+asset market value only — additive NAV
@@ -703,54 +585,54 @@ class DailyStateBuilder:
                     from_reinvested=day_acq_from_r,
                 )
 
-            # 4b2. Position state snapshots (start of frame + every day end)
-            if is_first_frame_day:
+            # 4b2. Position state snapshot at the end of the period's start day
+            if current == self.period_start:
                 for (aid, bid), qty in cumulative_qty.items():
                     if qty <= 0:
                         continue
                     ps = self._build_position_state(aid, bid, qty, current, cost_pool)
                     position_states_start.append(ps)
-                is_first_frame_day = False
 
             # 4h. Allocation: cash as Liquidity (type + sector, not geography)
             by_type["Liquidity"] = by_type.get("Liquidity", zero) + cumulative_cash + it_cash
             by_sector["Liquidity"] = by_sector.get("Liquidity", zero) + cumulative_cash + it_cash
 
-            states.append(
-                DailyPortfolioState(
-                    date=current,
-                    cash_value=cumulative_cash,
-                    market_value=market_value,
-                    broker_nav_value=broker_nav,
-                    in_transit_cash_value=it_cash,
-                    in_transit_asset_market_value=it_asset_mv,
-                    in_transit_market_value=in_transit_mv,
-                    nav_value=nav,
-                    open_cost_basis=open_cost_basis,
-                    in_transit_asset_cost_basis=it_asset_cb,
-                    in_transit_book_value=in_transit_bv,
-                    book_value=book,
-                    unrealized_gain_loss=ug,
-                    external_cash_flow=ecf_today,
-                    cumulative_external_cash_flow=cumulative_ecf,
-                    book_asset_like=book_asset_like,
-                    cash_from_contributed_capital=cash_from_contributed,
-                    cash_from_generated_returns=cash_from_generated,
-                    total_pnl=total_pnl,
-                    by_type=dict(by_type),
-                    by_sector=dict(by_sector),
-                    by_geography=dict(by_geo),
-                    missing_price_asset_ids=missing,
-                    missing_fx_pairs=missing_fx,
-                    stale_price_asset_ids=stale,
-                    transaction_implied_asset_ids=implied,
-                    nav_complete=len(missing) == 0,
-                    broker_contributions=broker_contributions,
-                    pnl_candle=pnl_candle,
-                    acquisition_funding=acquisition_funding,
-                    unrealized_by_currency={currency: UnrealizedSplit(asset=part[0], fx=part[1], unsplit=part[2]) for currency, part in unrealized_parts.items()},
-                )
+            previous_state = DailyPortfolioState(
+                date=current,
+                cash_value=cumulative_cash,
+                market_value=market_value,
+                broker_nav_value=broker_nav,
+                in_transit_cash_value=it_cash,
+                in_transit_asset_market_value=it_asset_mv,
+                in_transit_market_value=in_transit_mv,
+                nav_value=nav,
+                open_cost_basis=open_cost_basis,
+                in_transit_asset_cost_basis=it_asset_cb,
+                in_transit_book_value=in_transit_bv,
+                book_value=book,
+                unrealized_gain_loss=ug,
+                external_cash_flow=ecf_today,
+                cumulative_external_cash_flow=cumulative_ecf,
+                book_asset_like=book_asset_like,
+                cash_from_contributed_capital=cash_from_contributed,
+                cash_from_generated_returns=cash_from_generated,
+                total_pnl=total_pnl,
+                by_type=dict(by_type),
+                by_sector=dict(by_sector),
+                by_geography=dict(by_geo),
+                missing_price_asset_ids=missing,
+                missing_fx_pairs=missing_fx,
+                stale_price_asset_ids=stale,
+                transaction_implied_asset_ids=implied,
+                transaction_implied_last_quote_dates=implied_last_quotes,
+                nav_complete=len(missing) == 0,
+                broker_contributions=broker_contributions,
+                pnl_candle=pnl_candle,
+                acquisition_funding=acquisition_funding,
+                unrealized_by_currency={currency: UnrealizedSplit(asset=part[0], fx=part[1], unsplit=part[2]) for currency, part in unrealized_parts.items()},
             )
+            if current >= self.date_from:
+                states.append(previous_state)
             current += timedelta(days=1)
 
         # End-of-frame position snapshot (t1)
@@ -763,7 +645,9 @@ class DailyStateBuilder:
         return PortfolioCalculationResult(
             daily_states=states,
             position_states_start=position_states_start,
+            position_states_start_date=self.period_start,
             position_states_end=position_states_end,
+            internal_asset_transfers=self._internal_asset_transfers(),
             native_cash=self.native_cash,
             end_state=EngineEndState(
                 cumulative_cash=cumulative_cash,
@@ -811,7 +695,7 @@ class DailyStateBuilder:
             wac_val = position_cost.unit_cost_report if cost_complete else None
             wac_asset = position_cost.unit_cost_asset if position_cost.asset_complete else None
 
-        valuation = self._market_value_for(asset_id, qty, dt)
+        valuation = self._value_held_position(asset_id, broker_id, qty, dt, cost_pool)
         unrealized = (valuation.market_value - cost_basis) if valuation.market_value is not None and cost_complete else None
 
         return DailyPositionState(
@@ -863,6 +747,11 @@ class DailyStateBuilder:
         if tx.amount:
             converted = self._convert_movement(abs(tx.amount), tx.currency or self.target_currency, tx.date)
             proceeds = converted * ctxn.share if converted is not None else None
+        return self._realized_disposal(ctxn, tx_qty, cost, previous, proceeds)
+
+    def _realized_disposal(self, ctxn: ClassifiedTransaction, tx_qty: Decimal, cost: Decimal, previous: CostStep | None, proceeds: Decimal | None) -> RealizedSale:
+        """A disposal the engine replays: its proceeds (None when they could not be converted) against the historical cost it took from the pool."""
+        tx = ctxn.tx
         return RealizedSale(
             transaction_id=tx.id,
             asset_id=tx.asset_id,
@@ -874,6 +763,16 @@ class DailyStateBuilder:
             cost_complete=previous.report_complete if previous is not None else True,
         )
 
+    def _handed_over_value(self, ctxn: ClassifiedTransaction, tx_qty: Decimal) -> Decimal | None:
+        """J-24 — what a priced outgoing ADJUSTMENT hands over: ``|tx_qty| × cost_basis_override`` at the rate of its date.
+
+        In ``cost_basis_currency``, or in the asset's currency without one (the pool's rule for incoming adjustments);
+        ``tx_qty`` is already at the broker's share. None when the rate is missing, which is recorded with its date.
+        """
+        tx = ctxn.tx
+        currency = tx.cost_basis_currency or self.asset_currencies.get(tx.asset_id) or self.target_currency
+        return self._convert_movement(abs(tx_qty) * tx.cost_basis_override, currency, tx.date)
+
     def _add_unrealized_part(
         self,
         parts: dict[str, list[Decimal]],
@@ -883,11 +782,19 @@ class DailyStateBuilder:
         cost_report: Decimal,
         position_cost: CostStep | None,
         day: date_type,
+        *,
+        at_cost: bool = False,
     ) -> None:
-        """Add one position's MV − C_T to its asset currency's [asset, fx, unsplit] parts (see UnrealizedSplit)."""
+        """Add one position's MV − C_T to its asset currency's [asset, fx, unsplit] parts (see UnrealizedSplit).
+
+        A position valued at its book cost (``at_cost``) has no unrealized result, neither from a price nor
+        from a rate: it adds nothing, though its currency keeps its entry.
+        """
         zero = Decimal("0")
         asset_currency = self.asset_currencies.get(asset_id, self.target_currency)
         part = parts.setdefault(asset_currency, [zero, zero, zero])
+        if at_cost:
+            return
         value = market_value if market_value is not None else zero
         if asset_currency == self.target_currency:
             part[0] += value - cost_report
@@ -905,6 +812,118 @@ class DailyStateBuilder:
         cost_at_today_rate = cost_asset * rate
         part[0] += market_value - cost_at_today_rate
         part[1] += cost_at_today_rate - cost_report
+
+    def _read_rate(self, currency: str, day: date_type) -> Decimal | None:
+        """The rate the day reads from the pre-loaded map: the exact day's, or None."""
+        return self.fx_rate_map.get((currency, self.target_currency, day))
+
+    def _collect_dirty_days(self, movement_days: set[date_type], position_days: set[date_type], fx_days: set[date_type]) -> set[date_type]:
+        """The days from the replay's start to date_to whose state must be computed; any other day carries the last one.
+
+        A movement (cash, position, external or internal flow); a rate change of a held foreign currency (its cash is
+        revalued) or of a rate the day reads for its securities or its cash in transit; an in-transit boundary; a market
+        quote (it sets the day's mark and restarts the price's age); the day a carried price turns stale; a split; the
+        first replayed day, date_from and the period's start.
+        """
+        start, end = self._replay_from, self.date_to
+        dirty_days = {day for day in movement_days if day >= start}
+        dirty_days.update(fx_days)
+        dirty_days.update(self._valuation_rate_change_days())
+        for interval in self.in_transit_intervals:
+            boundaries = {interval.start_date, interval.end_date}
+            if interval.end_date < end:
+                boundaries.add(interval.end_date + timedelta(days=1))
+            dirty_days.update(day for day in boundaries if day >= start)
+        for prices in self.price_map.values():
+            dirty_days.update(dt for dt, _close, _currency in prices if start <= dt <= end)
+        observed = {dt for prices in self.price_map.values() for dt, _close, _currency in prices} | position_days
+        for day in observed:
+            first_stale = day + timedelta(days=STALE_PRICE_THRESHOLD_DAYS + 1)
+            if start <= first_stale <= end:
+                dirty_days.add(first_stale)
+        for history in self.split_history.values():
+            dirty_days.update(split.date for split in history if start <= split.date <= end)
+        dirty_days.add(start)
+        for day in (self.date_from, self.period_start):
+            if start <= day <= end:
+                dirty_days.add(day)
+        return dirty_days
+
+    @staticmethod
+    def _apply_pool_rule(
+        ctxn: ClassifiedTransaction,
+        amount: Decimal,
+        K: dict[int, Decimal],
+        R: dict[int, Decimal],
+        withdrawn: Decimal,
+        transfer_splits: dict[int, tuple[Decimal, Decimal]] | None = None,
+    ) -> tuple[Decimal, Decimal, Decimal]:
+        """The K/R/W pool rule of one cash movement that is not a position reduction; ``amount`` is in the target currency.
+
+        Returns the withdrawn pool after it, and what a BUY drew from K and from R. A deposit first restores withdrawn
+        returns; a withdrawal takes capital first; income (signed) feeds R; a fee or tax comes out of R, then of K; a BUY
+        spends R first. A linked-internal cash transfer or currency conversion leaves R first, and its arrival brings back
+        what the departure took from each pool, the gap between the two legs booked as a result (J2, D-MF4):
+        ``transfer_splits`` keeps each departure's ``(from R, amount)`` by its id until its arrival takes it up. An arrival
+        whose departure is unknown arrives in K.
+        """
+        zero = Decimal("0")
+        tx = ctxn.tx
+        bid = tx.broker_id
+        buy_from_k = buy_from_r = zero
+        if tx.type == TransactionType.DEPOSIT:
+            restore = min(amount, withdrawn)
+            R[bid] += restore
+            withdrawn -= restore
+            K[bid] += amount - restore
+        elif tx.type == TransactionType.WITHDRAWAL:
+            from_k = min(amount, max(K[bid], zero))
+            K[bid] -= from_k
+            remaining = amount - from_k
+            from_r = min(remaining, max(R[bid], zero))
+            R[bid] -= from_r
+            withdrawn += from_r
+        elif tx.type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
+            # Signed: preserve a legacy negative correction (plan §4.4). `amount` is abs(tx.amount) converted through
+            # the same (sign-agnostic) FX rate — flip its sign to match the original tx.amount instead of re-querying.
+            R[bid] += amount if tx.amount >= 0 else -amount
+        elif tx.type in (TransactionType.FEE, TransactionType.TAX):
+            R[bid] -= amount
+            if R[bid] < zero:
+                K[bid] += R[bid]
+                R[bid] = zero
+        elif tx.type == TransactionType.BUY and tx.asset_id:
+            buy_from_r = min(amount, max(R[bid], zero))
+            R[bid] -= buy_from_r
+            buy_from_k = amount - buy_from_r
+            K[bid] -= buy_from_k
+        elif tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION) and ctxn.classification == "linked_internal":
+            _move_linked_cash(ctxn, amount, K, R, transfer_splits)
+        return withdrawn, buy_from_k, buy_from_r
+
+    def _valuation_rate_change_days(self) -> set[date_type]:
+        """Frame days on which a rate the day reads to value it changes from the day before.
+
+        The currencies of prices and assets are read every day (securities held and in transit, the exchange part
+        of the unrealized result); the currency of cash in transit on the days of its transit. Same reading as the
+        valuation: the exact day's rate, so one that appears or disappears counts.
+        """
+        changed: set[date_type] = set()
+        currencies = {currency for prices in self.price_map.values() for _day, _close, currency in prices if currency}
+        currencies.update(currency for currency in self.asset_currencies.values() if currency)
+        currencies.discard(self.target_currency)
+        # R13-SEC8: no rate is read before EARLIEST_RANGE_START (none is loaded there), so the calendars start there at
+        # the earliest: a row stored centuries back never makes a calendar of every day since.
+        replay_from = max(self._replay_from, EARLIEST_RANGE_START)
+        if currencies:
+            changed.update(day for day in change_days(self._read_rate, currencies, _calendar(replay_from - timedelta(days=1), self.date_to)) if day >= replay_from)
+        for interval in self.in_transit_intervals:
+            currency = interval.departure_leg.currency
+            start, end = max(interval.start_date, replay_from), min(interval.end_date, self.date_to)
+            if interval.tx_type != "cash" or not currency or currency == self.target_currency or start > end:
+                continue
+            changed.update(day for day in change_days(self._read_rate, {currency}, _calendar(start - timedelta(days=1), end)) if day >= start)
+        return changed
 
     def _convert(self, amount: Decimal, from_ccy: str, dt: date_type) -> Decimal | None:
         """Convert amount from from_ccy to target_currency using pre-loaded FX map."""
@@ -949,6 +968,39 @@ class DailyStateBuilder:
             booked.append(exchange_result)
         return booked
 
+    def _value_held_position(
+        self,
+        asset_id: int,
+        broker_id: int,
+        qty: Decimal,
+        dt: date_type,
+        cost_pool: dict[tuple[int, int], CostStep],
+        *,
+        compute_ohlc: bool = False,
+    ) -> ValuationResult:
+        """Value one held position: by its price mark, or at its book cost when it has no price at all.
+
+        The resolver's answer (:meth:`_market_value_for`) when it has one. With no observation on or before
+        ``dt`` (MISSING) and the position's cost known in the report currency, the holding counts at that
+        cost — the acquisitions converted at their own dates — as a declared estimate, not a price: no
+        effective unit price, no unrealized result (developer's decision, J-17). With its cost unknown it stays
+        MISSING. A missing exchange rate is not this case: the mark exists, only its conversion fails.
+        """
+        valuation = self._market_value_for(asset_id, qty, dt, compute_ohlc=compute_ohlc)
+        if valuation.source != ValuationSource.MISSING:
+            return valuation
+        cost_value = self._book_cost_value(cost_pool.get((asset_id, broker_id)), qty)
+        if cost_value is None:
+            return valuation
+        return _valued_at_cost(cost_value)
+
+    @staticmethod
+    def _book_cost_value(position_cost: CostStep | None, qty: Decimal) -> Decimal | None:
+        """The report-currency book cost of ``qty`` units of a pool, or None when the pool's cost is not known."""
+        if position_cost is None or not position_cost.report_complete or position_cost.quantity <= 0:
+            return None
+        return position_cost.cost_report_for(qty)
+
     def _market_value_for(
         self,
         asset_id: int,
@@ -962,12 +1014,13 @@ class DailyStateBuilder:
         ``mark_series`` holds a per-asset :class:`AssetPriceSeries` fed with *both* asset-system
         quotes and observed trades in the asset's *native* currency, so a single ``resolve(dt)``
         answers the whole valuation at once: a real quote (exact or carried forward) →
-        ``MARKET_PRICE``; a trade-derived mark (BUY/SELL/priced ADJUSTMENT, same-day average, LOCF
-        with staleness) → ``LAST_TRADE_PRICE``. The mark is converted to the reporting currency
+        ``MARKET_PRICE``; a trade-derived mark (BUY/SELL, same-day average, LOCF with staleness) →
+        ``LAST_TRADE_PRICE``. The mark is converted to the reporting currency
         **here**, at the valuation date ``dt`` (never at the observation date), so a carried mark
         tracks the current FX rather than a frozen one. When the resolver has no observation on/before
         ``dt`` the holding is ``MISSING`` (no legacy price-map / last-buy / last-seed cascade — those
-        tiers are subsumed by the resolver's trade observations).
+        tiers are subsumed by the resolver's trade observations); :meth:`_value_held_position` then
+        counts a held position of known cost at that cost.
 
         ``compute_ohlc`` (G1b, default False — stays off the ordinary hot path per plan §4.1's
         "expensive OHLC work stays off ordinary reports") additionally resolves
@@ -1122,9 +1175,11 @@ class DailyStateBuilder:
         An opening / transfer / succession ADJUSTMENT that carries a per-unit
         ``cost_basis_override`` injects (qty>0) or removes (qty<0) real book value
         WITHOUT any cash counterpart. Economically this is a capital contribution /
-        distribution in kind (opening equity), NOT profit — so its cost must move the
+        distribution in kind (opening equity), NOT profit — so it must move the
         capital baseline (``cumulative_ecf``), leaving total P&L = NAV − capital to
-        reflect only genuine market / realized / income effects. Without this the
+        reflect only genuine market / realized / income effects: in at the cost it
+        adds to the pool, out at the value it hands over at the rate of its date
+        (J-24), the difference from the pool's cost being realized. Without this the
         injected book value leaks into the "Other / reconciliation residual".
 
         SPLIT-linked adjustments are excluded: a split redistributes existing cost
@@ -1132,29 +1187,18 @@ class DailyStateBuilder:
         """
         return tx.type == TransactionType.ADJUSTMENT and tx.cost_basis_override is not None and tx.quantity is not None and tx.quantity != 0 and (tx.id is None or tx.id not in self.split_linked_tx_ids)
 
-    def _internal_transfer_flows(self) -> list[tuple[date_type, int, int, Decimal]]:
-        """Lot 41 — the capital flows of the internal pairs between two brokers (step 3b).
+    def _internal_pairs(self) -> list[tuple[ClassifiedTransaction, ClassifiedTransaction, date_type, bool]]:
+        """The linked internal pairs between two brokers: ``(sender, receiver, arrival_date, is_cash)``, once each.
 
-        One ``(arrival_date, sender_broker_id, receiver_broker_id, value)`` for each
-        linked-internal CASH_TRANSFER / FX_CONVERSION / TRANSFER pair whose two legs sit on
-        different brokers. The sender is the leg going out (negative amount for cash, negative
-        quantity for securities), the receiver the leg coming in; the arrival date is the later
-        leg's date. Pairs without exactly one of each, same-broker pairs and ADJUSTMENT pairs
-        give no flow.
-
-        ``value`` is what the arrival brings into the receiver's NAV, valued on the arrival
-        date as the NAV values it — the received amount converted at that date, or the market
-        value of the received quantity — at the sender's share, like the value in transit.
-        A value that cannot be computed (MISSING mark, missing FX rate) gives no flow, which is
-        what the arrival adds to the NAV.
-
-        Pure: it records no missing data, so a build with this method returning ``[]`` differs
-        only in the per-broker capital.
+        One for each linked-internal CASH_TRANSFER / FX_CONVERSION / TRANSFER pair whose two legs sit on different
+        brokers. The sender is the leg going out (negative amount for cash, negative quantity for securities), the
+        receiver the leg coming in; the arrival date is the later leg's date. Pairs without exactly one of each,
+        same-broker pairs and ADJUSTMENT pairs are left out.
         """
         zero = Decimal("0")
         ctxn_by_id = {ctxn.tx.id: ctxn for ctxn in self.classified_txs if ctxn.tx.id is not None}
         seen_pairs: set[tuple[int, int]] = set()
-        flows: list[tuple[date_type, int, int, Decimal]] = []
+        pairs: list[tuple[ClassifiedTransaction, ClassifiedTransaction, date_type, bool]] = []
         for ctxn in self.classified_txs:
             tx = ctxn.tx
             if ctxn.classification != "linked_internal" or ctxn.paired_tx is None or tx.id is None or tx.type not in _LINKED_TYPES:
@@ -1177,26 +1221,109 @@ class DailyStateBuilder:
                 logger.debug("Internal pair without one sender and one receiver: no broker flow", pair=pair_key)
                 continue
             sender, receiver = senders[0], receivers[0]
-            arrival = max(sender.tx.date, receiver.tx.date)
-            received = receiver.tx
-            if is_cash:
-                value = self._convert(abs(received.amount), received.currency, arrival) if received.currency else None
-            else:
-                value = self._market_value_for(received.asset_id, abs(received.quantity), arrival).market_value if received.asset_id is not None else None
-            if value is None:
+            pairs.append((sender, receiver, max(sender.tx.date, receiver.tx.date), is_cash))
+        return pairs
+
+    def _internal_transfer_flows(self) -> list[tuple[date_type, int, int, Decimal]]:
+        """Lot 41 — the capital flows of the internal pairs between two brokers (step 3b).
+
+        One ``(arrival_date, sender_broker_id, receiver_broker_id, value)`` for each pair of :meth:`_internal_pairs`.
+
+        ``value`` is what the arrival brings into the receiver's NAV, valued on the arrival
+        date as the NAV values it — the received amount converted at that date, or the market
+        value of the received quantity — at the sender's share, like the value in transit. A
+        security with no price at all moves at the book cost the arrival adds to the receiver's
+        pool, as the NAV values such a holding at its cost (J-17). A value that cannot be computed
+        (a missing FX rate, an unknown cost) gives no flow, which is what the arrival adds to the NAV.
+
+        Pure: it records no missing data, so a build with this method returning ``[]`` differs
+        only in the per-broker capital.
+        """
+        zero = Decimal("0")
+        flows: list[tuple[date_type, int, int, Decimal]] = []
+        for sender, receiver, arrival, is_cash in self._internal_pairs():
+            flow_value = self._internal_pair_value(sender, receiver, arrival, is_cash=is_cash)
+            if flow_value is None:
                 continue
-            flow_value = value * sender.share
             if flow_value != zero:
-                flows.append((arrival, sender.tx.broker_id, received.broker_id, flow_value))
+                flows.append((arrival, sender.tx.broker_id, receiver.tx.broker_id, flow_value))
         return flows
 
-    def _transfer_leg_capital(self, ctxn: ClassifiedTransaction, tx_qty: Decimal) -> Decimal | None:
+    def _internal_asset_transfers(self) -> list[InternalAssetTransfer]:
+        """MF-A, P22 — the securities the internal pairs move between two brokers, with their value on arrival.
+
+        The value is :meth:`_internal_pair_value`'s, the one the brokers' capital moves at; the cost moved is what the
+        sender's average-cost pool gave up for the units (None when that cost is incomplete). Pure, like the flows.
+        """
+        transfers: list[InternalAssetTransfer] = []
+        for sender, receiver, arrival, is_cash in self._internal_pairs():
+            if is_cash or receiver.tx.asset_id is None:
+                continue
+            sender_step = self._movement_cost_step(sender.tx)
+            cost_moved = -sender_step.cost_report_change if sender_step is not None and sender_step.report_complete else None
+            transfers.append(
+                InternalAssetTransfer(
+                    departure=sender.tx.date,
+                    arrival=arrival,
+                    asset_id=receiver.tx.asset_id,
+                    sender_broker_id=sender.tx.broker_id,
+                    receiver_broker_id=receiver.tx.broker_id,
+                    value_at_arrival=self._internal_pair_value(sender, receiver, arrival, is_cash=False),
+                    cost_moved=cost_moved,
+                )
+            )
+        return transfers
+
+    def _internal_pair_value(self, sender: ClassifiedTransaction, receiver: ClassifiedTransaction, arrival: date_type, *, is_cash: bool) -> Decimal | None:
+        """What one internal pair's arrival brings into the receiver's NAV, at the sender's share; None when unknown.
+
+        Cash: the received amount converted at the arrival date. Securities: the market value of the received
+        quantity that day; with no price at all, the book cost the arrival adds to the receiver's pool, as the NAV
+        values such a holding at its cost (J-17): an unknown cost adds nothing (the pool counts it at zero).
+        """
+        received = receiver.tx
+        if is_cash:
+            value = self._convert(abs(received.amount), received.currency, arrival) if received.currency else None
+            return value * sender.share if value is not None else None
+        if received.asset_id is None:
+            return None
+        valuation = self._market_value_for(received.asset_id, abs(received.quantity), arrival)
+        if valuation.market_value is not None:
+            return valuation.market_value * sender.share
+        if valuation.source != ValuationSource.MISSING:
+            return None
+        received_cost = self._movement_cost_step(received)
+        if received_cost is None or receiver.share == 0:
+            return None
+        # The step is at the receiver's share, the flow at the sender's, like the value in transit. A receiver pool
+        # of incomplete cost (a MISSING holding) still takes the leg's known cost: the capital follows the pool's book
+        # cost, so the gap stays with the broker whose cost is unknown.
+        if receiver.share == sender.share:
+            return received_cost.cost_report_change
+        return received_cost.cost_report_change / receiver.share * sender.share
+
+    def _movement_cost_step(self, tx: Transaction) -> CostStep | None:
+        """The average-cost step of one position movement (``tx``), found by its id; None when it has none."""
+        if tx.asset_id is None or tx.id is None:
+            return None
+        average_cost = self.average_costs.get((tx.asset_id, tx.broker_id))
+        if average_cost is None:
+            return None
+        return next((step for step in average_cost.steps if step.movement.movement_id == tx.id), None)
+
+    def _transfer_leg_capital(self, ctxn: ClassifiedTransaction, tx_qty: Decimal, step: CostStep | None = None) -> Decimal | None:
         """Lot 41 (D2/D5) — in-kind capital of a TRANSFER leg that forms no internal pair.
 
         A TRANSFER whose other leg is outside the scope (linked_external_*), missing, or never
         linked (an orphan) moves securities across the scope boundary without cash: capital,
         not profit. It counts at market value on its own date, for ``tx_qty`` (already at the
-        broker's share): positive for securities received, negative for securities sent.
+        broker's share): positive for securities received, negative for securities sent. A
+        security with no price at all counts at the cost the leg moves in its pool (``step``),
+        as the holding itself is valued at its book cost (J-17), so the transfer stays neutral.
+        With the pool's cost incomplete the holding is MISSING, and the leg still moves its known
+        cost (an unknown one counts as zero), as an incoming in-kind ADJUSTMENT moves the cost it
+        adds: the capital follows the pool's book cost, so nothing is left behind once the units are
+        gone. (An outgoing priced ADJUSTMENT leaves at the value it hands over instead, J-24.)
         None for any other row, for an internal-pair leg (step 3b handles it), for a
         split-linked row, or when the security cannot be valued that day.
         """
@@ -1205,10 +1332,12 @@ class DailyStateBuilder:
             return None
         if ctxn.classification == "linked_internal" or (tx.id is not None and tx.id in self.split_linked_tx_ids):
             return None
-        market_value = self._market_value_for(tx.asset_id, abs(tx_qty), tx.date).market_value
-        if market_value is None:
-            return None
-        return market_value if tx_qty > 0 else -market_value
+        valuation = self._market_value_for(tx.asset_id, abs(tx_qty), tx.date)
+        if valuation.market_value is not None:
+            return valuation.market_value if tx_qty > 0 else -valuation.market_value
+        if valuation.source == ValuationSource.MISSING and step is not None:
+            return step.cost_report_change
+        return None
 
     def _distribute_allocation(
         self,

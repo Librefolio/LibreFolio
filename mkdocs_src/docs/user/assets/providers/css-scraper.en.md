@@ -65,6 +65,7 @@ Click **Test Configuration**: **Current Price** must show the number you see on 
 | **Price element not found** | The page layout may have changed: copy the selector again. |
 | **Failed to parse price** | Check `decimal_format`. The element must hold just the number: spaces, €, $, £, ¥ and % are ignored, letters such as `EUR` are not. |
 | **HTTP error** or **Request failed** | Check the URL; raise `timeout` for a slow site. Error 403 means the site refuses automated visits. |
+| **Paused for too many requests until …** | The site refused because LibreFolio visited it too often: LibreFolio leaves it alone until then. Your other sites are not affected. |
 | A wrong number | The selector matches another element (LibreFolio uses the first match): make it more specific. |
 
 ## ⚠️ Limits

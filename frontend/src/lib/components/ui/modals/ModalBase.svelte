@@ -33,8 +33,10 @@
         closeOnEscape?: boolean;
         /** Called when the user requests to close (backdrop click or Escape) */
         onRequestClose?: () => void;
-        /** Extra CSS class for the modal-content div */
+        /** Extra CSS class for the modal-content div: layout only, never a colour (a border colour here loses to the frame's own by name) */
         contentClass?: string;
+        /** The frame: 'danger' draws the 2 px danger border of a modal about a destructive or irreversible change */
+        tone?: 'default' | 'danger';
         /** data-testid for testing */
         testId?: string;
         labelledBy?: string;
@@ -50,7 +52,23 @@
         children?: Snippet;
     }
 
-    let {open = false, zIndex = 50, maxWidth = 'lg', closeOnBackdropClick = true, closeOnEscape = true, onRequestClose = () => {}, contentClass = '', testId = '', labelledBy, trapFocus = false, restoreFocus = false, noTransition = false, allowOverflow = false, children}: Props = $props();
+    let {
+        open = false,
+        zIndex = 50,
+        maxWidth = 'lg',
+        closeOnBackdropClick = true,
+        closeOnEscape = true,
+        onRequestClose = () => {},
+        contentClass = '',
+        tone = 'default',
+        testId = '',
+        labelledBy,
+        trapFocus = false,
+        restoreFocus = false,
+        noTransition = false,
+        allowOverflow = false,
+        children,
+    }: Props = $props();
 
     // Max-width preset map
     const maxWidthMap: Record<string, string> = {
@@ -218,7 +236,7 @@
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     {#if noTransition}
         <div class="modal-backdrop" style="z-index: {zIndex};" bind:this={backdropEl} tabindex="-1" onmousedown={handleBackdropMouseDown} onclick={handleBackdropClick} onkeydown={handleKeydown} role="dialog" aria-modal="true" aria-labelledby={labelledBy} data-testid={testId || undefined}>
-            <div class="modal-content {contentClass}" style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}" onclick={stopPropagation}>
+            <div class="modal-content {tone === 'danger' ? 'border-2 border-lf-danger-line' : 'border border-lf-raised'} text-lf-primary {contentClass}" data-tone={tone} style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}" onclick={stopPropagation}>
                 {#if children}{@render children()}{/if}
             </div>
         </div>
@@ -237,7 +255,13 @@
             data-testid={testId || undefined}
             transition:fade={{duration: 150}}
         >
-            <div class="modal-content {contentClass}" style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}" onclick={stopPropagation} transition:scale={{duration: 200, start: 0.95}}>
+            <div
+                class="modal-content {tone === 'danger' ? 'border-2 border-lf-danger-line' : 'border border-lf-raised'} text-lf-primary {contentClass}"
+                data-tone={tone}
+                style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}"
+                onclick={stopPropagation}
+                transition:scale={{duration: 200, start: 0.95}}
+            >
                 {#if children}{@render children()}{/if}
             </div>
         </div>
@@ -255,24 +279,23 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: var(--lf-surface-overlay); /* Q13 */
         padding: 1rem;
         outline: none;
     }
 
+    /* The panel on the roles (N3, Q8): the card surface, the raised shadow. Its border and text are classes in the
+       markup, not here: a component style sits outside Tailwind's layers and would beat every class. The frame's
+       border is one ternary on `tone` (rule 4 of the design system): a colour a caller passes through contentClass
+       would lose to it by name, so a danger frame is `tone="danger"`. */
     .modal-content {
-        background: white;
+        background: var(--lf-surface-card);
         border-radius: 0.75rem;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        box-shadow: 0 25px 50px -12px var(--lf-shadow-raised);
         width: 100%;
         max-height: 90vh;
         display: flex;
         flex-direction: column;
         overflow: hidden;
-    }
-
-    :global(.dark) .modal-content {
-        background: #1e293b;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     }
 </style>

@@ -5,12 +5,16 @@ Covers:
 - B1: Split via batch pipeline (commit with splits[])
 - B2: Promote via batch pipeline (commit with promotes[])
 - B3: Promote-suggest endpoint (POST /transactions/promote-suggest)
+- B4: Edits of rows an older version stored without a cost basis (N2)
 
 Reference: plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md
 """
 
+import contextlib
+import io
+import json
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 
@@ -1429,6 +1433,42 @@ class TestBatchPromote:
 # B3 — PROMOTE-SUGGEST
 # ============================================================================
 
+# W-B71: promote_suggest_bulk searches each input's date ± tolerance_days. Around WINDOW_DAY one standalone WITHDRAWAL
+# EUR -600 is stored at each offset (days): at tolerance_days=7 the offsets 0 and ±7 are inside the window, ±8 just
+# outside. The calendar's edge days, 0001-01-01 and 9999-12-31, are where the window leaves the calendar.
+WINDOW_DAY = date(2026, 3, 10)
+WINDOW_INSIDE = (0, -7, 7)
+WINDOW_OUTSIDE = (-8, 8)
+CALENDAR_EDGES = (date.min, date.max)
+
+
+async def create_window_withdrawals(client: httpx.AsyncClient, broker_id: int) -> dict[int, int]:
+    """One standalone WITHDRAWAL EUR -600 on ``broker_id`` at each offset of WINDOW_INSIDE and WINDOW_OUTSIDE from WINDOW_DAY: ``{offset: id}``."""
+    ids: dict[int, int] = {}
+    for offset in (*WINDOW_INSIDE, *WINDOW_OUTSIDE):
+        ids[offset] = await create_standalone_tx(client, broker_id, "WITHDRAWAL", cash={"code": "EUR", "amount": "-600"}, tx_date=(WINDOW_DAY + timedelta(days=offset)).isoformat())
+    return ids
+
+
+def deposit_input(input_id: int, broker_id: int, day: date) -> dict:
+    """An unsaved DEPOSIT EUR 600 on ``broker_id`` dated ``day``: on another broker, each WITHDRAWAL EUR -600 is its CASH_TRANSFER other half."""
+    return {"id": input_id, "type": "DEPOSIT", "broker_id": broker_id, "date": day.isoformat(), "currency": "EUR", "amount": "600"}
+
+
+def candidate_ids(results: dict, input_id: int) -> list[int]:
+    """The candidates of one input of a promote-suggest answer, by id, sorted."""
+    return sorted(candidate["id"] for candidate in results.get(str(input_id), []))
+
+
+async def post_on_its_own_connection(client: httpx.AsyncClient, url: str, **kwargs) -> httpx.Response:
+    """POST with ``client``'s session on a connection of its own, for a request that may end in an unhandled exception.
+
+    After such a 500 the server closes the connection; sent on the client's own, the next request (the cleanup) could be
+    written to it and fail with a ReadError, leaving the test's rows behind.
+    """
+    async with httpx.AsyncClient(cookies=client.cookies) as own:
+        return await own.post(url, **kwargs)
+
 
 @pytest.mark.asyncio
 class TestPromoteSuggest:
@@ -1885,3 +1925,199 @@ class TestPromoteSuggest:
             ids = sorted(c["id"] for c in resp.json()["results"].get("-1", []))
             assert ids == [same_day_id], f"tolerance_days=0 must offer the ADJUSTMENT(-5) id={same_day_id} of {day} alone, never id={day_before_id} of {day_before}; candidates {ids}"
             print_success("Suggest: tolerance_days=0 offers the same day only ✓")
+
+    async def test_suggest_window_guard_inside_the_calendar(self):
+        """B3.12 — W-B71 guard (passes before and after the cure): the window of an ordinary input, and the edge days at tolerance_days=0.
+
+        At tolerance_days=7 a new DEPOSIT EUR 600 dated 2026-03-10 on broker B is offered the WITHDRAWALs EUR -600 of
+        broker A 0 and 7 days away, either side, never those 8 days away. At tolerance_days=0 the same input, batched with
+        two more dated 0001-01-01 and 9999-12-31, is answered today: a window of the day itself moves nothing past the
+        calendar. One entry per input, the ordinary one keeps its same-day candidate, the edge ones have none. So the edge
+        dates are accepted as such: what B3.13 adds is the window around them.
+        """
+        print_section("B3.12 — Suggest: the window inside the calendar (W-B71 guard)")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_ids: list[int] = []
+            cleanup_problems: list[str] = []
+            try:
+                broker_a = await create_broker(client, "SugEdgeGuardA")
+                broker_ids.append(broker_a)
+                broker_b = await create_broker(client, "SugEdgeGuardB")
+                broker_ids.append(broker_b)
+                rows = await create_window_withdrawals(client, broker_a)
+                inside = sorted(rows[offset] for offset in WINDOW_INSIDE)
+                ordinary = deposit_input(-1, broker_b, WINDOW_DAY)
+
+                week = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=[ordinary], timeout=TIMEOUT)
+                assert week.status_code == 200, week.text
+                found = candidate_ids(week.json()["results"], -1)
+                assert found == inside, f"At tolerance_days=7 a DEPOSIT EUR 600 dated {WINDOW_DAY} on broker {broker_b} must be offered the WITHDRAWALs 0 and 7 days away {inside}, never those 8 days away {[rows[offset] for offset in WINDOW_OUTSIDE]}; candidates {found} (rows by offset {rows})"
+
+                batch = [ordinary, deposit_input(-2, broker_b, date.min), deposit_input(-3, broker_b, date.max)]
+                same_day = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 0}, json=batch, timeout=TIMEOUT)
+                assert same_day.status_code == 200, f"At tolerance_days=0 a batch with inputs dated 0001-01-01 and 9999-12-31 must be answered (the window is the day itself): HTTP {same_day.status_code} {same_day.text}"
+                results = same_day.json()["results"]
+                assert sorted(results) == ["-1", "-2", "-3"], f"One entry per input expected: {sorted(results)}"
+                assert candidate_ids(results, -1) == [rows[0]], f"At tolerance_days=0 the ordinary input keeps its same-day WITHDRAWAL id={rows[0]}, next to the edge-dated inputs: {results}"
+                assert (results["-2"], results["-3"]) == ([], []), f"Nothing is stored on 0001-01-01 or 9999-12-31: {results}"
+                print_success("Suggest: the window reaches 7 days and no further; the edge days are answered at tolerance 0 ✓")
+            finally:
+                cleanup_problems = await delete_owned(client, broker_ids=broker_ids, asset_ids=[])
+            assert cleanup_problems == [], f"Cleanup of the test's brokers: {cleanup_problems}"
+
+    async def test_suggest_cuts_the_window_at_the_calendar_edges(self):
+        """B3.13 — RED until W-B71: inputs dated 0001-01-01 and 9999-12-31 at tolerance_days=7 are answered with no candidate, and the ordinary input of the same batch keeps its own.
+
+        promote_suggest_bulk searches date ± tolerance_days: 7 days before 0001-01-01 or after 9999-12-31 is outside the
+        calendar, OverflowError, a 500 for the whole batch: every draft of the bulk editor loses its suggestions for one row
+        with a mistyped year. The window must be cut at the calendar's edge (shift_date, saturating at date.min /
+        date.max); not a 422, since the save refuses such a date already (N74). Then: one entry per input, none for the
+        edge ones (nothing is stored that early or that late), and the DEPOSIT dated 2026-03-10 is still offered the
+        WITHDRAWALs 0 and 7 days away and never those 8 days away, as in B3.12: the window is still the window.
+        """
+        print_section("B3.13 — Suggest: the window cut at the calendar's edges (W-B71)")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_ids: list[int] = []
+            cleanup_problems: list[str] = []
+            try:
+                broker_a = await create_broker(client, "SugEdgeA")
+                broker_ids.append(broker_a)
+                broker_b = await create_broker(client, "SugEdgeB")
+                broker_ids.append(broker_b)
+                rows = await create_window_withdrawals(client, broker_a)
+                inside = sorted(rows[offset] for offset in WINDOW_INSIDE)
+                batch = [deposit_input(-1, broker_b, WINDOW_DAY), deposit_input(-2, broker_b, date.min), deposit_input(-3, broker_b, date.max)]
+
+                resp = await post_on_its_own_connection(client, f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=batch, timeout=TIMEOUT)
+                if resp.status_code != 200:
+                    alone: dict[str, int] = {}
+                    for edge in CALENDAR_EDGES:
+                        probe = await post_on_its_own_connection(client, f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=[deposit_input(-1, broker_b, edge)], timeout=TIMEOUT)
+                        alone[edge.isoformat()] = probe.status_code
+                    pytest.fail(
+                        f"W-B71: promote-suggest answered HTTP {resp.status_code} ({resp.text[:200]}) to a batch with an input dated 0001-01-01 and one dated 9999-12-31 at tolerance_days=7, next to an ordinary input dated {WINDOW_DAY}; each edge input alone: {alone}. promote_suggest_bulk computes date ∓ timedelta(days=7), which raises OverflowError (a 500) past the calendar, so the whole batch loses its suggestions; a window at the calendar's edge must be cut there (shift_date, saturating at date.min / date.max)",
+                        pytrace=False,
+                    )
+                results = resp.json()["results"]
+                assert sorted(results) == ["-1", "-2", "-3"], f"One entry per input expected: {sorted(results)}"
+                assert (results["-2"], results["-3"]) == ([], []), f"Nothing is stored within 7 days of 0001-01-01 or of 9999-12-31, so the edge inputs have no candidate: {results}"
+                found = candidate_ids(results, -1)
+                assert found == inside, f"Next to the edge inputs, the DEPOSIT dated {WINDOW_DAY} on broker {broker_b} must still be offered the WITHDRAWALs 0 and 7 days away {inside}, never those 8 days away {[rows[offset] for offset in WINDOW_OUTSIDE]}; candidates {found} (rows by offset {rows})"
+                print_success("Suggest: the window is cut at the calendar's edges, the batch keeps its suggestions ✓")
+            finally:
+                cleanup_problems = await delete_owned(client, broker_ids=broker_ids, asset_ids=[])
+            assert cleanup_problems == [], f"Cleanup of the test's brokers: {cleanup_problems}"
+
+
+# ============================================================================
+# B4 — EDITS OF ROWS STORED WITHOUT A COST BASIS (N2)
+# ============================================================================
+
+
+def write_legacy_cost_rows(*, user_id: int, source_broker: int, dest_broker: int, asset_id: int, day: str, marker: str) -> dict[str, int]:
+    """Write a TRANSFER pair and an ADJUSTMENT +5 without cost basis, as a version before the mandatory cost stored them.
+
+    Through the lane-database helper ``test_db/legacy_cost_rows.py`` — the one the E2E data-quality spec runs as a
+    script — called in-process: same lane (TEST_PORT / LIBREFOLIO_TEST_DATA_DIR, exported by the runner), same guards
+    (this lane's test database only, both brokers owned by ``user_id``), one database transaction. TRANSFER 4 units of
+    ``asset_id`` from ``source_broker`` to ``dest_broker`` and ADJUSTMENT +5 of it at ``dest_broker``, all on ``day``:
+    amount 0, no currency, no cost basis; every description carries ``marker`` (the helper gives each leg its own).
+    Returns the helper's three ids: ``transfer_out``, ``transfer_in``, ``adjustment_in``.
+    """
+    from backend.test_scripts.test_db import legacy_cost_rows  # noqa: PLC0415 — imported where used: the module runs setup_test_database() on import, which this one test needs and the collection of the whole file does not
+
+    argv = ["--user-id", str(user_id), "--source-broker", str(source_broker), "--dest-broker", str(dest_broker), "--transfer-asset", str(asset_id), "--adjustment-asset", str(asset_id), "--date", day, "--marker", marker]
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        exit_code = legacy_cost_rows.main(argv)
+    assert exit_code == 0, f"legacy_cost_rows refused, exit {exit_code}: {stderr.getvalue()}"
+    lines = stdout.getvalue().strip().splitlines()
+    assert len(lines) == 1, f"legacy_cost_rows prints one line of JSON; it printed {stdout.getvalue()!r}"
+    return json.loads(lines[0])
+
+
+async def delete_owned(client: httpx.AsyncClient, *, broker_ids: list[int], asset_ids: list[int]) -> list[str]:
+    """Delete what a test created, by id: each broker with force, one request each as the E2E data-quality teardown
+    does (their transactions go with them, rows written by ``legacy_cost_rows`` included), then the assets, which a
+    remaining transaction would block.
+
+    Returns the problems instead of raising, so that a failed cleanup never hides the test's own failure.
+    """
+    problems: list[str] = []
+    try:
+        for broker_id in broker_ids:
+            resp = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": "true"}, timeout=TIMEOUT)
+            if resp.status_code != 200 or not any(item["id"] == broker_id and item["success"] for item in resp.json()["results"]):
+                problems.append(f"broker {broker_id} not deleted: HTTP {resp.status_code} {resp.text}")
+        if asset_ids:
+            resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT)
+            deleted = {item["asset_id"] for item in resp.json()["results"] if item["success"]} if resp.status_code == 200 else set()
+            problems.extend(f"asset {asset_id} not deleted: HTTP {resp.status_code} {resp.text}" for asset_id in asset_ids if asset_id not in deleted)
+    except httpx.HTTPError as exc:
+        problems.append(f"cleanup request failed: {exc!r}")
+    return problems
+
+
+@pytest.mark.asyncio
+class TestRowsStoredWithoutCostBasis:
+    @pytest.fixture(autouse=True)
+    def server(self, test_server):
+        yield
+
+    async def test_legacy_rows_description_only_update_commits(self):
+        """B4.1 — RED until N2: a notes-only edit of rows an older version stored without a cost basis commits.
+
+        The rows are ``legacy_cost_rows``': a TRANSFER pair (−4 / +4) and an ADJUSTMENT +5, amount 0, no currency, no
+        cost basis. The edit sends a new description, and nothing else, for all three — both legs of the pair alike,
+        as a pair keeps one description. It changes no type, quantity or cost: N2 lets it commit and repairs nothing.
+        Today ``_check_update_cost_basis`` checks every update, and refuses the receiving leg (update 1) and the
+        ADJUSTMENT (update 2) with ``costBasisRequired``: ``committed: false``. Service-level twin, with tags and
+        both shapes apart: ``test_services/test_transaction_cost_basis_rule.py``.
+        """
+        print_section("B4.1 — Notes-only edit of rows stored without a cost basis → committed (N2)")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            me = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+            assert me.status_code == 200, me.text
+            user_id = me.json()["user"]["id"]
+            broker_ids: list[int] = []
+            asset_ids: list[int] = []
+            cleanup_problems: list[str] = []
+            try:
+                broker_src = await create_broker(client, "LegacyCbSrc")
+                broker_ids.append(broker_src)
+                broker_dst = await create_broker(client, "LegacyCbDst")
+                broker_ids.append(broker_dst)
+                asset_id = await get_or_create_asset(client, "LegacyCbAsset")
+                asset_ids.append(asset_id)
+                # The source holds 10 units before the legacy transfer takes 4: the edit's balance replay re-reads that day.
+                await create_standalone_tx(client, broker_src, "BUY", asset_id=asset_id, quantity="10", cash={"code": "USD", "amount": "-1000"}, tx_date="2026-03-01")
+                marker = f"B4.1 legacy-cost {uuid.uuid4().hex}"
+                legacy = write_legacy_cost_rows(user_id=user_id, source_broker=broker_src, dest_broker=broker_dst, asset_id=asset_id, day="2026-03-10", marker=marker)
+                notes = f"{marker} notes edited"
+
+                resp = await client.post(
+                    f"{API_BASE}/transactions/commit",
+                    json={"updates": [{"id": legacy[key], "description": notes} for key in ("transfer_out", "transfer_in", "adjustment_in")]},
+                    timeout=TIMEOUT,
+                )
+                assert resp.status_code == 200, resp.text
+                data = resp.json()
+                if not data["committed"]:
+                    pytest.fail(f"N2: a notes-only edit of rows stored without a cost basis (TRANSFER out id={legacy['transfer_out']}, in id={legacy['transfer_in']}, ADJUSTMENT +5 id={legacy['adjustment_in']}) changes no type, quantity or cost and must commit; it was refused: {data['issues']}")
+
+                rows_resp = await client.get(f"{API_BASE}/transactions", params={"ids": list(legacy.values())}, timeout=TIMEOUT)
+                assert rows_resp.status_code == 200, rows_resp.text
+                by_id = {tx["id"]: tx for tx in rows_resp.json()}
+                for key, tx_id in legacy.items():
+                    tx = by_id.get(tx_id)
+                    assert tx is not None, f"{key} id={tx_id} not found after the commit: {rows_resp.json()}"
+                    assert tx["description"] == notes, f"{key} id={tx_id}: description {tx['description']!r} after a committed notes edit"
+                for key in ("transfer_in", "adjustment_in"):
+                    assert by_id[legacy[key]]["cost_basis_override"] is None, f"N2 repairs nothing: {key} id={legacy[key]} now has cost_basis_override={by_id[legacy[key]]['cost_basis_override']}"
+                print_success("Notes-only edit of rows stored without a cost basis → committed, still no cost basis ✓")
+            finally:
+                cleanup_problems = await delete_owned(client, broker_ids=broker_ids, asset_ids=asset_ids)
+            assert cleanup_problems == [], f"Cleanup of the test's brokers and asset: {cleanup_problems}"

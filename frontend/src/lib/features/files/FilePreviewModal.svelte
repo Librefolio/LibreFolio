@@ -1,0 +1,1268 @@
+<script lang="ts">
+    import {browser} from '$app/environment';
+    import {t} from '$lib/i18n';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import type {FilePreviewResponse} from '$lib/types';
+    import {formatBytes} from '$lib/utils/files/upload';
+    import {writeTextToClipboard} from '$lib/utils/clipboard';
+    import {NO_PDF_REPORTS, pdfPreviewState, type PdfPreviewReports, type PdfPreviewState} from '$lib/utils/files/pdfPreviewState';
+    import {buildDarkSpreadsheetTheme, spreadsheetLightBorders, spreadsheetTargetRowBg} from '$lib/theme/drawnColors';
+    import {chartRoles} from '$lib/theme/roleColors';
+    import type {DocumentManagerCapability, TilingCapability} from '@embedpdf/snippet';
+    import {AlertCircle, Copy, Download, Eye, FileImage, FileSpreadsheet, FileText, LoaderCircle, Minus, Plus, RotateCcw, X} from 'lucide-svelte';
+    import katex from 'katex';
+    import 'katex/dist/katex.min.css';
+    import {isDarkTheme} from '$lib/theme/themeMode';
+
+    interface Props {
+        open?: boolean;
+        preview?: FilePreviewResponse | null;
+        loading?: boolean;
+        error?: string | null;
+        onRequestClose?: () => void;
+        onSheetChange?: (sheetName: string) => void;
+        /**
+         * 1-based lines in the source file to tint, scrolling to the first of them. Set
+         * when the preview is opened *from* specific rows: the point of looking at the
+         * file is usually the rows around the ones being questioned, which a plain
+         * preview cannot show.
+         */
+        highlightRows?: number[];
+        zIndex?: number;
+    }
+
+    type CheetahGridInstance = {
+        dispose?: () => void;
+        makeVisibleCell?: (col: number, row: number) => void;
+        setColWidth?: (col: number, width: number) => void;
+        getCellRect?: (col: number, row: number) => {left: number; width: number};
+        getElement?: () => HTMLElement;
+        invalidate?: () => void;
+        /** Recompute the grid's own idea of how wide its content is. */
+        updateSize?: () => void;
+        /** Re-fit the scrollbars to that width. */
+        updateScroll?: () => boolean;
+        scrollLeft?: number;
+        listen?: (type: string, listener: (event: {col: number; row: number; event: MouseEvent}) => void) => void;
+    };
+
+    type CheetahGridModule = {
+        ListGrid: new (options: Record<string, unknown>) => CheetahGridInstance;
+        themes?: {MATERIAL_DESIGN?: {extends?: (patch: Record<string, unknown>) => unknown}};
+    };
+
+    /** The row-number column stays put while the rest scrolls. */
+    const FROZEN_COL_COUNT = 1;
+
+    /**
+     * The preview is a viewer only: it cannot save, so it offers nothing that edits, exports or replaces the document.
+     * The viewer hides every control, and ignores every shortcut, whose command carries one of these categories: the
+     * editing modes with their tools, comments and undo/redo (`history`); the document menu's open, close, print,
+     * protect, capture and export; the area screenshot on Ctrl/Meta+Shift+S (`capture`). Reading, fullscreen and copying
+     * selected text remain.
+     */
+    const PDF_PREVIEW_DISABLED = ['annotation', 'annotation-comment', 'panel-comment', 'insert', 'form', 'redaction', 'history', 'document-open', 'document-close', 'document-print', 'document-protect', 'document-capture', 'document-export', 'capture'];
+
+    /**
+     * The grid's text font, pinned rather than left to the library's default.
+     *
+     * {@link fitColumnWidth} measures text with a canvas ruler, and a ruler set to a
+     * different font than the one being drawn is not a ruler: measuring 13px type that
+     * renders at 16px cut roughly a fifth off every column, which is exactly the tail
+     * of a long sentence going missing. Naming the font makes the two agree by
+     * construction. The value is cheetah-grid's own fallback, so nothing changes on
+     * screen — only the measurement becomes true.
+     */
+    const GRID_FONT = '16px sans-serif';
+
+    /** Left + right cell padding to leave around the widest value. */
+    const CELL_PADDING_PX = 24;
+
+    let {open = false, preview = null, loading = false, error = null, onRequestClose = () => {}, onSheetChange = () => {}, highlightRows = [], zIndex = 50}: Props = $props();
+
+    let markdownMode: 'rendered' | 'raw' = $state('rendered');
+    let copied = $state(false);
+    let imageZoom = $state(1);
+    let imageStage: HTMLDivElement | null = $state(null);
+    let imageDragging = $state(false);
+    let renderedMarkdown = $state('');
+    let markdownError: string | null = $state(null);
+    let pdfError: string | null = $state(null);
+    /** Whether the PDF pages in view are drawn: the stage's data-state (pdfPreviewState.ts). */
+    let pdfState: PdfPreviewState = $state('loading');
+    let tableError: string | null = $state(null);
+
+    let pdfHost: HTMLDivElement | null = $state(null);
+    let tableHost: HTMLDivElement | null = $state(null);
+
+    let markdownToken = 0;
+    let pdfToken = 0;
+    let tableToken = 0;
+    let imageDragPointerId: number | null = null;
+    let imageDragStartX = 0;
+    let imageDragStartY = 0;
+    let imageDragStartScrollLeft = 0;
+    let imageDragStartScrollTop = 0;
+
+    const previewType = $derived(preview?.preview_type ?? null);
+    const sizeBytes = $derived(normalizeNumber(preview?.size_bytes));
+    const textContent = $derived(normalizeString(preview?.text_content));
+    const textLines = $derived(textContent.length > 0 ? textContent.split('\n') : []);
+    const sheetNames = $derived(normalizeStringArray(preview?.sheet_names));
+    const showSheetSelector = $derived(sheetNames.length > 1);
+    const tableRows = $derived(normalizeTableRows(preview?.table_rows));
+    const tableCols = $derived.by(() => {
+        const explicitCols = normalizeNumber(preview?.total_cols);
+        return explicitCols > 0 ? explicitCols : Math.max(...tableRows.map((row) => row.length), 0);
+    });
+    const totalRows = $derived(normalizeNumber(preview?.total_rows));
+    const totalLines = $derived(normalizeNumber(preview?.total_lines));
+    const imageWidth = $derived(normalizeNumber(preview?.image_width));
+    const imageHeight = $derived(normalizeNumber(preview?.image_height));
+    const detectedEncoding = $derived(normalizeString(preview?.detected_encoding));
+    const activeSheetName = $derived(normalizeString(preview?.active_sheet_name));
+    const formattedSize = $derived(preview ? formatBytes(sizeBytes) : '');
+    const encodingLabel = $derived(formatDetectedEncoding(detectedEncoding));
+    const tableSizeLabel = $derived(preview ? `${totalRows} × ${tableCols}` : '');
+    const imagePreviewSource = $derived(normalizeString(preview?.preview_url));
+    const imageFullSource = $derived(normalizeString(preview?.source_url));
+    const imageSource = $derived((imageZoom > 1 ? imageFullSource : imagePreviewSource) || imagePreviewSource || imageFullSource);
+    const canPanImage = $derived(imageZoom > 1);
+    const imageDisplayWidth = $derived(imageWidth > 0 ? Math.max(Math.round(imageWidth * imageZoom), 1) : null);
+    const imageDisplayHeight = $derived(imageHeight > 0 ? Math.max(Math.round(imageHeight * imageZoom), 1) : null);
+
+    $effect(() => {
+        if (!open) {
+            markdownMode = 'rendered';
+            copied = false;
+            resetImageViewport();
+            renderedMarkdown = '';
+            markdownError = null;
+            pdfError = null;
+            tableError = null;
+        }
+    });
+
+    $effect(() => {
+        const currentImage = open && previewType === 'image' ? normalizeString(preview?.source_url) : '';
+        if (!currentImage) return;
+
+        resetImageViewport();
+        queueMicrotask(() => {
+            imageStage?.scrollTo({left: 0, top: 0});
+        });
+    });
+
+    $effect(() => {
+        const markdownText = open && previewType === 'markdown' && markdownMode === 'rendered' ? textContent : '';
+        if (!browser || !markdownText) {
+            renderedMarkdown = '';
+            markdownError = null;
+            return;
+        }
+
+        const token = ++markdownToken;
+        markdownError = null;
+
+        void (async () => {
+            try {
+                const [{marked}, dompurifyModule] = await Promise.all([import('marked'), import('dompurify')]);
+                const cleanHtml = dompurifyModule.default.sanitize(await marked.parse(markdownText));
+                const enrichedHtml = enrichMarkdownHtml(cleanHtml);
+                if (token === markdownToken) {
+                    renderedMarkdown = enrichedHtml;
+                }
+            } catch (err) {
+                if (token === markdownToken) {
+                    renderedMarkdown = '';
+                    markdownError = err instanceof Error ? err.message : 'Failed to render markdown';
+                }
+            }
+        })();
+    });
+
+    $effect(() => {
+        const sourceUrl = open && previewType === 'pdf' ? (preview?.source_url ?? '') : '';
+        const host = pdfHost;
+        if (!browser || !host || !sourceUrl) {
+            if (host) host.innerHTML = '';
+            // No stage while a file is shown means the iframe fallback took its place: keep it. Clearing the error here
+            // would bring the stage back and start the failing viewer again, in a loop.
+            if (!sourceUrl) pdfError = null;
+            pdfState = 'loading';
+            return;
+        }
+
+        const token = ++pdfToken;
+        pdfError = null;
+        pdfState = 'loading';
+        host.innerHTML = '';
+        // The viewer's reports, unsubscribed with the viewer; `disposed` keeps a late subscription from outliving it.
+        const stopListening: Array<() => void> = [];
+        let disposed = false;
+
+        void (async () => {
+            try {
+                const [{default: EmbedPDF, DocumentManagerPlugin, TilingPlugin}, {pdfViewerAssets, pdfViewerOfflineOptions}] = await Promise.all([import('@embedpdf/snippet'), import('$lib/utils/files/pdfViewerAssets')]);
+                // Our engine and fallback fonts when they answer, the viewer's CDN defaults otherwise; nothing else is
+                // asked of a third party (pdfViewerAssets.ts).
+                const assets = await pdfViewerAssets(document.baseURI);
+                if (disposed) return;
+                const viewer = await Promise.resolve(
+                    EmbedPDF.init({
+                        type: 'container',
+                        target: host,
+                        src: sourceUrl,
+                        // The viewer ships three `comment-button` entries in different
+                        // slots — one in categories ['panel','panel-comment'], two in
+                        // ['annotation','annotation-comment'] — and disables a category
+                        // by *hiding* the control, not by unmounting it. A preview that
+                        // cannot save anything must not offer to comment.
+                        disabledCategories: PDF_PREVIEW_DISABLED,
+                        ...assets,
+                        ...pdfViewerOfflineOptions(getComputedStyle(host).fontFamily),
+                    }),
+                );
+                if (!viewer || disposed) return;
+                // Whether the pages in view are drawn, published on the stage as data-state and aria-busy
+                // (pdfPreviewState.ts). Both reports replay their latest value to a late listener, so
+                // listening once the viewer is up misses nothing. An open after an error — the password
+                // typed into the viewer's own prompt — clears the error.
+                const registry = await viewer.registry;
+                if (disposed) return;
+                const documents: DocumentManagerCapability | undefined = registry.getPlugin(DocumentManagerPlugin.id)?.provides?.();
+                const tiling: TilingCapability | undefined = registry.getPlugin(TilingPlugin.id)?.provides?.();
+                if (!documents || !tiling) return;
+                let reports: PdfPreviewReports = NO_PDF_REPORTS;
+                const report = (next: Partial<PdfPreviewReports>) => {
+                    reports = {...reports, ...next};
+                    pdfState = pdfPreviewState(reports);
+                };
+                stopListening.push(
+                    documents.onDocumentOpened(() => report({opened: true, failed: false})),
+                    documents.onDocumentError(() => report({failed: true})),
+                    tiling.onTileRendering(({tiles}) => report({tiles})),
+                    // The viewer must never stay on its own empty state: its «Open Document» button opens any PDF from
+                    // the user's disk inside the preview, and no category turns it off (the button calls the document
+                    // manager directly). The viewer empties itself on «Cancel» at its password prompt and on «Close» on
+                    // its error card; the preview then closes with it. Developer's decision (release 2): close, and do
+                    // not revisit. Only a viewer emptying itself on screen counts: when the preview drops the viewer
+                    // (closed, another file, the fallback), the stage is gone or this listener already stopped.
+                    documents.onDocumentClosed(() => {
+                        if (!disposed && host.isConnected && documents.getDocumentCount() === 0) onRequestClose();
+                    }),
+                );
+            } catch (err) {
+                if (token === pdfToken) {
+                    pdfError = err instanceof Error ? err.message : 'Failed to render PDF';
+                    host.innerHTML = '';
+                }
+            }
+        })();
+
+        return () => {
+            disposed = true;
+            for (const stop of stopListening) stop();
+            host.innerHTML = '';
+        };
+    });
+
+    $effect(() => {
+        const host = tableHost;
+        const rows = open && previewType === 'table' ? tableRows : [];
+        const cols = open && previewType === 'table' ? tableCols : 0;
+
+        if (!browser || !host || rows.length === 0 || cols === 0) {
+            if (host) host.innerHTML = '';
+            tableError = null;
+            return;
+        }
+
+        const token = ++tableToken;
+        const targets = new Set(highlightRows.filter((line) => line > 0 && line <= rows.length));
+        // Jump to the first of them: a highlighted block is read from its start.
+        const scrollTo = targets.size > 0 ? Math.min(...targets) : null;
+        host.innerHTML = '';
+        tableError = null;
+        let gridInstance: CheetahGridInstance | null = null;
+
+        void (async () => {
+            try {
+                const cheetahGrid = (await import('cheetah-grid')) as CheetahGridModule;
+                if (token !== tableToken) return;
+                // The grid draws on a canvas: its colours are the roles read on the grid's own element, once, when the
+                // grid is built (a theme switch shows at the next preview). Firmer grid lines than the stock theme: with
+                // faint borders there is no way to tell a short value from one the column is cutting off.
+                const dark = isDarkTheme();
+                const roles = chartRoles(dark, host);
+                const tableTheme = dark ? buildDarkSpreadsheetTheme(roles) : (cheetahGrid.themes?.MATERIAL_DESIGN?.extends?.({...spreadsheetLightBorders(roles)}) ?? 'MATERIAL_DESIGN');
+
+                // Tinting whole rows, not single cells: the rows are what the caller is
+                // pointing at, and a single highlighted cell reads as a selection instead.
+                const targetRowBg = spreadsheetTargetRowBg(roles);
+                const rowStyle = targets.size === 0 ? undefined : (record: {__rowNumber?: number}) => (record.__rowNumber !== undefined && targets.has(record.__rowNumber) ? {bgColor: targetRowBg} : undefined);
+
+                const records = rows.map((row, rowIndex) => {
+                    const record: Record<string, string | number> = {__rowNumber: rowIndex + 1};
+                    for (let colIndex = 0; colIndex < cols; colIndex += 1) {
+                        record[`c${colIndex}`] = row[colIndex] ?? '';
+                    }
+                    return record;
+                });
+
+                gridInstance = new cheetahGrid.ListGrid({
+                    parentElement: host,
+                    font: GRID_FONT,
+                    frozenColCount: FROZEN_COL_COUNT,
+                    defaultRowHeight: 30,
+                    theme: tableTheme,
+                    header: [
+                        {field: '__rowNumber', caption: '#', width: 56, style: rowStyle},
+                        ...Array.from({length: cols}, (_, index) => ({
+                            field: `c${index}`,
+                            caption: spreadsheetColumnLabel(index),
+                            width: 140,
+                            style: rowStyle,
+                        })),
+                    ],
+                    records,
+                });
+
+                // Double-clicking a header widens that column to its content, the way a
+                // spreadsheet does. Columns are laid out at a fixed width because their
+                // contents are unknown, so long values are cut off far more often here
+                // than in a real spreadsheet, and dragging every one of them is tedious.
+                gridInstance.listen?.('dblclick_cell', (event) => {
+                    if (event.row !== 0 || !gridInstance) return;
+                    const target = columnAtBorder(gridInstance, event.col, event.event);
+                    gridInstance.setColWidth?.(target, fitColumnWidth(target, records, cols));
+                    // The grid caches its own scrollable extent, so a wider column would
+                    // otherwise push the columns after it past a scrollbar that still stops
+                    // where it did before — the far right of the file becomes unreachable.
+                    gridInstance.updateSize?.();
+                    gridInstance.updateScroll?.();
+                    // Widening a column moves every column after it, and the grid only
+                    // repaints the cells it thinks changed — without this the old text
+                    // stays on screen until something else forces a redraw.
+                    gridInstance.invalidate?.();
+                });
+
+                // Row 0 is the header, so file line N sits at grid row N.
+                if (scrollTo !== null) gridInstance.makeVisibleCell?.(0, scrollTo);
+            } catch (err) {
+                if (token === tableToken) {
+                    tableError = err instanceof Error ? err.message : 'Failed to render spreadsheet preview';
+                    host.innerHTML = '';
+                }
+            }
+        })();
+
+        return () => {
+            gridInstance?.dispose?.();
+            host.innerHTML = '';
+        };
+    });
+
+    function spreadsheetColumnLabel(index: number): string {
+        let label = '';
+        let current = index;
+
+        do {
+            label = String.fromCharCode(65 + (current % 26)) + label;
+            current = Math.floor(current / 26) - 1;
+        } while (current >= 0);
+
+        return label;
+    }
+
+    async function copyCurrentText() {
+        if (!textContent) return;
+
+        try {
+            await writeTextToClipboard(textContent);
+            copied = true;
+            window.setTimeout(() => {
+                copied = false;
+            }, 1500);
+        } catch {
+            copied = false;
+        }
+    }
+
+    function zoomIn() {
+        imageZoom = Math.min(imageZoom + 0.25, 4);
+    }
+
+    function zoomOut() {
+        imageZoom = Math.max(imageZoom - 0.25, 0.25);
+        if (imageZoom <= 1) {
+            resetImageViewport();
+        }
+    }
+
+    function resetZoom() {
+        resetImageViewport();
+    }
+
+    function resetImageViewport() {
+        imageZoom = 1;
+        imageDragging = false;
+        releaseImagePointerCapture();
+        imageStage?.scrollTo({left: 0, top: 0});
+    }
+
+    function startImagePan(event: PointerEvent) {
+        if (!canPanImage || !imageStage) return;
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+
+        imageDragging = true;
+        imageDragPointerId = event.pointerId;
+        imageDragStartX = event.clientX;
+        imageDragStartY = event.clientY;
+        imageDragStartScrollLeft = imageStage.scrollLeft;
+        imageDragStartScrollTop = imageStage.scrollTop;
+        imageStage.setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+    }
+
+    function handleImagePan(event: PointerEvent) {
+        if (!imageDragging || !imageStage || imageDragPointerId !== event.pointerId) return;
+
+        event.preventDefault();
+        imageStage.scrollLeft = imageDragStartScrollLeft - (event.clientX - imageDragStartX);
+        imageStage.scrollTop = imageDragStartScrollTop - (event.clientY - imageDragStartY);
+    }
+
+    function stopImagePan(event: PointerEvent) {
+        if (imageDragPointerId !== event.pointerId) return;
+        imageDragging = false;
+        releaseImagePointerCapture();
+    }
+
+    function releaseImagePointerCapture() {
+        if (!imageStage || imageDragPointerId === null) {
+            imageDragPointerId = null;
+            return;
+        }
+
+        try {
+            imageStage.releasePointerCapture?.(imageDragPointerId);
+        } catch {
+            // Ignore lost-capture races while closing the modal.
+        }
+        imageDragPointerId = null;
+    }
+
+    function normalizeString(value: unknown): string {
+        if (typeof value === 'string') return value;
+        if (Array.isArray(value)) {
+            const first = value.find((item) => typeof item === 'string');
+            return typeof first === 'string' ? first : '';
+        }
+        return '';
+    }
+
+    function normalizeNumber(value: unknown): number {
+        if (typeof value === 'number') return value;
+        if (Array.isArray(value)) {
+            const first = value.find((item) => typeof item === 'number');
+            return typeof first === 'number' ? first : 0;
+        }
+        return 0;
+    }
+
+    function normalizeStringArray(value: unknown): string[] {
+        if (!Array.isArray(value)) return [];
+        return value.filter((item): item is string => typeof item === 'string');
+    }
+
+    function normalizeTableRows(value: unknown): string[][] {
+        if (!Array.isArray(value)) return [];
+
+        const directRows = value.filter((row): row is unknown[] => Array.isArray(row));
+        if (directRows.every((row) => row.every((cell) => typeof cell === 'string'))) {
+            return directRows as string[][];
+        }
+
+        const nestedMatrix = directRows.find((row) => row.every((cell) => Array.isArray(cell)));
+        if (nestedMatrix) {
+            return nestedMatrix.filter((row): row is unknown[] => Array.isArray(row)).map((row) => row.map((cell) => (typeof cell === 'string' ? cell : '')));
+        }
+
+        return directRows.map((row) => row.map((cell) => (typeof cell === 'string' ? cell : '')));
+    }
+
+    function formatDetectedEncoding(encoding: string): string {
+        const normalized = encoding.trim().toLowerCase();
+        if (!normalized || normalized === 'utf-8' || normalized === 'utf-8-sig') return '';
+        if (normalized === 'latin-1') return 'Latin-1';
+        if (normalized === 'cp1252') return 'Windows-1252';
+        return normalized.toUpperCase();
+    }
+
+    function enrichMarkdownHtml(html: string): string {
+        if (!browser || !html) return html;
+
+        const documentFragment = new DOMParser().parseFromString(html, 'text/html');
+        renderMarkdownBlockMath(documentFragment);
+        renderMarkdownInlineMath(documentFragment);
+        return documentFragment.body.innerHTML;
+    }
+
+    function renderMarkdownBlockMath(documentFragment: Document): void {
+        for (const paragraph of Array.from(documentFragment.body.querySelectorAll('p'))) {
+            if (paragraph.children.length > 0) continue;
+
+            const content = paragraph.textContent?.trim() ?? '';
+            if (!content.startsWith('$$') || !content.endsWith('$$')) continue;
+
+            const formula = content.slice(2, -2).trim();
+            if (!formula) continue;
+
+            paragraph.innerHTML = katex.renderToString(formula, {
+                throwOnError: false,
+                displayMode: true,
+            });
+            paragraph.classList.add('markdown-math-block');
+        }
+    }
+
+    function renderMarkdownInlineMath(documentFragment: Document): void {
+        const walker = documentFragment.createTreeWalker(documentFragment.body, NodeFilter.SHOW_TEXT);
+        const textNodes: Text[] = [];
+
+        let currentNode = walker.nextNode();
+        while (currentNode) {
+            const textNode = currentNode as Text;
+            if (shouldRenderInlineMath(textNode)) {
+                textNodes.push(textNode);
+            }
+            currentNode = walker.nextNode();
+        }
+
+        for (const textNode of textNodes) {
+            replaceInlineMath(documentFragment, textNode);
+        }
+    }
+
+    function shouldRenderInlineMath(textNode: Text): boolean {
+        const parent = textNode.parentElement;
+        const text = textNode.nodeValue ?? '';
+        if (!parent || !text.includes('$')) return false;
+        return !parent.closest('code, pre, .katex, .katex-display');
+    }
+
+    function replaceInlineMath(documentFragment: Document, textNode: Text): void {
+        const content = textNode.nodeValue ?? '';
+        const matches = Array.from(content.matchAll(/\$([^$\n]+?)\$/g));
+        if (matches.length === 0) return;
+
+        const fragment = documentFragment.createDocumentFragment();
+        let cursor = 0;
+
+        for (const match of matches) {
+            const fullMatch = match[0];
+            const formula = match[1];
+            const start = match.index ?? -1;
+            if (start < cursor) continue;
+
+            if (start > cursor) {
+                fragment.append(documentFragment.createTextNode(content.slice(cursor, start)));
+            }
+
+            const wrapper = documentFragment.createElement('span');
+            wrapper.innerHTML = katex.renderToString(formula, {
+                throwOnError: false,
+                displayMode: false,
+            });
+            while (wrapper.firstChild) {
+                fragment.append(wrapper.firstChild);
+            }
+
+            cursor = start + fullMatch.length;
+        }
+
+        if (cursor < content.length) {
+            fragment.append(documentFragment.createTextNode(content.slice(cursor)));
+        }
+
+        textNode.parentNode?.replaceChild(fragment, textNode);
+    }
+
+    /** How close to a column border still counts as a click *on* the border. */
+    const BORDER_GRAB_PX = 6;
+
+    /**
+     * Column a header double-click means to resize.
+     *
+     * On the border between A and B the grid reports whichever cell owns that exact
+     * pixel, so the same gesture resizes A or B depending on where the pointer landed
+     * by a pixel. A spreadsheet has no such doubt: the border belongs to the column on
+     * its left, so a click within {@link BORDER_GRAB_PX} of a cell's left edge is read
+     * as a click on the previous column.
+     */
+    function columnAtBorder(grid: CheetahGridInstance, col: number, event: MouseEvent): number {
+        if (col <= 0) return col;
+        const element = grid.getElement?.();
+        const rect = grid.getCellRect?.(col, 0);
+        if (!element || !rect) return col;
+        // Frozen columns do not move with the horizontal scroll, so only the scrollable
+        // ones need it added back to reach the grid's own coordinate space.
+        const scrolled = col >= FROZEN_COL_COUNT ? (grid.scrollLeft ?? 0) : 0;
+        const pointer = event.clientX - element.getBoundingClientRect().left + scrolled;
+        return pointer - rect.left <= BORDER_GRAB_PX ? col - 1 : col;
+    }
+
+    /** Shared text ruler for {@link fitColumnWidth} — creating a canvas per column is waste. */
+    let textRuler: CanvasRenderingContext2D | null = null;
+
+    /**
+     * Width that shows the longest value in a column in full, header included, within
+     * limits: a column narrower than its header is unreadable, and one wider than the
+     * modal pushes everything else off screen.
+     */
+    function fitColumnWidth(col: number, records: Record<string, string | number>[], cols: number): number {
+        if (!textRuler) textRuler = document.createElement('canvas').getContext('2d');
+        if (!textRuler) return 140;
+        textRuler.font = GRID_FONT;
+        const field = col === 0 ? '__rowNumber' : `c${col - 1}`;
+        const caption = col === 0 ? '#' : spreadsheetColumnLabel(Math.min(col - 1, cols - 1));
+        let widest = textRuler.measureText(caption).width;
+        for (const record of records) {
+            const width = textRuler.measureText(String(record[field] ?? '')).width;
+            if (width > widest) widest = width;
+        }
+        return Math.min(720, Math.max(56, Math.ceil(widest) + CELL_PADDING_PX));
+    }
+</script>
+
+<ModalBase {open} {onRequestClose} maxWidth="5xl" contentClass="file-preview-modal" testId="file-preview-modal" {zIndex}>
+    <div class="preview-shell" data-testid="file-preview-shell" aria-busy={loading} data-busy={loading}>
+        <div class="preview-header">
+            <div class="preview-heading">
+                <div class="preview-title-row">
+                    {#if previewType === 'image'}
+                        <FileImage size={18} />
+                    {:else if previewType === 'table'}
+                        <FileSpreadsheet size={18} />
+                    {:else}
+                        <FileText size={18} />
+                    {/if}
+                    <h3 class="preview-title">{preview?.filename || $t('common.preview')}</h3>
+                </div>
+
+                {#if preview}
+                    <div class="preview-meta">
+                        <span>{preview.mime_type}</span>
+                        <span>•</span>
+                        <span>{formattedSize}</span>
+                        {#if previewType === 'text' || previewType === 'markdown'}
+                            <span>•</span>
+                            <span>{totalLines} {$t('uploads.previewLines')}</span>
+                            {#if encodingLabel}
+                                <span>•</span>
+                                <span>{encodingLabel}</span>
+                            {/if}
+                        {:else if previewType === 'table'}
+                            <span>•</span>
+                            <span>{tableSizeLabel}</span>
+                        {:else if previewType === 'image'}
+                            <span>•</span>
+                            <span>{imageWidth} × {imageHeight}</span>
+                        {/if}
+                    </div>
+                {/if}
+            </div>
+
+            <div class="preview-actions">
+                {#if previewType === 'markdown'}
+                    <div class="preview-toggle" data-testid="file-preview-markdown-toggle">
+                        <button class:active={markdownMode === 'rendered'} onclick={() => (markdownMode = 'rendered')} type="button" data-testid="file-preview-markdown-rendered-btn">
+                            {$t('uploads.previewRendered')}
+                        </button>
+                        <button class:active={markdownMode === 'raw'} onclick={() => (markdownMode = 'raw')} type="button" data-testid="file-preview-markdown-raw-btn">
+                            {$t('uploads.previewRaw')}
+                        </button>
+                    </div>
+                {/if}
+
+                {#if previewType === 'image'}
+                    <div class="preview-toggle">
+                        <button type="button" onclick={zoomOut} aria-label={$t('uploads.zoomOut')}>
+                            <Minus size={16} />
+                        </button>
+                        <button type="button" onclick={resetZoom} aria-label={$t('common.reset')}>
+                            <RotateCcw size={16} />
+                        </button>
+                        <button type="button" onclick={zoomIn} aria-label={$t('uploads.zoomIn')} data-testid="file-preview-zoom-in">
+                            <Plus size={16} />
+                        </button>
+                    </div>
+                {/if}
+
+                {#if preview && (previewType === 'text' || previewType === 'markdown')}
+                    <button class="icon-btn" type="button" onclick={copyCurrentText} title={$t('uploads.previewCopy')} data-testid="file-preview-copy">
+                        <Copy size={16} />
+                        <span>{copied ? $t('common.copied') : $t('uploads.previewCopy')}</span>
+                    </button>
+                {/if}
+
+                {#if preview}
+                    <a class="icon-btn" href={preview.download_url} download={preview.filename} data-testid="file-preview-download">
+                        <Download size={16} />
+                        <span>{$t('uploads.download')}</span>
+                    </a>
+                {/if}
+
+                <button class="close-btn" type="button" onclick={onRequestClose} aria-label={$t('common.close')}>
+                    <X size={18} />
+                </button>
+            </div>
+        </div>
+
+        {#if loading}
+            <div class="preview-state">
+                <div class="preview-spinner">
+                    <LoaderCircle size={28} />
+                </div>
+                <p>{$t('common.loading')}</p>
+            </div>
+        {:else if error}
+            <div class="preview-state error-state">
+                <AlertCircle size={28} />
+                <p>{error}</p>
+            </div>
+        {:else if preview}
+            <div class="preview-body">
+                {#if previewType === 'image'}
+                    <div class="image-stage" class:pannable={canPanImage} class:dragging={imageDragging} bind:this={imageStage} data-testid="file-preview-image" onpointerdown={startImagePan} onpointermove={handleImagePan} onpointerup={stopImagePan} onpointercancel={stopImagePan}>
+                        <div class="image-canvas">
+                            <img src={imageSource} alt={preview.filename} width={imageDisplayWidth ?? undefined} height={imageDisplayHeight ?? undefined} draggable="false" decoding="async" />
+                        </div>
+                    </div>
+                {:else if previewType === 'pdf'}
+                    {#if pdfError}
+                        <div class="preview-inline-error">
+                            <AlertCircle size={18} />
+                            <span>{$t('uploads.previewFallbackPdf')}</span>
+                        </div>
+                        <iframe class="pdf-fallback" src={preview.source_url} title={preview.filename} data-testid="file-preview-pdf-fallback"></iframe>
+                    {:else}
+                        <div class="pdf-stage" bind:this={pdfHost} data-testid="file-preview-pdf" data-state={pdfState} aria-busy={pdfState === 'loading'}></div>
+                    {/if}
+                {:else if previewType === 'table'}
+                    <div class="table-stage">
+                        <div class="table-toolbar">
+                            {#if showSheetSelector}
+                                <label>
+                                    <span>{$t('uploads.previewSheet')}</span>
+                                    <select value={activeSheetName} onchange={(event) => onSheetChange((event.currentTarget as HTMLSelectElement).value)} data-testid="file-preview-sheet-select">
+                                        {#each sheetNames as sheetName}
+                                            <option value={sheetName}>{sheetName}</option>
+                                        {/each}
+                                    </select>
+                                </label>
+                            {/if}
+
+                            <div class="table-summary">
+                                <Eye size={16} />
+                                <span>{tableSizeLabel}</span>
+                            </div>
+
+                            <!-- The gesture is standard in a spreadsheet but invisible here:
+                                 nothing about a canvas suggests its headers can be acted on. -->
+                            <div class="table-hint" data-testid="file-preview-autofit-hint">{$t('uploads.previewAutofitHint')}</div>
+                        </div>
+
+                        {#if tableError}
+                            <div class="preview-inline-error">
+                                <AlertCircle size={18} />
+                                <span>{$t('uploads.previewFallbackTable')}</span>
+                            </div>
+                            <div class="table-fallback">
+                                <table>
+                                    <tbody>
+                                        {#each tableRows as row}
+                                            <tr>
+                                                {#each row as cell}
+                                                    <td>{cell}</td>
+                                                {/each}
+                                            </tr>
+                                        {/each}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {:else}
+                            <div class="grid-host" bind:this={tableHost} data-testid="file-preview-grid"></div>
+                        {/if}
+                    </div>
+                {:else if previewType === 'markdown' && markdownMode === 'rendered'}
+                    {#if markdownError}
+                        <div class="preview-inline-error">
+                            <AlertCircle size={18} />
+                            <span>{markdownError}</span>
+                        </div>
+                    {/if}
+                    <div class="markdown-stage" data-testid="file-preview-markdown-rendered">
+                        {@html renderedMarkdown}
+                    </div>
+                {:else}
+                    <div class="text-stage" data-testid="file-preview-text">
+                        <div class="text-lines">
+                            {#each textLines as line, index}
+                                <div class="text-line">
+                                    <span class="line-number">{index + 1}</span>
+                                    <code>{line || ' '}</code>
+                                </div>
+                            {/each}
+                        </div>
+                    </div>
+                {/if}
+            </div>
+        {:else}
+            <div class="preview-state">
+                <p>{$t('common.noData')}</p>
+            </div>
+        {/if}
+    </div>
+</ModalBase>
+
+<style>
+    .preview-shell {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .preview-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        border-bottom: 1px solid var(--lf-border-subtle);
+        padding: 1rem 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .preview-heading {
+        min-width: 0;
+    }
+
+    .preview-title-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 600;
+    }
+
+    .preview-title {
+        margin: 0;
+        font-size: 1.05rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .preview-meta {
+        margin-top: 0.35rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        color: var(--lf-text-muted);
+        font-size: 0.85rem;
+    }
+
+    .preview-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .preview-toggle {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid var(--lf-border-subtle);
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+
+    .preview-toggle button,
+    .icon-btn,
+    .close-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        border: none;
+        background: var(--lf-surface-card);
+        color: var(--lf-text-primary);
+        cursor: pointer;
+        text-decoration: none;
+        padding: 0.55rem 0.8rem;
+        font-size: 0.85rem;
+    }
+
+    .preview-toggle button.active {
+        background: var(--lf-checked);
+        color: var(--lf-on-checked);
+    }
+
+    .icon-btn,
+    .close-btn {
+        border: 1px solid var(--lf-border-subtle);
+        border-radius: 0.5rem;
+    }
+
+    .close-btn {
+        padding-inline: 0.65rem;
+    }
+
+    .preview-body {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        padding: 1rem 1.25rem 1.25rem;
+        overflow: hidden;
+        overscroll-behavior: contain;
+    }
+
+    .preview-state,
+    .preview-inline-error {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 1.25rem;
+        color: var(--lf-text-muted);
+    }
+
+    .preview-inline-error {
+        justify-content: flex-start;
+        padding-inline: 0;
+        color: var(--lf-warning);
+    }
+
+    .error-state {
+        color: var(--lf-danger);
+    }
+
+    .preview-spinner {
+        display: inline-flex;
+        animation: spin 1s linear infinite;
+    }
+
+    .preview-spinner :global(svg) {
+        animation: spin 1s linear infinite;
+    }
+
+    .image-stage,
+    .pdf-stage,
+    .pdf-fallback,
+    .table-stage,
+    .text-stage,
+    .markdown-stage {
+        flex: 1;
+        min-height: 0;
+    }
+
+    .image-stage {
+        overflow: auto;
+        border-radius: 0.75rem;
+        background: var(--lf-surface-panel);
+        padding: 1rem;
+        overscroll-behavior: contain;
+    }
+
+    .image-stage.pannable {
+        cursor: grab;
+        touch-action: none;
+    }
+
+    .image-stage.dragging,
+    .image-stage.dragging * {
+        cursor: grabbing;
+    }
+
+    .image-canvas {
+        width: max-content;
+        min-width: 100%;
+        min-height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+    }
+
+    .image-stage img {
+        display: block;
+        max-width: none;
+        user-select: none;
+        -webkit-user-drag: none;
+        transition:
+            width 0.12s ease,
+            height 0.12s ease;
+    }
+
+    .pdf-stage,
+    .pdf-fallback,
+    .grid-host,
+    .table-fallback {
+        width: 100%;
+        border: 1px solid var(--lf-border-subtle);
+        border-radius: 0.75rem;
+        background: var(--lf-surface-field);
+        overscroll-behavior: contain;
+    }
+
+    .pdf-stage,
+    .pdf-fallback {
+        border-color: var(--lf-border-input);
+    }
+
+    .pdf-stage,
+    .pdf-fallback,
+    .grid-host,
+    .table-fallback {
+        flex: 1;
+        min-height: 0;
+        height: auto;
+    }
+
+    .table-stage {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .table-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        color: var(--lf-text-muted);
+        font-size: 0.85rem;
+    }
+
+    .table-toolbar label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .table-toolbar select {
+        border: 1px solid var(--lf-border-input);
+        border-radius: 0.45rem;
+        background: var(--lf-surface-field);
+        padding: 0.4rem 0.6rem;
+        color: inherit;
+        color: var(--lf-text-primary);
+    }
+
+    .table-summary {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .table-hint {
+        margin-left: auto;
+        font-size: 0.7rem;
+        opacity: 0.65;
+    }
+
+    .table-fallback {
+        overflow: auto;
+    }
+
+    .table-fallback table {
+        width: max-content;
+        min-width: 100%;
+        border-collapse: collapse;
+    }
+
+    .table-fallback td {
+        border: 1px solid var(--lf-border-subtle);
+        padding: 0.45rem 0.6rem;
+        white-space: nowrap;
+    }
+
+    .text-stage {
+        border: 1px solid var(--lf-border-subtle);
+        border-radius: 0.75rem;
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
+        overflow: auto;
+        padding: 0.75rem 0 1rem;
+        overscroll-behavior: contain;
+    }
+
+    .text-lines {
+        display: flex;
+        flex-direction: column;
+        padding-block: 0.25rem;
+    }
+
+    .text-line {
+        display: grid;
+        grid-template-columns: 3rem minmax(0, 1fr);
+        gap: 0.9rem;
+        padding: 0.15rem 1.25rem 0.15rem 1.5rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.85rem;
+        line-height: 1.55;
+    }
+
+    .text-line:hover {
+        background: var(--lf-surface-hover);
+    }
+
+    .line-number {
+        color: var(--lf-text-muted);
+        text-align: right;
+        user-select: none;
+    }
+
+    .text-line code {
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: inherit;
+        background: transparent;
+        padding: 0;
+    }
+
+    .markdown-stage {
+        overflow: auto;
+        border: 1px solid var(--lf-border-subtle);
+        border-radius: 0.75rem;
+        background: var(--lf-surface-field);
+        padding: 1.25rem;
+        overscroll-behavior: contain;
+        color: var(--lf-text-primary);
+        line-height: 1.7;
+    }
+
+    .markdown-stage :global(h1),
+    .markdown-stage :global(h2),
+    .markdown-stage :global(h3) {
+        margin-top: 1.2rem;
+        margin-bottom: 0.6rem;
+        line-height: 1.25;
+        font-weight: 700;
+    }
+
+    .markdown-stage :global(h1) {
+        font-size: 1.8rem;
+    }
+
+    .markdown-stage :global(h2) {
+        font-size: 1.45rem;
+    }
+
+    .markdown-stage :global(h3) {
+        font-size: 1.15rem;
+    }
+
+    .markdown-stage :global(h1:first-child),
+    .markdown-stage :global(h2:first-child),
+    .markdown-stage :global(h3:first-child),
+    .markdown-stage :global(p:first-child) {
+        margin-top: 0;
+    }
+
+    .markdown-stage :global(p),
+    .markdown-stage :global(ul),
+    .markdown-stage :global(ol) {
+        margin: 0.75rem 0;
+    }
+
+    .markdown-stage :global(ul),
+    .markdown-stage :global(ol) {
+        padding-left: 1.4rem;
+    }
+
+    .markdown-stage :global(li + li) {
+        margin-top: 0.35rem;
+    }
+
+    .markdown-stage :global(blockquote) {
+        margin: 1rem 0;
+        border-left: 4px solid var(--lf-border-input);
+        border-radius: 0.5rem;
+        background: var(--lf-surface-panel);
+        padding: 0.3rem 1rem;
+        color: var(--lf-text-secondary);
+    }
+
+    .markdown-stage :global(table) {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+    }
+
+    .markdown-stage :global(th),
+    .markdown-stage :global(td) {
+        border: 1px solid var(--lf-border-subtle);
+        padding: 0.55rem 0.7rem;
+        text-align: left;
+        vertical-align: top;
+    }
+
+    .markdown-stage :global(th) {
+        background: var(--lf-surface-panel);
+        font-weight: 600;
+    }
+
+    .markdown-stage :global(pre) {
+        margin: 1rem 0;
+        overflow: auto;
+        border-radius: 0.75rem;
+        background: var(--lf-terminal-bg);
+        color: var(--lf-terminal-text);
+        padding: 1rem;
+    }
+
+    .markdown-stage :global(code) {
+        background: var(--lf-surface-panel);
+        border-radius: 0.35rem;
+        padding: 0.1rem 0.3rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .markdown-stage :global(pre code) {
+        background: transparent;
+        color: inherit;
+        padding: 0;
+    }
+
+    .markdown-stage :global(hr) {
+        border: none;
+        border-top: 1px solid var(--lf-border-subtle);
+        margin: 1.25rem 0;
+    }
+
+    .markdown-stage :global(.markdown-math-block) {
+        overflow-x: auto;
+    }
+
+    .markdown-stage :global(.katex-display) {
+        margin: 0.75rem 0;
+    }
+
+    :global(.file-preview-modal) {
+        height: min(86dvh, 58rem);
+        max-height: calc(100dvh - 2rem);
+    }
+
+    @keyframes spin {
+        from {
+            transform: rotate(0deg);
+        }
+
+        to {
+            transform: rotate(360deg);
+        }
+    }
+</style>

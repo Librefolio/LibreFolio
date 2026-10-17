@@ -22,7 +22,8 @@ import pytest
 
 from backend.app.config import DEFAULT_TEST_DATA_DIR
 from backend.app.services import provider_registry as registry_module
-from backend.app.services.provider_registry import AbstractPluginRegistry, AbstractProviderRegistry, BRIMProviderRegistry, PluginDiscoveryFailure, register_provider
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.provider_registry import AbstractPluginRegistry, AbstractProviderRegistry, PluginDiscoveryFailure, register_provider
 
 
 @dataclass

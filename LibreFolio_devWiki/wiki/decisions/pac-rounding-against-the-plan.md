@@ -130,7 +130,7 @@ percentage already computed — [[features/F-107]].
 |------|------|
 | Posting families, `_PLAN_ROUNDING`, `_validate_posting` | `backend/app/services/pac_allocator/ledger.py` |
 | SCIP rows (`_posted_units_term`, `FX_CREDIT_POSITIVE`, modelled families) | `backend/app/services/pac_allocator/constraints.py` |
-| Exact replay, `rounding_bound`, top-ups | `backend/app/services/pac_allocator/evaluator.py` |
+| Exact replay, `rounding_bound`, top-ups | `backend/app/services/pac_allocator/evaluation/evaluator.py`, `backend/app/services/pac_allocator/evaluation/economics.py` |
 | Rate band β, `allocation.fx_rate_inconsistent` | `backend/app/services/pac_allocator/normalize.py` |
 | `post_floor`, `post_ceiling`, `calculate_planning_fx_rate` | `backend/app/services/pac_allocator/numeric.py` |
 | `ExactReplayRejectedError` → `execution_failed` | `backend/app/services/pac_allocator/planner.py` |

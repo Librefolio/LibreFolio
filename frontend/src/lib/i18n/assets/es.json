@@ -56,7 +56,8 @@
       "progressWipe": "Eliminando {prices} precios + {events} eventos y desconectando {linkedTx} transacciones…",
       "wipeSuccess": "Eliminados {prices} precios, {events} eventos; desconectadas {linkedTx} transacciones",
       "bodyIntro": "El cambio de divisa requiere eliminar todos los datos de mercado almacenados (ver resumen abajo). LibreFolio intentará luego re-sincronizar precios y eventos desde el proveedor en la nueva divisa.",
-      "bodyCaveat": "Las transacciones enlazadas a los eventos eliminados serán desconectadas — es tu responsabilidad reasociarlas a los nuevos eventos si es necesario."
+      "bodyCaveat": "Las transacciones enlazadas a los eventos eliminados serán desconectadas — es tu responsabilidad reasociarlas a los nuevos eventos si es necesario.",
+      "splitAdjustmentsWithoutCost": "No se ha cambiado la divisa: el desdoblamiento del {date} tiene {n, plural, one {# ajuste vinculado} other {# ajustes vinculados}} sin coste de compra{hidden, plural, =0 {} one { (# en un bróker que no puedes ver)} other { (# en brókers que no puedes ver)}}{more, plural, =0 {} one {, y # desdoblamiento más también} other {, y # desdoblamientos más también}}. Cambiar la divisa borra los desdoblamientos, y esas unidades contarían como compradas a un precio desconocido: da primero un coste de compra a los ajustes."
     },
     "pricesInCurrency": "Precios en {currency}",
     "eventsInCurrency": "Eventos en {currency}",
@@ -70,7 +71,8 @@
     },
     "notFound": "Activo n.º {id} no encontrado",
     "loadFailed": "No se pudo cargar la información del activo",
-    "pricesLoadFailed": "No se pudieron cargar los precios"
+    "pricesLoadFailed": "No se pudieron cargar los precios",
+    "manualChip": "Manual"
   },
   "assets": {
     "create": "Nuevo activo",
@@ -98,15 +100,16 @@
     },
     "delete": {
       "confirmQuestion": "¿Eliminar \"{name}\"?",
-      "confirmWarning": "Las asignaciones de proveedores y el historial de precios serán eliminados. ⚠️",
+      "confirmWarning": "Las asignaciones de proveedores, el historial de precios y los eventos (dividendos, desdoblamientos…) serán eliminados. ⚠️",
       "toastOk": "{name} eliminado",
       "toastFailed": "Error al eliminar {name}",
       "hasTransactions": "No se puede eliminar \"{name}\": tiene transacciones existentes",
       "bulkOk": "{n} activos eliminados",
       "bulkPartial": "{failed} activos no eliminados (tienen transacciones)",
-      "bulkConfirmMessage": "Eliminar {n} activos? Las asignaciones de proveedores y el historial de precios se eliminaran.",
+      "bulkConfirmMessage": "¿Eliminar {n, plural, one {# activo} other {# activos}}? Las asignaciones de proveedores, el historial de precios y los eventos (dividendos, desdoblamientos…) se eliminarán.",
       "resultDeleted": "eliminado",
-      "resultHasTransactions": "tiene transacciones existentes"
+      "resultHasTransactions": "tiene transacciones existentes",
+      "itemsLabel": "{count, plural, one {# activo} other {# activos}}"
     },
     "merge": {
       "title": "Fusionar activos",
@@ -213,7 +216,10 @@
       "currencyHelp": "Divisa en la que se guardan los precios de este activo.",
       "currencyHelpLabel": "Información sobre la divisa del activo",
       "nameRequired": "Introduce el nombre del activo para continuar.",
-      "descriptionPlaceholder": "Breve descripción del activo…"
+      "descriptionPlaceholder": "Breve descripción del activo…",
+      "planSplitAdjustmentsWithoutCost": "No se han cambiado el proveedor ni sus parámetros: el desdoblamiento del {date}, generado por el proveedor, tiene {n, plural, one {# ajuste vinculado} other {# ajustes vinculados}} sin coste de compra{hidden, plural, =0 {} one { (# en un bróker que no puedes ver)} other { (# en brókers que no puedes ver)}}{more, plural, =0 {} one {, y # desdoblamiento más también} other {, y # desdoblamientos más también}}. Cambiar estos parámetros, o el proveedor, borra los eventos que generó, y esas unidades contarían como compradas a un precio desconocido: da primero un coste de compra a los ajustes.",
+      "providerRemovalLinkedTransactions": "No se ha quitado el proveedor: el evento {type} del {date}, generado por el proveedor, está vinculado a {n, plural, one {# transacción} other {# transacciones}}{hidden, plural, =0 {} one { (# en un bróker que no puedes ver)} other { (# en brókers que no puedes ver)}}{more, plural, =0 {} one {, y # evento más también} other {, y # eventos más también}}. Quitar el proveedor borra los eventos que generó: desvincula primero esas transacciones.",
+      "providerRemovalConflict": "No se ha quitado el proveedor: algunos datos todavía se refieren a los eventos que generó. Recarga la página y vuelve a intentarlo."
     },
     "provider": {
       "assignment": "Asignación de Proveedor",
@@ -281,7 +287,8 @@
       "notTested": "No probado",
       "totalTime": "Total",
       "copyErrorDetail": "Copiar el detalle del error",
-      "points": "{count, plural, one {{n} punto} other {{n} puntos}}"
+      "points": "{count, plural, one {{n} punto} other {{n} puntos}}",
+      "scopeNote": "La prueba solo lee los últimos días: un activo nuevo recibe todo su historial de precios al crearse."
     },
     "identifiers": {
       "askProvider": "Consultar Proveedor",
@@ -325,7 +332,23 @@
       "placeholder": "Buscar por nombre, ticker, ISIN...",
       "searching": "Buscando...",
       "timeout": "La búsqueda expiró. Inténtalo de nuevo.",
-      "rankHint": "Posición en la búsqueda web (metabúsqueda en varios motores) — el primer resultado es la coincidencia más probable"
+      "rankHint": "Posición en la búsqueda web (metabúsqueda en varios motores) — el primer resultado es la coincidencia más probable",
+      "notConfigured": "{provider} debe configurarse antes de poder buscar",
+      "crownLegend": "👑 la moneda del fondo",
+      "premiumBadge": "Premium",
+      "premiumEmpty": "Ningún resultado de las fuentes premium.",
+      "communitySection": "Fuentes no premium (comunidad) · {count, plural, one {# resultado} other {# resultados}}",
+      "communityWarning": "Fuentes de terceros: LibreFolio no garantiza sus precios ni sus datos. La elección solo vale para este activo.",
+      "reportQuestion": "¿No lo encuentras?",
+      "reportAction": "Avísanos",
+      "reportVia": {
+        "mailto": "Abre tu app de correo con los detalles de esta búsqueda",
+        "page": "Abre la página de soporte y copia los detalles de esta búsqueda, para pegarlos allí",
+        "github": "Abre una incidencia pública en GitHub con los detalles de esta búsqueda: revísala antes de enviarla"
+      },
+      "reportCopied": "Detalles de la búsqueda copiados: pégalos en la página de soporte.",
+      "reportCopyFailed": "No se pudieron copiar los detalles de la búsqueda: describe tu búsqueda en la página de soporte.",
+      "failed": "La búsqueda ha fallado. Inténtalo de nuevo."
     },
     "comparison": {
       "title": "Comparación de datos del proveedor",
@@ -373,13 +396,42 @@
     "typeSelect": {
       "searchPlaceholder": "Buscar un tipo",
       "noMatches": "Ningún tipo coincidente"
+    },
+    "dataEditor": {
+      "saved": "Datos del activo: {details}",
+      "pricesSaved": "{count, plural, one {# precio guardado} other {# precios guardados}}",
+      "pricesDeleted": "{count, plural, one {# precio eliminado} other {# precios eliminados}}",
+      "pricesSkipped": "{count, plural, one {# fila omitida (no válida)} other {# filas omitidas (no válidas)}}",
+      "eventsSaved": "{count, plural, one {# evento guardado} other {# eventos guardados}}",
+      "pricesRefused": "{count, plural, one {# precio rechazado} other {# precios rechazados}}"
     }
   },
   "events": {
-    "deleteSuccess": "{n} evento(s) eliminado(s)",
-    "deleteNotFound": "Evento(s) no encontrado(s): {ids}",
-    "deleteBlocked": "No se puede eliminar: {n} evento(s) aún en uso por transacciones ({accessible} visibles para ti, {hidden} en carteras de otros usuarios)",
-    "fxBannerContext": "para eventos dividendo/efectivo"
+    "deleteSuccess": "{n, plural, one {# evento eliminado} other {# eventos eliminados}}",
+    "fxBannerContext": "para eventos dividendo/efectivo",
+    "exists": {
+      "title": "Este evento ya existe",
+      "hint": "El activo ya tiene un evento de este tipo en esta fecha: úsalo o modifícalo. No se ha guardado nada.",
+      "use": "Usar este",
+      "edit": "Editar este",
+      "fromProvider": "Del proveedor de datos",
+      "manual": "Introducido a mano",
+      "linked": "{n, plural, =0 {no vinculado a transacciones} one {vinculado a # transacción} other {vinculado a # transacciones}}",
+      "providerNotEditable": "El proveedor de datos actualiza sus propios eventos: este no se edita aquí."
+    },
+    "saveError": {
+      "currencyMismatch": "No se ha guardado nada: el evento del {date} ({type}) está en {currency}, pero el activo está en {expected}. Convierte su importe o quita la fila{more, plural, =0 {} one { (y # más)} other { (y # más)}}.",
+      "keyConflict": "No se ha guardado nada: dos eventos manuales de tipo {type} caerían el {date}. Cambia la fecha o el tipo de uno de ellos.",
+      "notEditable": "No se ha guardado nada: uno de los eventos ya no existe o no se puede editar aquí. Vuelve a cargar los datos e inténtalo de nuevo.",
+      "assetNotFound": "No se ha guardado nada: el activo ya no existe. Vuelve a cargar la página.",
+      "unknownType": "No se ha guardado nada: «{value}» (fila del {date}) no es un tipo de evento. Usa DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT o MATURITY_SETTLEMENT.",
+      "generic": "No se ha guardado nada: {message}",
+      "inUse": "No se ha guardado nada: el evento {type} del {date} está vinculado a {n, plural, one {# transacción} other {# transacciones}} y no se puede eliminar. Quita primero el vínculo en las transacciones{more, plural, =0 {} one { (y # evento más)} other { (y # eventos más)}}.",
+      "notDeletable": "No se ha guardado nada: uno de los eventos que se van a eliminar ya no existe o no se puede eliminar aquí. Vuelve a cargar los datos e inténtalo de nuevo.",
+      "tooManyDigits": "No se ha guardado nada: el valor del evento {type} del {date}{more, plural, =0 {} one { (y # más)} other { (y # más)}} tiene demasiadas cifras. El valor de un evento tiene como máximo {max} decimales, {significant} cifras significativas y {integer} cifras en la parte entera.",
+      "invalidSplitRatio": "No se ha guardado nada: el evento {type} del {date}{more, plural, =0 {} one { (y # más)} other { (y # más)}} tiene una proporción de {ratio}. La proporción de un desdoblamiento debe ser un número mayor que 0: 2 para un desdoblamiento de 2 por 1, 0,5 para un contrasplit de 1 por 2.",
+      "splitAdjustmentsWithoutCost": "No se ha guardado nada: el evento {type} del {date} tiene {n, plural, one {# ajuste vinculado} other {# ajustes vinculados}} sin coste de compra{hidden, plural, =0 {} one { (# en un bróker que no puedes ver)} other { (# en brókers que no puedes ver)}}. Sin el desdoblamiento, esas unidades contarían como compradas a un precio desconocido: da primero un coste de compra a los ajustes y luego cambia el tipo del evento."
+    }
   },
   "providerErrors": {
     "NO_DATA": "No hay datos disponibles para este instrumento en el proveedor.",
@@ -391,6 +443,14 @@
     "MISSING_PARAMS": "A la configuración del proveedor le faltan parámetros obligatorios.",
     "PARSE_ERROR": "No se pudo interpretar la respuesta del proveedor.",
     "SCRAPE_ERROR": "No se pudo leer la página del proveedor.",
-    "UNSUPPORTED_PAGE": "El proveedor encontró este instrumento pero su página de mercado aún no se puede leer. Abre un issue en GitHub (Librefolio/LibreFolio) indicando este ISIN para que se añada el soporte."
+    "UNSUPPORTED_PAGE": "El proveedor encontró este instrumento pero su página de mercado aún no se puede leer. Abre un issue en GitHub (Librefolio/LibreFolio) indicando este ISIN para que se añada el soporte.",
+    "RATE_LIMITED": "Pausa por exceso de peticiones hasta las {time}",
+    "RATE_LIMITED_NO_TIME": "Demasiadas peticiones: inténtalo más tarde",
+    "RATE_LIMITED_DAY": "Pausa por exceso de peticiones hasta el {time}",
+    "NOT_CONFIGURED": "Este proveedor debe configurarse antes de usarlo",
+    "PROVIDER_ERROR": "El proveedor falló: {detail}",
+    "PROBE_RATE_LIMITED": "Demasiadas comprobaciones: inténtalo a las {time}",
+    "PROBE_RATE_LIMITED_DAY": "Demasiadas comprobaciones: inténtalo el {time}",
+    "PROBE_RATE_LIMITED_NO_TIME": "Demasiadas comprobaciones: inténtalo en un minuto"
   }
 }

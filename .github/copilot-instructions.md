@@ -50,12 +50,28 @@ LibreFolio/
 - **Incremental Alembic migrations (released)** — ship schema changes as new migrations to protect existing installs; edit `001_initial.py` only for brand-new never-shipped tables; `db create-clean` only for fresh/test DBs
 - **After modifying API** — run `./dev.py api sync` to regenerate TypeScript client
 - **After modifying DB models** — add an incremental Alembic migration (`./dev.py db migrate "…"`); use `db create-clean` only for fresh/test DBs
-- **NEVER run `git commit`** — the agent must only *propose* commit messages
-  (e.g. write them to `/tmp/libreFolio_commit_*.txt` or print them inline).
-  The user performs the actual commit manually. Staging (`git add`) and read-only
-  git commands (`git status`, `git diff`, `git log --no-pager`) are allowed.
-  Same rule for `git push`, `git reset --hard`, `git rebase`, `git checkout -- …`
-  and any other history-mutating operation: **never** execute, only suggest.
+- **Git: local yes, remote only the developer** (developer decision, 14/10/2026).
+  - **Allowed locally**, when the task needs it: commit, merge, fast-forward,
+    cherry-pick, branch create and rename.
+  - **The developer's alone:** `git push`, force-push, and any change to remotes or to
+    remote branches and tags. They push when they want, after their own review.
+  - **Coordinated work:** only the coordinator mutates history; child workstreams never
+    commit or merge. See `.github/agents/release-coordinator.agent.md` («Git authority»)
+    and `.github/agents/coordinated-workstream.agent.md` («Git policy»).
+  - **Guardrails, always:**
+    - **Never destroy work you do not own.** No `reset --hard`, `checkout -- …`,
+      `restore`, `clean -fd` or `stash drop` on changes you did not create: a dirty tree
+      is someone's open work.
+    - **Never rewrite history that already exists on `origin`.** No amend or rebase of
+      pushed commits.
+    - Delete or force-update a branch only if all of its commits are already in the
+      target or preserved elsewhere.
+    - Before every history operation, record HEAD and `git status --porcelain`. After
+      it, verify HEAD, parents and cleanliness, and report the resulting SHAs.
+    - Stage explicit, reviewed paths only. Never `git add -A` on a checkout shared with
+      other sessions or with the developer's IDE.
+    - Never commit secrets or ignored/generated artifacts.
+    - Commit messages follow Conventional Commits (skill `caveman-commit`).
 
 ## Terminal Command Rules
 
@@ -70,7 +86,7 @@ LibreFolio/
     <command> > /tmp/libreFolio_<descr>.log 2>&1; head -n 40 /tmp/libreFolio_<descr>.log
     <command> 2>&1 | tee /tmp/libreFolio_<descr>.log | { head -n 40; cat >/dev/null; }
     ```
-- ⚠️ **Never `npx` for frontend tools.** Without a local `node_modules/.bin`, npx (npm 11) queries the registry: plain `npx` installs a missing package into the user cache without asking (no TTY), and even `npx --no-install` silently runs a cached copy when it is the latest published version — in both cases not the version pinned by the lock. Call the locked binary explicitly, `frontend/node_modules/.bin/<tool>`, or an `npm run <script>` from `package.json`: a missing binary then fails with "No such file". The test runner and some `dev.py` commands still call `npx` internally, so in a **fresh worktree** run the approved `npm ci` before any `dev.py test front-*`, `front build` or `front check`.
+- ⚠️ **Never `npx` for frontend tools.** Without a local `node_modules/.bin`, npx (npm 11) queries the registry: plain `npx` installs a missing package into the user cache without asking (no TTY), and even `npx --no-install` silently runs a cached copy when it is the latest published version — in both cases not the version pinned by the lock. Call the locked binary explicitly, `frontend/node_modules/.bin/<tool>`, or an `npm run <script>` from `package.json`: a missing binary then fails with "No such file". `dev.py front build` and `dev.py api client`/`api sync` check `frontend/node_modules/.bin` first and stop with exit 1, naming the missing tools and `npm ci`; some runner actions still call `npx` directly (Vitest, J-8). So in a **fresh worktree** run the approved `npm ci` before the first `dev.py test` run that starts the shared backend, even a backend-only one (`server --test` builds the frontend when the build is missing), and before any `dev.py test front-*`, `front build` or `front check`. No manual build is needed after it: the runner and `dev.py mkdocs gallery` run `dev.py server --test --build-only` in the foreground before they start the test server, so a missing or stale debug build and site are built, visibly, outside the startup timeout (300 s, `LIBREFOLIO_TEST_STARTUP_TIMEOUT`), which measures the server start only.
 - **Rationale**: avoid re-running expensive commands (tests, builds, db operations) just to see output that was truncated earlier.
 
 ## Async I/O Rule (Event Loop Safety)
@@ -81,7 +97,7 @@ In `async def` handlers, **every sync library doing I/O** MUST be wrapped in `aw
 
 - **Svelte 5 Runes**: use `$state()`, `$derived()`, `$effect()` — never old `$:` reactive
 - **Tailwind CSS 4**: config via `@theme {}` in `app.css` — no `tailwind.config.ts`
-- **Dark mode**: `html.dark` with Tailwind `dark:*` classes
+- **Colours and dark mode**: the colour roles of `lib/theme/tokens.css` through their utilities (`bg-lf-card`, `text-lf-muted`, `border-lf-input`…), which change value under `html.dark` — never `dark:` on a role, no new palette class or hand-written colour (ratchet gate). For any new or changed UI: skill `design-system` (the two themes, the palette, the rules); details in `frontend.instructions.md` «Design System»; migrating legacy classes: skill `theme-roles`
 - **Icons**: lucide-svelte
 - **Selectors**: always use `data-testid` — never CSS classes or text (fragile with i18n)
 - **Flag emoji**: the `'LF Flags'` face (`static/lf-flags.css`, flags-only `unicode-range`) leads every font stack — Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere, Windows included. Never name an emoji font in a `font-family`; a component with its own stack starts it with `'LF Flags'` or wraps the flag in `.emoji-flag`

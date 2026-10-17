@@ -65,4 +65,4 @@ The provider fetches/computes price history. Results stored in `PriceHistory` wi
 | ScheduledInvestmentEditor | `frontend/src/lib/components/assets/ScheduledInvestmentEditor.svelte` |
 | PriceChartFull | `frontend/src/lib/components/charts/PriceChartFull.svelte` |
 | AssetDataEditorSection | `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` |
-| Assets API | `backend/app/api/v1/assets.py` |
+| Assets API | `backend/app/api/v1/assets/` |

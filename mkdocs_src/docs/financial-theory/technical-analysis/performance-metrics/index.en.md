@@ -25,7 +25,7 @@ Aggregate, WAC-based accounting for the whole portfolio (or any broker/asset sco
 
 | Metric / Concept | Description |
 |------------------|-------------|
-| **[Portfolio Engine Overview](portfolio-engine/index.md)** | Complete mathematical model: unified price resolver, WAC, aggregation, 3-pool model, contribution, pre-frame/frame architecture. |
+| **[Portfolio Engine Overview](portfolio-engine/index.md)** | Complete mathematical model: unified price resolver, WAC, aggregation, 3-pool model, contribution, one daily replay. |
 | **[Price Resolution](portfolio-engine/price-resolution.md)** | Unified resolver tiers: MARKET → TRADE_AVG → CARRIED → MISSING, with native marks and per-date FX. |
 | **[Net Asset Value (NAV)](portfolio-engine/nav.md)** | Total market valuation of the portfolio (assets + cash + in-transit), using the unified resolver. |
 | **[Book Value](portfolio-engine/book-value.md)** | Historical accounting cost of open positions (WAC × qty) plus cash. Difference from NAV = unrealized P&L. |
@@ -34,7 +34,7 @@ Aggregate, WAC-based accounting for the whole portfolio (or any broker/asset sco
 | **[Timing Effect](portfolio-engine/timing-effect.md)** | Difference between Cumulative MWRR and Cumulative TWRR — quantifies the impact of cash flow timing on returns. |
 | **[Simple ROI](portfolio-engine/roi.md)** | Percentage return relative to net invested capital. Simple but subject to cash flow dilution. |
 | **[Net Annualized Return](portfolio-engine/net-annualized-return.md)** | Net CAGR definitions for holdings, period contribution, and FIFO lots, with 30-day minimum window. |
-| **[Yield on Cost](portfolio-engine/yield-on-cost.md)** | Trailing-365-day non-negative gross dividend/interest per eligible historical unit, divided by average purchase price (WAC) for each asset/broker pair. |
+| **[Yield on Cost](portfolio-engine/yield-on-cost.md)** | Trailing-365-day gross dividend/interest, each amount with its sign, per eligible historical unit, divided by average purchase price (WAC) for each asset/broker pair. |
 | **[TWRR](portfolio-engine/twrr.md)** | Time-Weighted Rate of Return. Pure asset/strategy performance, neutralizing deposit/withdrawal timing. |
 | **[MWRR (XIRR)](portfolio-engine/mwrr.md)** | Money-Weighted Rate of Return. Personal investor performance accounting for cash flow timing. Annualized and Cumulative forms. |
 
@@ -101,7 +101,7 @@ To help you choose the right metric for your analysis, use this comparison guide
 
 ### 💸 9. [Yield on Cost](portfolio-engine/yield-on-cost.md)
 * **Core Question:** "How much gross dividend and interest income did each current unit produce over the last 365 calendar dates relative to its average purchase price?"
-* **Formula Concept:** Sums non-negative, transaction-date-FX income per eligible prior-day long unit, adjusts for linked splits, then divides by average purchase price (WAC) at the report end date.
+* **Formula Concept:** Sums signed, transaction-date-FX income per eligible prior-day long unit, adjusts for linked splits, then divides by average purchase price (WAC) at the report end date.
 * **Best Use Case:** Comparing the recorded income productivity of open asset/broker positions without confusing it with market dividend yield, CAGR, or bond YTM.
 
 ---

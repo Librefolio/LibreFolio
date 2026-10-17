@@ -19,7 +19,7 @@ error, so the command looked as if it had done what was asked.
 ## Root cause
 
 The launcher handed the file to Alembic as the `DATABASE_URL` environment variable. `backend/alembic/env.py` reads
-the URL from `get_settings()`, and `get_settings()` (`backend/app/config.py`) **recomputes** `DATABASE_URL` from the
+the URL from `get_settings()`, and `get_settings()` (`backend/app/config/__init__.py`) **recomputes** `DATABASE_URL` from the
 data directory and overwrites whatever the environment said. The variable was set, and never read.
 
 Same family as [[problems/env-var-injection-point-duplicated]]: a value injected at a point the consumer does not
@@ -59,7 +59,7 @@ already knew the cure: the migration tests had always passed `-x sqlalchemy.url=
 |------|------|
 | `_named_db_file`, `_alembic` (`-x sqlalchemy.url`) | `dev.py` |
 | Alembic environment, `-x` before settings | `backend/alembic/env.py` |
-| `get_settings()` recomputes `DATABASE_URL` | `backend/app/config.py` |
+| `get_settings()` recomputes `DATABASE_URL` | `backend/app/config/__init__.py` |
 | CLI reference | `mkdocs_src/docs/admin/cli_tools.en.md` |
 | Migration tests (always `-x sqlalchemy.url=`) | `backend/test_scripts/test_db/test_post_migration.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/28_fxDashboardSync/plan-phase00DbPathArgument.prompt.md` |

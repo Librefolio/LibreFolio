@@ -13,6 +13,7 @@ pestaña **Administración** de configuración de la aplicación.
 - 🐳 **[Docker avanzado](docker_advanced.md)**: Despliegue en contenedores usando Docker Compose, montajes de volumen y configuración de titularidad de GID/UID del usuario.
 - 🌐 **[Exponer de forma segura](service_exposure.md)**: Expón de forma segura tu instancia privada de LibreFolio a través de internet.
 - 🔍 **[Comprobar la seguridad de la conexión](connection_checks.md)**: Comprueba que tus usuarios se conectan de forma segura, y corrige la cookie de sesión o el proxy inverso cuando no es así.
+- 💤 **[Suspensión y activación](sleep_wake.md)**: Una máquina de Fly.io sin uso se suspende sola y se reactiva a una hora programada: un panel de alojamiento o una tarea cron actualiza los precios y los tipos de cambio.
 
 ### ⚙️ Configuración del sistema
 - 📝 **[Variables de entorno](configuration.md)**: Lista completa de variables `.env` soportadas (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) y precedencia de resolución de variables.

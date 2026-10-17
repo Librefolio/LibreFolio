@@ -1,7 +1,9 @@
 <script lang="ts">
     import {onMount} from 'svelte';
-    import DonationPopupModal from '$lib/components/auth/DonationPopupModal.svelte';
-    import UpdateAvailableModal from '$lib/components/auth/UpdateAvailableModal.svelte';
+    import WhatsNewModal from '$lib/features/changelog/WhatsNewModal.svelte';
+    import {whatsNew} from '$lib/features/changelog/whatsNewStore.svelte';
+    import DonationPopupModal from '$lib/features/support/DonationPopupModal.svelte';
+    import UpdateAvailableModal from '$lib/features/update-check/UpdateAvailableModal.svelte';
     import {updateAvailable} from '$lib/features/update-check/updateCheckStore.svelte';
     import {donationPopup} from '$lib/stores/app/donationPopupStore.svelte';
 
@@ -13,7 +15,7 @@
     let {guideActive = false, currentVersion}: Props = $props();
 
     let modalDepth = $state(0);
-    let activePopup = $state<'donation' | 'update' | null>(null);
+    let activePopup = $state<'whats-new' | 'donation' | 'update' | null>(null);
 
     function updateModalDepth() {
         modalDepth = Number(document.body.dataset.modalScrollLockCount || '0');
@@ -41,12 +43,16 @@
             activePopup = null;
             return;
         }
+        if (activePopup === 'whats-new' && whatsNew.shouldShow) return;
         if (activePopup === 'donation' && donationPopup.shouldShow) return;
         if (activePopup === 'update' && updateAvailable.release !== null) return;
 
         activePopup = null;
         if (modalDepth > 0) return;
-        if (donationPopup.shouldShow) {
+        // «What's new» first (C-54): it tells what changed in the version the user is now using.
+        if (whatsNew.shouldShow) {
+            activePopup = 'whats-new';
+        } else if (donationPopup.shouldShow) {
             activePopup = 'donation';
         } else if (updateAvailable.release !== null) {
             activePopup = 'update';
@@ -55,7 +61,9 @@
 </script>
 
 <div class="contents" data-testid="deferred-app-popups" data-active-popup={activePopup ?? 'none'} data-modal-depth={modalDepth}>
-    {#if activePopup === 'donation'}
+    {#if activePopup === 'whats-new'}
+        <WhatsNewModal />
+    {:else if activePopup === 'donation'}
         <DonationPopupModal />
     {:else if activePopup === 'update'}
         <UpdateAvailableModal {currentVersion} />

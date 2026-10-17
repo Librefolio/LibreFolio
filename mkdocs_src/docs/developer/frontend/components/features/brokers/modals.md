@@ -160,9 +160,10 @@ Reports* in its Transactions tab). It stores and manages files; parsing them is 
   [report set](../import-wizard.md#report-sets). The upload stops at the first failing file and
   names it in the error banner.
 - Closing with files picked but not uploaded asks for confirmation (*Pending Uploads*).
-- The modal does not check the user's role: a Viewer also sees the upload area and the delete
-  actions, and the server refuses them with `403` (EDITOR or OWNER access required on the
-  broker).
+- The modal does not check the user's role: a Viewer also sees the upload area and the bulk delete,
+  and the server refuses them with `403` (EDITOR or OWNER access required on the broker). The row's
+  **Delete** comes from `FilesTable`, which hides it on a file whose `can_delete` is `false`, as for
+  a Viewer (see [FilesTable](../../core-ui/file-upload.md#filestable)).
 - A link opens the Files page filtered on this broker (`/files?tab=brim&broker=<id>`).
 
 ### 🌐 API Calls

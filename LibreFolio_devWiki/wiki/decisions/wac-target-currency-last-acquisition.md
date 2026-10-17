@@ -84,10 +84,10 @@ split or an acquisition of unknown cost — or there is no addition at all — i
 |------|------|
 | determine_target_currency | `backend/app/services/financial_math/average_cost.py` |
 | WAC facade `compute_wac_iterative()` (override, or this rule) | `backend/app/services/portfolio_service.py` |
-| Currency sentinella logic | `backend/app/services/transaction_service.py` |
+| Currency sentinella logic | `backend/app/services/transactions/auto_cost.py` |
 | `POST /portfolio/wac` | `backend/app/api/v1/portfolio_api.py` |
-| PAC planner (passes T as override) | `backend/app/services/portfolio_allocation_source.py` |
-| Frontend chip selector | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |
+| PAC planner (passes T as override) | `backend/app/services/pac_allocator/source/wac.py` |
+| Frontend chip selector | `frontend/src/lib/features/transactions/wac/WacPreviewSection.svelte` |
 | Target-currency unit tests (`TestTargetCurrency`) | `backend/test_scripts/test_services/test_financial_math/test_average_cost.py` |
 | Developer docs (the WAC facade, "Two target-currency rules") | `mkdocs_src/docs/developer/backend/transactions/wac.md` |
 | Plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacCurrency.prompt.md` |

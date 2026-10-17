@@ -66,7 +66,7 @@ The provider captures the internal code into `provider_params.codice_fondo` at a
 - Searches across all instrument types: stocks, bonds, ETFs, ETC/ETN, and funds.
 - Fund names are indexed with Borsa abbreviations (for example `Obbligaz.` instead of `Obbligazionaria`), so the provider retries common full-word variants with abbreviated terms.
 - **Funds**: `cerca` returns the Borsa **internal code** in the `isin` field (not a real ISIN). The provider fetches each fund page **once per code** (in-search cache) via `ottieni_dati_fondo` to recover the real ISIN, sets it as the `identifier` (`ISIN`), and carries the internal code in `provider_params.codice_fondo`. If the page can't be fetched or no ISIN is present, it falls back to the code as an `OTHER` identifier — still priceable by NAV.
-- **Dual-language results**: emits two entries per instrument (🇮🇹 Italiano + 🇬🇧 English) with flag emojis in `display_name`. Each result carries `provider_params: {language: "en"|"it"}` so the user's selection is propagated on assignment.
+- **Dual-language results**: emits two entries per instrument (🇮🇹 Italiano + 🇬🇧 English) with flag emojis in `display_name`, or only the one of the user's `preferred_language` (`it` or `en`; `all`, the default, keeps both). Each result carries `provider_params: {language: "en"|"it"}` so the user's selection is propagated on assignment. The preference is the user's own setting (`scope=user`), read in `_emitted_languages()`, which search and `resolve_url` share: it chooses the rows emitted, never the language `cerca` is called in, the first of `_languages_in_order()`, Italian ([Plugin Settings](../../architecture/patterns/plugin_settings.md#shipped-plugins)).
 - **Result ordering**: results are **grouped by the cerca-level identifier** (the internal code for funds, the real ISIN otherwise), preserving first-seen order, and within each group **Italian is emitted before English**. This keeps sibling funds — whose internal codes may differ by a single letter — from interleaving across languages. Grouping also de-duplicates per `(identifier, language)`.
 - **Last-resort external fallback**: when `cerca` returns nothing, the search orchestration calls the LibreFolio [`web_link_finder`](search_link_finder.md) stack to turn the query into a candidate Borsa page URL, then `resolve_url`s it. The caller can pass **`hints`** (report-extracted ISIN + names) which drive a two-stage "stringone" query and an **identifier post-filter** that narrows the resolved siblings to the exact ISIN when it is known — all handled centrally, see [Asset Search & Link-Finder](search_link_finder.md). Best-effort, interactive-only, never on price fetches.
 
@@ -100,10 +100,10 @@ The provider opts into the generic **URL → search-item** capability:
 
 - `resolvable_url_domains = ["borsaitaliana.it"]` → `supports_url_resolution` is `True`.
 - `resolve_url(url)` recognises two public page families:
-    - **Fund detail pages** (`/borsa/fondi/dettaglio/{code}.html`) — fetches the page and returns the **full canonical set a normal search would emit** for that fund: the **IT + EN pair** (Italian first, with flag in `display_name`), each `{identifier: <ISIN from page> or code, identifier_type, display_name, currency, type: "FUND", provider_params: {codice_fondo, language}}`.
-    - **Stock / bond / ETF scheda pages** (`…/scheda/{ISIN}[-{MIC}].html`) — returns the same IT + EN canonical set, priced by ISIN. The rows' `currency` comes from one chart-API call shared by every row (`None` if it fails), not from the scheda.
+    - **Fund detail pages** (`/borsa/fondi/dettaglio/{code}.html`) — fetches the page and returns the **full canonical set a normal search would emit** for that fund: the **IT + EN pair** (Italian first, with flag in `display_name`), or the row of the user's preferred language alone, each `{identifier: <ISIN from page> or code, identifier_type, display_name, currency, type: "FUND", provider_params: {codice_fondo, language}}`.
+    - **Stock / bond / ETF scheda pages** (`…/scheda/{ISIN}[-{MIC}].html`) — returns the same canonical set, priced by ISIN. The rows' `currency` comes from one chart-API call shared by every row (`None` if it fails), not from the scheda.
 
-It is only a different **entry point** — the orchestration flattens the list and de-dupes by `(identifier, language)`. Anything that is not a recognisable Borsa page (off-domain, no extractable fund code or ISIN path) returns `None`. Best-effort: fetch/parse errors return `None`, never raise.
+It is only a different **entry point** — the orchestration flattens the list and de-dupes by `(identifier, language)`. Anything that is not a recognisable Borsa page (off-domain, no extractable fund code or ISIN path) returns `None`. Best-effort: fetch/parse errors return `None`, never raise — except a refusal for too many requests, on the fund page, in the market-parameter search (`cerca`) or on the scheda page, which leaves as `RATE_LIMITED` so that the core pauses the provider. The search's link-finder, which calls `resolve_url`, then skips that URL without reporting an error. Only the rows' currency lookup still swallows a refusal (see [Error Handling](#error-handling)).
 
 This lets an externally discovered page URL (e.g. found via `web_link_finder`, or pasted by the user in a future UI) be turned into a ready-to-create asset with the correct pricing params.
 
@@ -115,12 +115,12 @@ This lets an externally discovered page URL (e.g. found via `web_link_finder`, o
     the full contract (three layers, `hints`, identifier filter, config, invariants) lives on
     [Asset Search & Link-Finder](search_link_finder.md), which is the source of truth.
 
-`backend/app/services/web_link_finder.py` is a **LibreFolio-level** module (deliberately *not* inside the scraping library, so the choice of external engine stays a LibreFolio concern). It turns a free-text query/ISIN into candidate **provider-domain** URLs, used **only at search time** as a last resort when a provider's on-site search yields nothing.
+`backend/app/services/assets/web_link_finder.py` is a **LibreFolio-level** module (deliberately *not* inside the scraping library, so the choice of external engine stays a LibreFolio concern). It turns a free-text query/ISIN into candidate **provider-domain** URLs, used **only at search time** as a last resort when a provider's on-site search yields nothing.
 
 - **Best-effort**: any failure (rate-limit, anomaly page, network/parse error) yields `[]` and is never fatal — the search always completes and emits `done`.
 - **Async-safe**: sync I/O runs in `asyncio.to_thread`; short timeout, small TTL cache, domain-filtered hits, structured logs.
 - **Pluggable engine**: default `DdgsEngine` wraps the [`ddgs`](https://pypi.org/project/ddgs/) metasearch library (bing/brave/google/DuckDuckGo/… aggregated via `backend="auto"`) with an `ApiKeyEngine` seam for a paid API (Brave/Bing/SerpAPI) later; `searxng` reserved for a deferred Fase B.
-- **Config** (all optional env vars): `LIBREFOLIO_WEB_LINK_FINDER_ENABLED` (`1`/`0`, default `1`), `_ENGINE` (`ddgs`|`apikey`), `_API_KEY`, `_DDGS_REGION` (default `wt-wt`), `_DDGS_BACKEND` (default `auto`), `_TIMEOUT` (s), `_MAX`.
+- **Config**: optional environment variables, read in `backend/app/config/plugins.py`; the full list (including `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` for Docker secrets) is in [Asset Search & Link-Finder](search_link_finder.md#configuration-env-vars-all-optional).
 
 !!! warning "Invariant"
 
@@ -159,8 +159,32 @@ Uses `option_labels` for human-readable display in the frontend dropdown. Each f
 | `StrumentoNonRisolto` | `UNSUPPORTED_PAGE` | Instrument found but its market page can't be resolved/read (unhandled market family) — user is invited to open a GitHub issue |
 | `StrumentoNonTrovato` | `NOT_FOUND` | ISIN not recognized |
 | `DatiNonDisponibili` | `NO_DATA` | No data available (market closed, delisted, or empty window for an illiquid instrument) |
+| `RateLimitRaggiunto` | `RATE_LIMITED` | HTTP 429 after the library's own retries, or HTTP 403 (the Imperva WAF blocked the session): `_raise_if_rate_limited()` raises `AssetRateLimitedError`, with no `Retry-After`, and the core pauses the provider ([Provider Pauses](architecture.md#provider-pauses)) |
 | `RicercaNonDisponibile` | `FETCH_ERROR` | Search endpoint down |
 | `BorsaItalianaErrore` | `FETCH_ERROR` | Generic library error |
+
+`RateLimitRaggiunto` is recognised in current value, history, fund NAV, search, metadata (listed
+instruments and funds), where it used to read as "no metadata" (`None`), and the three lookups of
+`resolve_url`: the fund page, the market-parameter search and the scheda page. During a search, the
+link-finder skips a URL whose `resolve_url` was refused without reporting an error; the provider is
+paused all the same.
+
+Two best-effort enrichments still swallow a refusal, on purpose: it pauses nothing, and the
+operation goes on as after any other failure there.
+
+- The fund-page lookup inside `search()` (`ottieni_dati_fondo`): the fund's rows fall back to its
+  internal code, as an `OTHER` identifier.
+- The chart-API currency lookup (`_price_api_currency()`), in a listed instrument's metadata and in
+  `resolve_url`'s scheda rows: the currency stays unknown.
+
+!!! warning "Known gap: the library sleeps in the provider's thread"
+
+    On an HTTP 429 the library's `Sessione` retries by itself before raising `RateLimitRaggiunto`:
+    three attempts, each followed by a `time.sleep` of 2, 4 and 8 s, 14 s in all in the provider's
+    thread — against the rule of the
+    [Asset Plugin Guide](../../architecture/patterns/asset_plugin_guide.md#too-many-requests). The
+    library is a separate package (`borsa-italiana-scraping`, 0.3.2): the gap stays until it raises
+    at the first 429. A 403 raises at once.
 
 Note (library ≥ 0.3.0): an **empty history window** (e.g. an illiquid ExtraMOT bond over 1M) now maps to `NO_DATA`, never `NOT_FOUND` — the library distinguishes "unknown instrument" from "known but no trades in the window" via a MAX-period probe.
 

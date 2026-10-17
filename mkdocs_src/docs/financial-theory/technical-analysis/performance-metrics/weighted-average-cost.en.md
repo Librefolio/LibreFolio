@@ -184,14 +184,14 @@ The latest acquisition's currency is the currency paid by the most recent transa
 ## 🎯 Where WAC is Used in LibreFolio
 
 - **Cost basis**: $\text{CB}(a,b,t) = q(a,b,t) \times \text{WAC}^{T}(a,b,t)$, historical, with no conversion at $t$
-- **Realized P&L on SELL**: $\text{realized} = P_{\text{sell}} - q_{\text{sold}} \times \text{WAC}^{T}_{\text{pre-sell}}$, with the proceeds $P_{\text{sell}}$ converted at the sale date and the units sold leaving at their historical cost
+- **Realized P&L on SELL**: $\text{realized} = P_{\text{sell}} - q_{\text{sold}} \times \text{WAC}^{T}_{\text{pre-sell}}$, with the proceeds $P_{\text{sell}}$ converted at the sale date and the units sold leaving at their historical cost. An outgoing adjustment with a cost basis realizes the same way, its proceeds being the value it hands over, quantity × cost basis converted at its date (see [Outgoing Adjustments](../../instruments/transaction-types/adjustment.md#outgoing-adjustments))
 - **Cash pool decomposition**: SELL returns $C = q_{\text{sold}} \times \text{WAC}^{T}_{\text{pre-sell}}$ to Capital Pool
 - **Yield on Cost**: the average purchase price of the [Yield on Cost](portfolio-engine/yield-on-cost.md) denominator
 - **Transfer form**: auto-suggests the receiving side's cost_basis_override from the sending position's WAC
 
-!!! warning "WAC is never used for asset valuation"
+!!! warning "WAC is never a price"
 
-    WAC is an accounting construct for cost basis. Market value uses the unified resolver tiers: `MARKET → TRADE_AVG → CARRIED → MISSING`, exposed to portfolio rows as `MARKET_PRICE`, `LAST_TRADE_PRICE`, or `MISSING`. See [Price Resolution](portfolio-engine/price-resolution.md).
+    WAC is an accounting construct for cost basis. Market value uses the unified resolver tiers: `MARKET → TRADE_AVG → CARRIED → MISSING`, exposed to portfolio rows as `MARKET_PRICE` or `LAST_TRADE_PRICE`. Only a position whose asset has no mark at all — no quote, no BUY or SELL yet — is counted at its cost basis $q \times \text{WAC}^{T}$, as a declared estimate with no price and no unrealized P&L (`ESTIMATED_AT_COST`), or left unvalued (`MISSING`) when that cost is incomplete. See [Price Resolution](portfolio-engine/price-resolution.md).
 
 ## ⚙️ Implementation: Position-Level Scope
 

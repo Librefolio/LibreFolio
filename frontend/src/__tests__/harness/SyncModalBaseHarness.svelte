@@ -17,6 +17,10 @@
   turns a rejected call into failed rows — so a spec can check its language
   without rendering the production row.
 
+  `existingIds` is handed through untouched, absent when the spec leaves it out:
+  which targets already hold stored data in the range is the wrappers' input to
+  the base (C-66), and the base's overwrite warning is read from it.
+
   Lives under `src/__tests__/`, which `vitest.config.ts` excludes from coverage:
   the harness must never inflate the numbers it exists to improve.
 -->
@@ -32,6 +36,8 @@
         /** Defaults to a non-translated marker so a spec never reads a catalogue. */
         title?: string;
         countLabel?: string;
+        /** The targets that already hold stored data in the range (C-66). */
+        existingIds?: string[];
     }
 
     interface Props {
@@ -53,6 +59,7 @@
             title: s.title ?? `title:${s.id}`,
             countLabel: s.countLabel ?? `unit:${s.id}`,
             targetIds: s.targetIds,
+            ...(s.existingIds !== undefined ? {existingIds: s.existingIds} : {}),
             doSyncFn: s.doSyncFn,
             resultRow: row,
         })),

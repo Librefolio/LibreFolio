@@ -188,7 +188,7 @@
             <div class="w-44">
                 <CurrencySearchSelect disabled={true} value={displayFrom} />
             </div>
-            <ArrowRight class="text-gray-400 dark:text-gray-500 shrink-0" size={18} />
+            <ArrowRight class="text-lf-muted shrink-0" size={18} />
             <div class="w-44">
                 <CurrencySearchSelect disabled={true} value={displayTo} />
             </div>
@@ -198,11 +198,12 @@
         <div class="flex items-center gap-2">
             <button
                 aria-label={$t('common.swapDirection')}
-                class="flex items-center justify-center w-9 h-9 rounded-lg bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600
-                       text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200
+                class="flex items-center justify-center w-9 h-9 rounded-lg bg-lf-panel border border-lf-subtle
+                       text-lf-muted hover:bg-lf-neutral hover:text-lf-secondary
                        transition-colors text-base font-bold shrink-0"
                 onclick={handleSwap}
                 title={$t('common.swapDirection')}
+                data-testid="fx-import-swap"
                 >⇄
             </button>
             <div class="flex-1">
@@ -213,7 +214,7 @@
         </div>
 
         {#if headerMismatchError}
-            <div class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300" data-testid="fx-import-header-mismatch-error">
+            <div class="rounded-lg border border-lf-danger-line bg-lf-danger-soft px-3 py-2 text-sm text-lf-danger-on-soft" data-testid="fx-import-header-mismatch-error">
                 {headerMismatchMessage}
             </div>
         {/if}
@@ -222,7 +223,7 @@
     {#snippet helpContent()}
         <p class="font-semibold">{$t('csvImport.helpTitle')}</p>
         <p>{$t('csvImport.helpFormat')}</p>
-        <pre class="bg-white/50 dark:bg-slate-800/50 rounded p-2 text-xs font-mono">date;{displayFrom}>{displayTo}
+        <pre class="bg-lf-card/50 rounded p-2 text-xs font-mono">date;{displayFrom}>{displayTo}
 2024-01-15;1.0823
 2024-01-16;1.0845</pre>
         <ul class="list-disc list-inside space-y-1 text-xs">

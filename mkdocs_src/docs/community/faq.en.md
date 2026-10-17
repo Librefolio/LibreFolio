@@ -47,15 +47,15 @@ Follow the [Docker Installation Guide](../user/installation.md), the recommended
 
 ### 👤 How do I create an account?
 
-1. Open the login page.
-2. Click **Register here**, next to *Don't have an account?*
-3. Fill in your details: your account is ready to use.
+1. Open the login page and click **Register here**, next to *Don't have an account?* If an administrator sent you an invitation link, open that link instead.
+2. Fill in your details, then click **Register**.
+3. You are back on the login page: log in with your new account.
 
-On a new instance, the first account created becomes the administrator. After that, signing up works only while the administrator keeps **Enable Registration** on in the [Global Settings](../admin/settings.md); otherwise, ask them for an account.
+If the login page shows no **Register here**, this server accepts new accounts only through an invitation link, or not at all: ask the administrator. On a new instance, the first account created becomes the administrator. Details: [Getting Started](../user/getting-started.md#invitation-link) and, for administrators, [Who Can Sign Up](../admin/settings.md#registration).
 
 ### 🔑 I forgot my password, what do I do?
 
-Recovery by e-mail is not available yet: ask your instance administrator, who can set a new password from the command line ([Reset a Password](../admin/cli_tools.md#reset-a-password-or-lock-an-account)).
+On the login page, click **Forgot Password?**. If your instance can send emails, type your username or email address there and you receive a reset link valid for 30 minutes ([how it works](../user/getting-started.md#forgot-password)). Otherwise ask your instance administrator. They can send you a password-reset link, with which you choose the new password yourself ([how it works](../user/getting-started.md#password-reset-link)), or set a new password for you from the command line ([Reset a Password](../admin/cli_tools.md#reset-a-password-or-lock-an-account)).
 
 ## 🔧 Troubleshooting
 

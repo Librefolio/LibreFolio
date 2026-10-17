@@ -23,11 +23,13 @@ Design invariants:
   ``period_start`` and up to/including ``snapshot_as_of`` (``(start, end]``) -
   so this timeline and ``portfolio.flows_income`` cannot contradict each other.
   ``period_end`` is the upper bound, so a future-dated row can never appear.
-- **Ownership-share aware.** Native amounts are ``abs(amount) * share_percentage``
-  exactly like the report's ``period_income`` accumulation, so a co-owned
-  broker contributes only the user's economic share.
+- **Ownership-share aware.** Native amounts are ``amount * share`` with their sign and
+  the report's share (``native_cash.effective_share``: an owner's share, the whole broker
+  for an editor or a viewer), exactly like the report's ``period_income``: a co-owned
+  broker contributes only the user's economic share, and a negative correction lowers
+  the income.
 - **Honest FX.** Conversion to the target currency uses the shared
-  ``backend.app.services.fx.convert_bulk`` (unlimited backward-fill), preserving
+  ``backend.app.services.fx.conversion.convert_bulk`` (unlimited backward-fill), preserving
   the rate date and backward-fill flag as provenance. A row whose rate is
   missing keeps its native amount, sets ``target_amount=None`` and carries a
   machine-readable ``conversion_reason`` - a missing rate is **never** coerced
@@ -75,7 +77,8 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError
-from backend.app.services.fx import convert_bulk
+from backend.app.services.financial_math.native_cash import effective_share
+from backend.app.services.fx.conversion import convert_bulk
 
 # Only these two ledger types are realized cash income (see `TransactionType`).
 _INCOME_TYPES: frozenset[TransactionType] = frozenset({TransactionType.DIVIDEND, TransactionType.INTEREST})
@@ -133,7 +136,7 @@ class _IncomeRecord:
     asset_id: int | None
     broker_id: int
     income_type: TransactionType
-    amount: Decimal  # abs(amount) * share, in `currency`
+    amount: Decimal  # amount * share, signed, in `currency`
     currency: str
 
 
@@ -332,7 +335,7 @@ async def _load_income_records(context: BuildContext, scope: BuildScope) -> _Inc
 
     Permission + period semantics live entirely here: the query is intersected
     with the user's accessible brokers and filtered to ``(period_start,
-    snapshot_as_of]``. Amounts are ``abs(amount) * share_percentage`` to mirror
+    snapshot_as_of]``. Amounts are ``amount * effective_share`` (signed) to mirror
     the retained ``period_income`` aggregate. An empty result is a valid,
     successfully-built empty snapshot (never a failure).
     """
@@ -347,12 +350,12 @@ async def _load_income_records(context: BuildContext, scope: BuildScope) -> _Inc
             return _IncomeTimelineData()
 
         share_result = await session.execute(
-            select(BrokerUserAccess.broker_id, BrokerUserAccess.share_percentage).where(
+            select(BrokerUserAccess.broker_id, BrokerUserAccess.role, BrokerUserAccess.share_percentage).where(
                 BrokerUserAccess.user_id == scope.user_id,
                 BrokerUserAccess.broker_id.in_(effective),
             )
         )
-        shares: dict[int, Decimal] = {int(broker_id): (share if share is not None else Decimal("1")) for broker_id, share in share_result.all()}
+        shares: dict[int, Decimal] = {int(broker_id): effective_share(role, share) for broker_id, role, share in share_result.all()}
 
         stmt = select(Transaction).where(
             Transaction.broker_id.in_(effective),
@@ -376,7 +379,7 @@ async def _load_income_records(context: BuildContext, scope: BuildScope) -> _Inc
                     asset_id=tx.asset_id,
                     broker_id=tx.broker_id,
                     income_type=tx.type,
-                    amount=abs(tx.amount) * share,
+                    amount=tx.amount * share,
                     currency=tx.currency,
                 )
             )
@@ -643,7 +646,7 @@ async def _build_portfolio_income_timeline(context: BuildContext, dependencies: 
 
 PORTFOLIO_INCOME_TIMELINE_COMPONENT = ComponentSpec(
     component_id="portfolio.income_timeline",
-    version=1,
+    version=2,
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=IncomeTimelinePayload,
     builder=_build_portfolio_income_timeline,

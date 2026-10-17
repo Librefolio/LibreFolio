@@ -13,9 +13,12 @@ export const API_BASE = '/api/v1';
 
 /**
  * Navigate to Assets list page and wait for content to load.
+ * `search` is the URL query, the page's own state — e.g. its period `{start, end}`, which on a full load seeds the
+ * page's range; empty, the URL is plain `/assets` (the shape of `goToFxPage`).
  */
-export async function goToAssetsPage(page: import('@playwright/test').Page) {
-    await navigateTo(page, '/assets');
+export async function goToAssetsPage(page: import('@playwright/test').Page, search: Record<string, string> = {}) {
+    const query = new URLSearchParams(search).toString();
+    await navigateTo(page, query ? `/assets?${query}` : '/assets');
     await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
     // The page loads in two waves — list, then per-row prices — and says so via `data-busy`.
     await page.waitForSelector('[data-testid="assets-page"][data-busy="false"]', {timeout: 20_000});
@@ -23,9 +26,11 @@ export async function goToAssetsPage(page: import('@playwright/test').Page) {
 
 /**
  * Navigate to Asset detail page by asset ID.
+ * `search` is the URL query, as for `goToAssetsPage` — e.g. the period `{start, end}`.
  */
-export async function goToAssetDetailPage(page: import('@playwright/test').Page, assetId: string) {
-    await navigateTo(page, `/assets/${assetId}`);
+export async function goToAssetDetailPage(page: import('@playwright/test').Page, assetId: string, search: Record<string, string> = {}) {
+    const query = new URLSearchParams(search).toString();
+    await navigateTo(page, query ? `/assets/${assetId}?${query}` : `/assets/${assetId}`);
     await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 15_000});
     // The page says when it has finished loading; don't guess a duration for it.
     await page.waitForSelector('[data-testid="asset-detail-page"][data-busy="false"]', {timeout: 20_000});

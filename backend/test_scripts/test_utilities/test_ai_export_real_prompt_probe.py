@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.services.auth_service import hash_password, verify_password
+from backend.app.services.accounts.auth_service import hash_password, verify_password
 from backend.test_scripts.diagnostics.ai_export_real_prompt_probe import (
     COMPOSITION_COMPONENTS,
     NAMED_PROMPT_RETENTION,

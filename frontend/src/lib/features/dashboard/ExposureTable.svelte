@@ -1,0 +1,484 @@
+<!--
+  ExposureTable — Holdings snapshot table for open positions at the selected end date.
+
+  Shows open holdings only (snapshot at date_to).
+  Columns: Asset, Δ P&L 1D, Δ P&L % 1D, P&L, P&L %, Annualized, YOC, Value,
+  Weight, Quantity, Price (hidden), PMC (hidden), Oldest open lot (hidden), Broker.
+  Sorted by value descending.
+
+  Pattern: Svelte 5 Runes, DataTable, data-testid, dark mode.
+-->
+<script lang="ts">
+    import {_} from '$lib/i18n';
+    import {onMount} from 'svelte';
+    import {goto} from '$app/navigation';
+    import {ExternalLink, Layers} from 'lucide-svelte';
+    import type {ColumnDef, RowAction} from '$lib/components/table/types';
+    import DataTable from '$lib/components/table/DataTable.svelte';
+    import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
+    import YieldOnCostCell from './YieldOnCostCell.svelte';
+    import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
+    import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {makePositionKey} from '$lib/utils/core/positionKey';
+    import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {priceFractionDigits} from '$lib/utils/core/formatFixed';
+    import {maskableQuantity} from '$lib/utils/privacy/maskable';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {safeDecimal, safeNumber, safeScalar, safeString} from '$lib/types';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
+
+    interface Holding {
+        asset_id: number;
+        asset_name: string;
+        asset_ticker?: string | (string | null)[] | null;
+        asset_type: string;
+        broker_id?: number | (number | null)[] | null;
+        broker_name?: string | (string | null)[] | null;
+        quantity?: string | (string | null)[] | null;
+        wac_per_unit?: string | (string | null)[] | null;
+        current_price?: string | (string | null)[] | null;
+        current_value?: string | (string | null)[] | null;
+        nav_weight_percent?: string | (string | null)[] | null;
+        gain_loss?: string | (string | null)[] | null;
+        gain_loss_percent?: string | (string | null)[] | null;
+        annualized_return?: string | (string | null)[] | null;
+        yield_on_cost: YieldOnCostLike | (YieldOnCostLike | null)[];
+        gain_loss_change_1d?: string | (string | null)[] | null;
+        gain_loss_change_1d_percent?: string | (string | null)[] | null;
+        oldest_open_lot_date?: string | (string | null)[] | null;
+    }
+
+    interface YieldOnCostLike {
+        status: 'available' | 'no_income' | 'unavailable';
+        value?: string | (string | null)[] | null;
+        reason?: string | (string | null)[] | null;
+        provenance: {
+            window_start: string;
+            window_end: string;
+            first_pair_transaction_date?: string | (string | null)[] | null;
+            gross_income_transaction_count?: number;
+            gross_income_per_unit?: {code: string; amount: string} | ({code: string; amount: string} | null)[] | null;
+            net_zero?: boolean;
+            fx?: Array<{
+                purpose: 'income' | 'wac';
+                requested_date: string;
+                rate_date: string;
+                from_currency: string;
+                to_currency: string;
+                days_back: number;
+            }>;
+            issue_date?: string | (string | null)[] | null;
+            issue_pair?: string | (string | null)[] | null;
+        };
+    }
+
+    interface Props {
+        holdings: Holding[];
+        displayCurrency: string;
+        brokers?: ReadonlyArray<BrokerLike>;
+        onAnalyze?: (assetId: number) => void;
+        /** Asset whose lot-analysis panel is open — its row stays tinted (F9). */
+        analyzedAssetId?: number | null;
+    }
+
+    interface DisplayRow {
+        key: string;
+        assetId: number;
+        assetName: string;
+        assetType: string;
+        brokerId: number | null;
+        brokerName: string;
+        broker: BrokerLike | null;
+        currentValue: number | null;
+        navWeight: number | null;
+        unrealizedPnl: number | null;
+        unrealizedPnlPercent: number | null;
+        annualizedReturn: number | null;
+        yieldOnCost: YieldOnCostLike;
+        yieldOnCostStatus: 'available' | 'no_income' | 'unavailable';
+        yieldOnCostValue: number | null;
+        gainLossChange1d: number | null;
+        gainLossChange1dPercent: number | null;
+        quantity: number | null;
+        price: number | null;
+        wacPerUnit: number | null;
+        oldestOpenLotDate: string | null;
+    }
+
+    let {holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null, ..._legacyProps}: Props & Record<string, unknown> = $props();
+    void _legacyProps;
+
+    let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
+    let tableWrapperEl: HTMLDivElement | undefined = $state(undefined);
+
+    onMount(async () => {
+        await ensureAssetsLoaded();
+    });
+
+    // Cells are rendered as raw HTML strings (see the 'name' column below), so `use:` actions
+    // can't attach to them directly — scan the wrapper for overflow-marquee candidates instead,
+    // re-attaching automatically whenever rows are re-rendered (sort/filter/data refresh).
+    onMount(() => {
+        if (!tableWrapperEl) return;
+        return attachOverflowMarqueeToDescendants(tableWrapperEl);
+    });
+
+    export function getTableRef() {
+        return tableRef;
+    }
+
+    function signedAmountCell(value: number | null) {
+        if (value == null) return '—';
+        const classes = value > 0 ? SIGN_TEXT.portfolio.gain : value < 0 ? SIGN_TEXT.portfolio.loss : SIGN_TEXT.portfolio.zero;
+        return {
+            type: 'html' as const,
+            html: `<span class="font-medium ${classes}">${escapeHtml(formatCurrencyAmountPlain(value, displayCurrency, {showSign: value !== 0}))}</span>`,
+        };
+    }
+
+    function percentChangeCell(value: number | null) {
+        if (value == null) return '—';
+        const classes = value >= 0 ? SIGN_TEXT.portfolio.gain : SIGN_TEXT.portfolio.loss;
+        return {
+            type: 'html' as const,
+            html: `<span class="font-medium ${classes}">${formatPercent(value, {scale: 100})}</span>`,
+        };
+    }
+
+    /** A position quantity, up to the 10 decimals a quantity keeps (C-97c); masked under privacy (D5′), an em dash when absent. */
+    function formatQuantity(value: number | null): string {
+        return value == null ? '—' : maskableQuantity(value.toLocaleString(uiLocale(), {minimumFractionDigits: 0, maximumFractionDigits: 10}));
+    }
+
+    /** A price per unit, public: the decimals its first 4 significant digits need, at least 2, so a price under a cent is not 0.00 (C-97c). */
+    function formatUnitPrice(value: number): string {
+        const {min, max} = priceFractionDigits(value);
+        return formatCurrencyAmountPlain(value, displayCurrency, {minFraction: min, maxFraction: max, sensitivity: 'public'});
+    }
+
+    function label(key: string, fallback: string): string {
+        const translated = $_(key);
+        return translated === key ? fallback : translated;
+    }
+
+    let rows = $derived.by<DisplayRow[]>(() => {
+        const brokerMap = new Map(brokers.map((broker) => [broker.id, broker]));
+
+        return [...holdings]
+            .map((holding) => {
+                const brokerId = safeNumber(holding.broker_id);
+                const broker = brokerId == null ? null : (brokerMap.get(brokerId) ?? null);
+                const currentValue = safeDecimal(holding.current_value);
+                const yieldOnCost = safeScalar(holding.yield_on_cost) as YieldOnCostLike;
+                return {
+                    key: makePositionKey(holding.asset_id, brokerId),
+                    assetId: holding.asset_id,
+                    assetName: holding.asset_name,
+                    assetType: holding.asset_type,
+                    brokerId,
+                    brokerName: safeString(holding.broker_name) || broker?.name || '—',
+                    broker,
+                    currentValue,
+                    // The backend's weight as it is (W7): null reads «—», never value / NAV computed here.
+                    navWeight: safeDecimal(holding.nav_weight_percent),
+                    unrealizedPnl: safeDecimal(holding.gain_loss),
+                    unrealizedPnlPercent: safeDecimal(holding.gain_loss_percent),
+                    annualizedReturn: safeDecimal(holding.annualized_return),
+                    yieldOnCost,
+                    yieldOnCostStatus: yieldOnCost.status,
+                    yieldOnCostValue: safeDecimal(yieldOnCost.value),
+                    gainLossChange1d: safeDecimal(holding.gain_loss_change_1d),
+                    gainLossChange1dPercent: safeDecimal(holding.gain_loss_change_1d_percent),
+                    quantity: safeDecimal(holding.quantity),
+                    price: safeDecimal(holding.current_price),
+                    wacPerUnit: safeDecimal(holding.wac_per_unit),
+                    oldestOpenLotDate: safeString(holding.oldest_open_lot_date),
+                };
+            })
+            .filter((row) => row.quantity == null || row.quantity !== 0)
+            .sort((a, b) => (b.currentValue ?? 0) - (a.currentValue ?? 0));
+    });
+
+    let columns = $derived.by<ColumnDef<DisplayRow>[]>(() => {
+        const assetColumn: ColumnDef<DisplayRow> = {
+            id: 'asset',
+            header: () => $_('common.asset'),
+            type: 'text',
+            width: 240,
+            minWidth: 220,
+            maxWidth: 420,
+            resizable: true,
+            sortable: true,
+            getValue: (row) => row.assetName,
+            cell: (row) => {
+                const info = getAssetInfo(row.assetId);
+                const typeIconSrc = info?.icon_url || getAssetTypeIconUrl(row.assetType) || '';
+                const nameHtml = escapeHtml(row.assetName);
+                const typeIconHtml = typeIconSrc ? `<img src="${escapeHtml(typeIconSrc)}" alt="${escapeHtml(row.assetType)}" class="w-4 h-4 rounded object-contain shrink-0" onerror="this.style.display='none'" />` : '';
+                return {
+                    type: 'html',
+                    html: `<div class="flex items-center gap-1.5 min-w-0">${typeIconHtml}<span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-lf-secondary" title="${nameHtml}">${nameHtml}</span></div>`,
+                };
+            },
+        };
+
+        const brokerColumn: ColumnDef<DisplayRow> = {
+            id: 'broker',
+            header: () => $_('brokers.title') || 'Broker',
+            type: 'text',
+            width: 130,
+            minWidth: 120,
+            maxWidth: 220,
+            resizable: true,
+            sortable: true,
+            getValue: (row) => row.brokerName,
+            cell: (row) => {
+                const broker = row.broker;
+                if (!broker && row.brokerId == null) return '—';
+                return {
+                    type: 'custom',
+                    component: BrokerBadge,
+                    props: {
+                        broker: broker ?? {id: row.brokerId ?? 0, name: row.brokerName},
+                        size: 16,
+                        showName: true,
+                        tooltip: row.brokerName,
+                    },
+                };
+            },
+        };
+
+        return [
+            assetColumn,
+            {
+                id: 'pnl-change-1d',
+                header: () => $_('dashboard.pnlChange1d') || 'Δ P&L vs yesterday',
+                headerTooltip: () => $_('dashboard.pnlChange1dTooltip') || "Change in unrealized P&L vs yesterday, holding today's quantity constant.",
+                type: 'number',
+                align: 'right',
+                width: 190,
+                minWidth: 170,
+                maxWidth: 300,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => row.gainLossChange1d ?? 0,
+                cell: (row) => signedAmountCell(row.gainLossChange1d),
+            },
+            {
+                id: 'pnl-change-1d-percent',
+                header: () => $_('dashboard.pnlChange1dPercent') || 'Δ P&L %',
+                headerTooltip: () => $_('dashboard.pnlChange1dPercentTooltip') || "Δ P&L vs yesterday as a percentage of yesterday's unrealized P&L.",
+                type: 'number',
+                align: 'right',
+                width: 120,
+                minWidth: 110,
+                maxWidth: 190,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => row.gainLossChange1dPercent ?? 0,
+                cell: (row) => percentChangeCell(row.gainLossChange1dPercent != null ? row.gainLossChange1dPercent / 100 : null),
+            },
+            {
+                id: 'pnl',
+                header: () => $_('dashboard.unrealizedPnl'),
+                type: 'number',
+                align: 'right',
+                width: 180,
+                minWidth: 160,
+                maxWidth: 280,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => row.unrealizedPnl ?? 0,
+                cell: (row) => signedAmountCell(row.unrealizedPnl),
+            },
+            {
+                id: 'pnl-percent',
+                header: () => $_('dashboard.unrealizedPnlPercent') || 'P&L %',
+                headerTooltip: () => $_('dashboard.unrealizedPnlPercentTooltip') || 'Unrealized P&L as a percentage of the residual cost basis (Unrealized P&L / cost basis).',
+                type: 'number',
+                align: 'right',
+                width: 110,
+                minWidth: 100,
+                maxWidth: 180,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => row.unrealizedPnlPercent ?? 0,
+                cell: (row) => percentChangeCell(row.unrealizedPnlPercent),
+            },
+            {
+                id: 'annualized-return',
+                header: () => $_('dashboard.annualizedReturn') || 'Annualized',
+                headerTooltip: () => $_('dashboard.annualizedReturnTooltip') || 'P&L % annualized (CAGR) over the holding window (from the oldest open lot), for comparison across positions held for different durations.',
+                type: 'number',
+                align: 'right',
+                width: 120,
+                minWidth: 100,
+                maxWidth: 180,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => row.annualizedReturn ?? 0,
+                cell: (row) => percentChangeCell(row.annualizedReturn),
+            },
+            {
+                id: 'yield-on-cost',
+                header: () => label('dashboard.yieldOnCost', 'YOC'),
+                displayName: () => label('dashboard.yieldOnCostDisplayName', 'Yield on Cost (YOC)'),
+                headerTooltip: () => label('dashboard.yieldOnCostTooltip', 'Compares gross dividends and interest recorded over the last year with the average purchase price (WAC).'),
+                headerTooltipUrl: '/mkdocs/financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost/',
+                headerTooltipLinkMode: 'gesture',
+                type: 'number',
+                align: 'right',
+                width: 120,
+                minWidth: 105,
+                maxWidth: 180,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => (row.yieldOnCostStatus === 'no_income' ? 0 : row.yieldOnCostStatus === 'available' ? row.yieldOnCostValue : null),
+                cell: (row) => ({
+                    type: 'custom',
+                    component: YieldOnCostCell,
+                    props: {result: row.yieldOnCost},
+                }),
+            },
+            {
+                id: 'value',
+                header: () => $_('common.value'),
+                type: 'number',
+                align: 'right',
+                width: 180,
+                minWidth: 160,
+                maxWidth: 280,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => row.currentValue ?? 0,
+                cell: (row) => (row.currentValue == null ? '—' : formatCurrencyAmountPlain(row.currentValue, displayCurrency)),
+            },
+            {
+                id: 'weight',
+                header: () => $_('dashboard.navWeight') || 'Weight',
+                type: 'number',
+                align: 'right',
+                width: 100,
+                minWidth: 90,
+                maxWidth: 160,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => row.navWeight ?? 0,
+                cell: (row) => formatPercent(row.navWeight, {signed: false, digits: 1}),
+            },
+            {
+                id: 'quantity',
+                header: () => $_('dashboard.quantity') || 'Quantity',
+                type: 'number',
+                align: 'right',
+                width: 120,
+                minWidth: 100,
+                maxWidth: 200,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => row.quantity ?? 0,
+                cell: (row) => `${formatQuantity(row.quantity)} 📈`,
+            },
+            {
+                id: 'price',
+                header: () => $_('dashboard.price') || 'Price',
+                type: 'number',
+                align: 'right',
+                width: 180,
+                minWidth: 160,
+                maxWidth: 280,
+                resizable: true,
+                sortable: true,
+                hiddenByDefault: true,
+                getValue: (row) => row.price ?? 0,
+                // Public, like the same quote in AssetTable. Until 2026-09-23 it was masked
+                // on purpose: the row also carried `quantity`, visible by D5, and
+                // quantity × price reconstructs `value`. D5′ masks the quantity beside it,
+                // so the reason is gone, and a market price is not patrimony.
+                cell: (row) => (row.price == null ? '—' : formatUnitPrice(row.price)),
+            },
+            {
+                id: 'pmc',
+                header: () => $_('dashboard.pmc') || 'PMC',
+                headerTooltip: () => $_('dashboard.pmcTooltip') || 'Average cost per unit of the currently open position.',
+                type: 'number',
+                align: 'right',
+                width: 180,
+                minWidth: 160,
+                maxWidth: 280,
+                resizable: true,
+                sortable: true,
+                hiddenByDefault: true,
+                getValue: (row) => row.wacPerUnit ?? 0,
+                // The WAC per unit is admissible (product owner, 2026-09-22); masked only while the quantity was visible.
+                cell: (row) => (row.wacPerUnit == null ? '—' : formatUnitPrice(row.wacPerUnit)),
+            },
+            {
+                id: 'oldest-open-lot',
+                header: () => $_('dashboard.oldestOpenLotDate') || 'Oldest open lot',
+                headerTooltip: () => $_('dashboard.oldestOpenLotDateTooltip') || 'Opening date of the oldest FIFO lot still open for this position.',
+                type: 'date',
+                align: 'right',
+                width: 150,
+                minWidth: 130,
+                maxWidth: 220,
+                resizable: true,
+                sortable: true,
+                hiddenByDefault: true,
+                getValue: (row) => row.oldestOpenLotDate ?? '',
+                cell: (row) => (row.oldestOpenLotDate ? {type: 'date' as const, value: row.oldestOpenLotDate, format: 'date' as const} : '—'),
+            },
+            brokerColumn,
+        ];
+    });
+
+    let tableEmptyMessage = $derived($_('dashboard.noPositions') || 'No holdings at the selected date');
+
+    function goToAssetDetail(row: DisplayRow) {
+        void goto(`/assets/${row.assetId}`);
+    }
+
+    const rowActions: RowAction<DisplayRow>[] = [
+        {
+            id: 'view-asset',
+            icon: ExternalLink,
+            label: () => $_('brokers.lots.viewAsset') || 'View Asset',
+            onClick: (row) => goToAssetDetail(row),
+        },
+        {
+            id: 'analyze-lots',
+            icon: Layers,
+            label: () => $_('brokers.lots.analyze') || 'Analyze Lots',
+            onClick: (row) => onAnalyze?.(row.assetId),
+        },
+    ];
+</script>
+
+<div data-testid="exposure-table" bind:this={tableWrapperEl}>
+    <DataTable
+        bind:this={tableRef}
+        data={rows}
+        {columns}
+        getRowId={(row) => row.key}
+        storageKey="dashboard-holdings-v5"
+        enableSelection={false}
+        selectionMode="none"
+        enableActions={true}
+        enablePagination={true}
+        defaultPageSize={25}
+        enableColumnVisibility={true}
+        enableColumnFilters={false}
+        enableSorting={true}
+        enableColumnResize={true}
+        enableContextMenu={true}
+        tableLayout="fixed"
+        {rowActions}
+        getRowClass={(row) => (row.assetId === analyzedAssetId ? 'row-analyzed' : '')}
+        emptyMessage={tableEmptyMessage}
+    />
+</div>

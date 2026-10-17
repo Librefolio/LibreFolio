@@ -37,6 +37,14 @@ Then add the periods with **Add First Period**, and **Add Period** for the next 
 Periods must follow one another, with no gaps or overlaps. **Split** cuts a period in two; select
 neighbouring periods and click **Merge** to join them.
 
+!!! note "Limits of a schedule"
+
+    Every period must lie between 1 January 1900 and 31 December 2200, and the whole schedule may
+    span at most 100 years, with at most 1,200 periods. The grace days of
+    [late interest](#late-interest) are at most 100 years too (36,525 days). A schedule outside
+    these limits is refused: **Test Configuration**, and the price calculation (**Recalculate** on
+    the asset page), report invalid parameters.
+
 ### ⚡ Late Interest {: #late-interest }
 
 For a loan repaid late, turn on **⚡ Late Interest** below the periods: the asset keeps growing
@@ -77,8 +85,8 @@ as an interest event: the value starts again from $V_0$, and $I$ and the sums re
 
 - **Before the first period**, the value is the Initial Value.
 - **After the last period**, it stays at its final amount, unless late interest is on. With
-  **Generate Coupon** on the last period and no late interest, a maturity settlement event closes
-  the asset at that amount.
+  **Generate Coupon** on the last period and no late interest, the last coupon is paid on the end
+  date and a maturity settlement event closes the asset at the value left after it: the Initial Value.
 - **The chart** gets a point on each **Frequency** date: choose **Daily** for a smooth line.
 
 ??? example "🧮 A €10,000 loan at 5%, with a coupon every month"

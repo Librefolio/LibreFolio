@@ -144,6 +144,9 @@ The LAST_BUY_PRICE fallback is broker-scope-independent. Example: if VWCE's last
 > `last_buy_prices` no longer exists. Commit `1c5082f81` (2026-07-31,
 > "remove legacy valuation engine — resolver is the single brain") made that change. This section still describes the
 > earlier LAST_BUY_PRICE design and was not realigned here: valuation was not part of workstream P.
+> **J-17 (2026-10-16):** the enum gained `ESTIMATED_AT_COST` (no quote, BUY or SELL on or before the day: book
+> cost, a declared estimate), and an ADJUSTMENT is no longer a price observation. See
+> [[decisions/adjustment-is-never-a-price]].
 
 ## Inline WAC (Single-Pass) — 2026-06-30 model, superseded 2026-10-07
 
@@ -193,6 +196,8 @@ The engine no longer owns a cost algorithm. It calls the single average-cost fun
   - `EngineEndState.wac_pool_qty` / `wac_pool_cost` hold each pool's quantity and its historical cost in the target
     currency.
 - **Capital baseline:** a priced in-kind ADJUSTMENT moves it by the cost its step added (in) or removed (out).
+  **J-24 (2026-10-16):** an outgoing one now leaves at the value it hands over, quantity × cost basis at the rate of
+  its date, and the difference from the cost removed is a realized disposal (`RealizedSale`), as in the lots.
 - **In transit:** a frozen cost (`cost_basis_override × quantity`) is converted once, at the arrival date.
 - **Removed:** `_buy_unit_cost`, `_compute_open_cost_basis_inline`, `_capital_flow_for_adjustment_in`,
   `_apply_split_rescale`.

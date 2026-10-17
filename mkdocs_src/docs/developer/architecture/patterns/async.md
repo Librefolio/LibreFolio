@@ -59,7 +59,7 @@ event loop before it starts.
 ### 🧵 Canonical Provider Thread Boundary
 
 The single provider isolation helper is
-`backend/app/services/asset_sources/core.py::_run_provider_in_thread()`. Manager operation
+`backend/app/services/assets/core.py::_run_provider_in_thread()`. Manager operation
 modules and `AssetSearchService` route provider I/O through it. For every call, the helper:
 
 1. starts a worker with `asyncio.to_thread()`;
@@ -108,6 +108,10 @@ provider clients remain valid; they simply run on the worker thread's event loop
     Outside the asset-provider boundary, never call synchronous I/O (HTTP requests, file reads,
     `time.sleep()`) directly inside an `async def` endpoint or service method. Use an
     async-native library or an explicit service-level offload.
+
+    Long CPU-bound work holds the loop as well: the portfolio engine's daily replay runs on a dedicated executor, not
+    on the default one every `asyncio.to_thread()` call shares, so its own two workers bound how many replays run at
+    once ([Off the Event Loop](../../backend/financial_math.md#off-the-event-loop)).
 
     Symptoms of event loop blocking:
 

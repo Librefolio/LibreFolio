@@ -1,6 +1,8 @@
 import type {ECharts} from 'echarts';
+import {chartFontLoaded, chartFontReady} from './chartFont';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {formatPercent} from '$lib/utils/core/formatPercent';
+import {chartNeutrals} from '$lib/theme/chartTheme';
 
 /**
  * echartsTooltipHelpers.ts — Shared tooltip and lifecycle utilities for ALL ECharts charts.
@@ -21,15 +23,12 @@ export interface TooltipTheme {
 }
 
 /**
- * Get tooltip colors for the current theme.
+ * Get tooltip colors for the current theme: the roles of the shared box (`chartNeutrals().tooltip.box`), read on
+ * `scope`, the chart's own element (`<html>` when omitted).
  */
-export function buildTooltipTheme(isDark: boolean): TooltipTheme {
-    return {
-        bg: isDark ? '#1e293b' : '#ffffff',
-        border: isDark ? '#334155' : '#e2e8f0',
-        textColor: isDark ? '#e2e8f0' : '#1e293b',
-        mutedColor: isDark ? '#94a3b8' : '#64748b',
-    };
+export function buildTooltipTheme(isDark: boolean, scope?: Element | null): TooltipTheme {
+    const {box} = chartNeutrals(isDark, scope).tooltip;
+    return {bg: box.background, border: box.border, textColor: box.text, mutedColor: box.muted};
 }
 
 // =============================================================================
@@ -156,13 +155,12 @@ export interface ChartGridColors {
 }
 
 /**
- * Standard grid colors for axes and split lines.
+ * Standard grid colors for axes and split lines: the roles of the dashboard charts (`chartNeutrals().dashboard`), read
+ * on `scope`, the chart's own element (`<html>` when omitted).
  */
-export function buildGridColors(isDark: boolean): ChartGridColors {
-    return {
-        textColor: isDark ? '#94a3b8' : '#64748b',
-        gridColor: isDark ? '#1e293b' : '#f1f5f9',
-    };
+export function buildGridColors(isDark: boolean, scope?: Element | null): ChartGridColors {
+    const {dashboard} = chartNeutrals(isDark, scope);
+    return {textColor: dashboard.text, gridColor: dashboard.gridLine};
 }
 
 // =============================================================================
@@ -272,10 +270,12 @@ function pollStableRect(el: HTMLElement, onStable: () => void, maxFrames = 180):
  * each one forces a full internal ECharts re-render and can interrupt an already
  * visible tap-triggered tooltip on mobile.
  *
- * Uses 3 non-magic-number signals:
+ * Uses 4 non-magic-number signals:
  *  1) immediate corrective resize right after first paint,
  *  2) rect-stability polling via rAF for late reflows above the chart,
- *  3) browser `load` + `document.fonts.ready` for cold-load resource/font settling.
+ *  3) browser `load` + `document.fonts.ready` for cold-load resource/font settling,
+ *  4) the flag face (K-13), when the first paint came before it: `document.fonts.ready` waits only for the faces the
+ *     page has asked for, and canvas text asks for none, so the request of `chartFontReady` is awaited instead.
  */
 export function scheduleFirstRenderStabilityFix(chart: ECharts, container: HTMLElement, afterResize?: (chart: ECharts) => void): void {
     const resizeOnce = () => {
@@ -297,6 +297,8 @@ export function scheduleFirstRenderStabilityFix(chart: ECharts, container: HTMLE
             resizeOnce();
         })
         .catch(() => {});
+
+    if (!chartFontLoaded()) void chartFontReady().then(resizeOnce);
 }
 
 /**

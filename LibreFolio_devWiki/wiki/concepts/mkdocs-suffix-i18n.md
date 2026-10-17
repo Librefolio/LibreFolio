@@ -56,7 +56,6 @@ plugins:
 | Gallery | ✅ | 3 × 4 languages |
 | Root (Home, FAQ, Credits) | ✅ | 3 × 4 languages |
 | **Developer Manual** | ❌ | ~45 files (EN-only) |
-| POC UX | ❌ | 1 file (EN-only) |
 
 **Total**: ~36 source files → ~108 translated files (3 target languages).
 
@@ -64,7 +63,9 @@ plugins:
 
 `EN_ONLY_SECTIONS` in `translate_docs.py` skips:
 - `developer/` — technical audience, EN standard
-- `POC_UX/` — historical artifact
+
+`POC_UX/`, the early UI mockups, was skipped too until 2026-10-14, when it left the repository (it is still in the
+history up to v1.2.0).
 
 Rationale: developer audience expects English technical docs, translation overhead not justified.
 

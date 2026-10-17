@@ -2,8 +2,10 @@
 /**
  * State-machine wiring, not a pretend layout engine. Header, HelpMenu,
  * LanguageSelector, ThemeToggle and the document-scroll helper are real.
- * Only browser measurements, observers and animation-frame delivery are owned.
- * Real sticky/transform/reduced-motion geometry lives in header-scroll.spec.ts.
+ * Only browser measurements, observers, animation-frame delivery and the
+ * `:focus-visible` verdict the focus pin reads (ownFocusVisible) are owned.
+ * Real sticky/transform/reduced-motion geometry, and the focus kind Chrome
+ * gives a real click and a real Tab, live in header-scroll.spec.ts.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';
@@ -116,6 +118,30 @@ async function setModalCount(count: number) {
     document.body.setAttribute('data-modal-scroll-lock-count', String(count));
     ownModalObserver().deliver();
     await tick();
+}
+
+type FocusKind = 'keyboard' | 'pointer' | 'unsupported';
+
+/**
+ * Owns the browser's verdict on `:focus-visible`, which decides the focus pin. jsdom computes it with a heuristic that
+ * reads the last mouse or keyboard event its window recorded — a `fireEvent.click` of an earlier test in this file
+ * included — so, left to jsdom, the same `focus()` is visible or not depending on test order. The kind is stated
+ * instead: `keyboard`, the focused element matches (a focus by Tab); `pointer`, nothing matches (the focus Chrome
+ * leaves on a clicked button); `unsupported`, the selector throws, as in an engine that cannot parse it. Every other
+ * selector reaches jsdom unchanged, and afterEach's `vi.restoreAllMocks()` hands `matches` back. Call it once per test;
+ * `kind` may change mid-test, and `asked` lists every element the question was put to.
+ */
+function ownFocusVisible(kind: FocusKind): {kind: FocusKind; asked: Element[]} {
+    const jsdomMatches = Element.prototype.matches;
+    if (vi.isMockFunction(jsdomMatches)) throw new Error(':focus-visible is already owned in this test: change its `kind` instead');
+    const verdict = {kind, asked: [] as Element[]};
+    vi.spyOn(Element.prototype, 'matches').mockImplementation(function (this: Element, selectors: string) {
+        if (selectors !== ':focus-visible') return jsdomMatches.call(this, selectors);
+        verdict.asked.push(this);
+        if (verdict.kind === 'unsupported') throw new DOMException(`'${selectors}' is not a valid selector`, 'SyntaxError');
+        return verdict.kind === 'keyboard' && this === document.activeElement;
+    });
+    return verdict;
 }
 
 beforeAll(async () => {
@@ -370,7 +396,9 @@ describe('Header visibility pins', () => {
         expectState('visible');
     });
 
-    it('keeps focus pinned across controls, then releases only after focus leaves the header', async () => {
+    it('keeps keyboard focus pinned across controls, then releases only after focus leaves the header', async () => {
+        // The focus a Tab gives, stated rather than left to jsdom's order-dependent heuristic (ownFocusVisible).
+        ownFocusVisible('keyboard');
         await mount();
         const controls = within(header());
         controls.getByTestId('theme-toggle').focus();
@@ -386,6 +414,60 @@ describe('Header visibility pins', () => {
         expect(outside).toHaveFocus();
         expectState('visible');
         await scrollTo(188);
+        expectState('hidden');
+    });
+
+    it('does not pin on a focus the browser does not show (a mouse click), so the header still hides', async () => {
+        const focusVisible = ownFocusVisible('pointer');
+        await mount();
+        const controls = within(header());
+        const theme = controls.getByTestId('theme-toggle');
+        theme.focus();
+        await tick();
+        expect(theme).toHaveFocus();
+        // Presence barrier: the header put the question and was told no, so the missing pin is its answer and not a
+        // focus it never saw.
+        expect(focusVisible.asked).toContain(theme);
+        expectState('visible');
+        await scrollTo(108);
+        expectState('hidden');
+        // A move inside the header goes through the focus recheck, which applies the same rule.
+        const help = controls.getByTestId('help-menu-button');
+        help.focus();
+        expect(frames.size, 'the move queued the focus recheck').toBe(1);
+        await deliverFrames();
+        expect(help).toHaveFocus();
+        expectState('hidden');
+        // The sibling control: the same wiring pins as soon as the browser shows the focus.
+        focusVisible.kind = 'keyboard';
+        theme.focus();
+        await tick();
+        expectState('pinned');
+    });
+
+    it('keeps the old rule where the engine cannot read :focus-visible: any focus inside the header pins it', async () => {
+        const focusVisible = ownFocusVisible('unsupported');
+        await mount();
+        await scrollTo(108);
+        expectState('hidden');
+        const controls = within(header());
+        const theme = controls.getByTestId('theme-toggle');
+        theme.focus();
+        await tick();
+        // Presence barrier: the header put the question and the engine threw, so the pin is the fallback's.
+        expect(focusVisible.asked).toContain(theme);
+        expectState('pinned');
+        await scrollTo(200);
+        expectState('pinned');
+        // The focus recheck after a move inside the header falls back the same way.
+        controls.getByTestId('help-menu-button').focus();
+        await deliverFrames();
+        expectState('pinned');
+        outside.focus();
+        await deliverFrames();
+        expect(outside).toHaveFocus();
+        expectState('visible');
+        await scrollTo(208);
         expectState('hidden');
     });
 

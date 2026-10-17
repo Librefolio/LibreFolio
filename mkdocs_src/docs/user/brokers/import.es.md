@@ -54,3 +54,5 @@ El mismo asistente se abre desde **Importar** en la página [Transacciones](../t
 - **Gestionar todos los archivos** abre la página [Archivos y subidas](../files/index.md#broker-reports), filtrada por este bróker.
 
 Subir y eliminar informes requiere acceso de propietario o editor al bróker.
+
+Los informes que una versión anterior de LibreFolio guardó sin bróker no están en esta lista: quien los subió y los administradores los encuentran en la página [Archivos y subidas](../files/index.md#broker-reports).

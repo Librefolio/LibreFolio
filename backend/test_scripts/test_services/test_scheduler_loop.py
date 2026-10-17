@@ -15,10 +15,10 @@ from backend.app.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
-import backend.app.services.scheduler.state as state_mod
-from backend.app.services.scheduler.scheduler import due_current_price, due_history_sync
-from backend.app.services.scheduler.settings import SchedulerSettings
-from backend.app.services.scheduler.state import JobState, SchedulerState
+import backend.app.services.platform.scheduler.state as state_mod
+from backend.app.services.platform.scheduler.scheduler import due_current_price, due_history_sync
+from backend.app.services.platform.scheduler.settings import SchedulerSettings
+from backend.app.services.platform.scheduler.state import JobState, SchedulerState
 from backend.test_scripts.test_utils import print_section, print_success
 
 TZ = timezone(timedelta(hours=2))

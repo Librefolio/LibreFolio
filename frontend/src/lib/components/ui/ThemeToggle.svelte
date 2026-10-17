@@ -42,8 +42,7 @@
 
 <button
     aria-label={theme === 'light' ? $_('header.theme.switchToDark') : $_('header.theme.switchToLight')}
-    class="p-2 rounded-lg transition-colors duration-200
-           text-gray-600 dark:text-gray-300 hover:bg-white/20 dark:hover:bg-slate-600"
+    class="p-2 rounded-lg transition-colors duration-200 text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
     data-testid="theme-toggle"
     on:click={toggleTheme}
     title={theme === 'light' ? $_('header.theme.dark') : $_('header.theme.light')}

@@ -302,7 +302,8 @@
       "resource_limit_paths_or_horizon": "Esta simulación es demasiado grande para ejecutarse. Usa menos trayectorias simuladas o un horizonte más corto.",
       "resource_limit_horizon_or_sampling": "Esta simulación cuasi-Monte Carlo es demasiado grande para ejecutarse. Acorta el horizonte o elige el muestreo Monte Carlo.",
       "resource_limit_period": "Esta simulación es demasiado grande para ejecutarse: el periodo contiene demasiado historial. Elige un periodo más corto.",
-      "resource_limit_positions": "Una simulación puede incluir como máximo 100 posiciones, y esta cartera tiene más. Simula en su lugar un broker con menos posiciones."
+      "resource_limit_positions": "Una simulación puede incluir como máximo 100 posiciones, y esta cartera tiene más. Simula en su lugar un broker con menos posiciones.",
+      "resource_limit_period_or_assets": "Este análisis es demasiado grande para ejecutarse: estos activos abarcan demasiados días de precios. Elige un periodo más corto o menos activos."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe no está definido porque la volatilidad es cero.",
@@ -339,7 +340,9 @@
       "historical_replay_excluded_stale_at_start": "Sin precio en los {days} días anteriores al inicio de la ventana de la repetición: {names} — {treatment, select, zero_return_residual {peso contado como liquidez con rendimiento cero} other {fuera de la repetición}}.",
       "historical_replay_excluded_stale_at_end": "Sin precio en los últimos {days} días de la ventana de la repetición: {names} — {treatment, select, zero_return_residual {peso contado como liquidez con rendimiento cero} other {fuera de la repetición}}.",
       "historical_replay_mostly_excluded": "El resultado describe solo una parte de tu cartera ({covered, number, percent}): el resto queda fuera de la repetición.",
-      "assets_excluded_no_price_source": "{count, plural, one {# activo excluido} other {# activos excluidos}} del cálculo: sin fuente de precios asignada ni ningún precio registrado — {names}."
+      "assets_excluded_no_price_source": "{count, plural, one {# activo excluido} other {# activos excluidos}} del cálculo: sin fuente de precios asignada ni ningún precio registrado — {names}.",
+      "total_loss_no_recovery": "El valor cayó a cero: ninguna ganancia puede devolverlo a su máximo, así que no se muestra la recuperación necesaria.",
+      "total_loss_no_recovery_assets": "{count, plural, one {# activo cayó} other {# activos cayeron}} a cero: ninguna ganancia puede {count, plural, one {devolverlo a su máximo} other {devolverlos a su máximo}}, así que no se muestra la recuperación necesaria — {names}."
     },
     "assetDetail": {
       "overviewTab": "Resumen",

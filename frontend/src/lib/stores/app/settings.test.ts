@@ -13,12 +13,14 @@
  * instead of waiting on it. `$app/environment` stays the shared mock (`browser: false`), which keeps both stores off
  * `localStorage`, and both are reset around every case: no case inherits a neighbour's settings.
  *
- * The second describe is the one place this file loads. It pins how `globalSettings.load()` reads `enable_registration`
- * (K, step 22), the setting the login page follows to offer «Register here»: as the backend reads a `bool` setting
- * (`_convert_value` in `backend/app/services/global_settings_service.py`), true exactly when `value.lower()` is `true`,
- * `1`, `yes` or `on` and false for anything else, and open when the answer has no such row, the backend default
- * (`GLOBAL_SETTINGS_DEFAULTS`). `GET /settings/global` is answered one call at a time (`mockResolvedValueOnce`); the
- * client fails again right after.
+ * The second describe is the one place this file loads. It used to pin how `globalSettings.load()` read
+ * `enable_registration` (K, step 22), the bool the login page followed to offer «Register here». Accounts lot A5a
+ * replaced that setting with `registration_mode` (`open`, `invite`, `disabled`), and A5b moved the login page onto the
+ * public instance configuration (`instanceConfig.config.accounts.registration_mode`, which also knows when
+ * `LIBREFOLIO_REGISTRATION` pins the mode). So the describe now pins the store's new truth: `enable_registration` is
+ * gone from it — not in its defaults, not after a load — and `registration_mode`, read by nobody through this store,
+ * arrives as the plain string the server sent, like the other string settings. `GET /settings/global` is answered one
+ * call at a time (`mockResolvedValueOnce`); the client fails again right after.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {get, type Readable} from 'svelte/store';
@@ -116,26 +118,42 @@ describe('defaultDisplayCurrency — the Default Currency of the user first, the
     });
 });
 
-describe('globalSettings.load() — enable_registration, read as the backend reads a bool setting', () => {
+describe('globalSettings.load() — enable_registration is gone, registration_mode arrives as a plain string (A5b)', () => {
     const listGlobalSettings = vi.mocked(zodiosApi.list_global_settings_api_v1_settings_global_get);
 
     /**
-     * The part of the store these cases read: the setting under test, and `default_currency`, the witness that a load
-     * took its answer. `enable_registration` is `unknown` on purpose: the cases assert its type, not only its truth.
+     * The store as these cases read it: every key it holds, typed `unknown` on purpose — `enable_registration` must not
+     * be there at all, and `registration_mode` is no field of the `GlobalSettings` interface — with `default_currency`,
+     * the witness that a load took its answer.
      */
-    interface Observed {
-        enable_registration?: unknown;
-        default_currency: string;
-    }
-
-    function observed(): Observed {
-        return globalSettings.get();
+    function observed(): Record<string, unknown> & {default_currency: string} {
+        return globalSettings.get() as unknown as Record<string, unknown> & {default_currency: string};
     }
 
     /** One row of `GET /settings/global`, as the backend sends it. */
-    function row(key: string, value: string, value_type: 'bool' | 'int' | 'string') {
+    function row(key: string, value: string, value_type: 'bool' | 'int' | 'string' | 'str') {
         return {key, value, value_type};
     }
+
+    /**
+     * What the server sends today, `default_currency` aside (the witness adds it): every key of the backend's
+     * `GLOBAL_SETTINGS_DEFAULTS` (`schemas/settings.py`) at its default — `registration_mode` among them, no
+     * `enable_registration`.
+     */
+    const SERVER_ROWS = [
+        row('session_ttl_hours', '24', 'int'),
+        row('registration_mode', 'open', 'string'),
+        row('require_email_verification', 'false', 'bool'),
+        row('max_file_upload_mb', '10', 'int'),
+        row('scheduler_enabled', 'true', 'bool'),
+        row('scheduler_current_price_frequency_minutes', '10', 'int'),
+        row('scheduler_history_sync_times', '06:00,23:00', 'str'),
+        row('scheduler_history_sync_days', 'mon,tue,wed,thu,fri,sat', 'str'),
+        row('scheduler_history_sync_horizon_days', '14', 'int'),
+        row('scheduler_timezone', 'UTC', 'str'),
+        row('default_language', 'en', 'str'),
+        row('default_theme', 'auto', 'str'),
+    ];
 
     /**
      * `globalSettings.load()`, with `GET /settings/global` answering `rows` for this one call, plus a `default_currency`
@@ -160,34 +178,27 @@ describe('globalSettings.load() — enable_registration, read as the backend rea
     beforeEach(reset);
     afterEach(reset);
 
-    it.each(['true', 'True', 'TRUE', '1', 'yes', 'On'])('reads %j as open: the boolean true', async (value) => {
-        await loadAnswering([row('enable_registration', value, 'bool')], 'GBP');
-
-        expect(observed().enable_registration).toBe(true);
+    it('holds no enable_registration at rest: the defaults no longer carry the key A5a removed', () => {
+        expect(Object.keys(observed())).not.toContain('enable_registration');
     });
 
-    // `enabled` is in neither list on purpose: the backend's rule is "true only for those four", not "false only for
-    // these".
-    it.each(['false', 'FALSE', '0', 'no', 'off', '', 'enabled'])('reads %j as closed: the boolean false', async (value) => {
-        await loadAnswering([row('enable_registration', value, 'bool')], 'GBP');
+    it('holds no enable_registration after loading what the server sends today', async () => {
+        await loadAnswering(SERVER_ROWS, 'GBP');
 
-        expect(observed().enable_registration).toBe(false);
+        expect(Object.keys(observed()), 'premise: the answer was read, registration_mode included').toContain('registration_mode');
+        expect(Object.keys(observed())).not.toContain('enable_registration');
     });
 
-    it('reads an answer without the row as open: the backend default, GLOBAL_SETTINGS_DEFAULTS', async () => {
-        // The store last heard «closed»: an open below can only come from reading the absence, never from what it held.
-        await loadAnswering([row('enable_registration', 'false', 'bool')], 'GBP');
-        await loadAnswering([row('session_ttl_hours', '24', 'int')], 'USD');
+    it.each(['open', 'invite', 'disabled'])('takes registration_mode %j as the plain string the server sent, like the other string settings', async (mode) => {
+        await loadAnswering([row('registration_mode', mode, 'string')], 'GBP');
 
-        expect(observed().enable_registration).toBe(true);
+        expect(observed().registration_mode).toBe(mode);
     });
 
     it('keeps what it held when a load fails', async () => {
-        // A guard, green today: the catch in `load()` already keeps the current values. Pinned so that the fix keeps
-        // them too: a failure must not reopen registration on screen, nor close it.
-        await loadAnswering([row('enable_registration', 'false', 'bool')], 'GBP');
+        // A guard, green before A5b and after it: the catch in `load()` keeps the current values.
+        await loadAnswering([row('registration_mode', 'invite', 'string')], 'GBP');
         const held = {...globalSettings.get()};
-        const heldRegistration = observed().enable_registration;
 
         listGlobalSettings.mockRejectedValueOnce(new Error('GET /settings/global: the server did not answer'));
         // `load()` reports the failure on the console: silenced here, where the failure is the point.
@@ -199,7 +210,7 @@ describe('globalSettings.load() — enable_registration, read as the backend rea
         }
 
         expect(listGlobalSettings, 'the second read was asked, and failed').toHaveBeenCalledTimes(2);
-        expect(observed().enable_registration, 'enable_registration: still what the last answer said').toBe(heldRegistration);
+        expect(observed().registration_mode, 'registration_mode: still what the last answer said').toBe('invite');
         expect(globalSettings.get(), 'and nothing else moved').toEqual(held);
     });
 });

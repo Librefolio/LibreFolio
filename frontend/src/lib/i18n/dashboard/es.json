@@ -28,7 +28,7 @@
     "unrealizedDelta": "Variación no realizada",
     "unrealizedDeltaTooltip": "Variación de la ganancia/pérdida latente en posiciones aún abiertas.",
     "realizedSales": "Ventas",
-    "realizedSalesTooltip": "Ganancia o pérdida realizada de las ventas del período, calculada respecto al precio medio de compra.",
+    "realizedSalesTooltip": "Ganancia o pérdida realizada de las ventas del período, y de los títulos cedidos a un coste (por ejemplo a un bróker que LibreFolio no sigue), calculada respecto al precio medio de compra.",
     "income": "Dividendos e intereses",
     "incomeTooltip": "Ingresos recibidos en el período por dividendos, intereses o cupones.",
     "feesAndTaxes": "Costes e impuestos",
@@ -128,7 +128,8 @@
       "missingFx": "No está disponible el tipo de cambio necesario para un pago.",
       "missingWac": "El precio medio de compra (PMC) no está disponible.",
       "nonPositiveWac": "El precio medio de compra (PMC) es nulo o negativo.",
-      "missingFxDetails": "Falta el tipo de cambio {pair} necesario para el cálculo en la fecha {date}."
+      "missingFxDetails": "Falta el tipo de cambio {pair} necesario para el cálculo en la fecha {date}.",
+      "negativeNetIncome": "Las correcciones superan los ingresos del último año."
     },
     "yieldOnCostValue": "Rendimiento sobre coste",
     "yieldOnCostPeriod": "Periodo",
@@ -147,6 +148,7 @@
     "unrealizedAssetEffect": "Activos en {currency}",
     "unrealizedFxEffect": "Tipo de cambio {from} → {to}",
     "unrealizedUnsplit": "{currency}, sin desglosar",
-    "fxOnCash": "Efecto del tipo de cambio sobre el efectivo"
+    "fxOnCash": "Efecto del tipo de cambio sobre el efectivo",
+    "allocationNegativeCash": "Liquidez negativa: {amount}"
   }
 }

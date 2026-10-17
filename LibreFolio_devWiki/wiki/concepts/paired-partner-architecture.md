@@ -83,6 +83,6 @@ Backend:  op.link_uuid  → pair matching in execute_batch Step 6
 
 | Role | Path |
 |------|------|
-| PendingOp type + pairedWith | `frontend/src/lib/components/transactions/types.ts` |
-| BulkModal (getPartnerOp, visibleOps, collapsePairedOps) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| FormModal (resolveFormItems usage) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
+| PendingOp type + pairedWith | `frontend/src/lib/features/transactions/types.ts` |
+| BulkModal (getPartnerOp, visibleOps, collapsePairedOps) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| FormModal (resolveFormItems usage) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |

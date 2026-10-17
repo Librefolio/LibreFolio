@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
  * AllocationPieChart.test.ts — what the "by type" pie hands ECharts, read off the real component:
- * the family every asset type is drawn in, and the icon that titles each arc's tooltip.
+ * the family every asset type is drawn in, the icon that titles each arc's tooltip, and the palette
+ * its arcs are drawn from.
  *
  * ## Why the component, and not the pure modules
  *
@@ -36,12 +37,26 @@
  * really there, so "one icon" cannot hold because every subtype has fallen back to its family's
  * picture.
  *
+ * ## Every category in its own colour (GR1), the sector emoji from the sector store
+ *
+ * The designer's round 2 (D-T17) gives every category a colour of its own, by key and never by rank:
+ * a family is `categoryColor('type', family)` on its arc whatever its rank, a subtype the GR4 shade
+ * of it (`familyShade`), a sector `categoryColor('sector', key)`. Which colour a key has is pinned
+ * by the theme's own tests; what is pinned here is that the mounted pie draws through those
+ * functions — compared with them, never with copied hex values — in both themes, with the dark
+ * theme's shades taking the card the pie sits on, read from its own element through the sRGB
+ * bridge (`chartRoles`), and that no option hands ECharts a `color` list to paint by index.
+ *
+ * The sector names carry their emoji from the sector store, which loads the backend's one map
+ * (GET /utilities/sectors, mocked below with invented emoji, so a drawn emoji can only come from it):
+ * none until the list arrives, then a full rebuild. A Designer Lab edit (contract C4,
+ * `notifyChartColorsChange`) rebuilds the whole option too, never the data-only update.
+ *
  * ## What is not asserted
  *
  * No translated word: labels and the generic caption are resolved from the shipped catalogue,
- * through the same `$_` and the same keys the component calls. Colours are the subject of
- * `allocationRings.test.ts` and `allocationHierarchy.test.ts`. Every value and amount is
- * synthetic.
+ * through the same `$_` and the same keys the component calls. A sector name is read only for the
+ * emoji in front of it. Every value and amount is synthetic.
  *
  * ## Why the imports are dynamic
  *
@@ -109,6 +124,25 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
 
 vi.mock('echarts', () => echartsModule);
 
+/**
+ * GET /utilities/sectors, the one call the pie makes through `$lib/api`: the sector store loads its
+ * emoji from it, once per module. Every other endpoint answers an empty list, so jsdom sends no
+ * request (the pattern of `AllocationHistoryChart.test.ts`). Not `importOriginal`: the real module
+ * re-exports the generated client, whose absence the `beforeAll` below reports with its fix.
+ */
+const sectorsEndpoint = vi.hoisted(() => vi.fn());
+
+vi.mock('$lib/api', () => ({
+    zodiosApi: new Proxy(
+        {},
+        {
+            get(_target, name) {
+                return name === 'list_sectors_api_v1_utilities_sectors_get' ? sectorsEndpoint : vi.fn(async () => ({items: []}));
+            },
+        },
+    ),
+}));
+
 import {flushSync, tick} from 'svelte';
 import {get} from 'svelte/store';
 import {locale, waitLocale} from 'svelte-i18n';
@@ -116,6 +150,11 @@ import {locale, waitLocale} from 'svelte-i18n';
 import {render, setupI18n, waitFor} from '$test/component';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
+import {getSectorEmoji, sectorEmojiVersion} from '$lib/stores/reference/sectorStore';
+import {categoryColor} from '$lib/theme/chartCategories';
+import {familyShade, shadePoles} from '$lib/theme/chartShades';
+import {chartRoles, setRoleReader} from '$lib/theme/roleColors';
+import {notifyChartColorsChange} from '$lib/theme/themeMode';
 
 // =============================================================================
 // Fixtures
@@ -163,6 +202,8 @@ interface DrawnArc {
     ringRole?: 'base' | 'member' | 'filler';
     /** Set on the outer fillers, which ECharts never shows a tooltip for. */
     tooltip?: {show?: boolean};
+    /** The arc's own fill. */
+    itemStyle?: {color?: string};
 }
 
 interface Drawing {
@@ -172,8 +213,44 @@ interface Drawing {
     inner: DrawnArc[];
     /** The outer ring; empty when there is only one. */
     outer: DrawnArc[];
+    /** What the inner ring writes inside `arc`: the sector's emoji, or the type's icon token. */
+    insideLabelOf: (arc: DrawnArc) => string;
     /** The HTML the tooltip shows when `arc` is hovered. */
     tooltipOf: (arc: DrawnArc) => string;
+}
+
+/**
+ * GET /utilities/sectors as the sector store reads it. The emoji are **invented** — no table written
+ * by hand gives Technology a DNA helix — so an emoji drawn on a slice can only have come from here.
+ */
+const SECTOR_LIST = {
+    items: [
+        {key: 'Technology', emoji: '🧬'},
+        {key: 'Health Care', emoji: '🧪'},
+        {key: 'Financials', emoji: '🪙'},
+        {key: 'Energy', emoji: '🔋'},
+    ],
+    buckets: [
+        {key: 'Liquidity', emoji: '🫙'},
+        {key: 'Unknown', emoji: '🫥'},
+    ],
+    fallback_emoji: '🫧',
+};
+
+/** The emoji SECTOR_LIST gives `key`: its entry, a bucket's, or the fallback. */
+function listedEmoji(key: string): string {
+    return [...SECTOR_LIST.items, ...SECTOR_LIST.buckets].find((entry) => entry.key === key)?.emoji ?? SECTOR_LIST.fallback_emoji;
+}
+
+/** The two themes, as the pie reads them off the `dark` class of <html> when it draws. */
+const THEMES = [
+    {theme: 'light', dark: false},
+    {theme: 'dark', dark: true},
+] as const;
+
+/** The GR4 poles the pie shades with in `dark`: the card read through the sRGB bridge — the stand-in under jsdom, unless a reader is injected. */
+function polesFor(dark: boolean) {
+    return shadePoles(dark, chartRoles(dark).color('--lf-surface-card'));
 }
 
 type PieComponent = typeof import('./AllocationPieChart.svelte').default;
@@ -187,10 +264,17 @@ beforeAll(async () => {
     await setupI18n();
     K = await import('$lib/utils/assetTypes');
     AllocationPieChart = (await import('./AllocationPieChart.svelte')).default;
+    sectorsEndpoint.mockResolvedValue(SECTOR_LIST);
 });
 
 beforeEach(() => {
     chartInstances.length = 0;
+});
+
+afterEach(() => {
+    // Module-level state every test of the file shares: the role reader and the theme class.
+    setRoleReader(null);
+    document.documentElement.classList.remove('dark');
 });
 
 /** Every asset type of the generated enum, plus the cash bucket, each with a synthetic share. */
@@ -220,10 +304,10 @@ function genericCaptionOf(type: string): string {
 }
 
 /** Mount the pie as the Dashboard's allocation panel does, and read its first full build. */
-async function drawPie(data: Slice[]): Promise<Drawing> {
-    render(AllocationPieChart, {props: {data, mode: 'type', legendPosition: 'bottom', currency: 'EUR'}});
+async function drawPie(data: Slice[], mode: 'type' | 'sector' = 'type') {
+    const view = render(AllocationPieChart, {props: {data, mode, legendPosition: 'bottom', currency: 'EUR'}});
     await waitFor(() => expect(chartInstances[0]?.setOptionCalls.length ?? 0).toBeGreaterThan(0), {timeout: 5_000});
-    return drawing();
+    return Object.assign(drawing(), {view});
 }
 
 /** The last full build the pie handed ECharts — the one that carries the tooltip. */
@@ -232,16 +316,33 @@ function drawing(): Drawing {
     const build = [...chartInstances[0].setOptionCalls].reverse().find(({option}) => option.tooltip !== undefined);
     if (!build) throw new Error('the pie never handed ECharts a full option');
 
-    const series = build.option.series as Array<{id?: string; data: DrawnArc[]}>;
+    const series = build.option.series as Array<{id?: string; data: DrawnArc[]; label?: {formatter?: unknown}}>;
     const formatter = (build.option.tooltip as {formatter: (params: unknown) => string}).formatter;
     const tooltipOf = (arc: DrawnArc) => formatter({componentType: 'series', seriesType: 'pie', name: arc.name, value: arc.value, data: arc});
+    const insideLabelOf = (arc: DrawnArc) => {
+        const label = series[0].label?.formatter;
+        if (typeof label !== 'function') throw new Error('the inner ring carries no label formatter');
+        return (label as (params: unknown) => string)({componentType: 'series', seriesType: 'pie', name: arc.name, value: arc.value, data: arc});
+    };
 
     if (series.some((entry) => entry.id === 'alloc-base')) {
         expect(series.map((entry) => entry.id)).toEqual(['alloc-base', 'alloc-outer']);
-        return {rings: true, inner: series[0].data, outer: series[1].data, tooltipOf};
+        return {rings: true, inner: series[0].data, outer: series[1].data, insideLabelOf, tooltipOf};
     }
     expect(series, 'a pie without rings draws exactly one series').toHaveLength(1);
-    return {rings: false, inner: series[0].data, outer: [], tooltipOf};
+    return {rings: false, inner: series[0].data, outer: [], insideLabelOf, tooltipOf};
+}
+
+/** The data of the series the pie last handed ECharts, full build or data-only update alike: what is on screen now. */
+function latestSeriesData(): DrawnArc[][] {
+    const call = [...chartInstances[0].setOptionCalls].reverse().find(({option}) => Array.isArray(option.series));
+    if (!call) throw new Error('the pie never handed ECharts a series');
+    return (call.option.series as Array<{data: DrawnArc[]}>).map((entry) => entry.data);
+}
+
+/** Every `setOption` call that hands ECharts a `color` list: the palette it would paint an arc by its index with. */
+function callsWithAColourList(): string[] {
+    return chartInstances.flatMap((chart, index) => chart.setOptionCalls.filter(({option}) => 'color' in option).map(({option}) => `chart ${index}: ${JSON.stringify(option.color)}`));
 }
 
 function describeArc(arc: DrawnArc): string {
@@ -395,6 +496,213 @@ describe("AllocationPieChart — the tooltip titles each arc with the type's own
             return shared.length === 0 ? [] : [`${type}: its tooltip shows ${JSON.stringify(shared)}, the icon of its family ${K.assetTypeFamily(type)}`];
         });
         expect(problems, "subtypes whose tooltip picture is their family's or the fallback: the composite that carries what they hold is missing").toEqual([]);
+    });
+});
+
+// =============================================================================
+// GR1 and GR4 — every family in its own colour, every subtype a shade of it
+// =============================================================================
+
+/** Four families with no subtype, heaviest first: one ring, every family a group of one. */
+const SINGLETONS: Slice[] = [slice('STOCK', 40), slice('BOND', 30), slice('CRYPTO', 20), slice('COMMODITY', 10)];
+
+/** The ETF family split by two subtypes (60 in all), beside a plain family and the engine's cash bucket: two rings. */
+const ETF_FAMILY: Slice[] = [slice('ETF', 30), slice('BOND', 25), slice('ETF_STOCK', 20), slice(CASH_BUCKET, 15), slice('ETF_BOND', 10)];
+
+/** The fill of every arc, with what it stands for: one line each, so a red names the arc. */
+function fills(arcs: readonly DrawnArc[]): string[] {
+    return arcs.map((arc) => `${arc.ringRole ?? 'slice'} ${arc.rawName} ${arc.itemStyle?.color}`);
+}
+
+describe('AllocationPieChart — every family in its own colour (GR1), every subtype a shade of it (GR4)', () => {
+    it.each(THEMES)('$theme theme, one ring: each arc in categoryColor of its type — by key, so a re-ranking through the data-only update moves no colour', async ({dark}) => {
+        document.documentElement.classList.toggle('dark', dark);
+        const drawn = await drawPie(SINGLETONS);
+        expect(drawn.rings, 'families without a subtype are drawn on one ring').toBe(false);
+        expect(fills(drawn.inner)).toEqual(SINGLETONS.map(({name}) => `slice ${name} ${categoryColor('type', name, dark)}`));
+
+        // The same families ranked the other way round, on the same chart: the data-only update (same
+        // theme, locale and set of types).
+        const reversed = SINGLETONS.map(({name}, index) => slice(name, SINGLETONS[SINGLETONS.length - 1 - index].value));
+        const [chart] = chartInstances;
+        const before = chart.setOptionCalls.length;
+        await drawn.view.rerender({data: reversed});
+        await waitFor(() => expect(chart.setOptionCalls.length, 'the pie did not redraw the new data').toBeGreaterThan(before));
+        const [now] = latestSeriesData();
+        // Barrier: the ranks really moved, so a colour handed out by rank would have moved with them.
+        expect(now.map((arc) => arc.rawName)).toEqual([...SINGLETONS].reverse().map(({name}) => name));
+        expect(fills(now)).toEqual([...SINGLETONS].reverse().map(({name}) => `slice ${name} ${categoryColor('type', name, dark)}`));
+
+        expect(callsWithAColourList(), 'an option handing ECharts a palette to paint an arc by its index').toEqual([]);
+    });
+
+    it.each(THEMES)('$theme theme, two rings: base arcs and the generic member in categoryColor of their family, each subtype the familyShade of its rank, fillers transparent', async ({dark}) => {
+        document.documentElement.classList.toggle('dark', dark);
+        const drawn = await drawPie(ETF_FAMILY);
+        expect(drawn.rings, 'a family holding a subtype is split on a second ring').toBe(true);
+
+        const etf = categoryColor('type', 'ETF', dark);
+        const poles = polesFor(dark);
+        expect(fills(drawn.inner)).toEqual(['ETF', 'BOND', 'LIQUIDITY'].map((family) => `base ${family} ${categoryColor('type', family, dark)}`));
+        expect(fills(drawn.outer)).toEqual([`member ETF ${etf}`, `member ETF_STOCK ${familyShade(etf, 1, poles)}`, `member ETF_BOND ${familyShade(etf, 2, poles)}`, 'filler BOND transparent', 'filler LIQUIDITY transparent']);
+        // The engine spells the cash bucket in Title Case; its family wears the Liquidity colour.
+        expect(drawn.inner.find((arc) => arc.primaryKey === 'LIQUIDITY')?.itemStyle?.color).toBe(categoryColor('type', CASH_BUCKET, dark));
+
+        expect(callsWithAColourList(), 'an option handing ECharts a palette to paint an arc by its index').toEqual([]);
+    });
+
+    it("dark theme: the shades take the card the pie is drawn on, read through the bridge from the pie's own element", async () => {
+        const standInCard = chartRoles(true).color('--lf-surface-card');
+        // A card of its own, answered only for the pie's element: a shade made from any other read — <html>, a
+        // stand-in, a literal — would differ.
+        const CARD = '#2a1f3d';
+        const scopes: Array<Element | null> = [];
+        setRoleReader((role, scope) => {
+            scopes.push(scope);
+            return role === '--lf-surface-card' && scope !== null && scope === chartInstances[0]?.getDom() ? CARD : '';
+        });
+        document.documentElement.classList.add('dark');
+
+        const drawn = await drawPie(ETF_FAMILY);
+
+        const etf = categoryColor('type', 'ETF', true);
+        const shadesOn = (card: string) => [1, 2].map((rank) => familyShade(etf, rank, shadePoles(true, card)));
+        // Control: this card moves the shades, so the comparison below cannot pass on the stand-in.
+        expect(shadesOn(CARD)).not.toEqual(shadesOn(standInCard));
+        expect(drawn.outer.filter((arc) => arc.ringRole === 'member' && arc.rawName !== 'ETF').map((arc) => arc.itemStyle?.color)).toEqual(shadesOn(CARD));
+        expect(scopes.length, 'the pie never read a role').toBeGreaterThan(0);
+        expect(
+            scopes.filter((scope) => scope !== chartInstances[0].getDom()).map((scope) => scope?.nodeName ?? 'null'),
+            "roles read from another element than the pie's own",
+        ).toEqual([]);
+    });
+});
+
+// =============================================================================
+// The sector pie — its colours by key, its emoji from the sector store
+// =============================================================================
+
+/**
+ * Why: the header, "Every category in its own colour (GR1), the sector emoji from the sector store".
+ *
+ * Order matters in this block, and the first test says so: the sector store loads once per module,
+ * so the first sector pie of the file is the only one that can see it arrive. It checks that it is.
+ */
+describe('AllocationPieChart — the sector pie: each sector in its own colour, its emoji from the sector store', () => {
+    /** Listed sectors, the cash bucket and a key the list does not name, in no particular order. */
+    const SECTORS_AND_BUCKETS: Slice[] = [slice('Health Care', 20), slice('Technology', 35), slice(CASH_BUCKET, 10), slice('Quantum Computing', 5), slice('Energy', 30)];
+
+    it('draws first without emoji, then rebuilds in full when the sector list arrives: each name led by the emoji the list gives its key', async () => {
+        // Premise: the store has never loaded, and nobody has asked for the list yet.
+        expect(sectorsEndpoint, 'precondition: the sector list was requested before this test, which must run before any other sector pie of the file').not.toHaveBeenCalled();
+        expect(sectorEmojiVersion(), 'precondition: the sector store has already loaded').toBe(0);
+        expect(getSectorEmoji('Technology'), 'precondition: an emoji is known before the list arrived').toBe('');
+
+        let release: (list: typeof SECTOR_LIST) => void = () => {};
+        sectorsEndpoint.mockImplementationOnce(() => new Promise((resolve) => (release = resolve)));
+
+        const first = await drawPie(SECTORS_AND_BUCKETS, 'sector');
+        expect(sectorsEndpoint, 'the sector pie did not ask for the sector list').toHaveBeenCalledTimes(1);
+        // Before the list: no emoji in front of a name, none drawn inside a slice.
+        expect(first.inner.filter((arc) => first.insideLabelOf(arc) !== '').map((arc) => arc.name)).toEqual([]);
+        expect(first.inner.filter((arc) => [...SECTOR_LIST.items, ...SECTOR_LIST.buckets].some(({emoji}) => arc.name.includes(emoji))).map((arc) => arc.name)).toEqual([]);
+        const names = new Map(first.inner.map((arc) => [arc.rawName, arc.name]));
+
+        const [chart] = chartInstances;
+        const before = chart.setOptionCalls.length;
+        release(SECTOR_LIST);
+
+        // The list redraws the pie in full: its names change, so the data-only update would not do.
+        await waitFor(() => expect(chart.setOptionCalls.slice(before).filter(({option}) => option.tooltip !== undefined && option.legend !== undefined).length, 'no full build followed the sector list').toBeGreaterThan(0));
+        const after = drawing();
+        expect(after.inner.map((arc) => arc.name)).toEqual(after.inner.map((arc) => `${listedEmoji(arc.rawName)} ${names.get(arc.rawName)}`));
+        expect(after.inner.map((arc) => after.insideLabelOf(arc))).toEqual(after.inner.map((arc) => listedEmoji(arc.rawName)));
+        expect(chartInstances, 'the list made a new chart').toHaveLength(1);
+    });
+
+    it('takes each emoji from the sector list, never from the data: slices that bring an emoji of their own still wear the list’s', async () => {
+        // The data used to carry an emoji (`AllocationEntry.emoji`, removed): a pie still reading it would draw 🦄.
+        const withOwnEmoji = SECTORS_AND_BUCKETS.map((entry) => ({...entry, emoji: '🦄'}));
+        await drawPie(withOwnEmoji, 'sector');
+
+        // The list may still be on its way when this test runs alone: wait for the build it brings.
+        await waitFor(() => expect(drawing().inner.map((arc) => arc.name.split(' ')[0])).toEqual(drawing().inner.map((arc) => listedEmoji(arc.rawName))));
+        const drawn = drawing();
+        expect(drawn.inner.map((arc) => drawn.insideLabelOf(arc))).toEqual(drawn.inner.map((arc) => listedEmoji(arc.rawName)));
+        // Barrier: the bucket and the unlisted key are among them — their own emoji and the list's fallback.
+        expect(drawn.inner.map((arc) => arc.rawName)).toEqual(expect.arrayContaining([CASH_BUCKET, 'Quantum Computing']));
+        expect(JSON.stringify(chartInstances[0].setOptionCalls.map(({option}) => option.series)), 'the data’s own emoji reached the chart').not.toContain('🦄');
+    });
+
+    it.each(THEMES)('$theme theme: every slice in categoryColor("sector", its key), sorted by value — the cash bucket and an unlisted key included', async ({dark}) => {
+        document.documentElement.classList.toggle('dark', dark);
+        const drawn = await drawPie(SECTORS_AND_BUCKETS, 'sector');
+
+        const byValue = [...SECTORS_AND_BUCKETS].sort((left, right) => right.value - left.value);
+        expect(fills(drawn.inner)).toEqual(byValue.map(({name}) => `slice ${name} ${categoryColor('sector', name, dark)}`));
+        expect(callsWithAColourList(), 'an option handing ECharts a palette to paint a slice by its index').toEqual([]);
+    });
+});
+
+// =============================================================================
+// Redrawn in full when its colours change (C4) or its theme does
+// =============================================================================
+
+describe('AllocationPieChart — redrawn in full when its colours change (C4) or its theme does', () => {
+    it('notifyChartColorsChange() hands ECharts the whole option — legend and tooltip, never the data-only update — with the roles read again', async () => {
+        const standInCard = chartRoles(true).color('--lf-surface-card');
+        const FIRST_CARD = '#2a1f3d';
+        const NEXT_CARD = '#1f3d2a';
+        let card = FIRST_CARD;
+        setRoleReader((role, scope) => (role === '--lf-surface-card' && scope !== null && scope === chartInstances[0]?.getDom() ? card : ''));
+        document.documentElement.classList.add('dark');
+
+        await drawPie(ETF_FAMILY);
+        const [chart] = chartInstances;
+        const etf = categoryColor('type', 'ETF', true);
+        const shadesOn = (onCard: string) => [1, 2].map((rank) => familyShade(etf, rank, shadePoles(true, onCard)));
+        const drawnShades = () =>
+            drawing()
+                .outer.filter((arc) => arc.ringRole === 'member' && arc.rawName !== 'ETF')
+                .map((arc) => arc.itemStyle?.color);
+        // Control: the two cards and the stand-in give three different pairs of shades.
+        expect(new Set([FIRST_CARD, NEXT_CARD, standInCard].map((onCard) => shadesOn(onCard).join(' '))).size).toBe(3);
+        expect(drawnShades()).toEqual(shadesOn(FIRST_CARD));
+
+        card = NEXT_CARD;
+        const before = chart.setOptionCalls.length;
+        // Nothing redraws by itself: a role is read when the option is built, and only the signal says it changed.
+        flushSync();
+        await tick();
+        expect(chart.setOptionCalls.length, 'the pie redrew without being told its colours changed').toBe(before);
+
+        notifyChartColorsChange();
+
+        const since = chart.setOptionCalls.slice(before);
+        expect(since.length, 'no setOption followed the notification').toBeGreaterThan(0);
+        expect(
+            since.map(({option}) => ['legend', 'tooltip'].filter((key) => key in option).join('+')),
+            'a call after the notification that is not a full option: the data-only update',
+        ).toEqual(since.map(() => 'legend+tooltip'));
+        expect(drawnShades(), 'the shades of the new card').toEqual(shadesOn(NEXT_CARD));
+        expect(chartInstances, 'the notification made a new chart').toHaveLength(1);
+    });
+
+    it('a theme switch on <html> redraws in full, each family now in its colour for the other theme', async () => {
+        const drawn = await drawPie(SINGLETONS);
+        expect(fills(drawn.inner)).toEqual(SINGLETONS.map(({name}) => `slice ${name} ${categoryColor('type', name, false)}`));
+        const [chart] = chartInstances;
+        const before = chart.setOptionCalls.length;
+
+        document.documentElement.classList.add('dark');
+
+        await waitFor(() =>
+            expect(
+                chart.setOptionCalls.slice(before).some(({option}) => option.tooltip !== undefined),
+                'no full build followed the theme switch',
+            ).toBe(true),
+        );
+        expect(fills(drawing().inner)).toEqual(SINGLETONS.map(({name}) => `slice ${name} ${categoryColor('type', name, true)}`));
     });
 });
 

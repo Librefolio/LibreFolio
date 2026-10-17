@@ -315,6 +315,25 @@ def classify(engine: str, path: str, declared: str = None) -> str:  # noqa: C901
     return WRITE_GLOBAL
 
 
+def declared_isolation(category: str, action: str) -> str | None:
+    """The isolation class the catalogue declares for one action; ``None`` when it declares none.
+
+    ``exclusive_because`` *is* the WRITE_GLOBAL declaration — the class and its justification are one statement, not
+    a flag with a comment beside it. Written this way a category default cannot silently promote a unit that somebody
+    has already explained must not be promoted. Otherwise the action's own ``isolation``, then its category's
+    ``default_isolation``. Where this answers ``None``, ``classify()`` falls back to its static scan.
+    """
+    from ._registry import TEST_REGISTRY  # noqa: PLC0415 — read at call time, as collect_launches and build_inventory do
+
+    category_entry = TEST_REGISTRY.get(category, {})
+    entry = category_entry.get(action) if action != "_meta" else None
+    if not entry:  # an action the catalogue does not have declares nothing, whatever its category's default
+        return None
+    if entry.get("exclusive_because"):
+        return WRITE_GLOBAL
+    return entry.get("isolation") or category_entry.get("_meta", {}).get("default_isolation") or None
+
+
 def build_inventory() -> tuple:
     """Derive the full inventory of test units. Returns ``(units, errors)``."""
     from ._registry import TEST_REGISTRY
@@ -323,14 +342,7 @@ def build_inventory() -> tuple:
     units = []
     for (cat, action), items in sorted(launches.items()):
         entry = TEST_REGISTRY.get(cat, {}).get(action, {})
-        # `exclusive_because` *is* the WRITE_GLOBAL declaration — the class and
-        # its justification are one statement, not a flag with a comment beside
-        # it. Written this way a category default cannot silently promote a unit
-        # that somebody has already explained must not be promoted.
-        if entry.get("exclusive_because"):
-            declared = WRITE_GLOBAL
-        else:
-            declared = entry.get("isolation") or TEST_REGISTRY.get(cat, {}).get("_meta", {}).get("default_isolation")
+        declared = declared_isolation(cat, action)
         for engine, path, _project in items:
             units.append(
                 TestUnit(

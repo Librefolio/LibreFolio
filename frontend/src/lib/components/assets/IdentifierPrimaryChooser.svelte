@@ -183,9 +183,9 @@
 
 <div data-testid={testid} class="space-y-3">
     {#if preamble}
-        <p data-testid="{testid}-preamble" class="text-xs text-gray-600 dark:text-gray-400">{preamble}</p>
+        <p data-testid="{testid}-preamble" class="text-xs text-lf-secondary">{preamble}</p>
     {/if}
-    <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{title}</p>
+    <p class="text-sm font-medium text-lf-primary">{title}</p>
 
     <div class="space-y-1.5" role="radiogroup" aria-label={title}>
         {#each uniqueChoices as choice (choice.value)}
@@ -194,29 +194,29 @@
                 role="radio"
                 aria-checked={primary === choice.value}
                 data-testid="{testid}-option-{choice.value}"
-                class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-colors {primary === choice.value ? 'border-libre-green bg-libre-green/5 dark:bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500'}"
+                class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-colors {primary === choice.value ? 'border-lf-focus bg-lf-selected' : 'border-lf-subtle hover:border-lf-input-hover hover:bg-lf-hover'}"
                 onclick={() => select(choice.value)}
             >
-                <span class="shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center {primary === choice.value ? 'border-libre-green' : 'border-gray-300 dark:border-slate-500'}">
+                <span class="shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center {primary === choice.value ? 'border-lf-checked' : 'border-lf-input'}">
                     {#if primary === choice.value}
-                        <span class="w-2 h-2 rounded-full bg-libre-green"></span>
+                        <span class="w-2 h-2 rounded-full bg-lf-checked"></span>
                     {/if}
                 </span>
-                <span class="font-mono text-sm text-gray-900 dark:text-gray-100 truncate">{choice.value}</span>
+                <span class="font-mono text-sm text-lf-primary truncate">{choice.value}</span>
                 <span class="shrink-0 ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium {originClass(choice.origin)}">
                     {originLabel(choice.origin)}
                 </span>
             </button>
             {#if choice.detail}
-                <p class="pl-9 -mt-0.5 text-[11px] text-gray-500 dark:text-gray-400 truncate">{choice.detail}</p>
+                <p class="pl-9 -mt-0.5 text-[11px] text-lf-muted truncate">{choice.detail}</p>
             {/if}
         {/each}
     </div>
 
-    <p class="text-xs text-gray-600 dark:text-gray-400">{$t('assets.identifiers.primaryChooser.hint')}</p>
+    <p class="text-xs text-lf-secondary">{$t('assets.identifiers.primaryChooser.hint')}</p>
 
     {#if alternates.length > 0}
-        <div data-testid="{testid}-alternates" class="flex flex-wrap items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+        <div data-testid="{testid}-alternates" class="flex flex-wrap items-center gap-1.5 text-xs text-lf-muted">
             <span class="font-medium">{$t('assets.identifiers.primaryChooser.keepAlternates')}</span>
             {#each alternates as value (value)}
                 <span class="font-mono text-[11px] px-1.5 py-0.5 rounded {originClass(originOf(value))}">{value}</span>
@@ -225,7 +225,7 @@
     {/if}
 
     {#if showIssuanceNote}
-        <div data-testid="{testid}-issuance-note" class="flex gap-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-[11px] leading-relaxed text-blue-800 dark:text-blue-200">
+        <div data-testid="{testid}-issuance-note" class="flex gap-2 p-2.5 rounded-lg bg-lf-info-soft text-[11px] leading-relaxed text-lf-info-on-soft">
             <Info class="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <p>
                 {#each issuanceNoteParts as part, i (i)}{#if part.bold}<strong>{part.text}</strong>{:else}{part.text}{/if}{/each}

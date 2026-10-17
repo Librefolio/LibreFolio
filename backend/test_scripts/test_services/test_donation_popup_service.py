@@ -8,7 +8,7 @@ pattern as test_config_misc.py (plain pytest functions + monkeypatch for env var
 from datetime import timedelta
 
 from backend.app.db.models import User
-from backend.app.services.donation_popup_service import (
+from backend.app.services.accounts.donation_popup_service import (
     is_donation_popup_disabled,
     record_login_and_maybe_show_popup,
     should_show_donation_popup,

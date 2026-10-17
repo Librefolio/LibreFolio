@@ -2,10 +2,13 @@
   R9.8: one exposure dimension (Asset type, sector) as horizontal bars: for each category the target
   and the weight after the plan, side by side. The numbers on the bars and in the box are the
   backend's exact weights, formatted; the lengths are drawing only. Weights are public: nothing to mask.
+  TD-1: the weight after the plan in its category's colour, as on the dashboard (`./exposureBarColours`);
+  the target in a neutral role.
 -->
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {t} from '$lib/i18n';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
@@ -15,6 +18,11 @@
     import {exposureTooltipHtml, exposureTooltipText} from './exposureTooltip';
     import {chartPercent, type WeightRow} from './model';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {shadePoles} from '$lib/theme/chartShades';
+    import {chartNeutrals} from '$lib/theme/chartTheme';
+    import {chartRoles} from '$lib/theme/roleColors';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {actualColours, idealColour} from './exposureBarColours';
 
     interface Props {
         rows: readonly WeightRow[];
@@ -24,13 +32,9 @@
 
     let {rows, dimension}: Props = $props();
 
-    /** Target in grey and after in green, as the bars of the allocation table. */
-    const COLOURS = {
-        light: {target: '#9ca3af', final: '#1a4031'},
-        dark: {target: '#6b7280', final: '#00d681'},
-    };
-
     let dark = $state(false);
+    /** Bumped by a Designer Lab edit of a category colour (C4): the next option is rebuilt whole. */
+    let colorsVersion = $state(0);
     let container = $state<HTMLDivElement>();
     let chart: echarts.ECharts | null = null;
     const resizeWatcher = createResizeWatcher(() => chart?.resize());
@@ -42,14 +46,17 @@
 
     onMount(() => {
         const readTheme = () => {
-            dark = document.documentElement.classList.contains('dark');
+            dark = isDarkTheme();
         };
         readTheme();
-        const observer = new MutationObserver(readTheme);
-        observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const observer = onThemeClassChange(readTheme);
+        const colours = onChartColorsChange(() => {
+            colorsVersion += 1;
+        });
         return () => {
             renderGeneration += 1;
             observer.disconnect();
+            colours.disconnect();
             resizeWatcher.disconnect();
             chart?.dispose();
             chart = null;
@@ -68,7 +75,7 @@
             if (generation !== renderGeneration) return;
             const fresh = chart === null;
             if (!chart) {
-                chart = echarts.init(element, undefined, {renderer: 'canvas'});
+                chart = echarts.init(element, CHART_INIT_THEME, {renderer: 'canvas'});
                 attachChartReady(chart, element, `pac-planner-exposure-bars-${dimension}`);
             }
             chart.setOption(next, CHART_SET_OPTION_OPTS);
@@ -83,10 +90,16 @@
     }
 
     function option(): echarts.EChartsOption {
-        const grid = buildGridColors(dark);
-        const theme = buildTooltipTheme(dark);
-        const colours = dark ? COLOURS.dark : COLOURS.light;
+        void colorsVersion;
+        // The roles of the chart's own element: a forced theme subtree, or the Lab's preview, has its own.
+        const grid = buildGridColors(dark, container ?? null);
+        const theme = buildTooltipTheme(dark, container ?? null);
+        const neutrals = chartNeutrals(dark, container ?? null);
+        const roles = chartRoles(dark, container ?? null);
+        const ideal = idealColour(roles);
+        const card = roles.color('--lf-surface-card');
         const shown = [...rows];
+        const actual = actualColours(shown, dimension, dark, shadePoles(dark, card));
         const tooltipText = text;
         const label = (format: (row: WeightRow) => string) => ({
             show: true,
@@ -100,18 +113,30 @@
         });
         return {
             grid: {left: 8, right: 64, top: 28, bottom: 4, containLabel: true},
-            legend: {top: 0, left: 0, itemWidth: 10, itemHeight: 10, textStyle: {color: grid.textColor, fontSize: 11}, data: [tooltipText.target, tooltipText.final]},
+            legend: {
+                top: 0,
+                left: 0,
+                itemWidth: 10,
+                itemHeight: 10,
+                textStyle: {color: grid.textColor, fontSize: 11},
+                // The actual weight has a colour per row: its swatch is an outline in the text colour, on the card.
+                data: [
+                    {name: tooltipText.target, itemStyle: {color: ideal}},
+                    {name: tooltipText.final, itemStyle: {color: card, borderColor: grid.textColor, borderWidth: 1}},
+                ],
+            },
             tooltip: {
                 trigger: 'axis',
-                axisPointer: {type: 'shadow'},
+                axisPointer: {type: 'shadow', shadowStyle: {color: neutrals.axisPointer.shadow}},
                 confine: true,
                 backgroundColor: theme.bg,
                 borderColor: theme.border,
                 textStyle: {color: theme.textColor, fontSize: 12},
                 formatter: (params: unknown) => {
                     const first = Array.isArray(params) ? params[0] : params;
-                    const row = shown[(first as {dataIndex?: number} | undefined)?.dataIndex ?? -1];
-                    return row ? exposureTooltipHtml(row, tooltipText, theme, colours) : '';
+                    const index = (first as {dataIndex?: number} | undefined)?.dataIndex ?? -1;
+                    const row = shown[index];
+                    return row ? exposureTooltipHtml(row, tooltipText, theme, {target: ideal, final: actual[index]}) : '';
                 },
             },
             xAxis: {type: 'value', min: 0, show: false},
@@ -129,7 +154,7 @@
                     type: 'bar',
                     barMaxWidth: 14,
                     barGap: '25%',
-                    itemStyle: {color: colours.target, borderRadius: [0, 3, 3, 0]},
+                    itemStyle: {color: ideal, borderRadius: [0, 3, 3, 0]},
                     label: label((row) => formatExactPercent(row.target)),
                     data: shown.map((row) => chartPercent(row.target) ?? '-'),
                 },
@@ -137,9 +162,9 @@
                     name: tooltipText.final,
                     type: 'bar',
                     barMaxWidth: 14,
-                    itemStyle: {color: colours.final, borderRadius: [0, 3, 3, 0]},
+                    itemStyle: {borderRadius: [0, 3, 3, 0]},
                     label: label(finalText),
-                    data: shown.map((row) => chartPercent(row.final) ?? '-'),
+                    data: shown.map((row, index) => ({value: chartPercent(row.final) ?? '-', itemStyle: {color: actual[index]}})),
                 },
             ],
         };

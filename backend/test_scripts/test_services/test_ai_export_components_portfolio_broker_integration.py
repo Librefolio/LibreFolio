@@ -20,6 +20,16 @@ loaders are monkeypatched with deterministic synthetic data, but price
 monkeypatching still drives the **real** `SignalService.compute` so technical
 indicator/breadth/event composition is genuinely exercised end-to-end, not
 stubbed away.
+
+The tableless session must never connect. The DB-backed collaborators of the
+drawdown components (`resolve_date_sentinels`, `RiskService`) and of the income
+timeline (`resolve_accessible_broker_ids`, read from its own module) are
+doubled by the scenario setups like every other loader, and the autouse
+`_tableless_session_guard` fixture fails any test whose tableless session ever
+opened a connection: the AI Export turns a loader's SQL error into an
+unavailable payload, so such a test would otherwise stay green on an
+accidental failure path - and leave an aiosqlite connection open for the
+garbage collector to close against an event loop that no longer runs.
 """
 
 from __future__ import annotations
@@ -30,17 +40,21 @@ import json
 import math
 import subprocess
 import sys
-from dataclasses import replace
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+import pytest_asyncio
+from sqlalchemy import event, text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, OpenDateRangeModel
 from backend.app.schemas.portfolio import (
     AssetPeriodContribution,
+    DataQualityReport,
     LotAnalysisType,
     LotsAnalysisMetadata,
     LotsAnalysisResponse,
@@ -56,9 +70,10 @@ from backend.app.schemas.portfolio import (
     YieldOnCostStatus,
 )
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
-from backend.app.schemas.signals import SignalCadence, SignalDomain, SignalPricePoint
+from backend.app.schemas.risk import RiskAnalyticResult, RiskDrawdownOutput, RiskDrawdownRecoveryStatus, RiskQueryRequest, RiskQueryResponse, RiskResultStatus, RiskReturnBasis
+from backend.app.schemas.signals import SignalCadence, SignalDomain, SignalExecutionContext, SignalPricePoint
 from backend.app.services.ai_export.analyses.catalog import EXPECTED_ANALYSIS_COUNT
-from backend.app.services.ai_export.components import broker_cost_efficiency, broker_financial, portfolio_financial
+from backend.app.services.ai_export.components import broker_cost_efficiency, broker_financial, drawdown_context, portfolio_financial, portfolio_income
 from backend.app.services.ai_export.components import portfolio_broker_registry as portfolio_broker_registry_module
 from backend.app.services.ai_export.components.catalog import (
     ALL_FOUNDATION_COMPONENTS,
@@ -98,10 +113,10 @@ from backend.app.services.ai_export.dependencies import (
     ResourceKeyConflictError,
     build_bucket_plan_for_scope,
 )
-from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.services.signal_service import SignalExecutionContext, SignalService
+from backend.app.services.signals.service import SignalService
 
 CURRENCY = "USD"
 
@@ -147,10 +162,59 @@ def _broker_scope(broker_id: int = 9, **overrides) -> BuildScope:
     return BuildScope(**defaults)
 
 
+@dataclass
+class _TrackedTablelessSession:
+    session: AsyncSession
+    engine: AsyncEngine
+    connections_opened: int = 0
+
+
+# Every tableless session handed out during the current test; emptied by the
+# autouse `_tableless_session_guard` fixture at each teardown.
+_TABLELESS_SESSIONS: list[_TrackedTablelessSession] = []
+
+
 def _make_async_session() -> AsyncSession:
-    """Tableless in-memory `AsyncSession`: only satisfies `BuildContext`'s isinstance check."""
+    """Tableless in-memory `AsyncSession`: only satisfies `BuildContext`'s isinstance check.
+
+    It must never connect: every loader that would run SQL on it is patched
+    (the scenario setups patch them all). The autouse `_tableless_session_guard`
+    fixture enforces this contract - it counts the DBAPI connections each
+    engine opens and fails the test at teardown if any did - and closes and
+    disposes every session either way, so none outlives its test.
+    """
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    return AsyncSession(engine)
+    tracked = _TrackedTablelessSession(session=AsyncSession(engine), engine=engine)
+
+    def _count_connection(dbapi_connection, connection_record) -> None:  # noqa: ARG001
+        tracked.connections_opened += 1
+
+    event.listen(engine.sync_engine, "connect", _count_connection)
+    _TABLELESS_SESSIONS.append(tracked)
+    return tracked.session
+
+
+async def _drain_tableless_sessions() -> list[AsyncSession]:
+    """Closes and disposes every tableless session handed out so far; returns those whose engine ever connected."""
+    tracked = list(_TABLELESS_SESSIONS)
+    _TABLELESS_SESSIONS.clear()
+    for entry in tracked:
+        await entry.session.close()
+        await entry.engine.dispose()
+    return [entry.session for entry in tracked if entry.connections_opened]
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _tableless_session_guard() -> AsyncIterator[None]:
+    """Fails a test whose tableless session ever connected, after disposing every one it created.
+
+    The check runs at teardown, outside component code, because the AI Export
+    converts a loader's exception into an unavailable payload: SQL that fails
+    on the tableless session would be swallowed inside the test itself.
+    """
+    yield
+    connected = await _drain_tableless_sessions()
+    assert not connected, f"a loader ran SQL on the tableless session: patch it ({len(connected)} tableless session(s) connected during this test)"
 
 
 def _make_context(scope: BuildScope, registry: ComponentRegistry, session: AsyncSession) -> BuildContext:
@@ -428,6 +492,84 @@ def _patch_get_prices_bulk(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     return calls
 
 
+def _no_drawdown_result(request: RiskQueryRequest) -> RiskAnalyticResult:
+    """A successful `drawdown_summary` result over the requested range: no drawdown, the minimal valid episode."""
+    analyzed = request.date_range
+    end = analyzed.end or analyzed.start
+    output = RiskDrawdownOutput(
+        current_drawdown=0.0,
+        current_peak_date=end,
+        current_drawdown_duration_days=0,
+        maximum_drawdown=0.0,
+        maximum_drawdown_recovery_status=RiskDrawdownRecoveryStatus.NO_DRAWDOWN,
+        maximum_drawdown_duration_days=0,
+        remaining_to_peak_ratio=0.0,
+        available_start=analyzed.start,
+        available_end=end,
+        n_observations=(end - analyzed.start).days + 1,
+        coverage=1.0,
+        calculation_basis="historical_twrr",
+        return_basis=RiskReturnBasis.TWRR,
+    )
+    # model_construct skips only the success-requires-metadata validator, exactly as
+    # `_ok_result` in test_ai_export_components_drawdown_context.py does: the component
+    # reads status/output/data_quality/warnings/error, never the metadata.
+    analytic = request.analytics[0]
+    return RiskAnalyticResult.model_construct(
+        instance_id=analytic.instance_id,
+        analytic_code=analytic.analytic_code,
+        status=RiskResultStatus.OK,
+        output=output,
+        metadata=None,
+        data_quality=DataQualityReport(),
+        warnings=[],
+        error=None,
+    )
+
+
+def _patch_drawdown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Doubles both DB-backed collaborators of `portfolio.drawdown_summary`/`broker.drawdown_summary`.
+
+    The components read the user's transaction inception (`resolve_date_sentinels`)
+    and run `RiskService.execute` on the context's session. On the tableless session
+    both fail with `no such table`, and the component turns that into a FAILED
+    payload: a scenario composing an overview would pass on that accidental failure
+    path, leaving the session's connection open. Patched where `drawdown_context`
+    reads them, they answer a successful `drawdown_summary` without a database.
+    """
+
+    async def _fake_resolve_date_sentinels(date_range, user_id, session, *, broker_ids=None):  # noqa: ARG001
+        return OpenDateRangeModel(start=None, end=date_range.end)  # a user without transactions: drawdown starts at the period start
+
+    class _FakeRiskService:
+        def __init__(self, session):  # noqa: ARG002
+            pass
+
+        async def execute(self, *, user_id, request):  # noqa: ARG002
+            # model_construct on the response too: a validated `RiskQueryResponse` re-runs the
+            # item's success-requires-metadata validator that `_no_drawdown_result` skips.
+            return RiskQueryResponse.model_construct(items=[_no_drawdown_result(request)])
+
+    monkeypatch.setattr(drawdown_context, "resolve_date_sentinels", _fake_resolve_date_sentinels)
+    monkeypatch.setattr(drawdown_context, "RiskService", _FakeRiskService)
+
+
+def _patch_income_timeline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keeps `portfolio.income_timeline` off the database: no accessible broker, hence an empty income ledger.
+
+    Same answer as the `resolve_accessible_broker_ids` double `_patch_lots`
+    installs on `shared_payloads`, which never reaches this component: it binds
+    the function into its own module at import. Unpatched, its ledger query
+    fails with `no such table` on the tableless session and the component
+    reports `income_ledger_query_failed` - an accidental failure path again.
+    """
+
+    async def _fake_resolve_accessible_broker_ids(session, user_id):  # noqa: ARG001
+        return []
+
+    monkeypatch.setattr(portfolio_income, "resolve_accessible_broker_ids", _fake_resolve_accessible_broker_ids)
+
+
 def _full_registry() -> ComponentRegistry:
     return build_component_registry()
 
@@ -491,6 +633,8 @@ def _setup_portfolio_scenario(monkeypatch: pytest.MonkeyPatch, scope: BuildScope
     _patch_lots(monkeypatch, _fifo_lots_by_asset(), asset_ids=set(_HELD_ASSET_IDS))
     _patch_metadata(monkeypatch, asset_ids=list(_HELD_ASSET_IDS), broker_ids=[1, 2])
     _patch_get_prices_bulk(monkeypatch)
+    _patch_drawdown(monkeypatch)
+    _patch_income_timeline(monkeypatch)
 
 
 def _broker_fifo_lots_response(broker_id: int) -> LotsAnalysisResponse:
@@ -520,6 +664,7 @@ def _setup_broker_scenario(monkeypatch: pytest.MonkeyPatch, scope: BuildScope, b
     _patch_metadata(monkeypatch, asset_ids=[4], broker_ids=[broker_id])
     _patch_get_prices_bulk(monkeypatch)
     _patch_broker_period_activity(monkeypatch)
+    _patch_drawdown(monkeypatch)
 
 
 # =============================================================================
@@ -1351,3 +1496,65 @@ class TestImportCycleSafety:
         result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, f"fresh-process registry construction failed:\nstdout={result.stdout}\nstderr={result.stderr}"
         assert result.stdout.strip() == "67 40 11"
+
+
+# =============================================================================
+# 15. Hermetic scenarios: the tableless session never connects, and the
+#     scenario doubles take the success path, not an accidental failure
+# =============================================================================
+
+
+class TestTablelessSessionGuard:
+    @pytest.mark.asyncio
+    async def test_guard_check_reports_a_session_that_connected_and_not_an_idle_one(self):
+        """Presence check: proves the guard's check can fire, so its silence on every other test means something."""
+        idle = _make_async_session()
+        used = _make_async_session()
+        await used.execute(text("SELECT 1"))
+
+        # The guard's own check. It also drains, so this test's autouse teardown stays green.
+        connected = await _drain_tableless_sessions()
+
+        assert used in connected
+        assert idle not in connected
+
+
+class TestScenarioDoublesTakeTheSuccessPath:
+    """Drawdown and income timeline are optional in every composition, so a FAILED payload never turns a test red.
+
+    Without their doubles the scenarios got exactly that on the tableless session
+    (`risk_execution_error`, `income_ledger_query_failed`), and a double that
+    raises degrades the same way, silently: the component swallows the error
+    before the guard could see anything. These pin the success path the
+    scenarios are meant to exercise.
+    """
+
+    @pytest.mark.asyncio
+    async def test_portfolio_scenario_drawdown_summary_is_ok(self, monkeypatch):
+        scope = _portfolio_scope()
+        _setup_portfolio_scenario(monkeypatch, scope)
+        context = _full_context(scope, _make_async_session())
+
+        envelope = await context.resolve("portfolio.drawdown_summary", required=True)
+
+        assert envelope.payload["status"] == drawdown_context.DrawdownContextStatus.OK.value
+
+    @pytest.mark.asyncio
+    async def test_broker_scenario_drawdown_summary_is_ok(self, monkeypatch):
+        scope = _broker_scope()
+        _setup_broker_scenario(monkeypatch, scope)
+        context = _full_context(scope, _make_async_session())
+
+        envelope = await context.resolve("broker.drawdown_summary", required=True)
+
+        assert envelope.payload["status"] == drawdown_context.DrawdownContextStatus.OK.value
+
+    @pytest.mark.asyncio
+    async def test_portfolio_scenario_income_timeline_is_empty_not_failed(self, monkeypatch):
+        scope = _portfolio_scope()
+        _setup_portfolio_scenario(monkeypatch, scope)
+        context = _full_context(scope, _make_async_session())
+
+        envelope = await context.resolve("portfolio.income_timeline", required=True)
+
+        assert envelope.payload["status"] == portfolio_income.IncomeTimelineStatus.EMPTY.value
