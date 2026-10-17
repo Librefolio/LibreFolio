@@ -87,7 +87,7 @@ ENTRY_DOCUMENTS = ("/", "/index.html", "/200.html")
 STANDALONE_DOCUMENTS = ("/offline.html",)
 
 PASSWORD = "HttpGzipPass123!"
-SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
+SOLE_ADMIN_DELETE_DETAIL = {"error_code": "LAST_ADMIN", "message": "Cannot delete account: you are the last active administrator"}
 
 
 @pytest.fixture(scope="module")
