@@ -121,6 +121,22 @@ Each proven first through the engine's period figures in the summary and A's row
 fully sold), all green on HEAD. A scenario may read a subset of the user's brokers (``_Scenario.scope``): the report's
 ``broker_ids`` and the standalone calls'.
 
+MF-A9 (the same mirror, for a position still open) — TestOpenPositionMovedInBase: a row opened in the period has no
+start value, so its annualized return falls back on its end cost over its oldest open lot → the end
+(``contributions.annualized_period_return``). Opened by counted tracts and still holding every unit they brought, its
+result counts them from their value on arrival, so its base adds Σ(V − C) too (``moved_in``); with an exit in the
+period nothing is added — a transfer carries no quantity (the declared limitation). Expected / HEAD (770928213):
+
+- the A8 chain read to A9_TO (05-16; X closes 130 there too — to CB_TO C's window, 04-02 → 04-30, is 28 days, too
+  short to annualize: None before and after): C holds the 5, worth V₂ = 645 on arrival (C₂ = 500), 650 at the end:
+  P&L 5 on 645, 0.0078 → 0.066576 over 44 days; HEAD on the end cost 500, 0.0100 → 0.086045. Red on HEAD. A's and
+  B's rows as in MF-A8;
+- bought in the period (the guard, no transfer): BUY 5 for 645 on 04-02, read to A9_TO: 5 on the end cost 645,
+  0.0078 → 0.066576, as on HEAD;
+- received then partly sold (the guard, the declared limitation; the CB period): the 5 reach B on 02-19 (V₁ = 600,
+  C₁ = 500), B sells 2 for 264 on 03-31 and keeps 3: P&L −10 + 64 = 54 on the end cost 300, 0.1800 → 1.370355 over
+  02-19 → 04-30 (70 days), as on HEAD (on 300 + 100: 0.1350 → 0.935371).
+
 Isolation: every test owns its user, brokers and assets (unique names) and writes only through a session that is
 rolled back: nothing is committed. EUR amounts are read in EUR (``target_currency_override`` / the report's
 ``target_currency``); the EUR/USD rates of TestOldForeignQuoteAtEnd are flushed with the rest and rolled back, and the
@@ -131,7 +147,8 @@ each test. Rows are found by the test's own broker and asset ids; the user owns 
 Reference: backend/app/services/portfolio_service.py (get_positions_contribution, get_report),
 backend/app/services/financial_math/portfolio/daily_state.py (_build_position_state, _value_held_position,
 _market_value_for, _internal_pair_value), backend/app/services/financial_math/portfolio/period.py (period_pnl),
-backend/app/services/financial_math/portfolio/contributions.py (closed_position_base, transfer_costs_moved_out).
+backend/app/services/financial_math/portfolio/contributions.py (closed_position_base, transfer_costs_moved_out,
+annualized_period_return).
 """
 
 import sys
@@ -256,6 +273,9 @@ MI_ARRIVAL = date(2025, 2, 19)  # the units reach B
 MI_ONWARD = date(2025, 3, 31)  # the last leave B: sold, or passed on to C
 MI_ONWARD_ARRIVAL = date(2025, 4, 2)
 
+# open position, moved-in base (MF-A9): the A8 chain read to A9_TO, where C's window MI_ONWARD_ARRIVAL → A9_TO is 44 days
+# (to CB_TO it is 28: too short to annualize, None whatever the base)
+A9_TO = date(2025, 5, 16)
 # The annualized return's rounding of the period return before annualizing (financial_math.portfolio.contributions).
 RETURN_STEP = Decimal("0.0001")
 
@@ -701,6 +721,56 @@ async def _passed_through(session: AsyncSession, keep_alive: list[object]) -> _S
     book = await _moved_in_ledger(session, keep_alive, "a8chain", departure_day=MI_DEPARTURE, pass_on=True)
     # Start: A holds 550 against 500; end: C holds 5 × 130 against 500. NAV 550 → 650, no flow.
     return _Scenario(book=book, date_from=CB_FROM, date_to=CB_TO, engine=_EngineFigures("550", "650", "50", "150", "100"))
+
+
+async def _passed_through_held_longer(session: AsyncSession, keep_alive: list[object]) -> _Scenario:
+    """MF-A9. The A8 chain A → B → C, read to A9_TO (X closes 130 there too): C, opened by the tract on
+    MI_ONWARD_ARRIVAL, still holds the 5 units."""
+    book = await _moved_in_ledger(session, keep_alive, "a9chain", departure_day=MI_DEPARTURE, pass_on=True)
+    await _persist(session, keep_alive, _close(book, "X", A9_TO, "130"))
+    # As to CB_TO: start A holds 550 against 500; end C holds 5 × 130 against 500. NAV 550 → 650, no flow.
+    return _Scenario(book=book, date_from=CB_FROM, date_to=A9_TO, engine=_EngineFigures("550", "650", "50", "150", "100"))
+
+
+async def _bought_in_period(session: AsyncSession, keep_alive: list[object]) -> _Scenario:
+    """MF-A9's guard, no transfer. A: DEPOSIT 645 on CB_OPEN, BUY 5 X for 645 on MI_ONWARD_ARRIVAL — what C's units
+    were worth on reaching it in the chain; X closes 129 that day, 130 on A9_TO."""
+    book = await _book(session, keep_alive, "a9buy", ("A",), {"X": EUR})
+    await _persist(
+        session,
+        keep_alive,
+        _cash(book, "A", TransactionType.DEPOSIT, CB_OPEN, "645"),
+        _trade(book, "A", "X", TransactionType.BUY, MI_ONWARD_ARRIVAL, "5", "-645"),
+        _close(book, "X", MI_ONWARD_ARRIVAL, "129"),
+        _close(book, "X", A9_TO, "130"),
+    )
+    # Start: nothing held, cash 645; end: 5 × 130 against 645. NAV 645 → 650, no flow.
+    return _Scenario(book=book, date_from=CB_FROM, date_to=A9_TO, engine=_EngineFigures("0", "650", "0", "5", "5"))
+
+
+async def _received_then_partly_sold(session: AsyncSession, keep_alive: list[object]) -> _Scenario:
+    """MF-A9's declared limitation. A: DEPOSIT 500, BUY 5 X for 500 on CB_OPEN; the 5 leave A on MI_DEPARTURE and reach
+    B on MI_ARRIVAL (V₁ = 600, C₁ = 500); on MI_ONWARD B sells 2 of them for 264 and keeps 3. X closes 110 on CB_FROM,
+    115 on MI_DEPARTURE, 120 on MI_ARRIVAL, 130 on CB_TO; no quote on MI_ONWARD, where B's SELL is the only
+    observation."""
+    book = await _book(session, keep_alive, "a9part", ("A", "B"), {"X": EUR})
+    departure, arrival = _transfer_pair(book, "A", "B", MI_DEPARTURE, MI_ARRIVAL)
+    await _persist(
+        session,
+        keep_alive,
+        _cash(book, "A", TransactionType.DEPOSIT, CB_OPEN, "500"),
+        _trade(book, "A", "X", TransactionType.BUY, CB_OPEN, "5", "-500"),
+        _close(book, "X", CB_FROM, "110"),
+        _close(book, "X", MI_DEPARTURE, "115"),
+        _close(book, "X", MI_ARRIVAL, "120"),
+        _close(book, "X", CB_TO, "130"),
+        _trade(book, "B", "X", TransactionType.SELL, MI_ONWARD, "-2", "264"),
+        departure,
+        arrival,
+    )
+    await _link(session, departure, arrival)
+    # Start: A holds 5 × 110 against 500; end: B holds 3 × 130 against 300, and the 264. NAV 550 → 654, no flow.
+    return _Scenario(book=book, date_from=CB_FROM, date_to=CB_TO, engine=_EngineFigures("550", "390", "50", "90", "104"))
 
 
 ScenarioBuilder = Callable[[AsyncSession, list[object]], Awaitable[_Scenario]]
@@ -1392,3 +1462,79 @@ class TestClosedPositionBase:
         assert sender.annualized_return == _annualized("50", "500", CB_FROM, MI_DEPARTURE), "the sender's row: MF-A5's base"
         assert passer.annualized_return == expected, f"expected {expected} (45 / 600, V₁); HEAD gave {head} (45 / 500, C₁)"
         print_success(f"45 / 600 over 40 days: {passer.annualized_return}")
+
+
+# =============================================================================
+# MF-A9 — an open position opened in the period by counted tracts: its fallback base at their value on arrival
+# =============================================================================
+
+
+def _opened_row(contribution: PositionsContribution, book: _Book, broker: str, *, end: str, delta: str, pnl: str, realized: str | None) -> AssetPeriodContribution:
+    """``broker``'s row of X (MF-A9), once proven to be the position intended: nothing at the period's start, so no
+    return on it, ``end`` at its end, still held, its result."""
+    row = _row(contribution, book, broker, "X")
+    assert _view(row) == _expected("0", end, delta, pnl), f"precondition: {broker}'s boundaries and result"
+    assert (row.period_realized_gain_loss, row.is_fully_sold, row.period_pnl_percent) == (None if realized is None else Decimal(realized), False, None), f"precondition: {broker} opened in the period and holding"
+    return row
+
+
+class TestOpenPositionMovedInBase:
+    """A position opened inside the period has no start value: its annualized return falls back on its end cost, over
+    its oldest open lot → the end. Since MF-A9, when counted tracts brought units into it and it still holds them all,
+    the base adds what they gained before arriving, Σ(V − C), as its result counts them from their value on arrival
+    (the tract adjustment) — as a closed position's base does since MF-A8. Until then (HEAD 770928213) the base was their
+    historical cost. When units left the row in the period, nothing is added (a transfer carries no quantity)."""
+
+    @pytest.mark.asyncio
+    async def test_still_holding_the_base_is_the_value_on_arrival(self, session, keep_alive, path):
+        """The A8 chain read to A9_TO. C: ΔUGL (650 − 500) − 0 − (V₂ − C₂) = 150 − 145 = 5, nothing realized: P&L 5 on its
+        end cost 500 + 145 = V₂ = 645, 0.0078 → 0.066576 over MI_ONWARD_ARRIVAL → A9_TO (44 days). HEAD: on the end cost,
+        0.0100 → 0.086045. Red on HEAD. A and B, closed in the period, as in MF-A8."""
+        print_section(f"MF-A9 open position, opened by a tract and still holding ({path})")
+        scenario = await _passed_through_held_longer(session, keep_alive)
+        expected, head = _annualized("5", "645", MI_ONWARD_ARRIVAL, A9_TO), _annualized("5", "500", MI_ONWARD_ARRIVAL, A9_TO)
+        assert expected is not None and head is not None and expected != head, "precondition: two annualizable returns"
+
+        contribution, _summary = await _read(session, scenario, path)
+        holder = _opened_row(contribution, scenario.book, "C", end="650", delta="5", pnl="5", realized=None)
+        sender = _sold_out_row(contribution, scenario.book, "A", start="550", delta="50", pnl="50", realized=None)
+        passer = _sold_out_row(contribution, scenario.book, "B", start="0", delta="45", pnl="45", realized=None)
+
+        assert sender.annualized_return == _annualized("50", "500", CB_FROM, MI_DEPARTURE), "the sender's row: MF-A5's base"
+        assert passer.annualized_return == _annualized("45", "600", MI_ARRIVAL, MI_ONWARD), "the passer's row: MF-A8's base"
+        assert holder.annualized_return == expected, f"expected {expected} (5 / 645, V₂); HEAD gave {head} (5 / 500, the end cost)"
+        print_success(f"5 / 645 over 44 days: {holder.annualized_return}")
+
+    @pytest.mark.asyncio
+    async def test_bought_in_the_period_the_base_is_the_end_cost(self, session, keep_alive, path):
+        """Guard, no transfer. A bought the 5 for 645 on MI_ONWARD_ARRIVAL and holds them: P&L 5 on its end cost 645,
+        0.0078 → 0.066576 over 44 days. The same on HEAD — and C's figure in the chain since MF-A9."""
+        print_section(f"MF-A9 open position, bought in the period ({path})")
+        scenario = await _bought_in_period(session, keep_alive)
+        expected = _annualized("5", "645", MI_ONWARD_ARRIVAL, A9_TO)
+        assert expected is not None
+
+        contribution, _summary = await _read(session, scenario, path)
+        row = _opened_row(contribution, scenario.book, "A", end="650", delta="5", pnl="5", realized=None)
+
+        assert row.annualized_return == expected
+        print_success(f"5 / 645 over 44 days: {row.annualized_return}")
+
+    @pytest.mark.asyncio
+    async def test_received_then_partly_sold_the_base_stays_the_end_cost(self, session, keep_alive, path):
+        """Guard, the declared limitation. B received the 5 (V₁ = 600, C₁ = 500) and sold 2 for 264: ΔUGL (390 − 300) −
+        0 − 100 = −10, realized 264 − 200 = 64, P&L 54. A unit left B in the period: which part of the 100 left with it
+        cannot be told, so nothing is added — the base stays the end cost 300, 0.1800 → 1.370355 over MI_ARRIVAL →
+        CB_TO (70 days), as on HEAD (with the 100: 400, 0.1350 → 0.935371)."""
+        print_section(f"MF-A9 open position, received then partly sold ({path})")
+        scenario = await _received_then_partly_sold(session, keep_alive)
+        expected, with_moved_in = _annualized("54", "300", MI_ARRIVAL, CB_TO), _annualized("54", "400", MI_ARRIVAL, CB_TO)
+        assert expected is not None and with_moved_in is not None and expected != with_moved_in, "precondition: two annualizable returns"
+
+        contribution, _summary = await _read(session, scenario, path)
+        row = _opened_row(contribution, scenario.book, "B", end="390", delta="-10", pnl="54", realized="64")
+        sender = _sold_out_row(contribution, scenario.book, "A", start="550", delta="50", pnl="50", realized=None)
+
+        assert sender.annualized_return == _annualized("50", "500", CB_FROM, MI_DEPARTURE), "the sender's row: MF-A5's base"
+        assert row.annualized_return == expected, f"expected {expected} (54 / 300, the end cost); the moved-in base would give {with_moved_in} (54 / 400)"
+        print_success(f"54 / 300 over 70 days: {row.annualized_return}")

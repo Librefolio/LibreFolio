@@ -87,9 +87,17 @@ $$
 \mathrm{ann\_base}=
 \begin{cases}
 |\mathrm{StartValue}|, & |\mathrm{StartValue}|>0\\
-\mathrm{CostBasis}_{end}, & \text{otherwise}
+\mathrm{CostBasis}_{end} + \sum_a \left(V_a - C_a\right), & \text{otherwise}
 \end{cases}
 $$
+
+The sum is over the transfers from another broker of the scope the position received in the period, each counted as in
+[Positions Closed in the Period](#closed-in-period): what their units gained before they arrived, value on arrival less
+the historical cost moved (MF-A9). The position's result counts those units from their value on arrival, its end cost at
+their historical cost, so the base adds the same amount. It applies only while the position still holds every unit it
+received: once units left it in the period, a transfer carries no quantity to tell which part of the sum left with
+them, and the sum is dropped — the end cost alone is the base, as for any position opened mid-period that sold part of
+what it bought.
 
 Window start is clamped to the oldest FIFO lot still open at period end:
 
@@ -125,7 +133,7 @@ $$
 
 - $C_s$ is the historical cost, in $C^*$, of each disposal the period's Realized counts — a SELL, or an outgoing ADJUSTMENT with a cost basis ([Portfolio Engine — §8](index.md#8-realized-gain-loss)). A disposal left out of Realized adds no cost.
 - $C_m$ is the historical cost each transfer to another broker of the scope moved out, when the row counts that transfer's tract: it left after $t_{\mathrm{from}}$, arrived by $t_{\mathrm{end}}$, and both its value on arrival and the cost moved are known ([Period P&L](period-pnl.md), developer decision P22). The row's result carries what those units did until they arrived (the tract adjustment), so their cost belongs in the base.
-- $V_a - C_a$ is, for each such transfer the position **received**, what its units gained before they arrived: their value on arrival less the historical cost moved with them. The row's result starts those units at $V_a$ (the tract adjustment takes back $V_a - C_a$), while $C_s$ and $C_m$ carry their historical cost, so the base adds the same amount and counts them at their value on arrival too (MF-A8).
+- $V_a - C_a$ is, for each such transfer the position **received**, what its units gained before they arrived: their value on arrival less the historical cost moved with them. The row's result starts those units at $V_a$ (the tract adjustment takes back $V_a - C_a$), while $C_s$ and $C_m$ carry their historical cost, so the base adds the same amount and counts them at their value on arrival too (MF-A8). So $\mathrm{CostOut}$ is not only historical cost: for the units the position received, the base holds their value on arrival.
 - $t_{\mathrm{first\ opening}}$ is the position's first acquisition at that broker: a transfer opens it on its arrival there, a split never does. It is the first one ever, not the last lot's, so days at zero between two closes inside the period stay in the window.
 - The numerator is the row's whole $\mathrm{PnL}_{period}$: for a position held at $t_{\mathrm{from}}$, its $\Delta\mathrm{UGL}$ gives back the unrealized gain/loss it started with.
 - The displayed period percentage keeps $|\mathrm{StartValue}|$ as base: only the annualized value changes base and window.
