@@ -81,7 +81,7 @@ operation mixins:
 - **Provider Assignment**: Link an asset to a provider (e.g., "AAPL" → "yfinance").
 - **Price Sync**: 3-phase pipeline: PREPARE → FETCH → PERSIST (see [Data Flow](#data-flow-sync-pipeline) below).
 - **Price Query**: DB-only bulk query with backward-fill via `POST /assets/prices/query`.
-- **Current Price**: Bulk live-price endpoint via `POST /assets/prices/current`. Calls each asset's provider `get_current_value()` with DB fallback. Polled by the Assets list and the asset detail page for their [live prices](../../frontend/components/features/live-ticker.md#polling).
+- **Current Price**: Bulk live-price endpoint via `POST /assets/prices/current`. Calls each asset's provider `get_current_value()` with DB fallback, and serves, caches and writes a quote only as the price columns keep it ([Current Quotes and Today's OHLC](#current-quotes-and-todays-ohlc)). Polled by the Assets list and the asset detail page for their [live prices](../../frontend/components/features/live-ticker.md#polling).
 - **Event Sync**: Persist asset events from providers into the `asset_events` table, filtered by `provider_assignment_id` (manual events survive sync).
 - **Probe**: Dry-run provider config testing via `probe_provider_config()`.
 
@@ -178,11 +178,20 @@ the `-1` sentinel is no value). The call logs a warning, writes the other dates,
 the dropped ones in the asset's result message (*rejected N date(s) with a value no price
 column can keep*, the first five dates with the field and value), which the sync adds to
 the asset's errors as it does the OHLC rejections. The sync's change count, which runs
-before this (`_count_actual_price_changes()` in `refresh.py`), has no size check: it
-truncates the fetched close of each date already stored, so a close from `1E+48` up, or not
-finite, makes it raise, and its fallback then counts every fetched point as new while the
-upsert goes on; either way a skipped date is still counted, in `inserted_count` /
-`updated_count` and `changed_points`, as if it had been written. An open, high, low or
+before this (`_count_actual_price_changes()` in `refresh.py`), and its fallback take only the
+points `_unstorable_provider_point()` accepts (`kept_items` in `_persist_refresh_item()`,
+W-B62): a skipped date is neither counted in `inserted_count` / `updated_count` nor listed in
+`changed_points`, from which the asset page's chart would draw a point the database never got;
+`points_fetched` still counts it. Before, the count took every point: truncating the fetched
+close of a date already stored raised from `1E+48` up, or on a close not finite, and its
+fallback then announced every fetched point. The current value a refresh adds as today's
+point, when the range reaches today, goes through the check of the
+[live price](#current-quotes-and-todays-ohlc), `storable_current_value()`, in FETCH, before the
+shared current-value cache: a value no price column can keep is neither cached nor added, so
+the sync neither counts nor announces it (only the log has it, once), and a provider without
+history, such as the CSS Scraper, is left with nothing: the item fails with *No price data
+available from provider*. A kept value is cached as stored, so the live price then comes from
+the cache already truncated. An open, high, low or
 volume the F.4 merge keeps from the stored row, written by an older release past its
 column's digits, is written as NULL (`_kept_price()`, `_kept_volume()`) instead of raising
 mid-slices. A manual
@@ -232,21 +241,52 @@ the pair through its `requiredFxPairs` banners, and its comparison loader drops 
 
 ### 💹 Current Quotes and Today's OHLC
 
-`get_current_prices_bulk()` is deliberately separate from the DB-only historical query. It checks
-the core current-price cache, calls an assigned provider through `core.call_provider()`, and falls
-back to the latest `PriceHistory` row if the provider fails, is [paused](#provider-pauses) or is
-absent.
+`get_current_prices_bulk()` is deliberately separate from the DB-only historical query. For each
+asset, `_live_quote_item()` reads the core current-price cache, or calls an assigned provider
+through `core.call_provider()`, and checks the quote; the asset falls back to the database when
+the provider fails, is [paused](#provider-pauses) or is absent, or when its quote is refused.
+
+That check, `storable_current_value()` in `price_store.py`, is the one check of a live quote: the
+[refresh](#data-flow-sync-pipeline) applies it too, to the value it adds for today (X-R40, W-B62).
+`storable_price()` decides, as for the history (W-B58):
+
+- a quote the truncation (12 decimal places, then 15 significant digits, rounded down) leaves
+  unchanged is served in its own form (`101.5` stays `101.5`); one it changes is served
+  truncated, as the history and today's row keep it (`65432.1234567890999` →
+  `65432.123456789`), from the provider call and from the cache alike. Only a quote that passed
+  is cached, once its item is built, and a cached one is checked again on a hit (it costs
+  nothing);
+- a quote no price column can keep — not finite, more than 12 digits before the decimal point,
+  or non-zero but 0 once truncated to 12 decimal places (`1E-13`) — is refused: never served,
+  cached or written. The asset falls back exactly as after a provider failure, and the next poll
+  asks the provider again. A value that is no number at all, from a plugin that skips the
+  schema, is refused too: the check never raises. Before, the quote was served as the provider
+  gave it, a finite `1E+50000000` included, which `SafeDecimal` writes out in full (about 50 MB
+  per response), and from the cache for two minutes: W-B58 only kept it out of the database;
+- a refusal is logged at warning level once per process for each asset, provider and value,
+  *Live quote refused: no price column can keep it, the last stored price stands*, the value cut
+  to about 40 characters (`_quote_text()`). `_report_unstorable_quote()` remembers what it
+  logged in a `functools.lru_cache(maxsize=1024)`, bounded so that a provider answering a new
+  absurd value at every poll cannot grow it. Before, only the write-back warned, at every poll
+  of a quote dated today (the scheduler's, every 10 minutes by default; an open asset page's,
+  every 30 seconds; the Assets list's, every 60), while the quote was still served and cached.
+
+The fallback is the most recent `PriceHistory` row whose close reads a number
+(`_last_readable_price()`: the latest row alone, then older ones 32 at a time,
+`_FALLBACK_PAGE`), answered with `source: "db:last_known"`; with none, the item has
+`value: null` and `error: "No price data available"`. A close the file holds as ±inf, or as no
+number, reads `None` through `RealDecimal`
+([Decimal Columns](../../architecture/database/index.md#decimal-columns)) and is passed over;
+before, `Decimal(str(None))` raised, and the whole bulk call, every asset, answered 500.
 
 A successful provider quote dated today is written back to today's OHLC row:
 
 - a missing row is created with `open = high = low = close = value` and `volume = None`;
 - an existing row keeps its volume, widens `low`/`high`, fills `open` only when it is missing,
   and overwrites `close` with the latest quote;
-- the value written is the quote as `storable_price()` keeps it (W-B58), truncated like the
-  history: 12 decimal places, then 15 significant digits, rounded down (a quote of
-  `65432.1234567890999` is stored `65432.123456789`); a quote no price column can keep (not
-  finite, past 12 digits before the decimal point, or non-zero but truncated to 0) is not
-  written, with a warning. The response carries the quote as the provider gave it;
+- the value written is the quote as served, that is as `storable_price()` keeps it, truncated
+  like the history (a quote of `65432.1234567890999` is stored `65432.123456789`); a refused
+  quote never reaches the write-back, which no longer logs one;
 - a `db:last_known` fallback is never written as if it were a fresh quote.
 
 The write-back is best-effort: a commit failure is rolled back and logged without discarding the
@@ -413,8 +453,12 @@ cost unknown it stays `MISSING`.
 - **Canonical cache ownership**: `assets/core.py` owns the history, current, metadata,
   search-result, and search-query singleton caches. Responsibility modules dereference these
   objects through `core`, preserving one identity and one monkeypatch point.
-- **`_asset_current_cache`**: caches provider current-value results. The live-query path and refresh
-  share one key, built by `asset_cache_key()`: provider code, identifier, identifier type and the
+- **`_asset_current_cache`**: caches provider current-value results for two minutes, as the price
+  columns keep them: the live-query path and the refresh store a quote only once
+  `storable_current_value()` has passed it, truncated if need be, so the cache never holds one
+  that cannot be served or written ([Current Quotes and Today's OHLC](#current-quotes-and-todays-ohlc)).
+  The live-query path and refresh share one key, built by `asset_cache_key()`: provider code,
+  identifier, identifier type and the
   provider-parameter hash, so parameter changes cannot reuse stale data and two assets whose
   parameters differ never share a value. The key also includes the fingerprint of the provider's
   settings, as do the history, metadata and search-query keys, so different settings never
