@@ -527,6 +527,7 @@ _STAGE_WARNINGS = {
     "foreign_key_violations_added": "The upgrade added broken references to the copy",
     "control_totals_changed": "The ledger's totals differ from those the backup recorded (listed above)",
     "control_totals_unreadable": "The ledger's totals could not be read on the copy",
+    "non_iso_currencies": "Some currency codes in the backup are not ISO 4217 codes, names or numbers an earlier version saved: an edit of their rows is refused until they are corrected (./dev.py db currencies lists them after the restore)",
 }
 _STAGE_BLOCKERS = {
     "no_administrator": "The backup has no active administrator: after a restore nobody could manage the instance",

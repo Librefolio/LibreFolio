@@ -145,7 +145,8 @@
           "foreign_key_violations_added": "The update added broken references to the copy.",
           "control_totals_changed": "The ledger's totals differ from those the backup recorded (listed above).",
           "control_totals_unreadable": "The ledger's totals could not be read on the copy.",
-          "unknown": "Something in the archive deserves a look: the server's log has the details."
+          "unknown": "Something in the archive deserves a look: the server's log has the details.",
+          "non_iso_currencies": "Some currency codes in the backup are not ISO codes (names or numbers an earlier version saved): an edit of those rows is refused until the code is corrected."
         },
         "expires": "The checked copy is kept until {date}.",
         "drop": "Drop this archive"

@@ -145,7 +145,8 @@
           "foreign_key_violations_added": "L'aggiornamento ha aggiunto riferimenti non validi alla copia.",
           "control_totals_changed": "I totali del registro differiscono da quelli registrati nel backup (elencati sopra).",
           "control_totals_unreadable": "Non è stato possibile leggere i totali del registro sulla copia.",
-          "unknown": "Qualcosa nell'archivio merita uno sguardo: i dettagli sono nel log del server."
+          "unknown": "Qualcosa nell'archivio merita uno sguardo: i dettagli sono nel log del server.",
+          "non_iso_currencies": "Alcuni codici valuta del backup non sono codici ISO (nomi o numeri salvati da una versione precedente): la modifica di quelle righe è rifiutata finché il codice non viene corretto."
         },
         "expires": "La copia controllata resta disponibile fino al {date}.",
         "drop": "Scarta questo archivio"
