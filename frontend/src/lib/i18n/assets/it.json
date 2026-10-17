@@ -214,7 +214,8 @@
       "currencyHelp": "Valuta in cui vengono salvati i prezzi dell'asset.",
       "currencyHelpLabel": "Informazioni sulla valuta dell’asset",
       "nameRequired": "Inserisci il nome dell'asset per continuare.",
-      "descriptionPlaceholder": "Breve descrizione dell'asset…"
+      "descriptionPlaceholder": "Breve descrizione dell'asset…",
+      "planSplitAdjustmentsWithoutCost": "Il provider e i suoi parametri non sono stati cambiati: lo split del {date}, generato dal provider, ha {n, plural, one {# rettifica collegata} other {# rettifiche collegate}} senza costo d'acquisto{hidden, plural, =0 {} one { (# in un broker che non puoi vedere)} other { (# in broker che non puoi vedere)}}{more, plural, =0 {} one {, e anche # altro split} other {, e anche altri # split}}. Cambiare questi parametri, o il provider, cancella gli eventi che ha generato, e quelle unità conterebbero come comprate a un prezzo sconosciuto: dai prima un costo d'acquisto alle rettifiche."
     },
     "provider": {
       "assignment": "Assegnazione Provider",
