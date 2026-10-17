@@ -162,7 +162,7 @@ perform blocking I/O directly on the application's main event loop.
 | `cooldown_scope(identifier, type, params)` | `None` | The part of the provider a pause after «too many requests» covers, such as a site's host; `None` pauses the whole provider. Called before every call, so no I/O, and never a secret in the result: see [Too Many Requests](#too-many-requests) |
 | `provider_help_url` | `None` | URL to the provider's documentation page (served by the running instance) |
 | `settings_fields` | `()` | The values the provider needs from the instance or from each user: an API key, a region, a preference. Read with `self.settings` in the operations, never in `__init__`: see [Settings](#settings) |
-| `test_only` | `False` | `True` for a provider that exists for the tests: hidden from the provider list and from the settings catalogue |
+| `test_only` | `False` | `True` for a provider that exists for the tests: hidden from the provider list and from the settings catalogue and, outside test mode, not served at all ([Test-Only Plugins](plugin_settings.md#test-only)) |
 | `tier` | `FAProviderTier.COMMUNITY` | Where the provider stands in the asset search: `PREMIUM` for a source the instance vouches for, such as licensed data; when at least one premium provider is available, its results come first. A class attribute; a valid string (`"premium"`) is accepted. See [Search Order](#search-order) |
 | `search_priority` | `100` | The provider's place in the search inside its tier, lower first: a whole number of at least 0. A class attribute; a wrong value stops the import |
 | `shutdown()` | no-op | Called at app teardown to clean up resources (close sessions, stop threads). Override if your provider holds persistent connections. |
