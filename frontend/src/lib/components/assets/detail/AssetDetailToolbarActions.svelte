@@ -35,12 +35,12 @@
         isParametric: boolean;
         providerAssignmentLoaded: boolean;
         onsync: () => void;
-        /** The chart is loading. */
-        loading: boolean;
+        /** The page is loading what the user asked for (`pageBusy.busy`, Y11): the Refresh button waits for it. */
+        busy: boolean;
         onrefresh: () => void;
     }
 
-    let {showActionLabels, assetId, aiExportCompatibility, aiExportLabels, aiExportDisabled, onaiexportprepare, onaiexportcopied, editDisabled, onedit, syncBlocked, syncDisabledReason, syncing, isParametric, providerAssignmentLoaded, onsync, loading, onrefresh}: Props = $props();
+    let {showActionLabels, assetId, aiExportCompatibility, aiExportLabels, aiExportDisabled, onaiexportprepare, onaiexportcopied, editDisabled, onedit, syncBlocked, syncDisabledReason, syncing, isParametric, providerAssignmentLoaded, onsync, busy, onrefresh}: Props = $props();
 </script>
 
 <AiExportMenu
@@ -87,7 +87,13 @@
         {#if showActionLabels}<span>{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
     </button>
 {/if}
-<button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="asset-detail-refresh-btn" disabled={loading} onclick={() => onrefresh()}>
-    <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
+<button
+    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    data-testid="asset-detail-refresh-btn"
+    data-busy={busy ? 'true' : 'false'}
+    disabled={busy}
+    onclick={() => onrefresh()}
+>
+    <RefreshCw class={busy ? 'animate-spin' : ''} size={14} />
     {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
 </button>

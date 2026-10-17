@@ -485,9 +485,17 @@ left as they are.
 No other page listens for `prices`. The broker list (`routes/(app)/brokers/+page.svelte`) and the
 risk panels of the asset pages read the caches the signal marked stale, so they ask again the next
 time they load; the live prices of the Assets list and of an asset's page keep their own polling
-([Where prices are polled](#polling)). The price and rate series that an asset's page and the FX
-pages keep in their session caches (`lib/stores/assetPriceStoreRegistry.ts`,
-`lib/stores/fxStoreRegistry.ts`) are not on the bus: the signal leaves them as they are.
+([Where prices are polled](#polling)).
+
+The price and rate series that the asset pages and the FX pages keep in their session caches
+(`lib/stores/assetPriceStoreRegistry.ts`, `lib/stores/fxStoreRegistry.ts`) go stale too, on
+`prices` and on no other kind: each registry listens on the bus from its import and marks every
+store stale, keeping its points ([Registries & Caches](../../state/registries.md#how-it-works)).
+The next visit of a price or FX page, or its next change of range, asks the server again, once,
+and shows the page's loading state, as on a first visit, instead of the prices of before; the
+market rate a transaction modal compares an exchange with (`lookupFxRate`) is asked again for its
+day. A page already open during the catch-up does not reload by itself: it keeps its chart until
+its next load — a change of range, a return to the page, its **Refresh** (backlog Z-14b).
 
 #### 🚫 After a 4xx {: #price-refresh-4xx }
 
@@ -524,6 +532,16 @@ tracker, `priceRefresh`, built with the defaults: the `fetch` above, `instanceNo
 are called, not when the module loads: the API client imports this module, and a test that mocks one
 of them only in part, such as the client's own tests, must still load it.
 
+The default `notices` goes further: it loads the registry on first use. `instanceNotices.svelte.ts`
+holds runes, so `priceRefresh.ts` imports only its `InstanceNotice` type (`import type`); the first
+`show()` or `hide()` loads the module with `import()`, through one promise that every later call
+shares, which keeps a `hide()` from overtaking its `show()`. The API client imports `priceRefresh`,
+and the client must stay free of runes: the AI Export probe loads it without Svelte's compiler, and a
+gate checks it ([the probe's frontend bridge](../../../architecture/patterns/ai_export_probe_workflow.md#frontend-bridge)).
+The notice thus reaches `instanceNotices` a few microtasks after the tracker shows or hides it, which
+nothing visible depends on; a tracker built with `deps.notices`, as the tests build theirs, calls its
+sink at once.
+
 ## 🧪 How it is tested {: #testing }
 
 | Test | Runner action | What it pins |
@@ -531,13 +549,16 @@ of them only in part, such as the client's own tests, must still load it.
 | `lib/features/live-updates/activePolling.test.ts` (Vitest, node, fake timers) | `./dev.py test front-utility core-unit` | Every rule of [`startActivePolling`](#active-polling) on a clock and a tracker the test owns, [failures and provider pauses](#backoff) included, and the four numbers of `cadence.ts` |
 | `lib/services/livePriceService.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | `toLivePriceResult`, `fetchCurrentPrices` on a faked axios adapter, `livePollOutcome`, `livePollFailure` and `computeDirection` |
 | `lib/features/live-updates/activityTracker.test.ts` (Vitest, node, fake clock) | `./dev.py test front-utility core-unit` | The five input events, `hidden` and `visible`, `touch()`, the subscribers, and no listener left after `dispose()` |
-| `lib/features/price-refresh/priceRefresh.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | [Updating prices…](#price-refresh): `readPriceRefreshHeader`; the tracking that a header starts, one at a time; the notice; the ends of a tracking (`idle`, ten `starting`, five failures); a `4xx`, after which the headers are ignored until `reset()`; the portfolio refresh, only after a job seen running and with `last_refreshed`; `stop()`, and `reset()` at a change of account; the defaults, the `fetch` of the status route included, and the refresh of the app's tracker: `notifyPricesCaughtUp()` once a catch-up that updated something is over, never `requestPortfolioRefresh()`, and neither signal when nothing was updated or no job was seen running |
+| `lib/features/price-refresh/priceRefresh.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | [Updating prices…](#price-refresh): `readPriceRefreshHeader`; the tracking that a header starts, one at a time; the notice; the ends of a tracking (`idle`, ten `starting`, five failures); a `4xx`, after which the headers are ignored until `reset()`; the portfolio refresh, only after a job seen running and with `last_refreshed`; `stop()`, and `reset()` at a change of account; the defaults, the `fetch` of the status route included, and the refresh of the app's tracker: `notifyPricesCaughtUp()` once a catch-up that updated something is over, never `requestPortfolioRefresh()`, and neither signal when nothing was updated or no job was seen running; the default `notices`: importing the module or building a tracker loads no `instanceNotices.svelte.ts`, the first notice loads it, once, and a `show()` and a `hide()` issued while it is loading reach it in their order |
+| `lib/api/apiClientRuneFree.gate.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | The rule behind the lazy `notices` ([the probe's frontend bridge](../../../architecture/patterns/ai_export_probe_workflow.md#frontend-bridge)): from `lib/api/index.ts` and from `frontend/scripts/ai-export-render-prompt-probe.ts`, no static import reaches a `.svelte.ts` module or a `.svelte` component, each one reported with the chain of imports that reaches it, and `lib/api/zodios-client.ts` imports none directly. Imports are read on TypeScript's syntax tree: `import type` and `export type` are erased, `import {type X}` counts, since `verbatimModuleSyntax` keeps it, and a dynamic `import()` is not followed. It reads the generated client (`lib/api/generated.ts`, from `./dev.py api sync`): a local import that names no file fails it instead of being skipped. Synthetic graphs, and a real site that imports the instance block's face (`lib/features/email/verificationApi.ts`), check that the scanner reports what it must |
 | `lib/stores/portfolio/portfolioMutation.test.ts`, `lib/stores/portfolio/portfolioStore.test.ts`, `lib/features/brokers/lots/lotsAnalysisStore.test.ts` (Vitest, node) | `./dev.py test front-portfolio store-unit` | The cases of [Updating prices…](#price-refresh): `notifyPricesCaughtUp()` gives every listener exactly `{kind: 'prices'}`, once, kept apart from `refresh` and `mutation`; a listener that throws keeps none of the others from hearing it and is logged; a removed listener hears nothing. The report and lots caches mark their answers stale on it, keep them and ask nothing; the next report fetch without `force` asks the stale one again |
 | `lib/features/risk/riskStore.test.ts` (Vitest, node) | `./dev.py test front-portfolio risk-unit` | The case of [Updating prices…](#price-refresh): the risk answers marked stale on `{kind: 'prices'}`, kept, and nothing asked |
+| `lib/stores/__tests__/TimeSeriesStore.test.ts`, `lib/stores/__tests__/fxStoreRegistry.test.ts` (Vitest, node) | `./dev.py test front-fx fx-unit` | The stale price and rate caches of [Updating prices…](#price-refresh) (Z-14). `markStale()` keeps every point readable (`get`, `has`, `size`, `getRange().data`, `getAllSorted()`) and reports a loaded range missing whole, points or not; a merge covers nothing, only `markFetched` does; the fetches made after the mark add up, and what they leave uncovered comes back as contiguous intervals in date order; a fetch of the whole range makes the store fresh, a second mark stale again; `invalidateAll()` ends the state, and `invalidateRange()` still works in it; without a mark the gaps are the ones of before. On `{kind: 'prices'}` the FX registry marks every pair stale: `ensureFxRangeLoaded`, `ensureFxRangeLoadedBulk` and `loadFxRatesAndSignalsBulk` without signals ask a range loaded before again, in one interval for the whole range, then answer from the cache; `lookupFxRate` takes a stale day for a miss, asks it once and makes only that day fresh; `lookupFxRateSync` still returns the stale point and asks nothing; a `mutation` (the live poll's `POST /assets/prices/current`, a commit) or a `refresh` changes nothing |
+| `lib/stores/__tests__/assetPriceStoreRegistry.test.ts` (Vitest, node) | `./dev.py test front-asset asset-unit` | The same for the asset prices: on `{kind: 'prices'}` every store is stale, every asset in every currency, converted prices included; `ensureAssetPriceRangeLoaded` asks a range loaded before again, once, in one query for the whole range, then answers from the cache; the old points stay readable while the answer is in flight; a `mutation` or a `refresh` changes nothing |
 | `lib/features/live-updates/LiveUpdatesStatus.test.ts` (Vitest, jsdom) | `./dev.py test front-utility component-unit` | The pill only in `paused-idle`, with a label and a hint, and no button |
 | `lib/components/assets/detail/assetDetailLive.svelte.test.ts` (Vitest, jsdom, fake clock around the flash) | `./dev.py test front-utility core-unit` | The [asset detail poll](#asset-detail): what its effect reads; when it starts and stops the poller: none without a provider code (none assigned, no code, an empty code), one as soon as the code arrives alone, stopped when it goes, and no restart when the assignment is reloaded with the same code or another one (Z-8); the outcome it hands back, the answers it drops, the price summary with its conversion and fallback, the [flash](#price-flash) and its decay, put out by the effect's cleanup too, and the [chart head](#chart-head): the merge, the same-close guard on the native close, and the silent reload |
 | `frontend/e2e/assets/asset-live-pause.spec.ts` (Playwright) | `./dev.py test front-asset live-pause` | The list asks every 60 s and the detail exactly once per 30 s; both pause after 2 minutes without input, show the pill and ask at once on the next pointer move; the list pauses in a hidden tab and asks at once on the return; the detail asks nothing on a range in the past; (g) on the detail page, an endpoint that answers 500 spaces the requests 60, 120, 240, 480, 600 and 600 s apart; (h) on the list, an answer where every asset is `RATE_LIMITED` with `retry_after` 300 holds the next request for 300 s after the answer. In both, the state stays `running` and the pill hidden. (i)–(l), today on the user's calendar (Z-3): (i) on the list and (j) on the detail page, at 21:00 in New York, already the next day in UTC, a range ending today (`end=max`) asks when the page opens and again one interval later, and the detail's summary shows the polled quote, not the chart's last close; (k) on the list and (l) on the detail page, at 00:30 in Rome, still the day before in UTC, a range that ended yesterday asks nothing over the load and 65 s more, and the page is `stopped` |
-| `frontend/e2e/portfolio/price-refresh-reload.spec.ts` (Playwright) | `./dev.py test front-portfolio price-refresh` | [Updating prices…](#price-refresh) on a stubbed catch-up: the notice while a job runs, gone at `idle`. (a) Once a catch-up that updated something is over, the Dashboard asks for its main report again, once, the very question on screen, with no navigation; (b) a broker's page, the same on its overview report; (c) on the Dashboard, no reload after a catch-up whose job the page never saw run (`starting` → `idle`, no notice at any moment, even with `last_refreshed` true), nor after one that updated nothing (the notice comes and goes); then the control in the same page, a catch-up that updated something, reloads it once; (d) on the Dashboard, from the end of a catch-up that updated something to the user's next click, the whole reload in it, neither the root (`dashboard-page`) nor `sync-button` takes `data-busy="true"`, read from a record in the page of every value `data-busy` takes on `dashboard-page`, `sync-button` and `broker-refresh`, while the control, a **Refresh** the user asks for in the same page, makes both say busy, then idle again; (e) a broker's page, the same for `broker-refresh` (its root publishes no `data-busy`), with the same control |
+| `frontend/e2e/portfolio/price-refresh-reload.spec.ts` (Playwright) | `./dev.py test front-portfolio price-refresh` | [Updating prices…](#price-refresh) on a stubbed catch-up: the notice while a job runs, gone at `idle`. (a) Once a catch-up that updated something is over, the Dashboard asks for its main report again, once, the very question on screen, with no navigation; (b) a broker's page, the same on its overview report; (c) on the Dashboard, no reload after a catch-up whose job the page never saw run (`starting` → `idle`, no notice at any moment, even with `last_refreshed` true), nor after one that updated nothing (the notice comes and goes); then the control in the same page, a catch-up that updated something, reloads it once; (d) on the Dashboard, from the end of a catch-up that updated something to the user's next click, the whole reload in it, neither the root (`dashboard-page`) nor `sync-button` takes `data-busy="true"`, read from a record in the page of every value `data-busy` takes on `dashboard-page`, `sync-button` and `broker-refresh`, while the control, a **Refresh** the user asks for in the same page, makes both say busy, then idle again; (e) a broker's page, the same for `broker-refresh` (its root publishes no `data-busy`), with the same control; (f) the Dashboard on its Positions tab with the Performance view saved, the same as (d), the cached contribution, turned stale by the catch-up, asked again by the reload beside the main report; (g) an asset's page and (h) an FX pair's page without backend signals, on a range ending today, left for the Dashboard through the sidebar and found again with the browser's Back, an in-app navigation the session caches survive (the document's time origin is checked at every return); on the Dashboard both round trips press its **Refresh**, which starts the tracker on the case's header (its main report must come back first: a premise) and which the caches ignore: back without a catch-up the cache answers, the asset page's `POST /assets/prices/query` item carrying `include_price: false` though the live poll ran on the way, and the pair's page sending no `POST /fx/currencies/convert`; back after a catch-up that updated something, ended on the Dashboard, the asset page asks its prices again (`include_price: true`) and the pair's page asks again rates that cover its whole range |
 | `frontend/e2e/portfolio/page-busy.spec.ts` (Playwright) | `./dev.py test front-portfolio page-busy` | Its two cases of [Updating prices…](#price-refresh), on a stubbed catch-up that updated something, the reload held by `page.route` until the case lets it through and every value of the button's `data-busy` recorded in the page. Dashboard: from the reload's send to its landing `sync-button` stays idle and enabled, and the root (`dashboard-page`) keeps `data-busy="false"` while the reload is held; the control, a change of period to 6M in the same page, keeps the button busy until the new report is back. Broker detail: the same for `broker-refresh` and the broker's overview (its root publishes no `data-busy`) |
 
 The live-pause E2E drives time with `page.clock`, since minutes of cadence can be neither waited for nor
@@ -555,8 +576,10 @@ route on `**/api/v1/**`, installed after the sign-in, answers the status route i
 what the case scripts, and passes every other request to the backend (`route.fetch()`), giving the
 page the real answer with the case's header, or with none. Time runs on real timers. An init script
 records in the page every report request and every status answer read, the latter one task later,
-so a reload that answer caused is already recorded and an absence is read exactly. Nothing is
-written.
+so a reload that answer caused is already recorded and an absence is read exactly; for (g) and (h)
+it also records each price or rate query a chart sends, with its body and what its answer held. The
+one write on their path, the asset page's live poll, is answered in the browser with an empty
+result, as in the live-pause E2E. Nothing is written.
 
 ## ⚙️ Backend {: #backend }
 
@@ -572,29 +595,44 @@ sequenceDiagram
     participant DB as PriceHistory
 
     Page->>API: [asset_ids]
-    alt provider assigned
-        API->>Prov: get_current_value(), 2-min cache, 10 s timeout
+    opt provider assigned, no quote in the 2-min cache
+        API->>Prov: get_current_value(), 10 s timeout
         Prov-->>API: value, currency, as_of_date
-    else no provider, the provider failed, or it is paused
-        API->>DB: last stored close
+    end
+    alt quote, fresh or cached, kept by storable_current_value()
+        Note over API: served as the price columns keep it, a fresh quote cached 2 min
+    else no provider, the provider failed or is paused, or its quote is refused
+        API->>DB: latest stored close that reads a number
         DB-->>API: value, source db:last_known
     end
     API->>DB: upsert today's row, fresh provider quotes dated today only
     API-->>Page: results with asset_id, value, currency, as_of_date, source, error, error_code, retry_after
 ```
 
-- A provider answer has `source: "provider:<code>"` and is cached for two minutes
-  (`_asset_current_cache`, `backend/app/services/assets/core.py`).
-- An asset with no price at all comes back with `value: null` and an `error`.
+- A provider answer has `source: "provider:<code>"` and is served as the price columns keep it
+  (`storable_current_value()`, `backend/app/services/assets/price_store.py`; X-R40, W-B62): in
+  its own form when the history's truncation leaves it unchanged (`101.5` stays `101.5`),
+  truncated otherwise (`65432.1234567890999` → `65432.123456789`). Only such a quote is cached,
+  for two minutes (`_asset_current_cache`, `backend/app/services/assets/core.py`, shared with
+  the price sync), and a cached one is served the same way.
+- **A refused quote**, one no price column can keep (not finite, more than 12 digits before the
+  decimal point, or non-zero but 0 once truncated to 12 decimal places, such as `1E-13`), is
+  neither served, cached nor written: the asset falls back to the database exactly as after a
+  provider failure, with no `error_code`, and the next poll asks the provider again. The backend
+  logs it once per asset, provider and value:
+  [Current Quotes and Today's OHLC](../../../backend/assets/architecture.md#current-quotes-and-todays-ohlc).
+- The database fallback is the latest stored close that reads a number, with
+  `source: "db:last_known"`: a close the file holds as ±inf reads as no value and is passed over.
+  An asset with no price at all comes back with `value: null` and an `error`.
 - **A paused provider** is not called: while the asset's provider is paused after «too many
   requests», or when it refuses this call, the answer is the last stored price
   (`source: "db:last_known"`, still HTTP 200) with `error_code: "RATE_LIMITED"` and `retry_after`,
   the seconds until the provider may be called again; with no stored price, an `error` and the same
   two fields. The pauses are the backend's:
   [Provider Pauses](../../../backend/assets/architecture.md#provider-pauses).
-- **Side effect**: a provider quote dated today creates or extends today's `PriceHistory` row. A
-  database fallback is never written back. This write is why the frontend treats the call as a
-  portfolio mutation.
+- **Side effect**: a provider quote dated today creates or extends today's `PriceHistory` row, with
+  the value served. A database fallback is never written back. This write is why the frontend
+  treats the call as a portfolio mutation.
 
 ## 🔗 Related
 

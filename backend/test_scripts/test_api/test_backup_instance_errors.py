@@ -65,7 +65,7 @@ def replace_start(monkeypatch, outcome: Callable[[], jobs.BackupJob]) -> list[st
     """``jobs.start_backup`` gives ``outcome()`` (or raises what it raises); returns the origins it was called with."""
     calls: list[str] = []
 
-    def start_backup(*, origin: str = "ui", data_dir: Path | None = None) -> jobs.BackupJob:
+    def start_backup(*, origin: str = "ui", data_dir: Path | None = None, password: str | None = None) -> jobs.BackupJob:
         calls.append(origin)
         return outcome()
 

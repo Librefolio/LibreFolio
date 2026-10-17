@@ -25,6 +25,10 @@ The contract pinned here, by the module that holds each part:
    one), raises ``TypeError`` naming the class.
 4. ``services/assets/search.py``: ``AssetSearchService.search`` queries its providers in that order and answers
    provider by provider in it (``asyncio.gather`` keeps the order), in ``providers_queried`` and in ``results`` alike.
+5. ``services/assets/search.py``, the default list (X-R24): called without ``provider_codes``, ``search`` and
+   ``search_stream`` query every registered provider that can search except the test-only ones (``test_only``, the
+   rule ``GET /assets/provider`` applies in ``api/v1/assets/providers.py``), so ``mockprov`` is never queried by
+   default; named in ``provider_codes``, a test-only provider is still queried.
 
 Pure: no database, no server, no network. Both variables are removed from this process's environment before each test
 and set through ``monkeypatch`` where a test is about them. The cache of ``_report_unknown`` is emptied before and after
@@ -33,18 +37,27 @@ barrier: a canary logged through the module's own logger must reach the capture,
 The cases about declared values give ``provider_policy`` stand-in plugin classes in place of its own
 ``AssetProviderRegistry`` name; the shared registry, where the search also looks up the URLs of its results, is left as
 it is. The search runs against doubles handed out by a replaced ``core.configured_provider``: they are not plugins, so
-``core.call_provider`` runs them as they are. Each search test uses a query of its own, whose cache entries are removed
-after it. A class with a wrong declaration is defined inside its test and never registered.
+``core.call_provider`` runs them as they are. The cases about the default list read the real registry (which providers
+exist, which are test-only, which can search) and get, through that same replacement, a double for each registered
+code whose class carries its plugin's ``test_only`` and ``supports_search``: the fix may read the flag from the
+registry or from the instance. Each search test uses a query of its own, whose cache entries are removed after it. A
+class with a wrong declaration is defined inside its test and never registered.
 
-Red until the fix of the repeated codes lands: ``search.py`` ranks its providers in a dict keyed by code, where a code
-given twice takes the place of its last occurrence, so ``a,b,a`` is searched as ``b,a,a`` with every value at its
-default; and ``provider_policy.search_rank`` does not exist yet. The cases about it look it up when they run, so each
-fails alone, with an ``AttributeError``, and the rest of the file still runs.
+The cases about the repeated codes and ``search_rank`` were written red, and are green since the F21 fix: they stay as
+regressions. ``search.py`` used to rank its providers in a dict keyed by code, where a code given twice took the place
+of its last occurrence, so ``a,b,a`` was searched as ``b,a,a`` with every value at its default; and
+``provider_policy.search_rank`` did not exist. The search now sorts its providers by ``search_rank``, a stable sort.
+
+Red until X-R24 lands: without ``provider_codes`` the search takes the whole ``AssetProviderRegistry.list_providers()``,
+``mockprov`` included, so the two cases about the default list fail on ``mockprov``: called, and listed in
+``providers_queried`` and in the ``done`` event. The two cases about a ``mockprov`` named in ``provider_codes`` are green
+controls, and must stay green with the fix: the tests that search ``providers=mockprov`` rely on it.
 """
 
 import contextlib
+import json
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from typing import Any
 
 import pytest
@@ -437,11 +450,7 @@ def test_repeated_codes_keep_their_places(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_search_rank_is_the_effective_tier_then_the_effective_priority(monkeypatch: pytest.MonkeyPatch) -> None:
     """``search_rank(code)``: ``(0, priority)`` for a premium provider and ``(1, priority)`` for any other, an unknown code
-    included, from the effective values, with the variables or without them.
-
-    Red until ``search_rank`` exists: it is looked up here, when the case runs, so this case fails alone, with an
-    ``AttributeError``.
-    """
+    included, from the effective values, with the variables or without them."""
     _use_stand_ins(monkeypatch, _mixed_stand_ins())
     search_rank = provider_policy.search_rank
     codes = (ALPHA, BETA, GAMMA, DELTA, UNKNOWN_CODE)
@@ -456,10 +465,7 @@ def test_search_rank_is_the_effective_tier_then_the_effective_priority(monkeypat
 
 def test_search_order_is_a_stable_sort_by_search_rank(monkeypatch: pytest.MonkeyPatch) -> None:
     """``search_order(codes)`` is ``sorted(codes, key=search_rank)``, the key the search sorts its providers by: one order
-    for both, a repeated code at each of its places.
-
-    Red until ``search_rank`` exists, as above.
-    """
+    for both, a repeated code at each of its places."""
     _use_stand_ins(monkeypatch, _mixed_stand_ins())
     search_rank = provider_policy.search_rank
     given = [ALPHA, GAMMA, BETA, ALPHA, UNKNOWN_CODE, DELTA, GAMMA]
@@ -568,8 +574,8 @@ async def test_with_every_value_at_its_default_the_search_keeps_the_given_order(
 async def test_the_search_keeps_a_repeated_provider_at_each_of_its_places(monkeypatch: pytest.MonkeyPatch, query: str) -> None:
     """D-X3 with a code given twice: ``a,b,a`` is searched and answered as ``a,b,a``.
 
-    Red until the fix lands: search.py ranks the providers in a dict keyed by code, where a code given twice keeps the
-    place of its last occurrence and takes the first one along, so ``a,b,a`` comes out as ``b,a,a``.
+    A regression: search.py used to rank the providers in a dict keyed by code, where a code given twice kept the place
+    of its last occurrence and took the first one along, so ``a,b,a`` came out as ``b,a,a``.
     """
     _use_search_doubles(monkeypatch, {ALPHA: _plugin(), BETA: _plugin()})
 
@@ -592,3 +598,151 @@ async def test_the_search_reads_both_variables_at_every_call(monkeypatch: pytest
     monkeypatch.delenv(ORDER_VARIABLE)
 
     _assert_searched_in(await AssetSearchService.search(query, provider_codes=[ALPHA, BETA, GAMMA]), [ALPHA, BETA, GAMMA])
+
+
+# =============================================================================
+# 6. THE DEFAULT LIST: THE TEST-ONLY PROVIDERS LEFT OUT (X-R24)
+# =============================================================================
+
+#: The test-only provider shipped today: it can search, and answers every query.
+TEST_ONLY_CODE = "mockprov"
+
+
+class _CatalogueDouble(_SearchDouble):
+    """The double of one registered provider, recording each search it runs in ``searched`` (from the provider thread).
+
+    ``_use_catalogue_doubles`` gives each code a subclass carrying that plugin's ``test_only`` and ``supports_search``,
+    so the search may read either flag from the registry or from the instance.
+    """
+
+    test_only = False
+
+    def __init__(self, code: str, searched: list[str]):
+        super().__init__(code)
+        self._searched = searched
+
+    async def search(self, query: str) -> list[dict[str, Any]]:
+        self._searched.append(self.code)
+        return await super().search(query)
+
+
+def _flags(code: str) -> tuple[bool, bool]:
+    """``(test_only, supports_search)`` of the registered provider ``code``: ``test_only`` read on its plugin class, as
+    ``GET /assets/provider`` reads it (``api/v1/assets/providers.py``), ``supports_search`` on an instance."""
+    return bool(getattr(AssetProviderRegistry.get_plugin(code), "test_only", False)), bool(getattr(AssetProviderRegistry.get_provider_instance(code), "supports_search", False))
+
+
+def _default_codes(catalogue: dict[str, tuple[bool, bool]]) -> set[str]:
+    """What the search without ``provider_codes`` must query: every provider that can search, except the test-only ones."""
+    return {code for code, (test_only, searches) in catalogue.items() if searches and not test_only}
+
+
+def _catalogue() -> dict[str, tuple[bool, bool]]:
+    """``_flags`` of every registered provider, behind barriers: mockprov is a test-only provider that can search, or
+    leaving it out would prove nothing; and another provider can search, or a search that queries nothing would pass."""
+    catalogue = {code: _flags(code) for code in _registered_codes()}
+    assert catalogue.get(TEST_ONLY_CODE) == (True, True), f"barrier: {TEST_ONLY_CODE} must be a registered test-only provider that can search, or leaving it out proves nothing: {catalogue}"
+    assert _default_codes(catalogue), f"barrier: a provider that is not test-only must be able to search, or a search that queries nothing would pass: {catalogue}"
+    return catalogue
+
+
+def _use_catalogue_doubles(monkeypatch: pytest.MonkeyPatch, catalogue: dict[str, tuple[bool, bool]]) -> list[str]:
+    """``core.configured_provider`` hands out a double for each code of ``catalogue``, None for any other; the list
+    returned records the code of every search the doubles run."""
+    searched: list[str] = []
+    classes = {code: type(f"_CatalogueDouble_{code}", (_CatalogueDouble,), {"test_only": test_only, "supports_search": searches}) for code, (test_only, searches) in catalogue.items()}
+
+    async def configured_provider(code: str, *, user_id: int | None = None) -> _CatalogueDouble | None:
+        double_class = classes.get(code)
+        return double_class(code, searched) if double_class is not None else None
+
+    monkeypatch.setattr(core, "configured_provider", configured_provider)
+    return searched
+
+
+@pytest.fixture
+def catalogue_query() -> Iterator[str]:
+    """A query of this test alone, as ``query``; its cache entries go after it, under every registered code."""
+    text = f"x-r24-default-list-{uuid.uuid4().hex}"
+    yield text
+    for code in AssetProviderRegistry.list_plugin_codes():
+        core._search_query_cache.delete((code, text, core.settings_cache_part(_SearchDouble(code))))
+
+
+async def _sse(stream: AsyncIterator[str]) -> list[dict[str, Any]]:
+    """The events of an SSE stream, decoded, behind a barrier: the stream ends with its one ``done`` event."""
+    events: list[dict[str, Any]] = []
+    async for chunk in stream:
+        assert chunk.startswith("data: ") and chunk.endswith("\n\n"), chunk
+        events.append(json.loads(chunk[len("data: ") :]))
+    assert [event["event"] for event in events].count("done") == 1 and events[-1]["event"] == "done", f"barrier: the stream must end with its one done event: {events}"
+    return events
+
+
+@pytest.mark.asyncio
+async def test_the_search_without_providers_leaves_the_test_only_providers_out(monkeypatch: pytest.MonkeyPatch, catalogue_query: str) -> None:
+    """Without ``provider_codes`` the search queries every provider that can search except the test-only ones, the rule
+    of ``GET /assets/provider``: mockprov is not called, not in ``providers_queried``, and answers none of the results;
+    every other one is called once and answers.
+
+    Red until X-R24 lands: the default list is the whole registry, mockprov included.
+    """
+    catalogue = _catalogue()
+    searched = _use_catalogue_doubles(monkeypatch, catalogue)
+    expected = _default_codes(catalogue)
+
+    response = await AssetSearchService.search(catalogue_query)
+
+    assert response.providers_with_errors == [], f"barrier: a double failed, so the providers listed prove nothing: {response}"
+    assert set(response.providers_queried) == expected, f"the default list must be every provider that can search but the test-only ones: {response.providers_queried}"
+    assert sorted(searched) == sorted(expected), f"exactly those must be called, each once: {searched}"
+    assert {item.provider_code for item in response.results} == expected
+
+
+@pytest.mark.asyncio
+async def test_the_search_stream_without_providers_leaves_the_test_only_providers_out(monkeypatch: pytest.MonkeyPatch, catalogue_query: str) -> None:
+    """The same default list for the SSE stream: one ``provider_results`` event for each provider that can search except
+    the test-only ones, a ``done`` event that lists those, and mockprov never called.
+
+    Red until X-R24 lands, as above.
+    """
+    catalogue = _catalogue()
+    searched = _use_catalogue_doubles(monkeypatch, catalogue)
+    expected = _default_codes(catalogue)
+
+    events = await _sse(AssetSearchService.search_stream(catalogue_query))
+
+    assert [event for event in events if event["event"] == "provider_error"] == [], f"barrier: a double failed, so the providers listed prove nothing: {events}"
+    assert set(events[-1]["providers_queried"]) == expected, f"the default list must be every provider that can search but the test-only ones: {events[-1]}"
+    assert sorted(event["provider_code"] for event in events if event["event"] == "provider_results") == sorted(expected)
+    assert sorted(searched) == sorted(expected), f"exactly those must be called, each once: {searched}"
+
+
+@pytest.mark.asyncio
+async def test_the_search_still_queries_a_test_only_provider_named_in_provider_codes(monkeypatch: pytest.MonkeyPatch, catalogue_query: str) -> None:
+    """``provider_codes=["mockprov"]``: mockprov is called, listed and answers; only the default list leaves it out.
+
+    A green control, today and with the fix: the tests that search ``providers=mockprov`` rely on it.
+    """
+    searched = _use_catalogue_doubles(monkeypatch, _catalogue())
+
+    response = await AssetSearchService.search(catalogue_query, provider_codes=[TEST_ONLY_CODE])
+
+    assert response.providers_with_errors == [], f"barrier: the double failed, so what was queried proves nothing: {response}"
+    assert response.providers_queried == [TEST_ONLY_CODE]
+    assert searched == [TEST_ONLY_CODE]
+    assert [(item.provider_code, item.identifier) for item in response.results] == [(TEST_ONLY_CODE, item["identifier"]) for item in _items(TEST_ONLY_CODE)]
+
+
+@pytest.mark.asyncio
+async def test_the_search_stream_still_queries_a_test_only_provider_named_in_provider_codes(monkeypatch: pytest.MonkeyPatch, catalogue_query: str) -> None:
+    """The same for the SSE stream: one ``provider_results`` event, mockprov's with its items, and a ``done`` event that
+    lists it. A green control, as above."""
+    searched = _use_catalogue_doubles(monkeypatch, _catalogue())
+
+    events = await _sse(AssetSearchService.search_stream(catalogue_query, provider_codes=[TEST_ONLY_CODE]))
+
+    assert [(event["event"], event.get("provider_code")) for event in events[:-1]] == [("provider_results", TEST_ONLY_CODE)], f"one answer, mockprov's, and no error: {events}"
+    assert [item["identifier"] for item in events[0]["results"]] == [item["identifier"] for item in _items(TEST_ONLY_CODE)]
+    assert events[-1]["providers_queried"] == [TEST_ONLY_CODE]
+    assert searched == [TEST_ONLY_CODE]

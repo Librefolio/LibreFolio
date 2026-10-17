@@ -129,8 +129,9 @@ class TransactionService(TransactionAccessMixin, TransactionValidationMixin, Tra
     ) -> TXBatchResponse:
         """Unified pipeline for both /validate (commit=False) and /commit (commit=True).
 
-        Order: parse → access → delete → split → update → create → promote →
-        link → WAC → cost basis → balance replay → response.
+        Order: parse → decimal limits → access → delete → split → update → create → promote →
+        link → WAC → cost basis → balance replay → response. A refused access, or a value past its column's
+        integer digits (W-B58: the stages after compute with it), stops the batch after the access check.
 
         ``commit`` selects response semantics only. The caller still owns the
         session commit or rollback.
@@ -146,8 +147,8 @@ class TransactionService(TransactionAccessMixin, TransactionValidationMixin, Tra
         )
 
         parse_inputs(context)
-        check_decimal_limits(context)
-        if await preload_and_authorize(self, context):
+        out_of_range = check_decimal_limits(context)
+        if await preload_and_authorize(self, context) or out_of_range:
             return TXBatchResponse(
                 committed=False,
                 issues=context.issues,

@@ -43,7 +43,7 @@ def transfer_tract_adjustments(transfers: Iterable[InternalAssetTransfer], date_
 
 
 def period_return_on_start(period_pnl: Decimal | None, start_value: Decimal | None) -> Decimal | None:
-    """The period's P&L as a fraction of the size of the start value, to 4 decimals; None without a start value."""
+    """The period's P&L — or one of its components — as a fraction of the size of the start value, to 4 decimals; None without a start value."""
     if period_pnl is None or start_value is None or start_value == 0:
         return None
     return (period_pnl / abs(start_value)).quantize(_RATIO_QUANTUM)

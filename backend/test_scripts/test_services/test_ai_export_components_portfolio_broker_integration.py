@@ -71,7 +71,7 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
 from backend.app.schemas.risk import RiskAnalyticResult, RiskDrawdownOutput, RiskDrawdownRecoveryStatus, RiskQueryRequest, RiskQueryResponse, RiskResultStatus, RiskReturnBasis
-from backend.app.schemas.signals import SignalCadence, SignalDomain, SignalPricePoint
+from backend.app.schemas.signals import SignalCadence, SignalDomain, SignalExecutionContext, SignalPricePoint
 from backend.app.services.ai_export.analyses.catalog import EXPECTED_ANALYSIS_COUNT
 from backend.app.services.ai_export.components import broker_cost_efficiency, broker_financial, drawdown_context, portfolio_financial, portfolio_income
 from backend.app.services.ai_export.components import portfolio_broker_registry as portfolio_broker_registry_module
@@ -116,7 +116,7 @@ from backend.app.services.ai_export.dependencies import (
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.services.signals.service import SignalExecutionContext, SignalService
+from backend.app.services.signals.service import SignalService
 
 CURRENCY = "USD"
 

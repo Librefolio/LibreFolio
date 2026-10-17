@@ -7,8 +7,11 @@
 - ``start_check`` checks an upload in the background, one check at a time: the lock of the checks is taken by the
   request, so that a second start is refused at once, and handed to the thread, which releases it only once the
   check's end is recorded. ``read_check`` follows it; a check whose server stopped reads as ``restore_interrupted``.
+  A secure backup's password is checked in the request (lot B4): a missing or wrong one is refused at once and keeps
+  the upload, for another try; the thread gets the key it gives, never the password.
 - ``remove_check`` drops an ended check with its copy; ``prune`` drops what is older than ``STAGE_LIFETIME``, and
-  ends a check its stopped server left running.
+  ends a check its stopped server left running. At every start (lot B4b), ``remove_stray_decrypted_archives`` also
+  removes the decrypted archive a check killed outright left in its copy.
 - ``confirm_check`` confirms the restore of a finished check (lot B3, ``apply.py``): its copy then waits for the next
   start, and neither ``remove_check`` nor ``prune`` removes it until that restore is finished.
 
@@ -20,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import stat
 import threading
 import time
 from dataclasses import asdict, dataclass, replace
@@ -30,8 +34,10 @@ from typing import Literal
 from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_backup.apply import RestoreNotRestorableError, RestoreState, confirm_restore, protected_stage
+from backend.app.services.platform.instance_backup.envelope import EnvelopeKey, is_envelope, read_header, unlock
 from backend.app.services.platform.instance_backup.jobs import _lock_held, _out_of_space, _RunLock
 from backend.app.services.platform.instance_backup.paths import (
+    STAGE_DECRYPTED_ARCHIVE,
     STAGE_LOCK_FILE,
     BackupPathError,
     check_state_path,
@@ -77,6 +83,10 @@ class UploadNotFoundError(LookupError):
     """No finished upload has this id: never received, replaced, or already checked."""
 
 
+class PasswordRequiredError(RuntimeError):
+    """The upload is a secure backup, and no password came with it: the upload stays for another try."""
+
+
 class CheckNotFoundError(LookupError):
     """No check has this id."""
 
@@ -91,10 +101,11 @@ class CheckPendingError(RuntimeError):
 
 @dataclass(frozen=True)
 class RestoreUploaded:
-    """A finished upload: the id to check it with, and its size."""
+    """A finished upload: the id to check it with, its size, and its kind: ``envelope`` for a secure backup."""
 
     upload_id: str
     size: int
+    kind: Literal["zip", "envelope"] = "zip"
 
 
 @dataclass(frozen=True)
@@ -175,8 +186,9 @@ class UploadWriter:
         self._fd = None
         os.replace(self._partial, self._final)
         _remove_replaced_uploads(self._data_dir, keep=self.upload_id)
-        logger.info("Backup archive received for a restore", upload_id=self.upload_id, size=self.size)
-        return RestoreUploaded(upload_id=self.upload_id, size=self.size)
+        kind: Literal["zip", "envelope"] = "envelope" if is_envelope(self._final) else "zip"
+        logger.info("Backup archive received for a restore", upload_id=self.upload_id, size=self.size, kind=kind)
+        return RestoreUploaded(upload_id=self.upload_id, size=self.size, kind=kind)
 
     def abort(self) -> None:
         """Drop what was received; nothing when already finished or aborted."""
@@ -201,11 +213,13 @@ def _remove_replaced_uploads(data_dir: Path, *, keep: str) -> None:
 # =============================================================================
 
 
-def start_check(upload_id: str, *, data_dir: Path | None = None) -> RestoreCheck:
+def start_check(upload_id: str, *, data_dir: Path | None = None, password: str | None = None) -> RestoreCheck:
     """Check the upload ``upload_id`` in the background, on a copy; its first state.
 
     ``UploadNotFoundError`` when there is no such upload, ``StagingBusyError`` while another check runs,
-    ``BackupPathError`` when ``.restore`` is not a plain folder.
+    ``BackupPathError`` when ``.restore`` is not a plain folder. A secure backup needs its ``password``, checked here:
+    ``PasswordRequiredError`` without one, ``EnvelopeError`` (``wrong_password``, ``envelope_damaged``,
+    ``envelope_unsupported``) when it does not open it; the upload then stays, and no check starts. A zip ignores it.
     """
     data_dir = data_dir or get_data_dir()
     if not is_job_id(upload_id):
@@ -219,16 +233,29 @@ def start_check(upload_id: str, *, data_dir: Path | None = None) -> RestoreCheck
     if not lock.try_acquire():
         raise StagingBusyError("Another archive is being checked")
     try:
-        check = RestoreCheck(stage_id=new_stage_id(), upload_id=upload_id, status="running", phase="checking", done_bytes=0, total_bytes=0, created_at=_now())
+        key = _envelope_key(upload_path(data_dir, upload_id), password)
+        phase: StagePhase = "decrypting" if key is not None else "checking"
+        check = RestoreCheck(stage_id=new_stage_id(), upload_id=upload_id, status="running", phase=phase, done_bytes=0, total_bytes=0, created_at=_now())
         _write_state(data_dir, check)
-        threading.Thread(target=_run_check, args=(data_dir, check, lock), name=f"restore-check-{check.stage_id[:8]}", daemon=True).start()
+        threading.Thread(target=_run_check, args=(data_dir, check, lock, key), name=f"restore-check-{check.stage_id[:8]}", daemon=True).start()
     except BaseException:
         lock.release()
         raise
     return check
 
 
-def _run_check(data_dir: Path, check: RestoreCheck, lock: _RunLock) -> None:
+def _envelope_key(upload: Path, password: str | None) -> EnvelopeKey | None:
+    """The key of a secure backup's upload, for its password; ``None`` for a zip, whatever the password. Its header is
+    read first: an envelope that cannot be opened asks for no password."""
+    if not is_envelope(upload):
+        return None
+    read_header(upload)
+    if password is None:
+        raise PasswordRequiredError("The backup is protected by a password")
+    return unlock(upload, password)
+
+
+def _run_check(data_dir: Path, check: RestoreCheck, lock: _RunLock, key: EnvelopeKey | None = None) -> None:
     """The thread of one check: the copy, its state along the way, its end; the upload removed in any case."""
     upload = upload_path(data_dir, check.upload_id)
     current = check
@@ -237,15 +264,16 @@ def _run_check(data_dir: Path, check: RestoreCheck, lock: _RunLock) -> None:
     def progress(phase: StagePhase, done: int, total: int) -> None:
         nonlocal current, written
         moved = phase != current.phase
-        # done_bytes and total_bytes measure the unpacking; the later phases count other things, and keep its figures.
-        current = replace(current, phase=phase, done_bytes=done, total_bytes=total) if phase == "unpacking" else replace(current, phase=phase)
+        # done_bytes and total_bytes measure the decryption, then the unpacking; the later phases count other things, and
+        # keep its figures.
+        current = replace(current, phase=phase, done_bytes=done, total_bytes=total) if phase in ("decrypting", "unpacking") else replace(current, phase=phase)
         if moved or time.monotonic() - written >= _STATE_INTERVAL:
             _write_state(data_dir, current)
             written = time.monotonic()
 
     error_code: str | None = None
     try:
-        stage_archive(upload, data_dir, stage_id=check.stage_id, progress=progress, lock=lock)
+        stage_archive(upload, data_dir, stage_id=check.stage_id, progress=progress, lock=lock, key=key)
     except StagingError as exc:
         error_code = exc.code
     except BackupPathError:
@@ -315,8 +343,9 @@ def confirm_check(stage_id: str, *, confirmed_by: str, data_dir: Path | None = N
     return confirm_restore(stage_id, confirmed_by=confirmed_by, data_dir=data_dir)
 
 
-def prune(data_dir: Path, now: datetime | None = None) -> None:
-    """Remove the ended checks and their copies older than ``STAGE_LIFETIME``, and the uploads and copies left that old.
+def prune(data_dir: Path, now: datetime | None = None) -> int:
+    """Remove the ended checks and their copies older than ``STAGE_LIFETIME``, and the uploads and copies left that old;
+    how many checks it ended as ``restore_interrupted``.
 
     While no check runs, a check still recorded as running was left by a stopped server: it is ended as
     ``restore_interrupted`` first, its copy removed. Nothing is removed through a link: a folder that is not a plain
@@ -324,19 +353,21 @@ def prune(data_dir: Path, now: datetime | None = None) -> None:
     check: the restore needs it at the next start.
     """
     if not is_plain_dir(restore_dir(data_dir)):
-        return
+        return 0
     cutoff = (now or _now()) - STAGE_LIFETIME
     idle = not _a_check_runs(data_dir)
     protected = protected_stage(data_dir)
-    recorded = _prune_checks(data_dir, cutoff, idle=idle, protected=protected)
+    recorded, interrupted = _prune_checks(data_dir, cutoff, idle=idle, protected=protected)
     if idle:
         _prune_unrecorded(data_dir, cutoff, recorded if protected is None else recorded | {protected})
+    return interrupted
 
 
-def _prune_checks(data_dir: Path, cutoff: datetime, *, idle: bool, protected: str | None = None) -> set[str]:
+def _prune_checks(data_dir: Path, cutoff: datetime, *, idle: bool, protected: str | None = None) -> tuple[set[str], int]:
     """End the checks a stopped server left running (when ``idle``), remove the ended ones older than ``cutoff`` but the
-    ``protected`` one; the ids of every check found."""
+    ``protected`` one; the ids of every check found, and how many it ended."""
     checks = _checks(data_dir)
+    interrupted = 0
     for check in checks:
         if check.stage_id == protected:
             continue
@@ -345,9 +376,11 @@ def _prune_checks(data_dir: Path, cutoff: datetime, *, idle: bool, protected: st
                 check = read_check(check.stage_id, data_dir=data_dir)
             except CheckNotFoundError:
                 continue
+            if check.status == "failed" and check.error_code == "restore_interrupted":
+                interrupted += 1
         if check.status != "running" and (check.finished_at or check.created_at) < cutoff:
             _remove(data_dir, check)
-    return {check.stage_id for check in checks}
+    return {check.stage_id for check in checks}, interrupted
 
 
 def _prune_unrecorded(data_dir: Path, cutoff: datetime, recorded: set[str]) -> None:
@@ -383,6 +416,33 @@ def _remove(data_dir: Path, check: RestoreCheck) -> None:
 def _a_check_runs(data_dir: Path) -> bool:
     """Whether some process holds the lock of the checks: a running state without it was left by a stopped server."""
     return _lock_held(stages_dir(data_dir) / STAGE_LOCK_FILE)
+
+
+def remove_stray_decrypted_archives(data_dir: Path) -> int:
+    """Remove the decrypted archives runs killed outright left in the copies, while no check runs; how many (lot B4b).
+
+    A check decrypts a secure backup into its copy (``archive.zip``) and removes it once unpacked, or with the whole copy
+    on any error, always under the lock of the checks: with that lock free, one still there is what a run killed outright
+    left, and it holds the source instance's key. Only a regular file goes; a link or a folder of that name, and the rest
+    of the copy, stay (``prune`` removes the copy at its age).
+    """
+    if not _plain_folders(data_dir, stages_dir(data_dir)) or _a_check_runs(data_dir):
+        return 0
+    removed = 0
+    for stage in stages_dir(data_dir).iterdir():
+        if not is_job_id(stage.name) or not is_plain_dir(stage):
+            continue
+        # The decrypted archive, or its part when the run was killed while decrypting: both hold clear data.
+        for name in (STAGE_DECRYPTED_ARCHIVE, STAGE_DECRYPTED_ARCHIVE + _PARTIAL_SUFFIX):
+            archive = stage / name
+            try:
+                if not stat.S_ISREG(archive.lstat().st_mode):
+                    continue
+                archive.unlink()
+            except FileNotFoundError:
+                continue
+            removed += 1
+    return removed
 
 
 # =============================================================================

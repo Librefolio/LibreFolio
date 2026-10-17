@@ -419,6 +419,12 @@ class AssetPeriodContribution(BaseModel):
     period_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX attributed to this asset in period (positive value)")
     period_pnl: Optional[SafeDecimal] = Field(None, description="Total period P&L: unrealized_delta + realized + income - fees_taxes")
     period_pnl_percent: Optional[SafeDecimal] = Field(None, description="Period return %: period_pnl / |start_value|. None if start_value=0")
+    period_unrealized_delta_percent: Optional[SafeDecimal] = Field(None, description="period_unrealized_delta / |start_value|, a fraction rounded to 4 decimals like period_pnl_percent; None without a start value or without the component")
+    period_realized_gain_loss_percent: Optional[SafeDecimal] = Field(None, description="period_realized_gain_loss / |start_value|, a fraction rounded to 4 decimals; None without a start value or without the component")
+    period_income_percent: Optional[SafeDecimal] = Field(None, description="period_income / |start_value|, a fraction rounded to 4 decimals; None without a start value or without the component")
+    period_fees_taxes_percent: Optional[SafeDecimal] = Field(
+        None, description="period_fees_taxes / |start_value|, a fraction rounded to 4 decimals and positive like period_fees_taxes (a cost); None without a start value or without the component. Each component is rounded on its own: their sum may differ from period_pnl_percent in the last digit"
+    )
     annualized_return: Optional[SafeDecimal] = Field(
         None, description="Net annualized return (CAGR) over the position's holding window inside the period (oldest lot opening in period -> period end), base = |start_value| or end cost basis when opened mid-period: (1+period_pnl_pct)^(365/days)-1. Fraction. None if <30 days / no base."
     )
@@ -934,6 +940,10 @@ class LotTimelineEventSchema(StrictModel):
     realized_pnl: Optional[SafeDecimal] = Field(None, description="Closure realized P&L in target_currency.")
     proceeds: Optional[SafeDecimal] = Field(None, description="Closure proceeds in target_currency.")
     ratio: Optional[SafeDecimal] = Field(None, description="Split ratio for SPLIT events.")
+    opening_value: Optional[SafeDecimal] = Field(
+        None,
+        description="For the event that opens a lot (BUY, ADJUSTMENT_IN): the lot's original cost in target_currency, converted at the opening date — the lot summary's original_cost, in the currency of unit_price. None on every other kind and when the conversion is missing.",
+    )
 
 
 class LotValueHistoryPoint(StrictModel):

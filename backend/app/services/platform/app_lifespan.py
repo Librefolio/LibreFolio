@@ -35,6 +35,7 @@ from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform.config_audit import log_configuration_audit
 from backend.app.services.platform.database_bootstrap import ensure_database_exists, run_post_migration_fixes_at_startup
 from backend.app.services.platform.instance_backup.apply import apply_pending_restore, finish_pending_restore, hold_serving_lock
+from backend.app.services.platform.instance_backup.leftovers import sweep_backup_leftovers
 from backend.app.services.platform.lifecycle import Step, run_shutdown_steps, run_startup_steps
 from backend.app.services.platform.plugin_secrets_check import log_plugin_secrets_check
 from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
@@ -235,6 +236,9 @@ STARTUP_STEPS: tuple[Step, ...] = (
     # The first start on restored data completed: commit the restore (B3), before any step reports on or serves the data.
     # A step before this one that raises rolls the restore back at the next start; one after it no longer does (N57).
     Step("restore-commit", lambda: asyncio.to_thread(finish_pending_restore)),
+    # What runs killed outright left in clear: a check's decrypted archive, an inspect's folder, a backup's work files
+    # (B-23, N66). Once the restore is settled; it never raises: after restore-commit, a step that raises stops every start
+    Step("backup-leftovers", lambda: asyncio.to_thread(sweep_backup_leftovers)),
     # The stored plugin secrets the instance key can no longer read: an error in the log, with their count (H-15)
     Step("plugin-secrets-check", lambda: log_plugin_secrets_check()),
     Step("provider-prewarm", lambda: _start_provider_prewarm()),

@@ -55,21 +55,36 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `get_settings().LIBREFOLIO_PROFILE`, read at each call. A blank or an invalid value stays under
       the module's own rules: a module can, for example, treat a blank value as unset, and answer an
       invalid one with a coded error when the value is used rather than stop the startup.
-      `profile_default()` converts nothing (a `cast`): an entry is written in the type of the
-      module's fallback (`500`, never `"500"`). The first entry is the upload limit of a restore:
+      `profile_default()` converts nothing, but checks the active profile's entry before returning
+      it: the entry must be of the exact type of `fallback`, the reader's own default (`500` for the
+      fallback `0`; never `None`, `"500"`, `500.0` nor `True`: `True` does not pass for an `int`
+      fallback, nor `60` for a `float` one). An entry of any other type raises `ProfileDefaultError`,
+      a `TypeError` defined in `__init__.py` whose message names the variable, the profile, both types
+      and the table, and the reader stops instead of using the value: unchecked, a `None` under
+      `managed` would mean no upload limit at all for a restore (`backup_max_upload_mb()`, below). The
+      fallback itself, for a name the active profile does not list (any name under `selfhosted`), is
+      returned unchecked. The check runs at the reader's call, never at startup: only the reader knows
+      the type it expects; the table is code, guarded before release by the tests below.
+      The first entry is the upload limit of a restore:
       `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `500` megabytes in `managed` (decision 43), read by
       `backup_max_upload_mb()` in `config/backup.py` with `profile_default(MAX_UPLOAD_VARIABLE, 0)`: no limit on a
       self-hosted install.
       `./dev.py test services profile-defaults` guards this table too: one entry per profile;
       `selfhosted` empty; `managed` equal, value and type, to `ENVIRONMENT_MANAGED_DEFAULTS`, the
       decided table of the test file; no key that is a `Settings` field or sits in both tables; every
-      key read, as a string constant, by a section module, and documented in `.env.example`; and, for
+      key read, as a string constant, by a section module, and documented in `.env.example`; for
       every listed name, `profile_default()` returning the fallback under `selfhosted` and the
-      table's value under `managed`. To give such a variable a managed default, a workstream adds one
+      table's value under `managed`; an entry of another type raising `ProfileDefaultError` under
+      `managed` while `selfhosted` still gets the fallback, and the real `backup_max_upload_mb()`
+      raising on a `None` managed entry instead of lifting the limit; and, read in the sources, every
+      `profile_default(NAME, …)` call of a section module written with a literal fallback whose type
+      is exactly that of every profile's entry for `NAME`.
+      To give such a variable a managed default, a workstream adds one
       entry to `ENVIRONMENT_PROFILE_DEFAULTS["managed"]` and the same entry to
       `ENVIRONMENT_MANAGED_DEFAULTS` in the test file, says the managed value in the variable's
       commented line of `.env.example`, and calls `profile_default(NAME, fallback)` in its section
-      module while the variable is unset. Admin view of both tables:
+      module while the variable is unset, with a literal fallback of the variable's own type, as the
+      upload limit's `0`. Admin view of both tables:
       [The Managed Profile](../../admin/hosting_providers.md#managed-profile).
     - `get_data_dir()` picks the data root: in test mode `LIBREFOLIO_TEST_DATA_DIR` or
       `backend/data/test` (refused if it overlaps production), otherwise `LIBREFOLIO_DATA_DIR`,

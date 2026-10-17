@@ -23,13 +23,43 @@ The contract (developer's decisions of 16/10):
   endpoint answers 400 (``_REFUSAL_STATUS``).
 * What already fits reads back exactly as today, form included.
 
+R13-SEC2 (W-B58, E's security review of 17/10): the magnitude. Measured before the cure: the manual check counts the
+decimals and the significant digits of open/high/low/close, not their magnitude, and not the volume — a close of 1E+13
+is stored, from 1E+48 the truncation raises ``InvalidOperation`` (12 decimals in 60 digits) and 1E+1000000 makes the
+check itself raise ``decimal.Overflow``, a volume of 1E+400 is stored as a REAL inf; a provider upsert truncates every
+price and commits chunk by chunk, so a close of 1E+60 in the second chunk raises after the first is written; the
+current-price path stores a fresh quote as it comes (``Decimal(str(value))``: no truncation, no limit); manual events are
+checked for decimals and significant digits only, provider events for nothing. The cure's contract:
+
+* manual prices: ``_reject_prices_over_the_limit`` also refuses — ``ValueError``, HTTP 400, before anything is written,
+  also when the offending point is the last of ``PRICE_UPSERT_CHUNK_SIZE + 1`` — a price beyond 12 integer digits or
+  non-finite, and a volume non-finite or beyond 24 integer digits; a fractional volume stays accepted; the message names
+  the asset, the dates and the limits (12 and 15 as before, and 24 for a volume). A close of 1E-2000000 is refused;
+* provider prices (``source_plugin_key`` a provider code): before any chunk is written, a date with an unstorable value
+  — a price non-finite or beyond 12 integer digits, a volume beyond 24, a close that truncates to 0 — is skipped and
+  reported in its asset's result message ("rejected", with the date); every other date is written; nothing raises,
+  wherever the date sits;
+* the current price (``price_query.get_current_prices_bulk``): an unstorable quote (1E+400, 1E+60) is not persisted —
+  today's row neither created nor changed — and nothing raises; a valid one is truncated like the history, 12 decimals
+  then 15 significant digits, ``ROUND_DOWN``: a quote of 65432.1234567890999 is stored 65432.123456789;
+* events: a manual value beyond 12 integer digits or non-finite is refused with ``EVENT_TOO_MANY_DIGITS``, the details
+  gaining ``max_integer_digits: 12`` beside the existing keys, nothing written (``POST /assets/events`` answers 400); a
+  provider event whose value cannot be stored is dropped by ``_upsert_asset_events``, the other events of the call
+  written, nothing raised.
+
+A call that raises today where the contract refuses or skips fails its test naming the exception, never as an error. The
+current-price tests drive ``_QuoteDouble``, a provider double the registry hands out for a code of the test's own, to
+which the PEPE asset is assigned for that test alone (``assigned``); they read today's row with raw SQL, past the column
+types, so a REAL inf or 1e60 written today is seen as the float it is.
+
 Each red says what the user faces; a GUARD passes before and after the cure. A refusal is looked for
 as the router meets it: nobody commits after a refused call, the session just closes, so "nothing
 written" sees exactly what the service committed by itself.
 
-Isolation: write-scoped, the services default (as ``asset-source``). Every row is this unit's own: two
-EUR CRYPTO assets created under a unique name, and only their prices and events are written, read and
-wiped, by asset id. Nothing here counts or reads a row it did not write.
+Isolation: write-scoped, the services default (as ``asset-source``). Every row is this unit's own: two EUR CRYPTO assets
+created under a unique name, and only their prices and events are written, read and wiped, by asset id; and, for the
+tests that need one, an assignment of the PEPE asset to a provider code of the test's own, deleted at teardown. Nothing
+here counts or reads a row it did not write.
 """
 
 import asyncio
@@ -54,17 +84,19 @@ from backend.test_scripts.test_db_config import setup_test_database
 setup_test_database()
 
 from fastapi import HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.assets import events as events_api
-from backend.app.db.models import Asset, AssetEvent, AssetType, PriceHistory
+from backend.app.db.models import Asset, AssetEvent, AssetProviderAssignment, AssetType, PriceHistory, ProviderInputType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.assets.events import FAEventUpsert
-from backend.app.schemas.prices import FAPricePoint, FAUpsert
-from backend.app.services.assets.base import AssetSourceError
+from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPricePoint, FAUpsert
+from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.event_store import EventStoreOperations
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.price_store import PRICE_UPSERT_CHUNK_SIZE
+from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import unique_id
 
 # A window far from the mock dataset and from the other price/event units (1992, 1994-1995). Rows are
@@ -174,26 +206,35 @@ def _describe_prices(stored: dict[tuple[int, date], PriceHistory]) -> str:
 
 
 async def _manual_upsert_refused(owned: _Owned, data: list[FAUpsert], story: str) -> ValueError:
-    """``POST /assets/prices`` minus HTTP, for a call that must be refused: the ValueError the router answers 400 with."""
+    """``POST /assets/prices`` minus HTTP, for a call that must be refused: the ValueError the router answers 400 with.
+
+    Any other exception fails the test naming it: the router answers 500 to it (R13-SEC2: ``decimal.Overflow`` and
+    ``InvalidOperation`` are no ``ValueError``).
+    """
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         try:
             result = await AssetSourceManager.bulk_upsert_prices(data, session)
         except ValueError as refusal:
             return refusal
+        except Exception as exc:  # noqa: BLE001 — any other exception is the defect under test
+            pytest.fail(f"{story} raised {exc!r} instead of a ValueError: POST /assets/prices answers 500, not 400 (R13-SEC2)")
     messages = [row["message"] for row in result["results"]]
-    pytest.fail(f"{story} was accepted ({messages}) and stored as {_describe_prices(await _stored(owned))}, instead of being refused (C-97a: at most 12 decimal places and 15 significant digits)")
+    pytest.fail(f"{story} was accepted ({messages}) and stored as {_describe_prices(await _stored(owned))}, instead of being refused (C-97a: at most 12 decimal places and 15 significant digits; R13-SEC2: at most 12 integer digits, 24 for a volume)")
 
 
-def _assert_names_the_refusal(refusal: ValueError, asset_id: int, days: list[date]) -> None:
-    """The refusal names the asset, the maximum (12 decimal places, 15 significant digits) and every offending date.
+def _assert_names_the_refusal(refusal: ValueError, asset_id: int, days: list[date], extra_limits: tuple[str, ...] = ()) -> None:
+    """The refusal names the asset, the maximum (12 decimal places, 15 significant digits), any ``extra_limits`` (24 for a
+    volume, R13-SEC2) and every offending date.
 
-    The whole numbers are read after the ISO dates and the decimal values are taken out, so a date or a
-    price cannot stand in for the limit, and an asset id of 12 or 15 counts once, not for the limit too.
+    The whole numbers are read after the ISO dates and the decimal values are taken out — and the values written in
+    scientific notation (``1E+13``), so that their exponent cannot stand in for a limit — so a date or a price cannot
+    stand in for the limit, and an asset id of 12 or 15 counts once, not for the limit too.
     """
     message = str(refusal)
-    stated = Counter(re.findall(r"\d+", re.sub(r"\d*\.\d+(?:[eE][-+]?\d+)?", " ", re.sub(r"\d{4}-\d{2}-\d{2}", " ", message))))
-    missing = Counter({str(asset_id): 1}) + Counter({"12": 1, "15": 1}) - stated
-    assert not missing, f"the refusal must name asset {asset_id} and the maximum (12 decimal places, 15 significant digits); missing {sorted(missing)} in {message!r}"
+    without_values = re.sub(r"\d*\.?\d+[eE][-+]?\d+", " ", re.sub(r"\d*\.\d+(?:[eE][-+]?\d+)?", " ", re.sub(r"\d{4}-\d{2}-\d{2}", " ", message)))
+    stated = Counter(re.findall(r"\d+", without_values))
+    missing = Counter({str(asset_id): 1}) + Counter({"12": 1, "15": 1}) + Counter(extra_limits) - stated
+    assert not missing, f"the refusal must name asset {asset_id} and the maximum (12 decimal places, 15 significant digits{''.join(', ' + limit for limit in extra_limits)}); missing {sorted(missing)} in {message!r}"
     unnamed = [day.isoformat() for day in days if day.isoformat() not in message]
     assert not unnamed, f"the refusal does not name the offending date(s) {unnamed}: {message!r}"
 
@@ -433,14 +474,17 @@ async def _upsert_events(data: list[FAEventUpsert]) -> dict:
 
 
 async def _upsert_events_refused(owned: _Owned, data: list[FAEventUpsert], story: str) -> AssetSourceError:
-    """``POST /assets/events`` minus HTTP, for a request that must be refused."""
+    """``POST /assets/events`` minus HTTP, for a request that must be refused; any exception but the refusal fails the test
+    naming it (the endpoint answers 500 to it)."""
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         try:
             result = await AssetSourceManager.bulk_upsert_events(data, session)
         except AssetSourceError as refusal:
             return refusal
+        except Exception as exc:  # noqa: BLE001 — any other exception is the defect under test
+            pytest.fail(f"{story} raised {exc!r} instead of an AssetSourceError: POST /assets/events answers 500 (R13-SEC2)")
     messages = [row["message"] for row in result["results"]]
-    pytest.fail(f"{story} was accepted ({messages}) and reads back as {_describe_events(await _stored_events(owned))}, instead of being refused with EVENT_TOO_MANY_DIGITS (C-97a: at most 6 decimal places and 15 significant digits)")
+    pytest.fail(f"{story} was accepted ({messages}) and reads back as {_describe_events(await _stored_events(owned))}, instead of being refused with EVENT_TOO_MANY_DIGITS (C-97a: at most 6 decimal places and 15 significant digits; R13-SEC2: at most 12 integer digits)")
 
 
 @pytest.mark.asyncio
@@ -531,3 +575,448 @@ async def test_guard_a_manual_event_within_the_limits_is_stored(owned, amount, s
 
     rows = await _stored_events(owned)
     assert [(row.asset_id, row.date, row.value) for row in rows] == [(owned.asset_id, _day(0), Decimal(amount))], f"{story} reads back as {_describe_events(rows)}"
+
+
+# --------------------------------------------------------------------------- #
+# R13-SEC2 (W-B58): manual prices past the integer digits, and the volume
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field", "typed"),
+    [
+        pytest.param("close", "1E+13", id="close-1E+13"),
+        pytest.param("close", "1000000000000", id="close-13-integer-digits"),
+        pytest.param("close", "1E+48", id="close-1E+48"),
+        pytest.param("close", "1E+400", id="close-1E+400"),
+        pytest.param("close", "1E+1000000", id="close-1E+1000000"),
+        pytest.param("open", "1E+13", id="open-1E+13"),
+        pytest.param("high", "1E+60", id="high-1E+60"),
+        pytest.param("low", "1E+13", id="low-1E+13"),
+    ],
+)
+async def test_a_manual_price_beyond_12_integer_digits_is_refused_and_nothing_is_written(owned, field, typed):
+    """Red today: the check has no magnitude. A close, open or low of 1E+13 or of 13 integer digits is accepted and
+    stored; from 1E+48 the truncation raises ``InvalidOperation`` (12 decimals in 60 digits), and 1E+1000000 makes the
+    check itself raise ``decimal.Overflow``: HTTP 500, not 400.
+
+    Contract (R13-SEC2): ``ValueError`` naming the asset, the date and the limits (12 and 15 among them); nothing written.
+    """
+    point = _point(0, typed) if field == "close" else _point(0, "1", **{field: typed})
+
+    refusal = await _manual_upsert_refused(owned, [FAUpsert(asset_id=owned.asset_id, prices=[point])], f"a manual {field} of {typed} EUR (beyond 12 integer digits)")
+
+    _assert_names_the_refusal(refusal, owned.asset_id, [_day(0)])
+    stored = await _stored(owned)
+    assert not stored, f"the call was refused, yet rows were written: {_describe_prices(stored)}"
+
+
+@pytest.mark.asyncio
+async def test_a_manual_close_of_1e_minus_2000000_is_refused_and_nothing_is_written(owned):
+    """Red today: the check normalizes the value in a context of 60 digits, where it underflows to 0 and passes; the
+    truncation then stores a close of 0.
+
+    Contract (R13-SEC2): refused — it has two million decimal places — ``ValueError`` naming the asset, the date and the
+    limits; nothing written.
+    """
+    refusal = await _manual_upsert_refused(owned, [FAUpsert(asset_id=owned.asset_id, prices=[_point(0, "1E-2000000")])], "a manual close of 1E-2000000 EUR")
+
+    _assert_names_the_refusal(refusal, owned.asset_id, [_day(0)])
+    stored = await _stored(owned)
+    assert not stored, f"the call was refused, yet rows were written: {_describe_prices(stored)}"
+
+
+@pytest.mark.asyncio
+async def test_a_manual_close_beyond_12_integer_digits_in_the_second_chunk_writes_nothing_of_the_first(owned):
+    """Red today: accepted, every close stored, 1E+13 included.
+
+    ``bulk_upsert_prices`` commits every ``PRICE_UPSERT_CHUNK_SIZE`` dates. Contract (R13-SEC2): the call is refused
+    before any chunk is written, naming the late date; nothing written.
+    """
+    late = _point(PRICE_UPSERT_CHUNK_SIZE, "1E+13")
+    data = [FAUpsert(asset_id=owned.asset_id, prices=[*(_point(offset, "1.5") for offset in range(PRICE_UPSERT_CHUNK_SIZE)), late])]
+
+    refusal = await _manual_upsert_refused(owned, data, f"a history of {PRICE_UPSERT_CHUNK_SIZE + 1} closes whose last one is 1E+13 EUR")
+
+    _assert_names_the_refusal(refusal, owned.asset_id, [late.date])
+    stored = await _stored(owned)
+    assert not stored, f"the call was refused, yet {len(stored)} rows were written: {_describe_prices(stored)}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("typed", [pytest.param("1E+25", id="1E+25"), pytest.param("1E+400", id="1E+400"), pytest.param("1E+1000000", id="1E+1000000")])
+async def test_a_manual_volume_beyond_24_integer_digits_is_refused_and_nothing_is_written(owned, typed):
+    """Red today: the volume is not checked: 1E+25 is stored, and 1E+400 and 1E+1000000 as a REAL inf (read back
+    ``Decimal('Infinity')``, which breaks the responses that carry it).
+
+    Contract (R13-SEC2): ``ValueError`` naming the asset, the date and the limits, 24 among them; nothing written.
+    """
+    data = [FAUpsert(asset_id=owned.asset_id, prices=[_point(0, "1.5", volume=typed)])]
+
+    refusal = await _manual_upsert_refused(owned, data, f"a manual volume of {typed} beside a close of 1.5 EUR")
+
+    _assert_names_the_refusal(refusal, owned.asset_id, [_day(0)], extra_limits=("24",))
+    stored = await _stored(owned)
+    assert not stored, f"the call was refused, yet rows were written: {_describe_prices(stored)}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field", "typed"),
+    [
+        pytest.param("close", "999999999999", id="close-12-integer-digits"),
+        pytest.param("close", "999999999999.999", id="close-12-integer-digits-15-significant-digits"),
+        pytest.param("volume", "1.5", id="volume-fractional"),
+        pytest.param("volume", "999999999999999999999999", id="volume-24-integer-digits"),
+    ],
+)
+async def test_guard_a_manual_price_or_volume_at_the_integer_limit_is_accepted(owned, field, typed):
+    """Guard: green today and after. 12 integer digits for a price and 24 for a volume are the limit, not past it; a
+    volume is a count, read back rounded, so a fractional one stays accepted."""
+    point = _point(0, typed) if field == "close" else _point(0, "1.5", **{field: typed})
+    try:
+        await _manual_upsert([FAUpsert(asset_id=owned.asset_id, prices=[point])])
+    except ValueError as refusal:
+        pytest.fail(f"a manual {field} of {typed} was refused: {refusal}")
+
+    assert (owned.asset_id, _day(0)) in await _stored(owned), f"a manual {field} of {typed} was not stored"
+
+
+# --------------------------------------------------------------------------- #
+# R13-SEC2 (W-B58): a provider's date that cannot be stored is skipped, the others written
+# --------------------------------------------------------------------------- #
+
+
+def _message_of(result: dict, asset_id: int) -> str:
+    """The result message of ``asset_id`` in a ``bulk_upsert_prices`` answer."""
+    messages = [row["message"] for row in result["results"] if row["asset_id"] == asset_id]
+    assert len(messages) == 1, f"scaffold: the upsert reports {len(messages)} results for asset {asset_id}: {result}"
+    return messages[0]
+
+
+async def _provider_upsert_never_raising(data: list[FAUpsert], story: str) -> dict:
+    """``_provider_upsert``; an exception fails the test naming it."""
+    try:
+        return await _provider_upsert(data)
+    except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+        pytest.fail(f"{story} raised {exc!r}: the refresh reports «DB upsert failed» and writes no other date of that chunk, after committing the earlier chunks (R13-SEC2: skip the date, write the others)")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field", "delivered"),
+    [
+        pytest.param("close", "1E+13", id="close-1E+13"),
+        pytest.param("close", "1E+48", id="close-1E+48"),
+        pytest.param("close", "1E+400", id="close-1E+400"),
+        pytest.param("close", "1E+1000000", id="close-1E+1000000"),
+        pytest.param("close", "1E-13", id="close-1E-13-truncates-to-0"),
+        pytest.param("open", "1E+60", id="open-1E+60"),
+        pytest.param("high", "1E+400", id="high-1E+400"),
+        pytest.param("low", "1E+13", id="low-1E+13"),
+        pytest.param("volume", "1E+25", id="volume-1E+25"),
+        pytest.param("volume", "1E+400", id="volume-1E+400"),
+    ],
+)
+async def test_a_provider_date_with_an_unstorable_value_is_skipped_and_reported(owned, field, delivered):
+    """Red today: a value of 1E+13 (a close, a low), a close of 1E-13 (truncated to 0) or a volume of 1E+25 or 1E+400 (a
+    REAL inf) is stored; from 1E+48 a price makes the truncation raise ``InvalidOperation``, which loses the whole chunk.
+
+    Contract (R13-SEC2): the date that cannot be stored (day 1, between two valid ones) is skipped and reported in the
+    asset's result message, which contains "rejected" and the date; days 0 and 2 are written; nothing raises.
+    """
+    bad = _point(1, delivered) if field == "close" else _point(1, "1.5", **{field: delivered})
+    data = [FAUpsert(asset_id=owned.asset_id, prices=[_point(0, "1.5"), bad, _point(2, "2.5")])]
+
+    result = await _provider_upsert_never_raising(data, f"a {PROVIDER} refresh delivering a {field} of {delivered} EUR on {_day(1)}")
+
+    closes = {day: row.close for (_asset_id, day), row in (await _stored(owned)).items()}
+    assert closes == {_day(0): Decimal("1.5"), _day(2): Decimal("2.5")}, f"a {PROVIDER} refresh delivering a {field} of {delivered} EUR on {_day(1)} stored the closes {closes}: expected the two other days alone (R13-SEC2: skip the date that cannot be stored)"
+    message = _message_of(result, owned.asset_id)
+    assert "rejected" in message and _day(1).isoformat() in message, f"the result message of asset {owned.asset_id} does not report the skipped date {_day(1)}: {message!r}"
+
+
+@pytest.mark.asyncio
+async def test_a_provider_close_of_1e60_in_the_second_chunk_is_skipped_and_the_first_chunk_kept(owned):
+    """Red today: the first chunk is committed, then the truncation of 1E+60 raises ``InvalidOperation`` in the second:
+    the refresh fails with the first chunk written and nothing said about it.
+
+    Contract (R13-SEC2): the unstorable date is set aside before any chunk is written: nothing raises, the
+    ``PRICE_UPSERT_CHUNK_SIZE`` valid dates are written, the late one is not, and the message reports it.
+    """
+    late = _point(PRICE_UPSERT_CHUNK_SIZE, "1E+60")
+    data = [FAUpsert(asset_id=owned.asset_id, prices=[*(_point(offset, "1.5") for offset in range(PRICE_UPSERT_CHUNK_SIZE)), late])]
+
+    result = await _provider_upsert_never_raising(data, f"a {PROVIDER} history of {PRICE_UPSERT_CHUNK_SIZE + 1} closes whose last one is 1E+60 EUR")
+
+    stored = await _stored(owned)
+    assert (owned.asset_id, late.date) not in stored, f"the close of 1E+60 EUR on {late.date} was stored: {stored[(owned.asset_id, late.date)].close}"
+    assert len(stored) == PRICE_UPSERT_CHUNK_SIZE, f"{len(stored)} dates were stored: expected the {PRICE_UPSERT_CHUNK_SIZE} valid ones"
+    message = _message_of(result, owned.asset_id)
+    assert "rejected" in message and late.date.isoformat() in message, f"the result message of asset {owned.asset_id} does not report the skipped date {late.date}: {message!r}"
+
+
+@pytest.mark.asyncio
+async def test_guard_a_provider_close_of_12_integer_digits_is_stored_truncated(owned):
+    """Guard: green today and after. 999999999999.9999999 has 12 integer digits, the limit: stored, cut to 15 significant
+    digits (``ROUND_DOWN``), 999999999999.999, and the message reports no rejection."""
+    result = await _provider_upsert_never_raising([FAUpsert(asset_id=owned.asset_id, prices=[_point(0, "999999999999.9999999")])], f"a {PROVIDER} close of 999999999999.9999999 EUR")
+
+    row = (await _stored(owned)).get((owned.asset_id, _day(0)))
+    assert row is not None and row.close == Decimal("999999999999.999"), f"a {PROVIDER} close of 999999999999.9999999 EUR stores {row.close if row else None}: expected 999999999999.999"
+    assert "rejected" not in _message_of(result, owned.asset_id)
+
+
+# --------------------------------------------------------------------------- #
+# R13-SEC2 (W-B58): the current price, persisted by get_current_prices_bulk
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class _Assigned:
+    """The PEPE asset assigned, for one test, to a provider double of the test's own: its code, the assignment's id, the
+    current value the double answers (a ``float`` is built without validation, as a plugin that skips the schema), and how
+    many times it was asked for it."""
+
+    code: str
+    assignment_id: int
+    quote: object = Decimal("1")
+    current_calls: int = 0
+
+
+class _QuoteDouble(AssetSourceProvider):
+    """The provider of the current-price tests: never on the network, it answers ``assigned.quote`` in EUR, as of today."""
+
+    test_only = True
+
+    def __init__(self, assigned: _Assigned):
+        self.assigned = assigned
+
+    @property
+    def provider_code(self) -> str:
+        return self.assigned.code
+
+    @property
+    def provider_name(self) -> str:
+        return "R13-SEC2 current-price double"
+
+    @property
+    def test_cases(self) -> list[dict]:
+        return []
+
+    @property
+    def test_search_query(self) -> str | None:
+        return None
+
+    def validate_params(self, params: dict | None) -> None:
+        """Any params will do."""
+
+    async def get_current_value(self, identifier, identifier_type, provider_params=None) -> FACurrentValue:
+        self.assigned.current_calls += 1
+        quote = self.assigned.quote
+        if isinstance(quote, float):
+            return FACurrentValue.model_construct(value=quote, currency="EUR", as_of_date=date.today(), source=self.provider_code)
+        return FACurrentValue(value=quote, currency="EUR", as_of_date=date.today(), source=self.provider_code)
+
+    async def get_history_value(self, identifier, identifier_type, provider_params, start_date, end_date) -> FAHistoricalData:
+        raise AssertionError("the R13-SEC2 current-price double is never asked for a history")
+
+
+@pytest_asyncio.fixture
+async def assigned(owned: _Owned, monkeypatch: pytest.MonkeyPatch):
+    """The PEPE asset assigned to a ``_QuoteDouble`` behind a code of the test's own, which the registry hands out; the
+    assignment, and the prices and events written meanwhile, dropped at teardown."""
+    code = f"r13_{uuid.uuid4().hex[:12]}"
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        assignment = AssetProviderAssignment(asset_id=owned.asset_id, provider_code=code, identifier=f"R13-{uuid.uuid4().hex[:8]}", identifier_type=ProviderInputType.TICKER)
+        session.add(assignment)
+        await session.commit()
+        state = _Assigned(code=code, assignment_id=assignment.id)
+    original = AssetProviderRegistry.get_provider_instance
+
+    def get_provider_instance(_cls, provider_code, **kwargs):
+        return _QuoteDouble(state) if provider_code == code else original(provider_code, **kwargs)
+
+    monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(get_provider_instance))
+    yield state
+    await _wipe(owned)
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        await session.execute(delete(AssetProviderAssignment).where(AssetProviderAssignment.id == state.assignment_id))
+        await session.commit()
+
+
+async def _seed_todays_price(asset_id: int) -> None:
+    """A price row of today for ``asset_id``: open 9, high 11, low 8, close 10, volume 100 EUR."""
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        session.add(PriceHistory(asset_id=asset_id, date=date.today(), open=Decimal("9"), high=Decimal("11"), low=Decimal("8"), close=Decimal("10"), volume=Decimal("100"), currency="EUR", source_plugin_key="MANUAL"))
+        await session.commit()
+
+
+async def _todays_row(asset_id: int) -> tuple | None:
+    """Today's price row of ``asset_id`` as the file holds it — (open, high, low, close, volume) — read with raw SQL, past
+    the column types, so a REAL inf or 1e60 is seen as the float it is; None without a row."""
+    async with AsyncSession(get_async_engine()) as session:
+        row = (await session.execute(text("SELECT open, high, low, close, volume FROM price_history WHERE asset_id = :asset_id AND date = :day"), {"asset_id": asset_id, "day": date.today().isoformat()})).one_or_none()
+    return None if row is None else tuple(row)
+
+
+async def _current_price(asset_id: int, story: str):
+    """The current-price path (``get_current_prices_bulk``) for one asset: its item; an exception fails the test naming it."""
+    try:
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            (item,) = await AssetSourceManager.get_current_prices_bulk([asset_id], session)
+    except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+        pytest.fail(f"{story}: get_current_prices_bulk raised {exc!r}: GET /assets/prices/current answers 500 (R13-SEC2)")
+    return item
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("existing", [pytest.param(False, id="no-row-today"), pytest.param(True, id="a-row-today")])
+@pytest.mark.parametrize("quote", [pytest.param(Decimal("1E+400"), id="1E+400"), pytest.param(Decimal("1E+60"), id="1E+60")])
+async def test_an_unstorable_current_quote_is_not_persisted(owned, assigned, quote, existing):
+    """Red before W-B58: the path wrote ``Decimal(str(value))`` as it came — 1E+400 as a REAL inf, 1E+60 as a REAL 1e60 —
+    creating today's row with it or overwriting its high and close; every later read of that row raised.
+
+    Contract (R13-SEC2): not persisted — today's row neither created nor changed (open, high, low, close, volume as the
+    file holds them) — and nothing raises. The barrier is the provider's call, not the item's source: after W-B62 an
+    unstorable quote is no longer served, and the item falls back to the database.
+    """
+    if existing:
+        await _seed_todays_price(owned.asset_id)
+    before = await _todays_row(owned.asset_id)
+    assigned.quote = quote
+
+    await _current_price(owned.asset_id, f"a current quote of {quote} EUR")
+
+    assert assigned.current_calls >= 1, f"barrier: the provider double was never asked for the current value ({assigned.current_calls} calls), so nothing proves the quote reached the path"
+    after = await _todays_row(owned.asset_id)
+    assert after == before, f"R13-SEC2: a current quote of {quote} EUR changed today's row (open, high, low, close, volume): before {before}, after {after}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("existing", [pytest.param(False, id="no-row-today"), pytest.param(True, id="a-row-today")])
+async def test_guard_a_float_inf_current_quote_is_never_persisted(owned, assigned, existing):
+    """Guard: green today and after. A double inf never becomes an item — ``FACurrentPriceItem`` refuses a non-finite
+    value — so the path falls back to the stored price, or to an error, and persists nothing."""
+    if existing:
+        await _seed_todays_price(owned.asset_id)
+    before = await _todays_row(owned.asset_id)
+    assigned.quote = float("inf")
+
+    item = await _current_price(owned.asset_id, "a current quote of float('inf')")
+
+    assert not (item.source or "").startswith("provider:"), f"barrier: a float inf came out of the provider path as an item: {item!r}"
+    after = await _todays_row(owned.asset_id)
+    assert after == before, f"a current quote of float('inf') changed today's row: before {before}, after {after}"
+
+
+@pytest.mark.asyncio
+async def test_a_valid_current_quote_is_persisted_truncated_like_the_history(owned, assigned):
+    """Red today: written as it comes: 65432.1234567890999 becomes the double 65432.1234567891, read back 65432.1234567891.
+
+    Contract (R13-SEC2): truncated like the history, 12 decimals then 15 significant digits, ``ROUND_DOWN``: today's new
+    row opens, highs, lows and closes at 65432.123456789.
+    """
+    assigned.quote = Decimal("65432.1234567890999")
+
+    item = await _current_price(owned.asset_id, "a current quote of 65432.1234567890999 EUR")
+
+    assert item.source == f"provider:{assigned.code}", f"barrier: the item did not come from the provider double ({item!r})"
+    row = (await _stored(owned)).get((owned.asset_id, date.today()))
+    assert row is not None, "a valid current quote of 65432.1234567890999 EUR was not persisted as today's row"
+    expected = Decimal("65432.123456789")
+    found = (row.open, row.high, row.low, row.close)
+    assert found == (expected,) * 4, f"a current quote of 65432.1234567890999 EUR is stored as (open, high, low, close) = {found}: expected {expected} for each (12 decimals then 15 significant digits, ROUND_DOWN)"
+
+
+# --------------------------------------------------------------------------- #
+# R13-SEC2 (W-B58): events past the integer digits
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("amount", [pytest.param("1E+13", id="1E+13"), pytest.param("1E+60", id="1E+60"), pytest.param("1E+400", id="1E+400")])
+async def test_a_manual_event_beyond_12_integer_digits_is_refused_and_nothing_is_written(owned, amount):
+    """Red today: the check counts decimals and significant digits only, so the dividend is accepted — 1E+60 stored as a
+    REAL 1e60, 1E+400 as a REAL inf (read back ``Decimal('Infinity')``).
+
+    Contract (R13-SEC2): ``EVENT_TOO_MANY_DIGITS``, the details gaining ``max_integer_digits`` 12 beside the existing
+    maxima (6 decimal places, 15 significant digits) and naming event 1; nothing written, the valid event of the item
+    included.
+    """
+    data = [_event_item(owned.asset_id, [_event(0, "DIVIDEND", "1.5"), _event(1, "DIVIDEND", amount)])]
+
+    refusal = await _upsert_events_refused(owned, data, f"a PEPE dividend of {amount} EUR (beyond 12 integer digits)")
+
+    assert refusal.error_code == "EVENT_TOO_MANY_DIGITS", f"refused with {refusal.error_code}: {refusal.message}"
+    details = refusal.details or {}
+    maxima = {key: details.get(key) for key in ("max_decimal_places", "max_significant_digits", "max_integer_digits")}
+    assert maxima == {"max_decimal_places": 6, "max_significant_digits": 15, "max_integer_digits": 12}, f"the refusal's details give the maxima {maxima}: expected 6 decimal places, 15 significant digits, 12 integer digits ({details})"
+    named = [(event.get("event_index"), event.get("date")) for event in details.get("events", [])]
+    assert named == [(1, _day(1).isoformat())], f"the refusal names the events {named}: expected event 1, on {_day(1)} ({details})"
+    rows = await _stored_events(owned)
+    assert not rows, f"the request was refused, yet events were written: {_describe_events(rows)}"
+
+
+@pytest.mark.asyncio
+async def test_the_events_endpoint_answers_400_for_an_event_beyond_12_integer_digits(owned):
+    """Red today: 200, the dividend of 1E+13 EUR stored.
+
+    Contract (R13-SEC2): 400, ``detail.error_code`` EVENT_TOO_MANY_DIGITS, ``detail.params.max_integer_digits`` 12,
+    nothing written. The route function is called as FastAPI calls it, minus HTTP.
+    """
+    item = _event_item(owned.asset_id, [_event(0, "DIVIDEND", "1E+13")])
+    answer: HTTPException | None = None
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        try:
+            await events_api.upsert_events_bulk([item], session=session, _current_user=None)
+        except HTTPException as refusal:
+            answer = refusal
+    if answer is None:
+        pytest.fail(f"POST /assets/events saved a PEPE dividend of 1E+13 EUR (200): it reads back as {_describe_events(await _stored_events(owned))}, instead of answering 400 EVENT_TOO_MANY_DIGITS")
+
+    detail = answer.detail if isinstance(answer.detail, dict) else {}
+    assert (answer.status_code, detail.get("error_code")) == (400, "EVENT_TOO_MANY_DIGITS"), f"POST /assets/events answers {answer.status_code} {answer.detail!r} to a dividend of 1E+13 EUR: expected 400 EVENT_TOO_MANY_DIGITS"
+    assert (detail.get("params") or {}).get("max_integer_digits") == 12, f"the refusal's params do not give max_integer_digits 12: {detail}"
+    rows = await _stored_events(owned)
+    assert not rows, f"the request was refused, yet events were written: {_describe_events(rows)}"
+
+
+@pytest.mark.asyncio
+async def test_guard_a_manual_event_of_12_integer_digits_is_stored(owned):
+    """Guard: green today and after. A dividend of 999999999999 EUR has 12 integer digits, the limit: stored, and read back."""
+    try:
+        await _upsert_events([_event_item(owned.asset_id, [_event(0, "DIVIDEND", "999999999999")])])
+    except AssetSourceError as refusal:
+        pytest.fail(f"a dividend of 999999999999 EUR was refused: {refusal.error_code} {refusal.message}")
+
+    rows = await _stored_events(owned)
+    assert [(row.asset_id, row.date, row.value) for row in rows] == [(owned.asset_id, _day(0), Decimal("999999999999"))], f"a dividend of 999999999999 EUR reads back as {_describe_events(rows)}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("amount", [pytest.param("1E+400", id="1E+400"), pytest.param("1E+60", id="1E+60"), pytest.param("1E+13", id="derived-1E+13")])
+async def test_a_provider_event_that_cannot_be_stored_is_dropped_and_the_others_are_written(owned, assigned, amount):
+    """Red today: ``_upsert_asset_events`` checks nothing: the dividend of ``amount`` EUR is written (1E+400 as a REAL inf).
+
+    Contract (R13-SEC2): of a provider's events, the one whose value cannot be stored (day 1) is dropped, the valid ones of
+    the same call (days 0 and 2) are written under the assignment, nothing raises. 1E+13 (13 integer digits, past the 12
+    of ``AssetEvent.value``) is derived from the same rule.
+    """
+    events = [
+        {"date": _day(0), "type": "DIVIDEND", "value": {"code": "EUR", "amount": "1.5"}},
+        {"date": _day(1), "type": "DIVIDEND", "value": {"code": "EUR", "amount": amount}},
+        {"date": _day(2), "type": "INTEREST", "value": {"code": "EUR", "amount": "2.25"}},
+    ]
+
+    try:
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            await EventStoreOperations._upsert_asset_events(session, owned.asset_id, events, assigned.assignment_id, "EUR")
+    except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+        pytest.fail(f"the provider events of a refresh, one of them a dividend of {amount} EUR, raised {exc!r}: the refresh reports «Event upsert failed» and keeps none of them (R13-SEC2: drop that one, write the others)")
+
+    rows = await _stored_events(owned)
+    written = [(row.date, str(row.type), row.value, row.provider_assignment_id) for row in rows]
+    expected = [(_day(0), "DIVIDEND", Decimal("1.5"), assigned.assignment_id), (_day(2), "INTEREST", Decimal("2.25"), assigned.assignment_id)]
+    assert written == expected, f"the provider events, one of them a dividend of {amount} EUR on {_day(1)}, were written as {_describe_events(rows)}: expected the two others alone"

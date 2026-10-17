@@ -110,13 +110,13 @@ A **password strength indicator** powered by `@zxcvbn-ts/core`.
   warning, success
 - With `showRules` (default), a checklist of the
   [password rules](../../../architecture/security.md#password-rules) the server publishes
-  (`GET /system/instance`), the five of release 1.3 until it answers; its bindable `valid` tells a
-  form whether they all hold
+  (`GET /system/instance`), the five of release 1.3 until it answers, or of the rules a caller passes
+  in `rules`, such as a secure backup's; its bindable `valid` tells a form whether they all hold
 - Hidden while the password is empty
 
 Details: [PasswordStrength](../features/auth.md#passwordstrength).
 
-**Used by**: [RegisterCard](../features/auth.md) (below password field), `ResetPasswordCard`, `PasswordChangeModal`.
+**Used by**: [RegisterCard](../features/auth.md) (below password field), `ResetPasswordCard`, `PasswordChangeModal`, `BackupDownloadCard` (a secure backup's password, with `rules`).
 
 ---
 

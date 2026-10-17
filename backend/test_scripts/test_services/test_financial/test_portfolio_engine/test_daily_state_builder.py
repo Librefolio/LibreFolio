@@ -374,11 +374,12 @@ class TestSplitRescale:
         assert s_after.open_cost_basis == Decimal("1500")
         assert s_after.market_value == Decimal("1500")  # 15 * 100
 
-    def test_forward_split_in_pre_frame_preserves_cost_basis(self):
-        """Same as forward-split test but the split falls in the pre-frame window.
+    def test_forward_split_before_date_from_preserves_cost_basis(self):
+        """Same as forward-split test but the split falls before date_from.
 
-        Exercises the pre-frame accounting loop (a separate code path/copy from
-        the frame loop) with frame_start after the split date.
+        J1: replayed by the same loop, with the same rules, as any emitted day (before
+        J1 it ran in the pre-frame, a separate copy of the accounting); only the states
+        from date_from are emitted.
         """
         txs = [
             _ctxn(_tx(id=1, dt="2025-01-01", type="BUY", amount="-1500", quantity="15", asset_id=100, broker_id=10)),
@@ -390,16 +391,15 @@ class TestSplitRescale:
             quote_base_map={100: None},
             asset_types={100: "ETF"},
             asset_classifications={100: None},
-            date_from=date(2025, 1, 1),
-            frame_start=date(2025, 1, 6),
+            date_from=date(2025, 1, 6),
             date_to=date(2025, 1, 6),
             split_linked_tx_ids={2},
         )
         states = builder.build().daily_states
 
-        assert len(states) == 1  # only frame_start..date_to emitted
+        assert len(states) == 1  # only date_from..date_to emitted
         s = states[0]
-        assert s.open_cost_basis == Decimal("1500")  # carried over from pre-frame rescale
+        assert s.open_cost_basis == Decimal("1500")  # carried over from the rescale before date_from
         assert s.market_value == Decimal("3000")  # 30 * 100
 
 
@@ -1409,8 +1409,8 @@ class TestPricedAdjustmentOutHandsOverAtItsDate:
     (``cumulative_external_cash_flow``, and the broker's ``capital_contribution``) falls by D, and the difference from
     the historical cost C the pool gives up is realized, as for a SELL: one ``RealizedSale`` for the row, proceeds D,
     cost C, ``cost_complete`` the pool's before the row. With no rate on its day the proceeds are unknown (None), the
-    pair is a movement failure dated that day, and the capital falls by C, as before J-24. Both branches of the
-    replay: the frame and the pre-frame (rows before ``date_from``). Unchanged: an outgoing ADJUSTMENT without a cost
+    pair is a movement failure dated that day, and the capital falls by C, as before J-24. Rows before ``date_from``
+    too (J1: one replay with the same rules every day; before J1 they ran in a separate pre-frame branch). Unchanged: an outgoing ADJUSTMENT without a cost
     basis (its units destroyed, J-11 undecided), a split-linked ADJUSTMENT, the NAV, the pool.
 
     Before J-24 the capital fell by C in both branches, nothing converted the row, and only a SELL was realized; the
@@ -1539,8 +1539,9 @@ class TestPricedAdjustmentOutHandsOverAtItsDate:
         assert not problems, "\n".join(problems)
 
     def test_handover_before_the_period_leaves_the_capital_at_the_rate_of_its_day(self):
-        """The foreign book read from 01-05 to 01-06: the purchase and the ADJUSTMENT come before ``date_from``, so the
-        replay takes them in its pre-frame branch, as for a period that starts after them. The frame opens on 01-05
+        """The foreign book read from 01-05 to 01-06: the purchase and the ADJUSTMENT come before ``date_from``, so they
+        are replayed before the first emitted state (J1: with the same rules as any day; before J1, in the pre-frame
+        branch), as for a period that starts after them. The states open on 01-05
         with capital 100, NAV 0 and P&L −100, the broker's line alike; the row's RealizedSale is there (10 units,
         proceeds 800, cost 900, dated 01-02); no missing rate.
 

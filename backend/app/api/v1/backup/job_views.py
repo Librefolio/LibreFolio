@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from backend.app.logging_config import get_logger
 from backend.app.schemas.backup import InstanceBackupJob
 from backend.app.services.platform.instance_backup import jobs
+from backend.app.services.platform.instance_backup.envelope import FILE_SUFFIX
 from backend.app.services.platform.instance_backup.manifest import BackupOrigin
 from backend.app.services.platform.instance_backup.paths import BackupPathError
 
@@ -22,7 +23,7 @@ START_RESPONSES = {
     500: {"description": "The backup could not start: the backups folder of the data directory is a link or a file (code `backup_folder_unusable`), or it cannot be written (code `backup_failed`)"},
 }
 FILE_RESPONSES = {
-    200: {"content": {"application/zip": {}}, "description": "The backup archive"},
+    200: {"content": {"application/zip": {}, "application/octet-stream": {}}, "description": "The backup archive: a .zip, or the .lfbk envelope of a secure backup"},
     404: NOT_FOUND,
     409: {"description": "The job has not produced an archive: still running, or failed (code `backup_job_not_ready`)"},
 }
@@ -48,13 +49,17 @@ def job_view(job: jobs.BackupJob) -> InstanceBackupJob:
         file_size=job.file_size,
         warnings=list(job.warnings),
         error_code=job.error_code,
+        encrypted=job.encrypted,
     )
 
 
-def start_job(origin: BackupOrigin) -> InstanceBackupJob:
-    """Start a backup in the background; its first state. 409 while another runs, 500 when it cannot start."""
+def start_job(origin: BackupOrigin, password: str | None = None) -> InstanceBackupJob:
+    """Start a backup in the background; its first state. 409 while another runs, 500 when it cannot start.
+
+    ``password``: a secure backup (the Backup tab only; the hosting panel's backups never take one).
+    """
     try:
-        job = jobs.start_backup(origin=origin)
+        job = jobs.start_backup(origin=origin, password=password)
     except jobs.BackupBusyError:
         raise backup_error(status.HTTP_409_CONFLICT, "backup_busy", "Another backup is running") from None
     except BackupPathError:
@@ -96,7 +101,9 @@ def job_file(job_id: str, *, origin: BackupOrigin | None = None) -> FileResponse
         raise _not_found("No such backup archive") from None
     except jobs.BackupJobStateError:
         raise backup_error(status.HTTP_409_CONFLICT, "backup_job_not_ready", "The backup has no archive yet") from None
-    return FileResponse(path, media_type="application/zip", filename=name, headers={"Cache-Control": "no-store"})
+    # A secure backup's envelope is not a zip: a browser or a mail filter must not take it for one.
+    media_type = "application/octet-stream" if name.endswith(FILE_SUFFIX) else "application/zip"
+    return FileResponse(path, media_type=media_type, filename=name, headers={"Cache-Control": "no-store"})
 
 
 def remove_job(job_id: str, *, origin: BackupOrigin | None = None) -> Response:

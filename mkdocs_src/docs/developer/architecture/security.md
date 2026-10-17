@@ -243,7 +243,7 @@ the current password and ends the account's other sessions. No other route chang
   change carries on, and every other session gets `401` at its next request. A username-only change ends no session,
   nor does a refused one.
 - **The notice.** After a change of address, the route queues workstream E's `email_changed_work()` with the address
-  read before the change: a notice to that address, after the answer, with the new one masked
+  read before the change: a notice to that address, after the answer, showing nothing of the new one (decision N62)
   ([An Email Address Changes](../backend/email.md#flow-email-changed)). It changes neither the answer nor the cookie;
   with email off, nothing is sent.
 - **The log.** Neither the route nor `user_service.update_profile()` writes an address: *Profile updated* and *User
@@ -323,10 +323,21 @@ session and the [failed sign-in limit](#login-limit)):
   `[^\p{L}\p{N}\s]`, the length in code points) in `frontend/src/lib/features/auth/passwordRules.ts`
   ([PasswordStrength](../frontend/components/features/auth.md#passwordstrength)), so a rule changed here reaches the
   interface without a change of its own. A code the app does not know is not checked there: the server decides.
+- **Other passwords, the same rules** (lot B4). `failed_rules(password, rules=…)` and
+  `password_rules_public(rules=…)` take a list made from these rules instead of `PASSWORD_RULES`, which they read at
+  each call when `rules` is `None`, the default, so a change here reaches every list made from them; without `rules`,
+  both answer as before. `rules_with_minimum_length(n, rules=None)` gives those rules with a minimum length of at least
+  `n` characters: raised, never lowered, the other rules and their order kept (`ValueError` for `n` below 1). The
+  password of a [secure backup](#secure-backups) takes the accounts' rules with at least 12 characters
+  (`archive_password_rules()`, `ARCHIVE_PASSWORD_MIN_LENGTH`, in
+  `backend/app/services/platform/instance_backup/secure.py`, decision P12): `GET /backup/instance/options` publishes
+  them in the same `[{code, value}]` shape (`InstanceBackupOptions`), and the Backup tab draws them with
+  `PasswordStrength` through its `rules` prop, which replaces the instance configuration's list.
 
 Tests: `./dev.py test services password-policy` (`backend/test_scripts/test_services/test_password_policy.py`,
 POLICY-000 to POLICY-006: the published list, the order of `failed_rules()`, the Unicode classes, the length in code
-points); `./dev.py test api auth` (`test_api/test_auth_api.py`, REG-004, CHPWD-005 and PWD-001 to PWD-008: registration
+points; B4-RULES-01 to B4-RULES-09: `rules=` and `rules_with_minimum_length()`); `./dev.py test api auth`
+(`test_api/test_auth_api.py`, REG-004, CHPWD-005 and PWD-001 to PWD-008: registration
 and password change, the new password checked before the current one, a login that never checks);
 `./dev.py test api registration` (`test_api/test_registration_api.py`, RESET-004, RESET-006, RESET-007 and RULES-001 to
 RULES-003: the reset link and the invitation left unspent, the order of the checks, the first account, the `accounts`
@@ -582,15 +593,20 @@ it is.
 
 `derive_key()` and `derive_key_from()` validate and derive through the same private helpers
 (`_check_purpose_and_length()`, then `_derive()`), so the two cannot drift. `derive_key_from()` is for
-a key that is not this instance's. Its intended caller is the restore of workstream B, which will
-re-encrypt the plugin secrets that a backup's instance encrypted with its own key. The archive leaves
-that key out, so it comes from where the administrator kept it: a copy of the old
-`secrets/instance.key`, read with `read_secret_file(path, label)` (`backend/app/config/__init__.py`:
-the file's text without a leading byte order mark and its trailing line breaks) as this module reads
-its own, or the old value of `LIBREFOLIO_INSTANCE_KEY`. The restore derives the old subkey with
-`derive_key_from(old_key, "plugins.settings.v1", 32)` and gives it, with this instance's subkey, to
+a key that is not this instance's. Its caller is the check of a restore (lot B4, `_plugin_secrets()`
+in `backend/app/services/platform/instance_backup/staging.py`), which re-encrypts the plugin secrets
+that a backup's instance encrypted with its own key. A clear archive leaves that key out; a
+password-protected one carries it when LibreFolio generated it (decision 39), as the entry
+`secrets/instance.key`, read into memory and never unpacked ([Secure Backups](#secure-backups)). The
+check derives the archive's subkey with `derive_key_from(archive_key, SUBKEY_PURPOSE, SUBKEY_LENGTH)`
+(`plugins.settings.v1`, 32 bytes) and gives it, with this instance's subkey (`settings_subkey()`), to
 `rekey_plugin_secrets(conn, old_subkey, new_subkey)` in
-`backend/app/services/plugin_settings/crypto.py`. No code calls `derive_key_from()` yet.
+`backend/app/services/plugin_settings/crypto.py`, on a connection to the copy's database. It derives
+this instance's subkey only when the copy holds secrets, so the check of an archive without any never
+generates the key file. Without the archive's key, or with one `derive_key_from()` refuses, it only
+counts the secrets this instance cannot read (`count_unreadable_secrets()`). No path gives the restore
+a key the administrator kept, such as a copy of the old `secrets/instance.key`: that is backlog item
+B-18 (`restore --instance-key-file`).
 
 The generated file (`_create_key_file()`):
 
@@ -623,8 +639,10 @@ under the instance key today, make the change visible: each row records the `key
 encrypted it, and from the first start after the change the startup step `plugin-secrets-check` logs
 an error that counts the stored system secrets the current key cannot read, if there are any
 ([Plugin Secrets Check](#plugin-secrets-check)). The administrator puts back `secrets/instance.key`
-from their copy of the data directory (the archive of the instance backup leaves the key out), or
-enters the secrets again. The order matters: saving a secret rewrites its row's `secret_ciphertext`
+from their copy of the data directory (a clear archive of the instance backup leaves the key out; a
+password-protected one carries the generated key, and its restore re-encrypts the secrets with this
+instance's: [Secure Backups](#secure-backups)), or enters the secrets again. The order matters:
+saving a secret rewrites its row's `secret_ciphertext`
 and `key_id` under the current key (`_apply()` in `backend/app/services/plugin_settings/service.py`),
 so an old key brought back afterwards reads again the rows never entered again, but not the ones
 entered under the new key; the old key therefore goes back first (LibreFolio stopped, the copy in
@@ -636,6 +654,251 @@ Tests: `./dev.py test services config-secrets` (`env_secret()`) and
 known answers computed with `derive_key()` before the two shared their helpers. What the
 administrator sees and does is in [Configuration](../../admin/configuration.md), section «The
 Instance Key».
+
+### 🔐 Secure Backups (`.lfbk`) {: #secure-backups }
+
+A secure backup (lot B4: decisions 38 and 39, P12) is the zip of a clear backup encrypted with a password its maker
+chooses, in an envelope of LibreFolio's own, `.lfbk`, made of standard pieces of `cryptography`: scrypt and
+AES-256-GCM. Decision 38 ruled out a password-protected zip, which only some tools open (7-Zip, Keka) and whose key
+derivation is weak. Without a password the backup is the plain zip, as before, and the hosting panel's routes never
+encrypt (`backend/app/api/v1/backup/panel.py` passes no password). The format is
+`backend/app/services/platform/instance_backup/envelope.py`; what the administrator sees is
+[Secure Backups](../../admin/backup_restore.md#secure).
+
+**The header**: 52 bytes, big-endian (`struct` format `>4sBBBBB16s16sI7s`), the associated data of every chunk.
+
+| Bytes | Field | Written | Accepted when read |
+|-------|-------|---------|--------------------|
+| 0–3 | Magic | `LFBK` (`MAGIC`) | Only `LFBK`, and 52 bytes at least: otherwise `envelope_damaged` |
+| 4 | Format version | `1` (`FORMAT_VERSION`) | `1`: otherwise `envelope_unsupported` |
+| 5 | KDF id | `1`, scrypt (`KDF_SCRYPT`) | `1`: otherwise `envelope_unsupported` |
+| 6 | log2(n) | `15` (`LOG2_N`) | 14 to 16 |
+| 7 | r | `8` (`R`) | 1 to 8 |
+| 8 | p | `1` (`P`) | 1 to 2 |
+| 9–24 | Salt | 16 random bytes | Any |
+| 25–40 | Check value | Bytes 32–47 of the derivation | Compared in constant time |
+| 41–44 | Chunk size (u32) | `1 << 20`, 1 MiB (`CHUNK_SIZE`) | 64 KiB to 16 MiB |
+| 45–51 | Nonce prefix | 7 random bytes | Any |
+
+- **Bounds before any derivation.** `EnvelopeHeader.from_bytes()`, behind `read_header()` and `unlock()`, checks the
+  header before scrypt runs: a cost or a chunk size outside the bounds is `envelope_unsupported`. A hostile or newer
+  header so never makes a reader spend more than 64 MiB (128 · r · 2^log2(n), twice what is written) or work for
+  minutes: one that asks `log2(n) = 30` is refused in milliseconds. `encrypt_file()` checks the header it writes
+  against the same bounds.
+- **The key.** `Scrypt(salt, length=48, n=2**log2_n, r, p)` of `cryptography`, on
+  `unicodedata.normalize("NFC", password).encode("utf-8")`: a password typed with a composed or a decomposed accent
+  gives one key (NFC, not NFKC). Bytes 0–31 are the AES-256 key, bytes 32–47 the check value, kept in the header and
+  compared with `hmac.compare_digest()`: a wrong password is told at once, before any chunk is read
+  (`wrong_password`). The written cost takes 32 MiB and about a tenth of a second, once per backup and once per check
+  (P12: a small machine's memory). By design, a changed salt, cost or check value reads as `wrong_password` too.
+- **The chunks** (STREAM). The archive is cut into chunks of `chunk_size` bytes, at least one; the last one holds the
+  rest, empty only for an empty file, and a size that is a multiple of the chunk size ends on a full chunk. Each
+  chunk is sealed with `AESGCM(key).encrypt(nonce, chunk, header)`, the chunk and its 16-byte tag, written in order
+  after the header. The 12-byte nonce is the prefix (7 bytes), the chunk's counter (u32, big-endian, from 0) and a
+  flag, `0x01` on the last chunk and `0x00` on the others. Every tampering makes a tag fail, `envelope_damaged`: a
+  changed byte or tag; two chunks swapped; a chunk dropped, repeated or appended after the last; a file cut at or
+  inside a chunk (the chunk now last was not sealed as last, or is shorter than a tag); a chunk size or a nonce prefix
+  changed in the header. `decrypt_file()` also compares the first 52 bytes of the file with the header `unlock()`
+  read, so a file replaced in between is refused before its first chunk.
+- **The files.** `encrypt_file()` and `decrypt_file()` stream with constant memory and write through `<name>.part` in
+  the output's folder (`_NewFile`): created exclusively (`O_CREAT | O_EXCL | O_NOFOLLOW`), mode `0600`, fsynced,
+  renamed onto the final name, the folder fsynced. An output that already exists is `FileExistsError`, and nothing
+  is written; on any failure the `.part` is removed and the output does not exist. The salt and the prefix come from
+  `secrets.token_bytes()`, so two encryptions of one archive differ; the `salt`, `nonce_prefix` and `log2_n` keywords
+  of `encrypt_file()` are for tests. `encrypt_file()` returns the envelope's size and SHA-256 (`EncryptedFile`).
+- **The codes.** `EnvelopeError.code` is `wrong_password`, `envelope_damaged` or `envelope_unsupported`; the messages
+  hold no path and no secret.
+
+**The creation** (`jobs._run()`). With a password, `build_archive()` writes the zip as for a clear backup, in the
+job's folder `backups/.jobs/<id>/` (`0700`, the zip `0600`), with the instance key entry when there is one to carry
+(below). `_encrypt()` then checks the free space for the envelope (the zip's size plus 64 MiB, or `backup_no_space`),
+reports the phase `encrypting` (`done_bytes` of `total_bytes`: the zip's bytes) and writes
+`librefolio-backup-<UTC>.lfbk` beside it. The job records `encrypted: true` and the envelope's name, size and SHA-256
+(`InstanceBackupJob`); `_remove_work_files()` removes the clear zip with the other work files, on success as on
+failure. A run killed outright (a power cut, `kill -9`) removes nothing: the next read of its job, or the next start,
+ends it and removes them ([What a Run Killed Outright Leaves](#backup-leftovers)).
+
+**The password's life.**
+
+- **In the API.** `InstanceBackupRequest.password` (`POST /backup/instance`) and `RestoreStageRequest.password`
+  (`POST /backup/restore/stage`) are `SecretStr | None`, `max_length=1024`, in models with `extra="forbid"`; no body,
+  `{}` or `{"password": null}` is a clear backup, as before. Both routers use `NoInputEchoRoute`
+  (`backend/app/api/no_echo.py`, moved out of the plugin settings router, which imports it): a 422 keeps `type`,
+  `loc`, `msg` and `ctx`, and drops `input`, which for a missing field is the whole body, the password beside it
+  included.
+- **At the creation.** `POST /backup/instance` checks `archive_password_problems()` first: a password that misses a
+  rule answers `400` with `{"code": "password_too_weak", "message": …, "rules": […]}` in `detail`, `rules` being the
+  codes missed in the rules' order, and no job starts. `GET /backup/instance/options` (administrators; allowed on a
+  [blocked instance](#instance-block)) gives those rules ([Password Rules](#password-rules)). The password then goes
+  to the job's thread as an argument (`start_backup(password=…)`, `run_backup(password=…)` for the command line),
+  never into `state.json`, the log or an exception message.
+- **At the restore.** `restore_jobs.start_check()` takes the lock of the checks, then, for an upload that
+  `is_envelope()`, synchronously: `read_header()` first, so an envelope that cannot be opened asks for no password;
+  then `PasswordRequiredError` without a password, or the `EnvelopeError` of `unlock()`. In those cases the lock is
+  released, no check state is written and the upload is kept: a second `POST` with the right password needs no new
+  upload. The route answers `400` `password_required`, `400` `wrong_password`, `400` `envelope_damaged` (a header cut
+  short) or `409` `envelope_unsupported`. Otherwise the thread receives the `EnvelopeKey`, never the
+  password: it holds the header and an `AESGCM` object, and its `repr()` shows the version and the cost, never the
+  key. A zip ignores a password. `PUT /backup/restore/upload` answers `kind`: `envelope` when the stored file starts
+  with `LFBK`, `zip` otherwise.
+- **In the command line.** `scripts/backup_cli.py` reads it from `--password-file` (`read_secret_file()`: the file's
+  text without a leading byte order mark and its trailing line breaks, a blank file refused), from `--password-stdin`
+  (one line, when the standard input is not a terminal) or with `getpass` at a terminal (twice for `create`), never
+  from an argument. At a terminal, `--password-stdin` takes the `getpass` path too (`_password()`, B-25): a line read
+  there would show the password as it is typed, and for `create` it would not be asked twice. The subparsers of
+  `create`, `inspect`, `restore` and `decrypt` set `allow_abbrev=False`, so `--password` is refused instead of being
+  taken for one of the two options.
+- **In the app.** The Backup tab empties its password fields as soon as a password is submitted
+  (`BackupDownloadCard.svelte`, `RestoreCard.svelte`). The two fields of a new secure backup are
+  `autocomplete="new-password"`, so that a password manager does not fill in the account's password;
+  the restore card's field stays `autocomplete="off"`, as `current-password` would offer the account's. For another
+  try after a wrong password, `restoreFlow.svelte.ts` keeps the file and the id of its upload (state `password`),
+  never the password.
+
+**The key entry**, `secrets/instance.key` (`INSTANCE_KEY_ENTRY` in `paths.py`):
+
+- **Written** only by a backup with a password, and only when `exportable_instance_key()` (`secure.py`) gives the key:
+  `instance_key_status()` reports the source `generated` without a `problem`, and the key `read_secret_file()` reads
+  from the file fits an archive (`_fits_an_archive()`): at least `INSTANCE_KEY_MIN_LENGTH` characters, and at most
+  `INSTANCE_KEY_MAX_BYTES` (4096) bytes in UTF-8, as every restore reads no more (`read_instance_key()`; B-26). A
+  configured key (`LIBREFOLIO_INSTANCE_KEY`, its `_FILE`), no key yet, or a generated key that cannot be used gives no
+  entry. The last one adds the job's warning `instance_key_unusable` (`generated_key_unusable()`): H's status names a
+  problem, the file cannot be read, or the key is longer than that bound, which H's own check, a minimum length, lets
+  through. The backup completes. Neither function creates the key file, and neither raises.
+- **Announced** by the manifest, outside `manifest.files`:
+  `instance_key: {included: true, sha256: <hex of the entry>}` (`ManifestInstanceKey`, whose validator wants `sha256`
+  exactly when `included`). The entry holds the key's text, UTF-8.
+- **Read** in any archive whose manifest announces it: a decrypted envelope, or the plain zip that `backup decrypt`
+  writes out of one. Refusing it in a zip would refuse LibreFolio's own output; the rule that matters is the writing.
+  Present without the announcement: `unexpected_entry`; announced and missing: `missing_entry`; another SHA-256, more
+  than 4096 bytes (`INSTANCE_KEY_MAX_BYTES`) or not UTF-8: `checksum_mismatch`; a folder or a link: `not_a_file`;
+  encrypted: `encrypted_entry`; another compression: `unsupported_entry` (`_check_key_entry()`,
+  `_archive_instance_key()` in `staging.py`). `check_archive()`, behind `backup inspect`, expects it the same way.
+- **Never unpacked.** The check reads it into memory (`read_instance_key()` in `archive.py`) before the unpacking,
+  `secrets/` is never part of the copy, and the swap never touches the live `secrets/`
+  ([The Swap](#backup-restore-swap)).
+
+**The check of an envelope** (`staging.py`). `_decrypt()` comes first, in the phase `decrypting` (`done_bytes` of
+`total_bytes`, over the envelope): free space for the envelope's size plus 64 MiB (`no_space`), then `decrypt_file()`
+into `.restore/stage/<id>/archive.zip` (`STAGE_DECRYPTED_ARCHIVE`, `0600` in the stage's `0700` folder), through
+`archive.zip.part`. The checks of a zip follow on that archive, which is removed once unpacked; a check killed outright
+leaves it, or its `.part`, until the next start ([What a Run Killed Outright Leaves](#backup-leftovers)). A chunk that
+fails ends the check `failed` with `envelope_damaged`, and nothing of the stage is left; `stage_archive(…, key=None)`
+on an envelope is `password_required`. `RestoreErrorCode` gains only these two codes: `wrong_password` and
+`envelope_unsupported` are synchronous answers of `POST /backup/restore/stage`, never the end of a check.
+
+On the command line, `inspect` decrypts into a folder `mkdtemp(prefix=".decrypt-")` of `backups/` (made private by
+`ensure_private_dir()`) and removes it at the end. A killed `inspect` leaves its folder: before it makes its own,
+`inspect` removes the `.decrypt-*` folders older than an hour (`remove_stale_decrypt_folders()` in `leftovers.py`; a
+younger one may be another `inspect`'s, still running), and every start applies the same rule. `restore` decrypts
+through `stage_archive()`. `decrypt FILE -o OUT` writes `OUT` through `_NewFile`, and refuses, before it asks the
+password, an `OUT` that exists and a `FILE` that is not an envelope (`not_an_envelope`). Once `OUT` is written, it
+reads the manifest of the zip, and when the key is announced it adds
+`🔑 It also holds the instance key: with it, every saved provider key can be read.` (`_carries_instance_key()`, B-24;
+a manifest it cannot read adds nothing, and the command still exits with `0`).
+
+**The secrets of the copy** (`_plugin_secrets()`, after the upgrade and the post-migration fixes, with X's functions
+on a `sqlite3` connection to the copy's database):
+
+1. `count_unreadable_secrets()` with a random subkey counts every stored secret: with none, nothing more happens, and
+   this instance's key is neither read nor generated.
+2. `settings_subkey()` gives this instance's subkey; on `InstanceKeyError`, every secret counts as unreadable, and
+   the check goes on.
+3. With the archive's key, once `derive_key_from()` accepts it (`_archive_subkey()`):
+   `rekey_plugin_secrets(conn, old_subkey, new_subkey)`, committed. A row under the old key is decrypted with its own
+   context and encrypted again with a fresh nonce, a row already under this instance's key is left alone, and any
+   other stays as it is, counted unreadable. The rows rewritten decrypt with this instance's subkey, and their
+   `key_id` is its own.
+4. Without it: `count_unreadable_secrets(conn, settings_subkey())`.
+
+The report (`StagingReport`, `RestoreStageReport`) carries `encrypted`, `secrets_rekeyed` and `secrets_unreadable`
+`{system, user}` (`RestoreSecretCounts`) beside `instance_key_included`; a backup without the plugin settings tables
+gives zeros. The command line prints them, and the report window of the Backup tab shows
+`restore-report-secrets-rekeyed` and `restore-report-secrets-unreadable`, with `data-count`, when they are not zero.
+
+| Source | What it holds |
+|--------|---------------|
+| `backend/app/services/platform/instance_backup/envelope.py` | The format: the header, the key, the chunks; `is_envelope()`, `read_header()`, `unlock()`, `encrypt_file()`, `decrypt_file()` |
+| `backend/app/services/platform/instance_backup/secure.py` | The password's rules (`archive_password_rules()`, `archive_password_problems()`) and the key a backup may carry (`exportable_instance_key()`, `generated_key_unusable()`) |
+| `backend/app/services/platform/instance_backup/jobs.py` | The creation: the key, the phase `encrypting`, the clear zip removed |
+| `backend/app/services/platform/instance_backup/archive.py`, `manifest.py`, `paths.py` | The key entry written, checked and read (`read_instance_key()`, `check_archive()`); `ManifestInstanceKey`; `INSTANCE_KEY_ENTRY`, `STAGE_DECRYPTED_ARCHIVE` |
+| `backend/app/services/platform/instance_backup/staging.py` | The check of an envelope (`_decrypt()`), the key entry, the secrets of the copy (`_plugin_secrets()`) |
+| `backend/app/services/platform/instance_backup/restore_jobs.py` | The password tried in the request, the upload kept, `kind` |
+| `backend/app/services/platform/instance_backup/leftovers.py` | What a run killed outright leaves in clear, removed at every start ([below](#backup-leftovers)) |
+| `backend/app/api/v1/backup/instance.py`, `backend/app/api/v1/backup/restore.py`, `backend/app/schemas/backup.py` | The routes and their models |
+| `backend/app/api/no_echo.py` | `NoInputEchoRoute` |
+| `scripts/backup_cli.py` | `create --encrypt`, `--password-file`, `--password-stdin`, `decrypt` |
+| `frontend/src/lib/features/backup/` | `BackupDownloadCard.svelte` (the choice, the password typed twice), `RestoreCard.svelte` and `restoreFlow.svelte.ts` (the state `password`), `RestoreReportModal.svelte`, `backupApi.ts` (`isEnvelopeFile()`) |
+
+Tests: `./dev.py test services backup-envelope` (`backend/test_scripts/test_services/test_backup_envelope.py`: the
+header at its offsets, known answers built with `cryptography`, the bounds refused before any derivation, every
+tampering, NFC, no overwrite, `0600`), `./dev.py test services backup-secure-rules` (`test_backup_secure_rules.py`: the
+password's rules, the key a backup may carry), `./dev.py test services backup-secure` (`test_backup_secure.py`: the
+creation, the check of an envelope, the key entry, the secrets re-encrypted or counted),
+`./dev.py test api backup-secure` (`test_api/test_backup_secure_api.py`), `./dev.py test api no-echo-route`
+(`test_api/test_no_echo_route.py`) and `./dev.py test utils backup-cli-secure`
+(`test_utilities/test_backup_cli_secure.py`). The app's half: `./dev.py test front-utility core-unit`
+(`backupApi.test.ts`, `backupJob.test.ts`, `restoreFlow.test.ts`, `restoreI18n.test.ts`) and
+`./dev.py test front-utility component-unit` (`BackupDownloadCard.test.ts`, `RestoreCard.test.ts`,
+`RestoreReportModal.test.ts`, `PasswordStrength.test.ts`).
+
+#### What a Run Killed Outright Leaves {: #backup-leftovers }
+
+A run killed outright (a power cut, `kill -9`, a container stopped past its grace period) runs no clean-up, and three
+runs of the backup keep clear data on disk while they work (lot B4b, B-23, after E's review R13-SEC4):
+
+- the check of a secure backup decrypts it into its copy, `.restore/stage/<id>/archive.zip` (written through
+  `archive.zip.part`), until it is unpacked: the backup's data, and the instance key when the backup carries it;
+- `dev.py backup inspect` decrypts one into a folder `backups/.decrypt-<random>/`;
+- a backup writes the database's copy and the zip into its job folder, `backups/.jobs/<id>/`: a secure one keeps the
+  clear zip there until it is encrypted, then writes the envelope through `.lfbk.part`.
+
+The startup step `backup-leftovers`, right after `restore-commit` (decision N66; see the
+[startup steps](overview.md)), removes them at every start: `sweep_backup_leftovers()` in
+`backend/app/services/platform/instance_backup/leftovers.py`, in a thread. Three parts, in this order:
+
+1. **`restore`.** `restore_jobs.prune()`, as at the start of a check: while no check runs, a check still recorded as
+   `running` is ended `failed`, `restore_interrupted`, its copy and its upload removed, and `prune()` returns how many
+   it ended; what is older than `STAGE_LIFETIME` (24 hours) goes as before. Then
+   `restore_jobs.remove_stray_decrypted_archives()`: while `.restore/` and `.restore/stage/` are plain folders and the
+   lock of the checks (`.restore/stage/.stage.lock`) is free, it removes `archive.zip` and `archive.zip.part` from
+   every copy (a plain folder with a job-id name, the copy of a restore waiting for the next start included), each only
+   when it is a regular file (`lstat`): a link or a folder of that name stays. A check removes the decrypted archive
+   once unpacked, or the whole copy on any error, always under that lock: with the lock free, one still there is what a
+   killed run left. The rest of the copy stays, its `data/` and its report: `prune()` removes it at its age.
+2. **`decrypt_folders`.** `remove_stale_decrypt_folders()`, on `backups/`, removes with their content the entries named
+   `.decrypt-*` (`DECRYPT_FOLDER_PREFIX`) that are folders themselves (`lstat`, never followed) and were last modified
+   more than `DECRYPT_FOLDER_LIFETIME` (one hour) before: a younger one may be an `inspect` still running, and a link or
+   a file of that name stays. `inspect` applies the same function before it makes its own folder: one rule, one home.
+3. **`jobs`.** `jobs.end_interrupted_jobs()`: while no run holds the run lock (`backups/.jobs/.lock`), every job
+   folder (a plain folder with a job-id name) whose state reads `running` gets the end `get_job()` gives a run that
+   died with its process (`_end_interrupted()`): `failed`, `backup_interrupted`, `finished_at` now, its state written,
+   then everything in the folder but `state.json` removed. A state that cannot be read is left to the expiry. Then
+   `jobs.remove_expired_jobs()`, as at the start of every backup, removes the jobs that ended more than `JOB_RETENTION`
+   (one hour) ago, and a folder whose state cannot be read once it is that old: an interrupted job's state stays for
+   that hour, like any finished job's. Both act only while `backups/` and `backups/.jobs/` are plain folders: with
+   `backups` a link, `.jobs` in its target would look plain.
+
+A read of a job, through `get_job()` (the Backup tab and the hosting panel following their jobs, the downloads), ends
+a dead run the same way, its work files included, without waiting for a restart.
+
+- **Nothing a running process holds**: the run lock of the backups (a `dev.py backup create` running while the server
+  starts keeps its job), the lock of the checks (a check of the command line or of the app), an `inspect` younger than
+  an hour. **Nothing through a link**: a folder is acted on only when `lstat` finds a folder itself (`is_plain_dir()`),
+  and an entry that is a link is never followed.
+- **Never raises.** After `restore-commit`, a step that raises stops the start, and a cause that stays would stop every
+  start ([Steps and Middleware: the Contract](overview.md#lifecycle-contract)). Each part runs in its own `try`: one
+  that raises is logged as an error, `A cleanup of backup leftovers failed`, with `part` (`restore`,
+  `decrypt_folders` or `jobs`) and `error`, the exception's type name only, no path and no message; the next parts
+  still run.
+- **The log.** When something was ended or removed, one INFO line, `Backup leftovers removed at startup`, with
+  `checks_interrupted`, `decrypted_archives`, `decrypt_folders`, `jobs_interrupted` and `jobs_expired`, in this order.
+  A clean data directory, or one without `.restore/` and `backups/`, logs nothing.
+
+Tests: `./dev.py test services backup-leftovers` (`backend/test_scripts/test_services/test_backup_leftovers.py`: each
+part on its own, the locks held, the links, a part that raises, a clean data directory, the step), and the order
+`restore-commit` before `backup-leftovers` in `./dev.py test services backup-apply` (`test_backup_apply.py`, section
+(j)).
 
 ## 🩺 Configuration Checks {: #configuration-checks }
 
@@ -885,6 +1148,39 @@ All other endpoints — including Auth (profile, password), Settings (user setti
 
 For a complete endpoint reference, see the [API Overview](../api/overview.md).
 
+### 🔢 Numbers in Requests {: #request-numbers }
+
+Every field typed `float` that a request fills, in the body or in a model nested in it, or as a query, path, header
+or cookie parameter, refuses infinity and NaN in its schema (lot H-32). It is `Annotated[float, AllowInfNan(False)]`,
+which pydantic names `FiniteFloat`, or it carries bounds that exclude both: an upper bound (`le`, `lt`) excludes
+infinity and any bound excludes NaN, so `ge=0` alone still lets infinity through. Money is `Decimal`, which refuses
+both by default; a finite value too large for its column is another matter: see
+[Decimal Columns](database/index.md#decimal-columns).
+
+- **Why.** Pydantic accepts `inf`, `-inf` and `nan` in a `float` by default (`allow_inf_nan=True`), and the request
+  body is parsed with Python's `json`, which reads `1E+400` as infinity and accepts the `NaN` and `Infinity` tokens.
+  A value the schema lets in can be saved and used, and reads back as `null`: FastAPI 0.141 serialises the answer of
+  a route with a `response_model` through pydantic, which writes infinity and NaN as `null`. A route without a
+  `response_model` that returns the value as it is fails with a `500` instead: Starlette's JSON renderer refuses them
+  (`allow_nan=False`).
+- **Field by field, not in the base model.** `allow_inf_nan=False` on `StrictModel` (`backend/app/schemas/common.py`)
+  would reach further than the requests: the same base backs the response models and the internal payloads
+  (AI Export, risk), where a computed NaN would become an exception inside a service. The rule is for requests only.
+- **The guard.** `./dev.py test services request-float-inputs`
+  (`backend/test_scripts/test_services/test_request_float_inputs.py`) walks every route of the app with
+  `fastapi.routing.iter_route_contexts`, which also sees the routes of included routers, unlike a plain loop over
+  `app.routes`. It judges each request float with a `TypeAdapter`: a float that accepts any of `inf`, `-inf`, `NaN`
+  or `1E+400` fails it, named by route, model and field. Two barriers keep it from passing empty: a minimum number of
+  routes walked, and at least one float found.
+- **Today: six request floats.** Five are signal parameters of the annotation requests that
+  `POST /assets/prices/query` and `POST /fx/currencies/convert` accept (`backend/app/schemas/signals.py`):
+  `epsilon` and `relative_epsilon`, declared in `SignalAnnotationRequestBase`, of both `SignalLineCrossoverRequest`
+  and `SignalThresholdCrossingRequest`, and `threshold` of the second, all `FiniteFloat` already. The sixth is the
+  plain value of a plugin setting (`PluginSettingWriteItem.value`, `PATCH /settings/plugins/bulk`):
+  `PluginSettingPlainValue` (`backend/app/schemas/plugin_settings.py`) now has `AllowInfNan(False)` on its `float`
+  branch, as `validate_value()` (`backend/app/services/plugin_settings/fields.py`) already refused a non-finite
+  number before saving: see [Types and Validation](patterns/plugin_settings.md#types).
+
 ### 📁 Uploaded Files: Common and Personal {: #upload-scope }
 
 Each uploaded static file (`<data directory>/custom-uploads/<uuid>.<ext>`, with its JSON sidecar `<uuid>.json`, see
@@ -948,7 +1244,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | `auth.login`, `auth.logout`, `auth.get_me` | Signing in and out, and who is signed in |
 | `POST /auth/tokens/inspect`, `POST /auth/password-reset` | `auth.inspect_link_token`, `auth.reset_password_with_link` | A link already sent: reading it, and setting a new password with a reset link; without them, someone who lost the password could never reach the block page, the account deletion or the backup |
 | `DELETE /auth/users/me`, `GET /auth/users/me/deletion-preview` | `auth.delete_own_account`, `auth.preview_own_account_deletion` | Deleting one's own account, and seeing first what it would delete; the block page has no button for it yet |
-| `POST /backup/instance`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete. On a blocked instance the data can still be taken away, from the backup card of the block page (`backup_available` of `GET /system/block`, below) |
+| `POST /backup/instance`, `GET /backup/instance/options`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_options`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete. On a blocked instance the data can still be taken away, from the backup card of the block page (`backup_available` of `GET /system/block`, below). `GET /backup/instance/options` gives the rules of a secure backup's password ([Secure Backups](#secure-backups)), so that the card of a blocked instance can offer a secure backup too |
 | `POST /backup/panel/jobs`, `GET /backup/panel/jobs/{job_id}`, `GET /backup/panel/jobs/{job_id}/file`, `DELETE /backup/panel/jobs/{job_id}` | `backup_panel.start_panel_backup`, `backup_panel.get_panel_backup_job`, `backup_panel.download_panel_backup`, `backup_panel.delete_panel_backup_job` | The same, for the hosting panel, with its token (`require_panel_token`) instead of a session: the provider hands the data back |
 | `GET /backup/restore/outcome` | `backup_restore.get_restore_outcome` | The outcome of a restore, for the page that asked its restart, with the one-time ticket of that request instead of a session ([The Outcome Ticket](#backup-restore-outcome)): a restart that came back blocked reads `pending`, `waiting: "instance_blocked"`. It starts nothing |
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
@@ -972,7 +1268,7 @@ valid session gets these answers:
 | Routes | Not blocked | Blocked |
 |--------|-------------|---------|
 | Protected routes outside the list | `401` | The same `401` |
-| Public routes outside the list: `POST /auth/register`, `POST /auth/setup` (the [initial administrator](access_control.md#initial-admin): a blocked instance stays blocked until the subscription is paid, P16), `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
+| Public routes outside the list: `POST /auth/register`, `POST /auth/setup` (the [initial administrator](access_control.md#initial-admin): a blocked instance stays blocked until the subscription is paid, P16), `POST /email/verification/confirm` ([spends a verification link](../backend/email.md#api-verification-confirm)), `POST /email/verification/resend` ([sends the verification email again](../backend/email.md#api-verification-resend), with the sign-in's credentials instead of a session), `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
 | The routes of the list | Their usual answer | The same answer |
 
 - The protected routes and the routes of the list do not reveal the block: `/system/instance`,
@@ -1257,8 +1553,10 @@ a difference is a warning (`control_totals_changed`), never a refusal, since a m
 totals, like the snapshot's at the backup, come from J's `compute_control_totals()` on an engine of their own over an
 immutable, read-only connection (`mode=ro&immutable=1`), because every engine of the process sets the journal mode when
 it connects (`set_sqlite_pragma`, `db/session.py`), which a plain read-only connection to a rollback-journal file
-refuses; the amounts the manifest recorded must be plain decimal text, at most 60 digits on each side of the point,
-before J reads them, since an exponent would be expanded in full.
+refuses. The totals the manifest recorded go as they are to J's `ControlTotals.from_json()`, which reads an amount only
+as plain decimal text, at most 60 digits on each side of the point, and refuses any other before reading it (J-27): an
+exponent an archive recorded is never expanded, and the comparison is then `absent`. The rule has one home, J's:
+`compare_totals()` does not repeat it (B-22).
 
 ### 🔐 The Routes {: #backup-restore-routes }
 
@@ -1269,7 +1567,7 @@ only one in `ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error
 
 | Route | What it does |
 |-------|--------------|
-| `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2) |
+| `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2); the password of a secure backup comes with `POST /backup/restore/stage`, tried in the request ([Secure Backups](#secure-backups)) |
 | `DELETE /backup/restore/stage/{stage_id}` | Drops an ended check and its copy; `409` `restore_pending` for the copy of a restore not finished yet |
 | `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable` |
 | `GET /backup/restore/status` | `RestoreStatus`: its `state` is `none`, `pending`, `in_progress` (`applying`, `applied` or `rolling_back`), `committed` or `rolled_back`, with `reason`, and `waiting` (`backup_running`, `other_data_directory`, `server_running` or `instance_blocked`) on a restore a start left waiting |
@@ -1279,7 +1577,10 @@ only one in `ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error
 
 Every `RestoreStatus` carries `upload_limit_mb`, the largest archive `PUT /backup/restore/upload` accepts at the time of
 the answer, in megabytes: `0` for no limit, `null` when the limit cannot be read (the upload then answers `503`
-`backup_upload_unavailable`, and an error naming the variable is logged).
+`backup_upload_unavailable`, and an error naming the variable is logged). It cannot be read when
+`LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is not a whole number (`BackupConfigError`), or when `ENVIRONMENT_PROFILE_DEFAULTS`
+gives the active profile a value of the wrong type for it (`ProfileDefaultError`, [Settings](settings.md); B-21):
+`_upload_limit()` and `_readable_limit_mb()` in `restore.py` treat the two alike, so the status still answers `200`.
 
 On the server, `./dev.py backup restore ARCHIVE` confirms as `cli`, once the word `restore` is typed at a terminal or
 with `--yes`, and `./dev.py backup pending [--cancel]` shows the restore, or drops it with its copy. The command prints
@@ -1678,6 +1979,18 @@ hand into a query string. `mask_query_credentials()` holds the rule. One mode is
 `--log-level trace`, which LibreFolio never passes, logs every ASGI message on `uvicorn.asgi`, headers included. It is
 a debugging mode, not meant for a server with real users.
 
+Nor does the log keep a response that breaks its model (lot H-33, from workstream E's security review R13-SEC4). When
+an endpoint returns what its `response_model` refuses, FastAPI raises `ResponseValidationError`, for which it registers
+no handler: the exception used to go on to uvicorn, which logged it on `uvicorn.error` (*Exception in ASGI application*)
+with its traceback, whose message, `str(exc)`, lists every error with its `input`: the response itself, the data of the
+user who asked. Now `install_response_validation_handler(app)` (`backend/app/api/response_validation.py`) handles it,
+for every route, and logs one ERROR, *A response does not match its model*, with the method, the route (its path
+template), the endpoint and, for each error, its `type` and `loc` only: never the `input`, never the `msg` (a validator
+may build it from the value), never the traceback (its message is `str(exc)`). The answer does not change:
+`500 Internal Server Error` in plain text, with the [security headers](#response-headers). It is now the handler's own
+answer, which crosses the middleware stack like any other, and the exception stops there. Tests:
+`./dev.py test services response-validation` (`backend/test_scripts/test_services/test_response_validation.py`).
+
 ## 🤐 Validation Errors Without the Input {: #validation-errors }
 
 FastAPI answers a request that fails validation (`RequestValidationError`) with `422` and one error per problem, each
@@ -1719,6 +2032,9 @@ in the answer; the shape a plain `422` keeps, and the OpenAPI schema. Its sectio
 handler (the premise) and a `422` that a strict JSON parser reads with it, 20 cases; on the lane, `1E+400` and `NaN` as
 the amount of `POST /api/v1/fx/currencies/convert`, a `Decimal`, refused before the route runs, signed in as an account
 of the test's own.
+
+A `422` never sends the request's input back; a `500` from a response that breaks its model never writes the response
+to the log: see [Request Logs](#request-logs).
 
 ## 🏷️ Response Headers {: #response-headers }
 
@@ -1823,7 +2139,8 @@ CORS preflight or a 500; the policy read directive by directive, each directive 
 route's own header kept alone and the others added; the switches read when the middleware is built, never per request)
 and `./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`:
 the type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
-`mime.types` file). The switches' values per profile are tested with the profile defaults,
+`mime.types` file; no hidden file of either tree is sampled, since no route serves one,
+see [Server Startup](overview.md#server-startup)). The switches' values per profile are tested with the profile defaults,
 `./dev.py test services profile-defaults` (see [Settings System](settings.md)).
 
 ## 🌐 HTTPS & Deployment Architecture

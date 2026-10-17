@@ -23,8 +23,10 @@ Three checks:
     requested from a fresh app's static site at the three places that serve files: the SPA catch-all, the ``/_app``
     mount and ``/mkdocs``.
 (b) Every extension present in ``frontend/build/`` and ``mkdocs_src/site/``; a tree that is not there (no ``index.html``,
-    so the app serves none of it) is skipped, and says so. One file of each extension, the smallest, is requested from a
-    fresh app's static site over the real trees, and its body checked against the file before its type is judged. The
+    so the app serves none of it) is skipped, and says so; no hidden file of either tree (a part of its path starting
+    with ``.``) is sampled, since no route serves one: the catch-all answers the SPA fallback (H-28), the ``/_app``
+    mount and ``/mkdocs`` a 404 (H-29). One file of each extension, the smallest, is requested from a fresh app's
+    static site over the real trees, and its body checked against the file before its type is judged. The
     extension of a compressed file keeps the suffix before it (``.xml.gz``): ``mimetypes`` types it by that one. The
     table of the extensions, their files and their types is printed in the test's output, whatever the verdict.
 (c) The same extensions on a machine without any ``mime.types`` file, as the ``python:3.13-slim`` image the app ships in,
@@ -240,6 +242,11 @@ def samples_of(tree_key: str) -> tuple[Sample, ...]:
             continue
         relative = path.relative_to(tree.root).as_posix()
         if tree.url_prefix == "/" and relative.startswith(CATCH_ALL_REFUSES):
+            continue
+        # Nor does any route serve a hidden file, one with a part of its path starting with ``.`` (``.build-debug``, a
+        # Finder ``.DS_Store``), in either tree: the catch-all answers the SPA fallback (H-28), the ``/_app`` mount and
+        # ``/mkdocs`` a 404 (H-29).
+        if any(part.startswith(".") for part in relative.split("/")):
             continue
         groups.setdefault(extension_of(path.name), []).append((path.stat().st_size, relative, path))
     samples = []

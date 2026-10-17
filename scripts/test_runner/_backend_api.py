@@ -333,6 +333,22 @@ def api_backup_restore_apply(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Backup API restore confirmation tests", verbose=verbose)
 
 
+def api_backup_secure(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the secure backup through the API (lot B4): a password at the creation, the options, and the check of an envelope."""
+    print_section("Backup API: the secure backup")
+    print_info("Testing: POST /backup/instance with a password, GET /backup/instance/options, PUT /backup/restore/upload (kind), POST /backup/restore/stage with a password; no echo of a password")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_secure_api.py", test_names)
+    return run_command(cmd, "Backup API secure backup tests", verbose=verbose)
+
+
+def api_no_echo_route(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the route class whose 422 never repeats the body, shared by the routes that receive a secret."""
+    print_section("API: 422 without echo")
+    print_info("Testing: backend/app/api/no_echo.py (NoInputEchoRoute), on an app of the test; the routers that use it")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_no_echo_route.py", test_names)
+    return run_command(cmd, "422 without echo tests", verbose=verbose)
+
+
 def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
     """Run Transactions API endpoint tests."""
     print_section("Transactions API Endpoint Tests")
@@ -815,7 +831,7 @@ def api_email_verification_hooks(verbose: bool = False, test_names: list[str] | 
 def api_email_change_notice(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the tests of the email-change notice that A's PUT /auth/profile schedules (lot E4b, on A6e), in-process."""
     print_section("Email Change Notice API Tests")
-    print_info("Testing PUT /auth/profile: an accepted email change answers as before (200, a new session cookie), then emails the old address with the new one masked; nothing without a change of mailbox, on a refused change or with email off (an info line)")
+    print_info("Testing PUT /auth/profile: an accepted email change answers as before (200, a new session cookie), then emails the old address, with nothing of the new address nor the username; nothing without a change of mailbox, on a refused change or with email off (an info line)")
     print_info("In-process: the real auth router on a private SQLite, SMTP variables by monkeypatch, a fake SMTP server on 127.0.0.1; the lane's backend is never called")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_email_change_notice_api.py", test_names)
@@ -1041,6 +1057,25 @@ Tests for REST API endpoints (server auto-started):
     )
     add_test(
         api,
+        "backup-secure",
+        api_backup_secure,
+        name="Backup API Secure Backup",
+        desc="The secure backup through the API (lot B4): GET /backup/instance/options (the archive rules, admins only); POST /backup/instance with a password (password_too_weak 400 with its rules and no job; an .lfbk, encrypted; no body, {} or null a zip; a 422 never echoing the password); the panel never encrypting; PUT /backup/restore/upload kind; POST /backup/restore/stage with a password (password_required, wrong_password 400 keeping the upload, envelope_damaged 400, envelope_unsupported 409, a zip ignoring it); the report's encrypted and secret counts",
+        # Write-scoped (the category default): SECURE-001 to 005 start real backups on the lane's server, as an
+        # administrator the module registers and deletes; the others run in an app of the test under tmp_path.
+        exclusive_because="starts real backups on the lane's server, which hold its one backup run lock: api backup, run beside it, would meet 409 backup_busy",
+    )
+    add_test(
+        api,
+        "no-echo-route",
+        api_no_echo_route,
+        name="422 Without Echo",
+        desc="NoInputEchoRoute (api/no_echo.py): a 422 keeps type, loc, msg and ctx and never repeats the body (a missing field, an extra field, a value too long, beside a password); a valid body and an HTTPException pass unchanged; the plugin settings' router and the backup routers that receive a password use the one shared class",
+        # PURE: an app of the test, in this process; the routers are only imported. No DB, no server reached.
+        isolation="pure",
+    )
+    add_test(
+        api,
         "backup-restore-apply",
         api_backup_restore_apply,
         name="Backup API Restore Confirmation",
@@ -1161,7 +1196,7 @@ Tests for REST API endpoints (server auto-started):
         "email-verification",
         api_email_verification,
         name="Email Verification API",
-        desc="POST /email/verification/confirm (anonymous, no cookie set: 200 {username} and the account signs in; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, the hold refused as revoked and left live, a link emailed to another address revoked; 422 body) and POST /email/verification/resend (anonymous: 200 {language} and the verification email; 401 and 403 byte for byte the login's; 409 NOT_NEEDED, EMAIL_UNAVAILABLE and EMAIL_LINKS_UNAVAILABLE without problem, USER_LIMIT_REACHED; 429 with Retry-After per address before the password, per account, per recipient mailbox, budget; 502 then resend at once; 422; an IPv6 /64 is one client, no address no count; accounts before the configuration); no token, password, identifier or address in the logs",
+        desc="POST /email/verification/confirm (anonymous, no cookie set: 200 {username} and the account signs in; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, the hold refused as revoked and left live, a link emailed to another address revoked; 422 body) and POST /email/verification/resend (anonymous: 200 {language} and the verification email; 401 INVALID_CREDENTIALS (coded: any other 401 is the block's) and 403 byte for byte the login's; 409 NOT_NEEDED, EMAIL_UNAVAILABLE and EMAIL_LINKS_UNAVAILABLE without problem, USER_LIMIT_REACHED; 429 with Retry-After per address before the password, per account, per recipient mailbox, budget; 502 then resend at once; 422; an IPv6 /64 is one client, no address no count; accounts before the configuration); no token, password, identifier or address in the logs",
         # PURE: the real auth and email routers run in-process on a private SQLite file under tmp_path, the SMTP, public URL,
         # block and user-limit variables are set with monkeypatch in this process, the limiters are private on a fake clock
         # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
@@ -1183,7 +1218,7 @@ Tests for REST API endpoints (server auto-started):
         "email-change-notice",
         api_email_change_notice,
         name="Email Change Notice API",
-        desc="PUT /auth/profile (lot E4b, on A6e): an email change with the right current password answers as before (200, the new address, a new session cookie that signs in), then emails the old address only, in the account's language, the new one masked (***@domain), one budget unit; the work queued once, after the complete answer, with the account's id, both addresses and the request's own engine; nothing for a username-only change, the stored address sent again, an empty body or the same mailbox in other letters; email off: the same answer and an info line; a refused change (no or wrong current password, the address taken) sends nothing; the old address refused by the SMTP server: the answer unchanged and a warning; past 3 notices in the hour for the account, the change still answers 200 with a new cookie and no notice goes; E's log lines name neither address",
+        desc="PUT /auth/profile (lot E4b, on A6e): an email change with the right current password answers as before (200, the new address, a new session cookie that signs in), then emails the old address only, in the account's language, with nothing of the new address nor the username, one budget unit; the work queued once, after the complete answer, with the account's id, both addresses and the request's own engine; nothing for a username-only change, the stored address sent again, an empty body or the same mailbox in other letters; email off: the same answer and an info line; a refused change (no or wrong current password, the address taken) sends nothing; the old address refused by the SMTP server: the answer unchanged and a warning; past 3 notices in the hour for the account, the change still answers 200 with a new cookie and no notice goes; E's log lines name neither address",
         # PURE: the real auth router runs in-process on a private SQLite file under tmp_path, the SMTP variables are set with
         # monkeypatch in this process, the hourly budget is private on a fake clock and the fake SMTP server listens on
         # 127.0.0.1: the lane's backend is never called.

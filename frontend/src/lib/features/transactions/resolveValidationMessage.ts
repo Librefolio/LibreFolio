@@ -55,10 +55,11 @@ const FIELD_ERROR_OVERRIDES: Record<string, string> = {
 };
 
 /**
- * Codes about one field's value whose text names no field (C-97: a value over its column's limit, `params.max`):
- * the translated field label goes in front, e.g. "Quantity: At most 10 decimal places".
+ * Codes about one field's value whose text names no field (C-97: a value over its column's limit, `params.max`; the
+ * digits before the decimal point since W-B58): the translated field label goes in front, e.g. "Quantity: At most 10
+ * decimal places".
  */
-const FIELD_PREFIXED_CODES = new Set(['decimalPlacesExceeded', 'significantDigitsExceeded']);
+const FIELD_PREFIXED_CODES = new Set(['decimalPlacesExceeded', 'significantDigitsExceeded', 'integerDigitsExceeded']);
 
 /** Minimal broker shape needed for resolution. */
 interface BrokerLike {

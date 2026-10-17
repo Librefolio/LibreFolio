@@ -751,8 +751,30 @@ def _timed_run(args, body):
             print(note)
 
 
+def _refused_test_names(args) -> str | None:
+    """Why the test names on this command line are refused, or ``None`` when nothing is (H-26).
+
+    An action registered with ``test_names=False`` (every ``all``, ``db create`` and ``db populate``, the Vitest units)
+    has nothing to hand them to: it used to drop them in silence and run whole. Both entries check this first, so a
+    refused command archives no log, opens no campaign and runs nothing, ``--list`` included.
+    """
+    names = getattr(args, "test_names", None)
+    category, action = getattr(args, "category", None), getattr(args, "action", None)
+    entry = TEST_REGISTRY.get(category, {}).get(action) if names else None
+    if not entry or entry.get("test_names", False):
+        return None
+    given = " ".join(names)
+    if action == "all":
+        return f"{category} all takes no test names (got: {given}): name the action — dev.py test {category} <action> {given}. The actions: dev.py test {category} --help"
+    return f"{category} {action} takes no test names (got: {given}): it runs whole, drop them. The actions that take names: dev.py test {category} --help"
+
+
 def _dispatch_test_command(args):
     """Dispatch test command from dev.py, optionally teeing the full log to a file."""
+    refusal = _refused_test_names(args)
+    if refusal:
+        print_error(refusal)
+        return 2
     log_file = getattr(args, "log_file", None)
     if log_file:
         with _common.tee_output(log_file):
@@ -1254,14 +1276,20 @@ def main():
 
     argcomplete.autocomplete(parser)
     args = parser.parse_args(normalize_coverage_argv(sys.argv[1:]))
+    refusal = _refused_test_names(args)
+    if refusal:
+        print_error(refusal)
+        return 2
 
     log_file = getattr(args, "log_file", None)
     if log_file:
         with _common.tee_output(log_file):
             print_info(f"📝 Full run log → {log_file}")
             _activate_log_dir(args)
-            rc = _timed_run(args, lambda: _main_body(parser, args))
-            _snapshot_log_dir_db()
+            try:
+                rc = _timed_run(args, lambda: _main_body(parser, args))
+            finally:
+                _snapshot_log_dir_db()
             print_info(f"📝 Full run log saved to {log_file}")
         return rc
     _activate_log_dir(args)

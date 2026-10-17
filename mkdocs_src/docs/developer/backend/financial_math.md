@@ -76,6 +76,7 @@ backend/app/services/financial_math/
     ├── conversions.py       FxRateResolver, a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
     ├── histories.py         value, return, price and performance histories
+    ├── summary.py           a lot's figures: the cost of its open quantity, value and P&L by direction, the lot summary
     └── average_cost_lines.py  per-broker and cumulative WAC history points
 ```
 
@@ -114,7 +115,7 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
 6. runs `DailyStateBuilder` (`daily_state.py`) and stores its result in the cache.
 
 `position_states_start` holds the positions at the end of `calculate(period_start=…)` — the caller's period start, while
-the replay runs from `date_from` (t=0 for the Dashboard) — or of the first frame day when it is not named.
+the daily states run from `date_from` (t=0 for the Dashboard) — or of `date_from` when it is not named.
 `internal_asset_transfers` lists each linked TRANSFER of a security between two brokers of the scope, with its value on
 arrival and the cost the sender moved: the Performance table's transfer split (`contributions.py`, developer decision P22).
 
@@ -124,11 +125,16 @@ data-quality report with `build_data_quality_report()` (`data_quality.py`).
 
 #### 📅 The Days the Engine Recomputes {: #recomputed-days }
 
-`DailyStateBuilder.build()` emits one `DailyPortfolioState` for every day of the frame,
-`[frame_start, date_to]`, but evaluates only its **dirty** days: any other day gets a copy of the
-previous state, dated that day, with no external flow and no acquisition funding. The rule is
-developer decision 28 of release 1.3, «recompute whenever a term of the formula changes». A frame
-day is dirty when it has:
+`DailyStateBuilder.build()` runs one replay, with the same rules every day, from the earliest
+movement (or `date_from`, when it is earlier) to `date_to`: a movement dated before `date_from`
+moves the cash, the quantities, the cost pools, the capital and the K/R/W pools like any other —
+the pool rules of a cash movement that reduces no position are one static method,
+`_apply_pool_rule()`. It emits one `DailyPortfolioState` for every day of `[date_from, date_to]`,
+so a later `date_from` gets for its days exactly the states of the full replay. It evaluates only
+the **dirty** days, which `_collect_dirty_days()` lists: any other day carries the previous state
+(`dataclasses.replace()`, its containers copied), dated that day, with no external flow and no
+acquisition funding. The rule is developer decision 28 of release 1.3, «recompute whenever a term
+of the formula changes». A replayed day is dirty when it has:
 
 - a cash movement, a transaction that moves a quantity, an external flow, or an internal flow
   between two brokers;
@@ -146,7 +152,7 @@ day is dirty when it has:
   that moves a quantity — plus `STALE_PRICE_THRESHOLD_DAYS` + 1, since a price is stale when it
   is carried more than `STALE_PRICE_THRESHOLD_DAYS` days;
 - a split;
-- or it is `frame_start`, or `period_start` when it falls in the frame.
+- or it is the first replayed day, `date_from`, or `period_start` when it falls in the replay.
 
 Both rate rules take their days from one pure function, the one home of «the day a rate changes»:
 `native_cash.change_days(read, currencies, days)` returns the days of the calendar `days`, in its
@@ -154,10 +160,12 @@ order, on which `read(currency, day)` gives one of `currencies` another rate tha
 calendar's previous day; a rate on the calendar's first day counts. The caller chooses the reading
 and the calendar. The native cash reads the last rate known on or before the day, on the calendar
 of its rate points. The engine reads the rate `fx_rate_map` holds for that exact day
-(`_read_rate()`), on every day of the frame — or of the transit, for cash in transit — each
+(`_read_rate()`), on every replayed day — or day of the transit, for cash in transit — each
 compared with the day before (`_calendar()` starts one day early). `_read_rate()` reads only the
-map, which `_preload_fx_rates()` already fills for these currencies on every day of the range, and
-for cash in transit on every day of its transit: the rule asks the FX service for nothing more.
+map, which `_preload_fx_rates()` already fills for these currencies on every day of
+`[date_from, date_to]` (a day replayed before a later `date_from` may find none there, and its
+state is not emitted), and for cash in transit on every day of its transit: the rule asks the FX
+service for nothing more.
 
 When you add an input that can change a day's value — a rate, a price, a mark's source, an age —
 add its days to the dirty days, or show that the day cannot change.

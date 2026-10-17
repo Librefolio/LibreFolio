@@ -7,7 +7,9 @@ The defect (``DailyStateBuilder.build``, frame loop, @ 63e0374a3). The frame eva
 days only and copies the previous state on every other day. A day is dirty for its cash deltas, its
 position transactions, the external and internal flows, the rate-change days of foreign CASH
 (``NativeCash.rate_change_days``), the in-transit edges, a market close different from the previous
-close, the splits and ``frame_start``. But a day also reads, at its own date:
+close, the splits and ``frame_start`` (J1: one replay from the first movement, states from
+``date_from``; that last seed is now the first replayed day, ``date_from`` and the period's start).
+But a day also reads, at its own date:
 
 - the exact-day rate of a security's currency in ``fx_rate_map`` (``_market_value_for``; the fx part
   of ``_add_unrealized_part``);

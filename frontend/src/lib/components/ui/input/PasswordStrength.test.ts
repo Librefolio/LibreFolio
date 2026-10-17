@@ -94,7 +94,7 @@
  * action `component-unit`).
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {tick} from 'svelte';
+import {tick, type ComponentProps} from 'svelte';
 import {readable} from 'svelte/store';
 import type {InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {cleanup, render, screen, within} from '$test/component';
@@ -463,5 +463,140 @@ describe('PasswordStrength — the min-length label names the length the rule as
         expect(rules.map(keyOf), 'premise: the five rows are drawn').toEqual([...RULE_KEYS]);
 
         for (const rule of rules) expect(rule, keyOf(rule)).toHaveTextContent(`auth.passwordStrength.rules.${keyOf(rule)}`);
+    });
+});
+
+// =====================================================================================================================
+// B4 — the rules a parent gives: the prop `rules` (workstream B, lot B4; written red first)
+// =====================================================================================================================
+
+/*
+ * The «secure» backup asks for a password that follows the registration rules with at least twelve characters
+ * (developer decision P12). The server publishes those rules in `GET /backup/instance/options`, and the backup card
+ * hands them to this meter. The contract (B4 brief §7): an optional prop `rules?: PasswordRule[]`; when given, the
+ * checklist and `valid` follow those rules instead of `instanceConfig`'s; without it, exactly today's behaviour.
+ *
+ * What this block holds the meter to — red today, because the meter has no such prop and reads the instance's rules
+ * whatever it is given, unless said otherwise:
+ *   - given rules, the checklist is theirs: their rows, in their order, the min-length label naming their length;
+ *   - `valid` asks those rules, both ways: eleven characters fail a rule of twelve where the instance asks only eight,
+ *     and twelve meet it where the instance asks sixteen;
+ *   - an answer of the instance landing under a meter given rules changes nothing;
+ *   - rules that change under a mounted meter — the options' answer landing — are followed without a remount;
+ *   - a code this build does not know, among the rules given, draws no row and never makes `valid` false, as with the
+ *     instance's rules (the server checks it);
+ *   - `rules: undefined`, what a parent passes while its rules are on their way, is today's meter: the guard of
+ *     «without it, exactly today's behaviour», green today and to stay so.
+ *
+ * The prop does not exist yet: the props are cast once, in `rulesProp()` and `mountWithRules()`, so the type check does
+ * not wait for it.
+ */
+
+type MeterProps = ComponentProps<typeof PasswordStrength>;
+
+/** The rules of a secure archive, as `GET /backup/instance/options` answers them while A's minimum is eight (B4 §2, §4). */
+const ARCHIVE_RULES: RuleAnswer[] = withMinLength(12);
+
+/** `{rules}` as the meter takes it (B4 §7). */
+const rulesProp = (rules: RuleAnswer[] | undefined): Partial<MeterProps> => ({rules}) as unknown as Partial<MeterProps>;
+
+/** Mounts the meter with `rules` and `valid` bound, as `mountBound` binds it; `start` is the opposite of what the case expects. */
+function mountWithRules(password: string, rules: RuleAnswer[] | undefined, start: boolean) {
+    const bound = {value: start};
+    const props = {
+        password,
+        rules,
+        get valid(): boolean {
+            return bound.value;
+        },
+        set valid(next: boolean) {
+            bound.value = next;
+        },
+    };
+    const utils = render(PasswordStrength, {props: props as unknown as MeterProps});
+    return {...utils, bound};
+}
+
+describe('B4 — PasswordStrength given rules: the checklist and valid follow them, not the instance (rules prop)', () => {
+    it('draws the rules it is given, in their order, and names their length: min_length 12 as the ICU value of the label', () => {
+        // The instance's rules are the defaults here (beforeEach): eight characters.
+        mountWithRules(TWELVE, ARCHIVE_RULES, false);
+
+        expect(rulesDrawn().map(keyOf)).toEqual([...RULE_KEYS]);
+        expect(screen.getByTestId('password-rule-minLength')).toHaveTextContent('auth.passwordStrength.rules.minLength {"value":12}');
+    });
+
+    it.each<[string, RuleAnswer[] | null, string, boolean]>([
+        ['eleven characters of every class, the instance asking eight: the rule of twelve fails', null, ALL_RULES, false],
+        ['twelve characters of every class, the instance asking sixteen: the rule of twelve holds', withMinLength(16), TWELVE, true],
+    ])("valid follows the rules given, not the instance's — %s", (_label, served, password, met) => {
+        if (served !== null) answer(served);
+        const {bound} = mountWithRules(password, ARCHIVE_RULES, !met);
+
+        expect(rulesPassed()).toEqual(states({minLength: met, hasUppercase: true, hasLowercase: true, hasNumber: true, hasSpecial: true}));
+        expect(bound.value, 'valid, written by the meter').toBe(met);
+    });
+
+    it("draws only the rules given, in their order, and valid asks only those — whatever the instance's five say", () => {
+        answer(FIVE);
+        // Twelve characters, lower case and a digit: enough for the two rules given, not for the instance's five.
+        const {bound} = mountWithRules('abcdefghijk1', [{code: 'digit'}, {code: 'min_length', value: 12}], false);
+
+        expect(rulesDrawn().map(keyOf)).toEqual(['hasNumber', 'minLength']);
+        expect(rulesPassed()).toEqual({hasNumber: 'true', minLength: 'true'});
+        expect(bound.value, 'valid, written by the meter').toBe(true);
+    });
+
+    it("an answer of the instance landing under a meter given rules changes nothing: the checklist, its label and valid stay the given rules'", async () => {
+        const {bound} = mountWithRules(TWELVE, ARCHIVE_RULES, false);
+        expect(bound.value, 'premise: twelve characters of every class meet the rules given').toBe(true);
+
+        answer(withMinLength(16));
+        await tick();
+
+        expect(screen.getByTestId('password-rule-minLength'), 'the instance now asks sixteen: not the rule of this meter').toHaveAttribute('data-passed', 'true');
+        expect(screen.getByTestId('password-rule-minLength')).toHaveTextContent('auth.passwordStrength.rules.minLength {"value":12}');
+        expect(bound.value).toBe(true);
+    });
+
+    it('follows rules that change under a mounted meter — the answer of the options landing —, the checklist and valid, both ways, without a remount', async () => {
+        const {bound, rerender} = mountWithRules(ALL_RULES, withMinLength(10), false);
+        expect(screen.getByTestId('password-rule-minLength'), 'ten asked: eleven characters are enough').toHaveAttribute('data-passed', 'true');
+        expect(bound.value).toBe(true);
+
+        await rerender(rulesProp(ARCHIVE_RULES));
+
+        expect(screen.getByTestId('password-rule-minLength'), 'twelve asked').toHaveAttribute('data-passed', 'false');
+        expect(screen.getByTestId('password-rule-minLength')).toHaveTextContent('auth.passwordStrength.rules.minLength {"value":12}');
+        expect(bound.value).toBe(false);
+
+        await rerender(rulesProp(withMinLength(11)));
+
+        expect(screen.getByTestId('password-rule-minLength'), 'eleven asked').toHaveAttribute('data-passed', 'true');
+        expect(bound.value).toBe(true);
+    });
+
+    it('draws no row for a code it does not know among the rules given, and never lets that code make valid false', () => {
+        // Twelve characters in lower case: the one rule this build knows holds; the other is the server's to check.
+        const {bound} = mountWithRules(
+            'abcdefghijkl',
+            [
+                {code: 'min_length', value: 12},
+                {code: 'not_in_this_build', value: 3},
+            ],
+            false,
+        );
+
+        expect(rulesDrawn().map(keyOf), 'the one rule this build knows').toEqual(['minLength']);
+        expect(bound.value, 'valid, written by the meter').toBe(true);
+    });
+
+    it("rules: undefined — what a parent passes while its rules are on their way — is today's meter: the instance's rules (green today: the guard)", () => {
+        answer(withMinLength(12));
+        const {bound} = mountWithRules(ALL_RULES, undefined, true);
+
+        expect(rulesDrawn().map(keyOf)).toEqual([...RULE_KEYS]);
+        expect(screen.getByTestId('password-rule-minLength'), 'the instance asks twelve').toHaveAttribute('data-passed', 'false');
+        expect(bound.value, 'valid, written by the meter').toBe(false);
     });
 });
