@@ -201,7 +201,7 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
 |---|---|---|
 | Storage | **Typed columns** on the per-user `UserSettings` row | **Key-value rows** in the `GlobalSetting` table |
 | Who reads | The user themselves (`GET /api/v1/settings/user`) | Any signed-in user (`GET /api/v1/settings/global`, `GET /api/v1/settings/global/{key}`): `401` without a session. The login page reads none of them: what it needs before sign-in is in [`GET /system/instance`](#public-instance-configuration) |
-| Who writes | The user themselves (`PUT /api/v1/settings/user`) | Admins only (**Admin** tab of Settings, or `PATCH /api/v1/settings/global/bulk`) |
+| Who writes | The user themselves (`PUT /api/v1/settings/user`) | Admins only (**Global Settings** tab of Settings › Administration, or `PATCH /api/v1/settings/global/bulk`) |
 | Examples | `language`, `base_currency`, `theme`, `avatar_url` | `session_ttl_hours`, `registration_mode`, `scheduler_*`, `default_currency` … |
 
 The split is a deliberate design decision (P2-9), not an accident of history: per-user
@@ -210,8 +210,9 @@ while global settings are an open-ended key space that admins extend without mig
 `settings_service.py` (user + global CRUD) and `global_settings_service.py` (typed read helpers
 for global keys) stay separate services for the same reason.
 
-Admins manage global settings from the **Admin** tab of Settings (`GlobalSettingsTab.svelte`:
-lock-gated, with the scheduler dialogs and `CachePanel`, writing through the bulk-update endpoint).
+Admins manage global settings from the **Global Settings** tab of Settings › Administration
+(`GlobalSettingsTab.svelte`: lock-gated, with the scheduler dialogs and `CachePanel`, writing through
+the bulk-update endpoint).
 Missing rows are seeded at every startup by the `global-settings` step of the lifespan
 (`_initialize_global_settings()` in `backend/app/services/platform/app_lifespan.py`); the same
 idempotent seeding is available from the CLI:
@@ -240,8 +241,8 @@ How global values behave at runtime:
   days, at least one time and one day.
 - While its variable is set, a pinned row decides nothing and cannot be written:
   `GET /api/v1/settings/global` still returns the stored `registration_mode`, and the mode in force
-  is in `GET /system/instance` ([below](#public-instance-configuration)). The Admin tab shows that
-  one, read-only, and its **Reset All to Defaults** leaves the field alone
+  is in `GET /system/instance` ([below](#public-instance-configuration)). The Global Settings tab
+  shows that one, read-only, and its **Reset All to Defaults** leaves the field alone
   ([Settings components](../frontend/components/features/settings.md)).
 
 ## 📖 SETTINGS_REGISTRY — the single declaration point
@@ -266,10 +267,10 @@ The registry exposes two namespaces mirroring the storage models:
   `GLOBAL_SETTINGS_DEFAULTS`** so the defaults table stays the single source for both seeding
   and metadata.
 
-The global keys declared today, and where the **Admin** tab shows them
+The global keys declared today, and where the **Global Settings** tab shows them
 ([admin view](../../admin/settings.md)):
 
-| Key | Type | Default | In the Admin tab |
+| Key | Type | Default | In the Global Settings tab |
 |-----|------|---------|------------------|
 | `session_ttl_hours` | int | `24` | Session → **Session Duration** |
 | `registration_mode` | str | `invite` | Security → **Registration**: `open`, `invite` or `disabled` (`SettingConstraint(choices=…)`). `invite` since decision 36: a new install seeds it, an existing row is kept, and an install with accounts but no row gets `open` from migration `008_registration_invite_default`. The startup that creates the [initial administrator](access_control.md#initial-admin) writes `invite` too. Read-only while `LIBREFOLIO_REGISTRATION` is set: see [Registration Modes](access_control.md#registration-modes) |

@@ -453,9 +453,13 @@ address `rate_limit_address(http_request)` gives, and workstream E's «send the 
 The login page already turns any `429` of the sign-in into `auth.tooManyAttempts` (`loginErrorKey()` in
 `frontend/src/lib/stores/app/auth.ts`, see [LoginCard](../frontend/components/features/auth.md)), and the
 verification notice words the resend's `EMAIL_RATE_LIMITED` with the minutes to wait, as before
-(`resendFailureMessage()`, [In the Frontend](../backend/email.md#verification-frontend)). The password-change modal and
-the Profile tab have no text of their own for `TOO_MANY_ATTEMPTS` yet. The administrator's side is
-[Configuration](../../admin/configuration.md), section «Failed Sign-ins».
+(`resendFailureMessage()`, [In the Frontend](../backend/email.md#verification-frontend)). Since lot A8b (C11), the
+password-change modal and the Profile tab word it too, as `settings.tooManyPasswordAttempts` (*Too many wrong
+passwords: wait a few minutes and try again.*): the modal for a `429` whose `detail.error_code` is `TOO_MANY_ATTEMPTS`,
+keeping its three fields; the tab for that code, published as `data-error-code`, keeping the new address and the typed
+password ([ProfileTab](../frontend/components/features/settings.md#profiletab)). While the limit is off, the «Security»
+tab of Settings › Administration lists the warning of `accounts.login_limit` and counts it in its badge. The
+administrator's side is [Configuration](../../admin/configuration.md), section «Failed Sign-ins».
 
 Tests: `./dev.py test services login-throttle` (`backend/test_scripts/test_services/test_login_throttle.py`: the two
 limits on an injected clock, the A–Z key, the IPv6 /64, no address and no shared count of «no address», a refusal not
@@ -476,7 +480,9 @@ address its own failures locked refuses its direct requests but not those the pr
 `./dev.py test utils rate-window` (RWL-024: a locked identifier stays locked through 1,000 fresh ones, see
 [The Sliding-Window Limiter](../backend/email.md#testing)), and
 `./dev.py test api security-checks` (`test_api/test_security_checks_api.py`, on the lane's server, where
-`accounts.login_limit` is a `warning` since the lane runs with the limit off).
+`accounts.login_limit` is a `warning` since the lane runs with the limit off). The frontend's words for the limit:
+`./dev.py test front-utility component-unit` (`PasswordChangeModal.test.ts` and `tabs/ProfileTab.test.ts`, both under
+`frontend/src/lib/features/settings/`).
 
 ### 💻 Using curl
 
@@ -539,7 +545,7 @@ builds the `apikey` engine, and `_build_engine()` in `backend/app/services/asset
 then logs `web_link_finder: <error>; disabling` and returns no engine, so that search finds no links.
 Nor does a broken `LIBREFOLIO_SMTP_PASSWORD_FILE`: email is optional, so `email_config_state()` turns
 it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged at startup and shown to
-administrators in Settings › Email ([Email Service](../backend/email.md#config-state)).
+administrators in Settings › Administration › Email ([Email Service](../backend/email.md#config-state)).
 Nor does an unusable `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`: `backup_download_token()` in
 `backend/app/config/backup.py` reads it only when the hosting panel calls one of its routes, never at
 startup, so the server starts anyway. Besides the `SecretFileError` of a broken `_FILE`, it raises
@@ -939,7 +945,7 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 |-------|---------|
 | `check_id` | Stable id, such as `platform.jwt_secret` |
 | `severity` | `ok`, `info`, `warning` or `error` |
-| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 18 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). No page shows the `instance` and `auth` messages yet: the checks reach the log, and [`GET /security/checks`](#security-checks-endpoint) returns them for the «Security» tab of the admin settings, which does not exist yet |
+| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 18 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). The «Security» tab of Settings › Administration shows these messages, all three subsystems', from [`GET /security/checks`](#security-checks-endpoint) ([SecurityTab](../frontend/components/features/settings.md#securitytab)); the log has the English `summary` instead |
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
@@ -999,7 +1005,8 @@ At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
 Tests: `./dev.py test services config-audit` (the order of `CONFIG_CHECKS` included: the platform's checks, A's,
 then E's three); the stop on a `LIBREFOLIO_ADMIN_*` value is in `./dev.py test services admin-bootstrap`, the check
 `accounts.login_limit` and the stop on a `LIBREFOLIO_LOGIN_LIMIT` value in `./dev.py test services accounts-checks`.
-What the administrator sees and does is in [Configuration](../../admin/configuration.md), section «Startup Checks».
+What the administrator sees and does is in [Configuration](../../admin/configuration.md), section «Startup Checks»,
+and in the app in «Security» of [Global Settings](../../admin/settings.md).
 
 ### 🧩 Plugin Secrets Check {: #plugin-secrets-check }
 
@@ -1008,10 +1015,11 @@ What the administrator sees and does is in [Configuration](../../admin/configura
 lost `secrets/instance.key` generated again, data restored without its `secrets/`, another
 `LIBREFOLIO_INSTANCE_KEY`. It needs the database, and `CONFIG_CHECKS` run before the `database` step,
 so it cannot be one of them. `check_plugin_secrets(session) -> ConfigCheck` returns the `ConfigCheck`
-of `config_audit.py` all the same, so that the «Security» tab of the admin settings, which does not
-exist yet, can show it with the others; [`GET /security/checks`](#security-checks-endpoint) already
-returns it after them. Unlike the functions of `CONFIG_CHECKS`, it can raise, on a
-database error for one: the startup step below catches it.
+of `config_audit.py` all the same, so that the «Security» tab of Settings › Administration shows it
+with the others: [`GET /security/checks`](#security-checks-endpoint) returns it after them, and the tab
+links its finding to the Plugins tab ([SecurityTab](../frontend/components/features/settings.md#securitytab)).
+Unlike the functions of `CONFIG_CHECKS`, it can raise, on a database error for one: the startup step
+below catches it.
 
 It asks `plugin_secrets_key_status(session)` (`backend/app/services/plugin_settings/crypto.py`),
 which counts by `key_id`, without decrypting, the stored secrets of each scope that the current key
@@ -1058,9 +1066,11 @@ included, so that a page can show what is not:
 | `SecurityCheckRead` | `check_id`; `severity`, `ok`, `info`, `warning` or `error`; `i18n_key`; `detail`, the parameters of the message |
 
 An item never carries the English `summary`, which may name a host or a path (nor does
-[`GET /email/status`](../backend/email.md#api-status)), and never a secret value. The «Security» tab of the admin
-settings, which does not exist yet, is the page meant to read it. On a [blocked instance](#instance-block) the route is
-not on the allow-list: an administrator gets `423`.
+[`GET /email/status`](../backend/email.md#api-status)), and never a secret value. The «Security» tab of
+Settings › Administration reads it (lot A8b, [SecurityTab](../frontend/components/features/settings.md#securitytab)):
+once per page load, when an administrator first opens Settings, so that the tab's badge counts before the tab is
+opened, and again on «check again». On a [blocked instance](#instance-block) the route is not on the allow-list: an
+administrator gets `423`.
 
 Tests: `./dev.py test api login-throttle` (in-process: `401` and `403`, every check once, as `run_config_checks()` and
 `check_plugin_secrets()` evaluate them, `accounts.login_limit` `ok` with the limit on and a `warning` with `off`, no
@@ -1134,7 +1144,9 @@ more:
 - **It tells nothing new.** It reads the account's `is_superuser`, and the mode and whether
   `LIBREFOLIO_REGISTRATION` pins it, which `GET /system/instance` already publishes.
 
-The list of local hosts and the watcher:
+The «Security» tab of Settings › Administration lists the same warning among its findings, from the same
+`openRegistrationNoticeFor()`, whether or not the notice was closed
+([SecurityTab](../frontend/components/features/settings.md#securitytab)). The list of local hosts and the watcher:
 [Open-Registration Warning](../frontend/components/features/auth.md#open-registration-notice);
 administrator side: «The Open-Registration Warning» in [Global Settings](../../admin/settings.md).
 
@@ -1327,9 +1339,9 @@ backup of the instance: the user's `is_superuser`, so `true` for administrators 
 block page (`frontend/src/lib/features/instance/components/InstanceBlockedPage.svelte`) checks again
 that `billing_url` is an `http(s)` address, then shows an administrator a **Manage subscription** link
 to it, opened in a new tab (`rel="noopener noreferrer"`). When `backup_available` is `true`, and only
-then, it shows the backup card of **Settings › Backup** under the block message: the card's four
-`backup_instance` routes are on the list above, and nothing else on the server changes for it (see
-[Instance block](../frontend/state/app-state.md#instance-block)). A workstream that owns part of the
+then, it shows the backup card of **Settings › Administration › Backup** under the block message: the
+card's four `backup_instance` routes are on the list above, and nothing else on the server changes for
+it (see [Instance block](../frontend/state/app-state.md#instance-block)). A workstream that owns part of the
 block page adds one field there and fills it in `block.py` with one call to its service.
 
 **Changing the list.** The list is short on purpose. The two link endpoints joined it for someone who

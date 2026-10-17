@@ -355,6 +355,11 @@ Right after its `Starting LibreFolio` line, the server checks its configuration.
 each finding is one line of the log, at its level, with the name of the check in `check`, such as
 `platform.jwt_secret`.
 
+The same checks, on demand, are in the **Security** tab of **Settings › Administration**, for
+administrators: worded in the language of the app, errors and warnings counted by a number on the
+tab, and read again with **Check again** once you have fixed the configuration and restarted (see
+«Security» in [Global Settings](settings.md)).
+
 | Level | The log says | What to do |
 | --- | --- | --- |
 | ℹ️ `info` | `JWT_SECRET is not set: every start makes a new session signing key, …` | Nothing, if signing everyone out at every restart is fine. Otherwise see [Keep users signed in](index.md#session-persistence). |
@@ -464,8 +469,8 @@ instance.
 | --- | --- | --- |
 | `LIBREFOLIO_REGISTRATION` | _not set_ | Who may create an account: `open` (anyone), `invite` (only with an invitation link) or `disabled` (nobody). Not set: the **Registration** global setting decides, **By invitation** on a new instance unless an administrator changed it (an instance upgraded from an earlier version keeps the mode it had). Set: this value wins, and the global setting cannot be changed from the app. Case and spaces around the value do not matter. Whatever the value, the first account of a new instance can be created from the login page, with **Register here**, and becomes the administrator: see [Who Can Sign Up](settings.md#registration). With `LIBREFOLIO_ADMIN_EMAIL`, LibreFolio creates that administrator itself instead: see [The Initial Administrator](#initial-admin). Set to `open`, it also gives the administrators who open the app at an address outside the local network a warning that names this variable: see [The Open-Registration Warning](settings.md#open-registration-warning). |
 | `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires, each account waiting for its email verification while its link is live, and the [initial administrator](#initial-admin) while it waits for its setup; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
-| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation, password-reset and setup links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link, setup link or forgotten-password email goes out ([Email](email.md)). An address that holds a user name or a password is refused, and LibreFolio then works as it does without it. |
-| `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. Only administrators see it, as **Manage subscription**: in the [Users](users.md) tab of Settings, next to the count of places taken and in the banner shown when the instance is full, and on the block page of a [blocked instance](hosting_providers.md#instance-block). Not set: no such link. An address that holds a user name or a password is refused: no such link either. |
+| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings › Administration, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation, password-reset and setup links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link, setup link or forgotten-password email goes out ([Email](email.md)). An address that holds a user name or a password is refused, and LibreFolio then works as it does without it. |
+| `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. Only administrators see it, as **Manage subscription**: in the [Users](users.md) tab of Settings › Administration, next to the count of places taken and in the banner shown when the instance is full, and on the block page of a [blocked instance](hosting_providers.md#instance-block). Not set: no such link. An address that holds a user name or a password is refused: no such link either. |
 | `LIBREFOLIO_LOGIN_LIMIT` | `on` | The limit on failed sign-ins: `on` or `off`, in any case; spaces around the value do not matter. `off` is for a test instance only: anyone can then try passwords without pause, and every start logs a [warning](#startup-checks). Unlike the four above, any other value, `true`, `1` and `yes` included, stops the server at startup. See [Failed Sign-ins](#login-limit). |
 
 An empty value counts as not set. A wrong value of the first four does not stop the server, unlike the
@@ -532,7 +537,9 @@ password after password until one works. The limit is on unless you turn it off.
   user changes their email address in the Profile tab ([Profile](../user/settings/profile.md)),
   counts as a failed sign-in with the account's username, from the same address. So 10 wrong
   current passwords also block signing in with that username, and failed sign-ins with the username
-  block those two checks. Deleting one's own account asks for no password: nothing to limit there.
+  block those two checks: **Change Password** and the Profile tab then say *Too many wrong
+  passwords: wait a few minutes and try again.* Deleting one's own account asks for no password:
+  nothing to limit there.
 - **Send the link again counts too.** On the login page, an account that waits for its email
   verification gets **Send the link again**, which checks the username or email address and the
   password as a sign-in does ([Email Verification](email.md#verification)). A wrong password there
@@ -567,6 +574,9 @@ password after password until one works. The limit is on unless you turn it off.
 automated tests sign in wrongly on purpose: nothing is counted and nothing is refused. Every start
 then logs a warning, with `accounts.login_limit` in `check`:
 `LIBREFOLIO_LOGIN_LIMIT=off: failed sign-ins are not limited; turn it back on unless this is a test instance`.
+The same check, on demand, is in the **Security** tab of **Settings › Administration**: a warning,
+counted in the number on the tab, until the limit is back on (see «Security» in
+[Global Settings](settings.md)).
 Remove the variable, or set it to `on`, to turn the limit back on at the next start. Any other
 value stops the server at startup: see [Accounts and Sign-ups](#accounts).
 

@@ -1,0 +1,446 @@
+/**
+ * securityFindings — what Settings › Security lists (accounts lot A8b): the server's checks and the browser's own one,
+ * as two lists, sorted and linked to where each problem is fixed.
+ *
+ * The contract under test (approved for A8b):
+ *   1. `securityFindings(checks, browser)` returns `{attention, passed}`, and changes neither input.
+ *   2. `attention` holds every check whose severity is not `ok`, as a finding `{id: check_id, severity, messageKey:
+ *      i18n_key, params: detail, source: 'server'}`, plus the browser's finding when
+ *      `openRegistrationNoticeFor({isAdmin: true, ...browser})` gives a notice: `{id: 'accounts.openRegistration',
+ *      severity: 'warning', messageKey: the notice's, action: the notice's when it has one, source: 'browser'}`.
+ *      Sorted error → warning → info; within one severity, the server's order, and the browser's finding after the
+ *      server's findings of its severity.
+ *   3. `passed` holds the `ok` checks, in the server's order, mapped the same way, never with an action.
+ *   4. A server finding links to where it is fixed: `email.smtp`, `email.smtp_encryption` and `email.links` to Settings ›
+ *      Email (`settings.securityTab.openEmail`, `/settings?tab=email`), `platform.plugin_secrets` to Settings › Plugins
+ *      (`settings.securityTab.openPlugins`, `/settings?tab=plugins`); any other check has none.
+ *   5. `attentionCount({attention})` counts the attention findings that are errors or warnings: an `info` is listed,
+ *      not counted.
+ *
+ * How the cases read it. The expected findings are written from the fixtures with the contract's own mapping (`server()`
+ * below), never read from the module under test. The browser's finding is compared with literals for the two notices of
+ * today, and, for every combination of mode, pin and host, with what `openRegistrationNoticeFor` itself answers for an
+ * administrator: the rule of when to warn is that function's (its own file pins it), so this one only proves it is
+ * reused, not copied.
+ *
+ * Read as pinned, where the contract leaves a word to interpret:
+ *   - the browser's finding carries `params: {}` — `params` is a required field of a finding, and the notice has none;
+ *   - a finding is exactly its six fields: a notice's `dismissible` does not come along.
+ * Not pinned: the `severity` of a passed finding (a `FindingSeverity` has no `ok`, so «mapped the same way» cannot
+ * keep it), and whether `params` is the check's own `detail` object or a copy.
+ *
+ * Red until A8b: `securityFindings.ts` does not exist yet. It is loaded by a computed specifier, so each case fails on
+ * its own with the contract in its message rather than the whole file at import, and the type check does not depend on
+ * the module landing first. No DOM: the node environment, with `$lib/api` inert because `openRegistrationNoticeFor`'s
+ * module imports the auth store, which imports the client.
+ */
+import {describe, expect, it, vi} from 'vitest';
+import {openRegistrationNoticeFor} from '$lib/features/auth/openRegistrationNotice.svelte';
+
+// `$lib/api`: every operation an inert spy pending forever — nothing here may reach the network, nothing may settle
+// behind the assertions. The shape of `openRegistrationNotice.test.ts`.
+vi.mock('$lib/api', () => {
+    const inert = new Map<string, unknown>();
+    const zodiosApi = new Proxy(
+        {},
+        {
+            get(_target, operation) {
+                if (typeof operation !== 'string' || operation === 'then') return undefined;
+                if (!inert.has(operation))
+                    inert.set(
+                        operation,
+                        vi.fn(() => new Promise(() => {})),
+                    );
+                return inert.get(operation);
+            },
+        },
+    );
+    return {zodiosApi, ApiError: class ApiError extends Error {}, axiosInstance: {}};
+});
+
+// --- The module under test, by a computed specifier: Vite does not resolve it when it transforms this file ----------
+
+const FINDINGS_MODULE = './securityFindings';
+
+type Severity = 'ok' | 'info' | 'warning' | 'error';
+type FindingSeverity = 'error' | 'warning' | 'info';
+
+interface SecurityCheck {
+    check_id: string;
+    severity: Severity;
+    i18n_key: string;
+    detail: Record<string, string | number>;
+}
+
+interface FindingAction {
+    labelKey: string;
+    href: string;
+}
+
+interface SecurityFinding {
+    id: string;
+    severity: FindingSeverity;
+    messageKey: string;
+    params: Record<string, string | number>;
+    action?: FindingAction;
+    source: 'server' | 'browser';
+}
+
+interface BrowserState {
+    registrationMode: string;
+    registrationLocked: boolean;
+    hostname: string;
+}
+
+interface Findings {
+    attention: SecurityFinding[];
+    passed: SecurityFinding[];
+}
+
+interface FindingsModule {
+    securityFindings(checks: SecurityCheck[], browser: BrowserState): Findings;
+    attentionCount(findings: {attention: SecurityFinding[]}): number;
+}
+
+async function loadFindings(): Promise<FindingsModule> {
+    let module: Record<string, unknown>;
+    try {
+        module = (await import(/* @vite-ignore */ FINDINGS_MODULE)) as Record<string, unknown>;
+    } catch (error) {
+        throw new Error(`src/lib/features/settings/security/securityFindings.ts cannot be loaded (red until A8b: it does not exist yet): nothing turns the security checks into what the Security tab lists — ${String(error)}`);
+    }
+    for (const name of ['securityFindings', 'attentionCount']) {
+        expect(typeof module[name], `securityFindings.ts exports no ${name}()`).toBe('function');
+    }
+    return module as unknown as FindingsModule;
+}
+
+// --- The contract's literals, never read from the module under test --------------------------------------------------
+
+const OPEN_EMAIL: FindingAction = {labelKey: 'settings.securityTab.openEmail', href: '/settings?tab=email'};
+const OPEN_PLUGINS: FindingAction = {labelKey: 'settings.securityTab.openPlugins', href: '/settings?tab=plugins'};
+
+const BROWSER_ID = 'accounts.openRegistration';
+
+/** The browser's finding: an instance open to registration, reached from outside the local network. */
+const BROWSER_OPEN: SecurityFinding = {
+    id: BROWSER_ID,
+    severity: 'warning',
+    messageKey: 'auth.notices.openRegistration',
+    params: {},
+    action: {labelKey: 'auth.notices.openRegistrationAction', href: '/settings?tab=admin'},
+    source: 'browser',
+};
+
+/** The same with the mode pinned by LIBREFOLIO_REGISTRATION: nothing in the app can change it, so no link. */
+const BROWSER_LOCKED: SecurityFinding = {id: BROWSER_ID, severity: 'warning', messageKey: 'auth.notices.openRegistrationLocked', params: {}, source: 'browser'};
+
+const EXTERNAL_HOST = 'librefolio.example.com';
+
+/** Nothing to warn about: an instance on invitation only. */
+const SILENT: BrowserState = {registrationMode: 'invite', registrationLocked: false, hostname: EXTERNAL_HOST};
+const OPEN_EXTERNAL: BrowserState = {registrationMode: 'open', registrationLocked: false, hostname: EXTERNAL_HOST};
+const OPEN_LOCKED_EXTERNAL: BrowserState = {registrationMode: 'open', registrationLocked: true, hostname: EXTERNAL_HOST};
+
+function check(check_id: string, severity: Severity, i18n_key: string, detail: Record<string, string | number> = {}): SecurityCheck {
+    return {check_id, severity, i18n_key, detail};
+}
+
+/** The finding the contract makes of a server check: its fields renamed, and its action when it has one. */
+function server(source: SecurityCheck, action?: FindingAction): SecurityFinding {
+    return {id: source.check_id, severity: source.severity as FindingSeverity, messageKey: source.i18n_key, params: source.detail, ...(action ? {action} : {}), source: 'server'};
+}
+
+/** A passed finding without its severity, which is not pinned (see the header); an absent action reads `undefined`. */
+function passedView(finding: SecurityFinding): Omit<SecurityFinding, 'severity'> {
+    return {id: finding.id, messageKey: finding.messageKey, params: finding.params, action: finding.action, source: finding.source};
+}
+
+const ids = (findings: SecurityFinding[]): string[] => findings.map((finding) => finding.id);
+
+// --- Fixtures: the ten checks of today, in the platform's order --------------------------------------------------------
+
+const JWT_SHORT = check('platform.jwt_secret', 'warning', 'instance.checks.jwtSecret.short', {source: 'JWT_SECRET', length: 12, minimum: 32});
+const SECRETS_TWICE = check('platform.secrets_set_twice', 'warning', 'instance.checks.secretsSetTwice.found', {variables: 'JWT_SECRET'});
+const KEY_UNUSABLE = check('platform.instance_key', 'error', 'instance.checks.instanceKey.unusable', {source: 'LIBREFOLIO_INSTANCE_KEY_FILE', reason: 'the file cannot be read'});
+const COOKIE_OK = check('platform.session_cookie', 'ok', 'instance.checks.sessionCookie.ok');
+const LOG_VERBOSE = check('platform.log_level', 'info', 'instance.checks.logLevel.verbose', {log_level: 'DEBUG'});
+const LOGIN_LIMIT_OFF = check('accounts.login_limit', 'warning', 'auth.checks.loginLimit.off');
+const SMTP_OK = check('email.smtp', 'ok', 'email.checks.smtp.ok');
+const SMTP_PLAIN = check('email.smtp_encryption', 'warning', 'email.checks.smtpEncryption.plain');
+const LINKS_MISSING = check('email.links', 'info', 'email.checks.links.missing');
+const SECRETS_UNREADABLE = check('platform.plugin_secrets', 'error', 'instance.checks.pluginSecrets.unreadable', {count: 2});
+
+/** Every severity, several per severity, in the platform's order. */
+const MIXED: SecurityCheck[] = [JWT_SHORT, SECRETS_TWICE, KEY_UNUSABLE, COOKIE_OK, LOG_VERBOSE, LOGIN_LIMIT_OFF, SMTP_OK, SMTP_PLAIN, LINKS_MISSING, SECRETS_UNREADABLE];
+
+/** MIXED as the tab must list it, with nothing to warn about in the browser. */
+const MIXED_ATTENTION: SecurityFinding[] = [server(KEY_UNUSABLE), server(SECRETS_UNREADABLE, OPEN_PLUGINS), server(JWT_SHORT), server(SECRETS_TWICE), server(LOGIN_LIMIT_OFF), server(SMTP_PLAIN, OPEN_EMAIL), server(LOG_VERBOSE), server(LINKS_MISSING, OPEN_EMAIL)];
+
+/** The ten checks, all fine. */
+const ALL_OK: SecurityCheck[] = [
+    check('platform.jwt_secret', 'ok', 'instance.checks.jwtSecret.ok'),
+    check('platform.secrets_set_twice', 'ok', 'instance.checks.secretsSetTwice.ok'),
+    check('platform.instance_key', 'ok', 'instance.checks.instanceKey.ok', {source: 'generated'}),
+    check('platform.session_cookie', 'ok', 'instance.checks.sessionCookie.ok'),
+    check('platform.log_level', 'ok', 'instance.checks.logLevel.ok'),
+    check('accounts.login_limit', 'ok', 'auth.checks.loginLimit.ok'),
+    check('email.smtp', 'ok', 'email.checks.smtp.off'),
+    check('email.smtp_encryption', 'ok', 'email.checks.smtpEncryption.ok'),
+    check('email.links', 'ok', 'email.checks.links.ok'),
+    check('platform.plugin_secrets', 'ok', 'instance.checks.pluginSecrets.ok'),
+];
+
+/** Frozen all the way down: a sort in place, or a write into a detail, throws instead of passing. */
+function deepFreeze<T>(value: T): T {
+    if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+        Object.freeze(value);
+        for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
+    }
+    return value;
+}
+
+describe('securityFindings — attention: what is not ok', () => {
+    // red until A8b
+    it('every check that is not ok, mapped to a finding of the server, most severe first and in the server’s order within a severity', async () => {
+        const {securityFindings} = await loadFindings();
+
+        const {attention} = securityFindings(structuredClone(MIXED), SILENT);
+
+        expect(attention).toEqual(MIXED_ATTENTION);
+    });
+
+    // red until A8b
+    it('error → warning → info, whatever the order they came in', async () => {
+        const {securityFindings} = await loadFindings();
+        const shuffled = [LINKS_MISSING, SMTP_PLAIN, SECRETS_UNREADABLE, COOKIE_OK, LOG_VERBOSE, JWT_SHORT, KEY_UNUSABLE];
+
+        const {attention} = securityFindings(structuredClone(shuffled), SILENT);
+
+        expect(attention.map((finding) => finding.severity)).toEqual(['error', 'error', 'warning', 'warning', 'info', 'info']);
+    });
+
+    // red until A8b
+    it('within one severity the order received is kept, neither alphabetical nor reversed', async () => {
+        const {securityFindings} = await loadFindings();
+        const errors = [
+            check('platform.plugin_secrets', 'error', 'instance.checks.pluginSecrets.unreadable', {count: 1}),
+            check('accounts.login_limit', 'error', 'auth.checks.loginLimit.invalid', {value: 'maybe'}),
+            check('platform.instance_key', 'error', 'instance.checks.instanceKey.unusable', {source: 'LIBREFOLIO_INSTANCE_KEY', reason: 'not a key'}),
+        ];
+        const warnings = [check('email.smtp_encryption', 'warning', 'email.checks.smtpEncryption.plain'), check('accounts.login_limit', 'warning', 'auth.checks.loginLimit.off'), check('platform.session_cookie', 'warning', 'instance.checks.sessionCookie.never')];
+
+        expect(ids(securityFindings(structuredClone(errors), SILENT).attention)).toEqual(['platform.plugin_secrets', 'accounts.login_limit', 'platform.instance_key']);
+        expect(ids(securityFindings(structuredClone(warnings), SILENT).attention)).toEqual(['email.smtp_encryption', 'accounts.login_limit', 'platform.session_cookie']);
+    });
+
+    // red until A8b
+    it('the message key and its ICU values come from the check: a count stays a number', async () => {
+        const {securityFindings} = await loadFindings();
+
+        const {attention} = securityFindings(structuredClone([SECRETS_UNREADABLE, JWT_SHORT]), SILENT);
+
+        expect(attention.map(({id, messageKey, params, source}) => ({id, messageKey, params, source}))).toEqual([
+            {id: 'platform.plugin_secrets', messageKey: 'instance.checks.pluginSecrets.unreadable', params: {count: 2}, source: 'server'},
+            {id: 'platform.jwt_secret', messageKey: 'instance.checks.jwtSecret.short', params: {source: 'JWT_SECRET', length: 12, minimum: 32}, source: 'server'},
+        ]);
+        expect(typeof attention[0].params.count, 'the plural of instance.checks.pluginSecrets.unreadable needs a number').toBe('number');
+    });
+});
+
+describe('securityFindings — passed: what is ok', () => {
+    // red until A8b
+    it('the ok checks, in the server’s order, mapped the same way, never among the attention findings', async () => {
+        const {securityFindings} = await loadFindings();
+
+        const {attention, passed} = securityFindings(structuredClone(MIXED), SILENT);
+
+        expect(passed.map(passedView)).toEqual([passedView(server(COOKIE_OK)), passedView(server(SMTP_OK))]);
+        expect(ids(attention), 'an ok check is passed, not listed for attention').not.toContain('platform.session_cookie');
+        expect(ids(attention)).not.toContain('email.smtp');
+    });
+
+    // red until A8b
+    it('all ten ok: nothing for attention, ten passed in the platform’s order, none with an action — not even those that link when they fail', async () => {
+        const {securityFindings} = await loadFindings();
+
+        const {attention, passed} = securityFindings(structuredClone(ALL_OK), SILENT);
+
+        expect(attention).toEqual([]);
+        expect(passed.map(passedView)).toEqual(ALL_OK.map((ok) => passedView(server(ok))));
+        expect(
+            passed.filter((finding) => finding.action !== undefined).map((finding) => finding.id),
+            'a passed check needs no link to where it would be fixed',
+        ).toEqual([]);
+    });
+
+    // red until A8b
+    it('no check and nothing to warn about: two empty lists', async () => {
+        const {securityFindings} = await loadFindings();
+
+        expect(securityFindings([], SILENT)).toEqual({attention: [], passed: []});
+    });
+});
+
+describe('securityFindings — the link to where a problem is fixed', () => {
+    const LINKED: Array<[label: string, source: SecurityCheck, action: FindingAction]> = [
+        ['email.smtp, an error', check('email.smtp', 'error', 'email.checks.smtp.invalid', {problem: 'PORT_INVALID', variable: 'LIBREFOLIO_SMTP_PORT'}), OPEN_EMAIL],
+        ['email.smtp_encryption, a warning', SMTP_PLAIN, OPEN_EMAIL],
+        ['email.links, a warning', check('email.links', 'warning', 'email.checks.links.invalid'), OPEN_EMAIL],
+        ['email.links, an info', LINKS_MISSING, OPEN_EMAIL],
+        ['platform.plugin_secrets, an error', SECRETS_UNREADABLE, OPEN_PLUGINS],
+        ['platform.plugin_secrets, should it ever be a warning', check('platform.plugin_secrets', 'warning', 'instance.checks.pluginSecrets.unreadable', {count: 1}), OPEN_PLUGINS],
+    ];
+
+    // red until A8b
+    it.each(LINKED)('%s: linked to its tab', async (_label, source, action) => {
+        const {securityFindings} = await loadFindings();
+
+        const {attention} = securityFindings(structuredClone([source]), SILENT);
+
+        expect(attention).toEqual([server(source, action)]);
+    });
+
+    const UNLINKED: Array<[label: string, source: SecurityCheck]> = [
+        ['platform.jwt_secret', JWT_SHORT],
+        ['platform.secrets_set_twice', SECRETS_TWICE],
+        ['platform.instance_key', KEY_UNUSABLE],
+        ['platform.session_cookie', check('platform.session_cookie', 'warning', 'instance.checks.sessionCookie.never')],
+        ['platform.log_level', LOG_VERBOSE],
+        ['accounts.login_limit', LOGIN_LIMIT_OFF],
+        ['a check the platform may add tomorrow', check('platform.backup_key', 'warning', 'instance.checks.backupKey.missing')],
+    ];
+
+    // red until A8b
+    it.each(UNLINKED)('%s: no action', async (_label, source) => {
+        const {securityFindings} = await loadFindings();
+
+        const {attention} = securityFindings(structuredClone([source]), SILENT);
+
+        expect(attention, 'premise: the check is listed for attention').toHaveLength(1);
+        expect(attention[0].action).toBeUndefined();
+        expect(attention).toEqual([server(source)]);
+    });
+});
+
+describe('securityFindings — the browser’s own check: registration open to anyone, reached from outside', () => {
+    // red until A8b
+    it('open, reached from outside: the warning with the link to the setting, after the server’s warnings and before the infos', async () => {
+        const {securityFindings} = await loadFindings();
+
+        const {attention, passed} = securityFindings(structuredClone(MIXED), OPEN_EXTERNAL);
+
+        expect(attention).toEqual([...MIXED_ATTENTION.slice(0, 6), BROWSER_OPEN, ...MIXED_ATTENTION.slice(6)]);
+        expect(ids(passed), 'the browser’s finding is never passed').toEqual(['platform.session_cookie', 'email.smtp']);
+    });
+
+    // red until A8b
+    it('pinned by LIBREFOLIO_REGISTRATION: the locked message, and no action', async () => {
+        const {securityFindings} = await loadFindings();
+
+        const {attention} = securityFindings([], OPEN_LOCKED_EXTERNAL);
+
+        expect(attention).toEqual([BROWSER_LOCKED]);
+        expect(attention[0].action, 'nothing in the app can change a pinned mode').toBeUndefined();
+    });
+
+    // red until A8b
+    it('with no server warning it still sits between the errors and the infos', async () => {
+        const {securityFindings} = await loadFindings();
+
+        const {attention} = securityFindings(structuredClone([LOG_VERBOSE, KEY_UNUSABLE]), OPEN_EXTERNAL);
+
+        expect(ids(attention)).toEqual(['platform.instance_key', BROWSER_ID, 'platform.log_level']);
+    });
+
+    // red until A8b
+    it('alone: every server check ok, the browser’s warning is the one thing to look at', async () => {
+        const {securityFindings} = await loadFindings();
+
+        const {attention, passed} = securityFindings(structuredClone(ALL_OK), OPEN_EXTERNAL);
+
+        expect(attention).toEqual([BROWSER_OPEN]);
+        expect(passed).toHaveLength(10);
+    });
+
+    const SILENT_BROWSERS: Array<[label: string, browser: BrowserState]> = [
+        ['an instance on invitation only', SILENT],
+        ['an instance closed to registration', {registrationMode: 'disabled', registrationLocked: false, hostname: EXTERNAL_HOST}],
+        ['a mode not known yet (the public configuration has not answered)', {registrationMode: '', registrationLocked: false, hostname: EXTERNAL_HOST}],
+        ['open, reached through localhost', {registrationMode: 'open', registrationLocked: false, hostname: 'localhost'}],
+        ['open, reached through an address of the local network', {registrationMode: 'open', registrationLocked: false, hostname: '192.168.1.10'}],
+    ];
+
+    // red until A8b
+    it.each(SILENT_BROWSERS)('nothing to warn about (%s): no browser finding', async (_label, browser) => {
+        const {securityFindings} = await loadFindings();
+
+        const {attention, passed} = securityFindings(structuredClone(ALL_OK), browser);
+
+        expect(attention).toEqual([]);
+        expect(passed, 'premise: the server checks are all there').toHaveLength(10);
+    });
+
+    // red until A8b
+    it('for every mode, pin and host, the browser’s finding is what openRegistrationNoticeFor answers for an administrator', async () => {
+        const {securityFindings} = await loadFindings();
+        const hosts = [EXTERNAL_HOST, 'nas.tail1234.ts.net', 'localhost', '192.168.1.10', '[::1]'];
+        let warned = 0;
+        let silent = 0;
+
+        for (const registrationMode of ['open', 'invite', 'disabled', '']) {
+            for (const registrationLocked of [false, true]) {
+                for (const hostname of hosts) {
+                    const browser = {registrationMode, registrationLocked, hostname};
+                    const notice = openRegistrationNoticeFor({isAdmin: true, ...browser});
+                    const expected: SecurityFinding[] = notice ? [{id: notice.id, severity: 'warning', messageKey: notice.messageKey, params: {}, ...(notice.action ? {action: notice.action} : {}), source: 'browser'}] : [];
+                    if (notice) warned += 1;
+                    else silent += 1;
+
+                    expect(securityFindings([], browser).attention, `${JSON.stringify(browser)}`).toEqual(expected);
+                }
+            }
+        }
+        expect([warned > 0, silent > 0], 'premise: the table holds states that warn and states that do not').toEqual([true, true]);
+    });
+});
+
+describe('securityFindings — its inputs', () => {
+    // red until A8b
+    it('changes neither the checks nor the browser state: frozen all the way down, they come out as they went in', async () => {
+        const {securityFindings} = await loadFindings();
+        const checks = deepFreeze(structuredClone([LINKS_MISSING, SMTP_PLAIN, SECRETS_UNREADABLE, COOKIE_OK, JWT_SHORT, KEY_UNUSABLE]));
+        const browser = deepFreeze({...OPEN_EXTERNAL});
+        const before = structuredClone(checks);
+
+        let findings: Findings | undefined;
+        expect(() => {
+            findings = securityFindings(checks, browser);
+        }, 'a sort in place or a write into a check throws on a frozen input').not.toThrow();
+
+        expect(checks).toEqual(before);
+        expect(browser).toEqual(OPEN_EXTERNAL);
+        expect(ids(findings?.attention ?? []), 'premise: there was something to sort').toEqual(['platform.plugin_secrets', 'platform.instance_key', 'email.smtp_encryption', 'platform.jwt_secret', BROWSER_ID, 'email.links']);
+    });
+});
+
+describe('attentionCount — what needs doing', () => {
+    // red until A8b
+    it('counts the errors and the warnings among the attention findings, the browser’s included, never an info', async () => {
+        const {securityFindings, attentionCount} = await loadFindings();
+
+        expect(attentionCount(securityFindings(structuredClone(MIXED), SILENT)), '2 errors and 4 warnings; 2 infos listed, not counted').toBe(6);
+        expect(attentionCount(securityFindings(structuredClone(MIXED), OPEN_EXTERNAL)), 'and the browser’s warning').toBe(7);
+        expect(attentionCount(securityFindings(structuredClone([LOG_VERBOSE, LINKS_MISSING]), SILENT)), 'infos only: listed, nothing to count').toBe(0);
+        expect(attentionCount(securityFindings(structuredClone(ALL_OK), SILENT))).toBe(0);
+    });
+
+    // red until A8b
+    it('reads the attention list alone, whatever made it', async () => {
+        const {attentionCount} = await loadFindings();
+        const finding = (id: string, severity: FindingSeverity): SecurityFinding => ({id, severity, messageKey: `test.${id}`, params: {}, source: 'server'});
+
+        expect(attentionCount({attention: []})).toBe(0);
+        expect(attentionCount({attention: [finding('a', 'info'), finding('b', 'warning'), finding('c', 'error'), finding('d', 'info'), finding('e', 'warning')]})).toBe(3);
+    });
+});
