@@ -352,7 +352,7 @@ sqlite3 ./LibreFolio-data/sqlite/app.db ".backup '/path/to/backups/app.db-$(date
 
 SQLite's `.backup` command uses the online backup API, which is safe against a live WAL database.
 
-`backup create` needs neither a stop nor `sqlite3` on the host: `docker compose exec librefolio python dev.py backup create` puts a consistent copy of the database, the uploaded files, the broker reports and your own stress scenarios in one archive, in `LibreFolio-data/backups/`, while the server keeps running ([Back Up with Docker](cli_tools.md#backup-docker)). The archive leaves out `secrets/`, which holds the instance key: back that folder up as [What to Back Up](filesystem.md#what-to-back-up) explains.
+`backup create` needs neither a stop nor `sqlite3` on the host: `docker compose exec librefolio python dev.py backup create` puts a consistent copy of the database, the uploaded files, the broker reports and your own stress scenarios in one archive, in `LibreFolio-data/backups/`, while the server keeps running ([Back Up with Docker](cli_tools.md#backup-docker)). A clear archive leaves out `secrets/`, which holds the instance key: back that folder up as [What to Back Up](filesystem.md#what-to-back-up) explains. A [secure archive](backup_restore.md#secure), with `--encrypt`, carries the key LibreFolio generated, encrypted with your password.
 
 For the full list of what is worth backing up (uploaded files, original broker reports), see the [Filesystem Layout](filesystem.md) page.
 

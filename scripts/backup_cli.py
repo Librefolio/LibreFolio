@@ -8,13 +8,17 @@ files, the broker reports and the risk scenarios, with a manifest. It holds ever
 
 Usage:
     ./dev.py backup create [--output PATH]     Write an archive (default: <data dir>/backups/)
+    ./dev.py backup create --encrypt           A secure backup: an .lfbk only its password opens (asked twice)
     ./dev.py backup inspect ARCHIVE            Check an archive and show what it holds
     ./dev.py backup restore ARCHIVE --dry-run  Check an archive for a restore, on a copy: the instance stays as it is
     ./dev.py backup restore ARCHIVE [--yes]    The same check, then the restore at the next start of the server
+    ./dev.py backup decrypt ARCHIVE -o ZIP     The archive inside a secure backup, as a plain .zip
     ./dev.py backup pending [--cancel]         The restore waiting for the next start, or the last one; --cancel drops it
     ./dev.py backup --test-db create           Use the test data directory
 
-A relative PATH or ARCHIVE starts from the project root, like every path given to dev.py.
+A relative PATH or ARCHIVE starts from the project root, like every path given to dev.py. The password of a secure
+backup is never an argument (every process sees a command line, the shell keeps it): ``--password-file FILE`` (a Docker
+secret works), ``--password-stdin``, or typed at the terminal.
 
 In Docker: ``docker compose exec librefolio python dev.py backup create``. Run as root, the command works as the owner of
 the data directory, so every file it writes belongs to the server.
@@ -24,8 +28,10 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import getpass
 import os
 import shutil
+import stat
 import sys
 import time
 from pathlib import Path
@@ -69,6 +75,114 @@ def _drop_root_privileges(data_dir: Path) -> str | None:
     except OSError as exc:
         return f"cannot switch to the owner of {data_dir} ({owner.st_uid}:{owner.st_gid}): {exc}. Run the command as that user."
     return None
+
+
+class _PasswordProblem(Exception):
+    """No password could be read: ``code`` says why, in a stable word."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+def _password(args, *, twice: bool) -> str:
+    """The password from ``--password-file``, from ``--password-stdin``, or typed at the terminal (``twice`` to choose
+    one). ``_PasswordProblem`` when there is none: no source, and no terminal to ask on."""
+    from backend.app.config import SecretFileError, read_secret_file  # noqa: PLC0415 — keep dev.py's start light
+
+    password_file = getattr(args, "password_file", None)
+    if password_file:
+        try:
+            return read_secret_file(_requested(password_file), "password file")
+        except SecretFileError as exc:
+            raise _PasswordProblem("password_unreadable", str(exc)) from None
+    if getattr(args, "password_stdin", False):
+        line = sys.stdin.readline().rstrip("\r\n")
+        if not line:
+            raise _PasswordProblem("password_required", "The standard input carried no password")
+        return line
+    if not sys.stdin.isatty():
+        raise _PasswordProblem("password_required", "A password is needed: give it with --password-file or --password-stdin, or run the command at a terminal")
+    try:
+        password = getpass.getpass("   Password: ")
+        if twice and getpass.getpass("   The same password again: ") != password:
+            raise _PasswordProblem("password_mismatch", "The two passwords differ")
+    except EOFError:
+        raise _PasswordProblem("password_required", "No password was typed") from None
+    if not password:
+        raise _PasswordProblem("password_required", "No password was typed")
+    return password
+
+
+def _archive_password(args) -> str | None:
+    """The password of a new secure backup, once it meets the rules (P12); ``None`` after saying why not."""
+    from backend.app.services.platform.instance_backup.secure import ARCHIVE_PASSWORD_MAX_LENGTH, archive_password_problems, archive_password_rules  # noqa: PLC0415
+
+    try:
+        password = _password(args, twice=True)
+    except _PasswordProblem as exc:
+        print(f"❌ {exc} ({exc.code})")
+        return None
+    if len(password) > ARCHIVE_PASSWORD_MAX_LENGTH:
+        print(f"❌ The password is longer than {ARCHIVE_PASSWORD_MAX_LENGTH} characters (password_too_long)")
+        return None
+    failed = archive_password_problems(password)
+    if failed:
+        minimum = next((rule.value for rule in archive_password_rules() if rule.code == "min_length"), None)
+        print(f"❌ The password of a backup needs at least {minimum} characters, with an uppercase and a lowercase letter, a digit and a symbol (password_too_weak: {', '.join(failed)})")
+        return None
+    return password
+
+
+def _unlock(args, path: Path):
+    """The key of the secure backup at ``path``, from its password; ``None`` after saying why not."""
+    from backend.app.services.platform.instance_backup.envelope import EnvelopeError, unlock  # noqa: PLC0415
+
+    try:
+        password = _password(args, twice=False)
+    except _PasswordProblem as exc:
+        print(f"❌ {exc} ({exc.code})")
+        return None
+    try:
+        return unlock(path, password)
+    except EnvelopeError as exc:
+        print(f"❌ {exc} ({exc.code})")
+        return None
+
+
+#: The folders ``inspect`` decrypts a secure backup into, in ``backups/``: removed at the end of the run; one a killed run
+#: left behind, holding a clear archive, is removed by the next ``inspect`` once it is an hour old.
+_DECRYPT_PREFIX = ".decrypt-"
+_DECRYPT_STALE_SECONDS = 3600
+
+
+@contextlib.contextmanager
+def _private_folder(data_dir: Path):
+    """A new folder of the data directory that only its owner reads, removed with everything in it at the end."""
+    import tempfile  # noqa: PLC0415
+
+    from backend.app.services.platform.instance_backup.paths import backups_dir, ensure_private_dir  # noqa: PLC0415
+
+    parent = ensure_private_dir(backups_dir(data_dir), data_dir)
+    _remove_stale_decrypt_folders(parent)
+    folder = Path(tempfile.mkdtemp(prefix=_DECRYPT_PREFIX, dir=parent))
+    try:
+        yield folder
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def _remove_stale_decrypt_folders(parent: Path) -> None:
+    """Remove the decrypt folders older than an hour: a younger one may be another run's. A link or a file of that name
+    is never followed nor removed."""
+    cutoff = time.time() - _DECRYPT_STALE_SECONDS
+    for entry in parent.glob(f"{_DECRYPT_PREFIX}*"):
+        try:
+            info = entry.lstat()
+        except OSError:
+            continue
+        if stat.S_ISDIR(info.st_mode) and info.st_mtime < cutoff:
+            shutil.rmtree(entry, ignore_errors=True)
 
 
 def _requested(output: str) -> Path:
@@ -214,15 +328,18 @@ def _print_warnings(job) -> None:
         print("⚠️  The database failed its integrity check: the archive keeps it as it is (./dev.py backup inspect shows the result)")
     if "foreign_key_violations" in job.warnings:
         print("⚠️  The database has foreign-key violations: the archive keeps it as it is")
+    if "instance_key_unusable" in job.warnings:
+        print("⚠️  The instance key cannot be used: the secure backup was made without it, so saved provider keys must be entered again after a restore")
     if job.skipped:
         print(f"⚠️  Left out ({len(job.skipped)}{'+' if len(job.skipped) >= 50 else ''}): links, special files, files or folders that could not be read, or files removed during the backup:")
         for entry in job.skipped:
             print(f"     {_safe(entry)}")
 
 
-def _run_backup(data_dir: Path):
+def _run_backup(data_dir: Path, password: str | None = None):
     """Run the backup in this process, printing its phases: the job's end state and its folder, or ``None`` when the
-    run could not start (another backup runs, ``backups/`` is not a plain folder, it cannot be written)."""
+    run could not start (another backup runs, ``backups/`` is not a plain folder, it cannot be written). ``password``:
+    a secure backup."""
     from backend.app.services.platform.instance_backup import jobs  # noqa: PLC0415 — keep dev.py's start light
     from backend.app.services.platform.instance_backup.paths import BackupPathError, backups_dir  # noqa: PLC0415
 
@@ -234,7 +351,7 @@ def _run_backup(data_dir: Path):
             print(f"   … {phase}")
 
     try:
-        return jobs.run_backup(origin="cli", data_dir=data_dir, progress=progress)
+        return jobs.run_backup(origin="cli", data_dir=data_dir, progress=progress, password=password)
     except jobs.BackupBusyError:
         print("❌ Another backup is running (from the web interface or another command): try again when it ends")
     except BackupPathError as exc:
@@ -245,7 +362,13 @@ def _run_backup(data_dir: Path):
 
 
 def cmd_create(args) -> int:
-    """Write a backup archive of the instance."""
+    """Write a backup archive of the instance; with a password, a secure backup (an ``.lfbk`` envelope)."""
+    password = None
+    # A namespace built by hand (a script, a test) may lack the password options: no password, as before lot B4.
+    if getattr(args, "encrypt", False) or getattr(args, "password_file", None) or getattr(args, "password_stdin", False):
+        password = _archive_password(args)
+        if password is None:
+            return 1
     data_dir = _data_dir_for(args)
     if data_dir is None:
         return 1
@@ -257,7 +380,7 @@ def cmd_create(args) -> int:
 
     print(f"💾 Backing up {data_dir}")
     started = time.monotonic()
-    result = _run_backup(data_dir)
+    result = _run_backup(data_dir, password)
     if result is None:
         return 1
     job, folder = result
@@ -276,32 +399,79 @@ def cmd_create(args) -> int:
         print(f"❌ {problem}: the archive stays in {placed}. Move it within the hour: the next backup after that removes it.")
         return 1
     shutil.rmtree(folder, ignore_errors=True)
+    return _print_written(job, placed, problem, started)
 
+
+def _print_written(job, placed: Path, problem: str | None, started: float) -> int:
+    """Say where the archive went, what it holds and how to keep it; the exit code of ``create``."""
     if problem:
         print(f"⚠️  {problem}: the archive was written to {placed} instead")
     else:
         print(f"✅ Backup written: {placed}")
     print(f"   {_human(job.file_size or 0)} in {time.monotonic() - started:.1f} s")
     _print_warnings(job)
-    print("🔒 The archive holds every user's data: keep it private.")
+    if job.encrypted:
+        print("🔐 Encrypted with your password: only that password opens it, and LibreFolio cannot recover a lost one.")
+    else:
+        print("🔒 The archive holds every user's data: keep it private.")
     return 1 if problem else 0
 
 
 def cmd_inspect(args) -> int:
-    """Check an archive against its manifest and print what it holds."""
+    """Check an archive against its manifest and print what it holds; a secure backup is decrypted first, in a private
+    folder of the data directory removed at the end."""
     from backend.app.services.platform.instance_backup.archive import ArchiveError, check_archive  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.envelope import is_envelope  # noqa: PLC0415
     from backend.app.services.platform.instance_backup.manifest import ManifestError  # noqa: PLC0415
 
     path = Path(args.archive).expanduser()
     if not path.is_file():
         print(f"❌ No file at {path}")
         return 1
+    if is_envelope(path):
+        return _inspect_envelope(args, path)
     try:
         check = check_archive(path, verify=not args.no_verify)
     except (ArchiveError, ManifestError) as exc:
         print(f"❌ {exc} ({exc.code})")
         return 1
+    return _print_check(path, check)
 
+
+def _inspect_envelope(args, path: Path) -> int:
+    """``inspect`` of a secure backup: its password, then the archive inside it, decrypted in a private folder."""
+    from backend.app.services.platform.instance_backup.archive import ArchiveError, check_archive  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.envelope import EnvelopeError, decrypt_file  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.manifest import ManifestError  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.paths import BackupPathError  # noqa: PLC0415
+
+    key = _unlock(args, path)
+    if key is None:
+        return 1
+    data_dir = _data_dir_for(args, need_database=False)
+    if data_dir is None:
+        return 1
+    try:
+        with _private_folder(data_dir) as folder:
+            clear = folder / "archive.zip"
+            print(f"🔓 Decrypting {path}")
+            try:
+                decrypt_file(path, clear, key)
+                check = check_archive(clear, verify=not args.no_verify)
+            except (EnvelopeError, ArchiveError, ManifestError) as exc:
+                print(f"❌ {exc} ({exc.code})")
+                return 1
+            except OSError as exc:
+                print(f"❌ The archive could not be decrypted in {folder}: {exc.strerror or exc}")
+                return 1
+            return _print_check(path, check, encrypted=True)
+    except BackupPathError as exc:
+        print(f"❌ {exc.path} is not a plain folder (a link, or a file): a secure backup is decrypted in a folder of the data directory")
+        return 1
+
+
+def _print_check(path: Path, check, *, encrypted: bool = False) -> int:
+    """Print what ``check_archive`` found; the exit code."""
     manifest = check.manifest
     files = manifest.files[1:]
     print(f"📦 {path}")
@@ -309,6 +479,8 @@ def cmd_inspect(args) -> int:
     print(f"   Database: revision {_safe(manifest.alembic_revision or 'unknown')}, {_human(manifest.files[0].size)}, integrity {_safe(manifest.database.integrity_check)}")
     print(f"   Rows: {sum(manifest.database.tables.values())} in {len(manifest.database.tables)} tables")
     print(f"   Files: {len(files)}, {_human(sum(entry.size for entry in files))}")
+    if encrypted:
+        print("   Secure backup: decrypted with its password")
     print(f"   Instance key: {'included' if manifest.instance_key.included else 'not included'}")
     for label, entries in (("missing", check.missing), ("different from the manifest", check.mismatched), ("not in the manifest", check.unexpected)):
         if entries:
@@ -352,6 +524,19 @@ def _print_totals(report) -> None:
         print("⚠️  Ledger totals: could not be read on the copy")
 
 
+def _print_key_and_secrets(report) -> None:
+    """The instance key of the archive, and what becomes of the saved provider keys (lot B4): re-encrypted with this
+    instance's key, or to enter again."""
+    if report.encrypted:
+        print("   Secure backup: decrypted with its password")
+    print(f"   Instance key: {'included' if report.instance_key_included else 'not included'}")
+    if report.secrets_rekeyed:
+        print(f"   Saved provider keys: {report.secrets_rekeyed} re-encrypted with this instance's key")
+    unreadable = report.secrets_unreadable.system + report.secrets_unreadable.user
+    if unreadable:
+        print(f"⚠️  {unreadable} saved provider key{'s' if unreadable != 1 else ''} cannot be read with this instance's key: enter {'them' if unreadable != 1 else 'it'} again after the restore")
+
+
 def _print_stage_report(report) -> None:
     backup = report.backup
     print(f"📦 Made by LibreFolio {_safe(backup.app_version)} ({backup.origin}) on {backup.created_at:%Y-%m-%d %H:%M:%S} UTC")
@@ -370,7 +555,7 @@ def _print_stage_report(report) -> None:
         print(f"   Changed by the upgrade: {', '.join(changed[:10])}{' …' if len(changed) > 10 else ''}")
     print(f"   Files: {report.files}, {_human(report.files_size)}")
     _print_totals(report)
-    print(f"   Instance key: {'included' if report.instance_key_included else 'not included'}")
+    _print_key_and_secrets(report)
     if report.administrators:
         print(f"   Administrators: {', '.join(_safe(name) for name in report.administrators)}")
         print("   After a restore you sign in with one of them, with the password of then; every session open now ends.")
@@ -459,8 +644,9 @@ def _restore_already_active(data_dir: Path) -> bool:
     return True
 
 
-def _check_on_a_copy(path: Path, data_dir: Path):
-    """Check the archive on a copy, printing its phases: the report, or ``None`` when it was refused (said why)."""
+def _check_on_a_copy(path: Path, data_dir: Path, key=None):
+    """Check the archive on a copy, printing its phases: the report, or ``None`` when it was refused (said why).
+    ``key``: the key of a secure backup."""
     from backend.app.services.platform.instance_backup.paths import BackupPathError, stages_dir  # noqa: PLC0415
     from backend.app.services.platform.instance_backup.staging import StagingBusyError, StagingError, stage_archive  # noqa: PLC0415
 
@@ -473,7 +659,7 @@ def _check_on_a_copy(path: Path, data_dir: Path):
 
     print(f"🔎 Checking {path} on a copy, in {stages_dir(data_dir)}")
     try:
-        return stage_archive(path, data_dir, progress=progress)
+        return stage_archive(path, data_dir, progress=progress, key=key)
     except StagingBusyError:
         print("❌ Another archive is being checked (from the web interface or another command): try again when it ends")
     except StagingError as exc:
@@ -486,16 +672,22 @@ def _check_on_a_copy(path: Path, data_dir: Path):
 def cmd_restore(args) -> int:
     """Check an archive for a restore on a copy and say what a restore would do; without ``--dry-run``, then confirm the
     restore, which the next start of the server applies."""
+    from backend.app.services.platform.instance_backup.envelope import is_envelope  # noqa: PLC0415
     from backend.app.services.platform.instance_backup.staging import remove_stage  # noqa: PLC0415
 
     path = Path(args.archive).expanduser()
     if not path.is_file():
         print(f"❌ No file at {path}")
         return 1
+    key = None
+    if is_envelope(path):
+        key = _unlock(args, path)
+        if key is None:
+            return 1
     data_dir = _data_dir_for(args, need_database=False)
     if data_dir is None or (not args.dry_run and _restore_already_active(data_dir)):
         return 1
-    report = _check_on_a_copy(path, data_dir)
+    report = _check_on_a_copy(path, data_dir, key)
     if report is None:
         return 1
     keep = False
@@ -540,6 +732,40 @@ def _print_restore_state(state) -> None:
         print("⏳ A restore is being applied by the server")
 
 
+def cmd_decrypt(args) -> int:
+    """Write the archive inside a secure backup as a plain ``.zip``: to move an instance by hand («Porta a casa»)."""
+    from backend.app.services.platform.instance_backup.envelope import EnvelopeError, decrypt_file, is_envelope  # noqa: PLC0415
+
+    path = Path(args.archive).expanduser()
+    if not path.is_file():
+        print(f"❌ No file at {path}")
+        return 1
+    if not is_envelope(path):
+        print(f"❌ {path} is not a secure backup: a plain .zip needs no decrypting (not_an_envelope)")
+        return 1
+    target = _requested(args.output)
+    if target.exists() or target.is_symlink():
+        print(f"❌ {target} already exists: choose another name")
+        return 1
+    key = _unlock(args, path)
+    if key is None:
+        return 1
+    try:
+        size = decrypt_file(path, target, key)
+    except EnvelopeError as exc:
+        print(f"❌ {exc} ({exc.code})")
+        return 1
+    except FileExistsError:
+        print(f"❌ {target} already exists: choose another name")
+        return 1
+    except OSError as exc:
+        print(f"❌ Cannot write {target}: {exc.strerror or exc}")
+        return 1
+    print(f"✅ Decrypted: {target} ({_human(size)})")
+    print("🔒 It holds every user's data in clear: keep it private, and remove it once used.")
+    return 0
+
+
 def cmd_pending(args) -> int:
     """Show the restore waiting for the next start, or the last one; ``--cancel`` drops the one waiting."""
     from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, cancel_restore, read_restore  # noqa: PLC0415
@@ -563,13 +789,16 @@ def register_subparser(parent_subparsers):
     """Register ``backup`` as a command group of dev.py."""
     parser = parent_subparsers.add_parser(
         "backup",
-        help="💾 Instance backup (create, inspect, restore, pending)",
+        help="💾 Instance backup (create, inspect, restore, decrypt, pending)",
         description="Backup of the whole instance: database, uploaded files, broker reports and risk scenarios",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   ./dev.py backup create                       Write an archive into <data dir>/backups/
   ./dev.py backup create -o /mnt/nas/          Write it into another folder
+  ./dev.py backup create --encrypt             A secure backup (.lfbk): the password is asked twice
+  ./dev.py backup create --password-file /run/secrets/backup_password
+                                               The same, the password read from a file
   ./dev.py backup inspect /mnt/nas/librefolio-backup-20261015-101500.zip
                                                Check an archive and show what it holds
   ./dev.py backup restore /mnt/nas/librefolio-backup-20261015-101500.zip --dry-run
@@ -578,29 +807,43 @@ Examples:
   ./dev.py backup restore /mnt/nas/librefolio-backup-20261015-101500.zip
                                                The same check, then, once you type "restore", the
                                                restore at the next start of the server
+  ./dev.py backup decrypt backup.lfbk -o backup.zip
+                                               The archive inside a secure backup, as a plain .zip
   ./dev.py backup pending --cancel             Drop the restore waiting for the next start
   ./dev.py backup --test-db create             Use the test data directory
 
-A relative path starts from the project root, like every path given to dev.py.
+A relative path starts from the project root, like every path given to dev.py. A password is never an argument:
+--password-file, --password-stdin, or typed at the terminal.
 """,
     )
     parser.add_argument("--test-db", action="store_true", help="Use the test data directory instead of production")
     commands = parser.add_subparsers(dest="backup_cmd", title="Backup commands", metavar="")
 
-    create = commands.add_parser("create", help="Write a backup archive of the instance (safe while the server runs)")
+    # No abbreviated options: «--password» must never pass for one of the password sources.
+    create = commands.add_parser("create", help="Write a backup archive of the instance (safe while the server runs)", allow_abbrev=False)
     create.add_argument("--output", "-o", metavar="PATH", help="Archive file, or an existing folder for it (default: <data dir>/backups/); checked before the backup starts")
+    create.add_argument("--encrypt", action="store_true", help="A secure backup: an .lfbk envelope that only its password opens, with the instance key LibreFolio generated (the password is asked twice at the terminal)")
+    _password_options(create)
     create.set_defaults(backup_func=cmd_create)
 
-    inspect = commands.add_parser("inspect", help="Check an archive against its manifest and show what it holds")
-    inspect.add_argument("archive", help="The backup archive (.zip)")
+    inspect = commands.add_parser("inspect", help="Check an archive against its manifest and show what it holds", allow_abbrev=False)
+    inspect.add_argument("archive", help="The backup archive (.zip, or .lfbk for a secure backup)")
     inspect.add_argument("--no-verify", action="store_true", help="Compare the entry names with the manifest without reading the entries (faster)")
+    _password_options(inspect)
     inspect.set_defaults(backup_func=cmd_inspect)
 
-    restore = commands.add_parser("restore", help="Restore an archive at the next start of the server, once checked on a copy (--dry-run: only the check)")
-    restore.add_argument("archive", help="The backup archive (.zip)")
+    restore = commands.add_parser("restore", help="Restore an archive at the next start of the server, once checked on a copy (--dry-run: only the check)", allow_abbrev=False)
+    restore.add_argument("archive", help="The backup archive (.zip, or .lfbk for a secure backup)")
     restore.add_argument("--dry-run", action="store_true", help="Unpack the archive into a copy, upgrade and check it, report, then remove the copy; the instance is left as it is")
     restore.add_argument("--yes", "-y", action="store_true", help='Confirm the restore without typing "restore" (needed without a terminal)')
+    _password_options(restore)
     restore.set_defaults(backup_func=cmd_restore)
+
+    decrypt = commands.add_parser("decrypt", help="Write the archive inside a secure backup (.lfbk) as a plain .zip", allow_abbrev=False)
+    decrypt.add_argument("archive", help="The secure backup (.lfbk)")
+    decrypt.add_argument("--output", "-o", metavar="PATH", required=True, help="The .zip to write: it must not exist yet")
+    _password_options(decrypt)
+    decrypt.set_defaults(backup_func=cmd_decrypt)
 
     pending = commands.add_parser("pending", help="Show the restore waiting for the next start of the server, or the last one")
     pending.add_argument("--cancel", action="store_true", help="Drop the restore waiting for the next start, and its checked copy")
@@ -608,6 +851,13 @@ A relative path starts from the project root, like every path given to dev.py.
 
     parser.set_defaults(func=_dispatch)
     return parser
+
+
+def _password_options(command) -> None:
+    """Where the password of a secure backup comes from, never the command line."""
+    sources = command.add_mutually_exclusive_group()
+    sources.add_argument("--password-file", metavar="FILE", help="Read the password from FILE: its whole content, without a byte order mark and the line breaks at its end (a Docker secret works)")
+    sources.add_argument("--password-stdin", action="store_true", help="Read the password from the standard input, one line")
 
 
 def _dispatch(args) -> int:
