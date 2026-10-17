@@ -180,6 +180,20 @@ Each submitted item gets one result carrying the same `is_chain`/`providers_used
 
     If any submitted route references a provider code not registered in the provider registry, that item's result reports `success: false`, `action: "error"`, and a `message` naming the unknown code(s) — with `providers_used` still derived from the *submitted* `chain_steps`, so an unknown code appears in `providers_used` too (it is membership of what was posted, not a check that the code is valid). When at least one item fails validation, the whole batch is rolled back and the endpoint responds `400` with the per-item results (including the successful ones, none of which were actually persisted) in the error detail body.
 
+!!! note "Replacing a pair's routes: `?replace=true`"
+
+    By default the endpoint only creates or updates the priorities it is given: a route at another priority stays. With
+    `POST /api/v1/fx/providers/routes?replace=true`, each pair the request names keeps exactly the routes posted for it,
+    and its other priorities are deleted in the same transaction, after the validation (X-R75). An edit is then one
+    request: a refusal (`400`, `409`, `500`) or a request that never arrives leaves the pair as it was. The MANUAL rules
+    are the same: a real provider posted removes the MANUAL route, and the MANUAL item alone
+    (`{"from": base, "to": quote, "provider": "MANUAL"}`, priority `999`) leaves the pair manual. A pair not configured
+    yet is created; one another request configured in the meantime keeps only what this one posts for it.
+
+    The web app's provider editor (`FxPairAddModal`, the pair's detail page) saves this way. Before X-R75 it deleted the
+    whole pair first and then posted the new routes, so a failed post left the pair with no route at all, and removing
+    every route deleted the pair instead of leaving it manual.
+
 ### 🗑️ Delete Routes
 
 `DELETE /api/v1/fx/providers/routes`
@@ -198,7 +212,9 @@ Removes routing rules. Can delete a specific priority or all rules for a pair.
 ]
 ```
 
-If `priority` is omitted, all routes for the pair are deleted. When all real-provider routes are deleted, a MANUAL sentinel route is automatically reinstated to preserve the pair in the system.
+If `priority` is omitted, all routes for the pair are deleted, MANUAL included: the pair is removed, and no MANUAL
+route is reinstated. When a delete that names a priority leaves the pair without a real provider, a MANUAL sentinel route
+is reinstated to keep the pair in the system.
 
 ## 🔄 Auto-Sync Behavior
 
