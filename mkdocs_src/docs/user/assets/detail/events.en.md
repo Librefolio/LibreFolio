@@ -36,7 +36,7 @@ In **Prices** mode, events appear as markers on the [price chart](chart.md), eac
 - **From a provider**, at each sync: dividends and splits from [Yahoo Finance](../providers/yahoo-finance.md), dividends from [justETF](../providers/justetf.md), and from [Scheduled Investment](../providers/scheduled-investment.md) the interest payouts and final maturity settlement of **Generate Coupon**, plus the events listed in its schedule (**Add Event** in the asset form).
 - **From you**: in the **Events** tab of the [Data Editor](data-editor.md), one by one or from a CSV file, or with **+ New event** in the **Linked Event** field of a transaction ([below](#new-event)).
 
-A sync refreshes the provider's events and never touches yours. A provider's event is read-only in the editor, and deleting it lasts only until the provider sends it again: to change a Scheduled Investment's events, edit its schedule.
+A sync refreshes the provider's events and never touches yours. A provider's event is read-only in the editor, and deleting it lasts only until the provider sends it again: to change a Scheduled Investment's events, edit its schedule. Removing the provider (**No Provider** in the [asset form](../create-edit.md#editing-an-asset)) deletes its events, and is refused while a transaction is linked to one of them.
 
 ### ✨ New event from a transaction {: #new-event }
 
