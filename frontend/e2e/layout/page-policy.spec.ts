@@ -174,7 +174,10 @@ function laneOrigin(baseURL: string | undefined): string {
     return new URL(baseURL).origin;
 }
 
-/** An HTML answer, by the server's own rule (`_is_html`, security_headers.py): a Content-Type starting with `text/html`, in any case. */
+/**
+ * An HTML answer: a Content-Type starting with `text/html`, in any case. The server gives `PAGE_POLICY` to every document
+ * (`_is_document`, security_headers.py: HTML, XHTML, SVG and XML since H-45); every flow of this spec opens HTML pages only.
+ */
 function isHtml(contentType: string): boolean {
     return contentType.toLowerCase().startsWith('text/html');
 }
