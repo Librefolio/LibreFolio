@@ -1,5 +1,5 @@
 <!--
-  Settings › Backup (administrators only): the body of the tab.
+  Settings › Administration › Backup (administrators only): the body of the tab.
 
   The backup card, then the restore card (lot B5b).
 -->

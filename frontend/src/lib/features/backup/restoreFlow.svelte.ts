@@ -15,7 +15,7 @@
  * - `checking`: the server checks it on a copy; read again every `pollMs`.
  * - `report`: the check ended: its report, restorable or not.
  * - `confirming`, `cancelling`: the request is out.
- * - `pending`: a restore waits for the next start of the server; `errorCode` set when the restart request failed.
+ * - `pending`: a restore waits for the next start of the server; `errorCode` set when the restart or the cancel failed.
  * - `in_progress`: a start of the server is applying it.
  * - `restarting`: the server was asked to stop; `outcome` says what the page knows.
  * - `failed`: a request was refused or got no answer: `errorCode`, `failure`.
@@ -451,8 +451,11 @@ export class RestoreFlowController {
         } catch (error) {
             if (this.#stale(generation)) return;
             if (backupErrorCode(error) !== 'restore_not_pending') {
+                // The restore still waits: the card shows it with the error, to cancel it again or to restart (B-32).
+                const code = backupFailureCode(error);
                 this.state = 'pending';
-                this.#fail(backupFailureCode(error), 'cancel');
+                this.#setError(code, 'cancel');
+                this.#emit('backup.restore.failed', {code, what: 'cancel'});
                 return;
             }
         }

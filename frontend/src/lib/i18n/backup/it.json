@@ -214,6 +214,7 @@
         "restore_confirm_failed": "Il ripristino non è stato confermato: la causa è nel log del server. Non è cambiato nulla.",
         "restore_cancel_failed": "Il ripristino non è stato annullato: la causa è nel log del server. Attende ancora il prossimo avvio.",
         "restore_restart_failed": "LibreFolio non è stato riavviato: la causa è nel log del server. Il ripristino attende ancora il prossimo avvio.",
+        "restore_state_unreadable": "Lo stato del ripristino non si può leggere: la causa è nel log del server. Un ripristino potrebbe ancora attendere il prossimo avvio.",
         "network": "Il server non risponde: controlla la connessione e riprova.",
         "unexpected": "Il server ha risposto con un errore: la causa è nel log del server.",
         "wrong_password": "Password sbagliata, oppure il file è stato modificato: riscrivi la password.",
