@@ -39,6 +39,7 @@
     "valuedAtCost": "{count} asset(s) valued at cost — no price available for over 2 weeks (as of {as_of_date})",
     "transferShareMismatch": "{count} transfer(s) between brokers where your share differs — the difference counts as a gain or loss",
     "invalidSplitRatio": "{count} asset(s) have a split with an invalid ratio — ignored until you fix it in the asset's events",
-    "transactionsBeforeFloor": "{count} transaction(s) dated before 1900 (the earliest on {earliest}) — the history starts on 1 January 1900: correct their dates"
+    "transactionsBeforeFloor": "{count} transaction(s) dated before 1900 (the earliest on {earliest}) — the history starts on 1 January 1900: correct their dates",
+    "quoteInMinorUnit": "{count} asset(s) quoted in pence (GBp) by their provider and valued as pounds — set “Units per single price” to 100 on each"
   }
 }

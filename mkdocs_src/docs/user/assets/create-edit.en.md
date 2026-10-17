@@ -34,7 +34,10 @@ Check these fields before saving:
 - **Name**: required and unique; a warning appears if another asset already uses it.
 - **Type**: see [Choose the asset type](#choosing-the-asset-type).
 - **Units per single price**: how many units one price refers to, usually 1. Bonds are quoted per
-  100: LibreFolio proposes it when you choose **Bond**.
+  100: LibreFolio proposes it when you choose **Bond**. A London share that its provider quotes in
+  pence (GBp) needs 100 too: a price of 7,250 is then read as 72.50 GBP a share. Until you set it,
+  the [Data Quality Banner](../dashboard/index.md#data-quality-banner) lists each one you hold; the
+  dividends of such a share still show in pence.
 - **Currency**: the currency the prices are quoted in. For a fund listed in euros that is EUR,
   even when the fund is denominated in another currency.
 

@@ -5051,3 +5051,184 @@ del 1900, fuori (consigliato: una voce a parte) o un pavimento in lettura nel ri
 12. ✅ 17/10 ~15:57 — Checkpoint FROZEN (plurale, i due commenti, la verifica GBp, Z-32): 7 file tracciati, nessuno
     nuovo, su HEAD `35f31d492`. Build stretta rc 0, 0 avvisi; `check-links` 97 validi; `git diff --check` pulito;
     porta 6186 libera.
+
+### E-19 — `GBp` arriva al confronto di `refresh.py:507`? (17/10 ~16:00, sola lettura)
+> **Il compito** (coordinatore, ~15:57, da E): sì o no con prove, prima di ogni codice.
+
+**No.** Il plugin costruisce ogni punto con costruttori che validano (nessun `model_construct`): `FAPricePoint`
+(`schemas/prices.py:136–141`), `FACurrentValue` e `Currency` chiamano `Currency.validate_code`, che fa
+`v.upper().strip()` (`schemas/common.py:218`): `GBp` diventa `GBP` alla costruzione, prima del `model_dump()` di
+`refresh.py:292`. Le cache scrivono solo oggetti validati o i loro dump (`refresh.py:309`, `:331`;
+`price_query.py:158`). Sonda in processo (`files/e19/probe.py`, nessun DB, server o rete) con le vere
+`_map_history_prices` e `_parse_dividend_events`, date con fuso come le dà yfinance: codici `GBP`, **0 scarti su 3**,
+chiusure tenute in pence (1234.5, 1249.0, 1251.0). Risposta mandata al coordinatore alle ~16:01.
+
+### Z-32 (c) — l'avviso delle linee quotate in pence: analisi (17/10 ~16:05, sola lettura)
+> **Il compito** (coordinatore, ~16:00): «(c), the data-quality warning: yours, for 1.3, analysis first. The key
+> question: the schemas normalize `GBp` to `GBP`, so how do we know afterwards that Yahoo reported pence? Options to
+> weigh: the plugin keeps the raw code in the asset's provider metadata, or the warning uses the exchange suffix.»
+> Più: dove si vede (il report di qualità del portafoglio, come `NON_ISO_CURRENCY` di E-19b, stessa macchina), l'azione
+> suggerita, i test; il plugin yfinance è di X, che revisiona. (a)/(b) restano per lo sviluppatore, dopo la 1.3.
+
+**Stato reale** (HEAD `80cef0e43`).
+- Il codice grezzo esiste solo dentro il plugin: `_YahooHistoryAcquisition.currency` = `info["currency"]`
+  (`yahoo_finance/plugin.py:186`); `get_history_value` restituisce `FAHistoricalData` (`:598`). Dopo, tutto è `GBP`.
+- Nessuna colonna libera per conservarlo: l'asset ha `classification_params` (classificazione), l'assegnazione ha
+  `provider_params` (configurazione dell'utente, riscritta quando cambia provider, identificativo o parametri:
+  `provider_management.py:269–272`) e `last_fetch_at` (scritto da `refresh.py:622`).
+- yfinance accetta TICKER **e ISIN** (`plugin.py:400–401`): un'assegnazione per ISIN non ha suffisso di borsa.
+- Il report: `build_data_quality_report` (`financial_math/portfolio/data_quality.py`, di MF) riceve liste già pronte
+  da `portfolio_service.py`; il precedente più vicino è `INVALID_SPLIT_RATIO` (MF-D4): `(asset_id, nome)`,
+  WARNING, `cta_action="navigate_asset"`, `group_key`. I codici sono in `IssueCode` (`schemas/portfolio.py:161`,
+  pubblico: serve `api sync`). Il banner disegna un link «vai all'asset» per asset (`DataQualityBanner.svelte:146`).
+  Le stringhe: `i18n/dataQuality/{en,it,fr,es}.json`. `NON_ISO_CURRENCY` (E-19b) non è ancora nel mio albero.
+- L'azione: il campo «Units per single price» (`assets.quoteBaseQuantity`) nella finestra dell'asset
+  (`AssetModalDetails.svelte`); ogni utente può modificarlo (`patch_assets_bulk`, solo `get_current_user`), e vale
+  per tutti quelli che hanno l'asset. Documentato in `user/assets/create-edit.en.md:36` (solo obbligazioni).
+
+**La domanda chiave: come sapere dopo che Yahoo diceva pence.**
+1. **Il codice grezzo conservato (consigliata).** Il plugin lo dichiara in un campo a parte, non validato:
+   `FAHistoricalData.reported_currency` (facoltativo, non in OpenAPI); yfinance lo riempie da
+   `acquisition.currency`. Il refresh lo porta in `_FetchedRefreshData` e lo scrive accanto a `last_fetch_at`, in una
+   colonna nuova `asset_provider_assignments.reported_currency` (nullable, ≤ 8 caratteri) con la migrazione
+   `010_provider_reported_currency` (30 caratteri). Si azzera quando cambia provider o identificativo. L'avviso:
+   asset tenuti nel perimetro con `reported_currency` in una tabella di unità minori (`{"GBp": 100}`) e base 1.
+   - Pro: esatto (lo dice Yahoo), nessun falso positivo, valido per ogni provider futuro, sparisce da solo con la
+     base 100. Contro: schema e migrazione (catena condivisa), contratto del plugin (X); l'avviso compare dopo la
+     prossima sincronizzazione storica (lo scheduler la fa ogni giorno).
+2. **Il suffisso di borsa: scartata.** yfinance + `.L` + `GBP` + base 1. Manca le assegnazioni per ISIN, e prende per
+   pence le linee LSE quotate in sterline (alcuni ETF): lì «metti la base a 100» farebbe valere la linea 100 volte
+   meno. Un consiglio che può rompere un asset giusto non va mostrato.
+3. **Il rapporto fra chiusure e prezzi delle operazioni** (dopo la 1.3, di MF): per un asset tenuto a base 1, la
+   chiusura del giorno di un acquisto ~100 volte il prezzo unitario dell'operazione. Niente schema né plugin, e
+   prende anche le obbligazioni lasciate a base 1 o un CSS scraper in pence; ma è un'euristica: FX quando l'operazione
+   è in un'altra valuta, tolleranze, uno split mancante dà lo stesso segnale. È matematica finanziaria: MF.
+4. Senza migrazione, scartate: in `provider_params` (configurazione, riscritta dal PATCH dell'assegnazione e mostrata
+   come tale) o in `classification_params` (classificazione, non quotazione).
+
+**Dove e come si vede (strada 1).**
+- Report di qualità del portafoglio: nuovo `IssueCode` (proposta `QUOTE_IN_MINOR_UNIT`), WARNING, `affected_asset_ids`
+  e nomi, `cta_action="navigate_asset"`, `group_key="quote_in_minor_unit"`; parametro nuovo di
+  `build_data_quality_report` come `invalid_split_assets`.
+- Messaggio (`dataQuality.quoteInMinorUnit`, 4 lingue): «{count} asset(s) are quoted in pence by their provider but
+  valued as pounds — set "Units per single price" to 100 on each». Il link apre l'asset, dove si cambia il campo.
+- Limite noto, scritto nelle docs: con la base 100 i valori tornano, ma i dividendi mostrati restano in pence
+  (strada (b), dopo la 1.3).
+- **Con E-19b**: stessa forma (WARNING, `navigate_asset`, stringhe in `i18n/dataQuality`, righe vicine nella tabella
+  di `data-quality-banner.md`) e, se `NON_ISO_CURRENCY` guarda la valuta degli asset tenuti, un solo aiuto in
+  `portfolio_service.py` che legge una volta asset e assegnazioni e restituisce le due liste. Da concordare con E:
+  forma del suo parametro, chi crea l'aiuto, ordine d'ingresso (stessi file).
+
+**Superfici.** `schemas/prices.py` (`FAHistoricalData`); `yahoo_finance/plugin.py` (X); `assets/refresh.py`;
+`assets/provider_management.py`; `db/models.py` + `alembic/versions/010_…` + `_backend_db.py` (`migration-010`);
+`portfolio_service.py`; `financial_math/portfolio/data_quality.py` (MF); `schemas/portfolio.py` + `api sync`;
+`i18n/dataQuality/*.json`; docs `developer/frontend/data-quality-banner.md`, `developer/backend/assets/architecture.md`,
+`user/dashboard/index.en.md` («Data Quality Banner»), `user/assets/create-edit.en.md:36`; CHANGELOG.
+
+**Test** (test-author, rossi prima).
+- Puri: `build_data_quality_report` con la lista nuova (`services roi-fifo-utils`); yfinance con un `Ticker` finto,
+  `info["currency"]="GBp"` → `reported_currency == "GBp"`, prezzi `GBP` invariati (`services provider-errors`, o un
+  file nuovo; X revisiona).
+- Refresh: un provider finto che riporta `GBp` → colonna scritta; cambio di provider → azzerata
+  (`services asset-source-refresh`).
+- Migrazione: `db migration-010` (su e giù su un DB popolato, come 005–009).
+- Report: asset `GBp` a base 1 tenuto → avviso; base 100 → niente; `GBP` → niente (`api portfolio`).
+- Frontend: il banner è generico; un caso del nuovo codice in `front-portfolio banners` solo se serve. Catalogo i18n.
+
+**Rischi.** La catena delle migrazioni (due `010` in parallelo = due teste = avvio senza migrare): l'id lo fissa il
+coordinatore. File in comune con E-19b (`data_quality.py`, `schemas/portfolio.py`, `i18n/dataQuality`, docs), file
+di MF e di X. Complessità: media (una decina di file e una migrazione).
+
+**Decisioni chieste.** D1: strada 1 (consigliata) o 3. D2: i nomi (`QUOTE_IN_MINOR_UNIT`, `reported_currency`).
+D3: la macchina con E-19b (aiuto unico o solo stessa forma) e l'ordine. D4: id e posto della migrazione. D5: niente
+avviso nella pagina dell'asset per ora (pagina di X in movimento).
+
+**Passi** (dopo il via): 1. rossi; 2. schema e migrazione; 3. plugin e refresh; 4. report e `api sync`; 5. i18n;
+6. docs; 7. corse leggere (`services roi-fifo-utils`, `provider-errors`, `asset-source-refresh`, `db migration-010`,
+`api portfolio`, controllo i18n, build delle docs); 8. checkpoint. **Fatto** quando un asset `GBp` a base 1 tenuto dà
+l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
+
+> **Decisione** (coordinatore, 17/10 ~16:06): «Z-32 (c) decisions; GO, failing tests first: D1: option 1 (raw code
+> kept). Option 3 goes in MF's section as a post-1.3 idea. D2: `QUOTE_IN_MINOR_UNIT` / `reported_currency`, OK. D3:
+> you land first and create the shared helper in `portfolio_service.py`, which reads held assets and their
+> assignments once and returns what both checks need. E-19b (later, after E-19a) adds `NON_ISO_CURRENCY` on that
+> helper. D4: you own `010_provider_reported_currency`, `down_revision` 009. No other open lot has a migration […]
+> Up/down tested on a populated DB. D5: no warning on the asset page for now. Reviews: X (the yfinance plugin, the
+> `FAHistoricalData` contract), MF (`data_quality.py`), H (the migration). It needs `api sync`: you're its writer
+> for this lot, so tell me when you run it.» L'idea 3 nella sezione di MF la scrive il coordinatore (non è la mia
+> sezione).
+
+### Z-32 (c) — l'avviso delle linee quotate in pence: lavoro (17/10 ~16:07)
+> **Decisione** (coordinatore, 17/10 ~16:15): la semplificazione va bene (nessun cambio del plugin né campo nuovo:
+> `FAHistoricalData.currency`, già grezzo, più la guardia; X rivede descrizione e guardia). `_backend_db.py`: permesso
+> solo per l'azione `migration-010`, il suo `add_test` e la voce nell'ordine di `db all`, accanto a `session-pragmas`
+> di H-51 (già in dev).
+
+1. ✅ 17/10 ~16:12–17:00 — Rossi a test-author (un solo agente, una corsa alla volta): migrazione (`test_db/
+   test_migration_010_reported_currency.py`), guardie del contratto (`services provider-errors`), report puro
+   (`services roi-fifo-utils`), refresh e assegnazione, API (`api portfolio`).
+   > **Note implementazione**: 38 casi in 6 file, 35 rossi ognuno per la ragione detta e 3 guardie verdi:
+   > MIG010-001…013 (file nuovo; 9 «Alembic non trova 010», 2 la testa, 1 la revisione, 1 il modello), 2 guardie in
+   > `test_yahoo_finance_errors.py` (il campo resta `GBp`; Londra dà `GBp` con punti `GBP` e pence tenuti), 8 in
+   > `test_data_quality_report.py` (`TestQuoteInMinorUnitIssue`), 8 `test_z32_*` in `test_asset_source_refresh.py`, 6
+   > in `test_assets_provider.py`, 1 in `test_portfolio_api.py` (`TestQuoteInMinorUnitDataQuality`, nelle tre sezioni
+   > `data_quality`). Conti: provider-errors 195→197, roi-fifo-utils 1386→1394, asset-source-refresh 18→26,
+   > assets-provider 24→30, portfolio 52→53, migrazione 13. Test-author ha visto da sé che il downgrade a batch
+   > cancella o blocca gli eventi del provider (la mia bozza usava già `DROP COLUMN` nativo). Letture sue che
+   > accetto: un codice troppo lungo lascia quello salvato; un asset tenuto da due broker è elencato una volta; il
+   > cancello delle frasi (`TestReportSentences`) chiede la chiave nelle 4 lingue.
+   > **⚠️ Fuori pista**: test-author ha notato che `_normalize_yahoo_date` porta le date in UTC: verificato
+   > (yfinance 1.7.0 data le barre a mezzanotte del fuso della borsa) → Z-33, alto, mio (decisione del
+   > coordinatore), analisi dopo questo checkpoint.
+2. ✅ 17/10 ~16:40 — Bozza fuori dal repo (`files/z32-draft/apply_z32.py`, da HEAD `80cef0e43`): modello e migrazione
+   010 (file nuovo), descrizione di `FAHistoricalData.currency`, `IssueCode.QUOTE_IN_MINOR_UNIT`, parametro del
+   report, aiuto condiviso `_held_asset_quote_facts` (+ `HeldAssetQuoteFacts`, `_quote_in_minor_unit_assets`) e le
+   due chiamate, cattura e scrittura nel refresh, azzeramento al cambio di provider, la tabella delle unità minori
+   (`utils/currency_units.py`, file nuovo), l'azione `migration-010` del runner. Provata su copie: compilazione,
+   black, ruff dal repo, inverso esatto (i file nuovi tolti).
+   > **⚠️ Fuori pista**: la prima idea per il downgrade era `batch_alter_table`/`drop_column`; su SQLite un batch
+   > ricostruisce la tabella e, con `PRAGMA foreign_keys=ON`, il DROP dell'originale fa scattare l'azione di
+   > `asset_events.provider_assignment_id` (eventi scollegati o cancellati). Si fa come 004 e 005: `ALTER TABLE ADD
+   > COLUMN` e `DROP COLUMN` nativi (SQLite 3.54 qui), dichiarazione `VARCHAR(8)` come la scrive `create_all`.
+   > **Note implementazione**: ruff sulla copia dà un I001 spurio (il modulo nuovo non esiste ancora sul disco: lo
+   > legge come terza parte); da ricontrollare nel repo. `_backend_db.py` non passa black già a HEAD (preesistente):
+   > le mie tre aggiunte seguono lo stile dei vicini 005–009, e black se ne lamenta allo stesso modo.
+
+> **Decisione** (coordinatore, 17/10 ~17:0x): «Z-33: confirmed by a probe of mine (`2025-07-07 00:00+02:00` gives
+> `2025-07-06` via UTC, `07-07` locally). File it HIGH, owner Z (not X: X's queue is long, and you have the context);
+> X reviews the plugin change. It's 1.3 material, right after the Z-32 (c) checkpoint. Analysis first. The code fix
+> looks clear: take the local date. The repair is the hard part.» Da coprire: i prezzi (le righe in più nei giorni
+> senza borsa), gli eventi (una risincronizzazione sostituisce o aggiunge per data? uno split due volte), le strade
+> di riparazione (post-migrazione che cancella e lascia rileggere, ridatazione mirata, CLI manuale) e il rischio per
+> le righe manuali, come riconoscere gli asset toccati. La scelta della riparazione va allo sviluppatore.
+3. ✅ 17/10 ~17:02 — Codice applicato (`apply_z32.py`, da HEAD `80cef0e43`): ruff e black puliti nel repo (l'I001 della
+   copia era spurio). Chiave i18n `dataQuality.quoteInMinorUnit` con `dev.py i18n add` nelle 4 lingue (le etichette
+   vere del campo: «Units per single price», «Unità per singolo prezzo», «Unités par prix unitaire», «Unidades por
+   precio unitario»); `i18n check` passa (5 052 chiavi).
+4. ✅ 17/10 ~17:16 — Corse leggere (`files/z32_light.sh`, carico < 50, una alla volta, corsia 6186): `db migration-010`
+   13, `services provider-errors` 197, `services roi-fifo-utils` 1 394, `services asset-source-refresh` 26,
+   `api assets-provider` 30, `api portfolio` 53, `utils gate-i18n-catalog` 176, `utils gate-i18n-usage` 195; porta
+   libera.
+5. ✅ 17/10 ~17:20 — `api sync` (annunciato al coordinatore): il client generato (ignorato da git) ha
+   `QUOTE_IN_MINOR_UNIT`; nessun file tracciato cambiato. `front check`: svelte-check 0 errori e 0 avvisi.
+   `db validate`: 17 verdi (il DB della corsia migrato a 010 all'avvio del server di test).
+6. ✅ 17/10 ~17:22–17:43 — Docs (docs-writer), 8 file: `developer/frontend/data-quality-banner.md` (riga della tabella,
+   regola, «How to Trigger»), `developer/backend/assets/architecture.md` (`#reported-currency`),
+   `developer/architecture/database/assets_pricing.md` (la colonna, ancora `#asset-provider-assignment`),
+   `developer/architecture/database/index.md` (riga della migrazione 010), `developer/backend/assets/
+   provider_yahoo_finance.md`; per l'utente `dashboard/index.en.md` (banner), `assets/create-edit.en.md` («Units per
+   single price»: il caso dei pence) e, su mia richiesta, `assets/providers/yahoo-finance.en.md` (Limiti). Nessun
+   timbro: debito di traduzione vero (translate-validate: 3 errori di link mancante per pagina utente nuova, più il
+   debito preesistente di `create-edit`). Build stretta (`files/z32_build.sh`) rc 0, 0 avvisi; `check-links` 97 validi.
+   > **⚠️ Fuori pista**: docs-writer ha corretto la mia analisi: il selettore «Linked Event» del modulo transazione
+   > legge `/assets/events/query` (`AssetEventPicker.svelte:123`), non `/transactions/events/suggest` (nessuno lo chiama
+   > dal frontend); anche lì l'importo è grezzo, il limite resta. Corretto nel backlog («evento collegato»).
+   > **Note implementazione**: corse in più per i file toccati dal refresh e dall'assegnazione: `api assets-price` 22,
+   > `services asset-source` 61; porta libera.
+7. ✅ 17/10 ~17:50 — Checkpoint FROZEN al coordinatore (revisori X, MF, H).
+   > **Accordo con E** (17/10 ~17:30, su richiesta del coordinatore): per E-19b2 (`NON_ISO_CURRENCY`, dopo di me) E
+   > usa il mio lettore `_held_asset_quote_facts` → `HeldAssetQuoteFacts(asset_id, name, currency, quote_base_quantity,
+   > provider_code, reported_currency)`, la stessa variabile locale `held_quote_facts` nei due percorsi del report, un
+   > suo filtro accanto a `_quote_in_minor_unit_assets`; ordine: il suo codice dopo `QUOTE_IN_MINOR_UNIT`, il suo
+   > parametro dopo `quote_in_minor_unit_assets`, il suo blocco dopo il mio. Il mio avviso non ha `suggestion` (solo
+   > `count`, fissato dai test); nessun cambio del modello dell'avviso né del banner.
