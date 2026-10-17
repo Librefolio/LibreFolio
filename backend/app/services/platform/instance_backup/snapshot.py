@@ -57,7 +57,7 @@ def describe_database(path: Path) -> DatabaseDescription:
         integrity = [str(row[0]) for row in conn.execute("PRAGMA integrity_check").fetchmany(_INTEGRITY_LINES)]
         violations = len(conn.execute("PRAGMA foreign_key_check").fetchall())
         names = [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
-        tables = {name: conn.execute(f'SELECT count(*) FROM "{_quoted(name)}"').fetchone()[0] for name in names}
+        tables = {name: conn.execute(f"SELECT count(*) FROM {_identifier(name)}").fetchone()[0] for name in names}
         revision = _alembic_revision(conn) if "alembic_version" in tables else None
     size, sha256 = file_digest(path)
     return DatabaseDescription(
@@ -70,9 +70,10 @@ def describe_database(path: Path) -> DatabaseDescription:
     )
 
 
-def _quoted(name: str) -> str:
-    """A table name ready to sit between double quotes: a quote it holds is doubled."""
-    return name.replace('"', '""')
+def _identifier(name: str) -> str:
+    """``name`` as an SQL identifier: in double quotes, a quote it holds doubled (an archive's tables may be named
+    anything)."""
+    return '"' + name.replace('"', '""') + '"'
 
 
 def _alembic_revision(conn: sqlite3.Connection) -> str | None:
