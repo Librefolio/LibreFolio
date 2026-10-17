@@ -316,7 +316,8 @@
         "generic": "L'action a échoué. Réessayez.",
         "load": "Impossible de charger les comptes.",
         "PENDING_SETUP": "Cet administrateur attend sa configuration : il ne peut être ni réactivé ni rétrogradé ici.",
-        "SETUP_COMPLETED": "Cet administrateur a terminé sa configuration entre-temps : rien n'a été modifié."
+        "SETUP_COMPLETED": "Cet administrateur a terminé sa configuration entre-temps : rien n'a été modifié.",
+        "LAST_ADMIN_DELETION": "Vous êtes le dernier administrateur actif : nommez administrateur un autre compte avant de supprimer le vôtre."
       },
       "invite": {
         "button": "Inviter",
