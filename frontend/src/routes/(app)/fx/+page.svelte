@@ -28,9 +28,10 @@
     import {type ChartSettings, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, displayFxDelta, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
     import {extractDaysBack} from '$lib/utils/assetPriceDerived';
+    import {fetchFxPeriodChanges, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
@@ -170,44 +171,15 @@
 
     let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
-    // Delta periods for table columns
-    const DELTA_PERIODS = [
-        {key: '1W', days: 7},
-        {key: '1M', days: 30},
-        {key: '3M', days: 91},
-        {key: '6M', days: 182},
-        {key: '1Y', days: 365},
-        {key: '2Y', days: 730},
-        {key: '3Y', days: 1095},
-        {key: '5Y', days: 1825},
-    ] as const;
+    // The Δ columns (1D … 5Y): the backend computes them up to the end of the range, both ways, and lists the
+    // periods (X-R53). Kept apart from the rate flow, and replaced by the latest answer only.
+    let periodSpecs = $state<PeriodSpec[]>([]);
+    let periodDeltas = $state<Map<string, {direct: PeriodDeltas; inverse: PeriodDeltas}>>(new Map());
+    let periodChangesLoading = $state(false);
+    let periodChangesVersion = 0;
 
     // Which delta periods are visible for the selected date range
-    let visiblePeriods = $derived(
-        DELTA_PERIODS.filter((p) => {
-            const rangeMs = new Date(dateEnd).getTime() - new Date(dateStart).getTime();
-            const rangeDays = rangeMs / (1000 * 60 * 60 * 24);
-            return rangeDays >= p.days;
-        }),
-    );
-
-    function computePeriodDelta(data: FxDataPoint[], periodDays: number, inverted: boolean): number | null {
-        if (data.length < 2) return null;
-        const lastPoint = data[data.length - 1];
-        const targetDate = new Date(lastPoint.date);
-        targetDate.setDate(targetDate.getDate() - periodDays);
-        const targetStr = targetDate.toISOString().slice(0, 10);
-        // Find closest point at or before target date (backward-fill)
-        let refPoint: FxDataPoint | null = null;
-        for (let i = data.length - 1; i >= 0; i--) {
-            if (data[i].date <= targetStr) {
-                refPoint = data[i];
-                break;
-            }
-        }
-        if (!refPoint) return null;
-        return displayFxDelta(refPoint.rate, lastPoint.rate, inverted)?.pct ?? null;
-    }
+    let visiblePeriods = $derived(visiblePeriodColumns(periodSpecs, dateStart, dateEnd));
 
     function fxPointToLineDataPoint(point: FxDataPoint, inverted: boolean): LineDataPoint {
         const rate = displayFxRate(point.rate, inverted);
@@ -246,13 +218,8 @@
     // Map to FxRow for table view
     let fxTableRows = $derived<FxRow[]>(
         filteredPairs.map((p) => {
-            const inv = isCardInverted(p.config.slug);
-            const deltas: Record<string, number | null> = {
-                '1D': computePeriodDelta(p.data, 1, inv),
-            };
-            for (const period of visiblePeriods) {
-                deltas[period.key] = computePeriodDelta(p.data, period.days, inv);
-            }
+            const changes = periodDeltas.get(`${p.config.base}/${p.config.quote}`);
+            const deltas: PeriodDeltas = (isCardInverted(p.config.slug) ? changes?.inverse : changes?.direct) ?? {};
             return {
                 slug: p.config.slug,
                 base: p.config.base,
@@ -418,7 +385,53 @@
         displayDateStart = 'min';
     }
 
+    /** Rates and signals (the bulk convert, the cache) and the Δ columns (the backend's period changes), together. */
     async function fetchAllPairData(propagateError = false) {
+        await Promise.all([fetchAllPairSeries(propagateError), loadPeriodChanges()]);
+    }
+
+    /** The Δ columns of every configured pair up to the end of the range, both ways, from the backend (X-R53). */
+    async function loadPeriodChanges() {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        if (!current() || pairs.length === 0) return;
+        const version = ++periodChangesVersion;
+        periodChangesLoading = true;
+        try {
+            const result = await fetchFxPeriodChanges(
+                pairs.map((pair) => ({base: pair.config.base, quote: pair.config.quote})),
+                dateEnd,
+            );
+            if (!current() || version !== periodChangesVersion) return;
+            if (result.periods.length > 0) periodSpecs = result.periods;
+            periodDeltas = result.deltasByPair;
+        } catch (requestError) {
+            if (!current() || version !== periodChangesVersion) return;
+            console.error('Failed to fetch FX period changes:', requestError);
+            periodDeltas = new Map();
+        } finally {
+            if (version === periodChangesVersion) periodChangesLoading = false;
+        }
+    }
+
+    /** One pair's Δ columns from the backend, merged into the others' (after its sync, or once added). */
+    async function loadPairPeriodChanges(index: number) {
+        const pair = pairs[index];
+        if (!pair) return;
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        const version = periodChangesVersion;
+        try {
+            const result = await fetchFxPeriodChanges([{base: pair.config.base, quote: pair.config.quote}], dateEnd);
+            if (!current() || version !== periodChangesVersion) return;
+            if (result.periods.length > 0) periodSpecs = result.periods;
+            periodDeltas = new Map([...periodDeltas, ...result.deltasByPair]);
+        } catch (requestError) {
+            if (current()) console.error(`Failed to fetch the period changes of ${pair.config.slug}:`, requestError);
+        }
+    }
+
+    async function fetchAllPairSeries(propagateError = false) {
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current() || pairs.length === 0) return;
@@ -521,7 +534,12 @@
         }
     }
 
+    /** One pair's rates and signals, and its Δ columns, together. */
     async function fetchPairData(index: number) {
+        await Promise.all([fetchPairSeries(index), loadPairPeriodChanges(index)]);
+    }
+
+    async function fetchPairSeries(index: number) {
         const pair = pairs[index];
         if (!pair) return;
         const store = getFxStore(pair.config.slug);
@@ -966,7 +984,7 @@
      * Same two-wave load as the assets page: the pair list first, then rates per pair. See the
      * note there — until this is false, the rates on screen are not the final ones.
      */
-    let busy = $derived(loading || pairs.some((p) => p.loading));
+    let busy = $derived(loading || periodChangesLoading || pairs.some((p) => p.loading));
 </script>
 
 <div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="fx-page">

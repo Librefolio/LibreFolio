@@ -1,7 +1,8 @@
 /**
  * assetPriceDerived.ts — Pure, side-effect-free computation of per-asset derived price
- * state (last price, deltas over multiple periods, chart-ready data) from a raw price
- * array.
+ * state (last price, the delta over the range, chart-ready data) from a raw price
+ * array. The Δ columns of fixed periods (1D … 5Y) are not computed here: the backend
+ * does (`utils/periodChanges.ts`, X-R53).
  *
  * Extracted from the Assets list page (`assets/+page.svelte`) so the SAME logic can run
  * either on the main thread (cache-hit fast path, cheap) or inside a Web Worker (fetch
@@ -98,20 +99,7 @@ export interface DerivedPriceState {
     deltaAbs: number | null;
     deltaPercent: number | null;
     chartData: DerivedChartPoint[];
-    deltas: Record<string, number | null>;
 }
-
-/** Delta periods shown as table/card columns — shared by Assets and (conceptually) FX. */
-export const DELTA_PERIODS = [
-    {key: '1W', days: 7},
-    {key: '1M', days: 30},
-    {key: '3M', days: 91},
-    {key: '6M', days: 182},
-    {key: '1Y', days: 365},
-    {key: '2Y', days: 730},
-    {key: '3Y', days: 1095},
-    {key: '5Y', days: 1825},
-] as const;
 
 /** Catalog keys of a duration label by unit letter: `{n}` + the reader's unit letter, the date picker's presets. */
 const DURATION_LABEL_KEYS: Readonly<Record<string, string>> = {
@@ -131,48 +119,15 @@ export function deltaPeriodLabel(key: string, t: DurationLabelTranslate): string
 }
 
 /**
- * Compute the % change between the last chart point and the point `periodDays` before it
- * (backward-filled: the closest point at-or-before the target date).
- *
- * Scans backward from the END of `chartData` — for a long price history, the target date
- * for a short period (e.g. "1W") sits near the end of the array, so this finds it in
- * O(periodDays) instead of O(full history length). Matches the equivalent
- * computePeriodDelta() in the FX list page, which already used this pattern; the Assets
- * list page used to scan forward from the start (O(full history) for every period),
- * fixed to match this one.
- */
-export function computePeriodDelta(chartData: Array<{date: string; value: number}>, periodDays: number): number | null {
-    if (chartData.length === 0) return null;
-
-    const pn = chartData[chartData.length - 1];
-    if (!pn || pn.value === 0) return null;
-
-    const targetDate = new Date(pn.date);
-    targetDate.setDate(targetDate.getDate() - periodDays);
-    const targetStr = targetDate.toISOString().slice(0, 10);
-
-    let startPoint: {date: string; value: number} | null = null;
-    for (let i = chartData.length - 1; i >= 0; i--) {
-        if (chartData[i].date <= targetStr) {
-            startPoint = chartData[i];
-            break;
-        }
-    }
-
-    if (!startPoint || startPoint.value === 0) return null;
-    return ((pn.value - startPoint.value) / startPoint.value) * 100;
-}
-
-/**
- * Compute all derived price state (last price, abs/percent delta, chart-ready points,
- * and the full DELTA_PERIODS table) from a raw price array for ONE asset.
+ * Compute all derived price state (last price, abs/percent delta over the range,
+ * chart-ready points) from a raw price array for ONE asset.
  *
  * Pure function: same input always produces the same output, no shared/mutable state
  * touched — safe to call from a Worker as well as the main thread.
  */
 export function computeDerivedPriceState(prices: RawPricePoint[]): DerivedPriceState {
     if (prices.length === 0) {
-        return {lastPrice: null, deltaAbs: null, deltaPercent: null, chartData: [], deltas: {}};
+        return {lastPrice: null, deltaAbs: null, deltaPercent: null, chartData: []};
     }
 
     const firstPrice = prices[0]?.close != null ? Number(prices[0].close) : null;
@@ -191,11 +146,5 @@ export function computeDerivedPriceState(prices: RawPricePoint[]): DerivedPriceS
         staleDays: extractDaysBack(p),
     }));
 
-    const deltas: Record<string, number | null> = {};
-    deltas['1D'] = computePeriodDelta(chartData, 1);
-    for (const period of DELTA_PERIODS) {
-        deltas[period.key] = computePeriodDelta(chartData, period.days);
-    }
-
-    return {lastPrice, deltaAbs, deltaPercent, chartData, deltas};
+    return {lastPrice, deltaAbs, deltaPercent, chartData};
 }
