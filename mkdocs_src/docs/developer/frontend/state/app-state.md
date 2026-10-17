@@ -225,8 +225,9 @@ which the interceptor turns into the login as usual.
   [Instance Block](../../architecture/security.md#instance-block)); the page never guesses it from the
   role, so a `false`, a missing field, a pending or a failed request mean no card, for an
   administrator too. The section stays outside the `role="alert"` one, so a screen reader announces
-  the block, not the card and its progress. The card's four routes already answer on a blocked
-  instance.
+  the block, not the card and its progress. The card's routes already answer on a blocked instance:
+  the four of the backup, and `GET /backup/instance/options`, the rules of a secure backup's password
+  ([Instance Block](../../architecture/security.md#instance-block)).
 - The page mounts its own `ToastContainer`: the `(app)` layout mounts one only with the app shell,
   which this page replaces, and the card reports its errors and a backup with warnings by toast.
 - Colours are colour roles only. The test ids are `instance-blocked`, `instance-blocked-description`,
