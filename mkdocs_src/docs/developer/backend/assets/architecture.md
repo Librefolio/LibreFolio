@@ -14,7 +14,7 @@ responsibility:
 | `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation; and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
-| `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price refused, a provider's truncated), and bounded write chunks. |
+| `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price or volume refused; a provider's truncated, and a provider's date with a value no column can keep skipped and reported), and bounded write chunks. |
 | `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked. |
 | `event_store.py` | Event upserts (rows updated in place: a provider refresh commits them in the same bounded chunks as prices, the manual upsert once for the whole request, all or nothing, after deleting the events its items list in `delete_ids`) and deletes scoped to one asset, plus the event queries and reads by id behind `/assets/events`. |
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
@@ -81,7 +81,7 @@ operation mixins:
 - **Provider Assignment**: Link an asset to a provider (e.g., "AAPL" → "yfinance").
 - **Price Sync**: 3-phase pipeline: PREPARE → FETCH → PERSIST (see [Data Flow](#data-flow-sync-pipeline) below).
 - **Price Query**: DB-only bulk query with backward-fill via `POST /assets/prices/query`.
-- **Current Price**: Bulk live-price endpoint via `POST /assets/prices/current`. Calls each asset's provider `get_current_value()` with DB fallback. Polled by the Assets list and the asset detail page for their [live prices](../../frontend/components/features/live-ticker.md#polling).
+- **Current Price**: Bulk live-price endpoint via `POST /assets/prices/current`. Calls each asset's provider `get_current_value()` with DB fallback, and serves, caches and writes a quote only as the price columns keep it ([Current Quotes and Today's OHLC](#current-quotes-and-todays-ohlc)). Polled by the Assets list and the asset detail page for their [live prices](../../frontend/components/features/live-ticker.md#polling).
 - **Event Sync**: Persist asset events from providers into the `asset_events` table, filtered by `provider_assignment_id` (manual events survive sync).
 - **Probe**: Dry-run provider config testing via `probe_provider_config()`.
 
@@ -168,10 +168,40 @@ scoped by `provider_assignment_id`, so manual events are not replaced.
 `truncate_priceHistory()` (`backend/app/db/precision.py`): 12 decimal places, then 15
 significant digits, both rounded down — what a `RealDecimal(24, 12)` column reads back (see
 [Decimal Columns](../../architecture/database/index.md#decimal-columns)). That truncation is
-for a provider's long floats. A manual call (`source_plugin_key="MANUAL"`, the default, used by
-`POST /assets/prices`) is checked first instead: `_reject_prices_over_the_limit()` refuses the
-whole call when a price exceeds either limit, before anything of it is written — a
-`ValueError`, which the route answers with HTTP 400 naming the asset, the maxima and the dates.
+for a provider's long floats. A value that is not finite, or has more digits before the
+decimal point than its column (12 for a price, 24 for the volume), fits no truncation: a
+provider's call drops every date holding one before any slice is written (W-B58: a value
+that raised in the truncation of a later slice left the earlier ones committed). That is a
+price `storable_price()` cannot keep (not finite, past 12 digits before the point, or a
+non-zero close truncated to 0), or a volume past 24 digits (`_unstorable_provider_point()`;
+the `-1` sentinel is no value). The call logs a warning, writes the other dates, and reports
+the dropped ones in the asset's result message (*rejected N date(s) with a value no price
+column can keep*, the first five dates with the field and value), which the sync adds to
+the asset's errors as it does the OHLC rejections. The sync's change count, which runs
+before this (`_count_actual_price_changes()` in `refresh.py`), and its fallback take only the
+points `_unstorable_provider_point()` accepts (`kept_items` in `_persist_refresh_item()`,
+W-B62): a skipped date is neither counted in `inserted_count` / `updated_count` nor listed in
+`changed_points`, from which the asset page's chart would draw a point the database never got;
+`points_fetched` still counts it. Before, the count took every point: truncating the fetched
+close of a date already stored raised from `1E+48` up, or on a close not finite, and its
+fallback then announced every fetched point. The current value a refresh adds as today's
+point, when the range reaches today, goes through the check of the
+[live price](#current-quotes-and-todays-ohlc), `storable_current_value()`, in FETCH, before the
+shared current-value cache: a value no price column can keep is neither cached nor added, so
+the sync neither counts nor announces it (only the log has it, once), and a provider without
+history, such as the CSS Scraper, is left with nothing: the item fails with *No price data
+available from provider*. A kept value is cached as stored, so the live price then comes from
+the cache already truncated. An open, high, low or
+volume the F.4 merge keeps from the stored row, written by an older release past its
+column's digits, is written as NULL (`_kept_price()`, `_kept_volume()`) instead of raising
+mid-slices. A manual
+call (`source_plugin_key="MANUAL"`, the default, used by `POST /assets/prices`) is checked
+first instead: `_reject_prices_over_the_limit()` refuses the whole call when a price
+exceeds any of its limits — 12 digits before the decimal point, 12 decimal places, 15
+significant digits — or is not finite, or when a volume has more than 24 digits before the
+point (only its size is limited: a fractional volume is accepted), before anything of it is
+written — a `ValueError`, which the route answers with HTTP 400 naming the asset, the
+maxima (the volume's included) and the dates.
 
 ---
 
@@ -211,16 +241,52 @@ the pair through its `requiredFxPairs` banners, and its comparison loader drops 
 
 ### 💹 Current Quotes and Today's OHLC
 
-`get_current_prices_bulk()` is deliberately separate from the DB-only historical query. It checks
-the core current-price cache, calls an assigned provider through `core.call_provider()`, and falls
-back to the latest `PriceHistory` row if the provider fails, is [paused](#provider-pauses) or is
-absent.
+`get_current_prices_bulk()` is deliberately separate from the DB-only historical query. For each
+asset, `_live_quote_item()` reads the core current-price cache, or calls an assigned provider
+through `core.call_provider()`, and checks the quote; the asset falls back to the database when
+the provider fails, is [paused](#provider-pauses) or is absent, or when its quote is refused.
+
+That check, `storable_current_value()` in `price_store.py`, is the one check of a live quote: the
+[refresh](#data-flow-sync-pipeline) applies it too, to the value it adds for today (X-R40, W-B62).
+`storable_price()` decides, as for the history (W-B58):
+
+- a quote the truncation (12 decimal places, then 15 significant digits, rounded down) leaves
+  unchanged is served in its own form (`101.5` stays `101.5`); one it changes is served
+  truncated, as the history and today's row keep it (`65432.1234567890999` →
+  `65432.123456789`), from the provider call and from the cache alike. Only a quote that passed
+  is cached, once its item is built, and a cached one is checked again on a hit (it costs
+  nothing);
+- a quote no price column can keep — not finite, more than 12 digits before the decimal point,
+  or non-zero but 0 once truncated to 12 decimal places (`1E-13`) — is refused: never served,
+  cached or written. The asset falls back exactly as after a provider failure, and the next poll
+  asks the provider again. A value that is no number at all, from a plugin that skips the
+  schema, is refused too: the check never raises. Before, the quote was served as the provider
+  gave it, a finite `1E+50000000` included, which `SafeDecimal` writes out in full (about 50 MB
+  per response), and from the cache for two minutes: W-B58 only kept it out of the database;
+- a refusal is logged at warning level once per process for each asset, provider and value,
+  *Live quote refused: no price column can keep it, the last stored price stands*, the value cut
+  to about 40 characters (`_quote_text()`). `_report_unstorable_quote()` remembers what it
+  logged in a `functools.lru_cache(maxsize=1024)`, bounded so that a provider answering a new
+  absurd value at every poll cannot grow it. Before, only the write-back warned, at every poll
+  of a quote dated today (the scheduler's, every 10 minutes by default; an open asset page's,
+  every 30 seconds; the Assets list's, every 60), while the quote was still served and cached.
+
+The fallback is the most recent `PriceHistory` row whose close reads a number
+(`_last_readable_price()`: the latest row alone, then older ones 32 at a time,
+`_FALLBACK_PAGE`), answered with `source: "db:last_known"`; with none, the item has
+`value: null` and `error: "No price data available"`. A close the file holds as ±inf, or as no
+number, reads `None` through `RealDecimal`
+([Decimal Columns](../../architecture/database/index.md#decimal-columns)) and is passed over;
+before, `Decimal(str(None))` raised, and the whole bulk call, every asset, answered 500.
 
 A successful provider quote dated today is written back to today's OHLC row:
 
 - a missing row is created with `open = high = low = close = value` and `volume = None`;
 - an existing row keeps its volume, widens `low`/`high`, fills `open` only when it is missing,
   and overwrites `close` with the latest quote;
+- the value written is the quote as served, that is as `storable_price()` keeps it, truncated
+  like the history (a quote of `65432.1234567890999` is stored `65432.123456789`); a refused
+  quote never reaches the write-back, which no longer logs one;
 - a `db:last_known` fallback is never written as if it were a fresh quote.
 
 The write-back is best-effort: a commit failure is rolled back and logged without discarding the
@@ -387,8 +453,12 @@ cost unknown it stays `MISSING`.
 - **Canonical cache ownership**: `assets/core.py` owns the history, current, metadata,
   search-result, and search-query singleton caches. Responsibility modules dereference these
   objects through `core`, preserving one identity and one monkeypatch point.
-- **`_asset_current_cache`**: caches provider current-value results. The live-query path and refresh
-  share one key, built by `asset_cache_key()`: provider code, identifier, identifier type and the
+- **`_asset_current_cache`**: caches provider current-value results for two minutes, as the price
+  columns keep them: the live-query path and the refresh store a quote only once
+  `storable_current_value()` has passed it, truncated if need be, so the cache never holds one
+  that cannot be served or written ([Current Quotes and Today's OHLC](#current-quotes-and-todays-ohlc)).
+  The live-query path and refresh share one key, built by `asset_cache_key()`: provider code,
+  identifier, identifier type and the
   provider-parameter hash, so parameter changes cannot reuse stale data and two assets whose
   parameters differ never share a value. The key also includes the fingerprint of the provider's
   settings, as do the history, metadata and search-query keys, so different settings never
@@ -423,13 +493,13 @@ cost unknown it stays `MISSING`.
 | `DELETE /api/v1/assets/provider` | DELETE | Bulk remove providers |
 | `GET /api/v1/assets/provider/assignments` | GET | Read provider assignments |
 | `POST /api/v1/assets/provider/refresh` | POST | Refresh metadata from provider |
-| `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 decimal places or 15 significant digits refuses the whole call (400) |
+| `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400) |
 | `DELETE /api/v1/assets/prices` | DELETE | Bulk delete price ranges |
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
 | `POST /api/v1/assets/prices/current` | POST | Bulk current quotes with DB fallback and today's OHLC write-back |
 | `POST /api/v1/assets/prices/sync` | POST | Bulk refresh prices from provider |
 | `GET /api/v1/assets/prices/signals` | GET | Signal catalog: the visible plugins compatible with Asset prices |
-| `POST /api/v1/assets/events` | POST | Bulk upsert manual events, all or nothing (the asset's currency only; a value over 6 decimal places or 15 significant digits is a 400 `EVENT_TOO_MANY_DIGITS`); `mode: "create"` refuses a date and type the asset already has (409 `EVENT_EXISTS`); `delete_ids` deletes events of the asset first, manual or from a provider, in the same transaction (400 `EVENT_NOT_DELETABLE` for an id that is not one of them, 409 `EVENT_IN_USE` for an event a transaction uses), each result listing them in `deleted_ids` |
+| `POST /api/v1/assets/events` | POST | Bulk upsert manual events, all or nothing (the asset's currency only; a value over 12 digits before the decimal point, 6 decimal places or 15 significant digits is a 400 `EVENT_TOO_MANY_DIGITS`); `mode: "create"` refuses a date and type the asset already has (409 `EVENT_EXISTS`); `delete_ids` deletes events of the asset first, manual or from a provider, in the same transaction (400 `EVENT_NOT_DELETABLE` for an id that is not one of them, 409 `EVENT_IN_USE` for an event a transaction uses), each result listing them in `deleted_ids` |
 | `DELETE /api/v1/assets/events` | DELETE | Bulk delete the events of one asset (`asset_id` required, with `ids`): an id of another asset comes back `not_found`, an event a transaction uses `in_use` |
 | `POST /api/v1/assets/events/query` | POST | Bulk event query, each event with its `id` and `is_auto` flag |
 | `GET /api/v1/assets/events` | GET | Events by id |

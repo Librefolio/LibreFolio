@@ -5,7 +5,6 @@ import {dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {createServer} from 'vite';
-import {svelte} from '@sveltejs/vite-plugin-svelte';
 
 const frontendRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 process.env.LIBREFOLIO_FRONTEND_ROOT = frontendRoot;
@@ -26,8 +25,9 @@ const vite = await createServer({
     configFile: false,
     appType: 'custom',
     logLevel: 'silent',
-    // The renderer's import graph reaches `.svelte.ts` modules (runes): compile them as the app does.
-    plugins: [svelteKitRuntimeStubs, svelte({configFile: false})],
+    // No Svelte plugin: the probe's static imports reach no runes module, which a gate of `front-utility core-unit`
+    // keeps true (Z-20). A module that needs runes is imported lazily, through `import()`, and never on this path.
+    plugins: [svelteKitRuntimeStubs],
     server: {middlewareMode: true},
     resolve: {
         alias: {

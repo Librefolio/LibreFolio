@@ -53,7 +53,7 @@ AI_EXPORT_PURE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_temporal_aggregator_invariants.py",
 )
 
-# Provider error paths: what the four price/FX providers do when the source
+# Provider error paths: what the price and FX providers do when the source
 # misbehaves. Every HTTP client is doubled, so these never leave the machine —
 # which is also the only way the assertions can be exact rather than "something
 # arrived". No session and no server either, hence PURE and its own unit: folding
@@ -61,6 +61,7 @@ AI_EXPORT_PURE_TEST_PATHS = (
 # waste the parallelism on tests that touch nothing.
 PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_borsa_italiana_errors.py",
+    "backend/test_scripts/test_services/test_fx_parse_errors.py",
     "backend/test_scripts/test_services/test_justetf_errors.py",
     "backend/test_scripts/test_services/test_snb_errors.py",
     "backend/test_scripts/test_services/test_yahoo_finance_errors.py",
@@ -972,6 +973,15 @@ def services_asset_digit_limits(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Asset digit limit tests", verbose=verbose)
 
 
+def services_current_price_storable(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R40 + W-B62: the current price and the price refresh serve, cache and announce only what the database can keep."""
+    print_section("Services: Current Price Storable")
+    print_info("Testing: backend/app/services/assets/price_query.py (get_current_prices_bulk), refresh.py (bulk_refresh_prices)")
+    print_info("Tests: an unstorable quote never served nor cached (database fallback) and logged once per value, a valid one served and cached as the database keeps it, a refresh's changed_points and current-value cache limited to what is stored, a fallback past an unreadable close")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_current_price_storable.py", test_names)
+    return run_command(cmd, "Current price storable tests", verbose=verbose)
+
+
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
     """Test Portfolio Engine vNext: inline WAC, last_buy_price, 3-pool, position states."""
     print_section("Services: Portfolio Engine vNext")
@@ -1148,6 +1158,22 @@ def services_profile_defaults(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Profile defaults tests", verbose=verbose)
 
 
+def services_request_float_inputs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that every float a request can carry refuses infinity and NaN in its schema (H-32)."""
+    print_section("Services: Request Float Inputs")
+    print_info("Testing: every route of backend.app.main (iter_route_contexts): bodies, nested models, query, path, header and cookie parameters")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_request_float_inputs.py", test_names)
+    return run_command(cmd, "Request float inputs tests", verbose=verbose)
+
+
+def services_response_validation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a response breaking its model is logged without its content, and answered 500 (H-33)."""
+    print_section("Services: Response Validation")
+    print_info("Testing: backend/app/api/response_validation.py (install_response_validation_handler) and its install in backend/app/main.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_response_validation.py", test_names)
+    return run_command(cmd, "Response validation tests", verbose=verbose)
+
+
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
     """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
@@ -1290,6 +1316,38 @@ def services_backup_totals(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: backend/app/services/platform/instance_backup/totals.py (ledger_totals_of, compare_totals)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_totals.py", test_names)
     return run_command(cmd, "Instance backup ledger totals tests", verbose=verbose)
+
+
+def services_backup_envelope(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the envelope of a secure backup (.lfbk): scrypt and AES-256-GCM in chunks, its header, every tampering."""
+    print_section("Services: Secure Backup Envelope")
+    print_info("Testing: backend/app/services/platform/instance_backup/envelope.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_envelope.py", test_names)
+    return run_command(cmd, "Secure backup envelope tests", verbose=verbose)
+
+
+def services_backup_secure_rules(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the rules of a secure backup: its password (the accounts' rules, at least 12 characters) and the key it carries."""
+    print_section("Services: Secure Backup Rules")
+    print_info("Testing: backend/app/services/platform/instance_backup/secure.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_secure_rules.py", test_names)
+    return run_command(cmd, "Secure backup rules tests", verbose=verbose)
+
+
+def services_backup_secure(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a secure backup through the services: the job that encrypts it with the key, the check of an envelope, the secrets re-encrypted."""
+    print_section("Services: Secure Backup")
+    print_info("Testing: backend/app/services/platform/instance_backup/jobs.py, archive.py, staging.py, restore_jobs.py (lot B4)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_secure.py", test_names)
+    return run_command(cmd, "Secure backup tests", verbose=verbose)
+
+
+def services_backup_leftovers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the startup cleanup of what killed runs left in clear (lot B4b, B-23, decision N66)."""
+    print_section("Services: Backup Leftovers")
+    print_info("Testing: backend/app/services/platform/instance_backup/leftovers.py, restore_jobs.py, jobs.py (lot B4b)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_leftovers.py", test_names)
+    return run_command(cmd, "Backup leftovers tests", verbose=verbose)
 
 
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
@@ -1723,7 +1781,7 @@ Note: No backend server required.
         "password-policy",
         services_password_policy,
         name="Password Policy",
-        desc="the five rules of a new password in one place: published in order (GET /system/instance), failed_rules in the policy's order, Unicode classes Lu/Ll/Nd and symbols, length in code points",
+        desc="the five rules of a new password in one place: published in order (GET /system/instance), failed_rules in the policy's order, Unicode classes Lu/Ll/Nd and symbols, length in code points; lists made from them (rules=, rules_with_minimum_length: a minimum raised, never lowered, the rules read at each call), as a secure backup's password takes them",
         # PURE: a module of plain functions; no database, no server, no environment variable.
         isolation="pure",
     )
@@ -1809,7 +1867,7 @@ Note: No backend server required.
         "provider-cooldown",
         services_provider_cooldown,
         name="Provider Cooldown",
-        desc="config.sleep_wake: LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS (ASCII digits, 0–86400, 0 = off, default 60) and _MAX_SECONDS (1–86400, default 3600) read at each call, blank is unset, SleepWakeConfigError with variable and code, a max below an enabled base refused; provider_cooldown: PROVIDER_COOLDOWNS read at call time, keys (domain, provider, scope), wait_before_call/record_refusal/record_success/record_no_verdict over check/refused/succeeded/released with base and max read at each refusal and retry_after passed on, cooldown_snapshot; the answers of calls in flight while a pause runs change nothing (five 429s at once count one refusal, a late success does not lift the pause); base 0 records and skips nothing; an invalid configuration never raises, works on 60/3600 and is logged once per (variable, code) per process",
+        desc="config.sleep_wake: LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS (ASCII digits, 0–86400, 0 = off, default 60) and _MAX_SECONDS (1–86400, default 3600) read at each call, blank is unset, SleepWakeConfigError with variable and code, a max below an enabled base refused; provider_cooldown: PROVIDER_COOLDOWNS read at call time, keys (domain, provider, scope), wait_before_call/record_refusal/record_success/record_no_verdict over check/refused/succeeded/released with base and max read at each refusal and retry_after passed on; the answers of calls in flight while a pause runs change nothing (five 429s at once count one refusal, a late success does not lift the pause); base 0 records and skips nothing; an invalid configuration never raises, works on 60/3600 and is logged once per (variable, code) per process",
         # PURE: no DB, no server; environment changed only through monkeypatch, process-local; the module instance
         # replaced by monkeypatch. The once-per-process log is read in a fresh interpreter of its own (sys.executable,
         # run in tmp_path, with a copy of this environment): no DB, no server there either.
@@ -1886,7 +1944,7 @@ Note: No backend server required.
         "sleep-wake-activity",
         services_sleep_wake_activity,
         name="Sleep and Wake Activity",
-        desc="request_kind: the probes (system/health, ready, test-lane-health) and system/wake-sync under API_V1_PREFIX, trailing slashes ignored, then exact and case-sensitive, anything else user; Activity on an injected clock (time.time by default): request(presence) in flight for its whole body, an exception or a cancellation included, presence stamped at start and at end, return listeners at or below the silence called with it in registration order on the calling thread before the body (one that raises logged and skipped, a name registered again replaced, remove_return_listener: never called again, an unknown name a no-op, a blank one refused), presence=False only in flight, idle_seconds from started_at or the last user request and never below 0; busy(reason) nestable across threads, a blank reason refused; busy checks read at every call, true or raising = busy, a raising one warned once per streak; busy_reasons without duplicates, is_busy; thread safety; current_activity read at call time; ActivityMiddleware: other scopes untouched, probes uncounted, wake-sync in flight without presence, any other path (a 404 included) presence and in flight through the last chunk of a stream and its background tasks, errors and cancellations propagate, current_activity read per request without activity=; activity the outermost entry of MIDDLEWARE_STACK",
+        desc="request_kind: the probes (system/health, ready, test-lane-health) and system/wake-sync under API_V1_PREFIX, trailing slashes ignored, then exact and case-sensitive, anything else user; Activity on an injected clock (time.time by default): request(presence) in flight for its whole body, an exception or a cancellation included, presence stamped at start and at end, return listeners at or below the silence called with it in registration order on the calling thread before the body (one that raises logged and skipped, a name registered again replaced, remove_return_listener: never called again, an unknown name a no-op, a blank one refused), presence=False only in flight, idle_seconds from started_at or the last user request and never below 0; busy(reason) nestable across threads, a blank reason refused; busy checks read at every call, true or raising = busy, a raising one warned once per streak; busy_reasons without duplicates; thread safety; current_activity read at call time; ActivityMiddleware: other scopes untouched, probes uncounted, wake-sync in flight without presence, any other path (a 404 included) presence and in flight through the last chunk of a stream and its background tasks, errors and cancellations propagate, current_activity read per request without activity=; activity the outermost entry of MIDDLEWARE_STACK",
         # PURE: no DB, no server, no lane port, no network; every Activity is the test's own, on a fake clock, and the
         # process's ACTIVITY is replaced only through monkeypatch; the FastAPI apps are built in the test and served in
         # this process by httpx.ASGITransport (no socket); its threads are daemon threads joined within a deadline.
@@ -2069,6 +2127,18 @@ Note: No backend server required.
         # created under a unique name, and only their prices and events, written, read and wiped by asset id.
         # Nothing here counts or reads a row it did not write.
     )
+    add_test(
+        cat,
+        "current-price-storable",
+        services_current_price_storable,
+        name="Current Price Storable",
+        desc="X-R40 + W-B62: a current quote no price column keeps (storable_price None: 1E+50000000, 1E+60, 1E-13, a float inf) never served nor cached -- the item falls back to the latest stored close that reads a number (db:last_known) or to an error, the next call asks the provider again -- and its refusal logged once per (asset, provider, value), never at every poll; a valid quote served and cached as the database keeps it (65432.1234567890999 -> 65432.123456789), one that already fits served in its own form; a refresh leaves out of changed_points a date no column keeps, and neither caches nor stores nor announces an unstorable current value, while it caches a valid one as stored; the database fallback passes over a close that reads None and never raises",
+        # WRITE-SCOPED, the category default, as asset-digit-limits: every row is this unit's own -- two assets
+        # created under a unique name, and only their prices, events and provider assignment, written, read and
+        # wiped by asset id. The provider codes are unique per test, so the current-value cache entries and the
+        # log-once keys are the test's own; the cache's set is patched for one test only (monkeypatch).
+        # Nothing here counts or reads a row it did not write.
+    )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
@@ -2158,6 +2228,25 @@ Note: No backend server required.
         desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed; H-17: ENVIRONMENT_PROFILE_DEFAULTS has one entry per profile, selfhosted empty, managed equal to the decided table with exact types (LIBREFOLIO_BACKUP_MAX_UPLOAD_MB 500), no Settings field among its keys, every key read by a section module and documented in .env.example; profile_default() gives the fallback itself under selfhosted and the table's value under managed, the profile read at each call",
         # Settings built from the environment alone (_env_file=None), the variables set and removed by monkeypatch; the
         # .env case writes its own file under tmp_path and turns test mode off for that call. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "request-float-inputs",
+        services_request_float_inputs,
+        name="Request Float Inputs",
+        desc="H-32: every float a request can carry (body, nested model, query, path, header, cookie) refuses inf, -inf, NaN and 1E+400 in its schema; barriers on the number of routes walked",
+        # The app is imported, never served: its routes are walked with iter_route_contexts and each float judged with a
+        # TypeAdapter. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "response-validation",
+        services_response_validation,
+        name="Response Validation",
+        desc="H-33: a response that breaks its response_model is logged with its route, endpoint, error types and locations, never its content, and answered 500 in plain text",
+        # Fresh FastAPI apps in process, and the real app's handler table; logs captured with structlog. No DB, no server.
         isolation="pure",
     )
     add_test(
@@ -2273,10 +2362,48 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "backup-envelope",
+        services_backup_envelope,
+        name="Secure Backup Envelope",
+        desc="The .lfbk envelope (lot B4, decisions 38 and P12): its constants; round trips at the chunk edges; the 52-byte header at its offsets; known answers built with cryptography's Scrypt and AESGCM; bounds refused before any derivation (envelope_unsupported), too short or not ours (envelope_damaged); wrong_password, also for changed key parameters; every tampering of the chunks (a byte, a tag, truncations, an appended, swapped, dropped or repeated chunk) envelope_damaged with nothing left; NFC, not NFKC; no overwrite, 0600, .part only while writing, progress; the key never in its repr; constant memory",
+        # PURE: files under tmp_path only. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-secure-rules",
+        services_backup_secure_rules,
+        name="Secure Backup Rules",
+        desc="The rules of a secure backup (lot B4, P12, decision 39): the password's, the accounts' rules with at least 12 characters and up to 1024, following a longer minimum of the accounts; the instance key a backup may carry, the generated one only, as its text, never a configured one, never an unusable one, never created",
+        # PURE: data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables. No DB, no server, no
+        # network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-secure",
+        services_backup_secure,
+        name="Secure Backup",
+        desc="A secure backup through the services (lot B4): run_backup with a password writes an .lfbk (encrypting phase; no clear zip, part or password left; the envelope's size and hash), the generated instance key inside (never a configured, missing or unusable one: instance_key_unusable), its failures (backup_no_space, backup_failed); the check of an envelope (decrypting first, the same report as its zip's, no archive.zip or secrets/ left), password_required and envelope_damaged, start_check keeping the upload on a missing or wrong password; the key entry's rules; the plugin secrets re-encrypted with this instance's key, or counted unreadable",
+        # PURE: data directories, databases and archives under tmp_path. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-leftovers",
+        services_backup_leftovers,
+        name="Backup Leftovers",
+        desc="The startup cleanup of what runs killed outright left in clear (lot B4b, B-23, decision N66): a check its server left running ended (restore_interrupted, copy and upload removed); a decrypted archive.zip left in a copy removed while no check runs, never a link, the rest of the copy kept; the inspect folders .decrypt-* older than an hour removed, younger ones, links and files kept; a backup that died with its process ended (backup_interrupted) with its work files removed, also by get_job; nothing touched under a held lock; expired jobs removed; a part that fails logged while the others still run, never raised; quiet on a clean data directory; the step backup-leftovers",
+        # PURE: data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables. No lane DB, no server,
+        # no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "backup-totals",
         services_backup_totals,
         name="Instance Backup Ledger Totals",
-        desc="Lot B-13 (contract §7). ledger_totals_of: J's JSON of a real database's ledger, equal to J's control_totals of the same rows read with sqlite3, no line for an empty ledger; read as immutable (bytes, mtime, nothing created beside it, in rollback-journal mode, in WAL mode, with an empty -wal and its -shm); a -wal still holding frames never read past (None, PendingWriteAheadLog); the path a name, never a URI (spaces, accents, #, ?, &, %41); never raises (missing, folder, not a database, empty, truncated, no ledger table, a decimal trap, a running event loop): None and one error with the exception's type only. compare_totals: the decision order (absent; other_version before reading; absent for amounts that are not plain text, lines not lists of objects, decided before J's from_json, never expanding 1E+999999999, and for what from_json refuses, a version that is not an int included; unreadable; then the lines as maps, canonical text, zero lines dropped: same without a difference, reordered or zero lines included, changed with one line at least); differences cash first, by broker, currency or asset, canonical text, None for an absent line, the first 20 kept and all counted, none for another status; frozen; the documents given unchanged",
+        desc="Lot B-13 (contract §7). ledger_totals_of: J's JSON of a real database's ledger, equal to J's control_totals of the same rows read with sqlite3, no line for an empty ledger; read as immutable (bytes, mtime, nothing created beside it, in rollback-journal mode, in WAL mode, with an empty -wal and its -shm); a -wal still holding frames never read past (None, PendingWriteAheadLog); the path a name, never a URI (spaces, accents, #, ?, &, %41); never raises (missing, folder, not a database, empty, truncated, no ledger table, a decimal trap, a running event loop): None and one error with the exception's type only. compare_totals: the decision order (absent; other_version before reading; absent for amounts that are not plain text and lines not lists of objects, refused by J's from_json (one rule, J's home since J-27; never expanding 1E+999999999), and for the rest from_json refuses, a version that is not an int included; unreadable; then the lines as maps, canonical text, zero lines dropped: same without a difference, reordered or zero lines included, changed with one line at least); differences cash first, by broker, currency or asset, canonical text, None for an absent line, the first 20 kept and all counted, none for another status; frozen; the documents given unchanged",
         # PURE: one alembic process makes the module's database on a tmp_path file; every file read is a copy under
         # tmp_path, with a production data directory of the test configured (which must stay absent). No lane DB, no
         # server, no network.
@@ -2323,7 +2450,7 @@ Note: No backend server required.
         "provider-errors",
         services_provider_errors,
         name="Provider Error Paths",
-        desc="justETF, Borsa Italiana, Yahoo Finance and SNB when the source misbehaves or refuses for too many requests (every client doubled)",
+        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE and FED when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50)",
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")

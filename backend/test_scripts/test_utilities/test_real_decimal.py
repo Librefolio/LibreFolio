@@ -29,19 +29,66 @@ The contract (developer's decisions of 16/10):
   ``ROUND_HALF_EVEN``, then, on a ``RealDecimal`` column, 15 significant digits, ``ROUND_HALF_EVEN``; the result
   always passes ``decimal_limit_issue``. A value READ from a file stays as read (decision D2).
 
+R13-SEC2 (W-B58, E's security review of 17/10): a value of any magnitude. Measured before the cure: reading a stored
+±inf raises ``TypeError`` (the exponent ``'F'`` of ``Decimal('Infinity')`` compared with an int), a stored double from
+1e54 up ``InvalidOperation`` (padding it to 6 decimals in a 60-digit context); nothing refuses ``Decimal('1E+400')`` on
+write, which becomes a REAL inf; ``decimal_limit_issue`` raises ``decimal.Overflow`` on ``1E+1000000`` and
+``InvalidOperation`` on ``sNaN``, lets ``1E-2000000`` through (it underflows to 0), answers None for ±Infinity and NaN,
+and has no magnitude limit (``1E+60``: one digit, no decimals). The cure's contract:
+
+* reading never raises: a stored ±inf reads ``None`` (logged); a stored finite double of any magnitude (1e54, 1e60,
+  the largest double) reads a finite Decimal numerically equal to the double's shortest repr at 15 significant digits
+  (1e60 reads ``1E+60``); a normal value reads as before (the guards above);
+* ``RealDecimal.process_bind_param`` (new): a value that becomes ±inf as a float (``Decimal('1E+400')``) raises
+  ``ValueError``, its message containing "finite"; a finite value and None pass unchanged;
+* ``precision.INTEGER_DIGITS_EXCEEDED = "integerDigitsExceeded"``; ``decimal_limit_issue`` never raises for any
+  Decimal, and checks decimal places, then significant digits, then the integer digits: more than the column keeps
+  (trailing zeros not counted, as today) answers ``("integerDigitsExceeded", max_integer_digits(model, column))``, and
+  so does a non-finite value (±Infinity, NaN). The results of C-97a are unchanged (``1234567890123.456`` is still
+  ``significantDigitsExceeded``);
+* ``max_integer_digits(model, column) -> int`` (new; the coordinator's decision N63 of 17/10): 15
+  (``REAL_SIGNIFICANT_DIGITS``) for ``Transaction.quantity`` and ``Transaction.amount``; for every other column the
+  integer digits its declaration gives, ``precision - scale``: 12 for the per-unit cost basis, the five prices and an
+  event value, 24 for the volume;
+* ``integer_digits_issue(value, model, column)`` (new): the magnitude and the finiteness alone, no decimal or
+  significant-digit check: a volume of ``1E+400`` → ``("integerDigitsExceeded", 24)``, of ``1.5`` → None;
+* ``storable_value(value, model, column)`` (new): a provider's value truncated to the column
+  (``truncate_to_db_precision``), or None when ``integer_digits_issue`` is not None; it never raises.
+
+X-R38 (workstream X, the FX side of W-B58, reported as W-B61): an exchange rate no column can keep. Measured before the
+cure: ``truncate_fx_rate`` raises ``InvalidOperation`` from ``1E+50`` up and on ±Infinity, gives 0 for ``1E-11``, and
+nothing measures the 14 digits ``fx_rates.rate`` (``Numeric(24, 10)``) keeps before the decimal point; the new
+``storable_fx_rate`` is a stub raising ``NotImplementedError``. The cure's contract: ``storable_fx_rate(value)`` is the
+value as ``truncate_fx_rate`` gives it, or None when it is not finite, has more digits before the decimal point than
+``max_integer_digits`` gives for ``FxRate.rate`` (14), or is 0 once truncated to the 10 decimal places; a negative rate
+is the caller's business (``upsert_rates_bulk`` refuses it), not refused here; it never raises.
+
+X-R50 (E's review R13-SEC5 on X-R38): the double limit. SQLite keeps an exchange rate as a double, so a rate of 14 digits
+before the decimal point a few thousandths below ``1E+14`` is stored as ``1E+14``. Measured before the cure:
+``storable_fx_rate`` keeps it as ``truncate_fx_rate`` gives it (``float(Decimal("99999999999999.995")) == 1e14``, while
+``99999999999999.992`` is ``99999999999999.98``): a manual rate is answered «inserted» and a synced one stored, and every
+conversion then skips it (``convert_bulk`` reads only ``1E-10 <= rate < 1E+14``). The cure's contract: ``storable_fx_rate``
+also answers None when the double of the truncated rate, ``float(truncate_fx_rate(value))``, is ``1E+14`` or more; a rate
+whose double stays below it is kept as before. X-R50 reverses the X-R38 case ``14-integer-digits-cut-at-10-decimals``
+(``99999999999999.99999999999``, kept as ``99999999999999.9999999999``, whose double is ``1E+14``): it moved to the X-R50 reds.
+
 Reds fail at run time, never at collection: the column types are read from the models when a test
-runs (``Transaction.__table__.c.quantity.type``), and ``decimal_limit_issue`` and ``round_computed_value`` are
-looked up on ``backend.app.db.precision`` at call time, so the guards of this file stay green before the cure.
-Every red says what the user faces. A GUARD passes before and after the cure.
+runs (``Transaction.__table__.c.quantity.type``), and ``decimal_limit_issue``, ``round_computed_value``,
+``max_integer_digits``, ``integer_digits_issue``, ``storable_value``, ``storable_fx_rate`` and ``INTEGER_DIGITS_EXCEEDED``
+are looked up on ``backend.app.db.precision`` at call time, ``RealDecimal.process_bind_param`` on the column's type, so the guards
+of this file stay green before the cure. A red whose call raises today is turned into a failure that names the
+exception. Every red says what the user faces. A GUARD passes before and after the cure.
 
 Isolation: PURE. A round trip runs on a private in-memory SQLite engine of its own test, disposed at
 teardown: the lane database is never opened. Everything else is a function over values.
 """
 
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Context, Decimal
 
 import pytest
 from sqlalchemy import Column, Engine, Integer, MetaData, Numeric, Table, create_engine, select, text
+from sqlalchemy.dialects import sqlite
+from sqlalchemy.exc import StatementError
 from sqlalchemy.types import TypeDecorator, TypeEngine
 
 from backend.app.db import precision
@@ -458,3 +505,500 @@ def test_round_computed_value_keeps_the_form_of_a_value_that_fits(computed, mode
     assert found == Decimal(form), f"round_computed_value({computed}, {model.__name__}, {column!r}) = {found}: expected {form}"
     issue = _decimal_limit_issue()(found, model, column)
     assert issue is None, f"round_computed_value({computed}, {model.__name__}, {column!r}) = {found}, which decimal_limit_issue refuses: {issue}"
+
+
+# --------------------------------------------------------------------------- #
+# R13-SEC2 (W-B58): reading never raises, whatever the file holds
+# --------------------------------------------------------------------------- #
+
+#: What a read gives back of a stored double: its shortest repr, at ``REAL_SIGNIFICANT_DIGITS`` (15) significant digits.
+_SHORTEST_AT_15 = Context(prec=15, rounding=ROUND_HALF_EVEN)
+
+#: Finite doubles today's read cannot give back: from 1e54 up, padding them to 6 decimals needs more than 60 digits.
+_HUGE_FINITE_DOUBLES = [
+    pytest.param(1e54, id="1e54"),
+    pytest.param(1e60, id="1e60"),
+    pytest.param(1.7976931348623157e308, id="largest-double"),
+]
+
+
+def _read_back_never_raising(engine: Engine, model, column: str, stored: float) -> tuple[object, str]:
+    """``stored`` written raw (a REAL already in the file: an older version, another tool), read back through the column's
+    type; a read that raises fails the test, naming the exception."""
+    try:
+        return _write_and_read(engine, _column_type(model, column), stored, raw=True)
+    except (TypeError, ArithmeticError) as exc:
+        pytest.fail(f"a REAL {stored!r} in {model.__name__}.{column}: reading it back raised {exc!r}. Every list that reads the row answers 500 (the asset list reads every user's quantities), and deleting the row loads it (R13-SEC2: reading never raises)")
+
+
+@pytest.mark.parametrize(("model", "column"), _ROUND_TRIP_COLUMNS)
+@pytest.mark.parametrize("stored", [pytest.param(float("inf"), id="plus-inf"), pytest.param(float("-inf"), id="minus-inf")])
+def test_a_stored_infinite_double_reads_back_as_none(memory_engine, model, column, stored):
+    """Red today: the read builds ``Decimal('Infinity')`` and compares its exponent, ``'F'``, with an int: ``TypeError``.
+
+    Contract (R13-SEC2): a REAL ±inf — what ``Decimal('1E+400')`` became before the cure, or what another tool wrote —
+    reads back ``None`` (logged): the row loads, is listed, and can be deleted.
+    """
+    read, storage = _read_back_never_raising(memory_engine, model, column, stored)
+
+    assert storage == "real", f"the fixture itself is wrong: {stored!r} was stored as {storage}"
+    assert read is None, f"a REAL {stored!r} in {model.__name__}.{column} reads back {read!r}: expected None, since no Decimal of the column is infinite"
+
+
+@pytest.mark.parametrize(("model", "column"), _ROUND_TRIP_COLUMNS)
+@pytest.mark.parametrize("stored", _HUGE_FINITE_DOUBLES)
+def test_a_stored_finite_double_of_any_magnitude_reads_back_as_its_shortest_decimal(memory_engine, model, column, stored):
+    """Red today: ``InvalidOperation``: the read pads the value to 6 decimals in a context of 60 digits, and from 1e54 up
+    the padded value needs more.
+
+    Contract (R13-SEC2): a finite Decimal numerically equal to the double's shortest repr at 15 significant digits:
+    1e60 reads ``1E+60``, the largest double ``1.79769313486232E+308``. A value beyond the column's integer digits is
+    not dropped: a database of an older version may hold one, never checked, and reading it as None would lose a position.
+    """
+    expected = _SHORTEST_AT_15.create_decimal(repr(stored))
+
+    read, storage = _read_back_never_raising(memory_engine, model, column, stored)
+
+    assert storage == "real", f"the fixture itself is wrong: {stored!r} was stored as {storage}"
+    assert isinstance(read, Decimal) and read.is_finite(), f"a REAL {stored!r} in {model.__name__}.{column} reads back {read!r}: expected a finite Decimal"
+    assert read == expected, f"a REAL {stored!r} in {model.__name__}.{column} reads back {read}: expected {expected}, its shortest repr at 15 significant digits"
+
+
+@pytest.mark.parametrize(("model", "column"), _ROUND_TRIP_COLUMNS)
+def test_guard_a_stored_double_just_below_1e54_reads_back_as_its_value(memory_engine, model, column):
+    """Guard: green today and after. 1e53 padded to 6 decimals still fits the 60 digits of today's read; it reads back
+    a finite Decimal equal to ``1E+53``, before the cure and after (the form is not asserted)."""
+    read, storage = _read_back_never_raising(memory_engine, model, column, 1e53)
+
+    assert storage == "real", f"the fixture itself is wrong: 1e53 was stored as {storage}"
+    assert isinstance(read, Decimal) and read.is_finite() and read == Decimal("1E+53"), f"a REAL 1e53 in {model.__name__}.{column} reads back {read!r}: expected 1E+53"
+
+
+# --------------------------------------------------------------------------- #
+# R13-SEC2 (W-B58): writing refuses what a double cannot hold
+# --------------------------------------------------------------------------- #
+
+_SQLITE = sqlite.dialect()
+
+#: Values a double cannot hold: each becomes ±inf as a float.
+_BEYOND_A_DOUBLE = [
+    pytest.param(Decimal("1E+400"), id="Decimal-1E+400"),
+    pytest.param(Decimal("-1E+400"), id="Decimal--1E+400"),
+    pytest.param(Decimal("Infinity"), id="Decimal-Infinity"),
+    pytest.param(float("inf"), id="float-inf"),
+]
+
+
+def _process_bind_param(model, column: str):
+    """The column type's own ``process_bind_param``, looked up when the test runs: ``RealDecimal`` has none before R13-SEC2
+    (``TypeDecorator``'s raises ``NotImplementedError``)."""
+    column_type = _column_type(model, column)
+    if type(column_type).process_bind_param is TypeDecorator.process_bind_param:
+        pytest.fail(f"{type(column_type).__name__} ({model.__name__}.{column}) has no process_bind_param of its own: Decimal('1E+400') goes to SQLite as float('inf'), a REAL inf every later read of the row fails on (R13-SEC2)")
+    return column_type.process_bind_param
+
+
+@pytest.mark.parametrize(("model", "column"), _ROUND_TRIP_COLUMNS)
+@pytest.mark.parametrize("value", _BEYOND_A_DOUBLE)
+def test_binding_a_value_a_double_cannot_hold_raises_a_value_error_naming_finite(model, column, value):
+    """Red today: ``RealDecimal`` has no ``process_bind_param``; the value is bound as ``float('inf')``.
+
+    Contract (R13-SEC2): ``process_bind_param`` raises ``ValueError``, its message containing "finite", for any value
+    that becomes ±inf as a float, whoever writes it: a safety net under every input check.
+    """
+    bind = _process_bind_param(model, column)
+
+    with pytest.raises(ValueError, match="finite"):
+        bind(value, _SQLITE)
+
+
+@pytest.mark.parametrize(("model", "column"), _ROUND_TRIP_COLUMNS)
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(Decimal("0.12345678"), id="0.12345678"),
+        pytest.param(Decimal("-65000.123456"), id="-65000.123456"),
+        pytest.param(Decimal("1E+60"), id="1E+60-finite-as-a-double"),
+        pytest.param(None, id="None"),
+    ],
+)
+def test_binding_a_finite_value_or_none_passes_it_unchanged(model, column, value):
+    """Red today: ``RealDecimal`` has no ``process_bind_param`` (the lookup fails).
+
+    Contract (R13-SEC2): a finite value passes unchanged, a magnitude past the column's integer digits included (the
+    input checks refuse it, not the type), and None stays None.
+    """
+    bind = _process_bind_param(model, column)
+
+    bound = bind(value, _SQLITE)
+
+    if value is None:
+        assert bound is None, f"process_bind_param(None) on {model.__name__}.{column} returned {bound!r}"
+    else:
+        assert type(bound) is type(value) and bound == value, f"process_bind_param({value!r}) on {model.__name__}.{column} returned {bound!r}: a finite value passes unchanged"
+
+
+@pytest.mark.parametrize(("model", "column"), _ROUND_TRIP_COLUMNS)
+def test_writing_a_value_a_double_cannot_hold_is_refused_before_it_reaches_the_file(memory_engine, model, column):
+    """Red today: ``Decimal('1E+400')`` is written, a REAL inf, and reading it back raises ``TypeError``.
+
+    Contract (R13-SEC2): the INSERT fails with a ``StatementError`` whose ``orig`` is the ``ValueError`` of
+    ``process_bind_param``, naming "finite": nothing reaches the file.
+    """
+    try:
+        read, storage = _write_and_read(memory_engine, _column_type(model, column), Decimal("1E+400"))
+    except StatementError as refusal:
+        assert isinstance(refusal.orig, ValueError) and "finite" in str(refusal.orig), f"Decimal('1E+400') in {model.__name__}.{column} was refused with {refusal.orig!r}: expected the ValueError of process_bind_param, naming 'finite'"
+        return
+    except (TypeError, ArithmeticError) as exc:
+        pytest.fail(f"Decimal('1E+400') was written to {model.__name__}.{column} (a REAL inf), and reading it back raised {exc!r} (R13-SEC2: refuse it on write)")
+    pytest.fail(f"Decimal('1E+400') was written to {model.__name__}.{column} as {storage} and reads back {read!r} (R13-SEC2: refuse it on write)")
+
+
+# --------------------------------------------------------------------------- #
+# R13-SEC2 (W-B58): the integer digits, in decimal_limit_issue and its two new helpers
+# --------------------------------------------------------------------------- #
+
+
+def _never_raising(function, typed: str, model, column: str):
+    """``function(Decimal(typed), model, column)``; an exception fails the test, naming it: a request carrying the value
+    would answer 500 instead of a refusal."""
+    try:
+        return function(Decimal(typed), model, column)
+    except (ArithmeticError, TypeError, ValueError) as exc:
+        pytest.fail(f"{function.__name__}({typed}, {model.__name__}, {column!r}) raised {exc!r}: a request carrying it answers 500 instead of a refusal (R13-SEC2: it never raises)")
+
+
+def _integer_digits_issue():
+    """``precision.integer_digits_issue``, looked up when the test runs: the function is new in R13-SEC2."""
+    found = getattr(precision, "integer_digits_issue", None)
+    if found is None:
+        pytest.fail("backend/app/db/precision.py has no integer_digits_issue: a provider's volume of 1E+400 is written as a REAL inf, and nothing measures the magnitude of a value apart from its decimals")
+    return found
+
+
+def _storable_value():
+    """``precision.storable_value``, looked up when the test runs: the function is new in R13-SEC2."""
+    found = getattr(precision, "storable_value", None)
+    if found is None:
+        pytest.fail("backend/app/db/precision.py has no storable_value: a provider's close of 1E+60 reaches truncate_priceHistory, which raises InvalidOperation in the middle of a refresh")
+    return found
+
+
+def _max_integer_digits():
+    """``precision.max_integer_digits``, looked up when the test runs: the function is new in R13-SEC2 (decision N63)."""
+    found = getattr(precision, "max_integer_digits", None)
+    if found is None:
+        pytest.fail("backend/app/db/precision.py has no max_integer_digits: nothing says how many digits before the decimal point a column keeps, so a quantity of 1E+60 is stored")
+    return found
+
+
+@pytest.mark.parametrize(
+    ("model", "column", "expected"),
+    [
+        pytest.param(Transaction, "quantity", 15, id="Transaction.quantity-15-N63"),
+        pytest.param(Transaction, "amount", 15, id="Transaction.amount-15-N63"),
+        pytest.param(Transaction, "cost_basis_override", 12, id="Transaction.cost_basis_override-12"),
+        pytest.param(PriceHistory, "open", 12, id="PriceHistory.open-12"),
+        pytest.param(PriceHistory, "high", 12, id="PriceHistory.high-12"),
+        pytest.param(PriceHistory, "low", 12, id="PriceHistory.low-12"),
+        pytest.param(PriceHistory, "close", 12, id="PriceHistory.close-12"),
+        pytest.param(PriceHistory, "adjusted_close", 12, id="PriceHistory.adjusted_close-12"),
+        pytest.param(PriceHistory, "volume", 24, id="PriceHistory.volume-24"),
+        pytest.param(AssetEvent, "value", 12, id="AssetEvent.value-12"),
+        pytest.param(FxRate, "rate", 14, id="derived-FxRate.rate-14"),
+    ],
+)
+def test_max_integer_digits(model, column, expected):
+    """Red today: the function does not exist.
+
+    Contract (R13-SEC2, the coordinator's decision N63 of 17/10): 15, ``REAL_SIGNIFICANT_DIGITS``, for
+    ``Transaction.quantity`` and ``Transaction.amount``; for every other column the integer digits its declaration gives,
+    ``precision - scale`` — 12 for the per-unit cost basis, the five prices and an event value, 24 for the volume.
+    ``FxRate.rate`` (24, 10), 14, is derived from "every other column".
+    """
+    found = _max_integer_digits()(model, column)
+
+    assert found == expected, f"max_integer_digits({model.__name__}, {column!r}) = {found!r}: expected {expected}"
+    assert type(found) is int, f"max_integer_digits({model.__name__}, {column!r}) returned a {type(found).__name__}, not an int"
+
+
+def test_the_integer_digits_code_is_named():
+    """Red today: ``precision`` has no ``INTEGER_DIGITS_EXCEEDED``. Contract (R13-SEC2): ``"integerDigitsExceeded"``, the
+    value of ``TXValidationCode.INTEGER_DIGITS_EXCEEDED``."""
+    found = getattr(precision, "INTEGER_DIGITS_EXCEEDED", None)
+
+    assert found == "integerDigitsExceeded", f"precision.INTEGER_DIGITS_EXCEEDED is {found!r}: expected 'integerDigitsExceeded'"
+
+
+@pytest.mark.parametrize(
+    ("typed", "model", "column", "expected"),
+    [
+        pytest.param("1E+60", Transaction, "quantity", ("integerDigitsExceeded", 15), id="quantity-1E+60"),
+        pytest.param("1E+15", Transaction, "quantity", ("integerDigitsExceeded", 15), id="quantity-1E+15-is-16-integer-digits"),
+        pytest.param("1000000000000000", Transaction, "quantity", ("integerDigitsExceeded", 15), id="quantity-16-integer-digits"),
+        pytest.param("-1E+15", Transaction, "amount", ("integerDigitsExceeded", 15), id="amount--1E+15"),
+        pytest.param("1E+13", Transaction, "cost_basis_override", ("integerDigitsExceeded", 12), id="cost-basis-1E+13"),
+        pytest.param("1000000000000", Transaction, "cost_basis_override", ("integerDigitsExceeded", 12), id="cost-basis-13-integer-digits"),
+        pytest.param("1E+13", PriceHistory, "close", ("integerDigitsExceeded", 12), id="close-1E+13"),
+        pytest.param("1234567890123.4", PriceHistory, "close", ("integerDigitsExceeded", 12), id="close-13-integer-digits-within-the-other-limits"),
+        pytest.param("1E+48", PriceHistory, "close", ("integerDigitsExceeded", 12), id="close-1E+48"),
+        pytest.param("1E+13", AssetEvent, "value", ("integerDigitsExceeded", 12), id="event-1E+13"),
+        pytest.param("1E+25", PriceHistory, "volume", ("integerDigitsExceeded", 24), id="volume-1E+25"),
+        pytest.param("1E+1000000", Transaction, "quantity", ("integerDigitsExceeded", 15), id="quantity-1E+1000000-no-overflow"),
+        pytest.param("1E-2000000", PriceHistory, "close", ("decimalPlacesExceeded", 12), id="close-1E-2000000-no-underflow"),
+        pytest.param("Infinity", Transaction, "quantity", ("integerDigitsExceeded", 15), id="quantity-Infinity"),
+        pytest.param("-Infinity", Transaction, "amount", ("integerDigitsExceeded", 15), id="amount--Infinity"),
+        pytest.param("NaN", PriceHistory, "close", ("integerDigitsExceeded", 12), id="close-NaN"),
+        pytest.param("sNaN", PriceHistory, "volume", ("integerDigitsExceeded", 24), id="derived-volume-sNaN"),
+    ],
+)
+def test_decimal_limit_issue_refuses_more_integer_digits_than_the_column_keeps(typed, model, column, expected):
+    """Red today: the limit has no magnitude, so ``1E+60``, ``1E+15``, 16 integer digits, ``-1E+15``, ``1E+13``, 13
+    integer digits, ``1E+48`` and ``1E+25`` pass (few digits, no decimals); ±Infinity and NaN pass too (their exponent
+    is no int); ``1E+1000000`` raises ``decimal.Overflow`` and ``sNaN`` ``InvalidOperation`` (``normalize`` in a context
+    of 60 digits); ``1E-2000000`` underflows to 0 there and passes.
+
+    Contract (R13-SEC2, limits of decision N63): computed from the digits, without a context, never raising: decimal
+    places, then significant digits, then integer digits — more than ``max_integer_digits`` (15 for a quantity and an
+    amount, 12 for a cost basis, a price and an event value, 24 for a volume) answers ``("integerDigitsExceeded",
+    max)``, as does a non-finite value. ``1E-2000000`` has two million decimal places. ``sNaN`` is derived from "never
+    raises for any Decimal".
+    """
+    found = _never_raising(precision.decimal_limit_issue, typed, model, column)
+
+    assert found == expected, f"decimal_limit_issue({typed}, {model.__name__}, {column!r}) = {found!r}: expected {expected!r}"
+
+
+@pytest.mark.parametrize(
+    ("typed", "model", "column", "expected"),
+    [
+        pytest.param("999999999999999", Transaction, "quantity", None, id="quantity-15-integer-digits"),
+        pytest.param("-999999999999999", Transaction, "amount", None, id="amount-15-integer-digits"),
+        pytest.param("-1E+13", Transaction, "amount", None, id="amount--1E+13-14-integer-digits"),
+        pytest.param("1000000000000", Transaction, "quantity", None, id="quantity-13-integer-digits"),
+        pytest.param("999999999999999.0000000000", Transaction, "quantity", None, id="quantity-15-integer-digits-trailing-zeros"),
+        pytest.param("999999999999", Transaction, "cost_basis_override", None, id="cost-basis-12-integer-digits"),
+        pytest.param("999999999999.999", PriceHistory, "close", None, id="close-12-integer-digits-15-significant-digits"),
+        pytest.param("0E+70", Transaction, "quantity", None, id="zero-with-a-large-exponent"),
+        pytest.param("0E-2000000", PriceHistory, "close", None, id="zero-with-a-small-exponent"),
+        pytest.param("1234567890123.456", Transaction, "quantity", ("significantDigitsExceeded", 15), id="quantity-16-significant-digits-still-significant"),
+        pytest.param("1234567890123456.7", Transaction, "quantity", ("significantDigitsExceeded", 15), id="order-quantity-significant-digits-before-integer-digits"),
+        pytest.param("1234567890123456.7", Transaction, "amount", ("significantDigitsExceeded", 15), id="order-amount-significant-digits-before-integer-digits"),
+        pytest.param("10000000000000000.12345678901", Transaction, "quantity", ("decimalPlacesExceeded", 10), id="order-decimal-places-before-integer-digits"),
+        pytest.param("1234567890123.45678", Transaction, "cost_basis_override", ("significantDigitsExceeded", 15), id="order-cost-basis-significant-digits-before-integer-digits"),
+    ],
+)
+def test_guard_decimal_limit_issue_keeps_its_results_at_and_around_the_integer_limit(typed, model, column, expected):
+    """Guard: green today and after. The integer limit is reached, not passed: 15 digits for a quantity and an amount
+    (decision N63: a quantity of 13 digits and an amount of -1E+13 are accepted), 12 for a cost basis and a price;
+    trailing zeros are not counted; a zero is a zero whatever its exponent; and the order keeps the results of C-97a: a
+    value past two limits gets the code of the first (decimal places, then significant digits), so a quantity of 16
+    digits still reads ``significantDigitsExceeded``.
+    """
+    found = _never_raising(precision.decimal_limit_issue, typed, model, column)
+
+    assert found == expected, f"decimal_limit_issue({typed}, {model.__name__}, {column!r}) = {found!r}: expected {expected!r}, as today"
+
+
+@pytest.mark.parametrize(
+    ("typed", "model", "column", "expected"),
+    [
+        pytest.param("1E+400", PriceHistory, "volume", ("integerDigitsExceeded", 24), id="volume-1E+400"),
+        pytest.param("1.5", PriceHistory, "volume", None, id="volume-1.5-decimals-not-checked"),
+        pytest.param("1E+25", PriceHistory, "volume", ("integerDigitsExceeded", 24), id="derived-volume-1E+25"),
+        pytest.param("999999999999999999999999", PriceHistory, "volume", None, id="derived-volume-24-integer-digits"),
+        pytest.param("1E+13", PriceHistory, "close", ("integerDigitsExceeded", 12), id="derived-close-1E+13"),
+        pytest.param("0.0000000000001", PriceHistory, "close", None, id="derived-close-13-decimals-not-checked"),
+        pytest.param("3333.333333333333", PriceHistory, "close", None, id="derived-close-16-significant-digits-not-checked"),
+        pytest.param("1E-2000000", PriceHistory, "close", None, id="derived-close-1E-2000000-magnitude-only"),
+        pytest.param("1E+15", Transaction, "quantity", ("integerDigitsExceeded", 15), id="derived-quantity-1E+15"),
+        pytest.param("999999999999999", Transaction, "quantity", None, id="derived-quantity-15-integer-digits"),
+        pytest.param("1E+1000000", Transaction, "quantity", ("integerDigitsExceeded", 15), id="derived-quantity-1E+1000000"),
+        pytest.param("Infinity", PriceHistory, "close", ("integerDigitsExceeded", 12), id="derived-close-Infinity"),
+        pytest.param("NaN", PriceHistory, "volume", ("integerDigitsExceeded", 24), id="derived-volume-NaN"),
+    ],
+)
+def test_integer_digits_issue_measures_the_magnitude_and_the_finiteness_alone(typed, model, column, expected):
+    """Red today: the function does not exist.
+
+    Contract (R13-SEC2): ``integer_digits_issue(value, model, column)`` checks only the magnitude, against
+    ``max_integer_digits``, and the finiteness — the volume, a count read back rounded, has no other limit: a volume of
+    ``1E+400`` → ``("integerDigitsExceeded", 24)``, of ``1.5`` → None (the brief's two examples); the ``derived-`` cases
+    read the same rule (no decimal or significant-digit check, never raising).
+    """
+    found = _never_raising(_integer_digits_issue(), typed, model, column)
+
+    assert found == expected, f"integer_digits_issue({typed}, {model.__name__}, {column!r}) = {found!r}: expected {expected!r}"
+
+
+@pytest.mark.parametrize(
+    ("typed", "model", "column", "expected"),
+    [
+        pytest.param("1E+400", PriceHistory, "close", None, id="close-1E+400"),
+        pytest.param("1E+60", PriceHistory, "close", None, id="close-1E+60"),
+        pytest.param("1E+48", PriceHistory, "close", None, id="close-1E+48"),
+        pytest.param("Infinity", PriceHistory, "close", None, id="close-Infinity"),
+        pytest.param("123.4567890123456", PriceHistory, "close", Decimal("123.456789012345"), id="close-truncated-to-15-significant-digits"),
+        pytest.param("1E+13", PriceHistory, "close", None, id="derived-close-13-integer-digits"),
+        pytest.param("-1E+60", PriceHistory, "open", None, id="derived-open--1E+60"),
+        pytest.param("NaN", PriceHistory, "high", None, id="derived-high-NaN"),
+        pytest.param("1E+1000000", PriceHistory, "low", None, id="derived-low-1E+1000000"),
+        pytest.param("999999999999.9999999", PriceHistory, "close", Decimal("999999999999.999"), id="derived-close-12-integer-digits-truncated"),
+    ],
+)
+def test_storable_value_truncates_a_provider_value_or_answers_none(typed, model, column, expected):
+    """Red today: the function does not exist; the provider paths call ``truncate_priceHistory``, which raises
+    ``InvalidOperation`` from ``1E+48`` up (12 decimals in 60 digits) and on any non-finite value.
+
+    Contract (R13-SEC2): ``storable_value(value, model, column)`` is the value truncated to the column
+    (``truncate_to_db_precision``: 12 decimals then 15 significant digits, ``ROUND_DOWN``), or None when
+    ``integer_digits_issue`` is not None; it never raises. The ``derived-`` cases read the same rule.
+    """
+    found = _never_raising(_storable_value(), typed, model, column)
+
+    assert found == expected, f"storable_value({typed}, {model.__name__}, {column!r}) = {found!r}: expected {expected!r}"
+    if expected is not None:
+        assert isinstance(found, Decimal), f"storable_value({typed}) returned a {type(found).__name__}, not a Decimal"
+
+
+# --------------------------------------------------------------------------- #
+# X-R38 (the FX side of W-B58): storable_fx_rate, an exchange rate as fx_rates.rate keeps it
+# --------------------------------------------------------------------------- #
+
+
+def _storable_fx_rate_never_raising(typed: str):
+    """``precision.storable_fx_rate(Decimal(typed))``, looked up when the test runs. Any exception fails the test naming
+    it, the stub's ``NotImplementedError`` included: a provider sync meeting the rate loses its pair, a manual rate
+    carrying it answers 500 (X-R38: it never raises)."""
+    storable_fx_rate = getattr(precision, "storable_fx_rate", None)
+    if storable_fx_rate is None:
+        pytest.fail("backend/app/db/precision.py has no storable_fx_rate: nothing says which exchange rate fx_rates.rate can keep, so 1E+400 is stored as a REAL inf and 1E-11 as 0")
+    try:
+        return storable_fx_rate(Decimal(typed))
+    except Exception as exc:  # noqa: BLE001 — any exception is the defect under test, the stub's NotImplementedError included
+        pytest.fail(f"storable_fx_rate({typed}) raised {exc!r}: a provider sync meeting the rate loses its pair, a manual rate carrying it answers 500 (X-R38: it never raises)")
+
+
+@pytest.mark.parametrize(
+    "typed",
+    [
+        pytest.param("100000000000000", id="15-integer-digits"),
+        pytest.param("1E+14", id="1E+14-15-integer-digits"),
+        pytest.param("1E+15", id="1E+15"),
+        pytest.param("1E+50", id="1E+50-truncate_fx_rate-raises"),
+        pytest.param("1E+400", id="1E+400"),
+        pytest.param("1E+1000000", id="derived-1E+1000000"),
+        pytest.param("1E-11", id="1E-11-0-once-truncated"),
+        pytest.param("0.000000000099", id="derived-0.000000000099-0-once-truncated"),
+        pytest.param("1E-2000000", id="derived-1E-2000000-0-once-truncated"),
+        pytest.param("0", id="0"),
+        pytest.param("Infinity", id="Infinity"),
+        pytest.param("-Infinity", id="-Infinity"),
+        pytest.param("NaN", id="NaN"),
+        pytest.param("sNaN", id="derived-sNaN"),
+    ],
+)
+def test_xr38_storable_fx_rate_answers_none_for_a_rate_no_column_can_keep(typed):
+    """Red today: ``storable_fx_rate`` is a stub raising ``NotImplementedError``. What the FX writers call instead,
+    ``truncate_fx_rate``, raises ``InvalidOperation`` from ``1E+50`` up and on ±Infinity, and gives 0 for ``1E-11``.
+
+    Contract (X-R38): None, never an exception, when the rate is not finite, has more digits before the decimal point
+    than ``max_integer_digits(FxRate, "rate")`` (14: ``100000000000000`` and ``1E+14`` have 15), or is 0 once truncated to
+    the 10 decimal places of ``fx_rates.rate`` (a rate is never 0: its inverse and the conversions divide by it). The
+    ``derived-`` cases read the same rule.
+    """
+    found = _storable_fx_rate_never_raising(typed)
+
+    assert found is None, f"storable_fx_rate({typed}) = {found!r}: expected None, fx_rates.rate cannot keep it"
+
+
+@pytest.mark.parametrize(
+    ("typed", "expected"),
+    [
+        pytest.param("1.0850123456", "1.0850123456", id="10-decimals"),
+        pytest.param("1.08501234567890", "1.0850123456", id="cut-at-10-decimals-round-down"),
+        pytest.param("99999999999999", "99999999999999", id="14-integer-digits"),
+        pytest.param("1E+13", "10000000000000", id="1E+13-14-integer-digits"),
+        pytest.param("1E-10", "0.0000000001", id="1E-10-the-smallest-rate-kept"),
+        pytest.param("0.00000000019", "0.0000000001", id="cut-to-1E-10"),
+        pytest.param("1.50000000000000000000", "1.5", id="trailing-zeros"),
+        pytest.param("-1.25", "-1.25", id="negative-the-callers-business"),
+    ],
+)
+def test_xr38_storable_fx_rate_keeps_a_rate_as_truncate_fx_rate_gives_it(typed, expected):
+    """Red today: ``storable_fx_rate`` is a stub raising ``NotImplementedError``.
+
+    Contract (X-R38): a rate the column can keep comes back as ``truncate_fx_rate`` gives it, 10 decimal places
+    ``ROUND_DOWN``, its form included. 14 digits before the decimal point and ``1E-10`` are the limits, not past them. A
+    negative rate is not refused here: that is the caller's business (``upsert_rates_bulk`` refuses a rate of 0 or less).
+    X-R50 adds the double: the case ``14-integer-digits-cut-at-10-decimals`` (``99999999999999.99999999999``), whose
+    double is ``1E+14``, moved to ``test_xr50_storable_fx_rate_answers_none_for_a_rate_whose_double_is_1E14``.
+    """
+    found = _storable_fx_rate_never_raising(typed)
+
+    truncated = precision.truncate_fx_rate(Decimal(typed))
+    assert found == Decimal(expected), f"storable_fx_rate({typed}) = {found!r}: expected {expected}"
+    assert isinstance(found, Decimal) and found.as_tuple() == truncated.as_tuple(), f"storable_fx_rate({typed}) = {found!r}: expected the value as truncate_fx_rate gives it, {truncated!r}"
+
+
+# --------------------------------------------------------------------------- #
+# X-R50 (E's review R13-SEC5 on X-R38): storable_fx_rate and the double SQLite keeps
+# --------------------------------------------------------------------------- #
+
+
+def _xr50_double(typed: str) -> float:
+    """The double SQLite keeps for the rate as ``truncate_fx_rate`` gives it: ``fx_rates.rate`` is a REAL in the file."""
+    return float(precision.truncate_fx_rate(Decimal(typed)))
+
+
+@pytest.mark.parametrize(
+    "typed",
+    [
+        pytest.param("99999999999999.995", id="14-integer-digits-double-1E+14"),
+        pytest.param("99999999999999.9999999999", id="14-integer-digits-10-decimals-double-1E+14"),
+        pytest.param("99999999999999.99999999999", id="14-integer-digits-cut-at-10-decimals-double-1E+14-kept-by-X-R38"),
+        pytest.param("99999999999999.9921875", id="derived-halfway-below-1E+14-rounds-to-1E+14"),
+    ],
+)
+def test_xr50_storable_fx_rate_answers_none_for_a_rate_whose_double_is_1E14(typed):
+    """Red today: kept, as ``truncate_fx_rate`` gives it (``99999999999999.9950000000``): 14 digits before the decimal
+    point are the X-R38 limit, not past it. SQLite keeps the rate as a double, ``1E+14``: a manual rate is answered
+    «inserted» and a synced one stored, and every conversion then skips it as unusable (``convert_bulk`` reads only
+    ``1E-10 <= rate < 1E+14``). The case ``…-kept-by-X-R38`` is the X-R38 case ``14-integer-digits-cut-at-10-decimals``,
+    moved here from the test that keeps a rate: X-R50 reverses it.
+
+    Contract (X-R50): None, never an exception, also when the double of the truncated rate is ``1E+14`` or more. The
+    ``derived-`` case reads the same rule at its edge: halfway between the double below ``1E+14``
+    (``99999999999999.984375``) and ``1E+14``, the rate rounds to ``1E+14`` (to even).
+    """
+    integer_digits = Decimal(typed).adjusted() + 1
+    assert integer_digits == precision.max_integer_digits(FxRate, "rate"), f"barrier: {typed} has {integer_digits} digits before the decimal point, not the 14 X-R38 lets through: the digits would refuse it, not the double"
+    double = _xr50_double(typed)
+    assert double >= 1e14, f"barrier: the double of {typed}, cut to 10 decimal places, is {double!r}, below 1E+14"
+
+    found = _storable_fx_rate_never_raising(typed)
+
+    assert found is None, f"storable_fx_rate({typed}) = {found!r}: expected None, SQLite keeps it as {double!r}, a rate every conversion skips (X-R50)"
+
+
+@pytest.mark.parametrize(
+    ("typed", "expected"),
+    [
+        pytest.param("99999999999999.99", "99999999999999.99", id="14-integer-digits-double-99999999999999.98"),
+        pytest.param("99999999999999.9921874999", "99999999999999.9921874999", id="derived-just-below-halfway-double-99999999999999.98"),
+    ],
+)
+def test_xr50_guard_storable_fx_rate_keeps_a_rate_whose_double_stays_below_1E14(typed, expected):
+    """Guard: green today and after. A rate of 14 digits before the decimal point whose double stays below ``1E+14``
+    (``99999999999999.99`` is the double ``99999999999999.98``) comes back as ``truncate_fx_rate`` gives it, its form
+    included: X-R50 refuses from the double ``1E+14``, never a margin below it. The function alone, no round trip. The
+    ``derived-`` case reads the same rule at its edge, just below halfway."""
+    double = _xr50_double(typed)
+    assert double < 1e14, f"barrier: the double of {typed}, cut to 10 decimal places, is {double!r}, not below 1E+14"
+
+    found = _storable_fx_rate_never_raising(typed)
+
+    truncated = precision.truncate_fx_rate(Decimal(typed))
+    assert found == Decimal(expected), f"storable_fx_rate({typed}) = {found!r}: expected {expected}, its double {double!r} is below 1E+14 (X-R50 refuses from 1E+14 only)"
+    assert isinstance(found, Decimal) and found.as_tuple() == truncated.as_tuple(), f"storable_fx_rate({typed}) = {found!r}: expected the value as truncate_fx_rate gives it, {truncated!r}"

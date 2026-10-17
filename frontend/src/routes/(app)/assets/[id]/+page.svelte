@@ -37,6 +37,7 @@
     import AssetDetailHeader from '$lib/components/assets/detail/AssetDetailHeader.svelte';
     import AssetDetailMetadataPanel from '$lib/components/assets/detail/AssetDetailMetadataPanel.svelte';
     import AssetDetailToolbarActions from '$lib/components/assets/detail/AssetDetailToolbarActions.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
@@ -387,12 +388,12 @@
         }
         primaryMode = mode;
         if (mode === 'calendar-return') {
-            void loadChartData(false);
+            void pageBusy.track('asset-mode', () => loadChartData(false));
         } else {
             calendarCustomEditing = false;
-            void maybeLoadComparison();
+            void pageBusy.track('asset-mode', () => maybeLoadComparison());
             const hasBackendSignals = signals.some((config) => signalDefinitionsByType.get(config.signalType)?.source === 'backend');
-            if (hasBackendSignals) void loadChartData(false);
+            if (hasBackendSignals) void pageBusy.track('asset-mode', () => loadChartData(false));
         }
     }
 
@@ -415,7 +416,7 @@
             preset,
         });
         if (primaryMode === 'calendar-return') {
-            void loadChartData(false);
+            void pageBusy.track('asset-calendar-window', () => loadChartData(false));
         }
     }
 
@@ -430,7 +431,7 @@
         const changed = calendarWindowSelection.kind !== 'custom' || calendarWindowSelection.customAmount !== customAmount || calendarWindowSelection.customUnit !== customUnit;
         persistCalendarWindow(selection);
         if (changed && primaryMode === 'calendar-return') {
-            void loadChartData(false);
+            void pageBusy.track('asset-calendar-window', () => loadChartData(false));
         }
     }
 
@@ -1041,8 +1042,10 @@
     }
 
     async function retryBackendSignals() {
-        await loadAssetSignalDefinitions(true);
-        await loadChartData(false);
+        await pageBusy.track('asset-signals-retry', async () => {
+            await loadAssetSignalDefinitions(true);
+            await loadChartData(false);
+        });
     }
 
     /** Full page reload: fetches all data for the current assetId */
@@ -1105,7 +1108,8 @@
 
     onMount(async () => {
         _prevAssetId = data.assetId;
-        await reloadPage();
+        // The first load holds the page's Refresh button (Y11).
+        await pageBusy.track('asset-first-load', () => reloadPage());
         void loadAssetAiExportCompatibility();
         if (assetInfo) onboardingGuide.maybeStartContextual('asset_detail_guide');
     });
@@ -1115,9 +1119,11 @@
         const newId = data.assetId;
         if (_prevAssetId !== undefined && newId !== _prevAssetId) {
             _prevAssetId = newId;
-            void reloadPage().then(() => {
-                if (assetInfo) onboardingGuide.maybeStartContextual('asset_detail_guide');
-            });
+            void pageBusy
+                .track('asset-change', () => reloadPage())
+                .then(() => {
+                    if (assetInfo) onboardingGuide.maybeStartContextual('asset_detail_guide');
+                });
         }
     });
 
@@ -1172,7 +1178,7 @@
         }
         if (cur !== prevDisplayCurrency) {
             prevDisplayCurrency = cur;
-            loadChartData().then(() => maybeLoadComparison());
+            void pageBusy.track('asset-currency', () => loadChartData().then(() => maybeLoadComparison()));
         }
     });
 
@@ -1705,6 +1711,7 @@
             comparisonEvents = clearComparisonAssetsData(signals.filter((signal) => signal.signalType === 'asset-comparison'));
             overlayDataVersion++;
         }
+        // No pageBusy token: the sync has its own indicator, and this reload is not one the user asked for (P3, Y11).
         await handleRefresh();
         await reloadMetadata();
         overlayDataVersion++;
@@ -1732,12 +1739,13 @@
         const current = () => pageAlive && data.assetId === assetIdAtCreation && isClientSessionCurrent(detail.sessionGeneration);
         if (!current()) return;
         await loadFxPairSlugs(true);
+        // After the new pair's sync: no pageBusy token (P3, Y11).
         if (current()) await handleRefresh(true);
     }
 
     function createFxPairCallbacks(assetIdAtCreation: number, wasForComparison: boolean, assetCurrency: string) {
         return {
-            oncreated: (detail: FxPairCreatedDetail) => handleFxPairCreated(detail, assetIdAtCreation, wasForComparison, assetCurrency),
+            oncreated: (detail: FxPairCreatedDetail) => pageBusy.track('asset-reload', () => handleFxPairCreated(detail, assetIdAtCreation, wasForComparison, assetCurrency)),
             onsynced: (detail: FxPairSyncCompleteDetail) => handleFxPairCreationSynced(detail, assetIdAtCreation),
             onclose: () => {
                 if (!pageAlive || data.assetId !== assetIdAtCreation) return;
@@ -1758,8 +1766,10 @@
         // stays meaningful across reloads/shares and the "All" badge doesn't
         // look stuck on a specific historical date.
         replaceHistoryDateRange(newStart, newEnd);
-        await loadChartData();
-        await maybeLoadComparison();
+        await pageBusy.track('asset-period', async () => {
+            await loadChartData();
+            await maybeLoadComparison();
+        });
     }
 
     function handleMeasureClick(date: string, value: number) {
@@ -1825,10 +1835,10 @@
         const shouldReloadPriceComparisons = priceComparisonLoadFingerprint(signals) !== priceComparisonLoadFingerprint(newSignals);
         setPairSettings(`asset-${data.assetId}`, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
         if (primaryMode === 'price' && shouldReloadPriceComparisons) {
-            void maybeLoadComparison(false, newSignals);
+            void pageBusy.track('asset-comparison', () => maybeLoadComparison(false, newSignals));
         }
         if ((primaryMode === 'calendar-return' && shouldReloadCalendarComparisons) || (primaryMode === 'price' && shouldReloadBackend)) {
-            void loadChartData(false, newSignals);
+            void pageBusy.track('asset-signals', () => loadChartData(false, newSignals));
         }
     }
 
@@ -2265,8 +2275,8 @@
                 {isParametric}
                 {providerAssignmentLoaded}
                 onsync={handleSync}
-                {loading}
-                onrefresh={() => handleRefresh()}
+                busy={pageBusy.busy}
+                onrefresh={() => void pageBusy.track('asset-refresh', () => handleRefresh())}
             />
         {/snippet}
     </PageToolbar>
@@ -2629,7 +2639,7 @@
                                 dateEnd = expandedRange.end;
                                 displayDateStart = isMaxPending ? 'min' : dateStart;
                             }
-                            await handleRefresh();
+                            await pageBusy.track('asset-reload', () => handleRefresh());
                         }}
                         oncancel={() => {
                             showDataEditor = false;
@@ -2745,7 +2755,7 @@
     <!-- AssetModal for editing -->
     <!-- ======================================================================= -->
     {#if assetInfo}
-        <AssetModal bind:open={editModalOpen} editMode={true} editData={editDataForModal} onupdated={handleAssetUpdated} onclose={() => (editModalOpen = false)} />
+        <AssetModal bind:open={editModalOpen} editMode={true} editData={editDataForModal} onupdated={() => void pageBusy.track('asset-reload', () => handleAssetUpdated())} onclose={() => (editModalOpen = false)} />
 
         <!-- FX Pair Add Modal (opened from FX warning or banner) -->
         {@const fxCreateDefaults = fxPairCreateDefaults(fxPairCreateSlug, assetInfo.currency, displayCurrency)}

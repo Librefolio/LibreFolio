@@ -66,9 +66,11 @@ from scripts.cli_base import (
     print_header,
     print_success,
     print_warning,
+    record_tool_contract_inputs,
     run_command,
     run_command_live,
     run_pipenv,
+    tool_contract_fingerprint,
 )
 from scripts.cli_tree_parser import TreeParser, format_help
 
@@ -661,6 +663,9 @@ def cmd_fe_build(args):
         print_error("Resource cache incomplete - aborting frontend build")
         return cache_result
 
+    # The Tool codegen inputs as `api sync` reads them: recorded below only when the build succeeds (H-24)
+    tool_inputs = tool_contract_fingerprint(PROJECT_ROOT)
+
     # Sync API types to ensure frontend types are aligned with backend
     print(Colors.success("Syncing API types before build..."))
     sync_result = cmd_api_sync(args)
@@ -695,6 +700,7 @@ def cmd_fe_build(args):
         # build) even when the build isn't otherwise stale. Not tracked by git (frontend/build
         # is gitignored).
         _write_frontend_build_mode_marker(debug=args.debug)
+        record_tool_contract_inputs(PROJECT_ROOT, tool_inputs)
         print_success("Frontend build complete!")
         print(Colors.warning("Output in: frontend/build/"))
     else:
