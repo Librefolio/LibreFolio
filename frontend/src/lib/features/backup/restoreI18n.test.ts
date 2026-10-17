@@ -36,6 +36,7 @@ import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
 import es from '$lib/i18n/es.json';
+import {ERROR_KEYS} from './restoreText';
 
 const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
 const LANGUAGES = Object.keys(CATALOGUES);
@@ -276,6 +277,8 @@ const CODE_LISTS: Array<[string, string[]]> = [
             'restore_confirm_failed',
             'restore_cancel_failed',
             'restore_restart_failed',
+            // B-32: a state of the restore the server cannot read.
+            'restore_state_unreadable',
             'network',
             'unexpected',
         ],
@@ -390,5 +393,24 @@ describe('B-16 — the hint of a server that never stops', () => {
         expectMessage('backup.restore.restart.notStopped');
 
         expect(placeholdersOf(messageOf(en, 'backup.restore.restart.notStopped') as string)).toEqual([]);
+    });
+});
+
+// =====================================================================================================================
+// B-32 — a state of the restore the server cannot read (written red first)
+// =====================================================================================================================
+
+/*
+ * `GET /backup/restore/status` answers 500 `restore_state_unreadable` when the server cannot read the state of the
+ * restore (B-32 §3). restoreText.ts words it by `backup.restore.errors.restore_state_unreadable` (§4): a message of the
+ * four catalogues naming no placeholder, as the English one of the contract names none. The code is also in the list
+ * of the requests' errors above. Red today: neither the entry of `ERROR_KEYS` nor the key exists.
+ */
+describe('B-32 — a state of the restore the server cannot read', () => {
+    it('ERROR_KEYS.restore_state_unreadable is backup.restore.errors.restore_state_unreadable, a message of the four catalogues naming no placeholder', () => {
+        expect(ERROR_KEYS.restore_state_unreadable, 'restoreText.ts words the code').toBe('backup.restore.errors.restore_state_unreadable');
+
+        expectMessage('backup.restore.errors.restore_state_unreadable');
+        expect(placeholdersOf(messageOf(en, 'backup.restore.errors.restore_state_unreadable') as string)).toEqual([]);
     });
 });

@@ -214,6 +214,7 @@
         "restore_confirm_failed": "The restore could not be confirmed: the server's log has the cause. Nothing changed.",
         "restore_cancel_failed": "The restore could not be cancelled: the server's log has the cause. It still waits for the next start.",
         "restore_restart_failed": "LibreFolio could not be restarted: the server's log has the cause. The restore still waits for the next start.",
+        "restore_state_unreadable": "The state of the restore cannot be read: the server's log has the cause. A restore may still wait for the next start.",
         "network": "The server does not answer: check the connection and try again.",
         "unexpected": "The server answered with an error: the server's log has the cause.",
         "wrong_password": "Wrong password, or the file was changed: type the password again.",

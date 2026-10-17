@@ -3,8 +3,9 @@
 """
 Instance backup CLI: ``./dev.py backup …``.
 
-The same archive as Settings › Backup: the database (a consistent copy, safe while the server runs), the uploaded
-files, the broker reports and the risk scenarios, with a manifest. It holds every user's data: keep it private.
+The same archive as Settings › Administration › Backup: the database (a consistent copy, safe while the server runs),
+the uploaded files, the broker reports and the risk scenarios, with a manifest. It holds every user's data: keep it
+private.
 
 Usage:
     ./dev.py backup create [--output PATH]     Write an archive (default: <data dir>/backups/)
@@ -659,10 +660,15 @@ def _confirm(args, stage_id: str, data_dir: Path) -> bool:
 
 
 def _restore_already_active(data_dir: Path) -> bool:
-    """Whether a restore waits for the next start, or is being applied: then no other one is checked (said once)."""
-    from backend.app.services.platform.instance_backup.apply import ACTIVE, read_restore  # noqa: PLC0415
+    """Whether a restore waits for the next start, or is being applied, or its state cannot be read (B-32): then no other
+    one is checked (said once)."""
+    from backend.app.services.platform.instance_backup.apply import ACTIVE, RestoreStateUnreadableError, read_restore  # noqa: PLC0415
 
-    waiting = read_restore(data_dir)
+    try:
+        waiting = read_restore(data_dir)
+    except RestoreStateUnreadableError as exc:
+        print(f"❌ {exc} ({exc.code})")
+        return True
     if waiting is None or waiting.status not in ACTIVE:
         return False
     print("❌ A restore already waits for the next start: ./dev.py backup pending --cancel drops it (restore_already_pending)")
@@ -827,21 +833,59 @@ def _carries_instance_key(path: Path) -> bool:
 
 def cmd_pending(args) -> int:
     """Show the restore waiting for the next start, or the last one; ``--cancel`` drops the one waiting."""
-    from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, cancel_restore, read_restore  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.apply import RestoreStateUnreadableError, read_restore  # noqa: PLC0415
 
     data_dir = _data_dir_for(args, need_database=False)
     if data_dir is None:
         return 1
     if args.cancel:
-        try:
-            cancel_restore(data_dir=data_dir, drop_copy=True)
-        except RestoreNotPendingError:
-            print("❌ No restore waits for the next start: nothing to cancel (restore_not_pending)")
-            return 1
-        print("✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is")
-        return 0
-    _print_restore_state(read_restore(data_dir))
+        return _cancel_pending(data_dir)
+    try:
+        state = read_restore(data_dir)
+    except RestoreStateUnreadableError as exc:
+        print(f"❌ {exc} ({exc.code})")
+        return 1
+    _print_restore_state(state)
     return 0
+
+
+def _cancel_pending(data_dir: Path) -> int:
+    """``backup pending --cancel``: drop the restore waiting, with its checked copy, and say whether the copy went (B-32)."""
+    from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, RestoreStateUnreadableError, cancel_restore  # noqa: PLC0415
+
+    try:
+        state = cancel_restore(data_dir=data_dir, drop_copy=True)
+    except RestoreNotPendingError:
+        print("❌ No restore waits for the next start: nothing to cancel (restore_not_pending)")
+        return 1
+    except RestoreStateUnreadableError as exc:
+        print(f"❌ {exc} ({exc.code})")
+        return 1
+    except OSError as exc:
+        # Raised before the state is removed: the restore still waits.
+        print(f"❌ The restore could not be cancelled: {exc.strerror or type(exc).__name__}. It still waits for the next start (restore_cancel_failed)")
+        return 1
+    if _copy_left(data_dir, state.stage_id):
+        # Its removal failed after the drop: a warning above when it raised (B-31).
+        print("✅ The restore waiting for the next start was dropped: the data stays as it is")
+        print("⚠️  Its checked copy could not be removed: it goes when its check expires")
+        return 0
+    print("✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is")
+    return 0
+
+
+def _copy_left(data_dir: Path, stage_id: str) -> bool:
+    """Whether the checked copy of the restore just dropped is still there. One that cannot even be looked at counts as
+    there: never say that a copy went when it may not have."""
+    from backend.app.services.platform.instance_backup.paths import stage_dir  # noqa: PLC0415
+
+    try:
+        os.lstat(stage_dir(data_dir, stage_id))
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    return True
 
 
 def register_subparser(parent_subparsers):
