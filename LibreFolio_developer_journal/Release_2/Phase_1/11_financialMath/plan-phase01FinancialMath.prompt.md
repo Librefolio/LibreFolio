@@ -1369,3 +1369,86 @@ Quattro commit, uno per lotto che cambia numeri:
 - ✅ **Validazione combinata su `f2bd62ba1`** (00:51-01:06, `files/a.sh combined`): `financial-math` 774,
   `roi-fifo-utils` 995 (con l'orfano della decisione 47 e i test di A), `api portfolio` 51, `ai-export` 341 + 647
   (senza `structural_invariants`). Nessun rosso: decisione 47 e P22 convivono.
+
+#### P e A entrati; MF-E (17/10, dalle 01:10) — HEAD `5c9ad06d7` (ff del coordinatore)
+- Coordinatore: P + A in dev `536501541`, riga 🐛 `151488582`; piano committato `5c9ad06d7`; HEAD ff verificata. La
+  riga MF-W56 del backlog va col prossimo checkpoint.
+
+##### MF-E — analisi (su `5c9ad06d7`, CP-7b dentro)
+- **Sintesi del lotto** (`lots_analysis_service._build_lot_summaries` ~:713-852): valore aperto, valore totale e P&L per
+  direzione, rendimento relativo (`latest / reference − 1`), P&L di mercato, totale, netto, rendimenti, annualizzato.
+  Le stesse regole stanno già in `lots/histories.py` (`_value_snapshot_on_date`, `_lot_snapshot_on_date`,
+  `_lot_returns`): la convenzione del rendimento per direzione **coincide già** (corto: `costo + valore totale`,
+  cioè P&L + proventi sul costo) — nessun divario da curare lì.
+- **Costo residuo** scritto tre volte: sintesi (`opening_value * open / original`), storie (`open * (cost /
+  original)`), AI Export `payloads/portfolio_broker.py::lot_residual_cost_basis` (`cost * |open| / |original|`).
+- **T-B8** (`payloads/portfolio_broker.py::summarize_fifo_asset_rows`): `open_value` e `unrealized_pnl` sommano i lotti
+  aperti dove ciascuno è noto; i conteggi della copertura contano quelli dove sono noti entrambi → sommare entrambi su
+  `valued_open_rows`. `portfolio/broker.fifo_summary` sono già v2 nella 1.3: da confermare con J che basta.
+- **V11**: `opening_value` sugli eventi BUY/ADJUSTMENT_IN = il costo d'origine del lotto convertito alla data
+  d'apertura (`original_cost` = quantità × prezzo unitario del lotto), nella valuta di `unit_price`.
+- **⚠️ Corti nella storia di performance (E2) — domanda del developer**: `build_performance_history` somma il valore
+  aperto d'un lotto corto come quello d'un lungo; e i flussi non contano né la vendita d'apertura del corto (+) né i
+  riacquisti (−). Correggere il segno da solo non basta: con un NAV negativo il TWRR (`(V1 − V0)/V0`) dà il segno
+  sbagliato (una passività che cresce sembra un guadagno) e il ROI semplice non ha capitale investito. Scelte:
+  **(a)** la storia di performance d'un asset conta solo i lotti lunghi (documentato; il P&L d'un corto resta nella
+  sintesi del lotto, rendimento sul ricavo) — **raccomandata**; **(b)** corti col segno giusto e flussi completi, con
+  rendimenti su |esposizione| (una convenzione da definire); **(c)** com'è oggi. Notte: scritta qui e mandata al
+  coordinatore; E2 attende, E1 procede.
+- **E1 — disegno**: `financial_math/lots/summary.py` nuovo con le cifre della sintesi (funzione pura, i campi di oggi,
+  stessa composizione P&L di mercato / realizzato / proventi / costi), `lot_value(direction, …)` comune a sintesi e
+  storie, `residual_cost(...)` comune a sintesi, storie e AI Export, `relative_return` → `returns.price_return`; il
+  servizio resta mappatura. T-B8 e V11 come sopra. **Numeri**: nessuno nella sintesi e nelle storie (parità); T-B8 cambia
+  le due somme dell'AI Export solo con un lotto di valore noto e P&L ignoto; V11 campo nuovo.
+- **J (01:2x)**: `portfolio/broker.fifo_summary` erano già **v2 nella 1.2.1** rilasciata (B3b) → T-B8 è un cambio di
+  builder → **v3** (+1 sull'ultima release), segnaposto del catalogo e `COMPACT_COMPONENT_VERSIONS` `[1, 2, 3]` nello
+  stesso cambio; `lot_residual_cost_basis` nella casa a uscita identica: nessun aumento (e `fifo_lots` resta v2 se le
+  righe non cambiano). Coordinatore (01:3x): via alle due voci della mappa e ai segnaposto v3; casi di ripiego del test
+  v3 → v4 come J-17; **sonda AI Export di fumo** al checkpoint (`ai-export-probe-tuning`) coi test dei due componenti.
+
+##### MF-E1 — codice (17/10 notte)
+- ✅ `financial_math/lots/summary.py` nuovo: `residual_cost`, `lot_value`, `LotSummaryFigures`, `lot_summary_figures`
+  (la composizione della sintesi di oggi, riga per riga: valore aperto a mercato o al costo residuo in modo stimato,
+  totale/P&L per direzione — un lungo senza costo tiene il valore e perde il P&L —, P&L di mercato, totale, netto,
+  rendimenti sul costo, annualizzato; `relative_return` → `price_return`). Prende proventi, riacquisti e realizzato già
+  noti (niente import di `histories`: nessun ciclo).
+- ✅ `lots_analysis_service._build_lot_summaries`: conversioni, data di chiusura e mappatura; le cifre dalla casa; via
+  gli import inutili. `lots/histories.py`: `_value_snapshot_on_date` e `_lot_snapshot_on_date` usano `lot_value` e
+  `residual_cost` (al costo: `costo × aperto / originale` invece di `aperto × (costo / originale)`: al più l'ultima
+  delle 28 cifre).
+- ✅ AI Export: `payloads/portfolio_broker.py::lot_residual_cost_basis` delega a `residual_cost`; **T-B8**
+  (`summarize_fifo_asset_rows`: `open_value` e `unrealized_pnl` su `valued_open_rows`, docstring);
+  `portfolio/broker.fifo_summary` **v3** (definizioni e segnaposto del catalogo); `COMPACT_COMPONENT_VERSIONS`
+  `[1, 2, 3]` per i due (`snapshotDataRenderer.ts`); test del renderer al test-author.
+- ✅ **V11**: `LotTimelineEventSchema.opening_value` (BUY/ADJUSTMENT_IN = costo d'origine convertito alla data
+  d'apertura, la `original_cost` della sintesi, nella valuta di `unit_price`); `api sync`.
+- ✅ Mappe: docstring del pacchetto `lots`, le due istruzioni, albero di `financial_math.md`. Ruff/black puliti.
+- ✅ **Test E1** (test-author `mf-e1-tests`): `test_financial_math/test_lots_summary_house.py` (50: `residual_cost` ×
+  tre vie — formula di HEAD scritta, delega viva, regole —, `lot_value` lungo/corto); T-B8 in
+  `test_ai_export_components_portfolio_broker_financial.py` (tre lotti aperti, e lo specchio «P&L noto, valore
+  ignoto»; **aggiornato** `test_summary_takes_its_currency_…[market-value-only]`, che fissava il vecchio `open_value`;
+  `TestFifoComponentVersion` ora `fifo_summary` = 3, `fifo_lots` = 2); catalogo
+  (`test_fifo_summary_components_are_version_3_on_both_sides_of_the_catalog`); V11 in
+  `test_financial/test_lots_analysis_service.py` (EUR, USD, ADJUSTMENT-in prezzato nel 2048; mancanza di cambio →
+  None); `snapshotDataRenderer.test.ts` (v3 compatte e identiche alla v1; ripiego YAML ora a v4).
+- ✅ **Rossi E1** (01:19, `files/e1.sh red`; toppa `4b0ef393…`, `summary.py` `0cea343d…`, ripristino identico):
+  `financial-math test_lots_summary_house` **50/50**; `ai-export` mirato **7** (T-B8 ×2, il test aggiornato, versioni
+  ×4); `roi-fifo-utils opening_event` **2/2**; `front-ai-export unit` **4** (v3 ripiegavano in YAML).
+- **Sonda AI Export di fumo**: **bloccata nel mio worktree** — nessun DB di produzione
+  (`backend/data/prod/sqlite/app.db`, predefinito di `--source-db`) e nessuna credenziale
+  (`LIBREFOLIO_AI_EXPORT_PROBE_PASSWORD*`); il checkout principale non lo leggo. Da chiedere al coordinatore: la
+  esegue lui (o J) su dev dopo l'ingresso, oppure mi indica un `--source-db` e le credenziali.
+- ✅ **Verdi E1** (01:21-01:39, `files/e1.sh green` e `ai`): `financial-math` 825, `roi-fifo-utils` 997,
+  `lots-analysis-pure` 177, `front-ai-export unit` 568, `api portfolio` 51, `ai-export` 345 + 647 (senza
+  `structural_invariants`). Statici: ruff/black (13 `.py`), prettier dei due file TS, `mkdocs build` strict 0 (dopo la
+  doc), `git diff --check` pulito, porta libera.
+- ✅ **Doc E1** (docs-writer `mf-e1-docs`): `ai_export_composition.md:436-439` (le quattro somme di mercato sullo stesso
+  insieme, v3), `lots_analysis_service.md` (riga `summary.py` nella tabella, `opening_value` degli eventi d'apertura,
+  percorso di valutazione; corretti `:351`, `:411`, `:414` che citavano variabili sparite), `fifo_lot_engine.md:406`.
+  Solo pagine dev (nessun debito di traduzione).
+- **Due commit**: `files/e1_split/E1a.patch` (sha `d7c950c6…`, 13 file: casa, servizio, storie, delega AI Export
+  dell'`lot_residual_cost_basis` senza T-B8, V11 nello schema e nel servizio, test della casa e di V11, mappe e doc dev
+  dei lotti) — verificata su un indice temporaneo e su un albero estratto in `/tmp` (import, 50 test puri; con
+  `PIPENV_PIPFILE` del mio worktree, nessun `Pipfile` vagante). Il resto è **E1b** (T-B8 + v3: `portfolio_broker.py`
+  restante, `broker_financial.py`, `portfolio_financial.py`, `catalog.py`, `snapshotDataRenderer.ts` e il suo test, i due
+  test dell'AI Export, `ai_export_composition.md`) + giornale.
