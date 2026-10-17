@@ -154,7 +154,7 @@ Two producers build this issue, both through `build_data_quality_report(missing_
 
 So a purchase made years ago whose rate is missing is reported, because its cost weighs on today's figures, while a valuation gap before the period changes nothing on screen and is left out. When `get_report()` builds no summary, its own `data_quality` takes its missing pairs from the engine source only, and still reports `MISSING_COST_BASIS`, `INVALID_SPLIT_RATIO` and `QUOTE_IN_MINOR_UNIT`.
 
-The FIFO lots analysis reports in its own `data_quality` every conversion it could not make — in its WAC lines, its daily valuation and every other figure it returns (value, return, price and performance histories, lot summary, Gantt segments, event rows, income events), merged per pair — and the WAC lines' acquisitions of unknown cost. Any such gap turns a `COMPLETE` analysis `DEGRADED`; see [Lots Analysis Service — FX Conversion](../backend/transactions/lots_analysis_service.md#fx-conversion) and [WAC Lines](../backend/transactions/lots_analysis_service.md#wac-lines).
+The FIFO lots analysis reports in its own `data_quality` every conversion it could not make — in its WAC lines, its daily valuation and every other figure it returns (value, return, price, market price and performance histories, lot summary, Gantt segments, event rows, income events), merged per pair — and the WAC lines' acquisitions of unknown cost. Any such gap turns a `COMPLETE` analysis `DEGRADED`; see [Lots Analysis Service — FX Conversion](../backend/transactions/lots_analysis_service.md#fx-conversion) and [WAC Lines](../backend/transactions/lots_analysis_service.md#wac-lines).
 
 ### 📈 Asset Detail Issues (built client-side in `assets/[id]/+page.svelte`)
 
