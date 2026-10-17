@@ -10,7 +10,7 @@
     import {TrendingUp, TrendingDown} from 'lucide-svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import {_ as t} from '$lib/i18n';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
@@ -39,7 +39,7 @@
     <div class="flex items-center gap-3 {layoutMode === 'oneRow' ? 'px-3' : filtersStacked ? 'justify-around w-full' : 'justify-center'}" style={filtersStacked && maxWidth ? `max-width: ${maxWidth}px` : ''}>
         <!-- Left half: rate -->
         <span class="font-mono text-lg font-semibold text-lf-secondary">
-            {formatFixed(lastRate, 4)}
+            {formatPrice(lastRate, {minDecimals: 4})}
         </span>
 
         <!-- Right half: the backend's Δ over the range (X-R59) -->
