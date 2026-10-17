@@ -35,6 +35,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/__tests__/parseTypedDate.test.ts",
             "src/lib/utils/__tests__/requestConcurrency.test.ts",
             "src/lib/api/bulkBatches.test.ts",
+            "src/lib/api/bulkRefusal.test.ts",
             "src/lib/utils/__tests__/urlFilters.test.ts",
             "src/lib/utils/__tests__/trySave.test.ts",
             "src/lib/utils/layout/headerScroll.test.ts",
