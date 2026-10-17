@@ -6302,3 +6302,38 @@ orologio letto: lo stato «scaduto» viene dal timer.
    (`files/scripts/y24_brokerrefs.py`, istantanea → oggi): 9 nei backtick in `app-state.md` e `risk-lab.md`, più
    `(l.751)`/`(l.753)` → `(l.759)`/`(l.761)` a mano in `risk-lab.md:265`; tutti verificati sul codice.
 7. ⏳ CHECKPOINT READY con la riga 🐛 del CHANGELOG; Y-24 ✅ nel backlog (la parte del giro), il resto con Y-18.
+> **Y-24 entrato** (17/10, 19:48): dev `ad5104c4f` (prove combinate verdi sull'albero fuso), CHANGELOG `c1bdc380b`.
+> Review a posteriori fatte nel frattempo: C-97c-3 parte DV (OK, una nota su una copia di formato in 5 componenti) e J-21
+> lato renderer (OK, una nota: le sequenze di un output con molti `null` non hanno tetto; J la verifica con un rosso).
+
+## Y-34 · `brokers-detail.spec.ts`: il pannello dei lotti sotto carico, più la nota di X su Y-33 (17/10)
+
+Voce di gate I, via del coordinatore; review di X. Base `ab74aafbf`.
+- **Il difetto**: 12 test di `brokers-detail.spec.ts` aspettano 5 s `lots-analysis-panel` dopo «analizza i lotti» (`:314`,
+  `:327`, `:355`, `:364`, `:380`, `:407`, `:431`, `:458`, `:497`, `:532`, `:555`, `:610`); `:355` è caduto una volta col
+  carico vicino a 90. L'azione scrive `?asset=<id>` nell'URL, la pagina lo legge in un `$:` e monta il pannello sotto
+  `{#if open && assetId != null}`: navigazione nella stessa rotta più montaggio.
+- **La nota di X su Y-33**: i quattro test «Live price direction flash» di `asset-detail.spec.ts` (`:8265`, `:8279`,
+  `:8316`, `:8351`) abbassano il timeout a 20 s, sotto il tetto di 30 s dell'URL di `goToSeededAssetDetail`.
+- **La cura (forma decisa)**: in `brokers-detail.spec.ts` un aiuto, prima l'URL con `?asset=` (tetto 30 s), poi il
+  pannello (10 s), per i 12 punti (e `:947`/`:2027` se sono la stessa sequenza); in `asset-detail.spec.ts` un
+  `test.describe.configure({timeout: 60_000})` sul describe dei flash al posto dei quattro `setTimeout(20_000)`.
+- **Passi**: 1. `test-author` (brief `files/y34_testauthor_prompt.md`); 2. `tsc` delle E2E e Prettier; 3. slot:
+   `front-broker detail` e `front-asset asset-detail` (i flash); 4. CHECKPOINT READY, review di X.
+
+**Avanzamento.**
+1. ✅ 17/10 — **Riparazione** (`test-author` `f5f41fd9`, due giri). `brokers-detail.spec.ts`: `expectLotsPanelOpen(page,
+   assetId?)` (URL con `?asset=` 30 s, poi il pannello 10 s, senza ripetere il clic) al posto delle 12 attese di 5 s;
+   `expectLotsPanelClosed(page)` per la chiusura (`:352-353`: URL senza `?asset=`, poi il pannello nascosto); `:947`/`:2027`
+   lasciate (deep link). `asset-detail.spec.ts`: `test.describe.configure({timeout: 60_000})` sul describe dei flash (al posto
+   dei quattro `setTimeout(20_000)`) e sul describe `Asset Detail Page` (19 test col default di 30 s, che non arrivavano al
+   tetto dell'URL; fra loro quello caduto in Y-33). Tutti i 27 chiamanti di `goToSeededAssetDetail` hanno almeno 60 s; i 13
+   test del pannello stanno in describe da 60 s.
+   > **Note implementazione**: `tsc -p tsconfig.e2e.json` e Prettier puliti; `git diff --check` pulito. Verdetto (test-triage):
+   > un'assunzione di tempo.
+   > **⚠️ Fuori pista**: allargato oltre la nota di X ai 19 test col default di 30 s e alla chiusura del pannello (stessa classe,
+   > stessi due file). Residuo da instradare: `dashboard-cache.spec.ts:295` (`analyzeLots`), stessa classe con un'attesa sola.
+2. ✅ 17/10 — **E2E** (slot 20:02–20:08, `files/scripts/y34_e2e.sh`): `front-broker detail` **40/40**, `front-asset
+   asset-detail` filtrato su «direction» **5/5** (i 4 flash e un test veloce). Porta 6189 libera. Il coordinatore approva i 60 s
+   sul describe `Asset Detail Page` e il residuo di `dashboard-cache.spec.ts:295` nella riga di Y-34.
+3. ⏳ CHECKPOINT READY (solo test e giornale, nessuna riga del CHANGELOG); review di X.

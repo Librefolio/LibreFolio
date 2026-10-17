@@ -153,6 +153,9 @@ async function expectAssetDetailChartCanvas(page: import('@playwright/test').Pag
 }
 
 test.describe('Asset Detail Page', () => {
+    // A ceiling, never a delay: above goToSeededAssetDetail's 30 s URL ceiling (Y-33), so a slow navigation can fail on the helper's own message, not the test timeout (Y-34).
+    test.describe.configure({timeout: 60_000});
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
     });
@@ -8227,6 +8230,9 @@ test.describe('Asset Detail Page', () => {
 // time.
 // ============================================================================
 test.describe('Live price direction flash', () => {
+    // A ceiling, never a delay: above goToSeededAssetDetail's 30 s URL ceiling (Y-33), so a slow navigation can fail on the helper's own message, not the test timeout (Y-34).
+    test.describe.configure({timeout: 60_000});
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
     });
@@ -8262,7 +8268,6 @@ test.describe('Live price direction flash', () => {
     }
 
     test('first tick after load is neutral — no previous value to compare against', async ({page}) => {
-        test.setTimeout(20_000);
         const price = {value: 100};
         await mockCurrentPrice(page, price);
         await page.clock.install();
@@ -8276,7 +8281,6 @@ test.describe('Live price direction flash', () => {
     });
 
     test('an up-tick flashes green then decays back to neutral', async ({page}) => {
-        test.setTimeout(20_000);
         const price = {value: 100};
         await mockCurrentPrice(page, price);
         await page.clock.install();
@@ -8313,7 +8317,6 @@ test.describe('Live price direction flash', () => {
     });
 
     test('a down-tick flashes red then decays back to neutral', async ({page}) => {
-        test.setTimeout(20_000);
         const price = {value: 100};
         await mockCurrentPrice(page, price);
         await page.clock.install();
@@ -8348,7 +8351,6 @@ test.describe('Live price direction flash', () => {
     });
 
     test('consecutive same-direction ticks each restart the flash', async ({page}) => {
-        test.setTimeout(20_000);
         const price = {value: 100};
         await mockCurrentPrice(page, price);
         await page.clock.install();
