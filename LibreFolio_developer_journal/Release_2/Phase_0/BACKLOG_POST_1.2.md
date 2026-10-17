@@ -2526,15 +2526,14 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     2. la conferma con la parola da digitare (`restore-confirm-word`, `restore-confirm-input`, `restore-confirm`);
     3. l'overlay del riavvio (`restart-overlay`, `restart-detail`);
     4. l'esito. Il fallimento ha la sua schermata: l'overlay con `data-outcome="rolled_back"` e il motivo (es.
-       `first_start_failed`), poi l'avviso `restore-last-result` sulla card. Il successo (`committed`) oggi no: la
-       pagina passa all'accesso e la card non dice niente (FBKP-107; confermato da B il 17/10).
-  - **Il successo: B-27** (risposta di B, coordinatore, 17/10 03:13). La 1.3 l'ha deciso dopo B4b; il developer lo
-    rivede con N67.
-    - Sarà un avviso informativo sulla card: «applied on {date}, backup of {date} (LibreFolio {version}), confirmed by
-      {user}», visibile fino al ripristino successivo.
-    - Arriva con una E2E su uno stato finto, che dà anche lo scatto del successo. Lo scatto aspetta l'ingresso di
-      B-27, che segnala il coordinatore.
-    - Fino ad allora si fotografano l'overlay di fallimento (`rolled_back`) e l'avviso `restore-last-result`.
+       `first_start_failed`), poi l'avviso `restore-last-result` sulla card. Il successo (`committed`) no, per scelta
+       (P8): la pagina passa all'accesso e la card non dice niente (FBKP-107; confermato da B il 17/10).
+  - **Il successo resta muto, per scelta: decisione P8 del developer** (16/10), «successo senza messaggio, se ha
+    funzionato lo vedi».
+    - Nella notte del 17/10 la 1.3 aveva deciso B-27, un avviso «applied on …» sulla card, con la N67. Li ha ritirati
+      alle 04:53 (coordinatore), perché contraddicevano P8.
+    - Per G-20 si fotografano solo l'overlay di fallimento (`rolled_back`) e l'avviso `restore-last-result`. Per il
+      successo nessuno scatto.
   - B ha già simulato il flusso in `frontend/e2e/settings/backup.spec.ts` (`0cd910a7e`). La fixture `restoreTest`,
     con la sua `lane`, risponde sempre nella pagina al riavvio (`POST /api/v1/backup/restore/restart`). Quando il caso
     lo chiede, risponde anche a upload, controllo, esito, stato e `GET /api/v1/system/ready`.
