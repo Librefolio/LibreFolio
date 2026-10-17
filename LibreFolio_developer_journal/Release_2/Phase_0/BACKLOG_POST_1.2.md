@@ -4984,7 +4984,9 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Cura: mostrare il `detail` del 400 e gli `errors` del 200 (per data), contarli a parte. Prove: Vitest e
     `front-fx fx-editor`. Poi la frase della pagina utente (`user/fx/detail/data-editor.en.md`) può dire «con un messaggio
     che nomina la data».
-- **X-R75 · La modale delle rotte di un cambio cancella prima di salvare** — piccolo-medio, perdita di dati a ogni
+- ✅ **X-R75 · La modale delle rotte di un cambio cancella prima di salvare** (chiusa il 17/10 da B: `5cbc60844` frontend +
+  `970081b45` backend, entrata in dev `6ee4d2ed4`; revisione di X dopo l'ingresso: OK, il residuo delle gambe delle
+  catene è X-R79) — piccolo-medio, perdita di dati a ogni
   salvataggio fallito, **nella 1.3, fatta da B** (decisione del coordinatore, 17/10 17:05: B ha già l'analisi, con lo
   stesso gemello, e fa l'opzione A, un `replace=true` atomico su `POST /fx/providers/routes`; X rivede; la modale delle
   rotte resta a B); X, 17/10 (E, E-19, girata dal coordinatore).
@@ -5013,6 +5015,15 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     Doc: le rotte nella pagina dev dei cambi; `api sync`.
   - **Peso**: come X-R58: una rotta del backend, la modale, tre livelli di test, una finestra E2E (`fx-add-pair`).
     L'alternativa solo frontend è piccola.
+- **X-R79 · Il `replace` di X-R75 sostituisce anche le gambe delle catene** — basso, **nella 1.3, fatta da B**, dopo
+  W-B64/65 (decisione del coordinatore, 17/10 19:05); X, 17/10 (revisione di X-R75).
+  - `POST /fx/providers/routes?replace=true` vale per ogni coppia della richiesta, anche per le gambe che la modale
+    aggiunge con «crea le coppie intermedie». La voce X-R75 le voleva solo aggiunte, mai sostituite.
+  - La modale manda solo le gambe che crede non configurate, secondo la sua cache al salvataggio. Se un'altra scheda o
+    un altro utente configura quella gamba nel frattempo, la modifica ne sostituisce le rotte con quella di priorità 1
+    e cancella le altre. È una corsa stretta, e la docstring di B la dice.
+  - Cura (frontend): in modifica, prima le gambe con un upsert semplice (solo aggiunta), poi la sola coppia principale
+    con `replace=true`; un Vitest fissa l'ordine delle due richieste. Se fallisce la seconda, restano solo gambe nuove.
 - ✅ **X-R47 · Il rapporto di uno SPLIT non è mai validato** (chiusa il 17/10: `5f68a8db0`, la regola (d) con `1b6d65da7`; entrata in dev `952c68cd5`; gli SPLIT già salvati sono MF-D4) — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
   V-4 di CP-14a, F4, girato dal coordinatore).
   - Si salva uno SPLIT con rapporto 0 o negativo. Appena una transazione lo collega, il motore solleva un `ValueError` e
@@ -5270,6 +5281,11 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     pensato per i provider che mandano solo la chiusura).
   - Da decidere: rifiutare un limite vero dalla parte sbagliata (`ohlc_inconsistent`), allargarlo, o scriverlo. Poi
     cambia il test.
+- ✅ **C-97c-4 · I cambi delle valute deboli letti come zeri** (chiusa il 17/10, in attesa del commit del coordinatore) —
+  piccolo, **nella 1.3**; X, 17/10 (revisione di C-97c-3, decisione del coordinatore).
+  - La lista, la card e il riepilogo dei cambi, il Δ della lista e il tooltip del cambio di una transazione usano
+    `formatPrice(x, {minDecimals: 4})`. Prima scrivevano `formatFixed(x, 4)`, e VND→USD si leggeva `0.0000`.
+  - Dettagli nel piano 03, «C-97c-4».
 
 ## W · Import e transazioni (fase 01)
 
