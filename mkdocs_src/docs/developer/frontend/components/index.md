@@ -28,8 +28,9 @@ The library is split into two architectural layers: **Core UI** (generic atoms a
 
 ## 🧭 App Header {: #app-header }
 
-`lib/components/layout/Header.svelte` is the bar above every authenticated page (mobile menu,
-privacy and theme toggles, language and help menus). It is `sticky` on every viewport and gives the
+`lib/components/layout/Header.svelte` is the bar above every authenticated page (mobile menu, the
+Buy Me a Coffee link on a self-hosted instance only, privacy and theme toggles, language and help
+menus). It is `sticky` on every viewport and gives the
 page its height back while the user reads:
 
 - **Scrolling down** at least 8 px in a row hides it (it slides up by its own height); **scrolling

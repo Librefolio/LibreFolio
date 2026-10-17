@@ -158,6 +158,11 @@ skipping restores the saved one.
 Every path ends in `onboardingGuide.maybeStartIntro(returnTo)`: the page then moves to
 `/dashboard` if the tour starts, and to `returnTo` otherwise.
 
+Under its card, `WelcomePage.svelte` shows the instance's legal notice,
+[`LegalNotice`](components/features/settings.md#legal-notice) (F09). It frames the page and is not
+part of the flow, with no anchor and no step: adding it changed no version in
+`ONBOARDING_FLOW_VERSIONS`, so the Welcome did not come back for anyone.
+
 ### 🎬 Intro tour {: #intro-tour }
 
 `intro_tour` opens with `intro.scene`, a full-screen scene (`OnboardingIntroScene.svelte`) that
@@ -376,10 +381,15 @@ a modal.
 
 The backend decides the donation prompt at sign-in: `record_login_and_maybe_show_popup()`
 (`backend/app/services/accounts/donation_popup_service.py`) counts the login and sets `show_donation_popup`
-in the login response (`backend/app/api/v1/auth.py:112,146`). Counting from the last prompt, or
+in the login response (`login()` and `setup_admin()` in `backend/app/api/v1/auth.py`). Counting from the last prompt, or
 from the account's creation if there was none, it fires after `MAX_DAYS_WITHOUT_PROMPT` (60) days,
 or after `MIN_LOGINS_BETWEEN_PROMPTS` (10) sign-ins once `MIN_DAYS_BETWEEN_PROMPTS` (7) days have
-passed. `DonationPopupModal.svelte` has no close button and ignores backdrop clicks and
+passed. On a managed instance it never fires: `is_donation_popup_disabled()` is always true with
+`LIBREFOLIO_PROFILE=managed` (F05), and the login counters still advance
+(`./dev.py test services donation-managed`). Nor does the
+update-available modal come there by itself: the check at an administrator's sign-in probes only a
+self-hosted instance ([Container Image Check](../architecture/security.md#container-image-check)).
+`DonationPopupModal.svelte` has no close button and ignores backdrop clicks and
 <kbd>Esc</kbd> (`closeOnBackdropClick={false}`, `closeOnEscape={false}`): only **Buy Me a Coffee**
 and **Maybe later** dismiss it, and a share button opens the share dialog above it.
 
@@ -507,7 +517,7 @@ test, and provides `deleteDisposableUser()` to remove it at the end.
 | `frontend/src/lib/features/onboarding/guideCopy.test.ts` | No step text announces another guide |
 | `frontend/src/lib/features/onboarding/onboardingRouteSettlement.test.ts` | Welcome redirect or tour start, exactly once |
 | `frontend/src/routes/(app)/layout.gate.test.ts` | The layout gate follows the bootstrap |
-| `frontend/src/lib/features/onboarding/components/*.test.ts` | Coachmark geometry and stalls, intro scene, replay section, deferred popups, Welcome |
+| `frontend/src/lib/features/onboarding/components/*.test.ts` | Coachmark geometry and stalls, intro scene, replay section, deferred popups, Welcome and its legal notice (`WelcomePage.legal.test.ts`) |
 | `frontend/e2e/onboarding-guides.spec.ts` | Broker, FX and Asset guides walked to completion on desktop and mobile; pause and resume across routes; positions across tabs and logout |
 | `frontend/e2e/onboarding-tour.spec.ts` | Intro-tour order and Transactions overview geometry, scroll clearance, the Import and Bulk step interplay |
 

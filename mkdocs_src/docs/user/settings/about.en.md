@@ -10,6 +10,7 @@ The **About** tab shows:
 - **License** (AGPL-3.0)
 - Links to the **GitHub repository** and **documentation**
 - A **Support LibreFolio** card with the coffee link and the share buttons — see [Support LibreFolio](#support-librefolio) below
+- A **Legal notice** card — see [Legal Notice](#legal-notice) below
 - A **system information** grid (Python version, operating system, deployment mode — Docker or local — browser, viewport, theme and language) with a **copy-for-issue** button that packs these details into a ready-to-paste bug report
 - The **installed plugins**: collapsible lists of the asset price providers, FX rate providers, broker import plugins, and signal indicators detected at startup, followed by **Plugin diagnostics**
 
@@ -20,10 +21,16 @@ The **About** tab shows:
 The **Support LibreFolio** card offers two ways to help the project:
 
 - **Buy Me a Coffee** opens the project's Buy Me a Coffee page in a new tab. The same link is in
-  the page header (the coffee icon, with its label on wider screens) and in the
-  **Help & Support** menu.
+  the page header (the coffee icon, with its label on wider screens), in the
+  **Help & Support** menu, and at the top of the sign-in pages.
 - Below **Or share**, one button per social network: **X**, **Reddit**, **Facebook**,
   **Instagram**, and **TikTok**.
+
+!!! note "🏢 On an instance run by a hosting provider"
+
+    If a hosting provider runs LibreFolio for you, there is no **Buy Me a Coffee** in this card, in
+    the page header, in the **Help & Support** menu or on the sign-in pages, and no donation popup.
+    The card keeps its share buttons.
 
 A share button opens a **Share on …** dialog with a **Suggested message** written for that
 network, in the language of the interface. Whatever the language, every message ends with the
@@ -53,11 +60,25 @@ yours to review and publish on the social network.
 ### ☕ The donation popup {: #donation-popup }
 
 Every now and then, right after you sign in, LibreFolio reminds you that you can support the
-project, with the same coffee link and share buttons.
+project, with the same coffee link and share buttons. It never does on an instance a hosting
+provider runs for you.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="support" data-name="donation-popup" alt="Donation popup after sign-in, with Buy Me a Coffee, the five share buttons and Maybe later">
 </div>
+
+---
+
+## ⚖️ Legal Notice {: #legal-notice }
+
+The **Legal notice** card holds a short disclaimer: LibreFolio helps you follow your investments,
+and it is not financial advice. If your instance has them, the card also links its
+**Terms of service** and **Privacy policy**: each opens in a new tab.
+
+You find the same notice under the card of the Welcome page. A shorter version, on one line with the
+same links, sits under the card of every sign-in page and at the foot of the sidebar, below the
+version number, while the sidebar is expanded. Every text you copy with
+[AI Export](../ai-export/index.md) carries the notice too, near its end and without the links.
 
 ---
 
@@ -132,6 +153,9 @@ running, reads the latest **stable** release from GitHub again (instead of reusi
 that the automatic check keeps for an hour), and compares the two. A newer release counts only
 once its Docker image is available on the registry, so a release whose build is still in progress
 is not offered yet — see [Update Notifications](../../admin/index.md#update-notifications).
+
+On an instance a hosting provider runs for you, the button is not there: your provider keeps
+LibreFolio up to date.
 
 A check started here always tells you how it went:
 
