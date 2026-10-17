@@ -482,9 +482,9 @@ that LibreFolio emails to the address of the account. The switch is in
   ([Emails with a Link](#public-url)), and an instance that no hosting provider blocks. Until then,
   while it is off, the switch is greyed
   out, with the hint *Needs an email with a link to go out: set up SMTP and LIBREFOLIO_PUBLIC_URL
-  first (Settings › Email).* Should that change between the moment you open the tab and your save,
+  first (Settings › Administration › Email).* Should that change between the moment you open the tab and your save,
   the save is refused — *Email verification needs an email with a link to go out, and none can go
-  now: check Settings › Email.* — and nothing of it is stored.
+  now: check Settings › Administration › Email.* — and nothing of it is stored.
 - **Turning it off always works.** The accounts already waiting keep waiting: their links still
   work, and so does **Send the link again**. To let one in at once, activate it
   ([Waiting Accounts](#verification-waiting)).
