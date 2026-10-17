@@ -126,6 +126,24 @@ there, with no points. Before, nothing bounded the expansion: from 0001-01-01 to
 the endpoint's: `convert_bulk()` itself, which the other callers use directly, has none.
 {: #convert-range-ceiling }
 
+The endpoint also caps each request (Z-25, night decision N77), as `POST /assets/prices/query`
+does ([bulk request limits](../assets/architecture.md#bulk-request-limits)): X-R55 bounds each
+conversion, not how many one request holds, and 1,000 conversions of 100 years would build about
+36.5 million daily items. More than `MAX_BULK_ITEMS` (1,000) conversions get a 422
+`{"code": "bulk_too_many_items", "message", "max_items", "items"}` before any work, nothing
+converted; exactly 1,000 pass. The handler then plans the conversions one by one — each one's cut
+range, signal plan and warm-up — and counts the daily items and the one-unit signal items, warm-up
+included, that each would build; a conversion that starts after the cut counts zero, and its
+signals still run on an empty series. At the end of a conversion, a running total over
+`MAX_BULK_ITEM_DAYS` (5,000,000) gets a 422
+`{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`, `item_days` being the
+count through that conversion: more than the budget, a lower bound of the request's total. No item
+is built or converted until the whole request is within the budget; only then are the planned
+blocks expanded day by day, in request order and each conversion's daily items before its signal
+items, and converted in one `convert_bulk()` call. A refused request costs its planning, not its
+items. Like the ceiling, the caps are the endpoint's: `convert_bulk()` has none.
+{: #convert-request-limits }
+
 ### 🪟 Loading only the usable rate window {: #convert-bulk-window }
 
 Portfolio reports call `convert_bulk()` with thousands of items: the engine preloads a rate for every
