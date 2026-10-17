@@ -1025,6 +1025,15 @@ def services_current_price_storable(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Current price storable tests", verbose=verbose)
 
 
+def services_market_data_wipe_split_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R48: the market-data wipe refuses while a SPLIT of the asset has incoming adjustments without a purchase cost."""
+    print_section("Services: Market Data Wipe Split Guard")
+    print_info("Testing: backend/app/services/assets/currency_change.py (wipe_market_data_for_currency_change), backend/app/api/v1/assets/market_data.py")
+    print_info("Tests: the wipe refused with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409) naming each such split by date and only the caller's adjustments, nothing written; with a cost, an outgoing row, no link or a dry run the wipe is as before")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_market_data_wipe_split_guard.py", test_names)
+    return run_command(cmd, "Market data wipe split guard tests", verbose=verbose)
+
+
 def services_event_split_ratio(verbose: bool = False, test_names: list = None) -> bool:
     """Run X-R47: a SPLIT event's ratio checked when it is written, manual SPLITs of 0 or below refused, a provider's dropped; and R13-SEC7: the P-10 refusal shows only the caller's transactions."""
     print_section("Services: Event Split Ratio")
@@ -2249,6 +2258,15 @@ Note: No backend server required.
         # wiped by asset id. The provider codes are unique per test, so the current-value cache entries and the
         # log-once keys are the test's own; the cache's set is patched for one test only (monkeypatch).
         # Nothing here counts or reads a row it did not write.
+    )
+    add_test(
+        cat,
+        "market-data-wipe-split-guard",
+        services_market_data_wipe_split_guard,
+        name="Market Data Wipe Split Guard",
+        desc="X-R48: POST /assets/{id}/market-data/wipe refused before any write with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) while a SPLIT of the asset, manual or provider, has linked incoming ADJUSTMENTs without a purchase cost; details list every such SPLIT by date then id with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller); a cost of 0, an outgoing row, a SPLIT without links, another asset's SPLIT and the dry run leave the wipe as before",
+        # WRITE-SCOPED, the category default: every row is this unit's own (assets, brokers, users and accesses under a
+        # unique marker), wiped by asset and broker id; the route runs in process on an app of the call's own.
     )
     add_test(
         cat,

@@ -100,6 +100,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/assets/assetIdentifiers.test.ts",
             "src/lib/components/assets/providerComparisonQueue.test.ts",
             "src/lib/components/assets/currencyBlocker.test.ts",
+            "src/lib/components/assets/currencyChangeErrors.test.ts",
             "src/lib/components/assets/assetPayload.test.ts",
             "src/lib/components/assets/assetSearchSelection.test.ts",
             "src/lib/components/assets/assetSearchSections.test.ts",

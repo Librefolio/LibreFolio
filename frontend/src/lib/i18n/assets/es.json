@@ -56,7 +56,8 @@
       "progressWipe": "Eliminando {prices} precios + {events} eventos y desconectando {linkedTx} transacciones…",
       "wipeSuccess": "Eliminados {prices} precios, {events} eventos; desconectadas {linkedTx} transacciones",
       "bodyIntro": "El cambio de divisa requiere eliminar todos los datos de mercado almacenados (ver resumen abajo). LibreFolio intentará luego re-sincronizar precios y eventos desde el proveedor en la nueva divisa.",
-      "bodyCaveat": "Las transacciones enlazadas a los eventos eliminados serán desconectadas — es tu responsabilidad reasociarlas a los nuevos eventos si es necesario."
+      "bodyCaveat": "Las transacciones enlazadas a los eventos eliminados serán desconectadas — es tu responsabilidad reasociarlas a los nuevos eventos si es necesario.",
+      "splitAdjustmentsWithoutCost": "No se ha cambiado la divisa: el desdoblamiento del {date} tiene {n, plural, one {# ajuste vinculado} other {# ajustes vinculados}} sin coste de compra{hidden, plural, =0 {} one { (# en un bróker que no puedes ver)} other { (# en brókers que no puedes ver)}}{more, plural, =0 {} one {, y # desdoblamiento más también} other {, y # desdoblamientos más también}}. Cambiar la divisa borra los desdoblamientos, y esas unidades contarían como compradas a un precio desconocido: da primero un coste de compra a los ajustes."
     },
     "pricesInCurrency": "Precios en {currency}",
     "eventsInCurrency": "Eventos en {currency}",

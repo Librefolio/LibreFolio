@@ -33,6 +33,8 @@
     import {_ as t} from '$lib/i18n';
     import {buildAssetSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {extractErrorMessage} from '$lib/utils/trySave';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {wipeRefusalMessage} from './currencyChangeErrors';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
 
@@ -156,7 +158,8 @@
             // user can retry or cancel; surface the detail via toast.
             const msg = extractErrorMessage(err, 'unknown error');
             console.error('[currency-change] flow failed', msg, err);
-            toasts.error(`${$t('assetDetail.currencyChange.failed')}: ${msg}`);
+            // X-R48: a wipe refused for splits whose adjustments have no cost is said in the user's language.
+            toasts.error(wipeRefusalMessage(err, tr, (iso) => formatDay(iso)) ?? `${$t('assetDetail.currencyChange.failed')}: ${msg}`);
         } finally {
             inProgress = false;
             progressStep = null;
