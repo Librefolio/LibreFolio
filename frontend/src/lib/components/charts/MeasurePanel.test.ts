@@ -28,10 +28,19 @@
  *     fixed answer below — the responsive pixel behaviour is E2E territory.
  *   - what ECharts draws. MeasurePanel never touches a canvas; it emits plain
  *     data objects, and those are what the assertions read.
+ *
+ * C-97c-3 (the describe after the summary table's): a price keeps its
+ * significant digits — the summary's values under 1, its absolute Δ, and the
+ * pending banner's start value. The banner is read through the catalogue's own
+ * message (`measure.pending`, via `$_`) around the digits the case put in, never
+ * as a literal.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import type {ComponentProps} from 'svelte';
+import {flushSync, type ComponentProps} from 'svelte';
+import {get} from 'svelte/store';
 import {cleanup, fireEvent, render, setupI18n, waitFor, within} from '$test/component';
+import {_} from '$lib/i18n';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import MeasurePanel from './MeasurePanel.svelte';
 import type {LineDataPoint} from './LineChart.svelte';
 import type {RenderedSignal} from '$lib/charts/signals';
@@ -468,6 +477,102 @@ describe('MeasurePanel — summary table (expanded card)', () => {
         expect(main).not.toHaveTextContent('🇺🇸');
         expect(main).not.toHaveTextContent('🇪🇺');
         expect(rowById(container, 'main-original')).toBeNull();
+    });
+});
+
+/**
+ * C-97c-3 (decision D-C97c-1 of the coordinator, 17/10): a price on screen keeps its significant digits.
+ *
+ * Today the summary table writes a value under 1 with up to six decimals, trimmed (`formatFixed(v, 6, {trim: true})`),
+ * and the absolute Δ with four fixed ones (`formatFixed(v, 4, {signed: true})`); the pending banner writes the start
+ * value with four (`formatFixed(v, 4)`). On an asset priced in millionths the start 0.0000034573 reads `0.000003`, the
+ * end 0.0000035773 `0.000004`, their Δ of 1.2e-7 `+0.0000`, a start of 1.2e-7 `0`, and a pending start `0.0000`. The
+ * contract: a value from 1 keeps four decimals (`{minDecimals: 4}`); below 1 `formatPrice(v, {minDecimals: 0,
+ * floorDecimals: 6})` — up to six decimals where it has them, none forced, and as many as its first four significant
+ * digits need (`priceFractionDigits`, formatFixed.ts); the Δ `formatPrice(v, {minDecimals: 4, signed: true})`; the
+ * pending start value `formatPrice(v, {minDecimals: 4})`. Percentage points do not move (the case above reads them).
+ *
+ * Reds: the main row of a measure in millionths (start, end, Δ), a start of 1.2e-7, and a pending start of 0.0000034573.
+ * Guards, green today and after: a measure from 0.5 to 0.123456789 (`0.5`, `0.123457`, `-0.3765`), and a pending start
+ * of 100 (`100.0000`). A cell is read in the main row (`data-row-id`) by the column DataTable stamps on it
+ * (`data-column-id`), and holds its figure alone; the banner is the panel's text, compared with the catalogue's
+ * `measure.pending` around the expected digits. English UI on jsdom's en-US browser, checked before each case: the
+ * digits are typed.
+ */
+describe('MeasurePanel — a price keeps its significant digits (C-97c-3, D-C97c-1)', () => {
+    /** baseData's days, priced in millionths: 0.0000034573 → 0.0000035773, a rise of 1.2e-7. */
+    const MILLIONTHS: LineDataPoint[] = [0.0000034573, 0.0000034973, 0.0000035373, 0.0000035773].map((value, index) => ({date: baseData[index].date, value}));
+    /** baseData's days, from 1.2e-7 up to 0.0000034573. */
+    const FROM_TENTH_OF_MILLIONTH: LineDataPoint[] = [0.00000012, 0.0000012, 0.0000024, 0.0000034573].map((value, index) => ({date: baseData[index].date, value}));
+    /** baseData's days, under 1 but from 0.001 up: 0.5 → 0.123456789. */
+    const SUB_UNIT: LineDataPoint[] = [0.5, 0.4, 0.3, 0.123456789].map((value, index) => ({date: baseData[index].date, value}));
+
+    /** The summary's main row once a measure spans `chartData`: its start, end and absolute Δ cells. */
+    async function mainRowOf(chartData: LineDataPoint[]): Promise<{start: string; end: string; delta: string}> {
+        const {api, container} = mount({chartData});
+        api.addMeasureFromChartData(); // auto-expands the new card → DataTable mounts
+        await waitFor(() => expect(rowById(container, 'main')).not.toBeNull());
+        const row = rowById(container, 'main')!;
+        const cell = (columnId: string): string => {
+            const found = row.querySelector<HTMLElement>(`td[data-column-id="${columnId}"]`);
+            if (!found) throw new Error(`no ${columnId} cell in the main row`);
+            return (found.textContent ?? '').trim();
+        };
+        return {start: cell('valueStart'), end: cell('valueEnd'), delta: cell('deltaAbs')};
+    }
+
+    /**
+     * The panel's text once a measure is pending from `value` on 2024-01-01, after a barrier that the pending banner is
+     * shown — the catalogue's `measure.pending` around whatever start value is written — and the banner the catalogue
+     * words around `written`.
+     */
+    function pendingFrom(value: number, written: string): {panel: string; banner: string} {
+        const {api, container} = mount();
+        api.startMeasureMode();
+        vi.spyOn(Date, 'now').mockReturnValue(1000);
+        api.addPoint('2024-01-01', value); // first click → pending start, banner shown
+        flushSync();
+        const panel = container.textContent ?? '';
+        const banner = (startValue: string): string => get(_)('measure.pending', {values: {startDate: '2024-01-01', startValue}});
+        const [before, after] = banner('⟨value⟩').split('⟨value⟩');
+        expect(panel.includes(before) && panel.includes(after), `barrier: the pending banner is shown, around some start value (${before}…${after})`).toBe(true);
+        return {panel, banner: banner(written)};
+    }
+
+    beforeEach(() => {
+        // The expected digits are typed: the premise that the panel writes en-US, checked.
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+    });
+
+    it('a measure on a price in millionths: start 0.000003457, end 0.000003577, Δ +0.00000012', async () => {
+        const {start, end, delta} = await mainRowOf(MILLIONTHS);
+
+        expect.soft(start, 'the start value (today 0.000003: cut at the sixth decimal)').toBe('0.000003457');
+        expect.soft(end, 'the end value (today 0.000004)').toBe('0.000003577');
+        expect.soft(delta, 'the absolute Δ (today +0.0000)').toBe('+0.00000012');
+    });
+
+    it('a start of 1.2e-7 reads 0.00000012, not 0, and its Δ to 0.0000034573 +0.000003337, not +0.0000', async () => {
+        const {start, delta} = await mainRowOf(FROM_TENTH_OF_MILLIONTH);
+
+        expect.soft(start, 'the start value (today 0: no digit within six decimals)').toBe('0.00000012');
+        expect.soft(delta, 'the absolute Δ (today +0.0000)').toBe('+0.000003337');
+    });
+
+    it('a pending start of 0.0000034573 reads 0.000003457 in the banner, not 0.0000', () => {
+        const {panel, banner} = pendingFrom(0.0000034573, '0.000003457');
+
+        expect(panel, 'the pending banner’s start value (today 0.0000)').toContain(banner);
+    });
+
+    it('guard: a measure under 1 from 0.001 up reads as today — start 0.5, end 0.123457, Δ -0.3765', async () => {
+        expect(await mainRowOf(SUB_UNIT)).toEqual({start: '0.5', end: '0.123457', delta: '-0.3765'});
+    });
+
+    it('guard: a pending start of 100 reads 100.0000 in the banner', () => {
+        const {panel, banner} = pendingFrom(100, '100.0000');
+
+        expect(panel, 'the pending banner’s start value').toContain(banner);
     });
 });
 

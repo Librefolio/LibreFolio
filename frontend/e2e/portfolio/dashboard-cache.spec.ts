@@ -97,7 +97,7 @@ function mark(traffic: Traffic): {reports: number; riskQueries: number; lots: nu
  */
 async function stubLivePrice(page: Page): Promise<{served: number}> {
     const live = {served: 0};
-    await page.route('**/api/v1/assets/prices/current', async (route) => {
+    await page.route('**/api/v1/assets/prices/current*', async (route) => {
         const ids = (route.request().postDataJSON() as number[] | null) ?? [];
         const body = {
             results: ids.map((asset_id) => ({asset_id, value: null, currency: null, as_of_date: null, source: null, error: 'Synthetic offline boundary: no live quote requested'})),

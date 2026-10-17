@@ -6,12 +6,13 @@
  * grouping/dedup/disambiguation pipeline. i18n is injected as a plain
  * `labelForDate` echo so labels are asserted deterministically, no runtime.
  *
- * The last block (J-12) pins the two helpers of a FAILED analysis — the issue
- * partition and the failure rows; its notes are beside it.
+ * Two blocks close the file, each with its notes beside it: J-12 pins the two
+ * helpers of a FAILED analysis — the issue partition and the failure rows; J-53
+ * pins the lines of a group — every lot-less issue keeps its own message.
  */
 import {describe, it, expect, vi} from 'vitest';
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
-import {resolveLotId, groupedSeverity, buildIssueGroups, partitionLotIssues, buildFailureRows, type FailureRow, type IssueSeverity} from './lotDataQualityHelpers';
+import {resolveLotId, groupedSeverity, buildIssueGroups, partitionLotIssues, buildFailureRows, type FailureRow, type IssueGroup, type IssueSeverity} from './lotDataQualityHelpers';
 import {resolveBrokerName} from './lotChartShared';
 
 interface RawIssue {
@@ -74,18 +75,22 @@ describe('buildIssueGroups', () => {
     it('builds one group with one labelled chip for a resolvable in-range lot', () => {
         const groups = buildIssueGroups([issue('REF', 'warning', 10)], new Map([[10, '2024-03-15']]), echo);
         expect(groups).toHaveLength(1);
-        expect(groups[0]).toMatchObject({code: 'REF', severity: 'warning', messageKey: 'msg.REF'});
+        expect(groups[0]).toMatchObject({code: 'REF', severity: 'warning'});
+        expect(groups[0].messages.map((message) => message.messageKey)).toEqual(['msg.REF']);
         expect(groups[0].lots).toEqual([{lotId: 10, label: '2024-03-15'}]);
     });
 
-    it('preserves message params and key on the group', () => {
+    it('preserves message params and key on the group’s message', () => {
         const groups = buildIssueGroups([issue('REF', 'warning', 10, {extra: {foo: 'bar'}})], new Map([[10, 'd']]), echo);
-        expect(groups[0].messageParams).toEqual({lot_id: 10, foo: 'bar'});
+        expect(groups[0].messages).toHaveLength(1);
+        expect(groups[0].messages[0].params).toEqual({lot_id: 10, foo: 'bar'});
+        expect(groups[0].messages[0].messageKey).toBe('msg.REF');
     });
 
-    it('defaults messageParams to {} when the issue has none (?? {} right arm)', () => {
+    it('defaults the message params to {} when the issue has none (?? {} right arm)', () => {
         const groups = buildIssueGroups([issue('REF', 'info', undefined, {withParams: false})], new Map(), echo);
-        expect(groups[0].messageParams).toEqual({});
+        expect(groups[0].messages).toHaveLength(1);
+        expect(groups[0].messages[0].params).toEqual({});
         expect(groups[0].lots).toEqual([]);
     });
 
@@ -539,6 +544,301 @@ describe('J-12 — a FAILED lots analysis: partitionLotIssues and buildFailureRo
                 expect(rowKeys(issues)).toEqual(expected);
                 expect(rowKeys([...issues].reverse())).toEqual(expected);
             });
+        });
+    });
+});
+
+/**
+ * J-53 — every lot-less issue keeps its own message (workstream Y).
+ *
+ * The contract. The lots banner groups the issues by code: one block per code, keyed by the code and drawn as
+ * `lot-data-quality-issue-{code}`, the header counting categories. Until J-53 a group kept the message key and the
+ * params of its FIRST issue only (`IssueGroup.messageKey`, `messageParams`). A lot-scoped code loses nothing that way:
+ * its issues say the same thing of different lots, and the lots come back as chips. A lot-less issue loses everything.
+ * The backend puts `lot_id` in the params of every engine issue, null when the issue has no lot
+ * (`lots_analysis_service.py`, `_build_data_quality_report`), and the engine sends `ASSET_INCOME_NO_ELIGIBLE_LOTS` and
+ * `ASSET_COST_NO_ELIGIBLE_LOTS` once per orphan pool (`engine.py`), each with its own `economic_type`, `as_of_date`,
+ * `target_amount` and `target_currency`: with two pools the banner showed one amount and one date and hid the other,
+ * understating the income left unallocated. `_report_gaps` may likewise send `MISSING_FX_RATES` twice, under two
+ * message keys (the pairs a provider syncs, the manual pairs) and without any `lot_id`: the second never showed.
+ *
+ * The cure (the coordinator's decision; its shape, Y's). `IssueGroup.messages` replaces `messageKey` and
+ * `messageParams`: the group's lines, never empty, each `{key, messageKey, params}`.
+ *   - An issue is lot-less when `resolveLotId(message_params?.lot_id)` is not finite: null, absent, not a number. A
+ *     finite id the visible-lot map lacks (a hidden lot) is a lot: that issue stays lot-bearing, with no chip.
+ *   - The lot-bearing issues of a code make ONE line, the first one's key and params, and their visible lots the
+ *     chips, as before.
+ *   - Each lot-less issue makes a line of its own, with its own key and params (`?? {}`); a repeat — the same key and
+ *     deep-equal params — makes none: the first occurrence wins.
+ *   - The lines come in first-occurrence order: the lot-bearing line where the first lot-bearing issue came, each
+ *     lot-less line where its issue came.
+ *   - A line's `key` is unique within its group, which the banner keys its lines by; its format is the cure's
+ *     business, and nothing here reads it.
+ *   - The groups, their severity order and the chips: unchanged.
+ *
+ * Fixtures. The issues are built as the client receives them (`DataQualityIssue`, domain included): an engine issue
+ * carries `transaction_id`, `lot_id`, `broker_id` and `related_transaction_id`, null when it has none, then its own
+ * params, amounts as decimal strings; a `_report_gaps` issue carries its own params only (the fields beside them,
+ * which the helper does not read, are left out). Groups are found by their code, never by position; the lines of a
+ * group are compared in order, because their order is the contract.
+ *
+ * Red, before the cure: every test of this block fails on `messages`, undefined on today's groups, except the one
+ * named «control», which holds today and must hold after the cure. Three tests of the `buildIssueGroups` block above
+ * read the message from `messages` now, and are red for the same reason; the others are untouched and stay green.
+ */
+
+/** The params of an issue, as sent. */
+type Params = Record<string, Param>;
+
+/** The catalogue key the backend sends with each orphan code (`_message_key_for_issue`). */
+const ORPHAN_KEY = {
+    ASSET_INCOME_NO_ELIGIBLE_LOTS: 'dataQuality.assetIncomeNoEligibleLots',
+    ASSET_COST_NO_ELIGIBLE_LOTS: 'dataQuality.assetCostNoEligibleLots',
+} as const;
+
+type OrphanCode = keyof typeof ORPHAN_KEY;
+
+const INCOME = 'ASSET_INCOME_NO_ELIGIBLE_LOTS' as const;
+const COST = 'ASSET_COST_NO_ELIGIBLE_LOTS' as const;
+const FALLBACK = 'REFERENCE_PRICE_FALLBACK';
+const FX_RATES = 'MISSING_FX_RATES';
+
+/** An orphan pool as its issue names it (`engine.py`): the pool's first source row, its broker, the engine's four params. */
+interface Pool {
+    transaction_id: number;
+    broker_id: number;
+    economic_type: string;
+    as_of_date: string;
+    target_amount: string;
+    target_currency: string;
+}
+
+/** An orphan pool's issue as `_build_data_quality_report` serialises it: a warning, with no lot and no related row. */
+function orphan(code: OrphanCode, {transaction_id, broker_id, ...params}: Pool): WireIssue {
+    return {domain: 'PORTFOLIO', code, severity: 'warning', message_i18n_key: ORPHAN_KEY[code], message_params: {transaction_id, lot_id: null, broker_id, related_transaction_id: null, ...params}};
+}
+
+/** `REFERENCE_PRICE_FALLBACK` as the engine sends it for a lot an adjustment opened: the lot is its opening row. */
+function priceFallback(lotId: number, brokerId: number, referencePrice: string): WireIssue {
+    return {domain: 'PORTFOLIO', code: FALLBACK, severity: 'warning', message_i18n_key: MESSAGE_KEY[FALLBACK], message_params: {transaction_id: lotId, lot_id: lotId, broker_id: brokerId, related_transaction_id: null, reference_price: referencePrice}};
+}
+
+/** Two orphan income pools at Broker Alfa: 12.50 EUR of dividends on 15 March, 30.75 EUR on 20 June. */
+const MARCH = orphan(INCOME, {transaction_id: 7101, broker_id: ALFA.id, economic_type: 'DIVIDEND', as_of_date: '2024-03-15', target_amount: '12.50', target_currency: 'EUR'});
+const JUNE = orphan(INCOME, {transaction_id: 7102, broker_id: ALFA.id, economic_type: 'DIVIDEND', as_of_date: '2024-06-20', target_amount: '30.75', target_currency: 'EUR'});
+
+/** Two orphan cost pools: a fee at Broker Alfa on 2 May, a tax at Broker Beta on 20 June. */
+const FEE_MAY = orphan(COST, {transaction_id: 7201, broker_id: ALFA.id, economic_type: 'FEE', as_of_date: '2024-05-02', target_amount: '4.90', target_currency: 'EUR'});
+const TAX_JUNE = orphan(COST, {transaction_id: 7202, broker_id: BETA.id, economic_type: 'TAX', as_of_date: '2024-06-20', target_amount: '7.30', target_currency: 'EUR'});
+
+/** `_report_gaps`'s two issues of one code (`build_data_quality_report`): the pairs a provider syncs, the manual pairs. */
+const FX_PROVIDER: WireIssue = {domain: 'PORTFOLIO', code: FX_RATES, severity: 'warning', message_i18n_key: 'dataQuality.missingFxRates', message_params: {count: 2, date_from: '2024-02-01', date_to: '2024-05-31', dates_count: 14}};
+const FX_MANUAL: WireIssue = {domain: 'PORTFOLIO', code: FX_RATES, severity: 'warning', message_i18n_key: 'dataQuality.missingFxRatesManual', message_params: {count: 1}};
+
+/** The visible lots, lot id → opening day: 501 and 502. Lots 998 and 999 are hidden. */
+const LOT_DATES: ReadonlyMap<number, string> = new Map([
+    [501, '2024-01-10'],
+    [502, '2024-02-05'],
+]);
+
+/** A line as the banner writes it, its key left out: the catalogue key and its params. */
+interface Line {
+    messageKey: string;
+    params: Params;
+}
+
+/** The lines of `group`, in order. */
+function linesOf(group: IssueGroup): Line[] {
+    return group.messages.map(({messageKey, params}) => ({messageKey, params}));
+}
+
+/** The line an issue makes on its own: its key and its params. */
+function lineOf(sent: RawIssue): Line {
+    return {messageKey: sent.message_i18n_key, params: sent.message_params ?? {}};
+}
+
+/** The one group of `code`: found by its code, never by its position. */
+function groupOf(groups: readonly IssueGroup[], code: string): IssueGroup {
+    const found = groups.filter((group) => group.code === code);
+    expect(found, `one group for ${code}`).toHaveLength(1);
+    return found[0];
+}
+
+describe('J-53 — every lot-less issue keeps its own message', () => {
+    describe('lot-less issues', () => {
+        // Why: the defect itself — with two pools the banner wrote one amount and one day, and hid the other pool.
+        it('two orphan income pools: one group, a line per pool with its own params, in input order, and no chip', () => {
+            // June first: the engine sends the pools by day, so only an input out of day order tells input order from a sort.
+            const groups = buildIssueGroups([JUNE, MARCH], LOT_DATES, echo);
+
+            expect(
+                groups.map((group) => group.code),
+                'one group for the two pools',
+            ).toEqual([INCOME]);
+            const group = groupOf(groups, INCOME);
+            expect(linesOf(group), 'each pool its own amount and day, in the order sent').toEqual([lineOf(JUNE), lineOf(MARCH)]);
+            expect(group.lots, 'no lot named, no chip').toEqual([]);
+        });
+
+        it('orphan cost pools alongside: two groups, each with its own pools as lines', () => {
+            const groups = buildIssueGroups([MARCH, FEE_MAY, JUNE, TAX_JUNE], LOT_DATES, echo);
+
+            expect(groups.map((group) => group.code).sort(), 'a group per code').toEqual([COST, INCOME].sort());
+            expect(linesOf(groupOf(groups, INCOME)), 'the income pools').toEqual([lineOf(MARCH), lineOf(JUNE)]);
+            expect(linesOf(groupOf(groups, COST)), 'the cost pools').toEqual([lineOf(FEE_MAY), lineOf(TAX_JUNE)]);
+        });
+
+        // Why: `_report_gaps` sends MISSING_FX_RATES once for the pairs a provider syncs and once for the manual ones —
+        // two sentences, two things to do; the second hid behind the first.
+        it('MISSING_FX_RATES twice, the pairs a provider syncs and the manual pairs: one group, two lines, each with its own message key', () => {
+            const group = groupOf(buildIssueGroups([FX_PROVIDER, FX_MANUAL], LOT_DATES, echo), FX_RATES);
+
+            expect(linesOf(group)).toEqual([lineOf(FX_PROVIDER), lineOf(FX_MANUAL)]);
+            expect(group.lots).toEqual([]);
+        });
+
+        // Why: lot-less is «no finite lot id», in every form the id can be missing — `_report_gaps`'s issues send none.
+        it.each([
+            {name: 'null, as the backend sends it', lotId: null},
+            {name: 'absent', lotId: ABSENT},
+            {name: 'not a number', lotId: 'n/a'},
+        ] as ReadonlyArray<{name: string; lotId: Param | typeof ABSENT}>)('lot_id $name: the issue is lot-less, a line of its own', ({lotId}) => {
+            const march = withParam(MARCH, 'lot_id', lotId);
+            const june = withParam(JUNE, 'lot_id', lotId);
+
+            expect(linesOf(groupOf(buildIssueGroups([march, june], LOT_DATES, echo), INCOME))).toEqual([lineOf(march), lineOf(june)]);
+        });
+
+        // Why: the same pool reported twice must not print the same sentence twice.
+        it('a repeat — the same key, deep-equal params, another object — makes no line: the first occurrence keeps its place', () => {
+            const repeat = structuredClone(MARCH);
+            expect(repeat, 'control: the repeat is another object').not.toBe(MARCH);
+
+            const group = groupOf(buildIssueGroups([MARCH, JUNE, repeat], LOT_DATES, echo), INCOME);
+
+            expect(linesOf(group)).toEqual([lineOf(MARCH), lineOf(JUNE)]);
+        });
+
+        // Why: the same amount on the same day is not the same pool — another source row, another broker, another currency.
+        it.each([
+            {name: 'its source transaction', param: 'transaction_id', value: 7199},
+            {name: 'its broker', param: 'broker_id', value: BETA.id},
+            {name: 'its economic type', param: 'economic_type', value: 'INTEREST'},
+            {name: 'its day', param: 'as_of_date', value: '2024-03-16'},
+            {name: 'its amount', param: 'target_amount', value: '12.51'},
+            {name: 'its currency', param: 'target_currency', value: 'USD'},
+        ] as ReadonlyArray<{name: string; param: string; value: Param}>)('two pools apart only by $name are two lines', ({param, value}) => {
+            const twin = withParam(MARCH, param, value);
+
+            expect(linesOf(groupOf(buildIssueGroups([MARCH, twin], LOT_DATES, echo), INCOME))).toEqual([lineOf(MARCH), lineOf(twin)]);
+        });
+
+        // Why: a repeat is the same key AND the same params; the same params under another key are another sentence.
+        it('the same params under another message key are two lines', () => {
+            const one = issue('GAP', 'warning', undefined, {key: 'msg.one', extra: {count: 1}});
+            const other = issue('GAP', 'warning', undefined, {key: 'msg.other', extra: {count: 1}});
+
+            expect(linesOf(groupOf(buildIssueGroups([one, other], new Map(), echo), 'GAP'))).toEqual([lineOf(one), lineOf(other)]);
+        });
+    });
+
+    describe('lot-bearing issues', () => {
+        // Why: a lot-scoped code says the same thing of each lot, and names the lots as chips. Unchanged by J-53.
+        it('the lot-bearing issues of a code make one line, the first one’s, and their visible lots the chips', () => {
+            const lot502 = priceFallback(502, BETA.id, '99.80');
+            const lot501 = priceFallback(501, ALFA.id, '101.25');
+
+            const group = groupOf(buildIssueGroups([lot502, lot501], LOT_DATES, echo), FALLBACK);
+
+            expect(linesOf(group), 'one line: the first issue’s key and params').toEqual([lineOf(lot502)]);
+            expect(group.lots, 'a chip per lot, by opening day').toEqual([
+                {lotId: 501, label: '2024-01-10'},
+                {lotId: 502, label: '2024-02-05'},
+            ]);
+        });
+
+        // Why: a hidden lot is still a lot. It gets no chip — it is not on screen — and no line of its own either.
+        it('an issue on a hidden lot (a finite id the map lacks) stays lot-bearing: no chip, and no line of its own', () => {
+            const hidden = priceFallback(999, ALFA.id, '88.00');
+            const visible = priceFallback(501, ALFA.id, '101.25');
+            // A digit string is a finite id too.
+            const hiddenAsText = withParam(priceFallback(998, BETA.id, '91.40'), 'lot_id', '998');
+            expect(
+                [999, 998].filter((lotId) => LOT_DATES.has(lotId)),
+                'control: lots 998 and 999 are hidden',
+            ).toEqual([]);
+
+            const group = groupOf(buildIssueGroups([hidden, visible, hiddenAsText], LOT_DATES, echo), FALLBACK);
+
+            expect(linesOf(group), 'one line: the first lot-bearing issue’s, on the hidden lot').toEqual([lineOf(hidden)]);
+            expect(group.lots, 'a chip for the visible lot only').toEqual([{lotId: 501, label: '2024-01-10'}]);
+        });
+
+        // Why: not seen in practice, pinned anyway — the lines keep the order their issues came in.
+        it('a code with both kinds: the lot-bearing line where the first lot-bearing issue came, each lot-less line where its own came', () => {
+            const noLotA = withParam(priceFallback(601, ALFA.id, '90.00'), 'lot_id', null);
+            const noLotB = withParam(priceFallback(602, BETA.id, '95.00'), 'lot_id', null);
+            const lot501 = priceFallback(501, ALFA.id, '101.25');
+            const lot502 = priceFallback(502, BETA.id, '99.80');
+
+            const lotLessFirst = groupOf(buildIssueGroups([noLotA, lot501, noLotB, lot502], LOT_DATES, echo), FALLBACK);
+            expect(linesOf(lotLessFirst), 'lot-less, lot-bearing, lot-less: the second lot-bearing issue joins the first one’s line').toEqual([lineOf(noLotA), lineOf(lot501), lineOf(noLotB)]);
+            expect(
+                lotLessFirst.lots.map((lot) => lot.lotId),
+                'the chips, as before',
+            ).toEqual([501, 502]);
+
+            const lotBearingFirst = groupOf(buildIssueGroups([lot502, noLotA, lot501, noLotB], LOT_DATES, echo), FALLBACK);
+            expect(linesOf(lotBearingFirst), 'lot-bearing first: its line first, with the first lot-bearing issue’s params').toEqual([lineOf(lot502), lineOf(noLotA), lineOf(noLotB)]);
+            expect(
+                lotBearingFirst.lots.map((lot) => lot.lotId),
+                'the chips, as before',
+            ).toEqual([501, 502]);
+        });
+    });
+
+    describe('the groups', () => {
+        // Why: the banner keys a block's lines by `key`; two equal keys are a Svelte error (`each_key_duplicate`).
+        it('gives each line a key no other line of its group has', () => {
+            const noLot = withParam(priceFallback(601, ALFA.id, '90.00'), 'lot_id', null);
+            const groups = buildIssueGroups([priceFallback(501, ALFA.id, '101.25'), noLot, MARCH, FEE_MAY, JUNE, TAX_JUNE, FX_PROVIDER, FX_MANUAL, priceFallback(502, BETA.id, '99.80')], LOT_DATES, echo);
+
+            expect(groups.map((group) => group.code).sort(), 'barrier: the four groups').toEqual([COST, FALLBACK, FX_RATES, INCOME].sort());
+            for (const group of groups) {
+                const keys = group.messages.map((message) => message.key);
+                expect(keys.length, `barrier: ${group.code} has lines to tell apart`).toBeGreaterThan(1);
+                expect(new Set(keys).size, `${group.code}: no two lines share a key`).toBe(keys.length);
+            }
+        });
+
+        // Why: the banner keys its blocks by code and the header counts categories: one group per code, whatever it carries.
+        it('one group per code however many lot-less issues it carries, and none without a line', () => {
+            const atCost: WireIssue = {domain: 'PORTFOLIO', code: 'CURRENT_PRICE_ASSUMED_AT_COST', severity: 'warning', message_i18n_key: 'dataQuality.currentPriceAssumedAtCostRange', message_params: {asset_id: 9031, date_from: '2024-01-10', date_to: '2024-02-29'}};
+            const costBasis: WireIssue = {domain: 'PORTFOLIO', code: 'MISSING_COST_BASIS', severity: 'warning', message_i18n_key: 'dataQuality.missingCostBasis', message_params: {count: 1}};
+            const incomePools = [MARCH, JUNE, withParam(MARCH, 'as_of_date', '2024-09-16'), withParam(JUNE, 'as_of_date', '2024-12-16')];
+            const costPools = [FEE_MAY, TAX_JUNE, withParam(FEE_MAY, 'as_of_date', '2024-08-01')];
+            const issues = [priceFallback(501, ALFA.id, '101.25'), priceFallback(502, BETA.id, '99.80'), ...incomePools, ...costPools, atCost, FX_PROVIDER, FX_MANUAL, costBasis];
+
+            const groups = buildIssueGroups(issues, LOT_DATES, echo);
+
+            expect(groups.map((group) => group.code).sort(), 'each code of the input, once').toEqual([...new Set(issues.map((sent) => sent.code))].sort());
+            expect(Object.fromEntries(groups.map((group) => [group.code, group.messages.length])), 'the lines of each group').toEqual({
+                [FALLBACK]: 1,
+                [INCOME]: 4,
+                [COST]: 3,
+                CURRENT_PRICE_ASSUMED_AT_COST: 1,
+                [FX_RATES]: 2,
+                MISSING_COST_BASIS: 1,
+            });
+        });
+
+        // Control, green before and after the cure: the lines change nothing in the order of the groups.
+        it('control: the groups still come by severity — error, warning, info — whatever lines they carry', () => {
+            const lotLess = (code: string, severity: IssueSeverity, count: number): RawIssue => issue(code, severity, undefined, {extra: {count}});
+
+            const groups = buildIssueGroups([lotLess('I', 'info', 1), lotLess('W', 'warning', 1), lotLess('I', 'info', 2), lotLess('E', 'error', 1), lotLess('W', 'warning', 2), lotLess('E', 'error', 2)], new Map(), echo);
+
+            expect(groups.map((group) => group.code)).toEqual(['E', 'W', 'I']);
         });
     });
 });

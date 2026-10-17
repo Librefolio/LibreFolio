@@ -258,7 +258,7 @@ describe('fetchAssetPeriodChanges — the Assets list’s Δ columns', () => {
     });
 
     it('asks nothing for no asset', async () => {
-        await expect(fetchAssetPeriodChanges([], AS_OF)).resolves.toEqual({periods: [], deltasByAssetId: new Map()});
+        await expect(fetchAssetPeriodChanges([], AS_OF)).resolves.toEqual({periods: [], deltasByAssetId: new Map(), rangeDeltaByAssetId: new Map()});
         expect(post, 'an empty list is answered without a call').not.toHaveBeenCalled();
     });
 
@@ -445,7 +445,7 @@ describe('fetchFxPeriodChanges — the FX list’s Δ columns, in both orientati
     });
 
     it('asks nothing for no pair', async () => {
-        await expect(fetchFxPeriodChanges([], AS_OF)).resolves.toEqual({periods: [], deltasByPair: new Map()});
+        await expect(fetchFxPeriodChanges([], AS_OF)).resolves.toEqual({periods: [], deltasByPair: new Map(), rangeDeltasByPair: new Map()});
         expect(post, 'an empty list is answered without a call').not.toHaveBeenCalled();
     });
 

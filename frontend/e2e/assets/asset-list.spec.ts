@@ -1618,6 +1618,235 @@ test.describe('Assets list — which period changes the list keeps, and when it 
 });
 
 // ============================================================================
+// Each card's Δ over the range is the backend's (workstream Y, lot X-R59 A)
+// ============================================================================
+
+/** An asset of a period-changes request (`FAPeriodChangesQueryItem`), with the first day of the range it asks the Δ over. */
+type AssetRangeChangesQuery = AssetPeriodChangesQuery & {range_start?: string | null};
+
+/** An asset's Δ over the range as a stub answers it (`FARangeChange`): decimal strings, null where the backend has none. */
+type AssetRangeChange = {change_abs: string | null; change_ratio: string | null};
+
+/** +42.42 % over the range, +12.34 in the asset's currency: an asset of the test's own has no price, so no browser could compute them. */
+const STUBBED_RANGE_CHANGE: AssetRangeChange = {change_abs: '12.34', change_ratio: '0.4242'};
+
+/** A Δ over the range the backend could not compute: every field null. */
+const NO_RANGE_CHANGE: AssetRangeChange = {change_abs: null, change_ratio: null};
+
+/** The first day the backend values (`EARLIEST_RANGE_START`): it refuses an earlier `range_start`, and the whole request with it. */
+const EARLIEST_RANGE_START = '1900-01-01';
+
+/** What `routeAssetRangeChanges` saw: every item asked, what went wrong, how many requests it answered. */
+type AssetRangeChangesLog = {asked: AssetRangeChangesQuery[]; failures: string[]; answered: number};
+
+/**
+ * The asset period changes, routed through the backend: every request is recorded, and each answer goes back with the
+ * `range_change` of the assets `stubs` names replaced, every other item as the backend gave it. A non-OK answer is a
+ * failure, passed on as it came.
+ */
+async function routeAssetRangeChanges(page: Page, stubs: ReadonlyMap<number, AssetRangeChange>): Promise<AssetRangeChangesLog> {
+    const log: AssetRangeChangesLog = {asked: [], failures: [], answered: 0};
+    await page.route(ASSET_PERIOD_CHANGES, async (route) => {
+        try {
+            log.asked.push(...((route.request().postDataJSON() as AssetRangeChangesQuery[] | null) ?? []));
+            const response = await route.fetch();
+            if (!response.ok()) {
+                log.failures.push(`HTTP ${response.status()}: ${await response.text()}`);
+                await route.fulfill({response});
+                return;
+            }
+            const answer = (await response.json()) as {items?: Array<{asset_id: number; range_change?: Record<string, unknown> | null}>};
+            const items = (answer.items ?? []).map((item) => {
+                const stub = stubs.get(item.asset_id);
+                return stub ? {...item, range_change: {...(item.range_change ?? {}), ...stub}} : item;
+            });
+            await route.fulfill({response, json: {...answer, items}});
+        } catch (error) {
+            // Nobody awaits a route callback, so what it throws would land on whatever runs next: recorded, and the
+            // request let through, for the test to fail on its own assertions.
+            log.failures.push(String(error));
+            await route.continue().catch(() => undefined);
+        } finally {
+            log.answered += 1;
+        }
+    });
+    return log;
+}
+
+/** An asset of this test's own, in euros and with no price: whatever Δ its card shows can only come from an answer. */
+async function createOwnAsset(page: Page, displayName: string): Promise<number> {
+    const response = await page.request.post('/api/v1/assets', {data: [{display_name: displayName, currency: 'EUR', asset_type: 'STOCK'}]});
+    const text = await response.text();
+    expect(response.ok(), `create the asset ${displayName}: HTTP ${response.status()} ${text}`).toBe(true);
+    const created = (JSON.parse(text) as {results?: Array<{display_name?: string; success?: boolean; asset_id?: number | null}>}).results?.find((result) => result.display_name === displayName);
+    if (!created?.success || typeof created.asset_id !== 'number') throw new Error(`the asset ${displayName} was not created: ${text}`);
+    return created.asset_id;
+}
+
+/** The list over `range`, as cards, narrowed by `token` to the assets of this test. */
+async function openOwnCards(page: Page, range: {start: string; end: string}, token: string): Promise<Locator> {
+    await goToAssetsPage(page, range);
+    const assetsPage = page.getByTestId('assets-page');
+    await page.getByTestId('view-mode-grid').click();
+    await page.getByTestId('assets-search-input').fill(token);
+    await waitForSettled(assetsPage, 20_000);
+    return assetsPage;
+}
+
+/**
+ * A card's Δ in percent as any of the four languages writes it, matched whole: the arrow of its sign (▲, ▼), then the
+ * percentage as `percentCell` reads it.
+ */
+function arrowedPercent(figure: string): RegExp {
+    return new RegExp(`^\\s*${figure.startsWith('-') ? '▼' : '▲'}${percentCell(figure).source.slice(1)}`);
+}
+
+/**
+ * A card's absolute Δ as any of the four languages writes it, matched whole: the arrow of its sign, the signed figure
+ * with two decimals and either mark (a minus may be `-` or `−`), then the currency.
+ */
+function arrowedAmount(figure: string, currency: string): RegExp {
+    const parts = /^([+-])(\d+)\.(\d{2})$/.exec(figure);
+    if (!parts) throw new Error(`arrowedAmount: ${figure} is not a signed decimal with two digits such as +12.34`);
+    const up = parts[1] === '+';
+    return new RegExp(`^\\s*${up ? '▲' : '▼'}\\s*${up ? '\\+' : '[-\\u2212]'}${parts[2]}[.,]${parts[3]}\\s*${currency}\\s*$`);
+}
+
+/**
+ * Each card of the Assets list shows its Δ over the range on screen (X-R59, lot A): the change from the first to the last
+ * day of the range, which the backend computes — the `range_change` of `POST /assets/prices/period-changes`, asked with
+ * the first day of the range (`range_start`) in every item, raised to 1900-01-01, the first day the backend values, for a
+ * range that starts before it. The card shows it in percent (`data-mode="percentage"`), in the asset's currency once
+ * switched to absolute values (`data-mode="absolute"`), and draws no Δ where the backend has none. The browser computes
+ * none.
+ *
+ * Observed through the network, as in X-R53: the real answer is fetched and only this test's assets are changed in it,
+ * with figures their prices could never give — they have none, created here and deleted at the end. The range is about
+ * two months ending on a known day in the past, so no live quote is asked. The range before 1900 is drawn on a synthetic
+ * list whose prices the browser answers, so no price series is walked back over a century; its period changes still
+ * reach the backend, which says whether it takes the first day asked.
+ *
+ * Red before the cure of lot A: the request asks no `range_start`, and the card computes its Δ from the prices it loaded
+ * — none for an asset of this test's own.
+ */
+test.describe('Assets list — each card shows the backend’s Δ over the range (X-R59)', () => {
+    // A ceiling, never a delay: assets are created, then the list loads its waves — rows, prices, period changes — and
+    // settles once more, narrowed to them.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('every asset asks the first day of the range on screen; the card shows the answer’s Δ in percent, and in its currency once absolute', async ({page}) => {
+        const token = uniqueToken(6);
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const ownIds: number[] = [];
+        try {
+            const ownId = await createOwnAsset(page, `E2E RangeChange ${token}`);
+            ownIds.push(ownId);
+            const log = await routeAssetRangeChanges(page, new Map([[ownId, STUBBED_RANGE_CHANGE]]));
+
+            await openOwnCards(page, range, token);
+            const card = page.getByTestId(`asset-card-${ownId}`);
+            await expect(card, 'the own asset is listed as a card').toBeVisible({timeout: 10_000});
+            await expect(card, 'premise: a card opens in percent, the list’s default').toHaveAttribute('data-view-mode', 'percentage');
+
+            // Asked and answered — the page holds `data-busy` until the period changes are in; the poll is a deadline.
+            await expect.poll(() => log.answered, {message: 'the Assets list never asked POST /assets/prices/period-changes', timeout: 10_000}).toBeGreaterThan(0);
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            expect(log.asked, 'the own asset asks its Δ from the first day of the range on screen to the last').toContainEqual(expect.objectContaining({asset_id: ownId, as_of: range.end, range_start: range.start}));
+            expect([...new Set(log.asked.map((item) => item.range_start))], 'every asset asks its Δ from the first day of the range on screen').toEqual([range.start]);
+
+            const delta = card.getByTestId('asset-range-delta');
+            await expect(delta, 'the card shows the answer’s change_ratio 0.4242 as a percentage').toHaveText(arrowedPercent('+42.42'), {timeout: 10_000});
+            await expect(delta).toHaveAttribute('data-mode', 'percentage');
+
+            // The card's own Abs/% switch: the same answer, its change_abs in the asset's currency.
+            await card.getByTestId('asset-card-view-toggle').click();
+            await expect(card, 'the card shows absolute values').toHaveAttribute('data-view-mode', 'absolute');
+            await expect(delta, 'the card shows the answer’s change_abs 12.34, in euros').toHaveText(arrowedAmount('+12.34', 'EUR'));
+            await expect(delta).toHaveAttribute('data-mode', 'absolute');
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+            for (const id of ownIds) await page.request.delete(`/api/v1/assets?asset_ids=${id}`).catch(() => {});
+        }
+    });
+
+    test('an answer with every field null draws no Δ on the card, in percent or absolute', async ({page}) => {
+        const token = uniqueToken(6);
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const ownIds: number[] = [];
+        try {
+            // The subject is answered with no Δ; the witness with the stub, so its Δ on screen says the answer reached the
+            // cards — both are in the same answer.
+            const subjectId = await createOwnAsset(page, `E2E RangeChange none ${token}`);
+            ownIds.push(subjectId);
+            const witnessId = await createOwnAsset(page, `E2E RangeChange witness ${token}`);
+            ownIds.push(witnessId);
+            const log = await routeAssetRangeChanges(
+                page,
+                new Map([
+                    [subjectId, NO_RANGE_CHANGE],
+                    [witnessId, STUBBED_RANGE_CHANGE],
+                ]),
+            );
+
+            const assetsPage = await openOwnCards(page, range, token);
+            const subject = page.getByTestId(`asset-card-${subjectId}`);
+            const witness = page.getByTestId(`asset-card-${witnessId}`);
+            await expect(subject, 'the subject is listed as a card').toBeVisible({timeout: 10_000});
+            await expect(witness, 'the witness is listed as a card').toBeVisible();
+
+            // Presence first: the answer reached the cards — the witness shows its Δ — and the page waits for no other.
+            await expect(witness.getByTestId('asset-range-delta'), 'the witness shows the answer’s change_ratio 0.4242').toHaveText(arrowedPercent('+42.42'), {timeout: 10_000});
+            await waitForSettled(assetsPage, 20_000);
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            expect(log.asked, 'premise: the subject asks its Δ over the range on screen').toContainEqual(expect.objectContaining({asset_id: subjectId, as_of: range.end, range_start: range.start}));
+
+            // The subject's card is drawn, its own controls with it, and holds no Δ: in percent, then in euros.
+            const subjectDelta = subject.getByTestId('asset-range-delta');
+            const subjectToggle = subject.getByTestId('asset-card-view-toggle');
+            await expect(subject, 'premise: the subject opens in percent').toHaveAttribute('data-view-mode', 'percentage');
+            await expect(subjectToggle).toBeVisible();
+            await expect(subjectDelta, 'every field of range_change is null: no Δ in percent').toHaveCount(0);
+
+            await subjectToggle.click();
+            await expect(subject, 'the subject shows absolute values').toHaveAttribute('data-view-mode', 'absolute');
+            await expect(subjectDelta, 'every field of range_change is null: no Δ in the asset’s currency either').toHaveCount(0);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+            for (const id of ownIds) await page.request.delete(`/api/v1/assets?asset_ids=${id}`).catch(() => {});
+        }
+    });
+
+    test('a range that starts before 1900 asks every Δ from 1900-01-01, which the backend takes', async ({page}) => {
+        // A month before the first day the backend values: sent as is, the backend would refuse the whole request.
+        const range = {start: '1899-12-01', end: daysAgoIso(10)};
+        const asset = syntheticAsset(910_591, 0, 0, {displayName: 'Synthetic range before 1900'});
+        try {
+            // A synthetic list whose prices the browser answers, empty: no price series is walked back over a century. Its
+            // period changes still reach the backend, which says whether it takes the first day asked.
+            await mockAssets(page, [asset]);
+            const log = await routeAssetRangeChanges(page, new Map([[asset.id, STUBBED_RANGE_CHANGE]]));
+
+            await goToAssetsPage(page, range);
+            await page.getByTestId('view-mode-grid').click();
+            const card = page.getByTestId(`asset-card-${asset.id}`);
+            await expect(card, 'the synthetic asset is listed as a card').toBeVisible({timeout: 10_000});
+
+            await expect.poll(() => log.answered, {message: 'the Assets list never asked POST /assets/prices/period-changes', timeout: 10_000}).toBeGreaterThan(0);
+            expect(log.failures, 'the backend took every request: none asks a day before the first it values').toEqual([]);
+            expect(log.asked, `the asset asks its Δ from ${EARLIEST_RANGE_START} to the last day of the range`).toContainEqual(expect.objectContaining({asset_id: asset.id, as_of: range.end, range_start: EARLIEST_RANGE_START}));
+            expect([...new Set(log.asked.map((item) => item.range_start))], `every asset asks its Δ from ${EARLIEST_RANGE_START}, never from ${range.start}`).toEqual([EARLIEST_RANGE_START]);
+            await expect(card.getByTestId('asset-range-delta'), 'the Δ over the range still reaches the card').toHaveText(arrowedPercent('+42.42'), {timeout: 10_000});
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+});
+
+// ============================================================================
 // A bulk price request refused as too large says so (workstream X, lot X-R58)
 // ============================================================================
 

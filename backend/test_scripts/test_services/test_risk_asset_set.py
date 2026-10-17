@@ -95,6 +95,7 @@ from backend.app.schemas.risk import (
 )
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, normalize_fx_pair_slug
+from backend.app.services.market_series import prepare_asset_series_set
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.risk import scope as risk_scope_module
@@ -121,7 +122,6 @@ from backend.app.services.risk_plugins.asset_set_risk_return.plugin import (
     AssetSetRiskReturnParams,
 )
 from backend.app.services.risk_plugins.asset_set_var.plugin import AssetSetVarAnalytic, AssetSetVarParams
-from backend.app.services.series_preparation import prepare_asset_series_set
 
 # ---------------------------------------------------------------------------
 # Fixture material.
@@ -1567,7 +1567,7 @@ def test_asset_set_outputs_round_trip_through_the_discriminated_union():
 # Clause ② — a degraded selection says what to fix (developer's decisions of 05/10/2026, D373).
 #
 # Until now only the portfolio engine built `DataQualityIssue`s, and they reached risk only
-# through the portfolio's own report. An asset-set report comes from `series_preparation`,
+# through the portfolio's own report. An asset-set report comes from `market_series`,
 # which never builds one, so the lab's banner had no action to offer however degraded the
 # selection was. Every asset-set result whose report is not OK carries one issue per
 # category, `code + group_key` once, `count` and `message_params.count` the length of its
