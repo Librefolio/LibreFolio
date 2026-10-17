@@ -166,8 +166,15 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
                 await setStatus(account, {is_active: false}, 'deactivate', 'accounts.user.deactivated');
                 break;
             case 'cancel-setup':
-                // The row still reads «waiting» afterwards: the toast tells what changed
-                await perform('cancel-setup', {user_id: userId}, () => zodiosApi.update_account_api_v1_users__user_id__patch({is_active: false}, {params: {user_id: userId}}), 'accounts.user.setup-cancelled', $_('settings.usersTab.toasts.setupCancelled', {values: {username: account.username}}));
+                // The row still reads «waiting» afterwards: the toast tells what changed. `cancel_setup` makes it a cancellation
+                // and nothing else: an administrator that completed its setup meanwhile answers 409 SETUP_COMPLETED (A-51)
+                await perform(
+                    'cancel-setup',
+                    {user_id: userId},
+                    () => zodiosApi.update_account_api_v1_users__user_id__patch({is_active: false, cancel_setup: true}, {params: {user_id: userId}}),
+                    'accounts.user.setup-cancelled',
+                    $_('settings.usersTab.toasts.setupCancelled', {values: {username: account.username}}),
+                );
                 break;
             case 'promote':
                 await setStatus(account, {is_superuser: true}, 'promote', 'accounts.user.promoted');

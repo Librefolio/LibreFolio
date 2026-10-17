@@ -6394,7 +6394,7 @@
     "analysis_model": "deepseek-ai/DeepSeek-V4.1-Flash"
   },
   "user/dashboard/kpi-cards.en.md": {
-    "md5": "715f106f11369133b6657ee96f7a9e32",
+    "md5": "86ef964ccd3014f9886d130d60948313",
     "langs_done": [
       "es",
       "fr",
@@ -6414,7 +6414,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 252.4,
-        "stamped_at": "2026-10-13T02:20:37.543145+00:00",
+        "stamped_at": "2026-10-17T13:59:45.832951+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6427,7 +6427,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 333.3,
-        "stamped_at": "2026-10-13T02:20:37.543145+00:00",
+        "stamped_at": "2026-10-17T13:59:45.832951+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6442,7 +6442,7 @@
         "elapsed_s": 219.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=70, translated=77 (Δ+7)\n  L67: src=0 trn=1\n    EN: During the period you bought 10 units for €400, when they were worth 500 USD. At the end of the period they are worth 55\n    TR: Durante el periodo compraste 10 unidades por €400, cuando valían 500 USD. Al final del periodo valen 550 USD, y 1 USD = \n  L90: src=1 trn=2\n    EN: - **TWRR** — how your asset choices performed, whatever the timing of your deposits → [TWRR](../../financial-theory/tech\n    TR: - **TWRR** — cómo rindieron tus elecciones de activos, independientemente del timing de tus **depósitos** → [TWRR](../..\n  L95: src=3 trn=5\n    EN: - **Favorable timing** (green): you tended to deposit before prices rose. **Unfavorable timing** (red): you tended to de\n    TR: - **Timing favorable** (verde): tendiste a **depositar** antes de que subieran los precios. **Timing desfavorable** (roj\n  L98: src=1 trn=2\n    EN: - **`—` means no value**: a return LibreFolio cannot compute for the period shows `—` instead of a number. The timing ef\n    TR: - **`—` significa sin valor**: una rentabilidad que LibreFolio no puede calcular para el periodo muestra `—` en lugar de\n  L122: src=1 trn=2\n    EN: - **Net Worth** — the big number: securities at market value, plus cash, plus anything in transit between your brokers →\n    TR: - **Patrimonio neto** — el número grande: valores a precio de mercado, más efectivo, más cualquier importe **en tránsito\n  L127: src=1 trn=2\n    EN: - **Deposited Capital (Period)** — deposits minus withdrawals in the period, green to the right and red to the left; hov\n    TR: - **Capital depositado (Periodo)** — **depósitos** menos retiros en el periodo, verde a la derecha y rojo a la izquierda\n\nSOURCE_OUTLINE (for reference):\n  # 💰 KPI Cards\n    ## 📉 Card 1 — Period P&L {: #card-1-period-pl }\n      ### 💱 Unrealized change by currency {: #unrealized-change-by-currency }\n    ## 📈 Card 2 — Returns {: #card-2-returns }\n    ## 💰 Card 3 — Net Worth {: #card-3-net-worth }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-13T02:20:37.543145+00:00",
+        "stamped_at": "2026-10-17T13:59:45.832951+00:00",
         "stamped_by": "translate-stamp"
       }
     }

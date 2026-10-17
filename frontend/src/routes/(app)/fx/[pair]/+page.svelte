@@ -57,7 +57,9 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
-    import {apiResultsToCanonicalFxDataPoints, displayFxDelta, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {apiResultsToCanonicalFxDataPoints, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {fetchFxPeriodChanges} from '$lib/utils/periodChanges';
+    import type {RangeDelta} from '$lib/utils/rangeChange';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
     import {extractDaysBack} from '$lib/utils/assetPriceDerived';
     import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
@@ -292,9 +294,37 @@
         return displayFxRate(last.rate, inverted);
     });
 
-    let deltaPercent = $derived.by(() => {
-        if (chartData.length < 2) return null;
-        return displayFxDelta(chartData[0].rate, chartData[chartData.length - 1].rate, inverted)?.pct ?? null;
+    // The pair's Δ over the range on screen, both ways, from the backend (X-R59). Asked again when the pair or the range
+    // changes, and after a refresh, a sync or a session change (`rangeDeltaRefresh`); a Δ of another range is cleared
+    // at once, so the summary never shows one next to this range's rate. It completes what the page is doing, so it joins
+    // the page's token (N55): the Refresh button waits for it after the user's request, never after a sync (P3).
+    let rangeDeltas = $state<{direct: RangeDelta; inverse: RangeDelta} | null>(null);
+    let rangeDeltaRefresh = $state(0);
+    let rangeDeltaVersion = 0;
+    let rangeDeltasKey: string | null = null;
+
+    let deltaPercent = $derived((inverted ? rangeDeltas?.inverse : rangeDeltas?.direct)?.pct ?? null);
+
+    async function loadRangeDeltas(base: string, quote: string, start: string, end: string): Promise<void> {
+        const version = ++rangeDeltaVersion;
+        const sessionGeneration = getClientSessionGeneration();
+        const key = `${base}/${quote} ${start}…${end}`;
+        if (key !== rangeDeltasKey) rangeDeltas = null;
+        try {
+            const result = await fetchFxPeriodChanges([{base, quote}], end, start);
+            if (version !== rangeDeltaVersion || !isClientSessionCurrent(sessionGeneration)) return;
+            rangeDeltas = result.rangeDeltasByPair.get(`${base}/${quote}`) ?? null;
+            rangeDeltasKey = key;
+        } catch (requestError) {
+            if (version !== rangeDeltaVersion) return;
+            console.error('Failed to fetch the change of the pair over the range:', requestError);
+        }
+    }
+
+    $effect(() => {
+        const [base, quote, start, end] = [data.canonicalBase, data.canonicalQuote, dateStart, dateEnd];
+        void rangeDeltaRefresh;
+        untrack(() => void pageBusy.join('fx-detail-range-delta', () => loadRangeDeltas(base, quote, start, end)));
     });
 
     function fxPointToLineDataPoint(point: FxDataPoint, inverted: boolean): LineDataPoint {
@@ -628,6 +658,7 @@
                 if (!pageMounted || !isClientSessionCurrent(sessionGeneration) || data.canonicalSlug !== slug) return;
                 signalDefinitionsReady = true;
             }
+            rangeDeltaRefresh++;
             await loadChartData(signals, true);
         });
     }
@@ -675,6 +706,7 @@
             connectCreationCompletion();
             if (!initialSession && getClientSessionUserId() !== null) {
                 invalidateComparisonState();
+                rangeDeltaRefresh++;
                 if (signalDefinitionsReady) {
                     void pageBusy
                         .track('fx-detail-session', async () => {
@@ -985,6 +1017,7 @@
         if (!current()) return;
         const store = getFxStore(slug);
         store.invalidateRange(dateStart, dateEnd);
+        rangeDeltaRefresh++;
         await loadChartData(requestedSignals);
         if (!current()) return;
         // Also invalidate overlay pair stores so comparison signals refresh

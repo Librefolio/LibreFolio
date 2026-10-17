@@ -315,7 +315,8 @@
         "INVALID_INPUT": "Check what you entered: the e-mail address may not be valid.",
         "generic": "The action failed. Try again.",
         "load": "The accounts could not be loaded.",
-        "PENDING_SETUP": "This administrator waits for its setup: it can be neither reactivated nor demoted here."
+        "PENDING_SETUP": "This administrator waits for its setup: it can be neither reactivated nor demoted here.",
+        "SETUP_COMPLETED": "This administrator completed its setup in the meantime: nothing was changed."
       },
       "invite": {
         "button": "Invite",

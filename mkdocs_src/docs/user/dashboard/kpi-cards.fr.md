@@ -28,7 +28,7 @@ Combien d'argent vos investissements ont-ils généré sur la période sélectio
 
 - **P&L période** — le grand nombre : $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net flows}$, les flux nets étant le capital que vous avez déplacé vers l'intérieur ou vers l'extérieur → [P&L période](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **La ligne en dessous** — par exemple `+91,31 € (+16,36 %)` : de combien votre P&L total a évolué depuis hier (panneau ci-dessous)
-- **Variation non réalisée** — comment la plus-value ou moins-value latente de vos positions a évolué sur la période, effet de change inclus → [Valeur comptable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
+- **Variation non réalisée** — comment la plus-value ou moins-value latente de vos positions a évolué sur la période, effet de change inclus → [PnL de la période](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **Ventes** — la plus-value ou moins-value réalisée des ventes de la période, par rapport au prix de revient unitaire des unités vendues → [Prix de revient unitaire (PRU)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
 - **Dividendes et intérêts** — dividendes, coupons et intérêts P2P reçus → [Dividendes et intérêts](../../financial-theory/instruments/transaction-types/dividend-interest.md)
 - **Frais et impôts** — commissions et impôts enregistrés comme transactions ; survolez la ligne pour voir la répartition → [Frais et impôts](../../financial-theory/instruments/transaction-types/fee.md)

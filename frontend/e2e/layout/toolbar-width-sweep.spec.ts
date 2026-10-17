@@ -377,7 +377,7 @@ async function keepOffline(page: Page, origin: string): Promise<void> {
     );
     // /assets and /assets/{id} poll this on load and every 30 s. It asks the live providers and upserts today's
     // OHLC row on the shared seeded assets. Answered empty, the price summary shows the last stored close.
-    await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
 }
 
 /**
