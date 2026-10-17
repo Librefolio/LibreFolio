@@ -598,7 +598,9 @@ Composition applies the same discipline per request. `Composer` (`composer.py`) 
 `DatasetVersionMismatchError` or `AnalysisVersionMismatchError` for an explicit version that
 differs from the registry; all three derive from `ComposerError`. The runtime maps the version
 errors to `409 version_mismatch` and the detail-level error to `422 selection_not_applicable`
-with `reason_code` `unsupported_detail_level`. A `BuildContext` whose bucket plan does not match
+with `reason_code` `unsupported_detail_level`. A required component whose prices exceed one request's
+budget (`BulkTooManyDaysError`, Z-25) is the same 422 with `reason_code` `too_many_price_days`
+(J-50): a shorter period brings it back within reach, so the panel says so. A `BuildContext` whose bucket plan does not match
 its scope raises `BuildContextScopeError` (`dependencies.py`).
 
 The guards add no identity of their own: component, dataset, and analysis IDs, their versions,
@@ -611,7 +613,7 @@ and without `-O`, and expects the typed error each time.
 
 | Situation                                         | Result                                                                                                             |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Required component raises                         | Whole snapshot fails with `503 snapshot_source_failure`.                                                           |
+| Required component raises                         | Whole snapshot fails with `503 snapshot_source_failure`; too many days of prices: `422`, `too_many_price_days`.        |
 | Optional component raises                         | Component omitted; diagnostic remains internal.                                                                    |
 | Required dataset component raises                 | Analysis fails closed.                                                                                             |
 | Optional dataset has a required-component failure | Entire optional dataset is skipped.                                                                                |

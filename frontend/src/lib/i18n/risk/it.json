@@ -302,7 +302,8 @@
       "resource_limit_paths_or_horizon": "Questa simulazione è troppo grande per essere eseguita. Usa meno percorsi simulati o un orizzonte più breve.",
       "resource_limit_horizon_or_sampling": "Questa simulazione Quasi-Monte Carlo è troppo grande per essere eseguita. Accorcia l'orizzonte o scegli il campionamento Monte Carlo.",
       "resource_limit_period": "Questa simulazione è troppo grande per essere eseguita: il periodo contiene troppa storia. Scegli un periodo più breve.",
-      "resource_limit_positions": "Una simulazione può includere al massimo 100 posizioni, e questo portafoglio ne ha di più. Simula invece un broker con meno posizioni."
+      "resource_limit_positions": "Una simulazione può includere al massimo 100 posizioni, e questo portafoglio ne ha di più. Simula invece un broker con meno posizioni.",
+      "resource_limit_period_or_assets": "Questa analisi è troppo grande per essere eseguita: questi asset coprono troppi giorni di prezzi. Scegli un periodo più breve o meno asset."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe non definito perché la volatilità è zero.",

@@ -95,6 +95,7 @@ from backend.app.services.ai_export.temporal.policy import (
     EventSelectionPolicy,
     indicator_history_row_limit,
 )
+from backend.app.utils.date_range_limits import BulkTooManyDaysError
 from backend.app.utils.datetime_utils import latest_range_end
 
 SCHEMA_VERSION = AI_EXPORT_SCHEMA_VERSION
@@ -824,6 +825,11 @@ class AiExportSnapshotService:
             root_cause = _root_cause(exc)
             if isinstance(root_cause, AssetNotFoundError):
                 raise AiExportEntityNotFoundError(str(root_cause)) from exc
+            if isinstance(root_cause, BulkTooManyDaysError):
+                # J-50: the prices this selection reads over this period are more per-day points than one request may
+                # build (Z-25): the selection does not apply to so long a period, a 422 the user can act on, not a 503.
+                applicability_code = prepared.dataset.applicability_code if prepared.dataset is not None else prepared.analysis.applicability_code
+                raise AiExportSelectionNotApplicableError(applicability_code, "too_many_price_days") from exc
             raise AiExportSnapshotSourceError(
                 exc.component_id,
                 retryable=False,

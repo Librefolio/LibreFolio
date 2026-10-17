@@ -8,7 +8,9 @@
  * code, `resource_limit`, and «too large» does not say what to change. The cure differs from limit
  * to limit — fewer paths or a shorter horizon, a shorter period, Monte Carlo instead of Sobol
  * sampling, and nothing at all past 100 holdings — so the backend names it in `details.remedy`,
- * and each remedy has its own sentence under `risk.errors.<display code>`.
+ * and each remedy has its own sentence under `risk.errors.<display code>`. Since J-50 the prices a
+ * scope needs answer the same code when they exceed one request's budget, for every analytic: a
+ * shorter period or fewer assets.
  */
 
 /**
@@ -24,6 +26,7 @@ const RESOURCE_LIMIT_DISPLAY_CODES: ReadonlyMap<string, string> = new Map([
     ['horizon_or_sampling', 'resource_limit_horizon_or_sampling'],
     ['period', 'resource_limit_period'],
     ['positions', 'resource_limit_positions'],
+    ['period_or_assets', 'resource_limit_period_or_assets'],
 ]);
 
 /** The remedies a size refusal can name and this build words, in the order of the table above. */
