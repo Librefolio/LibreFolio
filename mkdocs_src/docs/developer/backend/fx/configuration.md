@@ -229,14 +229,20 @@ This ensures resilience to individual provider outages and supports currency pai
   (`backend/app/db/precision.py`; X-R38, the FX side of W-B58) answers the rate as the column keeps
   it (`truncate_fx_rate()`: 10 decimal places, rounded down), or `None` when it is not finite, has
   more than 14 digits before the point, or is 0 once truncated (below `1E-10`): a rate is never 0,
-  since its inverse and the conversions divide by it. Like W-B58's helpers (see
+  since its inverse and the conversions divide by it. It also answers `None` when the truncated
+  rate's double reaches `1E+14` (`float(stored) >= 1E+14`; X-R50): SQLite keeps the rate as a
+  double, and a rate within about 0.008 of `1E+14` with more digits than a double holds, such as
+  `99999999999999.995`, has 14 digits before the point but would be stored as `1E+14`, which the
+  conversions skip as unusable ([Loading only the usable rate window](architecture.md#convert-bulk-window));
+  `99999999999999.99` stays the double `99999999999999.98` and is kept. Like W-B58's helpers (see
   [Decimal Columns](../../architecture/database/index.md#decimal-columns)), it counts the digits
   without a decimal context and never raises: `1E+1000000` and `1E-2000000` are refused, never an
   overflow or a zero. A negative rate is its callers' to refuse.
 - **A provider's rate the column cannot keep is skipped.** While a provider's answer is read
   (`_collect_leg_rates()`), an observation that is not a finite rate above 0, or whose inverse
-  overflows, is set aside (`normalize_storable_rate()`) instead of making every leg of that provider
-  fail. A rate `storable_fx_rate()` refuses once normalized is skipped when stored; before, from
+  overflows or underflows to 0, is set aside (`normalize_storable_rate()`) instead of making every
+  leg of that provider fail. A rate `storable_fx_rate()` refuses once normalized is skipped when
+  stored; before, from
   `1E+50` up the route failed with none of the pair's dates stored, and a failing primary route
   switched the pair to its fallback route. For a chain (`_storable_chain_rates()`), a date whose leg
   is present but unusable, or whose chain rate the column cannot keep (`1E+20`, or 0 once
@@ -252,8 +258,9 @@ This ensures resilience to individual provider outages and supports currency pai
   (*Rate must be positive*), then puts the pair in alphabetical order, inverting the rate when the
   base comes after the quote, and checks the limits on the rate as stored, never on the rate typed:
   MMK → KHR `1E-13` is stored as KHR/MMK `1E+13`, accepted. A rate that is not finite, whose inverse
-  overflows (`1 / 1E-1000000`), or that `storable_fx_rate()` refuses is a `ValueError` naming the
-  pair in stored order, the date and the limits (`fx_rate_refusal()`): *The rate of KHR/MMK on
+  overflows (`1 / 1E-1000000`) or underflows to 0 (`1 / 1E+1000027`), or that `storable_fx_rate()`
+  refuses is a `ValueError` naming the pair in stored order, the date and the limits
+  (`fx_rate_refusal()`): *The rate of KHR/MMK on
   2024-01-02 cannot be stored: an exchange rate keeps at most 14 digits before the decimal point
   and 10 decimal places, and must stay above 0 once cut to them*. Nothing of the call is written;
   before, `1E+400` was stored as a REAL inf, and its inverse and `1E-11` as values that read back
@@ -263,7 +270,9 @@ This ensures resilience to individual provider outages and supports currency pai
   `Rate N: Validation error: …` in `errors` (N, the item's 0-based index) while the others are
   stored (200), and when every item fails the answer is 400 *All rates failed: …*. Its own
   inversion runs inside the item's `try` (`normalize_storable_rate()`), so an inverse that
-  overflows is that item's error, never a 500. The schema answers 422 to a rate that is not a
+  overflows is that item's error, never a 500, and one that underflows to 0 is refused naming the
+  limits, like any rate the column cannot keep (X-R50; before, the item's error was *Rate must be
+  positive (got 0E-1000026)*). The schema answers 422 to a rate that is not a
   number (`"abc"`, `true`, `"0x10"`), not finite (the JSON number `1E+400`, which JSON parsing
   turns into `inf`; `NaN`; `"Infinity"`) or ≤ 0 (`gt=0`): `FXUpsertItem.coerce_rate()` reads a
   finite float through its shortest decimal text (`0.1` → `Decimal("0.1")`) and hands anything

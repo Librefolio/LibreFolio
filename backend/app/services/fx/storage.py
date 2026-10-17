@@ -55,8 +55,9 @@ def normalize_rate_for_storage(base: str, quote: str, rate: Decimal) -> tuple[st
 
 def normalize_storable_rate(base: str, quote: str, rate: Decimal) -> tuple[str, str, Decimal] | None:
     """``normalize_rate_for_storage`` that never raises (X-R38): the pair in alphabetical order and the rate, inverted when
-    base > quote, or None when the rate is not a finite number above 0 or its inverse overflows (``1 / 1E-1000000``).
-    Whether ``fx_rates.rate`` can keep the result is ``storable_fx_rate``'s answer.
+    base > quote, or None when the rate is not a finite number above 0, or its inverse overflows (``1 / 1E-1000000``) or
+    underflows to 0 (``1 / 1E+1000030``, X-R50). Whether ``fx_rates.rate`` can keep the result is ``storable_fx_rate``'s
+    answer.
     """
     if not isinstance(rate, Decimal):
         try:
@@ -66,9 +67,11 @@ def normalize_storable_rate(base: str, quote: str, rate: Decimal) -> tuple[str, 
     if not rate.is_finite() or rate <= 0:
         return None
     try:
-        return normalize_rate_for_storage(base, quote, rate)
+        normalized = normalize_rate_for_storage(base, quote, rate)
     except ArithmeticError:
         return None
+    # The default context does not trap an underflow: the inverse of a huge rate comes back as 0 (X-R50)
+    return normalized if normalized[2] > 0 else None
 
 
 def fx_rate_refusal(base: str, quote: str, rate_date: date) -> str:

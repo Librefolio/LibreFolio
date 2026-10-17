@@ -5,7 +5,8 @@ Focus: happy-path/main-branch coverage in backend/app/api/v1/fx/
 without live server/network dependency.
 
 X-R38 (the FX side of W-B58): POST /fx/currencies/rate and a rate no column can keep, served in process
-(``httpx.ASGITransport``) on the lane's test database: see its block at the end.
+(``httpx.ASGITransport``) on the lane's test database: see its block at the end. X-R50 (E's review R13-SEC5 on X-R38): a
+rate whose double is 1E+14 and an inverse that underflows to 0, in the same block.
 """
 
 import json
@@ -560,6 +561,13 @@ async def test_create_routes_atomic_error_preserves_every_result_metadata(order,
 # decimal places); nothing refused is stored, every other item of the request is. A rate that is not a number is the
 # schema's to refuse: 422, its detail located on the item's rate.
 #
+# X-R50 (E's review R13-SEC5 on X-R38), measured before its cure. "99999999999999.995" (a JSON string: the JSON number
+# arrives as the float 1E+14, which X-R38 refuses) has the 14 digits before the decimal point X-R38 lets through: 200, and
+# stored as its double, 1E+14, which every conversion skips (convert_bulk reads only 1E-10 <= rate < 1E+14). "1E+1000030"
+# typed MMK → KHR makes the endpoint's inversion underflow to 0 without an exception, and upsert_rates_bulk refuses that 0
+# as «Rate must be positive (got 0E-1000026)»: a 400 that never names the limits. Contract (X-R50): both get the X-R38
+# answer, 400 naming the limits, nothing stored.
+#
 # Isolation: the unit's default, write-scoped. KHR/MMK is this block's own (no seed and no other test uses the pair): its
 # rates in the window are wiped before and after each test, and nothing else is read.
 
@@ -647,6 +655,52 @@ async def test_xr38_upsert_rates_endpoint_answers_400_to_a_rate_no_column_can_ke
     detail = response.json().get("detail")
     assert {"14", "10"} <= _xr38_numbers(str(detail)), f"{story}: the 400 does not name the limits, 14 digits before the decimal point and 10 decimal places: {detail!r}"
     stored = await _xr38_stored()
+    assert not stored, f"{story} was refused, yet rows were written: {stored}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr38_khr_mmk")
+async def test_xr50_upsert_rates_endpoint_answers_400_to_a_rate_whose_double_is_1E14():
+    """Red today: KHR → MMK "99999999999999.995" has the 14 digits before the decimal point X-R38 lets through: 200,
+    «inserted», and the rate stored as its double, ``1E+14``, which every conversion then skips (``convert_bulk`` reads
+    only ``1E-10 <= rate < 1E+14``): the user is told the rate is saved, and no conversion will ever use it.
+
+    Contract (X-R50): its only item refused, so 400, the detail naming the limits (14 digits before the decimal point, 10
+    decimal places); nothing stored.
+    """
+    rate = "99999999999999.995"
+    integer_digits, double = Decimal(rate).adjusted() + 1, float(Decimal(rate))
+    assert integer_digits == 14 and double >= 1e14, f"barrier: {rate} has {integer_digits} digits before the decimal point and the double {double!r}: expected the 14 X-R38 lets through and a double of 1E+14"
+    story = f'POST /fx/currencies/rate of KHR → MMK "{rate}" on {XR38_DAYS[0]} (its double {double!r})'
+
+    response = await _xr38_post([_xr38_item(XR38_DAYS[0], "KHR", "MMK", f'"{rate}"')], story)
+
+    stored = await _xr38_stored()
+    assert response.status_code == 400, f"{story} answered {response.status_code} {response.text[:300]}, and stored {stored}: expected 400, its only item refused (X-R50)"
+    detail = response.json().get("detail")
+    assert {"14", "10"} <= _xr38_numbers(str(detail)), f"{story}: the 400 does not name the limits, 14 digits before the decimal point and 10 decimal places: {detail!r}"
+    assert not stored, f"{story} was refused, yet rows were written: {stored}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr38_khr_mmk")
+async def test_xr50_upsert_rates_endpoint_names_the_limits_when_the_inverse_underflows_to_0():
+    """Red today: MMK → KHR "1E+1000030" is stored KHR/MMK, inverted by the endpoint, and the inverse underflows to 0
+    without an exception (``normalize_storable_rate`` answers ``0E-1000026``); ``upsert_rates_bulk`` refuses that 0 as
+    «Rate must be positive (got 0E-1000026)»: a 400 telling the user that a rate far above 0 is not positive, never naming
+    the limits.
+
+    Contract (X-R50): 400, its only item refused, the detail naming the limits (14 digits before the decimal point, 10
+    decimal places); nothing stored.
+    """
+    story = f'POST /fx/currencies/rate of MMK → KHR "1E+1000030" on {XR38_DAYS[0]} (KHR/MMK 1E-1000030 once normalized)'
+
+    response = await _xr38_post([_xr38_item(XR38_DAYS[0], "MMK", "KHR", '"1E+1000030"')], story)
+
+    stored = await _xr38_stored()
+    assert response.status_code == 400, f"{story} answered {response.status_code} {response.text[:300]}, and stored {stored}: expected 400, its only item refused (X-R50)"
+    detail = response.json().get("detail")
+    assert {"14", "10"} <= _xr38_numbers(str(detail)), f"{story}: the 400 does not name the limits, 14 digits before the decimal point and 10 decimal places: {detail!r}"
     assert not stored, f"{story} was refused, yet rows were written: {stored}"
 
 
