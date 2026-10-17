@@ -39,7 +39,9 @@ export function formatDecimalForDisplay(value: string | number | null | undefine
     const raw = typeof value === 'number' ? String(value) : value;
     if (raw === '') return '';
     const trimmed = raw.trim();
-    if (!/^-?\d*\.?\d*$/.test(trimmed)) return trimmed; // not a plain decimal — leave as-is
+    // Not a plain decimal: leave as-is. Linear: `\d*\.?\d*` backtracked quadratically on a long text that does not match
+    // (W-B66, a pasted text in the Bulk cell).
+    if (!/^-?\d*(?:\.\d*)?$/.test(trimmed)) return trimmed;
 
     const minFrac = Math.max(0, opts.minFrac ?? 0);
     const maxFrac = Math.max(minFrac, opts.maxFrac ?? 8);
@@ -55,7 +57,10 @@ export function formatDecimalForDisplay(value: string | number | null | undefine
     // plain round trip through an input look like a user edit.
     let frac = fracPartRaw;
     if (frac.length > maxFrac) frac = frac.slice(0, maxFrac);
-    frac = frac.replace(/0+$/, '');
+    // A loop, not `/0+$/`, which is quadratic on a long run of zeros that does not end the text (W-B66).
+    let end = frac.length;
+    while (end > 0 && frac[end - 1] === '0') end--;
+    frac = frac.slice(0, end);
     // Pad up to minFrac (only if we actually have any fraction OR the caller
     // wants a forced minimum like 2 for currency).
     if (frac.length < minFrac && minFrac > 0) {
