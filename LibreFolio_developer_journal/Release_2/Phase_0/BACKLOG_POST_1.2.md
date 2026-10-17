@@ -470,6 +470,11 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   developer, 16/10. Un solo lotto di documentazione del coordinatore, quando i lotti cloud di H, A, B, E e Z sono entrati.
   Struttura, regola provvisoria per i figli e requisiti (link vecchi funzionanti, controllo delle variabili,
   `.env.example` diviso): piano generale della 1.3, §6, «Manuale admin: la struttura finale».
+- **C-100 · Regola di review: un campo di sicurezza nuovo dichiara il suo valore managed** — minimo, regola; E e
+  coordinatore, 17/10 (revisione di H-37, R13-SEC7). Un campo `Settings` di sicurezza nuovo dichiara il suo valore in
+  `PROFILE_DEFAULTS["managed"]` nello stesso lotto, e chi rivede lo controlla; il test (a) di `MANAGED_DEFAULTS` non lo
+  vede se lista e test cambiano insieme. La riga gemella sta in `backend.instructions.md` (H-39), che aggiunge anche
+  l'avviso quando la protezione dei frame è spenta in managed.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
