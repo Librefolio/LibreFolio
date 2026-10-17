@@ -405,7 +405,7 @@ is one, never the secret. Fix it, then start
 again.
 
 In the `managed` profile, `LIBREFOLIO_TEST_MODE` on outside LibreFolio's own test runs stops the start as well, with
-`In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID): …; unset LIBREFOLIO_TEST_MODE`
+`In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID of 16 to 128 characters): …; unset LIBREFOLIO_TEST_MODE`
 in the console output: remove the variable, then start again (see
 [Hosting for Others](hosting_providers.md#managed-profile)).
 
