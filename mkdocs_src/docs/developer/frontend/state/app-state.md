@@ -522,7 +522,7 @@ the call where the user's request arrives:
 | The first load, in `onMount` | `dashboard-first-load` (`routes/(app)/dashboard/+page.svelte:832`), `broker-first-load` (`routes/(app)/brokers/[id]/+page.svelte:279`), `asset-first-load` (`routes/(app)/assets/[id]/+page.svelte:1112`) |
 | The Refresh handler | `handleSync()` → `dashboard-refresh` (`dashboard/+page.svelte:711`), `handleRefresh()` → `broker-refresh` (`brokers/[id]/+page.svelte:434`). On an asset's page the token sits on the button's `onrefresh`, `asset-refresh` (`assets/[id]/+page.svelte:2279`), because `handleRefresh()` also runs after a sync |
 | A change of period, currency, scope, filter or tab | `createDateRangeController(() => void pageBusy.track('dashboard-period', () => loadAll()))` (`dashboard/+page.svelte:175`), `dashboard-scope` after the broker filter's debounce (`dashboard/+page.svelte:706`), `broker-period` in `handleDateChange()` (`brokers/[id]/+page.svelte:431`); on an asset's page `asset-period`, `asset-currency`, and the chart's view and calendar window, `asset-mode` and `asset-calendar-window` (`assets/[id]/+page.svelte:1769`, `:1181`, `:391`, `:419`) |
-| A reload after a save in a window | `assets-reload` after a create, an edit or a merge on the Assets list (`routes/(app)/assets/+page.svelte:897`, `:1898`, `:1914`); `asset-reload` after an edit, a new FX pair or the data editor's save on an asset's page (`assets/[id]/+page.svelte:2758`, `:1748`, `:2642`): the page rebuilds what the user just changed |
+| A reload after a save in a window | `assets-reload` after a create, an edit or a merge on the Assets list (`routes/(app)/assets/+page.svelte:925`, `:1926`, `:1942`); `asset-reload` after an edit, a new FX pair or the data editor's save on an asset's page (`assets/[id]/+page.svelte:2758`, `:1748`, `:2642`): the page rebuilds what the user just changed |
 | A panel that opens, changes its inputs, or follows the page's Refresh | `lib/features/brokers/lots/LotsAnalysisPanel.svelte:343-371` (`lots-panel-load`, `lots-selection-load`, and `lots-*-refresh` on `refreshVersion`); `lib/features/risk/riskPanelController.svelte.ts` (`risk-load` in `applyBaseSignature()`, l.594; `risk-refresh` on `refreshVersion`, l.658); on the Assets list's Correlation tab, `AssetSetRiskPanel.reload()` (`lib/features/risk/AssetSetRiskPanel.svelte:224`) hands each section a new `refreshVersion`, so «Reload All» waits for their `risk-refresh` |
 | A lazy load a panel asks by itself: `join` | `dashboard-pnl-candles`, `dashboard-contribution` (`dashboard/+page.svelte:1040`, `:1057`); `broker-pnl-candles`, `broker-contribution` (`brokers/[id]/+page.svelte:675`, `:704`) |
 
@@ -594,11 +594,11 @@ icon. Trimmed from the Dashboard's:
 | Brokers list | `brokers-refresh` | `routes/(app)/brokers/+page.svelte:384` |
 | Transactions | `tx-refresh-button` | `routes/(app)/transactions/+page.svelte:768` |
 | Files | `files-refresh-button` | `routes/(app)/files/+page.svelte:783` |
-| FX list | `fx-refresh-all-button` | `routes/(app)/fx/+page.svelte:1113` |
+| FX list | `fx-refresh-all-button` | `routes/(app)/fx/+page.svelte:1131` |
 | FX detail | `fx-detail-refresh-btn` | `routes/(app)/fx/[pair]/+page.svelte:1338` |
 | Asset detail | `asset-detail-refresh-btn` | `lib/components/assets/detail/AssetDetailToolbarActions.svelte:92`, with `busy={pageBusy.busy}` from `routes/(app)/assets/[id]/+page.svelte:2278` |
-| Assets list | `assets-refresh-button` | `routes/(app)/assets/+page.svelte:1645` |
-| Assets list, Correlation tab | `risk-reload-button` («Reload All») | `routes/(app)/assets/+page.svelte:1595`, in place of the list's button on that tab |
+| Assets list | `assets-refresh-button` | `routes/(app)/assets/+page.svelte:1673` |
+| Assets list, Correlation tab | `risk-reload-button` («Reload All») | `routes/(app)/assets/+page.svelte:1623`, in place of the list's button on that tab |
 | Tools hub | `tools-hub-refresh` | `lib/features/tools/ToolsHub.svelte:162` |
 | Tool page | `tool-host-refresh` | `lib/features/tools/ToolHost.svelte:263` |
 

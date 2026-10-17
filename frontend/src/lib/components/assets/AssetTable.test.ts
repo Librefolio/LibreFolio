@@ -42,7 +42,6 @@ import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
 import es from '$lib/i18n/es.json';
-import {DELTA_PERIODS} from '$lib/utils/assetPriceDerived';
 import AssetCard from './AssetCard.svelte';
 import AssetTable, {type AssetRow} from './AssetTable.svelte';
 import {matchesAssetLifecycle, orderAssetsByLifecycle} from './assetLifecycle';
@@ -219,9 +218,8 @@ describe('AssetTable — F15 usage badge', () => {
 describe('AssetTable — the Δ period columns are labelled from the catalogues (T, duration labels)', () => {
     // The Δ columns are headed with their period's key — `Δ 1D` for the fixed column, `Δ 3M` for the
     // period ones: English unit letters in every language. The contract is the date picker's and the
-    // rolling window's, through the helper the asset and FX tables share (`deltaPeriodLabel`, beside
-    // DELTA_PERIODS): `Δ ` and then `datePicker.presets.days`, `.weeks`, `.months` or `.years` with the
-    // period's count as n.
+    // rolling window's, through the helper the asset and FX tables share (`deltaPeriodLabel`): `Δ ` and
+    // then `datePicker.presets.days`, `.weeks`, `.months` or `.years` with the period's count as n.
     //
     // Observed without reading a language, in a marker locale: every key of the English catalogue reads
     // as a marker of itself (`⟦common.name⟧`) and each count key as a marker of itself and its n
@@ -297,11 +295,11 @@ describe('AssetTable — the Δ period columns are labelled from the catalogues 
 
     it('heads the 3M and 2Y columns Δ datePicker.presets.months n=3 and Δ datePicker.presets.years n=2', async () => {
         expect(get(t)('datePicker.presets.months', {values: {n: 3}}), 'control: the marker locale reads a count message called as the contract says').toBe(marked('datePicker.presets.months', {n: 3}));
-        const periods = DELTA_PERIODS.filter(({key}) => key === '3M' || key === '2Y');
-        expect(
-            periods.map(({key}) => key),
-            'premise: DELTA_PERIODS offers both periods',
-        ).toEqual(['3M', '2Y']);
+        /** Two period columns as the page hands them to the table (`visiblePeriods`): the key and days of two of the backend's periods. */
+        const periods = [
+            {key: '3M', days: 91},
+            {key: '2Y', days: 730},
+        ];
         await mountMarked(periods);
 
         expect(Object.fromEntries(periods.map(({key}) => [key, headerText(`delta_${key}`)]))).toEqual({

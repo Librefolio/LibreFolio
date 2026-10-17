@@ -2151,3 +2151,48 @@ Quattro commit, uno per lotto che cambia numeri:
   righe caricate dalle query di `calculate()`, che non fa commit, rollback né expire». La pagina cita ora il file di
   test. `engine_off_the_loop` 6/6, ruff/black puliti, mkdocs build strict exit 0, check-links 97. Backlog **MF-J45b**
   (nessun single-flight tra lettura e scrittura della cache `portfolio_blob`).
+- ✅ **J-45 entrato** (08:30): dev `15d414a69`, CHANGELOG 🐛 `b5d9f627f`, HEAD ff **`b5d9f627f`**.
+
+#### W-B69 — il costo Auto su un pool illeggibile (17/10, 08:1x; da W, rilascio bloccante)
+Assegnato dal coordinatore (W occupato con SEC7-3, file aperti). Perimetro: `auto_cost.py` e `lone_transfer_legs.py`;
+**vietati** `transaction_batch_stages.py`, `batch_creates.py`, `transaction_service.py`, `batch_costs.py` (W: la metà
+batch, `autoCostUnreadable`, la prende W dopo SEC7-3 tramite la cucitura). Revisore: W.
+- Difetto: da W-B58 (`db/real_decimal.py`) un valore salvato che non è un numero (testo, REAL ±inf) si rilegge `None`.
+  `compute_wac_iterative` salta la riga (quantità `None`), conta l'importo come 0 (`abs(tx.amount) if tx.amount else 0`:
+  un acquisto gratis) o il costo come ignoto: il costo Auto scritto resta sbagliato per sempre. Prima di W-B58 il calcolo
+  sollevava (`TypeError`) e i passi lo trattavano (decisione 1 delle gambe sole); ora no → 2 rossi in
+  `test_lone_transfer_legs.py` (470050 convertita a 20 EUR invece di restare TRANSFER; lo script offline esce 0).
+- ✅ **Codice** (bozza di W, `files/wb69_for_mf/auto_cost_edits_reference.py.txt` della sessione W, rivista e applicata):
+  - `UnreadablePoolError(count)` in `auto_cost.py`: solo il conteggio, mai un id (il pool può essere il broker di un
+    altro utente: un TRANSFER ricevuto media quello del partner);
+  - `_unreadable_pool_rows(broker, asset, as_of, excluded)`: gli stessi filtri di `compute_wac_iterative`; conta le righe
+    con quantità o importo letti `None`, o un costo salvato (non `IS NULL` in SQL) ma letto `None`;
+  - `_auto_cost` solleva prima di `compute_wac_iterative` (nessun file di J/portfolio_service toccato);
+  - **cucitura per W**: `_compute_wac_for_auto_items(..., unreadable: list | None = None)`: con la lista, l'item va in
+    `(operation, index, count)` senza costo né risultato; senza, rilancia;
+  - `lone_transfer_legs.py`: solo docstring e commento (il `except Exception` per riga c'era già: decisione 1).
+  - `delete_by_broker` fallisce intero senza toccarlo: calcola tutti i costi prima di cambiare righe, e
+    `BrokerService.delete_bulk` chiude il savepoint del broker con `message=str(e)` (il conteggio, nessun id).
+  ⚠️ **Fuori pista — il parcheggio**: la patch scritta durante l'attesa dello slot J-45 è stata tolta dall'albero
+  (`files/wb69/code_draft1.patch`, sha `ec54e3db…`) per far girare lo slot sulla revisione J-45 pura, poi rimessa dopo
+  l'ingresso (stesso sha).
+- ✅ **Rossi lone legs** (`files/wb69.sh red`, prodotto invertito): `services lone-transfer-legs` **2 failed, 18
+  passed** (`…cost_cannot_be_computed…`: 470050 risposta convertita; `…offline_script…`: exit 0);
+  `transaction-cost-basis-rule` 80 (base, senza i rossi di W). **Verde** lone legs **20/20**.
+- ✅ **I rossi di W per la mia metà** (08:35): un file nuovo, autonomo, `test_services/test_auto_cost_unreadable_pool.py`
+  (17 test, copiato tale e quale dalla cartella di W, sha `1272a3d3…`), registrato come `services
+  auto-cost-unreadable-pool` in `scripts/test_runner/_backend_services.py` (solo righe aggiunte: funzione + `add_test`).
+  `test_transaction_cost_basis_rule.py` non toccato (la metà batch di W resta lì).
+  Rossi (`files/wb69.sh red`, prodotto invertito): `auto-cost-unreadable-pool` **8 failed, 9 passed** (raise ×4: 100/50/50/50
+  EUR invece del raise; conteggio ×2; cancellazione (c) ×2: riuscita e 100 EUR scritti sul superstite); guardie verdi.
+  `lone-transfer-legs` 2 failed, 18 passed; `transaction-cost-basis-rule` 80.
+- ✅ **Verdi** (`files/wb69.sh green`): `lone-transfer-legs` **20**, `auto-cost-unreadable-pool` **17**,
+  `transaction-cost-basis-rule` 80, `broker` 79, `db post-migration-orphan-pairs` 47, `roi-fifo-utils` 1251;
+  `check-orphans` exit 0; ruff/black puliti; `git diff --check` pulito; porta 6190 libera.
+- ✅ **Docs** (docs-writer): `wac.md` nuova sezione `### 🚫 Unreadable pool {: #unreadable-pool }` + un punto nell'elenco
+  del costo Auto; `service.md` paragrafo «An unreadable pool (W-B69)» nella cancellazione del broker;
+  `database/index.md` la conversione delle gambe sole nomina `UnreadablePoolError` e il motivo W-B58. Nessuna traduzione
+  per queste pagine. mkdocs build strict exit 0, check-links 97. Da aggiornare quando W cabla la cucitura: l'ultimo
+  paragrafo di `#unreadable-pool` dice che oggi il batch propaga l'errore (`batch_costs.py:32-36`, e il `_handover_cost`
+  della separazione a `:44`).
+- Non eseguito: `api transactions-wac`/`portfolio-wac` (pesanti: slot).
