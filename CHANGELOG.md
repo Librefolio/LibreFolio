@@ -298,6 +298,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Broker import: a report with about 90 or more different securities no longer fails while matching its assets. Large FX rate deletions no longer hold up the server, and the live-price fallback is read safely under load.
 - `./dev.py user create` now refuses a username shorter than 3 or longer than 50 characters, as registration does.
 - A number pasted in scientific notation, like `1e-8` copied from a spreadsheet, is now read exactly instead of turning into another number; one that can't be read, or that has an exponent beyond ±100, is shown in red with an explanation. Pasting a very long text into a number field no longer freezes the page.
+- Dividends and other events that a price provider reports with more than 6 decimals are now stored as they are read back, cut to 6 decimals like prices, instead of being read back rounded differently from what was written.
 
 #### 🔒 Security
 
