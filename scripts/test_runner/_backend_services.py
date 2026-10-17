@@ -1097,6 +1097,15 @@ def services_provider_wipe_split_guard(verbose: bool = False, test_names: list =
     return run_command(cmd, "Provider wipe split guard tests", verbose=verbose)
 
 
+def services_provider_removal_link_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R62: removing a provider refuses while a transaction is linked to an event it generated."""
+    print_section("Services: Provider Removal Link Guard")
+    print_info("Testing: backend/app/services/assets/provider_management.py (bulk_remove_providers), backend/app/services/assets/event_links.py, backend/app/api/v1/assets/providers.py")
+    print_info("Tests: a removal refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (HTTP 409) while a generated event has a linked transaction, only the caller's transactions named, nothing written; a link the check missed is PROVIDER_REMOVAL_CONFLICT (409, no SQL); else the removal is as before")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_removal_link_guard.py", test_names)
+    return run_command(cmd, "Provider removal link guard tests", verbose=verbose)
+
+
 def services_event_split_ratio(verbose: bool = False, test_names: list = None) -> bool:
     """Run X-R47: a SPLIT event's ratio checked when it is written, manual SPLITs of 0 or below refused, a provider's dropped; and R13-SEC7: the P-10 refusal shows only the caller's transactions."""
     print_section("Services: Event Split Ratio")
@@ -2401,6 +2410,15 @@ Note: No backend server required.
         desc="X-R49: POST /assets/provider refused before any write of the request with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) when an item would wipe the events a parametric provider generated (new params of the plan, or leaving it for another provider) while a SPLIT among them has linked incoming ADJUSTMENTs without a purchase cost; details name the item (asset_id, item_index) and each such SPLIT with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message the totals only; the items before the refused one are not written either. With a cost (0 included), a manual SPLIT, the same params, an online provider's params change or a new assignment the save is as before",
         # WRITE-SCOPED, the category default: four assets, three assignments, two users and two brokers under a unique
         # marker; each test restores the assignments by id and wipes by asset and broker id.
+    )
+    add_test(
+        cat,
+        "provider-removal-link-guard",
+        services_provider_removal_link_guard,
+        name="Provider Removal Link Guard",
+        desc="X-R62: DELETE /assets/provider refused before any write with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (409) while an event the removed assignment generated (deleted with it, CASCADE) has a linked transaction (RESTRICT); details name the asset (asset_id, item_index: its first position) and each such event (event_id, date, type) with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message the totals only; the assets before the blocked one are not removed either. A link the check missed is rolled back and answered PROVIDER_REMOVAL_CONFLICT (409, empty params, no SQL text). No linked transaction, a manual event, an asset without an assignment or an empty request: as before",
+        # WRITE-SCOPED, the category default: three inactive assets (no lane scheduler refreshes them), two users and two
+        # brokers under a unique marker, dated 1984; each test writes its own assignments and wipes by asset and broker id.
     )
     add_test(
         cat,
