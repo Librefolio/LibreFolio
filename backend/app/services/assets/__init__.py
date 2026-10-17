@@ -2,9 +2,9 @@
 
 The package re-exports nothing: import every name from the module that defines it.
 
-- ``core.py`` holds ``AssetSourceProvider``, the base class of the pricing plugins in
-  ``services/asset_source_providers/``, with ``AssetSourceError``, the provider caches and
-  ``_run_provider_in_thread``.
+- ``base.py`` holds ``AssetSourceProvider``, the base class of the pricing plugins in
+  ``services/asset_source_providers/``, with ``AssetSourceError``; ``core.py`` holds the provider
+  caches and ``_run_provider_in_thread``.
 - ``registry.py`` holds ``AssetProviderRegistry``, which discovers those plugins.
 - ``manager.py`` composes ``AssetSourceManager`` from ``provider_management.py``, ``metadata.py``,
   ``price_store.py``, ``price_query.py`` and ``refresh.py``.
