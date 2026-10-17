@@ -39,12 +39,13 @@ LIBREFOLIO_PROFILE=managed
 
 Case and spaces around the value do not matter; any other value stops the server at startup.
 
-Today the profile changes seven things:
+Today the profile changes eight things:
 
 | | `selfhosted` | `managed` |
 | --- | --- | --- |
 | `GET /api/v1/system/instance` answers | `{"profile": "selfhosted"}` | `{"profile": "managed"}` |
 | A `JWT_SECRET` shorter than 32 characters | A warning in the startup log | The server does not start |
+| `LIBREFOLIO_TEST_MODE` on, outside LibreFolio's own test runs | An error in the startup log | The server does not start |
 | A plugin setting set by an environment variable | Shown read-only in **Settings › Plugins**, *Set by the server*, and listed by `GET /api/v1/settings/plugins` | Not shown in **Settings › Plugins** nor listed, and a save to it is refused as if it did not exist |
 | The largest archive uploaded for a restore, while `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is not set | No limit | 500 MB: see [The Upload Limit of a Restore](#restore-upload-limit) |
 | Idle risk workers (simulations and optimizations) stop after | 600 seconds | 60 seconds |
@@ -57,6 +58,12 @@ Today the profile changes seven things:
   table.
 - Plugin settings and their variables: see «Plugin Settings» in
   [Environment Variables](configuration.md).
+- **Test mode** (`LIBREFOLIO_TEST_MODE`) is for LibreFolio's own test runs, which turn it on and off by themselves. A
+  server started without `./dev.py` takes it from its environment, your panel's included: it would serve data
+  providers that exist only for the tests, and keep the instance's data in a test folder instead of its data
+  directory. So a managed instance does not start with it, and says why:
+  `In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID): …; unset LIBREFOLIO_TEST_MODE`.
+  Remove the variable, then start again. See «Startup Checks» in [Configuration](configuration.md).
 - Like the upload limit, the last three rows are defaults, each set on its own by its variables, in
   either profile: `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS` and `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS`
   for the idle risk workers, then `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY` (see

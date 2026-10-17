@@ -3863,6 +3863,24 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `test_managed_headers.py`, (g).
 
   Dettagli: piano H, §14, lotto «H-42», passo 7.
+- **H-46 · `LIBREFOLIO_TEST_MODE` acceso fuori da una corsia di test non si vede** — basso, sicurezza; E (review di
+  X-R44), via coordinatore, 17/10.
+  - `dev.py server` lo spegne sempre. Un server avviato in altro modo (`uvicorn` a mano, un'unità di servizio) lo
+    prende dal suo ambiente, e nessun controllo lo dice. Effetti:
+    - `mockprov` e `mockfx` (X-R44) tornano visibili;
+    - i dati vanno nella cartella di test;
+    - `.env` non si legge più.
+  - Nell'immagine così com'è il server invece si ferma all'import su un `PermissionError`: l'utente del server non può
+    creare la cartella di test. È dedotto dai file e riprodotto fuori da un container; la prova in un container va con
+    CP7a.
+  - Cura fatta il 17/10 da H (lotto «H-46», piano H §14); E rivede. Il controllo `platform.test_mode` è `error` quando
+    test mode è acceso senza `LIBREFOLIO_TEST_LANE_ID` (che ogni corsia ha e che `dev.py server` toglie), nel log
+    d'avvio e nella scheda Sicurezza. Nel profilo managed **ferma l'avvio**, come un `JWT_SECRET` corto (decisione del
+    coordinatore, 17/10). Test: `services config-audit`, 204.
+  - Residuo per CP7a: provare in un container che l'immagine si fermi all'import, e valutare un messaggio chiaro al
+    posto del traceback di `PermissionError`.
+
+  Dettagli: piano H, §14, lotto «H-46».
 
 ## A · Account e accessi (fase 01)
 
