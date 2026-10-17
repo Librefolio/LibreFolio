@@ -56,7 +56,7 @@ zero silently** — hence the dedicated coverage test.
 
 ### Conventions
 
-- **Decimal columns** (C-97): `Numeric(18, 6)` for amounts and event values; quantities `RealDecimal(22, 10)`;
+- **Decimal columns** (C-97): amounts and event values `RealDecimal(18, 6)` (W-B60); quantities `RealDecimal(22, 10)`;
   prices and the per-unit cost basis `RealDecimal(24, 12)` (`db/real_decimal.py`: the SQLite REAL read back as
   the decimal written, at most 15 significant digits; reading never raises — a stored ±inf reads `None` — and a
   value a double cannot hold is refused on write); FX rates `Numeric(24, 10)`. A value typed or read from a

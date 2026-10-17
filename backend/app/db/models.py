@@ -2,7 +2,7 @@
 Database models for LibreFolio.
 
 All models use SQLModel (SQLAlchemy 2.x) with the following conventions:
-- Decimal columns: Numeric(18, 6) for amounts and event values; RealDecimal(22, 10) for quantities and
+- Decimal columns: RealDecimal(18, 6) for amounts and event values (W-B60), RealDecimal(22, 10) for quantities and
   RealDecimal(24, 12) for prices and the per-unit cost basis, read back as the decimal written (C-97,
   db/real_decimal.py); Numeric(24, 10) for FX
 - Timestamps in UTC (created_at, updated_at, fetched_at)
@@ -891,7 +891,9 @@ class Transaction(SQLModel, table=True):
     )
     amount: Decimal = Field(
         default=Decimal("0"),
-        sa_column=Column(Numeric(18, 6), nullable=False, default=0),
+        # W-B60: a REAL read back as the decimal written; a plain Numeric read it through '%.6f', the double's noise
+        # in the decimals from about 11 integer digits (123456789012.345 read 123456789012.345001). Same DDL.
+        sa_column=Column(RealDecimal(18, 6), nullable=False, default=0),
         description="Cash amount delta (+ in, - out)",
     )
     currency: Optional[str] = Field(default=None, max_length=3, description="ISO 4217 currency code, required if amount != 0")
@@ -1049,7 +1051,8 @@ class AssetEvent(SQLModel, table=True):
     asset_id: int = Field(foreign_key="assets.id", nullable=False)
     date: date_type = Field(nullable=False)
     type: AssetEventType = Field(nullable=False)
-    value: Decimal = Field(sa_column=Column(Numeric(18, 6), nullable=False))
+    # W-B60: read back as the decimal written, as Transaction.amount. Same DDL, NUMERIC(18, 6).
+    value: Decimal = Field(sa_column=Column(RealDecimal(18, 6), nullable=False))
     currency: str = Field(nullable=False)
     provider_assignment_id: Optional[int] = Field(
         default=None,
