@@ -234,6 +234,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live prices show only what the database can keep.** A provider's live price that no price column can keep (absurdly large, or so small it would be saved as 0) is no longer shown as the live price nor kept for two minutes: the last stored price stands, and the refusal is logged once instead of at every refresh. A valid live price is shown as it is saved, and a price sync no longer reports as changed a day it could not save. A stored price that cannot be read (left by an older version) no longer makes the whole live-price request fail.
 - `./dev.py server`: Ctrl+C lets the server finish its shutdown (within the budget + 2 s) instead of killing it after 0.25 s; a SIGTERM sent to `dev.py` reaches the server.
 - Changing the type of a split whose adjustments have no purchase cost is refused: those units would otherwise count as bought at an unknown price.
+- Freezing an automatic average cost into a manual one no longer fails on a value with too many decimals.
+- Dashboard cash breakdown: cash moved between brokers or converted between currencies keeps the returns it carried, instead of being counted as contributed capital; a gain or loss between the two legs (exchange rate, ownership share) counts as a result.
 
 #### 🔒 Security
 
