@@ -212,7 +212,8 @@ Good to know:
 - The run first waits 2 seconds, so that a machine that has just woken up has its clock right
   before the jobs are checked.
 - A run of the scheduler already in progress ends first; the wake-up then runs only what is still
-  due.
+  due. The wake-up waits ten minutes at most for it: see `not_leader` in
+  [The Answer](#wake-sync-answer).
 - The jobs a wake-up runs show in the **Scheduler Execution Log** like any other run. The server
   log has `Wake-up run started`, then `Wake-up run finished` with how the run ended.
 
@@ -343,7 +344,7 @@ The report's `status`:
 | `partial` | Part of the work failed or was deferred: a job is `partial`, or one job is `ok` and the other `error` |
 | `error` | Every job that ran failed, or the run itself failed (see `error`) |
 | `disabled` | The scheduler is off: no job ran |
-| `not_leader` | Only on Windows, with several server processes: the process that received the call does not run the jobs, and no job ran. See [Several Workers](#wake-sync-workers) |
+| `not_leader` | No job ran for this call. Either the call waited ten minutes for another run of the scheduler, in the same server process or in another one, and gave up, with a warning in the server log; or, on Windows with several server processes, the process that received the call does not run the jobs. See [Several Workers](#wake-sync-workers) |
 | `blocked` | The hosting provider blocked the instance, and no job ran: see [A Blocked Instance](#wake-sync-blocked) |
 
 !!! tip "🧑‍💻 Writing the caller"
@@ -353,9 +354,10 @@ The report's `status`:
     - Do not give up before the run ends. The spaces keep proxies from closing the connection, so an
       idle timeout of 30 seconds or more is safe, but a short total timeout may cut a long run.
     - If the connection drops, the run still goes on to its end, and until then every new call gets
-      `409`, or, when it reaches another server process, waits for that run
+      `409`, or, when it reaches another server process, waits for that run, ten minutes at most
       ([Several Workers](#wake-sync-workers)).
     - After a `409`, try again later, not at once: the run in progress is already doing the updates.
+    - A report with `status: "not_leader"` means that no job ran for this call: try again later.
     - Read the fields and the jobs you need, and ignore the ones you do not know.
 
 ### 👥 Several Workers {: #wake-sync-workers }
@@ -367,10 +369,15 @@ can run the scheduler's jobs. The processes take turns on a lock file in the dat
 
 - **The process that receives the call** runs the jobs that are due, as a single process would.
 - **When another process is already running them**, for its check of every minute, say, or for a
-  user who came back, the call waits for that run to end, then answers: the jobs that run has just
-  brought up to date say `not_due`.
+  user who came back, the call waits for that run to end, ten minutes at most, then answers: the
+  jobs that run has just brought up to date say `not_due`.
+- **After ten minutes of waiting**, the call gives up, as it does behind a run of its own process:
+  it answers `200` with `status: "not_leader"`, no job runs for it, and the server log has a
+  warning, `Scheduler run gave up waiting for another run`. Ten minutes is well past a normal run:
+  a run that holds the jobs that long is most likely stuck, so look at the server log.
 - **A `409`** (`wake_in_progress`) comes only from a process that is running a wake-up itself: a
-  call that reaches another process waits for that run instead, as above.
+  call that reaches another process waits for that run instead, as above. A call that gave up has
+  ended its wake-up, so the next call is accepted.
 - **`.scheduler.lock`** is an empty file that LibreFolio creates and never deletes: leave it in
   place, and never delete it while LibreFolio runs.
 
