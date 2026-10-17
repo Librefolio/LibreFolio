@@ -6008,6 +6008,10 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   descrizione coincide. Cura: la regola di D-W51-1 sui testi decimali esatti (la scala del meno preciso, half-up, mai oltre 0,0001),
   l'identità senza `toFixed(4)`; rossi Vitest in `importDedup.test.ts`; la pagina `import-wizard.md` («The dedup signature»). Subito dopo
   W-B51, proposta. Dettagli: piano 04, «W-B51».
+  ✅ 17/10 (via del coordinatore): `sameDedupQuantity`, la regola di D-W51-1 letta esatta dai testi decimali (mai un float, mai un
+  esponente in un testo), per la quantità e il costo per unità; l'importo entro 0,01 calcolato esatto; `DedupKey` e l'identità del
+  gruppo con i testi esatti. In più: una quantità illeggibile (`'n/a'`) non combacia più con tutto. 67 rossi Vitest, la tabella dei casi
+  condivisa coi nomi del backend. Dettagli: piano 04, «W-B81».
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
