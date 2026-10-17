@@ -5789,6 +5789,14 @@ non sposti il registro.
 >   - FPM-03 fissa «prima della risposta, nessuno dei due», e nessun test usa `failed: true`.
 >   - Proposto: con `failed`, mostrare `askAdmin`, vero in entrambi i profili, più un FPM-08.
 > - Il coordinatore (11:4x): il LOW va ad A come correzione in avanti.
+> - **Le due frasi di A9 nei miei docs** (12:1x, revisione dopo l'ingresso): **OK.**
+>   - `admin/email.en.md`: in managed «né il comando né l'avviso», al loro posto la frase di `auth.askAdminToResetPassword`,
+>     citata esatta dal catalogo EN. Vale nei due rami: con i link il pannello dei comandi lascia il posto ad
+>     `askAdmin`, senza i link anche l'avviso.
+>   - `developer/backend/email.md`: il pannello in self-hosted e `forgot-ask-admin` in managed. Esatto.
+>   - Il link `hosting_providers.md#managed-profile` tiene in ogni lingua: anche `hosting_providers` è solo inglese,
+>     quindi il ripiego è la pagina EN, che ha l'ancora. Non è la trappola di `#client-address`.
+>   - Quando A curerà il LOW, la frase dell'admin potrà dire anche il caso di una configurazione non letta.
 
 > **H-42, punto 4 del coordinatore** (11:39, la stessa richiesta incrociata col mio verdetto): **i bundle CDN sono
 > puliti.**
@@ -5902,3 +5910,151 @@ non sposti il registro.
 >   - il file della chiave è letto da `read_secret_file` (64 KiB al massimo, gli errori nominano il percorso, mai il
 >     contenuto), mai stampato né salvato;
 >   - il file di stato è letto con `lstat` e `O_NOFOLLOW`.
+>
+> **Lo smistamento di SEC9** (coordinatore, 12:2x):
+> - SEC9-1, i blocchi degli OR, `str(e)` e il tetto di `range_start` vanno a **MF**, prima dell'ingresso di X-R59;
+> - SEC9-2 (il budget più basso) va a **Z**, dentro Z-27;
+> - le impostazioni SYSTEM per voce vanno nel backlog di H, il rumore di `/restore/outcome` in quello di B.
+>
+> Rivedo ognuno al suo checkpoint.
+>
+> **Addendum a SEC9: H-46** (`3cce3a2b8`, già in dev con `b7dcd3a25`; 12:2x, chiesto dal coordinatore con la correzione
+> di H). È la mia nota 2 di X-R44. **OK, nessun reperto.**
+> - **Il controllo** `platform.test_mode`:
+>   - `ok` con il test mode spento, `ok` dentro una corsia (un `LIBREFOLIO_TEST_LANE_ID` non vuoto), `error` fuori, in
+>     ogni profilo;
+>   - in managed, `log_configuration_audit()` ferma l'avvio (`ManagedTestModeError`), subito dopo lo stop della chiave
+>     corta;
+>   - visibile solo agli admin; il `{data_dir}` che mostra è un percorso che l'admin vede già.
+> - **Che cosa cambia il test mode fuori da una corsia**, verificato su tutto `backend/app`: i doppi (X-R44), la
+>   cartella dei dati di test, `.env` non letto e il prewarm BRIM acceso di default.
+>   - Nessuna rotta distruttiva.
+>   - `/system/test-lane-health` resta chiusa senza il token della corsia.
+>   - In self-hosted resta un errore senza stop, per la regola «il self-hosted non cambia»: accettato.
+> - **La correzione di H** regge. Nell'immagine il test mode si ferma all'import, perché `configure_logging()` crea
+>   `<dati di test>/logs` dove non si può scrivere. Il controllo conta dove il server parte: `uvicorn` a mano, un'unità
+>   di servizio, un comando dell'immagine personalizzato, oppure un `LIBREFOLIO_TEST_DATA_DIR` scrivibile.
+> - **Note** (info):
+>   1. il controllo si fida di **qualunque** `LIBREFOLIO_TEST_LANE_ID` non vuoto, mentre il runner ne genera di 32
+>      caratteri esadecimali (`ensure_test_lane_id`, `token_hex(16)`). Un valore corto rimasto per sbaglio (un `=1` in
+>      un'unità di servizio) lo zittisce. Chiedere la forma del runner (16 caratteri o più, come dice H stesso) lo
+>      terrebbe utile contro gli incidenti; zittirlo apposta è dell'operatore;
+>   2. il profilo managed messo solo in `.env` non si vede in test mode, quindi niente stop, solo l'errore: documentato
+>      da H, accettato. Il cloud imposta l'ambiente vero.
+
+### E-16 — Le due frasi di E sulla «password dimenticata» dopo FPM-08 (2026-10-17, 12:3x)
+
+#### E-16.0 — Analisi ✅ (2026-10-17, 12:3x; sola lettura, HEAD `c2021cb52`)
+> **Il compito del coordinatore** (12:20): la prossima voce aperta di E che non chiede una decisione del developer, con
+> una breve analisi; altrimenti restare fermo.
+>
+> **Le voci aperte di E**: nessuna è libera.
+> - E-2, E-3 ed E-6 sono rimandate alla 1.4 dal coordinatore, perché toccano file condivisi. E-3 ed E-6 chiedono anche
+>   una scelta.
+> - E-7 è fuori dalla 1.3, per sua decisione.
+> - E-9 è fatta: la chiave degli alias è nella N62. Il suo seguito, il limite per dominio di E-12, aspetta D-E9-1, che
+>   è del developer.
+> - E-10, E-13, E-14 ed E-15 sono chiuse.
+>
+> **L'unica cosa libera, nuova**: il seguito della mia nota su A9. La correzione di A (`d04ffde90`, FPM-08, in dev)
+> mostra solo «Ask your administrator…» quando `GET /system/instance` fallisce prima di ogni risposta, in tutti e due
+> i profili. Con la richiesta fallita, `email.links` non c'è, quindi neanche il form di E.
+> - A ha allineato le sue pagine (`frontend/components/features/auth.md`, `state/app-state.md`), non le mie due.
+> - `admin/email.en.md:370-380` descrive self-hosted e managed, non la richiesta fallita.
+> - `developer/backend/email.md:1256-1260` (il punto «The «forgot password» form»): lo stesso.
+> - Le altre pagine che nominano il flusso sono di A o generali; `user/getting-started.en.md:117-134` cita già il
+>   consiglio di managed.
+>
+> **La proposta**:
+> - una frase per pagina:
+>   - admin: «When the page cannot read the instance's configuration from the server, it shows that same advice, in
+>     either profile»;
+>   - developer: «and when `GET /system/instance` fails before any answer (`instanceConfig.failed`), only
+>     `forgot-ask-admin` (FPM-08)»;
+> - pagine solo inglesi: niente traduzioni né stamp;
+> - controlli: `mkdocs build` stretto e `check-links`, col carico sotto 50; niente codice né test;
+> - nessun conflitto, nessuna superficie condivisa;
+> - peso: minimo, circa 10 minuti.
+>
+> **In attesa del via del coordinatore.** Dato alle 12:22: «Go E-16 (two sentences, strict build + check-links),
+> then FROZEN checkpoint».
+
+#### E-16.1 — Le due frasi ✅ (2026-10-17, 12:22–12:24)
+> **Note implementazione**:
+> - `admin/email.en.md:378-379`: «When the page cannot read the instance's configuration from the server, it shows
+>   only that advice, in either profile.»
+> - `developer/backend/email.md:1260-1262`: «When the request fails before any answer (`instanceConfig.failed`, never
+>   `loaded`), `email.links` is unknown: the card shows only `forgot-ask-admin`, the advice that holds in both profiles
+>   (FPM-08, workstream A).»
+> - Verificato sul codice di A (`d04ffde90`): il ramo `(!instanceConfig.loaded && instanceConfig.failed)` mostra solo
+>   `askAdmin()`. Se la configurazione era già stata letta, resta in vigore l'ultima.
+>
+> **Prove** (12:22–12:24, `files/tools/e16_docs.sh`, carico 27–42):
+>
+> | Controllo | Esito |
+> |---|---|
+> | `mkdocs build` stretto | rc 0, 0 righe WARNING/ERROR, 3 085 URL relativi risolti |
+> | `check-links` | 97 link validi |
+> | `git diff --check` | pulito |
+> | porta 6188 | libera |
+>
+> Pagine solo inglesi: niente traduzioni né stamp.
+
+### A-42/A-43 — La revisione preparata (2026-10-17, 12:2x; sola lettura, A sta scrivendo il codice)
+> **Il compito del coordinatore**: guardare ora A-42/A-43, cioè le mie note 1, 2 e 6 di R13-SEC4, così la revisione è
+> pronta al checkpoint di A. Niente codice.
+>
+> **Il contratto di A** (`02_accounts`, «A-42 + A-43», approvato dal coordinatore alle 10:36; letto dal ramo di A):
+> 1. il rilascio scrive prima, poi ricontrolla «in attesa» sotto il lock;
+> 2. il consumo rifiuta se un altro link di setup è già consumato;
+> 3. disattivare l'admin in attesa **revoca** i suoi link (l'annullamento), un account non in attesa **ritira**;
+> 4. la retrocessione dell'admin in attesa: 409 `PENDING_SETUP`;
+> 5. nella UI «Annulla il link di setup».
+>
+> Coincide con le mie note.
+>
+> **Verificato ora, sulla base** (`c2021cb52`):
+> - `revoke_tokens` è **un solo `UPDATE`**, senza lettura prima: prende il lock di scrittura di SQLite anche quando non
+>   tocca righe. Il punto 1 regge, a patto che resti così.
+> - `consume_token` è un UPDATE condizionato, quindi il controllo del punto 2, fatto dopo, sta dentro la transazione di
+>   scrittura.
+> - Le strade che spengono un account sono tre:
+>   - `update_user_status` (il PATCH) e `set_user_active` (la CLI): sono quelle del punto 3;
+>   - la terza è la mia attesa della verifica (`verification.py:186`), che vale solo dentro `register_user`, su un
+>     account nuovo e mai il primo. Non incontra mai un link di setup: non si applica.
+> - L'annullamento è un PATCH su un account **già** inattivo: il `deactivate` di oggi
+>   (`request.is_active is False and user.is_active`) è falso.
+>
+> **La lista per il checkpoint**:
+> - **A-42, rilascio**:
+>   - il ricontrollo sta dopo l'UPDATE di `revoke_tokens`, nella stessa transazione, in `issue_setup_link` e nel riarmo
+>     all'avvio (`_keep_pending_admin`);
+>   - nessun link stampato, annotato o mandato per email (`deliver_setup_link`) se il ricontrollo dice di no;
+>   - la CLI dice che nessuno aspetta.
+> - **A-42, consumo**:
+>   - la query «un altro consumato» esclude il token appena consumato (`id != record.id`);
+>   - conta i ritirati (`consumed_at` pieno), non i soli revocati: altrimenti un annullamento seguito da un nuovo
+>     `setup-link` verrebbe rifiutato;
+>   - la risposta è identica a un link non valido (`TOKEN_INVALID`): nessun oracolo, e niente bcrypt in nessuno dei
+>     due;
+>   - l'avviso nel log senza il token.
+> - **A-43**:
+>   - l'annullamento si decide dalla richiesta e dallo stato «in attesa», non dalla transizione;
+>   - dopo l'annullamento l'account resta in attesa, il vecchio link dà `TOKEN_INVALID`, e `setup-link` ne rilascia
+>     uno buono;
+>   - un account non in attesa ritira i link mai consumati;
+>   - il PATCH e la CLI si comportano allo stesso modo.
+> - **La domanda aperta** «`PENDING_SETUP` contro `account_protection`», che è dello sviluppatore: oggi `_protected`
+>   scatta solo su una transizione. L'annullamento dell'admin protetto in managed passerebbe. Conta solo se l'operatore
+>   ha creato un altro admin prima del setup del proprietario.
+> - **La retrocessione**: 409 `PENDING_SETUP` nell'API e in `user demote`.
+> - **I test**: UADM-062/067/069 e SETUP-016 cambiati per costruzione. Poi i nuovi:
+>   - la lettura vecchia simulata (nessun link);
+>   - il link rimasto (consumato più vivo, account disattivato → 400, nulla cambiato, il vivo ritirato);
+>   - l'annullamento dal PATCH e dalla CLI;
+>   - il ritiro alla disattivazione di un account non in attesa;
+>   - la retrocessione rifiutata.
+> - **I docs**: `security.md` (il ciclo di vita del link di setup), `access_control.md`, `admin/users.en.md`,
+>   `admin/cli_tools.en.md`.
+> - **Dalla parte di E**: nessun cambio. Da verificare solo che il riarmo non mandi un'email con un link poi annullato
+>   da un rollback, cioè l'invio dopo il commit.
