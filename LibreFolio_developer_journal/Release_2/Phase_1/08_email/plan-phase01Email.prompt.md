@@ -4353,3 +4353,184 @@ processo):
 >
 > **R13-SEC5 chiusa**: nessun reperto sopra la soglia nei quattro lotti. Il punto fuori diff sulle scritture FX va al
 > coordinatore per la domanda D-SEC2-1.
+>
+> **R13-SEC5 committato ed entrato** (coordinatore, 03:58; dev `7d3012e3b`; HEAD portato avanti con un
+> fast-forward). Le note sono andate a X; le scritture FX sono aggiunte alla domanda D-SEC2-1 del developer.
+
+### E-8 — La lingua dell'invito spedito per email
+
+#### E-8.0 — Analisi in sola lettura ✅ (2026-10-17, 04:00–04:10)
+> **Il compito del coordinatore** (03:58): l'analisi di E-8 in sola lettura. Il codice viene dopo A8b, perché A
+> riordina le schede di Impostazioni. Prima arriva R13-SEC6 su A8a, appena A lo consegna.
+
+**Stato reale** (HEAD `7d3012e3b`)
+- **Il backend è pronto.**
+  - `POST /email/links` accetta `language: "en" | "it" | "fr" | "es"`, solo per l'invito (`schemas/email.py:74`).
+  - Senza lingua decide `default_language` dell'istanza; il reset va sempre nella lingua dell'account
+    (`flows.send_link_email`, `:138-160`).
+  - La risposta dice in che lingua è partita (`EmailLinkResponse.language`).
+- **Il frontend non la passa.**
+  - `sendLinkApi.sendLinkByEmail({purpose, token, to})` non manda `language` (`:39-41`).
+  - `SendLinkByEmail.svelte` (80 righe, di E, a ruoli) ha per l'invito solo il campo «a chi» e il pulsante. È montato
+    da `LINK_SHARE_ACTIONS` (`features/settings/users/linkShareActions.ts`, di A), che A8b può spostare.
+- **Cosa c'è da riusare**:
+  - `LANGUAGE_OPTIONS` in `lib/i18n/index.ts:56`: codice, bandiera e nome nella sua lingua, «per i selettori»;
+  - `default_language` in `stores/app/globalSettings.ts`.
+
+**Disegno proposto**
+1. In `SendLinkByEmail`, solo per `purpose === 'invite'`, un `<select>` nativo «Language of the email».
+   - La prima voce è **«The instance's language»**, il default: nessun `language` nella richiesta, quindi il
+     comportamento di oggi non cambia e decide il backend.
+   - Poi le 4 lingue di `LANGUAGE_OPTIONS`, con bandiera e nome.
+   - I colori del campo nativo seguono la regola di T: `text-lf-primary` e i ruoli del campo accanto.
+2. `sendLinkByEmail({purpose, token, to, language})` manda `language` solo per l'invito, e solo se scelta.
+3. L'esito dice anche la lingua in cui è partita, da `answer.language`: «Sent to x@y, in Italiano».
+4. **i18n**: due chiavi nella sorgente `lib/i18n/email/`, nelle 4 lingue: l'etichetta e «la lingua dell'istanza».
+5. **Test**:
+   - i Vitest di `SendLinkByEmail`: il selettore c'è solo per l'invito; il default non manda `language`; una scelta
+     arriva nel payload; il reset non cambia;
+   - `sendLinkApi`;
+   - eventualmente un caso nella spec E2E `email-send-link`.
+6. **Docs**: `admin/email.en.md` («Send by email») e `developer/backend/email.md`. Poi E-8 ✅ nel backlog.
+
+**Decisioni** (consiglio in grassetto)
+- **D-E8-1, il default**: **«la lingua dell'istanza»**, cioè invariato. In alternativa, la lingua dell'interfaccia
+  dell'admin.
+- **D-E8-2, il perimetro**: **solo la lingua dell'email**.
+  - Farla diventare anche la lingua dell'account che si registra con l'invito chiederebbe di salvarla nel token
+    (`AccountToken`) e di leggerla alla registrazione.
+  - È codice di A, e merita una riga di backlog per A se la si vuole.
+- **D-E8-3**: **la lingua nell'esito**, sì.
+
+**Peso**: piccolo. 1 file `.svelte` di E, 1 file `.ts`, 2 chiavi i18n, Vitest e docs; nessun file di A, salvo che A8b
+non sposti il registro.
+
+**Quando**: dopo A8b, su una base che lo contiene.
+
+#### E-8.1 — Decisione N69 ✅ (2026-10-17, 04:00)
+> **Il coordinatore** (04:00) adotta le tre raccomandazioni come **decisione notturna N69**, da rivedere col
+> developer:
+> - **D-E8-1**: il default è la lingua dell'istanza, cioè invariato;
+> - **D-E8-2**: solo la lingua dell'email. Salvarla nel token per la registrazione è una riga di backlog di A, non ora;
+> - **D-E8-3**: la lingua compare nell'esito.
+>
+> Il codice viene dopo A8b, su una base che lo contiene. Questa analisi va col prossimo checkpoint del journal.
+
+### R13-SEC6 — A8a (il limite dei login falliti, `security/checks`) e i miei file (2026-10-17, 05:03–)
+> **Il compito del coordinatore** (05:02): A8a, cioè il codice `66873b0c9`, le docs `4a93f1f54` e il merge di dev
+> `125c19f0e`, con E-11 in `email.md`. Letto dagli oggetti git, mai dal worktree di A. Due parti:
+> - **i miei file**, che rivedo io;
+> - **la sicurezza** del limite, che va a un `security-review` in background: `login_throttle.py`, `security.py`,
+>   `checks.py`, `end_sessions` in SQL, le chiamate in `auth.py`.
+
+> **I miei file** (05:03–05:15, in sola lettura): **corretti**.
+> - **`verification.py`**: l'integrazione segue le indicazioni che avevo dato.
+>   - `refusal()` sta dopo `RESEND_BY_ADDRESS` e prima della ricerca dell'account.
+>   - `record_failure()` sta nel ramo unico che copre account sconosciuto e password sbagliata, col commento sul perché:
+>     nessun oracolo d'esistenza, perché il conteggio non distingue.
+>   - `record_success()` viene subito dopo, prima dei controlli di stato.
+>   - Il rifiuto diventa `EmailRateLimitedError(refused.retry_after)`, con un `RateDecision` in secondi che
+>     `_rate_limited` arrotonda per eccesso: il 429 `EMAIL_RATE_LIMITED` e l'avviso «fra N minuti» non cambiano, e il
+>     frontend nemmeno.
+> - **`api/v1/email.py`**: solo la docstring del 429; rispetta la regola dei testi del client OpenAPI (niente `${` né
+>   `\`).
+> - **Le docs**:
+>   - `developer/backend/email.md`: il paragrafo fra i passi 1 e 2, la riga della tabella dei limiti, il 401 «contato
+>     come login fallito», il 429, il paragrafo «due 429 prima della password», `#rate-window` e la riga di
+>     `emailText.ts` con «il limite dei login falliti» fra i 429. Tutto vero contro il codice: `login_throttle` usa
+>     davvero `SlidingWindowLimiter`.
+>   - `admin/email.en.md`: la riga nella tabella dei limiti, col link `configuration.md` nello stile della pagina.
+> - **Il merge `125c19f0e` è pulito sui miei file**:
+>   - fra la punta di dev e `125c19f0e` ci sono solo gli hunk di A8a;
+>   - E-9 (`mailbox_budget_key`, i costruttori senza username) ed E-11 (il 401 codificato, la docstring) sono intatti;
+>   - dev non ha più toccato i miei file da `fd6886bb0`.
+> - **I test**: i miei non sono stati toccati.
+>   - `conftest.py` spegne il limite per ogni processo di test (`setdefault`, quindi un valore esplicito vince ancora), e
+>     `dev.py` lo spegne solo nel ramo `--test` del server.
+>   - Il resend sotto il limite lo fissano LT-API-16…19 di A, che controllano gli stati e non il corpo del 401: quindi
+>     compatibili col 401 codificato di E-11.
+> - **⚠️ La revisione combinata non ha girato le mie suite.**
+>   - Il codice di A8a (04:54) non conteneva E-11: alla sua base mancava EVA-017. Il merge con dev è arrivato dopo
+>     (05:02), mentre lo slot API di A (A8a.8, 04:38–04:53) era prima.
+>   - Infatti A registra `services email-verification` **125**, che è il conteggio di prima di E-9 (oggi 127), e `api
+>     email-verification` **49**, di prima di E-11 (oggi 50).
+>   - All'ingresso servono, sulla revisione combinata:
+>     - `services email-verification` (127), `api email-verification` (50), `api email`, `api email-change-notice`;
+>     - LT-API-16…19.
+
+> **La sicurezza di A8a** (05:20–05:40).
+>
+> **⚠️ Fuori pista: l'agente `security-review` è fallito** prima di leggere qualsiasi cosa: «400 The requested model is
+> not supported», un errore dell'infrastruttura. Rilanciarlo avrebbe dato lo stesso errore. Il diff di sicurezza è
+> piccolo (circa 270 righe), quindi la revisione l'ho fatta io, in sola lettura dagli oggetti git a `125c19f0e`.
+>
+> **Reperto 1 — MEDIUM, confidenza 8/10: dietro un reverse proxy non configurato, 50 tentativi sbagliati di chiunque
+> bloccano il login di tutti.**
+> - **Il codice**: `refusal()` (`login_throttle.py:34-46`) rifiuta **prima** della password se è pieno il conteggio
+>   dell'identificativo **o** quello dell'indirizzo (`client_rate_key(client_address(request))`). Il rifiuto blocca
+>   anche la password giusta, e non si conta.
+> - **Il default**: l'immagine avvia `uvicorn … --host 0.0.0.0 --port 6040` senza `--forwarded-allow-ips`
+>   (`Dockerfile:164`), e uvicorn si fida solo di `127.0.0.1`. `LIBREFOLIO_CLIENT_IP_HEADER` è vuoto, e nessun
+>   profilo lo imposta (`client_address.py`, docstring); il cloud lo mette dal pannello (P17).
+> - **Il proxy è la norma**: l'HTTPS è compito di un reverse proxy, per disegno (`security.md:21`). Dietro un proxy in
+>   un altro container, o sull'host verso la porta di Docker, il container vede l'indirizzo del proxy o del gateway
+>   del bridge per **tutti** i visitatori.
+> - **Lo sfruttamento**, da anonimo:
+>   - 50 password sbagliate in 15 minuti, e da lì ogni login dell'istanza è rifiutato (429 `TOO_MANY_ATTEMPTS`), come
+>     il cambio password, il cambio email e il mio «resend»;
+>   - lo tiene così con circa una richiesta al secondo: quelle rifiutate costano poco (niente bcrypt) e non si contano,
+>     e ogni volta che si libera un posto la sua richiesta successiva lo riprende. Chi accede davvero quasi mai lo
+>     trova libero.
+> - **Prima di A8a**, la stessa configurazione rallentava solo i limiti per indirizzo secondari, quelli di E e di H:
+>   ora spegne il login.
+> - **Già documentato, ma non dove guarda l'operatore**: la pagina developer lo dice (`security.md:427-428`, «its 50
+>   failures lock every sign-in through it»). La sezione admin «Failed Sign-ins» (`configuration.en.md:504-526`) non
+>   nomina il proxy, e nessun controllo della scheda Security se ne accorge.
+> - **La direzione**:
+>   1. un controllo nella scheda Security e all'avvio, di H in `client_address`: richieste con `X-Forwarded-For` o
+>      `Forwarded` da un peer di cui uvicorn non si fida, quindi «i visitatori condividono un indirizzo; imposta
+>      `LIBREFOLIO_CLIENT_IP_HEADER` o `FORWARDED_ALLOW_IPS`». Coprirebbe anche i limiti per indirizzo di E;
+>   2. contro il blocco, i *device cookie* di OWASP: un browser che ha già fatto login con quell'identificativo resta
+>      fuori dal limite per indirizzo e da quello per identificativo. Oppure un ritardo progressivo invece del rifiuto
+>      secco;
+>   3. l'avviso del proxy nella sezione admin «Failed Sign-ins» e nella guida d'installazione.
+>
+> **Note sotto la soglia**:
+> 1. **Il blocco di un nome utente noto**: 10 errori in 15 minuti, da qualsiasi indirizzo, bloccano l'identificativo,
+>    password giusta compresa.
+>    - Si tiene bloccato con una richiesta al secondo.
+>    - Il titolare può entrare con l'email, che è un'altra chiave. Il link di reset non aiuta: anche la password nuova
+>      viene rifiutata finché la chiave è piena.
+>    - È il compromesso di D-A5; per il cloud vale anche per l'admin pagante. La cura dei device cookie del reperto 1
+>      copre anche questo.
+> 2. **Lo sfratto LRU**: `LOGIN_BY_IDENTIFIER` ha `max_keys` 10 000 col default di `SlidingWindowLimiter`.
+>    - Una pioggia di 10 000 identificativi sconosciuti sbagliati sfratta il contatore di un identificativo bloccato e
+>      gli ridà 10 tentativi.
+>    - Costa 10 000 bcrypt per ogni 10 tentativi, e con un /48 IPv6 il limite per indirizzo non la ferma.
+>    - La direzione: non sfrattare le chiavi piene, o un `max_keys` più alto per questo limitatore.
+> 3. **I tentativi per account**: il conteggio va per identificativo scritto, quindi chi conosce username ed email ha
+>    20 tentativi ogni 15 minuti. Contare per account darebbe un oracolo d'esistenza, quindi è voluto.
+>    - Il cambio password, con un cookie rubato, conta sotto lo username: chi ruba il cookie può bloccare il login per
+>      username del titolare, che può comunque entrare con l'email.
+> 4. **Già prima, nel mio dominio**: i limiti per indirizzo di E (`RESEND_BY_ADDRESS`, `FORGOT_BY_ADDRESS`,
+>    `REGISTRATION_EMAILS_BY_ADDRESS`) hanno la stessa dipendenza dal proxy. Dietro un proxy non configurato,
+>    «resend» e «dimenticata» si spengono per tutti con 10 richieste; la doc lo dice (`admin/email.en.md:417-421`).
+>    Il controllo del reperto 1, direzione 1, li coprirebbe.
+>
+> **Sani**:
+> - **L'ordine**: il rifiuto arriva prima della ricerca e di bcrypt al login (`auth.py:155-157`), al cambio password,
+>   al profilo e nel mio «resend». I rifiuti sono veloci allo stesso modo per account noti e ignoti.
+> - **Nessun oracolo**: `record_failure` sta nel ramo unico (login `:167`, resend `:384`); il 429 ha lo stesso corpo;
+>   `Retry-After` dice solo quando scade il più vecchio errore di quella chiave.
+> - **Le pieghe**: la chiave è `email_fold(identifier.strip())`, solo A–Z. La ricerca (`user_service.py:161`) confronta
+>   lo username esatto e l'email con `lower()` di SQLite, cioè A–Z: la chiave non piega mai meno della ricerca, quindi
+>   nessun N× per maiuscole o spazi. NFC e alias non trovano l'account.
+> - **Il successo**: `record_success` azzera solo l'identificativo scritto e mai l'indirizzo, e solo dopo il cookie
+>   (`auth.py:191`). I 403 (disattivato, non verificato) non contano né azzerano.
+> - **`end_sessions`**: atomico, `UPDATE … SET session_version = session_version + 1 RETURNING` sulla connessione della
+>   sessione, nella transazione del chiamante; poi `set_committed_value`, quindi il cookie nuovo porta la versione
+>   giusta (A-34 chiuso).
+> - **L'interruttore**: `LIBREFOLIO_LOGIN_LIMIT` è acceso di default; un valore non valido ferma l'avvio; spento, dà un
+>   avviso. `dev.py` lo spegne solo nel ramo `--test`, `conftest.py` solo per i test (`setdefault`).
+> - **`GET /security/checks`**: `require_admin`; rende id, gravità, chiave i18n e parametri. Il controllo del limite
+>   mette nei parametri solo il valore non valido della variabile, che non è un segreto.
