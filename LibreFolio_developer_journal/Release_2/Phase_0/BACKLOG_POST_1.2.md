@@ -3292,6 +3292,12 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - 17/10, H-36: un blocco nuovo in fondo a `#client-address` di `connection_checks` (un paragrafo, quattro punti, un
     paragrafo) e due frasi nel §2 di `docker_advanced`, che rimandano a `connection_checks.md#client-address`.
     **Ordine**: `docker_advanced` va tradotta insieme a `connection_checks` o dopo, per la stessa ancora.
+  - 17/10, H-39 e H-40:
+    - in `configuration`, «Startup Checks», due righe nuove (la protezione dai frame e la CSP report-only spente nel
+      profilo managed);
+    - in `connection_checks`, «Limits», il paragrafo «It cannot always see where visitors are» riscritto in parte
+      (IPv4 e IPv6 su Docker Engine), e una clausola nel punto «To fix it» di «The Visitor's Address».
+    - `hosting_providers` e le pagine per sviluppatori sono solo in inglese.
 
   Dettagli: piano H, §14 «CP5a passo 2», «CP6 passo 4» e «Lotto b-doc-notes».
 - ✅ **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
@@ -3728,8 +3734,15 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Stato al 17/10: la regola è scritta in `.github/instructions/backend.instructions.md`, e la riga accanto a C-99 la
     scrive il coordinatore. I due controlli, i test e le chiavi i18n aspettano l'ingresso di B-9, che scrive negli
     stessi file (`config_audit.py`, `test_config_audit.py`). La cura in prova è pronta in `files/h39/` della sessione H.
+  - Cura fatta il 17/10, dopo B-9 (lotto «H-39», piano H §14).
+    - `check_frame_protection` (warning) e `check_csp_report_only` (info) in `config_audit.py`, dopo
+      `check_client_address`.
+    - Sei chiavi `instance.checks.*` in 4 lingue, e i documenti: `security.md`, `settings.md`, `configuration`,
+      `hosting_providers`.
+    - Resta: un controllo a richiesta letto dopo una modifica di `.env` senza riavvio può mostrare il valore nuovo,
+      mentre il middleware porta ancora quello vecchio. I documenti dicono già di riavviare.
 
-  Dettagli: piano H, §14, lotto «Z-24» (la nota di H-39).
+  Dettagli: piano H, §14, lotti «Z-24» (la nota di H-39) e «H-39».
 - **H-40 · IPv6 su Docker Engine: il visitatore arriva dal gateway della rete** — basso, documentazione; E, via
   coordinatore, 17/10.
   - `connection_checks.en.md:328-329` dice che Docker Engine su Linux tiene l'indirizzo del visitatore. Vale per IPv4
@@ -3737,6 +3750,10 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     senza header di inoltro. N70 non può vederlo, e tutti i visitatori IPv6 condividono un solo conteggio per
     indirizzo (istanza esposta direttamente).
   - Una frase nei documenti, da verificare su un host Linux, come H-38. Va con i documenti di H-39.
+  - Frase scritta il 17/10 (lotto «H-39», piano H §14), come cautela, in `connection_checks#limits`; più due clausole,
+    in `connection_checks#client-address` e in «Why only a local peer» di `security.md`. Un visitatore IPv6 che passa
+    da `docker-proxy` può anche aggiungere un header di inoltro e lasciare i limiti per indirizzo, come con Docker
+    Desktop. Resta da verificare su un host Linux con Docker, insieme a H-38.
 - **H-41 · I `resolved_fields` di una promozione non sono validati** — medio, robustezza; W (trovato nel lotto H-34),
   17/10.
   - `TXPromoteBatchItem.resolved_fields: Dict[str, Any]` (`POST /transactions/validate` e `/commit`) è applicato così
