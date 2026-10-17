@@ -6,6 +6,7 @@ import asyncio
 import contextvars
 import hashlib
 import json
+import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date as date_type
@@ -26,7 +27,7 @@ from backend.app.services.financial_math.native_cash import cash_movement_from_t
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import build_cost_positions
-from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, InvalidSplitEvent, PortfolioCalculationResult, SplitHistory, SplitRecord
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, InvalidSplitEvent, PortfolioCalculationResult, RowsBeforeFloor, SplitHistory, SplitRecord
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
 from backend.app.services.financial_math.splits import is_valid_split_ratio, load_split_links
 from backend.app.services.fx.conversion import convert_bulk
@@ -42,8 +43,32 @@ _portfolio_blob_cache = get_ttl_cache("portfolio_blob", maxsize=30, ttl=86400)  
 
 # J-45 (R13-SEC7-1b): the daily replay is pure CPU and long on a wide range, so it runs here, off the event loop, and
 # never in the default executor the asyncio.to_thread callers share. Two workers bound how many replays run at once;
-# the GIL still serializes them, but the loop keeps answering other requests in between.
-_ENGINE_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")
+# the GIL still serializes them, but the loop keeps answering other requests in between. Created on first use and shut
+# down by the app's shutdown (MF-J45a), so a later start (a test app, a restart in the same process) makes a new one.
+_ENGINE_EXECUTOR: ThreadPoolExecutor | None = None
+_ENGINE_EXECUTOR_LOCK = threading.Lock()
+
+
+def _engine_executor() -> ThreadPoolExecutor:
+    """The engine's executor, created on first use (after a shutdown, a new one)."""
+    global _ENGINE_EXECUTOR
+    with _ENGINE_EXECUTOR_LOCK:
+        if _ENGINE_EXECUTOR is None:
+            _ENGINE_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")
+        return _ENGINE_EXECUTOR
+
+
+def shutdown_engine_executor() -> None:
+    """The ``portfolio-engine`` shutdown step (MF-J45a): a replay still queued is cancelled, nothing new is accepted.
+
+    A replay already running cannot be stopped (a thread cannot be cancelled): it ends in its thread, and its result is
+    dropped with its request. Never waits; the shutdown budget (``shutdown_budget.py``) still bounds the process.
+    """
+    global _ENGINE_EXECUTOR
+    with _ENGINE_EXECUTOR_LOCK:
+        executor, _ENGINE_EXECUTOR = _ENGINE_EXECUTOR, None
+    if executor is not None:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 # =============================================================================
@@ -450,10 +475,13 @@ class PortfolioCalculationEngine:
         # The builder reads only loaded column attributes of the transactions (no relationship, no deferred column) and no
         # session, and calculate() never commits or expires: nothing it touches loads lazily from the worker thread.
         # run_in_executor does not copy contextvars (to_thread does): the copied context keeps them, the secret mask included.
-        result = await asyncio.get_running_loop().run_in_executor(_ENGINE_EXECUTOR, contextvars.copy_context().run, builder.build)
+        result = await asyncio.get_running_loop().run_in_executor(_engine_executor(), contextvars.copy_context().run, builder.build)
         # J-43: the pairs between brokers owned at different shares, for the data-quality report (the cache key holds the shares).
         result.share_mismatches = classification.share_mismatches
         result.invalid_split_events = sorted(invalid_split_events.values(), key=lambda event: event.event_id)
+        # MF-SEC8-2a: the rows replayed before the floor the histories start on, for the data-quality report.
+        before_floor = [tx.date for tx in all_txs if tx.date < EARLIEST_RANGE_START]
+        result.rows_before_floor = RowsBeforeFloor(count=len(before_floor), earliest=min(before_floor)) if before_floor else None
 
         # ── 12. Store in blob cache ──
         _portfolio_blob_cache.set(blob_key, result)

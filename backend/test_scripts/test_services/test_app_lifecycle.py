@@ -35,7 +35,9 @@ steps), ``middleware.py`` and ``static_site.py``, cut out of ``backend/app/main.
     naming the variable and starts nothing, and the startup goes on. The test mode is set through
     ``LIBREFOLIO_TEST_MODE`` as the input, and each case's premise checked through ``is_test_mode()``, its one reader,
     never by reading the variable again. Each "nothing" has its presence barrier: the same step, switched on, calls the
-    stand-in.
+    stand-in. MF-J45a (red before its cure: no such step): the ``portfolio-engine`` shutdown step stands after
+    ``quant-pools`` and before ``caches`` (relative order, a constraint of its own beside the steps of CP2b) and reaches
+    ``app_lifespan.shutdown_engine_executor`` through the module's name when it runs.
 (e) Middleware: GZip outside CORS, with their options, checked in relative order so that a workstream adds an entry,
     and a test of its own constraint, without touching this file's tests; ``install_middleware`` adds any stack with
     its first entry outermost; the app of ``backend.app.main`` carries ``MIDDLEWARE_STACK``.
@@ -739,6 +741,13 @@ def test_the_brim_parse_pool_is_prewarmed_after_the_market_holidays_and_before_t
     print_success("✓ market-holidays, brim-parse-pool, scheduler")
 
 
+def test_the_portfolio_engine_is_shut_down_after_the_quant_pools_and_before_the_caches() -> None:
+    print_section("MF-J45a: the portfolio-engine shutdown step, after quant-pools and before caches")
+    # Relative order only: a step added between them is allowed
+    assert_in_relative_order(app_lifespan.SHUTDOWN_STEPS, ("quant-pools", "portfolio-engine", "caches"), "SHUTDOWN_STEPS")
+    print_success("✓ quant-pools, portfolio-engine, caches")
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("test_mode", "in_test_mode", "setting"),
@@ -831,6 +840,7 @@ async def test_the_brim_parse_pool_step_logs_an_invalid_setting_starts_nothing_a
         ("STARTUP_STEPS", "data-directories", "ensure_data_dirs"),
         ("FINALLY_STEPS", "tool-executor", "shutdown_tool_executor"),
         ("SHUTDOWN_STEPS", "market-holidays", "shutdown_market_holidays"),
+        ("SHUTDOWN_STEPS", "portfolio-engine", "shutdown_engine_executor"),
     ],
 )
 def test_a_step_reaches_its_function_through_the_module_when_it_runs(tuple_name: str, step_name: str, function_name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

@@ -64,8 +64,9 @@
     import {createPairSlug, displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
     import {computeDerivedPriceState} from '$lib/utils/assetPriceDerived';
-    import {fetchAssetPeriodChanges, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
+    import {fetchAssetPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
+    import {BULK_SIGNAL_MARGIN_DAYS, bulkRangeDays, sendBulkBatches} from '$lib/api/bulkBatches';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
@@ -322,11 +323,12 @@
     );
 
     // The Δ columns (1D … 5Y): the backend computes them up to the end of the range and lists the periods (X-R53).
-    // Kept apart from the price flow, so a price refresh never wipes them, and replaced by the latest answer only.
+    // Kept apart from the price flow, so a price refresh never wipes them. Which answer is kept while several are in
+    // flight, the ledger says (X-R60); `periodChangesLoading` copies its `busy`.
     let periodSpecs = $state<PeriodSpec[]>([]);
     let periodDeltas = $state<Map<number, PeriodDeltas>>(new Map());
     let periodChangesLoading = $state(false);
-    let periodChangesVersion = 0;
+    const periodChangesLedger = new PeriodChangesLedger<number>();
 
     // Which delta periods are visible for the selected date range
     let visiblePeriods = $derived(visiblePeriodColumns(periodSpecs, dateStart, dateEnd));
@@ -413,7 +415,8 @@
     async function retryBackendSignals() {
         await pageBusy.track('assets-signals-retry', async () => {
             await loadAssetSignalDefinitions(true);
-            await fetchAllPriceData();
+            // The prices and the signals only: the Δ columns do not depend on the signals (X-R60).
+            await fetchPriceSeries();
         });
     }
 
@@ -628,7 +631,11 @@
         displayDateStart = 'min';
     }
 
-    /** Prices and signals (the price query, the cache) and the Δ columns (the backend's period changes), together. */
+    /**
+     * Prices and signals (the price query, the cache) and the Δ columns (the backend's period changes), together. The
+     * signals' retry and a settings change ask only the prices and signals (`fetchPriceSeries`): the Δ columns depend
+     * on neither (X-R60).
+     */
     async function fetchAllPriceData() {
         if (assets.length === 0) return;
         await Promise.all([fetchPriceSeries(), loadPeriodChanges()]);
@@ -636,22 +643,26 @@
 
     /** The Δ columns of every listed asset up to the end of the range, from the backend (X-R53). */
     async function loadPeriodChanges() {
-        const version = ++periodChangesVersion;
-        periodChangesLoading = true;
+        const ticket = periodChangesLedger.begin(dateEnd, true);
+        periodChangesLoading = periodChangesLedger.busy;
         try {
             const result = await fetchAssetPeriodChanges(
                 assets.map((asset) => asset.id),
-                dateEnd,
+                ticket.asOf,
             );
-            if (version !== periodChangesVersion) return;
+            const next = periodChangesLedger.settle(ticket, periodDeltas, result.deltasByAssetId);
+            if (next === null) return;
             if (result.periods.length > 0) periodSpecs = result.periods;
-            periodDeltas = result.deltasByAssetId;
+            periodDeltas = next;
         } catch (e: any) {
-            if (version !== periodChangesVersion) return;
+            // The Δ computed up to the same day stay: only those of another range go (X-R60).
+            const next = periodChangesLedger.fail(ticket, periodDeltas);
+            if (next === null) return;
             console.error('Failed to fetch period changes:', e);
-            periodDeltas = new Map();
+            periodDeltas = next;
         } finally {
-            if (version === periodChangesVersion) periodChangesLoading = false;
+            periodChangesLedger.end(ticket);
+            periodChangesLoading = periodChangesLedger.busy;
         }
     }
 
@@ -740,22 +751,39 @@
         assets = assets.map((a) => ({...a, loadingPrices: needFetch.some((nf) => nf.id === a.id)}));
 
         try {
-            // Bulk query only assets with gaps — SAME single request as before (the
-            // backend runs one SQL query for all requested assets; splitting this into
-            // several smaller requests would lose that optimization, so it stays as one
-            // call). Use axiosInstance directly (bypassing Zodios' automatic response
-            // validation) so the raw, not-yet-validated body can be handed to the shared
-            // worker pool: validating + computing derived state for every asset in one
-            // synchronous main-thread block was what monopolized the thread long enough
-            // to delay click/navigation handling on large "ALL date range" loads.
-            const rawResponse = await axiosInstance.post('/api/v1/assets/prices/query', queryItems);
-            const rawItems: unknown[] = rawResponse.data?.items ?? [];
-
-            const {results, invalidItemErrors} = await processPriceItemsInParallel(rawItems);
+            // One request for the assets with gaps or backend signals while they stay under the
+            // backend's caps: the backend then runs one SQL query for all of them. A larger list is
+            // split into batches (lot Z-27, `lib/api/bulkBatches.ts`), sent one after the other and
+            // applied together at the end. Each batch uses axiosInstance directly (bypassing Zodios'
+            // automatic response validation) so its raw, not-yet-validated body can be handed to the
+            // shared worker pool: validating + computing derived state for every asset in one
+            // synchronous main-thread block was what monopolized the thread long enough to delay
+            // click/navigation handling on large "ALL date range" loads.
+            const today = todayIso();
+            const outcome = await sendBulkBatches(
+                queryItems,
+                (item) => bulkRangeDays(item.date_range.start, item.date_range.end, today) + (item.signals.length > 0 ? BULK_SIGNAL_MARGIN_DAYS : 0),
+                async (items) => {
+                    const rawResponse = await axiosInstance.post('/api/v1/assets/prices/query', items);
+                    const rawItems: unknown[] = rawResponse.data?.items ?? [];
+                    return processPriceItemsInParallel(rawItems);
+                },
+            );
+            const results = outcome.answers.flatMap(({answer}) => answer.results);
+            const invalidItemErrors = outcome.answers.flatMap(({answer}) => answer.invalidItemErrors);
             if (invalidItemErrors.length > 0) {
                 console.error('Some price-query items failed validation:', invalidItemErrors);
             }
-            signalRequestFailed = invalidItemErrors.length > 0 && [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
+            // The assets of a batch that got no answer are left as the catch below leaves them:
+            // their cache kept, their signals untouched and reported as failed.
+            const answeredIds = new Set(outcome.answers.flatMap(({batch}) => batch.items.map((item) => item.asset_id)));
+            const unansweredIds = new Set(queryItems.filter((item) => !answeredIds.has(item.asset_id)).map((item) => item.asset_id));
+            if (outcome.failed) {
+                console.error('Failed to fetch prices bulk:', outcome.error);
+            }
+            const anySignals = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
+            const unansweredSignals = [...requestContexts].some(([assetId, context]) => unansweredIds.has(assetId) && context.plan.requests.length > 0);
+            signalRequestFailed = (invalidItemErrors.length > 0 && anySignals) || unansweredSignals;
 
             // Populate caches (cheap: just Map.set calls) and build a per-asset lookup
             // of the already-computed derived UI state (last price, chart data).
@@ -772,6 +800,7 @@
             }
 
             for (const [assetId, context] of requestContexts) {
+                if (unansweredIds.has(assetId)) continue;
                 const state = resultStateForAsset(assetId);
                 const processed = derivedByAssetId.get(assetId);
                 const mapped = mapSignalInstanceResults(context.configs, context.plan, processed?.signals ?? []);
@@ -792,7 +821,8 @@
                 }
                 return {...asset, loadingPrices: false};
             });
-            resolveMaxStartFromAssets();
+            // As before a failure: «All» resolves only from a complete load, never from part of it.
+            if (!outcome.failed) resolveMaxStartFromAssets();
         } catch (e: any) {
             console.error('Failed to fetch prices bulk:', e);
             signalRequestFailed = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
@@ -1120,7 +1150,7 @@
             setGlobalSettings(s, 'assets');
         }
         if (shouldReloadBackend) {
-            void pageBusy.track('assets-settings', () => fetchAllPriceData());
+            void pageBusy.track('assets-settings', () => fetchPriceSeries());
         }
     }
 

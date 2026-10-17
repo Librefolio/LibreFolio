@@ -149,7 +149,7 @@ Returned snapshot of complete run.
 
 Useful helpers on result:
 
-- `analysis_status`: `"FAILED"` if any issue is a non-isolable quantitative-replay error (see `_QUANTITATIVE_FAILURE_CODES` in `models.py`), else `"DEGRADED"` if `issues` is non-empty, else `"COMPLETE"`
+- `analysis_status`: `"FAILED"` if any issue is a non-isolable quantitative-replay error (`fails_the_replay(code)`: a code of `_QUANTITATIVE_FAILURE_CODES` in `models.py`), else `"DEGRADED"` if `issues` is non-empty, else `"COMPLETE"`
 - `get_lot_states(lot_id)`: derives `LONG`/`SHORT`, `OPEN`/`PARTIALLY_CLOSED`/`CLOSED`, plus `IN_TRANSIT`, `DISTRIBUTED`, `DEGRADED`
 - `active_fragments(...)`: filter live custody fragments
 
@@ -325,7 +325,7 @@ analysis reads a leg whose partner pairs back from a broker outside its scope be
 (see [Transfers Across the Scope's Edge](lots_analysis_service.md#scope-edge-transfers)), so that leg never reaches
 this rule.
 
-### 🛫 Depart
+### 🛫 Depart {: #depart }
 
 `TRANSFER_DEPART`:
 
@@ -334,6 +334,10 @@ this rule.
 3. shrinks/closes source broker fragments
 4. opens `IN_TRANSIT` fragment when `transit_start < transit_end`
 5. stores `_PendingTransferPiece` until arrival
+
+Both issues a departure can record (`SHORT_TRANSFER_NOT_SUPPORTED`, and `FIFO_SOURCE_QUANTITY_MISSING` when the source
+broker holds less than the leg moves) name the giving leg, the row to fix: `raw_transaction_ids[0]`, the out leg of the
+pair (J-12). The event's own `transaction_id` is the pair's, which may be the receiving leg.
 
 ### 🛬 Arrive
 

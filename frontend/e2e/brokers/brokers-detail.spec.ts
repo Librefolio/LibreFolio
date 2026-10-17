@@ -4,10 +4,13 @@ import {waitForSettled} from '../fixtures/app-events';
 import {expectChartCanvas, showChartTooltip} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
+import {daysAgoIso} from '../fixtures/dates';
+import {commitCreates} from '../fixtures/owned-pair';
 import path from 'path';
 import {fileURLToPath} from 'url';
 import {appears} from '../fixtures/probe';
 import {lotIsOpenish, type LotOpenish} from '../../src/lib/features/brokers/lots/lotsAnalysisHelpers';
+import {resolveUiLocale} from '../../src/lib/stores/app/uiLocaleRule';
 
 /**
  * Ensure at least one broker exists for the test user.
@@ -1839,5 +1842,373 @@ test.describe('Broker detail — the quota badge in the UI language', () => {
         await setLanguage(page, 'fr');
         const french = await frenchQuota(page);
         await expect.poll(() => quotaBadgeText(page), {message: `en → fr in place: the badge in French notation, ${spelledSpaces(french)}`, timeout: 5_000}).toBe(french);
+    });
+});
+
+// ============================================================================
+// A FAILED lots analysis names the transaction to fix (J-12)
+// ============================================================================
+
+/**
+ * A lots analysis whose FIFO replay of the quantities breaks draws no lot and names the transactions to fix (J-12,
+ * panel half; the developer's decision N81, option A).
+ *
+ * The contract. On `calculation_status: FAILED` the panel takes no lot-derived section of the answer (lots, Gantt,
+ * events, price history, income): the WAC/price chart keeps its average-cost lines, and the Gantt, the lots table and
+ * the comparison chart are not rendered. `LotAnalysisFailedNotice` (`lots-analysis-panel-failed`) explains, then lists
+ * each issue flagged `fails_analysis` as `lots-analysis-failed-row-{code}-{transaction id}`: the broker's name, the day
+ * of the transaction, the message, and a button to `/transactions?highlight=<id>`. The banner keeps the other issues.
+ * J's backend half answers a FAILED analysis with those sections null and each blocking issue carrying
+ * `transaction_date` and `fails_analysis: true`.
+ *
+ * When it can run: once J's half is in dev. Before that, the failure premise — the analysis read through the API
+ * before the page is opened — goes red naming the missing flag, instead of a row that times out.
+ *
+ * The data, every row the test's own. A broker allowing both cash overdraft and shorting: a commit's balance check
+ * (`_validate_broker_balances`) is skipped only when both are allowed, and the BUY is not funded. A manual EUR stock
+ * with four closes; EUR everywhere, so no rate enters the replay. BUY 10 at 100, forty days ago; SELL 15 at 110, thirty
+ * days ago: the SELL closes the long lot and, the broker allowing it, opens a short lot of 5 (engine `_apply_sell`).
+ * That replays, and it is the control: on it the same page draws the Gantt, the table and the comparison. Then
+ * ADJUSTMENT −2, twenty days ago, without cost (a negative adjustment needs none): no long unit is left to take it and
+ * the broker holds −5, so the engine refuses it (`_apply_adjustment_out`: SHORT_ADJUSTMENT_NOT_SUPPORTED, missing 2),
+ * a code that fails the whole replay (`_QUANTITATIVE_FAILURE_CODES`). Nothing else is raised: no transfer, no income,
+ * one currency. The broker's name holds no digit, so no number in the notice row can be the name's. Afterwards the
+ * broker goes first — `force` takes its transactions — then the asset with its closes.
+ *
+ * Expectations.
+ * - The day: `formatDay` in the interface locale the app's own rule chooses (`resolveUiLocale`, imported from
+ *   `uiLocaleRule.ts`), written by this browser's Intl (`dayAsThePanelWritesIt`) and never written down here.
+ * - No bare broker id: the row's text, its day taken out, read as numbers — a group separator joins the digits, so
+ *   `1,234` reads `1234` — and none is the broker's id. The catalogue printed «(broker {broker_id})» until J-12.
+ * - The missing sections are unmounted, so they are counted: zero, behind two barriers — the WAC chart, drawn in the
+ *   same branch of the panel, and the control, where the same broker and asset drew all three.
+ * - The WAC chart out of its «no data» state: the chart publishes it on its root, `data-state="drawn"` exactly when it
+ *   draws (`showChart`: no «no data» overlay) and `"empty"` otherwise; a finished render (`data-chart-ready`) then says
+ *   the drawing is complete.
+ * - The banner is drawn from the same answer, in the same update, as the notice: once the notice row is on screen its
+ *   presence is settled, and reading it is not a probe. With this data it should be absent; present, it is opened
+ *   first, since its groups are rendered only open.
+ * - The landing: the transactions page consumes `?highlight=` by pulsing the row — a transient CSS class, not read
+ *   here — and opening the transaction read-only. That read-only form — the switch to edit, the footer naming the id,
+ *   no Save — is the view-mode signal transactions-modals.spec.ts reads (T11). The address the button goes to is read
+ *   as a navigation armed before the click: the page drops the parameter once it has read it.
+ */
+
+/** The scenario's one currency: the asset's, its cash's and — once the asset is known — the panel's. */
+const UNBUILDABLE_CURRENCY = 'EUR';
+
+/** The code the ADJUSTMENT raises: the notice row and the banner group the tests look for. */
+const SHORT_ADJUSTMENT = 'SHORT_ADJUSTMENT_NOT_SUPPORTED';
+
+/** What a J-12 test created, recorded the moment it exists: the cleanup deletes exactly this. */
+interface UnbuildableOwned {
+    brokerId?: number;
+    assetId?: number;
+}
+
+/** The test's broker and asset holding a short of 5: BUY and SELL committed, the ADJUSTMENT still to come. */
+interface ShortPosition {
+    broker: {id: number; name: string};
+    asset: {id: number; name: string};
+    /** The days of the BUY, the SELL and the ADJUSTMENT: forty, thirty and twenty days ago. */
+    days: {buy: string; sell: string; adjustment: string};
+    buyId: number;
+    sellId: number;
+}
+
+/** A data-quality issue as the lots analysis serialises it, reduced to what the premises read. */
+interface AnalysisIssue {
+    code: string;
+    message_params?: Record<string, unknown> | null;
+}
+
+/** `uniqueSuffix()` without a digit: each digit becomes a capital letter (0 → A … 9 → J). Its random part is lower-case, so it stays unique. */
+function digitFreeSuffix(): string {
+    return uniqueSuffix().replace(/\d/g, (digit) => String.fromCharCode(65 + Number(digit)));
+}
+
+/** A broker of the test's own that allows shorting and cash overdraft, its name without a digit. */
+async function createShortingBroker(page: Page, owned: UnbuildableOwned): Promise<{id: number; name: string}> {
+    // Never sorts first, so a neighbour's "first card" stays a mock broker.
+    const name = `Unbuildable lots ${digitFreeSuffix()}`;
+    expect(name, 'control: the broker name holds no digit').not.toMatch(/\d/);
+    const response = await page.request.post(`${API}/brokers`, {data: [{name, allow_cash_overdraft: true, allow_asset_shorting: true}]});
+    const body = (await response.json().catch(() => null)) as {results?: Array<{name: string; success: boolean; broker_id: number | null}>} | null;
+    const created = body?.results?.find((result) => result.name === name);
+    if (typeof created?.broker_id === 'number') owned.brokerId = created.broker_id;
+    expect(response.ok(), `create the shorting broker: HTTP ${response.status()} ${JSON.stringify(body)}`).toBe(true);
+    if (!created?.success || typeof created.broker_id !== 'number') throw new Error(`The shorting broker "${name}" was not created: ${JSON.stringify(body)}`);
+    return {id: created.broker_id, name};
+}
+
+/** A manual stock of the test's own, in UNBUILDABLE_CURRENCY, with `closes` stored. */
+async function createPricedAsset(page: Page, owned: UnbuildableOwned, closes: ReadonlyArray<{date: string; close: number}>): Promise<{id: number; name: string}> {
+    const name = `Unbuildable lots asset ${uniqueSuffix()}`;
+    const response = await page.request.post(`${API}/assets`, {data: [{display_name: name, currency: UNBUILDABLE_CURRENCY, asset_type: 'STOCK'}]});
+    const body = (await response.json().catch(() => null)) as {results?: Array<{asset_id?: number | null; display_name?: string; success?: boolean}>} | null;
+    const created = body?.results?.find((result) => result.display_name === name);
+    if (typeof created?.asset_id === 'number') owned.assetId = created.asset_id;
+    expect(response.ok(), `create the asset: HTTP ${response.status()} ${JSON.stringify(body)}`).toBe(true);
+    if (!created?.success || typeof created.asset_id !== 'number') throw new Error(`The asset "${name}" was not created: ${JSON.stringify(body)}`);
+    const assetId = created.asset_id;
+
+    const stored = await page.request.post(`${API}/assets/prices`, {data: [{asset_id: assetId, prices: closes}]});
+    const storedBody = (await stored.json().catch(() => null)) as {results?: Array<{asset_id: number; count: number}>} | null;
+    expect(stored.ok(), `store the closes of asset ${assetId}: HTTP ${stored.status()} ${JSON.stringify(storedBody)}`).toBe(true);
+    expect(storedBody?.results?.find((result) => result.asset_id === assetId)?.count, `the ${closes.length} closes of asset ${assetId} are stored`).toBe(closes.length);
+    return {id: assetId, name};
+}
+
+/** The broker, the asset with its closes, and the BUY and the SELL that leave the broker short of 5. */
+async function seedShortPosition(page: Page, owned: UnbuildableOwned): Promise<ShortPosition> {
+    const days = {buy: daysAgoIso(40), sell: daysAgoIso(30), adjustment: daysAgoIso(20)};
+    const broker = await createShortingBroker(page, owned);
+    const asset = await createPricedAsset(page, owned, [
+        {date: days.buy, close: 100},
+        {date: days.sell, close: 110},
+        {date: days.adjustment, close: 105},
+        {date: daysAgoIso(5), close: 108},
+    ]);
+    const [buyId, sellId] = await commitCreates(
+        page,
+        [
+            {broker_id: broker.id, asset_id: asset.id, type: 'BUY', date: days.buy, quantity: '10', cash: {code: UNBUILDABLE_CURRENCY, amount: '-1000'}},
+            {broker_id: broker.id, asset_id: asset.id, type: 'SELL', date: days.sell, quantity: '-15', cash: {code: UNBUILDABLE_CURRENCY, amount: '1650'}},
+        ],
+        'commit BUY 10, then SELL 15: a long lot closed, a short lot of 5 opened',
+    );
+    test.info().annotations.push({type: 'J-12 data', description: `broker ${broker.id}, asset ${asset.id}: BUY ${buyId} on ${days.buy}, SELL ${sellId} on ${days.sell}`});
+    return {broker, asset, days, buyId, sellId};
+}
+
+/** ADJUSTMENT −2 on the short, twenty days ago — the row the replay cannot take. Returns its id. */
+async function commitShortAdjustment(page: Page, position: ShortPosition): Promise<number> {
+    const [adjustmentId] = await commitCreates(page, [{broker_id: position.broker.id, asset_id: position.asset.id, type: 'ADJUSTMENT', date: position.days.adjustment, quantity: '-2'}], 'commit ADJUSTMENT −2 on the short position');
+    test.info().annotations.push({type: 'J-12 data', description: `ADJUSTMENT ${adjustmentId} on ${position.days.adjustment}`});
+    return adjustmentId;
+}
+
+/** The analysis of the test's broker and asset, read through the API: its status, its lot ids, its issues. */
+async function readLotsAnalysis(page: Page, position: ShortPosition): Promise<{status: unknown; lotIds: number[]; issues: AnalysisIssue[]}> {
+    const analysis = await lotsAnalysis(page, {asset_id: position.asset.id, broker_ids: [position.broker.id], requested_analyses: ['LOT_SUMMARY']});
+    const lots = Array.isArray(analysis.lots) ? (analysis.lots as Array<{lot_id: number}>) : [];
+    const issues = (analysis.data_quality as {issues?: unknown} | null | undefined)?.issues;
+    return {status: analysis.calculation_status, lotIds: lots.map((lot) => lot.lot_id).sort((a, b) => a - b), issues: Array.isArray(issues) ? (issues as AnalysisIssue[]) : []};
+}
+
+/** The control's premise: BUY and SELL replay — a long lot and a short one, each named after the transaction that opened it. */
+async function expectReplayPremise(page: Page, position: ShortPosition): Promise<void> {
+    const {status, lotIds, issues} = await readLotsAnalysis(page, position);
+    expect(status, `premise: a SELL past the holding opens a short on a broker that allows it — issues ${JSON.stringify(issues)}`).not.toBe('FAILED');
+    expect(lotIds, 'premise: the BUY opened a lot, the SELL closed it and opened a short one (a lot id is its opening transaction id)').toEqual([position.buyId, position.sellId].sort((a, b) => a - b));
+}
+
+/** The failure's premise, J's half of the contract: FAILED, and the ADJUSTMENT the one issue flagged blocking, with its broker and its day. */
+async function expectFailurePremise(page: Page, position: ShortPosition, adjustmentId: number): Promise<void> {
+    const {status, issues} = await readLotsAnalysis(page, position);
+    expect(status, `premise: an ADJUSTMENT on a short position fails the replay — issues ${JSON.stringify(issues)}`).toBe('FAILED');
+    const blocking = issues.filter((issue) => issue.message_params?.fails_analysis === true).map((issue) => ({code: issue.code, transaction_id: issue.message_params?.transaction_id, broker_id: issue.message_params?.broker_id, transaction_date: issue.message_params?.transaction_date}));
+    expect(blocking, `premise (J’s backend half of J-12): the ADJUSTMENT is the one issue flagged fails_analysis, with its broker and its day — issues ${JSON.stringify(issues)}`).toEqual([
+        {code: SHORT_ADJUSTMENT, transaction_id: adjustmentId, broker_id: position.broker.id, transaction_date: position.days.adjustment},
+    ]);
+}
+
+/**
+ * The test's broker page on its Positions tab, the lots panel open on the test's asset and every load of the page in.
+ *
+ * A new document each time: the panel's answers are cached in the page, and a row written through the API marks none of
+ * them stale. The title gains the asset's name once the asset cache resolves, which is when the panel's currency becomes
+ * the asset's and, if it changed, the analysis is asked again (see `openLotsPanelSettled`). The page's Refresh button
+ * holds every one of those loads (`pageBusy`), so its `data-busy` going false says the last answer is on screen.
+ */
+async function openOwnedLotsPanel(page: Page, position: ShortPosition): Promise<void> {
+    await navigateTo(page, lotsPanelUrl(position.broker.id, position.asset.id));
+    await expect(page.getByTestId('broker-name'), 'the page is the test’s own broker').toHaveText(position.broker.name, {timeout: 10_000});
+    await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 10_000});
+    await expect(page.getByTestId('lots-analysis-panel-title'), `the title gains "${position.asset.name}" once the asset cache has resolved: the panel's currency is final`).toContainText(position.asset.name, {timeout: 10_000});
+    await waitForSettled(page.getByTestId('broker-refresh'), 30_000);
+    await expect(page.getByTestId('lots-analysis-panel-loading'), 'the analysis has answered').toHaveCount(0);
+    await expect(page.getByTestId('lots-analysis-panel-error'), 'the analysis answered without an error').toHaveCount(0);
+}
+
+/**
+ * A calendar day as the lots panel writes it, `formatDay` (`$lib/utils/core/formatAxisDate`): the day read on the local
+ * calendar, then `toLocaleDateString(uiLocale(), {year: 'numeric', month: 'short', day: 'numeric'})` — never written
+ * down here.
+ *
+ * The locale is the one the app itself would choose. The rule is the app's own, `resolveUiLocale`
+ * (`src/lib/stores/app/uiLocaleRule.ts`, M-18), imported as `lotIsOpenish` is: a module that imports nothing, so
+ * Playwright loads it (`uiLocale.test.ts` holds it to that). It gets what the app gives it — the interface language,
+ * which the root layout keeps on `<html lang>`, and the browser's primary tag, `navigator.language` — both read in one
+ * `page.evaluate`. The rule runs here, in Node; the day is then written in the page, by the browser's own Intl, the one
+ * that writes the panel's figures.
+ */
+async function dayAsThePanelWritesIt(page: Page, iso: string): Promise<string> {
+    const {language, browserTag} = await page.evaluate(() => ({language: document.documentElement.lang, browserTag: navigator.language}));
+    const locale = resolveUiLocale(language, browserTag);
+    test.info().annotations.push({type: 'J-12 locale', description: `UI language ${language}, browser ${browserTag} → ${locale}`});
+    return page.evaluate(
+        ({day, uiLocale}) => {
+            const [year, month, date] = day.split('-').map(Number);
+            return new Date(year, month - 1, date).toLocaleDateString(uiLocale, {year: 'numeric', month: 'short', day: 'numeric'});
+        },
+        {day: iso, uiLocale: locale},
+    );
+}
+
+/** The numbers written in `text`, as bare digits: a group separator inside one is dropped, so `1,234` reads `1234`. */
+function numbersIn(text: string): string[] {
+    return (text.match(/\d+(?:[.,'’\u00a0\u202f]\d{3})*/g) ?? []).map((number) => number.replace(/\D/g, ''));
+}
+
+/**
+ * `code` is not a group of the banner. The banner is drawn from the same answer, in the same update, as the notice
+ * (`applyMain`, `partitionLotIssues`): once the notice row is on screen whether it is there is settled, and reading it
+ * is not a probe. Present, it is opened first — its groups are rendered only open — and a group of its own is the
+ * barrier for the absence.
+ */
+async function expectBannerWithout(page: Page, code: string): Promise<void> {
+    const banner = page.getByTestId('lot-data-quality-banner');
+    const present = (await banner.count()) > 0;
+    test.info().annotations.push({type: 'J-12 banner', description: present ? 'present: opened and read' : 'absent: no issue besides the blocking one'});
+    if (present) {
+        const toggle = banner.getByTestId('lot-data-quality-toggle');
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        await expect.poll(() => banner.locator('[data-testid^="lot-data-quality-issue-"]').count(), {message: 'barrier: the open banner lists its groups'}).toBeGreaterThan(0);
+    }
+    await expect(page.getByTestId(`lot-data-quality-issue-${code}`), `${code} broke the replay: it is the notice's, not a group of the banner`).toHaveCount(0);
+}
+
+/**
+ * Delete what the test created: the broker first — `force` takes its transactions — then the asset with its closes.
+ * The page is left first, so nothing on it reloads these rows while they go; every step is tried whatever happened to
+ * the one before.
+ */
+async function deleteUnbuildableOwned(page: Page, owned: UnbuildableOwned): Promise<void> {
+    if (owned.brokerId === undefined && owned.assetId === undefined) return;
+    const failures: string[] = [];
+    await page.goto('about:blank').catch((error: unknown) => failures.push(`leave the page: ${String(error)}`));
+    if (owned.brokerId !== undefined) {
+        try {
+            await deleteOwnedBrokerAndFiles(page, owned.brokerId);
+        } catch (error) {
+            failures.push(String(error));
+        }
+    }
+    if (owned.assetId !== undefined) {
+        const assetId = owned.assetId;
+        try {
+            const response = await page.request.delete(`${API}/assets?asset_ids=${assetId}`);
+            const body = (await response.json().catch(() => null)) as {results?: Array<{asset_id: number; success: boolean; message?: string | null}>} | null;
+            if (!response.ok() || !body?.results?.find((result) => result.asset_id === assetId)?.success) failures.push(`asset ${assetId}: HTTP ${response.status()} ${JSON.stringify(body)}`);
+        } catch (error) {
+            failures.push(`asset ${assetId}: ${String(error)}`);
+        }
+    }
+    expect(failures, 'cleanup removes the broker with its transactions, and the asset with its closes').toEqual([]);
+}
+
+test.describe('Broker detail — a FAILED lots analysis names the transaction to fix (J-12)', () => {
+    // An explicit budget for the chain these tests walk: login, the seeding requests, the broker page with its lots
+    // panel — twice in J12-1, the control and then the failure — and, in J12-2, the transactions page. A describe's
+    // timeout runs from the start of the test, so it covers the beforeEach too. The file's parallel mode is inherited:
+    // every row these tests read is their own.
+    test.describe.configure({timeout: 90_000});
+
+    let owned: UnbuildableOwned = {};
+
+    test.beforeEach(async ({page}) => {
+        owned = {};
+        await login(page, TEST_USER);
+    });
+
+    // afterEach, not `finally`: a cleanup throwing from `finally` would replace the assertion error it follows.
+    test.afterEach(async ({page}) => {
+        await deleteUnbuildableOwned(page, owned);
+    });
+
+    test('J12-1 an ADJUSTMENT on a short fails the analysis BUY and SELL had drawn: one row with the broker’s name and the day, the average-cost lines only, no Gantt, table, comparison or banner group', async ({page}) => {
+        const position = await seedShortPosition(page, owned);
+
+        // The control, on the same broker and asset before the row that breaks them: the replay goes through and the
+        // three sections a failure removes are drawn — so their absence below is the failure's doing, not the data's.
+        await expectReplayPremise(page, position);
+        await openOwnedLotsPanel(page, position);
+        await expect(page.getByTestId('lot-gantt-echart'), 'control: the Gantt draws its lanes').toHaveAttribute('data-chart-ready', 'true', {timeout: 20_000});
+        const lotsTable = page.getByTestId('unified-lots-table');
+        for (const lotId of [position.buyId, position.sellId]) {
+            await expect(lotsTable.locator(`tbody tr[data-row-id="${lotId}"]`), `control: lot ${lotId} has its row in the lots table`).toBeVisible({timeout: 10_000});
+        }
+        await expect(page.getByTestId('lot-comparison-chart'), 'control: the comparison chart is drawn').toBeVisible();
+        await expect(page.getByTestId('lots-analysis-panel-failed'), 'control: an analysis that replays has no failure notice').toHaveCount(0);
+
+        const adjustmentId = await commitShortAdjustment(page, position);
+        await expectFailurePremise(page, position, adjustmentId);
+        await openOwnedLotsPanel(page, position);
+
+        // 1. The notice: one row, the ADJUSTMENT's, naming its broker and its day.
+        const notice = page.getByTestId('lots-analysis-panel-failed');
+        await expect(notice, 'a FAILED analysis shows the notice').toBeVisible();
+        await expect(notice.getByTestId('lots-analysis-failed-explanation')).toBeVisible();
+        const row = notice.getByTestId(`lots-analysis-failed-row-${SHORT_ADJUSTMENT}-${adjustmentId}`);
+        await expect(row, 'the ADJUSTMENT has its row').toBeVisible();
+        await expect(notice.locator('[data-testid^="lots-analysis-failed-row-"]'), 'every row of this asset is the test’s own: one breaks the replay, one is listed').toHaveCount(1);
+
+        await expect(row.getByTestId('lots-analysis-failed-broker'), 'the broker, by its name').toHaveText(position.broker.name);
+
+        const day = await dayAsThePanelWritesIt(page, position.days.adjustment);
+        const [year, , dayOfMonth] = position.days.adjustment.split('-').map(Number);
+        expect(day, `control: the day is written out, not left as ${position.days.adjustment}`).not.toBe(position.days.adjustment);
+        expect(numbersIn(day), `control: "${day}" carries the year and the day of the month`).toEqual(expect.arrayContaining([String(year), String(dayOfMonth)]));
+        const date = row.getByTestId('lots-analysis-failed-date');
+        await expect(date, `the day of the ADJUSTMENT, ${position.days.adjustment}, as the panel writes a day`).toHaveText(day);
+
+        await expect(row.getByTestId(`lots-analysis-failed-goto-${adjustmentId}`), 'a button to the ADJUSTMENT').toBeVisible();
+
+        // Barriers: an empty message, or a key the catalogue did not resolve, would let the check below pass on nothing.
+        const message = row.getByTestId('lots-analysis-failed-message');
+        await expect(message, 'barrier: the message is written').toHaveText(/\S/);
+        await expect(message, 'barrier: the catalogue resolved its key').not.toHaveText('dataQuality.shortAdjustmentNotSupported');
+        // One read of a settled row: its broker, its day and its message are on screen above.
+        const rowText = (await row.textContent()) ?? '';
+        const dayText = (await date.textContent()) ?? '';
+        expect(rowText, 'control: the row holds the day read above').toContain(dayText);
+        expect(numbersIn(rowText.replace(dayText, ' ')), `the row writes no bare broker id (${position.broker.id}), it names the broker — «${rowText.trim()}»`).not.toContain(String(position.broker.id));
+
+        // 2. The average-cost lines only: the WAC chart drawn, and none of the three lot sections the control showed.
+        await expect(page.getByTestId('lot-wac-price-chart'), 'the WAC chart draws its average-cost lines, not its «no data» state').toHaveAttribute('data-state', 'drawn', {timeout: 10_000});
+        await expect(page.getByTestId('lot-wac-price-chart').locator('[data-chart-ready]'), 'the WAC chart finished drawing its average-cost lines').toHaveAttribute('data-chart-ready', 'true', {timeout: 10_000});
+        for (const section of ['lot-gantt-chart', 'unified-lots-table', 'lot-comparison-chart']) {
+            await expect(page.getByTestId(section), `${section} is not rendered for a FAILED analysis`).toHaveCount(0);
+        }
+
+        // 3. The banner keeps what did not break the replay: the ADJUSTMENT is not one of its groups.
+        await expectBannerWithout(page, SHORT_ADJUSTMENT);
+    });
+
+    test('J12-2 the failed row’s button opens its transaction, read-only, on the transactions page', async ({page}) => {
+        const position = await seedShortPosition(page, owned);
+        const adjustmentId = await commitShortAdjustment(page, position);
+        await expectFailurePremise(page, position, adjustmentId);
+        await openOwnedLotsPanel(page, position);
+
+        const row = page.getByTestId('lots-analysis-panel-failed').getByTestId(`lots-analysis-failed-row-${SHORT_ADJUSTMENT}-${adjustmentId}`);
+        await expect(row, 'the ADJUSTMENT has its row').toBeVisible();
+        const button = row.getByTestId(`lots-analysis-failed-goto-${adjustmentId}`);
+        await expect(button).toBeVisible();
+
+        // Armed before the click: a navigation is an edge, and the transactions page drops the parameter once read.
+        const navigated = page.waitForURL(new RegExp(`/transactions\\?highlight=${adjustmentId}(?:&|$)`), {waitUntil: 'commit', timeout: 15_000});
+        await button.click();
+        await navigated;
+
+        // 4. The transactions page reads ?highlight= and opens that transaction read-only — the view-mode signal of
+        //    transactions-modals.spec.ts (T11): the switch to edit, the footer naming the row, no Save.
+        await expect(page.getByTestId('tx-form-modal'), 'the transactions page opens the transaction the row named').toBeVisible({timeout: 20_000});
+        await expect(page.getByTestId('tx-form-readonly-footer'), `the form is the ADJUSTMENT's, #${adjustmentId}`).toContainText(new RegExp(`#${adjustmentId}\\b`));
+        await expect(page.getByTestId('tx-form-switch-edit'), 'opened read-only: the form offers the switch to edit').toBeVisible();
+        await expect(page.getByTestId('tx-form-save'), '…and no Save').toBeHidden();
+        await expect(page, 'on the transactions page').toHaveURL(/\/transactions(?:[?#]|$)/);
     });
 });

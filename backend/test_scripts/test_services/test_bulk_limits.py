@@ -5,9 +5,9 @@ at most, but nothing bounds how many ranges one request holds. ``POST /fx/curren
 100 years builds 18 million daily conversions; ``POST /assets/prices/query`` backward-fills one point a day per item from
 its first price — and a full-history signal (``RISK_DRAWDOWN``) loads from ``date.min``, so an item whose visible range
 is ONE day still makes the fill emit every day since the first stored price. Any logged-in user can send either. The
-contract pinned here (N77):
+contract pinned here (N77; its item-day budget lowered after R13-SEC9-2, coordinator 17/10):
 
-1. ``backend/app/utils/date_range_limits.py`` holds ``MAX_BULK_ITEMS = 1_000``, ``MAX_BULK_ITEM_DAYS = 5_000_000`` and
+1. ``backend/app/utils/date_range_limits.py`` holds ``MAX_BULK_ITEMS = 1_000``, ``MAX_BULK_ITEM_DAYS = 1_000_000`` and
    ``BulkTooManyDaysError``, with ``item_days`` and ``max_item_days``. ``price_query`` and ``currencies`` import the
    budget by name where they apply it: the seam these tests lower it through (``lower_budget``), as ``lift_range_bound``
    lifts X-R55's ceiling.
@@ -27,7 +27,7 @@ contract pinned here (N77):
 The budget is lowered to a few dozen item-days, so each case stays small; the real numbers are pinned by BL-001 and used
 by the guards that are cheap to refuse: 1 001 items (BL-I01…I03) and 200 one-day items of 36 525 filled days each
 (BL-A06). The real budget through the conversion route is BL-API-03 (``api fx``); through the price route it is not
-tested at API level: over 5 million item-days, code without the budget would make the lane's shared backend build them.
+tested at API level: over 1 million item-days, code without the budget would make the lane's shared backend build them.
 
 Isolation: PURE — no lane database, no server, no network. The price queries run on a private SQLite file under
 ``tmp_path`` built by ``create_all``, or on a stand-in session that answers every statement with no row and counts them;
@@ -74,7 +74,7 @@ BUDGET_CONSUMERS = ("backend.app.services.assets.price_query", "backend.app.api.
 BUDGET_READERS = (*BUDGET_CONSUMERS, "backend.app.utils.date_range_limits", "backend.app.api.v1.assets.prices")
 
 MAX_ITEMS = 1_000  # the contract's numbers, written here and not read from the module under test
-MAX_ITEM_DAYS = 5_000_000
+MAX_ITEM_DAYS = 1_000_000
 HUNDRED_YEARS = 36_525  # days: from 36 524 days back to today, a fill emits this many
 FROZEN_TODAY = date(2025, 6, 18)  # any day: the ceiling is frozen at the day after it
 CEILING = FROZEN_TODAY + timedelta(days=1)  # latest_range_end(), frozen
@@ -349,7 +349,7 @@ async def _convert(monkeypatch: pytest.MonkeyPatch, converter: _Converter, *conv
 
 
 def test_bl001_constants_and_error():
-    """BL-001: ``date_range_limits`` holds ``MAX_BULK_ITEMS = 1_000``, ``MAX_BULK_ITEM_DAYS = 5_000_000`` and
+    """BL-001: ``date_range_limits`` holds ``MAX_BULK_ITEMS = 1_000``, ``MAX_BULK_ITEM_DAYS = 1_000_000`` and
     ``BulkTooManyDaysError``, an ``Exception`` built with ``item_days`` and ``max_item_days`` and carrying both.
 
     Red before Z-25: none of the three existed.
@@ -366,7 +366,7 @@ def test_bl002_budget_read_by_name_where_applied():
     """BL-002: ``price_query`` and ``currencies`` read ``date_range_limits.MAX_BULK_ITEM_DAYS`` itself, imported by name.
 
     A name imported by value is the one a test lowers; a consumer reading the budget some other way would apply the real
-    5 million where every case here believes it lowered it. Red before Z-25: neither module read a budget.
+    1 million where every case here believes it lowered it. Red before Z-25: neither module read a budget.
     """
     budget = getattr(date_range_limits, "MAX_BULK_ITEM_DAYS", None)
     assert budget is not None, "date_range_limits has no MAX_BULK_ITEM_DAYS"
@@ -584,7 +584,7 @@ async def test_bla05_comparison_series_count(private_db, frozen_ceiling, lower_b
 async def test_bla06_guard_real_budget_refused_before_the_fill(private_db, monkeypatch, frozen_ceiling, no_market_holidays):
     """BL-A06 (guard, the real budget): 200 items of ONE visible day each, with a full-history drawdown, on an asset
     whose first price is 36 524 days back: each fill would emit 36 525 days, 7 305 000 in all.
-    ``BulkTooManyDaysError`` with ``item_days`` 7 305 000 and ``max_item_days`` 5 000 000, within ``GUARD_SECONDS``,
+    ``BulkTooManyDaysError`` with ``item_days`` 7 305 000 and ``max_item_days`` 1 000 000, within ``GUARD_SECONDS``,
     the fill never started (the fuse on ``price_query.timedelta`` stops a fill past ``FUSE_DAY_STEPS`` days).
 
     Red before Z-25: the fill ran — 7.3 million points for 200 visible ones; the fuse stopped it first.

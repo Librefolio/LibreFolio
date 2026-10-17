@@ -37,6 +37,10 @@ SCHEDULE_MAX_DATE = date(2200, 12, 31)
 SCHEDULE_MAX_SPAN_DAYS = 36_525
 SCHEDULE_MAX_PERIODS = 1_200
 LATE_INTEREST_MAX_GRACE_DAYS = 36_525
+# The manual events of a plan are replayed on every valuation, so their number is work too (MF-SI2, E's review of
+# R13-SEC7-2): ten thousand cover the 1 200 monthly or 5 218 weekly payouts of a century, or 27 years of daily ones;
+# past it the parameters are refused (INVALID_PARAMS).
+SCHEDULE_MAX_EVENTS = 10_000
 
 
 # ============================================================================
@@ -275,7 +279,7 @@ class FAScheduledInvestmentSchedule(StrictModel):
     initial_value: Currency = Field(..., description="Initial capital / face value with currency (e.g., {code: 'EUR', amount: 10000})")
     interest_type: InterestType = Field(default=InterestType.SIMPLE, description="Interest calculation method: SIMPLE (on initial principal) or COMPOUND (on running value)")
     day_count: DayCountConvention = Field(default=DayCountConvention.ACT_365, description="Day count convention for time fraction calculation (global for all periods)")
-    asset_events: List[FAAssetEventPoint] = Field(default_factory=list, description="Planned asset events (interest payouts, price adjustments)")
+    asset_events: List[FAAssetEventPoint] = Field(default_factory=list, max_length=SCHEDULE_MAX_EVENTS, description="Planned asset events (interest payouts, price adjustments); at most SCHEDULE_MAX_EVENTS (10 000)")
     schedule: List[FAInterestRatePeriod]
     late_interest: Optional[FALateInterestConfig] = None
 

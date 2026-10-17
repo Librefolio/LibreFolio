@@ -29,6 +29,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -68,6 +69,23 @@ def slugify_for_filename(raw: str, fallback: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+#: A text a spreadsheet takes for a formula (OWASP «CSV Injection»): one starting with ``=``, ``+``, ``-``, ``@``, a tab
+#: or a CR, after any apostrophes. It is written with one more leading apostrophe, so that a spreadsheet shows it as
+#: text, and the events import drops exactly one again: an exported file imports back as it was (B-39).
+_FORMULA_LIKE = re.compile(r"'*[=+\-@\t\r]")
+#: A plain number keeps its sign: ``-1.5``, ``+2``, ``-1E+2`` are never escaped, whatever their type.
+_PLAIN_NUMBER = re.compile(r"[+-]?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?")
+
+
+def _csv_cell(value: Any) -> Optional[str]:
+    """``value`` as a CSV cell: ``_to_str``, then a formula-like text kept as text with one more leading apostrophe
+    (B-39)."""
+    text = _to_str(value)
+    if text and _FORMULA_LIKE.match(text) and not _PLAIN_NUMBER.fullmatch(text):
+        return "'" + text
+    return text
+
+
 def stream_rows_as_csv(fieldnames: list[str], rows: Iterable[dict[str, Any]]) -> Iterator[str]:
     """Yield CSV chunks (header first, then one line per row).
 
@@ -88,8 +106,9 @@ def stream_rows_as_csv(fieldnames: list[str], rows: Iterable[dict[str, Any]]) ->
     buf.truncate(0)
     for row in rows:
         # Normalise every value to its string form — csv.DictWriter cannot
-        # serialise Decimal/datetime reliably across locales.
-        writer.writerow({k: _to_str(row.get(k)) for k in fieldnames})
+        # serialise Decimal/datetime reliably across locales — and keep a
+        # formula-like text as text (B-39).
+        writer.writerow({k: _csv_cell(row.get(k)) for k in fieldnames})
         yield buf.getvalue()
         buf.seek(0)
         buf.truncate(0)
