@@ -13,7 +13,7 @@ Also covers:
   construction regardless of the departure broker's real ownership share;
   ScopeAwareTransactionClassifier.classify() must now override it from
   broker_shares right after building the interval).
-- Broker-scoped in-kind ADJUSTMENT capital routing (pre-frame + frame code paths).
+- Broker-scoped in-kind ADJUSTMENT capital routing (before date_from and inside the emitted states).
 - EngineEndState.cumulative_cash_by_broker / cumulative_ecf_by_broker.
 - DerivedViewsBuilder.build_broker_pnl_history().
 
@@ -374,7 +374,7 @@ class TestScenarioBInTransitShareFix:
 
 
 # =============================================================================
-# In-kind ADJUSTMENT — broker-scoped capital routing (pre-frame + frame paths)
+# In-kind ADJUSTMENT — broker-scoped capital routing (before date_from + emitted days)
 # =============================================================================
 
 
@@ -382,17 +382,18 @@ class TestInKindAdjustmentBrokerAttribution:
     """A priced in-kind ADJUSTMENT (opening/transfer/succession) is a capital
     contribution/distribution, not profit — its cost must move
     cumulative_ecf_by_broker for the SPECIFIC broker that carries it, symmetric to
-    the scope-aggregate cumulative_ecf, whether the transaction falls in the
-    pre-frame accounting-only window or inside the fully-evaluated frame.
+    the scope-aggregate cumulative_ecf, whether the transaction falls before
+    date_from (replayed, not emitted) or on an emitted day. J1: one replay with the
+    same rules every day; before J1 the first case ran in a separate pre-frame.
     """
 
-    def test_preframe_in_and_frame_out_track_broker_ecf(self):
-        # Broker 10: opening in-kind ADJUSTMENT-in, dated BEFORE frame_start (pre-frame path).
+    def test_in_before_date_from_and_out_after_track_broker_ecf(self):
+        # Broker 10: opening in-kind ADJUSTMENT-in, dated BEFORE date_from (replayed, not emitted).
         adj_in = _tx(id=1, broker_id=10, type="ADJUSTMENT", dt="2025-01-02", quantity="10", asset_id=100, cost_basis_override="100", cost_basis_currency="EUR")
-        # Broker 20: unrelated external deposit (also pre-frame) — isolation control:
+        # Broker 20: unrelated external deposit (also before date_from) — isolation control:
         # its own capital baseline must stay untouched by broker 10's in-kind event.
         dep20 = _tx(id=2, broker_id=20, type="DEPOSIT", dt="2025-01-03", amount="500")
-        # Broker 10: in-kind ADJUSTMENT-out INSIDE the frame (frame path), same
+        # Broker 10: in-kind ADJUSTMENT-out on an emitted day, same
         # qty/cost -> fully unwinds the capital contributed above.
         adj_out = _tx(id=3, broker_id=10, type="ADJUSTMENT", dt="2025-01-12", quantity="-10", asset_id=100, cost_basis_override="100", cost_basis_currency="EUR")
 
@@ -403,13 +404,12 @@ class TestInKindAdjustmentBrokerAttribution:
             classified_txs=txs,
             external_cash_flows=ecfs,
             asset_currencies={100: "EUR"},
-            date_from=date(2025, 1, 1),
-            frame_start=date(2025, 1, 10),
+            date_from=date(2025, 1, 10),
             date_to=date(2025, 1, 15),
         )
         result = builder.build()
 
-        # First frame day: the pre-frame ADJUSTMENT-in has already been carried into
+        # First emitted day: the ADJUSTMENT-in before date_from has already been carried into
         # cumulative_ecf_by_broker[10], alongside broker 20's unrelated deposit.
         first = result.daily_states[0]
         assert first.date == date(2025, 1, 10)
@@ -418,7 +418,7 @@ class TestInKindAdjustmentBrokerAttribution:
         assert first.cumulative_external_cash_flow == Decimal("1500")
         _assert_broker_contribution_invariant(first)
 
-        # After the frame-path ADJUSTMENT-out: broker 10's in-kind capital fully
+        # After the ADJUSTMENT-out: broker 10's in-kind capital fully
         # unwinds; broker 20 is untouched (isolation control holds).
         last = result.daily_states[-1]
         assert last.broker_contributions[10].capital_contribution == Decimal("0")
