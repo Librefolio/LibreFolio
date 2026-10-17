@@ -161,6 +161,7 @@
         "waitingTitle": "LibreFolio redémarre",
         "waiting": "Son démarrage applique la restauration. Cette page attend son retour.",
         "slow": "LibreFolio n'est pas encore revenu. Si rien ne le redémarre tout seul, démarrez-le vous-même : la restauration est appliquée à ce démarrage.",
+        "notStopped": "LibreFolio ne s'est pas arrêté. S'il ne redémarre pas tout seul, redémarrez-le vous-même : la restauration est appliquée à ce démarrage.",
         "rolledBack": "Les données sont comme avant : {reason}.",
         "stillPending": "LibreFolio a redémarré, mais la restauration n'a pas été appliquée. {waiting}",
         "back": "Retour à la sauvegarde",
