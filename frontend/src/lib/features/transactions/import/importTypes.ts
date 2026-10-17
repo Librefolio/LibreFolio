@@ -89,23 +89,26 @@ export interface AssetResolution {
     groupPrimarySymbol: boolean;
 }
 
-/** The identity a row is deduplicated on: the fields two rows must share to be the same movement. */
+/**
+ * The identity a row is deduplicated on: the fields two rows must share to be the same movement. The quantity, the cash
+ * amount and the per-unit cost are exact decimal texts, trailing zeros removed (W-B81): never compared as floats.
+ */
 export interface DedupKey {
     broker: string;
     type: string;
     date: string;
-    quantity: number;
+    quantity: string;
     cashCode: string | null;
-    cashAmount: number | null;
-    costOverride: number | null;
+    cashAmount: string | null;
+    costOverride: string | null;
     assetIdentity: string;
 }
 
-/** Quantities within this fraction of each other are the same lot size. */
-export const QUANTITY_TOLERANCE = 0.0001;
+/** Two quantities (or per-unit costs) of one movement are never further apart than this: the rule of W-B51 is never looser. */
+export const QUANTITY_TOLERANCE = '0.0001';
 
 /** Cash amounts within this many currency units are the same countervalue. */
-export const AMOUNT_TOLERANCE = 0.01;
+export const AMOUNT_TOLERANCE = '0.01';
 
 /** Match-confidence ranking, strongest first. Unknown tiers sort last (see `?? 9` at call sites). */
 export const CONF_ORDER: Record<string, number> = {exact: 0, high: 1, medium: 2, low: 3};
