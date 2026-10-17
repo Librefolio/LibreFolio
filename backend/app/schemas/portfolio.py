@@ -537,9 +537,9 @@ class PortfolioSummary(StrictModel):
     period_book_value_start: Optional[Currency] = Field(None, description="Book value at start of selected period")
     period_net_flows: Optional[Currency] = Field(None, description="Sum of external cash flows in selected period")
     period_pnl: Optional[Currency] = Field(None, description="Period P&L = nav_end - nav_start - net_flows")
-    period_unrealized_gain_loss_start: Optional[Currency] = Field(None, description="Unrealized G/L at start of period")
-    period_unrealized_gain_loss_end: Optional[Currency] = Field(None, description="Unrealized G/L at end of period (snapshot)")
-    period_unrealized_gain_loss_delta: Optional[Currency] = Field(None, description="Change in unrealized G/L over the period")
+    period_unrealized_gain_loss_start: Optional[Currency] = Field(None, description="Unrealized G/L at start of period: market value − open cost basis of the positions held then, securities in transit left out (not NAV − book value)")
+    period_unrealized_gain_loss_end: Optional[Currency] = Field(None, description="Unrealized G/L at end of period (snapshot): market value − open cost basis of the positions held then, securities in transit left out")
+    period_unrealized_gain_loss_delta: Optional[Currency] = Field(None, description="Change in unrealized G/L over the period: end − start of market value − open cost basis")
     period_unrealized_breakdown: List[UnrealizedBreakdownRow] = Field(
         default_factory=list,
         description="period_unrealized_gain_loss_delta split by asset currency into the assets' own change and the exchange-rate effect on their historical cost; the rows add up to it exactly",
