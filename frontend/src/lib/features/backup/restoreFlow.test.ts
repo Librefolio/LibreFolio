@@ -292,7 +292,12 @@ const accepted = (ticket: string = TICKET): RestoreRestartAccepted => ({...pendi
 /** What the outcome route answers (B5c): its three fields, nothing else — no name, no date, no version. */
 const outcomeOf = (state: RestoreStatus['state'], reason: RollbackReason | null = null, waiting: WaitingReason | null = null) => ({state, reason, waiting}) as RestoreStatus;
 
-function report(overrides: Partial<RestoreStageReport> = {}): RestoreStageReport {
+/** B4 (§5): what a report says of the archive's encryption and of the plugin secrets. Written out until the client is generated again. */
+type ReportB4Fields = {encrypted: boolean; secrets_unreadable: {system: number; user: number}; secrets_rekeyed: number};
+/** B4 (§5): an upload says what was stored, a zip or an envelope. Written out until the client is generated again. */
+type Upload = RestoreUpload & {kind: 'zip' | 'envelope'};
+
+function report(overrides: Partial<RestoreStageReport & ReportB4Fields> = {}): RestoreStageReport & ReportB4Fields {
     return {
         backup_created_at: '2026-10-15T12:00:00Z',
         backup_app_version: '0.9.0',
@@ -318,6 +323,9 @@ function report(overrides: Partial<RestoreStageReport> = {}): RestoreStageReport
         control_totals_differences_count: 0,
         restorable: true,
         expires_at: '2026-10-16T12:00:00Z',
+        encrypted: false,
+        secrets_unreadable: {system: 0, user: 0},
+        secrets_rekeyed: 0,
         ...overrides,
     };
 }
@@ -332,7 +340,7 @@ const doneStage = (answer: RestoreStageReport = report(), overrides: Partial<Res
 
 const failedStage = (code: string) => stage({status: 'failed', phase: null, finished_at: '2026-10-16T09:01:00Z', error_code: code as RestoreStage['error_code']});
 
-const uploaded = (overrides: Partial<RestoreUpload> = {}): RestoreUpload => ({upload_id: UPLOAD_ID, size: 4096, ...overrides});
+const uploaded = (overrides: Partial<Upload> = {}): Upload => ({upload_id: UPLOAD_ID, size: 4096, kind: 'zip', ...overrides});
 
 /** An archive of `size` bytes: the size is set on the File, so a large one costs no memory. */
 function archive(size = 4096, name = 'librefolio-backup-20261015-120000.zip'): File {
@@ -2291,5 +2299,273 @@ describe('the defaults', () => {
         await vi.advanceTimersByTimeAsync(2_001);
 
         expect(controller.slow).toBe(true);
+    });
+});
+
+// =====================================================================================================================
+// B4 — an envelope (.lfbk): its password asked before anything is sent (B4 brief §5, §7; written red first)
+// =====================================================================================================================
+
+/*
+ * The contract under test:
+ *   - `upload(file)` of an envelope — its first four bytes `LFBK`, told by `isEnvelopeFile` of backupApi.ts — enters the
+ *     state `password`: not busy, nothing sent, nothing to announce yet;
+ *   - `submitPassword(password)`: the envelope sent if it was not yet (the same File), then
+ *     `startCheck(uploadId, password)`; `wrong_password` or `password_required` → back to `password` with `errorCode`
+ *     set and the upload id kept: the next `submitPassword` checks the same upload, the archive is not sent again; any
+ *     other refusal fails as today (`failed`, failure `check`, announced);
+ *   - `cancelPassword()`: `idle`, the error cleared, the file and the upload id forgotten — the next envelope is asked
+ *     for and sent from scratch, under its own upload id;
+ *   - a zip takes today's path: sent at once, then `startCheck(uploadId)` with the upload id alone;
+ *   - the password goes to `startCheck` and nowhere else: no storage — the one given, `sessionStorage`, `localStorage` —
+ *     and no event detail holds it; without an api option it is the body of `POST /restore/stage`,
+ *     `{upload_id, password}`.
+ *
+ * Choices of this file where the contract is silent: `password` is not busy (the existing list of busy states is
+ * unchanged), and `idle` after `cancelPassword()` holds no error code.
+ *
+ * Red today: an envelope is sent at once like a zip (the fake api rejects that unexpected call), the state `password`
+ * does not exist, and the controller has neither `submitPassword()` nor `cancelPassword()`. The zip case is the guard of
+ * «a zip, as today», green today. The controller's B4 members are reached through `secureFlow()`, written out like the
+ * rest of the contract above, so the type check does not wait for them.
+ */
+
+/** B4: the state that asks for the password of an envelope. */
+type SecureState = RestoreFlowState | 'password';
+
+/** The controller as B4 makes it (§7). */
+interface SecureFlow extends Omit<RestoreFlowController, 'state'> {
+    readonly state: SecureState;
+    submitPassword(password: string): Promise<void>;
+    cancelPassword(): void;
+}
+
+/** The controller with B4's members, or a failure that names the one missing. */
+function secureFlow(controller: RestoreFlowController): SecureFlow {
+    const flow = controller as unknown as SecureFlow;
+    for (const name of ['submitPassword', 'cancelPassword'] as const) {
+        expect(typeof flow[name], `restoreFlow.svelte.ts: the controller has no ${name}() (B4 §7)`).toBe('function');
+    }
+    return flow;
+}
+
+/** An envelope as the server writes it (B4 §1): `LFBK`, then the rest of its header — version 1, scrypt, log2(n) 15, r 8, p 1. */
+function envelope(name = 'librefolio-backup-20261016-230000.lfbk'): File {
+    return new File(['LFBK\u0001\u0001\u000f\u0008\u0001'], name, {type: 'application/octet-stream'});
+}
+
+const PASSWORD = 'Correct-Horse-Battery-9';
+const OTHER_PASSWORD = 'Staple-Battery-Horse-7';
+const OTHER_UPLOAD_ID = 'abcdef0123456789abcdef0123456789';
+/** B4's first phase of the check of an envelope: the generated client does not know it yet. */
+const DECRYPTING = 'decrypting' as string as NonNullable<RestoreStage['phase']>;
+
+/** A controller in `idle` that was given `file`, an envelope: the password is asked. */
+async function passwordAsked(file: File = envelope()) {
+    const context = await idle();
+    await context.controller.upload(file);
+    await flush();
+    expect(context.controller.state as SecureState, 'precondition: the password of the envelope is asked').toBe('password');
+    return {...context, flow: secureFlow(context.controller), file};
+}
+
+describe('B4 — an envelope: the password asked before anything is sent', () => {
+    it('upload(envelope): the state password, not busy, nothing sent, nothing announced', async () => {
+        const {controller, api, names} = await idle();
+
+        await controller.upload(envelope());
+        await flush();
+
+        expect(api.upload, 'the envelope was sent before its password was asked').not.toHaveBeenCalled();
+        expect(api.startCheck).not.toHaveBeenCalled();
+        expect(controller.state as SecureState).toBe('password');
+        expect(controller.busy, 'the card waits for the user, not for the server').toBe(false);
+        expect(controller.errorCode).toBeNull();
+        expect(names()).toEqual([]);
+    });
+
+    it('submitPassword(password): the envelope sent once, the File itself, then its check started with the upload id and the password', async () => {
+        const {flow, api, events, file} = await passwordAsked();
+        api.upload.mockResolvedValueOnce(uploaded({kind: 'envelope', size: file.size}));
+        api.startCheck.mockResolvedValueOnce(runningStage({phase: DECRYPTING}));
+
+        void flow.submitPassword(PASSWORD);
+        await flush();
+
+        expect(api.upload).toHaveBeenCalledTimes(1);
+        expect(api.upload.mock.calls[0][0], 'the File chosen is sent').toBe(file);
+        expect(api.startCheck.mock.calls).toEqual([[UPLOAD_ID, PASSWORD]]);
+        expect(flow.state).toBe('checking');
+        expect(flow.errorCode).toBeNull();
+        expect(events()).toContainEqual(['backup.restore.uploaded', {upload_id: UPLOAD_ID, size: file.size}]);
+    });
+
+    it.each<[string, number]>([
+        ['wrong_password', 400],
+        ['password_required', 400],
+    ])('a check refused as %s: back to password with the code, not busy; the next password checks the same upload — the archive is not sent again', async (code, status) => {
+        const {flow, api, file} = await passwordAsked();
+        api.upload.mockResolvedValueOnce(uploaded({kind: 'envelope', size: file.size}));
+        api.startCheck.mockRejectedValueOnce(refusal(status, code));
+
+        void flow.submitPassword(PASSWORD);
+        await flush();
+
+        expect(api.startCheck.mock.calls, 'precondition: the check was asked with the password').toEqual([[UPLOAD_ID, PASSWORD]]);
+        expect(flow.state).toBe('password');
+        expect(flow.errorCode).toBe(code);
+        expect(flow.busy).toBe(false);
+
+        api.startCheck.mockResolvedValueOnce(runningStage({phase: DECRYPTING}));
+        void flow.submitPassword(OTHER_PASSWORD);
+        await flush();
+
+        expect(api.upload, 'the archive was sent again: the upload id was not kept').toHaveBeenCalledTimes(1);
+        expect(api.startCheck.mock.calls).toEqual([
+            [UPLOAD_ID, PASSWORD],
+            [UPLOAD_ID, OTHER_PASSWORD],
+        ]);
+        expect(flow.state).toBe('checking');
+        expect(flow.errorCode).toBeNull();
+    });
+
+    it.each<[string, number]>([
+        ['envelope_damaged', 400],
+        ['envelope_unsupported', 409],
+        ['restore_busy', 409],
+    ])('a check refused as %s: failed (check) with the code, announced, as any check that cannot start', async (code, status) => {
+        const {flow, api, events, file} = await passwordAsked();
+        api.upload.mockResolvedValueOnce(uploaded({kind: 'envelope', size: file.size}));
+        api.startCheck.mockRejectedValueOnce(refusal(status, code));
+
+        void flow.submitPassword(PASSWORD);
+        await flush();
+
+        expect(flow.state).toBe('failed');
+        expect(flow.errorCode).toBe(code);
+        expect(flow.failure).toBe('check');
+        expect(events()).toContainEqual(['backup.restore.failed', {code, what: 'check'}]);
+    });
+
+    it('cancelPassword() before anything was sent: idle, nothing sent; the next envelope is asked for, and the File sent is that one', async () => {
+        const {flow, api} = await passwordAsked(envelope('first.lfbk'));
+
+        flow.cancelPassword();
+        await flush();
+
+        expect(flow.state).toBe('idle');
+        expect(flow.errorCode).toBeNull();
+        expect(api.upload).not.toHaveBeenCalled();
+
+        const second = envelope('second.lfbk');
+        await flow.upload(second);
+        await flush();
+        expect(flow.state, 'the next envelope asks for its own password').toBe('password');
+        api.upload.mockResolvedValueOnce(uploaded({kind: 'envelope', size: second.size}));
+        api.startCheck.mockResolvedValueOnce(runningStage());
+
+        void flow.submitPassword(PASSWORD);
+        await flush();
+
+        expect(api.upload).toHaveBeenCalledTimes(1);
+        expect(api.upload.mock.calls[0][0], 'the File sent is the one chosen last').toBe(second);
+    });
+
+    it('cancelPassword() after a wrong password: idle, the error gone, the upload forgotten — the next envelope is sent again and checked under its own upload id', async () => {
+        const {flow, api, file} = await passwordAsked(envelope('first.lfbk'));
+        api.upload.mockResolvedValueOnce(uploaded({kind: 'envelope', size: file.size}));
+        api.startCheck.mockRejectedValueOnce(refusal(400, 'wrong_password'));
+        void flow.submitPassword(PASSWORD);
+        await flush();
+        expect(flow.errorCode, 'precondition: the password was wrong').toBe('wrong_password');
+
+        flow.cancelPassword();
+        await flush();
+
+        expect(flow.state).toBe('idle');
+        expect(flow.errorCode).toBeNull();
+
+        const second = envelope('second.lfbk');
+        await flow.upload(second);
+        await flush();
+        api.upload.mockResolvedValueOnce(uploaded({upload_id: OTHER_UPLOAD_ID, kind: 'envelope', size: second.size}));
+        api.startCheck.mockResolvedValueOnce(runningStage());
+        void flow.submitPassword(PASSWORD);
+        await flush();
+
+        expect(api.upload, 'the next envelope must be sent: the server keeps an upload only for a while').toHaveBeenCalledTimes(2);
+        expect(api.upload.mock.calls[1][0]).toBe(second);
+        expect(api.startCheck.mock.calls, 'the forgotten upload id was checked again').toEqual([
+            [UPLOAD_ID, PASSWORD],
+            [OTHER_UPLOAD_ID, PASSWORD],
+        ]);
+        expect(flow.state).toBe('checking');
+    });
+
+    it("a zip: today's path — sent at once, then checked with the upload id alone; no password asked (green today: the guard)", async () => {
+        const {controller, api} = await idle();
+        api.upload.mockResolvedValueOnce(uploaded());
+        api.startCheck.mockResolvedValueOnce(runningStage());
+
+        void controller.upload(archive());
+        await flush();
+
+        expect(api.upload).toHaveBeenCalledTimes(1);
+        expect(api.startCheck.mock.calls, 'a zip is checked with the upload id alone').toEqual([[UPLOAD_ID]]);
+        expect(controller.state).toBe('checking');
+    });
+
+    it('the password goes to the check and nowhere else: no storage — the one given, sessionStorage, localStorage — and no event detail holds it', async () => {
+        // Owned by the case, before the controller exists: a write to localStorage lands where it is read back below.
+        const local = memoryStorage();
+        vi.stubGlobal('localStorage', local);
+        const {flow, api, storage, onEvent, file} = await passwordAsked();
+        api.upload.mockResolvedValueOnce(uploaded({kind: 'envelope', size: file.size}));
+        api.startCheck.mockRejectedValueOnce(refusal(400, 'wrong_password')).mockResolvedValueOnce(runningStage());
+
+        void flow.submitPassword(PASSWORD);
+        await flush();
+        void flow.submitPassword(OTHER_PASSWORD);
+        await flush();
+
+        // The presence barrier: the controller held both passwords, and used them.
+        expect(api.startCheck.mock.calls).toEqual([
+            [UPLOAD_ID, PASSWORD],
+            [UPLOAD_ID, OTHER_PASSWORD],
+        ]);
+        expect(storage.setItem, 'precondition: the check was remembered').toHaveBeenCalled();
+        const holding = (values: Iterable<unknown>) => [...values].filter((value) => typeof value === 'string' && (value.includes(PASSWORD) || value.includes(OTHER_PASSWORD)));
+        expect(holding(storage.setItem.mock.calls.flat()), 'a password was written to the storage given').toEqual([]);
+        expect(localStorage, 'precondition: the localStorage read back is the one the case owns').toBe(local);
+        expect(holding(local.setItem.mock.calls.flat()), 'a password was written to localStorage').toEqual([]);
+        const sessionValues = Array.from({length: sessionStorage.length}, (_, index) => sessionStorage.getItem(sessionStorage.key(index) ?? ''));
+        expect(holding(sessionValues), 'a password was written to sessionStorage').toEqual([]);
+        expect(
+            onEvent.mock.calls.filter(([, detail]) => holding([JSON.stringify(detail)]).length > 0),
+            'an event told a password',
+        ).toEqual([]);
+    });
+
+    it('without an api option: nothing sent before the password; then the envelope, and POST /restore/stage with the body {upload_id, password}', async () => {
+        const {RestoreFlowController} = await loadFlow();
+        zodios.get_restore_status_api_v1_backup_restore_status_get.mockResolvedValue(none());
+        zodios.upload_restore_archive_api_v1_backup_restore_upload_put.mockResolvedValue(uploaded({kind: 'envelope'}));
+        zodios.start_restore_check_api_v1_backup_restore_stage_post.mockResolvedValue(runningStage({phase: DECRYPTING}));
+        const controller = new RestoreFlowController({storage: null});
+        controllers.push(controller);
+        const file = envelope();
+
+        void controller.load();
+        await flush();
+        expect(controller.state, 'precondition: idle').toBe('idle');
+        await controller.upload(file);
+        await flush();
+
+        expect(zodios.upload_restore_archive_api_v1_backup_restore_upload_put, 'the envelope was sent before its password was asked').not.toHaveBeenCalled();
+        void secureFlow(controller).submitPassword(PASSWORD);
+        await flush();
+
+        expect(zodios.upload_restore_archive_api_v1_backup_restore_upload_put.mock.calls[0][0], 'the archive is the raw body').toBe(file);
+        expect(zodios.start_restore_check_api_v1_backup_restore_stage_post.mock.calls[0][0], 'the body of POST /restore/stage').toStrictEqual({upload_id: UPLOAD_ID, password: PASSWORD});
     });
 });

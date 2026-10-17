@@ -353,7 +353,9 @@ def utils_test_server_preparation(verbose: bool = False, test_names: list = None
     """Test that the test server's builds run before its startup timeout, that a tree without node_modules stops before npx (C-94), and that the shared backend's output reaches a log whose tail a failed start prints (H-12)."""
     print_section("Utils: Test Server Preparation")
     print_info("Testing: dev.py server --build-only, cmd_fe_build/cmd_api_client (frontend/node_modules/.bin check), cmd_mkdocs_gallery; scripts/test_runner/_server.py (build_server_prerequisites, SharedTestServer.start(), shared_backend_log_path, log_tail)")
-    print_info("Tests: pre-bind builds in order without binding, missing tools named with npm ci before any npm/npx, port check → build → spawn → STARTUP_TIMEOUT, build env without coverage wiring, gallery build with Playwright's env, the backend's output in shared-backend.log (emptied, appended to on a restart) and its tail on a failed start")
+    print_info(
+        "Tests: pre-bind builds in order without binding, missing tools named with npm ci before any npm/npx, port check → build → spawn → STARTUP_TIMEOUT, build env without coverage wiring, gallery build with Playwright's env, the backend's output in shared-backend.log (emptied, appended to on a restart) and its tail on a failed start"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_test_server_preparation.py", test_names)
     return run_command(cmd, "Test server preparation tests", verbose=verbose)
 
@@ -389,7 +391,9 @@ def utils_dev_designer_lab_banner(verbose: bool = False, test_names: list = None
     """Test that dev.py lists the Designer Lab (/designer-lab) among the server's endpoints only when the frontend build carries it, and under front dev unless LF_DESIGNER_LAB=0."""
     print_section("Utils: dev.py Designer Lab banner")
     print_info("Testing: dev.py _frontend_build_has_designer_lab, DESIGNER_LAB_MARKER (= LAB_MARKER of frontend/scripts/designer-lab/vite-plugin.mjs), cmd_server's «Available endpoints», cmd_fe_dev")
-    print_info("Tests: fake builds (none, release, debug with and without the Lab, production with LF_DESIGNER_LAB=1, rebuilt by the auto-build), only _app/immutable/**/*.js counts, listing and read errors read as no Lab and never stop the start, --build-only never asks, front dev hides it only for LF_DESIGNER_LAB=0")
+    print_info(
+        "Tests: fake builds (none, release, debug with and without the Lab, production with LF_DESIGNER_LAB=1, rebuilt by the auto-build), only _app/immutable/**/*.js counts, listing and read errors read as no Lab and never stop the start, --build-only never asks, front dev hides it only for LF_DESIGNER_LAB=0"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_designer_lab_banner.py", test_names)
     return run_command(cmd, "dev.py Designer Lab banner tests", verbose=verbose)
 
@@ -464,6 +468,14 @@ def utils_backup_cli_restore(verbose: bool = False, test_names: list = None) -> 
     print_info("Tests: --yes, the word typed on a pty, a pipe refused, declined, blocked, already pending, confirm errors; pending and --cancel")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_backup_cli_restore.py", test_names)
     return run_command(cmd, "Backup CLI restore tests", verbose=verbose)
+
+
+def utils_backup_cli_secure(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the secure backup from the command line: create with a password, inspect and restore an envelope, decrypt."""
+    print_section("Utils: Backup CLI secure backup")
+    print_info("Testing: scripts/backup_cli.py (create --encrypt / --password-file / --password-stdin, inspect, restore --dry-run and decrypt of an .lfbk)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_backup_cli_secure.py", test_names)
+    return run_command(cmd, "Backup CLI secure backup tests", verbose=verbose)
 
 
 def utils_all(verbose: bool = False) -> bool:
@@ -888,6 +900,16 @@ Tests for utility modules and helper functions:
         # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables (production mode, checked
         # before each command), children with the same data directory and without LIBREFOLIO_*/COVERAGE_*, identity
         # calls replaced: no lane DB, no server, no network, no writes outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-cli-secure",
+        utils_backup_cli_secure,
+        name="Backup CLI Secure Backup",
+        desc="scripts/backup_cli.py and a secure backup (lot B4): create with --password-file, --password-stdin or --encrypt (password_required without a terminal; the two sources exclusive; no --password option; password_too_weak with the failed rules, nothing written), an .lfbk the password opens; inspect and restore --dry-run of an envelope (wrong_password, password_required, a zip ignoring the source); decrypt to a new 0600 zip (an existing output refused untouched, not_an_envelope); the password never printed; no decrypted zip left in the data directory",
+        # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables, as test_backup_cli.py
+        # sets them: no lane DB, no server, no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(

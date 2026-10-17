@@ -629,7 +629,7 @@ async function fakeTheCheck(page: Page, size: number): Promise<{calls: string[]}
     const uploadId = randomBytes(16).toString('hex');
     const stageId = randomBytes(16).toString('hex');
     const createdAt = '2026-10-15T09:41:20Z';
-    const upload = schemas.RestoreUpload.parse({upload_id: uploadId, size});
+    const upload = schemas.RestoreUpload.parse({upload_id: uploadId, size, kind: 'zip'});
     const running = schemas.RestoreStage.parse({stage_id: stageId, status: 'running', phase: 'checking', done_bytes: 0, total_bytes: 0, created_at: createdAt, finished_at: null, error_code: null, report: null});
     const done = schemas.RestoreStage.parse({
         stage_id: stageId,
@@ -657,6 +657,9 @@ async function fakeTheCheck(page: Page, size: number): Promise<{calls: string[]}
             files_size: 2_097_152,
             database_size: 1_048_576,
             instance_key_included: true,
+            encrypted: false,
+            secrets_rekeyed: 0,
+            secrets_unreadable: {system: 0, user: 0},
             administrators: [TEST_ADMIN.username],
             warnings: [],
             blockers: [],

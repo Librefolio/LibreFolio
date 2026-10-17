@@ -89,6 +89,8 @@ const zodios = vi.hoisted(() => ({
     confirm_restore_check_api_v1_backup_restore_stage__stage_id__confirm_post: vi.fn(),
     cancel_pending_restore_api_v1_backup_restore_pending_delete: vi.fn(),
     restart_for_restore_api_v1_backup_restore_restart_post: vi.fn(),
+    // B4: the rules of a secure archive's password, `GET /backup/instance/options` (handler `get_instance_backup_options`).
+    get_instance_backup_options_api_v1_backup_instance_options_get: vi.fn(),
 }));
 /** The generated zod schemas, filled in by the group that may need them (the status `restoreOutcome()` reads). */
 const generatedSchemas = vi.hoisted((): Record<string, unknown> => ({}));
@@ -105,7 +107,10 @@ const DELETE: Alias = 'delete_instance_backup_job_api_v1_backup_instance_jobs__j
 
 const JOB_ID = '0123456789abcdef0123456789abcdef';
 
-function job(overrides: Partial<InstanceBackupJob> = {}): InstanceBackupJob {
+/** B4 (§4): every job says whether its archive is encrypted. Written out until the client is generated again from the B4 backend. */
+type Job = InstanceBackupJob & {encrypted: boolean};
+
+function job(overrides: Partial<Job> = {}): Job {
     return {
         job_id: JOB_ID,
         status: 'running',
@@ -118,6 +123,7 @@ function job(overrides: Partial<InstanceBackupJob> = {}): InstanceBackupJob {
         file_size: null,
         warnings: [],
         error_code: null,
+        encrypted: false,
         ...overrides,
     };
 }
@@ -238,7 +244,7 @@ describe('the three requests', () => {
 
         expect(zodios[START]).toHaveBeenCalledTimes(1);
         const [body, config] = zodios[START].mock.calls[0];
-        expect(body, 'a backup is started with an empty body').toBeUndefined();
+        expect(body, 'a backup is started with an empty body').toBeNull();
         expect(config).toBeUndefined();
         expect(untouchedBesides(START)).toEqual([]);
     });
@@ -341,7 +347,8 @@ describe('the same arguments, replayed on the generated client', () => {
 
 type RestoreStatus = z.infer<typeof schemas.RestoreStatus>;
 type RestoreStage = z.infer<typeof schemas.RestoreStage>;
-type RestoreUpload = z.infer<typeof schemas.RestoreUpload>;
+/** B4 (§5): an upload says what was stored, a zip or an envelope. Written out until the client is generated again from the B4 backend. */
+type RestoreUpload = z.infer<typeof schemas.RestoreUpload> & {kind: 'zip' | 'envelope'};
 type UploadOptions = {onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal};
 type RestoreOutcomeAnswer = {kind: 'signed_out'} | {kind: 'status'; status: RestoreStatus} | {kind: 'blocked'} | {kind: 'down'};
 /** The answer of an accepted restart (B5c): the status, and the one-time ticket that reads its outcome. Not generated yet. */
@@ -426,7 +433,7 @@ describe('the restore requests (B5b §1)', () => {
 
     it('uploadRestoreArchive puts the File itself as the body, hands the signal on, and reports progress as onProgress(loaded, total)', async () => {
         const file = archive();
-        const answer: RestoreUpload = {upload_id: UPLOAD_ID, size: file.size};
+        const answer: RestoreUpload = {upload_id: UPLOAD_ID, size: file.size, kind: 'zip'};
         const onProgress = vi.fn();
         const abort = new AbortController();
         zodios[UPLOAD].mockResolvedValue(answer);
@@ -451,7 +458,7 @@ describe('the restore requests (B5b §1)', () => {
 
     it('uploadRestoreArchive without options still puts the File itself', async () => {
         const file = archive();
-        zodios[UPLOAD].mockResolvedValue({upload_id: UPLOAD_ID, size: file.size});
+        zodios[UPLOAD].mockResolvedValue({upload_id: UPLOAD_ID, size: file.size, kind: 'zip'});
 
         await restore('uploadRestoreArchive')(file);
 
@@ -598,7 +605,7 @@ describe('the restore requests, replayed on the generated client (B5b §1)', () 
         await restore('uploadRestoreArchive')(file, {onProgress: () => undefined, signal: abort.signal});
         const passed = argumentsOf(UPLOAD);
 
-        const {client, requests} = recordingClient({upload_id: UPLOAD_ID, size: file.size});
+        const {client, requests} = recordingClient({upload_id: UPLOAD_ID, size: file.size, kind: 'zip'});
         await client[UPLOAD](...passed);
 
         expect(requests).toHaveLength(1);
@@ -984,5 +991,248 @@ describe('probeServer and restoreOutcome: a plain fetch on this origin, never Zo
             expect(requests[0].init).toMatchObject({credentials: 'same-origin', cache: 'no-store'});
             expect(zodiosCalls()).toEqual([]);
         });
+    });
+});
+
+// =====================================================================================================================
+// B4 — the «secure» backup: the password of a new archive, the rules it must meet, the password of an envelope to
+// restore, and the envelope told from a zip (B4 brief §4, §5, §7; written red first)
+// =====================================================================================================================
+
+/*
+ * The contract under test:
+ *   - `startInstanceBackup(password?)`: without a password, the request of before (no body: a clear backup); with one,
+ *     the body `{password}`; replayed on the generated client, `POST /api/v1/backup/instance` with that JSON body;
+ *   - `getInstanceBackupOptions()`: `GET /backup/instance/options`, no parameter, the answer handed back untouched
+ *     (`{password_rules: [{code, value}]}`); its alias is `get_instance_backup_options_api_v1_backup_instance_options_get`,
+ *     the name FastAPI gives a handler `get_instance_backup_options` on that path — the choice of this file, one place to
+ *     change;
+ *   - `startRestoreCheck(uploadId, password?)`: the body `{upload_id, password}` with a password, and `{upload_id}` alone
+ *     on the wire without one, as today;
+ *   - refusals go through untouched, so that `password_too_weak` or `wrong_password` can be read off them;
+ *   - `isEnvelopeFile(blob)`: true exactly when the first four bytes are `LFBK` — the name, the type and anything after
+ *     them never decide —, and it reads the head of the file, never the whole archive into the page.
+ *
+ * Red today: the functions take no password and send none; `getInstanceBackupOptions` and `isEnvelopeFile` do not exist;
+ * the options route is not in the generated client. Green today, and to stay so: the guards of «without a password, as
+ * today», and the refusals of the two requests that exist already, let through. `isEnvelopeFile` runs here in Node, as
+ * the rest of this file: a Blob's own readers (`slice`, `arrayBuffer`), not a FileReader, which Node does not have.
+ */
+
+const OPTIONS: Alias = 'get_instance_backup_options_api_v1_backup_instance_options_get';
+const PASSWORD = 'Correct-Horse-Battery-9';
+
+/** B4 (§4): the answer of `GET /backup/instance/options`. Written out until the client is generated again from the B4 backend. */
+type InstanceBackupOptions = {password_rules: Array<{code: string; value?: number | null}>};
+
+/** The archive's rules while A's minimum is eight: A's five, at least twelve characters (B4 §2). */
+const OPTIONS_ANSWER: InstanceBackupOptions = {
+    password_rules: [
+        {code: 'min_length', value: 12},
+        {code: 'uppercase', value: null},
+        {code: 'lowercase', value: null},
+        {code: 'digit', value: null},
+        {code: 'special', value: null},
+    ],
+};
+
+interface SecureRequests {
+    startInstanceBackup: (password?: string) => Promise<InstanceBackupJob>;
+    getInstanceBackupOptions: () => Promise<InstanceBackupOptions>;
+    startRestoreCheck: (uploadId: string, password?: string) => Promise<RestoreStage>;
+    isEnvelopeFile: (file: Blob) => Promise<boolean>;
+}
+
+/** One function of backupApi.ts as B4 makes it, or a failure that names it: each case fails on its own until it exists. */
+function secure<K extends keyof SecureRequests>(name: K): SecureRequests[K] {
+    const fn = (backupApiModule as unknown as Partial<SecureRequests>)[name];
+    expect(typeof fn, `backupApi.ts exports no ${name}() (B4 §7)`).toBe('function');
+    return fn as SecureRequests[K];
+}
+
+/** What a request carried on the wire: its JSON body parsed, or undefined when it had none. */
+function wireBody(request: InternalAxiosRequestConfig): unknown {
+    return request.data === undefined ? undefined : JSON.parse(String(request.data));
+}
+
+describe('B4 — the requests of a secure backup and of an envelope', () => {
+    beforeEach(() => {
+        for (const fn of Object.values(zodios)) fn.mockReset();
+    });
+
+    it.each<[string, () => Promise<unknown>]>([
+        ['startInstanceBackup()', () => secure('startInstanceBackup')()],
+        ['startInstanceBackup(undefined)', () => secure('startInstanceBackup')(undefined)],
+    ])('%s: a clear backup, the request of before — no body, no parameter (green today: the guard)', async (_case, call) => {
+        zodios[START].mockResolvedValue(job());
+
+        await call();
+
+        expect(zodios[START]).toHaveBeenCalledTimes(1);
+        const [body, config] = argumentsOf(START);
+        expect(body, 'a clear backup sends no password').toBeNull();
+        expect(config).toBeUndefined();
+    });
+
+    it('startInstanceBackup(password): the body {password}, nothing else, and the job the server answers handed back', async () => {
+        const answer = job({phase: 'preparing'});
+        zodios[START].mockResolvedValue(answer);
+
+        await expect(secure('startInstanceBackup')(PASSWORD)).resolves.toBe(answer);
+
+        expect(zodios[START]).toHaveBeenCalledTimes(1);
+        const [body, config] = argumentsOf(START);
+        expect(body, 'the body of POST /backup/instance').toStrictEqual({password: PASSWORD});
+        expect(config).toBeUndefined();
+    });
+
+    it('getInstanceBackupOptions() reads the options with no parameter, and hands the answer back untouched', async () => {
+        zodios[OPTIONS].mockResolvedValue(OPTIONS_ANSWER);
+
+        await expect(secure('getInstanceBackupOptions')()).resolves.toBe(OPTIONS_ANSWER);
+
+        expect(zodios[OPTIONS]).toHaveBeenCalledTimes(1);
+        expect(
+            argumentsOf(OPTIONS).filter((argument) => argument !== undefined),
+            'the options take no parameter',
+        ).toEqual([]);
+    });
+
+    it('startRestoreCheck(uploadId, password): the body {upload_id, password}', async () => {
+        zodios[STAGE].mockResolvedValue(runningStage());
+
+        await secure('startRestoreCheck')(UPLOAD_ID, PASSWORD);
+
+        expect(zodios[STAGE]).toHaveBeenCalledTimes(1);
+        expect(argumentsOf(STAGE)[0], 'the body of POST /restore/stage').toStrictEqual({upload_id: UPLOAD_ID, password: PASSWORD});
+    });
+
+    it('startRestoreCheck(uploadId): {upload_id} alone on the wire, as today (green today: the guard)', async () => {
+        zodios[STAGE].mockResolvedValue(runningStage());
+
+        await secure('startRestoreCheck')(UPLOAD_ID);
+
+        const body = argumentsOf(STAGE)[0];
+        expect(JSON.parse(JSON.stringify(body)), 'what JSON sends of the body').toStrictEqual({upload_id: UPLOAD_ID});
+    });
+
+    it.each<[string, Alias, string, () => Promise<unknown>]>([
+        ['startInstanceBackup(password), refused as password_too_weak', START, 'password_too_weak', () => secure('startInstanceBackup')(PASSWORD)],
+        ['getInstanceBackupOptions(), refused', OPTIONS, 'backup_busy', () => secure('getInstanceBackupOptions')()],
+        ['startRestoreCheck(uploadId, password), refused as wrong_password', STAGE, 'wrong_password', () => secure('startRestoreCheck')(UPLOAD_ID, PASSWORD)],
+    ])('%s: the refusal goes through untouched, its code readable', async (_case, alias, code, call) => {
+        const refused = refusal(400, code);
+        zodios[alias].mockRejectedValue(refused);
+
+        await expect(call()).rejects.toBe(refused);
+        expect(backupErrorCode(refused)).toBe(code);
+    });
+});
+
+describe('B4 — the same requests, replayed on the generated client', () => {
+    type Replayable = Record<string, (...args: unknown[]) => Promise<unknown>>;
+
+    let createApiClient: typeof import('$lib/api/generated').createApiClient;
+
+    beforeAll(async () => {
+        ({createApiClient} = await import('$lib/api/generated'));
+    });
+
+    beforeEach(() => {
+        for (const fn of Object.values(zodios)) fn.mockReset();
+    });
+
+    /** The generated client over an adapter that keeps each request as axios hands it to the network, answered at once. */
+    function recordingClient(answer: unknown): {client: Replayable; requests: InternalAxiosRequestConfig[]} {
+        const requests: InternalAxiosRequestConfig[] = [];
+        const adapter: AxiosAdapter = async (config) => {
+            requests.push(config);
+            return {data: answer, status: 200, statusText: 'OK', headers: new AxiosHeaders(), config, request: {}};
+        };
+        const client = createApiClient('/', {axiosInstance: axios.create({adapter}), validate: false});
+        return {client: client as unknown as Replayable, requests};
+    }
+
+    it('startInstanceBackup(password): POST /api/v1/backup/instance, the JSON body {password}', async () => {
+        zodios[START].mockResolvedValue(job());
+        await secure('startInstanceBackup')(PASSWORD);
+        const passed = argumentsOf(START);
+
+        const {client, requests} = recordingClient(job());
+        await client[START](...passed);
+
+        expect(requests.map((request) => ({method: request.method, url: request.url}))).toEqual([{method: 'post', url: '/api/v1/backup/instance'}]);
+        expect(requests[0].data, 'the request carries no body: the password never left').toBeDefined();
+        expect(wireBody(requests[0])).toStrictEqual({password: PASSWORD});
+    });
+
+    it('getInstanceBackupOptions: GET /api/v1/backup/instance/options', async () => {
+        zodios[OPTIONS].mockResolvedValue(OPTIONS_ANSWER);
+        await secure('getInstanceBackupOptions')();
+        const passed = argumentsOf(OPTIONS);
+
+        const {client, requests} = recordingClient(OPTIONS_ANSWER);
+        expect(typeof client[OPTIONS], `the generated client has no ${OPTIONS}: generate it again from the B4 backend (dev.py api sync)`).toBe('function');
+        await client[OPTIONS](...passed);
+
+        expect(requests.map((request) => ({method: request.method, url: request.url}))).toEqual([{method: 'get', url: '/api/v1/backup/instance/options'}]);
+    });
+
+    it('startRestoreCheck(uploadId, password): POST /api/v1/backup/restore/stage, the JSON body {upload_id, password}', async () => {
+        zodios[STAGE].mockResolvedValue(runningStage());
+        await secure('startRestoreCheck')(UPLOAD_ID, PASSWORD);
+        const passed = argumentsOf(STAGE);
+
+        const {client, requests} = recordingClient(runningStage());
+        await client[STAGE](...passed);
+
+        expect(requests.map((request) => ({method: request.method, url: request.url}))).toEqual([{method: 'post', url: '/api/v1/backup/restore/stage'}]);
+        expect(wireBody(requests[0])).toStrictEqual({upload_id: UPLOAD_ID, password: PASSWORD});
+    });
+});
+
+describe('B4 — isEnvelopeFile: the first four bytes are LFBK', () => {
+    const bytes = (...values: number[]) => new Uint8Array(values);
+    /** The head of an envelope (B4 §1): LFBK, version 1, scrypt, log2(n) 15, r 8, p 1. */
+    const ENVELOPE_HEAD = bytes(0x4c, 0x46, 0x42, 0x4b, 0x01, 0x01, 0x0f, 0x08, 0x01);
+    /** The head of a zip: PK\x03\x04, then its version. */
+    const ZIP_HEAD = bytes(0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x08, 0x00);
+
+    it.each<[string, () => Blob, boolean]>([
+        ['an envelope: LFBK, then its header', () => new File([ENVELOPE_HEAD], 'librefolio-backup-20261016-230000.lfbk'), true],
+        ['exactly the four bytes LFBK', () => new File([bytes(0x4c, 0x46, 0x42, 0x4b)], 'four.lfbk'), true],
+        ['a Blob, not a File, that starts with LFBK', () => new Blob([ENVELOPE_HEAD]), true],
+        ['an envelope named and typed as a zip: the bytes decide', () => new File([ENVELOPE_HEAD], 'backup.zip', {type: 'application/zip'}), true],
+        ['a zip, PK\\x03\\x04', () => new File([ZIP_HEAD], 'librefolio-backup-20261015-120000.zip', {type: 'application/zip'}), false],
+        ['a zip named .lfbk: the bytes decide, not the name', () => new File([ZIP_HEAD], 'renamed.lfbk'), false],
+        ['an empty file', () => new File([], 'empty.lfbk'), false],
+        ['three bytes, LFB', () => new File([bytes(0x4c, 0x46, 0x42)], 'short.lfbk'), false],
+        ['lfbk in lower case', () => new File([bytes(0x6c, 0x66, 0x62, 0x6b, 0x01)], 'lower.lfbk'), false],
+        ['LFBK one byte in', () => new File([bytes(0x00, 0x4c, 0x46, 0x42, 0x4b)], 'shifted.lfbk'), false],
+    ])('%s → %s', async (_case, make, expected) => {
+        await expect(secure('isEnvelopeFile')(make())).resolves.toBe(expected);
+    });
+
+    it('reads the head of the file only: an archive whose whole content may not be read is still told apart', async () => {
+        const content = new Uint8Array(64 * 1024);
+        content.set(ENVELOPE_HEAD);
+        const wholeRead = () => Promise.reject(new Error('isEnvelopeFile read the whole archive into the page: only its first four bytes decide'));
+        /** An archive that refuses to be read whole; a slice of it is an ordinary Blob of those bytes. */
+        class WholeReadRefused extends Blob {
+            arrayBuffer() {
+                return wholeRead();
+            }
+            bytes() {
+                return wholeRead();
+            }
+            text() {
+                return wholeRead();
+            }
+            slice(start?: number, end?: number, contentType?: string): Blob {
+                return new Blob([content]).slice(start, end, contentType);
+            }
+        }
+
+        await expect(secure('isEnvelopeFile')(new WholeReadRefused([content]))).resolves.toBe(true);
     });
 });

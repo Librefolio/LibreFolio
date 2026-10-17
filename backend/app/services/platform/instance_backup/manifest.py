@@ -73,11 +73,22 @@ class ManifestDatabase(BaseModel):
 
 
 class ManifestInstanceKey(BaseModel):
-    """Whether the archive carries the instance key (``secrets/instance.key``): only a password-protected one may (B4)."""
+    """Whether the archive carries the instance key (``secrets/instance.key``), and its SHA-256.
+
+    Only a password-protected archive may, and only a key LibreFolio generated (decision 39, lot B4). The entry is not
+    among ``files``: a restore never unpacks it, it only reads it to re-encrypt the restored secrets.
+    """
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     included: bool = False
+    sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _sha256_with_the_key(self) -> ManifestInstanceKey:
+        if self.included != (self.sha256 is not None):
+            raise ValueError("instance_key.sha256 is given exactly when the key is included")
+        return self
 
 
 class BackupManifest(BaseModel):

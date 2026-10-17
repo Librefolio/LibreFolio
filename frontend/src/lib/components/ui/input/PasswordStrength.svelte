@@ -12,9 +12,15 @@
         showRules?: boolean;
         /** Every rule is met. A form that needs a valid password binds to it (`bind:valid`) instead of keeping its own copy of the rules. */
         valid?: boolean;
+        /**
+         * Rules a server published for another password than an account's, such as a secure backup's (lot B4, P12: the
+         * same rules, a longer minimum), drawn and checked instead of `GET /system/instance`'s. Absent or `null`: the
+         * accounts' rules; an empty list: no rule, as `rules=[]` in the server's policy.
+         */
+        rules?: readonly PasswordRule[] | null;
     }
 
-    let {password = '', showRules = true, valid = $bindable(false)}: Props = $props();
+    let {password = '', showRules = true, valid = $bindable(false), rules: givenRules = null}: Props = $props();
 
     // Initialize zxcvbn with dictionaries
     const options = {
@@ -27,9 +33,12 @@
     };
     zxcvbnOptions.setOptions(options);
 
-    // The rules come from the server (`GET /system/instance`, decision 37); until it answers, or if it sends none, the
-    // rules of release 1.3. A rule this app does not know is neither drawn nor checked: the server decides.
+    // The rules come from the server (`GET /system/instance`, decision 37), or those a caller got from it for another
+    // password; until it answers, or if it sends none, the rules of release 1.3. A rule this app does not know is neither
+    // drawn nor checked: the server decides.
     const rules: PasswordRule[] = $derived.by(() => {
+        // Given rules, even an empty list, are the server's answer for that password, as `rules=` is in the policy.
+        if (givenRules != null) return givenRules.filter((rule) => Object.hasOwn(RULE_UI_KEYS, rule.code));
         // The generated type widens an optional integer to `number | null | Array<…>`; the schema allows a number or null.
         const served = instanceConfig.config.accounts.password_rules?.map(({code, value}) => ({code, value: typeof value === 'number' ? value : null}));
         return (served?.length ? served : DEFAULT_PASSWORD_RULES).filter((rule) => Object.hasOwn(RULE_UI_KEYS, rule.code));
