@@ -6331,7 +6331,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - 17/10 13:45: dev rosso sulla guardia dei rimedi (il rimedio era un letterale fuori dalla tabella): curato in
       J-50b, una tabella e un costruttore in `risk/base.py` e una scansione che vieta un rimedio scritto altrove.
       Dettagli: piano 05, sezione «J-50b».
-- **J-51 · Lo YoC di un co-proprietario manca sulle unità ricevute da un broker che non vede** — medio, numeri;
+- ✅ **J-51 · Lo YoC di un co-proprietario manca sulle unità ricevute da un broker che non vede** — medio, numeri;
   J, 17/10, letto nel codice durante J-10, non riprodotto. `yield_on_cost._include_external_transfer_legs` aggiunge
   al rigioco la sola gamba della compagna. Se quel broker non è visibile, il componente {A, B} parte da un A senza
   storia: `FIFO_SOURCE_QUANTITY_MISSING` → `FAILED`, YoC «non disponibile» per la posizione in B. Il lato del
@@ -6339,6 +6339,10 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   La cura naturale è la lettura al confine di J-10 (`financial_math/lots/scope_boundary.py`), applicata ai broker
   visibili al posto della gamba aggiunta. Prima un rosso. Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+  - ✅ 17/10: fatta da J (checkpoint J-51). Lo YoC legge al confine dei broker visibili le sole gambe in arrivo
+    (`read_arrivals_at_scope_boundary`); una partenza tiene la compagna (le unità in viaggio contano per l'origine). Il
+    costo resta il WAC della posizione della Dashboard: con la base della gamba un valore, senza `MISSING_WAC`.
+    Dettagli: piano 05, sezione «J-51».
 - **J-52 · Due convenzioni d'eco per la finestra del rigioco fuori dai limiti** — minimo, chiarezza; nota cosmetica di E
   alla revisione di SEC8-1b (17/10), facoltativa. Per una richiesta fuori dai limiti la finestra preparata
   (`requested_range`, che fa da ripiego di `metadata.analyzed_range`) è quella limitata, mentre `output.replay_range` e

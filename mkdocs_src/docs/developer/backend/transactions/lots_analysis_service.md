@@ -162,6 +162,11 @@ broker-scope Dashboard does:
   series. The re-run reads the edge of the accessible brokers in turn, for a partner at a broker the user cannot see.
   On a day valued at cost a leg moves the cost of its units instead (see
   [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)).
+- **Yield on cost.** `financial_math/yield_on_cost.py` reads the arrivals alone, with `read_arrivals_at_scope_boundary()`
+  (J-51): an arrival whose partner pairs back from a broker the user cannot see becomes an `ADJUSTMENT` in, and its
+  partner leaves the replay, which would otherwise join a broker with no history and fail. A departure keeps its partner,
+  because the yield on cost counts units in transit for the broker they left. It needs no price: the yield's cost is the
+  Dashboard's average cost of the position, never the replay's.
 - **The same rule as the Dashboard.** In a broker's own view the Dashboard counts an incoming leg's cost basis in the
   average cost and its market value as capital, and an outgoing leg's market value as the capital that left (lot 41,
   D2 and D5): lots and Dashboard agree broker by broker.
