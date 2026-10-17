@@ -6,8 +6,14 @@
  * environment (ECharts cannot mount in jsdom). Each block below walks the
  * decision points of one function, not just its happy path, because the whole
  * point of the extraction was to make those branches reachable.
+ *
+ * The last two blocks pin V11 (workstream Y, lot Y12b): the opening value a BUY
+ * marker shows is the backend's `opening_value`, read by `eventOpeningValue`,
+ * and LotWacPriceChart.svelte's source is read to pin the tooltip's glue, which
+ * a node test cannot render.
  */
 
+import {readFileSync} from 'node:fs';
 import {describe, expect, it} from 'vitest';
 import {
     applyLotEvent,
@@ -500,5 +506,146 @@ describe('applyLotEvent', () => {
     it('falls back to open_unit_price / close_unit_price for the price', () => {
         expect(applyLotEvent(start, ev('BUY', {quantity: '1', open_unit_price: '11'})).unitPrice).toBe(11);
         expect(applyLotEvent(start, ev('BUY', {quantity: '1', close_unit_price: '13'})).unitPrice).toBe(13);
+    });
+});
+
+/*
+ * V11 (workstream Y, lot Y12b) — the opening value of a BUY marker is the backend's.
+ *
+ * The contract. The tooltip of a BUY marker shows the lot's opening value. The backend sends that figure on the event:
+ * `LotTimelineEventSchema.opening_value` (MF-E1) — for the event that opens a lot (BUY, ADJUSTMENT_IN), the lot's
+ * original cost in target_currency, converted at the opening date: the lot summary's `original_cost`, in the currency
+ * of `unit_price`; null on every other kind and when the conversion is missing. Rule 10 of the project: one home for
+ * financial math, so the chart shows the backend's field and never recomputes it.
+ *
+ * Red on bab5a8fb9. `buildMarkerTooltip` (LotWacPriceChart.svelte) computes the figure from the event's own fields,
+ * `Math.abs(quantity) * unitPrice`, and this module has no reader for the backend's. The fix exports
+ * `eventOpeningValue(event)`, the field parsed as the chart parses every amount (`safeDecimal`: null when absent or not
+ * a finite number), and the BUY branch of the tooltip reads it; its quantity and unit-price rows stay. ADJUSTMENT_IN
+ * gets no value row (coordinator's decision), so nothing here pins one.
+ *
+ * How. The reader is loaded inside each case and typed through `unknown`: while the export is missing only these cases
+ * fail, on the V11 barrier, and the file type-checks before the export exists and after. The amounts disagree on
+ * purpose — 3 × 10 = 30 where the backend says 29.97, or says nothing — so a value can match one source only. The
+ * tooltip is built inside the component, out of reach of a node test (ECharts draws on a canvas), so its glue is pinned
+ * on the source, comments removed: the BUY branch calls the reader and multiplies no quantity by a unit price, and the
+ * component imports the reader from this module.
+ */
+
+/** The reader V11 adds, as these cases call it: on whole timeline events, so each fixture reads as the backend sends it. */
+type EventOpeningValue = (event: Partial<LotEventInput> & {opening_value?: unknown}) => number | null;
+
+/** `eventOpeningValue` off the helper module, through `unknown`; fails on the V11 barrier while the export is missing. */
+async function loadEventOpeningValue(): Promise<EventOpeningValue> {
+    const helpers: unknown = await import('./lotWacPriceChartHelpers');
+    const {eventOpeningValue} = helpers as {eventOpeningValue?: unknown};
+    expect(eventOpeningValue, 'V11 barrier: lotWacPriceChartHelpers.ts exports no eventOpeningValue(event), so the WAC chart has no reader for the backend’s opening_value and its BUY tooltip rebuilds the figure as |quantity| × unit price').toBeTypeOf('function');
+    return eventOpeningValue as EventOpeningValue;
+}
+
+describe('eventOpeningValue — a BUY’s opening value is the backend’s opening_value (Y12b, V11)', () => {
+    // Red on bab5a8fb9, on the barrier: the export is missing.
+    it('reads a decimal string as its number, zero included', async () => {
+        const eventOpeningValue = await loadEventOpeningValue();
+        expect(eventOpeningValue({kind: 'BUY', opening_value: '1234.56'}), 'V11: the opening_value "1234.56" is the number 1234.56').toBe(1234.56);
+        // J's edge case (Y12a, U8): a lot opened without cost is worth zero — a value, not a missing one.
+        expect(eventOpeningValue({kind: 'BUY', quantity: '5', unit_price: '0', opening_value: '0'}), 'V11: an opening value of zero is 0, not null').toBe(0);
+    });
+
+    // Red on bab5a8fb9, on the barrier. Today the tooltip shows 30 for this event.
+    it('takes the backend’s figure where it differs from |quantity| × unit price: 29.97, never 3 × 10 = 30', async () => {
+        const eventOpeningValue = await loadEventOpeningValue();
+        expect(eventOpeningValue({kind: 'BUY', quantity: '3', unit_price: '10', opening_value: '29.97'}), 'V11: the opening value is the backend’s opening_value, 29.97, not the event’s |quantity| × unit price, 30').toBe(29.97);
+    });
+
+    // Red on bab5a8fb9, on the barrier. Today the tooltip shows 30 for both events: it has their quantity and price.
+    it('is null when the backend sends none, null or absent, though quantity and unit price are there', async () => {
+        const eventOpeningValue = await loadEventOpeningValue();
+        expect(eventOpeningValue({kind: 'BUY', quantity: '3', unit_price: '10', opening_value: null}), 'V11: no conversion at the opening date is no opening value (null, «—»), not a product rebuilt in the browser').toBeNull();
+        expect(eventOpeningValue({kind: 'BUY', quantity: '3', unit_price: '10'}), 'V11: an event without opening_value has no opening value, not |quantity| × unit price').toBeNull();
+    });
+
+    // Red on bab5a8fb9, on the barrier.
+    it('is null for a value that is not a finite number', async () => {
+        const eventOpeningValue = await loadEventOpeningValue();
+        expect(eventOpeningValue({kind: 'BUY', opening_value: 'n/a'}), 'V11: a non-numeric opening_value is null').toBeNull();
+        // safeDecimal's own guard: the backend's SafeDecimal serialises an overflowed Decimal as "Infinity", which is no amount.
+        expect(eventOpeningValue({kind: 'BUY', opening_value: 'Infinity'}), 'V11: an opening_value of "Infinity" is null, not an amount').toBeNull();
+    });
+});
+
+describe('LotWacPriceChart BUY tooltip — the opening value’s glue on the source (Y12b, V11)', () => {
+    /** LotWacPriceChart.svelte as it is on disk: a node test cannot render the tooltip it builds. */
+    function componentSource(): string {
+        return readFileSync(new URL('./LotWacPriceChart.svelte', import.meta.url), 'utf8');
+    }
+
+    /** `code` without its comments: a comment that names a call is not the call. Cut at `//`, so it assumes no string of the code holds one. */
+    function withoutComments(code: string): string {
+        return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    }
+
+    /** The body of the block that `opener` (ending in `{`) opens first after `anchor`, braces balanced. */
+    function blockAfter(source: string, anchor: string, opener: string): string | undefined {
+        const at = source.indexOf(anchor);
+        const open = at < 0 ? -1 : source.indexOf(opener, at + anchor.length);
+        if (open < 0) return undefined;
+        const bodyStart = open + opener.length;
+        let depth = 1;
+        for (let i = bodyStart; i < source.length; i++) {
+            if (source[i] === '{') depth++;
+            else if (source[i] === '}' && --depth === 0) return source.slice(bodyStart, i);
+        }
+        return undefined;
+    }
+
+    /**
+     * The BUY branch of buildMarkerTooltip, comments removed, so the pins cannot match code elsewhere in the component.
+     * The function's body is the first block after its name, which holds while its signature carries no brace. Throws,
+     * naming the block, when either is not found.
+     */
+    function buyBranch(): string {
+        const tooltip = blockAfter(componentSource(), 'function buildMarkerTooltip(', '{');
+        if (tooltip === undefined) throw new Error('LotWacPriceChart.svelte: the body of function buildMarkerTooltip(…) { … } was not found');
+        const branch = blockAfter(tooltip, "if (event.kind === 'BUY')", '{');
+        if (branch === undefined) throw new Error("LotWacPriceChart.svelte: buildMarkerTooltip holds no if (event.kind === 'BUY') { … } branch");
+        return withoutComments(branch);
+    }
+
+    /** `import {…, name, …} from './lotWacPriceChartHelpers'`, whatever the other names and their order. */
+    function importFromHelpers(name: string): RegExp {
+        return new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*'\\./lotWacPriceChartHelpers'`);
+    }
+
+    /** |quantity| × unit price, in either order, with or without Math.abs: the opening value the tooltip computes on bab5a8fb9. */
+    const QUANTITY_TIMES_PRICE = /(?:Math\.abs\(\s*quantity\s*\)|\bquantity\b)\s*\*\s*unitPrice\b|\bunitPrice\s*\*\s*(?:Math\.abs\(\s*quantity\s*\)|\bquantity\b)/;
+
+    // Green before and after the fix: the positive controls. Without them the pins below could pass on an empty or a
+    // wrong slice, or with a pattern that matches nothing.
+    it('slices the BUY branch itself, sees the helper import, and the product pin sees every spelling of the product', () => {
+        const branch = buyBranch();
+        expect(branch, 'the BUY branch shows the quantity row').toMatch(/\blabels\.quantity\b/);
+        expect(branch, 'the BUY branch shows the unit-price row').toMatch(/\blabels\.unitPrice\b/);
+        expect(branch, 'the BUY branch shows the opening-value row').toMatch(/\blabels\.openingValue\b/);
+        expect(withoutComments(componentSource()), 'the import pin sees a name the component imports from ./lotWacPriceChartHelpers today').toMatch(importFromHelpers('toPercentSeries'));
+        for (const product of ['Math.abs(quantity) * unitPrice', 'quantity * unitPrice', 'unitPrice * Math.abs(quantity)', 'unitPrice * quantity']) {
+            expect(product, 'the product pin sees this spelling').toMatch(QUANTITY_TIMES_PRICE);
+        }
+        expect('const openingValue = eventOpeningValue(event);', 'the product pin spares the reader').not.toMatch(QUANTITY_TIMES_PRICE);
+    });
+
+    // Red on bab5a8fb9: the branch computes the figure itself and calls no reader.
+    it('reads the opening value with eventOpeningValue(event)', () => {
+        expect(buyBranch(), 'V11: the BUY branch of buildMarkerTooltip does not call eventOpeningValue(event), so the tooltip does not show the backend’s opening_value').toMatch(/\beventOpeningValue\(\s*event\s*\)/);
+    });
+
+    // Red on bab5a8fb9: `Math.abs(quantity) * unitPrice`.
+    it('computes no opening value from the event’s quantity and unit price', () => {
+        expect(buyBranch(), 'V11: the BUY branch of buildMarkerTooltip still computes the opening value in the browser, as |quantity| × unit price').not.toMatch(QUANTITY_TIMES_PRICE);
+    });
+
+    // Red on bab5a8fb9: the component imports no eventOpeningValue.
+    it('imports eventOpeningValue from ./lotWacPriceChartHelpers', () => {
+        expect(withoutComments(componentSource()), 'V11: LotWacPriceChart.svelte does not import eventOpeningValue from ./lotWacPriceChartHelpers').toMatch(importFromHelpers('eventOpeningValue'));
     });
 });
