@@ -70,6 +70,7 @@ export const ERROR_KEYS: Record<string, string> = {
     no_space: 'backup.restore.errors.no_space',
     stage_failed: 'backup.restore.errors.stage_failed',
     database_damaged: 'backup.restore.errors.database_damaged',
+    database_foreign_objects: 'backup.restore.errors.database_foreign_objects',
     manifest_mismatch: 'backup.restore.errors.manifest_mismatch',
     head_unknown: 'backup.restore.errors.head_unknown',
     revision_missing: 'backup.restore.errors.revision_missing',
