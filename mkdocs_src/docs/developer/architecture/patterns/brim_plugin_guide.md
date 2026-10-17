@@ -700,6 +700,13 @@ transaction breaks these rules, so flip source signs as needed:
     per-unit cost lands near `1.0` — that is correct, the engine handles the /100 quote
     scaling elsewhere. Canonical example: `broker_intesa/plugin.py` (patrimonio seed).
 
+    A plugin sets a cost basis on these incoming seeds only: on any other row — a `BUY`, a
+    cash row, a `TRANSFER`'s giving leg — `_create_transaction()` refuses the row, a
+    `costBasisNotAllowed` validation issue instead of a transaction (rule 12b, W-B72, or
+    rule 12's `costBasisModeIncompatible` when the row names a `cost_basis_mode`; an
+    `ADJUSTMENT` taking units out may still carry its handover cost: see
+    [Per-type rules](../../backend/transactions/service.md#per-type-rules)).
+
 !!! tip "Matured-bond redemption: close at par, surplus → INTEREST"
 
     A bond is **redeemed at par (100)** at maturity. When the bank credits *more* than par
