@@ -173,7 +173,10 @@ class FXSignalQueryResult(BaseModel):
     request_index: int = Field(..., ge=0)
     from_currency: str = Field(..., min_length=3, max_length=3)
     to_currency: str = Field(..., min_length=3, max_length=3)
-    date_range: DateRangeModel
+    date_range: DateRangeModel = Field(
+        ...,
+        description="The range the signals cover: the requested one cut at the ceiling (latest_range_end(), at most 100 years long). A conversion entirely after the ceiling echoes the requested range, with no points.",
+    )
     signals: List[SignalResult] = Field(default_factory=list)
 
 

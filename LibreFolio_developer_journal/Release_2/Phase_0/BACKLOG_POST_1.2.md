@@ -6017,6 +6017,18 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   lock di produzione farebbe solo aspettare a turno i giri dei due server, senza toccare dati. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra processi:
   analisi».
+- **Z-25 · Un tetto alla lunghezza delle liste di `POST /assets/prices/query` e `POST /fx/currencies/convert`** —
+  basso, sicurezza; Z, 17/10 (X-R55, N75, punto 4; via coordinatore). Con X-R55 ogni voce ha un intervallo con un
+  tetto, ma le due API accettano liste di lunghezza qualsiasi (`List[FAPriceQueryItem]`, `List[FXConversionRequest]`),
+  e N voci moltiplicano il tetto per voce. Cura possibile: un `max_length` sui due corpi, con un 422 chiaro. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «X-R55 — intervalli di date senza
+  tetto su prezzi e cambi: analisi».
+- **Z-26 · L'attesa del lock fra processi dello scheduler non ha un tempo massimo** — basso; E (R13-SEC8), via
+  coordinatore, 17/10. `scheduler_run_lock()` (`scheduler/run_lock.py:83-91`, Z-11) aspetta il lock senza limite. Un
+  job bloccato in un worker ferma i giri degli altri: lo scheduler resta occupato, e `wake-sync` risponde 409 a chi
+  arriva dopo, dove prima rispondevano `not_leader`. Dopo X-R55 e Z-25; prima un'analisi: quanto aspettare, e cosa
+  rispondere quando il tempo finisce. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
+  sezione «Z-11 — lock dei job tra processi: analisi».
 
 ## B · Backup e Docker (fase 01)
 
