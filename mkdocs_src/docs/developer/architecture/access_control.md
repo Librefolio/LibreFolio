@@ -492,7 +492,7 @@ what it writes, and returns a `BootstrapResult` whose `action` (`BootstrapAction
 | `created` | No account at all | In one transaction: the `registration_mode` row set to `invite` (inserted when missing, `updated_by_user_id` `NULL`); the administrator, superuser and inactive (`create_user(..., is_superuser=True, is_active=False, commit=False)`), whose password is the bcrypt hash of `secrets.token_urlsafe(32)`, a secret nobody ever sees, so no password signs in and a login attempt costs what it costs for any account; an `admin_setup` token for it, the variable's or a generated one, 72 hours. A variable's token already stored once (an instance emptied after an earlier setup) is not stored again: a token is generated instead, with a warning naming the variable. `link_token` holds the plaintext of a generated token, and only of that |
 | `rearmed` | An administrator waits, and the variable's token was never stored (`_token_known()`: no row has its hash, whatever its account or purpose) | Revokes the administrator's setup links, then reads «waiting» again under the write lock that revocation took (lot A-42, [The Setup Link's Lifecycle](security.md#setup-link-lifecycle)): an account set up in the meantime rolls everything back, and the start is `ignored`, with the INFO line `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN not re-armed: the initial administrator was set up meanwhile`. Otherwise stores the new token, 72 hours. The token is neither logged nor emailed |
 | `pending` | An administrator waits, with a live setup link | Nothing new: no link issued, none logged |
-| `expired` | An administrator waits, with no live setup link: the link expired, or was revoked — by a [cancellation](#setup-cancel), for one — and no token of the variable re-arms it, as one already stored never does | Logs the WARNING `The initial administrator's setup link has expired: run ./dev.py user setup-link`, followed by `, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` when the variable is set; at the start that writes a new address, the WARNING of the address change instead, with the same ending (below) |
+| `expired` | An administrator waits, with no live setup link: the link expired, or was revoked — by a [cancellation](#setup-cancel), for one — and no token of the variable re-arms it, as one already stored never does | Logs one WARNING, which ends with the remedy `run ./dev.py user setup-link`, followed by `, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` when the variable is set. Which one (lot A-50): at the start that writes a new address, the WARNING of the address change (below); otherwise, when the account's latest setup link (by `created_at`, then `id`) was revoked and never consumed (`_latest_setup_withdrawn()`), a cancellation or an address change at an earlier start, `The initial administrator's setup link was withdrawn (cancelled, or its address changed): …`; otherwise `The initial administrator's setup link has expired: …` |
 
 - **The waiting administrator** is `pending_admin(session)`, built on
   `registration_service.pending_admin_filter()`: an inactive account with at least one `admin_setup`
@@ -509,9 +509,10 @@ what it writes, and returns a `BootstrapResult` whose `action` (`BootstrapAction
   left and the start is `expired`, with the WARNING
   `The initial administrator's address changed: the setup link handed over before no longer works; run ./dev.py user setup-link`
   (and `, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` when the variable is set), once: the next
-  starts log the expiry. A new username alone, or an address another account holds, revokes
-  nothing. `user_service.update_profile()` revokes them the same way on a real change of the
-  address (`./dev.py user set-email`): the account then waits for a link of
+  starts log the WARNING of a withdrawn link, since the latest setup link is revoked (lot A-50,
+  `expired` above), until a new link is given. A new username alone, or an address another account
+  holds, revokes nothing. `user_service.update_profile()` revokes them the same way on a real change
+  of the address (`./dev.py user set-email`): the account then waits for a link of
   `./dev.py user setup-link`, and a next start whose `LIBREFOLIO_ADMIN_EMAIL` names another
   address, the earlier one for instance, writes it, which revokes them again.
 - **Registration.** The waiting administrator is a `users` row, so `first_account_open()` is false
@@ -645,8 +646,12 @@ up: inspected, it answers `revoked`, and `POST /auth/setup` with it `400` `TOKEN
 account keeps waiting: `pending_setup` stays `true`, in the `200` of the `PATCH` too, it keeps its
 place, and its reactivation stays `409` `PENDING_SETUP`. A new link comes from
 `./dev.py user setup-link`, or from a new `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` at the next start; the
-same token re-arms nothing, being stored already, and that start is `expired`. The cancellation logs
-the WARNING of [The Setup Link's Lifecycle](security.md#setup-link-lifecycle); a second `PATCH`
+same token re-arms nothing, being stored already, and that start is `expired`, with the WARNING of
+a withdrawn link rather than of an expiry (lot A-50: the latest setup link is revoked and never
+consumed), its remedy unchanged:
+`The initial administrator's setup link was withdrawn (cancelled, or its address changed): …`. The
+cancellation itself logs the WARNING of
+[The Setup Link's Lifecycle](security.md#setup-link-lifecycle); a second `PATCH`
 finds no link left to revoke and changes nothing. A [protected account](#account-protection)
 refuses it on the API, `409` `ACCOUNT_PROTECTED`, nothing changed and the link still working:
 `update_account()` asks the hook about the cancellation (`cancel`) as about a deactivation or a
@@ -687,4 +692,8 @@ retiring, `user demote` refused), SETUP-016 to SETUP-018 to `admin-setup` (what 
 waiting, `user deactivate` cancelling its link, the stray link of an account set up before) and
 UADM-072 to UADM-079 to `users-admin` (the demotion refused, the cancellation through the `PATCH`,
 another administrator's stray link retired, the direct deletion and the protection hook before it,
-the cancellation of a protected waiting administrator refused, its link still working).
+the cancellation of a protected waiting administrator refused, its link still working). Lot A-50
+adds A50-001 to A50-004 to `admin-bootstrap`: the start after a cancellation, from the Users tab or
+from `user deactivate`, and the starts after the one that wrote a new address, log the WARNING of a
+withdrawn link; a link that ran out still logs the expiry, even when an earlier one was revoked by a
+re-arm, as the latest link decides.
