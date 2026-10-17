@@ -51,11 +51,17 @@
  * shown besides notify()'s. Their UI texts are read from the shipped catalogue, and
  * each case first proves its key is there.
  *
- * The last block pins where a report may go (X-R37, N61): only a self-hosted
+ * The next block pins where a report may go (X-R37, N61): only a self-hosted
  * instance whose configuration has loaded falls back to a public GitHub issue; on a
  * managed one, or before the configuration has loaded, a search with no valid
  * support address — an address with a user or a password is none — shows no
  * report row at all, in every state, between the sections too.
+ *
+ * The last block pins the words of a failed search (X-R31): when the stream and
+ * then the REST fallback both fail, the dropdown says the catalogue's
+ * `assets.search.failed` in the language in force — never the error's own message,
+ * which still goes to `console.error` (spied, and silenced, for that case) — and the
+ * time cap keeps its own `assets.search.timeout`.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
@@ -1365,5 +1371,49 @@ describe('AssetSearchAutocomplete — a report needs a channel (X-R37, N61)', ()
         const link = await reportLink();
         expect(link).toHaveAttribute('data-channel', 'page');
         expect(link).toHaveAttribute('href', 'https://help.example.org/assets');
+    });
+});
+
+// --- X-R31: a failed search speaks the language of the UI ---
+describe('AssetSearchAutocomplete — a failed search says so in the UI’s language (X-R31)', () => {
+    afterEach(() => {
+        // A one-shot answer a failed case did not consume must not reach the next one.
+        restSearch.mockReset();
+    });
+
+    it('ASA-T1: the stream and the REST fallback both fail: the dropdown says assets.search.failed, never the error’s own message, and the error still goes to console.error', async () => {
+        // The component logs the failure: spied to prove it still does, and silenced so the run stays readable.
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            const boom = new Error('boom 42');
+            global.fetch = vi.fn(async () => {
+                throw new Error('network down');
+            }) as never;
+            restSearch.mockRejectedValueOnce(boom);
+            await mountReady();
+            await type('apple');
+            await waitFor(() => expect(state()).toBe('error'));
+            expect(restSearch, 'precondition: the stream failed, so the search fell back to REST — which failed too').toHaveBeenCalledTimes(1);
+
+            const shownText = normalize(screen.getByTestId('asset-search-results').textContent);
+            expect(shownText, 'the error’s own message must never reach the user').not.toContain('boom 42');
+            expect(shownText, 'the catalogue’s assets.search.failed, in the language in force').toContain(normalize(catalogue('assets.search.failed')));
+            expect(consoleError.mock.calls.flat(), 'the error itself still goes to console.error').toContain(boom);
+        } finally {
+            consoleError.mockRestore();
+        }
+    });
+
+    it('ASA-T2: guard — a search cut by the time cap still says assets.search.timeout, without asking REST', async () => {
+        const timeout = catalogue('assets.search.timeout');
+        global.fetch = vi.fn(async () => {
+            throw new DOMException('The operation was aborted.', 'AbortError');
+        }) as never;
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('error'));
+        expect(restSearch, 'the time cap does not fall back to REST').not.toHaveBeenCalled();
+
+        expect(normalize(screen.getByTestId('asset-search-results').textContent)).toContain(normalize(timeout));
     });
 });

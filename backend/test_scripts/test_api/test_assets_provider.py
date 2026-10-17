@@ -1521,7 +1521,7 @@ _Z32_YAHOO = {"provider_code": "yfinance", "identifier": "{ticker}", "identifier
 #: An assignment without an identifier: AUTO_GENERATED, sent empty, stored NULL.
 _Z32_AUTO = {"provider_code": "mockprov", "identifier": "", "identifier_type": "AUTO_GENERATED", "provider_params": {"note": "Z-32 first save"}}
 _Z32_SECOND_PARAMS = {"note": "Z-32 second save"}
-SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
+SOLE_ADMIN_DELETE_DETAIL = {"error_code": "LAST_ADMIN", "message": "Cannot delete account: you are the last active administrator"}
 
 
 def _z32_lane_engine():
@@ -1649,3 +1649,139 @@ async def test_z32_reported_currency_follows_the_assignment(test_server, first, 
     assert stored == sent, f"barrier: the second save did not take effect: stored {stored}, sent {sent}"
     assert reported == expected, f"saved from {first} to {second}: reported_currency must be {expected!r}, is {reported!r}"
     print_success(f"reported_currency {reported!r} after the second save")
+
+
+# ============================================================
+# Z-33: the exchange timezone stays with the assignment through every save
+# ============================================================
+#
+# ``asset_provider_assignments.exchange_timezone`` holds the timezone the provider dates by, learnt at a refresh
+# (``Europe/London``), or ``legacy-utc``, the sentinel migration 011 puts on every yfinance assignment of an older
+# install: its rows were dated by the old rule, and the next refresh re-dates them (decision N86 §3, §5). Unlike
+# ``reported_currency`` it survives every save of the assignment through POST /assets/provider, another provider code,
+# identifier or input type included: cleared, the sentinel would leave the old rows unfixed for ever (N86 §4). And a save
+# never sets it: a new assignment, yfinance included, starts NULL — its rows are dated by the new rule.
+#
+# Same route, helpers and cleanup as the Z-32 tests above (a new user and a GBP asset of its own per test; the column
+# written and read with the ORM on the lane's test database only). Red on HEAD 22b9b90ce: AssetProviderAssignment has no
+# ``exchange_timezone``; each test fails on that first.
+
+_Z33_SENTINEL = "legacy-utc"
+
+
+def _z33_column():
+    """``AssetProviderAssignment.exchange_timezone``; until the model has it the test fails here."""
+    column = getattr(AssetProviderAssignment, "exchange_timezone", None)
+    if column is None:
+        pytest.fail("red until Z-33: AssetProviderAssignment has no exchange_timezone (N86 §4): nothing keeps the sentinel or the timezone a provider dates by", pytrace=False)
+    return column
+
+
+async def _z33_write_zone(asset_id: int, zone: str | None) -> None:
+    """``zone`` in the asset's assignment, as the migration or a refresh would have left it."""
+    column = _z33_column()
+    async with AsyncSession(_z32_lane_engine()) as session:
+        result = await session.execute(update(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id).values({column: zone}))
+        await session.commit()
+    assert result.rowcount == 1, f"setup: asset {asset_id} has {result.rowcount} assignment(s)"
+
+
+async def _z33_zone(asset_id: int) -> str | None:
+    column = _z33_column()
+    async with AsyncSession(_z32_lane_engine()) as session:
+        return (await session.execute(select(column).where(AssetProviderAssignment.asset_id == asset_id))).scalar_one()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("first", "second", "zone"),
+    [
+        pytest.param(_Z32_YAHOO, _Z32_YAHOO, _Z33_SENTINEL, id="saved-again-as-it-is"),
+        pytest.param(_Z32_YAHOO, {**_Z32_YAHOO, "provider_params": _Z32_SECOND_PARAMS}, _Z33_SENTINEL, id="other-params-only"),
+        pytest.param(_Z32_YAHOO, {**_Z32_YAHOO, "identifier": "{ticker}X"}, _Z33_SENTINEL, id="identifier-changed"),
+        pytest.param(_Z32_YAHOO, {**_Z32_YAHOO, "identifier_type": "ISIN"}, _Z33_SENTINEL, id="identifier-type-changed"),
+        pytest.param(_Z32_YAHOO, {**_Z32_YAHOO, "provider_code": "mockprov"}, _Z33_SENTINEL, id="provider-code-changed"),
+        pytest.param(_Z32_AUTO, {**_Z32_AUTO, "provider_params": _Z32_SECOND_PARAMS}, _Z33_SENTINEL, id="auto-generated-other-params-only"),
+        pytest.param(_Z32_YAHOO, {**_Z32_YAHOO, "identifier": "{ticker}X"}, "Europe/London", id="a-learnt-zone-identifier-changed"),
+    ],
+)
+async def test_z33_exchange_timezone_survives_every_save_of_the_assignment(test_server, first, second, zone):
+    """Z-33 (N86 §4): an assignment holding ``legacy-utc`` (as migration 011 leaves it) or a learnt ``Europe/London`` is
+    saved again through POST /assets/provider — as it is, with other params, another identifier, input type or provider
+    code —: the value stays, where ``reported_currency`` would be cleared. Barriers: the value is in the column before
+    the second save, and GET /assets/provider/assignments reads back what the second save sent.
+
+    Red on HEAD 22b9b90ce: AssetProviderAssignment has no ``exchange_timezone``.
+    """
+    print_section("Z-33: exchange_timezone and the assignment's saves")
+    _z33_column()
+    ticker = f"Z33{uuid.uuid4().hex[:10].upper()}.L"
+    first, second = _z32_item(first, ticker), _z32_item(second, ticker)
+    asset_id: int | None = None
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        me = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+        assert me.status_code == 200, me.text
+        user_id = me.json()["user"]["id"]
+        try:
+            asset_id = await _z32_new_asset(client)
+            await _z32_assign(client, asset_id, first)
+            await _z33_write_zone(asset_id, zone)
+            assert await _z33_zone(asset_id) == zone, f"barrier: the column holds {zone!r} before the second save"
+
+            await _z32_assign(client, asset_id, second)
+
+            stored = await _z32_stored(client, asset_id)
+            held = await _z33_zone(asset_id)
+        finally:
+            cleanup_errors = await _z32_cleanup(client, asset_id, user_id)
+    assert cleanup_errors == [], f"cleanup left rows behind: {cleanup_errors}"
+
+    sent = {"provider_code": second["provider_code"], "identifier": second["identifier"] or None, "identifier_type": second["identifier_type"], "provider_params": second["provider_params"]}
+    assert stored == sent, f"barrier: the second save did not take effect: stored {stored}, sent {sent}"
+    assert held == zone, f"saved from {first} to {second}: exchange_timezone must stay {zone!r}, is {held!r}"
+    print_success(f"exchange_timezone {held!r} after the second save")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        pytest.param(_Z32_YAHOO, None, id="a-new-yfinance-assignment"),
+        pytest.param(_Z32_AUTO, None, id="a-new-mockprov-assignment"),
+        pytest.param(_Z32_AUTO, _Z32_YAHOO, id="mockprov-saved-as-yfinance"),
+    ],
+)
+async def test_z33_a_save_never_sets_the_exchange_timezone(test_server, first, second):
+    """Z-33 (N86 §4): a new assignment starts with ``exchange_timezone`` NULL, on yfinance too, and an assignment saved
+    over to yfinance stays NULL: only migration 011 puts the sentinel, on the rows an older install holds; a save that
+    put it would have the next refresh shift rows the new rule dated right. Barrier: GET /assets/provider/assignments
+    reads back what the last save sent.
+
+    Red on HEAD 22b9b90ce: AssetProviderAssignment has no ``exchange_timezone``.
+    """
+    print_section("Z-33: a save never sets exchange_timezone")
+    _z33_column()
+    ticker = f"Z33{uuid.uuid4().hex[:10].upper()}.L"
+    saves = [_z32_item(item, ticker) for item in (first, second) if item is not None]
+    asset_id: int | None = None
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        me = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+        assert me.status_code == 200, me.text
+        user_id = me.json()["user"]["id"]
+        try:
+            asset_id = await _z32_new_asset(client)
+            for item in saves:
+                await _z32_assign(client, asset_id, item)
+            stored = await _z32_stored(client, asset_id)
+            held = await _z33_zone(asset_id)
+        finally:
+            cleanup_errors = await _z32_cleanup(client, asset_id, user_id)
+    assert cleanup_errors == [], f"cleanup left rows behind: {cleanup_errors}"
+
+    last = saves[-1]
+    sent = {"provider_code": last["provider_code"], "identifier": last["identifier"] or None, "identifier_type": last["identifier_type"], "provider_params": last["provider_params"]}
+    assert stored == sent, f"barrier: the last save did not take effect: stored {stored}, sent {sent}"
+    assert held is None, f"after {len(saves)} save(s), the last {last}: exchange_timezone must be NULL, is {held!r}"
+    print_success("exchange_timezone NULL after every save")

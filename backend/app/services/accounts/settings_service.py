@@ -17,7 +17,7 @@ instead of raw string literals.
 """
 
 from collections.abc import Callable, Sequence
-from typing import Optional
+from typing import Optional, get_args
 
 import structlog
 from sqlalchemy import select
@@ -44,18 +44,43 @@ logger = structlog.get_logger(__name__)
 # USER SETTINGS
 # ============================================================================
 
+#: The themes the web app knows: the values ``UserSettingsRead.theme`` accepts, read from it.
+KNOWN_THEMES: frozenset[str] = frozenset(get_args(UserSettingsRead.model_fields["theme"].annotation))
+#: The theme shown when neither the stored one nor the instance's ``default_theme`` is known.
+FALLBACK_THEME = "auto"
+
+
+async def _shown_theme(session: AsyncSession, user_id: int, stored: str) -> str:
+    """The theme to show for the stored ``stored``: itself when the app knows it (A-11).
+
+    Otherwise — a row or a ``default_theme`` written by hand, or a later version's theme after a downgrade — the instance's
+    ``default_theme`` when that is known, else ``auto``, with a warning. The row keeps its value: reading writes nothing,
+    and a version that knows the theme shows it again.
+    """
+    if stored in KNOWN_THEMES:
+        return stored
+    default = await get_setting_value(session, SETTINGS_REGISTRY.global_.DEFAULT_THEME.key, FALLBACK_THEME)
+    shown = default if default in KNOWN_THEMES else FALLBACK_THEME
+    logger.warning("The stored theme is unknown: another one is shown", user_id=user_id, stored=str(stored)[:20], shown=shown)
+    return shown
+
+
+async def _settings_read(session: AsyncSession, settings: UserSettings) -> UserSettingsRead:
+    """``settings`` as the API answers them; a stored theme the app does not know is shown as another (A-11)."""
+    return UserSettingsRead(
+        language=settings.language,
+        base_currency=settings.base_currency,
+        theme=await _shown_theme(session, settings.user_id, settings.theme),
+        avatar_url=settings.avatar_url,
+    )
+
 
 async def get_user_settings(user_id: int, session: AsyncSession) -> Optional[UserSettingsRead]:
     """Get settings for a user. Returns None if not found."""
     result = await session.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     settings = result.scalar_one_or_none()
     if settings:
-        return UserSettingsRead(
-            language=settings.language,
-            base_currency=settings.base_currency,
-            theme=settings.theme,
-            avatar_url=settings.avatar_url,
-        )
+        return await _settings_read(session, settings)
     return None
 
 
@@ -149,12 +174,7 @@ async def update_user_settings(user_id: int, updates: UserSettingsUpdate, sessio
 
     logger.info("Updated user settings", user_id=user_id)
 
-    return UserSettingsRead(
-        language=settings.language,
-        base_currency=settings.base_currency,
-        theme=settings.theme,
-        avatar_url=settings.avatar_url,
-    )
+    return await _settings_read(session, settings)
 
 
 # ============================================================================

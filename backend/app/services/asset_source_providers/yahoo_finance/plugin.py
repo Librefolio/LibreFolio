@@ -55,6 +55,7 @@ from backend.app.services.assets.base import AssetHistoryStartDate, AssetRateLim
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
+from backend.app.utils.exchange_dates import exchange_zone
 
 logger = get_logger(__name__)
 
@@ -141,12 +142,17 @@ class _YahooHistoryAcquisition:
     currency: str
     dividends: object | None
     splits: object | None
+    #: The exchange's IANA timezone, the one yfinance stamped the dates in (Z-33); None when unknown
+    exchange_timezone: str | None = None
 
 
 def _normalize_yahoo_date(index_value) -> date:
-    """Convert a Yahoo index value to the canonical UTC calendar date."""
-    if hasattr(index_value, "tz_convert"):
-        return index_value.tz_convert("UTC").date()
+    """The calendar date of a Yahoo index value, in its own timezone.
+
+    yfinance stamps a daily bar, a dividend or a split at midnight in the exchange's timezone (``scrapers/history.py``:
+    ``tz_localize(tz_exchange)``), so the wall date is the session's date. Converting to UTC first gave the day before
+    for every exchange east of UTC (Z-33).
+    """
     return index_value.date()
 
 
@@ -180,15 +186,22 @@ def _acquire_history_data(
         )
 
     currency = "USD"
+    reported_timezone: str | None = None
     try:
         info = ticker.info
         if info:
             currency = info.get("currency", "USD") or "USD"
+            reported_timezone = info.get("exchangeTimezoneName") or None
     except Exception:
         logger.exception(
             "Failed to fetch yfinance currency metadata; falling back to USD",
             identifier=identifier,
         )
+    # Z-33: the exchange's timezone, the one the dates were stamped in: the index's own, else Yahoo's metadata
+    index_timezone = getattr(getattr(history, "index", None), "tz", None)
+    if index_timezone is not None:
+        reported_timezone = str(index_timezone)
+    zone = exchange_zone(reported_timezone)
 
     try:
         dividends = ticker.dividends
@@ -207,6 +220,7 @@ def _acquire_history_data(
         currency=currency,
         dividends=dividends,
         splits=splits,
+        exchange_timezone=zone.key if zone is not None else None,
     )
 
 
@@ -486,10 +500,12 @@ class YahooFinanceProvider(AssetSourceProvider):
 
             currency = info.get("currency") or info.get("financialCurrency") or "USD"
 
-            # Date from regularMarketTime (Unix timestamp) or today
+            # Date from regularMarketTime (Unix timestamp), in the exchange's timezone (Z-33: a session that crosses UTC
+            # midnight, Sydney's or Auckland's, belongs to its local day; UTC when the timezone is unknown), or today
+            zone = exchange_zone(info.get("exchangeTimezoneName"))
             rmt = info.get("regularMarketTime")
             if rmt:
-                as_of_date = _dt.fromtimestamp(rmt, tz=UTC).date()
+                as_of_date = _dt.fromtimestamp(rmt, tz=zone or UTC).date()
             else:
                 as_of_date = date.today()
 
@@ -498,6 +514,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 currency=currency,
                 as_of_date=as_of_date,
                 source=self.provider_name,
+                exchange_timezone=zone.key if zone is not None else None,
             )
             logger.debug(f"current_value for {identifier}: {price} {currency}")
             return result
@@ -600,6 +617,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 events=events,
                 currency=acquisition.currency,
                 source=self.provider_name,
+                exchange_timezone=acquisition.exchange_timezone,
             )
 
         except AssetSourceError:

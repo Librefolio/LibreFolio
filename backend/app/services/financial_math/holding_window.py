@@ -34,12 +34,14 @@ class QuantityMove:
     split: bool = False
 
 
-def quantity_moves(transactions: Iterable[Any], split_linked_ids: Collection[int]) -> list[QuantityMove]:
+def quantity_moves(transactions: Iterable[Any], split_linked_ids: Collection[int], share: Decimal = Decimal("1")) -> list[QuantityMove]:
     """The quantity stream of a position's transactions, in replay order (date, then id).
 
-    ``split_linked_ids`` are the transactions linked to a SPLIT asset event (``splits.split_linked_ids``).
+    ``split_linked_ids`` are the transactions linked to a SPLIT asset event (``splits.split_linked_ids``). ``share`` is
+    the owner's share of the broker (``native_cash.effective_share``): each quantity is scaled by it, as the engine
+    scales its own (MF-A10), so the dust threshold the windows apply is the one the rows apply to the engine's quantity.
     """
-    moves = [QuantityMove(date=tx.date, order=tx.id or 0, quantity=tx.quantity or _ZERO, split=tx.id is not None and tx.id in split_linked_ids) for tx in transactions]
+    moves = [QuantityMove(date=tx.date, order=tx.id or 0, quantity=(tx.quantity or _ZERO) * share, split=tx.id is not None and tx.id in split_linked_ids) for tx in transactions]
     return sorted(moves, key=lambda move: (move.date, move.order))
 
 

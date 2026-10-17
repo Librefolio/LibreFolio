@@ -88,8 +88,8 @@ Access to brokers is granularly controlled via the `BrokerUserAccess` table.
 
 ### 🗑️ Deleting an Account {: #account-deletion }
 
-An account is deleted by its holder, from the profile (`DELETE /api/v1/auth/users/me`, refused with `400` to
-the last active administrator: see [Superusers](access_control.md#superusers)), or by an administrator
+An account is deleted by its holder, from the profile (`DELETE /api/v1/auth/users/me`, refused with `400`
+`LAST_ADMIN` to the last active administrator: see [Superusers](access_control.md#superusers)), or by an administrator
 (`DELETE /api/v1/users/{user_id}`, with its refusals in
 [Deleting an Account](access_control.md#admin-account-deletion)). Both apply one rule, broker by broker: the
 last-owner rule of `BrokerService.leave_broker()` (`backend/app/services/brokers/access.py`).

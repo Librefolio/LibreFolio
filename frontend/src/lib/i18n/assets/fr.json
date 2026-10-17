@@ -71,7 +71,8 @@
     },
     "notFound": "Actif n° {id} introuvable",
     "loadFailed": "Impossible de charger les informations de l'actif",
-    "pricesLoadFailed": "Impossible de charger les prix"
+    "pricesLoadFailed": "Impossible de charger les prix",
+    "manualChip": "Manuel"
   },
   "assets": {
     "create": "Nouvel actif",
@@ -99,15 +100,16 @@
     },
     "delete": {
       "confirmQuestion": "Supprimer \"{name}\" ?",
-      "confirmWarning": "Les assignations de fournisseurs et l'historique des prix seront supprimés. ⚠️",
+      "confirmWarning": "Les assignations de fournisseurs, l'historique des prix et les événements (dividendes, divisions…) seront supprimés. ⚠️",
       "toastOk": "{name} supprimé",
       "toastFailed": "Échec de suppression de {name}",
       "hasTransactions": "Impossible de supprimer \"{name}\" : des transactions existent",
       "bulkOk": "{n} actifs supprimés",
       "bulkPartial": "{failed} actifs non supprimés (ont des transactions)",
-      "bulkConfirmMessage": "Supprimer {n} actifs? Les assignations de fournisseurs et historique des prix seront supprimes.",
+      "bulkConfirmMessage": "Supprimer {n, plural, one {# actif} many {# actifs} other {# actifs}} ? Les assignations de fournisseurs, l'historique des prix et les événements (dividendes, divisions…) seront supprimés.",
       "resultDeleted": "supprimé",
-      "resultHasTransactions": "a des transactions existantes"
+      "resultHasTransactions": "a des transactions existantes",
+      "itemsLabel": "{count, plural, one {# actif} many {# actifs} other {# actifs}}"
     },
     "merge": {
       "title": "Fusionner des actifs",
@@ -345,7 +347,8 @@
         "github": "Ouvre un ticket public sur GitHub avec les détails de cette recherche : relisez-le avant de l'envoyer"
       },
       "reportCopied": "Détails de la recherche copiés : collez-les dans la page d'assistance.",
-      "reportCopyFailed": "Impossible de copier les détails de la recherche : décrivez votre recherche sur la page d'assistance."
+      "reportCopyFailed": "Impossible de copier les détails de la recherche : décrivez votre recherche sur la page d'assistance.",
+      "failed": "La recherche a échoué. Veuillez réessayer."
     },
     "comparison": {
       "title": "Comparaison des données du fournisseur",

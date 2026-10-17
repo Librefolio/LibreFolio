@@ -6608,3 +6608,154 @@ di «promuovi tutto», scritto e girato nello slot).
    dev `a6adb0066` (HEAD `a5d615fd7` antenato; dev tocca solo il backlog, in altre sezioni): 0 conflitti; `mkdocs build` stretto e
    `check-links` con uscita 0 (log `files/logs/wb70/31_sim.log`; la stessa a 18:56 su `d9e9a88b2`). `git diff --check` pulito.
    Handoff FROZEN; H rivede W-B77.
+
+### Revisioni dopo l'ingresso: MF-SEC9g (di E) ed E-19a, la guardia del gap-fix ✅ (2026-10-17, sola lettura, HEAD `c9ebc1102`)
+
+W-B70 entrato: dev `41335f1e1` (`07fcf4303`), CHANGELOG `c9ebc1102`. `theme-roles --check` pulito sulla HEAD (le condizioni del
+coordinatore dei colori per C-97c: classi invariate, il cancello pulito a ogni checkpoint, un colore solo col suo via).
+- **MF-SEC9g** (`316f9c0d3`): **OK, nessun reperto**. Semantica identica: gli indici ISIN e ticker tengono i valori salvati nell'ordine
+  dell'universo e si leggono con `.upper()` come l'uguaglianza di prima; un matcher compilato per ago con la stessa regola del testo
+  vuoto; gli stessi campi del nome, nello stesso ordine, e le stesse porte di priorità. Il thread legge solo le viste semplici, costruite
+  sul loop dagli attributi già caricati; `_add_candidate` legge esattamente i quattro campi della vista. Osservazione: il confronto dei
+  nomi generici resta O(estrazioni × universo) di CPU, ora fuori dal loop.
+- **E-19a, la guardia del gap-fix** (`e4a4af4e2`, doc `180e7b20d`): **OK**. Le righe sono quelle che `get_balances_at_end_of` somma
+  (broker, data fino ad `as_of`, le stesse esclusioni; `amount` NOT NULL); il controllo di W-B74 prima; una query DISTINCT per
+  checkpoint o verifica; il messaggio è testo semplice in `GapFixStep` (`{group.error}`): i codici citati sono sicuri. Nota: il 409 arriva
+  in inglese in ogni lingua, come quello di W-B74 → **W-B80** (dopo la 1.3).
+- Backlog: chiusi con i loro commit W-B43, W-B58, W-B59, W-B60 (miei) e W-B61, W-B62 (di X), entrati senza la riga ✅.
+
+### W-B48 — gli ultimi selettori per testo nei due spec del data editor: analisi e cura ✅ (2026-10-17) — 🧊 FROZEN
+
+Ogni sito della voce c'è ancora, circa 15 righe più in basso. Sostituzioni senza codice di prodotto:
+- `asset-data-editor.spec.ts`: `/Import \(N\)/` (308, 322, 345, 359, 385, 414, 478, 492) → `data-import-confirm` con `data-valid-rows`
+  (e `data-error-count`); `button:has-text("Save")` (231, 260, 279, 368, 423) → `asset-editor-save-btn`; `toHaveText(/Save \(\d+\)/)`
+  (372) → il `data-badge` della scheda dei prezzi (`asset-editor-prices-tab` → `tab-badge`), lo stesso conteggio delle righe modificate;
+  `button:has-text("Cancel")` (235, 292) → `asset-editor-cancel-btn`; `span.rounded-full` (274) → `tab-badge` con `data-badge` (li
+  pubblica `ui/tabs/TabBar.svelte:201`).
+- `fx-csv-import.spec.ts`: `'Import (2)'`/`'Import (1)'` (178, 196, 223, 264, 397, 479, 490) → `data-import-confirm` con
+  `data-valid-rows`; `text=Discard import` (280) → `data-import-discard-confirm`; `hasText: 'Cancel'` (291) → `data-import-cancel`; il
+  test 14 (315–336) senza i due `if (count() > 0)`: il banner c'è e nomina i due codici, prima e dopo lo scambio.
+- **Due glifi** restano, entrambi in file di X: il ✕ del pannello dell'editor (`routes/(app)/assets/[id]/+page.svelte:2650`) e il ⇄
+  dell'import FX (`FxDataImportModal.svelte:199-206`). Un selettore per ruolo leggerebbe titoli tradotti: chiesto l'OK per un
+  `data-testid` ciascuno (`asset-detail-editor-close`, `fx-import-swap`).
+- Prove: `front-asset asset-data-editor` e `front-fx fx-csv-import`, nello slot (circa 10 min).
+
+**Decisione** (coordinatore, 17/10 19:4x): **via, con i due `data-testid`** (`asset-detail-editor-close`, `fx-import-swap`), solo
+l'attributo, nient'altro nei due file di X (J ha la pagina dell'asset aperta alle righe 57/916, lontano da 2650). Slot di circa 10 minuti
+da chiedere quando pronto.
+
+**Passi**:
+1. ✅ **Selettori** (17/10, test-author `wb48-selectors`, scritti e non girati): le sostituzioni della lista, verificate sui componenti;
+   oltre la lista, con la sua ragione: il badge della scheda `'2'` esatto (le due righe importate), i due «non N righe» come
+   `data-valid-rows` `'0'` e disabilitato (aspettano invece di passare subito), e il test 14 con un `not.toHaveText(prima)` dopo lo
+   scambio (un banner che non si aggiorna non passa).
+2. ✅ **I due `data-testid`** (17/10): `asset-detail-editor-close` sul ✕ (`routes/(app)/assets/[id]/+page.svelte:2650`) e `fx-import-swap`
+   sul ⇄ (`FxDataImportModal.svelte`), solo l'attributo; poi il ✕ dello spec e **tutti gli otto** ⇄ dello spec FX su quei testid (sette
+   oltre la lista della voce, lo stesso glifo). Prettier pulito sui quattro file; `theme-roles --check` pulito; `front check` 0/0 dopo un
+   `api sync` (il client generato era di nuovo quello di prima dell'avanzamento: 7 errori nei file di X).
+3. ✅ **Slot** (via del coordinatore 19:4x, insieme a W-B51; `files/scripts/wb4851_slot.sh`, log `files/logs/wb4851_slot_*.log`):
+   `front-asset asset-data-editor` **30/30**, `front-fx fx-csv-import` **22/22** (dopo `db populate --force` sulla mia cartella).
+4. ✅ **Checkpoint** (17/10, 19:5x) — 🧊 FROZEN: simulazione su dev `2fbbf4c4c` con `--docs` pulita (0 conflitti, build stretta e
+   `check-links`), `theme-roles --check` pulito, `git diff --check` pulito, porta 6184 libera.
+
+### W-B51 — la tolleranza dei duplicati BRIM sulle quantità crypto: analisi e cura ✅ (2026-10-17) — 🧊 FROZEN
+
+**Stato reale**: `detect_tx_duplicates` (`backend/app/services/brim/brim_provider.py:2166`) cerca, per riga del report, le righe del broker
+dello stesso tipo e giorno (e dello stesso asset, se risolto), poi tiene quelle con `abs(existing.quantity - tx.quantity) <=
+QUANTITY_TOLERANCE` (`Decimal("0.0001")`, `:2207`, `:2256`) e la cassa uguale a `AMOUNT_TOLERANCE` (0,01).
+- **Il caso vero, più comune dell'esempio della voce**: due acquisti ricorrenti da 10 € di BTC lo stesso giorno, 0,00015123 e
+  0,00015098 BTC: stessa cassa, quantità a 2,5e-7 l'una dall'altra, quindi doppione: «probabile» se anche la descrizione coincide
+  (un piano d'accumulo la ripete), e allora la seconda riga parte **deselezionata**; «possibile» altrimenti, selezionata con un avviso
+  (`importDedup.ts`; la correzione è del test-author). Con le quantità esatte a 10 decimali (C-97a), 0,0001 è grosso per ogni token sotto il centesimo di unità.
+- **L'uguaglianza esatta** sistema il reimport dello stesso file (la quantità salvata torna com'era scritta), ma perde un report di
+  un altro formato che arrotonda (0,0002 contro 0,00015123 salvato): la riga tornerebbe «nuova», e un doppio import vero è peggio di un
+  doppione segnalato.
+
+**Proposta D-W51-1**: uguali alla precisione del meno preciso dei due: `|a − b| ≤ ½ unità dell'ultima cifra` della scala minore, la scala
+letta senza gli zeri finali (`normalize()`: la lettura della colonna aggiunge zeri, `10` torna `10.000000`). 0,00015123 contro 0,00015098:
+diversi; 0,0002 (un report a 4 decimali) contro 0,00015123: uguali; gli interi come oggi. La cassa resta a 0,01 (valuta, 2 decimali).
+Un aiuto puro (`_same_quantity`) accanto al rilevatore; rossi prima: i due acquisti ricorrenti (oggi doppioni), con guardie per il
+reimport identico, il report arrotondato e le quantità intere.
+
+**Decisione D-W51-1** (coordinatore, 17/10 19:4x): **approvata con una guardia**: due quantità coincidono quando, arrotondate (half-up)
+alla scala della meno precisa, sono uguali **e** `|a − b| ≤ 0,0001` (il limite di oggi: mai più largo di prima; 10 e 10,4 restano
+distinte); la scala misurata sui valori `normalize()`. Rossi prima: 0,00015 contro 0,00008 (oggi doppioni), un 0,00015 di un report
+arrotondato contro uno 0,000153 salvato (resta un doppione), il caso degli interi.
+
+**Passi**:
+1. ✅ **Cura pronta** (17/10): `files/scripts/wb51_cure.py`, dry run pulito; l'aiuto provato a parte su tutti gli esempi della decisione
+   (anche 25 cifre, `None`, inf).
+2. ✅ **Rossi** (17/10, test-author `wb51-reds`; uguali nella mia corsia, carico 32, `files/logs/wb51/10_my_reds.log`): `db brim`
+   **4 rossi, 35 verdi**, la classe nuova `TestWB51QuantityOfADuplicate` in `backend/test_scripts/test_db/test_brim_db.py`:
+   - rossi: 0,00015 contro 0,00008 e 0,00015123 contro 0,00015098 (oggi doppioni «probabili»); una quantità salvata illeggibile, testo
+     `'n/a'` o `9e999` (+inf), che si legge `None`: oggi `TypeError` a `brim_provider.py:2256` (la cassa guardava già `None`);
+   - guardie: il report arrotondato (0,00015 contro 0,000153 salvato), 10 e 10, la reimportazione identica, il valore salvato riletto
+     con gli zeri (0,00015 → `0.000150`) in entrambi i versi, il pareggio half-up (0,000145 contro 0,00015), 10 e 10,4 distinti.
+   > **⚠️ Fuori pista**: il mio esempio «`0.000153000` riletto» non esiste: la colonna completa a 6 decimali, e `0.000153` torna com'è;
+   > il test-author ha usato `0.00015` → `0.000150`.
+3. ✅ **Cura applicata e verdi** (17/10): `wb51_cure.py --apply` (`QUANTITY_MATCH_BOUND`, `_decimal_places`, `_same_quantity` accanto a
+   `detect_tx_duplicates`; la docstring del rilevatore); `ruff`, `black` puliti; `db brim` **39/39**; `utils gate-event-loop-io` 14/14.
+4. ✅ **Doc**: `developer/backend/brim/architecture.md`, la tabella della deduplicazione (la regola della quantità e della cassa).
+   > **Scoperta**: il wizard ha una **copia** della regola, sul float e a 0,0001, per i doppioni fra file e col pool in attesa
+   > (`importDedup.ts:145-157`, l'identità del gruppo con `toFixed(4)`): **W-B81**, proposta subito dopo.
+5. ✅ **Slot** (con W-B48): `api brim` **118/118**, `api brim-scalable` **2/2**. Checkpoint FROZEN con W-B48 (sopra).
+
+### W-B81 — i doppioni del wizard con la regola di W-B51: analisi e cura (2026-10-17) ✅
+
+**Base**: HEAD `c97001b80` = dev con W-B48 e W-B51 (`080f7ee7f`, `52573b4aa`, `5c2faced1` → `4bc6b2ab1`, CHANGELOG `c97001b80`). Via del
+coordinatore (17/10 19:4x): «Vitest first; `importDedup.ts:145-157` applies exactly D-W51-1; fold the `toFixed(4)` group identity onto
+the same rule, no float compare on decimals; name the shared cases so backend and frontend pin the same table».
+
+**Stato reale** (`frontend/src/lib/features/transactions/import/importDedup.ts`, `importTypes.ts`):
+- `DedupKey` tiene quantità, importo e costo per unità come `number`; `buildDedupKey` legge `Number(tx.quantity ?? 0)`;
+  `dedupKeysMatch` confronta in float a 0,0001 (quantità e costo) e a 0,01 (importo); `describeDedupKey` scrive `toFixed(4)`/`toFixed(2)`
+  (0,00015123 e 0,00015098 hanno la stessa identità `0.0002`). Il wizard usa le chiavi solo attraverso le funzioni (`ImportWizardModal`,
+  il pool in attesa); l'identità del gruppo vive nella sessione (nessuna memoria).
+- In più, dai rossi: un NaN (`'n/a'`) combaciava con tutto (`Math.abs(NaN) > 0.0001` è falso), il float sbagliava il limite
+  (100 contro 100,0001; −100 contro −100,01) e confondeva due testi a 18 decimali (`wei-apart`).
+
+**Contratto**: un lettore esatto dei testi decimali semplici (segno, cifre, punto facoltativo; mai un esponente: un report scrive
+decimali semplici, `SafeDecimal`), `sameDedupQuantity(a, b)` con la regola di D-W51-1 (half-up alla scala del meno preciso, `normalize`
+dei testi, e `|a − b| ≤ 0,0001`) per quantità e costo per unità; l'importo entro 0,01 calcolato esatto; `DedupKey` con i testi esatti, e
+`describeDedupKey` con il testo esatto di ogni numero. Un testo che non è un decimale semplice non fa chiave; **uno vuoto si legge `0`**
+(decisione mia, il default del payload: una riga di cassa con la quantità svuotata incontra ancora il suo gemello in attesa).
+`getDedupCurrency` rende l'importo come testo esatto; **un importo vuoto si legge `0`** come uno mancante e come la quantità (oggi
+`Number('')` è 0; domanda del test-author, decisione mia). **Un numero finito** (i default `?? 0` del codice, un valore messo a run
+time: il tipo dice testo) si legge come lo scrive JavaScript, l'esponente espanso (`1.5e-7` → `0.00000015`); un testo resta stretto
+(`'1.5e-7'` illeggibile). Il confronto resta stretto: il vuoto diventa `0` solo nei lettori dei campi (`buildDedupKey`, `getDedupCurrency`).
+Fuori ambito: i gettoni del confronto a N colonne (`CmpSource`, `ImportWizardModal.svelte:1718`, `toFixed(2)`) evidenziano le celle a
+schermo, non decidono un doppione: restano.
+
+**Passi**:
+1. ✅ **Rossi** (test-author `wb81-reds`, `importDedup.test.ts`, in `front-utility core-unit`): **47 rossi, 72 verdi** (119); la tabella
+   condivisa coi nomi del backend (`apart-at-5-decimals`, `recurring-buys-at-8-decimals`, `report-rounded`, `integers-10`,
+   `integers-10-and-10.4`, `identical-reimport`, i due «padded», `half-up-tie`, `unreadable[text]`, `unreadable[inf]`), più
+   `integers-10-read-back`, `bound-inclusive`, `wei-apart`, `negative-half-up-tie`; i letterali di `DedupKey` passati a testi. Poi due
+   aggiustamenti chiesti: il vuoto si legge `0` in `buildDedupKey`, le attese di `getDedupCurrency` come testi. Terzo giro: l'importo
+   vuoto si legge `0`, un numero finito come lo scrive JavaScript (esponente espanso), le forme accettate (`+0.5`, `.5`, `5.`, `' 0.5 '`,
+   `-.5`), l'esponente anche finito (`'1.5e-7'`) illeggibile. **Rossi confermati da me** (17/10, carico 15): `importDedup.test.ts` **135
+   test, 67 rossi, 68 verdi**; `importDuplicateResolver.test.ts` 54/54 (solo il commento di `:298`). Log `files/logs/wb81/50_reds_confirm.log`.
+2. ✅ **Cura pronta**: `files/scripts/wb81_cure.py` (dry run pulito sui 2 file), l'aritmetica provata in node su tutta la tabella nei due
+   versi (`files/wb81_check.mjs`).
+3. ✅ **Doc**: `developer/frontend/components/features/import-wizard.md`, la tabella della firma (quantità, importo, costo per unità).
+4. ✅ **Cura applicata** (17/10, `wb81_cure.py --apply`): `importTypes.ts` (`DedupKey` a testi, le tolleranze come testi) e
+   `importDedup.ts` (`readExactDecimal` / `readFieldDecimal`, `exactText`, `atScale`, `withinExact`, `sameDedupQuantity` esportata,
+   `sameDedupAmount`, `getDedupCurrency` a testo, `buildDedupKey`, `dedupKeysMatch`, `describeDedupKey` senza `toFixed`).
+   > **Note implementazione**: un lettore solo, `readExactDecimal`: un testo decimale semplice, o un numero finito com'è scritto da
+   > JavaScript con l'esponente espanso (`exactDecimal`); `readFieldDecimal` legge il vuoto come `0` (i due lettori dei campi). Le cifre
+   > in `bigint`, nessun `Number` sulle cifre. Aritmetica provata in node prima (`files/wb81_check.mjs`, 21 casi nei due versi e il limite
+   > dell'importo; `files/wb81_check2.mjs`, 35 casi del lettore).
+   > **⚠️ Fuori pista**: `ImportWizardModal.svelte:1718` scrive `src.cashAmount.toFixed(2)`, ma `src` è un `CmpSource` del confronto a N
+   > colonne (gettoni per evidenziare le celle), non una `DedupKey`: fuori ambito, non toccato. Gli E2E leggono l'identità del gruppo
+   > dal testid (`import-wizard-resolver-compare-{key}`, `tx-import-duplicate-precedence.spec.ts:858`), mai un formato scritto a mano;
+   > l'identità resta unica (`DuplicatesStep.svelte:149`, `{#each … (group.key)}`): due chiavi dello stesso testo combaciano.
+5. ✅ **Verdi** (17/10, `files/scripts/wb81_light.sh`, carico 13–41, una alla volta; log in `files/logs/wb81/`):
+   - Vitest dei 7 file dell'import (`importDedup`, `importDuplicateResolver`, `importMerge`, `importPairs`, `importRowState`,
+     `importResolutionHelpers`, `ImportWizardModal`): **347/347**;
+   - Prettier dei 4 file: pulito; `theme-roles --check`: pulito;
+   - `api sync`: nessuna differenza tracciata;
+   - `front-utility core-unit`: **217 file, 9 212 test** verdi; `front-utility component-unit`: **185 file, 4 923** verdi;
+   - `front check`: **0 errori, 0 avvisi**.
+   - Non girato: nessun E2E. Proposto facoltativo: `front-transaction tx-import-duplicate-precedence` (6 test, i gruppi tra file sul
+     percorso dei dati veri).
+6. ✅ **Backlog**: W-B81 ✅.
