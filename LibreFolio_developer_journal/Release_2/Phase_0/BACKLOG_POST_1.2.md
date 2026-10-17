@@ -706,7 +706,7 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
 - **T-U6 · Finestre di detenzione dal FIFO** — medio; T, 11/10. Comprende L1 e L2 di I e T-B4. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezioni «2.5» e «7.1».
 - **T-U7 · Pesi e concentrazione** — medio; T, 11/10. Comprende W1 (l'allocazione senza il valore in viaggio). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «2.8» e «7.1».
-- **T-U8 · Il frontend solo di presentazione: Δ, KPI, lotti** — medio-alto; T, 11/10. Comprende il valore d'apertura
+- **T-U8 · Il frontend solo di presentazione: Δ, KPI, lotti** — medio-alto; T, 11/10. **Stato al 17/10 (coordinatore)**: con Y12a, MF-P e il lotto R17/W8/P4 di Y (dev `1565b6bbb`) restano solo V11 e P5, legati a MF-E e a CP-7b di J; la dichiarazione delle misure è coperta per `MeasureSignal.ts` da CP-14b. Comprende il valore d'apertura
   che il modale della custodia ricalcola come quantità × prezzo d'apertura (`LotCustodyModal.svelte`) invece di
   leggere `original_cost`, trovato in B3b, e la dichiarazione nel codice delle misure interattive che la regola
   ammette (`MeasureSignal.ts`, `CompoundSignal.ts`, `LinearSignal.ts`, `SineSignal.ts`; docs-writer di T-1). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «7.1».
@@ -716,7 +716,7 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   cambia il contratto, quindi la v2. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «7.1» e «C-55 — analisi».
 - **T-U10 · Interessi e convenzioni di calendario (`interest.py`)** — basso-medio; T, 11/10, decisione D-8. Dettagli:
   [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «2.10» e «7.1».
-- **T-D9 · MeasureSignal: la soglia dei 30 giorni sull'annualizzato** — minimo; T, 11/10, decisione D-9. Dettagli:
+- ✅ **T-D9 · MeasureSignal: la soglia dei 30 giorni sull'annualizzato** — **chiusa il 17/10 da CP-14b di J** (dev `4111239a7`): `MIN_ANNUALIZATION_DAYS = 30` in `MeasureSignal.ts`, `—` sotto i 30 giorni e su un inizio a 0 (N65). Era: minimo; T, 11/10, decisione D-9. Dettagli:
   [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «2.1», riga R18.
 - **P-5 (di P) · Migrare `roi_utils` e `valuation_utils` in `financial_math`** — basso, refactor; decisione D1 del
   developer, registrata da P (09/10). Coperta da T-1 e BU1 se entrano nella 1.2. Dettagli:
@@ -4500,7 +4500,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
      (`except (ValueError, IndexError, ZeroDivisionError)`): lo chiudo insieme.
   - Inoltre E ha classato MEDIUM 8/10 le scritture dei cambi da parte di qualunque utente (profilo gestito): va al
     developer insieme a D-SEC2-1, non a X.
-- ✅ **X-R51 · Il refresh non dice più perché ha scartato il valore corrente** (consegnata il 17/10, 05:15; SHA all'ingresso) — piccolo, **subito dopo l'ingresso di
+- ✅ **X-R51 · Il refresh non dice più perché ha scartato il valore corrente** (chiusa il 17/10: `ce798e36a`, entrata in dev `b3cae6e0e`) — piccolo, **subito dopo l'ingresso di
   X-R40/W-B62**; X, 17/10 (trovato dal docs-writer di X-R40).
   - Con X-R40/W-B62 una quotazione corrente che nessuna colonna tiene si scarta prima dell'upsert. Il risultato del
     refresh perde così il motivo («rejected … no price column can keep»): con lo storico è OK senza messaggio, senza
@@ -4513,12 +4513,26 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
       massimo 14 cifre prima della virgola», ma ne ha 14. Aggiungere «sotto 100000000000000». I test cercano solo i
       numeri 14 e 10, e la frase va aggiornata anche in `backend/fx/configuration.md`;
     - la docstring di `_collect_leg_rates()` (`sync.py`) nomina solo l'overflow, non l'underflow.
-- **X-R52 · ECB: un valore che non è un numero fa perdere tutta la valuta** — piccolo, disponibilità; X, 17/10 (trovato dal
+- ✅ **X-R52 · ECB: un valore che non è un numero fa perdere tutta la valuta** (consegnata il 17/10, 05:35; SHA all'ingresso) — piccolo, disponibilità; X, 17/10 (trovato dal
   docs-writer di X-R50).
   - `ecb/plugin.py` non ha un `try` per osservazione, e il suo `except (KeyError, IndexError, ValueError)` non cattura
     `InvalidOperation`: un valore ostile fa uscire l'eccezione grezza invece di `FXServiceError`, e si perde la valuta,
     forse tutto il fetch di ECB. ECB è il fornitore principale dei cambi.
   - Cura: saltare l'osservazione (`ArithmeticError`), come BOE, SNB e FED con X-R50. Un rosso in `test_fx_parse_errors.py`.
+- **X-R53 · Usare il campo dei periodi fissi (1D, 1W…) che MF porta nel backend** — medio, **quando MF manda il
+  contratto**; X, 17/10 (coordinatore).
+  - Oggi la tabella dei periodi fissi di asset e cambi si calcola nel frontend (`lib/utils/assetPriceDerived.ts:193`,
+    `AssetTable.svelte:239`, `routes/(app)/fx/+page.svelte:236`). MF, nel lotto MF-P, crea il campo nel backend.
+  - Da fare: leggerlo da lì nei miei file, quando MF scrive col contratto. Non ora.
+  - Accordo con MF (17/10, 05:25), detto al coordinatore:
+    - endpoint dedicati: `POST /assets/prices/period-changes` e `POST /fx/currencies/period-changes`;
+    - `as_of` = la fine dell'intervallo, come oggi: le serie sono giornaliere e riempite all'indietro, quindi i numeri
+      non cambiano, compreso un 1D a 0 % nel fine settimana;
+    - resta la regola di oggi, che mostra le colonne fino all'intervallo scelto, quindi niente cambia a vista. Mostrare
+      tutti i periodi che hanno un valore va proposto al developer;
+    - `target_currency` col cambio di ogni giorno;
+    - MF scrive il backend (moduli nuovi, rotte e schemi aggiunti nei miei file) e io lo rivedo; il frontend è mio, dopo
+      l'ingresso di MF.
 
 ## W · Import e transazioni (fase 01)
 
@@ -5506,7 +5520,11 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - la liquidazione senza mora va in **CP-14b**, coi valori dichiarati, il rosso prima e una riga 🐛;
     - la parte della mora aspetta il developer (la domanda è nella lista del mattino);
     - `get_current_value` contro `get_history_value` dopo la scadenza si verifica nell'analisi di CP-14b.
-  - Dettagli: piano J, §10 «CP-14a».
+  - **Liquidazione senza mora: curata in CP-14b (17/10)** — è il capitale quando l'ultima cedola cade alla scadenza,
+    altrimenti il valore del giorno; `get_current_value` e `get_history_value` dopo la scadenza la seguono. Rosso prima,
+    8 punti della rete dichiarati (le liquidazioni di `s4_annual_settlement` al capitale). **Resta aperta la parte
+    della mora**: base, liquidazione che si sposta con `end_date`, cedole della mora senza azzeramento (developer).
+  - Dettagli: piano J, §10 «CP-14a» e «CP-14b».
 - **J-40 · Lo svuotamento dei dati di mercato toglie gli SPLIT e lascia rettifiche senza costo (il buco di P-10 dal
   lato asset)** — medio, numeri, da decidere; test-author di J (CP-14a, V-4), 17/10, letto nel codice. Area di X.
   - `POST /assets/{id}/market-data/wipe` (`market_data.py:46-71`) è il flusso del cambio di valuta
@@ -5532,6 +5550,20 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   Area di X. Un rapporto 0 o negativo si salva (P-10 lascia passare la modifica, il tipo non cambia). Quando una
   transazione lo lega, il motore solleva `ValueError` (`engine.py:226-227`) e il rapporto della Dashboard risponde
   500. `is_valid_split_ratio` della casa (`splits.py`) esiste già. **→ X** (coordinatore, 17/10).
+- **J-43 · L'avviso delle quote diverse fra le due gambe di un trasferimento tace se cadono lo stesso giorno** —
+  minimo, qualità dei dati; MF (MF-J4), assegnata a J dal coordinatore il 17/10, dopo CP-14b.
+  - In `financial_math/portfolio/classifier.py:131-149` l'avviso `share mismatch` sta dentro il ramo
+    `if pair_key not in processed_pairs and tx.date != paired.date:`, quello che costruisce l'intervallo in transito.
+  - Due gambe collegate dello stesso giorno, fra broker con quote di proprietà diverse, non producono nessun avviso
+    (`share_mismatch_warnings`, `schemas/portfolio.py:239`).
+  - Cura: l'avviso esce dal ramo delle date diverse e resta una volta per coppia. Prima il rosso.
+- **J-44 · Il Δ% del tooltip del grafico dà 0 % quando il primo valore è 0** — minimo, numeri; J, 17/10, letto nel
+  codice durante CP-14b. `components/charts/priceChartHelpers.ts::buildDeltaHtml` calcola il Δ% dal primo valore del
+  grafico e, per scelta scritta nel suo JSDoc, dà 0 % su un primo valore 0. È lo stesso numero sbagliato che la
+  decisione N65 toglie al righello (CP-14b: `—`), in una seconda copia del Δ% nel frontend (regola 10: va segnalata).
+  Da instradare: il file ha storia dei colori (lotto B) e di X (helper della pagina asset). Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «CP-14b».
+  - 17/10, coordinatore: **a J**, dopo F5, riusando `changePct` di `MeasureSignal.ts` (stessa regola di N65); X rivede in sola lettura, nessuna classe di colore toccata.
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -5655,12 +5687,13 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   finché non si ricaricano. Da decidere con Y dopo Y11: per esempio i pannelli si ricaricano da soli su
   `{kind: 'prices'}`, fuori da `pageBusy`. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-13», passo 6.
-- **Z-16 · `admin/filesystem`: l'albero tradotto è indietro** — minimo, traduzione; Z, 16/10 (Z-12). In
-  `filesystem.es.md` gli altri nove commenti dell'albero sono ancora in inglese, e gli alberi IT, FR ed ES non hanno le
-  tre righe aggiunte dopo in inglese (`backups/`, `secrets/` e `instance.key`). La pagina ha già debito di traduzione
-  (la cache di Aphra è del 10/10, l'inglese è cambiato dopo), quindi niente stamp: da chiudere col prossimo giro di
-  traduzione, verificando che i commenti dell'albero spagnolo vengano tradotti, oppure a mano in un lotto di doc.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-12».
+- ✅ **Z-16 · `admin/filesystem`: l'albero tradotto è indietro** — minimo, traduzione; Z, 16/10 (Z-12). **Chiusa il
+  17/10 a mano** (il commit è del coordinatore; via del 17/10 ~05:32, senza stamp): gli alberi IT, FR ed ES hanno le
+  tre righe (`backups/`, `secrets/`, `instance.key`), con la colonna dei commenti allineata all'inglese, e i nove
+  commenti dello spagnolo sono tradotti. La pagina resta con il suo debito di traduzione fuori dall'albero (la cache
+  di Aphra è del 10/10): il prossimo giro lo chiude. Era: in `filesystem.es.md` nove commenti in inglese, e i tre
+  alberi senza le tre righe aggiunte in inglese. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-16».
 - ✅ **Z-17 · `developer/backend/scheduler.md`: «The backend does not validate these values»** — minimo, doc;
   docs-writer di Z, 16/10 (Z-5). **Chiusa il 16/10 col mini-lotto Z-17** (il commit è del coordinatore): la frase dice
   ora che `PATCH /api/v1/settings/global/bulk` controlla ogni valore con `validate_global_setting_value()` contro
@@ -5932,7 +5965,7 @@ sulla base `23f6578f3`.
 
   ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): `exportable_instance_key()` e `generated_key_unusable()` usano
   il limite di 4096 byte in UTF-8 (`INSTANCE_KEY_MAX_BYTES`).
-- **B-27 · Dopo un ripristino riuscito la scheda Backup non dice nulla** — piccolo; G (G-20) tramite il coordinatore,
+- ✅ **B-27 · Dopo un ripristino riuscito la scheda Backup non dice nulla** — piccolo; G (G-20) tramite il coordinatore,
   17/10, decisione notturna N67 (la rivede il developer). Dopo un ripristino `committed` la pagina va al login senza
   dire niente (FBKP-107), e al rientro la scheda tace: `restore-last-result` c'è solo per `rolled_back`
   (`RestoreCard.svelte:64`). Si aggiunge l'avviso «applied on {date}, backup of {date} (LibreFolio {version}),
@@ -5940,6 +5973,27 @@ sulla base `23f6578f3`.
   `GET /restore/status` dà già `finished_at`, `backup_created_at`, `backup_app_version` e `confirmed_by`. Con i casi
   Vitest, una chiave i18n in 4 lingue, un E2E su uno stato finto (come FBKP-103, e dà la foto a G) e una riga nella
   guida. Dopo B4b. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
+
+  ✅ **Chiusa il 17/10, non da fare** (coordinatore, 05:00): N67 è ritirato e resta la decisione P8 del developer
+  (16/10, 11:25): un ripristino riuscito non dice nulla, «se ha funzionato lo vedi». Nell'elenco del developer va solo
+  come nota. L'analisi è pronta nel piano 07, «B-27», se un giorno servisse.
+- ✅ **B-28 · I trigger del DB caricato girano nel processo del server, senza limite di tempo** — basso (un DoS fuori dal
+  perimetro: serve un admin che carichi l'archivio); E (revisione di sicurezza di B3) tramite il coordinatore, 17/10.
+  Il coordinatore lo chiamava «B-19», ma quell'ID è già usato: un DB caricato può portare trigger propri, e scattano
+  quando il controllo scrive sulla copia. Succede con l'`alembic upgrade` di un archivio più vecchio, con le correzioni
+  post-migrazione (`_post_migration_fixes`, `staging.py`) e col rekey dei segreti. Una CTE ricorsiva in un trigger:
+  - tiene `.stage.lock` fino al riavvio, quindi nessun altro controllo parte;
+  - sul profilo `managed` tiene l'istanza sveglia, perché `backup_in_progress` vale vero.
+
+  Direzione: un limite di tempo sulle scritture della copia (`set_progress_handler` di sqlite3, o un sottoprocesso con
+  un tempo massimo), più `PRAGMA trusted_schema=OFF` sulle connessioni della copia. Dopo B4. Dettagli: piano 07, «B-27».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 05:50), con la strada (B) decisa dal coordinatore. Subito dopo lo
+  spacchettamento, il controllo legge `sqlite_master` in sola lettura e classifica ogni oggetto dal suo testo SQL. Un
+  trigger, una vista o una tabella virtuale, che LibreFolio non crea mai, fanno rifiutare l'archivio con
+  `database_foreign_objects` prima di ogni altro accesso; uno schema che SQLite non legge dà `database_damaged`. In
+  più `trusted_schema=OFF` sulle cinque connessioni di B alla copia. L'`alembic upgrade` girava già in un processo a
+  sé, col suo tempo massimo.
 
 ## E · Email (fase 01)
 

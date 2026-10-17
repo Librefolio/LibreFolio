@@ -25,8 +25,8 @@ Les mesures ne sont pas sauvegardées : le rechargement de la page vide le panne
 Le tableau comporte une ligne pour l'actif (une seconde dans sa propre devise lorsque le graphique est converti) et une pour chaque ligne tracée sur l'axe des prix, comme un actif de comparaison ou une moyenne mobile. À côté des valeurs **Début** et **Fin** :
 
 - **Δ Abs** — la différence $V_{end} - V_{start}$, dans l'unité de la ligne.
-- **Δ %** — la variation $\frac{V_{end} - V_{start}}{V_{start}}$ → [Rendements et taux de croissance](../../../financial-theory/fundamentals/returns.md)
-- **Δ%/an** — la même variation en taux annuel sur les $d$ jours calendaires entre les points, $(1 + \Delta\%)^{365/d} - 1$ → [Rendements et taux de croissance](../../../financial-theory/fundamentals/returns.md)
+- **Δ %** — la variation $\frac{V_{end} - V_{start}}{V_{start}}$, ou `—` quand la ligne part de 0 → [Rendements et taux de croissance](../../../financial-theory/fundamentals/returns.md)
+- **Δ%/an** — la même variation en taux annuel sur les $d$ jours calendaires entre les points, $(1 + \Delta\%)^{365/d} - 1$, à partir de 30 jours : `—` sur un intervalle plus court, sans **Δ %**, ou quand la ligne finit de l'autre côté de zéro → [Rendements et taux de croissance](../../../financial-theory/fundamentals/returns.md)
 
 La ligne de résumé de la mesure ajoute le nombre de jours.
 

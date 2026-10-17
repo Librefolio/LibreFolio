@@ -4475,6 +4475,191 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > L'avviso resta fino al ripristino seguente, come `rolled_back`. Il testo è quello proposto, il ruolo è info, e l'E2E
 > gira su uno stato finto, così dà anche la foto a G.
 
+### B-27 — l'avviso di un ripristino riuscito: analisi (2026-10-17, 04:55-05:05) — chiuso, non da fare (P8)
+
+> **B4b entrato (coordinatore, 04:55)**: commit `964ecf434`, `70d515552` e `b3d4a81db`; dev `c7dd3934a`; il CHANGELOG
+> (3 🔒 e 1 🐛) in `8b15a6c6c`. La mia HEAD è portata in avanti a **`8b15a6c6c`**, pulita. Il via è per B-27 (N67),
+> analisi prima.
+>
+> **Nel backlog anche B-28** (coordinatore, 04:50: la nota di E dalla revisione di B3, che lui chiamava «B-19»; quell'ID
+> è già di `decrypt` da root). I trigger di un DB caricato scattano quando il controllo scrive sulla copia: l'`alembic
+> upgrade`, `_post_migration_fixes` (`staging.py:550`, non la riga 464 citata) e il rekey dei segreti. Non hanno limite
+> di tempo. Direzione: `set_progress_handler` o un sottoprocesso con un tempo massimo, più `trusted_schema=OFF`.
+>
+> **⚠️ Il conflitto, prima di tutto.** N67 contraddice una decisione esplicita del developer, **P8** (16/10, 11:25, in
+> «Decisioni del developer su P7, P8 e P12»): «**successo senza messaggio** ("se ha funzionato lo vedi"): la pagina va
+> dritta al login, poi alla solita pagina iniziale; la scheda non mostra "ripristino applicato"». Lo dice anche il codice,
+> `RestoreCard.svelte:63`: «Developer decision P8: a restore kept says nothing (the data shows it); one rolled back says
+> why». Nella mia risposta a G-20 (03:12) ho scritto solo «oggi non c'è», senza dire che il silenzio era una scelta del
+> developer. **Errore mio**: il coordinatore ha deciso N67 senza quell'informazione. È una domanda che solo il developer
+> può decidere, quindi, con la regola della notte, va nel piano e al coordinatore, e si passa ad altro. Propongo di
+> fermare B-27 finché il developer non sceglie fra P8 e N67.
+>
+> **L'analisi, pronta se il developer conferma N67**:
+>
+> - Stato reale:
+>   - `lastResult` vale solo per `rolled_back` (`RestoreCard.svelte:64`). L'avviso usa `restore-last-result`,
+>     `data-result`, `data-reason`, il ruolo warning e `TriangleAlert`;
+>   - il server ha già tutto. Uno stato `committed` porta sempre `finished_at`, `confirmed_by` (il nome dell'admin, o
+>     `cli`), `backup_created_at` e `backup_app_version`: in `RestoreState` non sono opzionali. Lo stato resta fino al
+>     ripristino confermato seguente;
+>   - il ruolo info esiste (`bg-lf-info-soft`, `border-lf-info-line`, `text-lf-info-on-soft`).
+> - Superfici, tutte di B:
+>   - `RestoreCard.svelte`: il derivato per `committed`; lo stesso `restore-last-result` con `data-result="committed"`,
+>     il ruolo info, un'icona (`History` o `CircleCheck`); e il commento P8 aggiornato;
+>   - i18n `backup/{en,it,fr,es}.json`: due chiavi, `backup.restore.last.committed` («applied on {date}, backup of
+>     {backupDate} (LibreFolio {version}), confirmed by {user}») e `committedCli` («… confirmed from the command line»).
+>     Niente `select` ICU, per il controllo dei segnaposto;
+>   - i test: `RestoreCard.test.ts` (l'avviso con i quattro valori; `cli`; niente avviso per `none`, `pending` o fuori da
+>     `idle`), `restoreI18n.test.ts` (le chiavi in 4 lingue), e FBKP-110 in `backup.spec.ts` su uno stato finto come
+>     FBKP-103, che dà anche la foto a G;
+>   - la doc: `backup_restore.en.md` (`#restore-settings`) ed eventualmente la pagina sviluppatore della scheda.
+> - Costo: circa un'ora coi rossi. Uno slot E2E breve per FBKP-110.
+>
+> **Mentre B-27 aspetta**, propongo l'analisi di B-28: un indurimento di sicurezza del controllo, «dopo B4», e B4 è
+> entrato. In alternativa un lotto minimo con B-19 (`decrypt` da root) e B-20 (knip).
+>
+> **Deciso (coordinatore, 05:00)**: N67 ritirato, **P8 resta**. B-27 è chiuso come «non da fare, P8» (nel backlog con
+> ✅ e la nota) e va nell'elenco del developer solo come nota. Si procede con (a), l'analisi di B-28.
+
+### B-28 — i trigger del DB caricato durante il controllo (2026-10-17, 05:00-05:50) ✅ — 🧊 FROZEN, checkpoint pronto
+
+> Sola lettura, HEAD `8b15a6c6c` pulita.
+>
+> **Stato reale**:
+>
+> - L'`alembic upgrade` della copia gira già **in un processo a sé, con un tempo massimo** (`_upgrade`,
+>   `UPGRADE_TIMEOUT_SECONDS` = 3600). Su questa strada la nota di E è già coperta.
+> - Nel processo del server girano invece:
+>   - le correzioni post-migrazione, `run_post_migration_fixes`. È codice condiviso (`backend/app/db/post_migration/`)
+>     e apre una sua connessione `sqlite3`;
+>   - il rekey dei segreti, `_plugin_secrets` (`sqlite3`);
+>   - `_administrators`;
+>   - i totali, `ledger_totals_of`, con aiosqlite e SQLAlchemy;
+>   - `describe_database`, in sola lettura, sulle sole `type = 'table'`.
+>
+>   Le scritture fanno scattare i trigger del DB caricato; una vista con lo stesso nome di una tabella dell'app
+>   girerebbe a ogni lettura per nome.
+> - **Lo schema di LibreFolio non ha né trigger, né viste, né tabelle virtuali.** Lo dice un grep di `backend/alembic`
+>   e `backend/app` per `CREATE TRIGGER` e `CREATE VIEW`. In SQLite solo trigger e viste possono contenere una query
+>   qualsiasi, cioè una CTE ricorsiva: CHECK, DEFAULT, colonne generate e indici su espressioni non ammettono
+>   sottoquery. Le tabelle virtuali eseguono il codice del loro modulo.
+>
+> **Due strade**:
+>
+> - **(A), la direzione di E alla lettera**: un tempo massimo su ogni connessione alla copia nel processo del server
+>   (`set_progress_handler`, oppure le correzioni in un sottoprocesso come alembic), più `trusted_schema=OFF`. Bisogna
+>   agganciarsi a quattro tipi di connessione, una delle quali nel codice condiviso delle correzioni. Il codice ostile
+>   gira comunque fino al limite, e dopo un ripristino i trigger stranieri resterebbero nel DB vivo: girerebbero a ogni
+>   scrittura del server, e al primo avvio delle correzioni.
+> - **(B), la causa (la mia proposta)**: subito dopo lo spacchettamento, e prima di ogni altro accesso, il controllo
+>   legge `sqlite_master` in sola lettura, dove nessun codice dell'utente gira. Se il DB ha anche un solo trigger, una
+>   vista o una tabella virtuale (`CREATE VIRTUAL TABLE`), l'archivio si rifiuta con un codice nuovo,
+>   `database_foreign_objects`: un backup di LibreFolio non li ha mai. Questo copre il controllo, la CLI (`inspect` non
+>   apre il DB; `restore` e `--dry-run` passano dallo stesso staging) e quello che un ripristino porterebbe nel server.
+>   Un test di guardia fissa che lo schema all'ultima revisione non ha oggetti di quei tipi: se una migrazione futura ne
+>   aggiunge uno, il test lo dice e la lista dei permessi si aggiorna. In più, `trusted_schema=OFF` sulle connessioni di
+>   B alla copia, una riga ciascuna, come difesa in più. Non serve un tempo massimo: senza trigger e viste non resta
+>   codice che possa girare all'infinito.
+>
+> **Superfici di (B)**:
+>
+> - `staging.py`, una funzione e la sua chiamata prima di `describe_database`;
+> - il `Literal` dei codici di errore in `schemas/backup.py`, poi `api sync`;
+> - `restoreText.ts`, e la chiave i18n `backup.restore.errors.database_foreign_objects` in 4 lingue;
+> - la doc: le tabelle dei problemi in `backup_restore.en.md` e `cli_tools.en.md`, e `security.md`;
+> - i test:
+>   - `services backup-staging`: un trigger, una vista, una tabella virtuale, ciascuno rifiutato senza che nulla giri;
+>     un DB vero passa; la guardia dello schema alla testa;
+>   - il test «prodotti = dichiarati» dei codici;
+>   - `restoreI18n`.
+>
+> **Costo**: piccolo-medio. Rischio basso: nessun backup vero ha quegli oggetti. Conflitti: nessuno, i file sono di B
+> più `api sync`. Se il test «prodotti = dichiarati» è nella categoria `api`, serve uno slot breve.
+>
+> **Domande al coordinatore**: (A) o (B)? Propongo (B) più `trusted_schema=OFF`. E il nome del codice,
+> `database_foreign_objects`.
+>
+> **Via (coordinatore, 05:20)**: **(B) più `trusted_schema=OFF`**; il codice `database_foreign_objects` va bene
+> («meglio la causa di un tempo massimo»). Prima i rossi, poi uno slot breve per `api backup-restore` quando sono
+> pronto.
+>
+> **Rossi in scrittura (05:25)**: il contratto congelato è in `files/b28-test-brief.md`. TA-S scrive in
+> `test_backup_staging.py` (§4), TA-F in `restoreI18n.test.ts`. Il codice è pronto fuori dal worktree:
+> `files/b28-wip/apply_b28.py`, 13 operazioni, `--check` verde:
+>
+> - `staging.py`: la classificazione per testo SQL (`_leading_words`, `_schema_object_kind`) e
+>   `_refuse_foreign_objects`, chiamata prima di `describe_database`; `trusted_schema=OFF` su `_plugin_secrets` e
+>   `_administrators`;
+> - `snapshot.py` e `totals.py`: `trusted_schema=OFF`;
+> - il codice nello schema, in `restoreText.ts` e nei quattro cataloghi, inserito come testo per non toccare la
+>   formattazione dei JSON.
+>
+> **⚠️ Fuori pista, verificato su SQLite 3.54.0 (05:28)**: una riga di `sqlite_master` travestita (un trigger con
+> `type` table, index o view, qualunque rootpage) fa rifiutare a SQLite tutto lo schema, «malformed database schema».
+> Un trigger si carica solo con `type = 'trigger'`. Il caso del contratto quindi si aspetta `database_damaged`
+> (revisione delle 05:30), sempre rifiutato prima di ogni altro accesso. La lettura per testo SQL resta: non costa nulla
+> e non dipende da questa verifica di SQLite. Prova fatta su un DB di prova in `/tmp`, poi tolto.
+>
+> **Rossi scritti**:
+>
+> - TA-F, `restoreI18n.test.ts`: due casi. La chiave nei 4 cataloghi, e il codice nella lista scritta a mano
+>   `CODE_LISTS`, perché quella lista non deriva dal client generato. Il rosso è stato eseguito alle 05:03: 2 falliti e
+>   121 passati;
+> - TA-S, `test_backup_staging.py`, nuova sezione (l), 6 test e 15 casi:
+>   - i cinque oggetti stranieri rifiutati prima che `describe_database` sia chiamata;
+>   - il WARNING senza nomi né SQL (un marcatore `b28_untrusted` in ogni nome);
+>   - lo schema che SQLite rifiuta, cioè la riga travestita e la riga che non si analizza, dà `database_damaged`;
+>   - la guardia dello schema alla testa;
+>   - `trusted_schema=OFF` per primo su ognuna delle 5 connessioni;
+>   - la prima connessione sulla copia è la lettura in sola lettura di §1.
+>
+> **⚠️ Fuori pista, da TA-S**:
+>
+> - un test esistente si sarebbe rotto: `test_an_upgrade_that_fails_in_alembic_is_refused_and_leaves_nothing` fa
+>   fallire alembic con un trigger su `alembic_version`, e dopo B-28 quell'archivio si rifiuterebbe prima. Riscritto
+>   ora con il meccanismo di TA-S: una tabella che una migrazione in sospeso crea esiste già, e `op.create_table`
+>   fallisce. Una precondizione prova che l'archivio non ha oggetti stranieri;
+> - con `PRAGMA writable_schema=ON` SQLite carica comunque un trigger travestito, e `VACUUM` lo accende internamente.
+>   Nessun codice di LibreFolio lo usa sulle connessioni del controllo;
+> - il testo d'errore di SQLite nomina la riga, ed è testo dell'archivio. Il mio codice usa un messaggio fisso e non
+>   registra l'eccezione.
+>
+> **Il rosso (05:34)**: `services backup-staging` dà 15 falliti, proprio i casi nuovi, e 145 passati, compreso il test
+> riscritto. Per farlo fallire TA-S ha usato un indice, non una tabella: 007 salta le tabelle che esistono già, ma un
+> indice chiamato `plugin_system_settings` fa fallire il suo `op.create_table`.
+>
+> **Codice applicato (05:35)**: `apply_b28.py`, 13 operazioni. Ruff e black puliti; `api sync` (il client generato ha
+> il codice); `i18n build` e `i18n check`, 4968 chiavi, rigoroso. La descrizione del selettore `backup-staging` nomina
+> B-28.
+>
+> **Verdi leggeri (05:36-05:40)**:
+>
+> - `services`: `backup-staging` 160, `backup-secure` 68, `backup-totals` 84, `backup-apply` 228;
+> - `utils`: `backup-cli-restore` 77, `backup-cli-secure` 58;
+> - Vitest: `restoreI18n`, `backupApi`, `restoreFlow` e `RestoreCard`, 573 in tutto;
+> - `front check`: 0 errori e 0 avvisi.
+>
+> **In corso**: la doc (docs-writer); lo slot breve chiesto al coordinatore (05:41) per `api backup-restore` (il test
+> «prodotti = dichiarati») e `api backup-restore-apply`.
+>
+> **Slot 2 (05:41-05:46) ✅**: `api backup-restore` 130 e `api backup-restore-apply` 136. Porta libera.
+>
+> **Doc (docs-writer, 05:45)**:
+>
+> - `backup_restore.en.md`, `#check-refused`: una riga per `database_foreign_objects`, e anche quella di
+>   `database_damaged`, che mancava;
+> - `cli_tools.en.md`: la tabella dei codici e una frase nella prova su copia;
+> - `security.md`: la sottosezione nuova `#backup-restore-foreign-objects`.
+>
+> **⚠️ Fuori pista**: il docs-writer ha notato «holds 1 triggers»: il messaggio del rifiuto aveva un conteggio al
+> plurale. Ora il messaggio è senza numero, che resta nel log. Nessun test fissava quel testo; corretta anche la
+> citazione in `security.md`. Poi `services backup-staging` 160.
+>
+> **Verdi della doc (05:46-05:48)**: build rigorosa exit 0, check-links valido, `gate-docs-links` 63.
+>
+> **Backlog**: B-28 chiuso con ✅. **Checkpoint (05:50)**, col blocco del CHANGELOG. 🧊 FROZEN.
+
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
 > Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto

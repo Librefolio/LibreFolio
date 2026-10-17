@@ -90,6 +90,8 @@ async def _read(database: Path) -> dict[str, Any]:
     async def connect() -> aiosqlite.Connection:
         connection = await aiosqlite.connect(uri, uri=True)
         opened.append(connection)
+        # A schema's functions only if innocuous: the database is an archive's copy (lot B-28).
+        await connection.execute("PRAGMA trusted_schema=OFF")
         return connection
 
     engine = create_async_engine("sqlite+aiosqlite://", async_creator=connect)
