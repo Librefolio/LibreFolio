@@ -5600,13 +5600,21 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   rifiuta un costo su FX_CONVERSION; `costBasisNotAllowed` e `costBasisModeIncompatible` in 4 lingue, cancello su tutti i codici delle
   regole (22). 21 rossi verdi: `transaction-cost-basis-rule` 164, `transaction` 125, `transaction-decimal-places` 201; BRIM
   (`brim-create-transaction` 14, `brim-gap-fix` 115, `external brim-providers` 736) e gate i18n verdi. Dettagli: piano 04, sezione
-  «W-B72 — … (N78): cura».
+  «W-B72 — … (N78): cura». Dopo l'ingresso, un rosso di dev (X): il cancello dell'HTML
+  (`frontend/src/htmlInterpolation.gate.test.ts`) non ammetteva il `<b>` delle due chiavi nuove. Ora sono testo semplice; il
+  cancello dà 26 verdi e `core-unit` 8 378 verdi.
 - **W-B75 · Un errore di campo di un plugin BRIM può rendere la risposta del parse non serializzabile** — minimo, disponibilità; W,
   17/10 (W-B72). `BRIMProvider._create_transaction` (`backend/app/services/brim/brim_provider.py`) copia in `params` il contesto di ogni
   errore solo così com'è; quello di un `value_error` porta l'oggetto eccezione, e `BRIMValidationIssue.model_dump(mode="json")` alza
   `PydanticSerializationError` (verificato): un 500 sul parse. Oggi non è raggiungibile: i plugin passano istanze di `Currency` (non
   rivalidate) e liste di stringhe. È latente per un plugin nuovo. Cura: lo stesso filtro dei dati semplici di `_lone_error_params`
   (W-B72), con un rosso su un plugin finto. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
+- **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
+  coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
+  `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
+  J-12 può solo controllare che la modale si apra. Cura, economica: un segno che resta, `data-highlighted="true"` sulla riga fino
+  alla prossima evidenziazione o al cambio di pagina, con un ruolo visibile del design system (un ruolo `-lf-`, niente palette);
+  l'E2E di J-12 lo legge. Dopo la 1.3, salvo spazio. Dettagli: questa voce.
 - **W-B73 · La pagina utente delle transazioni dice che l'unione sceglie anche data e costo** — minimo, doc; W, 17/10 (docs-writer).
   `mkdocs_src/docs/user/transactions/index.en.md` descrive il dialogo «Promote pair» con la scelta di data e costo; `PromoteMergeModal`
   offre solo descrizione e tag dal maggio 2026 (SP-C Step 5). La pagina ha già un debito di traduzione non timbrato (la cache di Aphra
