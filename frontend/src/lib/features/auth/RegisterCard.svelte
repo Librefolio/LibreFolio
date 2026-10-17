@@ -41,6 +41,11 @@
             usernameError = $_('auth.validation.usernameMinLength');
             return false;
         }
+        // The sign-in reads a name with @ as an email address: the server refuses it (A-21a)
+        if (username.includes('@')) {
+            usernameError = $_('auth.validation.usernameNoAt');
+            return false;
+        }
         usernameError = '';
         return true;
     }

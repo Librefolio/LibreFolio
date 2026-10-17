@@ -154,6 +154,25 @@ account: **Deactivated** while it is not active, with **Reactivate**, and `GET /
 it `pending_setup: false`. Like any deactivated account it then takes no place, so **Reactivate**
 needs a free one. A reset link nobody uses, or **Remove administrator**, leaves it waiting.
 
+### 🔤 Usernames with an @ {: #usernames-with-at }
+
+From version 1.3, a new username cannot contain `@`: at sign-in, LibreFolio reads anything with an
+`@` as an email address. Registration, a change of username in the Profile and `user create` on the
+[command line](cli_tools.md) refuse it, and a `LIBREFOLIO_ADMIN_USERNAME` with an `@` stops the
+server at startup («The Initial Administrator» in [Environment Variables](configuration.md)).
+Spaces, accented letters and signs such as `.`, `_`, `-` or `+` are still fine.
+
+An account created before version 1.3 may have one, such as `anna@example.com` as its username:
+
+- 🏷️ the username stays as it is: nothing renames it. Its user can change it in their
+  [Profile](../user/settings/profile.md), to a name without `@`;
+- 🔑 the account signs in with its email address, as every account has one. The username itself
+  works only while no account has it as its email address: typed at sign-in, an address names the
+  account that has it;
+- 📧 no other account can take that username as its email address, in any capitals: registration,
+  the Profile, `user create` and `user set-email` refuse it with *Email already registered*. The
+  account itself can take it as its own address.
+
 ---
 
 ## ✉️ Invitations {: #invitations }

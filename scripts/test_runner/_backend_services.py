@@ -566,6 +566,26 @@ def services_email_case(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Email case tests", verbose=verbose)
 
 
+def services_username_rules(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A-21a, rules 1 and 2: no new username with an @, no address that is another account's username."""
+    print_section("Services: Username Rules (A-21a)")
+    print_info("Testing: config/accounts.py admin_bootstrap_config, user_service.create_user/update_profile, register_user, scripts/user_cli.py create-user/set-email")
+    print_info("Tests: the @ refused in every new username and nothing else of the character set, legacy names left as they are, an address equal to a username refused in any A–Z case")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_username_rules.py", test_names)
+    return run_command(cmd, "Username rules tests", verbose=verbose)
+
+
+def services_username_lookup(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A-21a, rule 3: the sign-in's lookup reads an identifier with an @ as an address first."""
+    print_section("Services: Username Lookup (A-21a)")
+    print_info("Testing: user_service.get_user_by_username_or_email")
+    print_info("Tests: an address finds its owner before a legacy name written like it, in both orders of the rows; the exact legacy fallback; without an @ a username only, exact")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_username_lookup.py", test_names)
+    return run_command(cmd, "Username lookup tests", verbose=verbose)
+
+
 def services_password_policy(verbose: bool = False, test_names: list = None) -> bool:
     """Test the password rules in one place: what a new password must meet, for the API, the CLI and the app."""
     print_section("Services: Password Policy")
@@ -1856,6 +1876,25 @@ Note: No backend server required.
         name="Email Addresses Regardless of Case (P18)",
         desc="email_fold and same_email fold A–Z only, the unique index on lower(email), lookups in any case, case variants refused on create and register, a case-only change of one's own address keeps sessions and verification, F02, the non-ASCII limit",
         # PURE: every database is a private file under tmp_path built with create_all; variables removed with monkeypatch.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "username-rules",
+        services_username_rules,
+        name="Username Rules (A-21a)",
+        desc="No @ in a new username (user create, LIBREFOLIO_ADMIN_USERNAME), spaces, accents and punctuation still taken, legacy names left as they are; no address equal to another account's username, A–Z case aside (register_user, user set-email, user create)",
+        # PURE: every database is a private file under tmp_path built with create_all; the command line runs in this
+        # process on that file, get_async_engine a tripwire; variables removed with monkeypatch. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "username-lookup",
+        services_username_lookup,
+        name="Username Lookup (A-21a)",
+        desc="get_user_by_username_or_email: an address first, then the exact legacy name; without an @ a username only, exact, never an address; both orders of the rows",
+        # PURE: every database is a private file under tmp_path built with create_all; get_async_engine a tripwire.
         isolation="pure",
     )
     add_test(

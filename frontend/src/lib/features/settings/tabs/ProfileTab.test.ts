@@ -1594,3 +1594,63 @@ describe("ProfileTab — the server's limit on failed passwords, met by an e-mai
         expect(emailPassword()).toBeNull();
     });
 });
+
+// =========================================================================
+/**
+ * Lot A-21a (release 1.3, workstream A) — a new username holding `@`, refused by the server.
+ *
+ * Why. The sign-in reads an identifier holding `@` as an email address first, so a username holding one is a name the
+ * account could not sign in with. `PUT /auth/profile` now refuses a new username holding `@` with a 400
+ * `{detail: {error_code: "USERNAME_INVALID", message}}`. `describeRefusal` words only the codes of a password, so this
+ * one reads as a failed update (`settings.updateFailed`): the user is not told what is wrong with the name.
+ *
+ * The contract, the tab's half: that refusal is worded by the tab as `auth.validation.usernameNoAt` — the key the
+ * sign-up card shows for the same rule — never the server's English sentence nor `settings.updateFailed`, with its code
+ * on `profile-error` as `data-error-code`, the way the A6e block publishes the codes the tab words (the row's Save and
+ * save all both publish them today); and the username field goes back to the saved value, as for every username
+ * refusal.
+ *
+ * Red until A-21a: the refusal, through the username row's Save and through save all (the «save all» block above pins
+ * its refusals too). The username put back is green today, and stays so.
+ *
+ * Not pinned: a check of the `@` in the tab before the request — the contract gives the tab none, and the case holds
+ * the request going out as its premise, so the words it reads are the server's refusal and not a check of the client;
+ * the five seconds the banner lives, as for every refusal.
+ */
+describe('ProfileTab — a new username holding @, refused by the server (A-21a)', () => {
+    /** The key the contract adds: the words of the sign-up card for the same rule. */
+    const NO_AT_KEY = 'auth.validation.usernameNoAt';
+    /** The server's own sentence for the refusal (`USERNAME_RESERVED_MESSAGE`, `backend/app/config/accounts.py`): never on screen. */
+    const NO_AT_MESSAGE = 'A username cannot contain @: the sign-in reads it as an email address';
+    /** The name typed: an address, what the rule exists for. */
+    const ADDRESS_AS_NAME = 'bob@example.com';
+
+    /** The two controls that save a username change alone: the row's Save (its first variant, see `fieldButtons`) and save all. */
+    const USERNAME_SAVES = [
+        {via: "the username row's Save", save: () => fieldButtons('profile-username', 'save')[0]},
+        {via: 'save all', save: () => screen.getByTestId('profile-save-all')},
+    ];
+
+    // red until A-21a
+    it.each(USERNAME_SAVES)('USERNAME_INVALID through $via: worded as auth.validation.usernameNoAt with its code on the banner — never the server sentence nor a failed update — and the saved username put back', async ({save}) => {
+        profilePut().mockRejectedValue(axiosError({error_code: 'USERNAME_INVALID', message: NO_AT_MESSAGE}));
+        await mountUnlocked();
+        await type(username(), ADDRESS_AS_NAME);
+
+        await fireEvent.click(save());
+
+        await waitFor(() => {
+            expect(error()).not.toBeNull();
+            expect(screen.getByTestId('profile-tab')).toHaveAttribute('data-busy', 'false');
+        });
+        // The premise: the request went out, so what the banner says is the tab's reading of the server's refusal.
+        expect(profilePut()).toHaveBeenCalledTimes(1);
+        expect(profilePut()).toHaveBeenCalledWith({username: ADDRESS_AS_NAME});
+        expect(error()).toHaveAttribute('data-error-code', 'USERNAME_INVALID');
+        expect(error()).toHaveTextContent(NO_AT_KEY);
+        expect(error(), "nothing of the server's English").not.toHaveTextContent(NO_AT_MESSAGE);
+        expect(error(), 'not a failed update: the tab knows what is wrong').not.toHaveTextContent('settings.updateFailed');
+        // As for every username refusal: the field shows the name the account still has.
+        expect(username()).toHaveValue('alice');
+    });
+});
