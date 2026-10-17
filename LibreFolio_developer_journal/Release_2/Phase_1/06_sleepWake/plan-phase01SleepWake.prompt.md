@@ -3407,3 +3407,466 @@ aspetta lo spegnimento; un secondo Ctrl+C forza). Nessun file del frontend, ness
 
 **Costo e rischi:** S, una quarantina di righe e quattro casi. I test con segnali e processi veri sono sensibili al
 carico: lo scambio su file evita le attese fisse, e le grazie dei casi restano larghe.
+
+> **Decisione** (coordinatore, 17/10, con l'ingresso di Z-22, dev `22d46da6e`): «**Go for Z-10** as you propose
+> (N-Z10-1; `cli_base.py`/`dev.py:448`, writer OK). **Yes to forwarding SIGTERM** in the same function: a supervisor
+> that stops `dev.py` must not leave the server orphaned. And yes to the wiki-file for the Vite gotcha, at the end.»
+
+**Contratto, dopo il sì** (N-Z10-1 e N-Z10-2, «da rivedere»):
+- `scripts/cli_base.py`: `run_server_live(cmd, env=None, grace_seconds=None) -> int`.
+  - Avvia `cmd` con `Popen`. Se il figlio esce da sé, rende il suo codice.
+  - Primo Ctrl+C: il SIGINT non viene inoltrato, perché il terminale l'ha già dato a tutto il gruppo e un secondo
+    SIGINT farebbe forzare l'uscita a uvicorn. Aspetta fino a `grace_seconds` (None: senza limite). Rende 130.
+  - SIGTERM a `dev.py` (N-Z10-2): lo inoltra al figlio, perché un supervisore può segnalare `dev.py` da solo, e
+    aspetta come sopra. Rende 143. Un SIGTERM doppio (gruppo più inoltro) è innocuo: il watchdog del budget si arma
+    una volta sola (`arm()`), e uvicorn forza solo al secondo SIGINT.
+  - Un secondo segnale (Ctrl+C o SIGTERM), o la grazia scaduta: SIGKILL, poi attesa del figlio.
+  - I gestori **registrano** il segnale in una lista e tornano, senza sollevare eccezioni; il ciclo la legge a ogni
+    giro (sonno di 50 ms). Un gestore che solleva (`KeyboardInterrupt`, o un'eccezione per il SIGTERM) potrebbe
+    cadere dentro `Popen.poll()` fra `_waitpid_lock.acquire(False)` e il suo `try` (CPython 3.13.16,
+    `subprocess.py`, `_internal_poll`; anche `send_signal` chiama `poll()`): il lock resterebbe preso, e ogni
+    `poll()` dopo direbbe che il server gira ancora, cioè un'attesa senza fine. Si sostituiscono solo i gestori
+    usuali (`default_int_handler` per SIGINT, `SIG_DFL` per SIGTERM): un segnale che chi lancia ignora o gestisce
+    resta com'è. Solo nel thread principale; alla fine tornano quelli di prima.
+  - I gestori si installano prima di `Popen`, così nessun segnale arriva senza gestore. Un segnale arrivato mentre il
+    server partiva può essergli sfuggito: quello si inoltra (SIGINT o SIGTERM). È una finestra di millisecondi, che
+    non si può provocare in un test.
+  - Il primo segnale stampa una riga con `Interrupted` (o `SIGTERM`) prima di aspettare: i test la usano solo per
+    mettere in fila i segnali.
+- `dev.py`: `_server_stop_grace(env)`, cioè il budget di `shutdown_timeout_seconds(env)` più 2 s (non impostato:
+  10.0; `5`: 7.0; `0`: None; illeggibile: 10.0). La chiamata del server diventa
+  `run_server_live(uvicorn_cmd, env=env, grace_seconds=_server_stop_grace(env))`.
+
+**Superfici trovate dopo il sì** (17/10 ~04:10; chiesto al coordinatore il via da scrittore, i file non sono miei):
+tre test fanno le veci del lancio del server su `dev.run_command_live`.
+- `test_runtime_isolation.py`, `capture_server_child` (riga 1172). Pericolo: senza sostituto, `dev.main()` avvierebbe
+  un uvicorn vero su 6126/6127 e il test resterebbe appeso.
+- `test_dev_designer_lab_banner.py`, `record_launches` (205–214): lì `Popen` è vietato, quindi nessuna fuga, ma il
+  test diventerebbe rosso.
+- `test_test_server_preparation.py:181`: l'elenco dei divieti di `--build-only` deve nominare anche
+  `run_server_live`.
+
+Regola: il codice di prodotto entra solo insieme a questi tre adattamenti. Loro tengono anche `run_command_live`
+sostituito, così restano sicuri in entrambi gli stati.
+
+> **Via da scrittore** (coordinatore, 17/10): «**Writer OK on all three** (stub/forbid `run_server_live` alongside
+> `run_command_live`, which stays; the product code only together with the three seams). Two of them are H's
+> (`test_runtime_isolation.py`, `test_test_server_preparation.py`) and one is the colour team's L
+> (`test_dev_designer_lab_banner.py`): I'm telling both.»
+
+**Passi.**
+1. ✅ 17/10 04:12–04:44 — Rossi (test-author, nel worktree; i tre adattamenti col via da scrittore):
+   - il file nuovo `backend/test_scripts/test_utilities/test_dev_server_interrupt.py`, puro, 27 casi:
+     - (a)–(f) con processi veri: un sostituto di `dev.py` e un finto server, in una sessione loro sotto `tmp_path`,
+       segnali solo a quel gruppo o al pid del sostituto, scambi su file e righe, nessuna attesa fissa;
+     - (g), (g'), (h) nel processo: il codice d'uscita, la cartella e l'ambiente, un comando che non parte, i gestori
+       uguali (gli stessi oggetti) dopo la chiamata, dai gestori usuali e da quelli del test;
+     - (i) `_server_stop_grace` su 11 valori, con un budget diverso in `os.environ` (letto dall'env passato);
+     - (j) `cmd_server` passa da `run_server_live` con la grazia del budget (5 → 7.0; 0 → None), in produzione e
+       in `--test`; (j') `--coverage` fa ancora `os.execvpe` (verde apposta: una guardia);
+   - la registrazione `utils dev-server-interrupt` in `scripts/test_runner/_backend_utils.py` (`isolation="pure"`);
+   - i tre adattamenti, additivi: `capture_server_child` e `record_launches` fanno le veci anche di
+     `run_server_live`; `--build-only` vieta anche `run_server_live` (`raising=False` finché il nome non c'era).
+   Rossi nella mia corsia (`files/z10_light.sh red`, 04:44, carico 26): 26 su 27, per il motivo giusto (11 «dev.py
+   has no _server_stop_grace», 7 + 4 «no run_server_live», 4 «launched the server through run_command_live»); verde
+   la guardia di `--coverage`. Prova di test-author, su due sostituti di `cli_base` buttati poi: uno scritto sul
+   contratto passa tutti i 27 casi, uno che fa come `subprocess.run` cade per il difetto (uscita 0,29 s dopo il
+   Ctrl+C, server ucciso; con SIGTERM a `dev.py` il server resta orfano). I tre file adattati, col codice di
+   allora: `runtime-isolation` 291, `dev-designer-lab-banner` 37, `test-server-preparation` 91, tutti verdi.
+2. ✅ 17/10 04:13 — Prova del difetto, a parte (`files/z10-draft/prove_defect.py`, non nel repo; carico 41): un
+   «server» che al SIGINT lavora 1 s prima di uscire, lanciato con `run_command_live` del codice di oggi, e Ctrl+C
+   mandato al gruppo. Risultato: `rc=130` 0,29 s dopo il Ctrl+C; il figlio ha ricevuto `['SIGINT']` ma non ha
+   finito il suo spegnimento, ucciso. È il difetto letto nel codice.
+   Codice preparato fuori dal repo: `files/z10-draft/apply_z10.py`, provato su una copia (`/tmp/z10-copy`):
+   applicazione, compilazione, ruff con gli stessi 45 rilievi di prima (nessuno nuovo; `dev.py` e `cli_base.py` ne
+   avevano già), black pulito sulle righe nuove, inverso esatto (`cmp`).
+   > **⚠️ Fuori pista** (04:20–04:30): rileggendo la bozza ho trovato una corsa nella prima versione, che sollevava
+   > un'eccezione dal gestore (vedi il contratto sopra, i gestori che registrano). Bozza riscritta e riprovata sulla
+   > copia (ruff: nessun rilievo nuovo; black e ruff puliti sui blocchi nuovi), più la prova funzionale sulla copia,
+   > col «server» che lavora 1 s:
+   > - `run_command_live`: uscita 0,28 s dopo il Ctrl+C, figlio ucciso;
+   > - `run_server_live` con grazia 10 s: uscita 1,10 s dopo, il figlio finisce il suo spegnimento, `rc=130`, un solo
+   >   SIGINT ricevuto (niente inoltro);
+   > - con grazia 0,3 s: uscita 0,45 s dopo, figlio ucciso alla scadenza.
+3. ✅ 17/10 04:44 — Codice (`files/z10-draft/apply_z10.py <repo> apply`; impronta in `files/z10-draft/z10_applied.md5`):
+   - `scripts/cli_base.py`: `run_server_live`, `_record_stop_signals` (i gestori che registrano, solo al posto dei
+     gestori usuali, solo nel thread principale), `_supervise_server` (il ciclo: inoltro del SIGTERM, grazia, un
+     secondo segnale uccide); gli import `signal`, `threading`, `time`;
+   - `dev.py`: l'import di `run_server_live`, `SERVER_STOP_MARGIN_SECONDS = 2` e `_server_stop_grace(env)`, la
+     chiamata del server.
+4. ✅ 17/10 04:12–04:25 — Doc (docs-writer, scritta sul contratto; verificata da me sul codice applicato):
+   - `developer/dev_workflow.en.md`: una sezione nuova «⏹️ Stopping the Server» (Ctrl+C, SIGTERM a `dev.py`, la
+     grazia, il secondo segnale, i codici 130 e 143, `--coverage` senza involucro, gli altri comandi ancora con
+     `run_command_live`);
+   - `admin/cli_tools.en.md#start-the-server`: un punto ⏹️;
+   - `admin/configuration.en.md#shutdown`: una frase, `./dev.py server` tiene da sé i 2 s di margine.
+   `mkdocs build` stretto senza avvisi (carico 17), `check-links` 97 validi. Nessuno stamp: sono aggiunte di
+   contenuto, e le due pagine admin avevano già debito di traduzione (cache di Aphra del 10/10). Debito nuovo per
+   il prossimo giro: il punto di `cli_tools` e la frase di `configuration` (`translate-validate`: 6 link mancanti
+   in IT, FR ed ES, più un punto e un paragrafo). La frase vecchia di `configuration.en.md` («SIGINT from Ctrl+C»,
+   righe 396–397), falsa per `./dev.py server` fino a oggi, diventa vera col codice.
+5. ✅ 17/10 04:44–04:52 — Controlli col codice, sotto 50 (`files/z10_light.sh green`):
+   - `utils dev-server-interrupt` 27/27 (7,9 s);
+   - `utils runtime-isolation` 291/291, `utils dev-designer-lab-banner` 37/37,
+     `utils test-server-preparation` 91/91;
+   - `utils dev-cli-image` 94/94 (il segreto JWT condiviso di `cmd_server`);
+   - la prova col codice del repo: `rc=130` 1,08 s dopo il Ctrl+C, il «server» finisce il suo spegnimento.
+   Lint: ruff sui due file di prodotto con gli stessi 45 rilievi di HEAD, nessuno nuovo; ruff e black puliti sui
+   cinque file di test e del runner. Porta 6186 libera, nessun processo di prova rimasto.
+   Non eseguita: la prova a mano con un `dev.py server` vero. Il build del frontend del worktree è vecchio (Z-22 e
+   la base), e `cmd_server` lo rifarebbe prima di partire: un passo pesante, da fare in uno slot se il
+   coordinatore lo vuole. La meccanica è la stessa dei casi (a)–(f). Con `--reload` e `--workers` il figlio di
+   `dev.py` è il supervisore di uvicorn 0.52.4, che aspetta i suoi processi: `supervisors/basereload.py`
+   `shutdown()` fa `process.terminate()` e `process.join()`, `supervisors/multiprocess.py` `run()` fa
+   `terminate_all()` e `join_all()`. Il server riceve così il SIGINT del gruppo e il SIGTERM del supervisore, e
+   uvicorn forza l'uscita solo a un secondo SIGINT (`server.py:344`).
+6. ✅ 17/10 04:52–04:56 — Backlog: Z-10 ✅. Wiki-file approvato dal coordinatore, sulla trappola di Vite di Z-22:
+   - la pagina nuova `LibreFolio_devWiki/wiki/problems/vite-hmr-dispose-only-on-the-accepted-module.md`, con la sua
+     riga in `index.md` e la voce in `log.md`;
+   - `check_source_paths.py`: 7 percorsi mancanti su 4118, tutti di prima e in altre pagine, nessuno nella nuova;
+   - il grafo non è aggiornato: graphify non c'è in questo worktree, come per le altre voci di stanotte.
+   Checkpoint FROZEN al coordinatore.
+
+### Z-14b + Z-15 — piano per il mattino (17/10 ~05:05, sola lettura; parte solo se il developer dice sì)
+
+> **Richiesta** (coordinatore, 17/10 ~04:57): «So you're ready in the morning: a **read-only plan for Z-14b + Z-15**,
+> with the exact files per owner, the reds, the E2E and the slot, ready to start if the developer says yes.»
+
+**La domanda per il developer** (una sola; in grassetto la mia raccomandazione): «Dopo un recupero dei prezzi (un
+risveglio, un ritorno all'app), le viste già sullo schermo si riallineano da sole, senza dire "occupato"?» Se sì:
+- D1, il pannello di rischio mentre ricarica: **in silenzio** (le cifre cambiano quando arrivano le nuove), oppure
+  l'icona che gira e la sezione attenuata, come dopo una sincronizzazione.
+- D2, le analisi su richiesta già a schermo (stress, replay, simulazione): **restano come sono** (le ha lanciate
+  l'utente, e una simulazione costa), oppure si rilanciano.
+- D3, il ritorno su una pagina dei prezzi dopo un recupero: **i punti vecchi subito, aggiornati in background**,
+  oppure il caricamento come una prima visita (oggi). Serve comunque alla ricarica silenziosa di una pagina aperta:
+  senza, quella ricarica accenderebbe `aria-busy`.
+
+**Stato reale** (HEAD `75a1107a7`, con Y11 sulle pagine degli asset, merge `d32d0f3d9`):
+- Il bus: `{kind: 'prices'}` (`notifyPricesCaughtUp`, `stores/portfolio/portfolioMutation.ts:155`). Ricaricano solo
+  il Dashboard (`dashboard/+page.svelte:729–737`) e la pagina del broker (`brokers/[id]/+page.svelte:449–456`), in
+  background e fuori da `pageBusy`; i loro commenti dicono che rischio e lotti restano stale.
+- Rischio: ogni pannello ha un `createRiskPanelController` (`lib/features/risk/riskPanelController.svelte.ts`):
+  Dashboard e broker (`RiskLevelsPanel`), lista asset (`AssetSetRiskPanel`, più controller), dettaglio asset
+  (`AssetRiskScenariosView`). L'onda di base si ricarica all'apertura o al cambio d'ambito (`pageBusy` `risk-load`) e
+  a `refreshVersion` (`risk-refresh`). `riskStore` segna stale a ogni segnale del bus (`riskStore.svelte.ts:307`).
+  `loadBase` mette la cache a schermo e accende `refreshing` (riga 464): in `RiskResultFrame` un'icona che gira
+  (`{testId}-refreshing`) e la sezione al 60 %.
+- Lotti: `LotsAnalysisPanel.svelte`, `loadMain` (~riga 221), mette la cache a schermo e, se stale, chiede di nuovo
+  senza indicatori. Manca solo chi lo richiami dopo un recupero: oggi lo fanno gli `$effect` sugli input e
+  `refreshVersion`.
+- Le quattro pagine dei prezzi leggono i negozi con `getMissingIntervals`. Dopo Z-14 un negozio stale dà tutto
+  l'intervallo come mancante, e la pagina mostra il caricamento:
+  - dettaglio asset, `routes/(app)/assets/[id]/+page.svelte`: `loadChartData` (1262–1345) fa
+    `loading = !pricesFromCache`, e `aria-busy`/`data-busy` della radice `asset-detail-page` (2189–2190) seguono
+    `loading`;
+  - dettaglio cambio, `routes/(app)/fx/[pair]/+page.svelte`: `loadChartData` (760–800) fa
+    `loading = !hasCachedRange`, con `data-busy={loading}` sulla radice `fx-detail-page` (1243);
+  - lista asset, `routes/(app)/assets/+page.svelte`: `fetchAllPriceData` (~640–700), `loadingPrices` per asset;
+  - lista cambi, `routes/(app)/fx/+page.svelte`: `fetchAllPairData` (~450–540), `loading: true` per coppia.
+  Nessuna delle quattro ascolta il bus.
+
+**Disegno** (decisioni N-Z14b-1…3 e N-Z15-1…2, «da rivedere»):
+- N-Z14b-1: un aiuto, mio: `lib/features/price-refresh/onPricesCaughtUp.ts`.
+  - `onPricesCaughtUp(reload)` si registra sul bus con una chiave unica per chiamata, perché una pagina può avere più
+    controller di rischio.
+  - Reagisce solo a `prices`, e chiama `reload` in un microtask, dopo che ogni negozio ha segnato stale.
+  - Rende la funzione che smette; pagine e pannelli lo chiamano nel loro ciclo di vita.
+  - Dashboard e broker restano come sono.
+- N-Z14b-2: `TimeSeriesStore` espone `isStale`, in sola lettura. Regola delle quattro pagine (D3): se il negozio è
+  stale e ha punti per l'intervallo, quei punti vanno subito a schermo e la richiesta parte senza `loading` (quindi
+  senza `aria-busy`/`data-busy`); altrimenti come oggi.
+- N-Z14b-3: ogni pagina dei prezzi, con `onPricesCaughtUp`, rilegge l'intervallo che mostra, attraverso la sua
+  funzione di oggi (`loadChartData`, `fetchAllPriceData`, `fetchAllPairData`) e fuori da `pageBusy`. Y11 ha messo
+  l'«Aggiorna» di queste pagine su `pageBusy`, e la ricarica non è un «Aggiorna».
+- N-Z15-1: il controller del rischio, con `onPricesCaughtUp`, richiede la sua onda di base senza force e fuori da
+  `pageBusy`. Con D1 «in silenzio» non accende `refreshing` (un'opzione di `loadBase`). Un solo file vale per tutti i
+  pannelli di rischio.
+- N-Z15-2: il pannello dei lotti, con `onPricesCaughtUp`, richiama `loadMain` e `loadSelectionHistories` senza force
+  e fuori da `pageBusy`; la cache stale li fa chiedere di nuovo senza indicatori.
+- Con D2 «restano», nessun rilancio delle analisi su richiesta.
+
+**File per proprietario** (lo scrittore lo assegna il coordinatore; proprietari letti nella storia dei merge):
+
+| proprietario | file | cosa |
+|---|---|---|
+| Z | `lib/features/price-refresh/onPricesCaughtUp.ts` (nuovo) e `onPricesCaughtUp.test.ts` | l'aiuto |
+| Z | `lib/stores/core/TimeSeriesStore.ts`, `lib/stores/__tests__/TimeSeriesStore.test.ts` | `isStale` |
+| Z | `e2e/portfolio/price-refresh-reload.spec.ts`; la `desc` di `price-refresh` in `scripts/test_runner/_frontend_portfolio.py` (condiviso) | gli E2E |
+| Y (Y4b, Y11) | `lib/features/risk/riskPanelController.svelte.ts`, `riskPanelController.test.ts` | N-Z15-1 |
+| Y (spostato con Y3; colori di BK; nella lista del coordinatore J: da confermare) | `lib/features/brokers/lots/LotsAnalysisPanel.svelte` | N-Z15-2, solo `<script>` |
+| Y (Y11; nella storia anche X, C-66, e AF, colori) | `routes/(app)/assets/[id]/+page.svelte`, `routes/(app)/assets/+page.svelte`, `routes/(app)/fx/[pair]/+page.svelte`, `routes/(app)/fx/+page.svelte` | N-Z14b-2 e 3, solo `<script>` |
+| DV, BK | `routes/(app)/dashboard/+page.svelte`, `routes/(app)/brokers/[id]/+page.svelte` | i commenti di `reloadAfterPriceCatchUp` |
+| docs-writer | `developer/frontend/state/domain-state.md`, `live-ticker.md#price-refresh`, `state/registries.md` («Invalidating»), la pagina di sviluppo del rischio se descrive i ricaricamenti | doc |
+
+Nessuna area dei colori: niente markup né classi. Il lotto T della lista asset tocca le righe 1707–1708, cioè il
+markup: un altro pezzo del file.
+
+**Rossi** (test-author, prima del codice):
+- `onPricesCaughtUp.test.ts` (`front-utility core-unit`):
+  - solo `prices` chiama, e dopo gli ascoltatori del dispatch;
+  - due chiamate danno due ricariche (chiavi uniche);
+  - dopo lo stop, nulla.
+- `TimeSeriesStore.test.ts` (`front-fx fx-unit`): `isStale` vero dopo `markStale()`, falso dopo `invalidateAll()`.
+- `riskPanelController.test.ts` (`front-portfolio risk-controller-unit`):
+  - con `{kind: 'prices'}` l'onda di base è chiesta di nuovo, senza force, con `pageBusy.busy` falso e (D1)
+    `refreshing` falso;
+  - con `mutation` e `refresh` no;
+  - le analisi su richiesta restano intatte (D2).
+- Le pagine e il pannello dei lotti hanno la logica nei `.svelte`: li coprono gli E2E.
+
+**E2E** (nel mio spec, `front-portfolio price-refresh`). Stesso recupero simulato e stesso registro di `data-busy`,
+con in più le radici `asset-detail-page`, `fx-detail-page`, `assets-page` e `fx-page`:
+- (i) Dashboard col pannello di rischio aperto. Dopo un recupero che ha aggiornato qualcosa, di nuovo
+  `POST /risk/query`, con le stesse domande e senza navigare; radice e «Aggiorna» mai occupati; (D1) nessuna icona
+  `-refreshing`. Controllo: un recupero che non ha aggiornato nulla non chiede niente.
+- (j) Dashboard col pannello dei lotti aperto su una posizione: di nuovo `POST /portfolio/lots/analysis`, e nessun
+  «occupato».
+- (k) Dettaglio asset aperto: la sua `prices/query` con `include_price: true`, senza navigare; `asset-detail-page` mai
+  `data-busy`; il grafico resta.
+- (l) Lo stesso per il dettaglio di un cambio: `convert`, `fx-detail-page`.
+- (m) Liste asset e cambi aperte: chiedono di nuovo prezzi e cambi; le radici non sono mai occupate.
+- (g') e (h'): (g) e (h) di oggi, più «al ritorno dopo il recupero la radice non dice mai occupato» (D3).
+
+Oggi rossi per il motivo giusto: in (i)–(m) nessuna richiesta, in (g') e (h') `data-busy` acceso.
+
+**Slot**:
+- `front-portfolio price-refresh` intero: 8 casi oggi, 7 in più; stima 15–20 min.
+- La regressione delle pagine toccate, stima 20–25 min: `front-asset asset-detail`, `front-asset asset-list`,
+  `front-asset live-pause`, `front-fx fx-detail`, `front-fx fx-list`, `front-portfolio risk-asset-detail`.
+- Due slot, o uno da ~45 min.
+
+Controlli leggeri: `core-unit`, `fx-unit`, `asset-unit`, `risk-controller-unit`, `store-unit`, `component-unit` e
+`front check`.
+
+**Passi, dopo il sì**:
+1. analisi del turno: rileggere le righe e le firme di `loadBase`, `fetchAllPriceData` e `fetchAllPairData`;
+2. rossi;
+3. codice: l'aiuto e `isStale` sono miei; i file di Y col suo via da scrittore, o li fa Y;
+4. doc;
+5. controlli leggeri;
+6. slot;
+7. checkpoint FROZEN.
+
+Stima: mezza giornata, più gli slot.
+
+**Rischi**:
+- Richieste in più dopo un recupero: una per vista aperta, e solo quando il recupero ha aggiornato qualcosa. Nel cloud
+  succede una volta, al risveglio.
+- Il dettaglio asset ha molte guardie di generazione (`chartRequestGeneration`): la ricarica passa da `loadChartData`,
+  non da un percorso nuovo.
+- File aperti da altre sessioni (Y, X, i colori): solo `<script>`, ma ogni via va annunciato.
+
+**Fatto quando**: i rossi sono verdi; i 7 E2E sono verdi nello slot, con i loro controlli; la ricarica non accende
+mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 sono ✅ nel backlog.
+
+### Z-16 — l'albero tradotto di `admin/filesystem`, a mano (17/10)
+
+> **Via** (coordinatore, 17/10 ~05:32): «meanwhile, if it's quick: **Z-16** by hand (the translated tree of
+> `admin/filesystem`: the Spanish comments, plus the 3 missing rows in IT/FR/ES), no stamp, in your lane 6186 for the
+> strict build.» Base: HEAD `1a937b93e`.
+
+1. ✅ 17/10 05:30–05:33 — Gli alberi di `filesystem.it.md`, `.fr.md` ed `.es.md`:
+   - le tre righe, `backups/` dopo `logs/`, `secrets/` e `instance.key` dopo `scenario_catalog/`;
+   - a sinistra del `#` ogni riga è uguale all'inglese (controllo riga per riga con `paste`);
+   - in spagnolo i nove commenti tradotti, con «copias de seguridad» per gli archivi: «archivos» vorrebbe dire anche
+     file;
+   - termini: le pagine tradotte non nominano ancora la chiave d'istanza; scelti «chiave dell'istanza», «clé de
+     l'instance», «clave de la instancia». Lo spagnolo dà del tu, come il resto della pagina.
+2. ✅ 17/10 05:33–05:35 — `mkdocs build` stretto rc 0, nessun avviso (carico 28); `check-links` 97 validi. Nel sito
+   costruito le tre pagine hanno `instance.key` e `backups/`. Nessuno stamp: il resto della pagina tiene il suo
+   debito (cache di Aphra del 10/10).
+3. ✅ 17/10 05:37 — Backlog: Z-16 ✅. Checkpoint al coordinatore insieme all'analisi di Z-11.
+
+### Z-11 — lock dei job tra processi: analisi (17/10 ~05:40, sola lettura)
+
+> **Via** (coordinatore, 17/10 ~05:32): «**Z-11**, the job lock across processes (flock in the data folder, state
+> re-read inside the lock; coordinator decision D-Z3-3): **analysis first** (surfaces, interaction with leader
+> election, tests), send it to me, then reds and code».
+
+**Stato reale** (HEAD `1a937b93e`):
+- **Per processo.** Ogni worker uvicorn ha:
+  - il suo loop dello scheduler (`app_lifespan`);
+  - il suo `asyncio.Lock` (`_run_lock`, uno per event loop);
+  - la sua attività e il suo `PRICE_REFRESH`.
+- **Il giro.** `_run_locked` (`scheduler.py:463`) controlla nell'ordine:
+  - spento → `disabled`; bloccata → `blocked`;
+  - poi `am_i_leader()` (`leader.py`): leader è il PID più basso fra i figli del master; con `--reload`, senza
+    genitore o con un errore, il processo è leader. Altrimenti `not_leader`;
+  - poi le impostazioni, `load_state()`, e i job dovuti in sequenza, con `save_state()` dopo ciascuno (scrittura
+    atomica, `state.py`).
+- **Con `--workers N`** (D-Z3-3):
+  - un `wake-sync` che arriva a un altro worker risponde `not_leader` e non esegue nulla
+    (`admin/sleep_wake.en.md#wake-sync-workers`);
+  - il ritorno dopo un silenzio spinge il loop del worker che ha ricevuto la richiesta: se non è il leader, nulla
+    fino al tick del leader (≤ 60 s).
+- **Quanto è comune.** `--workers auto` è un'opzione documentata per chi gira dal sorgente (`admin/cli_tools`). Docker
+  e Fly hanno un worker. Il server di test del runner gira con `--workers 2`, ma con `--no-scheduler`.
+- **`fcntl` c'è già in quattro posti**: `instance_backup/jobs.py` (`_RunLock`: `LOCK_EX | LOCK_NB`, `O_NOFOLLOW`,
+  `0o600`, e senza `fcntl` un `threading.Lock` per processo), `instance_backup/apply.py`, `db/post_migration`,
+  `brim_provider.py`. La guida d'installazione copre anche Windows, dove `fcntl` non c'è.
+- **Chi legge lo stato fuori dallo scheduler**: `api/v1/settings.py:374`, che lo mostra; la sostituzione atomica basta.
+
+**Proposta** (decisioni N-Z11-1…4, «da rivedere»):
+- N-Z11-1 — il lock al posto del leader, dove c'è `fcntl`.
+  - Un modulo nuovo, `scheduler/run_lock.py`: un context manager asincrono sul file `<data_dir>/.scheduler.lock`.
+    Nascosto, `0o600`, `O_NOFOLLOW`, mai cancellato: cancellare un file di flock in uso rompe l'esclusione.
+  - Lo prende `_run_locked` dopo i controlli `disabled`/`blocked` e le impostazioni. Dentro il lock legge lo stato,
+    esegue i dovuti, salva e rilascia.
+  - Qualunque worker esegue: chi arriva secondo aspetta, rilegge lo stato e trova i job `not_due`.
+  - Un `wake-sync` gira su qualunque worker, o aspetta chi sta già eseguendo e risponde a lavoro finito. Il ritorno
+    parte subito nel worker che l'ha visto.
+- N-Z11-2 — l'attesa.
+  - Tentativi `LOCK_NB` ogni 0,2 s, con `asyncio.sleep`: cancellabile allo spegnimento, nessun thread bloccato.
+  - Dentro `busy("scheduler")` come oggi, con il rilascio nel `finally`.
+  - Un processo che muore col lock lo perde (lo rilascia il kernel): niente lock orfani.
+- N-Z11-3 — senza `fcntl` (Windows) resta l'elezione di oggi, con `am_i_leader()` e `not_leader`. Quindi `leader.py`,
+  i suoi test e lo stato `not_leader` restano per quel caso: nessun cambio d'API (`RunReport.status` uguale), nessun
+  `api sync`.
+- N-Z11-4 — il codice del lock: una copia piccola del modello di `_RunLock` (B), non un modulo condiviso, perché
+  estrarlo toccherebbe quattro proprietari. Nel backlog, una riga per un aiuto comune dopo la 1.3.
+
+**Limiti che restano** (fuori da Z-11, invariati):
+- Il tracker `PRICE_REFRESH`, l'attività e il monitor d'inattività sono per processo. Con più worker l'avviso
+  «Aggiornamento prezzi…» compare solo sulle risposte del worker che esegue: oggi è lo stesso, col leader.
+- La sospensione su Fly usa un worker.
+
+**Test** (test-author, rossi prima):
+- `test_scheduler_run_lock.py` (nuovo, `services`, puro):
+  - esclusione fra due processi veri: un figlio tiene il lock, e l'attesa del genitore finisce solo quando il figlio
+    lo rilascia;
+  - lock rilasciato alla morte del figlio (SIGKILL);
+  - un'attesa cancellata non lascia fd aperti né il lock;
+  - il file è `0o600`, e un symlink al suo posto viene rifiutato;
+  - senza `fcntl` (monkeypatch), il percorso del leader.
+- `test_scheduler_multiprocess.py` (nuovo, `services`): due processi veri su una cartella dati in `tmp_path` lanciano
+  insieme `run_due_jobs("wake")`, con job finti che scrivono ogni esecuzione in un file.
+  - Ogni job dovuto gira una volta sola, e il secondo processo risponde `not_due`.
+  - Nessun `not_leader`, nemmeno dal processo col PID più alto.
+- Da adattare, perché il ramo del leader vale solo senza `fcntl`:
+  - `test_scheduler_catchup.py`: il contratto dell'ordine dei controlli, il caso `not_leader` e (h), «off the loop»;
+  - `test_system_wake.py`: il caso `not_leader`;
+  - `test_scheduler_backoff.py` e `test_scheduler_price_refresh.py`, che sostituiscono `am_i_leader`.
+  `test_scheduler_leader.py` resta.
+- Nessun E2E: è solo backend.
+- Azioni:
+  - `services`: `scheduler-catchup`, `scheduler-backoff`, `scheduler-price-refresh`, `scheduler-leader`,
+    `scheduler-jobs`, `scheduler-state`, `scheduler-due`, `scheduler-loop`, più le due nuove;
+  - `api`: `system-wake`.
+
+**Superfici:**
+- Miei: `scheduler/scheduler.py`, il nuovo `scheduler/run_lock.py`, i test dello scheduler e di `wake-sync`.
+- Condiviso: `scripts/test_runner/_backend_services.py`, due voci.
+- Doc (docs-writer, solo inglese; `sleep_wake` non ha traduzioni):
+  - `admin/sleep_wake.en.md#wake-sync-workers`: con più worker esegue un worker qualunque, uno alla volta;
+    `not_leader` solo dove manca `fcntl`;
+  - `developer/backend/scheduler.md`: lo schema dei controlli e `#leader-election`;
+  - `developer/architecture/database/index.md#data-directory`: la riga di `.scheduler.lock`.
+- Nessun frontend, nessuna area dei colori, nessuna migrazione.
+
+**Rischi:**
+- I test con processi veri sotto carico: scambi su file, nessuna attesa fissa, limiti larghi.
+- `flock` su un file system di rete: non è un vincolo nuovo, perché SQLite in WAL vuole già una cartella dati locale.
+
+**Stima:** S–M, mezza giornata con i test. Nessuno slot E2E: azioni `services` leggere (sotto 50) e `api system-wake`.
+
+> **Via** (coordinatore, 17/10 ~05:39): «**Z-11: go**, reds first (test-author), then code. N-Z11-1…4 adopted as
+> **night decision N71**, for review with the developer. **Runner**: OK for your 2 entries in
+> `_backend_services.py`, **in the scheduler block**. B has an uncommitted edit to the same file (the
+> `backup-staging` description, around line 2273): stay away from that region, add only, and don't reorder. Docs:
+> English only, no stamp. Lane 6186, light runs only (no slot needed); at the checkpoint, list the scheduler suites
+> with their counts plus `api system-wake`.» Base: HEAD `737972ef5`.
+
+**Contratto** (N71):
+- `scheduler/run_lock.py`, nuovo:
+  - `fcntl` importato con la guardia di B (`None` dove manca);
+  - `LOCK_FILE_NAME = ".scheduler.lock"` e `POLL_SECONDS = 0.2`;
+  - `cross_process_lock_available()`: vero se c'è `fcntl`;
+  - `run_lock_path()`: `get_data_dir() / LOCK_FILE_NAME`.
+- `scheduler_run_lock(path=None)`, un context manager asincrono:
+  - ogni tentativo apre il file (`O_RDWR|O_CREAT|O_NOFOLLOW`, `0o600`, cartella creata se manca) e prova
+    `LOCK_EX|LOCK_NB`, in un thread (`asyncio.to_thread`); tra un tentativo e l'altro `asyncio.sleep(POLL_SECONDS)`;
+  - il rilascio (`LOCK_UN` e chiusura) è nel `finally`, anche lui in un thread;
+  - un tentativo in volo quando l'attesa viene cancellata non lascia il lock preso: se lo prende, lo rilascia;
+  - un symlink al posto del file solleva `OSError`, e nessun file dietro il link viene creato o bloccato.
+- `_run_locked` controlla nell'ordine:
+  - spento → `disabled`; bloccata → `blocked`;
+  - senza `fcntl`, `am_i_leader()` (in un thread) → `not_leader`;
+  - le impostazioni → `disabled`;
+  - con `fcntl`, dentro `scheduler_run_lock()`: `load_state()`, l'ora letta dopo l'attesa, i job dovuti; senza
+    `fcntl`, lo stesso senza lock.
+  - Con `fcntl`, `am_i_leader()` non viene mai chiamata.
+- Un errore del lock risale come gli altri: il loop lo registra e continua; `wake-sync` risponde `status: "error"` col
+  nome della classe (`wake.py`, `_wake_run`).
+
+**Passi.**
+1. ✅ 17/10 05:41–06:22 — Rossi (test-author; due voci nel blocco dello scheduler del runner, solo aggiunte, lontano
+   dalla riga ~2273 di B):
+   - `test_scheduler_run_lock.py`, nuovo, RL-001…009: esclusione fra processi veri, SIGKILL, attesa cancellata,
+     eccezione nel blocco, `0o600` e symlink, nessuna chiamata sul thread del loop, costanti e percorso, un tentativo
+     in volo che prende il lock dopo la cancellazione, un interprete senza `fcntl`;
+   - `test_scheduler_multiprocess.py`, nuovo, MP-001 e MP-002: due processi veri, ogni job una volta sola, il secondo
+     `not_due`, nessun `not_leader` né `am_i_leader` chiamata, lo stato scritto una volta per job;
+   - adattati: `test_scheduler_catchup.py` (SCU-006, 011, 012 e 013 divisi fra lock e ripiego; nuovi SCU-033 e
+     SCU-034), `test_system_wake.py` (WAKE-029 nuovo; WAKE-024 intrappola anche il lock),
+     `test_scheduler_backoff.py` e `test_scheduler_price_refresh.py` (un lock finto);
+   - col codice di allora:
+     - `scheduler-run-lock` 0/9 (manca il modulo);
+     - `scheduler-multiprocess` 0/2 (ogni job girava due volte);
+     - `scheduler-catchup` 81 verdi e 12 rossi (i casi nuovi), `scheduler-backoff` 79, `scheduler-price-refresh`
+       44, `scheduler-leader` 8;
+     - `api system-wake` 75 verdi e 1 rosso (WAKE-029).
+     Nessun `.scheduler.lock` nella cartella della corsia; ruff e black puliti.
+   Domande di test-author, mie risposte: SCU-034 (l'errore del lock risale) resta, è il contratto; gli extra restano.
+2. ✅ 17/10 05:45–05:52 — Bozza del codice fuori dal repo (`files/z11-draft/run_lock.py`, `apply_z11.py`), provata
+   su una copia: applicazione, compilazione, black pulito, inverso esatto. Ruff segna I001 solo sulla copia: fuori
+   dal repo il nuovo import finisce in un'altra sezione, mentre l'ordine alfabetico è giusto. Da riprovare sul repo.
+   Prova funzionale con processi veri:
+   - A prende il lock subito e lo tiene 1,5 s;
+   - C, in attesa, cancellato dopo 0,5 s, non lascia nulla;
+   - B lo prende 1,42 s dopo, quando A lo lascia;
+   - il file è `-rw-------`;
+   - un symlink è rifiutato (`OSError` 62, `ELOOP`), e dietro il link non viene creato nulla.
+3. ✅ 17/10 05:53–06:07 — Doc (docs-writer, scritta sul contratto; da riverificare sul codice applicato):
+   - `admin/sleep_wake.en.md`:
+     - la riga `not_leader` della tabella: solo su Windows con più processi;
+     - «👥 Several Workers» `#wake-sync-workers` riscritta (qualunque processo esegue, uno alla volta; chi trova un
+       giro in corso aspetta e risponde coi job `not_due`; il 409 solo dal processo che fa già un risveglio; non
+       cancellare `.scheduler.lock`; Windows col leader);
+     - due frasi rese false dal cambio: il consiglio sul chiamante e il punto dei worker in «While Prices Catch Up».
+   - `developer/backend/scheduler.md`:
+     - lo schema, `#run-lock` (il lock fra processi), `#run-checks` (il passo 3 solo senza `fcntl`, il lock dopo i
+       controlli, lo stato e l'ora dentro);
+     - il rapporto (`not_leader` solo senza `fcntl`), il tracker (chi aspetta resta `starting`);
+     - la sezione `#leader-election`, che tiene l'ancora, ora «🔐 Several Workers»: il lock, il ripiego del leader,
+       quel che resta per processo.
+   - `developer/architecture/database/index.md#data-directory`: la riga di `.scheduler.lock`.
+   - Ancore nuove: `#cross-process-lock`, `#leader-election-fallback` e `#workers-per-process`.
+   - `mkdocs build` stretto senza avvisi (carico 43); `check-links` 97 validi.
+   - Nessuno stamp: `sleep_wake` non ha traduzioni, e le pagine di sviluppo sono solo in inglese.
+   - Lasciati di proposito: l'albero di `admin/filesystem` (quattro lingue; non dice di elencare ogni file) e la
+     voce del 1.2 nel `CHANGELOG`. Restano da aggiornare: la docstring del modulo `scheduler.py` (nel codice) e la
+     pagina `market-data-scheduler` della devWiki (dello storico).
+   - La docstring del modulo e quella di `run_due_jobs` le aggiorna il codice (passo 4). Riverificata sul codice
+     applicato la frase «chi aspetta resta `starting`»: un giro di recupero chiama `run_started` prima del lock, e
+     senza job lo stato è `starting` (`PriceRefreshTracker.snapshot`).
+4. ✅ 17/10 06:24 — Codice (`files/z11-draft/apply_z11.py <repo> apply`; impronta in
+   `files/z11-draft/z11_applied.md5`):
+   - `scheduler/run_lock.py`, nuovo;
+   - in `scheduler.py`: l'import, la docstring del modulo, `_run_locked` (il leader solo senza `fcntl`, il lock dopo
+     le impostazioni) e la funzione nuova `_run_due` (stato e ora letti dentro il lock), la docstring di
+     `run_due_jobs`.
+   Sul repo ruff e black puliti: l'I001 della copia era un effetto della cartella.
+5. ✅ 17/10 06:24–06:29 — Controlli, sotto 50, uno alla volta (`files/z11_light.sh green`):
+   - le due azioni nuove: `scheduler-run-lock` 9/9, `scheduler-multiprocess` 2/2;
+   - le altre `services scheduler-*`: `scheduler-catchup` 93/93, `scheduler-backoff` 79/79,
+     `scheduler-price-refresh` 44/44, `scheduler-leader` 8/8, `scheduler-state` 14/14, `scheduler-settings` 14/14,
+     `scheduler-settings-misc` 2/2, `scheduler-due` 25/25, `scheduler-loop` 5/5, `scheduler-jobs` 73/73,
+     `scheduler-joblog-builders` 16/16, `scheduler-joblog-misc` 2/2;
+   - `api system-wake` 76/76.
+   Nessun `.scheduler.lock` nella cartella della corsia né in `backend/data`; porta 6186 libera, nessun processo di
+   prova rimasto.
+6. ✅ 17/10 06:31 — Backlog: Z-11 ✅; nuove Z-23 (un aiuto comune per i lock su file, N-Z11-4) e Z-24
+   (`.scheduler.lock` in `validate_test_data_dir`, file di H, facoltativa). Checkpoint FROZEN al coordinatore.
+   In attesa del via da scrittore: la `desc` di `scheduler-catchup` (dice ancora «not_leader … SCU-001..032») e
+   quella di `system-wake` in `_backend_api.py` (non nomina WAKE-029).

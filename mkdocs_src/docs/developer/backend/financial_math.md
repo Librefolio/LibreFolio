@@ -38,6 +38,24 @@ The technical indicators (`services/signal_plugins/`, `services/signals/runtime.
 annualization, conversions, average cost, valuation — from the layer. FX conversion itself stays
 in the FX service: `convert_bulk()` in `services/fx/conversion.py` is the primitive the calculations call.
 
+### 🪞 Declared Float Twins {: #float-twins }
+
+Four float functions of `backend/app/services/risk/metrics.py` have a counterpart in `returns.py`.
+They are declared twins, not copies, and they stay in `risk/metrics.py` on purpose: series
+statistics live there (`.github/instructions/backend-risk.instructions.md`). The layer's versions
+take and return `Decimal`: NAV snapshots and cash flows for the TWRR, a rate over a span of days
+for the conversions. The twins run on the float return series of the risk analytics.
+
+- `compounded_return(returns)` — Π(1 + r) − 1, the geometric chaining that `calculate_twrr()`
+  applies to its sub-period returns.
+- `wealth_index(returns)` — 1, then Π(1 + r) after each return: the float form of the
+  `wealth_index` of `calculate_twrr_period_series()`.
+- `period_returns_from_cumulative(cumulative_returns)` — (1 + cₜ) / (1 + cₜ₋₁) − 1, which takes a
+  cumulative return series back to period returns: the inverse of chaining the TWRR.
+- `daily_risk_free_rate(annual_rate, periods_per_year)` — `expm1(log1p(R) / f)`, an annual rate
+  per observation, the same compounding as `annualized_to_cumulative()` and
+  `cumulative_to_annualized()`.
+
 ---
 
 ## 🗺️ Package Map {: #package-map }
@@ -48,12 +66,13 @@ backend/app/services/financial_math/
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
 ├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
-├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return, recovery from a drawdown
+├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series, fixed-period changes of a price or rate (1D … 5Y, both orientations), recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
+├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360) and simple interest: the primitives the Scheduled Investment provider builds its accrual on
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
-├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule
+├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan
 ├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window
 ├── fifo/                    FIFO lots
 │   ├── __init__.py          docstring only
@@ -89,6 +108,29 @@ every point of the line (developer decision D-MF5): no rate when the value is ze
 capital up to that day — the first snapshot's value plus the flows after it (decision N54) — is zero or less; the
 series' last point is the card. `calculate_mwrr()` and `calculate_mwrr_series()` remain the bare solves, without that
 rule, and every point of the series is the single solve ending on its snapshot (one starting guess).
+
+`float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
+signal statistics read. `series_preparation.py`, which prepares those series, takes both from here and keeps no return
+or annualization formula of its own.
+
+- `float_price_return(start, end)` is `price_return()` as a float. It raises `ValueError` on a missing price or a zero
+  start: a series never carries an unavailable return.
+- `observed_annualization(n_observations, baseline_date, final_date)` returns the series' calendar span and its
+  [observed annualization factor](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md#formula),
+  observations × 365 / days. An empty series gives `(0, None)`; a span of zero days or less raises `ValueError`. A
+  caller that can meet a zero-day span picks its own fallback before calling: `portfolio_twrr_returns()`
+  (`risk/results.py`) leaves the factor `None`, the `comparison` analytic takes the context's factor.
+
+`fixed_period_dates()` and `fixed_period_changes()` (`returns.py`) hold the change of a price or rate over the fixed
+periods of the Assets and FX tables (developer decision D-MF6 b). `FIXED_PERIODS` lists their keys and calendar days,
+in display order: 1D 1, 1W 7, 1M 30, 3M 91, 6M 182, 1Y 365, 2Y 730, 3Y 1095, 5Y 1825. `fixed_period_dates(as_of)`
+names the days to value: `as_of`, then `as_of − days` for each period. The caller values those days: the last stored
+price on or before each ([`POST /assets/prices/period-changes`](assets/architecture.md#fixed-period-changes)), or
+the rate `convert_bulk()` gives on it ([`POST /fx/currencies/period-changes`](fx/architecture.md#fixed-period-changes)).
+`fixed_period_changes(values, as_of)` then gives each period both orientations, as fractions: `change_ratio`,
+`value(as_of) / value(as_of − days) − 1`, and `inverse_change_ratio`, `value(as_of − days) / value(as_of) − 1`, the
+change of the inverted quote. Both are None when either value is missing or ≤ 0.
+{: #fixed-period-changes }
 
 ### ⚙️ The Portfolio Package at Work {: #portfolio-package }
 
@@ -129,7 +171,15 @@ data-quality report with `build_data_quality_report()` (`data_quality.py`).
 movement (or `date_from`, when it is earlier) to `date_to`: a movement dated before `date_from`
 moves the cash, the quantities, the cost pools, the capital and the K/R/W pools like any other —
 the pool rules of a cash movement that reduces no position are one static method,
-`_apply_pool_rule()`. It emits one `DailyPortfolioState` for every day of `[date_from, date_to]`,
+`_apply_pool_rule()`. A linked-internal CASH_TRANSFER or FX_CONVERSION leg goes through
+`_move_linked_cash()` (developer decision D-MF4): the departure records its `(from R, amount)`
+split in `transfer_splits`, keyed by its transaction id, and its arrival takes it up once,
+bringing back what the departure took from K and R. The gap between the two legs — a
+conversion's spread, the rate move while the cash travels, two brokers owned at different shares —
+is already in the engine's P&L, since no leg is an external flow: it is booked as a result (a gain
+to R, a loss out of R then K). An arrival whose departure is unknown arrives in K, and one whose
+departure is on the same day is applied last on that day. The replay emits one
+`DailyPortfolioState` for every day of `[date_from, date_to]`,
 so a later `date_from` gets for its days exactly the states of the full replay. It evaluates only
 the **dirty** days, which `_collect_dirty_days()` lists: any other day carries the previous state
 (`dataclasses.replace()`, its containers copied), dated that day, with no external flow and no
@@ -310,7 +360,8 @@ flowchart LR
    routes), the Yield on Cost loaders (`yield_on_cost.py`), the
    [ledger control totals](#ledger-totals) (`compute_control_totals()`, through the session it
    is given) and the split links (`splits.load_split_links()` and `splits.split_linked_ids()`,
-   the rows of the transactions it is given).
+   the rows of the transactions it is given; `splits.costless_incoming_split_adjustments()`, the
+   rows linked to the events it is given).
 2. **Callers call the layer, never the other way round.** The layer never imports the
    orchestration services (`portfolio_service`, `broker_service`, `transaction_service`,
    `lots_analysis_service`), the API, AI Export, risk, PAC or signals: they call it.
@@ -345,6 +396,9 @@ flowchart LR
    [synthetic benchmarks](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md)
    (`CompoundSignal.ts`, `LinearSignal.ts`, `SineSignal.ts`), all in
    `frontend/src/lib/charts/signals/` — and each exception must be declared where it lives.
+   The measuring tool takes the backend's annualization floor: `MIN_ANNUALIZATION_DAYS` in
+   `MeasureSignal.ts` is held to `_MIN_ANNUALIZATION_DAYS` of `returns.py` by a parity test in
+   `measureSignal.test.ts`, so changing one without the other fails that test.
    The declaration is the tag `@financial-math-exception` in the file's leading JSDoc block,
    followed by what the exception computes and why it stays in the browser. The [gate](#frontend-exceptions-gate)
    (`frontend/src/financialMathExceptions.gate.test.ts`) holds the list of declared files and
@@ -410,9 +464,10 @@ flowchart LR
 
 ### 🚧 The Layer Guard {: #layer-guard }
 
-`backend/test_scripts/test_services/test_financial_math/test_layer_boundaries.py` parses the
-source of every module of the layer with `ast` — it imports none of them: no database, no
-server — and fails when:
+`backend/test_scripts/test_services/test_financial_math/test_layer_boundaries.py` parses with
+`ast` the source of every module of the layer and, for the two rules at the end of this section,
+of every module of `backend/app`. It imports none of them — no database, no server — and fails
+when:
 
 - a module imports an orchestration service, the API, AI Export, risk (`risk_plugins`
   included), PAC (`pac_allocator`, its planner source in `pac_allocator/source/` included) or signals (every `signal*`
@@ -425,9 +480,9 @@ server — and fails when:
 - one of the old homes below exists again, for example after merging a branch older than the
   move. A `__pycache__` folder left behind by git does not count.
 
-Each detector first proves, on synthetic sources, that it sees what it looks for, and the scan
-must reach the layer's known modules: a rule that asserts an absence never passes on an empty
-scan. The guard runs with the layer's tests:
+Each detector first proves, on synthetic sources, that it sees what it looks for, and each scan
+must reach the modules it knows of, in the layer or in `backend/app`: a rule that asserts an
+absence never passes on an empty scan. The guard runs with the layer's tests:
 
 ```bash
 ./dev.py test services financial-math
@@ -447,6 +502,35 @@ The sync builders of `LotsAnalysisService` that never touched the database moved
 functions of `lots/`; the service keeps the orchestration, the database loaders, the response
 builders and the analysis' data-quality report (see
 [Lots Analysis Service](transactions/lots_analysis_service.md#code-layout)).
+
+The day count conventions and simple interest of the Scheduled Investment provider moved too,
+unchanged (lot CP-14a, U10, developer decision D-8): `calculate_day_count_fraction()` with its
+three helpers (`_calculate_act_fixed()` for ACT/365 and ACT/360, `_calculate_act_act()`,
+`_calculate_30_360()`), and `calculate_simple_interest()`, now in `interest.py`. The provider
+imports them from there and keeps `_compute_maturation_dates()`, which reads the domain's
+maturation frequency, and its accrual walk (see
+[Scheduled Investment Provider](assets/provider_scheduled_investment.md#accrual-walk)). Its file
+stays, so the guard follows the names rather than a file: it fails when one of the five is not
+defined exactly once in `interest.py`, or is defined anywhere else in `backend/app` — a method,
+a nested function or a fallback under `except ImportError` included.
+
+The other rule over `backend/app` keeps one question in one place, «which rows are linked to a
+SPLIT asset event», and fails when:
+
+- a module of `backend/app` names `AssetEventType.SPLIT` anywhere but its two allowed homes:
+  `services/financial_math/splits.py`, the one loader of those rows, and
+  `services/transactions/event_suggestions.py`, a UI mapping of event type to transaction type
+  that loads nothing, [rule 5](#layer-rules). Every shape that reaches the member counts —
+  `AssetEventType.SPLIT`, `models.AssetEventType.SPLIT`, an alias bound by
+  `from … import AssetEventType as X`, `AssetEventType("SPLIT")`, `AssetEventType["SPLIT"]`,
+  `getattr(AssetEventType, "SPLIT")` — and nothing else does: a comment, a docstring, another
+  enum's `SPLIT` member, the string `"SPLIT"` on its own. Read the linked rows through
+  `splits.py` instead: `split_linked_ids()`, or `load_split_links()` when the ratio, the event
+  or the dates matter; the event store, before a SPLIT changes type, asks
+  `costless_incoming_split_adjustments()`. Before lot MF-I2 the WAC preview
+  (`portfolio_service.py`), the broker summary (`brokers/summary.py`) and the auto cost
+  (`transactions/auto_cost.py`) each wrote the join again. An allowed home that no longer names
+  the member is a stale entry, and fails too.
 
 ### 🚦 The Frontend Exceptions Gate {: #frontend-exceptions-gate }
 
@@ -468,11 +552,12 @@ for. The gate runs with the chart-safety unit tests:
 
 | Command | Runs (under `backend/test_scripts/`) | Covers |
 |---------|--------------------------------------|--------|
-| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`) and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
+| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`; the fixed-period changes of the Assets and FX tables, `fixed_period_dates()` and `fixed_period_changes()`, `test_fixed_period_changes.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`) and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
 | `./dev.py test services roi-fifo-utils` | `test_services/test_financial/` | Returns, FIFO lots, price marks, Yield on Cost, the portfolio engine (`test_portfolio_engine/`), and the portfolio and lots services that call them |
 | `./dev.py test services portfolio-engine` | `test_services/test_portfolio_engine_vnext.py` | `DailyStateBuilder` |
 | `./dev.py test services lots-analysis-pure` | `test_services/test_lots_analysis_pure.py` | `lots/` and the service's sync builders; a pure unit |
 | `./dev.py test utils roi-utils` | `test_utilities/test_roi_utils.py` | `returns.py` |
+| `./dev.py test utils day-count` | `test_utilities/test_day_count_conventions.py` | `interest.py`: the four day count conventions (`calculate_day_count_fraction()`) and simple interest (`calculate_simple_interest()`) |
 
 !!! note "Test files keep their historical names"
 
@@ -491,10 +576,11 @@ for. The gate runs with the chart-safety unit tests:
 | `lots/` | [Lots Analysis Service](transactions/lots_analysis_service.md) | [FIFO Lot Analysis](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md) |
 | `price_marks.py` | [Price Resolver](transactions/price_resolver.md) | [Price Resolution](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md) |
 | `portfolio/` | [The portfolio package at work](#portfolio-package); its data-quality report in [Data Quality Banner](../frontend/data-quality-banner.md); its cache in [FX Architecture](fx/architecture.md#portfolio-cache-invalidation) | [Portfolio Engine — Mathematical Model](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md) |
-| `returns.py` | — | [ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md), [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md), [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md); the gain that recovers a drawdown in [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md#recovery-time) and [Current Drawdown](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md#what-it-takes-to-get-back) |
+| `returns.py` | — | [ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md), [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md), [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md); the gain that recovers a drawdown in [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md#recovery-time) and [Current Drawdown](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md#what-it-takes-to-get-back); the factor of a return series in [Observed Annualization](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md) |
 | `yield_on_cost.py` | — | [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) |
 | `splits.py` | — | [Split](../../financial-theory/instruments/asset-events/split.md) |
 | `ledger_totals.py` | [Ledger control totals](#ledger-totals) | — |
+| `interest.py` | [Scheduled Investment Provider](assets/provider_scheduled_investment.md#accrual-walk), its only consumer | [Day Count Conventions](../../financial-theory/fundamentals/day-count.md); simple interest in [Interest](../../financial-theory/instruments/asset-events/interest.md) |
 
 ---
 

@@ -129,11 +129,21 @@ A **decimal text field that never goes through a JavaScript number**.
 - `type="text"` with `inputmode="decimal"`: `,` and `.` both work as the decimal separator, and
   characters that can never belong to a number are filtered out while typing
 - `value` (bindable string) is the field text; on blur or Enter a valid value is rewritten in
-  canonical form (`.` separator, trailing zeros trimmed), then `oncommit` fires
+  canonical form (`.` separator, trailing zeros trimmed), then `oncommit` fires. An invalid value
+  stays as typed: never cut, never coerced on blur
 - Validation is exact: digit budget (`maxIntegerDigits`, `maxFractionDigits`, default 12 each),
   `min`/`max` (strings, compared as exact decimals), `required`, `allowNegative`;
   `onvaliditychange` reports `{normalized, empty, syntaxValid, requiredValid, digitsValid,
   rangeValid, valid}`, and `externalInvalid` lets the parent mark it invalid
+- A fraction longer than `maxFractionDigits` is flagged (`digitsValid: false`, `aria-invalid`, red
+  border) and also said under the field: a `<p>` rendered right after the `<input>`, as its
+  sibling, with `data-testid="<testid>-digits-error"` (when `testid` is set), `data-max` set to the
+  budget, and a text that follows the budget (`common.decimalPlacesExceeded`, an ICU plural):
+  *Whole numbers only* for `maxFractionDigits={0}`, as in the PAC priority fields,
+  *At most 1 decimal place* for 1, *At most N decimal places* above. It is withdrawn as soon as
+  the value is back within the budget. Too many integer digits and the other limits are flagged
+  without a message. The field has no `maxlength`: the browser silently cut a longer paste down to
+  a number that looked valid
 - ↑/↓ step by `step` in exact decimal arithmetic, clamped to the bounds (to 0 without
   `allowNegative`); `accelerateOnHold` (default `false`) climbs by powers of ten while the key is
   held
@@ -154,8 +164,11 @@ A **decimal text field that never goes through a JavaScript number**.
 - `signRule`: `positive`, `negative`, `nonzero`, `zero` or `any` (default) — a sign that breaks the
   rule makes the value invalid and the border red, a matching one turns it green
 - `accelerateOnHold` defaults to `true`
+- `testid` is passed to the inner field, so the message under it is `<testid>-digits-error`
 
-**Used by**: the quantity field of `TransactionFormModal`.
+**Used by**: the quantity field of `TransactionFormModal` (`tx-form-quantity`), with at most 12
+integer and 10 fraction digits — the 10 decimals the backend keeps for a quantity — so a longer
+fraction shows `tx-form-quantity-digits-error`.
 
 ---
 

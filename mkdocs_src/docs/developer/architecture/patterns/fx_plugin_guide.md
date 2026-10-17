@@ -68,7 +68,7 @@ graph TD
 
 **Phase 2** happens during sync — the system requests actual rate data for specific date ranges.
 
-**Plugin responsibility**: Fetch raw rates from the provider's API. Apply multi-unit adjustment (e.g., JPY ÷ 100). Return data in the provider's native format (no inversion, no alphabetical ordering). Skip only what it cannot read: BOE, FED and SNB also catch `ArithmeticError` in the `try` around each line or point, so a value that is no number (`"abc"`, `"1.2.3"`) skips its line or point alone, logged at debug like their other invalid lines (X-R50; before, `decimal.InvalidOperation`, which is no `ValueError`, escaped that `try`: BOE and FED lost that currency's answer, and SNB, whose `_parse_json()` runs outside the `try` of `fetch_rates()`, the whole fetch).
+**Plugin responsibility**: Fetch raw rates from the provider's API. Apply multi-unit adjustment (e.g., JPY ÷ 100). Return data in the provider's native format (no inversion, no alphabetical ordering). Skip only what it cannot read: BOE, FED, SNB and ECB catch `ArithmeticError` where they read each line, point or observation, so a value that is no number (`"abc"`, `"1.2.3"`, a JSON `null` at ECB) skips its date alone, logged at debug (X-R50; ECB since X-R52, where a structural problem, a missing index or key, still loses the currency: *Unexpected ECB response format*); before, `decimal.InvalidOperation`, which is no `ValueError`, got past their handlers: BOE, FED and ECB lost that currency's answer, every date of it, and SNB, whose `_parse_json()` runs outside the `try` of `fetch_rates()`, the whole fetch.
 **Core responsibility**: Normalize for storage (alphabetical `base < quote`), skip duplicates, handle fallback chains.
 
 ---
