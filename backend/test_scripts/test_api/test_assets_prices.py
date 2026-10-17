@@ -8,6 +8,7 @@ Tests for price-related endpoints:
 - POST /api/v1/assets/prices/sync - Refresh prices from providers
 """
 
+import time
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -29,6 +30,7 @@ from backend.app.schemas.prices import (
     FAUpsert,
 )
 from backend.app.schemas.provider import FAProviderAssignmentItem
+from backend.app.utils.datetime_utils import latest_range_end
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
 
@@ -976,3 +978,103 @@ async def test_sync_and_current_price_provider_success_with_mockprov(test_server
         assert verify_resp.status_code == 200, verify_resp.text
         assert len(verify_resp.json()["items"][0]["prices"]) >= 1
         print_success("  ✓ Sync + current price wrappers succeeded with mock provider")
+
+
+# ============================================================
+# X-R55 (N75): a price query has a ceiling, the server's tomorrow
+# ============================================================
+#
+# get_prices_bulk used to backward-fill one point a day up to any requested end: 9999-12-31 meant about 2.9 million
+# points built and serialised by the lane's backend. These two cases go through the route. The unbounded sizes are
+# pinned at service level (services range-ceiling, RC-A06), behind a fuse: here a red guard on unbounded code must not
+# keep the shared backend's event loop busy for minutes, with every neighbour test of the run waiting on it.
+#
+# The ceiling is datetime_utils.latest_range_end(), tomorrow by the server's calendar (R13-SEC7-1's one helper). The
+# lane's server runs on this host, in this process's time zone: the test asks the same helper for the day it cuts at.
+
+EXTREME_SECONDS = 20.0  # a capped answer takes milliseconds; an unbounded one, minutes
+
+
+async def _create_ceiling_asset(client: httpx.AsyncClient) -> int:
+    """An asset of this test alone, in USD; the caller deletes it."""
+    item = FAAssetCreateItem(display_name=f"Range Ceiling {unique_id('RCEIL')}", currency="USD")
+    resp = await client.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
+    assert resp.status_code == 201, resp.text
+    return FABulkAssetCreateResponse(**resp.json()).results[0].asset_id
+
+
+async def _price_three_days_before(client: httpx.AsyncClient, asset_id: int, today: date) -> None:
+    """A close on each of the three days before ``today``: the last stored price is yesterday's."""
+    prices = [FAPricePoint(date=today - timedelta(days=back), close=Decimal(100 + back), currency="USD") for back in (3, 2, 1)]
+    resp = await client.post(f"{API_BASE}/assets/prices", json=[FAUpsert(asset_id=asset_id, prices=prices).model_dump(mode="json")], timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+async def test_query_end_after_tomorrow_stops_at_tomorrow(test_server):
+    """RC-API-01 (X-R55, N75): POST /assets/prices/query up to today+10 gives no point after the ceiling,
+    ``latest_range_end()``: tomorrow, by the server's calendar.
+
+    The last stored price is yesterday: the series is backward-filled up to the ceiling, and no further. The ceiling is
+    read before the request (the series must reach it) and after the answer (no point may pass it): a day turning
+    meanwhile only widens what is accepted.
+    Red before X-R55: points backward-filled up to today+10.
+    """
+    print_section("RC-API-01: price query clamped to tomorrow")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        asset_id = await _create_ceiling_asset(client)
+        try:
+            ceiling_before = latest_range_end()
+            today = ceiling_before - timedelta(days=1)
+            await _price_three_days_before(client, asset_id, today)
+            date_range = {"start": (today - timedelta(days=3)).isoformat(), "end": (today + timedelta(days=10)).isoformat()}
+            resp = await client.post(f"{API_BASE}/assets/prices/query", json=[{"asset_id": asset_id, "date_range": date_range}], timeout=TIMEOUT)
+            ceiling = latest_range_end()
+            assert resp.status_code == 200, resp.text
+            days = [date.fromisoformat(point["date"]) for point in resp.json()["items"][0]["prices"]]
+            late = [day for day in days if day > ceiling]
+            assert not late, f"{len(late)} points after the ceiling {ceiling}: {late[0]} … {late[-1]}"
+            assert days and days[-1] >= ceiling_before, f"the series should be backward-filled up to the ceiling {ceiling_before}: {days}"
+            print_success(f"  ✓ {len(days)} points, the last on {days[-1]}")
+        finally:
+            await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+async def test_query_extreme_end_is_bounded(test_server):
+    """RC-API-02 (X-R55, N75, guard): a query ending 9999-12-31 answers within EXTREME_SECONDS with no point after the
+    ceiling, ``latest_range_end()``: 9999-12-01 … 9999-12-31 lies wholly after it, so the item is empty, without error.
+
+    The start is not 0001-01-01 on purpose: on unbounded code that request makes the lane's shared backend build and
+    serialise about 2.9 million points, its event loop blocked for minutes and every neighbour test with it. This shape
+    costs unbounded code 31 points, and still fails it; 0001-01-01 … 9999-12-31 is pinned at service level (RC-A06).
+    Red before X-R55: 500 «date value out of range» — after its 31 backward-filled points the per-day walk stepped past
+    9999-12-31, the last day a date can hold, as every query ending there did (after 2.9 million points from today).
+    """
+    print_section("RC-API-02: price query ending 9999-12-31")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        asset_id = await _create_ceiling_asset(client)
+        try:
+            await _price_three_days_before(client, asset_id, latest_range_end() - timedelta(days=1))
+            query = [{"asset_id": asset_id, "date_range": {"start": "9999-12-01", "end": "9999-12-31"}}]
+            started = time.monotonic()
+            try:
+                resp = await client.post(f"{API_BASE}/assets/prices/query", json=query, timeout=EXTREME_SECONDS)
+            except httpx.TimeoutException:
+                pytest.fail(f"no answer within {EXTREME_SECONDS:.0f} s for a query ending 9999-12-31")
+            elapsed = time.monotonic() - started
+            ceiling = latest_range_end()
+            assert resp.status_code == 200, resp.text
+            assert elapsed < EXTREME_SECONDS, f"{elapsed:.1f} s"
+            (item,) = resp.json()["items"]
+            days = [date.fromisoformat(point["date"]) for point in item["prices"]]
+            late = [day for day in days if day > ceiling]
+            assert not late, f"{len(late)} points after the ceiling {ceiling}: {late[0]} … {late[-1]}"
+            assert (item["asset_id"], item["prices"], item["events"], item["errors"]) == (asset_id, [], [], [])
+            print_success(f"  ✓ empty item in {elapsed:.2f} s")
+        finally:
+            await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
