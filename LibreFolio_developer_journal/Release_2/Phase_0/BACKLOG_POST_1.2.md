@@ -7642,6 +7642,19 @@ sulla base `23f6578f3`.
   - Un commento vecchio in `frontend/e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` dice ancora «the form
     (12 integer digits, 6 decimals)».
   Dettagli: piano 07, «W-B64 + W-B65 (per W)».
+- **B-49 · Un testo non UTF-8 nei dati di un backup passa la verifica del ripristino** — basso, da decidere dopo
+  W-B65; E, 17/10 (RNW-109 e la barriera SCA-036 di E; la decisione è di B).
+  - E l'ha trovato in 4 posti: un valore TEXT con byte non UTF-8 passa la verifica su copia. `integrity_check`, i
+    conteggi e i totali non leggono quei testi.
+  - Dopo il ripristino, molto probabilmente rompe le letture del server di quelle righe: pysqlite lancia alla lettura
+    («Could not decode to UTF-8 column …»), come prova la barriera SCA-036 di E. Non misurato su un server.
+  - Un caso è già rifiutato, per caso: il nome utente non UTF-8 di un amministratore attivo. `_administrators` lancia
+    `OperationalError`, che l'involucro di B-43 fa diventare `database_damaged`, con un messaggio generico. Le colonne
+    che la verifica non legge passano.
+  - Da decidere: la verifica rifiuta (un codice suo, senza mai citare il testo, che è dell'archivio) o avvisa come
+    E-19b1. Per trovarli serve leggere i testi come byte (`text_factory = bytes`) e provarne la decodifica: un costo
+    sui backup grandi.
+  Dettagli: piano 07, «W-B64 + W-B65 (per W)», punto di E-19b1.
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
