@@ -5178,3 +5178,388 @@ profondità sotto); A-34 tocca 9 punti delle sessioni, coperti da `session-versi
 A-32 (C1/C2, più il rifiuto di `complete_admin_setup`), A-33 (C3), A-35 (C5, gestore globale in `api/validation_errors.py`
 più la riga in `main.py`, da far rivedere ad H), doc (C6). Rossi prima del codice (75), verdi dopo, nessun file di altri
 toccato (`plugin_settings.py` intatto: A-37). Restano: A-34 (backlog), A-37 (dopo B4).
+
+### A7b-2 — Dopo il checkpoint (17/10, 01:36–)
+
+- **Commit del coordinatore**: `53c064556` (A-32/A-33), `2a238cf0c` (A-35), `d5f92e26e` (doc), `f5a42a00e` (diario).
+  Base aggiornata: merge di dev `b36e3873f`, HEAD **`c9cb27e4c`** (genitori `f5a42a00e` + `b36e3873f`), pulito. La riga
+  di `main.py` e il gestore li ha rivisti il coordinatore. `all-backend` su `c9cb27e4c` prima dell'ingresso, nel primo
+  slot libero.
+- **Il controllo su `ctx` chiesto dal coordinatore** (nota LOW: un `field_validator` con `ValueError(f"… {value}")`):
+  provato in processo col gestore vero, `ctx.error` esce come `{}` (un'eccezione si serializza vuota), quindi da lì
+  non passa nulla; il valore passa invece da **`msg`** («Value error, …»), che teniamo per scelta. Nessun validatore
+  mio né di uno schema con una password mette un valore nel messaggio (`schemas/auth.py`, `users.py` e gli schemi
+  email non ne hanno; le regole della password stanno nella rotta, 400 coi soli codici); i messaggi che citano un
+  valore (`schemas/settings.py`: orari, giorni, fuso, valuta) non citano segreti. **Niente A-38.** Da aggiungere, alla
+  prossima passata di doc, una frase in `security.md#validation-errors`: un validatore non mette mai il valore nel
+  messaggio, perché `msg` resta.
+- **Backlog**: A-39 (l'avviso del cambio d'indirizzo in `admin/configuration`) e A-40 (l'avviso del limite di
+  `user activate` sull'admin in attesa), dalle note del `docs-writer`. A-34 va con A8 (d'accordo il coordinatore).
+
+## A8 — Analisi e contratto (17/10, 02:00; in attesa del via)
+
+Fonti: decisioni del 14/10, punto 4 (D-A5, F15) e P13 (`decisioni-analisi-20261014.md`); §4.8 di questo piano; dal
+coordinatore: la sfumatura P13 (a) su `TabBar.svelte` è di A (01:35), A-34 va qui (01:36). Base `c9cb27e4c`.
+
+### Stato reale
+
+- **Il primitivo c'è già**: `utils/runtime/rate_window.py`, `SlidingWindowLimiter` (in memoria, per processo, chiavi
+  limitate, orologio iniettabile; un colpo rifiutato non conta), scritto anche per i tentativi di login. E lo usa per
+  «password dimenticata» (`FORGOT_BY_ADDRESS` 10/15 min, `FORGOT_BY_IDENTIFIER`) e per la verifica. La chiave per
+  indirizzo è di H: `services/platform/client_address.py`, `client_address(request)` (l'header fidato di
+  `LIBREFOLIO_CLIENT_IP_HEADER`, altrimenti la connessione) e `client_rate_key()` (IPv6 per /64). Nessuna copia.
+- **Login** (`auth.py:~150`): la password si verifica sempre (`verify_password_or_dummy`, stesso costo per un account
+  inesistente), poi 401 «Invalid credentials», poi i 403 (`EMAIL_NOT_VERIFIED`, `ACCOUNT_DISABLED`). Nessun limite.
+- **Frontend**: il 429 al login è già mappato (`auth.ts:70` → `auth.tooManyAttempts`, A3). `TabBar.svelte` ha già
+  `badge` per scheda e la modalità `scrollable` (`tab-bar-scroller`, commit `affae6ffe`), senza sfumatura. Il registro
+  `settingsTabs.ts` ha 8 schede; `admin` (impostazioni globali) è **visibile a tutti** (in sola lettura ai non admin),
+  `users`, `backup`, `email` solo agli admin.
+- **E2E da toccare con P13 (b)**: 8 spec cliccano le schede dell'admin dalla barra (29 clic, 14 via `?tab=`):
+  `settings.spec.ts`, `settings/admin-users` (A), `settings/backup` (B), `settings/email-tab`, `email-send-link`,
+  `auth-email-verification` (E), `settings/scheduler` (Z), `gallery.spec.ts` (G).
+
+### Proposta: due lotti
+
+**A8a — backend** (F15, controlli di sicurezza, A-34):
+- **C1** `services/accounts/login_throttle.py`: `LOGIN_BY_IDENTIFIER` (10 errori in 15 min, identificativo con le sole
+  A–Z ripiegate, che l'account esista o no) e `LOGIN_BY_ADDRESS` (50 in 15 min, `client_rate_key`). Prima di bcrypt
+  si guarda (`peek`) su entrambe; oltre → **429** `{"error_code": "TOO_MANY_ATTEMPTS"}` con `Retry-After` (secondi,
+  il maggiore dei due), la stessa risposta che l'account esista o no. Un errore di password conta su entrambe; un 200
+  azzera l'identificativo; i 403 (password giusta, account fermo) non contano.
+- **C2** le altre verifiche di password (stesso limite, chiave = l'account): `change-password`, `PUT /auth/profile`
+  quando chiede la password attuale, l'eliminazione del proprio account se la chiede. I link (§4.8): un secchio per
+  indirizzo dei **token sbagliati** (inspect non valido, setup e reset `TOKEN_INVALID`, invito non valido alla
+  registrazione), 50 in 15 min, stesso 429. Il reinvio della verifica di E ha già il suo limite: non lo tocco.
+- **C3** `LIBREFOLIO_LOGIN_LIMIT` (`on` predefinito, `off` lo spegne; un altro valore è un errore all'avvio, come
+  `LIBREFOLIO_REGISTRATION`), letto in `config/accounts.py`; riga commentata nella sezione di A di `.env.example`; un
+  avviso nel log all'avvio se spento. **Corsie di test**: il server di test parte con `off` (file del runner condiviso:
+  scrittore da decidere), i test del limite lo accendono in processo con un limitatore e un orologio iniettati.
+- **C4** controlli di sicurezza: un registro (`register_security_check(code, fn)`; il primo, di A,
+  `LOGIN_LIMIT_DISABLED`, avviso), e `GET /api/v1/security/checks` (solo admin; `{items: [{code, severity,
+  params}]}`): file nuovo `api/v1/security.py` più **una riga** in `api/v1/router.py`. Gli altri filoni aggiungono un
+  controllo con una riga.
+- **C5** A-34: `end_sessions(session, user)` asincrona, `UPDATE … SET session_version = session_version + 1` e
+  rilettura del valore; le 9 chiamate; il contratto 5 di `test_session_version.py` riscritto, più un test con due
+  sessioni che arrivano a +2.
+
+**A8b — frontend** (scheda «Sicurezza», P13):
+- **C6** `features/settings/security/`: `SecurityTab.svelte` e un registro dei controlli del browser (il primo: la
+  registrazione aperta su un host non locale, riusando `openRegistrationNoticeFor` di A7b) uniti a quelli del backend;
+  ogni avviso con il suo testo (i18n per codice) ed eventuale link; **badge** col numero degli avvisi sulla scheda e sul
+  gruppo «Amministrazione».
+- **C7** P13 (b): il registro prende `group?: 'administration'` (`admin`, `users`, `backup`, `email`, `security`); la
+  barra di sopra mostra le altre schede e una scheda «Amministrazione» (a destra, `settings-tab-administration`); la
+  seconda barra mostra quelle del gruppo quando una è attiva; `?tab=users` (e le altre) apre il gruppo su quella
+  scheda; gli id `settings-tab-{id}` restano. Un non admin vede nel gruppo solo `admin` (in sola lettura): con una
+  scheda sola niente seconda barra, il gruppo la apre direttamente.
+- **C8** P13 (a): in `TabBar` (`scrollable`) una `mask-image` con `linear-gradient` sui bordi del contenitore che
+  scorre, solo dal lato dove c'è altro da vedere, aggiornata allo scorrimento e al ridimensionamento; nessun colore;
+  `data-fade` (`none|start|end|both`) per i test.
+- **C9** E2E: un aiuto `openSettingsTab(page, id)` e le 8 spec che cliccano le schede dell'admin passate all'aiuto
+  (righe in file di A, B, E, G, Z: scrittore da decidere); la galleria della barra «Amministrazione» dopo G.
+- **C10** i18n nelle 4 lingue, doc (admin, utente, developer), riga del CHANGELOG.
+
+**Domande per il coordinatore**: (1) la divisione in A8a/A8b; (2) il nome `LIBREFOLIO_LOGIN_LIMIT`; (3) chi scrive
+la riga del runner che spegne il limite sulle corsie e la riga di `router.py`; (4) chi aggiorna le 8 spec E2E (io con
+un aiuto comune, oppure ciascun filone); (5) il secchio dei token sbagliati (C2), utile ma non chiesto
+esplicitamente.
+
+**Risposte del coordinatore (17/10, 01:41)**: (1) A8a e A8b separati, A8a entra da solo; (2) `LIBREFOLIO_LOGIN_LIMIT`
+(`on`/`off`, predefinito `on`) va bene; (3) la riga del runner che spegne il limite sulle corsie la scrivo io e la
+rivede H al checkpoint, i miei test API accendono il limite esplicitamente; la riga di `router.py` la scrivo io e la
+rivede il coordinatore; (4) le 8 spec E2E le faccio io in A8b con l'aiuto comune `openSettingsTab`, per ultime, dopo
+il codice, con un breve congelamento annunciato dal coordinatore ai proprietari (B, E, Z, colori per `gallery`); (5) il
+secchio dei token sbagliati **fuori** (token lunghi e casuali: la forza bruta non è praticabile, e un limite per
+indirizzo rischia di bloccare utenti dietro lo stesso NAT): backlog **A-41**. `SecurityTab` e la barra
+«Amministrazione»: solo ruoli colore, `theme-roles --check` fra i controlli leggeri. Rossi di A8a dopo l'`all-backend`.
+
+**Correzione di C4 (17/10, 01:50), prima dei rossi**: il registro c'è già. `services/platform/config_audit.py` di H
+(`ConfigCheck`: `check_id`, `severity` ok/info/warning/error, `i18n_key`, `detail`, `summary`; `CONFIG_CHECKS`,
+`run_config_checks()`) è nato **per la scheda «Sicurezza»** («will evaluate the same checks on demand»); E vi aggiunge
+`EMAIL_CONFIG_CHECKS` da un suo modulo, H ha anche `check_plugin_secrets(session)` (asincrono, col database). Quindi
+niente registro nuovo:
+- il controllo di A, `accounts.login_limit` (avviso quando `LIBREFOLIO_LOGIN_LIMIT=off`, i18n
+  `auth.checks.loginLimit.*`), sta in un modulo mio (`ACCOUNTS_CONFIG_CHECKS`) ed entra in `CONFIG_CHECKS` con **una
+  riga** nel file di H, come quelli di E: così il log dell'avvio lo scrive già `log_configuration_audit()`;
+- A8a aggiunge solo l'endpoint che la scheda chiede: `GET /api/v1/security/checks` (solo admin), `run_config_checks()`
+  più `check_plugin_secrets(session)`, tutti con la loro gravità (la scheda mostra quelli non `ok`), in
+  `api/v1/security.py` più la riga di `router.py`.
+
+### A8a.1 — Rossi (17/10, 01:50–)
+
+- **Dove spegnere il limite sulle corsie**: `dev.py` (~300), dove il server parte in modo test e già mette
+  `LIBREFOLIO_DISABLE_DONATION_POPUP=1` per i login degli E2E: `env.setdefault("LIBREFOLIO_LOGIN_LIMIT", "off")`, così
+  un valore esplicito vince. Riga per H (revisione al checkpoint). La riga di `config_audit.py` (anche lì H): l'avvio si
+  ferma su un valore non valido di `LIBREFOLIO_LOGIN_LIMIT`, accanto a `admin_bootstrap_config()`; e
+  `*ACCOUNTS_CONFIG_CHECKS` in `CONFIG_CHECKS`.
+- **Due `test-author` su file nuovi** (l'`all-backend` di A7b-2 in corso non li raccoglie: non registrati):
+  `test_services/test_login_throttle.py` (C1, C3, C4; puro, orologio e limitatori iniettati) e
+  `test_api/test_login_throttle_api.py` (privato: login, indirizzo, cambio password, profilo, interruttore,
+  `GET /security/checks`) più `test_api/test_security_checks_api.py` (corsia: `accounts.login_limit` in `warning`, che
+  fissa la riga del runner). A-34 (riscrive `test_session_version.py`, già esistente) dopo la fine dell'`all-backend`.
+> **⚠️ Fuori pista**: l'`all-backend` di A7b-2 (slot 1, 01:38) ha `--log-dir` nella stessa cartella dove reindirizzavo
+> l'uscita: all'avvio il runner archivia quel che trova in `00_archive/` (tar) e il file della redirezione resta senza
+> nome. La corsa continua; i risultati si leggono dai log per unità e da `dev.py test --run-status`. D'ora in poi la
+> redirezione sta fuori dalla cartella dei log.
+- **Rossi dei servizi scritti** (`test-author`, solo file nuovi): `test_login_throttle.py` (LT-001…020) e
+  `test_accounts_checks.py` (LE-001…004, LC-001…011, LC-004b): 109 casi, 94 rossi «red until A8a», 15 guardie; provati
+  in processo contro una versione di riferimento (106/106) e contro 25 versioni sbagliate (tutte prese). Scelte fissate
+  su domanda: il valore non valido in `detail` è quello **senza spazi**; il riassunto di `off` è un testo fisso; l'audit
+  si ferma **prima di scrivere qualunque riga**. Da fare dopo l'`all-backend`: `CHECK_IDS` di `test_config_audit.py`
+  (di H) prende `check_login_limit`; `*ACCOUNTS_CONFIG_CHECKS` va **prima** di quelli di E (i test di E vogliono la lista
+  che finisce con i tre controlli email).
+- **Bozze del codice** (`work/a8a/`, a secco pulite, non applicate: il repo non si tocca finché l'`all-backend` gira):
+  `login_throttle.py`, `services/accounts/checks.py`, `schemas/security.py`, `api/v1/security.py` (nuovi);
+  `apply_a8a.py` per `config/accounts.py` (`login_limit_enabled`), `config_audit.py` (H: import, riga in
+  `CONFIG_CHECKS`, la validazione accanto a `admin_bootstrap_config()`), `auth.py` (login, cambio password, profilo),
+  `router.py`, `dev.py` (H: `setdefault` del limite spento in modo test), `.env.example` (riga commentata);
+  `i18n_add.py` per le tre chiavi `auth.checks.loginLimit.*`.
+- **Congelamento della galleria** fino alle ~03:30 (coordinatore, 02:16): niente passi pesanti (`api`, E2E,
+  `all-backend`); i rossi delle API di A8a dopo.
+- **Rossi delle API scritti** (`test-author`, solo file nuovi): `test_login_throttle_api.py` (privato, 24: LT-API-01…15,
+  SC-API-01…06; indirizzi di documentazione per richiesta, orologio finto, bcrypt a costo 4, l'hash fittizio privato)
+  e `test_security_checks_api.py` (corsia, 3: SC-LANE-01…03). Oggi: errori di setup (modulo mancante) e 404; contro una
+  versione di riferimento in memoria 24/24; dieci varianti sbagliate prese ciascuna dai test giusti.
+> **⚠️ Fuori pista (dal `test-author`, punto 5)**: la riga di `dev.py` arriva solo al server della corsia. I processi
+> pytest che montano le app in processo (gli harness privati di molti file, consolidati in un processo solo)
+> avrebbero il limite **acceso**, con i limitatori del processo e l'orologio vero: dopo 50 errori da `127.0.0.1` fra
+> file diversi, 429 spuri in test che si aspettano 401. Cura: anche `backend/test_scripts/conftest.py`
+> `os.environ.setdefault("LIBREFOLIO_LOGIN_LIMIT", "off")` (un valore esplicito vince; i test del limite lo accendono
+> con monkeypatch). In `apply_a8a.py`; per la revisione di H con la riga di `dev.py`.
+- Note del `test-author` per il contratto, nessuna in contrasto: il profilo chiede la password solo per un indirizzo
+  davvero nuovo (il resto non si limita); nel cambio di password il limite viene **prima** del controllo della
+  password debole (nella bozza è così); l'identificativo come scritto fa del nome utente e dell'email due secchi (~20
+  tentativi in 15 minuti per account, sempre sotto i 50 dell'indirizzo): da dire nelle doc.
+
+### A7b-2 — Aggiunta: i numeri non finiti (17/10, 03:02)
+
+- Da X, via coordinatore: un numero non finito in un corpo JSON (`1E+400`, `NaN`) fa portare al 422 di FastAPI
+  `input: inf`; il renderer di Starlette (`allow_nan=False`) fallisce e la risposta è un **500**, in tutta l'app.
+- **Provato in processo** col gestore vero e un campo `Decimal`: `1E+400`, `-1E+400`, `NaN`, `Infinity` (e `NaN` su un
+  `Decimal` con `max_digits`/`decimal_places`) → senza il gestore **500**, col gestore **422** `finite_number`, `msg`
+  senza il valore, **nessun `ctx`**. Il gestore di A-35 lo cura già.
+- Da aggiungere a `test_validation_errors_api.py` (parte pura: la premessa del 500 e il 422; un caso sulla corsia su una
+  rotta vera con un `Decimal`), **dopo** l'`all-backend` in corso, come commit a parte; l'ingresso non lo aspetta.
+- Nota fuori da A-35: un campo **`float`** semplice *accetta* `1E+400` (200, `allow_inf_nan=True` predefinito di
+  Pydantic); chiesto al coordinatore se serve una riga di backlog e di chi.
+- **A-34 in bozza** (`work/a8a/apply_a34.py`, a secco pulito): `end_sessions(session, user)` asincrona con
+  `UPDATE … SET session_version = session_version + 1 … RETURNING` e `set_committed_value` (niente `refresh()`, che
+  scaricherebbe prima del tempo i campi già cambiati dal chiamante, come `hashed_password`); le 9 chiamate (6 in
+  `user_service`, `change-password`, `POST /users/{id}/sessions/revoke`, `complete_admin_setup`). I test: dopo
+  l'`all-backend` (riscrive il contratto 5 di `test_session_version.py`, file esistente).
+- Il `float` che accetta `1E+400`: riga di backlog di H (H-32), la registra il coordinatore.
+
+### A7b-2 — Revisione di E (17/10, 03:08, «R13-SEC4»)
+
+Le tre note di A sono chiuse; niente sopra la soglia; nulla blocca l'ingresso. Quattro voci basse nel backlog: **A-38**
+(`msg`/`ctx` con parti del valore dove un validatore lo formatta: in parte coperto dal test di A-35 su tutta la
+risposta delle rotte con credenziali), **A-42** (gara fra un setup e un nuovo link: rifiutare se un altro link di setup è
+già consumato), **A-43** (ritirare i link anche alla disattivazione, per i database delle build precedenti), **A-44**
+(annullare l'admin iniziale mai attivato).
+- **`all-backend` su `c9cb27e4c`** (slot 1, 01:38–03:10): rc 0; API 2 263, servizi 13 774, utils 3 287, schemi 1 833,
+  e2e del backend 10, DB/BRIM/migrazioni 1 885: circa 23 050 verdi, 0 rossi; `--run-status` con ogni unità fatta.
+- **A7b-2 entrato** (17/10, ~03:12): dev `90219770c` più la cura `28059249a` (conflitto su `overview.md` accanto a H-29,
+  sistemato dal coordinatore) e il CHANGELOG 🔒 `81b8db4e1`. La mia base resta `c9cb27e4c` (l'avanzamento rapido non
+  passa per il diario sporco): la punta arriva al prossimo checkpoint, quello del seguito di A-35.
+
+### A8a.2 — Rossi osservati (17/10, 03:15–)
+
+- Registrate le quattro unità: `services login-throttle`, `services accounts-checks` (pure), `api login-throttle`
+  (pura: app in processo), `api security-checks` (corsia).
+- `services login-throttle` **32 rossi**, 1 guardia verde; `services accounts-checks` **62 rossi**, 14 guardie verdi
+  (03:12–03:13, carico 46): i 94 + 15 previsti dal `test-author`, ciascuno sul suo messaggio.
+- **`test_config_audit.py`** (di H, per la revisione di H): `CHECK_IDS` impara `check_login_limit` con un import pigro;
+  ordine e appartenenza di `CONFIG_CHECKS` in un test nuovo, rosso fino ad A8a (i controlli di A subito prima dei tre di
+  E); il resto dei 90 casi invariato. In più `_configure` toglie `LIBREFOLIO_LOGIN_LIMIT`, come già le `SMTP_*`: col
+  predefinito `off` del `conftest` 16 casi di H che vogliono «tutti ok» sarebbero diventati rossi.
+- **Seguito di A-35** (numeri non finiti, `test_validation_errors_api.py` §4): parte pura 20 casi (premessa del 500
+  senza il gestore, 422 in JSON stretto con), corsia 2 casi su `POST /fx/currencies/convert` (una lettura, `Decimal`,
+  account propri); verdi all'arrivo. Descrizione del runner aggiornata (sette account, i numeri non finiti).
+- **Rossi di A-34 scritti** (`test-author`, solo `test_session_version.py`, 03:30): contratto 5 riscritto (incremento
+  nella transazione del chiamante, `user not in session.dirty`, una connessione nuova legge ancora il vecchio valore,
+  rollback), più due test nuovi: un campo già cambiato dal chiamante (`hashed_password`) resta in sospeso e lo scrive il
+  commit del chiamante; **la gara** (due sessioni caricano l'account a 6; cambio password + «esci ovunque» → **8**, il
+  cookie riemesso a 7 rifiutato). Ordine fissato, niente thread né attese. La forma (`async`, `(session, user)`) si
+  verifica in `_end_sessions()`: oggi 5 rossi su quel messaggio, 51 verdi. In processo: con l'`end_sessions(user)` di
+  oggi la gara salva **7**; la versione di riferimento passa tutto; sette versioni sbagliate prese (incremento
+  sull'oggetto, `update(User)` ORM che scarica prima, `refresh`, assegnazione normale, commit dentro…).
+  `_end_sessions_of(engine, user_id)` mantiene la firma.
+> **⚠️ Fuori pista**: `test_backup_apply.py` (di B) importa `_end_sessions_of` da questo file: il suo test (i)
+> `test_a_password_change_after_the_restore_raises_that_account_alone_by_one` (unità `services backup-apply`) è rosso
+> fino ad A8a sullo stesso messaggio. Decisione: **nessun ripiego** che accetti anche la forma vecchia (codice morto
+> dopo A8a); test e codice entrano nello stesso commit, quindi su dev non è mai rosso. `services backup-apply` entra nei
+> verdi da provare. Previsione per l'integrazione: chi aggiunge altrove una chiamata `end_sessions(user)` (B, E) ha un
+> `TypeError` subito, non un errore silenzioso; da dire nel handoff.
+- **Bozze corrette** (03:40): A8a entra senza la scheda «Sicurezza» (è di A8b). Le frasi che la davano per esistente ora
+  dicono «i controlli della configurazione» (`login_throttle.py`, `checks.py`, la docstring di `login_limit_enabled`) e,
+  in `.env.example`, «il server avvisa nel log a ogni avvio». L'eliminazione del proprio account non chiede la password
+  (`auth.py` `delete_own_account`): la clausola di C2 «se la chiede» non si applica, niente da limitare.
+- **Per A8b, C11** (trovato rileggendo il frontend): il 429 nuovo del cambio password e del cambio d'indirizzo non ha
+  parole sue. `PasswordChangeModal` mostra il `message` inglese del backend (attraverso `trySave`); `ProfileTab`
+  (`describeRefusal`) mostra «aggiornamento non riuscito». Raro (10 password attuali sbagliate in 15 minuti), quindi
+  accettabile fra l'ingresso di A8a e quello di A8b. In A8b: `TOO_MANY_ATTEMPTS` → un testo tradotto, nelle 4 lingue,
+  in entrambi, con i loro Vitest.
+- **Doc in scrittura** (`docs-writer`, 03:40, senza comandi `dev.py` per il congelamento): `admin/configuration`
+  (variabile, sezione `#login-limit`, controlli d'avvio), `admin/connection_checks` (`#client-address`), utente
+  (`getting-started`, `settings/profile`), developer `architecture/security.md` (limite, controlli e endpoint, A-34,
+  numeri non finiti e la frase di A-38). Build strict e controllo dei link li lancio io quando il carico lo permette.
+> **⚠️ Fuori pista (bozza di A-34 sbagliata, presa rileggendola contro i test)**: la bozza usava `update(User)` ORM con
+> `synchronize_session=False` via `session.execute()`. Un UPDATE ORM fa comunque l'**autoflush** prima di partire,
+> quindi l'hash già cambiato dal chiamante sarebbe stato scritto da `end_sessions`: il test «un campo cambiato prima resta
+> in sospeso» l'avrebbe preso (è la riga «ORM `update(User)`» della matrice del `test-author`). Corretta: istruzione
+> Core su `User.__table__` (stile di `models.py`, `# type: ignore[attr-defined]`), eseguita su
+> `await session.connection()` (nessun flush), poi `set_committed_value`. Tolto l'import di `update`. Verificati anche
+> `expire_on_commit=False` (il cambio password legge `session_version` dopo il commit per il cookie) e nessun
+> `onupdate` su `users.updated_at` (un'istruzione Core lo farebbe scattare). Prove a secco dei due script pulite.
+- **Rossi dei servizi osservati** (03:40–03:42, carico 31): `services session-version` **5 rossi** / 51 verdi,
+  `services config-audit` **1** / 90, `services backup-apply` **1** / 227 (il test (i) di B): ciascuno sul suo
+  messaggio («red until A8a (A-34): … a plain function of (user)»; «`accounts.checks` does not exist»). Porta 6182
+  libera dopo.
+- **Rossi delle API non ripassati dal runner**: ogni `dev.py test api …` avvia il server della corsia
+  (`_SERVER_BACKED_CATEGORIES` in `_cli.py`), anche per un'unità pura, quindi è un passo pesante, vietato dal
+  congelamento. Prova dei rossi: le corse in processo dei `test-author` (`api login-throttle` 24 errori di setup, modulo
+  mancante; `api security-checks` 3 × 404; contro una versione di riferimento 24/24, dieci varianti sbagliate prese).
+  Per non fermare il lotto il codice entra ora; i verdi delle API nel primo slot. Da dire nel handoff.
+
+### A8a.3 — Codice ✅ (17/10, 03:44)
+
+- `apply_a8a.py` e `apply_a34.py` applicati (bozze corrette prima: la scheda «Sicurezza» non data per esistente;
+  A-34 con l'istruzione Core). `i18n_add.py`: le tre chiavi `auth.checks.loginLimit.*` nelle 4 lingue
+  (`frontend/src/lib/i18n/auth/*.json`), `i18n build` e `i18n check` puliti (4 941 chiavi). Nel messaggio `ok`
+  «un nome utente» → «un nome utente o un'email» (l'identificativo è quello scritto), in tutte e 4 le lingue.
+- `ruff` e `black` puliti su 21 file. `dev.py`: 43 rilievi di ruff e la riformattazione di black **identici a HEAD**
+  (preesistenti, le mie 3 righe non ne aggiungono).
+> **⚠️ Fuori pista (guardia di H, `services config-package`, regola b)**: nessun modulo di `backend/app/` fuori da
+> `config/` legge `os.environ`. La bozza di `checks.py` lo leggeva per mettere il valore non valido in `detail`. Cura:
+> accessore `login_limit_value()` in `config/accounts.py` (con `_blank_to_none`, quindi senza spazi), usato da
+> `login_limit_enabled()` e da `checks.py` (tolto `import os`). Trovato leggendo le guardie che scorrono i moduli,
+> prima dei verdi.
+
+### A8a.4 — Verdi dei servizi ✅ (17/10, 03:46–04:03)
+
+- 13 unità, una alla volta, carico < 50 (lo script aspetta da solo; picchi a 225 fra le 03:56 e le 04:00):
+  `login-throttle` 33, `accounts-checks` 76, `config-audit` 91, `config-package` 848, `config-env-example` 38,
+  `session-version` 56, `admin-bootstrap` 190, `account-tokens` 76, `user-profile` 52, `registration` 151,
+  `email-checks` 87, `plugin-secrets-check` 11, `backup-apply` 228: **1 937 verdi, 0 rossi**. Porta 6182 libera.
+
+### A8a.5 — Doc e un buco trovato dalle doc (17/10, 03:40–04:15)
+
+- `docs-writer` (senza comandi): `admin/configuration` (riga della variabile, «🚦 Failed Sign-ins» `#login-limit`,
+  controlli d'avvio), `admin/connection_checks` (`#client-address`), `user/getting-started`, `user/settings/profile`,
+  developer `architecture/security.md` (nuove `#login-limit` e `#security-checks-endpoint`, A-34, numeri non finiti e
+  A-38), `backend/email.md` (`#rate-window`), `frontend/components/features/auth.md` (frasi diventate false).
+> **⚠️ Fuori pista 1 (dal `docs-writer`)**: in `dev.py` «an explicit value still wins» era falso:
+> `configure_test_runtime()` toglie ogni `LIBREFOLIO_*` di `.env` e della shell (`scripts/cli_base.py`
+> `_test_lane_drops`) prima di `env = os.environ.copy()`. La riga ora è un'assegnazione semplice, `env[...] = "off"`,
+> come quella del popup, con il commento giusto (per la revisione di H). Il `setdefault` del `conftest.py` invece
+> serve: vale per i processi pytest.
+> **⚠️ Fuori pista 2 (dal `docs-writer`, verificato)**: `POST /email/verification/resend` di E
+> (`services/email/verification.py` `resend_verification`) controlla la password dell'accesso (sbagliata → 401,
+> giusta su un account attivo → 409 `EMAIL_VERIFICATION_NOT_NEEDED`) col solo limite per indirizzo di E: con il limite
+> per identificativo di A8a diventava la via per aggirarlo. È il quarto e ultimo controllo di password dell'app (gli
+> altri tre ora sono limitati). **Decisione del coordinatore (04:10)**: lo scrivo io in A8a, E rivede (E-R13-SEC6
+> aspetta A8a). **Indicazioni di E (04:12)**: `refusal` dopo `RESEND_BY_ADDRESS` e prima della ricerca dell'account;
+> `record_failure` nel ramo unico `if not password_ok or user is None:` (altrimenti oracolo d'esistenza);
+> `record_success` subito dopo, prima dei controlli `is_active` (come cambio password e profilo; diverso dal login,
+> che non azzera sui 403: va bene, serve la password giusta); il 429 resta `EmailRateLimitedError` →
+> `EMAIL_RATE_LIMITED`, il frontend non cambia. E pensava che tre punti dei suoi test cambiassero: col predefinito `off`
+> del `conftest` (il suo `_no_inherited_variables` toglie solo `SMTP_*` e `INHERITED`) restano come sono; detto al
+> coordinatore, da confermare con `services email-verification` e `api email-verification`.
+- **Rossi in scrittura** (`test-author`, solo `test_login_throttle_api.py`): R1 resend sbagliati → login 429 (account
+  esistente e sconosciuto), R2 login falliti → resend 429 `EMAIL_RATE_LIMITED` senza bcrypt e senza contare, R3 la
+  password giusta al resend azzera (409 attivo, 403 disattivato), R4 il resend conta anche sull'indirizzo.
+- **Bozza** `work/a8a/apply_resend.py` (a secco pulita): le righe in `resend_verification`, la sua docstring, e la
+  docstring della rotta in `api/v1/email.py` (descrizione OpenAPI: il 429 elenca anche il limite dell'accesso).
+- **Da fare nelle doc, dopo il resend**: `security.md` (il resend ora è limitato), `backend/email.md`
+  (`#verification-resend`), `developer/architecture/settings.md` (gli accessori di `config/accounts.py`:
+  `login_limit_value()`, `login_limit_enabled()`) e `developer/api/index.md` (il router `/security`), più l'accessore
+  nella sezione dei controlli.
+
+### A8a.6 — Doc ✅ (17/10, 04:17–04:25)
+
+- Seguito del `docs-writer` (stesse regole): il resend come quarto controllo sotto il limite (`security.md`
+  `#login-limit`, la tabella delle rotte a quattro righe; `backend/email.md` `#verification-resend`, `#rate-window`,
+  `#api-verification-resend`, `#verification-frontend`; `admin/configuration` `#login-limit`; `user/getting-started`
+  `#verify-email`), l'accessore `login_limit_value()`, la riga di `dev.py` senza `setdefault`,
+  `developer/architecture/settings.md` (accessori e variabile) e `developer/api/index.md` (`/email`, `/security`).
+- Io: una riga nella tabella `#verification-limits` di `admin/email.en.md` (di E; pagina senza traduzioni, quindi
+  nessun debito; E la vede con il resend).
+> **⚠️ Fuori pista**: la build strict è caduta su **quella mia riga**: `admin/email.en.md` non ha traduzioni, quindi
+> la build italiana la usa com'è, e il suo link `configuration.md#login-limit` va su `configuration.it.md`, che non ha
+> l'ancora (nessuna sezione 1.3 vi è tradotta: mancano anche `#accounts`, `#user-limit`, `#initial-admin`). Le pagine
+> solo inglesi infatti non linkano ancore nuove di pagine tradotte. Cura: link alla pagina senza ancora, «see *Failed
+> Sign-ins* in [Configuration](configuration.md)».
+- `dev.py mkdocs build` (strict) **verde** (3 084 URL relativi risolti); `dev.py mkdocs check-links` **verde** (97
+  link validi, nessun link di confine rotto). `translate-validate`: 1 164 errori, il debito di traduzione già noto
+  della 1.3 (es. `getting-started` it indietro da A5/A7) più le parti nuove; nessuna traduzione ora (solo su richiesta
+  del developer).
+- Pagine con debito nuovo: `admin/configuration` (riga, «Failed Sign-ins» `#login-limit`, riga e frase dei controlli
+  d'avvio, «Related»), `admin/connection_checks` (`#client-address`), `user/getting-started` (nota del login,
+  `#verify-email`), `user/settings/profile` (un punto e un paragrafo). L'ancora `{: #login-limit }` va tenuta nelle 4
+  lingue.
+- Dal `docs-writer`, fuori perimetro: `developer/api/index.md` dice che `/auth` fa «token refresh», falso → backlog
+  **A-45**. A-34 chiusa nel backlog (✅, il SHA lo mette il coordinatore).
+
+### A8a.7 — Il resend sotto il limite: rossi, codice, verdi ✅ (17/10, 04:05–04:26)
+
+- **Rossi** (`test-author`, solo `test_login_throttle_api.py`, sezione 7 `TestResend`, LT-API-16…19, 8 casi): resend
+  sbagliati → login 429 (account, nessun account, l'email in maiuscole: l'identificativo come scritto); login bloccato
+  (per identificativo e per indirizzo) → resend 429 `EMAIL_RATE_LIMITED` con `retry_after` = `Retry-After` = l'attesa
+  esatta, senza bcrypt e senza contare (conteggi dei limitatori uguali prima e dopo), poi l'accesso a tempo scaduto;
+  la password giusta al resend azzera (409 attivo, 403 disattivato, tutto scritto come email); un resend sbagliato
+  conta sull'indirizzo. `RESEND_BY_ADDRESS` di E sostituito da uno privato sull'orologio finto. Contro una copia in
+  memoria della cura 32/32; 15 varianti sbagliate prese (tabella nel resoconto del `test-author`; 4 solo dalle sue
+  aggiunte: rifiuto senza indirizzo, rifiuto contato, conteggi per username).
+- **Rossi osservati da me** (in processo, senza corsia né conftest: `--noconftest`, `--basetemp` e dati privati,
+  `LIBREFOLIO_TEST_MODE=1`, niente bytecode; carico 21): **8 rossi** sui loro messaggi (429 atteso, 200/401/409
+  ottenuti; `[401, 429×9]` invece di dieci 401). Il passaggio dal runner (`api login-throttle`) è nello slot: ogni
+  `dev.py test api …` avvia il server della corsia.
+- **Codice** (`work/a8a/apply_resend.py`): in `resend_verification` (E) `refusal` dopo `RESEND_BY_ADDRESS` e prima
+  della ricerca → `EmailRateLimitedError(retry_after)`; `record_failure` nel ramo unico password sbagliata/account
+  sconosciuto; `record_success` subito dopo, prima dei controlli `is_active`; docstring del servizio e della rotta
+  (`api/v1/email.py`, descrizione OpenAPI). Nessun ciclo d'import nuovo (`verification.py` importava già
+  `user_service`). `ruff`/`black` puliti; `api sync` rc 0 (solo la descrizione; il client è ignorato da git).
+- **Verdi**: il file intero in processo **32/32**; `services email-verification` (E) **125** verdi, i tre punti dei
+  test di E invariati, come previsto (`conftest` → limite spento); `services config-package` 848.
+- **Per lo slot** (`work/a8a/slot_api.sh`, un'unità alla volta): `login-throttle`, `security-checks`,
+  `validation-errors`, `auth`, `registration`, `admin-setup`, `users-admin`, `session-revocation`, `account-deletion`,
+  `plugin-settings`, `email`, `email-verification`, `email-verification-hooks`, `email-change-notice`.
+- **Controlli leggeri in più** (04:26–04:28, carico ~20): `dev.py i18n audit` 4 941 chiavi, 0 inutilizzate, 0 mancanti
+  (le tre `auth.checks.loginLimit.*` le trova scritte intere in `checks.py`); `utils runtime-isolation` 232 verdi (la
+  riga nuova di `dev.py` nell'ambiente del server di test). I file di test che tolgono tutti i `LIBREFOLIO_*`
+  (`test_config_audit`, `test_email_checks`, `test_config_secrets`, `test_backup_*`, `test_runtime_isolation`,
+  `test_release_image_contract`, `test_rate_limit_*`, `test_plugin_settings_service`) non fanno accessi: il limite
+  acceso lì non tocca nessuno.
+- **Coordinatore (04:30)**: `all-backend` **non serve** (il suo cancello dopo gli ingressi copre le suite vicine); slot
+  tutto mio (il terzo, ~25 min) alla fine del blocco della galleria (~04:35, me lo dice lui), in parallelo a X e Y. La
+  riga di `dev.py` (`env[...] = "off"`) va in revisione ad H al checkpoint.
+- **Da H, via coordinatore (04:30)**: la docstring di `test_admin_setup_api.py` diceva ancora che `/auth/setup` su
+  un'istanza bloccata «aspetta una decisione del developer (A7)». Decisa in P16(d): resta fuori da
+  `ALLOWED_WHEN_BLOCKED` e chi non ha sessione riceve il 401 di `get_current_user`. Commento aggiornato (rimanda a
+  `test_instance_block.py`, che fissa la lista per nome e per rotta); nessun'altra menzione stantia. `api admin-setup`
+  è già nello slot.
+- **Congelamento FE8b di W** (04:30, fino al «finito» del coordinatore): transazioni del frontend,
+  `CompactCashCell*`, `_frontend_transaction.py`, `_frontend_utility.py`. A8a non li tocca. Per A8b: le righe dei
+  Vitest nuovi in `_frontend_utility.py` vanno chieste al coordinatore se il congelamento dura ancora.
+  Finito alle 04:31 (`31335fe26`): i file delle transazioni ora stanno in `frontend/src/lib/features/transactions/`.
+
+### A8a.8 — Verdi delle API nello slot 3 ✅ (17/10, 04:38–04:53)
+
+- `work/a8a/slot_api.sh slot3`, un'unità alla volta, corsia 6182, carico 22–56: `login-throttle` 32, `security-checks`
+  3, `validation-errors` 53, `auth` 95, `registration` 102, `admin-setup` 50, `users-admin` 100,
+  `session-revocation` 11, `account-deletion` 9, `plugin-settings` 14, `email` 158, `email-verification` 49,
+  `email-verification-hooks` 16, `email-change-notice` 14: **706 verdi, 0 rossi**. Porta 6182 libera prima e dopo.
+- `security-checks` sulla corsia: `accounts.login_limit` è `warning` (il server della corsia gira col limite spento):
+  la riga di `dev.py` funziona. `email-verification` invariato con il resend sotto il limite (il `conftest` lo spegne).
+
+### A8a — Definizione di fatto ✅ (17/10, 04:55)
+
+- Test: servizi 15 unità (2 910) + `utils runtime-isolation` 232 + API 14 unità (706), tutti verdi; rossi osservati
+  prima del codice (servizi dal runner; resend e API del limite in processo, perché ogni unità `api` avvia il server
+  della corsia). `all-backend` non richiesto dal coordinatore.
+- Statici: `ruff`/`black` puliti su 23 file Python (`dev.py`: rilievi identici a HEAD); `git diff --check` pulito;
+  `i18n check`/`audit` puliti; `api sync` rc 0 (client ignorato da git).
+- Doc: build strict e `check-links` verdi; debito di traduzione elencato in A8a.6.
+- Revisioni da fare al checkpoint: H (`dev.py`, `config_audit.py`, `conftest.py`, `test_config_audit.py`), il
+  coordinatore (`router.py`), E (resend in `verification.py` e `email.py`, le righe delle sue pagine di doc).
+- Stato: **FROZEN** 🧊 dopo l'handoff.
