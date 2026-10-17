@@ -691,6 +691,15 @@ def api_settings(verbose: bool = False, test_names: list[str] | None = None) -> 
     return run_command(cmd, "Settings API tests", verbose=verbose)
 
 
+def api_settings_currency_strict(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the E-19a settings currency tests: a user's base_currency strict, the 422 naming the code it stands for."""
+    print_section("Settings Currency Strict API Tests (E-19a)")
+    print_info("Tests: PUT /settings/user and the welcome flow refuse a non-ISO base_currency; an E-18 route's 422 names the ISO code")
+    print_info("Note: Server will be automatically started and stopped by test")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_settings_currency_strict_api.py", test_names)
+    return run_command(cmd, "Settings currency strict API tests", verbose=verbose)
+
+
 def api_plugin_settings(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the plugin settings API tests: catalogue, all-or-nothing writes, write-only secrets, isolation, delivery."""
     print_section("Plugin Settings API Tests")
@@ -1188,6 +1197,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "users-admin", api_users_admin, name="Users Admin API", desc="Invitations, accounts and usage, PATCH with the last-admin and limit guards, reset links, sessions revoke, onboarding reset, token-free logs")
     add_test(api, "profile", api_profile, name="Profile API", desc="Username/email update")
     add_test(api, "settings", api_settings, name="Settings API", desc="User and global settings")
+    add_test(api, "settings-currency-strict", api_settings_currency_strict, name="Settings Currency Strict API", desc="E-19a: base_currency strict on PUT /settings/user and the welcome flow; the 422 names the ISO code")
     add_test(
         api,
         "plugin-settings",
