@@ -15,10 +15,11 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
 (b) A check never puts a secret in its result: recognisable values for ``JWT_SECRET``, the instance key and the content
     of the secret files appear in no field of any result, in no log record and in no startup error.
 (c) A check changes nothing: ``run_config_checks`` evaluates every check in the order of ``CONFIG_CHECKS``, leaves the
-    environment as it was and generates no key file. ``CONFIG_CHECKS`` is the platform's checks, then workstream A's
-    ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it; it holds no check without an id here (a new check comes
-    with its tests), and each result carries the id of its check. [updated in A8a (accounts check, H reviews): A's
-    checks are imported by that one test, red until lot A8a lands them; every other test runs without them.]
+    environment as it was and generates no key file. ``CONFIG_CHECKS`` is the platform's checks, then workstream B's
+    ``BACKUP_CONFIG_CHECKS``, then workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it; it holds no
+    check without an id here (a new check comes with its tests), and each result carries the id of its check. [updated
+    in A8a (accounts check, H reviews): A's checks are imported by that one test, red until lot A8a lands them; every
+    other test runs without them.]
 (d) ``log_configuration_audit``: a ``JWT_SECRET_FILE`` that cannot be read stops the start (``SecretFileError``), and so
     does a configured instance key that cannot be used (``InstanceKeyError``), since the admin asked for that source and
     the server must not start without it; nothing is logged first, and a blank ``NAME`` beside the file hides nothing. A
@@ -83,6 +84,23 @@ from backend.app.services.platform.config_audit import (
 from backend.app.services.platform.instance_key import INSTANCE_KEY_FILE, InstanceKeyError, derive_key, instance_key_path
 from backend.test_scripts.test_utils import print_section, print_success
 
+# B-9 (workstream B; H reviews): the two checks of instance_backup.checks, imported guarded while that module does not
+# exist yet, so that this file still collects; only its own absence is tolerated. Until then these stand-ins are what
+# CHECK_IDS lists, and (c) finds them missing from CONFIG_CHECKS.
+_BACKUP_CHECKS_MODULE = "backend.app.services.platform.instance_backup.checks"
+try:
+    from backend.app.services.platform.instance_backup.checks import check_panel_token, check_upload_limit
+except ModuleNotFoundError as missing:
+    if missing.name != _BACKUP_CHECKS_MODULE:
+        raise
+
+    def check_panel_token() -> ConfigCheck:
+        pytest.fail(f"{_BACKUP_CHECKS_MODULE} does not exist yet: lot B-9 is not written")
+
+    def check_upload_limit() -> ConfigCheck:
+        pytest.fail(f"{_BACKUP_CHECKS_MODULE} does not exist yet: lot B-9 is not written")
+
+
 POSIX = os.name != "nt"
 needs_posix_modes = pytest.mark.skipif(not POSIX, reason="file modes are POSIX only")
 needs_permission_checks = pytest.mark.skipif(not POSIX or os.geteuid() == 0, reason="needs POSIX permissions, which root bypasses")
@@ -98,6 +116,8 @@ CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     check_smtp_configuration: "email.smtp",
     check_smtp_encryption: "email.smtp_encryption",
     check_email_links: "email.links",
+    check_panel_token: "backup.panel_token",
+    check_upload_limit: "backup.upload_limit",
 }
 # updated in A8a (accounts check, H reviews): workstream A's checks, right before E's three in CONFIG_CHECKS, and their
 # ids by function name. Their module is imported only by the test that pins CONFIG_CHECKS whole (``_accounts_checks``):
@@ -156,6 +176,9 @@ def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: b
     # Workstream E: email off whatever the environment holds, so its two checks are ok
     for variable in [name for name in os.environ if name.startswith("LIBREFOLIO_SMTP_")]:
         monkeypatch.delenv(variable)
+    # Workstream B: no panel token and no upload limit whatever the environment holds, so its two checks are ok
+    for variable in ("LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN", "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"):
+        monkeypatch.delenv(variable, raising=False)
     # updated in A8a (accounts check, H reviews): workstream A's login limit on whatever the environment holds (the lane's
     # server runs with it off), so its check is ok and the variable cannot stop the audit
     monkeypatch.delenv("LIBREFOLIO_LOGIN_LIMIT", raising=False)
@@ -514,16 +537,17 @@ def test_run_config_checks_evaluates_every_check_in_order_and_changes_nothing(co
 
 # updated in A8a (accounts check, H reviews): red until A8a, the one test of this file that needs workstream A's checks
 def test_config_checks_holds_every_check_in_its_place_with_its_id(configuration):
-    """(c) ``CONFIG_CHECKS`` is the platform's checks, then workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it (``test_email_checks.py``, EMK-010); it holds every check with an id here, A's ``check_login_limit`` (``accounts.login_limit``) included, and no other — a new check comes with its tests —; ``run_config_checks`` gives each result the id of its check."""
+    """(c) ``CONFIG_CHECKS`` is the platform's checks, then workstream B's two backup checks, then workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it (``test_email_checks.py``, EMK-010); it holds every check with an id here, A's ``check_login_limit`` (``accounts.login_limit``) included, and no other — a new check comes with its tests —; ``run_config_checks`` gives each result the id of its check."""
     print_section("Configuration checks: CONFIG_CHECKS whole")
     accounts = _accounts_checks()
     check_ids = {**CHECK_IDS, **{getattr(accounts, name): check_id for name, check_id in ACCOUNTS_CHECK_IDS.items()}}
-    platform = tuple(check for check in CHECK_IDS if check not in EMAIL_CONFIG_CHECKS)
+    backup = (check_panel_token, check_upload_limit)
+    platform = tuple(check for check in CHECK_IDS if check not in EMAIL_CONFIG_CHECKS and check not in backup)
 
     results = run_config_checks()
 
     names = [check.__name__ for check in CONFIG_CHECKS]
-    assert tuple(CONFIG_CHECKS) == (*platform, *accounts.ACCOUNTS_CONFIG_CHECKS, *EMAIL_CONFIG_CHECKS), f"CONFIG_CHECKS must be the platform's checks, then ACCOUNTS_CONFIG_CHECKS, then E's three email checks: {names}"
+    assert tuple(CONFIG_CHECKS) == (*platform, *backup, *accounts.ACCOUNTS_CONFIG_CHECKS, *EMAIL_CONFIG_CHECKS), f"CONFIG_CHECKS must be the platform's checks, then B's two backup checks, then ACCOUNTS_CONFIG_CHECKS, then E's three email checks: {names}"
     missing = [check.__name__ for check in check_ids if check not in CONFIG_CHECKS]
     untested = [check.__name__ for check in CONFIG_CHECKS if check not in check_ids]
     assert (missing, untested) == ([], []), f"CONFIG_CHECKS must hold every check with an id here and no other: missing {missing}; without an id here, give it its tests: {untested}"
