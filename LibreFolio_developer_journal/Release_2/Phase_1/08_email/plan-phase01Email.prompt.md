@@ -6688,6 +6688,43 @@ non sposti il registro.
 >   Frontend: banner e selettore, i18n nelle 4 lingue. Test: services, api, Vitest.
 > - **La correzione** (A o C) e quella degli asset: un lotto medio.
 
+#### E-19b2.2 — I rossi ✅ (2026-10-17, 20:1x–20:5x; `test-author` `d495e334`, HEAD `e84778677`)
+> Le LOW di H sono entrate (commit `e84778677`, dev `0897502a9`). Il coordinatore aggiorna la mia base solo dopo il
+> commit di questi rossi: dev ha toccato `test_portfolio_api.py`.
+>
+> **I rossi**:
+> - `test_data_quality_report.py`: **35 nuovi (34 rossi, 1 guardia), i 74 di prima verdi**.
+>   - `TestNonIsoCurrencyIssue` (19): il membro dell'enum; `978/EUR` con la forma intera della voce e nessun
+>     `MISSING_FX_*`; i tre gruppi FX misti; `eur/EUR` e `EUR-EUR`; le chiavi per tipo di valore (978, EURO, Bolívar,
+>     BTC, `GBp` anche con spazi); l'ordine; un valore sia in una coppia sia su un asset; i soli asset; la valuta del
+>     rapporto (978, Bolívar, `GBp`, un nome lungo, l'asset nella valuta del rapporto); i valori con `/`; il valore
+>     lungo tagliato e la chiave intera; la forma dei lotti; `missing_fx_pairs` grezzo; l'ordine completo delle voci;
+>     la guardia.
+>   - `TestNonIsoCurrencyAssets` (2): `_non_iso_currency_assets`. `TestNonIsoCurrencySentences` (1): le cinque chiavi
+>     scritte come letterali, così le copre il controllo delle frasi.
+> - `test_portfolio_api.py`: **2 nuovi**, solo raccolti (55): un asset e la cassa in `978` con il rapporto in EUR;
+>   la valuta base salvata `978`. Entrambi su tutte e tre le sezioni `data_quality`.
+> - `DataQualityBanner.nonIso.test.ts` (nuovo): **8 rossi**. DQN-01 ×5 (le chiavi nei cataloghi), DQN-02/03 (due voci
+>   disegnate, nessuna CTA), DQN-04 (il client generato accetta il codice: serve `api sync`).
+> - Il `test-author` ha provato un'implementazione minima in una copia in `/tmp`: 35 e 8 su 35 e 8.
+> - Registro: il file puro sta in services `roi-fifo-utils` (`test_financial/` intero), l'API in api `portfolio`; il
+>   Vitest nuovo l'ho registrato in `component-unit`, accanto a `Tooltip.test.ts`.
+> - Verifica mia: puro 34 rossi, tutti nelle classi NonIso, e 75 verdi; API 55 raccolti; Vitest 8 rossi.
+>
+> **I dubbi del `test-author` e le mie decisioni**:
+> 1. **Le coppie con il trattino.** Sei test esistenti passano coppie `"EUR-USD"` (`_make_missing_fx`); con un
+>    `rpartition("/")` letterale diventerebbero lati `""` e `"EUR-USD"`, voci spurie. Nessun produttore scrive quella
+>    forma. **Regola aggiunta al contratto: una coppia senza `/` non si spezza, i suoi lati contano come canonici**,
+>    come oggi. I sei test restano com'erano, nessuna riparazione nei file d'altri.
+> 2. **Le chiavi letterali**: `test_the_scan_reaches_the_builder_s_keys` vuole un `message_i18n_key` letterale in ogni
+>    `DataQualityIssue(...)`. Quindi un costruttore per ramo, con `**common` per il resto.
+> 3. Fissati come scritti: una valuta del rapporto Bolívar va su `nonIsoReportCurrencyUnknown`; `" GBp "` con gli
+>    spazi conta come unità minore (`minor_unit_factor` toglie gli spazi); `XXX` è canonico.
+> 4. `PortfolioReportQuery.target_currency` è una stringa libera: un rapporto chiesto in `978` è accettato oggi. Fuori
+>    da b2; nota.
+> - `test_portfolio_api.py` non passa `black --check` già a HEAD (7 hunk fra 1348 e 1834), nessuno nella sezione
+>   nuova: lasciato com'è.
+
 #### E-19b2.1 — Analisi del rapporto di qualità (2026-10-17, 20:0x–20:2x; sola lettura, HEAD `2fbbf4c4c`)
 > E-19b1 è entrato (dev `1742aaaaa`, CHANGELOG `2fbbf4c4c`); Z-32 (c) è nella base.
 >
