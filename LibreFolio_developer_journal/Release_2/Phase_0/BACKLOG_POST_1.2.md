@@ -7655,47 +7655,66 @@ punto di partenza, l'audit dello stesso giorno:
 - **MF-A…MF-P · I 16 lotti dell'audit** — tutti nella 1.3 per decisione del developer (16/10). Voci per lotto
   scritte da MF nell'analisi del 16/10 (base `f77743d47`); la ripartizione con J (CP-3, CP-5, U3/U7, CP-12, CP-13) è
   la domanda Q1 al coordinatore. Ordine e ondate: piano MF, §4.
-- **MF-A · Contributo per posizione dal motore** (CP-3 di J: B8, V2/P2, R4, B19; TRANSFER per broker secondo P22) —
+- ✅ **MF-A · Contributo per posizione dal motore** (CP-3 di J: B8, V2/P2, R4, B19; TRANSFER per broker secondo P22) —
   grande, numeri; audit 16/10. Dettagli: [piano MF](../Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md),
   sezione «MF-A».
-- **MF-B · NAV e utile per broker dal motore** — piccolo; audit 16/10. Dettagli: piano MF, sezione «MF-B».
-- **MF-C · Una funzione «pesi» nella casa, HHI unico** (con i due difetti di Y su `allocation_percent` e
+  **Entrato** il 17/10: dev `536501541` (la tabella Performance valutata dal motore). Seguito MF-A2 (doc) in corso.
+- ✅ **MF-B · NAV e utile per broker dal motore** — piccolo; audit 16/10. Dettagli: piano MF, sezione «MF-B».
+  **Entrato** il 16/10: dev `bcc644491`.
+- ✅ **MF-C · Una funzione «pesi» nella casa, HHI unico** (con i due difetti di Y su `allocation_percent` e
   `nav_weight_percent`; T-U7, W1–W5) — piccolo-medio, numeri nei casi limite; audit 16/10, Y. Decisione D-MF7.
   Dettagli: piano MF, sezione «MF-C».
-- **MF-D · Rapporti, rendimenti di prezzo, annualizzazione, composizione** (R6–R10 del 43; `drawdown_context.py:498`
+  **Entrato** il 16/10: dev `0eb85aa9b`. Seguito: MF-C2 (decisione).
+- ✅ **MF-D · Rapporti, rendimenti di prezzo, annualizzazione, composizione** (R6–R10 del 43; `drawdown_context.py:498`
   senza guardia sullo zero) — piccolo; audit 16/10. Dettagli: piano MF, sezione «MF-D».
+  **Entrato** il 16–17/10: prima parte dev `8d244d1c6` (ondata 1/1b), resto dev `aca75c7ca`, D3 `482343eb3`, D4
+  `c2feaf3e4`.
 - **MF-E · Sintesi del lotto nella casa, segno dei corti nella storia di performance, T-B8** — medio, numeri (corti
   aperti); audit 16/10, riverifica MF (`histories.py:63-72`). Dettagli: piano MF, sezione «MF-E».
-- **MF-F · Segno del reddito nei lotti e nella timeline dei redditi dell'AI Export** (O3, B9) — piccolo, numeri; audit
+  **E1 entrato** il 17/10: dev `e43dfae68`. **E2** (corti nella storia di performance) attende la decisione del
+  developer.
+- ✅ **MF-F · Segno del reddito nei lotti e nella timeline dei redditi dell'AI Export** (O3, B9) — piccolo, numeri; audit
   16/10. Decisione D-MF3. Dettagli: piano MF, sezione «MF-F».
+  **Entrato** il 16/10: F1 e F2 in dev `8d244d1c6`.
 - **MF-G · Quantità e cassa senza `SUM` SQL** (PAC; `balances.py` col via di W, accanto a W-B19; O4) — piccolo-medio;
   audit 16/10. Dettagli: piano MF, sezione «MF-G».
-- **MF-H · Finestra di detenzione nella casa** (T-B4, T-U6, L1–L2) — piccolo-medio, numeri; audit 16/10. Decisione
+  **G1 entrato** il 16/10 (dev `8d244d1c6`); **G2** (`balances.py`) resta col via di W, accanto a W-B19.
+- ✅ **MF-H · Finestra di detenzione nella casa** (T-B4, T-U6, L1–L2) — piccolo-medio, numeri; audit 16/10. Decisione
   D-MF2. Dettagli: piano MF, sezione «MF-H».
-- **MF-I · Un caricatore degli split, `financial_math/splits.py`** (T-U2, S1–S3) — piccolo; audit 16/10. Dettagli:
+  **Entrato** il 16/10: dev `bcc644491` (D-MF2 = arrivo al broker).
+- ✅ **MF-I · Un caricatore degli split, `financial_math/splits.py`** (T-U2, S1–S3) — piccolo; audit 16/10. Dettagli:
   piano MF, sezione «MF-I».
-- **MF-J · `DailyStateBuilder` più lineare** (J1 refactor senza pre-frame; J2 ripartizione K/R all'arrivo) — medio
+  **Entrato** il 16/10: I1 dev `8d244d1c6`, I2 dev `3741b95b0`.
+- ✅ **MF-J · `DailyStateBuilder` più lineare** (J1 refactor senza pre-frame; J2 ripartizione K/R all'arrivo) — medio
   (J1), piccolo-medio (J2, numeri); audit 16/10. Decisione D-MF4. Dettagli: piano MF, sezione «MF-J».
-- **MF-K · Un MWRR solo** (un costruttore dei flussi, una politica della radice; card = grafico anche con prelievi
+  **Entrato** il 17/10: J1 dev `d93de2899`, J2 dev `04a5088ff`. Seguiti: MF-J3 (decisione), MF-J4 (J).
+- ✅ **MF-K · Un MWRR solo** (un costruttore dei flussi, una politica della radice; card = grafico anche con prelievi
   netti) — piccolo-medio, numeri; audit 16/10, riverifica MF (`portfolio_service.py:882`). Decisione D-MF5. Dettagli:
   piano MF, sezione «MF-K».
+  **Entrato** il 16/10: K1 e K2 in dev `8d244d1c6`. Seguito: MF-K3 (decisione).
 - **MF-L · `BRSummary.holdings`: togliere o valutare col motore** — piccolo/medio, API; audit 16/10. Decisione D-MF1,
   file di W. Dettagli: piano MF, sezione «MF-L».
-- **MF-M · PAC: prova del cambio del WAC da `CostStep.conversion`** — piccolo; audit 16/10. Dettagli: piano MF, sezione
+- ✅ **MF-M · PAC: prova del cambio del WAC da `CostStep.conversion`** — piccolo; audit 16/10. Dettagli: piano MF, sezione
   «MF-M».
-- **MF-N · AI Export: efficienza dei costi con la quota effettiva** (O3, B9) — piccolo, numeri (AI Export); audit
+  **Entrato** il 16/10: dev `8d244d1c6`.
+- ✅ **MF-N · AI Export: efficienza dei costi con la quota effettiva** (O3, B9) — piccolo, numeri (AI Export); audit
   16/10. Dettagli: piano MF, sezione «MF-N».
-- **MF-O · Yield on Cost: mai il WAC convertito al cambio di `as_of`** — minimo; audit 16/10. Dettagli: piano MF,
+  **Entrato** il 16/10: dev `8d244d1c6`.
+- ✅ **MF-O · Yield on Cost: mai il WAC convertito al cambio di `as_of`** — minimo; audit 16/10. Dettagli: piano MF,
   sezione «MF-O».
+  **Entrato** il 16/10: dev `8d244d1c6`.
 - **MF-P · Campi del backend per il frontend** (T-U8 lato backend, CP-13 meno CP-13a; W8, P4, P5, V11, R17 di Y; il
   consumo è di Y) — medio; audit 16/10, Y12a. Decisione D-MF6. Dettagli: piano MF, sezione «MF-P».
-- **MF-O2 · Yield on Cost: un reddito netto negativo nella finestra fa fallire il report** — basso (dati legacy),
+  **Lato backend entrato** il 17/10: P dev `536501541`, P4b `d93de2899`, P2 `aa4370905`, P2b `c9b1162d4`; il consumo
+  nel web app è di Y.
+- ✅ **MF-O2 · Yield on Cost: un reddito netto negativo nella finestra fa fallire il report** — basso (dati legacy),
   robustezza; test-author di MF, 16/10 (letto nel codice, non provato). Il reddito per unità somma i redditi col segno
   (`yield_on_cost.py`, `_calculate_income_position`): se nei 365 giorni le correzioni negative superano i dividendi, il
   risultato `AVAILABLE` ha un valore negativo che il validatore di `YieldOnCostResult` rifiuta
   (`schemas/portfolio.py:335-340`), con un errore invece di «—». Cura proposta: `UNAVAILABLE` con un motivo nuovo
   (`negative_net_income`) nello schema di J, poi `api sync` e l'etichetta nei 4 cataloghi; rosso prima. Dettagli: piano
   MF, sezione «MF-F1».
+  **Chiusa** il 16/10: `negative_net_income`, dev `8d244d1c6` (commit `2650a7da4`).
 - **MF-K3 · La card e la linea del TWRR e del ROI semplice in due casi limite** — basso, numeri (proposta, da decidere);
   test-author di MF, 16/10 (K2). (1) Come l'MWRR prima di D-MF5: la card calcola il TWRR solo con NAV > 0
   (`portfolio_service.py`, `get_summary`), la linea (`calculate_twrr_series`) no: col portafoglio svuotato la card dice
@@ -7713,17 +7732,29 @@ punto di partenza, l'audit dello stesso giorno:
   «negative-sum»). Proposta: con una somma ≤ 0 le fette restano `value` null («—») e gli importi restano; serve l'ok
   del developer (cambia il grafico, lo schema — `AllocationItem.value` oggi obbligatorio — e il dataset AI Export
   che lo copia, `portfolio_financial.py:251-253`). Dettagli: piano MF, sezione «Lotto C».
-- **MF-W56 · L'anteprima del WAC arrotondata alla colonna dov'è usata** — basso, numeri oltre la 12ª cifra; W (W-B56) e
+- ✅ **MF-W56 · L'anteprima del WAC arrotondata alla colonna dov'è usata** — basso, numeri oltre la 12ª cifra; W (W-B56) e
   MF, 17/10. `compute_wac_iterative` (facciata di `portfolio_service`) restituisce un WAC non arrotondato, a volte
   periodico: «congelato» in un costo manuale è rifiutato da C-97a (D2), e il costo automatico
   (`auto_cost._write_auto_cost`) lo scrive così in `cost_basis_override`. Cura concordata: alla facciata
   `round_computed_value(…, Transaction, "cost_basis_override")` (D6), mai nella casa (`average_cost` resta esatto). Di
   MF dopo MF-E, rossi prima. Dettagli: piano MF, sezione «MF-W56».
+  **Chiusa** il 17/10: dev `04a5088ff` (commit `c129e82a9`).
 - **MF-A2 · Documentare l'annualizzato delle posizioni chiuse nel periodo e la definizione del non realizzato** — basso,
   doc; MF (docs-writer), 17/10. `period-pnl`/`net-annualized-return` non dicono che una posizione chiusa nel periodo
   annualizza sul costo venduto e sul suo tempo di volo; `portfolio-engine/index` §5 definisce il non realizzato come
   NAV − Book (transito incluso) mentre il periodo usa valore di mercato − costo aperto (§7 ora lo dice). Dettagli:
   piano MF, sezione «MF-A — codice».
+- **MF-A3 · Una posizione chiusa presto nel periodo annualizza sull'anno intero** — basso, numeri (domanda, da
+  decidere); docs-writer di MF, 17/10 (MF-A2). Quando la regola delle posizioni chiuse non dà valore (nulla venduto al
+  costo, o meno di 30 giorni tenuti: `closed_position_annualized`, `returns.cumulative_to_annualized`),
+  `period_annualized` ricade sulla regola generale, |StartValue| su t₀→t₁: una posizione tenuta a t₀ e venduta dopo 10
+  giorni d'un periodo d'un anno è annualizzata sull'anno. Documentato com'è (`net-annualized-return` «Positions Closed
+  in the Period»). Scelte: (a) com'è; (b) «—» quando la regola chiusa non vale. Dettagli: piano MF, «MF-A2».
+- **MF-A4 · Doc: il «non realizzato» della card punta alla pagina sbagliata** — minimo, doc; docs-writer di MF, 17/10.
+  `book-value.en.md` definisce il non realizzato come NAV − Book; `user/dashboard/kpi-cards.en.md:31` collega la card
+  **Unrealized change** (che mostra la cifra di periodo, valore di mercato − costo aperto) a quella pagina; le
+  descrizioni API di `period_unrealized_gain_loss_*` non dicono MV − OCB. Cura: il collegamento a
+  `portfolio-engine/index#two-unrealized-figures` e una riga nelle descrizioni (`api sync`).
 - **MF-J3 · Un trasferimento di cassa che attraversa il confine del perimetro non tocca i pool K/R** — basso-medio,
   numeri (proposta, da decidere); test-author e docs-writer di MF, 17/10 (J2), provato con una sonda su HEAD e su J2.
   Una gamba `linked_external_inflow`/`_outflow` (l'altra gamba è in un broker fuori dal perimetro scelto) entra nel
@@ -7781,7 +7812,9 @@ punto di partenza, l'audit dello stesso giorno:
   MF-SEC8-2). Una coppia con l'arrivo datato `0001-01-01` (`portfolio/classifier.py:217`, `arrival.date − 1`) e un
   provento datato `0001-01-01` (`financial_math/yield_on_cost.py:631`) sollevano `OverflowError`. Cura: confrontare prima
   di sottrarre, o partire da `EARLIEST_RANGE_START`. Rossi prima. Dettagli: piano MF, sezione «MF-SEC8-2».
-- **MF-SEC9a · Altri 500 dei prezzi che ripetono l'errore; `DELETE /prices` senza tetto** — basso, sicurezza;
+- ✅ **MF-SEC9a · Altri 500 dei prezzi che ripetono l'errore; `DELETE /prices` senza tetto** — basso, sicurezza;
+  **chiusa il 17/10**: prima parte dev `dd416f5bb` (commit `34cc1a58b`), il resto (BRIM, WAC, bisezione LOW-1) dev
+  `29e30b6cc`; E, W e H OK.
   test-author di MF, 17/10 (R13-SEC9). In `api/v1/assets/prices.py` restano `detail=str(e)` sui 500 di `POST /prices`
   (~:90), `DELETE /prices` (~:104) e `POST /prices/sync` (~:249). `DELETE /prices` costruisce un termine OR per
   intervallo senza tetto agli elementi: da ~1000 intervalli SQLite risponde «Expression tree is too large», un 500 che
@@ -7813,7 +7846,9 @@ punto di partenza, l'audit dello stesso giorno:
   l'input in maiuscolo (`EURO`, `978`, `US DOLLAR`), non il codice a tre lettere: ogni campo valuta li lascia passare
   (con D1 finiscono in `convert_bulk`, nessun cambio, variazioni null; nessun 500). Cura: solo alpha-3, cambio di
   contratto da decidere. Dettagli: piano MF, sezione «R13-SEC9».
-- **MF-SEC9c · Il ripiego dal DB del prezzo corrente usa una sessione sola da task paralleli** — basso, preesistente;
+- ✅ **MF-SEC9c · Il ripiego dal DB del prezzo corrente usa una sessione sola da task paralleli** — basso, preesistente;
+  **chiusa il 17/10**: le quotazioni in parallelo senza sessione, i ripieghi in una lettura raggruppata dopo, dev
+  `29e30b6cc`.
   test-author di MF, 17/10 (R13-SEC9). `get_current_prices_bulk` (`services/assets/price_query.py` ~:929) lancia i recuperi
   con `asyncio.gather`, e i ripieghi sul prezzo salvato interrogano la stessa `AsyncSession`, che SQLAlchemy non
   ammette fra task concorrenti. La deduplica degli id (SEC9-1) lo rende più raro, non lo toglie. Cura: le letture del
