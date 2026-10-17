@@ -25,7 +25,7 @@
  */
 import {buildRiskAnalyticRequest, type RiskAnalyticParameters, type RiskAnalyticRequest, type RiskMode, type RiskScenarioDimension} from '$lib/features/risk/riskRequest';
 import {singleValue, type RiskDataQualityReport} from '$lib/features/risk/riskTypes';
-import {maskCurrencyParts} from '$lib/utils/privacy/maskable';
+import {maskCurrencyParts, maskFormattedNumber} from '$lib/utils/privacy/maskable';
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 import {formatFixed} from '$lib/utils/core/formatFixed';
@@ -159,13 +159,22 @@ export function formatRatio(value: number | null | undefined): string {
  * The privacy check sits *after* the absence checks on purpose: an absent value
  * keeps its em-dash. Masking it would turn "there is no figure here" into "there
  * is a figure here and you may not see it", which is a different statement.
+ *
+ * A code `Intl` rejects (`978`, `EURO`: saved before E-18 made the writes strict,
+ * and still served, since reads stay tolerant) makes `Intl.NumberFormat` throw.
+ * The amount is then written with two decimals and followed by the code as
+ * stored, as the lots chart does: a risk view must not break on a legacy row.
  */
 export function formatCurrencyAmount(value: string | readonly (string | null)[] | null | undefined, currency: string, locale: string = uiLocale()): string {
     const scalar = singleValue(value);
     if (scalar == null) return '—';
     const amount = Number(scalar);
     if (!Number.isFinite(amount)) return '—';
-    return maskCurrencyParts(new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2}).formatToParts(amount));
+    try {
+        return maskCurrencyParts(new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2}).formatToParts(amount));
+    } catch {
+        return `${maskFormattedNumber(amount.toLocaleString(locale, {minimumFractionDigits: 2, maximumFractionDigits: 2}))} ${currency}`;
+    }
 }
 
 /**
