@@ -627,7 +627,8 @@ class StressAnalytic(RiskAnalytic):
         ]
 
         prepared = replay.prepared_series
-        analyzed_range = prepared.effective_range or params.replay_range
+        # The window the replay prepared (bounded, R13-SEC8-1b), never the request's own.
+        analyzed_range = prepared.effective_range or prepared.requested_range
         return RiskComputation(
             output=RiskStressOutput(
                 method=RiskStressMethod.HISTORICAL_REPLAY,
