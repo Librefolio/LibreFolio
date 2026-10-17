@@ -343,7 +343,7 @@ The report's `status`:
 | `partial` | Part of the work failed or was deferred: a job is `partial`, or one job is `ok` and the other `error` |
 | `error` | Every job that ran failed, or the run itself failed (see `error`) |
 | `disabled` | The scheduler is off: no job ran |
-| `not_leader` | This server process does not run the jobs, and no job ran: see [Several Workers](#wake-sync-workers) |
+| `not_leader` | Only on Windows, with several server processes: the process that received the call does not run the jobs, and no job ran. See [Several Workers](#wake-sync-workers) |
 | `blocked` | The hosting provider blocked the instance, and no job ran: see [A Blocked Instance](#wake-sync-blocked) |
 
 !!! tip "🧑‍💻 Writing the caller"
@@ -353,17 +353,31 @@ The report's `status`:
     - Do not give up before the run ends. The spaces keep proxies from closing the connection, so an
       idle timeout of 30 seconds or more is safe, but a short total timeout may cut a long run.
     - If the connection drops, the run still goes on to its end, and until then every new call gets
-      `409`.
+      `409`, or, when it reaches another server process, waits for that run
+      ([Several Workers](#wake-sync-workers)).
     - After a `409`, try again later, not at once: the run in progress is already doing the updates.
     - Read the fields and the jobs you need, and ignore the ones you do not know.
 
 ### 👥 Several Workers {: #wake-sync-workers }
 
-With several server processes (`./dev.py server --workers N`), only one of them runs the
-scheduler's jobs: the leader. A call may reach any of them, and one that reaches another process
-answers `200` with `status: "not_leader"`: nothing runs. When you use the scheduled wake-up, run the
-server with one worker: the Docker image does, and so does `./dev.py server` without `--workers`
-([Start the Server](cli_tools.md#start-the-server)).
+With several server processes (`./dev.py server --workers N`, see
+[Start the Server](cli_tools.md#start-the-server)), a call may reach any of them, and any of them
+can run the scheduler's jobs. The processes take turns on a lock file in the data directory,
+`.scheduler.lock`: one run of the jobs at a time, never two at once.
+
+- **The process that receives the call** runs the jobs that are due, as a single process would.
+- **When another process is already running them**, for its check of every minute, say, or for a
+  user who came back, the call waits for that run to end, then answers: the jobs that run has just
+  brought up to date say `not_due`.
+- **A `409`** (`wake_in_progress`) comes only from a process that is running a wake-up itself: a
+  call that reaches another process waits for that run instead, as above.
+- **`.scheduler.lock`** is an empty file that LibreFolio creates and never deletes: leave it in
+  place, and never delete it while LibreFolio runs.
+
+On Windows, the server processes cannot share this lock, so only one of them runs the jobs: the
+leader. A call that reaches another process answers `200` with `status: "not_leader"`, and nothing
+runs. There, run the server with one process when you use the scheduled wake-up, as
+`./dev.py server` does without `--workers`.
 
 ### 🔒 A Blocked Instance {: #wake-sync-blocked }
 
@@ -402,8 +416,8 @@ catch-up is over.
   one, it asks the server every 3 seconds whether it is over: these questions count as visits, like
   the [live prices](#idle-suspend-activity), and pause the same way, in a background tab and after
   two minutes without input. The catch-up itself keeps the machine awake until it ends.
-- **One server process.** With several (`--workers N`), only one of them runs the jobs, and the
-  notice may not show.
+- **Several server processes.** With several (`--workers N`), the jobs run in one of them at a time,
+  and only that one's answers tell the app about the catch-up: the notice may not show.
 
 The app learns of a catch-up from a header of the server's answers, `X-LibreFolio-Price-Refresh`: a
 reverse proxy that strips the response headers it does not know only loses the notice, and the update

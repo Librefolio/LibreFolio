@@ -31,8 +31,9 @@ the state file's ``test_scheduler_state.py``. The contract pinned here:
 Pure: no database, no server, no lane port, no network. (C) calls the two due functions as they are. (D) and (E) go
 through ``run_due_jobs`` with every collaborator but the due functions faked on the module with ``monkeypatch``, as in
 ``test_scheduler_catchup.py``: the switches let the run through, the settings are a test's, a state store in memory
-hands out and keeps deep copies as a file would, ``utc_now`` is a wall clock that moves only when the test moves it,
-and the two jobs record their call, then raise, or write a fresh ``JobState`` — ``last_run_at`` the wall clock's time —
+hands out and keeps deep copies as a file would, the lock across processes (Z-11) is a no-op stand-in that writes no
+file, ``utc_now`` is a wall clock that moves only when the test moves it, and the two jobs record their call, then
+raise, or write a fresh ``JobState`` — ``last_run_at`` the wall clock's time —
 as the real ones will. The real due functions decide what runs. Each test has its own ``Activity`` on a fake clock in
 place of the process's. Nothing sleeps, and no assertion depends on a duration: every moment is the fake wall clock's.
 The log is read with ``structlog.testing.capture_logs`` behind a barrier: a canary logged through the scheduler's own
@@ -48,8 +49,8 @@ from __future__ import annotations
 import asyncio
 import copy
 import dataclasses
-from collections.abc import Awaitable, Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -97,6 +98,12 @@ REAL_DUE_HISTORY_SYNC = scheduler.due_history_sync
 
 class ProviderExploded(Exception):
     """A job's failure, named so that its class is recognisable in a state and in an outcome."""
+
+
+@asynccontextmanager
+async def _no_cross_process_lock(*_args: object, **_kwargs: object) -> AsyncIterator[None]:
+    """``scheduler_run_lock`` stood in for (Z-11, N71): held at once, no file written; ``test_scheduler_run_lock.py`` tests the real one."""
+    yield
 
 
 # =============================================================================
@@ -162,6 +169,9 @@ class World:
         }
         for name, fake in fakes.items():
             monkeypatch.setattr(scheduler, name, fake)
+        # Z-11 (N71): with fcntl the run takes the lock across processes; stood in for, so that no .scheduler.lock is
+        # written in the lane's data directory. raising=False: the name exists only once Z-11 does.
+        monkeypatch.setattr(scheduler, "scheduler_run_lock", _no_cross_process_lock, raising=False)
 
     def ran(self, name: str, when: datetime | None, **fields: Any) -> JobState:
         """The stored state says ``name`` last ran at ``when`` — never, when None —, with ``fields`` besides; returns that ``JobState``."""

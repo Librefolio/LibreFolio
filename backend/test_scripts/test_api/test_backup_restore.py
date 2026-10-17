@@ -45,11 +45,15 @@ restore_jobs.py`` (the upload, the check in a thread followed through a state fi
 (e) ``backup_max_upload_mb()``: unset or blank, 0 self-hosted and 500 managed; a whole number of ASCII digits, spaces
     around allowed, wins over the profile; anything else raises ``BackupConfigError`` ``BACKUP_MAX_UPLOAD_MB_INVALID``,
     naming the variable. The managed value is the entry of H's profile table, read at each call (a guard of lot B4,
-    green from the start). An entry of that table of another type than the code's default (``"500"``, ``None``,
-    ``500.0``, ``True``), on which H's ``profile_default`` raises ``ProfileDefaultError`` (H-27), is a limit that cannot
-    be read, as a variable that cannot be (B-21, RED until the routes catch it; until then each answers a plain 500): the
-    upload 503 ``backup_upload_unavailable``, nothing written; ``GET /backup/restore/status`` (lot B3's route) 200 with
+    green from the start for an entry written there; the entry removed raises, never gives 0: H-37, below). An entry of
+    that table of another type than the code's default (``"500"``, ``None``, ``500.0``, ``True``), on which H's
+    ``profile_default`` raises ``ProfileDefaultError`` (H-27), is a limit that cannot be read, as a variable that cannot
+    be (B-21, RED until the routes catch it; until then each answers a plain 500): the upload 503
+    ``backup_upload_unavailable``, nothing written; ``GET /backup/restore/status`` (lot B3's route) 200 with
     ``upload_limit_mb`` null; each with one error logged, the line of a limit that cannot be read, naming the variable.
+    A missing managed entry is the same: H's ``profile_default`` raises ``ProfileDefaultError`` for a variable a profile
+    other than ``selfhosted`` does not list (H-37; E, R13-SEC7), so the upload is 503 and the status null, never no
+    limit (RED until H's cure: until then the entry removed gives the code's own 0, no limit at all, a fail-open).
 (f) Found while writing the second round, RED until the product changes, each with the fix it suggests: an upload whose
     file cannot be created (a folder that cannot be written) is a plain 500 without a code, not ``backup_upload_failed``;
     a drop follows a link in place of ``.restore`` or ``checks/`` and removes the state of a check in the link's target;
@@ -1398,10 +1402,12 @@ def test_the_variable_and_the_managed_default_are_the_documented_ones():
 
 
 def test_the_managed_limit_is_the_entry_of_the_profile_table_read_at_each_call(monkeypatch):
-    """(e) A GUARD, GREEN FROM THE START (lot B4, the note of H-17): not a red, it holds today and must keep holding. The
-    managed limit is whatever H's ``ENVIRONMENT_PROFILE_DEFAULTS["managed"]`` holds for the variable, read through
-    ``profile_default`` at each call. With the managed profile and ``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`` unset, 123
-    written in the table's entry is the limit, and the entry removed gives the code's own fallback, 0 (no limit). A
+    """(e) A GUARD of lot B4 (the note of H-17), green from the start for the entry written, with H-37 now part of it:
+    the entry removed is RED until H's ``profile_default`` fails closed (E, R13-SEC7). The managed limit is whatever
+    H's ``ENVIRONMENT_PROFILE_DEFAULTS["managed"]`` holds for the variable, read through ``profile_default`` at each
+    call. With the managed profile and ``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`` unset, 123 written in the table's entry is the
+    limit, and the entry removed raises H's ``ProfileDefaultError``, never gives the code's own fallback 0, which is no
+    limit at all: a managed instance whose table lost the entry refuses uploads (503) rather than accept any size. A
     managed value written by hand in ``config/backup.py``, or a copy of the table taken at import, would answer 500 both
     times and fail here; the name check of the test above cannot see a value under another name."""
     monkeypatch.setenv(PROFILE_VARIABLE, "managed")
@@ -1410,34 +1416,51 @@ def test_the_managed_limit_is_the_entry_of_the_profile_table_read_at_each_call(m
 
     monkeypatch.setitem(managed, backup_config.MAX_UPLOAD_VARIABLE, 123)
     written = backup_max_upload_mb()
-    monkeypatch.delitem(managed, backup_config.MAX_UPLOAD_VARIABLE)
-    removed = backup_max_upload_mb()
-
     assert written == 123, f"managed, {LIMIT_VARIABLE} unset, the table's managed entry at 123: the limit is the entry, got {written}"
-    assert removed == 0, f"managed, {LIMIT_VARIABLE} unset, no entry in the table: the code's own fallback 0 (no limit), got {removed}"
+
+    monkeypatch.delitem(managed, backup_config.MAX_UPLOAD_VARIABLE)
+    with pytest.raises(config.ProfileDefaultError):
+        removed = backup_max_upload_mb()
+        # reached only when nothing was raised: say what came back
+        pytest.fail(f"managed, {LIMIT_VARIABLE} unset, no entry in the table: backup_max_upload_mb() returns {removed!r}, where H's profile_default raises ProfileDefaultError (H-37: fail closed); the code's own fallback 0 would be no limit at all")
 
 
-#: Entries of H's profile table for the upload limit, of another type than the code's default ``0`` (H-27):
-#: ``profile_default`` raises ``ProfileDefaultError`` on each. ``None``, read as it is, would mean no limit at all.
+class _Missing:
+    """The type of ``MISSING``: shown as ``no entry`` where a message or a print line writes ``{value!r}``."""
+
+    def __repr__(self) -> str:
+        return "no entry"
+
+
+#: The entry removed from the managed table (H-37).
+MISSING = _Missing()
+#: Entries of H's profile table for the upload limit that cannot be read: of another type than the code's default ``0``
+#: (H-27), or missing (H-37). ``profile_default`` raises ``ProfileDefaultError`` on each. ``None``, read as it is, would
+#: mean no limit at all; so would a missing entry, read as the code's own fallback ``0``.
 WRONG_TABLE_LIMITS = [
     pytest.param("500", id="the-text-500"),
     pytest.param(None, id="null"),
     pytest.param(500.0, id="a-float"),
     pytest.param(True, id="true"),
+    pytest.param(MISSING, id="missing"),
 ]
 
 
 def wrong_table_entry(monkeypatch: pytest.MonkeyPatch, value: object) -> None:
-    """The managed profile, the variable unset, and H's table giving the upload limit ``value``. Checked: the limit then
-    raises H's ``ProfileDefaultError`` (H-27), so the case is the one it names."""
+    """The managed profile, the variable unset, and H's table giving the upload limit ``value``, or no entry at all for
+    ``MISSING``. Checked: the limit then raises H's ``ProfileDefaultError``, for an entry of another type (H-27) as for a
+    missing one (H-37), so the case is the one it names."""
     monkeypatch.setenv(PROFILE_VARIABLE, "managed")
     monkeypatch.delenv(LIMIT_VARIABLE, raising=False)
-    monkeypatch.setitem(config.ENVIRONMENT_PROFILE_DEFAULTS["managed"], backup_config.MAX_UPLOAD_VARIABLE, value)
+    if value is MISSING:
+        monkeypatch.delitem(config.ENVIRONMENT_PROFILE_DEFAULTS["managed"], backup_config.MAX_UPLOAD_VARIABLE)
+    else:
+        monkeypatch.setitem(config.ENVIRONMENT_PROFILE_DEFAULTS["managed"], backup_config.MAX_UPLOAD_VARIABLE, value)
     try:
         limit = backup_max_upload_mb()
     except config.ProfileDefaultError:
         return
-    pytest.fail(f"precondition: H's table giving {value!r}, backup_max_upload_mb() raises ProfileDefaultError (H-27), not {limit!r}")
+    pytest.fail(f"precondition: H's table giving {value!r}, backup_max_upload_mb() raises ProfileDefaultError (H-27/H-37), not {limit!r}")
 
 
 def limit_errors(events: list[dict]) -> list[tuple[object, bool]]:
