@@ -823,3 +823,224 @@ test.describe('FX list — which period changes the list keeps, and when it asks
         }
     });
 });
+
+// ============================================================================
+// The Δ over the range is the backend's, both ways (workstream Y, lot X-R59 A)
+// ============================================================================
+
+/** One pair of a period-changes request (`FXPeriodChangesRequest`), with the first day of the range it asks the Δ over. */
+type FxRangeChangesQuery = FxPeriodChangesQuery & {range_start?: string | null};
+
+/** A pair's Δ over the range as a stub answers it (`FXRangeChange`): decimal strings, null where the backend has none. */
+type FxRangeChange = {change_abs: string | null; change_ratio: string | null; inverse_change_abs: string | null; inverse_change_ratio: string | null};
+
+/**
+ * +42.42 % and +0.1234 as configured; −21.21 % and −0.0567 inverted, which are neither the inversion of the first
+ * (−29.79 %) nor its negation, so a swapped pair shows them only by reading the inverse fields. No seeded rate moves 42 %
+ * in two months: a figure on screen comes from the answer.
+ */
+const STUBBED_RANGE_CHANGE: FxRangeChange = {change_abs: '0.1234', change_ratio: '0.4242', inverse_change_abs: '-0.0567', inverse_change_ratio: '-0.2121'};
+
+/** A Δ over the range the backend could not compute: every field null, both ways. */
+const NO_RANGE_CHANGE: FxRangeChange = {change_abs: null, change_ratio: null, inverse_change_abs: null, inverse_change_ratio: null};
+
+/** The first day the backend values (`EARLIEST_RANGE_START`): it refuses an earlier `range_start`, and the whole request with it. */
+const EARLIEST_RANGE_START = '1900-01-01';
+
+/** What `routeFxRangeChanges` saw: every pair asked, what went wrong, how many requests it answered. */
+type FxRangeChangesLog = {asked: FxRangeChangesQuery[]; failures: string[]; answered: number};
+
+/**
+ * The FX period changes, routed through the backend: every request is recorded, and each answer goes back with the
+ * `range_change` of the pairs `stubs` names replaced, every other item as the backend gave it. A non-OK answer is a
+ * failure, passed on as it came.
+ */
+async function routeFxRangeChanges(page: Page, stubs: ReadonlyArray<readonly [{base: string; quote: string}, FxRangeChange]>): Promise<FxRangeChangesLog> {
+    const log: FxRangeChangesLog = {asked: [], failures: [], answered: 0};
+    await page.route(FX_PERIOD_CHANGES, async (route) => {
+        try {
+            log.asked.push(...((route.request().postDataJSON() as FxRangeChangesQuery[] | null) ?? []));
+            const response = await route.fetch();
+            if (!response.ok()) {
+                log.failures.push(`HTTP ${response.status()}: ${await response.text()}`);
+                await route.fulfill({response});
+                return;
+            }
+            const answer = (await response.json()) as {items?: Array<{base: string; quote: string; range_change?: Record<string, unknown> | null}>};
+            const items = (answer.items ?? []).map((item) => {
+                const stub = stubs.find(([pair]) => pair.base === item.base && pair.quote === item.quote)?.[1];
+                return stub ? {...item, range_change: {...(item.range_change ?? {}), ...stub}} : item;
+            });
+            await route.fulfill({response, json: {...answer, items}});
+        } catch (error) {
+            // Nobody awaits a route callback, so what it throws would land on whatever runs next: recorded, and the
+            // request let through, for the test to fail on its own assertions.
+            log.failures.push(String(error));
+            await route.continue().catch(() => undefined);
+        } finally {
+            log.answered += 1;
+        }
+    });
+    return log;
+}
+
+/** A row's Δ over the range, by the column ids DataTable publishes on each cell: the absolute change and the percentage. */
+function rangeCells(row: Locator): {abs: Locator; pct: Locator} {
+    return {abs: row.locator('td[data-column-id="deltaAbs"]'), pct: row.locator('td[data-column-id="deltaPct"]')};
+}
+
+/** A Δ Abs cell as any of the four languages writes it, matched whole: the signed figure with four decimals and either mark; a minus may be `-` or `−`. */
+function amountCell(figure: string): RegExp {
+    const parts = /^([+-])(\d+)\.(\d{4})$/.exec(figure);
+    if (!parts) throw new Error(`amountCell: ${figure} is not a signed decimal with four digits such as +0.1234`);
+    return new RegExp(`^\\s*${parts[1] === '+' ? '\\+' : '[-\\u2212]'}${parts[2]}[.,]${parts[3]}\\s*$`);
+}
+
+/** A card's Δ as any of the four languages writes it, matched whole: the arrow of its sign (▲, ▼), then the percentage as `percentCell` reads it. */
+function arrowedPercent(figure: string): RegExp {
+    return new RegExp(`^\\s*${figure.startsWith('-') ? '▼' : '▲'}${percentCell(figure).source.slice(1)}`);
+}
+
+/**
+ * The FX list shows each pair's Δ over the range on screen (X-R59, lot A) — the table's Δ Abs and Δ % columns, the
+ * card's Δ: the change from the first to the last day of the range, which the backend computes both ways, the
+ * `range_change` of `POST /fx/currencies/period-changes`, asked with the first day of the range (`range_start`) in every
+ * item, raised to 1900-01-01, the first day the backend values, for a range that starts before it. A pair shown as
+ * configured reads `change_abs` and `change_ratio`; swapped, `inverse_change_abs` and `inverse_change_ratio`; where the
+ * backend has none, the table shows its empty marker and the card no Δ. The browser computes none, though it holds the
+ * rates.
+ *
+ * The pairs are the seeded EUR/USD and, as a witness, EUR/GBP: read and never written, as in X-R53. The real answer is
+ * fetched and only their items are changed in it, with figures their rates do not give over these days; a swapped row
+ * or card is this browser's state (`fxCardInversionStore`), never the database's. The range before 1900 has its rates
+ * answered in the browser, empty, so no conversion is walked back over a century for every pair; its period changes
+ * still reach the backend, which says whether it takes the first day asked.
+ *
+ * Red before the cure of lot A: the request asks no `range_start`, and the table and the card compute their Δ from the
+ * rates they loaded.
+ */
+test.describe('FX list — the Δ over the range is the backend’s, both ways (X-R59)', () => {
+    // A ceiling, never a delay: the list loads its waves — pairs, rates, period changes — for every configured pair, and
+    // loads the rates again once a pair is swapped.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('every pair asks the first day of the range on screen; the row shows the answer’s Δ Abs and Δ %, the inverse ones once swapped', async ({page}) => {
+        // About two months ending on a known day in the past.
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        try {
+            const log = await routeFxRangeChanges(page, [[PAIR, STUBBED_RANGE_CHANGE]]);
+            const {fxPage, row} = await openPairRow(page, range);
+
+            // Asked and answered — the page holds `data-busy` until the period changes are in; the poll is a deadline.
+            await expect.poll(() => log.answered, {message: 'the FX list never asked POST /fx/currencies/period-changes', timeout: 10_000}).toBeGreaterThan(0);
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            expect(log.asked, 'the pair asks its Δ from the first day of the range on screen to the last').toContainEqual(expect.objectContaining({...PAIR, as_of: range.end, range_start: range.start}));
+            expect([...new Set(log.asked.map((item) => item.range_start))], 'every pair asks its Δ from the first day of the range on screen').toEqual([range.start]);
+
+            // As configured, EUR → USD: change_abs and change_ratio.
+            const cells = rangeCells(row);
+            await expect(cells.pct, 'Δ %: change_ratio 0.4242').toHaveText(percentCell('+42.42'), {timeout: 10_000});
+            await expect(cells.abs, 'Δ Abs: change_abs 0.1234').toHaveText(amountCell('+0.1234'));
+
+            // Swapped through the row's own action, USD → EUR: inverse_change_abs and inverse_change_ratio.
+            await rowAction(page, SLUG, 'swap');
+            await expect(row.locator('td[data-column-id="pair"]'), 'the row is swapped: USD → EUR').toHaveText(/USD.*EUR/);
+            await waitForSettled(fxPage, 20_000);
+            await expect(cells.pct, 'Δ % swapped: inverse_change_ratio -0.2121').toHaveText(percentCell('-21.21'), {timeout: 10_000});
+            await expect(cells.abs, 'Δ Abs swapped: inverse_change_abs -0.0567').toHaveText(amountCell('-0.0567'));
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('the card shows the answer’s Δ over the range, the inverse one once swapped', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        try {
+            const log = await routeFxRangeChanges(page, [[PAIR, STUBBED_RANGE_CHANGE]]);
+            await goToFxPage(page, range);
+            const fxPage = page.getByTestId('fx-page');
+            await page.getByTestId('view-mode-grid').click();
+            await waitForSettled(fxPage, 20_000);
+            const card = page.getByTestId(`fx-card-${SLUG}`);
+            await expect(card, `${SLUG} is not in the FX list — check its ECB route in populate_mock_data.py`).toBeVisible({timeout: 10_000});
+            const label = card.getByTestId('fx-pair-label');
+            await expect(label, 'premise: the card shows the pair as configured, EUR → USD').toHaveText(/EUR[\s\S]*USD/);
+
+            await expect.poll(() => log.answered, {message: 'the FX list never asked POST /fx/currencies/period-changes', timeout: 10_000}).toBeGreaterThan(0);
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            expect(log.asked, 'the pair asks its Δ from the first day of the range on screen to the last').toContainEqual(expect.objectContaining({...PAIR, as_of: range.end, range_start: range.start}));
+
+            const delta = card.getByTestId('fx-range-delta');
+            await expect(delta, 'as configured: change_ratio 0.4242').toHaveText(arrowedPercent('+42.42'), {timeout: 10_000});
+
+            // Swapped through the card's own button, USD → EUR: inverse_change_ratio, from the answer already in.
+            await card.getByTestId('fx-swap-btn').click();
+            await expect(label, 'the card is swapped: USD → EUR').toHaveText(/USD[\s\S]*EUR/);
+            await waitForSettled(fxPage, 20_000);
+            await expect(delta, 'swapped: inverse_change_ratio -0.2121').toHaveText(arrowedPercent('-21.21'), {timeout: 10_000});
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('an answer with every field null leaves the row’s Δ Abs and Δ % empty and draws no Δ on the card, though the pair has rates', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        try {
+            // The pair is answered with no Δ; the witness with the stub, so its figures on screen say the answer reached the
+            // page — both are in the same answer.
+            const log = await routeFxRangeChanges(page, [
+                [PAIR, NO_RANGE_CHANGE],
+                [WITNESS, STUBBED_RANGE_CHANGE],
+            ]);
+            const {fxPage, row} = await openPairRow(page, range);
+            const witnessRow = page.locator(`tbody tr[data-row-id="${WITNESS_SLUG}"]`);
+            await expect(witnessRow, `${WITNESS_SLUG} is not in the FX list — check its ECB route in populate_mock_data.py`).toBeVisible();
+
+            // Presence first: the answer reached the table, and the pair has rates over the range — a browser that still
+            // computed the Δ would have them to compute it from.
+            await expect(rangeCells(witnessRow).pct, 'the witness shows the answer’s change_ratio 0.4242').toHaveText(percentCell('+42.42'), {timeout: 10_000});
+            await expect(row.locator('td[data-column-id="rate"]'), 'premise: the pair has rates over the range — check populate_fx_rates in populate_mock_data.py').toHaveText(RATE_FIGURE);
+            await waitForSettled(fxPage, 20_000);
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            expect(log.asked, 'premise: the pair asks its Δ over the range on screen').toContainEqual(expect.objectContaining({...PAIR, as_of: range.end, range_start: range.start}));
+
+            const cells = rangeCells(row);
+            await expect(cells.abs, 'every field of range_change is null: Δ Abs shows the empty marker').toHaveText(EMPTY_CELL);
+            await expect(cells.pct, 'every field of range_change is null: Δ % shows the empty marker').toHaveText(EMPTY_CELL);
+
+            // The same answer, as cards: the witness shows its Δ, the pair its rate and no Δ.
+            await page.getByTestId('view-mode-grid').click();
+            const card = page.getByTestId(`fx-card-${SLUG}`);
+            await expect(page.getByTestId(`fx-card-${WITNESS_SLUG}`).getByTestId('fx-range-delta'), 'the witness card shows the answer’s change_ratio 0.4242').toHaveText(arrowedPercent('+42.42'), {timeout: 10_000});
+            await expect(card, 'premise: the card shows the pair’s rate').toContainText(RATE_FIGURE);
+            await expect(card.getByTestId('fx-range-delta'), 'every field of range_change is null: no Δ on the card').toHaveCount(0);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('a range that starts before 1900 asks every Δ from 1900-01-01, which the backend takes', async ({page}) => {
+        // A month before the first day the backend values: sent as is, the backend would refuse the whole request.
+        const range = {start: '1899-12-01', end: daysAgoIso(10)};
+        try {
+            // The rates answered in the browser, empty: no conversion is walked back over a century for every pair.
+            await page.route(FX_CONVERT, async (route) => {
+                await route.fulfill({json: {results: [], success_count: 0, errors: []}});
+            });
+            const log = await routeFxRangeChanges(page, [[PAIR, STUBBED_RANGE_CHANGE]]);
+            const {row} = await openPairRow(page, range);
+
+            await expect.poll(() => log.answered, {message: 'the FX list never asked POST /fx/currencies/period-changes', timeout: 10_000}).toBeGreaterThan(0);
+            expect(log.failures, 'the backend took every request: none asks a day before the first it values').toEqual([]);
+            expect(log.asked, `the pair asks its Δ from ${EARLIEST_RANGE_START} to the last day of the range`).toContainEqual(expect.objectContaining({...PAIR, as_of: range.end, range_start: EARLIEST_RANGE_START}));
+            expect([...new Set(log.asked.map((item) => item.range_start))], `every pair asks its Δ from ${EARLIEST_RANGE_START}, never from ${range.start}`).toEqual([EARLIEST_RANGE_START]);
+            await expect(rangeCells(row).pct, 'the Δ over the range still reaches the row').toHaveText(percentCell('+42.42'), {timeout: 10_000});
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+});
