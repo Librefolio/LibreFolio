@@ -6376,13 +6376,20 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - Se il codice servirà, la strada è `LIBREFOLIO_SMTP_MAX_PER_DOMAIN`, spenta di default, con un default per il
       profilo `managed`, in un lotto suo.
     - Dettagli: piano 08, «E-12.0» ed «E-12.1».
-- **E-14 · Uno sfratto mirato libera ancora un identificativo bloccato** — piccolo; E, 17/10 (revisione di N70, LOW).
+- ✅ **E-14 · Uno sfratto mirato libera ancora un identificativo bloccato** — piccolo; E, 17/10 (revisione di N70, LOW).
   Con `eviction_scan=32`, sfrattare dal limitatore in memoria un identificativo bloccato costa 10 279 richieste,
-  contro le 10 000 dell'LRU semplice (misurato). Il tetto ferma lo spruzzo ingenuo, non quello mirato, e alzare K
-  aggiunge solo 10 richieste per unità. Un indice O(1) delle chiavi non piene porta lo sfratto a 100 000 richieste e
-  il lock a 9,9 µs (prototipo nella cartella di sessione). Nello stesso lotto: la precisione dei docs su «310 contro
-  100 000» (`developer/backend/email.md`, e `security.md` con l'ok di A). Dettagli:
-  [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «La revisione di N70 a posteriori».
+  contro le 10 000 dell'LRU semplice (misurato). Il tetto ferma lo spruzzo ingenuo, non quello mirato. Dettagli:
+  [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «La revisione di N70 a posteriori» ed «E-14».
+  - 17/10, E: fatta nella 1.3 (via del coordinatore).
+    - Il disegno proposto (un indice delle chiavi non piene) non bastava, e l'ho corretto prima del codice: chi si
+      ferma a 9 fallimenti non rende mai piena la chiave, e uno spruzzo la libera per circa 1 100 richieste a
+      tentativo, come oggi.
+    - Ora si sfratta la chiave con meno colpi nella finestra, e tra quelle la meno usata. La scadenza è esatta (un
+      heap), non c'è ricerca, e `eviction_scan` sparisce.
+    - Il caso migliore per l'attaccante costa ora circa 10 000 richieste per tentativo, e nessuno spruzzo libera una
+      chiave più pesante.
+    - I docs «310 contro 100 000» sono corretti.
+    - Commit al checkpoint di E-14.
 
 ## Y · Cruscotto e grafici (fase 01)
 
