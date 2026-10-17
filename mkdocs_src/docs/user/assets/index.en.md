@@ -66,13 +66,15 @@ Each card has its own buttons; in the table, the **⋮** at the end of a row, or
 - **Sync** — downloads the asset's prices for the selected period. It needs a provider, and the table also blocks it for an archived asset.
 - **Reload** — reloads its prices from what LibreFolio has stored.
 - **Merge with…** — folds a duplicate into another asset, which keeps everything ([Create & Edit](create-edit.md)).
-- **Delete** — removes an asset that no transaction uses.
+- **Delete** — removes an asset that no transaction uses, with its provider, prices and events (dividends, splits…).
 
 In the table, tick several rows to **Sync**, **Reload** or **Delete** them together.
 
 ??? warning "🗑️ When an asset cannot be deleted"
 
     An asset is not deleted while **any** transaction uses it, even one in a broker you cannot see. The result shows how many transactions use it, with a **Transactions** link filtered to that asset. That page shows only the brokers you can access, so it may list fewer transactions than the count.
+
+    When the list already counts transactions for the asset, its confirmation opens straight on that result, with no **Delete** button: there is nothing to confirm. Otherwise the result appears after you confirm, and LibreFolio still checks before deleting.
 
 ## 🧭 Features
 

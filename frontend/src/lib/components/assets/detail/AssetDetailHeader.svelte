@@ -75,7 +75,7 @@
                         {assetProviderName}
                     </span>
                 {:else}
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-lf-warning-soft text-lf-warning-on-soft"> ✏️ Manual </span>
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-lf-warning-soft text-lf-warning-on-soft"> ✏️ {$t('assetDetail.manualChip')} </span>
                 {/if}
 
                 {#if userUrl || providerExternalUrl}
