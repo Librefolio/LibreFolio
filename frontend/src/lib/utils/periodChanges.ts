@@ -12,9 +12,13 @@
  * The same answer carries the Δ over the whole range on screen when the request sends its first day (`range_start`,
  * X-R59): `rangeChange.ts` says which day may be sent and reads the change; it is also the home of `ratioToPercent`.
  *
+ * The backend answers at most 1,000 items per request (`MAX_BULK_ITEMS`): a longer list goes in batches, one after the
+ * other, and its answers are merged into one (X-R64).
+ *
  * @module utils/periodChanges
  */
 import {zodiosApi} from '$lib/api';
+import {sendBulkBatches} from '$lib/api/bulkBatches';
 import {assetRangeDelta, fxRangeDeltas, rangeStartFor, ratioToPercent, type RangeDelta} from './rangeChange';
 
 export {ratioToPercent};
@@ -80,19 +84,32 @@ function deltasOf(periods: ReadonlyArray<PeriodChangeRow> | undefined, pick: (pe
 }
 
 /**
+ * The answers of `items` sent in batches of at most `BULK_MAX_ITEMS` (`sendBulkBatches`, lot Z-27), in order. A period
+ * change asks no per-day work, so only the item cap splits a request. All or nothing (X-R64): a failed batch rejects
+ * with its own error and nothing is sent after it, so a list never shows the changes of some items only.
+ */
+async function inBatches<T, R>(items: readonly T[], send: (batch: T[]) => Promise<R>): Promise<R[]> {
+    const outcome = await sendBulkBatches(items, () => 0, send);
+    if (outcome.failed) throw outcome.error;
+    return outcome.answers.map(({answer}) => answer);
+}
+
+/**
  * The Δ of each asset up to `asOf` (the end of the range the list shows), in the asset's own currency: one call for
- * every asset, none for an empty list. A failed call rejects. With `rangeStart`, the first day of that range, each
- * asset also gets its Δ over the whole range (`rangeDeltaByAssetId`); a start the backend would refuse is not sent
+ * every 1,000 assets, none for an empty list. A failed call rejects. With `rangeStart`, the first day of that range,
+ * each asset also gets its Δ over the whole range (`rangeDeltaByAssetId`); a start the backend would refuse is not sent
  * (`rangeStartFor`), and then that map is empty.
  */
 export async function fetchAssetPeriodChanges(assetIds: readonly number[], asOf: string, rangeStart: string | null = null): Promise<{periods: PeriodSpec[]; deltasByAssetId: Map<number, PeriodDeltas>; rangeDeltaByAssetId: Map<number, RangeDelta>}> {
     if (assetIds.length === 0) return {periods: [], deltasByAssetId: new Map(), rangeDeltaByAssetId: new Map()};
     const start = rangeStart === null ? null : rangeStartFor(rangeStart, asOf);
-    const response = await zodiosApi.post(
-        '/api/v1/assets/prices/period-changes',
-        assetIds.map((assetId) => ({asset_id: assetId, as_of: asOf, ...(start === null ? {} : {range_start: start})})),
+    const answers = await inBatches(assetIds, (batch) =>
+        zodiosApi.post(
+            '/api/v1/assets/prices/period-changes',
+            batch.map((assetId) => ({asset_id: assetId, as_of: asOf, ...(start === null ? {} : {range_start: start})})),
+        ),
     );
-    const items = response.items ?? [];
+    const items = answers.flatMap((response) => response.items ?? []);
     return {
         periods: periodsOf(items),
         deltasByAssetId: new Map(items.map((item) => [item.asset_id, deltasOf(item.periods, (period) => period.change_ratio)])),
@@ -102,8 +119,9 @@ export async function fetchAssetPeriodChanges(assetIds: readonly number[], asOf:
 
 /**
  * The Δ of each pair up to `asOf`, both ways: `direct` for the pair as configured (quote per base), `inverse` for the
- * pair shown inverted. Keyed `BASE/QUOTE`; one call for every pair, none for an empty list. A failed call rejects. With
- * `rangeStart`, each pair also gets its Δ over the whole range, both ways (`rangeDeltasByPair`), as for the assets.
+ * pair shown inverted. Keyed `BASE/QUOTE`; one call for every 1,000 pairs, none for an empty list. A failed call
+ * rejects. With `rangeStart`, each pair also gets its Δ over the whole range, both ways (`rangeDeltasByPair`), as for
+ * the assets.
  */
 export async function fetchFxPeriodChanges(
     pairs: ReadonlyArray<{base: string; quote: string}>,
@@ -112,11 +130,13 @@ export async function fetchFxPeriodChanges(
 ): Promise<{periods: PeriodSpec[]; deltasByPair: Map<string, {direct: PeriodDeltas; inverse: PeriodDeltas}>; rangeDeltasByPair: Map<string, {direct: RangeDelta; inverse: RangeDelta}>}> {
     if (pairs.length === 0) return {periods: [], deltasByPair: new Map(), rangeDeltasByPair: new Map()};
     const start = rangeStart === null ? null : rangeStartFor(rangeStart, asOf);
-    const response = await zodiosApi.post(
-        '/api/v1/fx/currencies/period-changes',
-        pairs.map(({base, quote}) => ({base, quote, as_of: asOf, ...(start === null ? {} : {range_start: start})})),
+    const answers = await inBatches(pairs, (batch) =>
+        zodiosApi.post(
+            '/api/v1/fx/currencies/period-changes',
+            batch.map(({base, quote}) => ({base, quote, as_of: asOf, ...(start === null ? {} : {range_start: start})})),
+        ),
     );
-    const items = response.items ?? [];
+    const items = answers.flatMap((response) => response.items ?? []);
     return {
         periods: periodsOf(items),
         deltasByPair: new Map(items.map((item) => [`${item.base}/${item.quote}`, {direct: deltasOf(item.periods, (period) => period.change_ratio), inverse: deltasOf(item.periods, (period) => period.inverse_change_ratio)}])),

@@ -35,6 +35,21 @@ currency.**
 
 This ensures that we only need to store one rate per pair, and we can easily calculate the inverse if needed.
 
+Rate writes keep to the [stored-date bounds](../assets/architecture.md#stored-date-bounds) of the
+prices: from 1900-01-01 to tomorrow by the server's calendar (`stored_date_bounds()`; X-R65, night
+decision N83). `POST /api/v1/fx/currencies/rate` (`upsert_rates_endpoint()`) checks every item's
+`date` before its loop: a single date outside refuses the whole request with the same 422
+`date_out_of_range` (`date_out_of_range_detail()`), its `items` `{"index", "date"}` (the item's
+0-based index; at most ten), its `count` all of them. Nothing is written, not even the valid
+items, unlike the endpoint's [per-item errors](configuration.md#chain-dates-writes-and-counters).
+The provider sync never stores a rate dated before 1900-01-01, whatever its start: in
+`sync_pairs_bulk()`, the live sync path, `_is_date_within_sync_range()`
+(`backend/app/services/fx/sync.py`), which keeps the dates of the requested range, is false before
+`EARLIEST_RANGE_START`, so neither `start: "min"` nor an older start reaches past it; its end stays
+the requested one, today at the latest. `ensure_rates_multi_source()`, which has no production
+caller, is left without that floor.
+{: #stored-rate-dates }
+
 ## 🔢 Priority System
 
 When converting currency, the system needs to decide which rate to use if multiple providers have data for the same pair and date.
@@ -251,10 +266,31 @@ The FX list calls the endpoint through `fetchFxPeriodChanges()` (`frontend/src/l
 request for every configured pair, with `as_of` the end of the selected range, and one for a single pair when that pair
 reloads on its own (its **Reload**, or after its **Sync**: `fetchPairData()`). A pair shown swapped (⇄) reads
 `inverse_change_ratio`, the others `change_ratio`. Besides its fixed 1D column, the table shows each period whose
-`days` fit in the range's whole calendar days (`visiblePeriodColumns()`). The request is not split yet: past 1,000
-configured pairs it gets `bulk_too_many_items`, the `catch` of the page's loader logs it to the browser console, and
-the Δ columns stay empty. Splitting the request into batches (backlog Z-27, as for the
-[conversions](#convert-request-limits)) is to cover this endpoint too: at most 1,000 pairs and one `as_of` per request.
+`days` fit in the range's whole calendar days (`visiblePeriodColumns()`). Past 1,000 configured pairs that request
+goes in batches (X-R64): the function hands the pairs to `sendBulkBatches(items, () => 0, send)`
+(`frontend/src/lib/api/bulkBatches.ts`, Z-27,
+[Bulk requests in batches](../../frontend/state/registries.md#bulk-requests-in-batches)), which sends consecutive
+batches of at most `BULK_MAX_ITEMS` (1,000) pairs, in the order given, one request after the other. There is no day
+estimate: the endpoint has the item cap, not the item-days budget of the [conversions](#convert-request-limits), and
+every batch asks up to the same `as_of`. The answers merge as if one request had answered, the periods taken from the
+first item that has any; up to 1,000 pairs it is one request, as before. All or nothing: a batch that fails rejects
+the whole call with its own error and nothing is sent after it, so the list never shows a partial answer.
+
+Several of these requests can be in flight at once, a pair's **Sync** during a range change for instance: the list
+keeps a `PeriodChangesLedger` (`periodChanges.ts`, X-R60) that says which answer it keeps.
+
+- A full request, for every pair (the first load, a range change, a refresh), replaces every request before it: an
+  older answer that lands later is not kept.
+- A single pair's own request (`loadPairPeriodChanges()`, run by `fetchPairData()`) is fresher, for that pair, than a
+  full request begun before it, whichever answer lands first. One begun before a newer full request is moot.
+- The page's `data-busy` (`data-testid="fx-page"`) stays true while any request whose answer would still be kept is
+  in flight, a single pair's included.
+- A failed full request keeps the Δ computed up to the same `as_of` (the end of the range) and drops the others; it
+  is logged to the browser console, unless a newer full request has replaced it. A failed single-pair request is
+  logged and changes nothing.
+- The signals' retry, a chart-settings save and swapping a pair (⇄) reload only the rates and signals
+  (`fetchAllPairSeries()`; a save, only when it changes the backend signals), never the period changes: the Δ come
+  both ways and do not depend on the signals.
 
 ## 🧹 Rate writes clear the portfolio caches {: #portfolio-cache-invalidation }
 
@@ -266,6 +302,19 @@ Every write that changes stored rates drops the two portfolio cache layers, `por
 | Provider sync (`POST /api/v1/fx/currencies/sync`, scheduler) | `sync_pairs_bulk()` | At least one rate point changed |
 | Manual rates (`POST /api/v1/fx/currencies/rate`) | `upsert_rates_bulk()` | After the commit (any non-empty batch) |
 | Rate deletion (`DELETE /api/v1/fx/currencies/rate`) | `delete_rates_bulk()` | At least one row was deleted |
+
+**Limits and chunks** (MF-SEC9a, from E's review of R13-SEC9). `POST` and `DELETE /api/v1/fx/currencies/rate` take at
+most `MAX_BULK_WRITE_ITEMS` (10,000) rates or deletions, a 422 `bulk_too_many_items` before any write: the FX page
+saves a CSV import in one request, and daily rates since 1999 are about 7,000 rows. The statements behind them hold
+one `OR` term per rate or deletion, so they run in chunks of `OR_TERMS_PER_QUERY` (500, `utils/sql_chunks.py`, the
+value of `FX_PAIRS_PER_QUERY`), in the same transaction: the read of the stored rates and the
+`INSERT … ON CONFLICT` of `upsert_rates_bulk()`, the read of the matching rates of `delete_rates_bulk()` (a deletion
+of more than 1,000 separate days, which the FX page sends as as many ranges, answered 500; each deletion then takes
+its rates by bisection over its pair's sorted dates, not by a scan of them, which at the cap held the event loop for
+seconds), and the read of the
+stored rates a provider sync compares with (`_stored_rates()`; refused, it was taken for a missing table and every
+rate counted as new). An error answers with a fixed message, never the database's, and is logged.
+{: #rate-write-limits }
 
 Both layers also key their entries on an FX fingerprint of the scope
 (`compute_portfolio_fx_cache_identity()` in `financial_math/portfolio/engine.py`); the explicit clear drops entries
