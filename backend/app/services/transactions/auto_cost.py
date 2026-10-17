@@ -15,6 +15,7 @@ from backend.app.schemas.transactions.transactions import (
 from backend.app.schemas.wac import WACPreviewResultItem
 from backend.app.services.financial_math.splits import split_linked_ids
 from backend.app.services.portfolio_service import compute_wac_iterative
+from backend.app.services.transactions.unreadable_rows import count_unreadable_rows
 
 
 class UnreadablePoolError(Exception):
@@ -172,19 +173,18 @@ class TransactionAutoCostMixin:
     async def _unreadable_pool_rows(self, broker_id: int, asset_id: int | None, as_of_date: date_type, excluded: list[int]) -> int:
         """How many rows of the pool ``compute_wac_iterative`` averages — its filters, without ``excluded`` — hold a stored
         value that is no number (W-B69): a quantity or an amount read None (``amount`` is NOT NULL, and the pool holds no
-        NULL quantity), or a cost basis stored but read None."""
-        stmt = select(Transaction.quantity, Transaction.amount, Transaction.cost_basis_override, Transaction.cost_basis_override.is_(None)).where(
+        NULL quantity), or a cost basis stored but read None. Counted by ``unreadable_rows.count_unreadable_rows``, as the
+        balances' rows are (W-B74)."""
+        where = [
             Transaction.broker_id == broker_id,
             Transaction.asset_id == asset_id,
             Transaction.date <= as_of_date,
             Transaction.quantity.is_not(None),
             Transaction.quantity != 0,
-        )
+        ]
         if excluded:
-            stmt = stmt.where(Transaction.id.notin_(excluded))
-        rows = (await self.session.execute(stmt)).all()
-        # A cost basis NULL in SQL is a row without one (a BUY); stored but read None, it cannot be read.
-        return sum(1 for quantity, amount, cost, cost_is_null in rows if quantity is None or amount is None or (cost is None and not cost_is_null))
+            where.append(Transaction.id.notin_(excluded))
+        return await count_unreadable_rows(self.session, *where, with_cost_basis=True)
 
     async def _handover_cost(self, db_tx: Transaction) -> WACPreviewResultItem:
         """The Auto cost a giving TRANSFER leg leaves with when it becomes an ADJUSTMENT-out (decision 47).
