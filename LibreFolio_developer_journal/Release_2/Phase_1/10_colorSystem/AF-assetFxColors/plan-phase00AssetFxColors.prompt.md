@@ -863,7 +863,7 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        >
        > **⚠️ Fuori pista — AF-13 di nuovo:** macOS ha toccato `frontend/src/.DS_Store` alle 23:52:26, e `asset-list` ha
        > rifatto la build all'avvio.
-17. 🔄 (17/10, 00:14–01:5x) **`lib/theme/drawnColors.ts` sui ruoli**, fuori area (`lib/theme`, dichiarato), richiesta del
+17. ✅ (17/10, 00:14–03:29) **`lib/theme/drawnColors.ts` sui ruoli**, fuori area (`lib/theme`, dichiarato), richiesta del
     coordinatore dopo l'ingresso `9d3607eb6`. Sono i 32 letterali slate (17 distinti) del rapporto di L
     (`L-designerLab/audit-colori-fuori-metrica.md`, riga 2): il tema scuro del foglio di cheetah-grid in
     `FilePreviewModal` (26), i due bordi del foglio in chiaro, la riga indicata, i segnaposto di `LazyImage` (2),
@@ -913,9 +913,21 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        `theme-roles.mjs --check` pulito; il compilatore di Svelte sui tre componenti, 0 avvisi prima e dopo;
        `py_compile` del runner; Vitest **8 file, 286/286** (`drawnColors`, `roleColors` e `roleColors.dom`, i tre gate
        dei colori, `FilePreviewModal.test`, `FilesTable.test`); `git diff --check` pulito.
-    5. ⏳ **Slot** nella 6157, dopo il «prima» della galleria di G, al via del coordinatore: `front check`,
-       `component-unit`, E2E `front-utility files`, `front-transaction tx-import-report-set`, `front-asset asset-list`,
-       `front-utility image-crop`.
+    5. ✅ (17/10, 03:06–03:29) **Slot F** nella 6157 su `c37c55649` (codice `cfa78f210`, docs `fd6e7b3d9`, base merge
+       con la punta `2818924b7`: X O-8, H-27, E-11; il runner si è unito da solo con quello della 1.3, la riga di
+       `drawnColors.test.ts` c'è). Nessun passo nuovo dopo le 03:40. Script `/tmp/libreFolio_af_slotF.sh`, log in
+       `/tmp/libreFolio_af_slotF/`.
+       > | Passo | Esito |
+       > |---|---|
+       > | `api sync`, `front build --debug` | rc 0 |
+       > | `front check` | 0 errori, 0 avvisi |
+       > | `front-utility component-unit` | 166 file, 4.418/4.418 |
+       > | E2E `front-utility files` (2 worker) | 29/29 |
+       > | `front-transaction tx-import-report-set` (1 worker) | 32/32; gli altri 32 sono i test dell'altro progetto (desktop o mobile), saltati per contratto |
+       > | `front-asset asset-list` (1 worker) | 30/30 |
+       > | `front-utility image-crop` (2 worker) | 42/42 |
+       >
+       > Nessuna build in più (AF-13 non si è ripetuto); porta libera alla fine; HEAD `c37c55649`, albero pulito.
 
 ## 12. Dove guardarlo (per il developer)
 
