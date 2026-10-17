@@ -5494,6 +5494,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   non combacia (solo il proprio browser); (3) il toast di «+ New event» mostra 2 decimali (`parseFloat`, `formatFixed`): va con
   C-97c. Cura: (1) un esponente incollato letto esatto o rifiutato col messaggio; (2) un tetto alla lunghezza del testo prima del
   confronto e una regex lineare; (3) in C-97c. Dettagli: piano 08 di E, «R13-SEC5».
+  ✅ 17/10 (D-W66-1 = (a), coordinatore). Un testo incollato interamente in notazione scientifica si legge esatto entro ±100 (il
+  limite del backend), in `filterDecimalInput` e in `normalizeDecimalInput` per ogni campo che legge da lì: `1e-8` →
+  `0.00000001`. Un testo con un esponente che non si legge (fuori portata, o non interamente un numero: `1e5x`) resta com'è,
+  rosso, con `common.decimalExponentOutOfRange` (4 lingue). Le frecce non lo spostano. Le tre regex quadratiche sono lineari
+  (circa 3 s a 40 000 caratteri), e `compareExact` gira solo nel budget delle cifre. Prove: 88 rossi verdi (Vitest 231),
+  `core-unit` 8 589, `component-unit` 4 821, `front check` 0/0. Il punto (3) resta in C-97c. Dettagli: piano 04, «W-B66 — cura».
 - **W-B67 · Il costo Auto può finire sulla riga sbagliata** — medio, numeri; J, 17/10 (analisi di V-4, via il coordinatore). Prima
   del rilascio. `_find_created_tx_for_wac` (`backend/app/services/transactions/auto_cost.py:158-183`) trova la riga creata di un
   elemento senza `link_uuid` cercando l'ultima con lo stesso broker, asset, data e tipo (`order_by(id.desc()).limit(1)`): con due
