@@ -128,6 +128,7 @@ all-accessible requests that did not send an explicit Broker filter.
 | `409` | `version_mismatch`         | Catalog, selection, instruction, or response-contract identity differs. |
 | `422` | `unsupported_selection`    | Dataset or analysis is unknown or belongs to another domain.            |
 | `422` | `selection_not_applicable` | Runtime facts do not satisfy an analysis applicability rule.            |
+| `422` | `selection_not_applicable` | `reason_code` `too_many_price_days`: the prices a required component reads exceed one request's budget (J-50). |
 | `503` | `snapshot_source_failure`  | A required component raised while building.                             |
 
 Required failures fail closed. Optional failures may be omitted and remain
