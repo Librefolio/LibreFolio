@@ -19,7 +19,7 @@ from backend.app.db.models import (
     Transaction,
     User,
 )
-from backend.app.db.precision import decimal_limit_issue, get_model_column_precision, integer_digits_issue, max_integer_digits
+from backend.app.db.precision import decimal_limit_issue, get_model_column_precision, max_integer_digits, storable_value
 from backend.app.db.real_decimal import REAL_SIGNIFICANT_DIGITS
 from backend.app.schemas.assets.events import FAAssetEventPoint, FAAssetEventPointOut, FAEventBulkDeleteResponse, FAEventDeleteItemResult, FAEventQueryResult, FAEventUpsertPoint
 from backend.app.schemas.common import (
@@ -85,7 +85,9 @@ class EventStoreOperations:
 
         An event whose value ``AssetEvent.value`` cannot keep (not finite, past 12 digits before the decimal point) is
         dropped before anything is written, with a warning (W-B58): stored as a REAL inf, it broke every response of
-        the asset's events, for every user. The manual events never get here with one (``_reject_too_many_digits``).
+        the asset's events, for every user. The others are written as the column keeps them, truncated like a
+        provider's price (``storable_value``, W-B68): what is read back is what was written. The manual events never
+        get here with one (``_reject_too_many_digits``), and are refused rather than truncated.
 
         Returns:
             Number of events upserted
@@ -99,7 +101,12 @@ class EventStoreOperations:
         A SPLIT whose ratio is not a number above 0 is dropped and logged too (X-R47): linked to a transaction, it made
         the portfolio engine raise. A raw event the schema itself refuses — a value that is no number, or whose exponent
         is past ±100 (``schemas/common.check_decimal_exponent``, R13-SEC7-3) — is dropped the same way: parsed in one
-        go, it made the whole refresh lose its events. Its value is never logged: it can be of any length."""
+        go, it made the whole refresh lose its events. Its value is never logged: it can be of any length.
+
+        A value the column keeps is truncated to it (``storable_value``: ROUND_DOWN to 6 decimals, then 15 significant
+        digits), only when that changes it, so a value that fits keeps its form (W-B68). Before, it was written whole
+        and read back rounded (``RealDecimal(18, 6)``): ``784.0774475`` read ``784.077448``. A split's ratio is judged on
+        the truncated value: ``1E-7`` would be stored and read back 0."""
         storable: list[FAAssetEventPoint] = []
         dropped: list[str] = []
         invalid_splits: list[str] = []
@@ -109,9 +116,13 @@ class EventStoreOperations:
             except ValidationError:
                 dropped.append(f"{str(raw.get('date'))[:10]} {str(raw.get('type'))[:24]}=(refused by the schema)")
                 continue
-            if integer_digits_issue(evt.value.amount, AssetEvent, "value") is not None:
+            stored = storable_value(evt.value.amount, AssetEvent, "value")
+            if stored is None:
                 dropped.append(f"{evt.date.isoformat()} {evt.type!s}={evt.value.amount}")
-            elif is_split_event_type(evt.type) and not is_valid_split_ratio(evt.value.amount):
+                continue
+            if stored != evt.value.amount:
+                evt = evt.model_copy(update={"value": evt.value.model_copy(update={"amount": stored})})
+            if is_split_event_type(evt.type) and not is_valid_split_ratio(evt.value.amount):
                 invalid_splits.append(f"{evt.date.isoformat()} ratio {evt.value.amount}")
             else:
                 storable.append(evt)
