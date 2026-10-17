@@ -8,6 +8,7 @@
  * - Database populated (./dev.py test db populate --force)
  */
 
+import {IntlMessageFormat} from 'intl-messageformat';
 import {expect, test} from '../fixtures/playwright';
 import type {Locator, Page, Request} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
@@ -1612,6 +1613,100 @@ test.describe('Assets list — which period changes the list keeps, and when it 
             expect(asked, 'the retry asked the period changes again, though they do not depend on the signals').toBe(askedBefore);
         } finally {
             await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+});
+
+// ============================================================================
+// A bulk price request refused as too large says so (workstream X, lot X-R58)
+// ============================================================================
+
+/** The catalogue's sentence for a bulk request refused for its items (`bulk_too_many_items`, Z-25). */
+const BULK_TOO_MANY_ITEMS_KEY = 'common.bulkRefusal.tooManyItems';
+
+/**
+ * The numbers the stubbed refusal carries: an item cap, and a count past it. Five digits rather than the backend's
+ * 1,000: whether a four-digit number is grouped depends on the locale's minimum grouping digits in the CLDR data of the
+ * runtime (Node's ICU here writes 1000 in Italian and Spanish), so the browser and Node could write it differently;
+ * five digits are grouped in the four languages either way.
+ */
+const REFUSED_ITEMS = {max_items: 10_000, items: 12_345} as const;
+
+/**
+ * `key` as the `lang` catalogue words it, formatted with `values` by `intl-messageformat`, the formatter svelte-i18n
+ * compiles messages with — the reading of `overwriteWarningSentence` (`fixtures/sync-overwrite.ts`) for any message.
+ * A catalogue without the message fails here, by name: a key that resolved to itself would let a toast printing the
+ * key pass.
+ */
+function catalogueSentence(lang: string, key: string, values: Record<string, number>): string {
+    const message = t(lang, key);
+    expect(message, `the "${lang}" catalogue has a message for ${key}`).not.toBe(key);
+    return String(new IntlMessageFormat(message, lang).format(values));
+}
+
+/**
+ * A bulk price request the backend refuses as too large reaches the user (X-R58). Since Z-25 `POST
+ * /assets/prices/query` refuses a request past its caps with a coded 422 (`backend/app/utils/date_range_limits.py`); the
+ * list sends its prices through `sendBulkBatches` (Z-27), which never splits a refusal for its items, so the load fails
+ * with it. The list then says so in an error toast: the catalogue's `common.bulkRefusal.tooManyItems`, with the cap and
+ * the count the refusal carries. Any other failure stays as it was.
+ *
+ * Observed through the network: every price request is answered with the refusal. The list is loaded over about two
+ * months ending on a known day in the past, as in X-R53: prices to ask, and no live price. The test's own asset —
+ * created here and deleted at the end — is a row whose prices the list must ask, so the refused request is proven to
+ * be the list's load. The sentence is the catalogue's, formatted for the page's language: never a translation written
+ * here.
+ *
+ * Red today: `fetchPriceSeries` only logs the failure (`console.error`) — the cards stay without prices, and nothing
+ * tells the user why.
+ */
+test.describe('Assets list — a bulk price request refused as too large says so (X-R58)', () => {
+    // A ceiling, never a delay: an asset is created, then the list loads its waves — rows, refused prices, period changes.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('a load refused for its items shows the catalogue’s sentence, with the cap and the count, in an error toast', async ({page}) => {
+        const token = uniqueToken(6);
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const asked: Array<Record<string, unknown>> = [];
+        const failures: string[] = [];
+        let assetId: number | null = null;
+        try {
+            const createRes = await page.request.post('/api/v1/assets', {data: [{display_name: `E2E BulkRefusal ${token}`, currency: 'EUR', asset_type: 'STOCK'}]});
+            expect(createRes.ok(), `asset create must succeed: ${await createRes.text()}`).toBeTruthy();
+            const ownId = ((await createRes.json()) as {results: Array<{asset_id: number}>}).results[0].asset_id;
+            assetId = ownId;
+
+            // Every price request is refused for its items: a refusal Z-27 never splits, so the load gives up on it.
+            await page.route(ASSET_PRICE_QUERY, async (route) => {
+                try {
+                    asked.push(...((route.request().postDataJSON() as Array<Record<string, unknown>> | null) ?? []));
+                    await route.fulfill({status: 422, json: {detail: {code: 'bulk_too_many_items', message: `A bulk request may hold at most ${REFUSED_ITEMS.max_items} items, not ${REFUSED_ITEMS.items}`, ...REFUSED_ITEMS}}});
+                } catch (error) {
+                    // Nobody awaits a route callback, so what it throws would land on whatever runs next: recorded, and
+                    // the request let through, for the test to fail on its own assertions.
+                    failures.push(String(error));
+                    await route.continue().catch(() => undefined);
+                }
+            });
+
+            // The list over the range; `goToAssetsPage` returns once `data-busy` says the load is over, refusal included.
+            await goToAssetsPage(page, range);
+            expect(failures, 'the refusal reached the page').toEqual([]);
+            expect(asked, 'premise: the list asked the own asset’s prices over the range — the request the refusal answered').toContainEqual(expect.objectContaining({asset_id: ownId, include_price: true, date_range: range}));
+
+            // One load, refused once: one error toast, and its words are the catalogue's.
+            const errorToasts = page.getByTestId('toast-error');
+            await expect(errorToasts, 'the refused load must say so in an error toast — the list only logged it, and the cards stayed without prices').toHaveCount(1, {timeout: 10_000});
+            const sentence = catalogueSentence(await pageLanguage(page), BULK_TOO_MANY_ITEMS_KEY, {max: REFUSED_ITEMS.max_items, count: REFUSED_ITEMS.items});
+            await expect(errorToasts, 'the catalogue’s sentence, with the cap and the count of the refusal').toHaveText(sentence);
+            await expect(errorToasts).toBeVisible();
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+            if (assetId != null) await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
         }
     });
 });
