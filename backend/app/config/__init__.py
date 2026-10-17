@@ -31,7 +31,8 @@ Environment Variables (see .env):
     RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS: Optimization worker idle reap (default: 600; managed: 60)
     LIBREFOLIO_PROFILE: Instance profile: selfhosted | managed (default: selfhosted); a profile's defaults: PROFILE_DEFAULTS
         for Settings fields, ENVIRONMENT_PROFILE_DEFAULTS (profile_default()) for the variables of the section modules
-    LIBREFOLIO_FRAME_PROTECTION: X-Frame-Options and frame-ancestors on every response (default: off; managed: on)
+    LIBREFOLIO_FRAME_PROTECTION: X-Frame-Options and frame-ancestors on every response, plus object-src, base-uri and
+        form-action on the HTML pages (default: off; managed: on)
     LIBREFOLIO_CSP_REPORT_ONLY: Report-only Content-Security-Policy on the web app's pages (default: off; managed: on)
     LIBREFOLIO_CLIENT_IP_HEADER: The header a trusted reverse proxy passes the visitor's address in, such as Fly-Client-IP
         (default: unset, the connection's address; no profile sets it)
@@ -298,7 +299,8 @@ class Settings(BaseSettings):
         return value.strip().lower() if isinstance(value, str) else value
 
     # Frame protection (D5): X-Frame-Options: SAMEORIGIN and Content-Security-Policy: frame-ancestors 'self' on every
-    # response. Off by default: a self-hosted install may be embedded by its owner's dashboards (Home Assistant panels)
+    # response, and on the HTML pages object-src 'none', base-uri 'self' and form-action 'self' too (H-42). Off by
+    # default: a self-hosted install may be embedded by its owner's dashboards (Home Assistant panels)
     LIBREFOLIO_FRAME_PROTECTION: bool = False
     # Report-only Content-Security-Policy on the web app's pages (D5): violations show in the browser console, nothing
     # is blocked. Off by default
