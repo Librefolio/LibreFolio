@@ -1,6 +1,7 @@
 """
 Login limit API — release 1.3, workstream A, lot A8a (plan phase01Accounts §4.8, A8a C1–C4): F15, a limit on failed
-sign-ins, and ``GET /api/v1/security/checks``, the administrator's list of the «Security» checks.
+sign-ins, and ``GET /api/v1/security/checks``, the administrator's list of the «Security» checks; then decision N70:
+the limit per address behind a local reverse proxy LibreFolio does not trust.
 
 The contract, over HTTP:
 
@@ -40,6 +41,19 @@ The contract, over HTTP:
    identifier's failures whatever the answer then — 409 ``EMAIL_VERIFICATION_NOT_NEEDED`` for an active account, 403
    ``ACCOUNT_DISABLED`` for a deactivated one —: as a change of password does, unlike the sign-in's 403 (item 1). E's
    own limit per address, ten resends in 15 minutes, is E's to pin, not this file's.
+8. Behind a local reverse proxy LibreFolio does not trust (decision N70 of 17/10, on workstream E's R13-SEC6) every
+   visitor has the proxy's address, and fifty failures of anyone would refuse everyone. At its three places that check
+   a password — the sign-in, the change of password, the change of email address — ``auth.py`` gives the throttle
+   workstream H's ``rate_limit_address(request)`` (H-36): ``None`` for a request whose peer is local — ``classify_ip``
+   of ``utils/runtime/network.py`` says ``lan``, ``loopback`` or ``vpn``, the CGNAT range included — and which carries
+   a forwarding header nothing applied (``X-Forwarded-For``, ``Forwarded``, ``X-Real-IP``); ``client_address(request)``
+   otherwise. ``None`` counts and refuses under the identifier alone. So: fifty wrong passwords through such a proxy,
+   over fifty identifiers, lock nobody else out; a wrong password through it, at any of the three places, counts on its
+   identifier and on no address; an address its own failures locked refuses its direct requests and lets through what
+   the proxy forwards — decided per request —; ten wrong passwords for one identifier through the proxy still lock
+   that identifier. A public peer is the client whatever it forwards: its failures lock it, and the header it forwards
+   is not the key either. A local peer forwarding nothing is a client like any other. The resend behind a proxy is
+   workstream E's (its lot E-13), and the once-per-process warning H's: neither is pinned here.
 
 Where it runs: in-process only, never on the lane, whose server runs with the limit off (``dev.py server --test``):
 ``test_security_checks_api.py`` pins that line. Each case has a private SQLite file under ``tmp_path`` (NullPool,
@@ -64,6 +78,13 @@ The harness:
 - Addresses: each request comes from a client of its own whose ASGI ``client`` is a documentation address
   (``httpx.ASGITransport(client=…)``). No request carries the header ``LIBREFOLIO_CLIENT_IP_HEADER`` may name, so H's
   ``client_address(request)`` is the connection's whatever this process configured.
+- The N70 cases are the exception: their proxies are local addresses (``10.0.0.7``, ``192.168.1.20``, ``127.0.0.1``,
+  ``100.100.1.5``) and their requests carry forwarding headers, ``X-Real-IP`` among them. So they unset
+  ``LIBREFOLIO_CLIENT_IP_HEADER`` — no header gives the address — and ``FORWARDED_ALLOW_IPS`` — uvicorn's default,
+  which trusts none of those peers but ``127.0.0.1`` —, and start over, before and after, the reads H's module caches
+  once per process (``untrusted_proxy``). No uvicorn stands in front of the app, so no header is applied: H's helper
+  decides for real, through the routes, and nothing fakes it. ``127.0.0.1`` never forwards ``X-Forwarded-For`` here:
+  uvicorn would have applied it, and what H's helper answers for a request it could not receive is H's to choose.
 - bcrypt at cost 4, and the dummy hash an unknown identifier is checked against is a private one of cost 4: the
   process's own, computed once and cached (LOGIN-024 of ``test_auth_api.py`` checks it has the shipped cost), is left
   as it was.
@@ -85,9 +106,18 @@ resends answers 200, or 401 where no account matches (LT-API-16); the resend of 
 (LT-API-18); Carol's sign-in from an address with forty-nine failed sign-ins and a wrong resend answers 200
 (LT-API-19).
 
+The N70 cases (LT-API-20 to 25, item 8), written once the rest of A8a was in. The reds, «red until A8a (N70)»: today
+the three places count and refuse every request under ``client_address(request)``, the proxy's address, so each fails
+on the 429 that address answers — never at its setup: Carol's sign-in through the proxy after fifty failures through it
+(LT-API-20); a newcomer's sign-in from the proxy's address after forty-nine failures of its own and one through the
+proxy (LT-API-24); the request through the proxy from an address its own failures locked (LT-API-25). They stay red
+until workstream H's ``rate_limit_address`` (H-36) is in this branch and ``auth.py`` gives it to the throttle.
+LT-API-21, 22 and 23 are guards, green today and to stay green: the identifier's limit through the proxy, a public
+peer's header, a local peer forwarding nothing.
+
 Isolation: pure — no lane, no server, no shared row. Process-wide state — the variables, the two limiters and E's
 resend limiter, bcrypt's cost and dummy hash, ``bcrypt.checkpw``, the cookie's Secure mode — is replaced through
-``monkeypatch`` and put back.
+``monkeypatch`` and put back; the reads H's module caches are started over around each N70 case.
 """
 
 from __future__ import annotations
@@ -99,7 +129,7 @@ import os
 import re
 import uuid
 from collections import Counter
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncIterator, Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -113,6 +143,7 @@ from fastapi import APIRouter, FastAPI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
+from starlette.requests import Request
 
 from backend.app.api.v1 import auth as auth_api
 from backend.app.api.v1.router import router as api_v1_router
@@ -124,6 +155,7 @@ from backend.app.services.accounts import auth_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.email import verification
 from backend.app.services.platform import config_audit
+from backend.app.services.platform.client_address import client_address
 from backend.app.services.platform.plugin_secrets_check import check_plugin_secrets
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.test_utils import print_section, print_success
@@ -1040,3 +1072,224 @@ class TestResend:
 
         _assert_too_many_attempts(carol_from_the_address, f"POST /auth/login as {CAROL!r} from an address with {ADDRESS_LIMIT - 1} failed sign-ins and one wrong password at the resend")
         assert carol_elsewhere.status_code == 200, f"another address is not affected: {carol_elsewhere.status_code} {carol_elsewhere.text}"
+
+
+# ============================================================================
+# 8. BEHIND A LOCAL PROXY LIBREFOLIO DOES NOT TRUST (N70): NO LOCK UNDER ITS ADDRESS, THE IDENTIFIER'S KEPT
+# ============================================================================
+
+CLIENT_ADDRESS_MODULE = "backend.app.services.platform.client_address"
+CLIENT_IP_HEADER_VARIABLE = "LIBREFOLIO_CLIENT_IP_HEADER"
+#: uvicorn's own variable: the peers whose X-Forwarded-For it applies — 127.0.0.1 when unset.
+TRUSTED_PROXIES_VARIABLE = "FORWARDED_ALLOW_IPS"
+
+#: A header line as a proxy adds it: its name, its value.
+Header = tuple[str, str]
+#: The proxy of the cases that vary the place, not the proxy: a reverse proxy on the local network (``lan``), and the header it forwards.
+LOCAL_PROXY = ("10.0.0.7", 123)
+XFF: Header = ("X-Forwarded-For", "203.0.113.50")
+#: Two peers ``classify_ip`` calls ``public`` — no documentation range is a local one of N70 —: each is the client, whatever it forwards.
+PUBLIC_PEER = ("198.51.100.20", 41020)
+OTHER_PUBLIC_PEER = ("198.51.100.21", 41021)
+
+#: Proxies ``classify_ip`` calls local — ``lan``, ``loopback``, ``vpn`` (the CGNAT range) —, each forwarding a header nothing applies, naming a visitor of its own (RFC 5737): the three headers from 10.0.0.7, one from each of the others.
+THROUGH_A_LOCAL_PROXY = [
+    pytest.param(LOCAL_PROXY, XFF, id="lan-10.0.0.7-x-forwarded-for"),
+    pytest.param(LOCAL_PROXY, ("Forwarded", "for=203.0.113.51"), id="lan-10.0.0.7-forwarded"),
+    pytest.param(LOCAL_PROXY, ("X-Real-IP", "203.0.113.52"), id="lan-10.0.0.7-x-real-ip"),
+    pytest.param(("192.168.1.20", 124), ("X-Forwarded-For", "203.0.113.53"), id="lan-192.168.1.20-x-forwarded-for"),
+    pytest.param(("127.0.0.1", 125), ("X-Real-IP", "203.0.113.54"), id="loopback-127.0.0.1-x-real-ip"),
+    pytest.param(("100.100.1.5", 126), ("Forwarded", "for=203.0.113.55"), id="vpn-100.100.1.5-forwarded"),
+]
+#: The three forwarding headers of N70, as a public peer may send them.
+FORWARDING_HEADERS = [
+    pytest.param(XFF, id="x-forwarded-for"),
+    pytest.param(("Forwarded", "for=203.0.113.51"), id="forwarded"),
+    pytest.param(("X-Real-IP", "203.0.113.52"), id="x-real-ip"),
+]
+#: Local peers forwarding nothing: clients like any other.
+LOCAL_PEERS = [
+    pytest.param(LOCAL_PROXY, id="lan-10.0.0.7"),
+    pytest.param(("127.0.0.1", 125), id="loopback-127.0.0.1"),
+]
+
+
+def _start_client_address_over() -> None:
+    """Workstream H's module reads its settings once per process — ``LIBREFOLIO_CLIENT_IP_HEADER`` among them —: every cached function of its own cleared, so the next request reads the environment as it is then."""
+    module = importlib.import_module(CLIENT_ADDRESS_MODULE)
+    for value in list(vars(module).values()):
+        if getattr(value, "__module__", None) == module.__name__ and callable(getattr(value, "cache_clear", None)):
+            value.cache_clear()
+
+
+@pytest.fixture
+def untrusted_proxy(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """N70's setting, whatever the lane exported: ``LIBREFOLIO_CLIENT_IP_HEADER`` unset — no header gives the address, X-Real-IP included — and ``FORWARDED_ALLOW_IPS`` unset — uvicorn's default —, the reads H's module caches started over before and after. Premise: a request from the proxy carrying X-Real-IP has the proxy's address."""
+    monkeypatch.delenv(CLIENT_IP_HEADER_VARIABLE, raising=False)
+    monkeypatch.delenv(TRUSTED_PROXIES_VARIABLE, raising=False)
+    _start_client_address_over()
+    probe = Request({"type": "http", "method": "POST", "path": LOGIN, "headers": [(b"x-real-ip", b"203.0.113.52")], "client": LOCAL_PROXY, "query_string": b""})
+    seen = client_address(probe)
+    assert seen == LOCAL_PROXY[0], f"premise: with {CLIENT_IP_HEADER_VARIABLE} unset, a request from {LOCAL_PROXY[0]} carrying X-Real-IP has {LOCAL_PROXY[0]}'s address, not {seen!r}: a header that gives the address is applied, and N70 is not about it"
+    yield
+    _start_client_address_over()
+
+
+def _through(forwarded: Optional[Header]) -> str:
+    """How a message names what a request forwards: `` forwarding <header>``, or nothing."""
+    return f" forwarding {forwarded[0]}" if forwarded else ""
+
+
+async def _send(private: _Private, method: str, path: str, *, peer: tuple[str, int], forwarded: Optional[Header] = None, cookie: Optional[str] = None, json: Any = None) -> httpx.Response:
+    """One request from a client of its own at ``peer`` (the ASGI ``client``), carrying ``forwarded`` when given — as a proxy adds it — and the session cookie when given."""
+    headers = {forwarded[0]: forwarded[1]} if forwarded else {}
+    if cookie:
+        headers["Cookie"] = f"{COOKIE}={cookie}"
+    transport = httpx.ASGITransport(app=private.app, client=peer)
+    async with httpx.AsyncClient(transport=transport, base_url=BASE_URL, timeout=TIMEOUT) as client:
+        return await client.request(method, path, json=json, headers=headers)
+
+
+async def _login_from(private: _Private, identifier: str, password: str, *, peer: tuple[str, int], forwarded: Optional[Header] = None) -> httpx.Response:
+    """``POST /auth/login`` with ``identifier`` and ``password`` from ``peer``, forwarding ``forwarded`` when given."""
+    return await _send(private, "POST", LOGIN, peer=peer, forwarded=forwarded, json={"username": identifier, "password": password})
+
+
+async def _fail_logins_from(private: _Private, identifiers: Iterable[str], *, peer: tuple[str, int], forwarded: Optional[Header] = None) -> None:
+    """A wrong password for each of ``identifiers``, in order, from ``peer``, forwarding ``forwarded`` when given. It ends on its promise: each one answered 401, a failure the limit still allowed."""
+    for number, identifier in enumerate(identifiers, start=1):
+        response = await _login_from(private, identifier, WRONG_PASSWORD, peer=peer, forwarded=forwarded)
+        assert response.status_code == 401, f"wrong password #{number} ({identifier!r} from {peer[0]}{_through(forwarded)}): expected 401, a failure still allowed — got {response.status_code} {response.text}"
+
+
+def _answer(response: httpx.Response) -> tuple[int, Optional[str]]:
+    """What a place answered: the status, and ``detail.error_code`` when there is one."""
+    return response.status_code, _error_code(response)
+
+
+@dataclass(frozen=True)
+class _Place:
+    """One of the three places of ``auth.py`` that check a password, as Alice's browser reaches it: the request, and the answer — status and ``detail.error_code`` — to a wrong password and to the right one."""
+
+    name: str
+    method: str
+    path: str
+    body: Callable[[str], dict[str, Any]]
+    wrong: tuple[int, Optional[str]]
+    right: tuple[int, Optional[str]]
+
+    async def attempt(self, private: _Private, alice: _Browser, password: str, *, forwarded: Optional[Header] = None) -> httpx.Response:
+        """``password`` at this place from Alice's browser — its address, its session cookie —, forwarding ``forwarded`` when given."""
+        return await _send(private, self.method, self.path, peer=alice.address, forwarded=forwarded, cookie=alice.cookie, json=self.body(password))
+
+
+#: The three places of ``auth.py`` that give the throttle an address (N70): the sign-in, the change of password, the change of email address.
+PASSWORD_PLACES = [
+    pytest.param(_Place("POST /auth/login", "POST", LOGIN, lambda password: {"username": ALICE, "password": password}, wrong=(401, None), right=(200, None)), id="sign-in"),
+    pytest.param(_Place("POST /auth/change-password", "POST", CHANGE_PASSWORD, lambda password: {"current_password": password, "new_password": NEW_PASSWORD}, wrong=(400, None), right=(200, None)), id="change-of-password"),
+    pytest.param(_Place("PUT /auth/profile changing the email", "PUT", PROFILE, lambda password: {"email": NEW_EMAIL, "current_password": password}, wrong=(400, "CURRENT_PASSWORD_INVALID"), right=(200, None)), id="change-of-email"),
+]
+
+
+class TestUntrustedLocalProxy:
+    """N70: what a local proxy LibreFolio does not trust forwards locks nothing under the proxy's address, and the identifier's limit holds; a public peer, and a local one forwarding nothing, are limited by their address as before."""
+
+    # red until A8a (N70)
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("proxy", "forwarded"), THROUGH_A_LOCAL_PROXY)
+    async def test_fifty_failures_through_the_proxy_lock_nobody_else_out(self, private: _Private, throttle: _Throttle, untrusted_proxy: None, proxy: tuple[str, int], forwarded: Header) -> None:
+        """LT-API-20: fifty wrong passwords through a local proxy LibreFolio does not trust — from ``proxy``, each request forwarding ``forwarded``, each for an identifier of its own — → Carol's right password through it → 200, not the shared address's lockout (today: 429 ``TOO_MANY_ATTEMPTS``). Barrier: the fifty failures counted, each on its identifier, none on an address."""
+        print_section(f"LT-API-20: fifty failures through {proxy[0]}, forwarding {forwarded[0]}")
+        await _add_user(private.engine, CAROL)
+        await _fail_logins_from(private, _strangers(ADDRESS_LIMIT), peer=proxy, forwarded=forwarded)
+
+        carol = await _login_from(private, CAROL, PASSWORD, peer=proxy, forwarded=forwarded)
+
+        assert carol.status_code == 200, f"POST /auth/login as {CAROL!r}, right password, from {proxy[0]}{_through(forwarded)}, after {ADDRESS_LIMIT} failures through it: expected 200 — every visitor of the proxy has its address, so no limit per address —, got {carol.status_code} {carol.text}"
+        counted = (len(throttle.by_identifier), len(throttle.by_address))
+        assert counted == (ADDRESS_LIMIT, 0), f"each failure through the proxy counts on its identifier and on no address: keys counted (identifier, address) {counted}"
+        print_success("fifty failures through the proxy, and Carol signs in")
+
+    # guard (N70): green today, and to stay green — the identifier's limit holds through the proxy
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("proxy", "forwarded"), THROUGH_A_LOCAL_PROXY)
+    async def test_the_identifier_limit_holds_through_the_proxy(self, private: _Private, throttle: _Throttle, untrusted_proxy: None, proxy: tuple[str, int], forwarded: Header) -> None:
+        """LT-API-21: ten wrong passwords for Alice through the local proxy → her eleventh attempt through it, her right password, → 429 ``TOO_MANY_ATTEMPTS`` with ``Retry-After``, no session cookie; Bob's right password through it → 200: the lock is Alice's, not the proxy's."""
+        print_section(f"LT-API-21: the identifier's limit through {proxy[0]}, forwarding {forwarded[0]}")
+        await _add_user(private.engine, ALICE)
+        await _add_user(private.engine, BOB)
+        await _fail_logins_from(private, [ALICE] * IDENTIFIER_LIMIT, peer=proxy, forwarded=forwarded)
+
+        alice = await _login_from(private, ALICE, PASSWORD, peer=proxy, forwarded=forwarded)
+        bob = await _login_from(private, BOB, PASSWORD, peer=proxy, forwarded=forwarded)
+
+        _assert_too_many_attempts(alice, f"POST /auth/login as {ALICE!r}, her right password, from {proxy[0]}{_through(forwarded)}, after {IDENTIFIER_LIMIT} wrong passwords through it: the identifier's limit holds behind the proxy")
+        assert bob.status_code == 200, f"another identifier through the same proxy signs in: {bob.status_code} {bob.text}"
+        print_success("Alice locked, Bob signs in")
+
+    # guard (N70): green today, and to stay green — a public peer's forwarding header changes nothing
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("forwarded", FORWARDING_HEADERS)
+    async def test_a_public_peer_is_the_client_whatever_it_forwards(self, private: _Private, throttle: _Throttle, untrusted_proxy: None, forwarded: Header) -> None:
+        """LT-API-22: fifty wrong passwords from a public peer, each request forwarding ``forwarded``, each for an identifier of its own → Carol's right password from it, forwarding the same, → 429 ``TOO_MANY_ATTEMPTS``: the fifty counted on the peer's address, as without the header. Nor is the header the key: from another public peer forwarding the same, Carol signs in (200)."""
+        print_section(f"LT-API-22: a public peer forwarding {forwarded[0]}")
+        await _add_user(private.engine, CAROL)
+        await _fail_logins_from(private, _strangers(ADDRESS_LIMIT), peer=PUBLIC_PEER, forwarded=forwarded)
+
+        locked = await _login_from(private, CAROL, PASSWORD, peer=PUBLIC_PEER, forwarded=forwarded)
+        elsewhere = await _login_from(private, CAROL, PASSWORD, peer=OTHER_PUBLIC_PEER, forwarded=forwarded)
+
+        _assert_too_many_attempts(locked, f"POST /auth/login as {CAROL!r} from the public peer {PUBLIC_PEER[0]}{_through(forwarded)}, after {ADDRESS_LIMIT} wrong passwords from it: a public peer is the client, whatever it forwards")
+        assert elsewhere.status_code == 200, f"the forwarded header is not the key: from another public peer forwarding the same, Carol signs in — got {elsewhere.status_code} {elsewhere.text}"
+        counted = (len(throttle.by_address), throttle.by_address.count(PUBLIC_PEER[0]))
+        assert counted == (1, ADDRESS_LIMIT), f"the fifty failures count on the public peer's address, under one key: (address keys, count) {counted}"
+        print_success("the public peer locked, its header ignored")
+
+    # guard (N70): green today, and to stay green — a local peer forwarding nothing is a client
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("peer", LOCAL_PEERS)
+    async def test_a_local_peer_forwarding_nothing_is_limited_by_its_address(self, private: _Private, throttle: _Throttle, untrusted_proxy: None, peer: tuple[str, int]) -> None:
+        """LT-API-23: fifty wrong passwords from a local peer whose requests forward nothing, each for an identifier of its own → Carol's right password from it → 429 ``TOO_MANY_ATTEMPTS``: a local client is still a client, limited by its address."""
+        print_section(f"LT-API-23: {peer[0]} forwarding nothing")
+        await _add_user(private.engine, CAROL)
+        await _fail_logins_from(private, _strangers(ADDRESS_LIMIT), peer=peer)
+
+        locked = await _login_from(private, CAROL, PASSWORD, peer=peer)
+
+        _assert_too_many_attempts(locked, f"POST /auth/login as {CAROL!r} from the local peer {peer[0]}, forwarding nothing, after {ADDRESS_LIMIT} wrong passwords from it: a local client is still a client")
+        print_success("the local client locked by its address")
+
+    # red until A8a (N70)
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("place", PASSWORD_PLACES)
+    async def test_a_wrong_password_through_the_proxy_counts_on_the_identifier_only(self, private: _Private, throttle: _Throttle, untrusted_proxy: None, place: _Place) -> None:
+        """LT-API-24: Alice signed in from the local proxy's address, where forty-nine failures are then recorded — written in its limiter, as forty-nine wrong passwords from it forwarding nothing count there (LT-API-23) —; her wrong password at ``place`` through the proxy (``X-Forwarded-For``) gets the place's own answer, and counts on her identifier and on no address: Carol's right password from the proxy's address, forwarding nothing, → 200 — a fiftieth failure there would refuse her —; the address holds forty-nine, Alice one. Each place of ``auth.py`` that checks a password: the sign-in, the change of password, the change of email address."""
+        print_section(f"LT-API-24: a wrong password through the proxy at {place.name}")
+        alice = await _signed_in(private, ALICE, address=LOCAL_PROXY)
+        await _add_user(private.engine, CAROL)
+        for _ in range(ADDRESS_LIMIT - 1):
+            throttle.by_address.hit(LOCAL_PROXY[0])
+        wrong = await place.attempt(private, alice, WRONG_PASSWORD, forwarded=XFF)
+        carol = await _login_from(private, CAROL, PASSWORD, peer=LOCAL_PROXY)
+
+        assert _answer(wrong) == place.wrong, f"{place.name}, a wrong password through the proxy: expected {place.wrong}, the place's answer to a wrong password — got {wrong.status_code} {wrong.text}"
+        assert carol.status_code == 200, f"POST /auth/login as {CAROL!r}, right password, from {LOCAL_PROXY[0]} forwarding nothing, after {ADDRESS_LIMIT - 1} failures there and one through the proxy at {place.name}: expected 200, got {carol.status_code} {carol.text}"
+        counted = (*_counted(throttle, ALICE, LOCAL_PROXY), len(throttle.by_address))
+        assert counted == (1, ADDRESS_LIMIT - 1, 1), f"the failure through the proxy counts on Alice's identifier and on no address: (Alice, the proxy's address, address keys) {counted}"
+        print_success("counted on Alice only")
+
+    # red until A8a (N70)
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("place", PASSWORD_PLACES)
+    async def test_an_address_its_own_failures_locked_lets_the_proxy_through(self, private: _Private, throttle: _Throttle, untrusted_proxy: None, place: _Place) -> None:
+        """LT-API-25: Alice signed in from the local proxy's address, where fifty failures are then recorded — written in its limiter —: her right password at ``place`` from it, forwarding nothing, → 429 ``TOO_MANY_ATTEMPTS``, the barrier that the place reads that address; the same request through the proxy (``X-Forwarded-For``) → 200: decided per request, the limit per address skipped for what the proxy forwards. Each place of ``auth.py`` that checks a password."""
+        print_section(f"LT-API-25: a locked address and its proxy, at {place.name}")
+        alice = await _signed_in(private, ALICE, address=LOCAL_PROXY)
+        for _ in range(ADDRESS_LIMIT):
+            throttle.by_address.hit(LOCAL_PROXY[0])
+        direct = await place.attempt(private, alice, PASSWORD)
+        through_the_proxy = await place.attempt(private, alice, PASSWORD, forwarded=XFF)
+
+        _assert_too_many_attempts(direct, f"{place.name}, the right password from {LOCAL_PROXY[0]} forwarding nothing, the address holding {ADDRESS_LIMIT} failures (barrier: the place reads that address)")
+        assert _answer(through_the_proxy) == place.right, f"{place.name}, the right password through the proxy, its address locked by its own failures: expected {place.right} — no limit per address for what it forwards —, got {through_the_proxy.status_code} {through_the_proxy.text}"
+        print_success("refused direct, let through the proxy")
