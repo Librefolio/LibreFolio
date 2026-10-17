@@ -3555,6 +3555,9 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura proposta: la stessa regola di `_hidden_in_build()` nei due percorsi, con un test ciascuno.
 
   Dettagli: piano H, §14, «Residuo di H-24 e H-28».
+  - Cura fatta il 17/10 (lotto «H-29 e H-30», piano H §14).
+    - `ImmutableStaticFiles.get_response()` dà a un nome nascosto il 404 di un file mancante;
+    - `mkdocs_static()` gli dà il 404 della documentazione, attraverso `_hidden_below()`, che usa anche il catch-all.
 - **H-30 · `python -m scripts.test_runner --log-file` non fotografa il DB se il corpo alza un'eccezione** — basso,
   runner; H (test-author di H-26), 17/10.
   - Nel ramo `--log-file` di `main()` (`scripts/test_runner/_cli.py`), `_snapshot_log_dir_db()` segue
@@ -3563,6 +3566,32 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura proposta: lo stesso `try/finally`, con un test.
 
   Dettagli: piano H, §14, «Residuo di H-24 e H-28».
+  - Cura fatta il 17/10 (lotto «H-29 e H-30»): il `try/finally` dentro il `with` di `tee_output`, come in
+    `_dispatch_test_command`.
+- **H-31 · `blocked` nel pubblico `/system/instance`** — basso, facoltativo; E (E-11) e coordinatore, 17/10.
+  - Le pagine anonime dei link (A7b) deducono il blocco dal 401 di una rotta pubblica fuori lista. Un booleano
+    `blocked` in `GET /system/instance`, che è permesso a istanza bloccata, lo direbbe senza deduzioni e senza
+    dettagli: la data di cancellazione resta dietro login in `/system/block`.
+  - Non serve per E-11: E lo risolve nei suoi file, con il 401 `INVALID_CREDENTIALS` della sola `resend`.
+  - Scelto (a) invece di (b), un codice nel 401 anonimo del blocco: con (b) una rotta protetta non risponderebbe più
+    allo stesso modo con o senza blocco.
+
+  Dettagli: piano H, §14, lotto «H-29 e H-30».
+- **H-32 · Un `float` nel corpo di una richiesta accetta `1E+400`** — basso, API; A (A-35), via coordinatore, 17/10.
+  - Pydantic accetta `inf` e `nan` di default (`allow_inf_nan=True`): la richiesta riceve 200. Se una rotta
+    restituisce il valore così com'è, il renderer di Starlette (`allow_nan=False`) fallisce con un 500.
+  - Direzione: un inventario dei campi `float` degli schemi dei corpi; poi forse `allow_inf_nan=False` nel modello
+    base, o `Decimal` dove sono soldi.
+
+  Dettagli: piano H, §14, lotto «H-29 e H-30».
+- **H-33 · Senza un gestore di `ResponseValidationError`, il log del server contiene la risposta** — basso,
+  sicurezza (log); E (R13-SEC4), via coordinatore, 17/10.
+  - Quando una risposta non passa il suo `response_model`, FastAPI alza `ResponseValidationError`. Nessuno la gestisce,
+    quindi il traceback che uvicorn scrive nel log porta l'`input`: la risposta stessa, con i dati che conteneva.
+  - Cura proposta: un gestore, accanto a quello globale dei 422 di A (A-35, lotto A7b-2), che registra la rotta e gli
+    errori senza il valore e risponde 500.
+
+  Dettagli: piano H, §14, lotto «H-29 e H-30».
 
 ## A · Account e accessi (fase 01)
 
