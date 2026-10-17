@@ -205,6 +205,10 @@
     "reference": {
       "zero": "Zéro"
     },
+    "gapsJoined": {
+      "label": "vides reliés",
+      "warning": "Trop de vides à dessiner : la ligne les relie."
+    },
     "regions": {
       "oversoldDescription": "Extrême inférieur sous le seuil configuré.",
       "neutralDescription": "Plage centrale entre les seuils configurés.",
