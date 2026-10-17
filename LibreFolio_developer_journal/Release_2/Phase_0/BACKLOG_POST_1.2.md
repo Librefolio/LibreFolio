@@ -6962,6 +6962,13 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - Una frase per pagina. Nessuna decisione.
   - 17/10, E: fatta (via del coordinatore, 12:22). Build stretta e `check-links` puliti. Commit al checkpoint di E-16.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-16».
+- ✅ **E-17 · Due errori di `tsc -p frontend/tsconfig.e2e.json`** — piccolo (test e configurazione); coordinatore, 17/10.
+  - `onboarding-tour.spec.ts:863`: la lista dei passi è tipizzata dalle opzioni di `expectGuideStep`. Dietro c'era
+    un secondo errore, il `backdrop` mancante: ora c'è un `backdrop: false`, che prende lo stesso ramo di prima.
+  - `tsconfig.e2e.json`: la mappa `$lib`.
+  - Nessun cambio a runtime, `tsc` senza i due errori, Prettier pulito.
+  - Restano 3 TS2769 di C-66 (`c18517e31`): l'allargamento di E-2 contro `isStoredPoint`, di un ramo attivo.
+  - Commit al checkpoint di E-17. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-17».
 
 ## Y · Cruscotto e grafici (fase 01)
 
