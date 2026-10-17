@@ -27,6 +27,7 @@ from backend.app.schemas.common import (
 )
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.price_store import PRICE_UPSERT_CHUNK_SIZE
+from backend.app.services.financial_math.splits import costless_incoming_split_adjustments
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.utils.datetime_utils import utcnow
 
@@ -452,6 +453,7 @@ class EventStoreOperations:
             AssetSourceError(code="EVENT_NOT_EDITABLE"): an id that is unknown,
                 belongs to another asset, or names a provider event.
             AssetSourceError(code="EVENT_KEY_CONFLICT"): see ``_reject_event_key_conflicts``.
+            AssetSourceError(code="EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST"): see ``_reject_split_retype_without_costs``.
         """
         if not edits:
             return
@@ -461,6 +463,7 @@ class EventStoreOperations:
         if refused:
             raise AssetSourceError(f"EVENT_NOT_EDITABLE: no manual event of asset {asset_id} has id {', '.join(str(i) for i in refused)}", "EVENT_NOT_EDITABLE", {"ids": refused})
         await EventStoreOperations._reject_event_key_conflicts(session, asset_id, edits, rows, new_events)
+        await EventStoreOperations._reject_split_retype_without_costs(session, edits, rows)
 
         now = utcnow()
         for event_id, point in edits.items():
@@ -510,6 +513,32 @@ class EventStoreOperations:
         if conflicts:
             day, kind = conflicts[0]
             raise AssetSourceError(f"EVENT_KEY_CONFLICT: asset {asset_id} would have two manual {kind} events on {day.isoformat()}", "EVENT_KEY_CONFLICT", {"date": day.isoformat(), "type": kind})
+
+    @staticmethod
+    async def _reject_split_retype_without_costs(session: AsyncSession, edits: dict[int, FAEventUpsertPoint], rows: dict[int, AssetEvent]) -> None:
+        """P-10 (decision 27): refuse an edit that changes a SPLIT's type while a linked incoming adjustment has no cost.
+
+        Retyped, the event no longer rescales the position, and such a row would become an acquisition of unknown cost
+        (``MISSING_COST_BASIS`` on the Dashboard and in the lots). Which rows those are, the layer says
+        (``financial_math.splits.costless_incoming_split_adjustments``): an edit that keeps the type, or an outgoing
+        row, is never refused.
+
+        Raises:
+            AssetSourceError(code="EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST"): ``details`` names the first such edit in
+                request order: ``event_id``, ``date`` (the stored event's) and ``transaction_ids``, sorted.
+        """
+        retyped = [event_id for event_id, point in edits.items() if str(point.type) != str(rows[event_id].type)]
+        costless = await costless_incoming_split_adjustments(session, retyped)
+        for event_id in retyped:
+            if event_id not in costless:
+                continue
+            day = rows[event_id].date.isoformat()
+            transaction_ids = costless[event_id]
+            raise AssetSourceError(
+                f"EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST: the split of {day} (event {event_id}) has {len(transaction_ids)} linked adjustment(s) without a cost; give them a cost before changing its type",
+                "EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST",
+                {"event_id": event_id, "date": day, "transaction_ids": transaction_ids},
+            )
 
     @staticmethod
     async def query_events_bulk(requests: list, session: AsyncSession) -> list:
