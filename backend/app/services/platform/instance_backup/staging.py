@@ -59,7 +59,7 @@ from backend.app.db.post_migration import run_post_migration_fixes
 from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_backup.archive import INSTANCE_KEY_MAX_BYTES, read_instance_key, read_manifest
 from backend.app.services.platform.instance_backup.envelope import EnvelopeError, EnvelopeKey, decrypt_file, is_envelope
-from backend.app.services.platform.instance_backup.jobs import _out_of_space, _RunLock
+from backend.app.services.platform.instance_backup.jobs import _RunLock, out_of_space
 from backend.app.services.platform.instance_backup.manifest import BackupManifest, BackupOrigin, ManifestError, ManifestFile
 from backend.app.services.platform.instance_backup.paths import (
     DATABASE_ENTRY,
@@ -330,7 +330,7 @@ def _decrypt(envelope: Path, root: Path, key: EnvelopeKey | None, progress: Stag
         # With its key given, an envelope can only fail here as damaged: a tag, a cut, a header changed since.
         raise StagingError("envelope_damaged", "The secure backup is damaged or was changed") from None
     except OSError as exc:
-        if _out_of_space(exc):
+        if out_of_space(exc):
             raise StagingError("no_space", "Not enough free space to check the archive") from None
         logger.error("A secure backup could not be decrypted for a check", error=f"{type(exc).__name__}: {exc.strerror or exc}")
         raise StagingError("stage_failed", "The archive could not be decrypted: the log of the server has the details") from None
@@ -487,7 +487,7 @@ def _write_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo, entry: Manifes
     except _ZIP_READ_ERRORS:
         raise StagingError("archive_damaged", "An entry of the archive cannot be read: the archive is damaged") from None
     except OSError as exc:
-        if _out_of_space(exc):
+        if out_of_space(exc):
             raise StagingError("no_space", "Not enough free space to check the archive") from None
         logger.error("A restore copy could not be written", error=f"{type(exc).__name__}: {exc.strerror or exc}")
         raise StagingError("stage_failed", "The copy of the archive could not be written: the log of the server has the details") from None
