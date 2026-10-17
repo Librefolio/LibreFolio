@@ -1520,6 +1520,14 @@ def services_backup_staging(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Instance backup staging tests", verbose=verbose)
 
 
+def services_restore_non_iso_warning(verbose: bool = False, test_names: list = None) -> bool:
+    """E-19b1: the restore check's warning non_iso_currencies: the report's schema, its builder, the check of a copy, the CLI's texts."""
+    print_section("Services: Restore Non-ISO Currency Warning (E-19b1)")
+    print_info("Testing: schemas/backup.py (RestoreStageReport.warnings), instance_backup/staging.py (_report, stage_archive on archives), scripts/backup_cli.py (_STAGE_WARNINGS)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_restore_non_iso_warning.py", test_names)
+    return run_command(cmd, "Restore non-ISO currency warning tests", verbose=verbose)
+
+
 def services_backup_apply(verbose: bool = False, test_names: list = None) -> bool:
     """Test a checked restore confirmed, applied at the next start, committed or rolled back; the restart."""
     print_section("Services: Instance Backup Restore")
@@ -2800,6 +2808,16 @@ Note: No backend server required.
         # PURE: every data directory, database and archive under tmp_path; two alembic processes make the module's
         # databases and two more are the product's upgrade of a copy, all on tmp_path files, with a production data
         # directory of the test configured (which must stay absent). No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "restore-non-iso-warning",
+        services_restore_non_iso_warning,
+        name="Restore Non-ISO Currency Warning",
+        desc="E-19b1: the restore check warns non_iso_currencies when the upgraded copy holds stored currency codes an edit would refuse (978, eur, EURO), last and once, never a blocker, written to report.json; none for a clean copy or one the upgrade corrected; the report's Literal, staging._report's flag, the CLI's text naming db currencies, the Literal and _STAGE_WARNINGS equal",
+        # PURE: archives, data directories and databases under tmp_path, the module's databases made by two alembic
+        # processes on tmp_path files (as backup-staging); no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
