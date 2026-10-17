@@ -12,7 +12,7 @@
      *
      * Uses Svelte 5 runes. Reference: fx/[pair]/+page.svelte
      */
-    import {onDestroy, onMount, tick} from 'svelte';
+    import {onDestroy, onMount, tick, untrack} from 'svelte';
     import {page} from '$app/stores';
     import {goto} from '$app/navigation';
     import {debug, isDebugEnabled} from '$lib/debug';
@@ -30,6 +30,8 @@
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import AssetPriceSummary from '$lib/components/assets/AssetPriceSummary.svelte';
+    import {fetchSeriesRangeDelta, summaryRangeDelta} from '$lib/components/assets/detail/assetDetailRangeChange';
+    import type {RangeDelta} from '$lib/utils/rangeChange';
     import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/components/assets/detail/AssetChartModeToggle.svelte';
     import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
     import AssetDetailSignalsPanel from '$lib/components/assets/detail/AssetDetailSignalsPanel.svelte';
@@ -491,26 +493,56 @@
         return !fxFirstConvertedDate;
     });
 
+    /** The summary shows the live quote: the range ends today and a live price is there. */
+    let liveShown = $derived.by(() => isHeadToday && live.currentPrice != null);
+
     /** Effective last price: live from provider when head = today, otherwise last chart close */
     let lastPrice = $derived.by(() => {
-        if (isHeadToday && live.currentPrice != null) return live.currentPrice;
+        if (liveShown) return live.currentPrice;
         if (chartData.length === 0) return null;
         const last = chartData[chartData.length - 1];
         return last?.close != null ? Number(last.close) : null;
     });
 
-    let deltaPercent = $derived.by(() => {
-        if (chartData.length < 2 || lastPrice == null) return null;
-        const first = Number(chartData[0].close ?? 0);
-        if (first === 0) return null;
-        return ((lastPrice - first) / first) * 100;
-    });
+    // The Δ over the range is the backend's (X-R59): the live quote's comes with each poll (`live.rangeDelta`), the stored
+    // series' is asked here — when the asset, the range or the display currency changes, and after a reload
+    // (`seriesRangeDeltaRefresh`). A Δ of another context is cleared at once: never one beside another range's price.
+    // It completes what the page is doing, so it joins the page's token (N55): the Refresh button waits for it after the
+    // user's request, and stays still through the reload that follows a sync, which `handleRefresh()` runs without one (P3).
+    let seriesRangeDelta = $state<RangeDelta | null>(null);
+    let seriesRangeDeltaRefresh = $state(0);
+    let seriesRangeDeltaVersion = 0;
+    let seriesRangeDeltaKey: string | null = null;
 
-    let deltaAbs = $derived.by(() => {
-        if (chartData.length < 2 || lastPrice == null) return null;
-        const first = Number(chartData[0].close ?? 0);
-        if (first === 0) return null;
-        return lastPrice - first;
+    let summaryDelta = $derived.by(() => summaryRangeDelta(liveShown, live.rangeDelta, seriesRangeDelta));
+    let deltaPercent = $derived(summaryDelta.pct);
+    let deltaAbs = $derived(summaryDelta.abs);
+
+    async function loadSeriesRangeDelta(assetId: number, start: string, end: string, targetCurrency: string | null): Promise<void> {
+        const version = ++seriesRangeDeltaVersion;
+        const sessionGeneration = getClientSessionGeneration();
+        const key = `${assetId} ${start}…${end} ${targetCurrency ?? ''}`;
+        if (key !== seriesRangeDeltaKey) seriesRangeDelta = null;
+        try {
+            const delta = await fetchSeriesRangeDelta({assetId, asOf: end, dateStart: start, targetCurrency});
+            if (version !== seriesRangeDeltaVersion || !isClientSessionCurrent(sessionGeneration)) return;
+            seriesRangeDelta = delta;
+            seriesRangeDeltaKey = key;
+        } catch (requestError) {
+            if (version !== seriesRangeDeltaVersion) return;
+            console.error('Failed to fetch the change of the asset over the range:', requestError);
+        }
+    }
+
+    $effect(() => {
+        const assetId = assetInfo?.id;
+        const nativeCurrency = assetInfo?.currency;
+        const [start, end] = [dateStart, dateEnd];
+        // In the display currency only when the chart is really converted: with the pair missing the summary shows native prices.
+        const targetCurrency = displayCurrency && nativeCurrency && displayCurrency !== nativeCurrency && !fxConversionMissing ? displayCurrency : null;
+        void seriesRangeDeltaRefresh;
+        if (!assetId) return;
+        untrack(() => void pageBusy.join('asset-detail-range-delta', () => loadSeriesRangeDelta(assetId, start, end, targetCurrency)));
     });
 
     let currencyFlag = $derived.by(() => {
@@ -1080,6 +1112,7 @@
         calendarSnapshotFingerprint = null;
         comparisonEvents = new Map();
         live.resetPrice();
+        seriesRangeDeltaRefresh++;
         sectorDistribution = null;
         geographicDistribution = null;
         shortDescription = null;
@@ -1145,6 +1178,9 @@
         },
         get isHeadToday() {
             return isHeadToday;
+        },
+        get rangeStart() {
+            return dateStart;
         },
         get providerAssignment() {
             return providerAssignment;
@@ -1631,6 +1667,7 @@
             displayCurrency === requestedCurrency &&
             signalDataContextFingerprint(signals) === requestedSignalDataFingerprint;
         if (!current()) return;
+        seriesRangeDeltaRefresh++;
         await loadChartData(true, requestedSignals, propagateError);
         if (!current()) return;
         // Invalidate FX overlay stores so they refetch updated rates

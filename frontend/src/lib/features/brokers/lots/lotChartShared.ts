@@ -24,11 +24,22 @@
  * A fourth copy of `clamp` lives in `$lib/utils/layout/dropdownPosition.ts`; it
  * is outside this campaign's area and is left untouched (reported, not moved).
  *
+ * `LOT_QUANTITY_FRACTION_DIGITS` is not a chart helper: it is the one number of
+ * decimals every lot view writes a quantity with (C-97c), the table's
+ * `formatLotQuantity` and the Gantt's `formatQuantity` alike, kept here because
+ * both modules already read this light one.
+ *
  * @module brokers/lots/lotChartShared
  */
 
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+
+/**
+ * The fraction digits a lot quantity shows: the 10 decimals its column keeps (C-97a), so no lot view drops a digit
+ * the database holds (C-97c). The Gantt's plural count reads the same digits, so a tooltip's noun follows its figure.
+ */
+export const LOT_QUANTITY_FRACTION_DIGITS = 10;
 
 /**
  * `-0` survives arithmetic and prints as "-0.00" / "-0%", which reads as a loss

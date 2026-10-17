@@ -17,7 +17,7 @@
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {maskableQuantity} from '$lib/utils/privacy/maskable';
-    import {formatExactDecimal} from '$lib/utils/core/formatFixed';
+    import {formatExactDecimal, priceFractionDigits} from '$lib/utils/core/formatFixed';
     import {lotDisplayState, lotStateColor, lotStateSymbol, type LotDisplayState} from './lotStateVisual';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
@@ -27,6 +27,7 @@
     import {safeDecimal, safeNumber, safeScalar, safeString} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import {formatAxisNumber as sharedFormatAxisNumber, normalizeZero, resolveBrokerName} from './lotChartShared';
+    import {formatLotQuantity} from './unifiedLotsTableHelpers';
     import {
         applyLotEvent,
         cloneLotEventState,
@@ -496,9 +497,10 @@
         return labels.eventType[kind];
     }
 
-    /** Every quantity this chart renders goes through here; masked under privacy (D5′). */
+    /** Every quantity this chart renders goes through here; masked under privacy (D5′). The lots' shared formatter, up to
+     *  10 decimals (C-97c): `formatExactDecimal` wrote a number through `String()`, so a 10-satoshi lot read `1e-7`. */
     function formatQuantityValue(value: number): string {
-        return maskableQuantity(formatExactDecimal(Math.abs(value), {minFrac: 0, maxFrac: 8}));
+        return maskableQuantity(formatLotQuantity(Math.abs(value)));
     }
 
     function formatSignedQuantityValue(value: number): string {
@@ -521,7 +523,10 @@
      * with quantities masked (D5′) price × quantity rebuilds nothing. Totals keep `formatMaybeMoney`.
      */
     function formatMaybePrice(value: number | null): string {
-        return value == null ? '—' : formatCurrencyAmountPlain(value, currency, {sensitivity: 'public'});
+        if (value == null) return '—';
+        // C-97c: a price under a cent keeps 4 significant digits instead of reading 0.00.
+        const {min, max} = priceFractionDigits(value);
+        return formatCurrencyAmountPlain(value, currency, {minFraction: min, maxFraction: max, sensitivity: 'public'});
     }
 
     function eventQuantityText(event: LotTimelineEventSchema): string | null {

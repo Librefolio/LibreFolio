@@ -61,17 +61,6 @@ export function displayFxRate(rate: number | null, inverted: boolean): number | 
 }
 
 /**
- * First→last change of a pair as the user sees it (flipped when `inverted`): the absolute
- * change of the displayed rate and its percentage. Null without two usable rates.
- */
-export function displayFxDelta(firstRate: number | null, lastRate: number | null, inverted: boolean): {abs: number; pct: number} | null {
-    const first = displayFxRate(firstRate, inverted);
-    const last = displayFxRate(lastRate, inverted);
-    if (first === null || last === null) return null;
-    return {abs: last - first, pct: ((last - first) / first) * 100};
-}
-
-/**
  * FX pair configuration derived from GET /fx/providers/routes.
  * Represents a unique currency pair with its route configuration.
  */

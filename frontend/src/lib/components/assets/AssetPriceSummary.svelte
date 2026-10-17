@@ -22,7 +22,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
@@ -96,7 +96,7 @@
                         data-testid="asset-detail-live-price"
                         data-live-price-direction={livePriceDirection}
                     >
-                        {formatFixed(lastPrice, 2)}
+                        {formatPrice(lastPrice)}
                     </span>
                 {/key}
                 <span class="text-xs text-lf-muted">{livePriceConversionFailed ? assetCurrency : displayCurrency}</span>
@@ -108,14 +108,14 @@
                     </Tooltip>
                 {/if}
                 {#if deltaAbs !== null}
-                    <span class="text-xs text-lf-muted">
-                        ({formatFixed(deltaAbs, 2, {signed: true})})
+                    <span class="text-xs text-lf-muted" data-testid="asset-price-summary-range-delta-abs">
+                        ({formatPrice(deltaAbs, {signed: true})})
                     </span>
                 {/if}
             </div>
 
             {#if deltaPercent !== null}
-                <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}">
+                <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}" data-testid="asset-price-summary-range-delta">
                     {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
                     {formatPercent(deltaPercent)}
                 </span>

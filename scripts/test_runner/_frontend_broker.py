@@ -27,6 +27,7 @@ def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = Fa
         "src/lib/utils/url/__tests__/tabUrl.test.ts",
         "src/lib/features/brokers/lots/LotCustodyModal.test.ts",
         "src/lib/features/brokers/lots/LotAnalysisFailedNotice.test.ts",
+        "src/lib/features/brokers/lots/LotDataQualityBanner.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Broker Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")

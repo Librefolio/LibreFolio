@@ -93,8 +93,9 @@ async def sync_rates(
     except FXServiceError as e:
         raise HTTPException(status_code=502, detail=f"Failed to sync rates: {e!s}") from e
     except Exception as e:
-        # Catch-all to prevent hanging — always return a response
-        raise HTTPException(status_code=500, detail=f"Unexpected sync error: {e!s}") from e
+        # Catch-all to prevent hanging — always return a response; logged, never echoed (X-R74)
+        logger.exception(f"Unexpected error while syncing rates: {e}")
+        raise HTTPException(status_code=500, detail="Internal error while syncing rates") from e
 
 
 @router_currencies.post("/rate", response_model=FXBulkUpsertResponse, status_code=200)

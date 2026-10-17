@@ -13,24 +13,33 @@ import * as derived from '../assetPriceDerived';
 import {computeDerivedPriceState, deltaPeriodLabel, extractDaysBack} from '../assetPriceDerived';
 
 describe('computeDerivedPriceState', () => {
-    it('returns empty/null state for an empty price array', () => {
+    // The Δ over the range — from the first to the last point of the range on screen, the Assets cards’ — is the backend’s
+    // (X-R59, decision N80): an item of `POST /assets/prices/period-changes` asks it with `range_start`, its result carries
+    // it as `range_change`, and the page reads it through `utils/rangeChange.ts`. So the derived state keeps the last
+    // price and the chart’s points, and carries no change: deltaAbs and deltaPercent would be a second copy of the figure,
+    // computed in floats, that no card would read any more. Its own keys are exactly chartData and lastPrice.
+    //
+    // Red today: the state carries deltaAbs and deltaPercent.
+
+    it('returns no last price and no chart point for an empty price array, and no change', () => {
         const result = computeDerivedPriceState([]);
-        expect(result).toMatchObject({lastPrice: null, deltaAbs: null, deltaPercent: null, chartData: []});
+        expect(result.lastPrice).toBeNull();
+        expect(result.chartData).toEqual([]);
+        expect(Object.keys(result).sort(), 'the state of an empty history: its last price and its chart, no change over the range').toEqual(['chartData', 'lastPrice']);
     });
 
-    it('computes lastPrice, deltaAbs, deltaPercent and chartData', () => {
+    it('computes lastPrice and chartData, and no change over the range', () => {
         const prices = [
             {date: '2026-01-01', close: '100'},
             {date: '2026-01-08', close: '110'},
         ];
         const result = computeDerivedPriceState(prices);
         expect(result.lastPrice).toBe(110);
-        expect(result.deltaAbs).toBeCloseTo(10, 5);
-        expect(result.deltaPercent).toBeCloseTo(10, 5);
         expect(result.chartData).toEqual([
             {date: '2026-01-01', value: 100, staleDays: 0},
             {date: '2026-01-08', value: 110, staleDays: 0},
         ]);
+        expect(Object.keys(result).sort(), 'the change over the range is the backend’s range_change: the state of a priced history carries none').toEqual(['chartData', 'lastPrice']);
     });
 
     it('reads staleDays from backward_fill_info.days_back when present', () => {
@@ -51,14 +60,18 @@ describe('computeDerivedPriceState', () => {
         expect(result.chartData[0].staleDays).toBe(0);
     });
 
-    it('treats a zero first price as "no delta" (avoids division by zero)', () => {
+    it('reads a zero first price as any other: the last price and the chart are unaffected, and no change is derived', () => {
         const prices = [
             {date: '2026-01-01', close: '0'},
             {date: '2026-01-08', close: '10'},
         ];
         const result = computeDerivedPriceState(prices);
-        expect(result.deltaAbs).toBeNull();
-        expect(result.deltaPercent).toBeNull();
+        expect(result.lastPrice).toBe(10);
+        expect(result.chartData).toEqual([
+            {date: '2026-01-01', value: 0, staleDays: 0},
+            {date: '2026-01-08', value: 10, staleDays: 0},
+        ]);
+        expect(Object.keys(result).sort(), 'no delta keys, whatever the first price').toEqual(['chartData', 'lastPrice']);
     });
 });
 

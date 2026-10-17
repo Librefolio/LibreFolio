@@ -1479,6 +1479,32 @@ both by default; a finite value too large for its column is another matter: see
   `List[dict]`, and the service validates them one by one afterwards, each with its own model: a `SafeDecimal` there
   refuses infinity and NaN.
 
+### 🧯 Error Answers {: #error-answers }
+
+A `500` of the asset and FX routes never carries the error's text, which can name the database schema (an SQL error
+quotes its statement): the answer is a fixed message naming the action, such as «Internal error while assigning
+providers», and the error goes to the log with its exception (`logger.exception(...)`).
+
+- **Where.** First the price routes (`backend/app/api/v1/assets/prices.py`): R13-SEC9-3 for the query and the
+  [current prices](../backend/assets/architecture.md#current-quotes-and-todays-ohlc), then MF-SEC9a for the writes and
+  the sync, and for the FX rates' delete. Since X-R74 (release 1.3), the 26 sites of the other asset and FX routes that
+  still echoed the error (`detail=str(e)`, or `f"…: {e!s}"`): `providers.py`, `crud.py`, `events.py` and
+  `market_data.py` in `backend/app/api/v1/assets/`, `providers.py` and `currencies.py` (the sync's catch-all) in
+  `backend/app/api/v1/fx/`. The provider probe and the five FX sites did not log the error at all before.
+- **What stays.** The refusals the routes author answer as before: a `400` or `404` with an authored message, the coded
+  refusals `{"error_code", "message", "params"}` (the `409`s, and the events' `400`s), the `422`s with a code, and the
+  FX sync's `502` «Failed to sync rates: …» for an `FXServiceError`.
+- **A failed merge.** `merge_assets` answers an `AssetSourceError` with its text, `404` or `400`, and its messages are
+  authored. `MERGE_FAILED` is the one that wraps an unexpected error: `AssetCRUDService.merge_assets()`
+  (`backend/app/services/assets/crud.py`) raises it for any error that stops the merge, a database error included, and
+  logs that error with its exception. Since X-R74 it stays a `400` with its code, but its text is the fixed «Merge
+  failed: internal error».
+
+Tests: `./dev.py test services routes-generic-500` (`backend/test_scripts/test_services/test_routes_generic_500.py`),
+parametrized over the 26 failure paths, each a `500` that holds no word of the error while the error is logged with its
+exception; a failed merge, a `400` that holds no word of the error while the service logs it; and guards that the
+authored refusals answer as before.
+
 ### 📁 Uploaded Files: Common and Personal {: #upload-scope }
 
 Each uploaded static file (`<data directory>/custom-uploads/<uuid>.<ext>`, with its JSON sidecar `<uuid>.json`, see
@@ -1999,6 +2025,28 @@ anything of it can run.
 - **A schema SQLite refuses to read** is `database_damaged`: any `sqlite3.DatabaseError` of that read, such as a row
   whose SQL does not parse, or a row that disguises its object, a trigger whose row says `type = 'table'` (SQLite then
   refuses the whole schema, «malformed database schema», checked on 3.54.0).
+- **What the check cannot read.** `_refuse_foreign_objects()` takes each object's kind, never the expressions inside
+  a table or an index. An index's expression calling a function plain `sqlite3` lacks, such as `regexp`, fails the
+  integrity check of `describe_database()` («unknown function»), read only or not, and so does a generated column
+  calling one when that check computes it (a virtual column with a declared type, a `NOT NULL` one, one an index or a
+  `STRICT` table relies on; an untyped virtual column or a stored one passes, checked on 3.54.0). A `CHECK` calling one
+  passes that check: on a read-only connection SQLite leaves the `CHECK` constraints out, and its `integrity_check`
+  answers `ok` even for a violated built-in `CHECK` (checked on 3.54.0). Such a `CHECK` fails at the first read-write
+  `integrity_check`, the post-migration fixes', as it would at a write to its table. That error, and any other
+  `sqlite3` error while the check reads or checks the copy's database (not a `ProgrammingError`, a bug of
+  LibreFolio's), ends the check with `database_damaged`,
+  `The backup's database cannot be read or checked: it cannot be restored` (lot B-43). It is logged as a warning with
+  the error's class and SQLite's error name only: the error's message names the archive's function, and no text of
+  the archive reaches the log, as with the kinds above. Before B-43 such an error escaped as it was: the app's check
+  answered `stage_failed`, and `dev.py backup restore` stopped with a traceback. The schema itself is first read as
+  the server's connections read it: `_refuse_foreign_objects()` registers the functions SQLAlchemy registers there,
+  `regexp` and `floor`, as stand-ins that never run (`_register_server_functions()`). A schema that calls one in an
+  index or a generated column, which every connection of the server refuses since H-51 («unsafe use of …»), so that
+  the first start after the restore would fail, cannot be read there either: `database_damaged`, before anything else
+  opens the copy. A `CHECK` or a `DEFAULT` calling them passes that read, since SQLite resolves them only when used:
+  after a restore, the writes that need them fail, and nothing of the archive runs (backlog B-45). When the copy needs
+  an upgrade, the upgrade runs first: a `CHECK` calling `regexp`, which its connections refuse since H-51 (below), or
+  one on a table it writes, ends the check there, as `upgrade_failed`.
 - **`trusted_schema` off on every connection to the copy.** Every connection to the copy runs
   `PRAGMA trusted_schema=OFF` before any other statement: this read, `describe_database()` (`snapshot.py`, which also
   describes the backup's own snapshot), `_plugin_secrets()` and `_administrators()` (`staging.py`), the totals'
@@ -2008,9 +2056,11 @@ anything of it can run.
   the refusal, turns it off first on its own connection, on the live database too, where nothing changes, since
   LibreFolio's schema holds only tables and indexes (lot B-37); its `count(*)` of each table quotes the name, doubling
   `"`, since an archive's tables may be named anything (lot B-36). The upgrade runs `alembic upgrade head` in a process
-  of its own, stopped after an hour (`UPGRADE_TIMEOUT_SECONDS`), and `backend/alembic/env.py` turns it off on every
-  connection with a `connect` listener, `_schema_untrusted`, whatever the URL: the copy's, given with
-  `-x sqlalchemy.url`, and the live database's alike (lot B-37).
+  of its own, stopped after an hour (`UPGRADE_TIMEOUT_SECONDS`). On its connections `set_sqlite_pragma()` turns it off
+  first, since lot H-51 ([`trusted_schema` Off in the Server's Engines](#trusted-schema-server)), and
+  `backend/alembic/env.py` turns it off again with a `connect` listener of its own, `_schema_untrusted`, once the
+  dialect has registered `regexp` and `floor`, whatever the URL: the copy's, given with `-x sqlalchemy.url`, and the
+  live database's alike (lot B-37).
 - **Why the upgrade needs it.** SQLAlchemy's SQLite dialects (`pysqlite`, which `aiosqlite` inherits; SQLAlchemy
   2.0.52, `SQLiteDialect_pysqlite.on_connect()`) register two Python functions on every connection: `regexp`
   (`re.search`), behind the `REGEXP` operator, and `floor` (`math.floor`), in place of SQLite's own `floor()` where the
@@ -2029,6 +2079,11 @@ or a view; `trusted_schema` off first on every connection of a whole check, the 
 B-37), `./dev.py test db post-migration` (`backend/test_scripts/test_db/test_post_migration.py`: tables named `x"y` or
 `a" WHERE 1 --`, counted while a fix runs, lot B-36) and `./dev.py test utils dev-cli-db-path`
 (`backend/test_scripts/test_utilities/test_dev_cli_db_path.py`: the `connect` listener of `env.py`, lot B-37).
+Lot B-43: `./dev.py test services backup-staging` (a function plain `sqlite3` lacks, in an index's expression, a
+generated column and a `CHECK`, each `database_damaged`; `regexp` in a generated column and `floor` in an index,
+refused at the read of the schema, before anything else opens the copy; one warning, the function named in no log; a
+`CHECK` on a built-in function, restored as usual; LibreFolio's own index on `lower()`, read with the stand-ins) and
+`./dev.py test utils backup-cli-restore` (the refusal on the command line, no traceback).
 
 #### `trusted_schema` Off in the Server's Engines {: #trusted-schema-server }
 
@@ -2041,9 +2096,13 @@ with `PRAGMA writable_schema=RESET`.
   expressions inside tables and indexes, and its plain `sqlite3` connections never evaluate a `DEFAULT`:
   `PRAGMA integrity_check` answers `ok`. Before H-51, an archive whose column had `DEFAULT (regexp(…))` passed the
   check, and in the server every insert that omitted that column ran SQLAlchemy's Python `regexp` with the archive's
-  pattern and value, through the async engine too. A `CHECK` or an index's expression calling a function plain
-  `sqlite3` lacks, such as `regexp`, stops the check at the `PRAGMA integrity_check` of `describe_database()`
-  («unknown function»), before the upgrade runs.
+  pattern and value, through the async engine too. An index's expression calling a function plain `sqlite3` lacks,
+  such as `regexp`, stops the check at the `PRAGMA integrity_check` of `describe_database()` («unknown function»),
+  before the upgrade runs, and so does a generated column calling one when that check computes it (a virtual column
+  with a declared type, a `NOT NULL` one, one an index or a `STRICT` table relies on). A `CHECK` calling one passes
+  that read-only check, which SQLite runs without the `CHECK` constraints, and stops the check at the first read-write
+  one, the post-migration fixes' `integrity_check`. Either way the check ends with `database_damaged` (lot B-43),
+  unless an upgrade runs before and fails on the `CHECK` first (`upgrade_failed`, below).
 - **Why the reset, last.** SQLAlchemy calls the listeners registered on a class before those of one engine, so this
   one runs before the dialect's `on_connect()` registers `regexp` and `floor`, and its `PRAGMA journal_mode=WAL` makes
   SQLite read the schema right then. SQLite marks a call as the schema's own only when it finds the function, and

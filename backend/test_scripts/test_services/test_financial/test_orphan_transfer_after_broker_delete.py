@@ -111,6 +111,24 @@ FAILED analysis still lists A's lot of 1 Oct with its 10 X open, value 300, P&L 
 books the orphan at market (_transfer_leg_capital, 4 × 25): invested 100, P&L 80. Not pinned here: a leg
 whose Auto cost needs a missing conversion stays that TRANSFER (BR-U-087).
 
+MIRROR IN ANOTHER CURRENCY (W-B55) — the MIRROR with X″, a USD asset, read in EUR: from the deletion to the numbers.
+A's Auto cost (decision 47) is compute_wac_iterative's without a currency hint, so in the currency of A's last
+purchase, each purchase converted at the rate of its own day; J-24 makes the Dashboard realize the exchange difference
+on the handover day, as the lots already did (CP-7a): D at that day's rate, minus C, the historical cost the pool gives
+up. One user owns A and B, 100 % each. On 3 Dec 2018 A receives 1000 USD and buys 10 X″ for 1000 USD, 100 USD a unit,
+when 1 EUR = 1.25 USD (1 USD = 0.80 EUR): capital 800 EUR, 80 EUR a unit. On 5 Dec 4 X″ move from A to B by a linked
+TRANSFER pair, when 1 EUR = 1.60 USD (1 USD = 0.625 EUR) and X″ is quoted 110 USD; B's leg carries no cost basis, it
+goes with B. B deleted, A's −4 becomes an ADJUSTMENT at 100 USD a unit, in USD. A alone on 5 Dec, in EUR:
+- Dashboard: D = 400 USD × 0.625 = 250 leaves the capital, invested 800 − 250 = 550; C = 4 × 80 = 320, realized
+  D − C = −70; the 6 X″ left are worth 6 × 110 × 0.625 = 412.5 against 6 × 80 = 480, −67.5 unrealized; net worth
+  412.5 (no cash: 1000 − 1000 USD), P&L 412.5 − 550 = −137.5; no warning.
+- lots: COMPLETE, no issue; A's BUY lot of 10 at 800 hands 4 over at the handover's rate — proceeds 250, realized
+  −70 —; open 6 worth 412.5, market −67.5, total −137.5. Its reference is its own unit price at the opening's rate,
+  80: relative return 68.75 / 80 − 1. The WAC lines 10, then 6, at 80: a reduction leaves the average.
+- the J-24 parity: the Dashboard's realized and P&L are the lot's, −70 and −137.5.
+Control and orphan as in the MIRROR. Every reading stops on 5 Dec: ``fx_rates`` is global, and a later day would
+value the 6 X″ at a rate the test did not write.
+
 CASH LEGS — J (15/10): an orphan cash leg already counts as an external flow
 (financial_math/portfolio/classifier.py:96-107), as the DEPOSIT or WITHDRAWAL it becomes, so capital
 and P&L do not move. Two Dashboard series do, both corrections:
@@ -153,7 +171,12 @@ green today, and on the orphan, RED today; capital and P&L are guards, green on 
 
 Rows are written straight into the session (no transaction validation) and never committed: the
 ``session`` fixture rolls back, so nothing outlives the test. Each test owns its user, brokers and
-asset, and the prices it writes are its asset's. No FX: everything is in EUR.
+asset, and the prices it writes are its asset's. No FX — everything is in EUR — but in the MIRROR IN
+ANOTHER CURRENCY, which writes the two EUR/USD rates it reads, on their own days: ``fx_rates`` is global
+and unique on (date, base, quote), so a neighbour's row on those keys is deleted first, inside the same
+rolled-back transaction, and comes back intact afterwards (J's pattern, ``_own_eur_usd_rate`` of
+test_adjustment_out_with_cost_numbers.py). The days in between read them by backward fill; no figure
+pinned here reads a rate of those days.
 """
 
 import sys
@@ -173,10 +196,10 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
+from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import BRDeleteItem
 from backend.app.schemas.common import Currency
@@ -360,6 +383,78 @@ MIRROR_DASHBOARD = {
     "warnings and errors": [],
 }
 
+# MIRROR IN ANOTHER CURRENCY (W-B55, module docstring): X″ quoted in USD, A read in EUR on the handover day.
+# FxRate stores the pair as EUR/USD (base < quote): 1 EUR = rate USD, so 1 USD = 1 / rate EUR.
+# December 2018: no other test file writes EUR/USD on these days — the delete-then-add of _own_eur_usd_rate holds anyway.
+FOREIGN_CURRENCY = "USD"
+FOREIGN_FUNDING_DAY = date(2018, 12, 3)  # A: +1000 USD, then 10 X″ for 1000 USD — 100 USD a unit
+FOREIGN_TRANSFER_DAY = date(2018, 12, 5)  # 4 X″ leave A for B
+FOREIGN_READING_DAY = FOREIGN_TRANSFER_DAY  # date_to of every reading: no rate or price after the ones the test wrote
+FOREIGN_EUR_USD_RATES = {FOREIGN_FUNDING_DAY: "1.25", FOREIGN_TRANSFER_DAY: "1.6"}  # 1 USD = 0.80 EUR, then 0.625
+FOREIGN_PRICES = {FOREIGN_TRANSFER_DAY: "110"}  # USD
+FOREIGN_HANDOVER_COST_PER_UNIT = "100"  # A's Auto cost: in USD, the currency of its last purchase, 1000 / 10
+# (a) A's row once B is deleted: decision 47's ADJUSTMENT −4, its cost in the currency compute_wac_iterative chose.
+FOREIGN_MIRROR_LEG = {
+    "broker": "A",
+    "asset": "X",
+    "type": TransactionType.ADJUSTMENT,
+    "date": FOREIGN_TRANSFER_DAY,
+    "quantity": Decimal("-4"),
+    "cost_basis_override": Decimal(FOREIGN_HANDOVER_COST_PER_UNIT),  # per unit, not converted: no currency hint
+    "cost_basis_currency": FOREIGN_CURRENCY,  # the currency of A's last purchase, written with the cost
+    "related_transaction_id": None,  # its pair is gone
+}
+_SIX_AT_EIGHTY, _TEN_AT_EIGHTY = (Decimal("80"), Decimal("6")), (Decimal("80"), Decimal("10"))  # WAC line points, in EUR
+# (a) The lots of X″ at A, in EUR: each leg of the closure at its own date (CP-7a).
+FOREIGN_MIRROR_LOTS = {
+    "calculation_status": "COMPLETE",
+    "issue codes": [],
+    "lots": [
+        {
+            "opens on": "A's purchase",  # the only lot: A's BUY of 3 Dec
+            "broker": "A",
+            "direction": "LONG",
+            "opening_date": FOREIGN_FUNDING_DAY,
+            "original_quantity": Decimal("10"),
+            "opening_unit_price": Decimal("80"),  # 100 USD at 0.80, the opening's rate
+            "original_cost": Decimal("800"),  # 1000 USD at 0.80
+            "open_quantity": Decimal("6"),  # 4 handed over on 5 Dec
+            "open_value": Decimal("412.5"),  # 6 × 110 USD at 0.625, the reading day's rate
+            "pnl": Decimal("-137.5"),  # 412.5 + 250 of proceeds − 800
+            # A BUY lot has no reference price of its own: its unit price, at the opening's rate, "exact".
+            "reference_unit_price": Decimal("80"),
+            "reference_price_source": "exact",
+            "relative_return": Decimal("-0.140625"),  # 68.75 / 80 − 1: 110 USD at 0.625 against 100 USD at 0.80
+            "total_return": Decimal("-0.171875"),  # total_pnl / original_cost = −137.5 / 800
+            "cumulative_proceeds": Decimal("250"),  # D: 4 × 100 USD at 0.625, the handover's rate
+            "realized_pnl": Decimal("-70"),  # D − C = 250 − 4 × 80, the cost at the opening's rate
+            "market_pnl": Decimal("-67.5"),  # pnl − realized: 412.5 − 6 × 80
+            "total_pnl": Decimal("-137.5"),  # market + realized + 0 of income: the Dashboard's P&L
+        }
+    ],
+    # 10 at 80, then 6 at 80 from 5 Dec: each purchase at its own day's rate, and a reduction leaves the average.
+    "A's WAC line": {FOREIGN_FUNDING_DAY: _TEN_AT_EIGHTY, date(2018, 12, 4): _TEN_AT_EIGHTY, FOREIGN_TRANSFER_DAY: _SIX_AT_EIGHTY},
+    "cumulative WAC line": {FOREIGN_FUNDING_DAY: _TEN_AT_EIGHTY, date(2018, 12, 4): _TEN_AT_EIGHTY, FOREIGN_TRANSFER_DAY: _SIX_AT_EIGHTY},
+}
+# (b) The Dashboard of A, in EUR: D leaves the capital, D − C is realized (J-24).
+FOREIGN_MIRROR_DASHBOARD = {
+    "brokers holding X": ["A"],
+    "A": {
+        "quantity": Decimal("6"),  # 10 − 4
+        "wac_per_unit": Decimal("80"),  # the historical cost: 100 USD at 0.80
+        "current_value": Decimal("412.5"),  # 6 × 110 USD at 0.625
+        "gain_loss": Decimal("-67.5"),  # 412.5 − 6 × 80
+    },
+    "open_cost_basis": Decimal("480"),  # 6 × 80
+    "net_worth": Decimal("412.5"),  # the 6 X″, and no cash: 1000 − 1000 USD
+    "total_invested": Decimal("550"),  # 1000 USD at 0.80 − D, the 400 USD handed over at 0.625: 800 − 250
+    "total_gain_loss": Decimal("-137.5"),  # 412.5 − 550: −70 realized, −67.5 unrealized
+    "warnings and errors": [],
+    "period_realized_gain_loss": Decimal("-70"),  # D − C = 250 − 320, from the first row to 5 Dec
+}
+# (c) The J-24 parity, the point of W-B55: the Dashboard's realized and P&L are A's lot's realized_pnl and total_pnl.
+FOREIGN_PARITY = {"realized": Decimal("-70"), "P&L": Decimal("-137.5")}
+
 # CASH LEGS (module docstring). Every reading is on 7 Oct.
 CASH_READING_DAY = date(2018, 10, 7)
 CASH_PRICES = {date(2018, 10, 2): "100", date(2018, 10, 3): "120", date(2018, 10, 5): "120", date(2018, 10, 6): "100", CASH_READING_DAY: "100"}
@@ -474,13 +569,13 @@ async def _new_user(session: AsyncSession) -> User:
     return user
 
 
-async def _user_and_asset(session: AsyncSession, label: str, prices: dict[date, str] = PRICES) -> tuple[User, Asset]:
-    """A user and X, quoted ``prices``: by default 25 EUR on the transfer day and 30 on the reading day."""
+async def _user_and_asset(session: AsyncSession, label: str, prices: dict[date, str] = PRICES, currency: str = REPORT) -> tuple[User, Asset]:
+    """A user and X, quoted ``prices`` in ``currency``: by default 25 EUR on the transfer day and 30 on the reading day."""
     user = await _new_user(session)
-    asset = Asset(display_name=f"Orphan transfer {label} {uuid4().hex[:12]}", currency=REPORT, asset_type=AssetType.STOCK)
+    asset = Asset(display_name=f"Orphan transfer {label} {uuid4().hex[:12]}", currency=currency, asset_type=AssetType.STOCK)
     session.add(asset)
     await session.flush()
-    session.add_all(PriceHistory(asset_id=asset.id, date=day, close=Decimal(close), currency=REPORT, source_plugin_key="orphan_transfer_test") for day, close in prices.items())
+    session.add_all(PriceHistory(asset_id=asset.id, date=day, close=Decimal(close), currency=currency, source_plugin_key="orphan_transfer_test") for day, close in prices.items())
     await session.flush()
     return user, asset
 
@@ -574,6 +669,66 @@ async def _mirror_control_book(session: AsyncSession) -> Book:
     return Book(user=user, broker=broker_a, asset=asset, leg=handover, name="A", leg_name="A's departure", purchase=purchase)
 
 
+async def _own_eur_usd_rate(session: AsyncSession, day: date, rate: str) -> None:
+    """The EUR/USD rate of ``day`` the foreign book reads, written by it: 1 EUR = ``rate`` USD (J's pattern,
+    test_adjustment_out_with_cost_numbers.py).
+
+    ``fx_rates`` is global and unique on (date, base, quote). A neighbour's row on this key is deleted first, inside
+    this test's transaction, which the ``session`` fixture rolls back: the neighbour's row comes back intact, and
+    this test reads its own rate, never someone else's.
+    """
+    await session.execute(delete(FxRate).where(FxRate.date == day, FxRate.base == REPORT, FxRate.quote == FOREIGN_CURRENCY))
+    session.add(FxRate(date=day, base=REPORT, quote=FOREIGN_CURRENCY, rate=Decimal(rate), source="TEST_W_B55"))
+    await session.flush()
+
+
+async def _foreign_purchase(session: AsyncSession, label: str) -> tuple[User, Asset, Broker, Transaction]:
+    """W-B55's book up to the transfer: its two EUR/USD rates, a user, X″ quoted 110 USD on the transfer day, and A,
+    which receives 1000 USD and buys 10 X″ with them on 3 Dec. The user, X″, A and the BUY."""
+    for day, rate in FOREIGN_EUR_USD_RATES.items():
+        await _own_eur_usd_rate(session, day, rate)
+    user, asset = await _user_and_asset(session, label, prices=FOREIGN_PRICES, currency=FOREIGN_CURRENCY)
+    broker_a = await _owned_broker(session, user, "A")
+    purchase = Transaction(broker_id=broker_a.id, asset_id=asset.id, type=TransactionType.BUY, date=FOREIGN_FUNDING_DAY, quantity=Decimal("10"), amount=Decimal("-1000"), currency=FOREIGN_CURRENCY)
+    session.add_all([Transaction(broker_id=broker_a.id, type=TransactionType.DEPOSIT, date=FOREIGN_FUNDING_DAY, amount=Decimal("1000"), currency=FOREIGN_CURRENCY), purchase])
+    await session.flush()
+    return user, asset, broker_a, purchase
+
+
+async def _foreign_mirror_book(session: AsyncSession) -> Book:
+    """W-B55's scenario, then B deleted through the real path: A's outgoing leg in USD is left without its pair. The book of A."""
+    user, asset, broker_a, purchase = await _foreign_purchase(session, "foreign mirror")
+    broker_b = await _owned_broker(session, user, "B")
+    departure = Transaction(broker_id=broker_a.id, asset_id=asset.id, type=TransactionType.TRANSFER, date=FOREIGN_TRANSFER_DAY, quantity=Decimal("-4"))
+    # B's leg carries no cost basis: it goes with B, and A's leg leaves at A's own Auto cost (decision 47) whatever it said.
+    arrival = Transaction(broker_id=broker_b.id, asset_id=asset.id, type=TransactionType.TRANSFER, date=FOREIGN_TRANSFER_DAY, quantity=Decimal("4"))
+    session.add_all([departure, arrival])
+    await session.flush()
+    # A linked pair references itself both ways: the ids exist only after the first flush.
+    departure.related_transaction_id, arrival.related_transaction_id = arrival.id, departure.id
+    await session.flush()
+    await _delete_broker(session, user, broker_b)
+    return Book(user=user, broker=broker_a, asset=asset, leg=departure, name="A", leg_name="A's departure", purchase=purchase)
+
+
+async def _foreign_mirror_control_book(session: AsyncSession) -> Book:
+    """A alone, its −4 written as the ADJUSTMENT decision 47 makes the deletion of B leave — at A's Auto cost, 100 USD a
+    unit, with its currency — and never a B. The book of A."""
+    user, asset, broker_a, purchase = await _foreign_purchase(session, "foreign mirror control")
+    handover = Transaction(
+        broker_id=broker_a.id,
+        asset_id=asset.id,
+        type=TransactionType.ADJUSTMENT,
+        date=FOREIGN_TRANSFER_DAY,
+        quantity=Decimal("-4"),
+        cost_basis_override=Decimal(FOREIGN_HANDOVER_COST_PER_UNIT),
+        cost_basis_currency=FOREIGN_CURRENCY,
+    )
+    session.add(handover)
+    await session.flush()
+    return Book(user=user, broker=broker_a, asset=asset, leg=handover, name="A", leg_name="A's departure", purchase=purchase)
+
+
 async def _leg_now(session: AsyncSession, book: Book) -> dict | None:
     """The book's leg as the database holds it now — the in-memory copy refreshed — or None when it is gone."""
     statement = select(Transaction).where(Transaction.id == book.leg.id).execution_options(populate_existing=True)
@@ -602,24 +757,29 @@ _MIRROR_ORIGINS = [
     pytest.param("control", id="control-adjustment-out-at-cost-written-as-such"),
     pytest.param("orphan", id="orphan-left-by-deleting-broker-b"),
 ]
+_FOREIGN_MIRROR_BUILDERS = {"control": _foreign_mirror_control_book, "orphan": _foreign_mirror_book}
+_FOREIGN_MIRROR_ORIGINS = [
+    pytest.param("control", id="control-adjustment-out-at-cost-in-usd-written-as-such"),
+    pytest.param("orphan", id="orphan-left-by-deleting-broker-b"),
+]
 
 
-async def _lots(session: AsyncSession, book: Book) -> LotsAnalysisResponse:
-    """The lots page of X for the user, in EUR, from the first movement to the reading day: lots and both WAC lines."""
+async def _lots(session: AsyncSession, book: Book, *, date_to: date = READING_DAY) -> LotsAnalysisResponse:
+    """The lots page of X for the user, in EUR, from the first movement to ``date_to`` (the reading day by default): lots and both WAC lines."""
     return await LotsAnalysisService(session).get_lots_analysis(
         user_id=book.user.id,
         asset_id=book.asset.id,
         broker_ids=None,
         date_from=None,
-        date_to=READING_DAY,
+        date_to=date_to,
         target_currency=REPORT,
         selected_lot_ids=None,
         requested_analyses=[LotAnalysisType.LOT_SUMMARY, LotAnalysisType.BROKER_WAC_HISTORY, LotAnalysisType.CUMULATIVE_WAC_HISTORY],
     )
 
 
-async def _dashboard(session: AsyncSession, book: Book) -> PortfolioSummary:
-    return await PortfolioService(session).get_summary(user_id=book.user.id, target_currency_override=REPORT, date_to=READING_DAY)
+async def _dashboard(session: AsyncSession, book: Book, *, date_to: date = READING_DAY) -> PortfolioSummary:
+    return await PortfolioService(session).get_summary(user_id=book.user.id, target_currency_override=REPORT, date_to=date_to)
 
 
 def _amount(value: Currency | None) -> Decimal | None:
@@ -916,6 +1076,65 @@ class TestOrphanOutgoingTransfer:
 
         assert observed == MIRROR_DASHBOARD
         print_success(f"V-3 mirror (b) {origin}: 120 invested, 60 of P&L")
+
+
+# =============================================================================
+# MIRROR IN ANOTHER CURRENCY (W-B55) — B deleted: A's leg in USD handed over at A's Auto cost, the exchange
+# difference realized at the rate of its day (decision 47, J-24; module docstring)
+# =============================================================================
+
+
+class TestOrphanOutgoingTransferInAnotherCurrency:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("origin", _FOREIGN_MIRROR_ORIGINS)
+    async def test_lots_of_x_at_a_once_broker_b_is_deleted(self, session, origin):
+        """W-B55 (a): A's leg an ADJUSTMENT −4 at A's Auto cost, 100 USD — the currency of A's last purchase —; the lots COMPLETE, A's BUY lot of 10 at 800 EUR handing 4 over at the handover's rate — proceeds 250, realized −70 —, open 6 worth 412.5, market −67.5, total −137.5; the WAC lines 10 then 6 at 80."""
+        print_section(f"W-B55 (a) — lots of X″ at A once B is deleted ({origin})")
+        book = await _FOREIGN_MIRROR_BUILDERS[origin](session)
+
+        observed = {
+            "A's row": await _leg_now(session, book),  # first: it refreshes the copy the readings below go through
+            "lots": _lots_view(await _lots(session, book, date_to=FOREIGN_READING_DAY), book, closure_fields=_CLOSURE_FIELDS),
+        }
+        for part, view in observed.items():
+            print(f"{part}: {view}")
+
+        assert observed == {"A's row": FOREIGN_MIRROR_LEG, "lots": FOREIGN_MIRROR_LOTS}
+        print_success(f"W-B55 (a) {origin}: A's leg handed over at 100 USD, the lot realizes −70")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("origin", _FOREIGN_MIRROR_ORIGINS)
+    async def test_dashboard_of_a_once_broker_b_is_deleted(self, session, origin):
+        """W-B55 (b): 550 invested — 800 less D, the 400 USD handed over at 0.625 —, realized D − C = 250 − 320 = −70, net worth 412.5, P&L −137.5; A's X″ 6 at 80, value 412.5, gain −67.5."""
+        print_section(f"W-B55 (b) — Dashboard of A once B is deleted ({origin})")
+        book = await _FOREIGN_MIRROR_BUILDERS[origin](session)
+
+        summary = await _dashboard(session, book, date_to=FOREIGN_READING_DAY)
+        observed = {**_dashboard_view(summary, book), "period_realized_gain_loss": _amount(summary.period_realized_gain_loss)}
+        print(f"dashboard: {observed}")
+
+        assert observed == FOREIGN_MIRROR_DASHBOARD
+        print_success(f"W-B55 (b) {origin}: 550 invested, −70 realized, −137.5 of P&L")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("origin", _FOREIGN_MIRROR_ORIGINS)
+    async def test_the_dashboards_realized_is_the_lots_realized(self, session, origin):
+        """W-B55 (c), the point: J-24's parity from the deletion on — one lot, A's BUY's, so the Dashboard's realized and P&L are the lot's realized_pnl and total_pnl, −70 and −137.5 on both sides."""
+        print_section(f"W-B55 (c) — the Dashboard's realized and P&L against A's lot ({origin})")
+        book = await _FOREIGN_MIRROR_BUILDERS[origin](session)
+
+        summary = await _dashboard(session, book, date_to=FOREIGN_READING_DAY)
+        lots = [lot for lot in (await _lots(session, book, date_to=FOREIGN_READING_DAY)).lots or [] if lot.opening_transaction_id == book.purchase.id]
+        assert len(lots) == 1, f"precondition: one lot, opened by A's purchase — got {lots}"
+        (lot,) = lots
+        observed = {
+            "Dashboard": {"realized": _amount(summary.period_realized_gain_loss), "P&L": _amount(summary.total_gain_loss)},
+            "A's lot": {"realized": lot.realized_pnl, "P&L": lot.total_pnl},
+        }
+        print(f"parity: {observed}")
+
+        assert observed == {"Dashboard": FOREIGN_PARITY, "A's lot": FOREIGN_PARITY}
+        print_success(f"W-B55 (c) {origin}: the Dashboard and A's lot both realize −70, −137.5 of P&L")
 
 
 # =============================================================================

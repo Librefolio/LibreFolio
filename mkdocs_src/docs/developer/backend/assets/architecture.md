@@ -283,6 +283,36 @@ another currency answered 400 with the first two already saved.
   for a manual call it is a safety net, for an asset whose currency changed between the read
   and the write.
 
+### 💷 The Provider's Own Quote Currency {: #reported-currency }
+
+`FAHistoricalData.currency` (`backend/app/schemas/prices.py`) is the quote currency as the
+provider reports it, never normalized: Yahoo reports a London line quoted in pence as `GBp`,
+while its price points carry `GBP` (`FAPricePoint.currency` goes through
+`Currency.validate_code()`, which upper-cases it) with the numbers unchanged — pence stored as
+pounds. FETCH keeps the code in `_FetchedRefreshData.reported_currency`, from the history call
+or from the core history cache, whose entry stores it as `"currency"` beside its dates and
+events for a later full hit; a provider without history, or a range that starts today, gives
+none. PERSIST writes it, stripped, next to `last_fetch_at`, in
+`asset_provider_assignments.reported_currency` (`VARCHAR(8)`, nullable, migration
+`010_provider_reported_currency`): no code, or one longer than 8 characters, leaves the last
+value. `bulk_assign_providers()` (`provider_management.py`) clears it when an assignment's
+provider, identifier or identifier type changes: another line, learnt again at its next history
+fetch. No API schema exposes the column.
+
+`MINOR_UNIT_FACTORS` (`backend/app/utils/currency_units.py`) maps each minor-unit code a
+provider may report, exactly as reported (the case tells `GBp` from `GBP`), to its factor:
+`{"GBp": 100}`; `minor_unit_factor()` gives the factor of a stripped code, or None. The
+portfolio data-quality report reads both: `PortfolioService._held_asset_quote_facts()` reads the
+assets held at the end of the period with their assignments once (`HeldAssetQuoteFacts`), a
+helper shared by the report's checks on held assets' quotes, and `_quote_in_minor_unit_assets()`
+lists those quoted in a minor unit whose quote base (`quote_base_quantity`, «Units per single
+price») is not its factor: the warning `QUOTE_IN_MINOR_UNIT`
+([Data Quality Banner](../../frontend/data-quality-banner.md)). The fix is a quote base of 100,
+which `compute_holding_value()` divides the prices by; the dividends stay in pence, since no
+event path reads it. The `test_z32_*` tests of `test_asset_source_refresh.py` and
+`test_assets_provider.py` pin the column, and two guards of `test_yahoo_finance_errors.py` the
+raw code.
+
 ---
 
 ## 📊 Data Flow: Price Query
@@ -457,8 +487,19 @@ The change is on this endpoint, not on `POST /assets/prices/query`: the Assets p
 cache (`getAssetPriceStore()`), so a change attached to a series response would not be the visible range's. When the
 range ends today the asset detail page shows the live quote, which may not be stored, as its last value: the change to
 that quote comes from `POST /assets/prices/current` with the same `range_start`
-([Current Quotes and Today's OHLC](#current-quotes-range-change)). The web app is to send `range_start` and read
-`range_change`; until then it computes the Δ in the browser (`computeDerivedPriceState()`).
+([Current Quotes and Today's OHLC](#current-quotes-range-change)). The Assets list sends it:
+`fetchAssetPeriodChanges(ids, asOf, rangeStart)` (`frontend/src/lib/utils/periodChanges.ts`) gives each item the first
+day of the range on screen, raised to 1 January 1900 by `rangeStartFor()` (`frontend/src/lib/utils/rangeChange.ts`),
+none for a day the backend would refuse (after `as_of`, or not a calendar day), and reads `range_change` with
+`assetRangeDelta()` for the cards' Δ. The browser no longer computes it: `computeDerivedPriceState()` returns no Δ. The
+page keeps the cards' Δ with a `PeriodChangesLedger` of its own, which marks each request with the whole range rather
+than its last day, so a failed request keeps only the values of the same range. The asset detail page sends it too, for
+its price summary: `fetchSeriesRangeDelta()` (`frontend/src/lib/components/assets/detail/assetDetailRangeChange.ts`)
+asks one item, `as_of` the range's end and `range_start` from `rangeStartFor()`, with `target_currency` only when the
+chart is really converted (the display currency is not the asset's and the FX pair is configured: with the pair missing,
+the summary shows native prices). The page asks it on load, when the asset, the range or the display currency changes,
+and after a refresh (a sync ends with one). The summary shows that Δ when it shows no live price, and the live quote's
+own beside a live price, never the series' (`summaryRangeDelta()`). The browser computes neither.
 
 `errors` is deduplicated and capped at ten plus one "… and N more" line. The endpoint reads the stored history
 directly, so a 5Y change exists whatever range the page has loaded.
@@ -584,8 +625,14 @@ it. `live_range_changes()` (`services/assets/period_changes.py`) values it after
   every field null (unavailable, never a guess).
 
 A `range_start` outside 1 January 1900 … tomorrow (`latest_range_end()`) is refused by the parameter itself
-(the standard 422, `loc` `["query", "range_start"]`), before any provider call (R13-SEC9-4); one after the price's day gives an empty `range_change`. The asset detail page is to send
-it with its range's start and read `range_change` for the live quote: it does not yet.
+(the standard 422, `loc` `["query", "range_start"]`), before any provider call (R13-SEC9-4); one after the price's day
+gives an empty `range_change`. The asset detail page sends it with its live poll (`AssetDetailLive`,
+`frontend/src/lib/components/assets/detail/assetDetailLive.svelte.ts`): while the range ends today, each request asks
+`range_start`, the range's first day raised to 1 January 1900 by `rangeStartFor()`, and `target_currency`, the display
+currency, only when the summary converts the live price (the display currency is not the asset's and the FX pair is
+configured). The answer's `range_change` becomes `rangeDelta`, the Δ the summary shows beside the live price: none
+beside a price left native because its conversion failed (the change is in the display currency), and none from the
+moment the asset, the range's start or the display currency changes until the next poll.
 
 ---
 
@@ -595,6 +642,9 @@ it with its range's start and read `range_change` for the live quote: it does no
 Any user may start one, so each user gets at most 30 probes a minute (a `SlidingWindowLimiter` in
 `api/v1/assets/providers.py`, counted in each process; MF-SI2): past it the route answers 429
 `{"error_code": "PROBE_RATE_LIMITED", "retry_after", "message"}` with `Retry-After`, before the provider is called.
+The web app says it in the user's language, with the local time the wait ends, rounded up to the minute
+(`probeRateLimitMessage()` in `components/assets/resolveProviderError.ts`, X-R66): **Test Configuration** shows it as the
+result row's detail and one-line summary, **Ask Provider** as its error toast; any other failure is shown as before.
 `LIBREFOLIO_PROBE_RATE_LIMIT` (`probe_rate_limit()` in `config/plugins.py`) sets the number, read at each probe by
 `probe_limiter()`, as the sign-in limit reads its variable: a change applies at the next probe, without a restart.
 `PROBES_BY_LIMIT` holds one limiter per limit the setting has had, so a value it comes back to finds its counts. `0`

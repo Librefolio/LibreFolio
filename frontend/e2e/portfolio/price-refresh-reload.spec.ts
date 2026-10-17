@@ -155,7 +155,7 @@ const BROKER_WITH_HOLDINGS = 'Interactive Brokers';
 const PRICES_QUERY_PATH = `${API}/assets/prices/query`;
 const CONVERT_PATH = `${API}/fx/currencies/convert`;
 /** The asset detail's live poll, answered in the browser in (g): the endpoint writes today's candle. */
-const LIVE_PRICES_ROUTE = '**/api/v1/assets/prices/current';
+const LIVE_PRICES_ROUTE = '**/api/v1/assets/prices/current*';
 /** The mock's asset with a provider (populate_mock_data.py: populate_assets, populate_asset_provider_assignments), found by name and provider, never by position. */
 const PRICED_ASSET = {displayName: 'Apple Inc.', providerCode: 'yfinance'} as const;
 /** A pair the mock configures a route for (populate_mock_data.populate_fx_currency_pair_sources), checked through the routes, never assumed. */

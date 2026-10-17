@@ -7,13 +7,18 @@ Tests for asset provider assignment and management:
 - POST /api/v1/assets/provider/refresh - Refresh metadata from providers
 """
 
+import uuid
 from datetime import date, timedelta
+from pathlib import Path
 
 import httpx
 import pytest
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
-from backend.app.db.models import AssetType
+from backend.app.db.models import AssetProviderAssignment, AssetType
+from backend.app.db.session import get_async_engine
 from backend.app.schemas.assets.assets import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
@@ -26,6 +31,8 @@ from backend.app.schemas.provider import (
     IdentifierType,
     ProviderInputType,
 )
+from backend.app.services.accounts import user_service
+from backend.test_scripts.test_db_config import get_test_db_path, verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
 
@@ -1489,3 +1496,156 @@ async def test_probe_bulk_assign_refresh_and_remove_with_mock_provider(test_serv
         remove_data = remove_resp.json()
         assert remove_data["success_count"] == 2
         print_success("✓ Bulk provider removal succeeded")
+
+
+# ============================================================
+# Z-32 (c): the quote currency a provider reported belongs to the assignment that fetched it
+# ============================================================
+#
+# ``asset_provider_assignments.reported_currency`` keeps the code the provider reported at its last history fetch (``GBp``
+# for a London line quoted in pence). It belongs to the source that reported it: when POST /assets/provider saves an
+# existing assignment with another ``provider_code``, ``identifier`` or ``identifier_type``, the column becomes NULL and the
+# next fetch learns it again; saved with the same three — other params only, or nothing changed at all — it is kept. The
+# three are compared as the assignment stores them: an AUTO_GENERATED assignment saved with an empty identifier stores
+# NULL both times, which is no change.
+#
+# Through the route, as the asset form saves it. No route shows or writes the column: it is written and read with the
+# ORM, on the lane's test database only (``_z32_lane_engine``). Each test owns a new user and a GBP asset of its own,
+# assigned under a ticker of its own; the asset goes with its assignment (DELETE /assets cascades), then the user. Saving
+# an assignment asks no provider for anything: no network.
+#
+# Red on HEAD 80cef0e43: AssetProviderAssignment has no ``reported_currency``; each test fails on that first.
+
+#: A London line on yfinance, as the asset form saves it; ``{ticker}`` becomes a ticker of the test's own.
+_Z32_YAHOO = {"provider_code": "yfinance", "identifier": "{ticker}", "identifier_type": "TICKER", "provider_params": {"note": "Z-32 first save"}}
+#: An assignment without an identifier: AUTO_GENERATED, sent empty, stored NULL.
+_Z32_AUTO = {"provider_code": "mockprov", "identifier": "", "identifier_type": "AUTO_GENERATED", "provider_params": {"note": "Z-32 first save"}}
+_Z32_SECOND_PARAMS = {"note": "Z-32 second save"}
+SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
+
+
+def _z32_lane_engine():
+    """The engine of the runner's test database, never another: the column is written here around every API check."""
+    is_test_db, database_url = verify_test_database()
+    assert is_test_db, f"Refusing to touch a database other than the test one ({database_url})"
+    engine = get_async_engine()
+    assert engine.url.database and Path(engine.url.database).resolve() == get_test_db_path().resolve(), f"Refusing to write through a non-test engine ({engine.url})"
+    return engine
+
+
+def _z32_column():
+    """``AssetProviderAssignment.reported_currency``; until the model has it the test fails here."""
+    column = getattr(AssetProviderAssignment, "reported_currency", None)
+    if column is None:
+        pytest.fail("red until Z-32 (c): AssetProviderAssignment has no reported_currency: nothing keeps the code the provider reported", pytrace=False)
+    return column
+
+
+async def _z32_write_reported(asset_id: int, code: str | None) -> None:
+    """``code`` in the asset's assignment, as a refresh would have left it."""
+    column = _z32_column()
+    async with AsyncSession(_z32_lane_engine()) as session:
+        result = await session.execute(update(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id).values({column: code}))
+        await session.commit()
+    assert result.rowcount == 1, f"setup: asset {asset_id} has {result.rowcount} assignment(s)"
+
+
+async def _z32_reported(asset_id: int) -> str | None:
+    column = _z32_column()
+    async with AsyncSession(_z32_lane_engine()) as session:
+        return (await session.execute(select(column).where(AssetProviderAssignment.asset_id == asset_id))).scalar_one()
+
+
+def _z32_item(item: dict, ticker: str) -> dict:
+    """``item`` with ``{ticker}`` in its identifier replaced."""
+    return {**item, "identifier": item["identifier"].format(ticker=ticker)}
+
+
+async def _z32_assign(client: httpx.AsyncClient, asset_id: int, item: dict) -> None:
+    """POST /assets/provider for the asset, with ``item``; it must answer one success."""
+    resp = await client.post(f"{API_BASE}/assets/provider", json=[{"asset_id": asset_id, **item}], timeout=TIMEOUT)
+    assert resp.status_code == 200, f"{resp.status_code}: {resp.text}"
+    assert resp.json()["success_count"] == 1, resp.text
+
+
+async def _z32_stored(client: httpx.AsyncClient, asset_id: int) -> dict:
+    """What GET /assets/provider/assignments reads back for the asset: its code, identifier, input type and params."""
+    resp = await client.get(f"{API_BASE}/assets/provider/assignments", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    (stored,) = [row for row in resp.json() if row["asset_id"] == asset_id]
+    return {key: stored[key] for key in ("provider_code", "identifier", "identifier_type", "provider_params")}
+
+
+async def _z32_new_asset(client: httpx.AsyncClient) -> int:
+    name = f"Z-32 London line {uuid.uuid4().hex}"
+    resp = await client.post(f"{API_BASE}/assets", json=[{"display_name": name, "currency": "GBP", "asset_type": "STOCK"}], timeout=TIMEOUT)
+    assert resp.status_code == 201, resp.text
+    (created,) = [row for row in resp.json()["results"] if row["display_name"] == name]
+    return created["asset_id"]
+
+
+async def _z32_cleanup(client: httpx.AsyncClient, asset_id: int | None, user_id: int) -> list[str]:
+    """The asset (its assignment cascades), then the user; what could not be deleted."""
+    errors: list[str] = []
+    if asset_id is not None:
+        resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+        if resp.status_code != 200 or not all(row["success"] for row in resp.json()["results"]):
+            errors.append(f"asset {asset_id}: {resp.status_code} {resp.text}")
+    resp = await client.delete(f"{API_BASE}/auth/users/me", timeout=TIMEOUT)
+    if resp.status_code == 400 and resp.json().get("detail") == SOLE_ADMIN_DELETE_DETAIL:
+        async with AsyncSession(_z32_lane_engine()) as session:
+            if not await user_service.delete_user(session, user_id):
+                errors.append(f"user {user_id}: not deleted")
+    elif resp.status_code != 200:
+        errors.append(f"user {user_id}: {resp.status_code} {resp.text}")
+    return errors
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("first", "second", "expected"),
+    [
+        pytest.param(_Z32_YAHOO, _Z32_YAHOO, "GBp", id="saved-again-as-it-is"),
+        pytest.param(_Z32_YAHOO, {**_Z32_YAHOO, "provider_params": _Z32_SECOND_PARAMS}, "GBp", id="other-params-only"),
+        pytest.param(_Z32_YAHOO, {**_Z32_YAHOO, "identifier": "{ticker}X"}, None, id="identifier-changed"),
+        pytest.param(_Z32_YAHOO, {**_Z32_YAHOO, "identifier_type": "ISIN"}, None, id="identifier-type-changed"),
+        pytest.param(_Z32_YAHOO, {**_Z32_YAHOO, "provider_code": "mockprov"}, None, id="provider-code-changed"),
+        pytest.param(_Z32_AUTO, {**_Z32_AUTO, "provider_params": _Z32_SECOND_PARAMS}, "GBp", id="auto-generated-other-params-only"),
+    ],
+)
+async def test_z32_reported_currency_follows_the_assignment(test_server, first, second, expected):
+    """Z-32 (c): an assignment that holds ``GBp`` (written as a refresh leaves it) is saved again through POST
+    /assets/provider: with another provider code, identifier or input type the code becomes NULL — another source, the
+    next fetch learns it —; with the same three, other params or none, ``GBp`` stays. Barriers: ``GBp`` is in the column
+    before the second save, and GET /assets/provider/assignments reads back what the second save sent.
+
+    Red on HEAD 80cef0e43: AssetProviderAssignment has no ``reported_currency``.
+    """
+    print_section("Z-32 (c): reported_currency and the assignment's source")
+    _z32_column()
+    ticker = f"Z32{uuid.uuid4().hex[:10].upper()}.L"
+    first, second = _z32_item(first, ticker), _z32_item(second, ticker)
+    asset_id: int | None = None
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        me = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+        assert me.status_code == 200, me.text
+        user_id = me.json()["user"]["id"]
+        try:
+            asset_id = await _z32_new_asset(client)
+            await _z32_assign(client, asset_id, first)
+            await _z32_write_reported(asset_id, "GBp")
+            assert await _z32_reported(asset_id) == "GBp", "barrier: the column holds GBp before the second save"
+
+            await _z32_assign(client, asset_id, second)
+
+            stored = await _z32_stored(client, asset_id)
+            reported = await _z32_reported(asset_id)
+        finally:
+            cleanup_errors = await _z32_cleanup(client, asset_id, user_id)
+    assert cleanup_errors == [], f"cleanup left rows behind: {cleanup_errors}"
+
+    sent = {"provider_code": second["provider_code"], "identifier": second["identifier"] or None, "identifier_type": second["identifier_type"], "provider_params": second["provider_params"]}
+    assert stored == sent, f"barrier: the second save did not take effect: stored {stored}, sent {sent}"
+    assert reported == expected, f"saved from {first} to {second}: reported_currency must be {expected!r}, is {reported!r}"
+    print_success(f"reported_currency {reported!r} after the second save")
