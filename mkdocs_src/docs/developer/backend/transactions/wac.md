@@ -238,7 +238,11 @@ All the conversions go to the FX service in **one**
 
 - every non-zero movement in a currency other than T, at its own date — for the flows;
 - one unit of each foreign currency on every day from its first movement through
-  `rates_until` — for the balances.
+  `rates_until` — for the balances. The days start on `EARLIEST_RANGE_START`
+  (1 January 1900, `utils/datetime_utils.py`) when the first movement is earlier: a
+  movement stored centuries back would otherwise ask one rate per day since
+  (R13-SEC8). Before the floor only the movements' own days are asked, so a balance
+  counted there still has a rate on or before every later day.
 
 When every non-zero amount is already in T, no call is made and `session` is not
 used: cash held only in the report currency never needs a rate.

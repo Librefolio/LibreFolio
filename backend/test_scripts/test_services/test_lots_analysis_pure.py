@@ -2760,3 +2760,122 @@ class TestLastDayWithoutObservation:
         """The series is the service's, built from rows (closes in EUR, transactions): a BUY observes like a close, an
         ADJUSTMENT at a cost never does (J-17), and a close older than the first day is carried onto it."""
         assert prices_module.last_day_without_observation(build_series(), self._DAYS) == expected
+
+
+# =========================================================================== #
+# R13-SEC8-2 — a lot opened before 1900: the analysis starts at the floor
+# =========================================================================== #
+#
+# MF-SEC8-2 (MEDIUM, DoS). get_lots_analysis started its window at the first transaction: computed_from =
+# transactions[0].date, the prices loaded from it, every day from it valued (history_dates), a rate asked for every day
+# since for a foreign asset (collect_fx_needs), and display_from = date_from or computed_from. A lot stored in 1890 made
+# it walk every day since 1890. The cure: computed_from = max(first transaction, EARLIEST_RANGE_START = 1900-01-01) and
+# display_from clamped to it too — no price load, history point, income marker or daily rate before 1900 — while the
+# FIFO engine still opens the lot on its own date, with its own quantity, cost and income. The floor is a literal here:
+# the name is new. Driven like the CP-7b class above: get_lots_analysis on loader doubles and a session double; in EUR
+# no rate is asked, and the USD case replaces convert_bulk where conversions reads it. Each docstring says what HEAD
+# 94e170ae1 returns; GUARD marks a value the cure leaves as it was.
+
+_SEC8_FLOOR = date(1900, 1, 1)
+_SEC8_OPENED = date(1890, 1, 1)  # transaction 1, a BUY of 10 at 120 a unit
+_SEC8_DIVIDEND_DAY = date(1890, 6, 1)  # transaction 2, a DIVIDEND of 50 on the lot
+_SEC8_QUOTED = date(1900, 1, 5)  # the asset's only close, 150
+_SEC8_END = date(1900, 1, 10)  # the reading day: near the floor, so the cured run walks ten days, HEAD's 3 662
+_SEC8_HISTORIES = (LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.PRICE_HISTORY, LotAnalysisType.PERFORMANCE_HISTORY)
+
+
+async def _sec8_analysis(monkeypatch, *, date_from: date | None, currency: str = "EUR") -> tuple[LotsAnalysisResponse, list[dict]]:
+    """get_lots_analysis up to 10 Jan 1900 of asset 7 (in ``currency``, quoted per unit) for broker 1 alone: the summary,
+    the four histories and the income markers. Returns the response and the arguments of every price load.
+
+    The rows: 10 units bought for 1200 on 1890-01-01, a DIVIDEND of 50 on 1890-06-01, a close of 150 on 5 Jan 1900 —
+    all in ``currency``. No split, no cost transaction.
+    """
+    service = LotsAnalysisService(db=_SessionWithTheAsset(SimpleNamespace(id=7, display_name="X", currency=currency, quote_base_quantity=1)))
+    price_loads: list[dict] = []
+
+    async def load_prices(*_args, **kwargs):
+        price_loads.append(kwargs)
+        return [_price(_SEC8_QUOTED, D("150"), currency)]
+
+    loaded = {
+        "_get_scope_broker_ids": [1],
+        "_load_transactions": [_tx(1, tx_date=_SEC8_OPENED, quantity=D("10"), amount=D("-1200"), currency=currency)],
+        "_load_split_ratios": {},
+        "_load_broker_shorting": {1: False},
+        "_load_income_transactions": [_tx(2, tx_type=TransactionType.DIVIDEND, tx_date=_SEC8_DIVIDEND_DAY, quantity=D("0"), amount=D("50"), currency=currency)],
+        "_load_cost_transactions": [],
+    }
+    for name, value in loaded.items():
+        monkeypatch.setattr(service, name, _loader_returning(value))
+    monkeypatch.setattr(service, "_load_prices", load_prices)
+    response = await service.get_lots_analysis(
+        user_id=1,
+        asset_id=7,
+        broker_ids=[1],
+        date_from=date_from,
+        date_to=_SEC8_END,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=[LotAnalysisType.LOT_SUMMARY, *_SEC8_HISTORIES, LotAnalysisType.INCOME_EVENTS],
+    )
+    return response, price_loads
+
+
+def _sec8_history_dates(response: LotsAnalysisResponse) -> dict[str, list[date]]:
+    """The dates of every point of the four histories, by history."""
+    return {name: [point.date for point in getattr(response, name) or []] for name in ("value_history", "return_history", "price_history", "performance_history")}
+
+
+class TestALotOpenedBeforeTheFloor:
+    """get_lots_analysis on a lot bought on 1890-01-01: nothing of the analysis' window before 1900-01-01."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("date_from", [pytest.param(None, id="no-date_from"), pytest.param(date(1, 1, 1), id="date_from-day-one")])
+    async def test_the_window_starts_at_the_floor(self, monkeypatch, date_from):
+        """computed_date_from 1900-01-01, the prices loaded from it, every history point and income marker on or after
+        it, the value history starting on it. HEAD: computed_date_from 1890-01-01, the prices loaded from it, the
+        histories from 1890-01-01 and the 1890 dividend's marker."""
+        response, price_loads = await _sec8_analysis(monkeypatch, date_from=date_from)
+
+        assert response.calculation_metadata.computed_date_from == _SEC8_FLOOR
+        assert [load.get("date_from") for load in price_loads] == [_SEC8_FLOOR], f"price loads: {price_loads}"
+        histories = _sec8_history_dates(response)
+        assert all(histories.values()), f"precondition: every history has points, got {[name for name, dates in histories.items() if not dates]} empty"
+        early = {name: (len(dates), min(dates)) for name, dates in histories.items() if min(dates) < _SEC8_FLOOR}
+        assert early == {}, f"(points before the floor, first date) by history: {early}"
+        assert min(histories["value_history"]) == _SEC8_FLOOR
+        assert [event.date for event in response.income_events or [] if event.date < _SEC8_FLOOR] == []
+
+    @pytest.mark.asyncio
+    async def test_the_lot_keeps_its_own_date_and_numbers(self, monkeypatch):
+        """GUARD: the lot opens on 1890-01-01 with its 10 units for 1200 and its 50 of income; on 1900-01-01 it is worth
+        1200 (the BUY's 120, carried), its income 50; on 10 Jan 1900, 1500 (10 x 150)."""
+        response, _ = await _sec8_analysis(monkeypatch, date_from=None)
+
+        lots = [lot for lot in response.lots or [] if lot.opening_transaction_id == 1]
+        assert len(lots) == 1, f"precondition: transaction 1 opens one lot, got {response.lots}"
+        lot = lots[0]
+        assert (lot.opening_date, lot.original_quantity, lot.open_quantity, lot.original_cost, lot.asset_income, lot.open_value) == (_SEC8_OPENED, D("10"), D("10"), D("1200"), D("50"), D("1500"))
+        value_by_day = {point.date: point for point in response.value_history or [] if point.lot_id == lot.lot_id}
+        assert (value_by_day[_SEC8_FLOOR].open_value, value_by_day[_SEC8_FLOOR].original_cost, value_by_day[_SEC8_FLOOR].income) == (D("1200"), D("1200"), D("50"))
+        assert value_by_day[_SEC8_END].open_value == D("1500")
+
+    @pytest.mark.asyncio
+    async def test_a_foreign_lot_asks_no_daily_rate_before_the_floor(self, monkeypatch):
+        """The same rows in USD, read in EUR: before the floor only the rows' own days are asked (the BUY's 1890-01-01,
+        the dividend's 1890-06-01); the daily rates of the price line start on 1900-01-01. HEAD: every day from
+        1890-01-01."""
+        requested: set[tuple[str, date]] = set()
+
+        async def recording_convert_bulk(_session, conversions, raise_on_error=False):
+            requested.update((amount.code, day) for amount, _to, day in conversions)
+            return [(Currency(code="EUR", amount=amount.amount * D("0.9")), day, False) for amount, _to, day in conversions], []
+
+        monkeypatch.setattr(conversions_module, "convert_bulk", recording_convert_bulk)
+
+        await _sec8_analysis(monkeypatch, date_from=None, currency="USD")
+
+        before_the_floor = sorted(day for _currency, day in requested if day < _SEC8_FLOOR)
+        assert before_the_floor == [_SEC8_OPENED, _SEC8_DIVIDEND_DAY], f"{len(before_the_floor)} days asked before the floor, from {before_the_floor[:1]}"
+        assert ("USD", _SEC8_FLOOR) in requested, "the price line's daily rates start on the floor"
