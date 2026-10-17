@@ -218,7 +218,7 @@ def utils_pwa_assets(verbose: bool = False, test_names: list = None) -> bool:
     """Test the committed PWA icons, manifest, apple-touch link and service-worker stamp."""
     print_section("Utils: PWA Assets")
     print_info("Testing: frontend/static/{icons/,manifest.json,sw.js,offline.html}, frontend/src/app.html")
-    print_info("Tests: opaque RGB icons, maskable safe zone on splash beige, 180px apple-touch icon, sw.js stamp = md5(offline.html)[:8]")
+    print_info("Tests: opaque RGB icons, maskable safe zone on splash beige, 180px apple-touch icon, sw.js stamp = md5(offline.html)[:8]; stamp_service_worker() and cmd_fe_build on copies under tmp_path (H-52)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_pwa_assets.py", test_names)
     return run_command(cmd, "PWA asset tests", verbose=verbose)
 
@@ -689,9 +689,9 @@ Tests for utility modules and helper functions:
         "pwa-assets",
         utils_pwa_assets,
         name="PWA Assets",
-        desc="Opaque RGB icons at exact sizes (any, maskable, apple-touch 180), maskable logo inside the 0.40 safe zone on the splash beige, one manifest entry per purpose and size with no file serving both, app.html apple-touch link at 180x180, sw.js build stamp = md5(offline.html)[:8]",
-        # Reads committed files under frontend/static/ and frontend/src/app.html only:
-        # no DB, no server, no network, no writes.
+        desc="Opaque RGB icons at exact sizes (any, maskable, apple-touch 180), maskable logo inside the 0.40 safe zone on the splash beige, one manifest entry per purpose and size with no file serving both, app.html apple-touch link at 180x180, sw.js build stamp = md5(offline.html)[:8]; H-52: stamp_service_worker() writes sw.js only when its stamp changes (the same page leaves its bytes and mtime alone, an edited page gets the new stamp on line 2), and cmd_fe_build stamps it before the build command, both on copies under tmp_path",
+        # Reads committed files under frontend/static/ and frontend/src/app.html; the stamping cases (H-52) write
+        # copies under tmp_path only: no DB, no server, no network, no write to the checkout.
         isolation="pure",
     )
     add_test(
