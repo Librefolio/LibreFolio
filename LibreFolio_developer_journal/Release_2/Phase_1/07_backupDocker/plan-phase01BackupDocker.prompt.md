@@ -5496,6 +5496,76 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   - un BLOB in un posto di valuta fa lanciare a `_as_text` un `TypeError`, non un `sqlite3.Error` (provato,
 >     `files/e19b-wip/probe_audit.py`): il controllo finirebbe;
 >   - nel log, la classe e `sqlite_errorname`, mai il testo (un UTF-8 non valido lo cita).
+> - **Entrato nel ramo** (coordinatore, 19:59): `2b3c9e8d7` (fix) e `26e17c167` (diario); dev `fe42c9a2f` unito nel mio
+>   ramo: **`597b2867c`**, pulito, senza conflitti; le 2 righe del CHANGELOG al loro posto.
+> - ⏳ **Revisione combinata** su `597b2867c`, prima dell'ingresso in dev (coordinatore, 19:59):
+>   - ✅ `api sync` (exit 0, nessun file tracciato cambiato) e `front check` **0/0** (20:00-20:01, carico 12);
+>   - ✅ Vitest sui 5 file **519/519** (20:01; `b_vitest_wb64_65_combined.log`);
+>   - ✅ E2E (20:01-20:07, carico a 5 minuti 16-18; ricostruzione compresa): tutto `tx-bulk-operations` **14 passati**,
+>     tutto `tx-split-promote` **6 passati** (`wb65_combined_tx_bulk.log`, `wb65_combined_tx_split_promote.log`). Porta
+>     6187 libera. **Combinata OK**, riferita al coordinatore alle 20:08.
+> - **B-49** archiviato (coordinatore, 19:58, la nota di E): un testo non UTF-8 nei dati di un backup passa la verifica;
+>   da decidere dopo W-B65 se rifiutarlo o avvisare.
+
+### X-R79 (per X) — l'editor delle rotte manda prima le coppie intermedie, senza `replace`, poi la coppia da sola con `replace` (2026-10-17, 19:56-20:21) — ✅ 🧊 FROZEN (checkpoint delle 20:21)
+
+> **Assegnazione** (coordinatore, 19:56; dalla revisione di X su X-R75; la riga la scrive X, il proprietario sono io;
+> X rivede): «`replace=true` also applies to the chain legs the modal adds with "create intermediate pairs"… If another
+> tab configures a leg meanwhile, the edit replaces that leg's routes. Fix, frontend only: in edit mode, post the legs
+> first as a plain upsert (add-only), then the main pair alone with `replace=true`.»
+>
+> **Analisi** (19:56-20:00, sola lettura; `files/xr79-analysis.md`):
+> - Oggi, in modifica, una sola `POST` con `replace` porta coppia e gambe (`FxPairAddModal.svelte` l.326-327), e il
+>   backend applica `replace` a ogni coppia nominata: una gamba configurata nel frattempo da un'altra scheda resta con
+>   la sola rotta del modale.
+> - **L'upsert semplice non è «add-only»**: `create_routes_bulk` aggiorna la rotta che esiste già alla stessa priorità
+>   (`providers.py` l.249-262), e un provider vero toglie la MANUAL. Con la cura, una gamba configurata nel frattempo
+>   perde solo la priorità 1, non tutte le rotte: la stessa esposizione che la creazione ha sempre avuto.
+> - Opzioni: **A**, come chiesto; **A+**, rileggere le rotte prima delle gambe (`ensureFxRoutesLoaded` non ricarica:
+>   carica una volta); **B**, una bandiera del backend (`create_only`), davvero solo aggiunta.
+> - Due richieste: gambe rifiutate → ci si ferma, niente scritto; gambe scritte e coppia rifiutata → la coppia resta com'era
+>   (la garanzia di X-R75 per la coppia modificata), le gambe restano, e un nuovo tentativo le riscrive uguali.
+>
+> **Decisione** (coordinatore, 19:59): **opzione A**, solo frontend. Scrittura su `FxPairAddModal.svelte` (solo logica),
+> il suo test, `fx-chain-algorithm.md` (compresa la frase sbagliata «reloads») e `fx/configuration.md`. Prima i rossi.
+> L'opzione B va a X come voce dopo la 1.3 (la gira il coordinatore).
+>
+> - **Rossi in scrittura** (20:03): TA-XR79, solo `FxPairAddModal.test.ts`: l'ordine delle due richieste; le gambe
+>   rifiutate (nessuna seconda richiesta); la coppia rifiutata dopo le gambe; le guardie (gambe già configurate, creazione).
+> - **Doc** (mia, 20:05-20:10, solo inglesi):
+>   - `developer/frontend/fx-chain-algorithm.md`: la frase «before posting the modal reloads the configured routes» era
+>     sbagliata. Ora dice che il modale controlla le coppie che ha, senza ricaricarle: `ensureFxRoutesLoaded()` risponde
+>     dallo store finché `invalidateFxRoutes()` non lo svuota. Più un punto nuovo sul salvataggio in due richieste;
+>   - `developer/backend/fx/configuration.md`: le coppie intermedie dell'editor vanno prima, in una richiesta semplice.
+> - **Patch pronta** (`files/xr79-wip/apply_xr79.py`, 1 operazione; `--check` OK; prettier OK sulla copia):
+>   - in modifica, le gambe prima, senza `replace`, poi la sola coppia con `replace`; senza gambe, una richiesta;
+>   - in creazione, una richiesta semplice come prima;
+>   - `sameSession()` dopo ogni richiesta; `finishFxPairCreation` una volta sola, dopo l'ultima.
+> - **W-B64/65 entrato in dev** (coordinatore, 20:08): `cde76dc54`. Il mio worktree resta a `597b2867c` fino al
+>   checkpoint di X-R79, perché il backlog è aperto qui.
+> - ✅ **Rossi scritti** (TA-XR79, 20:03-20:15), 8 casi in un `describe` nuovo, più due commenti del file allineati:
+>   - 6 rossi: l'ordine delle due richieste, con due gambe e con una (l'altra già configurata); le gambe rifiutate (503,
+>     409); la coppia rifiutata dopo le gambe (503, 409);
+>   - 2 guardie: tutte le gambe già configurate (una richiesta con `replace`); la creazione con la casella (una richiesta
+>     semplice, coppia e gambe).
+> - ✅ **Rosso Vitest** (20:15-20:16, carico 13): **6 falliti** e 26 passati (`b_vitest_xr79_red.log`), esattamente i 6, e
+>   tutti alla stessa asserzione: oggi c'è una sola `POST` con la coppia e le gambe, e con `replace`. Il file del test
+>   aveva una riga da riformattare (prettier `--write`, solo spazi).
+> - ✅ **Patch applicata** (20:16); un ritocco al commento prima: «replaces the pair's own routes».
+> - ✅ **Verdi** (20:16-20:20, carico 12-13):
+>   - `FxPairAddModal.test.ts` **32/32** (`b_vitest_xr79_green.log`);
+>   - `vitest related` sul modale: **8 file, 184 passati**;
+>   - `front check` **0/0**;
+>   - doc: build stretta, `check-links`, `utils gate-docs-links` **63 passati**.
+>   - `git diff --check` pulito; porta 6187 libera.
+>   - Nessun E2E: la modifica senza gambe è la stessa richiesta di X-R75 (i suoi 2 test di `fx-detail`).
+> - **Note del test-author, dette al coordinatore**:
+>   - un 409 sulla richiesta della coppia, dopo le gambe scritte, mostra `fx.addPair.createConflict` («Nothing was
+>     saved»), che allora non è vero per le gambe. Caso raro (un inserimento concorrente della stessa priorità); una
+>     frase giusta vorrebbe una chiave nuova in 4 lingue: lo decide il coordinatore o X;
+>   - dopo le gambe scritte e la coppia rifiutata, lo store delle rotte non lo sa: un nuovo tentativo riscrive le gambe
+>     uguali (idempotente).
+> - 🧊 **CHECKPOINT READY** (20:21): 6 file tracciati, nessun file nuovo; FROZEN.
 
 ### X-R75 (per X) — il modale delle rotte di cambio cancella prima di salvare; e togliere ogni rotta cancella la coppia (2026-10-17, 16:42-18:33) — ✅ 🧊 FROZEN (checkpoint delle 18:33)
 
