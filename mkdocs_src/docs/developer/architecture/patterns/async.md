@@ -109,6 +109,10 @@ provider clients remain valid; they simply run on the worker thread's event loop
     `time.sleep()`) directly inside an `async def` endpoint or service method. Use an
     async-native library or an explicit service-level offload.
 
+    Long CPU-bound work holds the loop as well: the portfolio engine's daily replay runs on a dedicated executor, not
+    on the default one every `asyncio.to_thread()` call shares, so its own two workers bound how many replays run at
+    once ([Off the Event Loop](../../backend/financial_math.md#off-the-event-loop)).
+
     Symptoms of event loop blocking:
 
     - Other API calls hang until the blocking call completes

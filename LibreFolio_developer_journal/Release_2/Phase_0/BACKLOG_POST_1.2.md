@@ -6817,3 +6817,11 @@ punto di partenza, l'audit dello stesso giorno:
   massimo (costo lineare, solo il corpo della richiesta li limita), e `POST /assets/provider/probe` non ha un limite
   per utente. Proposta: un tetto agli eventi (p. es. 10 000) nello schema, e il limite della sonda dove vivono gli altri
   limiti delle richieste. Dettagli: piano MF, sezione «SEC7-2 entrato; MF-SI1».
+- **MF-J45a · L'esecutore del motore non è chiuso allo spegnimento** — minimo; docs-writer di MF, 17/10 (J-45).
+  `_ENGINE_EXECUTOR` (`financial_math/portfolio/engine.py`) non è nella sequenza di spegnimento dell'app: una
+  ricostruzione in corso tiene il processo fino alla fine, come l'esecutore predefinito di `asyncio.to_thread`.
+  Proposta, se serve: `shutdown(wait=False, cancel_futures=True)` nel lifespan. Dettagli: piano MF, sezione «J-45».
+- **MF-J45b · Nessun single-flight sulla cache del motore** — basso, carico; J, 17/10 (revisione di J-45). Tra la
+  lettura della cache `portfolio_blob` (`portfolio/engine.py` ~:316) e la sua scrittura (~:457) nessun lucchetto: due
+  richieste identiche concorrenti ricostruiscono entrambe (con J-45 occupano i due worker). Nessuna azione ora; cura
+  possibile: un `asyncio.Future` per chiave in volo. Dettagli: piano MF, sezione «J-45».

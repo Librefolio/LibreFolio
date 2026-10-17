@@ -2101,3 +2101,53 @@ Quattro commit, uno per lotto che cambia numeri:
 - ✅ **Verdi** (07:26–07:37, attese per carico): `invalid_split_ratio` 67, `roi-fifo-utils` **1245** (golden),
   `portfolio-engine` 41, `lots-analysis-pure` 177, `financial-math` 1111, `event-split-ratio` 78,
   `utils gate-i18n-catalog` 176. ruff/black puliti. **Da fare in slot**: `api portfolio` (enum nuovo, report).
+- ✅ **Residui MF-D4** (coordinatore): (1) divergenza FIFO/WAC accettata (dato corrotto e segnalato); (2) l'evento del
+  fornitore col rapporto non valido non modificabile né cancellabile → **X-R56** di X (un refresh del fornitore lo
+  scarta).
+- ✅ **MF-D4 slot e ingresso**: slot 1 su `4fab57400` (carico a 5 min 47): `api portfolio` **51**, `roi-fifo-utils`
+  1245, `portfolio-engine` 41, porta libera → **entrato** dev `c2feaf3e4`, CHANGELOG `7e6cf7914`, HEAD ff
+  **`7e6cf7914`**.
+
+#### J-45 = R13-SEC7-1b — il motore fuori dal ciclo degli eventi (17/10, 07:4x)
+- ✅ **Codice** (`portfolio/engine.py`, unico scrittore): `_ENGINE_EXECUTOR = ThreadPoolExecutor(max_workers=2,
+  thread_name_prefix="portfolio-engine")` a livello di modulo; `result = await
+  asyncio.get_running_loop().run_in_executor(_ENGINE_EXECUTOR, contextvars.copy_context().run, builder.build)`.
+  ⚠️ **Fuori pista — il contesto**: `run_in_executor`, a differenza di `asyncio.to_thread`, non copia i `contextvars`
+  (il contesto dei log di structlog, il `request_id`): passato esplicitamente con `copy_context().run`. Commento sul
+  perché è sicuro (solo colonne caricate, nessuna sessione).
+- Suite esistenti verdi col codice (07:4x): `roi-fifo-utils` **1245** (golden `native_cash_guard` compreso, ora
+  attraverso l'esecutore), `portfolio-engine` 41, `financial-math` 1111, `portfolio-allocation-source` 98 (il PAC chiama
+  il motore).
+- ✅ **Test (17/10, 08:0x)** — test-author, un file nuovo
+  `test_financial/test_portfolio_engine/test_engine_off_the_loop.py` (6 test, nessuna riga di runner: lo prende
+  `roi-fifo-utils`): (1) la ricostruzione gira su un worker `portfolio-engine_N`; (2) il ciclo fa 5 giri mentre `build`
+  è bloccato su un `threading.Event` (limite 5 s); (3) parità puro ciclo/worker, esponenti Decimal compresi (rosso con
+  precisione 12 nel worker); (4) guardia: nessuna lettura di `related_transaction` e nessun caricamento pigro
+  (`AttributeImpl._fire_loader_callables`) durante `build`, su un registro con `paired_tx` dei tre tipi collegati e
+  gambe in transito; (4b) autoverifica della guardia; (5) il `request_id` di structlog e la maschera
+  `secrets_in_flight` arrivano dentro `build`. Mutazioni provate dal test-author: senza `copy_context().run` → (5)
+  rosso; `_ = tx.related_transaction` nel giro del builder → (4) rosso; senza guardia quella lettura è silenziosa (le
+  due gambe sono nella identity map).
+- ✅ **Docs (docs-writer)**: `financial_math.md` passo 6 + sezione `#### 🧵 Off the Event Loop {: #off-the-event-loop }`;
+  `async.md` una frase nell'avviso «Event Loop Blocking Rule» (descrittiva: rischio e segnali restano su `to_thread`).
+  mkdocs build strict exit 0, check-links 97 validi.
+  ⚠️ **Fuori pista — commenti corretti in `engine.py`** dopo il riscontro del docs-writer: niente «~75» chiamanti
+  (oggi 97 chiamate `to_thread` in 33 file); nessun contesto di richiesta structlog legato in `backend/app` (il
+  contesto copiato porta i `contextvars`, la maschera dei segreti compresa); non ogni sessione ha
+  `expire_on_commit=False`, quindi il commento poggia su «`calculate()` non fa commit né expire».
+  Nota non corretta: `_ENGINE_EXECUTOR` non è chiuso allo shutdown (come l'esecutore predefinito di `to_thread`); una
+  ricostruzione in corso tiene il processo fino alla fine.
+- ✅ **Rossi** (`files/j45.sh red`, carico 25): `engine.py` invertito → **2 failed, 4 passed** (1: «ran on thread
+  'MainThread'»; 2: «waited 5.0s … saw 0 ticks»); patch reinserita, sha `5dd46e44…` uguale.
+- ✅ **Verdi** (`files/j45.sh green`): `engine_off_the_loop` 6, `roi-fifo-utils` **1251**, `portfolio-engine` 41,
+  `financial-math` 1111, `portfolio-allocation-source` 98. ruff/black puliti, `git diff --check` pulito, porta 6190
+  libera. Non eseguito: `api portfolio` (pesante, nello slot del coordinatore).
+- ✅ **Slot 2 su `ae4f41297`** (J-45 + dev `7f8e69be6`, albero pulito; carico a 5 min < 50 alle 08:20): `api
+  portfolio` **51**, `roi-fifo-utils` **1251**, `portfolio-engine` 41, porta 6190 libera.
+- ✅ **Revisione J: OK, un LOW di sola doc** (08:3x): «Off the Event Loop» e la docstring del test (l. 8–12, 22–24,
+  127) dicevano il contesto structlog (`merge_contextvars`: nessuno chiama `bind_contextvars`) e `expire_on_commit=False`
+  come argomento. Corretti: la copia porta oggi la maschera dei segreti e il contesto `decimal` (tenuto da `decimal` in
+  una contextvar: la ricostruzione calcola con precisione e arrotondamento della richiesta); l'invariante vero è «solo
+  righe caricate dalle query di `calculate()`, che non fa commit, rollback né expire». La pagina cita ora il file di
+  test. `engine_off_the_loop` 6/6, ruff/black puliti, mkdocs build strict exit 0, check-links 97. Backlog **MF-J45b**
+  (nessun single-flight tra lettura e scrittura della cache `portfolio_blob`).
