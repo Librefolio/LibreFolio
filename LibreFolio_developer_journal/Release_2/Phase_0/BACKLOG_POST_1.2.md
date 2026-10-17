@@ -4776,7 +4776,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   `comparisonAssetIds`, che il FE5c ha portato in `lib/charts/chartPageSignals.ts` (N18). E `toSlug` di
   `assetDetailFxRequirements.ts` è una copia di `createPairSlug` (`fxStoreRegistry.ts`), che però rende maiuscolo.
   Da adottare e unificare nel FE4 (CP7). Dettagli: piano 03, sezione «FE5c-2» e «FE5c-6».
-- **X-R15 · Due testi inglesi fissi nella pagina dell'asset** — minimo, i18n; X, 16/10 (FE5c-3, FE5c-5). «Provider»
+- ✅ **X-R15 · Due testi inglesi fissi nella pagina dell'asset** (chiusa il 17/10, in attesa del commit del coordinatore: «Provider» riusa `common.provider`, «Manual» è `assetDetail.manualChip`) — minimo, i18n; X, 16/10 (FE5c-3, FE5c-5). «Provider»
   (il titolo della fonte nel pannello dei metadati) e «✏️ Manual» (il chip dell'intestazione) non passano dal
   catalogo. Il FE5c li sposta così come sono, in `AssetDetailMetadataPanel` e in `AssetDetailHeader`: due chiavi in
   `assets` dopo il taglio, come O-8. Dettagli: piano 03, sezione «FE5c-3/4/5».
@@ -4789,21 +4789,21 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - **Cura**: leggere i segnali dopo la cache e la risoluzione, o catturare l'errore solo attorno ai segnali. Con un
     test di componente o E2E che instrada un segnale non valido.
   - Fuori dal FE5c, che sposta il codice senza cambiarlo. Dettagli: piano 03, sezione «FE5c-2».
-- **X-R17 · La conferma di cancellazione di un asset non nomina i suoi eventi** — basso, UX; dal test-author di
+- ✅ **X-R17 · La conferma di cancellazione di un asset non nomina i suoi eventi** (chiusa il 17/10, in attesa del commit del coordinatore: `confirmWarning` e `bulkConfirmMessage` nominano gli eventi, con il plurale e due refusi corretti) — basso, UX; dal test-author di
   W-B42 (lettura), girata a X dal coordinatore il 16/10. La descrizione della conferma singola
   (`routes/(app)/assets/+page.svelte:1808`, `assets.delete.confirmWarning`) dice «Provider assignments and price history
   will be removed», ma anche gli eventi (dividendi, split) se ne vanno in cascata. Cura: una frase nella chiave in 4
   lingue, e lo stesso nella conferma multipla. Dopo il FE5c.
-- **X-R18 · Una transazione blocca la cancellazione solo dopo la conferma** — basso, UX; stessa origine.
+- ✅ **X-R18 · Una transazione blocca la cancellazione solo dopo la conferma** (chiusa il 17/10, in attesa del commit del coordinatore: la conferma singola si apre già bloccata, con il link, quando il `tx_count` della riga è sopra 0) — basso, UX; stessa origine.
   `confirmDeleteAsset` (`:925`) chiama il DELETE e solo allora riceve `HAS_TRANSACTIONS`, con il conteggio e il link
   alle transazioni; la multipla fa lo stesso (`:995`). L'utente conferma una cosa che non può succedere. Cura: usare il
   `tx_count` della riga della lista (`:554`) per aprire la conferma già bloccata, con il link. È solo un'indicazione,
   perché può contare solo le transazioni visibili all'utente, e il controllo del backend resta quello che decide. Dopo
   il FE5c.
-- **X-R19 · «N assets» in inglese fisso nella conferma multipla** — minimo, i18n; stessa origine.
+- ✅ **X-R19 · «N assets» in inglese fisso nella conferma multipla** (chiusa il 17/10, in attesa del commit del coordinatore: `assets.delete.itemsLabel`, un plurale) — minimo, i18n; stessa origine.
   `itemsLabel={\`${deletingAssets.length} assets\`}` (`:1826`). Cura: una chiave con il plurale in `assets.delete`, 4
   lingue. Dopo il FE5c.
-- **X-R20 · Il cestino della card e la conferma singola senza `data-testid`** — minimo, test; stessa origine.
+- ✅ **X-R20 · Il cestino della card e la conferma singola senza `data-testid`** (chiusa il 17/10, in attesa del commit del coordinatore: `asset-card-delete-btn`, `asset-delete-confirm`, `asset-bulk-delete-confirm`; le E2E li usano) — minimo, test; stessa origine.
   Il bottone del cestino di `AssetCard.svelte:318` non ha `data-testid`, e la `ConfirmModal` singola (`:1805`) non
   passa `testId` (la multipla nemmeno). Cura: `asset-card-delete-btn` e `testId` sulle due conferme, poi le E2E che
   oggi passano dal testo o dalla posizione. Dopo il FE5c.
@@ -4943,7 +4943,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Il rischio vero di C-66 è questo.
   - **Cura proposta**: una sola funzione in `services/assets/core.py` che costruisce la chiave, usata nei quattro
     punti, con un rosso per ciascun difetto. È naturale farla nello stesso lotto di X-R27.
-- **X-R31 · Ricerca degli asset: il messaggio d'errore non è tradotto** — basso; X, 16/10 (trovato dal test-author di
+- ✅ **X-R31 · Ricerca degli asset: il messaggio d'errore non è tradotto** (chiusa il 17/10, in attesa del commit del coordinatore: `assets.search.failed`) — basso; X, 16/10 (trovato dal test-author di
   F21/P20, fuori perimetro).
   - Quando falliscono sia lo streaming sia il ripiego REST, la tendina mostra `e.message` così com'è, oppure
     `'Search failed'` in inglese (`AssetSearchAutocomplete.svelte`, ramo `catch` del REST).
@@ -5006,7 +5006,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - ~865: l'avviso si ripete a ogni interrogazione della stessa quotazione (lo scheduler ogni 10 minuti, più ogni pagina
     aperta). Cura: una volta per (asset, valore) per processo (`functools.cache`, come `_report_invalid`), oppure
     `info`.
-- **X-R41 · `POST /fx/currencies/convert` con importo 0 dà un 500** — basso; X, 17/10 (trovato dal test-author di
+- ✅ **X-R41 · `POST /fx/currencies/convert` con importo 0 dà un 500** (chiusa il 17/10, in attesa del commit del coordinatore: un importo 0 si converte come una unità: risposta 0 al tasso del giorno) — basso; X, 17/10 (trovato dal test-author di
   X-R38, girato nel backlog dal coordinatore).
   - L'endpoint divide per l'importo di partenza: convertire 0 fra due valute solleva un'eccezione invece di rispondere 0.
 - **X-R42 · Due fixture dei test FX lasciano righe committate** — basso, test; X, 17/10 (dal test-author di X-R38).
@@ -5109,6 +5109,14 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     e cancella le altre. È una corsa stretta, e la docstring di B la dice.
   - Cura (frontend): in modifica, prima le gambe con un upsert semplice (solo aggiunta), poi la sola coppia principale
     con `replace=true`; un Vitest fissa l'ordine delle due richieste. Se fallisce la seconda, restano solo gambe nuove.
+- **X-R80 · Le gambe delle catene non sono mai davvero «solo aggiunte»** — basso, **dopo la 1.3**; X, 17/10 (dall'analisi
+  di B per X-R79, girata dal coordinatore).
+  - `create_routes_bulk` fa un upsert per (base, quote, priorità): a una priorità esistente sovrascrive `chain_steps`
+    (`api/v1/fx/providers.py` ~249-262), e un provider vero toglie la rotta MANUAL.
+  - Così anche il POST delle gambe di X-R79 (opzione A, solo frontend) può sovrascrivere la priorità 1 di una gamba
+    configurata nel frattempo. È la stessa esposizione che il percorso di creazione ha sempre avuto.
+  - Per avere davvero «solo aggiunta» serve un flag del backend, per esempio `create_only`: salta una coppia che ha
+    già rotte, nella stessa transazione. Più `api sync`.
 - ✅ **X-R47 · Il rapporto di uno SPLIT non è mai validato** (chiusa il 17/10: `5f68a8db0`, la regola (d) con `1b6d65da7`; entrata in dev `952c68cd5`; gli SPLIT già salvati sono MF-D4) — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
   V-4 di CP-14a, F4, girato dal coordinatore).
   - Si salva uno SPLIT con rapporto 0 o negativo. Appena una transazione lo collega, il motore solleva un `ValueError` e
