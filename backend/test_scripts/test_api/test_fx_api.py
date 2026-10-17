@@ -13,7 +13,8 @@ Note: The former GET /fx/currencies endpoint was removed and absorbed
 by GET /fx/providers which now includes target_currencies per provider.
 """
 
-from datetime import date, timedelta
+import time
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import httpx
@@ -1040,3 +1041,80 @@ async def test_delete_rates_mixed_validity(test_server):
         assert body.errors, "expected at least one per-item error"
         assert any("EUR" in e for e in body.errors), f"errors should mention EUR: {body.errors}"
         print_success(f"✓ Mixed batch handled: 1 success + {len(body.errors)} error(s)")
+
+
+# ============================================================================
+# X-R55 (N75): a conversion has a ceiling, tomorrow (UTC)
+# ============================================================================
+#
+# POST /fx/currencies/convert used to expand one conversion a day up to any requested end: 9999-12-31 meant about 3.6
+# million daily conversions in the lane's backend. Identity conversions (CHF → CHF) need no rate and write nothing: the
+# daily expansion alone is under test. The unbounded sizes are pinned at service level (services range-ceiling, RC-F05),
+# behind a fuse: here a red guard on unbounded code must not keep the shared backend busy for minutes.
+
+EXTREME_SECONDS = 20.0  # a capped answer takes milliseconds; an unbounded one, minutes
+
+
+def _utc_today() -> date:
+    """The server's today: date_range_limits.latest_range_end() reads the UTC date."""
+    return datetime.now(UTC).date()
+
+
+def _identity_conversion(start: str, end: str) -> list[dict]:
+    return [{"from_amount": {"code": "CHF", "amount": "100"}, "to": "CHF", "date_range": {"start": start, "end": end}}]
+
+
+@pytest.mark.asyncio
+async def test_convert_end_after_tomorrow_stops_at_tomorrow(test_server):
+    """RC-API-03 (X-R55, N75): POST /fx/currencies/convert up to today+10 gives no result after today+1 (UTC).
+
+    The ceiling is read after the answer, so a day turning meanwhile only widens it.
+    Red today: one result a day up to today+10.
+    """
+    print_section("RC-API-03: conversion clamped to tomorrow")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        before = _utc_today()
+        request = _identity_conversion((before - timedelta(days=3)).isoformat(), (before + timedelta(days=10)).isoformat())
+        response = await client.post(f"{API_BASE}/fx/currencies/convert", json=request, timeout=TIMEOUT)
+        ceiling = _utc_today() + timedelta(days=1)
+        assert response.status_code == 200, response.text
+        body = FXConvertResponse(**response.json())
+        days = [result.conversion_date for result in body.results]
+        late = [day for day in days if day > ceiling]
+        assert not late, f"{len(late)} conversions after the ceiling {ceiling}: {late[0]} … {late[-1]}"
+        assert days and days[-1] >= before + timedelta(days=1), f"one conversion a day up to tomorrow expected: {days}"
+        assert body.errors == []
+        print_success(f"✓ {len(days)} conversions, the last on {days[-1]}")
+
+
+@pytest.mark.asyncio
+async def test_convert_extreme_end_is_bounded(test_server):
+    """RC-API-04 (X-R55, N75, guard): a conversion ending 9999-12-31 answers within EXTREME_SECONDS: 9999-12-01 …
+    9999-12-31 lies wholly after the ceiling, so it gives no result and no error (200, not the 404 of failed ones).
+
+    The start is not 0001-01-01 on purpose: on unbounded code that request makes the lane's shared backend expand about
+    3.6 million conversions, its event loop blocked for minutes and every neighbour test with it. This shape costs
+    unbounded code 31 conversions, and still fails it; 0001-01-01 … 9999-12-31 is pinned at service level (RC-F05).
+    Red today: 500 Internal Server Error — after its 31 conversions the daily expansion steps past 9999-12-31, the last
+    day a date can hold (OverflowError, uncaught), as every conversion ending there does.
+    """
+    print_section("RC-API-04: conversion ending 9999-12-31")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        started = time.monotonic()
+        try:
+            response = await client.post(f"{API_BASE}/fx/currencies/convert", json=_identity_conversion("9999-12-01", "9999-12-31"), timeout=EXTREME_SECONDS)
+        except httpx.TimeoutException:
+            pytest.fail(f"no answer within {EXTREME_SECONDS:.0f} s for a conversion ending 9999-12-31")
+        elapsed = time.monotonic() - started
+        ceiling = _utc_today() + timedelta(days=1)
+        assert response.status_code == 200, response.text
+        assert elapsed < EXTREME_SECONDS, f"{elapsed:.1f} s"
+        body = FXConvertResponse(**response.json())
+        late = [result.conversion_date for result in body.results if result.conversion_date > ceiling]
+        assert not late, f"{len(late)} conversions after the ceiling {ceiling}: {late[0]} … {late[-1]}"
+        assert (body.results, body.errors) == ([], [])
+        print_success(f"✓ no conversion, no error, in {elapsed:.2f} s")
