@@ -470,6 +470,8 @@ def cancel_restore(*, data_dir: Path | None = None, drop_copy: bool = False) -> 
     """Drop the restore waiting for the next start; the state it had. ``RestoreNotPendingError`` when none waits.
 
     ``drop_copy`` also removes its checked copy; otherwise the copy stays until it expires, and can be confirmed again.
+    A copy that cannot be removed is logged, never raised: the restore is cancelled already, and the copy goes when its
+    check expires (``restore_jobs.prune``).
     The one-time ticket of its outcome goes too. Without a restore nothing is created, not even the lock.
     """
     data_dir = data_dir or get_data_dir()
@@ -482,10 +484,15 @@ def cancel_restore(*, data_dir: Path | None = None, drop_copy: bool = False) -> 
         restore_state_path(data_dir).unlink()
         _fsync_dir(restore_dir(data_dir))
         drop_ticket(data_dir=data_dir)
+        copy_dropped = drop_copy
         if drop_copy:
             # Inside the lock: a confirmation of the same copy, from another page, cannot come in between.
-            _remove_leftovers(data_dir, state.stage_id)
-    logger.info("Pending restore cancelled", stage_id=state.stage_id, copy_dropped=drop_copy)
+            try:
+                _remove_leftovers(data_dir, state.stage_id)
+            except OSError as exc:
+                copy_dropped = False
+                logger.warning("The copy of a cancelled restore could not be removed: it goes when its check expires", stage_id=state.stage_id, error=f"{type(exc).__name__}: {exc.strerror or exc}")
+    logger.info("Pending restore cancelled", stage_id=state.stage_id, copy_dropped=copy_dropped)
     return state
 
 

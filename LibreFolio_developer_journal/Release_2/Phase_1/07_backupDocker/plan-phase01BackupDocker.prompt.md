@@ -5108,6 +5108,101 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   `uploads/`. Nota sua, lasciata com'è: dopo un avvio di controllo fallito, la scheda dimentica l'id dell'upload; nella
 >   UI «riprova» vuol dire scegliere di nuovo l'archivio, che sostituisce quello tenuto.
 
+### B-31 — conferma, annullamento e riavvio: un codice e un messaggio (2026-10-17, 08:01-08:46) — ✅ 🧊 FROZEN (checkpoint delle 08:46)
+
+> **B-30 entrato** (coordinatore, 08:01): commit con la punta `116df6800`, dev `af9b7f482`, CHANGELOG 🐛 `f4dab3db7`;
+> HEAD portata in avanti a **`f4dab3db7`**, pulita. **Via a B-31** come annotato: un 500 con un codice e un messaggio
+> suo per conferma, annullamento e riavvio (3 chiavi × 4, `ERROR_KEYS`, l'elenco §5 di `restoreI18n`), 507 alla
+> conferma. Niente classi di colore; `backup.spec.ts` resta fermo per A8b.
+>
+> **Stato reale** (verificato prima di scrivere il contratto):
+>
+> - conferma (`confirm_check` → `apply.confirm_restore`): la cartella `.restore`, il lock, poi lo stato scritto per
+>   ultimo e in modo atomico; dopo, solo `drop_ticket`, che non solleva mai. Quindi un `OSError` vuol dire sempre «nulla
+>   confermato». La rotta prende solo `BackupPathError`: tutto il resto esce come il 500 in testo semplice;
+> - annullamento (`apply.cancel_restore`): il lock, la lettura, l'`unlink` dello stato, poi `drop_ticket` e `_fsync_dir`,
+>   che non sollevano, poi, con `drop_copy`, `_remove_leftovers`, quasi tutto in silenzio. Restano due punti rari di
+>   `remove_stage` (`lstat`, `unlink` di un non-cartella) che possono sollevare **dopo** che il ripristino è già
+>   annullato: allora un 500 «could not be cancelled» sarebbe falso. **Correzione accoppiata**: in `cancel_restore` un
+>   `OSError` di `_remove_leftovers` diventa un WARNING, e la copia se ne va con `prune`. Così il 500 vuol dire sempre
+>   «nulla annullato». Vale anche per `dev.py backup pending --cancel`;
+> - riavvio: il 500 `restore_restart_failed` c'è già, ma nessun test lo fissa, e la scheda dice «unexpected» (nessuna
+>   chiave, fuori da `ERROR_KEYS`).
+>
+> **Contratto congelato** (file della sessione, `b31-test-brief.md`, alle 08:05):
+>
+> - conferma: un disco pieno → 507 `backup_no_space` (WARNING); ogni altro `OSError` → 500 `restore_confirm_failed`
+>   (ERROR, tipo e strerror). Nulla confermato; la stessa conferma, tolto il guasto, dà 202;
+> - annullamento: un `OSError` prima di togliere il ripristino → 500 `restore_cancel_failed`, il ripristino ancora in
+>   attesa; uno durante la rimozione della copia → 204 e un WARNING;
+> - riavvio: invariato e ora fissato (500 `restore_restart_failed`, nessun riavvio programmato);
+> - i messaggi, in 4 lingue: «… could not be confirmed … Nothing changed.», «… could not be cancelled … It still waits
+>   for the next start.», «LibreFolio could not be restarted … The restore still waits for the next start.».
+>
+> - **Rossi in scrittura** (brief inviati alle 08:05):
+>   - TA-B: `test_backup_restore_apply.py` (conferma, annullamento, riavvio, OpenAPI);
+>   - TA-S: `test_backup_apply.py` (`cancel_restore` con la copia che non si toglie);
+>   - TA-F: `restoreI18n.test.ts` §5 e `restoreFlow.test.ts`.
+> - **Codice pronto** in `b31-wip/apply_b31.py` (alle 08:05): 9 operazioni in 3 file, più 4 cataloghi. Provato a secco
+>   su `f4dab3db7`; le copie passano ruff, black e prettier.
+> - ✅ **Rossi scritti**:
+>   - TA-F, 3 + 4 casi: `restoreI18n` §5 con i 3 codi (rossi); `restoreFlow`, blocco «B-31», con conferma 500, conferma
+>     507 (guardia), annullamento 500 e riavvio 500 (rossi sulla chiave: oggi «unexpected»);
+>   - TA-S, 2 + 1 in `test_backup_apply.py`: la copia che non si toglie (EACCES, EIO; rossi: l'`OSError` esce) e la
+>     guardia con `drop_copy=False`. Su sua nota, entrambi fissano anche l'INFO «Pending restore cancelled» con
+>     `copy_dropped` falso: dopo una rimozione fallita la riga diceva `copy_dropped=True`. Corretto nella patch;
+>   - TA-B, 19 istanze in `test_backup_restore_apply.py`: conferma 507 ×6 (lock o scrittura dello stato × ENOSPC,
+>     EDQUOT, EIO causato da ENOSPC) e 500 ×4; annullamento 500 ×4 (lock o rimozione dello stato); la copia che non si
+>     toglie ×2 (204); riavvio ×2 (guardie: la rotta prende già l'errore); OpenAPI (rosso su conferma 500/507 e
+>     annullamento 500).
+> - **⚠️ Fuori pista — «la lettura» nel contratto**: TA-B nota che `_read_state` prende ogni `OSError`, lo registra e
+>   rende `None`. Quindi uno stato illeggibile fa rispondere a un annullamento 404 `restore_not_pending`, non 500.
+>   Il contratto (§1) diceva «leggere o rimuovere lo stato»: i test coprono il lock e la rimozione. Il 404 su uno stato
+>   illeggibile è un comportamento di prima: va nel residuo.
+> - ✅ **Rossi leggeri**:
+>   - Vitest (08:08, carico 32): 6 falliti e 338 passati, i 6 attesi;
+>   - `services backup-apply` (08:19-08:20): 2 falliti e 229 passati, cioè i due casi della copia («cancel_restore let
+>     the OSError of the copy's removal out, once the restore was dropped»).
+> - ✅ **Metà frontend applicata** (08:09): `--part front` (`ERROR_KEYS` più le 3 chiavi × 4); `i18n build` (4993
+>   chiavi) e `i18n check` strict puliti; Vitest (08:09-08:10) su `restoreI18n`, `restoreFlow` e `RestoreCard`: 398 su
+>   398; `utils gate-i18n-catalog` 176 e `gate-i18n-usage` 195 (08:14-08:15, dopo un'attesa sopra 50).
+> - ✅ **Doc** (docs-writer):
+>   - `backup_restore.en.md`: la riga «…for this archive.» ora copre anche la conferma; tre righe nuove;
+>   - `security.md`: le righe di conferma, annullamento e riavvio, più la frase su `cancel_restore`;
+>   - `cli_tools.en.md` l.580 allineata (la pagina ha traduzioni: debito).
+>   Fra le note del docs-writer: il bottone della conferma è «Restore and restart», non «Confirm the restore».
+> - **Residuo** (pre-esistente, fuori dall'ambito approvato), in backlog come **B-32**:
+>   - in `cancelPending()` la riga `state = 'pending'` è morta (`#fail` mette `failed`): un annullamento rifiutato
+>     finisce sulla schermata di errore, non sul blocco del ripristino in attesa con l'errore accanto, come fa il
+>     riavvio;
+>   - `dev.py backup pending --cancel` finisce in un traceback su un `OSError` prima della rimozione, e la sua riga ✅
+>     dice «with its copy» anche quando la copia è rimasta;
+>   - uno stato illeggibile dà 404 «not pending» all'annullamento (e `read_restore` dà `None`).
+> - **Slot API chiesto** (08:20): il rosso `api backup-restore-apply`, poi la metà backend, poi i verdi
+>   `api backup-restore-apply` e `api backup-restore`.
+> - **Coordinatore** (risposta alla richiesta, fra le 08:21 e le 08:29): in coda per lo slot 2; approvate le due decisioni (copia → WARNING e 204; conferma →
+>   507 `backup_no_space`); i residui nel backlog di B (B-32).
+> - ✅ **Slot 2** (08:30-08:34, corsia 6187):
+>   - rosso: `api backup-restore-apply` 17 falliti e 137 passati. Conferma e annullamento sul 500 in testo semplice di
+>     Starlette; l'OpenAPI sui codici non documentati; le 2 guardie del riavvio verdi. Il primo run ha ricostruito
+>     frontend e doc (svelte-check: 0 errori, con la metà frontend già dentro);
+>   - **metà backend** (08:33): `--part back`, 8 operazioni su `restore.py` e `apply.py`; ruff e black puliti;
+>   - verdi: `api backup-restore-apply` 154, `api backup-restore` 146.
+> - ✅ **Verdi leggeri** (08:34-08:39, con un'attesa per carico sopra 50): `services backup-apply` 231, `services backup-outcome` 97,
+>   `utils backup-cli-restore` 77.
+> - ✅ `api sync` (08:39): la conferma documenta 507 `backup_no_space` e 500 `restore_confirm_failed`, l'annullamento
+>   500 `restore_cancel_failed`; i file generati sono ignorati.
+> - **⚠️ Fuori pista — le doc dicevano «read»**: le righe dell'annullamento (`backup_restore.en.md`, `security.md`)
+>   davano «locked, read or removed». Uno stato illeggibile risponde invece 404 (B-32): tolto «read» dalle due pagine e
+>   dal contratto.
+> - ✅ **Doc** (08:41-08:45): `mkdocs build` strict OK (143 s), `check-links` OK, `utils gate-docs-links` 63.
+>   Traduzioni: `cli_tools.en.md` ne ha (cli_tools.es.md, cli_tools.fr.md, cli_tools.it.md), quindi
+>   la sua riga è debito; `backup_restore.en.md` non ne ha. Niente stamp.
+> - Non eseguiti: `e2e` (nessun componente cambia; `backup.spec.ts` fermo per A8b); `front check` separato (lo
+>   svelte-check del build del primo run `api` era pulito, con `restoreText.ts` già cambiato); `theme-roles` (nessun file
+>   Svelte e nessuna classe).
+> - **Backlog**: B-31 ✅; B-32 nuovo.
+
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
 > Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto
