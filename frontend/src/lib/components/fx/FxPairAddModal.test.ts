@@ -8,9 +8,15 @@
  * the provider's full history (`start: 'min'`) up to today on the user's calendar,
  * whichever page opened it. Edit mode and MANUAL-only pairs never sync. "Today" is
  * frozen per test (only `Date` is faked, so testing-library's polling still runs).
+ *
+ * Edit mode (the pair page's provider editor) writes the pair's whole new
+ * configuration in one POST that replaces its routes, `{queries: {replace: true}}`,
+ * and deletes nothing first (X-R75); with no route left it posts the MANUAL route.
+ * Creation's POST adds a pair and asks no replace.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';
+import {get} from 'svelte/store';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import type {ChainStep, ProviderInfo} from '$lib/utils/currency/currencyGraph';
 
@@ -79,6 +85,7 @@ import {getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 import {buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
 import {notify} from '$lib/stores/app/notify.svelte';
+import {_} from '$lib/i18n';
 
 const createRoutes = vi.mocked(zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post);
 const deleteRoutes = vi.mocked(zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete);
@@ -94,6 +101,11 @@ const CHAIN: ChainStep[] = [
     {from: 'EUR', to: 'USD', provider: 'ECB'},
     {from: 'USD', to: 'GBP', provider: 'FED'},
 ];
+/** The identity the route picker publishes for each route (`data-route-key`), as FxProviderSelect builds it. */
+const DIRECT_KEY = 'EUR-GBP:ECB';
+const CHAIN_KEY = 'EUR-USD:ECB|USD-GBP:FED';
+/** EUR-GBP with no provider: the item creation posts for a manual pair, and edit mode once every route is removed. */
+const MANUAL_EUR_GBP = {base: 'EUR', quote: 'GBP', chain_steps: [{from: 'EUR', to: 'GBP', provider: 'MANUAL'}], priority: 999};
 const PROVIDERS: ProviderInfo[] = [
     {code: 'ECB', name: 'Fixture ECB', base_currency: 'EUR', base_currencies: ['EUR'], target_currencies: ['GBP', 'USD']},
     {code: 'FED', name: 'Fixture FED', base_currency: 'USD', base_currencies: ['USD'], target_currencies: ['GBP']},
@@ -178,6 +190,57 @@ async function save() {
 
 async function closed() {
     await waitFor(() => expect(screen.queryByTestId('fx-add-pair-modal')).not.toBeInTheDocument());
+}
+
+/** The `replace` query a routes POST asked for, from its second argument; `undefined` when it asked none. */
+function replaceQuery(config: unknown): unknown {
+    return (config as {queries?: {replace?: unknown}} | undefined)?.queries?.replace;
+}
+
+/**
+ * Every routes POST, as what it carried and whether it replaces the pair's routes (X-R75): edit mode writes the
+ * whole new configuration in one POST with `{queries: {replace: true}}`; creation adds a pair, so its POST asks no
+ * `replace` at all (no second argument, or one without it). Deep equality on `body` stays an allowlist.
+ */
+function posts() {
+    return createRoutes.mock.calls.map(([body, config]) => ({body, replace: replaceQuery(config)}));
+}
+
+/** The route picker's selected routes, by key, in priority order. */
+function selectedRouteKeys() {
+    return screen.queryAllByTestId('fx-route-selected').map((row) => row.getAttribute('data-route-key'));
+}
+
+/** The picker's row of one selected route, found by its key, never by its position. */
+function selectedRow(key: string): HTMLElement {
+    const row = screen.queryAllByTestId('fx-route-selected').find((candidate) => candidate.getAttribute('data-route-key') === key);
+    if (!row) throw new Error(`No selected route ${key}: the picker shows ${JSON.stringify(selectedRouteKeys())}`);
+    return row;
+}
+
+/**
+ * The provider editor on EUR-GBP, whose stored routes are `stored` (priority = position), returned once the picker
+ * shows them selected: edit mode loads them with a GET and maps them onto the routes it computed, and a pick made
+ * before that would be overwritten by the load.
+ */
+async function editStored(...stored: ChainStep[][]) {
+    // An empty list would be no barrier at all: the picker shows no route before the load as well as after it.
+    if (stored.length === 0) throw new Error('editStored needs at least one stored route to wait for');
+    listRoutes.mockResolvedValue({
+        items: stored.map((chainSteps, index) => ({
+            base: 'EUR',
+            quote: 'GBP',
+            priority: index + 1,
+            chain_steps: chainSteps,
+            is_chain: chainSteps.length > 1,
+            providers_used: [...new Set(chainSteps.map((step) => step.provider))].sort(),
+        })),
+    });
+    const view = mount({editMode: true, editBase: 'EUR', editQuote: 'GBP'});
+    await ready();
+    const keys = stored.map((chainSteps) => chainSteps.map(({from, to, provider}) => `${from}-${to}:${provider}`).join('|'));
+    await waitFor(() => expect(selectedRouteKeys()).toEqual(keys));
+    return view;
 }
 
 /** Only this file's notifications, not a shared UI/global toast count. */
@@ -394,8 +457,9 @@ describe('FxPairAddModal — configuration before background sync', () => {
         await pickRoute('direct');
         await save();
         await closed();
-        expect(deleteRoutes.mock.calls.map(([body]) => body)).toEqual([[{base: 'EUR', quote: 'GBP'}]]);
-        expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([[{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}]]);
+        // X-R75: the edit is one POST that replaces the pair's routes; nothing is deleted before it.
+        expect(deleteRoutes).not.toHaveBeenCalled();
+        expect(posts()).toEqual([{body: [{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}], replace: true}]);
         expect(oncreated).toHaveBeenCalledTimes(1);
         expect(syncRates).not.toHaveBeenCalled();
         expect(onsynced).not.toHaveBeenCalled();
@@ -562,15 +626,17 @@ describe('FxPairAddModal — configuration before background sync', () => {
         }
     });
 
-    it.each(['CREATE', 'DELETE'] as const)('reports a failed %s globally if the original form is already gone', async (operation) => {
+    it.each(['create', 'edit'] as const)('reports a failed %s POST globally if the original form is already gone', async (mode) => {
+        const editing = mode === 'edit';
         const pending = deferred<never>();
-        if (operation === 'CREATE') createRoutes.mockReturnValue(pending.promise);
-        else deleteRoutes.mockReturnValue(pending.promise);
-        const old = mount(operation === 'DELETE' ? {editMode: true, editBase: 'EUR', editQuote: 'GBP'} : {});
+        createRoutes.mockReturnValue(pending.promise);
+        const old = mount(editing ? {editMode: true, editBase: 'EUR', editQuote: 'GBP'} : {});
         try {
             await pickRoute('direct');
             await save();
-            await waitFor(() => expect(operation === 'CREATE' ? createRoutes : deleteRoutes).toHaveBeenCalledTimes(1));
+            await waitFor(() => expect(createRoutes).toHaveBeenCalledTimes(1));
+            // X-R75: in edit mode too the pending write is the one POST; nothing was deleted before it.
+            expect(deleteRoutes).not.toHaveBeenCalled();
             old.unmount();
             vi.mocked(findConversionPaths).mockResolvedValue([]);
             const fresh = mount({initialBase: 'JPY', initialQuote: 'USD'});
@@ -581,7 +647,7 @@ describe('FxPairAddModal — configuration before background sync', () => {
                 expect(notify).toHaveBeenCalledWith(
                     expect.objectContaining({
                         name: 'fx.pair.configuration-failed',
-                        detail: expect.objectContaining({slug: 'EUR-GBP', editMode: operation === 'DELETE'}),
+                        detail: expect.objectContaining({slug: 'EUR-GBP', editMode: editing}),
                         toast: expect.objectContaining({variant: 'error'}),
                     }),
                 );
@@ -594,37 +660,36 @@ describe('FxPairAddModal — configuration before background sync', () => {
             expect(fresh.onclose).not.toHaveBeenCalled();
             expect(fresh.onsynced).not.toHaveBeenCalled();
             expect(syncRates).not.toHaveBeenCalled();
-            expect(createRoutes.mock.calls.map(([body]) => body)).toEqual(operation === 'CREATE' ? [[{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}]] : []);
-            expect(deleteRoutes.mock.calls.map(([body]) => body)).toEqual(operation === 'DELETE' ? [[{base: 'EUR', quote: 'GBP'}]] : []);
+            // The edit's POST replaces the pair's routes; the creation's adds a pair and asks no replace.
+            expect(posts()).toEqual([{body: [{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}], replace: editing ? true : undefined}]);
+            expect(deleteRoutes).not.toHaveBeenCalled();
         } finally {
             pending.reject(new Error('release-owned-failed-configuration'));
             await pending.promise.catch(() => undefined);
         }
     });
 
-    it.each([false, true])('finishes pending edit DELETE without adopting a new draft (account changed: %s)', async (changeAccount) => {
-        const deleted = deferred<Awaited<ReturnType<typeof zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete>>>();
-        const deletedResponse = {
-            results: [{success: true, deleted_count: 1, base: 'EUR', quote: 'GBP'}],
-            success_count: 1,
-            total_deleted: 1,
-        };
-        deleteRoutes.mockReturnValue(deleted.promise);
+    it.each([false, true])('finishes a pending edit POST without adopting a new draft (account changed: %s)', async (changeAccount) => {
+        const posted = deferred<CreationResponse>();
+        const edited = [{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}];
+        // Only the edit's POST is held; the replacement draft's own save is answered at once.
+        createRoutes.mockReturnValueOnce(posted.promise);
         const old = mount({editMode: true, editBase: 'EUR', editQuote: 'GBP'});
         try {
             await pickRoute('direct');
             await save();
-            await waitFor(() => expect(deleteRoutes).toHaveBeenCalledTimes(1));
-            expect(createRoutes).not.toHaveBeenCalled();
+            await waitFor(() => expect(createRoutes).toHaveBeenCalledTimes(1));
+            // X-R75: the edit's one write is this POST, which replaces the pair's routes; nothing was deleted before it.
+            expect(deleteRoutes).not.toHaveBeenCalled();
+            expect(posts()).toEqual([{body: edited, replace: true}]);
             old.unmount();
             if (changeAccount) transitionClientSession('replacement-edit-account');
             vi.mocked(findConversionPaths).mockResolvedValue([]);
             const fresh = mount({initialBase: 'JPY', initialQuote: 'USD'});
             await ready();
-            deleted.resolve(deletedResponse);
+            posted.resolve(creationResponse(edited));
             if (!changeAccount) {
                 await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({name: 'fx.pair.updated', detail: expect.objectContaining({slug: 'EUR-GBP'})})));
-                expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([[{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}]]);
                 expect(feedback.notices).toEqual([]);
             }
             expect(screen.getByTestId('fx-add-pair-modal')).toBeVisible();
@@ -632,21 +697,133 @@ describe('FxPairAddModal — configuration before background sync', () => {
             expect(fresh.oncreated).not.toHaveBeenCalled();
             expect(fresh.onclose).not.toHaveBeenCalled();
             // A new owned successful save also establishes a completion barrier
-            // for the negative account case: the old DELETE cannot POST as it.
+            // for the negative account case: the old POST cannot finish as it.
             await save();
             await closed();
             const manual = [{base: 'JPY', quote: 'USD', chain_steps: [{from: 'JPY', to: 'USD', provider: 'MANUAL'}], priority: 999}];
-            expect(createRoutes.mock.calls.map(([body]) => body)).toEqual(changeAccount ? [manual] : [[{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}], manual]);
-            expect(deleteRoutes.mock.calls.map(([body]) => body)).toEqual([[{base: 'EUR', quote: 'GBP'}]]);
+            expect(posts()).toEqual([
+                {body: edited, replace: true},
+                {body: manual, replace: undefined},
+            ]);
+            expect(deleteRoutes).not.toHaveBeenCalled();
             expect(syncRates).not.toHaveBeenCalled();
+            expect(old.oncreated).not.toHaveBeenCalled();
+            expect(old.onclose).not.toHaveBeenCalled();
             expect(fresh.oncreated).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({slug: 'JPY-USD', autoSyncStarted: false}));
             expectLinkedPair(onlyNotice().message, 'JPY-USD');
             if (changeAccount) {
                 expect(vi.mocked(notify).mock.calls.some(([event]) => event.name === 'fx.pair.updated')).toBe(false);
             }
         } finally {
-            deleted.resolve(deletedResponse);
-            await deleted.promise;
+            posted.resolve(creationResponse(edited));
+            await posted.promise;
         }
+    });
+});
+
+/**
+ * X-R75. The provider editor (the pair page's modal, `editMode`) used to DELETE the whole pair and then POST the
+ * routes picked: a refused POST left the pair with no route, and with no route picked the POST was skipped, so the
+ * pair was deleted outright where the user guide says it becomes manual. It now writes the pair's whole new
+ * configuration in one POST with `{queries: {replace: true}}` — the backend keeps exactly the routes posted for the
+ * pair, atomically — and deletes nothing; with no route picked, what it posts is the MANUAL route creation builds.
+ * Errors are reported as before, on the form that is still open. Creation is unchanged: its POST asks no replace.
+ */
+describe('FxPairAddModal — the provider editor replaces the pair’s routes in one POST (X-R75)', () => {
+    it('posts the stored route and the one added in one POST that replaces the pair, and deletes nothing', async () => {
+        const {oncreated, onsynced} = await editStored(DIRECT);
+        await pickRoute('chain');
+        await waitFor(() => expect(selectedRouteKeys()).toEqual([DIRECT_KEY, CHAIN_KEY]));
+        await save();
+        await closed();
+        // `replace` drops whatever is not posted: the POST must carry the stored route too, in priority order.
+        expect(posts(), 'one POST, every route the pair keeps, replacing its routes').toEqual([
+            {
+                body: [
+                    {base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1},
+                    {base: 'EUR', quote: 'GBP', chain_steps: CHAIN, priority: 2},
+                ],
+                replace: true,
+            },
+        ]);
+        expect(deleteRoutes, 'nothing is deleted before the POST').not.toHaveBeenCalled();
+        expect(oncreated).toHaveBeenCalledExactlyOnceWith({base: 'EUR', quote: 'GBP', slug: 'EUR-GBP', hasRealProvider: true, autoSyncStarted: false});
+        expect(syncRates).not.toHaveBeenCalled();
+        expect(onsynced).not.toHaveBeenCalled();
+        expect(feedback.notices).toEqual([]);
+    });
+
+    it('with every route removed, posts the MANUAL route in one POST that replaces the pair: the pair is kept, manual', async () => {
+        const {oncreated, onsynced} = await editStored(DIRECT);
+        await fireEvent.click(within(selectedRow(DIRECT_KEY)).getByTestId('fx-route-remove'));
+        await waitFor(() => expect(selectedRouteKeys()).toEqual([]));
+        await save();
+        await closed();
+        expect(posts(), 'one POST that leaves the pair its MANUAL route, replacing the route removed').toEqual([{body: [MANUAL_EUR_GBP], replace: true}]);
+        expect(deleteRoutes, 'nothing is deleted: a pair without any route no longer exists').not.toHaveBeenCalled();
+        expect(oncreated).toHaveBeenCalledExactlyOnceWith({base: 'EUR', quote: 'GBP', slug: 'EUR-GBP', hasRealProvider: false, autoSyncStarted: false});
+        expect(notify).toHaveBeenCalledWith(expect.objectContaining({name: 'fx.pair.updated', detail: expect.objectContaining({slug: 'EUR-GBP', hasRealProvider: false})}));
+        expect(syncRates).not.toHaveBeenCalled();
+        expect(onsynced).not.toHaveBeenCalled();
+        expect(feedback.notices).toEqual([]);
+    });
+
+    it.each([503, 409])('a POST refused with HTTP %s leaves its error on the open editor, the draft as it was, and deletes nothing', async (status) => {
+        const detail = status === 409 ? 'owned-edit-conflict-detail' : 'owned-edit-refused';
+        createRoutes.mockRejectedValue({response: {status, data: {detail}}});
+        const {oncreated, onsynced, onclose} = await editStored(DIRECT);
+        await pickRoute('chain');
+        await waitFor(() => expect(selectedRouteKeys()).toEqual([DIRECT_KEY, CHAIN_KEY]));
+        await save();
+
+        // The error as today: on the form, which is still open, saveable again, on the user's draft.
+        const banner = await screen.findByTestId('info-banner-error');
+        if (status === 409) {
+            // The conflict is the one refusal the user can act on: the catalogue's sentence, never the backend's own.
+            const conflict = get(_)('fx.addPair.createConflict');
+            expect(conflict, 'the catalogue has a sentence for the conflict').not.toBe('fx.addPair.createConflict');
+            expect(banner).toHaveTextContent(conflict);
+            expect(banner).not.toHaveTextContent(detail);
+        } else {
+            expect(banner).toHaveTextContent(detail);
+        }
+        expect(screen.getByTestId('fx-add-pair-modal')).toBeVisible();
+        await waitFor(() => expect(screen.getByTestId('fx-add-pair-save')).toBeEnabled());
+        expect(selectedRouteKeys(), 'the draft is kept').toEqual([DIRECT_KEY, CHAIN_KEY]);
+
+        // A refused POST changed nothing, because nothing was deleted before it.
+        expect(deleteRoutes, 'nothing was deleted: the pair keeps the routes it had').not.toHaveBeenCalled();
+        expect(posts()).toEqual([
+            {
+                body: [
+                    {base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1},
+                    {base: 'EUR', quote: 'GBP', chain_steps: CHAIN, priority: 2},
+                ],
+                replace: true,
+            },
+        ]);
+        expect(oncreated).not.toHaveBeenCalled();
+        expect(onclose).not.toHaveBeenCalled();
+        expect(onsynced).not.toHaveBeenCalled();
+        expect(syncRates).not.toHaveBeenCalled();
+        const detachedReports = vi.mocked(notify).mock.calls.filter(([event]) => event.name === 'fx.pair.configuration-failed');
+        expect(detachedReports, 'the open form reports the error itself, not a detached notification').toEqual([]);
+        expect(feedback.notices).toEqual([]);
+    });
+
+    // Guard, green before and after the cure: creation adds a pair, it never replaces one.
+    it.each(['a provider route', 'no route'] as const)('creation with %s is one POST that asks no replace', async (kind) => {
+        const {oncreated, onsynced} = mount();
+        if (kind === 'a provider route') await pickRoute('direct');
+        else await ready();
+        await save();
+        await closed();
+        const item = kind === 'a provider route' ? {base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1} : MANUAL_EUR_GBP;
+        expect(posts()).toEqual([{body: [item], replace: undefined}]);
+        expect(deleteRoutes).not.toHaveBeenCalled();
+        expect(oncreated).toHaveBeenCalledTimes(1);
+        // A provider creation syncs in the background: let it finish inside this test.
+        if (kind === 'a provider route') await waitFor(() => expect(onsynced).toHaveBeenCalledTimes(1));
+        else expect(syncRates).not.toHaveBeenCalled();
     });
 });

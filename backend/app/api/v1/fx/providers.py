@@ -169,6 +169,7 @@ async def list_routes(session: AsyncSession = Depends(get_session_generator), _c
 @router_providers.post("/routes", response_model=FXCreateRoutesResponse, status_code=201)
 async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item validation
     routes: List[FXConversionRouteItem],
+    replace: bool = Query(False, description="Keep exactly the routes posted for each pair the request names: its other priorities are deleted in the same transaction (X-R75)"),
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
@@ -188,8 +189,16 @@ async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item 
     - Provider codes must be registered in FXProviderRegistry
     - Chain steps must be valid (continuity, no repeated edges, matching endpoints)
 
+    **Replace** (``?replace=true``, X-R75): each pair the request names keeps exactly the routes posted for it; its
+    other priorities are deleted in the same transaction, after the validation. So an edit is one request, and a
+    refusal (400, 409, 500) leaves the pair as it was. The MANUAL rules hold as without it: a real provider posted
+    removes the MANUAL route, and the MANUAL item alone (priority 999) leaves the pair manual. A pair not configured
+    yet, such as an intermediate pair of a chain, is created; one another request configured meanwhile keeps only what
+    is posted for it.
+
     Args:
         routes: List of routes to create/update
+        replace: Keep exactly the posted routes of each pair named (default: upsert only)
         session: Database session
 
     Returns:
@@ -285,6 +294,16 @@ async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item 
                     "results": [r.model_dump() for r in results],
                 },
             )
+
+        if replace:
+            # X-R75: each pair the request names keeps exactly the priorities posted for it, in this transaction: a
+            # refusal from here on rolls the whole edit back, so a pair never loses its routes to a failed save.
+            posted: dict[tuple[str, str], set[int]] = {}
+            for route_item in routes:
+                pair = (min(route_item.base.upper(), route_item.quote.upper()), max(route_item.base.upper(), route_item.quote.upper()))
+                posted.setdefault(pair, set()).add(route_item.priority)
+            for (pair_base, pair_quote), priorities in posted.items():
+                await session.execute(sql_delete(FxConversionRoute).where(FxConversionRoute.base == pair_base, FxConversionRoute.quote == pair_quote, FxConversionRoute.priority.not_in(priorities)))
 
         # Auto-remove MANUAL sentinel for pairs that now have real providers
         pairs_with_real_providers = set()
