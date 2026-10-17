@@ -1652,6 +1652,11 @@ class PortfolioService:
                     period_fees_taxes=fees if fees else None,
                     period_pnl=period_pnl,
                     period_pnl_percent=period_pnl_pct,
+                    # Each component on the same base as the row's return (P4, the Performance tooltip).
+                    period_unrealized_delta_percent=period_return_on_start(unrealized_delta, start_value),
+                    period_realized_gain_loss_percent=period_return_on_start(realized if realized else None, start_value),
+                    period_income_percent=period_return_on_start(income if income else None, start_value),
+                    period_fees_taxes_percent=period_return_on_start(fees if fees else None, start_value),
                     annualized_return=period_annualized,
                     start_value=start_value,
                     end_value=end_value,

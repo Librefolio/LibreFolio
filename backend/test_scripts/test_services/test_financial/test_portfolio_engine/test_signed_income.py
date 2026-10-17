@@ -1,8 +1,9 @@
 """Regression tests for G1c — signed personal income history (engine layer).
 
-Covers the DailyStateBuilder DIVIDEND/INTEREST touch points (plan §4.4): both the
-pre-frame loop (accounting-only, line ~725) and the frame loop (full evaluation,
-line ~1021) now preserve the sign of the *original* ``tx.amount`` instead of
+Covers the DailyStateBuilder DIVIDEND/INTEREST touch point (plan §4.4): the replay
+(J1: one loop with the same rules every day, also for the days before ``date_from``;
+before J1 a separate pre-frame loop had a copy of the rule) preserves the sign of the
+*original* ``tx.amount`` instead of
 unconditionally converting through ``abs(tx.amount)``. A legacy negative
 DIVIDEND/INTEREST correction must reduce the returns pool ``R[bid]``, never be
 added to it as if it were positive income.
@@ -16,7 +17,7 @@ Two outputs matter here, and they are NOT interchangeable:
 - COSMETIC: the 3-pool ``cash_from_contributed_capital`` /
   ``cash_from_generated_returns`` split. Pre-existing step "4g. Clamp pools
   per-broker (rounding safety)" clamps a negative-enough ``R[bid]`` to 0 at the
-  end of every frame day — that clamp is OUT OF SCOPE for this plan (it existed
+  end of every computed day — that clamp is OUT OF SCOPE for this plan (it existed
   before G1c and is not asserted to have changed here); this file only asserts
   it still exists and does not crash.
 
@@ -112,7 +113,7 @@ def _mark_series_from(txs, price_map, asset_currencies, quote_base_map):
     return mark_series
 
 
-def _builder(txs, ecfs, *, date_from=date(2025, 1, 1), date_to=date(2025, 1, 1), frame_start=None, price_map=None, **overrides) -> DailyStateBuilder:
+def _builder(txs, ecfs, *, date_from=date(2025, 1, 1), date_to=date(2025, 1, 1), price_map=None, **overrides) -> DailyStateBuilder:
     defaults = {
         "classified_txs": txs,
         "in_transit_intervals": [],
@@ -126,7 +127,6 @@ def _builder(txs, ecfs, *, date_from=date(2025, 1, 1), date_to=date(2025, 1, 1),
         "target_currency": "EUR",
         "date_from": date_from,
         "date_to": date_to,
-        "frame_start": frame_start,
     }
     defaults.update(overrides)
     if "mark_series" not in defaults:
@@ -362,52 +362,52 @@ class TestSameDayCorrectionBucketOrdering:
 
 
 # =============================================================================
-# PRE-FRAME LOOP — the sign fix applies there too (line ~725)
+# A CORRECTION BEFORE date_from — the sign survives into the first emitted state
 # =============================================================================
 
 
-class TestPreFrameSignedCorrection:
-    """A DIVIDEND/INTEREST correction dated before frame_start is handled by the
-    pre-frame (accounting-only) loop, not the frame loop — a structurally
-    different code path (line ~725, no per-day clamp of its own). This must
-    still carry the *signed* value forward into the first emitted frame day.
+class TestSignedCorrectionBeforeDateFrom:
+    """A DIVIDEND/INTEREST correction dated before date_from is replayed, not
+    emitted. J1: by the same loop and the same rules as any other day, the per-day
+    clamp included (before J1, a separate pre-frame loop with no clamp of its own).
+    The *signed* value must still reach the first emitted day.
     """
 
-    def test_negative_correction_before_frame_start_carries_into_frame(self):
+    def test_negative_correction_before_date_from_carries_into_the_first_state(self):
         txs = [
             _ctxn(_tx(id=1, dt="2025-01-01", type="DEPOSIT", amount="1000")),
             _ctxn(_tx(id=2, dt="2025-01-02", type="DIVIDEND", amount="-30")),
         ]
         ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
-        builder = _builder(txs, ecfs, date_from=date(2025, 1, 1), date_to=date(2025, 1, 6), frame_start=date(2025, 1, 5))
+        builder = _builder(txs, ecfs, date_from=date(2025, 1, 5), date_to=date(2025, 1, 6))
         result = builder.build()
 
-        assert [s.date for s in result.daily_states] == [date(2025, 1, 5), date(2025, 1, 6)], "pre-frame days must emit no DailyPortfolioState"
-        first_frame_day = result.daily_states[0]
+        assert [s.date for s in result.daily_states] == [date(2025, 1, 5), date(2025, 1, 6)], "days before date_from must emit no DailyPortfolioState"
+        first_day = result.daily_states[0]
 
-        assert first_frame_day.cash_value == Decimal("970"), "1000 - 30 = 970, carried from the pre-frame loop"
-        assert first_frame_day.cumulative_external_cash_flow == Decimal("1000")
-        assert first_frame_day.total_pnl == Decimal("-30")
-        _assert_decomposition_invariants(first_frame_day)
-        # A correction before the frame is no flow of it, for the native cash either: test_native_cash.py::TestFlowsPortedFromTheEngine.
+        assert first_day.cash_value == Decimal("970"), "1000 - 30 = 970, carried from the days before date_from"
+        assert first_day.cumulative_external_cash_flow == Decimal("1000")
+        assert first_day.total_pnl == Decimal("-30")
+        _assert_decomposition_invariants(first_day)
+        # A correction before the window is no flow of it, for the native cash either: test_native_cash.py::TestFlowsPortedFromTheEngine.
 
-    def test_mirror_positive_correction_before_frame_start(self):
+    def test_mirror_positive_correction_before_date_from(self):
         """Same construction, genuinely positive +30 — proves the sign, not just
-        the magnitude, survives the pre-frame -> frame boundary."""
+        the magnitude, survives into the first emitted state."""
         txs = [
             _ctxn(_tx(id=1, dt="2025-01-01", type="DEPOSIT", amount="1000")),
             _ctxn(_tx(id=2, dt="2025-01-02", type="DIVIDEND", amount="30")),
         ]
         ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
-        builder = _builder(txs, ecfs, date_from=date(2025, 1, 1), date_to=date(2025, 1, 6), frame_start=date(2025, 1, 5))
+        builder = _builder(txs, ecfs, date_from=date(2025, 1, 5), date_to=date(2025, 1, 6))
         result = builder.build()
-        first_frame_day = result.daily_states[0]
+        first_day = result.daily_states[0]
 
-        assert first_frame_day.cash_value == Decimal("1030")
-        assert first_frame_day.cumulative_external_cash_flow == Decimal("1000")
-        assert first_frame_day.total_pnl == Decimal("30")
-        assert first_frame_day.cash_from_generated_returns == Decimal("30"), "positive correction sits entirely in R, undisturbed by any clamp"
-        _assert_decomposition_invariants(first_frame_day)
+        assert first_day.cash_value == Decimal("1030")
+        assert first_day.cumulative_external_cash_flow == Decimal("1000")
+        assert first_day.total_pnl == Decimal("30")
+        assert first_day.cash_from_generated_returns == Decimal("30"), "positive correction sits entirely in R, undisturbed by any clamp"
+        _assert_decomposition_invariants(first_day)
 
 
 # =============================================================================
