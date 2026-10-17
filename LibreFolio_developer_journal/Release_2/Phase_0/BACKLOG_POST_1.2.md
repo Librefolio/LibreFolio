@@ -5141,12 +5141,13 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     che la modale mostra come errore generico.
   - Da decidere: scollegare prima, come il wipe di X-R48 (con la regola degli SPLIT senza costo), o rifiutare con un
     codice e i collegamenti. Prima un rosso che lo riproduca.
-- **X-R66 · Il limite delle sonde dei provider detto nella lingua dell'utente** — basso, **dopo X-R58** (il
+- ✅ **X-R66 · Il limite delle sonde dei provider detto nella lingua dell'utente** — basso, **dopo X-R58** (il
   coordinatore, 17/10); X, 17/10 (dalla revisione di MF-SI2).
   - `POST /assets/provider/probe` risponde 429 `{error_code: PROBE_RATE_LIMITED, retry_after, message}` oltre 30
     sonde al minuto per utente. «Test Configuration» mostra il `message` inglese del backend (`extractErrorMessage`),
     «Ask Provider» un generico «si è verificato un errore».
   - Cura: una frase tradotta con l'ora locale di fine attesa, come per il `RATE_LIMITED` dei provider.
+  ✅ **Fatto da A il 17/10** (`ed5ad328a`, dev `e50c23919`): `probeRateLimitMessage()` in `resolveProviderError.ts`, chiavi `providerErrors.PROBE_RATE_LIMITED*` ×4; Test Configuration e Ask Provider dicono quando riprovare.
 - **X-R49b · I controlli degli SPLIT senza costo leggono prima del BEGIN differito** — basso, dopo la 1.3 salvo che costi
   poco; X, 17/10 (E, revisione di X-R49, via coordinatore). Vale anche per X-R48.
   - Il controllo legge prima della prima scrittura, fuori dal lock di scrittura di SQLite: una rettifica senza costo

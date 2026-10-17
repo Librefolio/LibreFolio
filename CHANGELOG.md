@@ -311,6 +311,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prices: deleting several date ranges of an asset now reports each row once, also when ranges overlap or the asset is named twice, and an empty delete request no longer fails; large deletions count far faster.
 - A manual price upload for several assets is refused as a whole when one of its prices is in a currency other than its asset's: before, the assets before it were already saved. The refusal (422 `price_currency_mismatch`) names every asset at fault.
 - Editing a pair's conversion routes no longer loses them when the save fails, and removing every route keeps the pair as a manual one instead of deleting it. The route picker no longer fails when two providers cover the same currency direction.
+- Too many provider checks in a minute (Test Configuration, Ask Provider): the asset form now says, in your language, when you can try again, instead of an English sentence or "An error occurred".
 - `./dev.py user create` now refuses a username shorter than 3 or longer than 50 characters, as registration does.
 - Settings › Administration › Users: cancelling the setup link of an administrator who completed its setup in the meantime no longer deactivates it: the tab says so and nothing changes.
 - The import's gap-fix refuses to compare a broker whose transactions hold currency codes that are not ISO codes, instead of proposing corrections for money already there.
