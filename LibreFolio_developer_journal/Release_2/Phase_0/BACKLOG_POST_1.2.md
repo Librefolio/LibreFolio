@@ -4535,12 +4535,20 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Cura: mostrare il `detail` del 400 e gli `errors` del 200 (per data), contarli a parte. Prove: Vitest e
     `front-fx fx-editor`. Poi la frase della pagina utente (`user/fx/detail/data-editor.en.md`) può dire «con un messaggio
     che nomina la data».
-- **X-R47 · Il rapporto di uno SPLIT non è mai validato** — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
+- ✅ **X-R47 · Il rapporto di uno SPLIT non è mai validato** (consegnata il 17/10, 06:00; committata `5f68a8db0`; l'ingresso aspetta la cura della regola (d) e X-R47b, stesso lotto; gli SPLIT già salvati sono MF-D4) — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
   V-4 di CP-14a, F4, girato dal coordinatore).
   - Si salva uno SPLIT con rapporto 0 o negativo. Appena una transazione lo collega, il motore solleva un `ValueError` e
     il report della Dashboard risponde 500.
   - Cura: validare il rapporto alla scrittura dell'evento. Al via, verificare col coordinatore chi possiede i file degli
     eventi (consegnati a W dopo CP2b).
+  - Rosso della regola (d) dei confini dello strato (J, 17/10 06:20): `event_store.py` nominava `AssetEventType.SPLIT`.
+    Cura: il predicato `financial_math.splits.is_split_event_type` (file di J, J rivede).
+- ✅ **X-R47b · Senza chiamante il rifiuto di P-10 mostrava tutti gli id** (consegnata il 17/10, 06:54; SHA all'ingresso) — piccolo, sicurezza (LOW); X, 17/10 (E,
+  revisione di `5f68a8db0`, girato dal coordinatore). Nello stesso lotto della cura della regola (d).
+  - Cura: la rotta passa `_current_user.id`; senza chiamante nessun id, solo `hidden_transactions_count`. I test P-10 di
+    J (file di W) rispondono a un utente che vede le transazioni: J e W rivedono. Nello stesso lotto, la nota LOW di W:
+    il rapporto nel messaggio d'errore scritto nella lingua dell'interfaccia (`formatExactDecimal`). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+    sezione «X-R47b».
 - **X-R48 · `market-data/wipe` cancella gli SPLIT collegati a rettifiche senza costo** — **prima del rilascio, dopo
   l'ingresso di CP-14a di J**; X, 17/10 (J, F1, girato dal coordinatore).
   - `POST /assets/{id}/market-data/wipe` (il flusso del cambio di valuta, ma si può chiamare anche da solo) scollega ogni
@@ -4596,6 +4604,30 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     - `target_currency` col cambio di ogni giorno;
     - MF scrive il backend (moduli nuovi, rotte e schemi aggiunti nei miei file) e io lo rivedo; il frontend è mio, dopo
       l'ingresso di MF.
+  - Contratto di MF (05:50, backend al checkpoint):
+    - `POST /api/v1/assets/prices/period-changes` prende `[{asset_id, as_of, target_currency?}]` e restituisce per
+      voce `{asset_id, as_of, currency, periods[{key, days, change_ratio}], errors[]}`;
+    - `POST /api/v1/fx/currencies/period-changes` prende `[{base, quote, as_of}]` (422 se base = quote) e restituisce
+      `periods[{…, inverse_change_ratio}]`;
+    - i periodi arrivano in ordine (1D … 5Y); i valori sono frazioni, da moltiplicare per 100; null = non disponibile.
+  - Da fare nel lotto frontend:
+    - `isPortfolioAffectingMutation()` (`lib/stores/portfolio/portfolioMutation.ts:102-107`) deve escludere
+      `/period-changes`, altrimenti ogni chiamata segna come vecchie le viste del portafoglio. Aggiornare anche la riga
+      di `developer/frontend/state/domain-state.md`. Di chi è il file, da verificare all'avvio;
+    - via le due copie di `computePeriodDelta`. Calcolavano il giorno di riferimento in ora locale del browser e, a cavallo
+      dell'ora legale, sbagliavano di un giorno. Il backend conta giorni di calendario esatti: alcuni riferimenti
+      cambiano, e va una riga 🐛 nel CHANGELOG;
+    - altre differenze: 1D c'è anche con un intervallo di un giorno; una serie nativa con valute miste, o una
+      conversione fallita, dà null più un errore; un prezzo ≤ 0 dà null.
+- **X-R55 · Intervalli senza tetto: una data estrema blocca l'istanza** — sicurezza, disponibilità; **passata a Z** (il
+  coordinatore, 17/10 06:38: Z è libera; X rivede al checkpoint di Z, perché i file sono di X); X, 17/10 (J, lo stesso
+  vettore di R13-SEC7-1; girato dal coordinatore). E rivede.
+  - `services/assets/price_query.py` `_build_backward_filled_series`: un punto per giorno su qualunque intervallo chiesto
+    (API dei prezzi degli asset, ambiti degli asset del rischio, segnali).
+  - `api/v1/fx/currencies.py` (~427 e ~471): il ciclo di `convert` sull'intervallo della richiesta.
+  - Una richiesta con `end` 9999-12-30 o `start` 0001-01-01 blocca l'istanza.
+  - Direzione, come J: la fine limitata a oggi + 1 (margine per i fusi orari); l'inizio limitato al primo dato o a un
+    arco di 100 anni. Prima i rossi con date moderate, poi le date estreme come guardie con un limite di tempo.
 
 ## W · Import e transazioni (fase 01)
 

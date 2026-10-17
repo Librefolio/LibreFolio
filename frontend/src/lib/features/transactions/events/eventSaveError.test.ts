@@ -24,6 +24,10 @@
  * sentence of its own, `events.saveError.tooManyDigits`, naming the first event at fault, how many
  * more, and the decimal places a value keeps (`max`). Every other code keeps its sentence.
  *
+ * X-R47, W's review (LOW): the ratio of a refused split is written in the interface locale
+ * (`formatExactDecimal`), from the string the server echoes and never through a float: «-0,5» in Italian,
+ * French and Spanish. Red before the cure for it/fr/es; the English case, and a ratio of 0, are guards.
+ *
  * `t` is a stand-in for svelte-i18n's `$t`: it records the key and the values and renders them the
  * way a template does (`String(value)`), so an object passed as a value would show as
  * `[object Object]` here exactly as it would on screen.
@@ -31,7 +35,10 @@
  * Before E1b `eventSaveError.ts` does not exist: this file fails to load. Against the first draft
  * (no deletions, no `existingAmountText`) it fails to load too: the import names a missing export.
  */
-import {describe, expect, it} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {eventRefusal, eventSaveErrorMessage, existingAmountText, existingEvents, type ExistingEvent} from './eventSaveError';
 
 type Values = Record<string, string | number>;
@@ -167,6 +174,20 @@ describe('eventSaveErrorMessage — the refusals of decision 22', () => {
         expectReadable(message, 'EVENT_ASSET_NOT_FOUND');
     });
 
+    // X-R47: a manual SPLIT whose ratio (its value) is not a number above 0 is refused, 400 EVENT_INVALID_SPLIT_RATIO, with
+    // params.events = [{event_index, date, type: 'SPLIT', ratio}, …], the ratio a string as sent.
+    it('EVENT_INVALID_SPLIT_RATIO names the first split whose ratio is not above 0, its ratio as sent, and how many more', () => {
+        const {t, calls} = fakeT();
+        const events = [
+            {event_index: 1, date: '2026-02-10', type: 'SPLIT', ratio: '0'},
+            {event_index: 3, date: '2026-04-10', type: 'SPLIT', ratio: '-2'},
+        ];
+        const message = eventSaveErrorMessage(refusal(400, 'EVENT_INVALID_SPLIT_RATIO', {asset_id: 7, item_index: 0, events}), t, [], typeLabel, dateLabel);
+
+        expect(onlyCall(calls)).toEqual({key: 'events.saveError.invalidSplitRatio', values: {date: 'D<2026-02-10>', type: 'T<SPLIT>', ratio: '0', more: 1}});
+        expectReadable(message, 'EVENT_INVALID_SPLIT_RATIO');
+    });
+
     it('without labels, the date and the type are passed as the server wrote them', () => {
         const {t, calls} = fakeT();
         eventSaveErrorMessage(refusal(400, 'EVENT_KEY_CONFLICT', {asset_id: 7, item_index: 0, date: '2026-03-15', type: 'INTEREST'}), t);
@@ -182,6 +203,97 @@ describe('eventSaveErrorMessage — the refusals of decision 22', () => {
         expect(call.key).toBe('events.saveError.generic');
         expect(typeof call.values?.message).toBe('string');
         expect(message).not.toContain('[object Object]');
+    });
+});
+
+/**
+ * X-R47, W's review (LOW) — the ratio of a refused split, written the way the interface writes numbers.
+ *
+ * EVENT_INVALID_SPLIT_RATIO names each refused split with its ratio as the request sent it: a decimal
+ * string with at most six decimals, the scale of the event's value (`"-0.5"`, `"0"`, `"-0.000001"`).
+ * Handed to `t` as it is, an Italian, French or Spanish user reads «-0.5» in a sentence where every other
+ * figure of the app reads «-0,5». The cure writes it with `formatExactDecimal`: the digits of
+ * `formatDecimalForDisplay` (nothing rounded, trailing zeros dropped), written by Intl from the string and
+ * never from a float (`toLocaleString` on a float prints `-0.000001` as «-0»), in `uiLocale()`. The date
+ * and the type still come from the caller's labels, and `more` is unchanged.
+ *
+ * The browser. Node's `navigator.language` follows the host's ICU locale (uiLocale.test.ts): an `it_CH`
+ * host would write the Italian ratio «-0.5», an `en_DE` one the English «-0,5». So this block runs with no
+ * navigator, as on the server, where each language takes its own default (en-GB, it, fr, es), and every
+ * test checks that locale before it reads the sentence.
+ *
+ * Red before the cure: Italian, French and Spanish, which read the ratio as sent. Guards, green before and
+ * after: English, which already read «-0.5», and a ratio of 0, with nothing to localize in any language.
+ * The expectations are typed, as this runtime's Intl writes them: a decimal comma and the ASCII minus
+ * (U+002D). A runtime without the locale's data would fall back to English and turn them red, never green.
+ */
+describe('eventSaveErrorMessage — the ratio of a refused split, in the interface language (X-R47, W review)', () => {
+    /** The interface locale of each language when no browser lends it a region: the language's own default. */
+    const LOCALE_OF = {en: 'en-GB', it: 'it', fr: 'fr', es: 'es'} as const;
+    type UiLanguage = keyof typeof LOCALE_OF;
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: UiLanguage): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    /** Switch the interface to `lang`, then check the locale its figures are written in. */
+    async function interfaceIn(lang: UiLanguage): Promise<void> {
+        await uiLanguage(lang);
+        expect(uiLocale(), `control: a ${lang} interface with no browser to lend a region writes ${LOCALE_OF[lang]}`).toBe(LOCALE_OF[lang]);
+    }
+
+    /** A refused save naming each split by its ratio, as the request sent it; the sentence names the first, of 2026-02-10. */
+    function invalidSplitRatio(...ratios: string[]) {
+        const events = ratios.map((ratio, i) => ({event_index: 2 * i + 1, date: `2026-02-${10 + i}`, type: 'SPLIT', ratio}));
+        return refusal(400, 'EVENT_INVALID_SPLIT_RATIO', {asset_id: 7, item_index: 0, events});
+    }
+
+    beforeEach(() => {
+        vi.stubGlobal('navigator', undefined);
+    });
+
+    afterEach(async () => {
+        // The language is module-level state and the navigator a global: both go back for the rest of the file.
+        await uiLanguage('en');
+        vi.unstubAllGlobals();
+    });
+
+    it.each(['it', 'fr', 'es'] as const)('EVENT_INVALID_SPLIT_RATIO writes the ratio the way the interface language writes numbers (%s): -0,5', async (lang) => {
+        await interfaceIn(lang);
+        const {t, calls} = fakeT();
+        const message = eventSaveErrorMessage(invalidSplitRatio('-0.5', '-0.000001'), t, [], typeLabel, dateLabel);
+
+        expect(onlyCall(calls)).toEqual({key: 'events.saveError.invalidSplitRatio', values: {date: 'D<2026-02-10>', type: 'T<SPLIT>', ratio: '-0,5', more: 1}});
+        expectReadable(message, 'EVENT_INVALID_SPLIT_RATIO');
+    });
+
+    it.each(['it', 'fr', 'es'] as const)('EVENT_INVALID_SPLIT_RATIO keeps the six decimals of the ratio, through no float and no rounding (%s): -0,000001', async (lang) => {
+        await interfaceIn(lang);
+        const {t, calls} = fakeT();
+        eventSaveErrorMessage(invalidSplitRatio('-0.000001'), t, [], typeLabel, dateLabel);
+
+        expect(onlyCall(calls)).toEqual({key: 'events.saveError.invalidSplitRatio', values: {date: 'D<2026-02-10>', type: 'T<SPLIT>', ratio: '-0,000001', more: 0}});
+    });
+
+    it('with the interface in English the ratio reads as it always has: -0.5, and -0.000001 with its six decimals', async () => {
+        await interfaceIn('en');
+        const half = fakeT();
+        eventSaveErrorMessage(invalidSplitRatio('-0.5', '-0.000001'), half.t, [], typeLabel, dateLabel);
+        const tiny = fakeT();
+        eventSaveErrorMessage(invalidSplitRatio('-0.000001'), tiny.t, [], typeLabel, dateLabel);
+
+        expect(onlyCall(half.calls)).toEqual({key: 'events.saveError.invalidSplitRatio', values: {date: 'D<2026-02-10>', type: 'T<SPLIT>', ratio: '-0.5', more: 1}});
+        expect(onlyCall(tiny.calls)).toEqual({key: 'events.saveError.invalidSplitRatio', values: {date: 'D<2026-02-10>', type: 'T<SPLIT>', ratio: '-0.000001', more: 0}});
+    });
+
+    it.each(['en', 'it', 'fr', 'es'] as const)('a ratio of 0 reads 0 in every language, with nothing to localize (%s)', async (lang) => {
+        await interfaceIn(lang);
+        const {t, calls} = fakeT();
+        eventSaveErrorMessage(invalidSplitRatio('0', '-2'), t, [], typeLabel, dateLabel);
+
+        expect(onlyCall(calls)).toEqual({key: 'events.saveError.invalidSplitRatio', values: {date: 'D<2026-02-10>', type: 'T<SPLIT>', ratio: '0', more: 1}});
     });
 });
 
