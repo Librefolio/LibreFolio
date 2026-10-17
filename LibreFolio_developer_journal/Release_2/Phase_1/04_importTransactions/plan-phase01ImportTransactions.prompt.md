@@ -6217,7 +6217,7 @@ Quel che c'è già:
 | `GapFixStep:72` | quantità a 8 | 10 |
 | `DataEditor:212`, riga di sola lettura | `Number(val)…max 4` | `formatPrice(Number(val), {minDecimals: 0, floorDecimals: 4})` |
 
-### C-97c-2 — quantità e prezzi dei lotti (BK): analisi e cura (2026-10-17, in corso)
+### C-97c-2 — quantità e prezzi dei lotti (BK): analisi e cura ✅ (2026-10-17) — entrato (`a8ec9d309` → `016fe7af9`)
 
 **Base**: HEAD `a84020b09` = dev con C-97c-1 (`7b251606a` → `f1bfa1e31`, CHANGELOG `a84020b09`; `theme-roles --check` pulito sulla
 punta). Via del coordinatore: «Go C-97c-2 (BK, lots); J reviews».
@@ -6386,3 +6386,110 @@ Il cancello del denaro non registra siti dei lotti.
 - **D-W70-5.** W-B77 dentro W-B70: una sola copia di `_loc_to_field` e della regola dei `params` in un modulo neutro
   (`backend/app/utils/pydantic_errors.py`; i due servizi lo importano senza cicli), con la riduzione di `resolved_fields.` (innocua
   per il BRIM, che non ha quel campo). Altrimenti due copie cambiate uguali e un test di parità, e W-B77 dopo con H.
+
+**Decisioni del coordinatore** (17/10 16:5x; ordine: C-97c-3 prima, poi W-B70):
+- **D-W70-1: OK.** Il cambio di contratto va bene prima del rilascio; i tre test che fissano `None` si riscrivono come rossi.
+- **D-W70-2: OK**, e l'`escapeHtml` del ramo dei built-in nello stesso lotto, con un rosso.
+- **D-W70-3: OK**; OK di scrittura su `PromoteMergeModal.svelte`, solo ruoli di colore.
+- **D-W70-4: (a)**: la coppia resta non promossa, con l'avviso; OK di scrittura su `TransactionBulkModal.svelte`. Mai perdere testo.
+- **D-W70-5: W-B77 dentro**, un modulo condiviso `utils/pydantic_errors.py`; rivede H (era co-proprietario). La SEC9g di MF tocca
+  `brim_provider.py` in `search_asset_candidates_bulk`, un'altra funzione: in BRIM la mia modifica resta all'import e ai siti di chiamata.
+
+### C-97c-3 — prezzi degli asset (AF) e dei grafici, quantità della dashboard (DV): analisi e cura ✅ (2026-10-17) — 🧊 FROZEN
+
+**Base**: HEAD `6e503e0f6` = dev con C-97c-2 (`4e02e5fee` → `016fe7af9`, CHANGELOG `6e503e0f6`), con X-R59 di Y (`f317e3a9f`).
+Via del coordinatore (17/10 16:5x): «C-97c-3 first (it closes C-97c), then W-B70». OK di scrittura sui `.svelte` di AF e DV dal
+D-C97c-1, solo per la formattazione dei numeri. Revisori: X (AF), Y (DV).
+
+**Siti** (riverificati sulla punta; X-R59 ha spostato le righe di 1–2):
+
+| Area | Sito | Oggi | Dopo |
+|---|---|---|---|
+| AF | `components/assets/AssetTable.svelte:219`, colonna `lastPrice` | `formatCurrencyAmountHtml(price, …, {public})`: 2 fissi | `minFraction`/`maxFraction` da `priceFractionDigits(price)` |
+| AF | `AssetPriceSummary.svelte:99`, prezzo | `formatFixed(lastPrice, 2)` | `formatPrice(lastPrice)` |
+| AF | `AssetPriceSummary.svelte:112`, Δ assoluto | `formatFixed(deltaAbs, 2, {signed})` | `formatPrice(deltaAbs, {signed: true})` |
+| AF | `AssetCard.svelte:226`, prezzo | `formatFixed(Number(livePrice), 2)` | `formatPrice(livePrice)` |
+| AF | `AssetCard.svelte:233`, Δ assoluto | `formatFixed(Number(deltaAbs), 2, {signed})` | `formatPrice(deltaAbs, {signed: true})` |
+| AF | `ProviderAssignmentSection.svelte:381`, prova: prezzo corrente | `formatFixed(Number(cpValue), 2)` | `formatPrice(Number(cpValue))` |
+| AF | `providerProbe.ts:124`, `:135`, tooltip della prova: prezzo, chiusure | `formatFixed(Number(…), 2)` | `formatPrice(Number(…))` |
+| DV | `features/dashboard/ExposureTable.svelte:154`, quantità | Intl a 6 | Intl a 10 |
+| DV | `ExposureTable.svelte:396` prezzo, `:412` PMC | `formatCurrencyAmountPlain(…, {public})`: 2 fissi | `priceFractionDigits` |
+| DV | `charts/candlestickChartHelpers.ts:94-97` `formatCandlePrice` (tooltip) | ≥100 → 2; ≥1 → 4; sotto 1 → fino a 6, almeno 1 | `formatPrice(v)`; `{minDecimals: 4}`; `{minDecimals: 1, floorDecimals: 6}` |
+| DV | `charts/priceChartHelpers.ts:608`, Δ del tooltip | `formatFixed(deltaAbs, 4, {signed})` | `formatPrice(deltaAbs, {minDecimals: 4, signed: true})` |
+| DV | `PriceChartFull.svelte:820`, `:823` (valore dell'evento, originale), `:888` (valore del secchio), `:1051` (valore della riga) | `formatFixed(…, 4)` | `formatPrice(…, {minDecimals: 4})` |
+| DV | `LineChart.svelte:826` (valore), `:837` (banda superiore e inferiore) | `formatFixed(…, 4)` | `formatPrice(…, {minDecimals: 4})` |
+| DV | `MeasurePanel.svelte:300-301` `fmtValue` | ≥1 → 4; sotto 1 → fino a 6 | `{minDecimals: 4}`; `{minDecimals: 0, floorDecimals: 6}` |
+| DV | `MeasurePanel.svelte:305` `fmtDelta`, `:534` valore d'inizio in attesa | 4 (col segno il Δ) | `{minDecimals: 4[, signed: true]}` |
+
+Ogni sostituzione tiene il minimo di oggi (`minDecimals`, `floorDecimals`): nessun valore mostra meno cifre, e sopra 0,001 le cifre
+non cambiano, salvo i prezzi a 2 fra 1 e 10, che mostrano la terza quando c'è (`1.234`, D-C97c-1: 4 cifre significative).
+
+**Restano**:
+- gli assi (`LineChart:744-746`), i volumi (`formatVolume`), i giorni (`PriceChartFull:825`), i conteggi e i secondi
+  (`ProviderAssignmentSection:402`, `:654`, `:686`), le percentuali;
+- `AssetTable.formatDelta`: il ramo a 2 decimali è morto (le due chiamate passano `'%'`). Non si tocca.
+
+**Scoperte**:
+- **Tre prezzi per unità fuori dall'elenco**, negli stessi file autorizzati: la colonna `lastPrice` di `AssetTable` e prezzo e PMC di
+  `ExposureTable`, scritti come valuta con 2 decimali fissi. Un PEPE si legge `0,00 €`. Stessa regola dei prezzi dei lotti (C-97c-2):
+  entrano. Fuori da AF e DV nessun altro prezzo `public` (il planner PAC tiene tutte le cifre).
+- **L'arrotondamento.** `formatFixed` arrotonda il valore binario (`toFixed`), `formatPrice` il decimale più corto (Intl): solo un
+  caso esattamente a metà può cambiare l'ultima cifra (`1.005` → `1.00` oggi, `1.01` dopo). È la regola già accettata in C-97c-1.
+- **Il `NaN`.** `formatFixed` scrive `NaN`, `formatPrice` niente: i siti escludono già `null`, e un prezzo non numerico non arriva.
+
+**Cancelli**:
+- HTML (`htmlInterpolation.gate.test.ts`): `LineChart:837` passa `upper[dataIdx]`, una lettura per chiave calcolata, che il cancello
+  accetta solo come primo argomento di un formattatore numerico. `formatPrice` entra in `NUMERIC_FORMAT_CALLS`, con la ragione: scrive
+  cifre, i segni della lingua e un segno; `''` per un valore non numerico, mai il suo input.
+- Denaro (`moneyRenderSites.test.ts`): il frammento di `PriceChartFull:1051` è registrato `public` e cambia: si aggiorna nella stessa
+  modifica. Nessun sito nuovo: le righe con `formatCurrencyAmount*` sono esenti, e nessun altro letterale cambiato unisce un `currency` a
+  un numero.
+
+**E2E**: nessuno fissa un prezzo che cambia (tutti sopra 10: `12.34`, `95`–`777`, `123.45`).
+
+**Test** (test-author): rossi in `candlestickChartHelpers`, `priceChartHelpers`, `providerProbe` (core-unit), `ProviderAssignmentSection`,
+`PriceChartFull`, `LineChart`, `MeasurePanel`, `AssetTable` (con `AssetCard`, già montato lì), `ExposureTable` (component-unit), e un
+file nuovo `AssetPriceSummary.test.ts` (registrato in component-unit); nel cancello HTML un caso della regola per `formatPrice`.
+
+**Passi**:
+1. ✅ **Cura pronta** (17/10): `files/scripts/c97c3_cure.py`, dry run pulito su 13 file (11 di prodotto più i due cancelli).
+2. ✅ **Rossi** (17/10, test-author `c97c3-reds`): **28 rossi, 447 verdi** in 11 file, uguali nella mia corsia (carico 31,
+   `files/logs/c97c3/10_my_reds.log`); tutti nei blocchi C-97c-3, ognuno sul suo motivo (oggi `0.00`, `0.0000`, `1.23`, `0.000003`,
+   `0.0`, `0.123457`, `0`; il cancello riporta le due letture).
+   - core-unit: `candlestickChartHelpers` 3, `priceChartHelpers` 2 (`buildDeltaHtml`), `providerProbe` 3, il cancello HTML 1 (più una
+     guardia: `formatPrice(row.display_name)` resta riportato dalla regola dei nomi, un'opzione calcolata dalla sua);
+   - component-unit: `AssetPriceSummary` 4 (file nuovo, registrato dopo `AssetTable.test.ts` in `front_component_unit`), `AssetTable` 3
+     (colonna `lastPrice`, prezzo e Δ di `AssetCard`), `ProviderAssignmentSection` 2, `PriceChartFull` 2, `LineChart` 1, `MeasurePanel` 3,
+     `ExposureTable` 4.
+   - Nessuna asserzione esistente fissava un comportamento che cambia; `providerProbe.test.ts` fissa ora il browser a en-US per tutto il
+     file (Node segue la lingua dell'host); `ExposureTable.test.ts`: i due oracoli della quantità passano a 10, stessi valori.
+   - Due letture senza testid (`AssetCard`, il prezzo vivo; `MeasurePanel`, la riga in attesa): lette dal contenitore, senza aggiungere
+     testid (nessun markup oltre la chiamata, regola del D-C97c-1).
+   > **Note del test-author**: (1) `formatPrice` scrive `''` per null, undefined, NaN, dove `formatFixed` scriveva `NaN`: un limite di
+   > banda o un valore di secchio mancante mostra vuoto; (2) la prova col prezzo nullo resta `0.00` (`Number(null)`); (3) svelte-check dà 6
+   > errori in file d'altri (`periodChanges.ts`, `assetDetailRangeChange.ts`, `assetDetailLive.svelte.ts`, `UsersTab.svelte`): il client
+   > generato è vecchio dopo l'avanzamento, `api sync` prima di `front check`; (4) i commenti del cancello che nominano i due formattatori:
+   > la riga 140 entra nella cura (quella a 57 dà esempi).
+3. ✅ **Cura applicata e verdi** (17/10, 17:3x–17:57): `c97c3_cure.py --apply` sui 13 file, più la riga 140 del cancello HTML
+   («`formatFixed`, `formatPercent` or `formatPrice`»). L'unico `formatPrice` locale, quello di `LotCustodyModal`, scrive un numero o `—`:
+   la fiducia per nome del cancello resta giusta. Gli 11 file e il cancello del denaro: **482/482** (carico 38). Poi
+   `files/scripts/c97c3_light.sh`, una prova alla volta, carico < 50 (log `files/logs/c97c3/light_*.log`):
+
+   | Prova | Esito |
+   |---|---|
+   | `dev.py api sync` | uscita 0, nessun file tracciato cambiato |
+   | `dev.py test check-orphans` | ogni test registrato raggiungibile (il file nuovo compreso) |
+   | `front-utility core-unit` (i due cancelli, gli aiuti dei grafici, la prova) | 211 file, 8 795 verdi |
+   | `front-utility component-unit` | 180 file, 4 866 verdi |
+   | `front-portfolio chart-safety-unit` (l'escape dei tooltip) | 8 file, 91 verdi |
+   | `dev.py front check` | svelte-check 0/0 (i 6 errori visti dal test-author erano il client vecchio) |
+   | Prettier sui 24 file | pulito |
+
+4. ✅ **Doc** (17/10, modifica puntuale, pagina per sviluppatori senza traduzioni): `developer/frontend/i18n.md`, la frase sui due cancelli:
+   il cancello HTML si fida di `formatFixed`, `formatPercent` **o `formatPrice`** («only those three names»). Nessun'altra pagina fissa le
+   cifre di questi siti (grep dei nomi delle funzioni e di `2|4|6 dp`, `decimals`). Backlog: **W-B78** (le 10 cifre delle quantità scritte
+   a mano in 10 punti di 9 file; una costante in `utils/core`, dopo la 1.3).
+5. ✅ **Simulazione** (17/10, 17:58–18:01): `sim_cherry_pick.sh dev_release2 --docs` sui 27 file (il test nuovo, non tracciato,
+   compreso), dev `685d76dab` (HEAD `6e503e0f6` antenato, 42 commit avanti; tocca due miei file condivisi, il backlog e
+   `_frontend_utility.py`, in altre righe): 0 conflitti; `mkdocs build` stretto e `check-links` con uscita 0 sull'albero unito (log
+   `files/logs/c97c3/20_sim.log`). `git diff --check` pulito. Handoff FROZEN; revisori X (AF) e Y (DV). Chiude C-97c.
