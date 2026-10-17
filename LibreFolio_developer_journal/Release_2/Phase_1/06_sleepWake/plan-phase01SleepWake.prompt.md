@@ -3259,3 +3259,151 @@ colori.
    `front-portfolio price-refresh` intero 8/8 sul codice (`files/z20_slot.sh`, impronta verificata): l'avviso
    arriva attraverso il pozzo pigro. Porta 6186 libera.
 6. ✅ 17/10 ~03:25 — Backlog: Z-20 ✅. Checkpoint FROZEN inviato al coordinatore.
+7. ✅ 17/10 03:25–03:36 — Revisione combinata (coordinatore: commit `3235837ad` e `96d77117a`, base aggiornata con
+   dev `69e1c58e9`, HEAD `cb6950f26`), controlli leggeri sotto 50 (`files/z20_combined.sh`): `api sync` rc 0;
+   `front check` 0 errori e 0 avvisi; `front-utility core-unit` 7864/7864 (199 file, col cancello);
+   `onboarding-component-unit` 459/459; il ponte vero carica l'ingresso della sonda (rc 0). Lo slot di
+   `price-refresh` resta valido (dev non tocca quei file). Porta 6186 libera. Revisione di H: OK, le quattro
+   condizioni rispettate; una nota facoltativa, solo sviluppo, da fare dopo l'ingresso: Z-22.
+
+### Backlog aperto di Z: analisi in ordine di priorità per il Cloud (17/10 ~03:30, sola lettura)
+
+> **Via** (coordinatore, 17/10 ~03:24): «Afterwards: a read-only analysis of your open backlog (Z-4, Z-7, Z-10, Z-11,
+> Z-15, Z-16), in Cloud priority order, with a proposal of what's worth doing before the release.»
+
+Fonte del Cloud: la nota «Feature SaaS Readiness» del business plan (sola lettura, aggiornata il 16/10). C16, fase 1:
+orari di risveglio fissi decisi dal pannello di controllo, con `wake-sync` e il token d'istanza; `next_wake_at` dopo
+la 1.3. La fase dopo (EOD per il Premium, ogni ora in orario di mercato per le fonti non premium, per asset) segue
+D-19.
+
+| ordine | voce | conta per il Cloud? | prima del rilascio? | perché, e quanto costa |
+|---|---|---|---|---|
+| 1 | Z-15 (rischio e lotti dopo un recupero), con Z-14b | sì: un risveglio porta un recupero, e chi apre subito il Dashboard vede rischio e lotti vecchi, segnati stale, finché non si ricaricano | sì, se il developer sceglie la ricarica silenziosa (domanda Z-14b del mattino) | piccolo-medio. La condizione «dopo Y11» c'è: Y11 è in dev, e `riskPanelController.svelte.ts` e `LotsAnalysisPanel.svelte` caricano sotto `pageBusy`. Cura: su `{kind: 'prices'}` i due pannelli ricaricano in background fuori da `pageBusy`, come `reloadAfterPriceCatchUp` di Dashboard e broker. File di Y (rischio), J (lotti), DV e BK (pagine, solo `<script>`), pagine dei prezzi (X/Y) |
+| 2 | Z-16 (albero tradotto di `admin/filesystem`) | no, è doc admin | sì, dentro il giro di traduzione prima del rilascio: nessun lotto a parte, un controllo dopo il giro | minimo |
+| 3 | Z-10 (Ctrl+C su `dev.py server`) | no: in Docker e su Fly uvicorn è il PID 1 | facoltativo, per chi gira dal sorgente | S; `run_command_live` ha 37 chiamate (35 in `dev.py`, 2 in `scripts/cli_base.py`): il rimedio va solo sulla chiamata del server (`dev.py:448`); superficie del coordinatore |
+| 4 | Z-11 (lock dei job tra processi) | no: una macchina, un worker | no | solo self-hosted con `--workers` |
+| 5 | Z-7 (`next_wake_at`, calendario dei job, jitter) | sì, ma è la fase 2 di C16 | no: la nota del Cloud e la decisione 33 lo rimandano dopo la 1.3 | M; la risposta di `wake-sync` è già estendibile |
+| 6 | Z-4 (risvegli orari per singolo titolo) | sì, fase 2 (D-19) | no | serve un campo per asset (migrazione) e la politica di D-19 |
+
+Altro del mio perimetro prima del rilascio:
+- la prova su Fly (protocollo A1–A9 in «Chiusura del piano», e «Check That It Works» in `admin/sleep_wake.en.md`) su
+  una macchina vera: non si fa nelle corsie, tocca al developer o al pannello del Cloud;
+- il foglio delle decisioni «da rivedere» (43) più quelle di stanotte (N-ZA-1…6, N-Z14-1…3, N-Z20-1…4, N-Z21-1);
+- Z-22 (H, solo sviluppo): `instanceBlock.svelte.ts` aggiunge un ascoltatore a ogni HMR senza togliere il vecchio;
+  una riga, `import.meta.hot?.dispose(stop)`, dopo l'ingresso di Z-20.
+
+Proposta: (1) Z-14b e Z-15 come una sola domanda di UX al developer stamattina; se la risposta è sì, un lotto «le
+viste aperte si riallineano da sole dopo un recupero», coi proprietari dei file; (2) Z-22 subito dopo l'ingresso di
+Z-20; (3) Z-10 se resta tempo; (4) Z-4, Z-7 e Z-11 dopo la 1.3; Z-16 col giro di traduzione.
+
+> **Decisione** (coordinatore, 17/10, con l'ingresso di Z-20): «Proposal approved: **Z-22** now; Z-14b + Z-15 as
+> **one question** for the developer (I've updated it in the list); **Z-10** if there's time (S, `dev.py:448`, writer
+> OK); Z-4/7/11 after 1.3; Z-16 with the translation round.» La riga di Z-22 proposta qui non scatta: sezione «Z-22».
+
+### Z-22 — un ascoltatore in più a ogni aggiornamento a caldo della faccia (17/10, dopo l'ingresso di Z-20)
+
+> **Via** (coordinatore, 17/10): «**Z-20 entered**: dev `3f654c4da`; your HEAD is ff'd. Proposal approved: **Z-22**
+> now». Nota di H (revisione di Z-20): «`instanceBlock.svelte.ts:23` adds a listener at every HMR without removing the
+> old one. `import.meta.hot?.dispose(stop)` with the function `subscribe()` returns fixes it.»
+
+**Analisi.**
+- Il difetto c'è. `instanceBlockState` tiene gli ascoltatori in un `Set`. Un aggiornamento a caldo di
+  `instanceBlock.svelte.ts` valuta una copia nuova del file, che si iscrive di nuovo. Il modulo semplice, che non è
+  cambiato, tiene anche l'ascoltatore della copia vecchia, che scrive in un `$state` che nessuno legge più. Succede
+  solo in sviluppo: in produzione il modulo si valuta una volta.
+- La riga di H qui non scatta. Vite 7.3.5 chiama `dispose` solo sul modulo attraverso cui l'aggiornamento è accettato
+  (`dist/client/client.mjs`, `fetchUpdate`: `disposeMap.get(acceptedPath)`). La faccia non si auto-accetta, quindi
+  `propagateUpdate` (`dist/node/chunks/config.js`) risale agli importatori. Il confine è il layout `(app)`, un
+  componente Svelte che si auto-accetta: `acceptedPath` è il layout, mai la faccia.
+- Prova: `files/z22-draft/hmr_experiment.mjs`, col Vite del repo e il suo module runner, che usa lo stesso
+  `HMRClient` del browser. Un modulo semplice, una faccia che si iscrive all'import, un importatore che si
+  auto-accetta; tre modifiche della faccia, e ogni volta il layout vede la copia nuova. Ascoltatori: senza nulla
+  1→2→3→4; con `dispose` 1→2→3→4; passando la funzione per `import.meta.hot.data`, sempre 1.
+- I registri di Z-14 (`assetPriceStoreRegistry`, `fxStoreRegistry`) non hanno il difetto:
+  `registerPortfolioMutationListener` è a chiave, e la copia nuova sostituisce la vecchia.
+
+**Decisione N-Z22-1** («da rivedere», mia; il coordinatore informato alle ~03:46, prima del codice, per H): la cura
+resta nella faccia, come voleva H, ma col meccanismo che scatta.
+- Ogni copia ferma la precedente passandosi la funzione per `import.meta.hot.data`, che persiste fra le copie dello
+  stesso percorso.
+- Quattro righe; la build le toglie, perché lì `import.meta.hot` è `undefined`. Le quattro condizioni di H restano.
+- Alternativa, se H la preferisce: un `subscribe(key, listener)` a chiave, come il bus. Si può verificare con un
+  test, ma cambia l'API del modulo semplice.
+- Nessun test nuovo: in Vitest non c'è un aggiornamento a caldo. La prova è l'esperimento.
+
+**Passi.**
+1. ✅ 17/10 03:42–03:46 — Esperimento, sotto 50 (ha aspettato il carico dalle 03:42; le tre varianti alle 03:45):
+   il risultato è quello sopra.
+2. ✅ 17/10 03:46 — Codice in `instanceBlock.svelte.ts`: `const stopFollowing = instanceBlockState.subscribe(…)`,
+   poi il passaggio per `import.meta.hot.data`, con un commento sul perché. Prettier pulito.
+3. ✅ 17/10 03:49–04:03 — Controlli leggeri, sotto 50 (`files/z22_light.sh`; impronta del file in
+   `files/z22-draft/z22_applied.md5`, il file non è cambiato dalle 03:48):
+   - l'esperimento con la guardia definitiva (03:49), con lo stesso risultato: senza nulla e con `dispose` 1→4,
+     col passaggio sempre 1;
+   - Vitest su `instanceBlock.test.ts` e sul cancello, 40/40 (03:49);
+   - `api sync` rc 0 e `front check` 0 errori, 0 avvisi (03:53–03:57);
+   - `front-utility core-unit` 7941/7941, 200 file (04:01–04:03). Porta 6186 libera.
+   > **⚠️ Fuori pista** (03:47): la prima versione, `if (import.meta.hot)`, ha fatto cadere 24 casi su 24 di
+   > `instanceBlock.test.ts` con `TypeError: Cannot read properties of undefined (reading 'stopFollowing')`. In
+   > Vitest 4.1.11 `import.meta.hot` esiste, ma è un sostituto senza `data` (`createHotContext` in
+   > `dist/module-evaluator.js` dà solo `accept`, `dispose` e simili). Catena fermata; la guardia ora è
+   > `if (import.meta.hot?.data)`, e il commento lo dice. Nel browser e nel module runner `data` c'è sempre.
+   >
+   > **⚠️ Fuori pista** (03:52): il primo `front check` ha dato 13 errori in 5 file, tutti del backup di B (la
+   > cifratura: `encrypting`, `secrets_rekeyed`, `get_instance_backup_options…`), arrivati con la base nuova: il
+   > client generato era vecchio. Nessuno nel file di Z-22. Catena fermata, rifatta con `api sync` prima.
+   >
+   > Non eseguiti: E2E (il percorso è solo di sviluppo, la build toglie il blocco); `component-unit` e
+   > `onboarding-component-unit` (i test del layout deridono `instanceBlock.svelte`).
+4. ✅ 17/10 ~04:06 — Backlog: Z-22 ✅. Checkpoint FROZEN al coordinatore.
+
+### Z-10 — Ctrl+C su `./dev.py server`: analisi (17/10 ~04:06, sola lettura)
+
+> **Via** (coordinatore, 17/10): «**Z-10** if there's time (S, `dev.py:448`, writer OK)».
+
+**Stato reale** (letto nel codice, le righe di oggi):
+- `cmd_server` (`dev.py:163`) lancia il server con `run_command_live(uvicorn_cmd, env=env)` (`dev.py:448`). Il comando
+  è `pipenv run python -c "…uvicorn.main.main()" …`, e `pipenv run` su POSIX fa `os.execve`
+  (`pipenv/routines/shell.py:230`). Il figlio di `dev.py` è quindi uvicorn stesso: il server con `--no-reload`, il
+  supervisore con `--reload`, il gestore dei worker con `--workers`.
+- `run_command_live` (`scripts/cli_base.py:457`) usa `subprocess.run`. In CPython 3.13.16, al primo
+  `KeyboardInterrupt` `subprocess.run` aspetta il figlio 0,25 s (`_sigint_wait_secs`, riga 896), poi lo uccide con
+  `process.kill()` (righe 572–574).
+- Ctrl+C manda SIGINT a tutto il gruppo in primo piano, `dev.py` e server insieme. Il server comincia lo spegnimento
+  col suo budget (8 s di default, `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`), ma dopo 0,25 s muore di SIGKILL: niente
+  drenaggio, lavori non fermati in ordine, scritture tagliate.
+- La doc admin (`admin/configuration.en.md#shutdown`) promette il budget anche a «SIGINT from Ctrl+C». È vero per
+  uvicorn lanciato a mano e in Docker, non per `./dev.py server`: lo diventa con Z-10.
+- Non c'entrano:
+  - `--coverage`: fa `os.execvpe`, quindi non c'è involucro;
+  - il runner dei test: ferma il suo server con SIGTERM al gruppo (`scripts/test_runner/_server.py:453`, avviato con
+    `start_new_session=True`), mai con SIGINT;
+  - Docker e Fly: lì uvicorn è il PID 1.
+- uvicorn 0.52.4 al secondo SIGINT forza l'uscita da sé (`server.py:344`, `force_exit`).
+
+**Proposta** (decisione N-Z10-1, «da rivedere»):
+- Una funzione nuova, `run_server_live(cmd, env, grace_seconds)`, in `scripts/cli_base.py`, accanto a
+  `run_command_live`, che resta com'è per le altre 36 chiamate. Fa `Popen` e `wait()`.
+- Al primo Ctrl+C stampa che aspetta lo spegnimento («Ctrl+C again to force») e aspetta il figlio fino a
+  `grace_seconds`. Al secondo Ctrl+C, o a tempo scaduto, manda SIGKILL e aspetta il figlio. Codice d'uscita 130, come
+  oggi.
+- `dev.py:448` la chiama con grazia = budget + 2 s; il budget viene da `shutdown_timeout_seconds(env)`, col default
+  se il valore non si usa. Con budget 0 (nessun limite) aspetta finché il server esce, e il secondo Ctrl+C forza.
+- Fuori da Z-10, da decidere: un SIGTERM mandato al solo `dev.py` (non al gruppo, per esempio da un supervisore di
+  processi) lascia oggi il server orfano. La stessa funzione potrebbe inoltrarlo al figlio.
+
+**Test** (rossi prima, test-author), in `backend/test_scripts/test_utilities/`, senza server né DB:
+- uno script di prova lancia, attraverso la funzione, un figlio che al SIGINT lavora ~1 s, scrive un segnale ed esce
+  con 0. Il test aspetta che il figlio dica «pronto» (scambio su file, nessuna attesa fissa) e poi manda SIGINT al
+  gruppo, come il terminale. Casi:
+  - (a) il figlio finisce il suo spegnimento e lo script esce con 130 (rosso oggi: SIGKILL dopo 0,25 s);
+  - (b) oltre la grazia il figlio è ucciso;
+  - (c) un secondo SIGINT lo uccide subito;
+- un caso sul cablaggio: `cmd_server` passa a `run_server_live` la grazia derivata dal budget (funzione sostituita).
+
+**Superfici:** `scripts/cli_base.py` (funzione nuova), `dev.py` (la chiamata del server), un file di test nuovo con
+la sua registrazione nel catalogo del runner (`scripts/test_runner/`). Doc: `developer/dev_workflow.en.md` (Ctrl+C
+aspetta lo spegnimento; un secondo Ctrl+C forza). Nessun file del frontend, nessuna area dei colori.
+
+**Costo e rischi:** S, una quarantina di righe e quattro casi. I test con segnali e processi veri sono sensibili al
+carico: lo scambio su file evita le attese fisse, e le grazie dei casi restano larghe.
