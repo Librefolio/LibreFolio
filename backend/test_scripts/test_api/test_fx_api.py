@@ -13,6 +13,7 @@ Note: The former GET /fx/currencies endpoint was removed and absorbed
 by GET /fx/providers which now includes target_currencies per provider.
 """
 
+import time
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -32,6 +33,7 @@ from backend.app.schemas.fx import (
     FXUpsertItem,
 )
 from backend.app.schemas.refresh import FXSyncBulkResponse
+from backend.app.utils.datetime_utils import latest_range_end
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
 
@@ -1040,3 +1042,82 @@ async def test_delete_rates_mixed_validity(test_server):
         assert body.errors, "expected at least one per-item error"
         assert any("EUR" in e for e in body.errors), f"errors should mention EUR: {body.errors}"
         print_success(f"✓ Mixed batch handled: 1 success + {len(body.errors)} error(s)")
+
+
+# ============================================================================
+# X-R55 (N75): a conversion has a ceiling, the server's tomorrow
+# ============================================================================
+#
+# POST /fx/currencies/convert used to expand one conversion a day up to any requested end: 9999-12-31 meant about 3.6
+# million daily conversions in the lane's backend. Identity conversions (CHF → CHF) need no rate and write nothing: the
+# daily expansion alone is under test. The unbounded sizes are pinned at service level (services range-ceiling, RC-F05),
+# behind a fuse: here a red guard on unbounded code must not keep the shared backend busy for minutes.
+#
+# The ceiling is datetime_utils.latest_range_end(), tomorrow by the server's calendar (R13-SEC7-1's one helper). The
+# lane's server runs on this host, in this process's time zone: the test asks the same helper for the day it cuts at.
+
+EXTREME_SECONDS = 20.0  # a capped answer takes milliseconds; an unbounded one, minutes
+
+
+def _identity_conversion(start: str, end: str) -> list[dict]:
+    return [{"from_amount": {"code": "CHF", "amount": "100"}, "to": "CHF", "date_range": {"start": start, "end": end}}]
+
+
+@pytest.mark.asyncio
+async def test_convert_end_after_tomorrow_stops_at_tomorrow(test_server):
+    """RC-API-03 (X-R55, N75): POST /fx/currencies/convert up to today+10 gives no result after the ceiling,
+    ``latest_range_end()``: tomorrow, by the server's calendar.
+
+    The ceiling is read before the request (the results must reach it) and after the answer (no result may pass it): a
+    day turning meanwhile only widens what is accepted.
+    Red before X-R55: one result a day up to today+10.
+    """
+    print_section("RC-API-03: conversion clamped to tomorrow")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        ceiling_before = latest_range_end()
+        today = ceiling_before - timedelta(days=1)
+        request = _identity_conversion((today - timedelta(days=3)).isoformat(), (today + timedelta(days=10)).isoformat())
+        response = await client.post(f"{API_BASE}/fx/currencies/convert", json=request, timeout=TIMEOUT)
+        ceiling = latest_range_end()
+        assert response.status_code == 200, response.text
+        body = FXConvertResponse(**response.json())
+        days = [result.conversion_date for result in body.results]
+        late = [day for day in days if day > ceiling]
+        assert not late, f"{len(late)} conversions after the ceiling {ceiling}: {late[0]} … {late[-1]}"
+        assert days and days[-1] >= ceiling_before, f"one conversion a day up to the ceiling {ceiling_before} expected: {days}"
+        assert body.errors == []
+        print_success(f"✓ {len(days)} conversions, the last on {days[-1]}")
+
+
+@pytest.mark.asyncio
+async def test_convert_extreme_end_is_bounded(test_server):
+    """RC-API-04 (X-R55, N75, guard): a conversion ending 9999-12-31 answers within EXTREME_SECONDS: 9999-12-01 …
+    9999-12-31 lies wholly after the ceiling, ``latest_range_end()``, so it gives no result and no error (200, not the
+    404 of failed ones).
+
+    The start is not 0001-01-01 on purpose: on unbounded code that request makes the lane's shared backend expand about
+    3.6 million conversions, its event loop blocked for minutes and every neighbour test with it. This shape costs
+    unbounded code 31 conversions, and still fails it; 0001-01-01 … 9999-12-31 is pinned at service level (RC-F05).
+    Red before X-R55: 500 Internal Server Error — after its 31 conversions the daily expansion stepped past 9999-12-31,
+    the last day a date can hold (OverflowError, uncaught), as every conversion ending there did.
+    """
+    print_section("RC-API-04: conversion ending 9999-12-31")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        started = time.monotonic()
+        try:
+            response = await client.post(f"{API_BASE}/fx/currencies/convert", json=_identity_conversion("9999-12-01", "9999-12-31"), timeout=EXTREME_SECONDS)
+        except httpx.TimeoutException:
+            pytest.fail(f"no answer within {EXTREME_SECONDS:.0f} s for a conversion ending 9999-12-31")
+        elapsed = time.monotonic() - started
+        ceiling = latest_range_end()
+        assert response.status_code == 200, response.text
+        assert elapsed < EXTREME_SECONDS, f"{elapsed:.1f} s"
+        body = FXConvertResponse(**response.json())
+        late = [result.conversion_date for result in body.results if result.conversion_date > ceiling]
+        assert not late, f"{len(late)} conversions after the ceiling {ceiling}: {late[0]} … {late[-1]}"
+        assert (body.results, body.errors) == ([], [])
+        print_success(f"✓ no conversion, no error, in {elapsed:.2f} s")

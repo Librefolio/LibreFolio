@@ -577,7 +577,7 @@ When a start found a restore waiting and did not apply it, one more line says wh
 
 A rollback also removes the restored data and the copy: to try again, run `backup restore` again. If even putting the data back fails, on a disk or permission error for instance, LibreFolio does not start: its log has `The data directory is half restored: the restore could not be undone, and LibreFolio does not start on it`, and every start tries again.
 
-`--cancel` drops the restore waiting, with its checked copy, whoever confirmed it: `✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is`, exit code `0`. When no restore waits, or one is already being applied: `❌ No restore waits for the next start: nothing to cancel (restore_not_pending)`, exit code `1`.
+`--cancel` drops the restore waiting, with its checked copy, whoever confirmed it: `✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is`, exit code `0`. If the copy cannot be removed, on a permission or disk error for instance, the restore is dropped all the same, with that line and exit code `0`: the log above it has the warning `The copy of a cancelled restore could not be removed: it goes when its check expires`, and LibreFolio removes the copy at its first start once the check is 24 hours old. When no restore waits, or one is already being applied: `❌ No restore waits for the next start: nothing to cancel (restore_not_pending)`, exit code `1`.
 
 ### 🔓 Decrypt a Secure Archive {: #backup-decrypt }
 

@@ -167,8 +167,11 @@ def _now() -> datetime:
 _NO_SPACE_ERRNOS = frozenset(code for code in (errno.ENOSPC, getattr(errno, "EDQUOT", None)) if code is not None)
 
 
-def _out_of_space(exc: BaseException) -> bool:
-    """Whether a failure, or one of its causes, is a full disk or quota: the file system's, or SQLite's ``SQLITE_FULL``."""
+def out_of_space(exc: BaseException) -> bool:
+    """Whether a failure, or one of its causes, is a full disk or quota: the file system's, or SQLite's ``SQLITE_FULL``.
+
+    Public: the routes of the backup and of the restore tell a full disk from any other failure with it too (B-30).
+    """
     seen: BaseException | None = exc
     for _ in range(8):
         if seen is None:
@@ -251,7 +254,7 @@ def _run(data_dir: Path, job: BackupJob, lock: _RunLock, progress: Callable[[Pha
         current = replace(current, status="failed", phase=None, finished_at=_now(), error_code="backup_no_space")
         logger.warning("Instance backup refused: not enough free space", job_id=job.job_id, needed_bytes=exc.needed, free_bytes=exc.free)
     except Exception as exc:  # noqa: BLE001 — any failure ends the job as failed, with the cause in the log
-        error_code: JobError = "backup_no_space" if _out_of_space(exc) else "backup_failed"
+        error_code: JobError = "backup_no_space" if out_of_space(exc) else "backup_failed"
         current = replace(current, status="failed", phase=None, finished_at=_now(), error_code=error_code)
         logger.error("Instance backup failed", job_id=job.job_id, error_code=error_code, error=f"{type(exc).__name__}: {exc}")
     else:

@@ -13,8 +13,16 @@
  * decision. Rewording a test until it passes again turns the net into a mirror.
  *
  * Who leans on the contract pinned here:
- * - `e2e/gallery.spec.ts` (`selectIndicatorFromTree`): the first group expands by itself on open, the
- *   group rows publish `aria-expanded`, a collapsed group is expanded with a click;
+ * - `e2e/gallery.spec.ts`: since G-9 `selectIndicatorFromTree` chooses from the keyboard, never with the
+ *   pointer. ↓ on the closed trigger opens it onto its search box, focused, with a row highlighted:
+ *   trigger and search box both name that row's `id` in `aria-activedescendant`. ↓ and ↑ in the search
+ *   box walk the rows in screen order, group rows included; the group rows publish `aria-expanded`, and
+ *   → expands the collapsed one the walk has reached; Enter chooses the highlighted row and closes the
+ *   menu. The «keyboard» cases pin each step: «ArrowDown on the closed trigger opens it onto the first
+ *   entry», «walks group rows and the items of expanded groups with ArrowDown and ArrowUp», «expands a
+ *   collapsed group on ArrowRight and collapses an expanded one on ArrowLeft», «toggles the active group
+ *   on Enter, and selects the active item on Enter». The `assets/detail-signals-tree` shot of the same
+ *   file still opens with a click, onto the first group expanded by itself and the others collapsed;
  * - `e2e/assets/asset-detail.spec.ts`: `signal-tree-group-*` / `signal-tree-option-*` looked up inside
  *   the signals panel (so the rows must live inside the component), Escape pressed on the trigger;
  * - `e2e/fx/fx-detail.spec.ts` and `ChartSignalsSection.test.ts`: `${testId}-button`, option test ids.
@@ -303,11 +311,13 @@ describe('SignalTreeSelect — D-K1 characterization net', () => {
             expect(group('momentum')).toHaveAttribute('aria-expanded', 'false');
         });
 
-        it('selects an item on click, the way the gallery helper drives it: onchange once, bound value updated, closed', async () => {
+        it('selects an item on click, its collapsed family clicked open first: onchange once, bound value updated, closed', async () => {
             const {trigger, onchange, bound} = mount();
             await openByClick(trigger);
 
-            // selectIndicatorFromTree(): expand the family only when it is collapsed, then click the option.
+            // The click path users take, and e2e/assets/asset-detail.spec.ts with them: a collapsed family clicked
+            // open, then the option clicked. The gallery's selectIndicatorFromTree() took it too until G-9; it now
+            // chooses from the keyboard, which the «keyboard» cases below pin.
             const family = group('momentum');
             expect(family).toHaveAttribute('aria-expanded', 'false');
             await fireEvent.click(family);

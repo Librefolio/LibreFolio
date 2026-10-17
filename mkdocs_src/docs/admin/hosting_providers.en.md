@@ -62,7 +62,10 @@ Today the profile changes seven things:
   for the idle risk workers, then `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY` (see
   «Main Options» and «Risk engine workers» in [Environment Variables](configuration.md)). A value you
   set always wins over the profile, even one equal to the `selfhosted` default:
-  `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS=600` keeps 600 seconds on a managed instance.
+  `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS=600` keeps 600 seconds on a managed instance. If your panel
+  or your environment turns `LIBREFOLIO_FRAME_PROTECTION` or `LIBREFOLIO_CSP_REPORT_ONLY` off, the
+  log says so at every start, a warning for frame protection and an `info` for the policy, and so do
+  the security checks: see «Startup Checks» in [Configuration](configuration.md).
 - **Frame protection** adds `X-Frame-Options: SAMEORIGIN` and
   `Content-Security-Policy: frame-ancestors 'self'` to every response: a browser then shows
   LibreFolio in a frame only inside LibreFolio's own pages. If your hosting panel, or any page at
@@ -515,7 +518,8 @@ curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" "$JOBS/<job_id>"
 | `409` | A start while another backup runs | `backup_busy` |
 | `409` | A download of a job that has no archive: still running, or failed | `backup_job_not_ready` |
 | `409` | A delete while the job runs | `backup_job_running` |
-| `500` | The backup cannot start: the `backups/` folder of the data directory is a link or a file, or cannot be written. The log has the cause | `backup_folder_unusable`, `backup_failed` |
+| `507` | A start while the disk of the data directory, or a quota, is full: free some space, then start again | `backup_no_space` |
+| `500` | The backup cannot start: the `backups/` folder of the data directory is a link or a file, or cannot be written for another reason. The log has the cause | `backup_folder_unusable`, `backup_failed` |
 
 The `code` comes in the `detail` of the answer, with a `message` in English:
 
@@ -558,8 +562,9 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
   the log has an error that names the variable: `The upload limit of a restore cannot be read`.
 - The disk of the data directory needs room for the archive and, while it is checked, for its copy
   unpacked as well (how much: «Try a Restore on a Copy» in [CLI Admin Tools](cli_tools.md)): short of
-  space, the upload answers `507` with the code `backup_no_space`, and the check refuses the archive
-  with `no_space`.
+  space, the upload answers `507` with the code `backup_no_space`, also when the disk reports itself
+  full only at the end of the file, as a network file system or a quota may. The check answers with
+  its own code, `no_space`: a `507` when it cannot even start, a refusal of the archive once it runs.
   An upload that cannot be written for another reason answers `500` with the code
   `backup_upload_failed`, and the log has the cause.
 - An administrator reads the limit in force in `upload_limit_mb` of

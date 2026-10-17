@@ -101,6 +101,8 @@ export function isPortfolioAffectingMutation(method: string | undefined, url: st
     }
     if (path.startsWith('/api/v1/assets/prices')) {
         if (path === '/api/v1/assets/prices/query') return false;
+        // The Δ columns' period changes only read the stored prices (X-R53).
+        if (path === '/api/v1/assets/prices/period-changes') return false;
         if (path === '/api/v1/assets/prices/sync') return normalizedMethod === 'POST' && assetSyncWrote(data);
         // `/prices/current` stays a write: it persists today's candle (decision E1). What changed is
         // the effect — the views are marked stale and refreshed in background, not thrown away.

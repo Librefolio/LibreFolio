@@ -366,6 +366,14 @@ its link: the lots refuse it (`TRANSFER_PAIR_MISSING`) and the Dashboard counts 
 at market value, as before decision 47, rather than read an `ADJUSTMENT` without a
 cost as units destroyed.
 
+**An unreadable pool** (W-B69). Either cost raises `UnreadablePoolError` when its
+pool — the deleted broker's for a receiving leg, the leg's own broker for a giving
+one — holds a row whose quantity, amount or cost basis cannot be read (see
+[Unreadable pool](wac.md#unreadable-pool)). The deletion of that broker then fails
+whole: `delete_bulk()` rolls back its savepoint and reports it failed with the
+error's message, which gives the number of such rows and never an id; nothing of
+that broker changes, and the other brokers of the request go on.
+
 The same cost is written wherever else a giving leg leaves its pair: on a split of
 the pair, in the batch's WAC stage (see
 [Split & Promote](split_promote.md#transfer-giving-leg)), and, on the legs that a

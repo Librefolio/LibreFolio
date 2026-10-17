@@ -63,7 +63,8 @@
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
-    import {computeDerivedPriceState, computePeriodDelta, DELTA_PERIODS} from '$lib/utils/assetPriceDerived';
+    import {computeDerivedPriceState} from '$lib/utils/assetPriceDerived';
+    import {fetchAssetPeriodChanges, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
@@ -98,7 +99,6 @@
         deltaAbs: number | null;
         deltaPercent: number | null;
         chartData: Array<{date: string; value: number; staleDays?: number}>;
-        deltas: Record<string, number | null>;
         loadingPrices: boolean;
     }
 
@@ -321,14 +321,15 @@
         ),
     );
 
+    // The Δ columns (1D … 5Y): the backend computes them up to the end of the range and lists the periods (X-R53).
+    // Kept apart from the price flow, so a price refresh never wipes them, and replaced by the latest answer only.
+    let periodSpecs = $state<PeriodSpec[]>([]);
+    let periodDeltas = $state<Map<number, PeriodDeltas>>(new Map());
+    let periodChangesLoading = $state(false);
+    let periodChangesVersion = 0;
+
     // Which delta periods are visible for the selected date range
-    let visiblePeriods = $derived(
-        DELTA_PERIODS.filter((p) => {
-            const rangeMs = new Date(dateEnd).getTime() - new Date(dateStart).getTime();
-            const rangeDays = rangeMs / (1000 * 60 * 60 * 24);
-            return rangeDays >= p.days;
-        }),
-    );
+    let visiblePeriods = $derived(visiblePeriodColumns(periodSpecs, dateStart, dateEnd));
 
     // Map to AssetRow for table
     let tableRows = $derived<AssetRow[]>(
@@ -344,7 +345,7 @@
             lastPrice: a.lastPrice,
             deltaAbs: a.deltaAbs,
             deltaPercent: a.deltaPercent,
-            deltas: a.deltas,
+            deltas: periodDeltas.get(a.id) ?? {},
             txCount: a.tx_count ?? 0,
             txScope: assetScope(a),
         })),
@@ -570,7 +571,6 @@
                 deltaAbs: null,
                 deltaPercent: null,
                 chartData: [],
-                deltas: {},
                 // Born already waiting for wave 2, so the row draws its own
                 // skeleton the instant it appears instead of a bare empty cell.
                 loadingPrices: true,
@@ -588,8 +588,8 @@
         // are back: rows render at once and fill in per-row (loading=
         // {asset.loadingPrices}). fetchAllPriceData() owns its own errors and
         // clears loadingPrices on every path, so nothing here can strand a row.
-        // `data-busy` (loading || any loadingPrices) stays the single signal for
-        // "both waves finished".
+        // `data-busy` (loading, any loadingPrices, the period changes in flight)
+        // stays the single signal for "both waves finished".
         if (!error) await fetchAllPriceData();
     }
 
@@ -628,7 +628,34 @@
         displayDateStart = 'min';
     }
 
+    /** Prices and signals (the price query, the cache) and the Δ columns (the backend's period changes), together. */
     async function fetchAllPriceData() {
+        if (assets.length === 0) return;
+        await Promise.all([fetchPriceSeries(), loadPeriodChanges()]);
+    }
+
+    /** The Δ columns of every listed asset up to the end of the range, from the backend (X-R53). */
+    async function loadPeriodChanges() {
+        const version = ++periodChangesVersion;
+        periodChangesLoading = true;
+        try {
+            const result = await fetchAssetPeriodChanges(
+                assets.map((asset) => asset.id),
+                dateEnd,
+            );
+            if (version !== periodChangesVersion) return;
+            if (result.periods.length > 0) periodSpecs = result.periods;
+            periodDeltas = result.deltasByAssetId;
+        } catch (e: any) {
+            if (version !== periodChangesVersion) return;
+            console.error('Failed to fetch period changes:', e);
+            periodDeltas = new Map();
+        } finally {
+            if (version === periodChangesVersion) periodChangesLoading = false;
+        }
+    }
+
+    async function fetchPriceSeries() {
         if (assets.length === 0) return;
         void getSettingsVersion();
 
@@ -731,7 +758,7 @@
             signalRequestFailed = invalidItemErrors.length > 0 && [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
 
             // Populate caches (cheap: just Map.set calls) and build a per-asset lookup
-            // of the already-computed derived UI state (last price, deltas, chart data).
+            // of the already-computed derived UI state (last price, chart data).
             const derivedByAssetId = new Map<number, ProcessedAssetResult>();
             const needFetchIds = new Set(needFetch.map((asset) => asset.id));
             for (const result of results) {
@@ -763,7 +790,7 @@
                 if (processed) {
                     return {...asset, ...processed.derived, loadingPrices: false};
                 }
-                return {...asset, loadingPrices: false, deltas: {}};
+                return {...asset, loadingPrices: false};
             });
             resolveMaxStartFromAssets();
         } catch (e: any) {
@@ -773,7 +800,7 @@
             assets = assets.map((a) => {
                 const cachedPrices = cached.get(a.id);
                 if (cachedPrices) return buildAssetStateFromPrices(a, cachedPrices);
-                return {...a, loadingPrices: false, deltas: {}};
+                return {...a, loadingPrices: false};
             });
         } finally {
             refreshing = false;
@@ -781,11 +808,12 @@
     }
 
     function buildAssetStateFromPrices(asset: AssetState, prices: any[]): AssetState {
-        // Empty prices: preserve whatever chart/delta data the asset already had (e.g. a
-        // stale-but-valid previous fetch) — only reset loadingPrices/deltas, matching the
+        // Empty prices: preserve whatever chart data the asset already had (e.g. a
+        // stale-but-valid previous fetch) — only reset loadingPrices, matching the
         // pre-extraction behavior exactly (do NOT wipe lastPrice/chartData to null/empty).
+        // The Δ columns are not here: the backend computes them (loadPeriodChanges, X-R53).
         if (prices.length === 0) {
-            return {...asset, loadingPrices: false, deltas: {}};
+            return {...asset, loadingPrices: false};
         }
         return {
             ...asset,
@@ -1268,7 +1296,7 @@
      * is readable by assistive tech (`aria-busy`) and by anything else that needs to know
      * whether what it is looking at is final.
      */
-    let busy = $derived(loading || assetEditLoading || assets.some((a) => a.loadingPrices));
+    let busy = $derived(loading || assetEditLoading || periodChangesLoading || assets.some((a) => a.loadingPrices));
 </script>
 
 <div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-live-updates={liveUpdatesState} data-testid="assets-page">
