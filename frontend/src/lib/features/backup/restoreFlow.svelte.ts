@@ -34,6 +34,7 @@ import {
     deleteRestoreCheck,
     getRestoreCheck,
     getRestoreStatus,
+    isEnvelopeFile,
     probeServer,
     requestRestart,
     restoreOutcome,
@@ -47,7 +48,7 @@ import {
     type RestoreUploadOptions,
 } from './backupApi';
 
-export type RestoreFlowState = 'loading' | 'idle' | 'uploading' | 'checking' | 'report' | 'confirming' | 'pending' | 'in_progress' | 'cancelling' | 'restarting' | 'failed';
+export type RestoreFlowState = 'loading' | 'idle' | 'password' | 'uploading' | 'checking' | 'report' | 'confirming' | 'pending' | 'in_progress' | 'cancelling' | 'restarting' | 'failed';
 export type RestoreFailure = 'status' | 'upload' | 'check' | 'confirm' | 'cancel' | 'restart';
 export type RestartOutcome = 'waiting' | 'restored' | 'rolled_back' | 'still_pending';
 export type RestoreEventName = 'backup.restore.uploaded' | 'backup.restore.staged' | 'backup.restore.confirmed' | 'backup.restore.cancelled' | 'backup.restore.restart.requested' | 'backup.restore.failed' | 'backup.restore.restored' | 'backup.restore.rolled_back';
@@ -88,7 +89,8 @@ export function pickConfirmationWord(words: string[], random: () => number = Mat
 export interface RestoreApi {
     status(): Promise<RestoreStatus>;
     upload(file: File, options?: RestoreUploadOptions): Promise<RestoreUpload>;
-    startCheck(uploadId: string): Promise<RestoreStage>;
+    /** `password`: a secure backup's (lot B4). */
+    startCheck(uploadId: string, password?: string): Promise<RestoreStage>;
     getCheck(stageId: string): Promise<RestoreStage>;
     dropCheck(stageId: string): Promise<void>;
     confirm(stageId: string): Promise<RestoreStatus>;
@@ -117,6 +119,8 @@ const STAGE_ID = /^[0-9a-f]{32}$/;
 const MEGABYTE = 1024 * 1024;
 const MAX_POLL_FAILURES = 5;
 const MAX_BACKOFF_STEPS = 5;
+// A secure backup's check refused with one of these codes asks for its password again; the upload stays on the server.
+const PASSWORD_AGAIN = new Set(['wrong_password', 'password_required']);
 // A confirmation refused with one of these codes leaves nothing to confirm: the check is forgotten.
 const CHECK_GONE = new Set(['restore_stage_not_found', 'restore_stage_expired', 'restore_stage_outdated', 'restore_not_restorable']);
 
@@ -159,11 +163,13 @@ export class RestoreFlowController {
     slow = $state(false);
     /** The status read once the server came back, for `rolled_back` and `still_pending`. */
     outcomeStatus = $state<RestoreStatus | null>(null);
+    /** A secure backup's password is out to the server: the form waits for its answer. */
+    submitting = $state(false);
 
     report = $derived(this.stage !== null && this.stage.status === 'done' ? (this.stage.report ?? null) : null);
     /** The largest archive the server takes, in megabytes: `0` for no limit, `null` when unknown. */
     limitMb = $derived(this.status?.upload_limit_mb ?? null);
-    busy = $derived(this.state === 'loading' || this.state === 'uploading' || this.state === 'checking' || this.state === 'confirming' || this.state === 'cancelling' || this.state === 'restarting');
+    busy = $derived(this.state === 'loading' || this.state === 'uploading' || this.state === 'checking' || this.state === 'confirming' || this.state === 'cancelling' || this.state === 'restarting' || this.submitting);
 
     readonly #api: RestoreApi;
     readonly #storage: RestoreStorage | null;
@@ -183,6 +189,8 @@ export class RestoreFlowController {
     #seenDown = false;
     // The one-time ticket of the restart under way (lot B5c): in memory only, never stored nor announced.
     #ticket: string | null = null;
+    // The secure backup waiting for its password (lot B4): the file, and its upload once sent, kept for another try.
+    #envelope: {file: File; uploadId: string | null} | null = null;
 
     constructor(options: RestoreFlowOptions = {}) {
         this.#api = options.api ?? SERVER_API;
@@ -240,7 +248,10 @@ export class RestoreFlowController {
         }
     }
 
-    /** Send an archive, then check it on a copy. Refused at once when it is larger than the server's limit. */
+    /**
+     * Send an archive, then check it on a copy. Refused at once when it is larger than the server's limit. A secure
+     * backup (an `.lfbk` envelope, lot B4) waits for its password first: state `password`, nothing sent yet.
+     */
     async upload(file: File): Promise<void> {
         if (this.state !== 'idle' && this.state !== 'failed') return;
         const limit = this.limitMb;
@@ -252,6 +263,46 @@ export class RestoreFlowController {
             this.#emit('backup.restore.failed', {code: 'backup_too_large', what: 'upload'});
             return;
         }
+        const generation = this.#next();
+        const envelope = await isEnvelopeFile(file).catch(() => false);
+        if (this.#stale(generation)) return;
+        if (envelope) {
+            this.#envelope = {file, uploadId: null};
+            this.#setError(null, null);
+            this.errorLimitMb = null;
+            this.stage = null;
+            this.state = 'password';
+            return;
+        }
+        await this.#send(file, null);
+    }
+
+    /** Check the secure backup waiting for its password: sent first if it is not yet. A wrong password asks again, and
+     * the archive is not sent again. */
+    async submitPassword(password: string): Promise<void> {
+        const envelope = this.#envelope;
+        if (this.state !== 'password' || envelope === null || password === '' || this.submitting) return;
+        if (envelope.uploadId === null) {
+            await this.#send(envelope.file, password);
+            return;
+        }
+        const generation = this.#next();
+        this.submitting = true;
+        this.#setError(null, null);
+        await this.#check(envelope.uploadId, password, envelope.file, generation);
+    }
+
+    /** Leave the secure backup waiting for its password: back to `idle`, the file forgotten. */
+    cancelPassword(): void {
+        if (this.state !== 'password') return;
+        this.#next();
+        this.#envelope = null;
+        this.submitting = false;
+        this.#setError(null, null);
+        this.state = 'idle';
+    }
+
+    async #send(file: File, password: string | null): Promise<void> {
         const generation = this.#next();
         const abort = new AbortController();
         this.#abort = abort;
@@ -275,6 +326,7 @@ export class RestoreFlowController {
         } catch (error) {
             if (this.#stale(generation)) return;
             this.#abort = null;
+            this.#envelope = null;
             const code = backupFailureCode(error);
             this.errorLimitMb = code === 'backup_too_large' ? backupErrorLimitMb(error) : null;
             this.#fail(code, 'upload');
@@ -284,15 +336,36 @@ export class RestoreFlowController {
         if (this.#stale(generation)) return;
         this.uploadedBytes = upload.size;
         this.#emit('backup.restore.uploaded', {upload_id: upload.upload_id, size: upload.size});
+        if (upload.kind === 'envelope' && password === null) {
+            // A secure backup its first bytes did not reveal here: its password, then the same upload.
+            this.#envelope = {file, uploadId: upload.upload_id};
+            this.state = 'password';
+            return;
+        }
+        await this.#check(upload.upload_id, password, file, generation);
+    }
+
+    async #check(uploadId: string, password: string | null, file: File, generation: number): Promise<void> {
         let stage: RestoreStage;
         try {
-            stage = await this.#api.startCheck(upload.upload_id);
+            stage = await (password === null ? this.#api.startCheck(uploadId) : this.#api.startCheck(uploadId, password));
         } catch (error) {
             if (this.#stale(generation)) return;
-            this.#fail(backupFailureCode(error), 'check');
+            this.submitting = false;
+            const code = backupFailureCode(error);
+            if (PASSWORD_AGAIN.has(code)) {
+                this.#envelope = {file, uploadId};
+                this.#setError(code, 'check');
+                this.state = 'password';
+                return;
+            }
+            this.#envelope = null;
+            this.#fail(code, 'check');
             return;
         }
         if (this.#stale(generation)) return;
+        this.submitting = false;
+        this.#envelope = null;
         this.#watched = stage.stage_id;
         this.#follow(stage, generation, true);
     }
@@ -302,6 +375,7 @@ export class RestoreFlowController {
         if (this.state !== 'uploading') return;
         this.#abort?.abort();
         this.#abort = null;
+        this.#envelope = null;
         this.#next();
         this.state = 'idle';
         this.uploadedBytes = 0;
@@ -433,6 +507,7 @@ export class RestoreFlowController {
     dispose(): void {
         this.#disposed = true;
         this.#ticket = null;
+        this.#envelope = null;
         this.#abort?.abort();
         this.#abort = null;
         this.#next();
