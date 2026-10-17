@@ -7269,6 +7269,16 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     corrente. **Chiusa il 17/10 col lotto Z-33** (il commit è del coordinatore; revisori X, H, MF, W).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-33 — … analisi» e
   «Z-33 — … lavoro».
+- **Z-36 · `tzdata` da PyPI: un server senza database dei fusi non risolve il fuso della borsa** — basso, ambiente,
+  **domanda per lo sviluppatore**; Z, 17/10 (dalla revisione di H a Z-33, archiviato su richiesta del coordinatore).
+  - Su un host senza database dei fusi (Windows fuori da Docker, un container minimo) o con un nome che tzdata non ha,
+    `exchange_zone()` dà None: un'assegnazione Yahoo ancora segnata dalla migrazione 011 non scrive nulla a ogni giro.
+    L'immagine Docker è a posto.
+  - Fatto nella 1.3 (la metà a basso costo): un avviso nel log, una volta per nome e processo (Z-33, terzo seguito).
+  - Da decidere: aggiungere `tzdata` (PyPI) alle dipendenze, così `zoneinfo` ha sempre i fusi. Cambia l'ambiente:
+    decisione dello sviluppatore. Nota (docs-writer, 17/10): pandas 3.0.5 dichiara `tzdata` per `win32`, ma il
+    `Pipfile.lock`, risolto su macOS, non lo porta: su Windows c'è o no a seconda di come si è installato.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro», passo 12.
 - **Z-35 · Le chiusure Yahoo salvate con la rettifica del giorno in cui sono state lette** — medio, dati, **dopo la
   1.3**, decisione dello sviluppatore; proprietari X e MF; Z, 17/10 (trovato nell'analisi di Z-33, archiviato dal
   coordinatore).

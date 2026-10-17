@@ -10,9 +10,10 @@ from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 from decimal import Decimal
 from typing import Any, List
+from zoneinfo import ZoneInfo
 
 import structlog
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from backend.app.db.models import (
@@ -509,6 +510,31 @@ def _server_date(moment: datetime | None) -> date_type | None:
     return (moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)).astimezone().date()
 
 
+async def _redate_legacy_rows(session: AsyncSession, asset_id: int, prep: _PreparedRefreshItem, remote_data: _FetchedRefreshData, zone: ZoneInfo, last_day: date_type | None, assignment_id: int) -> dict[str, int]:
+    """The one-time check's moves (Z-33), flushed in ``session`` and not committed: the provider's prices and the
+    assignment's events an older version dated by UTC, each to its exchange day as ``_settle_exchange_timezone``
+    describes. Returns the counts its log line carries."""
+    sessions = remote_data.session_dates
+
+    def price_target(stored: date_type) -> date_type | None:
+        target = local_date_of_legacy_utc_date(stored, zone)
+        if target == stored or target not in sessions or last_day is None or stored > last_day - timedelta(days=2):
+            return None
+        return target
+
+    def event_target(stored: date_type, kind: str) -> date_type | None:
+        target = local_date_of_legacy_utc_date(stored, zone)
+        if target == stored or (target, kind) not in remote_data.fresh_events or (stored, kind) in remote_data.fresh_events:
+            return None
+        return target
+
+    prices_moved, prices_dropped = await PriceStoreOperations.redate_provider_rows(session, asset_id, prep.provider_code, price_target)
+    events_moved, events_merged = await EventStoreOperations.redate_provider_events(session, asset_id, assignment_id, event_target)
+    first_session = min(sessions)
+    before_calendar = (await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset_id, PriceHistory.source_plugin_key == prep.provider_code, PriceHistory.date < first_session - timedelta(days=1)))).scalar_one()
+    return {"prices_moved": prices_moved, "prices_dropped": prices_dropped, "events_moved": events_moved, "events_merged": events_merged, "rows_before_calendar": before_calendar}
+
+
 async def _settle_exchange_timezone(engine: AsyncEngine, asset_id: int, prep: _PreparedRefreshItem, remote_data: _FetchedRefreshData) -> str | None:
     """Z-33: the exchange timezone of the asset's assignment, settled before the refresh writes anything.
 
@@ -522,6 +548,9 @@ async def _settle_exchange_timezone(engine: AsyncEngine, asset_id: int, prep: _P
     - an event of the assignment moves when the rule says so and the full history has an event of its type on S+1 and
       none on S (``EventStoreOperations.redate_provider_events``: merges, and a SPLIT's ADJUSTMENT rows on S).
 
+    The mark is read again here and claimed by a conditional UPDATE before anything moves: the manual sync and the
+    scheduler can refresh one asset at the same time, and only the refresh whose UPDATE still finds the mark moves rows.
+
     Without a full history or a timezone the mark stays and the refresh writes nothing: the returned message says why.
     Otherwise a reported timezone is stored (never over the mark of another provider's assignment). Returns the
     message of a refresh that must write nothing, else None.
@@ -533,41 +562,23 @@ async def _settle_exchange_timezone(engine: AsyncEngine, asset_id: int, prep: _P
         assignment = await session.get(AssetProviderAssignment, prep.assignment_id)
         if assignment is None:
             return None
-        if prep.legacy_check:
+        # The mark as stored now, not as the preparation read it: another refresh of the asset may have settled since
+        if prep.legacy_check and assignment.exchange_timezone == LEGACY_UTC_DATES:
             sessions = remote_data.session_dates
             if zone is None or not sessions:
                 return "Nothing written: the stored dates await their one-time check, and the provider gave no full history or exchange timezone"
             last_day = _server_date(prep.last_fetch_at)
-
-            def price_target(stored: date_type) -> date_type | None:
-                target = local_date_of_legacy_utc_date(stored, zone)
-                if target == stored or target not in sessions or last_day is None or stored > last_day - timedelta(days=2):
-                    return None
-                return target
-
-            def event_target(stored: date_type, kind: str) -> date_type | None:
-                target = local_date_of_legacy_utc_date(stored, zone)
-                if target == stored or (target, kind) not in remote_data.fresh_events or (stored, kind) in remote_data.fresh_events:
-                    return None
-                return target
-
-            prices_moved, prices_dropped = await PriceStoreOperations.redate_provider_rows(session, asset_id, prep.provider_code, price_target)
-            events_moved, events_merged = await EventStoreOperations.redate_provider_events(session, asset_id, assignment.id, event_target)
-            first_session = min(sessions)
-            before_calendar = (await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset_id, PriceHistory.source_plugin_key == prep.provider_code, PriceHistory.date < first_session - timedelta(days=1)))).scalar_one()
+            # Claimed before anything moves. pysqlite opens the transaction at this write: when another refresh holds the
+            # write lock, this UPDATE waits for its commit (busy_timeout) and then finds the mark gone. The refresh that
+            # did not claim it moves nothing and writes its data as any refresh does
+            claim = update(AssetProviderAssignment).where(AssetProviderAssignment.id == assignment.id, AssetProviderAssignment.exchange_timezone == LEGACY_UTC_DATES).values(exchange_timezone=zone.key).execution_options(synchronize_session=False)
+            if (await session.execute(claim)).rowcount != 1:
+                await session.rollback()
+                return None
+            moves = await _redate_legacy_rows(session, asset_id, prep, remote_data, zone, last_day, assignment.id)
             assignment.exchange_timezone = zone.key
             await session.commit()
-            logger.info(
-                "Stored dates checked against the exchange calendar",
-                asset_id=asset_id,
-                provider=prep.provider_code,
-                timezone=zone.key,
-                prices_moved=prices_moved,
-                prices_dropped=prices_dropped,
-                events_moved=events_moved,
-                events_merged=events_merged,
-                rows_before_calendar=before_calendar,
-            )
+            logger.info("Stored dates checked against the exchange calendar", asset_id=asset_id, provider=prep.provider_code, timezone=zone.key, **moves)
             return None
         if zone is not None and assignment.exchange_timezone not in (zone.key, LEGACY_UTC_DATES):
             assignment.exchange_timezone = zone.key
