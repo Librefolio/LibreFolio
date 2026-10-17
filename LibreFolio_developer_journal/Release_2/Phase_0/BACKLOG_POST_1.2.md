@@ -7074,8 +7074,11 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     non il totale.
   - Una scheda ne mostra un riassunto (ultimo prezzo, mini grafico): servirebbe una serie ridotta dal backend
     (campionata) o un'altra fonte per le schede. Da progettare dopo la 1.3; tocca la lista (X) e la query dei prezzi.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-27 — il web app e i tetti
-  delle richieste di massa: analisi».
+  - Analisi del 17/10 (sola lettura, chiesta dal coordinatore per la 1.3): consigliata (A), `max_points` facoltativo
+    nella query dei prezzi (il backend sceglie il passo per asset, ~30× meno punti su «All»), in due lotti: Z-29a
+    backend, Z-29b lista (X). In attesa della decisione.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-27 — il web app e i tetti
+  delle richieste di massa: analisi» e «Z-29 — una scheda della lista asset e lo storico intero: analisi».
 - ✅ **Z-28 · Due file di lock aperti con `open()`, che segue un symlink** — basso, sicurezza; Z, 17/10
   (dall'analisi di Z-23; via coordinatore, che l'ha assegnata). **Chiusa il 17/10 col lotto Z-28** (il commit è del
   coordinatore).
