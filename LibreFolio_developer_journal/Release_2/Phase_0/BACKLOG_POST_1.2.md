@@ -3027,6 +3027,23 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     (archiviato), coordinatore, 17/10.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
     «Giro 3».
+- **DV-12 · L'E2E del pannello posizioni trattiene la «prima» richiesta del report, non quella della pagina sotto
+  prova** — minimo, test; DV, 18/10 (slot del giro 3, fuori area: `e2e/portfolio/dashboard.spec.ts`, «Positions panel
+  publishes its loading state through data-busy»).
+  - Rosso nella run intera su `08512c952`, verde da solo; verde nello slot di B4 (`f35fd9026`), con lo stesso ordine.
+  - `login()` atterra su `/dashboard` e aspetta solo che l'app arrivi: una POST `/portfolio/report` della pagina
+    d'atterraggio partita dopo la rotta è «la prima», il `goto` la abbandona, e il pannello non è mai occupato.
+  - Rimedio nel test (`test-author`, proprietario dello spec): `page.goto('about:blank')` prima della rotta, oppure
+    trattenere la richiesta della pagina sotto prova.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), passo G3-9.
+- **DV-13 · L'E2E «export JSON, reset all, import back» del Lab vuole due fonti di colore che dal 16/10 sono una** —
+  minimo, test; DV, 18/10 (slot del giro 3, fuori area: `e2e/designer-lab/designer-lab-live.spec.ts`).
+  - Deterministico: il sottotitolo delle transazioni e l'intestazione di `DataTable` leggono tutti e due
+    `--lf-text-muted` (`546204732` e `77bfa6a39`, 16/10). La modifica della variabile vince su quella del letterale, e
+    l'intestazione esce rosa invece che blu.
+  - Rimedio nel test (`test-author`; il Lab, L, è archiviato): due elementi con fonti diverse, con la precondizione
+    scritta.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), passo G3-9.
 
 ---
 
