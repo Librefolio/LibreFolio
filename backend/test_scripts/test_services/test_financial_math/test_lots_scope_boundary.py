@@ -25,6 +25,11 @@ THE RULES (decision N76, coordinator 17/10; home ``backend/app/services/financia
 Today (base ``ba63b7b24``): the module does not exist — ModuleNotFoundError — and ``FifoInputTransaction`` has no
 ``hands_over_at_own_cost`` — TypeError. The module is imported inside each test (``_scope_boundary``), so that the
 engine GUARD at the bottom — a costless ADJUSTMENT-out handed over at 0, green today and after — is collected and runs.
+
+J-51 (last section, coordinator 17/10): ``read_arrivals_at_scope_boundary``, for Yield on Cost, reads at the edge only
+the ARRIVING legs whose partner pairs back from outside the scope, as rule 2 reads them, and takes no price; a departure,
+and every other row, comes back as it is. Today (HEAD ``b077dfd81``) it does not exist: ImportError, raised inside each
+of its tests (``_read_arrivals``).
 """
 
 import dataclasses
@@ -456,3 +461,151 @@ def test_guard_an_unflagged_adjustment_out_without_cost_still_hands_its_units_ov
         "closures": [(11, "ADJUSTMENT_OUT", D("5"), D("0"), D("-500"), D("0")), (12, "ADJUSTMENT_OUT", D("5"), D("0"), D("-600"), D("0"))],
         "lots": [(11, D("0"), D("5"), D("-500"), D("0")), (12, D("0"), D("5"), D("-600"), D("0"))],
     }
+
+
+# --------------------------------------------------------------------------- #
+# J-51 — the arrivals alone: read_arrivals_at_scope_boundary
+# --------------------------------------------------------------------------- #
+#
+# Workstream J, lot J-51 (coordinator, 17/10). Yield on Cost replays the brokers the user can see plus the partner of each
+# of their TRANSFER legs (financial_math/yield_on_cost.py, _include_external_transfer_legs). For a RECEIVER whose units
+# came from a broker the user cannot see, that partner is a departure from a broker that holds nothing else of the replay:
+# FIFO_SOURCE_QUANTITY_MISSING, FAILED, YoC unavailable. The fix reads at the edge of the visible scope only the ARRIVING
+# legs whose partner pairs back from outside it — the checks of rule 1 — exactly as J-10 reads an arrival (rule 2): a
+# detached ADJUSTMENT-in copy of its units, on its date, at its own cost, recorded in ``legs`` as IN. A departure, and every
+# other row, comes back as the same object: YoC keeps counting a sender's units in transit, which needs the pair
+# (test_yield_on_cost.py, test_transfer_in_transit_counts_for_source_not_destination). It takes no price.
+
+
+def _read_arrivals():
+    """``read_arrivals_at_scope_boundary``, imported per test: before J-51 it does not exist, and a module-level import
+    would turn every test of this file into a collection error."""
+    from backend.app.services.financial_math.lots.scope_boundary import read_arrivals_at_scope_boundary  # noqa: PLC0415 — absent before J-51
+
+    return read_arrivals_at_scope_boundary
+
+
+@pytest.mark.parametrize(
+    ("cost", "cost_currency"),
+    [
+        pytest.param("100", "EUR", id="with-its-cost-basis"),
+        pytest.param(None, None, id="without-a-cost-basis"),
+    ],
+)
+def test_an_arrival_from_outside_the_scope_reads_as_an_adjustment_in_at_its_own_cost(cost, cost_currency):
+    """J-51: B, read alone, receives 10 from A. The arrival reads as J-10 reads it: a detached ADJUSTMENT-in of 10 on its
+    own day at ITS cost basis — 100 EUR a unit, or none on a leg that carries none (old data: a costless ADJUSTMENT-in,
+    MISSING_COST_BASIS downstream, as for any such row) —; the sale beside it is the same object; legs = {arrival: IN}.
+    The call passes no price: the reading takes none.
+
+    Today: ImportError — ``scope_boundary`` has no ``read_arrivals_at_scope_boundary``.
+    """
+    sb = _scope_boundary()
+    read_arrivals = _read_arrivals()
+    arrival = _row(201, TransactionType.TRANSFER, "10", on="2025-01-13", broker_id=BROKER_B, related=102, currency=None, cost=cost, cost_currency=cost_currency)
+    sale = _row(202, TransactionType.SELL, "-4", on="2025-01-15", broker_id=BROKER_B, amount="600")
+    rows = [arrival, sale]
+
+    reading = read_arrivals(rows, partners={102: _partner(sb, 102, broker_id=BROKER_A, quantity="-10", related=201)}, scope_broker_ids={BROKER_B})
+
+    assert {"rows": _as_read(reading.transactions, rows), "legs": reading.legs} == {
+        "rows": [_copy(arrival, cost=None if cost is None else D(cost), cost_currency=cost_currency, own_cost=False), "input row 1"],
+        "legs": {201: sb.BoundaryLeg(transaction_id=201, direction="IN")},
+    }
+
+
+def test_a_departure_to_outside_the_scope_comes_back_as_it_is():
+    """J-51: A, read alone, buys 10 and sends them to B, whose leg pairs back from outside the scope. J-10's reader would
+    read that departure at the market of its day; this one leaves it to the replay: both rows come back as the same
+    objects, and ``legs`` is empty.
+
+    Today: ImportError — ``scope_boundary`` has no ``read_arrivals_at_scope_boundary``.
+    """
+    sb = _scope_boundary()
+    read_arrivals = _read_arrivals()
+    purchase = _row(101, TransactionType.BUY, "10", on="2025-01-10", broker_id=BROKER_A, amount="-1000")
+    departure = _row(102, TransactionType.TRANSFER, "-10", on="2025-01-12", broker_id=BROKER_A, related=201)
+    rows = [purchase, departure]
+
+    reading = read_arrivals(rows, partners={201: _partner(sb, 201, broker_id=BROKER_B, quantity="10", related=102)}, scope_broker_ids={BROKER_A})
+
+    assert {"rows": _as_read(reading.transactions, rows), "legs": reading.legs} == {"rows": ["input row 0", "input row 1"], "legs": {}}
+
+
+def test_beside_an_arrival_it_reads_a_departure_comes_back_as_it_is_in_order_and_the_input_untouched():
+    """J-51: A receives 5 from C (cost basis 90) and sends 10 to B, between a BUY and a SELL; both legs pair back from
+    outside the scope. Only the ARRIVAL is read — an ADJUSTMENT-in of 5 at its own 90 —; the departure comes back as the
+    same object, as the BUY and the SELL do, in the input's order; ``legs`` names the arrival alone; the input list and
+    its rows are left as they were.
+
+    Today: ImportError — ``scope_boundary`` has no ``read_arrivals_at_scope_boundary``.
+    """
+    sb = _scope_boundary()
+    read_arrivals = _read_arrivals()
+    purchase = _row(101, TransactionType.BUY, "10", on="2025-01-10", broker_id=BROKER_A, amount="-1000")
+    arrival = _row(103, TransactionType.TRANSFER, "5", on="2025-01-11", broker_id=BROKER_A, related=301, cost="90", cost_currency="EUR")
+    departure = _row(102, TransactionType.TRANSFER, "-10", on="2025-01-12", broker_id=BROKER_A, related=201)
+    sale = _row(104, TransactionType.SELL, "-2", on="2025-01-14", broker_id=BROKER_A, amount="280")
+    rows = [purchase, arrival, departure, sale]
+    rows_before = list(rows)
+    columns_before = [_columns(row) for row in rows]
+
+    reading = read_arrivals(
+        rows,
+        partners={
+            201: _partner(sb, 201, broker_id=BROKER_B, quantity="10", related=102),
+            301: _partner(sb, 301, broker_id=BROKER_C, quantity="-5", related=103),
+        },
+        scope_broker_ids={BROKER_A},
+    )
+
+    assert {
+        "rows": _as_read(reading.transactions, rows),
+        "legs": reading.legs,
+        "input list": _as_read(rows, rows_before),
+        "input rows": [_columns(row) for row in rows],
+    } == {
+        "rows": ["input row 0", _copy(arrival, cost=D("90"), cost_currency="EUR", own_cost=False), "input row 2", "input row 3"],
+        "legs": {103: sb.BoundaryLeg(transaction_id=103, direction="IN")},
+        "input list": ["input row 0", "input row 1", "input row 2", "input row 3"],
+        "input rows": columns_before,
+    }
+
+
+# Each case: the arriving leg's own link, the partners the caller found, the scope. The partner of every case but the last
+# would pair back from broker A if it were not for the one thing the case changes.
+_ARRIVAL_PAIRED_BACK = {"partner_id": 102, "broker_id": BROKER_A, "quantity": "-10", "related": 201}
+
+
+@pytest.mark.parametrize(
+    ("leg_related", "partner", "scope"),
+    [
+        pytest.param(102, None, {BROKER_B}, id="partner-absent"),
+        pytest.param(102, _ARRIVAL_PAIRED_BACK, {BROKER_A, BROKER_B}, id="partner-broker-in-scope"),
+        pytest.param(102, {**_ARRIVAL_PAIRED_BACK, "tx_type": "ADJUSTMENT"}, {BROKER_B}, id="partner-not-a-transfer"),
+        pytest.param(102, {**_ARRIVAL_PAIRED_BACK, "related": None}, {BROKER_B}, id="partner-not-pointing-back"),
+        pytest.param(102, {**_ARRIVAL_PAIRED_BACK, "related": 999}, {BROKER_B}, id="partner-pointing-elsewhere"),
+        pytest.param(102, {**_ARRIVAL_PAIRED_BACK, "asset_id": OTHER_ASSET_ID}, {BROKER_B}, id="partner-of-another-asset"),
+        pytest.param(102, {**_ARRIVAL_PAIRED_BACK, "quantity": "10"}, {BROKER_B}, id="partner-of-the-same-sign"),
+        pytest.param(102, {**_ARRIVAL_PAIRED_BACK, "quantity": "-8"}, {BROKER_B}, id="partner-of-another-quantity"),
+        pytest.param(None, _ARRIVAL_PAIRED_BACK, {BROKER_B}, id="leg-without-a-link"),
+    ],
+)
+def test_an_arrival_whose_partner_does_not_pair_back_from_outside_the_scope_comes_back_as_it_is(leg_related, partner, scope):
+    """J-51, rule 1's checks: unless the partner exists, sits outside the scope and pairs back (TRANSFER, pointing back,
+    same asset, opposite sign, same absolute quantity), the arrival is not read: every row comes back as the same object
+    and ``legs`` is empty — the replay then reports the pair, as today. The arrival carries a cost basis, so a wrong
+    reading would show. A leg without a link is never looked up, even when some partner points at it.
+
+    Today: ImportError — ``scope_boundary`` has no ``read_arrivals_at_scope_boundary``.
+    """
+    sb = _scope_boundary()
+    read_arrivals = _read_arrivals()
+    arrival = _row(201, TransactionType.TRANSFER, "10", on="2025-01-13", broker_id=BROKER_B, related=leg_related, cost="100", cost_currency="EUR")
+    sale = _row(202, TransactionType.SELL, "-4", on="2025-01-15", broker_id=BROKER_B, amount="600")
+    rows = [arrival, sale]
+    partners = {} if partner is None else {partner["partner_id"]: _partner(sb, **partner)}
+
+    reading = read_arrivals(rows, partners=partners, scope_broker_ids=scope)
+
+    assert {"rows": _as_read(reading.transactions, rows), "legs": reading.legs} == {"rows": ["input row 0", "input row 1"], "legs": {}}
