@@ -35,7 +35,7 @@ async def compute_wac_and_fx_issues(
         context.wac_results = await service._compute_wac_for_auto_items(
             context.parsed_creates,
             context.parsed_updates,
-            context.link_uuid_map,
+            context.created_by_index,
             unreadable=unreadable,
         )
         for operation, index, count in unreadable:

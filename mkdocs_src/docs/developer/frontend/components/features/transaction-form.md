@@ -218,9 +218,12 @@ SELL do not show it.
   once `wacCurrencyHint` holds a currency (the user's pick, the first WAC result's, or the one in
   the row's sentinel), the hint `{code, amount: '0'}` as override.
 - In Auto mode the backend writes the WAC into `cost_basis_override`
-  (`TransactionService._compute_wac_for_auto_items()` → `compute_wac_iterative()`, as of the row's
-  date): the WAC of the linked partner's broker for a create carrying `link_uuid` (a new `TRANSFER`
-  pair), otherwise of the row's own broker, without the row. When that broker has no other row of
+  (`TransactionService._compute_wac_for_auto_items()` → `compute_wac_iterative()`): for the
+  receiving side of a `TRANSFER` pair, the WAC of the partner's broker as of the partner's date,
+  without the partner's outgoing leg; otherwise the WAC of the row's own broker as of the row's
+  date, without the row. The batch's other Auto rows not yet costed are left out too, and the rows
+  are costed in date order (W-B67; see
+  [Inline Batch Auto Modes](../../../backend/transactions/wac.md#inline-batch-auto-modes)). When that broker has no other row of
   the asset up to that date — the transfer's own outgoing leg aside — the WAC is `0`, and the row
   is saved with a zero cost basis. That is by design (developer decision of 2026-10-09): the user
   corrects that transaction later if needed. Auto rows skip the required-cost-basis check
