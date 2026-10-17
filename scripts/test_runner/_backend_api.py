@@ -573,11 +573,31 @@ def api_validation_errors(verbose: bool = False, test_names: list = None) -> boo
     """Run the API tests of the 422 without the request's input (A-35): no password or token ever comes back."""
     print_section("Validation Errors API Tests")
     print_info("Testing that a 422 drops the input of every error, on the routes that carry a password or a token")
-    print_info("In-process on a small app for the handler; on the lane's server only refusals, and five accounts of its own")
+    print_info("In-process on a small app for the handler; on the lane's server only refusals, and seven accounts of its own")
     print_info("Note: Server will be automatically started and stopped by test")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_validation_errors_api.py", test_names)
     return run_command(cmd, "Validation errors API tests", verbose=verbose)
+
+
+def api_login_throttle(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the API tests of the limit on failed sign-ins (F15) and of GET /security/checks, in-process."""
+    print_section("Login Throttle API Tests")
+    print_info("Testing the 429 TOO_MANY_ATTEMPTS of sign-in, change of password and change of address, and the Security checks")
+    print_info("In-process on private databases, the limit turned on with limiters of its own: never the lane's server")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_login_throttle_api.py", test_names)
+    return run_command(cmd, "Login throttle API tests", verbose=verbose)
+
+
+def api_security_checks(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the lane's tests of GET /security/checks: administrators only, the login limit off on the lane."""
+    print_section("Security Checks API Tests")
+    print_info("Testing GET /api/v1/security/checks on the lane's server: 200 admin, 403 member, 401 anonymous")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_security_checks_api.py", test_names)
+    return run_command(cmd, "Security checks API tests", verbose=verbose)
 
 
 def api_registration(verbose: bool = False, test_names: list = None) -> bool:
@@ -1066,7 +1086,24 @@ Tests for REST API endpoints (server auto-started):
         "validation-errors",
         api_validation_errors,
         name="Validation Errors API",
-        desc="A-35: every 422 keeps loc, msg, type and ctx and drops input, so no password or token comes back (login, register, change-password, password-reset, setup, tokens/inspect, profile, email resend); the OpenAPI schema unchanged",
+        desc="A-35: every 422 keeps loc, msg, type and ctx and drops input, so no password or token comes back (login, register, change-password, password-reset, setup, tokens/inspect, profile, email resend); a non-finite number (1E+400, NaN) on a Decimal is a readable 422, not a 500; the OpenAPI schema unchanged",
+    )
+    add_test(
+        api,
+        "login-throttle",
+        api_login_throttle,
+        name="Login Throttle API",
+        desc="F15 (A8a): 429 TOO_MANY_ATTEMPTS with an exact Retry-After before any password check, the same for an unknown identifier; per address; change of password and of address under the account's username; the switch; GET /security/checks admin-only, every check once, no secret in the body",
+        # PURE: in-process apps on private SQLite files under tmp_path, limiters of their own on a fake clock; no lane DB,
+        # no server.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "security-checks",
+        api_security_checks,
+        name="Security Checks API",
+        desc="GET /api/v1/security/checks on the lane: an administrator sees accounts.login_limit as a warning (the lane's server runs with LIBREFOLIO_LOGIN_LIMIT=off) and the platform checks; a member 403, anonymous 401",
     )
     # Write-scoped, no exclusive_because: a waiting administrator exists only in-process on private databases; on the
     # lane's server only refusals that write nothing.
