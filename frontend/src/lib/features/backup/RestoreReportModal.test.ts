@@ -130,8 +130,11 @@ const MIB = 1024 * 1024;
 const CASH_LINE: Difference = {kind: 'cash', broker_id: 7, currency: 'EUR', asset_id: null, before: '1000.00', after: '1250.50'};
 const QUANTITY_LINE: Difference = {kind: 'quantity', broker_id: 7, currency: null, asset_id: 34, before: '10', after: '12'};
 
+/** B4 (§5): what a report says of the archive's encryption and of the plugin secrets. Written out until the client is generated again. */
+type ReportB4Fields = {encrypted: boolean; secrets_unreadable: {system: number; user: number}; secrets_rekeyed: number};
+
 /** An upgrade: two migrations, two tables changed and one not, the totals changed, two administrators, two warnings. */
-function report(overrides: Partial<RestoreStageReport> = {}): RestoreStageReport {
+function report(overrides: Partial<RestoreStageReport & ReportB4Fields> = {}): RestoreStageReport & ReportB4Fields {
     return {
         backup_created_at: '2026-10-15T12:00:00Z',
         backup_app_version: '0.8.2',
@@ -164,6 +167,9 @@ function report(overrides: Partial<RestoreStageReport> = {}): RestoreStageReport
         control_totals_differences_count: 2,
         restorable: true,
         expires_at: '2026-10-16T12:00:00Z',
+        encrypted: false,
+        secrets_unreadable: {system: 0, user: 0},
+        secrets_rekeyed: 0,
         ...overrides,
     };
 }
@@ -433,5 +439,73 @@ describe('RestoreReportModal — confirm and drop', () => {
 
         expect(onDrop).toHaveBeenCalledTimes(1);
         expect(onConfirm).not.toHaveBeenCalled();
+    });
+});
+
+// =====================================================================================================================
+// B4 — the plugin secrets of the checked copy (B4 brief §5, §7; written red first)
+// =====================================================================================================================
+
+/*
+ * The contract: the report says how many plugin secrets of the copy were re-encrypted with this instance's key
+ * (`secrets_rekeyed`, from an archive that carried its key) and how many cannot be read with it
+ * (`secrets_unreadable.system` + `.user`). The modal draws `restore-report-secrets-rekeyed` when `secrets_rekeyed > 0`
+ * and `restore-report-secrets-unreadable` when the two unreadable counts add up to more than 0, each with `data-count`;
+ * neither line otherwise.
+ *
+ * Choices of this file where the contract is silent, each one place to change: the lines are worded by
+ * `backup.restore.report.secretsRekeyed` and `backup.restore.report.secretsUnreadable`, given the count they show as
+ * `{count}` (the translator of this file prints the values it is given after the key).
+ *
+ * Red today: the modal knows neither count, so it draws neither line. The cases of a count of 0 are green today (the
+ * guards of «absent at 0»), with the links notice as their presence barrier.
+ */
+
+/** The values a line was worded with: the translator renders `key {"name":value}`. */
+function valuesOf(line: HTMLElement, key: string): Record<string, unknown> {
+    const text = line.textContent ?? '';
+    const at = text.indexOf(`${key} {`);
+    expect(at, `the line is not worded by ${key} with its values: ${JSON.stringify(text)}`).toBeGreaterThanOrEqual(0);
+    const json = text.slice(at + key.length + 1);
+    return JSON.parse(json.slice(0, json.lastIndexOf('}') + 1)) as Record<string, unknown>;
+}
+
+describe('B4 — RestoreReportModal: the plugin secrets of the checked copy', () => {
+    const root = () => screen.getByTestId('restore-report');
+
+    it('secrets_rekeyed 3: restore-report-secrets-rekeyed with data-count 3, worded by backup.restore.report.secretsRekeyed with the count', () => {
+        mount(report({secrets_rekeyed: 3}));
+
+        const line = within(root()).getByTestId('restore-report-secrets-rekeyed');
+        expect(line).toHaveAttribute('data-count', '3');
+        expect(valuesOf(line, 'backup.restore.report.secretsRekeyed')).toMatchObject({count: 3});
+    });
+
+    it.each<[string, {system: number; user: number}, number]>([
+        ['of the system and of the users', {system: 2, user: 3}, 5],
+        ['of the system only', {system: 1, user: 0}, 1],
+        ['of the users only', {system: 0, user: 4}, 4],
+    ])('secrets unreadable %s: restore-report-secrets-unreadable with data-count the sum, worded by backup.restore.report.secretsUnreadable with it', (_case, unreadable, total) => {
+        mount(report({secrets_unreadable: unreadable}));
+
+        const line = within(root()).getByTestId('restore-report-secrets-unreadable');
+        expect(line).toHaveAttribute('data-count', String(total));
+        expect(valuesOf(line, 'backup.restore.report.secretsUnreadable')).toMatchObject({count: total});
+    });
+
+    it('both counts at once: the two lines, each with its own count', () => {
+        mount(report({secrets_rekeyed: 6, secrets_unreadable: {system: 1, user: 1}}));
+
+        expect(within(root()).getByTestId('restore-report-secrets-rekeyed')).toHaveAttribute('data-count', '6');
+        expect(within(root()).getByTestId('restore-report-secrets-unreadable')).toHaveAttribute('data-count', '2');
+    });
+
+    it('no secret re-encrypted and none unreadable: neither line (green today: the guard)', () => {
+        mount(report({secrets_rekeyed: 0, secrets_unreadable: {system: 0, user: 0}}));
+
+        // The presence barrier: the report drew its sections.
+        expect(within(root()).getByTestId('restore-report-links')).toBeInTheDocument();
+        expect(within(root()).queryByTestId('restore-report-secrets-rekeyed')).toBeNull();
+        expect(within(root()).queryByTestId('restore-report-secrets-unreadable')).toBeNull();
     });
 });

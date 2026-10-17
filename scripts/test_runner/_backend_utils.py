@@ -470,6 +470,14 @@ def utils_backup_cli_restore(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Backup CLI restore tests", verbose=verbose)
 
 
+def utils_backup_cli_secure(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the secure backup from the command line: create with a password, inspect and restore an envelope, decrypt."""
+    print_section("Utils: Backup CLI secure backup")
+    print_info("Testing: scripts/backup_cli.py (create --encrypt / --password-file / --password-stdin, inspect, restore --dry-run and decrypt of an .lfbk)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_backup_cli_secure.py", test_names)
+    return run_command(cmd, "Backup CLI secure backup tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -892,6 +900,16 @@ Tests for utility modules and helper functions:
         # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables (production mode, checked
         # before each command), children with the same data directory and without LIBREFOLIO_*/COVERAGE_*, identity
         # calls replaced: no lane DB, no server, no network, no writes outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-cli-secure",
+        utils_backup_cli_secure,
+        name="Backup CLI Secure Backup",
+        desc="scripts/backup_cli.py and a secure backup (lot B4): create with --password-file, --password-stdin or --encrypt (password_required without a terminal; the two sources exclusive; no --password option; password_too_weak with the failed rules, nothing written), an .lfbk the password opens; inspect and restore --dry-run of an envelope (wrong_password, password_required, a zip ignoring the source); decrypt to a new 0600 zip (an existing output refused untouched, not_an_envelope); the password never printed; no decrypted zip left in the data directory",
+        # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables, as test_backup_cli.py
+        # sets them: no lane DB, no server, no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(
