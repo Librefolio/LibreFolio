@@ -7101,3 +7101,11 @@ punto di partenza, l'audit dello stesso giorno:
   lettura della cache `portfolio_blob` (`portfolio/engine.py` ~:316) e la sua scrittura (~:457) nessun lucchetto: due
   richieste identiche concorrenti ricostruiscono entrambe (con J-45 occupano i due worker). Nessuna azione ora; cura
   possibile: un `asyncio.Future` per chiave in volo. Dettagli: piano MF, sezione «J-45».
+- **MF-SEC8-2a · Un avviso di qualità dati per le righe datate prima del 1900** — basso; coordinatore, 17/10 (decisione 2
+  di MF-SEC8-2). N74 impedisce le nuove; quelle già salvate si rigiocano ma la storia parte dal 1900-01-01 senza dirlo.
+  Proposta: un codice `TRANSACTION_BEFORE_FLOOR` (INFO) con `navigate_asset`/il broker. Dettagli: piano MF, sezione
+  «MF-SEC8-2».
+- **MF-SEC8-2b · `date.min − 1 giorno` fuori dalla ricostruzione** — minimo, preesistente; MF, 17/10 (decisione 3 di
+  MF-SEC8-2). Una coppia con l'arrivo datato `0001-01-01` (`portfolio/classifier.py:217`, `arrival.date − 1`) e un
+  provento datato `0001-01-01` (`financial_math/yield_on_cost.py:631`) sollevano `OverflowError`. Cura: confrontare prima
+  di sottrarre, o partire da `EARLIEST_RANGE_START`. Rossi prima. Dettagli: piano MF, sezione «MF-SEC8-2».
