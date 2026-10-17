@@ -8,6 +8,7 @@ Reference: backend/app/services/portfolio_service.py
 """
 
 import json
+import re
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
@@ -28,6 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
+import backend.app.services.financial_math.portfolio.models as portfolio_models_module
 import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
@@ -51,10 +53,22 @@ from backend.app.services.portfolio_service import (
     _portfolio_l2_cache,
 )
 from backend.app.utils.datetime_utils import utcnow
+from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
+
+@pytest.fixture(scope="module", autouse=True)
+def range_bound_lifted():
+    """R13-SEC7-1: the FX-in-transit, cache-identity and L2-key scenarios here live in 2032–2038, after tomorrow, so the
+    range bound is lifted for the whole module, before any fixture builds data (see ``lift_range_bound``). Every other
+    scenario is the same lifted or not: J-43's 2025 pair and the today-relative rows end by tomorrow, and the 2026–2027
+    income/cost/deposit histories are read through the standalone getters, which do not apply the bound."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        lift_range_bound(monkeypatch)
+        yield
 
 
 @pytest.fixture(scope="module")
@@ -1911,6 +1925,146 @@ class TestValuedAtCostDataQuality:
         self._assert_at_cost_on_v(summary, test_asset.id)
         for code in ("VALUED_AT_COST", "TRANSACTION_IMPLIED", "MISSING_PRICE"):
             assert test_asset.id not in self._listed_ids(summary, code), f"manual asset {test_asset.id} listed under {code}"
+
+
+# =============================================================================
+# TestTransferShareMismatchDataQuality (J-43)
+# =============================================================================
+
+
+class TestTransferShareMismatchDataQuality:
+    """J-43 — a linked internal pair between two brokers the user owns at different shares, end to end.
+
+    Each leg counts at its own broker's share, so moving 1000 EUR from a broker owned at 1 to one owned at 0.5 turns 500
+    of the user's money into a loss (D-MF4 = a: the gap is a result, never capital). The data-quality report is the
+    user's only explanation of it: one INFO issue ``TRANSFER_SHARE_MISMATCH`` counting the pairs and one string per pair
+    in ``share_mismatch_warnings`` naming both legs — from both report builders of ``portfolio_service``
+    (``get_summary``'s, and ``get_report``'s own when the summary is not requested) — and the engine's result carries
+    the pair as a ``ShareMismatch``. At equal shares nothing is reported.
+
+    The pair is same-day on purpose: on HEAD 252835dce the classifier does not even warn for it (J-43a), and no warning
+    of any date leaves the classifier (J-43b). Each test owns its user and its two brokers (flushed, rolled back by
+    ``session``), so the counts are the counts of what it wrote; a barrier first proves the pair is in the scope at the
+    shares the case claims. ``ShareMismatch`` is read from ``models`` when the test runs.
+    """
+
+    D = date(2025, 3, 10)  # the deposit and both legs of the transfer
+    V = date(2025, 3, 20)  # the valuation day
+
+    async def _owned_broker(self, session, user: User, share: str) -> Broker:
+        broker = Broker(name=f"PfBroker_J43_{uuid4().hex[:12]}")
+        session.add(broker)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=broker.id, user_id=user.id, role=UserRole.OWNER, share_percentage=Decimal(share)))
+        await session.flush()
+        return broker
+
+    async def _same_day_transfer(self, session, user: User, *, sender_share: str, receiver_share: str) -> tuple[Transaction, Transaction]:
+        """5000 EUR deposited on D at a sender owned at ``sender_share``, then 1000 EUR moved the same day to a receiver
+        owned at ``receiver_share``: a CASH_TRANSFER pair linked both ways (both legs flushed first: the foreign key of
+        ``related_transaction_id`` is deferred). Returns the two legs, the one sent first."""
+        sender = await self._owned_broker(session, user, sender_share)
+        receiver = await self._owned_broker(session, user, receiver_share)
+        session.add(Transaction(broker_id=sender.id, type=TransactionType.DEPOSIT, date=self.D, amount=Decimal("5000"), currency="EUR"))
+        sent = Transaction(broker_id=sender.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=self.D, quantity=Decimal("0"), amount=Decimal("-1000"), currency="EUR")
+        received = Transaction(broker_id=receiver.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=self.D, quantity=Decimal("0"), amount=Decimal("1000"), currency="EUR")
+        session.add_all([sent, received])
+        await session.flush()
+        sent.related_transaction_id = received.id
+        received.related_transaction_id = sent.id
+        await session.flush()
+        return sent, received
+
+    @staticmethod
+    def _mismatch_problems(where: str, data_quality, legs: tuple[Transaction, Transaction]) -> list[str]:
+        """What keeps ``data_quality`` from reporting exactly the one pair ``legs``: one INFO TRANSFER_SHARE_MISMATCH
+        issue counting 1, and one string naming both legs (the rest of its text is not pinned)."""
+        if data_quality is None:
+            return [f"{where}: no data quality"]
+        problems: list[str] = []
+        issues = [(issue.severity, issue.count, issue.message_params) for issue in data_quality.issues if issue.code == "TRANSFER_SHARE_MISMATCH"]
+        if issues != [(IssueSeverity.INFO, 1, {"count": 1})]:
+            problems.append(f"{where}: TRANSFER_SHARE_MISMATCH issues {issues}, expected one INFO counting 1; the report carries {[issue.code for issue in data_quality.issues]}")
+        leg_ids = {leg.id for leg in legs}
+        strings = data_quality.share_mismatch_warnings
+        if len(strings) != 1 or not leg_ids <= {int(number) for number in re.findall(r"\d+", strings[0])}:
+            problems.append(f"{where}: share_mismatch_warnings {strings}, expected one string naming both legs {sorted(leg_ids)}")
+        return problems
+
+    @pytest.mark.asyncio
+    async def test_summary_reports_a_same_day_transfer_between_different_shares(self, session, test_user):
+        """Red (J-43a + J-43b). Sender at 1, receiver at 0.5: the net worth is 4000 + 1000 x 0.5 = 4500 (barrier), and the
+        summary's data quality carries one TRANSFER_SHARE_MISMATCH issue counting 1 and one string naming both legs.
+
+        HEAD: neither — no issue, ``share_mismatch_warnings == []``: the classifier does not warn for a same-day pair,
+        and nothing takes its warnings out of the engine."""
+        legs = await self._same_day_transfer(session, test_user, sender_share="1", receiver_share="0.5")
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, target_currency_override="EUR", date_to=self.V)
+
+        assert summary.net_worth.amount == Decimal("4500"), f"barrier: each leg at its broker's share, got {summary.net_worth.amount}"
+        problems = self._mismatch_problems("get_summary", summary.data_quality, legs)
+        assert not problems, "\n".join(problems)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("include_summary", [True, False], ids=["summary_builds_it", "report_builds_it"])
+    async def test_report_reports_it_from_either_builder(self, session, test_user, include_summary):
+        """Red (J-43a + J-43b). The same pair through ``get_report`` over D..V: with the summary, the report's data quality
+        is the summary's; without it, ``get_report`` builds its own (the second ``build_data_quality_report`` call of
+        portfolio_service.py). Either way one issue counting 1 and one string naming both legs. Barrier: the engine's
+        states start on D, so it replayed these rows.
+
+        HEAD: neither, from either builder."""
+        legs = await self._same_day_transfer(session, test_user, sender_share="1", receiver_share="0.5")
+        _portfolio_l2_cache.clear()
+
+        report = await PortfolioService(session).get_report(
+            user_id=test_user.id,
+            query=PortfolioReportQuery(
+                target_currency="EUR",
+                include_summary=include_summary,
+                include_history=False,
+                include_allocation_history=False,
+                include_positions_contribution=False,
+                date_range={"start": self.D.isoformat(), "end": self.V.isoformat()},
+            ),
+        )
+
+        assert report.metadata.computed_date_from == self.D, f"barrier: the engine replayed this user's rows from D, got {report.metadata.computed_date_from}"
+        problems = self._mismatch_problems(f"get_report(include_summary={include_summary})", report.data_quality, legs)
+        assert not problems, "\n".join(problems)
+
+    @pytest.mark.asyncio
+    async def test_engine_result_carries_the_pair_as_a_share_mismatch(self, session, test_user):
+        """Red (J-43b). ``PortfolioCalculationEngine.calculate`` returns the pair as one ShareMismatch: the legs' ids lower
+        first, their brokers and shares (the engine's ``broker_shares``: 1 for the sender, 0.5 for the receiver) in that
+        order, dated D.
+
+        HEAD: AttributeError — ``models`` has no ShareMismatch, PortfolioCalculationResult no ``share_mismatches``."""
+        sent, received = await self._same_day_transfer(session, test_user, sender_share="1", receiver_share="0.5")
+        share_of = {sent.broker_id: Decimal("1"), received.broker_id: Decimal("0.5")}
+        first, second = sorted((sent, received), key=lambda leg: leg.id)
+
+        result = await portfolio_engine_module.PortfolioCalculationEngine(session).calculate(user_id=test_user.id, date_to=self.V, target_currency="EUR")
+
+        expected = portfolio_models_module.ShareMismatch(tx_ids=(first.id, second.id), broker_ids=(first.broker_id, second.broker_id), shares=(share_of[first.broker_id], share_of[second.broker_id]), date=self.D)
+        assert result.share_mismatches == [expected]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("share", "net_worth"), [("1", "5000"), ("0.5", "2500")], ids=["both_whole", "both_half"])
+    async def test_equal_shares_report_nothing(self, session, test_user, share, net_worth):
+        """Guard (green on HEAD and after J-43). The same transfer between two brokers owned at the same share — whole,
+        or half each — is no mismatch: no TRANSFER_SHARE_MISMATCH issue and no string. Barrier first: the net worth is
+        the 5000 deposited, at that share."""
+        await self._same_day_transfer(session, test_user, sender_share=share, receiver_share=share)
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, target_currency_override="EUR", date_to=self.V)
+
+        assert summary.net_worth.amount == Decimal(net_worth), f"barrier: the pair is in the scope at share {share}, got {summary.net_worth.amount}"
+        data_quality = summary.data_quality
+        assert data_quality is not None
+        assert [issue.code for issue in data_quality.issues if issue.code == "TRANSFER_SHARE_MISMATCH"] == []
+        assert data_quality.share_mismatch_warnings == []
 
 
 # =============================================================================
