@@ -229,9 +229,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AI Export FIFO summary: open value and unrealized P&L now add up the same lots — those whose value and P&L are both known — so the two totals stay comparable when a lot's cost is unknown.
 - The asset's data editor now speaks your language when it saves: «12 prices saved, 1 event deleted» and its error message were in English in every language.
 - On an instance its hosting provider has blocked, "Send the link again" on the sign-in page now says the instance is blocked, instead of reporting a wrong username or password.
+- **A secure backup always restores its key** — a generated instance key longer than a restore reads (4096 bytes) is no longer put in a secure backup: the backup warns `instance_key_unusable` instead, as for any unusable key.
 
 #### 🔒 Security
 
+- **Nothing left in clear after a crash** — at every start, LibreFolio removes what a backup, a restore check or `dev.py backup inspect` left on disk when it was stopped outright (a power cut, `kill -9`): a decrypted archive, even a partial one, an `inspect` folder older than an hour, and the database copy and clear zip of a backup that died. Nothing a running command still holds is touched, and nothing through a link. Finished backups past their hour are removed at start too, not only at the next backup.
+- **Passwords never shown** — `--password-stdin` at a terminal now asks the password without showing it (twice for `dev.py backup create`), and the password fields of a secure backup in Settings › Backup are marked as new passwords, so a password manager does not fill in your account password there.
+- **What a decrypted backup holds** — `dev.py backup decrypt` now says when the zip also holds the instance key, which opens every saved provider key.
 - **The secure backup's envelope** — scrypt (32 MiB per attempt) and AES-256-GCM in authenticated chunks: a file that was changed, cut short or reordered is refused, and a crafted header cannot push the password check past about 64 MiB of memory. An `.lfbk` downloads as a plain binary file, never presented as a zip.
 - **The instance key leaves only inside a secure backup**, and only when LibreFolio generated it: a key given by the environment or a hosting panel never leaves. A restore keeps the installation's own key.
 - **Passwords and clear copies are never left behind** — a password is never stored or logged, and a malformed request to the backup routes (and to the plugin settings) no longer repeats its body in the error. The clear copy that `inspect` and `restore` decrypt into a private folder is removed at the end; one an interrupted `inspect` left behind is removed by the next one once it is an hour old.
