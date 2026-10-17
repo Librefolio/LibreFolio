@@ -2371,9 +2371,10 @@ Note: No backend server required.
         "test-only-providers",
         services_test_only_providers,
         name="Test-Only Providers",
-        desc="X-R44: outside test mode (LIBREFOLIO_TEST_MODE off, simulated in process) a plugin flagged test_only — mockprov, MOCKFX, MOCKFX_FAIL — is found by no registry lookup or list, configured by no runtime, and an assignment or probe naming it is refused as an unknown provider; in test mode, for real providers (yfinance, justetf, ECB) and for a family without the flag (signals) nothing changes",
+        desc="X-R44: outside test mode (LIBREFOLIO_TEST_MODE off, simulated in process) a plugin flagged test_only — mockprov, MOCKFX, MOCKFX_FAIL — is found by no registry lookup or list, configured by no runtime, and an assignment or probe naming it is refused as an unknown provider; in test mode, for real providers (yfinance, justetf, ECB) and for a family without the flag (signals) nothing changes. X-R44c: only an asset or an FX plugin may be flagged test_only (the BRIM, signal, risk and tool registries have doors that do not withhold one), read over every registry the application defines, and the check proven to report a flagged class elsewhere",
         # PURE: nothing is written; production is simulated with monkeypatch inside a block, and the settings step
-        # (configure_instance) is replaced by a recorder, so no database, server or network is touched.
+        # (configure_instance) is replaced by a recorder, so no database, server or network is touched. The X-R44c guard
+        # loads every plugin family in process (heavier than the rest, as other services suites do).
     )
     add_test(
         cat,
