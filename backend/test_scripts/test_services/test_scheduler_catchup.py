@@ -26,10 +26,14 @@ will go through it on a scheduled wake-up. The contract pinned here:
     the first is done, and loads the state the first saved —; two successive event loops, each with two runs
     contending, both work.
 (g) Under the lock, in this order, each answer short-circuiting with ``jobs == ()``, without loading the state or running
-    a job, whatever the reason: ``scheduler_disabled()`` → "disabled", ``instance_blocked()`` → "blocked", not
-    ``am_i_leader()`` → "not_leader", ``load_scheduler_settings()`` with ``scheduler_enabled`` false → "disabled".
-(h) ``am_i_leader``, ``load_state`` and ``save_state`` run off the event loop's thread.
-(i) Otherwise ``load_state()``, then one ``now = utc_now()`` given to both due functions with the settings and the
+    a job, whatever the reason: ``scheduler_disabled()`` → "disabled", ``instance_blocked()`` → "blocked", then — only
+    without ``fcntl`` (``cross_process_lock_available()`` false, the fallback) — not ``am_i_leader()`` → "not_leader",
+    then ``load_scheduler_settings()`` with ``scheduler_enabled`` false → "disabled". With ``fcntl`` ``am_i_leader`` is
+    never asked (Z-11, night decision N71): a run whose leader would say no goes on.
+(h) ``am_i_leader`` (the fallback), ``load_state`` and ``save_state`` run off the event loop's thread.
+(i) Otherwise — with ``fcntl`` inside ``scheduler_run_lock()``, the lock across processes, entered after the settings
+    and left after the last save; without it the same, without that lock — ``load_state()``, then one ``now =
+    utc_now()``, read once the lock is held, given to both due functions with the settings and the
     loaded state, then the jobs, ``current_price`` then ``history_sync``. One not due is ``JobOutcome(name, "not_due")``;
     one due is awaited on that state — ``run_history_sync`` with ``horizon_days=settings.history_sync_horizon_days`` —,
     then the state is saved; its outcome copies the ``JobState`` the job wrote — status ``last_status`` ("ok" when
@@ -50,12 +54,18 @@ will go through it on a scheduled wake-up. The contract pinned here:
     ``CATCH_UP_AFTER_SECONDS`` of silence nudges it, from any thread; one after less does not. The nudge is cleared as a
     run starts: two nudges during a run make one run after it. A run that raises is logged — ERROR, "Scheduler run
     failed" — and the loop goes on. The shutdown ends it promptly, with no further run, and removes the listener.
+(o) A ``scheduler_run_lock()`` that raises as it is entered — the lock cannot be taken — stops the run: its exception
+    goes up out of ``run_due_jobs`` as any other (Z-11, N71), before the state is loaded; the span closes and the
+    ``asyncio.Lock`` is free.
 
 Pure: no database, no server, no lane port, no network. Every collaborator of ``run_due_jobs`` is a fake set on the module
 with ``monkeypatch``: the switches, the leader, the settings, a state store in memory, the two jobs, the due functions —
 due when the state says the job never ran; the real ones serve only in (m) —, ``utc_now`` on a fake wall clock and
-``settle_clock`` as a recorder. Each test has its own ``Activity`` on a fake clock in place of the process's
-``ACTIVITY``; it also counts the busy spans open per reason and records the return listeners and their calls. The loop
+``settle_clock`` as a recorder. The lock across processes is a recording stand-in that writes no file (``run_lock.py``'s
+own tests are ``test_scheduler_run_lock.py``), and ``cross_process_lock_available()`` a switch of the test — true by
+default, as with ``fcntl`` on POSIX; the cases of the leader set it false. Each test has its own ``Activity`` on a fake
+clock in place of the process's ``ACTIVITY``; it also counts the busy spans open per reason and records the return
+listeners and their calls. The loop
 tests put a recorder in place of ``run_due_jobs``, with ``FIRST_RUN_DELAY_SECONDS`` 0 and ``TICK_SECONDS`` 3600 — 0.05
 where a tick is the event awaited, the marker that the loop went back to waiting —, and wait for a run on an event with a
 bounded timeout. Nothing sleeps, and no assertion depends on a duration: the one bound of (b) is a timer of the loop,
@@ -63,7 +73,11 @@ which never fires before the callbacks already due. The log is read with ``struc
 barrier: a canary logged through each module's own ``logger`` must reach the capture.
 
 Red until the code of Z3 exists: the new names are missing from the module, an ``AttributeError`` where a test or a
-fixture sets or reads one; then the loop's exit needs ``Activity.remove_return_listener``.
+fixture sets or reads one; then the loop's exit needs ``Activity.remove_return_listener``. Since Z-11 (N71), the
+"cross-process-lock" cases of SCU-006, SCU-011, SCU-012 and SCU-013, and SCU-033 and SCU-034, are red until
+``_run_locked`` takes ``scheduler_run_lock()`` where ``cross_process_lock_available()``: before, it asks
+``am_i_leader`` and never enters the lock. The stand-ins are set with ``raising=False``, so the cases of the fallback
+pass before and after.
 """
 
 from __future__ import annotations
@@ -131,6 +145,11 @@ NOT_GIVEN = "<not given>"
 #: The real due functions, read before any test replaces them: (m) runs on them.
 REAL_DUE_CURRENT_PRICE = scheduler.due_current_price
 REAL_DUE_HISTORY_SYNC = scheduler.due_history_sync
+#: The two ways a run is kept to one worker (Z-11, N71): with ``fcntl`` the lock across processes, the World's default;
+#: without it, the fallback, the leader election.
+LOCK_MODES = [pytest.param(True, id="cross-process-lock"), pytest.param(False, id="fallback-leader")]
+#: Where the wall clock is once the stand-in of the lock has made a run wait seven minutes for another worker's.
+AFTER_THE_WAIT = WALL_START + timedelta(minutes=7)
 
 
 class ProviderExploded(Exception):
@@ -227,9 +246,11 @@ class World:
     """Every collaborator of ``run_due_jobs``, faked: a test sets what each one answers, and reads what each one saw.
 
     ``timeline`` records the calls in order — ``("settle",)``, ``("disabled",)``, ``("blocked",)``, ``("leader",)``,
-    ``("settings",)``, ``("load",)``, ``("due", name)``, ``("job", name)``, ``("save",)`` —; the clock readings are kept
-    apart, in ``wall.readings``. The state store keeps a deep copy of what was saved and hands out a deep copy of it,
-    as a file would. A job is due when the state it is given says it never ran.
+    ``("settings",)``, ``("lock",)`` and ``("unlock",)`` as the lock across processes is entered and left, ``("load",)``,
+    ``("due", name)``, ``("job", name)``, ``("save",)`` —; the clock readings are kept apart, in ``wall.readings``. The
+    state store keeps a deep copy of what was saved and hands out a deep copy of it, as a file would. A job is due when
+    the state it is given says it never ran. ``lock_available`` is what ``cross_process_lock_available()`` answers:
+    true, as with ``fcntl``; false for the leader's fallback.
     """
 
     def __init__(self, activity: RecordingActivity) -> None:
@@ -238,6 +259,9 @@ class World:
         self.disabled = False
         self.blocked = False
         self.leader = True
+        self.lock_available = True
+        self.lock_shift = timedelta(0)
+        self.lock_failure: BaseException | None = None
         self.settings = _settings()
         self.settings_failure: BaseException | None = None
         self.settle_shift = timedelta(0)
@@ -269,6 +293,9 @@ class World:
         monkeypatch.setattr(scheduler, "due_current_price", self._due("current_price"))
         monkeypatch.setattr(scheduler, "due_history_sync", self._due("history_sync"))
         monkeypatch.setattr(scheduler, "utc_now", self.wall)
+        # Z-11 (N71): names the module has only once the lock across processes exists, hence raising=False.
+        monkeypatch.setattr(scheduler, "cross_process_lock_available", self.cross_process_lock_available, raising=False)
+        monkeypatch.setattr(scheduler, "scheduler_run_lock", self.scheduler_run_lock, raising=False)
 
     def _listed(self, where: str) -> None:
         self.busy_seen[where].append(SCHEDULER_REASON in self.activity.busy_reasons())
@@ -280,6 +307,25 @@ class World:
     def instance_blocked(self) -> bool:
         self.timeline.append(("blocked",))
         return self.blocked
+
+    def cross_process_lock_available(self) -> bool:
+        """Not on the timeline: when and how often the run asks is its own business; what it does with the answer is not."""
+        return self.lock_available
+
+    @asynccontextmanager
+    async def scheduler_run_lock(self, *_args: object, **_kwargs: object) -> AsyncIterator[None]:
+        """The lock across processes, stood in for: no file. Entered, it records ``("lock",)`` — "scheduler" listed or
+        not —, moves the wall clock on by ``lock_shift`` as a wait for another worker's run would, and raises
+        ``lock_failure`` when one is set; left, however, it records ``("unlock",)``."""
+        self.timeline.append(("lock",))
+        self._listed("lock")
+        self.wall.now += self.lock_shift
+        if self.lock_failure is not None:
+            raise self.lock_failure
+        try:
+            yield
+        finally:
+            self.timeline.append(("unlock",))
 
     def am_i_leader(self) -> bool:
         self.timeline.append(("leader",))
@@ -600,16 +646,19 @@ async def test_an_unknown_reason_is_refused_before_anything_happens(world: World
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("reason", REASONS)
-async def test_the_run_is_busy_from_the_settle_to_the_last_save_and_not_after(world: World, activity: RecordingActivity, reason: str) -> None:
-    """SCU-006 — contract (d): "scheduler" is listed during the settle — for "return" and "wake" —, while the leader is asked, during each job and each save; once the run is over, no longer, and no span of it is left open."""
-    print_section(f"SCU-006: busy('scheduler') through a {reason} run")
+@pytest.mark.parametrize("lock_available", LOCK_MODES)
+async def test_the_run_is_busy_from_the_settle_to_the_last_save_and_not_after(world: World, activity: RecordingActivity, reason: str, lock_available: bool) -> None:
+    """SCU-006 — contract (d): "scheduler" is listed during the settle — for "return" and "wake" —, as the run enters the lock across processes — or, without ``fcntl``, while the leader is asked —, during each job and each save; once the run is over, no longer, and no span of it is left open."""
+    print_section(f"SCU-006: busy('scheduler') through a {reason} run, {'the cross-process lock' if lock_available else 'the leader'}")
+    world.lock_available = lock_available
 
     report = await _within(scheduler.run_due_jobs(reason), f"the {reason} run")
 
-    expected = {"leader": [True], "job:current_price": [True], "job:history_sync": [True], "save": [True, True]}
+    gate = "lock" if lock_available else "leader"
+    expected = {gate: [True], "job:current_price": [True], "job:history_sync": [True], "save": [True, True]}
     if reason in SETTLING_REASONS:
         expected["settle"] = [True]
-    assert dict(world.busy_seen) == expected
+    assert dict(world.busy_seen) == expected, f"{'with fcntl the run enters the cross-process lock and never asks am_i_leader (Z-11, N71); ' if lock_available else ''}the timeline: {world.timeline}"
     assert SCHEDULER_REASON not in activity.busy_reasons()
     assert activity.open_spans[SCHEDULER_REASON] == 0
     _assert_frame(report, reason)
@@ -732,27 +781,34 @@ def test_runs_contending_in_two_successive_event_loops_both_work(world: World) -
 @pytest.mark.asyncio
 @pytest.mark.parametrize("reason", REASONS)
 @pytest.mark.parametrize(
-    ("disabled", "blocked", "leader", "enabled", "status", "calls"),
+    ("lock_available", "disabled", "blocked", "leader", "enabled", "status", "calls"),
     [
         # Every later answer would stop the run too: the order decides.
-        pytest.param(True, True, False, False, "disabled", ["disabled"], id="scheduler-disabled"),
-        pytest.param(False, True, False, False, "blocked", ["disabled", "blocked"], id="instance-blocked"),
-        pytest.param(False, False, False, False, "not_leader", ["disabled", "blocked", "leader"], id="not-the-leader"),
-        pytest.param(False, False, True, False, "disabled", ["disabled", "blocked", "leader", "settings"], id="setting-off"),
+        pytest.param(True, True, True, False, False, "disabled", ["disabled"], id="lock-scheduler-disabled"),
+        pytest.param(True, False, True, False, False, "blocked", ["disabled", "blocked"], id="lock-instance-blocked"),
+        # With fcntl am_i_leader is never asked, even where it would say no (Z-11, N71): the setting decides, and the lock
+        # across processes, taken only after the settings, is not entered.
+        pytest.param(True, False, False, False, False, "disabled", ["disabled", "blocked", "settings"], id="lock-setting-off-leader-never-asked"),
+        # Without fcntl, the fallback: the leader is asked, between the instance and the settings.
+        pytest.param(False, True, True, False, False, "disabled", ["disabled"], id="fallback-scheduler-disabled"),
+        pytest.param(False, False, True, False, False, "blocked", ["disabled", "blocked"], id="fallback-instance-blocked"),
+        pytest.param(False, False, False, False, False, "not_leader", ["disabled", "blocked", "leader"], id="fallback-not-the-leader"),
+        pytest.param(False, False, False, True, False, "disabled", ["disabled", "blocked", "leader", "settings"], id="fallback-setting-off"),
     ],
 )
-async def test_each_short_circuit_answers_in_order_without_loading_the_state(world: World, activity: RecordingActivity, reason: str, disabled: bool, blocked: bool, leader: bool, enabled: bool, status: str, calls: list[str]) -> None:
-    """SCU-011 — contract (g): the switches are asked in their order, the first that says stop is the status, and nothing after it is asked; the state is neither loaded nor saved, no job runs, ``jobs`` is empty — whatever the reason, the settle of "return" and "wake" first. "scheduler" is not listed after."""
-    print_section(f"SCU-011: {reason} run → {status} after {calls}")
+async def test_each_short_circuit_answers_in_order_without_loading_the_state(world: World, activity: RecordingActivity, reason: str, lock_available: bool, disabled: bool, blocked: bool, leader: bool, enabled: bool, status: str, calls: list[str]) -> None:
+    """SCU-011 — contract (g): the switches are asked in their order, the first that says stop is the status, and nothing after it is asked; the state is neither loaded nor saved, no job runs, ``jobs`` is empty — whatever the reason, the settle of "return" and "wake" first. With ``fcntl`` the leader is not one of the switches; without it, "not_leader" stops the run. "scheduler" is not listed after."""
+    print_section(f"SCU-011: {reason} run, {'cross-process lock' if lock_available else 'fallback'} → {status} after {calls}")
+    world.lock_available = lock_available
     world.disabled, world.blocked, world.leader = disabled, blocked, leader
     world.settings = _settings(enabled=enabled)
 
     report = await _within(scheduler.run_due_jobs(reason), f"the {reason} run")
 
     _assert_frame(report, reason)
-    assert (report.status, report.jobs) == (status, ())
     settle = [("settle",)] if reason in SETTLING_REASONS else []
-    assert world.timeline == settle + [(call,) for call in calls]
+    assert world.timeline == settle + [(call,) for call in calls], f"{'with fcntl am_i_leader is never asked (Z-11, N71); ' if lock_available else ''}the timeline: {world.timeline}"
+    assert (report.status, report.jobs) == (status, ())
     assert SCHEDULER_REASON not in activity.busy_reasons()
     print_success(f"{status}, nothing loaded, nothing run")
 
@@ -763,16 +819,21 @@ async def test_each_short_circuit_answers_in_order_without_loading_the_state(wor
 
 
 @pytest.mark.asyncio
-async def test_the_leader_and_the_state_store_run_off_the_event_loop_thread(world: World) -> None:
-    """SCU-012 — contract (h): ``am_i_leader``, ``load_state`` and both ``save_state`` calls ran in threads other than the one running the event loop."""
-    print_section("SCU-012: am_i_leader, load_state, save_state off the loop")
+@pytest.mark.parametrize("lock_available", LOCK_MODES)
+async def test_the_leader_and_the_state_store_run_off_the_event_loop_thread(world: World, lock_available: bool) -> None:
+    """SCU-012 — contract (h): ``load_state`` and both ``save_state`` calls ran in threads other than the one running the event loop. Without ``fcntl`` so did ``am_i_leader``; with it the leader was never asked, and the run entered the lock across processes once and left it."""
+    print_section(f"SCU-012: {'the cross-process lock' if lock_available else 'am_i_leader'}, load_state, save_state off the loop")
+    world.lock_available = lock_available
     loop_thread = threading.get_ident()
 
     await _within(scheduler.run_due_jobs("tick"), "the run")
 
-    assert {where: len(threads) for where, threads in world.threads.items()} == {"leader": 1, "load": 1, "save": 2}
-    assert {where: [thread == loop_thread for thread in threads] for where, threads in world.threads.items()} == {"leader": [False], "load": [False], "save": [False, False]}
-    print_success("three collaborators, four calls, none on the loop's thread")
+    leader_calls = 0 if lock_available else 1
+    assert len(world.threads["leader"]) == leader_calls, f"am_i_leader asked {len(world.threads['leader'])} time(s): {'with fcntl never, the cross-process lock decides (Z-11, N71)' if lock_available else 'once, the fallback'}"
+    assert {where: len(threads) for where, threads in world.threads.items()} == {"leader": leader_calls, "load": 1, "save": 2}
+    assert {where: [thread == loop_thread for thread in threads] for where, threads in world.threads.items()} == {"leader": [False] * leader_calls, "load": [False], "save": [False, False]}
+    assert (world.timeline.count(("lock",)), world.timeline.count(("unlock",))) == ((1, 1) if lock_available else (0, 0)), world.timeline
+    print_success("none on the loop's thread" + ("; the cross-process lock entered once" if lock_available else ""))
 
 
 # =============================================================================
@@ -781,14 +842,19 @@ async def test_the_leader_and_the_state_store_run_off_the_event_loop_thread(worl
 
 
 @pytest.mark.asyncio
-async def test_due_jobs_run_in_order_on_the_loaded_state_each_saved_after_it(world: World) -> None:
-    """SCU-013 — contract (i): after the switches, the state is loaded; each due function gets the settings and that very state, and is asked before its job runs; current_price runs, the state is saved, history_sync runs with ``horizon_days`` from the settings, the state is saved — the very object loaded, each time. Each outcome copies the ``JobState`` its job wrote, ``started_at`` the wall clock's time."""
-    print_section("SCU-013: the jobs, their order, their saves, their outcomes")
+@pytest.mark.parametrize("lock_available", LOCK_MODES)
+async def test_due_jobs_run_in_order_on_the_loaded_state_each_saved_after_it(world: World, lock_available: bool) -> None:
+    """SCU-013 — contract (i): after the switches, the state is loaded — with ``fcntl`` once the lock across processes is entered, after the settings, and the lock is left after the last save; without it, after the leader and the settings —; each due function gets the settings and that very state, and is asked before its job runs; current_price runs, the state is saved, history_sync runs with ``horizon_days`` from the settings, the state is saved — the very object loaded, each time. Each outcome copies the ``JobState`` its job wrote, ``started_at`` the wall clock's time."""
+    print_section(f"SCU-013: the jobs, their order, their saves, their outcomes ({'cross-process lock' if lock_available else 'fallback'})")
+    world.lock_available = lock_available
     world.writes["current_price"] = {"last_duration_s": 1.25, "last_status": "partial", "last_items_ok": 7, "last_items_err": 2, "last_error": "QuotaExceeded"}
 
     report = await _within(scheduler.run_due_jobs("tick"), "the run")
 
-    assert world.timeline[:5] == [("disabled",), ("blocked",), ("leader",), ("settings",), ("load",)]
+    gate = [("settings",), ("lock",)] if lock_available else [("leader",), ("settings",)]
+    assert world.timeline[:5] == [("disabled",), ("blocked",), *gate, ("load",)], f"{'with fcntl: the settings, then the cross-process lock, never am_i_leader (Z-11, N71); ' if lock_available else ''}the timeline: {world.timeline}"
+    assert [entry for entry in world.timeline if entry[0] in ("lock", "unlock")] == ([("lock",), ("unlock",)] if lock_available else [])
+    assert (world.timeline[-1] == ("unlock",)) is lock_available, f"the cross-process lock is left after the last save: {world.timeline}"
     assert _jobs_and_saves(world) == [("job", "current_price"), ("save",), ("job", "history_sync"), ("save",)]
     assert all(world.timeline.index(("due", name)) < world.timeline.index(("job", name)) for name in JOBS), world.timeline
     (loaded,) = world.loaded
@@ -997,6 +1063,66 @@ async def test_the_report_status_follows_the_jobs_that_ran(world: World, first: 
     assert [(outcome.name, outcome.status) for outcome in report.jobs] == [(name, OUTCOME_OF[how]) for name, how in zip(JOBS, (first, second), strict=True)]
     assert report.status == status
     print_success(status)
+
+
+# =============================================================================
+# (g), (i), (o) THE LOCK ACROSS PROCESSES (Z-11, N71)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_with_the_cross_process_lock_the_leader_is_never_asked_and_the_run_reads_the_clock_inside_it(world: World, activity: RecordingActivity) -> None:
+    """SCU-033 — contracts (g) and (i), Z-11 (N71): with ``fcntl``, a "wake" run on a worker whose ``am_i_leader`` would answer no is never asked it: after the settle, the switches and the settings, the run enters ``scheduler_run_lock()`` — "scheduler" listed —, loads the state, runs both due jobs and saves after each inside it, and leaves it after the last save. Entering it moves the wall clock on by seven minutes, as a wait for another worker's run would: both due checks and both jobs' ``started_at`` read the time once the lock is held."""
+    print_section("SCU-033: the cross-process lock in place of the leader")
+    world.leader = False
+    world.lock_shift = AFTER_THE_WAIT - WALL_START
+
+    report = await _within(scheduler.run_due_jobs("wake"), "the wake run")
+
+    assert ("leader",) not in world.timeline, f"with fcntl available am_i_leader is never asked, the cross-process lock decides (Z-11, N71): {world.timeline}"
+    assert world.timeline == [
+        ("settle",),
+        ("disabled",),
+        ("blocked",),
+        ("settings",),
+        ("lock",),
+        ("load",),
+        ("due", "current_price"),
+        ("job", "current_price"),
+        ("save",),
+        ("due", "history_sync"),
+        ("job", "history_sync"),
+        ("save",),
+        ("unlock",),
+    ], f"the state loaded, the jobs run and saved inside the cross-process lock, entered after the settings: {world.timeline}"
+    assert [now for _, now, _, _ in world.due_calls] == [AFTER_THE_WAIT, AFTER_THE_WAIT], f"the clock is read once the lock is held: {world.due_calls}"
+    assert [(outcome.name, outcome.status, outcome.started_at) for outcome in report.jobs] == [(name, "ok", AFTER_THE_WAIT) for name in JOBS]
+    assert (report.status, world.busy_seen["lock"]) == ("ok", [True]), "the run is ok, and busy while it takes the lock"
+    assert SCHEDULER_REASON not in activity.busy_reasons()
+    print_success("no leader asked; load, jobs and saves inside the lock; the clock read once it was held")
+
+
+@pytest.mark.asyncio
+async def test_a_cross_process_lock_that_cannot_be_taken_stops_the_run_before_the_state(world: World, activity: RecordingActivity) -> None:
+    """SCU-034 — contract (o), Z-11 (N71): ``scheduler_run_lock()`` raises ``PermissionError`` as it is entered — the data directory refuses the lock file. The run raises that very exception, as any other (the loop logs it, ``wake-sync`` answers its class name), without loading the state or running a job; "scheduler" is no longer listed; the next run takes the lock and runs both jobs."""
+    print_section("SCU-034: a cross-process lock that cannot be taken")
+    failure = PermissionError(f"provoked: the lock file cannot be opened, {SECRET}")
+    world.lock_failure = failure
+
+    try:
+        result = await _within(scheduler.run_due_jobs("tick"), "the run whose lock cannot be taken")
+    except PermissionError as raised:
+        assert raised is failure
+    else:
+        pytest.fail(f"the run went on without its cross-process lock: a lock that cannot be taken stops the run, its error going up as any other (Z-11, N71): {result!r}, {world.timeline}")
+
+    assert world.timeline[-1] == ("lock",) and ("load",) not in world.timeline, f"nothing past the lock that could not be taken: {world.timeline}"
+    assert SCHEDULER_REASON not in activity.busy_reasons()
+    assert activity.open_spans[SCHEDULER_REASON] == 0
+    world.lock_failure = None
+    report = await _within(scheduler.run_due_jobs("tick"), "the next run: is the asyncio lock still held?")
+    assert [(outcome.name, outcome.status) for outcome in report.jobs] == [("current_price", "ok"), ("history_sync", "ok")]
+    print_success("raised before the state; the next run went through")
 
 
 # =============================================================================

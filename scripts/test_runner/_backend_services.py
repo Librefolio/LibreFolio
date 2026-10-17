@@ -1018,6 +1018,26 @@ def services_scheduler_leader(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Scheduler leader election tests", verbose=verbose)
 
 
+def services_scheduler_run_lock(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's lock across processes: scheduler_run_lock, a flock on the data directory's .scheduler.lock (Z-11, N71)."""
+    print_section("Services: Scheduler Lock Across Processes")
+    print_info("Testing: backend/app/services/platform/scheduler/run_lock.py (scheduler_run_lock, cross_process_lock_available, run_lock_path), against real child processes")
+    print_info(
+        "Tests: RL-001..009 — the block waits while another process holds the lock (LOCK_EX | LOCK_NB, POLL_SECONDS apart) and runs once it lets go or is killed; a cancelled wait, even with an attempt in flight, leaves no descriptor nor lock; released on an exception; 0o600 file kept, symlink refused; open/flock/close off the loop; constants, availability, path; without fcntl"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_run_lock.py", test_names)
+    return run_command(cmd, "Scheduler lock across processes tests", verbose=verbose)
+
+
+def services_scheduler_multiprocess(verbose: bool = False, test_names: list = None) -> bool:
+    """Test two real processes running the scheduler's due jobs at once: each job once, behind the lock across processes (Z-11, N71)."""
+    print_section("Services: Scheduler Across Two Processes")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (run_due_jobs) with run_lock.py, in two child processes on one data directory")
+    print_info("Tests: MP-001..002 — each due job once across the two, one report ok, the other not_due, never not_leader nor am_i_leader; the state written once per job and re-read inside the lock; the data directory's .scheduler.lock")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_multiprocess.py", test_names)
+    return run_command(cmd, "Scheduler across processes tests", verbose=verbose)
+
+
 def services_scheduler_loop(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler loop integration (due_* + state roundtrip, no real loop)."""
     print_section("Services: Scheduler Loop Integration")
@@ -2115,6 +2135,31 @@ Note: No backend server required.
     add_test(cat, "scheduler-settings", services_scheduler_settings, name="Scheduler Settings", desc="_parse_times, _parse_days pure functions")
     add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases; a missed slot of a configured day in the last 7 days is due once a run exists (D-Z3-1)")
     add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
+    add_test(
+        cat,
+        "scheduler-run-lock",
+        services_scheduler_run_lock,
+        name="Scheduler Lock Across Processes",
+        desc="Z-11 (N71), run_lock.py: scheduler_run_lock(path) waits while another process holds the lock (each attempt LOCK_EX | LOCK_NB in a thread, POLL_SECONDS apart) and runs the block once it lets go or is SIGKILLed; a cancelled wait goes through, never runs the block, and leaves no descriptor nor lock, an attempt in flight that took it included; released on an exception (another process takes it at once); the file created 0o600 with its folder and never deleted; a symbolic link refused at once with OSError, nothing behind it created or locked; open/flock/close never on the event loop's thread; LOCK_FILE_NAME .scheduler.lock, POLL_SECONDS 0.2, cross_process_lock_available() with fcntl (false with fcntl None or not importable), run_lock_path() the data directory's, read at the call",
+        # PURE: no DB, no server, no lane port, no network. Every lock file lives under the test's tmp_path, and an autouse
+        # fixture points the data directory (LIBREFOLIO_TEST_DATA_DIR) there too, for the test and its children: no
+        # .scheduler.lock reaches the lane's. The other processes are real child interpreters the test starts (a holder of the
+        # lock, a one-shot probe), coordinated by files under tmp_path against deadlines of their own; each holder gives up
+        # by itself, and every child is killed and reaped in a finally.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "scheduler-multiprocess",
+        services_scheduler_multiprocess,
+        name="Scheduler Across Two Processes",
+        desc="Z-11 (N71): two real processes call run_due_jobs('wake') at once on one data directory, both jobs due and am_i_leader answering yes: each job runs once across the two, in the process that took the lock first (both ok), the other finds both not_due; neither reports not_leader, neither asks am_i_leader; the state file holds each last_run_at written once, the second process loaded it inside the lock; the lock file is the data directory's .scheduler.lock",
+        # PURE: no DB, no server, no lane port, no network. The two processes are child interpreters the test starts, their
+        # LIBREFOLIO_DATA_DIR a folder of tmp_path (test mode off, no switch nor coverage variable inherited): the state file
+        # and the lock file are real, both under tmp_path. Settings, jobs and the leader are patched in each child's memory;
+        # both are killed and reaped in a finally.
+        isolation="pure",
+    )
     add_test(cat, "scheduler-loop", services_scheduler_loop, name="Scheduler Loop Integration", desc="due_* + state roundtrip, no real loop")
     add_test(
         cat,
