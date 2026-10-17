@@ -25,6 +25,9 @@ The steps, each refusing with a stable ``code`` (``StagingError``):
 6. **Plugin secrets** (decision 39): the instance keeps its own key. The copy's secrets are re-encrypted with it from
    the archive's key, when the archive carries one; the others stay as they are, counted: «set but unreadable, enter it
    again». This instance's key is derived only when the copy holds secrets.
+7. **Currency codes** (E-19b1): stored currency values that are not ISO 4217 codes — a number or a name an earlier
+   version saved, such as ``978`` or ``EURO`` — are a warning: an edit of their rows is refused until they are
+   corrected. Read on the upgraded copy by E-19a's audit; a read that fails only leaves the warning out.
 
 The report is written beside the copy (``report.json``). A confirmed restore (lot B3) moves the copy into place; the
 copy of an archive nobody confirms is removed after ``STAGE_LIFETIME``.
@@ -79,6 +82,7 @@ from backend.app.services.platform.instance_backup.paths import (
 from backend.app.services.platform.instance_backup.snapshot import DatabaseDescription, describe_database
 from backend.app.services.platform.instance_backup.totals import TotalsComparison, TotalsDifference, TotalsStatus, compare_totals, ledger_totals_of
 from backend.app.services.platform.instance_key import INSTANCE_KEY_MIN_LENGTH, InstanceKeyError, derive_key_from
+from backend.app.services.platform.stored_currencies import find_stored_currency_findings
 from backend.app.services.plugin_settings.crypto import SUBKEY_LENGTH, SUBKEY_PURPOSE, count_unreadable_secrets, rekey_plugin_secrets, settings_subkey
 
 logger = get_logger(__name__)
@@ -159,7 +163,9 @@ class StagingReport(BaseModel):
     upgrade changed the rows of a table), ``foreign_key_violations`` (the backup's database has broken references, kept
     as they are), ``foreign_key_violations_added`` (the upgrade added some), ``control_totals_changed`` (the ledger's
     control totals of the copy differ from those the backup recorded: ``control_totals_differences``),
-    ``control_totals_unreadable`` (the copy's could not be read). A blocker forbids it: ``no_administrator``.
+    ``control_totals_unreadable`` (the copy's could not be read), ``non_iso_currencies`` (the copy holds stored currency
+    values that are not ISO 4217 codes, which an edit of their rows refuses until they are corrected: ``./dev.py db
+    currencies`` lists them; E-19b1). A blocker forbids it: ``no_administrator``.
     ``control_totals``: ``same``, ``changed``, ``absent`` (not in the archive), ``other_version`` (another version of
     J's method: not compared) or ``unreadable``. ``encrypted``: a secure backup (lot B4). ``secrets_rekeyed``: the
     plugin secrets re-encrypted with this instance's key; ``secrets_unreadable``: those that stay unreadable.
@@ -219,6 +225,8 @@ def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = 
     The copy and its report stay in ``.restore/stage/<stage id>/``; on any refusal nothing of them is left. One archive
     is checked at a time: ``StagingBusyError`` while another is. ``StagingError`` says why an archive is refused; an
     ``sqlite3`` error while the copy's database is read or checked is ``database_damaged`` (B-43), never raised as such.
+    The one read that refuses nothing, of the copy's stored currency codes (E-19b1), only warns: when it fails, the
+    warning is left out and the check goes on.
     ``lock``: the lock of the checks, already held by the caller (``restore_jobs``, which takes it in the request and
     checks in a thread). The caller keeps it and releases it itself, once the check's end is recorded: until then, a
     reader must find it held. Without one, the lock is taken and released here.
@@ -331,7 +339,7 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
         if after.alembic_revision != head:
             raise StagingError("upgrade_failed", "The copy of the backup's database did not reach this LibreFolio's revision")
         totals = compare_totals(manifest.database.control_totals, ledger_totals_of(database))
-        report = _report(stage_id, manifest, before, after, action, migrations, head, fixes, _administrators(database), totals, encrypted=encrypted, secrets_rekeyed=rekeyed, secrets_unreadable=unreadable)
+        administrators = _administrators(database)
     except sqlite3.ProgrammingError:
         raise
     except sqlite3.DatabaseError as exc:
@@ -341,6 +349,9 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
         # archive's function, archive text: the class and SQLite's error name only (B-28).
         logger.warning("A backup's database could not be read or checked on its copy", error=type(exc).__name__, sqlite_error=getattr(exc, "sqlite_errorname", None))
         raise StagingError("database_damaged", "The backup's database cannot be read or checked: it cannot be restored") from None
+    # Outside the wrap above: this read refuses nothing, so its failure must never become database_damaged (E-19b1)
+    non_iso_currencies = _holds_non_iso_currencies(database, stage_id)
+    report = _report(stage_id, manifest, before, after, action, migrations, head, fixes, administrators, totals, encrypted=encrypted, secrets_rekeyed=rekeyed, secrets_unreadable=unreadable, non_iso_currencies=non_iso_currencies)
     _write_report(root, report)
     return report
 
@@ -710,6 +721,20 @@ def _administrators(database: Path) -> list[str]:
     return [str(row[0]) for row in rows]
 
 
+def _holds_non_iso_currencies(database: Path, stage_id: str) -> bool:
+    """Whether the upgraded copy holds stored currency values that are not ISO 4217 codes (E-19b1): E-19a's audit
+    (``find_stored_currency_findings``), read only. Whatever it raises never ends the check, as the control totals' read
+    (B-29): the warning is left out, and the log names the error's class, never its text or a path — for a stored text
+    that is no UTF-8, sqlite3's message quotes the archive's bytes."""
+    try:
+        with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+            conn.execute("PRAGMA trusted_schema=OFF")
+            return bool(find_stored_currency_findings(conn))
+    except Exception as exc:  # noqa: BLE001 — a warning that cannot be read is left out, never a refusal
+        logger.warning("Stored currency codes could not be read on the copy: the check goes on without their warning", stage_id=stage_id, error=type(exc).__name__, sqlite_error=getattr(exc, "sqlite_errorname", None))
+        return False
+
+
 def _report(
     stage_id: str,
     manifest: BackupManifest,
@@ -725,6 +750,7 @@ def _report(
     encrypted: bool = False,
     secrets_rekeyed: int = 0,
     secrets_unreadable: SecretCounts | None = None,
+    non_iso_currencies: bool = False,
 ) -> StagingReport:
     tables = {name: TableRows(before=before.tables.get(name), after=after.tables.get(name)) for name in sorted(set(before.tables) | set(after.tables))}
     warnings = []
@@ -741,6 +767,8 @@ def _report(
         warnings.append("control_totals_changed")
     elif totals.status == "unreadable":
         warnings.append("control_totals_unreadable")
+    if non_iso_currencies:
+        warnings.append("non_iso_currencies")
     files = manifest.files[1:]
     staged_at = datetime.now(UTC)
     return StagingReport(
