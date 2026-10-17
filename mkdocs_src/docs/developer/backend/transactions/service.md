@@ -83,6 +83,8 @@ stores all state that must survive across stages. This includes:
 - `issues` and per-operation `results`;
 - preloaded transactions and the touched-broker set;
 - the earliest affected date per broker;
+- every row `apply_creates()` flushed, by its create index (`created_by_index`):
+  the row a create's Auto cost is written on (W-B67);
 - transient create-correlation groups and the groups consumed by promote;
 - the giving legs of the `TRANSFER` pairs the batch splits, each with its split's
   index (`handover_rows`), which the WAC stage prices;
@@ -125,6 +127,7 @@ frontend, each time they run, so they follow any change to it:
 | 9 | `event_compatible()` | An asset event link on another type (`eventTypeIncompatible`, its `allowed` param from `event_compatible_types()`) or without an asset (`eventRequiresAsset`) |
 | 10, 11 | `quantity_sign`, `cash_sign` | A quantity, or a non-zero cash amount, of the wrong sign (`qtyPositive`, `qtyNegative`, `qtyZero`, `qtyNonzero`; `cashSignPositive`, `cashSignNegative`); a zero cash amount where `cash_sign` is `nonzero` (`cashNonzero`; see below for when) |
 | 12 | `cost_basis_allowed()` | A `cost_basis_mode` where the type and side take no cost basis (`costBasisModeIncompatible`; see [Persisted Cost Basis](wac.md#persisted-cost-basis)) |
+| 12b | `cost_basis_allowed()`, `cost_basis_set` | A non-null `cost_basis_override` the request sets without a `cost_basis_mode` where the type and side take no cost basis, except on an `ADJUSTMENT` taking units out (`costBasisNotAllowed`; see below) |
 
 Decision P6 (the developer's, 2026-10-16) sets when four of these refusals hold: a
 `TRANSFER`'s cash (`cashForbidden`), `FX_CONVERSION`'s non-zero quantity (`qtyZero`),
@@ -137,6 +140,41 @@ tags or date, or the field re-sent as stored. A promote changes the type, which 
 a changed cash and quantity, so it checks all four. A create (`changed_fields=None`)
 keeps them in its own rules 2, 3 and 3b. This mirrors N2's cost check, which judges only
 an update that touches the cost (see [Persisted Cost Basis](wac.md#persisted-cost-basis)).
+
+Rule 12b (W-B72; night decision N78, as the coordinator refined it on 17/10, pending the
+developer's review) reads `cost_basis_set`: whether the request sets a non-null
+`cost_basis_override`. The create passes it from `TXCreateItem.validate_transaction_rules`,
+the update from `_validate_updated_final_state()`; `_promoted_state_issues()` leaves it
+false, as a promote's resolved cost basis has its own check (`_resolved_cost_issues()`, see
+[Request shape](split_promote.md#promote-request-shape)). Where `cost_basis_allowed()` is
+false, the cost basis is refused with `costBasisNotAllowed`, params `{type, qty}`, except on
+an `ADJUSTMENT` taking units out: its cost is decision 47's handover cost, which an update of
+the split's own batch may set without a mode (decision 4, see
+[The giving leg of a `TRANSFER`](split_promote.md#transfer-giving-leg)). Rule 12b is rule
+12's `elif`: a request that names a mode gets `costBasisModeIncompatible` alone. It
+judges only a cost basis the request sets: never one the row already stores — a notes-only
+edit of an older row carrying a stray one commits and keeps it — and never an explicit
+`null`. Before W-B72, a cost basis sent without a mode was stored on any type. Tests:
+`./dev.py test services transaction-cost-basis-rule` (`TestN78*`).
+
+A create meets its business rules at the lenient parse (`_parse_lenient()`,
+`transaction_batch_stages.py`): `TXCreateItem` raises a lone business-rule error as it is,
+and packs several into `multipleBusinessRuleErrors`, which the parse unpacks into one issue
+each, with its context as `params`. Since W-B72 a lone one keeps its context as `params`
+too (`_lone_error_params()`), when its `loc` is empty and its context holds plain data
+(str, int, float, bool or `None` values); before, it reached the app with `params` null, so
+its message lost the `{type}` it names. A field's error (`loc` not empty, such as
+`string_too_long`) and a `value_error`, whose context holds the exception itself, keep
+`params` null. An update's and a promote's rule errors, raised after the parse, already
+carried their context.
+
+The frontend reads the two codes as `transactions.errors.costBasisNotAllowed` and
+`transactions.errors.costBasisModeIncompatible`, messages that name the type and leave
+`qty` out. The second had no message before W-B72, so the app showed the backend's
+English. `TestN78TheMessages` (`test_transaction_cost_basis_rule.py`) holds every
+business-rule code of `backend/app/schemas/transactions/transactions.py` — the literal first
+argument of each `PydanticCustomError`, the `multipleBusinessRuleErrors` wrapper aside — to
+a message in English, Italian, French and Spanish.
 
 ### 🔢 Decimal limits {: #decimal-limits }
 
@@ -307,7 +345,10 @@ Role hierarchy is `OWNER > EDITOR > VIEWER`; mutation requires at least `EDITOR`
 `TRANSFER`, `FX_CONVERSION`, and `CASH_TRANSFER` are two-row composite
 transactions. A create request uses `link_uuid` only as transient correlation:
 
-1. `apply_creates()` records each flushed row in `context.link_uuid_map`;
+1. `apply_creates()` records each flushed row by its create index in
+   `context.created_by_index` (where the Auto cost finds it, see
+   [Inline Batch Auto Modes](wac.md#inline-batch-auto-modes)), and one carrying a
+   `link_uuid` in `context.link_uuid_map` too;
 2. `resolve_create_links()` validates each unconsumed two-row group; and
 3. the stage writes reciprocal `related_transaction_id` values.
 

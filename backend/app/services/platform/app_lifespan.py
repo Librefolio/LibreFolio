@@ -31,6 +31,7 @@ from backend.app.services.brim.brim_parse_pool import prewarm as prewarm_brim_pa
 from backend.app.services.brim.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.files.static_uploads import seed_default_avatars
+from backend.app.services.financial_math.portfolio.engine import shutdown_engine_executor
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform.config_audit import log_configuration_audit
 from backend.app.services.platform.database_bootstrap import ensure_database_exists, run_post_migration_fixes_at_startup
@@ -257,6 +258,8 @@ SHUTDOWN_STEPS: tuple[Step, ...] = (
     Step("providers", lambda: _shutdown_providers()),
     Step("brim-parse-pool", lambda: _shutdown_brim_parse_pool(), blocking=True),
     Step("quant-pools", lambda: shutdown_quant_worker_pools()),
+    # The portfolio replay's threads: a queued replay is cancelled, never waited for (MF-J45a)
+    Step("portfolio-engine", lambda: shutdown_engine_executor()),
     # Never waits for a holiday build in progress: its process is ended at once
     Step("market-holidays", lambda: shutdown_market_holidays()),
     # Close all TTL caches (stop timer wheel threads for clean exit)

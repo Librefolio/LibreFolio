@@ -9,7 +9,8 @@ Module under test: ``backend/app/services/financial_math/returns.py``:
 * ``fixed_period_changes(values, as_of, periods=FIXED_PERIODS)`` → ``tuple[FixedPeriodChange(key, days, change_ratio,
   inverse_change_ratio), ...]``. The anchor is ``values[as_of]``, each reference is ``values[as_of − days]``;
   ``change_ratio = anchor / reference − 1`` and ``inverse_change_ratio = reference / anchor − 1`` (the inverted FX
-  quote), both Decimal fractions, never ×100; a missing, None or ≤ 0 value makes that change and its inverse None.
+  quote), both Decimal fractions, never ×100; a missing or None value, a reference ≤ 0 or a negative anchor makes that
+  change and its inverse None; an anchor of exactly 0 over a positive reference is −1 without an inverse (see below).
   The carry-forward is the caller's job: the value on a day is the last stored price on or before it (assets, grouped
   SQL) or a rate converted at it (FX, ``convert_bulk``).
 
@@ -35,20 +36,41 @@ reference read on the wrong day changes the result.
 Red by absence on HEAD (1c37ad0f0): ``returns.py`` there has none of the new names, so the import below fails and the
 file errors at collection with ImportError.
 
+X-R59 (rule 10, developer decision N80) adds ``TestRangeChange`` at the end: the whole-range Δ of the Assets cards and
+the FX Δ Abs / Δ % — today ``computeDerivedPriceState`` (``assetPriceDerived.ts``) and ``displayFxDelta``
+(``fxStoreRegistry.ts``), floats in the browser — get the house function
+``range_change(reference, anchor) -> RangeChange(change_abs, change_ratio, inverse_change_abs, inverse_change_ratio)``.
+It is looked up on the module when a test calls it, so the rest of this file still collects and runs on HEAD a275ec8af,
+where those tests are red with AttributeError.
+
+X's review, point 2 (decision on N80): a price written down to nothing — a defaulted loan, a delisted share — is −100 %,
+not «no change». ``range_change(reference, anchor)`` with an anchor of exactly 0 over a positive reference gives
+``change_abs = −reference``, ``change_ratio = −1`` and both inverse fields None (the inverted quote has no value); a
+reference ≤ 0 and a negative anchor still give all four None. ``fixed_period_changes`` delegates to ``range_change``, so
+every period with a positive reference gets −1 and an inverse None. Pinned by ``TestAnchorOfZero``; ``zero-anchor`` left
+``UNUSABLE_PAIRS``, and ``test_negative_anchor_or_non_positive_reference_gives_no_change`` (formerly
+``test_non_positive_value_gives_no_change_either_way``) keeps only what is still refused. Red on HEAD f252acb4a: None where
+−1 is expected (every test of ``TestAnchorOfZero``).
+
 Pure: no database, no server, no network.
 """
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, timedelta
 from decimal import Decimal
 
+import pytest
+
+from backend.app.services.financial_math import returns as returns_module
 from backend.app.services.financial_math.returns import (
     FIXED_PERIODS,
     FixedPeriodChange,
     fixed_period_changes,
     fixed_period_dates,
+    price_return,
 )
 
 D = Decimal
@@ -504,17 +526,17 @@ def test_only_the_values_on_the_fixed_dates_count() -> None:
     assert one_month.change_ratio is None and one_month.inverse_change_ratio is None
 
 
-def test_non_positive_value_gives_no_change_either_way() -> None:
-    """A value ≤ 0 is never priced: an anchor ≤ 0 nulls every period, a reference ≤ 0 nulls its own.
+def test_negative_anchor_or_non_positive_reference_gives_no_change() -> None:
+    """A negative anchor nulls every period; a reference ≤ 0 nulls its own. Never a number from such a value.
 
     This is the FX page's rule (``displayFxRate`` nulls ≤ 0). The Assets page nulls only ``=== 0``: on a negative value
-    it shows a number where the house gives None — the parity tests use positive values only.
+    it shows a number where the house gives None — the parity tests use positive values only. An anchor of exactly 0 is
+    no longer refused (N80, X's review point 2): ``TestAnchorOfZero``.
     """
     positive = dict(_priced(fixed_period_dates(TUESDAY)))
 
-    for anchor in (D("0"), D("-12.5")):
-        changes = fixed_period_changes({**positive, TUESDAY: anchor}, TUESDAY)
-        assert all(change.change_ratio is None and change.inverse_change_ratio is None for change in changes), anchor
+    changes = fixed_period_changes({**positive, TUESDAY: D("-12.5")}, TUESDAY)
+    assert all(change.change_ratio is None and change.inverse_change_ratio is None for change in changes)
 
     references = {**positive, _days_before(TUESDAY, 30): D("0"), _days_before(TUESDAY, 365): D("-3")}
     changes = {change.key: change for change in fixed_period_changes(references, TUESDAY)}
@@ -538,3 +560,173 @@ def test_high_precision_pair_is_exact_decimal() -> None:
     assert change.change_ratio == D("0.013711709598196718737703116")
     assert change.inverse_change_ratio == D("-0.0135262417000506061392250849")
     assert change.change_ratio != Decimal(float(anchor) / float(reference) - 1)
+
+
+# --- X-R59: the whole-range change (rule 10, decision N80) ----------------------------------------------------------
+
+#: The fields of ``RangeChange``, the brief's contract.
+RANGE_CHANGE_FIELDS = {"change_abs", "change_ratio", "inverse_change_abs", "inverse_change_ratio"}
+
+#: Pairs ``(reference, anchor)`` the house refuses to price: a missing value, a reference at or below zero, a negative
+#: anchor. An anchor of exactly 0 over a positive reference is priced, −100 % (``ZERO_ANCHOR_REFERENCES``).
+UNUSABLE_PAIRS = [
+    pytest.param(None, D("100"), id="no-reference"),
+    pytest.param(D("100"), None, id="no-anchor"),
+    pytest.param(None, None, id="neither"),
+    pytest.param(D("0"), D("100"), id="zero-reference"),
+    pytest.param(D("0"), D("0"), id="both-zero"),
+    pytest.param(D("-5"), D("100"), id="negative-reference"),
+    pytest.param(D("100"), D("-5"), id="negative-anchor"),
+    pytest.param(D("-5"), D("-4"), id="both-negative"),
+    pytest.param(D("-5"), D("0"), id="negative-reference-zero-anchor"),
+]
+
+#: Positive references an anchor of 0 is measured against (N80): −1 whatever their size.
+ZERO_ANCHOR_REFERENCES = [D("100"), D("3.21"), D("0.000123"), D("99999999.999999999999")]
+
+
+def _range_change(reference: Decimal | None, anchor: Decimal | None):
+    """``returns.range_change(reference, anchor)``, looked up when called: it does not exist on HEAD a275ec8af (an
+    AttributeError there), and an import at the top would take the whole file down with it."""
+    return returns_module.range_change(reference, anchor)
+
+
+def _range_change_type() -> type:
+    return returns_module.RangeChange
+
+
+class TestRangeChange:
+    """``range_change(reference, anchor)``: the change from the range's first value to its last, in both orientations.
+
+    ``change_abs = anchor − reference``, ``change_ratio = anchor / reference − 1`` (``price_return``),
+    ``inverse_change_abs = 1/anchor − 1/reference`` (the pair read the other way round, ``displayFxDelta`` inverted),
+    ``inverse_change_ratio = reference / anchor − 1``: Decimal, unrounded, never ×100. Only when both values exist, the
+    reference > 0 and the anchor ≥ 0 (an anchor of 0: ``TestAnchorOfZero``); otherwise all four None. RED on HEAD
+    a275ec8af: AttributeError, the function does not exist.
+    """
+
+    def test_rise(self) -> None:
+        result = _range_change(D("100"), D("125"))
+
+        assert result.change_abs == D("25")
+        assert result.change_ratio == D("0.25") == price_return(D("100"), D("125"))
+        assert result.inverse_change_abs == D("-0.002"), "1/125 − 1/100"
+        assert result.inverse_change_ratio == D("-0.2"), "100/125 − 1"
+
+    def test_fall(self) -> None:
+        result = _range_change(D("160"), D("125"))
+
+        assert result.change_abs == D("-35")
+        assert result.change_ratio == D("-0.21875") == price_return(D("160"), D("125"))
+        assert result.inverse_change_abs == D("0.00175"), "1/125 − 1/160: the inverted quote rose"
+        assert result.inverse_change_ratio == D("0.28"), "160/125 − 1"
+
+    @pytest.mark.parametrize("value", [D("3.21"), D("100"), D("0.000123")], ids=str)
+    def test_equal_values_are_exactly_zero_both_ways(self, value: Decimal) -> None:
+        """No move over the range: all four exactly 0 — not None, not −0."""
+        result = _range_change(value, value)
+
+        for field in sorted(RANGE_CHANGE_FIELDS):
+            change = getattr(result, field)
+            assert isinstance(change, Decimal) and change == 0, f"{field}: {change!r}"
+            assert not change.is_signed(), f"{field} is −0"
+
+    def test_inverse_fields_are_the_inverted_quote_not_the_sign_flipped(self) -> None:
+        """On values whose quotients do not terminate: each field is its own formula; the inverse ratio is not the
+        direct one negated, and ``(1 + change) × (1 + inverse)`` is 1 within the context's precision."""
+        reference, anchor = D("1.0873"), D("1.0912")
+
+        result = _range_change(reference, anchor)
+
+        assert result.change_abs == anchor - reference == D("0.0039")
+        assert result.change_ratio == anchor / reference - 1
+        assert result.inverse_change_abs == 1 / anchor - 1 / reference
+        assert result.inverse_change_ratio == reference / anchor - 1
+        assert result.inverse_change_ratio != -result.change_ratio
+        assert result.inverse_change_abs != -result.change_abs
+        assert abs((1 + result.change_ratio) * (1 + result.inverse_change_ratio) - 1) <= D("1e-25")
+
+    @pytest.mark.parametrize(("reference", "anchor"), UNUSABLE_PAIRS)
+    def test_unusable_values_give_all_none(self, reference: Decimal | None, anchor: Decimal | None) -> None:
+        result = _range_change(reference, anchor)
+
+        assert {field: getattr(result, field) for field in RANGE_CHANGE_FIELDS} == dict.fromkeys(RANGE_CHANGE_FIELDS)
+
+    def test_decimal_exactness_no_float_in_between(self) -> None:
+        """Reference 3, anchor 3.21: the ratio is exactly 0.07 — a float would give 0.07000000000000006."""
+        reference, anchor = D("3"), D("3.21")
+        assert Decimal(3.21 / 3 - 1) != D("0.07"), "precondition: the float route is not exact here"
+
+        result = _range_change(reference, anchor)
+
+        assert all(isinstance(getattr(result, field), Decimal) for field in RANGE_CHANGE_FIELDS), result
+        assert result.change_abs == D("0.21")
+        assert result.change_ratio == D("0.07")
+        assert result.inverse_change_ratio == reference / anchor - 1
+        assert result.inverse_change_abs == 1 / anchor - 1 / reference
+        assert result.inverse_change_ratio != Decimal(3 / 3.21 - 1)
+
+    @pytest.mark.parametrize(
+        ("reference", "anchor"),
+        [(D("100"), D("125")), (D("160"), D("125")), (D("1.0873"), D("1.0912")), (D("99.99993"), D("101.3711")), (D("3"), D("3")), pytest.param(D("100"), D("0"), id="zero-anchor"), *UNUSABLE_PAIRS],
+    )
+    def test_ratios_are_the_fixed_periods_ones(self, reference: Decimal | None, anchor: Decimal | None) -> None:
+        """One home: the range's ratios are what ``fixed_period_changes`` gives a period with the same two values."""
+        (period,) = fixed_period_changes({TUESDAY: anchor, _days_before(TUESDAY, 1): reference}, TUESDAY, (("1D", 1),))
+
+        result = _range_change(reference, anchor)
+
+        assert (result.change_ratio, result.inverse_change_ratio) == (period.change_ratio, period.inverse_change_ratio)
+
+    def test_result_is_a_frozen_dataclass_of_four_fields(self) -> None:
+        range_change_type = _range_change_type()
+        result = _range_change(D("100"), D("125"))
+
+        assert isinstance(result, range_change_type) and dataclasses.is_dataclass(result)
+        assert {field.name for field in dataclasses.fields(range_change_type)} == RANGE_CHANGE_FIELDS
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            result.change_abs = D("0")
+
+
+# --- X's review, point 2 (decision on N80): a price written down to nothing -----------------------------------------
+
+
+class TestAnchorOfZero:
+    """An anchor of exactly 0 over a positive reference — a defaulted loan, a delisted share —: −100 %. ``change_abs`` is
+    −reference and ``change_ratio`` −1, exact Decimals; the inverse fields are None, the inverted quote having no value.
+    ``fixed_period_changes`` gives the same −1 to every period whose reference is positive, the others staying None.
+
+    RED on HEAD f252acb4a, every test: an anchor of 0 was refused there, None where −1 is expected.
+    """
+
+    @pytest.mark.parametrize("reference", ZERO_ANCHOR_REFERENCES, ids=str)
+    def test_range_change_is_minus_the_reference_and_minus_one(self, reference: Decimal) -> None:
+        result = _range_change(reference, D("0"))
+
+        assert (result.change_abs, result.change_ratio) == (-reference, D("-1")), result
+        assert isinstance(result.change_abs, Decimal) and isinstance(result.change_ratio, Decimal), result
+        assert (result.inverse_change_abs, result.inverse_change_ratio) == (None, None), result
+
+    def test_every_period_with_a_positive_reference_is_minus_one_without_inverse(self) -> None:
+        """Anchor 0 on TUESDAY; a positive reference on every period but 1M (none stored), 1Y (0) and 3Y (−3): those
+        three None both ways, every other −1 with its inverse None."""
+        values: dict[date, Decimal | None] = dict(_priced(fixed_period_dates(TUESDAY)))
+        values[TUESDAY] = D("0")
+        del values[_days_before(TUESDAY, 30)]
+        values[_days_before(TUESDAY, 365)] = D("0")
+        values[_days_before(TUESDAY, 1095)] = D("-3")
+
+        changes = fixed_period_changes(values, TUESDAY)
+
+        refused = {"1M", "1Y", "3Y"}
+        got = {change.key: (change.change_ratio, change.inverse_change_ratio) for change in changes}
+        assert got == {key: (None, None) if key in refused else (D("-1"), None) for key, _days in FIXED_PERIODS}, got
+
+    @pytest.mark.parametrize("reference", ZERO_ANCHOR_REFERENCES, ids=str)
+    def test_one_rule_for_the_range_and_the_periods(self, reference: Decimal) -> None:
+        """One home: a period with the same two values gives the range's ratios, −1 and None."""
+        (period,) = fixed_period_changes({TUESDAY: D("0"), _days_before(TUESDAY, 1): reference}, TUESDAY, (("1D", 1),))
+
+        result = _range_change(reference, D("0"))
+
+        assert (period.change_ratio, period.inverse_change_ratio) == (result.change_ratio, result.inverse_change_ratio) == (D("-1"), None), (period, result)

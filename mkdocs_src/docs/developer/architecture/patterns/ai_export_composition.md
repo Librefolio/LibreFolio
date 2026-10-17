@@ -478,6 +478,25 @@ valued open lots, whose open value and unrealized P&L are both known: since v3 a
 sum that same set, the one `valued_open_lot_count` counts. Their coverage is stated in
 `value_coverage_status`, `valued_open_lot_count` and `unavailable_open_lot_count`.
 
+An Asset whose lots analysis is `FAILED` — its replay hit a quantitative failure, such
+as a sale beyond the quantity held — has wrong lot figures, so the lot components
+declare it instead of exporting them (J-12). In the four multi-Asset components
+(`portfolio.fifo_summary`, `broker.fifo_summary`, `portfolio.fifo_lots`,
+`broker.fifo_lots`) it has no row in `assets` and no lot in `lots`: it is a row of
+`failed_lot_reconstructions` — `asset_id`, `asset_name`, `asset_ticker` and
+`failure_codes`, never a figure — counted by `failed_reconstruction_asset_count`,
+always present, 0 included. Its part of the scope is unknown, so while one Asset
+failed the summaries' `total_open_lots`, `total_partial_lots`, `total_closed_lots`
+and `total_residual_cost_basis` are `null`, and `asset_count` counts the rows.
+`asset.lot_detail` states `lot_reconstruction_status` (`COMPLETE`, `DEGRADED`,
+`FAILED`) and `failure_codes`; a `FAILED` reconstruction exports no lot. The codes are
+those of the analysis' issues that carry `fails_analysis`
+(`analysis_failure_codes()`, see
+[A Failed Reconstruction](../../backend/transactions/lots_analysis_service.md#failed-reconstruction)).
+The compact renderer prints the failed Asset by its prompt ref. For this the FIFO lots
+moved to v3 and the lot detail to v4; the summaries, already v3 in the same release,
+kept it.
+
 `portfolio.reconciliation` and `broker.reconciliation` state `residual`, the exact
 period P&L minus its components, and `reconciled`: `null` if a term is missing, true
 below `CONVERSION_DUST` (`1e-9`) in absolute value, since `period_other_result` closes

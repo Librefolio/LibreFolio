@@ -175,7 +175,7 @@
 | [[decisions/fifo-v4-income-eligibility-d1]] | FIFO v4 income eligibility uses D-1 open quantity, scoped to paying broker, transfer-aware | 2026-07-22 | backend, fifo, dividend, interest |
 | [[decisions/fifo-v4-cost-allocation-ladder]] | Distinct deterministic FEE/TAX matching ladders route asset-linked costs to lots | 2026-07-22 | backend, fifo, fee, tax |
 | [[decisions/fifo-v4-engine-architecture]] | One canonical FifoLotEngine path; native+target economic events; always-inline 3-level audit | 2026-07-22 | backend, fifo, architecture |
-| [[decisions/fifo-v4-gross-net-status-model]] | Gross metrics untouched, net is additive; split analysis_status/LotNetMetricsStatus reliability model | 2026-07-22 | backend, frontend, fifo, net-metrics |
+| [[decisions/fifo-v4-gross-net-status-model]] | Gross metrics untouched, net is additive; split analysis_status/LotNetMetricsStatus reliability model; a FAILED analysis explains and hides (N81, 2026-10-17) | 2026-07-22 | backend, frontend, fifo, net-metrics |
 | [[decisions/fifo-v4-validation-and-scope]] | API-layer sign validation over DB CHECK; Portfolio Engine reconciliation deferred | 2026-07-22 | backend, validation, scope |
 | [[decisions/fx-sync-pair-based]] | FX sync redesigned from currency-list to pair-list (GET→POST) | 2026-03-06 | fx, api, breaking-change |
 | [[decisions/brim-broker-scoped]] | Each BRIM file gets one broker at upload through the shared multipart endpoint; multi-file/multi-broker sessions remain supported | 2026-01-22 | brim, brokers, multiuser, upload |

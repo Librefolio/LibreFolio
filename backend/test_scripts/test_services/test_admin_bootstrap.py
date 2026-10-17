@@ -61,6 +61,31 @@ read the clock: the A32 scenes are dated from it, as CLI-003's. A33 — a real c
 address in the variables revokes its live setup links (``EXPIRED``, or ``REARMED`` with a token never seen); the same
 address in other capitals, the username alone and an address another account holds revoke nothing. Red until A7b-2:
 each new red says so on its first contract assertion; the new guards are green today and must stay green.
+
+Lot A-42 + A-43 (the setup link's lifecycle; contract approved by the coordinator, 17/10) adds two more sections at the
+end, every new or changed red labelled ``# red until A-42/A-43``. A42 — issuing and spending: ``issue_setup_link`` (the
+CLI's ``user setup-link``) and the startup re-arm decide «waiting» under SQLite's write lock, so a setup completed by
+another worker between their read and their first write leaves nothing issued — rolled back; the CLI says nobody waits;
+the start does not re-arm —; ``complete_admin_setup`` refuses a link while another setup link of the same account is
+consumed — the account was set up before, or its links were retired —: nothing changes, the account's never-consumed
+setup links are retired, a warning is logged. A43 — deactivation and demotion: ``update_user_status(...,
+is_active=False)`` and ``set_user_active(..., False)`` revoke the live setup links of the waiting administrator — it
+still waits, a new link one ``./dev.py user setup-link`` away — and retire the never-consumed setup links of an account
+that does not wait; ``./dev.py user demote`` refuses the waiting administrator — falsy, a line starting with ❌, nothing
+changed — and demotes any other administrator as before. A32-004 loses four variants by construction: its two
+deactivations of the account already inactive now revoke the link (A43-001), and its two demotions are now refused at
+the CLI (A43-004) and in the Users tab (UADM-072), wherever the refusal lives.
+
+Lot A-50 (the restart's warning; cure approved by the coordinator, 17/10) adds one more section at the end, every new
+red labelled ``# red until A-50``. A50 — a restart that finds the waiting administrator without a live setup link
+still answers ``EXPIRED`` — the same account, no ``link_token``, nothing written — and its one warning says why: the
+link «withdrawn» when the account's most recent setup link — the latest created — is revoked and was never consumed,
+«has expired» otherwise; the start that changes the address still says «address changed». A50-001 and A50-002: the
+setup cancelled, through the Users tab's PATCH with a token in the configuration, and through the CLI's
+``user deactivate`` with a generated link; A50-003: the starts after the one that changed the address; A50-004, a
+guard: a link that ran out, an earlier one revoked by a re-arm counting for nothing. The remedy is today's:
+``./dev.py user setup-link``, and ``LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`` only when the configuration carries a token. Only
+a distinctive word of the warning is pinned, never its sentence: the log is English, for the developer.
 """
 
 from __future__ import annotations
@@ -88,9 +113,10 @@ import bcrypt
 import pytest
 import pytest_asyncio
 import structlog
-from sqlalchemy import func, select, text
+from sqlalchemy import event, func, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
+from sqlalchemy.util import await_only
 from structlog.testing import capture_logs
 
 from backend.app.config import SecretFileError, accounts
@@ -2014,22 +2040,6 @@ async def _nothing_done(engine: AsyncEngine, user_id: int, moment: datetime) -> 
     """Nothing: the waiting administrator as the bootstrap left it."""
 
 
-async def _demote_by_update_user_status(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
-    """The service of the Users tab's PATCH: ``update_user_status(session, user, is_superuser=False)``."""
-    async with AsyncSession(engine, expire_on_commit=False) as session:
-        user = await session.get(User, user_id)
-        refusal = await user_service.update_user_status(session, user, is_superuser=False)
-    assert refusal is None, f"setup: the demotion must succeed: {refusal}"
-
-
-async def _demote_by_set_user_admin(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
-    """The CLI's ``user demote``: ``set_user_admin(session, username, False)``."""
-    username = (await _account(engine, user_id)).username
-    async with AsyncSession(engine) as session:
-        outcome = await user_service.set_user_admin(session, username, False)
-    assert outcome == (True, None), f"setup: user demote must succeed: {outcome}"
-
-
 async def _a_reset_link_never_spent(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
     """A reset link issued for the account (``create_password_reset``) and never spent: no password is set."""
     async with AsyncSession(engine, expire_on_commit=False) as session:
@@ -2053,14 +2063,13 @@ PASSWORDS_ANOTHER_WAY = [
     pytest.param(_password_by_user_reset_password, id="password-by-user-reset-password"),
     pytest.param(_password_by_a_reset_link, id="password-by-a-reset-link"),
 ]
-#: What neither activates the waiting administrator nor gives it a password (C2's guards): nothing; a demotion, by the
-#: service of the Users tab or by the CLI; a deactivation of the account already inactive, by either; a reset link never spent.
+#: What neither activates the waiting administrator nor gives it a password, and touches none of its setup links (C2's
+#: guards): nothing; a reset link never spent. Updated in A-42/A-43: a deactivation of the account already inactive — by
+#: the service of the Users tab or by the CLI — now revokes its live setup link, the account still waiting for a new one
+#: (A43-001); a demotion of the waiting administrator is now refused, at the CLI (A43-004) and in the Users tab (UADM-072),
+#: wherever the refusal lives. Neither leaves «its link valid» any more: both left this guard.
 NO_END_OF_THE_SETUP = [
     pytest.param(_nothing_done, id="nothing-done"),
-    pytest.param(_demote_by_update_user_status, id="demoted-by-update-user-status"),
-    pytest.param(_demote_by_set_user_admin, id="demoted-by-user-demote"),
-    pytest.param(_deactivate_by_update_user_status, id="deactivated-while-inactive-by-update-user-status"),
-    pytest.param(_deactivate_by_set_user_active, id="deactivated-while-inactive-by-user-deactivate"),
     pytest.param(_a_reset_link_never_spent, id="a-reset-link-never-spent"),
 ]
 
@@ -2142,11 +2151,18 @@ async def test_a_password_set_another_way_retires_the_setup_link(engine: AsyncEn
     print_success("the operator's password kept; the old link retired; it waits for nothing")
 
 
-# guard
+# guard — updated in A-42/A-43: four variants left it by construction (NO_END_OF_THE_SETUP)
 @pytest.mark.asyncio
 @pytest.mark.parametrize("change", NO_END_OF_THE_SETUP)
 async def test_what_neither_activates_nor_sets_a_password_leaves_the_administrator_waiting(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, change: Change) -> None:
-    """A32-004 — GUARD, green today and after: what neither activates the waiting administrator nor gives it a password ends nothing — nothing done; a demotion, ``update_user_status(..., is_superuser=False)`` or the CLI's ``set_user_admin(..., False)``; a deactivation of the account already inactive, ``update_user_status(..., is_active=False)`` or ``set_user_active(..., False)``; a reset link issued and never spent —: the account still waits — ``is_pending_admin``, in ``pending_admin_ids``, the one ``pending_admin`` answers —, its setup link valid; and the link still completes the setup: the account active, with the password chosen through the link, its role as the change left it."""
+    """A32-004 — GUARD, green today and after: what neither activates the waiting administrator nor gives it a password, nor touches its setup links, ends nothing — nothing done; a reset link issued and never spent —: the account still waits — ``is_pending_admin``, in ``pending_admin_ids``, the one ``pending_admin`` answers —, its setup link valid; and the link still completes the setup: the account active, with the password chosen through the link, its role as the change left it.
+
+    Updated in A-42/A-43, by construction: the deactivation of the account already inactive (``update_user_status(...,
+    is_active=False)``, ``set_user_active(..., False)``) now revokes its live setup link, the account still waiting for a
+    new one — A43-001 —; the demotion (``update_user_status(..., is_superuser=False)``, ``set_user_admin(..., False)``)
+    is now refused at the CLI and in the Users tab — A43-004, UADM-072 —, and whether these services refuse it too is the
+    implementation's choice: no variant pins it here.
+    """
     print_section(f"A32-004: {_named(change)}")
     moment = utcnow()
     user_id = await _waiting_administrator(engine, bootstrap, f02, moment)
@@ -2349,3 +2365,639 @@ async def test_a_change_that_gives_no_new_address_revokes_no_setup_link(engine: 
     user = await _complete(engine, bootstrap, TOKEN_ONE, now=moment + HOUR)
     assert user is not None and user.id == created.user_id and user.is_active, f"the link must still complete the setup: {user!r}"
     print_success("PENDING; nothing revoked; the link completes the setup")
+
+
+# =============================================================================
+# A42 — LOT A-42: THE SETUP LINK ISSUED, AND SPENT, UNDER THE WRITE LOCK
+# =============================================================================
+# The race of A-42: ``issue_setup_link`` (the CLI's ``user setup-link``) and the startup re-arm (``_keep_pending_admin``,
+# a token of the variable never seen) read «the account waits», then write. Another worker serving ``POST /auth/setup``
+# may complete the setup in between: today the issue goes on, and the account, set up, holds a live setup link — which a
+# later deactivation turns into a way in, the account waiting again for a link its holder already has. The contract
+# (approved by the coordinator, 17/10): they decide «waiting» under SQLite's write lock, and when by then the account no
+# longer waits they issue nothing — rolled back; the CLI says nobody waits; the start does not re-arm.
+#
+# The race is played without threads, and without assuming which read the module makes nor with which function: the
+# rival — that setup, through the account's link, on another connection to the same private file — commits right before
+# the first write statement of the issuer's engine (``_rival_before_the_first_write``). Every read before it sees the
+# account waiting, every read after it the account set up: «decided under the write lock», seen from outside. A guard
+# (A42-004) holds the other side: a rival that leaves the account waiting stops nothing.
+#
+# The spending of A-42: ``complete_admin_setup`` refuses a link while another setup link of the same account is consumed
+# — the account was set up before, or its links were retired —: nothing changes (the password, the active flag, the
+# session version), the account's never-consumed setup links are retired, a warning is logged. Its scene is rows, as the
+# race above or an earlier 1.3 build leaves them. Every call takes its ``now`` but the CLI's: A42-002 is dated from the
+# clock, as CLI-003.
+
+#: The first word of the statements that open a write in SQLite: the rival commits right before the first of them.
+WRITE_STATEMENTS = frozenset({"INSERT", "UPDATE", "DELETE", "REPLACE", "BEGIN", "SAVEPOINT"})
+#: How the other setup link of the account was spent before the stray ones were left live (A42-005): through the
+#: account's setup, or retired when the account was set up another way (A-32).
+SPENT_BEFORE = [pytest.param("set-up-through-it", id="set-up-through-another-link"), pytest.param("retired", id="its-links-retired")]
+#: The issuers of A-42 that a rival leaving the account waiting must not stop (A42-004).
+ISSUERS = [pytest.param("issue-setup-link", id="user-setup-link"), pytest.param("restart-with-a-new-token", id="a-restart-with-a-token-never-seen")]
+
+#: The database as the rival left it, appended once it committed: what the issuer must leave as it is.
+Landed = list[dict[str, list[Any]]]
+
+
+@contextlib.asynccontextmanager
+async def _issuer_engine(engine: AsyncEngine) -> AsyncIterator[AsyncEngine]:
+    """A second engine on the private file of ``engine``, the issuer's: a listener on it sees neither the rival's statements nor the test's own reads. Disposed at the end."""
+    issuer = create_async_engine(engine.url, poolclass=NullPool)
+    try:
+        yield issuer
+    finally:
+        await issuer.dispose()
+
+
+@contextlib.contextmanager
+def _rival_before_the_first_write(issuer: AsyncEngine, rival: Callable[[], Awaitable[None]]) -> Iterator[list[str]]:
+    """``rival`` run right before the first write statement of ``issuer``'s engine; yields the statement it ran before, in a list (the barrier: empty, the rival never ran).
+
+    A ``before_cursor_execute`` listener: when the first INSERT, UPDATE, DELETE, REPLACE, BEGIN or SAVEPOINT is about to
+    run, it awaits the rival from the issuer's own greenlet (``await_only``, as SQLAlchemy's asyncio layer awaits), then
+    lets the statement go. pysqlite defers ``BEGIN`` to the first write, and in WAL a reader holds nothing once its
+    statement is done: the issuer holds no lock yet, so the rival writes and commits on its own connection, and the
+    transaction the issuer's write opens sees that commit. No thread and no sleep: one interleaving, every time.
+    """
+    fired: list[str] = []
+
+    def before_cursor_execute(_connection: Any, _cursor: Any, statement: str, _parameters: Any, _context: Any, _executemany: bool) -> None:
+        words = statement.split(None, 1)
+        if fired or not words or words[0].upper() not in WRITE_STATEMENTS:
+            return
+        fired.append(statement)
+        await_only(rival())
+
+    event.listen(issuer.sync_engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        yield fired
+    finally:
+        event.remove(issuer.sync_engine, "before_cursor_execute", before_cursor_execute)
+
+
+def _setup_completed_meanwhile(engine: AsyncEngine, bootstrap: ModuleType, token: str, moment: datetime, landed: Landed) -> Callable[[], Awaitable[None]]:
+    """The rival of A-42: the waiting administrator's setup completed through ``token`` with SETUP_PASSWORD, on another connection — another worker serving ``POST /auth/setup`` —; the database as it leaves it, appended to ``landed``."""
+
+    async def rival() -> None:
+        user = await _complete(engine, bootstrap, token, now=moment)
+        assert user is not None and user.is_active, f"barrier: the rival's setup must complete: {user!r}"
+        landed.append(await _snapshot(engine))
+
+    return rival
+
+
+def _setup_links_revoked_meanwhile(engine: AsyncEngine, user_id: int, moment: datetime, landed: Landed) -> Callable[[], Awaitable[None]]:
+    """A rival that leaves the account waiting (A42-004): its live setup links revoked on another connection, as a new address in the variables revokes them (A-33); the database as it leaves it, appended to ``landed``."""
+
+    async def rival() -> None:
+        async with AsyncSession(engine) as session:
+            revoked = await token_service.revoke_tokens(session, user_id=user_id, purpose=ADMIN_SETUP, now=moment)
+            await session.commit()
+        assert revoked == 1, f"barrier: the rival revokes the account's one live setup link: {revoked}"
+        landed.append(await _snapshot(engine))
+
+    return rival
+
+
+async def _assert_set_up_by_the_rival(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
+    """After a lost race: the account as the rival's setup left it — active, SETUP_PASSWORD its own — and no setup link of the instance live."""
+    account = await _account(engine, user_id)
+    assert (account.is_active, verify_password(SETUP_PASSWORD, account.hashed_password)) == (True, True), "the account must be as the rival's setup left it: active, its password chosen through the link"
+    assert await _live_setup_rows(engine, moment) == [], "no setup link may be left live"
+
+
+async def _set_up_before_with_stray_links(engine: AsyncEngine, spent: str) -> tuple[int, IssuedToken, list[IssuedToken]]:
+    """carol, as rows: an administrator set up before and deactivated since — inactive —, her first setup link spent three hours before NOW (``set-up-through-it``: consumed by her setup; ``retired``: retired, carol set up another way, A-32), and two stray setup links issued after, live, as the race of A-42 or an earlier 1.3 build leaves them. ``(carol's id, the spent link, [the stray links])``."""
+    user_id = await _add_user(engine, "carol", active=False, admin=True)
+    first = await _issue(engine, ADMIN_SETUP, user_id=user_id, now=NOW - 4 * HOUR)
+    async with AsyncSession(engine) as session:
+        if spent == "set-up-through-it":
+            assert await token_service.consume_token(session, first.token, ADMIN_SETUP, consumed_by_user_id=user_id, now=NOW - 3 * HOUR) is not None, "setup: carol's setup spends her first link"
+        else:
+            assert await token_service.retire_tokens(session, user_id=user_id, purpose=ADMIN_SETUP, now=NOW - 3 * HOUR) == 1, "setup: carol's first link is retired"
+        await session.commit()
+    strays = [await _issue(engine, ADMIN_SETUP, user_id=user_id, now=NOW - 2 * HOUR), await _issue(engine, ADMIN_SETUP, user_id=user_id, now=NOW - HOUR)]
+    return user_id, first, strays
+
+
+# red until A-42/A-43
+@pytest.mark.asyncio
+async def test_issue_setup_link_issues_nothing_for_an_account_set_up_before_its_first_write(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> None:
+    """A42-001 — NEW, red until A-42 (today the issue goes on: the account, set up, holds a new live setup link): the waiting administrator, created with TOKEN_ONE; ``issue_setup_link(session, now=...)`` on the issuer's connection, its setup completed through TOKEN_ONE on another one and committed right before the issuer's first write. ``None``, and nothing written — rolled back, even when its caller commits —: the database exactly as the setup left it, the account active with the password chosen through the link, no setup link live."""
+    print_section("A42-001: issue_setup_link, the setup completed before its first write")
+    created = await _created(engine, bootstrap, f02, token=TOKEN_ONE)
+    moment = NOW + HOUR
+    landed: Landed = []
+
+    async with _issuer_engine(engine) as issuer:
+        with _rival_before_the_first_write(issuer, _setup_completed_meanwhile(engine, bootstrap, TOKEN_ONE, moment, landed)) as fired:
+            issued = await _issue_setup_link(issuer, bootstrap, now=moment)
+
+    assert fired and landed, f"barrier: issue_setup_link never wrote, so the rival's setup never landed between its reads and its first write: {issued!r}"
+    assert issued is None, f"red until A-42: the account was set up between issue_setup_link's read and its first write, so it must issue nothing: it issued a setup link of account {issued.record.user_id if issued else None}"
+    assert await _snapshot(engine) == landed[0], "issue_setup_link must write nothing — rolled back, even when its caller commits —: the database as the setup left it"
+    await _assert_set_up_by_the_rival(engine, created.user_id, moment)
+    print_success("nothing issued; the database as the setup left it")
+
+
+# red until A-42/A-43
+@pytest.mark.asyncio
+async def test_setup_link_says_nobody_waits_when_the_setup_completes_before_its_first_write(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, cli: ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """A42-002 — NEW, red until A-42 (today it prints ✅ and a live link for the account already set up, and answers ``True``): ``cmd_setup_link`` — ``./dev.py user setup-link`` — on the issuer's connection, the waiting administrator's setup completed through TOKEN_ONE on another one right before the command's first write. The command says nobody waits: falsy, a line starting with ``❌`` (its wording is not pinned), no link printed; nothing written, the database as the setup left it.
+
+    It reads the clock: the scene is dated from it, the administrator created an hour before.
+    """
+    print_section("A42-002: user setup-link, the setup completed before its first write")
+    moment = utcnow()
+    created = await _created(engine, bootstrap, f02, token=TOKEN_ONE, now=moment - HOUR)
+    landed: Landed = []
+
+    async with _issuer_engine(engine) as issuer:
+        monkeypatch.setattr(cli, "get_async_engine", lambda: issuer)
+        capsys.readouterr()
+        with _rival_before_the_first_write(issuer, _setup_completed_meanwhile(engine, bootstrap, TOKEN_ONE, moment, landed)) as fired:
+            ok = await cli.cmd_setup_link()
+        out = capsys.readouterr().out
+
+    assert fired and landed, f"barrier: the command never wrote, so the rival's setup never landed between its reads and its first write: {out!r}"
+    assert not ok, f"red until A-42: the account was set up between the command's read and its first write: ./dev.py user setup-link must say nobody waits, it answered {ok!r}: {out!r}"
+    assert any(line.startswith("❌") for line in out.splitlines()), f"a line must start with ❌: {out!r}"
+    assert "#token=" not in out, f"no link may be printed: {out!r}"
+    assert await _snapshot(engine) == landed[0], "the command must write nothing: the database as the setup left it"
+    await _assert_set_up_by_the_rival(engine, created.user_id, utcnow())
+    print_success("❌, nothing printed, nothing written")
+
+
+# red until A-42/A-43
+@pytest.mark.asyncio
+async def test_a_restart_does_not_rearm_an_account_set_up_before_its_first_write(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> None:
+    """A42-003 — NEW, red until A-42 (today ``REARMED``: TOKEN_TWO stored as a live setup link of the account already set up): a restart an hour after the creation with TOKEN_TWO in the config — a token never seen, which re-arms a waiting administrator (BOOT-010) —, the administrator's setup completed through TOKEN_ONE on another connection right before the restart's first write. The start does not re-arm: neither ``REARMED`` nor ``CREATED`` — which other action it answers is not pinned —, no ``link_token``, TOKEN_TWO never stored (``unknown``), nothing written — even when its caller commits —: the database as the setup left it."""
+    print_section("A42-003: a restart re-arming, the setup completed before its first write")
+    created = await _created(engine, bootstrap, f02, token=TOKEN_ONE)
+    moment = NOW + HOUR
+    landed: Landed = []
+
+    async with _issuer_engine(engine) as issuer:
+        with _rival_before_the_first_write(issuer, _setup_completed_meanwhile(engine, bootstrap, TOKEN_ONE, moment, landed)) as fired:
+            result = await _run(issuer, bootstrap, _config(f02, token=TOKEN_TWO), now=moment, then_commit=True)
+
+    assert fired and landed, f"barrier: the restart never wrote, so the rival's setup never landed between its reads and its first write: {result!r}"
+    assert result.action not in (bootstrap.BootstrapAction.REARMED, bootstrap.BootstrapAction.CREATED) and result.link_token is None, f"red until A-42: the account was set up between the restart's read and its first write, so the start must not re-arm it: {result!r}"
+    assert await _status(engine, TOKEN_TWO, moment) == TokenStatus.UNKNOWN, "the variable's new token must never be stored"
+    assert await _snapshot(engine) == landed[0], "the restart must write nothing: the database as the setup left it"
+    await _assert_set_up_by_the_rival(engine, created.user_id, moment)
+    print_success(f"{result.action}: not re-armed, nothing written")
+
+
+# guard
+@pytest.mark.asyncio
+@pytest.mark.parametrize("issuer_kind", ISSUERS)
+async def test_a_rival_that_leaves_the_account_waiting_stops_no_issue(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, issuer_kind: str) -> None:
+    """A42-004 — GUARD, green today and after: «waiting» is decided on what the database holds under the lock, not on whether anything moved. The waiting administrator's live setup link revoked on another connection right before the issuer's first write — what a new address in the variables does (A-33): the account still waits —: ``issue_setup_link`` still issues a new link, valid; a restart with TOKEN_TWO still re-arms, ``REARMED``, TOKEN_TWO valid. Either way the new link is the account's one live setup link, and the account still waits."""
+    print_section(f"A42-004: {issuer_kind}, the account still waiting after the rival")
+    created = await _created(engine, bootstrap, f02, token=TOKEN_ONE)
+    moment = NOW + HOUR
+    landed: Landed = []
+
+    async with _issuer_engine(engine) as issuer:
+        with _rival_before_the_first_write(issuer, _setup_links_revoked_meanwhile(engine, created.user_id, moment, landed)) as fired:
+            if issuer_kind == "issue-setup-link":
+                outcome: Any = await _issue_setup_link(issuer, bootstrap, now=moment)
+            else:
+                outcome = await _run(issuer, bootstrap, _config(f02, token=TOKEN_TWO), now=moment)
+
+    assert fired and landed, f"barrier: the rival never ran between the issuer's reads and its first write: {outcome!r}"
+    if issuer_kind == "issue-setup-link":
+        assert isinstance(outcome, IssuedToken), f"the account still waits: issue_setup_link must issue a new link: {outcome!r}"
+        token = outcome.token
+    else:
+        assert (outcome.action, outcome.link_token) == (bootstrap.BootstrapAction.REARMED, None), f"the account still waits: the restart must re-arm it: {outcome!r}"
+        token = TOKEN_TWO
+    fresh = await _inspect(engine, token, moment)
+    assert fresh.status == TokenStatus.VALID and fresh.record is not None and fresh.record.user_id == created.user_id, f"the new link must be the waiting account's, valid: {fresh.status}"
+    assert [row.id for row in await _live_setup_rows(engine, moment)] == [fresh.record.id], "the new link must be the one live setup link"
+    assert await _waiting(engine, bootstrap, created.user_id) == (True, True, created.user_id), "the account still waits for its setup"
+    print_success("issued: the account still waited")
+
+
+# red until A-42/A-43
+@pytest.mark.asyncio
+@pytest.mark.parametrize("spent", SPENT_BEFORE)
+async def test_a_setup_link_is_refused_once_another_setup_link_of_the_account_was_consumed(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, spent: str) -> None:
+    """A42-005 — NEW, red until A-42 (today the stray link sets the password of whoever holds it and activates the account): carol, set up before — through another setup link, or her links retired —, deactivated since, holds two stray live setup links (rows: ``_set_up_before_with_stray_links``). ``complete_admin_setup`` with one of them is ``None``: nothing changes on the account — its password hash, ``is_active``, its session version, the whole row —, nor in the settings; every never-consumed setup link of carol is retired — revoked and consumed, without a consumer —, the one shown and the other, the shown one inspecting ``revoked``; the spent link stays as it was. A warning about carol (``user_id``) is logged — its wording is not pinned —, and no event holds a link."""
+    print_section(f"A42-005: a stray setup link of an account {spent}")
+    user_id, first, strays = await _set_up_before_with_stray_links(engine, spent)
+    shown = strays[0]
+    statuses = [await _status(engine, issued.token, NOW) for issued in (first, *strays)]
+    spent_status = TokenStatus.CONSUMED if spent == "set-up-through-it" else TokenStatus.REVOKED
+    assert statuses == [spent_status, TokenStatus.VALID, TokenStatus.VALID], f"barrier: the first link spent, the two stray ones valid: {statuses}"
+    before = await _snapshot(engine)
+
+    with _captured(bootstrap) as events:
+        user = await _complete(engine, bootstrap, shown.token, now=NOW, password=INTRUDER_PASSWORD, then_commit=True)
+
+    after = await _snapshot(engine)
+    rows = {row.id: row for row in await _setup_rows(engine, user_id)}
+    assert user is None, f"red until A-42: another setup link of carol was consumed — she was set up before —, so a stray one must set nothing: it set up account {user.id if user else None}"
+    assert (after["users"], after["settings"]) == (before["users"], before["settings"]), "nothing may change on the account — its password hash, is_active, its session version —, nor in the settings"
+    assert _link_states([rows[issued.record.id] for issued in strays]) == [RETIRED, RETIRED], "every never-consumed setup link of carol must be retired — revoked and consumed, without a consumer —, the one shown and the other"
+    assert await _status(engine, shown.token, NOW) == TokenStatus.REVOKED, "the link shown must inspect revoked"
+    assert [row for row in after["tokens"] if row["id"] == first.record.id] == [row for row in before["tokens"] if row["id"] == first.record.id], "the spent link must stay as it was"
+    assert [event for event in _at_level(events, "warning") if event.get("user_id") == user_id], f"the refusal must be logged as a warning about carol (user_id {user_id}): {_logged(events)}"
+    assert [event for event in _logged(events) if any(issued.token in repr(event) for issued in strays)] == [], "no log event may hold a link"
+    print_success("refused; nothing changed; both stray links retired; a warning")
+
+
+# guard
+@pytest.mark.asyncio
+async def test_setup_links_revoked_or_expired_beside_the_live_one_refuse_nothing(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> None:
+    """A42-006 — GUARD, green today and after: A42-005's refusal is a consumed sibling's alone. The waiting administrator re-armed with TOKEN_TWO — TOKEN_ONE revoked, never consumed — holds besides an expired setup link, neither consumed nor revoked (a row); ``complete_admin_setup`` with TOKEN_TWO sets it up: the account it returns, active, still a superuser, its password the one chosen through the link."""
+    print_section("A42-006: siblings revoked or expired, none consumed")
+    created = await _created(engine, bootstrap, f02, token=TOKEN_ONE)
+    rearmed = await _run(engine, bootstrap, _config(f02, token=TOKEN_TWO), now=NOW + HOUR)
+    assert rearmed.action == bootstrap.BootstrapAction.REARMED, f"setup: TOKEN_TWO re-arms the waiting administrator: {rearmed!r}"
+    expired = await _issue(engine, ADMIN_SETUP, user_id=created.user_id, now=NOW - SETUP_TTL)
+    moment = NOW + 2 * HOUR
+    statuses = [await _status(engine, token, moment) for token in (TOKEN_ONE, expired.token, TOKEN_TWO)]
+    assert statuses == [TokenStatus.REVOKED, TokenStatus.EXPIRED, TokenStatus.VALID], f"barrier: one link revoked, one expired, one live — none consumed: {statuses}"
+
+    user = await _complete(engine, bootstrap, TOKEN_TWO, now=moment)
+
+    account = await _account(engine, created.user_id)
+    assert user is not None and user.id == created.user_id, f"no sibling was consumed: the live link must set the account up: {user!r}"
+    assert (account.is_active, account.is_superuser, verify_password(SETUP_PASSWORD, account.hashed_password)) == (True, True, True), "active, a superuser, its password the one chosen through the link"
+    print_success("set up: a revoked or an expired sibling refuses nothing")
+
+
+# =============================================================================
+# A43 — LOT A-43: THE SETUP LINK WHEN THE ACCOUNT IS DEACTIVATED OR DEMOTED
+# =============================================================================
+# A-43: a deactivation leaves the account's setup links as they are today. The waiting administrator, already inactive,
+# keeps a live link after root's ``{is_active: false}`` or the CLI's ``user deactivate``; an active administrator holding
+# a stray setup link becomes, once deactivated, an account that waits — inactive, a setup link, none consumed —, and the
+# link sets its password. The contract: ``update_user_status(..., is_active=False)`` (the Users tab's PATCH) and
+# ``set_user_active(..., False)`` (the CLI's ``user deactivate``) revoke the live setup links of the waiting administrator
+# — revoked, not retired: it still waits, for a new link of ``./dev.py user setup-link`` — and retire the never-consumed
+# setup links of an account that does not wait: an active one being deactivated, or an inactive one set up before.
+#
+# And the waiting administrator is not demoted: ``./dev.py user demote`` refuses it — falsy, a line starting with ❌ (its
+# wording is not pinned), nothing changed —, whichever layer holds the refusal, so the command itself runs here
+# (``cmd_set_admin``, ``get_async_engine`` the private engine); any other administrator is demoted as before. Through
+# ``user_service`` and the CLI, which read the clock: every scene is dated from it, as A32's.
+
+#: A setup link's row once revoked, and only revoked: (revoked, consumed, consumed_by_user_id) — its account still waits.
+REVOKED_ONLY = (True, False, None)
+
+#: A scene of A43-002, from (the engine, the moment): (boss's id, its never-consumed setup links, its consumed ones).
+StrayScene = Callable[[AsyncEngine, datetime], Awaitable[tuple[int, list[IssuedToken], list[IssuedToken]]]]
+
+
+async def _boss_active_with_a_stray_link(engine: AsyncEngine, moment: datetime) -> tuple[int, list[IssuedToken], list[IssuedToken]]:
+    """boss, an operator's active administrator written as a row, holding a stray setup link issued an hour before ``moment``, live."""
+    boss = await _add_user(engine, OTHER_USERNAME, email=OTHER_EMAIL, admin=True)
+    return boss, [await _issue(engine, ADMIN_SETUP, user_id=boss, now=moment - HOUR)], []
+
+
+async def _boss_set_up_before_with_a_stray_link(engine: AsyncEngine, moment: datetime) -> tuple[int, list[IssuedToken], list[IssuedToken]]:
+    """boss, an inactive administrator set up before, as rows: its first setup link consumed by its setup two hours before ``moment``, and a stray one issued after, live."""
+    boss = await _add_user(engine, OTHER_USERNAME, email=OTHER_EMAIL, active=False, admin=True)
+    first = await _issue(engine, ADMIN_SETUP, user_id=boss, now=moment - 3 * HOUR)
+    async with AsyncSession(engine) as session:
+        assert await token_service.consume_token(session, first.token, ADMIN_SETUP, consumed_by_user_id=boss, now=moment - 2 * HOUR) is not None, "setup: boss's setup spends its first link"
+        await session.commit()
+    return boss, [await _issue(engine, ADMIN_SETUP, user_id=boss, now=moment - HOUR)], [first]
+
+
+#: Accounts that do not wait for their setup and hold a never-consumed setup link (A43-002).
+NOT_WAITING_WITH_A_STRAY_LINK = [
+    pytest.param(_boss_active_with_a_stray_link, id="an-active-administrator-with-a-stray-link"),
+    pytest.param(_boss_set_up_before_with_a_stray_link, id="an-inactive-administrator-set-up-before-with-a-stray-link"),
+]
+#: Administrators beside the waiting one, demoted by the CLI as before (A43-005): (active, whether its setup link was spent).
+OTHER_ADMINISTRATORS = [
+    pytest.param(True, False, id="an-active-administrator"),
+    pytest.param(False, False, id="an-inactive-administrator-without-any-link"),
+    pytest.param(False, True, id="an-inactive-administrator-whose-setup-link-was-spent"),
+]
+
+
+async def _demote_with_the_cli(cli: ModuleType, engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], username: str) -> tuple[Any, str]:
+    """``./dev.py user demote <username>``: ``cmd_set_admin(username, False)`` in-process, ``get_async_engine`` the private engine — what it answered, and what it printed."""
+    monkeypatch.setattr(cli, "get_async_engine", lambda: engine)
+    capsys.readouterr()
+    answer = await cli.cmd_set_admin(username, False)
+    return answer, capsys.readouterr().out
+
+
+# red until A-42/A-43
+@pytest.mark.asyncio
+@pytest.mark.parametrize("deactivate", DEACTIVATIONS)
+async def test_deactivating_the_waiting_administrator_revokes_its_setup_link_and_it_still_waits(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, deactivate: Change) -> None:
+    """A43-001 — NEW, red until A-43 (today nothing moves: its link stays valid, as A32-004 pinned until A-43): the waiting administrator, already inactive, deactivated — ``update_user_status(..., is_active=False)``, the Users tab's PATCH, or ``set_user_active(..., False)``, the CLI's ``user deactivate`` —: its live setup link is revoked in the commit of the deactivation — ``inspect_token`` says ``revoked`` —, and only revoked: ``consumed_at`` empty, so the account still waits — ``is_pending_admin``, in ``pending_admin_ids``, the one ``pending_admin`` answers —, inactive, a superuser, its password hash untouched. A warning about the account (``user_id``) is logged — the plan's point 3, «un avviso nel log»; its wording is not pinned —, holding no link. The revoked link sets nothing — ``complete_admin_setup`` ``None``, nothing changes —; ``issue_setup_link`` gives the account a new link, which sets it up: active, still a superuser, its password the one chosen through that link."""
+    print_section(f"A43-001: the waiting administrator {_named(deactivate)}")
+    moment = utcnow()
+    user_id = await _waiting_administrator(engine, bootstrap, f02, moment)
+    hashed = (await _account(engine, user_id)).hashed_password
+
+    with _captured(bootstrap) as events:
+        await deactivate(engine, user_id, moment)
+
+    later = moment + AFTERWARDS
+    status = await _status(engine, TOKEN_ONE, later)
+    assert status == TokenStatus.REVOKED, f"red until A-43: deactivating the waiting administrator must revoke its live setup link: it is still {status}"
+    assert _link_states(await _setup_rows(engine, user_id)) == [REVOKED_ONLY], "revoked, not retired: consumed_at stays empty, so the account still waits"
+    assert await _waiting(engine, bootstrap, user_id) == (True, True, user_id), "the account must still wait for its setup"
+    account = await _account(engine, user_id)
+    assert (account.is_active, account.is_superuser, account.hashed_password) == (False, True, hashed), "inactive, a superuser, its password hash untouched"
+    assert [event for event in _at_level(events, "warning") if event.get("user_id") == user_id], f"the revocation must be logged as a warning about the account (user_id {user_id}): {_logged(events)}"
+    assert _holding(events, CANARY) == [], "no log event may hold the link"
+    before = await _snapshot(engine)
+    assert await _complete(engine, bootstrap, TOKEN_ONE, now=later, password=INTRUDER_PASSWORD, then_commit=True) is None, "the revoked link must set nothing"
+    assert await _snapshot(engine) == before, "the revoked link must change nothing"
+    issued = await _issue_setup_link(engine, bootstrap, now=later)
+    assert isinstance(issued, IssuedToken), f"./dev.py user setup-link must give the waiting account a new link: {issued!r}"
+    user = await _complete(engine, bootstrap, issued.token, now=later + timedelta(minutes=1))
+    after = await _account(engine, user_id)
+    assert user is not None and user.id == user_id, f"the new link must set the account up: {user!r}"
+    assert (after.is_active, after.is_superuser, verify_password(SETUP_PASSWORD, after.hashed_password)) == (True, True, True), "active, a superuser, its password the one chosen through the new link"
+    print_success("revoked, still waiting; a new link sets it up")
+
+
+# red until A-42/A-43
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scene", NOT_WAITING_WITH_A_STRAY_LINK)
+@pytest.mark.parametrize("deactivate", DEACTIVATIONS)
+async def test_deactivating_an_account_that_does_not_wait_retires_its_setup_links(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, deactivate: Change, scene: StrayScene) -> None:
+    """A43-002 — NEW, red until A-43 (today the stray link stays valid; deactivated, an active administrator then waits — inactive, a setup link, none consumed — and the link sets its password): boss does not wait for a setup — active, or set up before — and holds a stray live setup link; root, active, beside. Deactivated — ``update_user_status(..., is_active=False)`` or ``set_user_active(..., False)`` —, boss's never-consumed setup links are retired in the commit of the deactivation — revoked and consumed, without a consumer; ``inspect_token`` says ``revoked`` —, the link its setup consumed stays as it was; boss is inactive and waits for nothing (C2, effect 3: not ``is_pending_admin``, ``issue_setup_link`` ``None``, a restart ``IGNORED``); and the stray link sets nothing."""
+    print_section(f"A43-002: {_named(scene)}, {_named(deactivate)}")
+    moment = utcnow()
+    await _add_user(engine, ROOT_USERNAME, admin=True)
+    boss, strays, spent = await scene(engine, moment)
+    assert await _waiting(engine, bootstrap, boss) == (False, False, None), "barrier: boss does not wait for a setup"
+
+    await deactivate(engine, boss, moment)
+
+    later = moment + AFTERWARDS
+    statuses = [await _status(engine, issued.token, later) for issued in strays]
+    assert statuses == [TokenStatus.REVOKED] * len(strays), f"red until A-43: deactivating an account that does not wait must retire its never-consumed setup links: they are {statuses}"
+    rows = {row.id: row for row in await _setup_rows(engine, boss)}
+    assert _link_states([rows[issued.record.id] for issued in strays]) == [RETIRED] * len(strays), "retired: revoked and consumed at once, without a consumer"
+    assert [(rows[issued.record.id].consumed_by_user_id, rows[issued.record.id].revoked_at) for issued in spent] == [(boss, None)] * len(spent), "the link its setup consumed stays as it was"
+    assert (await _account(engine, boss)).is_active is False, "boss is inactive"
+    await _assert_waits_for_nothing(engine, bootstrap, f02, boss, later, f"{_named(deactivate)} of boss, who does not wait")
+    before = await _snapshot(engine)
+    for issued in strays:
+        assert await _complete(engine, bootstrap, issued.token, now=later, password=INTRUDER_PASSWORD, then_commit=True) is None, "the stray link must set nothing"
+    assert await _snapshot(engine) == before, "the stray link must change nothing"
+    print_success("the stray link retired; boss waits for nothing")
+
+
+# guard
+@pytest.mark.asyncio
+@pytest.mark.parametrize("deactivate", DEACTIVATIONS)
+async def test_deactivating_another_account_moves_no_setup_link_of_the_waiting_administrator(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, deactivate: Change) -> None:
+    """A43-003 — GUARD, green today and after: the revocation and the retirement are the deactivated account's own. carol, an active member holding no token, deactivated beside the waiting administrator: no account token moves; the waiting administrator still waits, its link valid."""
+    print_section(f"A43-003: another account {_named(deactivate)}")
+    moment = utcnow()
+    admin_id = await _waiting_administrator(engine, bootstrap, f02, moment)
+    carol = await _add_user(engine, "carol")
+    tokens_before = (await _snapshot(engine))["tokens"]
+
+    await deactivate(engine, carol, moment)
+
+    assert (await _account(engine, carol)).is_active is False, "barrier: carol is deactivated"
+    assert (await _snapshot(engine))["tokens"] == tokens_before, "no account token may move: carol holds none, and the waiting administrator's are not hers"
+    assert await _waiting(engine, bootstrap, admin_id) == (True, True, admin_id), "the waiting administrator must still wait"
+    assert await _status(engine, TOKEN_ONE, moment + AFTERWARDS) == TokenStatus.VALID, "its setup link must stay valid"
+    print_success("nothing moved")
+
+
+# red until A-42/A-43
+@pytest.mark.asyncio
+@pytest.mark.parametrize("expired", LINK_STATES)
+async def test_the_cli_refuses_to_demote_the_waiting_administrator(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, cli: ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], expired: bool) -> None:
+    """A43-004 — NEW, red until A-43 (today ``✅ … demoted from admin`` and ``True``: the waiting administrator, a superuser no more, sets up an ordinary account through its link): ``./dev.py user demote`` of the waiting administrator — ``cmd_set_admin(username, False)``, root active beside — is refused: falsy, a line starting with ``❌`` (its wording is not pinned), and nothing changed — every account, token and setting as it was. The account still waits; its link live, it still sets it up, a superuser. Its link live or expired: it waits all the same."""
+    print_section(f"A43-004: user demote of the waiting administrator, its link {'expired' if expired else 'live'}")
+    moment = utcnow()
+    user_id = await _waiting_administrator(engine, bootstrap, f02, moment, expired=expired)
+    before = await _snapshot(engine)
+
+    answer, out = await _demote_with_the_cli(cli, engine, monkeypatch, capsys, ADMIN_USERNAME)
+
+    assert not answer, f"red until A-43: ./dev.py user demote must refuse the waiting administrator: it answered {answer!r}: {out!r}"
+    assert any(line.startswith("❌") for line in out.splitlines()), f"a line must start with ❌: {out!r}"
+    assert await _snapshot(engine) == before, "a refused demotion must change nothing: every account, token and setting as it was"
+    assert await _waiting(engine, bootstrap, user_id) == (True, True, user_id), "the account must still wait for its setup"
+    if not expired:
+        user = await _complete(engine, bootstrap, TOKEN_ONE, now=moment + AFTERWARDS)
+        assert user is not None and (user.is_active, user.is_superuser) == (True, True), f"its link must still set it up, a superuser: {user!r}"
+    print_success("❌, nothing changed, still waiting")
+
+
+# guard
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("active", "set_up_before"), OTHER_ADMINISTRATORS)
+async def test_the_cli_still_demotes_any_other_administrator(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, cli: ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], active: bool, set_up_before: bool) -> None:
+    """A43-005 — GUARD, green today and after: the refusal is the waiting administrator's alone — not the instance's while one waits, nor every inactive administrator's, nor every account that ever had a setup link. boss — active, or inactive without any link, or inactive with its setup link spent — beside the waiting administrator and root: ``./dev.py user demote boss`` answers truthy, a line starting with ``✅``; boss is an administrator no more, as active as before; the waiting administrator still waits, its link valid."""
+    print_section(f"A43-005: user demote of another administrator, active={active}, set up before={set_up_before}")
+    moment = utcnow()
+    admin_id = await _waiting_administrator(engine, bootstrap, f02, moment)
+    boss = await _add_user(engine, OTHER_USERNAME, email=OTHER_EMAIL, active=active, admin=True)
+    if set_up_before:
+        spent = await _issue(engine, ADMIN_SETUP, user_id=boss, now=moment - 2 * HOUR)
+        async with AsyncSession(engine) as session:
+            assert await token_service.consume_token(session, spent.token, ADMIN_SETUP, consumed_by_user_id=boss, now=moment - HOUR) is not None, "setup: boss's setup spends its link"
+            await session.commit()
+
+    answer, out = await _demote_with_the_cli(cli, engine, monkeypatch, capsys, OTHER_USERNAME)
+
+    after = await _account(engine, boss)
+    assert answer, f"./dev.py user demote must still demote another administrator: it answered {answer!r}: {out!r}"
+    assert any(line.startswith("✅") for line in out.splitlines()), f"a line must start with ✅: {out!r}"
+    assert (after.is_active, after.is_superuser) == (active, False), f"boss must be an administrator no more, as active as before: (is_active, is_superuser) {(after.is_active, after.is_superuser)}"
+    assert await _waiting(engine, bootstrap, admin_id) == (True, True, admin_id), "the waiting administrator must still wait"
+    assert await _status(engine, TOKEN_ONE, moment + AFTERWARDS) == TokenStatus.VALID, "its setup link must stay valid"
+    print_success("demoted; the waiting administrator untouched")
+
+
+# =============================================================================
+# A50 — LOT A-50: THE RESTART SAYS WHY THE SETUP LINK IS GONE
+# =============================================================================
+# A-50: a restart while the initial administrator waits finds no live setup link, and a token of the variable already
+# known re-arms nothing: ``_keep_pending_admin`` answers ``EXPIRED`` and logs one warning — «address changed» at the
+# start that changes the address (A-33), «has expired» at any other, even for a link that did not run out but was
+# revoked: cancelled (A-43: ``update_user_status(..., is_active=False)``, the Users tab's PATCH, or
+# ``set_user_active(..., False)``, the CLI's ``user deactivate``), or revoked by an address changed at an earlier start.
+# The cure (approved by the coordinator, 17/10): when the address did not change at this start, and the account's most
+# recent setup link — the latest created — is revoked and was never consumed, the warning says the link was withdrawn;
+# otherwise «has expired», as today. The action stays ``EXPIRED`` — the same ``user_id`` and ``username``, no
+# ``link_token`` —, nothing is written, and the remedy is today's: ``./dev.py user setup-link``, with a new
+# LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN when the configuration carries one. The log is English, for the developer: only a
+# distinctive word is pinned — «withdrawn», «has expired», «address changed» —, never the sentence. The cancellations go
+# through ``user_service``, which reads the clock: A50-001 and A50-002 are dated from it, as A43's; every other call
+# takes its ``now``.
+
+#: The distinctive words of the restart's warning, looked for in its message in lower case: the link withdrawn (A-50),
+#: the link run out, the address changed at this very start (A-33). The withdrawn warning may name the change of
+#: address among its causes, so «address changed» alone does not tell the two apart: «withdrawn» does.
+SAYS_WITHDRAWN = "withdrawn"
+SAYS_EXPIRED = "has expired"
+SAYS_MOVED = "address changed"
+#: When the restart after the change of address runs (A50-003): an hour after it, the link's 72 hours not over; or once
+#: they are, the link revoked and run out at once — its revocation decides all the same.
+LATER_RESTARTS = [
+    pytest.param(HOUR, id="an-hour-later"),
+    pytest.param(SETUP_TTL + HOUR, id="once-its-72-hours-are-over-too"),
+]
+#: Setup links that ran out, never revoked (A50-004): (the token the administrator is created with, or None for a
+#: generated link; the token that re-arms it an hour later — revoking the first link —, or None). The restart's
+#: configuration carries the last token given.
+RUN_OUT_LINKS = [
+    pytest.param(TOKEN_ONE, None, id="the-variables-token"),
+    pytest.param(None, None, id="a-generated-link"),
+    pytest.param(TOKEN_ONE, TOKEN_TWO, id="the-token-that-re-armed-it-its-first-link-revoked"),
+]
+
+
+def _said(event: dict[str, Any]) -> str:
+    """The message of a log event, in lower case: where a distinctive word is looked for."""
+    return str(event.get("event", "")).lower()
+
+
+def _the_restarts_warning(events: list[dict[str, Any]], token: Optional[str]) -> dict[str, Any]:
+    """The one warning of a restart that found no live setup link, its remedy as today: it names ``./dev.py user setup-link``, and ``LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`` exactly when the configuration carries a token — a new one there re-arms."""
+    warnings = _at_level(events, "warning")
+    assert len(warnings) == 1, f"the restart must log one warning: {warnings}"
+    warning = warnings[0]
+    assert SETUP_LINK_COMMAND in repr(warning), f"the warning must still name {SETUP_LINK_COMMAND}: {warning}"
+    if token is None:
+        assert TOKEN_VARIABLE not in repr(warning), f"the configuration carries no token: the warning must name {SETUP_LINK_COMMAND} alone, never {TOKEN_VARIABLE}: {warning}"
+    else:
+        assert TOKEN_VARIABLE in repr(warning), f"the configuration carries a token: the warning must name {TOKEN_VARIABLE} too: {warning}"
+    return warning
+
+
+async def _cancelled_waiting_administrator(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, cancel: Change, moment: datetime, *, token: Optional[str]) -> tuple[int, str]:
+    """The F02 administrator created by the bootstrap an hour before ``moment`` — with ``token`` from the configuration, or a generated link —, root beside it, then its setup cancelled by ``cancel``: the id of the waiting account and its link.
+
+    Barriers: before, the account waits and its link is valid at ``moment``; after, the link is revoked and only
+    revoked, and the account still waits — what A43-001 pins.
+    """
+    created = await _created(engine, bootstrap, f02, token=token, now=moment - HOUR)
+    await _add_user(engine, ROOT_USERNAME, admin=True)
+    link = token or created.link_token
+    assert await _waiting(engine, bootstrap, created.user_id) == (True, True, created.user_id), "barrier: the F02 administrator waits for its setup"
+    assert await _status(engine, link, moment) == TokenStatus.VALID, "barrier: its setup link is valid"
+    await cancel(engine, created.user_id, moment)
+    assert _link_states(await _setup_rows(engine, created.user_id)) == [REVOKED_ONLY], f"barrier: {_named(cancel)} must revoke the link, and only revoke it (A43-001)"
+    assert await _waiting(engine, bootstrap, created.user_id) == (True, True, created.user_id), "barrier: the account still waits for its setup"
+    return created.user_id, link
+
+
+# red until A-50
+@pytest.mark.asyncio
+async def test_a_restart_after_the_setup_was_cancelled_in_the_users_tab_says_the_link_was_withdrawn(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> None:
+    """A50-001 — NEW, red until A-50 (today «has expired», for a link that did not run out): the waiting administrator, created by the bootstrap with TOKEN_ONE from the configuration, its setup cancelled in the Users tab — ``update_user_status(..., is_active=False)``, the PATCH, revokes its link (A43-001) —; a restart five minutes later with the same configuration, TOKEN_ONE known so re-arming nothing: ``EXPIRED``, the same account, no ``link_token``, nothing written; one warning, which says the link was withdrawn — never «has expired» —, its remedy as today: ``./dev.py user setup-link``, or a new ``LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN``. No token in the log."""
+    print_section("A50-001: a restart after the cancellation through the PATCH, a token in the configuration")
+    moment = utcnow()
+    user_id, link = await _cancelled_waiting_administrator(engine, bootstrap, f02, _deactivate_by_update_user_status, moment, token=TOKEN_ONE)
+    before = await _snapshot(engine)
+
+    with _captured(bootstrap) as events:
+        result = await _run(engine, bootstrap, _config(f02, token=TOKEN_ONE), now=moment + AFTERWARDS, then_commit=True)
+
+    assert (result.action, result.user_id, result.username, result.link_token) == (bootstrap.BootstrapAction.EXPIRED, user_id, ADMIN_USERNAME, None), f"no live link, and a token already known: EXPIRED, for the waiting account, as today: {result!r}"
+    assert await _snapshot(engine) == before, "EXPIRED must write nothing"
+    warning = _the_restarts_warning(events, TOKEN_ONE)
+    assert _holding(events, link) == [] and _holding(events, CANARY) == [], "no log event may hold the token"
+    assert SAYS_WITHDRAWN in _said(warning), f"red until A-50: the link was cancelled, it did not run out: the warning must say it was withdrawn: {warning.get('event')!r}"
+    assert [event for event in _logged(events) if SAYS_EXPIRED in _said(event)] == [], "a link withdrawn must not be said to have expired"
+    print_success("EXPIRED; one warning: withdrawn, the remedy as today")
+
+
+# red until A-50
+@pytest.mark.asyncio
+async def test_a_restart_after_user_deactivate_cancelled_a_generated_link_says_it_was_withdrawn(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> None:
+    """A50-002 — NEW, red until A-50 (today «has expired»): A50-001 the other way, with the other link — the CLI's ``user deactivate``, ``set_user_active(..., False)``, cancels a generated link, and the configuration carries no token —: a restart five minutes later with the same configuration is ``EXPIRED``, the same account, no ``link_token``, nothing written; one warning, which says the link was withdrawn — never «has expired» —, its remedy as today: ``./dev.py user setup-link`` alone, never ``LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN``. The link is not in the log."""
+    print_section("A50-002: a restart after the cancellation by user deactivate, a generated link")
+    moment = utcnow()
+    user_id, link = await _cancelled_waiting_administrator(engine, bootstrap, f02, _deactivate_by_set_user_active, moment, token=None)
+    before = await _snapshot(engine)
+
+    with _captured(bootstrap) as events:
+        result = await _run(engine, bootstrap, _config(f02), now=moment + AFTERWARDS, then_commit=True)
+
+    assert (result.action, result.user_id, result.username, result.link_token) == (bootstrap.BootstrapAction.EXPIRED, user_id, ADMIN_USERNAME, None), f"no live link: EXPIRED, for the waiting account, as today: {result!r}"
+    assert await _snapshot(engine) == before, "EXPIRED must write nothing"
+    warning = _the_restarts_warning(events, None)
+    assert _holding(events, link) == [], "no log event may hold the link"
+    assert SAYS_WITHDRAWN in _said(warning), f"red until A-50: the link was cancelled, it did not run out: the warning must say it was withdrawn: {warning.get('event')!r}"
+    assert [event for event in _logged(events) if SAYS_EXPIRED in _said(event)] == [], "a link withdrawn must not be said to have expired"
+    print_success("EXPIRED; one warning: withdrawn, the command alone")
+
+
+# red until A-50
+@pytest.mark.asyncio
+@pytest.mark.parametrize("delay", LATER_RESTARTS)
+@pytest.mark.parametrize("token", LINK_ORIGINS)
+async def test_a_restart_after_the_one_that_changed_the_address_says_the_link_was_withdrawn(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, token: Optional[str], delay: timedelta) -> None:
+    """A50-003 — NEW, red until A-50 (today «has expired»): the waiting administrator created at NOW — with TOKEN_ONE from the configuration, or a generated link —; an hour later a start with a new LIBREFOLIO_ADMIN_EMAIL revokes the link (A33-001) and says so: ``EXPIRED``, one warning that the address changed — not «withdrawn», a later start's word —, its remedy as today. A later restart with the same variables — an hour later, or once the link's 72 hours are over too —: ``EXPIRED``, the same account, no ``link_token``, nothing written; one warning, which says the link was withdrawn — never «has expired» —, its remedy as today. No link in the log."""
+    print_section(f"A50-003: a restart after the change of address, {'the variable token' if token else 'a generated link'}, {delay} later")
+    created = await _created(engine, bootstrap, f02, token=token)
+    link = token or created.link_token
+    config = _config(f02, email=OTHER_EMAIL, token=token)
+    moment = NOW + HOUR
+
+    with _captured(bootstrap) as moving:
+        moved = await _run(engine, bootstrap, config, now=moment)
+
+    assert (moved.action, moved.link_token) == (bootstrap.BootstrapAction.EXPIRED, None), f"setup: the new address leaves no live link: {moved!r}"
+    assert _link_states(await _setup_rows(engine, created.user_id)) == [REVOKED_ONLY], "barrier: the new address revokes the link, and only revokes it (A33-001)"
+    assert await _accounts(engine) == {ADMIN_USERNAME: (created.user_id, OTHER_EMAIL, False, True)}, "barrier: the account at its new address, still inactive"
+    said = _said(_the_restarts_warning(moving, token))
+    assert SAYS_MOVED in said and SAYS_WITHDRAWN not in said, f"the start that changes the address must still say so, as today — not that the link was withdrawn: {said!r}"
+    before = await _snapshot(engine)
+
+    with _captured(bootstrap) as events:
+        result = await _run(engine, bootstrap, config, now=moment + delay, then_commit=True)
+
+    assert (result.action, result.user_id, result.username, result.link_token) == (bootstrap.BootstrapAction.EXPIRED, created.user_id, ADMIN_USERNAME, None), f"no live link: EXPIRED, for the waiting account, as today: {result!r}"
+    assert await _snapshot(engine) == before, "EXPIRED must write nothing"
+    warning = _the_restarts_warning(events, token)
+    assert _holding(moving, link) == [] and _holding(events, link) == [], "no log event may hold the link"
+    assert SAYS_WITHDRAWN in _said(warning), f"red until A-50: the link was revoked by the address changed at an earlier start, it did not run out: the warning must say it was withdrawn: {warning.get('event')!r}"
+    assert [event for event in _logged(events) if SAYS_EXPIRED in _said(event)] == [], "a link withdrawn must not be said to have expired"
+    print_success("the start of the change: address changed; the starts after it: withdrawn")
+
+
+# guard
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("created_with", "rearmed_with"), RUN_OUT_LINKS)
+async def test_a_restart_after_the_link_ran_out_still_says_it_has_expired(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, created_with: Optional[str], rearmed_with: Optional[str]) -> None:
+    """A50-004 — GUARD, green today and after: a setup link that ran out, never revoked — the variable's token, a generated link, or the token that re-armed the waiting administrator an hour after its creation, its first link revoked by that re-arm —; a restart with the same configuration an hour after the link's 72 hours: ``EXPIRED``, the same account, no ``link_token``, nothing written; one warning, which still says the link has expired — never «withdrawn»: the most recent setup link decides, and an earlier one revoked does not —, its remedy as today. No link in the log."""
+    print_section(f"A50-004: a restart after the link ran out, {'the variable token' if created_with else 'a generated link'}{', re-armed an hour later' if rearmed_with else ''}")
+    created = await _created(engine, bootstrap, f02, token=created_with)
+    issued_at = NOW
+    if rearmed_with is not None:
+        issued_at = NOW + HOUR
+        rearmed = await _run(engine, bootstrap, _config(f02, token=rearmed_with), now=issued_at)
+        assert rearmed.action == bootstrap.BootstrapAction.REARMED, f"setup: a token never seen re-arms the waiting administrator: {rearmed!r}"
+    token = rearmed_with or created_with
+    moment = issued_at + SETUP_TTL + HOUR
+    states = _link_states(await _setup_rows(engine, created.user_id))
+    assert states == [REVOKED_ONLY] * (len(states) - 1) + [(False, False, None)], f"barrier: the latest setup link neither revoked nor consumed, any earlier one revoked: {states}"
+    assert await _live_setup_rows(engine, moment) == [], "barrier: no setup link is live at the restart: the latest ran out"
+    before = await _snapshot(engine)
+
+    with _captured(bootstrap) as events:
+        result = await _run(engine, bootstrap, _config(f02, token=token), now=moment, then_commit=True)
+
+    assert (result.action, result.user_id, result.username, result.link_token) == (bootstrap.BootstrapAction.EXPIRED, created.user_id, ADMIN_USERNAME, None), f"no live link: EXPIRED, for the waiting account: {result!r}"
+    assert await _snapshot(engine) == before, "EXPIRED must write nothing"
+    warning = _the_restarts_warning(events, token)
+    assert SAYS_EXPIRED in _said(warning), f"a link that ran out, never revoked, must still be said to have expired: {warning.get('event')!r}"
+    assert [event for event in _logged(events) if SAYS_WITHDRAWN in _said(event)] == [], "a link that ran out must not be said withdrawn: the most recent setup link decides, not an earlier one revoked"
+    assert _holding(events, CANARY) == [] and (created.link_token is None or _holding(events, created.link_token) == []), "no log event may hold a link"
+    print_success("EXPIRED; one warning: has expired, the remedy as today")

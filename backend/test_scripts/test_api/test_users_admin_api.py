@@ -84,8 +84,32 @@ Lot A7b-2 (plan phase01Accounts, «A7b-2 — Analisi e contratto», C1 and C2: A
     an account already active (night decision 6, completed). Its old link then inspects ``revoked``, ``POST
     /auth/setup`` with it is 400 ``TOKEN_INVALID`` and changes nothing, and the account, inactive again, is listed
     ``pending_setup: false`` and reactivated by ``PATCH {is_active: true}`` (200, not point 14's 409). What leaves it
-    waiting — nothing done, a reset link issued and not spent, a demotion, ``{is_active: false}`` — keeps both its link
-    and point 14's refusal.
+    waiting — nothing done, a reset link issued and not spent, a refused demotion (point 16) — keeps both its link and
+    point 14's refusal.
+
+Lot A-42 + A-43 (the setup link's lifecycle; contract approved by the coordinator, 17/10) adds:
+
+16. ``PATCH /users/{user_id}`` refuses to demote the account waiting for its setup: a body with ``is_superuser: false`` —
+    alone, or with ``is_active: false`` — is 409 with point 14's detail exactly, ``{error_code: PENDING_SETUP,
+    message}``, the same message as the refused activation, and changes nothing, all or nothing. Any other administrator
+    is demoted as before. ``{is_active: false}`` on that account, already inactive, still answers 200 with its row
+    (``pending_setup: true``), and now revokes its live setup links: its link inspects ``revoked``, ``POST /auth/setup``
+    with it is 400 ``TOKEN_INVALID``, and the account still waits — a new link of ``./dev.py user setup-link`` sets it
+    up. Unless the hook of lot A7 protects it (coordinator, 17/10, after the review): then that cancellation is refused
+    as a deactivation is (point 12), 409 ``ACCOUNT_PROTECTED`` with the hook's ``reason``, and changes nothing — its
+    link live, the account still waiting, the link still setting it up; ``./dev.py user deactivate`` stays above the
+    protection, as for every protection. On an account that does not wait — an active one, or an inactive one set up
+    before — the deactivation (the ``PATCH``, ``./dev.py user deactivate``) retires its never-consumed setup links:
+    inspected ``revoked``, the account listed ``pending_setup: false``, reactivated by ``PATCH {is_active: true}``, and
+    the link sets nothing.
+17. ``DELETE /users/{user_id}`` deletes the account waiting for its setup directly (coordinator, 17/10 11:45: its
+    demotion refused, there is nothing to demote first): 204 with no body, not 409 ``DEMOTE_FIRST``, whichever state
+    its setup links are in — live, expired, revoked by a cancellation, or re-armed by ``./dev.py user setup-link``. The
+    account and its tokens go as with any deletion (``user_service.delete_account``: the row, and with it, by the
+    schema's cascade, its ``account_tokens``), and nothing else changes: its links then inspect ``unknown`` and set up
+    nothing, its place is free, and nobody waits any more. Any other administrator — active or not, holding a stray
+    setup link or set up before — is still 409 ``DEMOTE_FIRST``, nothing deleted; and a protected account is still 409
+    ``ACCOUNT_PROTECTED`` before any other answer (point 12), the waiting administrator included.
 
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/login`` gives ``ACCOUNT_DISABLED`` and
 ``test_registration_api.py`` reads; the administrator's ``USER_LIMIT_REACHED`` carries ``limit``, ``used`` and
@@ -129,7 +153,12 @@ ago when the case wants that link expired —, and every other state of a setup 
 service, an expired link issued the same way, never waited for. Its cleanup is the private file's. On the lane, the
 field is read by UADM-003, UADM-007 and UADM-008: false on every account they own. A7b-2's cases run there too, for the
 same reason; ``./dev.py user activate`` and ``./dev.py user reset`` are the calls the commands make
-(``user_service.set_user_active``, ``user_service.reset_password``), on the private file.
+(``user_service.set_user_active``, ``user_service.reset_password``), on the private file. So are A-42/A-43's: ``./dev.py
+user deactivate`` is ``user_service.set_user_active(…, False)`` and ``./dev.py user setup-link`` is
+``bootstrap_admin_service.issue_setup_link``, committed; what the commands themselves answer and print is pinned in
+``test_admin_setup_api.py`` (SETUP-016, SETUP-017) and ``test_admin_bootstrap.py`` (A42-002, A43-004). The deletion of
+the pending administrator (UADM-076 to UADM-078) runs on the migrated schema instead (``private_head``), as A6a's
+deletions do: a deletion relies on the production schema's cascades.
 
 The unit is therefore write-scoped (the ``api`` category's default), with no ``exclusive_because``. bcrypt runs at its
 lowest cost in this process (``auth_service.BCRYPT_ROUNDS = 4``, as in ``test_registration_api.py``); the lane's server
@@ -144,6 +173,18 @@ UADM-065, green today: what the refusal must not reach.
 Red until A7b-2: UADM-068, UADM-070 and UADM-071 — nothing retires a setup link today: the old link takes the account
 over (``POST /auth/setup`` answers 200), and an account set up another way waits again once deactivated
 (``pending_setup`` true, the reactivation 409) —. UADM-069 is their guard, green today: what must retire nothing.
+
+Red until A-42/A-43 (label ``# red until A-42/A-43``): UADM-072 — the demotion of the pending administrator answers 200
+today —, UADM-074 and UADM-075 — a deactivation moves no setup link today —; and, changed by construction, UADM-062 (its
+demotion now 409; its deactivation now revokes the link), UADM-067 (its demotion now 409; its deactivation still 200,
+the guard it was) and UADM-069 (root's demotion now refused at its first step, the link still working; its
+``{is_active: false}`` variant left it for UADM-074, the link revoked). UADM-073 is the guard of UADM-072, green today:
+any other administrator is demoted as before. UADM-076 — the deletion of the pending administrator, 409
+``DEMOTE_FIRST`` today — is red too (added 17/10, 11:45); UADM-077 and UADM-078 are its guards, green today: any other
+administrator must still be demoted first, and the hook of lot A7 still answers before anything else. UADM-079 — the
+cancellation of the setup link of a pending administrator the hook protects, 200 today and its link revoked: the route
+asks the hook about an active account's deactivation only — is red too (added 17/10, after the review); its positive
+control is UADM-074 (``patch-by-root``), the same ``PATCH`` on the pending administrator nobody protects.
 """
 
 import ast
@@ -185,7 +226,7 @@ from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.schemas.brokers import BRDeleteItem
 from backend.app.schemas.users import AdminUserRead
 from backend.app.services.accounts import auth_service, registration_service, user_service
-from backend.app.services.accounts.bootstrap_admin_service import BootstrapAction, run_admin_bootstrap
+from backend.app.services.accounts.bootstrap_admin_service import BootstrapAction, issue_setup_link, run_admin_bootstrap
 from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus, consume_token, hash_token, inspect_token, issue_token, revoke_tokens
@@ -2295,10 +2336,13 @@ PENDING_SETUP_SCENES = [
     pytest.param(_SetupScene(active=False, superuser=True, tokens=(), pending_setup=False), id="inactive-administrator-without-any-link"),
 ]
 
-#: What an administrator may do to the pending administrator that leaves it waiting for its setup, with whether it is an administrator afterwards.
+#: What an administrator may ask of the pending administrator besides its activation, and what lot A-43 answers: (the body,
+#: the status, ``detail.error_code``, how its setup link inspects afterwards). Changed in A-42/A-43, by construction: the
+#: demotion — 200 until A-43, the account a superuser no more — is refused whole now (UADM-072); {is_active: false} on the
+#: account already inactive still answers 200, and now revokes its live setup link, the account still waiting (UADM-074).
 PENDING_ADMIN_CHANGES = [
-    pytest.param({"is_superuser": False}, False, id="demoted"),
-    pytest.param({"is_active": False}, True, id="deactivated-while-already-inactive"),
+    pytest.param({"is_superuser": False}, 409, "PENDING_SETUP", "valid", id="demoted-refused"),
+    pytest.param({"is_active": False}, 200, None, "revoked", id="deactivated-while-already-inactive"),
 ]
 
 #: The detail of the refusal to activate the pending administrator carries exactly these keys (UADM-065); the wording of its message is not pinned.
@@ -2377,13 +2421,16 @@ class TestThePendingAdministratorInTheUsersTab:
         assert not violations, f"pending_setup must be the notion of pending_admin_filter():{_verdict(violations)}"
         print_success(f"pending_setup {scene.pending_setup}, as the filter says; root false")
 
+    # red until A-42/A-43 — changed by construction: its demotion is refused now, its deactivation now revokes the link
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(("change", "superuser_after"), PENDING_ADMIN_CHANGES)
-    async def test_the_patch_answer_carries_pending_setup_as_the_list_does(self, private: _Private, change: dict[str, bool], superuser_after: bool) -> None:
-        """UADM-062: PATCH /users/{the pending administrator} with a change that leaves it waiting for its setup — a demotion, or {is_active: false} on the account already inactive — → 200, the account exactly its nine fields, still inactive, pending_setup true. The answer replaces its row in the Users tab: it is the item GET /users lists right after.
+    @pytest.mark.parametrize(("change", "status", "code", "link"), PENDING_ADMIN_CHANGES)
+    async def test_the_patch_answer_carries_pending_setup_as_the_list_does(self, private: _Private, change: dict[str, bool], status: int, code: Optional[str], link: str) -> None:
+        """UADM-062: PATCH /users/{the pending administrator} with a change that leaves it waiting for its setup. {is_active: false} on the account already inactive → 200, the account exactly its nine fields, still inactive, still an administrator, pending_setup true: the answer replaces its row in the Users tab, it is the item GET /users lists right after. Whatever the PATCH, the account still waits — the filter selects it, the list says pending_setup true. The flag is the one of the account the PATCH returns, as ``holds_place`` is.
 
-        Premise: after the change the filter still selects the account. The flag is the one of the account the PATCH
-        returns, as ``holds_place`` is.
+        Changed in A-42/A-43, by construction: that deactivation now revokes the account's live setup link — inspected,
+        ``revoked`` —, the account still waiting (until A-43 the link stayed valid); the demotion, 200 until A-43 with the
+        account a superuser no more, is refused now — 409 PENDING_SETUP, UADM-072 —, and the list still says inactive, an
+        administrator, pending_setup true, its link valid.
         """
         print_section(f"UADM-062: PATCH {change} on the pending administrator")
         pending = await _bootstrap_pending_admin(private)
@@ -2391,14 +2438,19 @@ class TestThePendingAdministratorInTheUsersTab:
 
         response = await _call(private, "PATCH", f"/users/{pending.account.user_id}", cookie=cookie, json=change)
 
-        assert response.status_code == 200, f"PATCH {change} on the pending administrator: expected 200, got {response.status_code} {response.text}"
-        assert pending.account.user_id in await _pending_admin_ids(private), f"premise: after {change} the account still waits for its setup"
         listed = (await _private_listed(private, cookie)).get(pending.account.user_id)
-        answer = response.json()
-        violations = _user_item_violations(answer, pending.account, active=False, superuser=superuser_after, pending_setup=True)
-        _expect(violations, _comparable(answer) == _comparable(listed), f"the answer must be the account as GET /users lists it right after: answered {answer}, listed {listed}")
-        assert not violations, f"The PATCH answer must carry pending_setup as the list does:{_verdict(violations)}"
-        print_success("200, pending_setup true, as the list says")
+        inspected = _inspected(await _inspect_setup_link(private, pending.token))
+        violations: list[str] = []
+        _expect(violations, _refusal(response) == (status, code), f"PATCH {change} on the pending administrator: expected {status} {code or ''}, got {response.status_code} {response.text}")
+        _expect(violations, pending.account.user_id in await _pending_admin_ids(private), f"after PATCH {change} the account must still wait for its setup: pending_admin_filter() no longer selects it")
+        violations += [f"listed after the PATCH: {violation}" for violation in _user_item_violations(listed, pending.account, active=False, superuser=True, pending_setup=True)]
+        if response.status_code == 200:
+            answer = response.json()
+            violations += [f"the PATCH's answer: {violation}" for violation in _user_item_violations(answer, pending.account, active=False, superuser=True, pending_setup=True)]
+            _expect(violations, _comparable(answer) == _comparable(listed), f"the answer must be the account as GET /users lists it right after: answered {answer}, listed {listed}")
+        _expect(violations, inspected[1].get("status") == link, f"after PATCH {change} its setup link must inspect {link}: {inspected}")
+        assert not violations, f"red until A-43: the PATCH must answer as lot A-43 says, the account still waiting for its setup:{_verdict(violations)}"
+        print_success(f"{status}, pending_setup true, its link {link}")
 
     @pytest.mark.asyncio
     async def test_once_set_up_the_administrator_is_pending_no_more_even_deactivated(self, private: _Private) -> None:
@@ -2504,26 +2556,32 @@ class TestThePendingAdministratorInTheUsersTab:
         assert not violations, f"An inactive account that does not wait for its setup must still be activated:{_verdict(violations)}"
         print_success("200, active")
 
+    # red until A-42/A-43 — its demotion is refused now (changed by construction); its deactivation stays the guard it was
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(("change", "superuser_after"), PENDING_ADMIN_CHANGES)
-    async def test_a_patch_that_leaves_the_pending_administrator_waiting_still_answers_200(self, private: _Private, change: dict[str, bool], superuser_after: bool) -> None:
-        """UADM-067, guard of UADM-065 (green today): UADM-062's PATCHes on the pending administrator — a demotion, {is_active: false} on the account already inactive — still answer 200: only an activation is refused, not every change to the pending administrator, nor every body that names is_active. The answer and the database say inactive, an administrator or not as asked, and the account still waits: the filter selects it. Its pending_setup is UADM-062's to read (red until A7b): here only the status and the two states."""
-        print_section(f"UADM-067: PATCH {change} on the pending administrator still answers 200")
+    @pytest.mark.parametrize(("change", "status", "code", "link"), PENDING_ADMIN_CHANGES)
+    async def test_only_the_activation_and_the_demotion_of_the_pending_administrator_are_refused(self, private: _Private, change: dict[str, bool], status: int, code: Optional[str], link: str) -> None:
+        """UADM-067, guard of UADM-065: not every change to the pending administrator is refused, nor every body that names is_active — {is_active: false} on the account already inactive still answers 200, green today and after —; the answer and the database say inactive, still an administrator, and the account still waits: the filter selects it. Its pending_setup and its link are UADM-062's to read: here only the status and the two states.
+
+        Changed in A-42/A-43, by construction (until A-43 «still answers 200» for both): the demotion is refused now, as
+        the activation is — 409 PENDING_SETUP, nothing changed (UADM-072) —, the account an administrator still.
+        """
+        print_section(f"UADM-067: PATCH {change} on the pending administrator")
         pending = await _bootstrap_pending_admin(private)
         _, cookie = await _admin(private)
         user_id = pending.account.user_id
 
         response = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json=change)
 
-        assert response.status_code == 200, f"PATCH {change} leaves the pending administrator waiting: expected 200, got {response.status_code} {response.text}"
-        answer = response.json()
         state = (await _private_user(private, user_id))[:2]
         violations: list[str] = []
-        _expect(violations, (answer.get("is_active"), answer.get("is_superuser")) == (False, superuser_after), f"the answer must be the account inactive, is_superuser {superuser_after}: {answer}")
-        _expect(violations, state == (False, superuser_after), f"in the database: (is_active, is_superuser) {state}, expected {(False, superuser_after)}")
+        _expect(violations, _refusal(response) == (status, code), f"PATCH {change} on the pending administrator: expected {status} {code or ''}, got {response.status_code} {response.text}")
+        if response.status_code == 200:
+            answer = response.json()
+            _expect(violations, (answer.get("is_active"), answer.get("is_superuser")) == (False, True), f"the answer must be the account inactive, still an administrator: {answer}")
+        _expect(violations, state == (False, True), f"in the database: (is_active, is_superuser) {state}, expected (False, True)")
         _expect(violations, user_id in await _pending_admin_ids(private), "the account must still wait for its setup: pending_admin_filter() no longer selects it")
-        assert not violations, f"A PATCH that leaves the pending administrator waiting must still go through:{_verdict(violations)}"
-        print_success("200, still waiting")
+        assert not violations, f"Only the activation and the demotion of the pending administrator are refused:{_verdict(violations)}"
+        print_success(f"{status}, still waiting")
 
 
 # ============================================================================
@@ -2538,17 +2596,18 @@ RETIRED = (200, {"status": "revoked", "purpose": "admin_setup"})
 #: How the pending administrator is set up without its link (A-32), ending inactive as it began (``_set_up_another_way``).
 SET_UP_ANOTHER_WAY = ["a-reset-link-from-the-users-tab", "user-reset", "user-activate-then-deactivated-by-root"]
 #: What root does that leaves the pending administrator waiting (UADM-069): the method, the path after /users/{id}, the body, the status it answers.
+#: Changed in A-42/A-43, by construction: root's demotion answered 200 until A-43 — the setup then made an ordinary member
+#: —; it is refused now, 409 PENDING_SETUP, and changes nothing (UADM-072). Root's {is_active: false} on the account
+#: already inactive now revokes its link: «the link still works» no longer holds for it, and it left for UADM-074.
 WAITING_ACTIONS: dict[str, tuple[str, str, Optional[dict[str, bool]], int]] = {
     "a-reset-link-issued-not-spent": ("POST", "/password-reset-link", None, 201),
-    "demoted-by-root": ("PATCH", "", {"is_superuser": False}, 200),
-    "deactivated-by-root-while-already-inactive": ("PATCH", "", {"is_active": False}, 200),
+    "demotion-refused": ("PATCH", "", {"is_superuser": False}, 409),
 }
 #: UADM-069's cases — WAITING_ACTIONS, and nothing done —, with whether the account is an administrator afterwards.
 LEAVE_IT_WAITING = [
     pytest.param("nothing-done", True, id="nothing-done"),
     pytest.param("a-reset-link-issued-not-spent", True, id="a-reset-link-issued-not-spent"),
-    pytest.param("demoted-by-root", False, id="demoted-by-root"),
-    pytest.param("deactivated-by-root-while-already-inactive", True, id="deactivated-by-root-while-already-inactive"),
+    pytest.param("demotion-refused", True, id="demoted-by-root-refused"),
 ]
 
 
@@ -2612,13 +2671,14 @@ async def _set_up_another_way(private: _Private, cookie: str, pending: _PendingA
     return password
 
 
-async def _leave_it_waiting(private: _Private, cookie: str, user_id: int, action: str) -> None:
-    """Root's ``action`` on the pending administrator (WAITING_ACTIONS; ``nothing-done``: none). It ends on its promise: the status the request answers, the account still inactive."""
+async def _leave_it_waiting(private: _Private, cookie: str, user_id: int, action: str) -> Optional[httpx.Response]:
+    """Root's ``action`` on the pending administrator (WAITING_ACTIONS; ``nothing-done``: none): the answer to its request — its status is the case's to read —, None for nothing done. It ends on its promise: the account still inactive."""
+    response = None
     if action != "nothing-done":
-        method, suffix, body, expected = WAITING_ACTIONS[action]
+        method, suffix, body, _expected = WAITING_ACTIONS[action]
         response = await _call(private, method, f"/users/{user_id}{suffix}", cookie=cookie, json=body)
-        assert response.status_code == expected, f"Setup: {action}: expected {expected}, got {response.status_code} {response.text}"
     assert not (await _private_user(private, user_id))[0], f"Setup: after {action} the pending administrator must still be inactive"
+    return response
 
 
 class TestTheSetupLinkOfAnAccountSetUpAnotherWay:
@@ -2661,16 +2721,22 @@ class TestTheSetupLinkOfAnAccountSetUpAnotherWay:
         assert not violations, f"An account set up another way must wait no more, and its old link must set nothing:{_verdict(violations)}"
         print_success("retired: pending no more, reactivated by the PATCH, the old link refused")
 
-    # guard
+    # red until A-42/A-43 — its demoted-by-root-refused variant, changed by construction; its two others stay guards
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("action", "superuser_after"), LEAVE_IT_WAITING)
     async def test_what_leaves_the_pending_administrator_waiting_keeps_the_refusal_and_the_link(self, private: _Private, action: str, superuser_after: bool) -> None:
-        """UADM-069, guard of UADM-068 (green today): what leaves the pending administrator waiting — nothing done, root's reset link issued and not spent, root's demotion, root's {is_active: false} on the account already inactive — retires nothing: GET /users lists it inactive, pending_setup true; PATCH {is_active: true} → 409 PENDING_SETUP (UADM-065); its link inspects valid, for its username, and POST /auth/setup with it → 200, the account active, an administrator or not as the action left it. Complements UADM-062 and UADM-067: the retirement is an activation's and a new password's only."""
+        """UADM-069, guard of UADM-068: what leaves the pending administrator waiting — nothing done, root's reset link issued and not spent, root's demotion, refused — retires nothing: root's request answers as WAITING_ACTIONS says; GET /users lists it inactive, pending_setup true; PATCH {is_active: true} → 409 PENDING_SETUP (UADM-065); its link inspects valid, for its username, and POST /auth/setup with it → 200, the account active and still an administrator. Complements UADM-062 and UADM-067: the retirement is an activation's and a new password's only.
+
+        Changed in A-42/A-43, by construction: root's demotion answered 200 until A-43, and the setup then made an
+        ordinary member; it is refused now (409 PENDING_SETUP, UADM-072) and changes nothing, so the link still works —
+        red until A-43, on its first step. Root's {is_active: false} on the account already inactive left this guard
+        for UADM-074: it now revokes the link.
+        """
         print_section(f"UADM-069: {action}, and the pending administrator still waits")
         pending = await _bootstrap_pending_admin(private)
         _, cookie = await _admin(private)
         user_id = pending.account.user_id
-        await _leave_it_waiting(private, cookie, user_id, action)
+        acted = await _leave_it_waiting(private, cookie, user_id, action)
 
         listed = (await _private_listed(private, cookie)).get(user_id)
         refused = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json={"is_active": True})
@@ -2678,7 +2744,11 @@ class TestTheSetupLinkOfAnAccountSetUpAnotherWay:
         setup = await _setup_with(private, pending.token)
         state = (await _private_user(private, user_id))[:2]
 
-        violations = _user_item_violations(listed, pending.account, active=False, superuser=superuser_after, pending_setup=True)
+        violations: list[str] = []
+        if acted is not None:
+            expected = WAITING_ACTIONS[action][3]
+            _expect(violations, acted.status_code == expected, f"{action}: root's request must answer {expected} (a demotion of the pending administrator is refused since A-43), got {acted.status_code} {acted.text}")
+        violations += _user_item_violations(listed, pending.account, active=False, superuser=superuser_after, pending_setup=True)
         _expect(violations, _refusal(refused) == (409, "PENDING_SETUP"), f"PATCH {{is_active: true}} on the account still waiting: expected 409 PENDING_SETUP, got {refused.status_code} {refused.text}")
         _expect(violations, (status, shown.get("status"), shown.get("username")) == (200, "valid", F02_USERNAME), f"its link must still be valid, for {F02_USERNAME}: {status} {shown}")
         _expect(violations, setup.status_code == 200, f"its link must still set the account up: POST /auth/setup answered {setup.status_code} {setup.text}")
@@ -2742,3 +2812,392 @@ class TestTheSetupLinkOfAnAccountSetUpAnotherWay:
         _expect(violations, signed_in.status_code == 200, f"the refused setup changed no password: reactivated, the account signs in with its own: {signed_in.status_code} {signed_in.text}")
         assert not violations, f"The refused link of an account already active must retire its setup links, so that a deactivation leaves it waiting for nothing:{_verdict(violations)}"
         print_success("both links retired; deactivated, pending no more; reactivated by the PATCH")
+
+
+# ============================================================================
+# IN-PROCESS: THE SETUP LINK'S LIFECYCLE IN THE USERS TAB (lot A-42 + A-43)
+# ============================================================================
+
+
+#: What POST /auth/tokens/inspect shows of a revoked setup link (``_inspected``) — only revoked, or retired alike: revoked, its purpose, nothing more.
+INSPECTED_REVOKED = (200, {"status": "revoked", "purpose": "admin_setup"})
+#: PATCH bodies that demote the pending administrator: refused whole (UADM-072), whatever else they ask.
+DEMOTIONS = [
+    pytest.param({"is_superuser": False}, id="demote"),
+    pytest.param({"is_active": False, "is_superuser": False}, id="deactivate-and-demote"),
+]
+#: Administrators beside the pending one, demoted as before (UADM-073): an active one, an inactive one without any link,
+#: an inactive one whose setup link was spent — deactivated after its setup.
+OTHER_ADMINISTRATORS = [
+    pytest.param(_SetupScene(active=True, superuser=True, tokens=(), pending_setup=False), id="an-active-administrator"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=(), pending_setup=False), id="an-inactive-administrator-without-any-link"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=((ADMIN_SETUP, "consumed"),), pending_setup=False), id="an-inactive-administrator-whose-setup-link-was-spent"),
+]
+#: How an account is deactivated (UADM-074, UADM-075): root's PATCH {is_active: false}, or ``./dev.py user deactivate`` —
+#: the call the command makes, ``user_service.set_user_active(…, False)``.
+DEACTIVATIONS = [pytest.param("patch-by-root", id="patch-by-root"), pytest.param("user-deactivate", id="user-deactivate")]
+#: Administrators that do not wait for their setup and hold a stray live setup link (UADM-075): (active, whether set up
+#: before — its first setup link consumed by itself).
+NOT_WAITING_WITH_A_STRAY_LINK = [
+    pytest.param(True, False, id="an-active-administrator-with-a-stray-link"),
+    pytest.param(False, True, id="an-inactive-administrator-set-up-before-with-a-stray-link"),
+]
+
+
+async def _deactivate(private: _Private, cookie: str, account: _Account, way: str) -> Optional[httpx.Response]:
+    """``account`` deactivated ``way`` (DEACTIVATIONS): root's PATCH — its answer, the case's to read — or ``./dev.py user deactivate`` — None. It ends on its promise: the account inactive."""
+    response = None
+    if way == "patch-by-root":
+        response = await _call(private, "PATCH", f"/users/{account.user_id}", cookie=cookie, json={"is_active": False})
+    else:
+        assert way == "user-deactivate", f"no such way: {way!r}"
+        await _cli_set_active(private, account.username, False)
+    assert not (await _private_user(private, account.user_id))[0], f"Setup: deactivated ({way}), the account must be inactive"
+    return response
+
+
+async def _a_new_setup_link(private: _Private) -> Optional[str]:
+    """``./dev.py user setup-link``: the call the command makes, ``bootstrap_admin_service.issue_setup_link``, committed — the new link's token, None when nobody waits."""
+    async with AsyncSession(private.engine, expire_on_commit=False) as session:
+        issued = await issue_setup_link(session)
+        await session.commit()
+    return issued.token if issued is not None else None
+
+
+class TestTheSetupLinkLifecycleInTheUsersTab:
+    """Lot A-42 + A-43 (contract approved by the coordinator, 17/10): the Users tab refuses to demote the pending administrator as it refuses to activate it; a deactivation revokes the pending administrator's setup link — it still waits, for a new one; the hook of lot A7 refuses it for the pending administrator it protects (UADM-079) — and retires those of an account that does not wait. In-process only, as A7b's: a pending administrator never enters the lane's database."""
+
+    # red until A-42/A-43
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("expired", PENDING_LINKS)
+    @pytest.mark.parametrize("change", DEMOTIONS)
+    async def test_demoting_the_pending_administrator_is_refused_as_its_activation_is(self, private: _Private, change: dict[str, bool], expired: bool) -> None:
+        """UADM-072 (A-43; decision 4a of the coordinator): PATCH /users/{the pending administrator} with a body that demotes it — {is_superuser: false}, alone or with {is_active: false} — → 409 with the detail of its refused activation word for word: {error_code: PENDING_SETUP, message}, the message the two refusals share — read here from PATCH {is_active: true} on the same account (UADM-065), so its wording is not pinned. All or nothing: every row of users and account_tokens as it was — its setup link neither consumed nor revoked, the deactivation the second body also asks not applied —; its row in GET /users and the usage identical. Its link live or expired: it waits all the same. Its link live, it still sets the account up afterwards: 200, the account active and still an administrator."""
+        print_section(f"UADM-072: PATCH {change} on the pending administrator, its link {'expired' if expired else 'live'}")
+        pending = await _bootstrap_pending_admin(private, expired=expired)
+        _, cookie = await _admin(private)
+        user_id = pending.account.user_id
+        activation = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json={"is_active": True})
+        assert _refusal(activation) == (409, "PENDING_SETUP"), f"Premise (UADM-065): the activation of the pending administrator is refused: {activation.status_code} {activation.text}"
+        listed_before, usage_before = await _private_view(private, cookie, user_id)
+        assert listed_before is not None, "Presence barrier: GET /users must list the pending administrator, or «its row identical» below proves nothing"
+        before = await _private_snapshot(private)
+
+        response = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json=change)
+
+        changes = _snapshot_changes(before, await _private_snapshot(private))
+        listed_after, usage_after = await _private_view(private, cookie, user_id)
+        setup = None if expired else await _setup_with(private, pending.token)
+        state = (await _private_user(private, user_id))[:2]
+        detail = _detail(response)
+        violations: list[str] = []
+        _expect(violations, _refusal(response) == (409, "PENDING_SETUP"), f"red until A-43: PATCH {change} on the pending administrator must be refused, 409 PENDING_SETUP: got {response.status_code} {response.text}")
+        _expect(violations, set(detail) == PENDING_SETUP_KEYS and detail == _detail(activation), f"the detail must be exactly the refused activation's, {_detail(activation)}: got {detail}")
+        _expect(violations, changes == {}, f"a refused PATCH must change nothing, all or nothing — rows that changed: {changes}")
+        _expect(violations, (_comparable(listed_after), usage_after) == (_comparable(listed_before), usage_before), f"its row in GET /users and the usage must be identical: before {listed_before} {usage_before}, after {listed_after} {usage_after}")
+        if setup is not None:
+            _expect(violations, (setup.status_code, state) == (200, (True, True)), f"its link must still set it up, an administrator: POST /auth/setup answered {setup.status_code} {setup.text}; (is_active, is_superuser) {state}")
+        assert not violations, f"Demoting the pending administrator must be refused as its activation is, and change nothing:{_verdict(violations)}"
+        print_success("409 PENDING_SETUP, the activation's detail; nothing changed")
+
+    # guard
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("scene", OTHER_ADMINISTRATORS)
+    async def test_any_other_administrator_is_demoted_as_before(self, private: _Private, scene: _SetupScene) -> None:
+        """UADM-073, guard of UADM-072 (green today and after): the refusal is the pending administrator's alone — not the instance's while one waits, nor every inactive administrator's, nor every account that ever had a setup link. Beside it, PATCH {is_superuser: false} on another administrator — active, inactive without any link, inactive with its setup link spent — → 200, the answer and the database an administrator no more, as active as before; the pending administrator still waits, its link valid.
+
+        Premise: the filter selects the pending administrator, and only it.
+        """
+        print_section(f"UADM-073: PATCH {{is_superuser: false}} on another administrator, active={scene.active}, tokens {[(purpose.value, state) for purpose, state in scene.tokens]}")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+        subject = await _add_user(private, "subject", admin=True, active=scene.active)
+        for purpose, link_state in scene.tokens:
+            await _private_link(private, subject.user_id, purpose, link_state)
+        assert await _pending_admin_ids(private) == {pending.account.user_id}, "premise: pending_admin_filter() selects the pending administrator, and only it"
+
+        response = await _call(private, "PATCH", f"/users/{subject.user_id}", cookie=cookie, json={"is_superuser": False})
+
+        state = (await _private_user(private, subject.user_id))[:2]
+        inspected = _inspected(await _inspect_setup_link(private, pending.token))
+        violations: list[str] = []
+        _expect(violations, response.status_code == 200, f"PATCH {{is_superuser: false}} on another administrator: expected 200, got {response.status_code} {response.text}")
+        if response.status_code == 200:
+            violations += [f"the PATCH's answer: {violation}" for violation in _user_item_violations(response.json(), subject, active=scene.active, superuser=False)]
+        _expect(violations, state == (scene.active, False), f"in the database: (is_active, is_superuser) {state}, expected {(scene.active, False)}")
+        _expect(violations, await _pending_admin_ids(private) == {pending.account.user_id}, "the pending administrator must still wait, and only it")
+        _expect(violations, (inspected[0], inspected[1].get("status")) == (200, "valid"), f"the pending administrator's link must stay valid: {inspected}")
+        assert not violations, f"Any other administrator must be demoted as before:{_verdict(violations)}"
+        print_success("200, demoted; the pending administrator untouched")
+
+    # red until A-42/A-43
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("way", DEACTIVATIONS)
+    async def test_deactivating_the_pending_administrator_revokes_its_link_and_a_new_one_sets_it_up(self, private: _Private, way: str) -> None:
+        """UADM-074 (A-43, the cancellation; UADM-069's «deactivated by root» variant until A-43, the old link still working): the pending administrator, already inactive, deactivated — root's PATCH {is_active: false}, which answers 200 with its row, pending_setup true (UADM-062), or ./dev.py user deactivate —: its live setup link is revoked, not retired. Inspected → revoked, nothing more; POST /auth/setup with it → 400 TOKEN_INVALID, every row of users and account_tokens as it was. The account still waits: GET /users lists it inactive, an administrator, pending_setup true, and PATCH {is_active: true} is still 409 PENDING_SETUP (UADM-065). ./dev.py user setup-link — the call the command makes — gives it a new link, and POST /auth/setup with that one → 200: the account active, an administrator, listed pending_setup false."""
+        print_section(f"UADM-074: the pending administrator deactivated ({way})")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+        user_id = pending.account.user_id
+
+        off = await _deactivate(private, cookie, pending.account, way)
+
+        inspected = _inspected(await _inspect_setup_link(private, pending.token))
+        before = await _private_snapshot(private)
+        old = await _setup_with(private, pending.token)
+        changes = _snapshot_changes(before, await _private_snapshot(private))
+        listed = (await _private_listed(private, cookie)).get(user_id)
+        refused = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json={"is_active": True})
+        token = await _a_new_setup_link(private)
+        new = await _setup_with(private, token) if token else None
+        relisted = (await _private_listed(private, cookie)).get(user_id)
+
+        violations: list[str] = []
+        if off is not None:
+            _expect(violations, off.status_code == 200, f"root's PATCH {{is_active: false}} must answer 200: {off.status_code} {off.text}")
+            if off.status_code == 200:
+                violations += [f"the PATCH's answer: {violation}" for violation in _user_item_violations(off.json(), pending.account, active=False, superuser=True, pending_setup=True)]
+        _expect(violations, inspected == INSPECTED_REVOKED, f"red until A-43: the deactivation must revoke the pending administrator's live setup link: inspected, {INSPECTED_REVOKED}; got {inspected}")
+        _expect(violations, _refusal(old) == (400, "TOKEN_INVALID"), f"POST /auth/setup with the revoked link: expected 400 TOKEN_INVALID, got {old.status_code} {old.text}")
+        _expect(violations, changes == {}, f"the refused setup must change nothing — rows that changed: {changes}")
+        violations += [f"listed after the deactivation: {violation}" for violation in _user_item_violations(listed, pending.account, active=False, superuser=True, pending_setup=True)]
+        _expect(violations, _refusal(refused) == (409, "PENDING_SETUP"), f"the account still waits: PATCH {{is_active: true}} must still be refused, 409 PENDING_SETUP: got {refused.status_code} {refused.text}")
+        _expect(violations, new is not None and new.status_code == 200, f"./dev.py user setup-link must give the account still waiting a new link, which sets it up: {'a link' if token else 'no link'}, POST /auth/setup {new.status_code if new is not None else None}")
+        violations += [f"listed once set up through the new link: {violation}" for violation in _user_item_violations(relisted, pending.account, active=True, superuser=True)]
+        assert not violations, f"Deactivating the pending administrator must revoke its link, and leave it waiting for a new one:{_verdict(violations)}"
+        print_success("revoked; still waiting; a new link sets it up")
+
+    # red until A-42/A-43
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("active", "set_up_before"), NOT_WAITING_WITH_A_STRAY_LINK)
+    @pytest.mark.parametrize("way", DEACTIVATIONS)
+    async def test_deactivating_an_account_that_does_not_wait_retires_its_setup_links(self, private: _Private, way: str, active: bool, set_up_before: bool) -> None:
+        """UADM-075 (A-43): veteran, an administrator that does not wait for its setup — active, or inactive and set up before, its first setup link consumed by itself —, holds a stray live setup link (rows of the token service: the race of A-42, or an earlier 1.3 build). Deactivated — root's PATCH {is_active: false} (200) or ./dev.py user deactivate —, its never-consumed setup link is retired: inspected → revoked, nothing more; offered at once to POST /auth/setup → 400 TOKEN_INVALID, every row of users and account_tokens as it was; GET /users lists it inactive, pending_setup false; and PATCH {is_active: true} → 200, active again — not 409 PENDING_SETUP —, its own password signing it in. Today the stray link stays valid: an active administrator so deactivated waits — inactive, a setup link, none consumed —, listed pending_setup true, its reactivation refused, and the link sets its password."""
+        print_section(f"UADM-075: an administrator that does not wait, active={active}, set up before={set_up_before}, deactivated ({way})")
+        _, cookie = await _admin(private)
+        veteran = await _add_user(private, "veteran", admin=True, active=active)
+        if set_up_before:
+            await _private_link(private, veteran.user_id, ADMIN_SETUP, "consumed")
+        stray = await _private_issue(private, ADMIN_SETUP, user_id=veteran.user_id)
+        assert veteran.user_id not in await _pending_admin_ids(private), "premise: veteran does not wait for a setup — active, or its setup link spent (UADM-061)"
+
+        off = await _deactivate(private, cookie, veteran, way)
+
+        inspected = _inspected(await _inspect_setup_link(private, stray.token))
+        before = await _private_snapshot(private)
+        setup = await _setup_with(private, stray.token)
+        changes = _snapshot_changes(before, await _private_snapshot(private))
+        listed = (await _private_listed(private, cookie)).get(veteran.user_id)
+        on = await _call(private, "PATCH", f"/users/{veteran.user_id}", cookie=cookie, json={"is_active": True})
+        state = (await _private_user(private, veteran.user_id))[:2]
+        signed_in = await _call(private, "POST", "/auth/login", json={"username": veteran.username, "password": veteran.password})
+
+        violations: list[str] = []
+        if off is not None:
+            _expect(violations, off.status_code == 200, f"root's PATCH {{is_active: false}} must answer 200: {off.status_code} {off.text}")
+        _expect(violations, inspected == INSPECTED_REVOKED, f"red until A-43: deactivating an account that does not wait must retire its never-consumed setup link: inspected, {INSPECTED_REVOKED}; got {inspected}")
+        _expect(violations, _refusal(setup) == (400, "TOKEN_INVALID"), f"POST /auth/setup with the stray link: expected 400 TOKEN_INVALID, got {setup.status_code} {setup.text} — its holder takes the account over")
+        _expect(violations, changes == {}, f"the refused setup must change nothing — rows that changed: {changes}")
+        violations += [f"listed after the deactivation: {violation}" for violation in _user_item_violations(listed, veteran, active=False, superuser=True)]
+        _expect(violations, (on.status_code, state) == (200, (True, True)), f"PATCH {{is_active: true}} must reactivate it, not refuse it: {on.status_code} {on.text}; (is_active, is_superuser) {state}")
+        _expect(violations, signed_in.status_code == 200, f"reactivated, the account must sign in with its own password: {signed_in.status_code} {signed_in.text}")
+        assert not violations, f"Deactivating an account that does not wait must retire its setup links:{_verdict(violations)}"
+        print_success("the stray link retired; pending no more; reactivated by the PATCH")
+
+    # red until A-42/A-43
+    @pytest.mark.asyncio
+    async def test_a_protected_pending_administrator_refuses_the_cancellation_and_keeps_its_link(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-079 (A-43; coordinator 17/10, after the review — today 200 and its link revoked: the route asks the hook about an active account's deactivation only, and the pending administrator is inactive already): the hook of lot A7 protects the pending administrator (replaced in this process, ``_protect``), and root cancels its setup link — PATCH {is_active: false} on it —: 409 ACCOUNT_PROTECTED, ``detail.reason`` the hook's reason (point 12), and nothing changes, all or nothing — every row of users and account_tokens as it was, the setup link the bootstrap handed over neither revoked nor consumed; its row in GET /users (protected true, pending_setup true) and the usage identical. The account still waits — the filter selects it —, its link inspects valid, and it still sets the account up afterwards: POST /auth/setup → 200, the account active and an administrator.
+
+        Positive control: UADM-074 (``patch-by-root``; UADM-062 too) — the same PATCH on the pending administrator the hook
+        does not protect → 200, its link revoked, the account still waiting. Root stays an active administrator the hook
+        never protects, so LAST_ADMIN never applies: only the hook can refuse. ``./dev.py user deactivate`` stays above the
+        protection, as for every protection: not this case's subject.
+        """
+        print_section("UADM-079: PATCH {is_active: false} on a protected pending administrator")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+        user_id = pending.account.user_id
+        _protect(monkeypatch, user_id)
+        assert user_id in await _pending_admin_ids(private), "premise: pending_admin_filter() selects the pending administrator"
+        listed_before, usage_before = await _private_view(private, cookie, user_id)
+        assert listed_before is not None, "Presence barrier: GET /users must list the pending administrator, or «its row identical» below proves nothing"
+        before = await _private_snapshot(private)
+
+        response = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json={"is_active": False})
+
+        after = await _private_snapshot(private)
+        listed_after, usage_after = await _private_view(private, cookie, user_id)
+        waiting = user_id in await _pending_admin_ids(private)
+        inspected = _inspected(await _inspect_setup_link(private, pending.token))
+        setup = await _setup_with(private, pending.token)
+        state = (await _private_user(private, user_id))[:2]
+        detail = _detail(response)
+        handed_over = [(row["user_id"], row["purpose"], row["consumed_at"], row["revoked_at"]) for row in after["account_tokens"] if row["token_hash"] == hash_token(pending.token)]
+        changes = _snapshot_changes(before, after)
+        violations: list[str] = []
+        _expect(violations, _refusal(response) == (409, "ACCOUNT_PROTECTED"), f"red until A-43: the cancellation of a protected pending administrator's setup link must be refused, 409 ACCOUNT_PROTECTED: got {response.status_code} {response.text}")
+        _expect(violations, detail.get("reason") == PROTECTION_REASON, f"the refusal must carry the hook's reason, {PROTECTION_REASON!r}: detail {detail}")
+        _expect(violations, handed_over == [(user_id, ADMIN_SETUP.value, None, None)], f"the setup link handed over must still be live, neither revoked nor consumed: (user_id, purpose, consumed_at, revoked_at) {handed_over}")
+        _expect(violations, changes == {}, f"a refused PATCH must change nothing, all or nothing — rows that changed: {changes}")
+        violations += [f"listed after the PATCH: {violation}" for violation in _user_item_violations(listed_after, pending.account, active=False, superuser=True, protected=True, pending_setup=True)]
+        _expect(violations, (_comparable(listed_after), usage_after) == (_comparable(listed_before), usage_before), f"its row in GET /users and the usage must be identical: before {listed_before} {usage_before}, after {listed_after} {usage_after}")
+        _expect(violations, waiting, "the account must still wait for its setup: pending_admin_filter() no longer selects it")
+        _expect(violations, (inspected[0], inspected[1].get("status")) == (200, "valid"), f"its setup link must still inspect valid: {inspected}")
+        _expect(violations, (setup.status_code, state) == (200, (True, True)), f"its link must still set it up, an administrator: POST /auth/setup answered {setup.status_code} {setup.text}; (is_active, is_superuser) {state}")
+        assert not violations, f"A protected pending administrator must refuse the cancellation of its setup link, and change nothing:{_verdict(violations)}"
+        print_success("409 ACCOUNT_PROTECTED with the hook's reason; nothing changed; its link still sets it up")
+
+
+# ============================================================================
+# IN-PROCESS, ON THE MIGRATED SCHEMA: DELETING THE PENDING ADMINISTRATOR (lot A-43, coordinator 17/10 11:45)
+# ============================================================================
+
+
+#: The states in which the pending administrator waits, for its deletion (UADM-076): its setup link live, expired,
+#: revoked — as the cancellation of A-43 leaves it —, or revoked and a new one live — as ``./dev.py user setup-link`` leaves it.
+WAITING_STATES = [
+    pytest.param("live", id="its-link-live"),
+    pytest.param("expired", id="its-link-expired"),
+    pytest.param("revoked", id="its-link-revoked"),
+    pytest.param("re-armed", id="re-armed-by-setup-link"),
+]
+#: How its setup links read in each of WAITING_STATES, oldest first.
+WAITING_LINK_STATUSES = {
+    "live": [TokenStatus.VALID],
+    "expired": [TokenStatus.EXPIRED],
+    "revoked": [TokenStatus.REVOKED],
+    "re-armed": [TokenStatus.REVOKED, TokenStatus.VALID],
+}
+#: Administrators that do not wait for their setup, beside the pending one (UADM-077): still to be demoted first — active
+#: or not, holding a stray setup link or set up before.
+ADMINISTRATORS_NOT_WAITING = [
+    pytest.param(_SetupScene(active=True, superuser=True, tokens=(), pending_setup=False), id="an-active-administrator"),
+    pytest.param(_SetupScene(active=True, superuser=True, tokens=((ADMIN_SETUP, "live"),), pending_setup=False), id="an-active-administrator-with-a-stray-setup-link"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=(), pending_setup=False), id="an-inactive-administrator-without-any-link"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=((ADMIN_SETUP, "consumed"),), pending_setup=False), id="an-inactive-administrator-whose-setup-link-was-spent"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=((ADMIN_SETUP, "consumed"), (ADMIN_SETUP, "live")), pending_setup=False), id="an-inactive-administrator-set-up-before-with-a-stray-link"),
+]
+
+
+async def _setup_link_status(private: _Private, token: str) -> TokenStatus:
+    """How ``token`` reads as an ``admin_setup`` link, read fresh: ``unknown`` once its row is gone."""
+    async with AsyncSession(private.engine) as session:
+        return (await inspect_token(session, token, ADMIN_SETUP)).status
+
+
+async def _waiting_in_state(private: _Private, state: str) -> tuple[_PendingAdmin, list[str]]:
+    """The pending administrator the bootstrap makes (run it first: the instance must hold no account), brought to ``state`` (WAITING_STATES) by the services, never by the route under test: ``revoked`` by ``token_service.revoke_tokens``, ``re-armed`` by ``issue_setup_link`` — the call ``./dev.py user setup-link`` makes. With the tokens of its setup links, oldest first.
+
+    It ends on its promise: the account waits for its setup (``pending_admin_filter()`` selects it), and its links read
+    as WAITING_LINK_STATUSES says.
+    """
+    pending = await _bootstrap_pending_admin(private, expired=state == "expired")
+    tokens = [pending.token]
+    if state in ("revoked", "re-armed"):
+        async with AsyncSession(private.engine, expire_on_commit=False) as session:
+            if state == "revoked":
+                revoked = await revoke_tokens(session, user_id=pending.account.user_id, purpose=ADMIN_SETUP)
+                assert revoked == 1, f"Setup: the cancellation revokes the one live setup link: {revoked}"
+            else:
+                issued = await issue_setup_link(session)
+                assert issued is not None, "Setup: ./dev.py user setup-link must give the pending administrator a new link"
+                tokens.append(issued.token)
+            await session.commit()
+    statuses = [await _setup_link_status(private, token) for token in tokens]
+    assert statuses == WAITING_LINK_STATUSES[state], f"Setup: its setup links must read {WAITING_LINK_STATUSES[state]}, they read {statuses}"
+    assert pending.account.user_id in await _pending_admin_ids(private), f"Setup: its links {state}, the account must still wait for its setup"
+    return pending, tokens
+
+
+class TestDeletingThePendingAdministrator:
+    """Lot A-43 (coordinator, 17/10 11:45): its demotion refused, the pending administrator is deleted directly — no DEMOTE_FIRST —, the account and its tokens gone as any deletion removes them; every other administrator is still to be demoted first, and the hook of lot A7 still answers first. In-process, on the migrated schema (``private_head``), as A6a's deletions: a deletion relies on the production schema's cascades."""
+
+    # red until A-42/A-43
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("state", WAITING_STATES)
+    async def test_the_pending_administrator_is_deleted_directly(self, private_head: _Private, state: str) -> None:
+        """UADM-076 (A-43, coordinator 17/10 11:45; today 409 DEMOTE_FIRST, and nothing deleted): root deletes the pending administrator — the bootstrap's, its setup links live, expired, revoked as a cancellation leaves them, or re-armed by ``./dev.py user setup-link`` (``_waiting_in_state``) —: DELETE /users/{it} → 204 with no body, as any deletion. Exactly what ``user_service.delete_account`` removes, and nothing else: its row of ``users``, and every row of ``account_tokens`` of it — its setup links — by the schema's cascade; every other row of both tables as it was. Afterwards GET /users no longer lists it and the usage frees its place (used 2 → 1: root and it, then root); nobody waits any more — ``pending_admin_filter()`` selects nobody, and ``./dev.py user setup-link`` (``issue_setup_link``) finds nobody to give a link to —; each of its links inspects ``unknown``, and POST /auth/setup with it → 400 TOKEN_INVALID.
+
+        Presence barrier: GET /users lists it before the deletion, so «no longer listed» proves something.
+        """
+        print_section(f"UADM-076: DELETE of the pending administrator, its links {state}")
+        pending, links = await _waiting_in_state(private_head, state)
+        _, cookie = await _admin(private_head)
+        user_id = pending.account.user_id
+        listed_before, usage_before = await _private_view(private_head, cookie, user_id)
+        assert listed_before is not None, "Presence barrier: GET /users must list the pending administrator before its deletion, or «no longer listed» below proves nothing"
+        before = await _private_snapshot(private_head)
+        gone = {
+            "users": {"before": [row for row in before["users"] if row["id"] == user_id], "after": []},
+            "account_tokens": {"before": [row for row in before["account_tokens"] if row["user_id"] == user_id], "after": []},
+        }
+        assert len(gone["account_tokens"]["before"]) == len(links), f"Setup: the pending administrator's tokens must be its {len(links)} setup link(s): {gone['account_tokens']['before']}"
+
+        response = await _call(private_head, "DELETE", f"/users/{user_id}", cookie=cookie)
+
+        changes = _snapshot_changes(before, await _private_snapshot(private_head))
+        listed_after, usage_after = await _private_view(private_head, cookie, user_id)
+        waiting = await _pending_admin_ids(private_head)
+        new_link = await _a_new_setup_link(private_head)
+        statuses = [await _setup_link_status(private_head, token) for token in links]
+        setups = [_refusal(await _setup_with(private_head, token)) for token in links]
+        violations: list[str] = []
+        _expect(violations, (response.status_code, response.content) == (204, b""), f"red until A-43: the pending administrator is deleted directly — its demotion is refused, there is nothing to demote first —: expected 204 with no body, got {response.status_code} {response.text}")
+        _expect(violations, changes == gone, f"the deletion must remove its row and its tokens, and nothing else: expected the rows that change to be {gone}; rows that changed: {changes}")
+        _expect(violations, listed_after is None, f"GET /users must no longer list it: {listed_after}")
+        _expect(violations, (usage_before.get("used"), usage_after.get("used")) == (2, 1), f"its place must be free: used, before and after, expected (2, 1): before {usage_before}, after {usage_after}")
+        _expect(violations, waiting == set() and new_link is None, f"nobody must wait any more: pending_admin_filter() selects {waiting}, ./dev.py user setup-link {'issued a link' if new_link else 'found nobody'}")
+        _expect(violations, statuses == [TokenStatus.UNKNOWN] * len(links), f"each of its setup links must inspect unknown, its row gone: {statuses}")
+        _expect(violations, setups == [(400, "TOKEN_INVALID")] * len(links), f"POST /auth/setup with each of its links must answer 400 TOKEN_INVALID: {setups}")
+        assert not violations, f"The pending administrator must be deleted directly, as any deletion removes an account:{_verdict(violations)}"
+        print_success("204: the account and its setup links gone, its place free, nobody waiting")
+
+    # guard
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("scene", ADMINISTRATORS_NOT_WAITING)
+    async def test_any_other_administrator_must_still_be_demoted_first(self, private_head: _Private, scene: _SetupScene) -> None:
+        """UADM-077, guard of UADM-076 (green today and after): the direct deletion is the pending administrator's alone — not the instance's while one waits, nor every inactive administrator's, nor every account that ever had a setup link. Beside it, another administrator — active or not, holding a stray setup link or set up before, the only OWNER of a broker with a DEPOSIT —: DELETE → 409 DEMOTE_FIRST, and nothing deleted — every row of users and account_tokens, every broker, grant and transaction as it was.
+
+        Premise: the filter selects the pending administrator, and only it.
+        """
+        print_section(f"UADM-077: DELETE of another administrator, active={scene.active}, tokens {[(purpose.value, state) for purpose, state in scene.tokens]}")
+        pending = await _bootstrap_pending_admin(private_head)
+        _, cookie = await _admin(private_head)
+        subject = await _add_user(private_head, "subject", admin=True, active=scene.active)
+        for purpose, link_state in scene.tokens:
+            await _private_link(private_head, subject.user_id, purpose, link_state)
+        await _private_broker(private_head, "Subject's broker", [(subject.user_id, UserRole.OWNER)], deposits=1)
+        assert await _pending_admin_ids(private_head) == {pending.account.user_id}, "premise: pending_admin_filter() selects the pending administrator, and only it"
+        before = (await _private_snapshot(private_head), await _private_holdings(private_head))
+
+        response = await _call(private_head, "DELETE", f"/users/{subject.user_id}", cookie=cookie)
+
+        after = (await _private_snapshot(private_head), await _private_holdings(private_head))
+        violations: list[str] = []
+        _expect(violations, _refusal(response) == (409, "DEMOTE_FIRST"), f"DELETE of an administrator that does not wait for its setup: expected 409 DEMOTE_FIRST, got {response.status_code} {response.text}")
+        _expect(violations, _snapshot_changes(before[0], after[0]) == {}, f"a refused deletion must change no account and no token — rows that changed: {_snapshot_changes(before[0], after[0])}")
+        _expect(violations, after[1] == before[1], f"a refused deletion must delete nothing: before {before[1]}, after {after[1]}")
+        assert not violations, f"Any other administrator must still be demoted before it can be deleted:{_verdict(violations)}"
+        print_success("409 DEMOTE_FIRST, nothing deleted")
+
+    # guard
+    @pytest.mark.asyncio
+    async def test_the_hook_still_answers_first_for_the_pending_administrator(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-078, guard of UADM-076 (green today and after): the hook of lot A7 still answers before any other answer (point 12, UADM-051), the new deletion path included: the pending administrator, protected by the hook (replaced in this process, ``_protect``) → DELETE → 409 ACCOUNT_PROTECTED, and nothing deleted — every row of users and account_tokens as it was —; it still waits."""
+        print_section("UADM-078: DELETE of a protected pending administrator")
+        pending = await _bootstrap_pending_admin(private_head)
+        _, cookie = await _admin(private_head)
+        user_id = pending.account.user_id
+        _protect(monkeypatch, user_id)
+        before = await _private_snapshot(private_head)
+
+        response = await _call(private_head, "DELETE", f"/users/{user_id}", cookie=cookie)
+
+        changes = _snapshot_changes(before, await _private_snapshot(private_head))
+        violations: list[str] = []
+        _expect(violations, _refusal(response) == (409, "ACCOUNT_PROTECTED"), f"DELETE of the pending administrator the hook protects: expected 409 ACCOUNT_PROTECTED, got {response.status_code} {response.text}")
+        _expect(violations, changes == {}, f"a refused deletion must change nothing — rows that changed: {changes}")
+        _expect(violations, user_id in await _pending_admin_ids(private_head), "the pending administrator must still wait for its setup")
+        assert not violations, f"The hook must still answer first, for the pending administrator too:{_verdict(violations)}"
+        print_success("409 ACCOUNT_PROTECTED, nothing deleted, still waiting")

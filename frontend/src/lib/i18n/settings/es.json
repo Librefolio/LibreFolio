@@ -256,13 +256,15 @@
         "resetLink": "Enlace de restablecimiento",
         "signOut": "Cerrar sesión en todas partes",
         "restartGuides": "Reiniciar las guías",
-        "delete": "Eliminar"
+        "delete": "Eliminar",
+        "cancelSetup": "Cancelar el enlace de configuración"
       },
       "reasons": {
         "protected": "Esta cuenta está protegida: nadie puede desactivarla, degradarla ni eliminarla.",
         "lastAdmin": "Es el único administrador activo: no se puede desactivar ni degradar.",
         "limit": "La instancia está llena: libera una plaza para reactivarla.",
-        "demoteFirst": "Un administrador debe ser degradado antes de poder eliminarlo."
+        "demoteFirst": "Un administrador debe ser degradado antes de poder eliminarlo.",
+        "pendingSetup": "Espera su configuración: mantiene su rol hasta entonces."
       },
       "confirm": {
         "deactivate": {
@@ -294,6 +296,11 @@
           "title": "¿Revocar la invitación para {email}?",
           "message": "El enlace deja de funcionar de inmediato.",
           "confirm": "Revocar"
+        },
+        "cancelSetup": {
+          "title": "¿Cancelar el enlace de configuración de {username}?",
+          "message": "El enlace ya entregado deja de funcionar. La cuenta sigue esperando su configuración: un enlace nuevo se obtiene con «dev.py user setup-link» en el servidor o de tu proveedor.",
+          "confirm": "Cancelar el enlace"
         }
       },
       "errors": {
@@ -308,7 +315,7 @@
         "INVALID_INPUT": "Revisa lo que has introducido: puede que la dirección de correo no sea válida.",
         "generic": "La acción ha fallado. Inténtalo de nuevo.",
         "load": "No se han podido cargar las cuentas.",
-        "PENDING_SETUP": "Este administrador activa la cuenta con su enlace de configuración: no se puede reactivar desde aquí."
+        "PENDING_SETUP": "Este administrador espera su configuración: no se puede reactivar ni degradar desde aquí."
       },
       "invite": {
         "button": "Invitar",
@@ -338,7 +345,8 @@
       "toasts": {
         "signedOut": "Se han cerrado todas las sesiones de {username}.",
         "guidesRestarted": "Las guías de {username} empiezan de nuevo.",
-        "resetLinkCreated": "Enlace de restablecimiento creado para {username}."
+        "resetLinkCreated": "Enlace de restablecimiento creado para {username}.",
+        "setupCancelled": "El enlace de configuración de {username} ya no funciona."
       },
       "pendingSetupHint": "Esta cuenta de administrador se activa con su enlace de configuración. Si el enlace se ha perdido, ejecuta «dev.py user setup-link» en el servidor o pídelo a tu proveedor."
     },

@@ -205,7 +205,7 @@ The whole story of one lot. Open it with **View lot detail** (⋮) or by clickin
 ??? warning "⚠️ When the panel warns you"
 
     - **A folded banner** lists what is missing — a rate, a price, a purchase cost — with a chip per affected lot that finds its bubble. Fix it as for the [Data Quality banner](index.md#data-quality-banner).
-    - **A red message** means quantities or transfers do not add up: the figures may be incomplete, so check the asset's transactions.
+    - **A red message** means the quantities or transfers of some of the asset's transactions do not add up, so its lots cannot be rebuilt. It lists each transaction to fix with its day, its broker, what is wrong and a **Go to transaction** button. Meanwhile the panel hides the lots, their timeline and the comparison, and the first chart keeps only its **Avg. Cost** lines. Fix those transactions and the lots come back.
     - **Valued at cost**: on the days before the asset's first price — no market price, no purchase or sale — its lots are valued at what they cost, with no market gain or loss, and the banner names those days. With no price at all up to the end date, the lot's bubble has a dashed border.
 
 ---

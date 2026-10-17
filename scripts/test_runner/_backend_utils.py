@@ -810,7 +810,7 @@ Tests for utility modules and helper functions:
         "dev-cli-db-path",
         utils_dev_cli_db_path,
         name="Dev CLI db path",
-        desc="dev.py db current/upgrade/downgrade/migrate/check act on the [path] they are given (absolute, or relative to the project root), never on the configured database: a missing file is refused (upgrade creates it), a path with %, ? or # is refused, db check runs the CHECK constraints hook; without a path the configured database is used",
+        desc="dev.py db current/upgrade/downgrade/migrate/check act on the [path] they are given (absolute, or relative to the project root), never on the configured database: a missing file is refused (upgrade creates it), a path with %, ? or # is refused, db check runs the CHECK constraints hook; without a path the configured database is used; B-37 (DBP-j, static): env.py's run_migrations_online registers a connect listener on its engine, for every URL, before it connects, executing PRAGMA trusted_schema=OFF",
         # Temporary databases and data dirs under tmp_path, free ports, dev.py and alembic
         # in subprocesses: no lane DB, no server, no network, no repo writes (db migrate
         # only ever runs its refusal, with no database at head within its reach).
@@ -932,7 +932,7 @@ Tests for utility modules and helper functions:
         "backup-cli-secure",
         utils_backup_cli_secure,
         name="Backup CLI Secure Backup",
-        desc="scripts/backup_cli.py and a secure backup (lot B4): create with --password-file, --password-stdin or --encrypt (password_required without a terminal; the two sources exclusive; no --password option; password_too_weak with the failed rules, nothing written), an .lfbk the password opens; inspect and restore --dry-run of an envelope (wrong_password, password_required, a zip ignoring the source); decrypt to a new 0600 zip (an existing output refused untouched, not_an_envelope); the password never printed; no decrypted zip left in the data directory",
+        desc="scripts/backup_cli.py and a secure backup (lot B4): create with --password-file, --password-stdin or --encrypt (password_required without a terminal; the two sources exclusive; no --password option; password_too_weak with the failed rules, nothing written), an .lfbk the password opens; inspect and restore --dry-run of an envelope (wrong_password, password_required, a zip ignoring the source); decrypt to a new 0600 zip (an existing output refused untouched, not_an_envelope); the password never printed; no decrypted zip left in the data directory; B-38: a --password-file or --instance-key-file that is not a regular file (a FIFO, a folder) refused at once, as root and not (not a regular file, password_unreadable / instance_key_unreadable; a FIFO never waited on); as root, one that goes through a link inside the data directory (the file, or backups/ itself) refused with its target never opened; read as today: a plain file, a Kubernetes secret link outside the data directory, a link inside it when not root",
         # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables, as test_backup_cli.py
         # sets them: no lane DB, no server, no network, no writes outside tmp_path.
         isolation="pure",

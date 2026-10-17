@@ -108,6 +108,7 @@ pipenv run ./dev.py user activate <username>
 - 📏 When the instance has reached its [user limit](configuration.md#user-limit), `activate` of a deactivated account warns `… the command line reactivates the account anyway`, then reactivates it.
 - 📬 With email verification on, `activate` lets an account that waits for its email in at once — with no limit warning while its link is live, since its place is already counted — and `deactivate` ends its wait: either way, the verification links it was sent stop working. See *Email Verification* in [Email](email.md).
 - 🏁 On the [initial administrator](configuration.md#initial-admin) still waiting for its setup link, `reset` and `activate` work as on any account: they set it up without its link. Either one ends the wait for good: its setup links stop working, the one of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` included, and neither [`user setup-link`](#setup-link) nor a new `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` gives it another one. `activate` alone leaves an active account whose password nobody knows, until `reset` or a [reset link](#reset-link) gives it one; `reset` alone leaves it inactive, until `activate`.
+- 🚫 On that administrator still waiting, `deactivate` sets nothing up: it cancels the setup link, as **Cancel setup link** does in [Users & Invitations](users.md#cancel-setup). The command prints `✅ User '<username>' deactivated`; every setup link of the account stops working, the one of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` included, and the account keeps waiting for a new one: [`user setup-link`](#setup-link) gives it one, and so does a new `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` at the next start. The same token at a restart gives none, as the instance has already seen it.
 - 💬 The app's **Forgot Password?** screen shows this command for both installations: `docker compose exec librefolio python dev.py user reset …` for Docker, and `./dev.py user reset …` for a host installation, to run after `pipenv shell` or with `pipenv run` in front. When your instance can email a reset link, the screen shows the email form first and keeps the commands in a panel closed by default ([Forgotten Passwords](email.md#forgot-password)). In the `managed` profile it shows no command: it tells users to ask their administrator for a password-reset link ([Hosting for Others](hosting_providers.md#managed-profile)).
 
 ### 🔗 Send a Password-Reset Link {: #reset-link }
@@ -128,14 +129,15 @@ Instead of choosing a new password for someone with `user reset`, send them this
 pipenv run ./dev.py user setup-link
 ```
 
-When LibreFolio created the administrator from `LIBREFOLIO_ADMIN_EMAIL` at its first start ([The Initial Administrator](configuration.md#initial-admin)) and nobody has used its setup link yet, this command prints a new one: the administrator opens it, chooses the password and is signed in. Use it when the link has expired or got lost.
+When LibreFolio created the administrator from `LIBREFOLIO_ADMIN_EMAIL` at its first start ([The Initial Administrator](configuration.md#initial-admin)) and nobody has used its setup link yet, this command prints a new one: the administrator opens it, chooses the password and is signed in. Use it when the link has expired, got lost or was cancelled.
 
 - ⏱️ The link works once, for 72 hours. The setup links issued before stop working, the one of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` included.
+- 🚫 A cancelled link — **Cancel setup link** in [Users & Invitations](users.md#cancel-setup), or `user deactivate` on the waiting administrator — leaves the administrator waiting: this command gives it a new link.
 - 📮 A new address for the waiting administrator — `LIBREFOLIO_ADMIN_EMAIL` changed before a restart, or [`user set-email`](#set-email) — stops its setup links, which went to the old address. The administrator still waits: this command gives it a link for the new address. The same address with other capitals of the letters A to Z is no change, and the link keeps working.
 - 🔚 Set up another way — activated with `user activate`, or given a password with `user reset` or a [reset link](#reset-link) — the administrator waits no more: its setup links stop working for good, and this command stops with the error below.
 - 🌐 As for [invitations](#invite), the link is complete when `LIBREFOLIO_PUBLIC_URL` is set, and the path only (`/setup#token=…`) when it is not.
 - 📧 The command only prints the link: it sends no email.
-- ❌ When no administrator is waiting for its setup, the command stops with the error `No administrator account is waiting for its setup link` and exits with `1`.
+- ❌ When no administrator is waiting for its setup, the command stops with the error `No administrator account is waiting for its setup link` and exits with `1`. It does so too when the administrator completes its setup while the command runs: the command checks again just before it issues the link, and gives none to an account already set up.
 
 ### 📧 Change the Email Address of an Account {: #set-email }
 
@@ -158,6 +160,8 @@ pipenv run ./dev.py user demote <username>
 ```
 
 `demote` refuses the last active administrator: it stops with the error `User '<username>' is the last active administrator: promote another user first` and exits with `1`. A demotion signs the account out of every device.
+
+`demote` also refuses the [initial administrator](configuration.md#initial-admin) still waiting for its setup link, which keeps its role until then: it stops with the error `User '<username>' is the initial administrator waiting for its setup: it keeps its role until then; deactivate it to cancel its setup link, or delete it from Settings › Administration › Users` and exits with `1`, changing nothing. To cancel its link, run `user deactivate` (see «Reset a Password or Lock an Account» above); to remove the account, delete it in [Users & Invitations](users.md#delete), with no demotion first: the command line deletes no account.
 
 ### 🧭 Restart the Guides of a User {: #reset-onboarding }
 
@@ -356,6 +360,8 @@ A secure archive, `librefolio-backup-20261015-121500.lfbk`, is the zip that `bac
 
     `--password-file` and `--password-stdin` exclude each other, and either one makes the archive secure without `--encrypt`.
 
+- 📄 **A file the command can trust.** The file of `--password-file`, like that of `--instance-key-file` ([The Instance Key of Another Installation](#backup-restore-instance-key)), must be a regular file: a FIFO, a folder or a device is refused at once, never waited on nor read, with `❌ password file: <path> is not a regular file (password_unreadable)`. Started as root, such as with `docker compose exec`, the command also refuses a path that goes through a link inside the data directory, where LibreFolio's user could have planted one to a file only root may read: `❌ password file: <path> goes through a link inside the data directory: give the file itself, from outside it (password_unreadable)`. A link elsewhere is followed, as Kubernetes mounts its secrets; Docker and Compose secrets are plain files. For `--instance-key-file`, the same lines start with `instance key file:` and end with `(instance_key_unreadable)`.
+
 - 📏 **The rules** are those of an account's password with at least 12 characters: an uppercase and a lowercase letter, a digit and a symbol, each class counted in Unicode as for the accounts; at most 1024 characters. They are checked before the backup starts: a password that misses one writes nothing.
 - 🗝️ **The instance key.** The archive carries `secrets/instance.key` when LibreFolio generated the key and can use it; never a key set with `LIBREFOLIO_INSTANCE_KEY` or `LIBREFOLIO_INSTANCE_KEY_FILE`. A generated key that cannot be used, damaged, out of reach, or longer than 4096 bytes, more than a restore reads back, is left out, with the warning `⚠️ The instance key cannot be used: the secure backup was made without it, so saved provider keys must be entered again after a restore`, and the archive is written all the same.
 - 🔐 **The encryption** comes after the usual phases, as `… encrypting`. It writes the `.lfbk` beside the zip in `backups/`, so it needs the zip's size again there, plus 64 MB: when that is short, `❌ Backup failed (backup_no_space): not enough free space`. The zip is removed once encrypted, or when the backup fails. A backup killed outright, by a power cut or `kill -9`, cannot remove it: the next start of LibreFolio ends that backup as interrupted and removes what it left in `backups/.jobs/`, the zip and the copy of the database included.
@@ -369,7 +375,7 @@ A secure archive, `librefolio-backup-20261015-121500.lfbk`, is the zip that `bac
     - `❌ The two passwords differ (password_mismatch)`.
     - `❌ The password of a backup needs at least 12 characters, with an uppercase and a lowercase letter, a digit and a symbol (password_too_weak: <rules>)`: the codes of the rules it misses, in this order: `min_length`, `uppercase`, `lowercase`, `digit`, `special`.
     - `❌ The password is longer than 1024 characters (password_too_long)`.
-    - `❌ password file: <path> does not exist (password_unreadable)`, or `cannot be read (…)`, `is empty or blank`, `is not UTF-8 text`, `is larger than 65536 bytes, too large for a secret`.
+    - `❌ password file: <path> does not exist (password_unreadable)`, or `cannot be read (…)`, `is empty or blank`, `is not UTF-8 text`, `is larger than 65536 bytes, too large for a secret`, `is not a regular file`, `goes through a link inside the data directory: give the file itself, from outside it` (see «A file the command can trust» above).
 
     Both password options at once, or an option that does not exist, such as `--password`, stop the command before it starts, with its usage line and the exit code `2`.
 
@@ -555,12 +561,12 @@ pipenv run ./dev.py backup restore /mnt/nas/librefolio/librefolio-backup-2026101
 A clear archive leaves the instance key out, and so does a secure one whose key came from the environment: the saved plugin secrets it holds, such as the API key of a data source, open only with the key of the installation that made it. `--instance-key-file FILE` gives that key to `backup restore`, with or without `--dry-run`: the check re-encrypts those secrets on the copy with this instance's key, which stays as it is.
 
 - 📄 The file holds the old installation's instance key: a copy of its `secrets/instance.key`, or the value of its `LIBREFOLIO_INSTANCE_KEY` in a file, such as the one of its `LIBREFOLIO_INSTANCE_KEY_FILE`. The line breaks at its end do not count.
-- 🔑 The command reads it first, as the user who started it, before it switches to the owner of the data directory, as it reads `--password-file`: with `docker compose exec`, a Docker secret only root can read works.
+- 🔑 The command reads it first, as the user who started it, before it switches to the owner of the data directory, as it reads `--password-file`: with `docker compose exec`, a Docker secret only root can read works. The file follows the same rule as `--password-file`, «A file the command can trust» in [A Secure Archive](#backup-secure): keep it outside the data directory.
 - 🙈 The key is never printed. Only the command line takes it: the web interface never takes a key, and a restore from Settings › Administration › Backup counts those secrets as unreadable.
 - 📁 The report says `Instance key: not included; given with --instance-key-file`, then `Saved provider keys: <n> re-encrypted with this instance's key`.
 - ℹ️ An archive that carries its own key is restored with it, whatever the file holds: the report adds `ℹ️ The archive carries its own instance key: --instance-key-file is not used`.
 - ⚠️ A key that reads none of the saved secrets is not the key of the installation that made the backup: the report adds `⚠️ The key given with --instance-key-file reads none of the saved provider keys: it is not the key of the instance this backup came from`, before the line that counts them, to enter again after the restore. When this instance's own key cannot be used, nothing is re-encrypted, whatever the key given, and the line is `⚠️ This instance's own key cannot be used, so nothing was re-encrypted with the key given: <problem>` instead: the problem of the start log's `The instance key cannot be used: …` («Startup Checks» in [Environment Variables](configuration.md)). Secrets already under this instance's key, as in an archive of this same instance, are left as they are, whatever the key given.
-- ❌ It exits with `1`, before anything is checked, when the file cannot give the key: `❌ instance key file: <path> does not exist (instance_key_unreadable)`, or `cannot be read (…)`, `is empty or blank`, `is not UTF-8 text`, `is larger than 65536 bytes, too large for a secret`. A key shorter than 32 characters stops it before the copy is made: `❌ The instance key given is too short: an instance key has at least 32 characters (instance_key_invalid)`.
+- ❌ It exits with `1`, before anything is checked, when the file cannot give the key: `❌ instance key file: <path> does not exist (instance_key_unreadable)`, or `cannot be read (…)`, `is empty or blank`, `is not UTF-8 text`, `is larger than 65536 bytes, too large for a secret`, `is not a regular file`, `goes through a link inside the data directory: give the file itself, from outside it`. A key shorter than 32 characters stops it before the copy is made: `❌ The instance key given is too short: an instance key has at least 32 characters (instance_key_invalid)`.
 
 ### ⏳ Follow or Cancel a Restore {: #backup-pending }
 

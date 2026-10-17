@@ -383,22 +383,30 @@ async def update_user_status(
     the wait, as ``user deactivate`` does. Activating or deactivating revokes the account's email-verification links:
     an administrator has decided, so the account no longer waits for one, and an old link cannot wake it (workstream E).
     Activating retires the setup links of the initial administrator: set up another way, it waits no more (A-32).
+    Deactivating the initial administrator waiting for its setup, already inactive, revokes its setup links — the
+    cancellation: it keeps waiting, and ``./dev.py user setup-link`` gives it a new one —; deactivating any other
+    account retires the setup links it never used (A-43). Demoting the waiting administrator is refused by the caller.
     """
     deactivate = is_active is False and user.is_active
     demote = is_superuser is False and user.is_superuser
     if (deactivate or demote) and await _is_last_active_admin(session, user):
         return "LAST_ADMIN"
+    # Read before any change: whether the account is the initial administrator waiting for its setup (F02)
+    waiting = is_active is False and await _is_pending_admin(session, user)
     changed = False
     if is_active is not None and is_active != user.is_active:
         user.is_active = is_active
         changed = True
         await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.EMAIL_VERIFICATION)
-        if is_active:
-            # Activated another way, the initial administrator is set up: its setup link is retired (A-32)
-            await token_service.retire_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)
-    elif is_active is False and await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.EMAIL_VERIFICATION):
-        # An account already inactive that waited for its email verification: its links stop working, its place is free.
-        changed = True
+        # Activated another way, the initial administrator is set up (A-32); deactivated, a link left behind must not
+        # set up the account again (A-43): either way its setup links are retired
+        await token_service.retire_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)
+    elif is_active is False:
+        if await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.EMAIL_VERIFICATION):
+            # An account already inactive that waited for its email verification: its links stop working, its place is free.
+            changed = True
+        if await _end_setup_links(session, user, waiting):
+            changed = True
     if is_superuser is not None and is_superuser != user.is_superuser:
         user.is_superuser = is_superuser
         changed = True
@@ -413,6 +421,28 @@ async def update_user_status(
     return None
 
 
+async def _is_pending_admin(session: AsyncSession, user: User) -> bool:
+    """``registration_service.is_pending_admin``; imported when it runs: registration imports this module."""
+    from backend.app.services.accounts.registration_service import is_pending_admin  # noqa: PLC0415
+
+    return await is_pending_admin(session, user)
+
+
+async def _end_setup_links(session: AsyncSession, user: User, waiting: bool) -> int:
+    """Deactivating an account ends its setup links (A-43); how many. Not committed.
+
+    The initial administrator waiting for its setup has its links **revoked**: that is the cancellation of the link handed
+    over, and the account still waits, so ``./dev.py user setup-link`` gives it a new one. Any other account has the
+    setup links it was never set up with **retired**: they count as used, and none can set it up again.
+    """
+    if waiting:
+        revoked = await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)
+        if revoked:
+            logger.warning("Setup link of the initial administrator revoked: its setup was cancelled; ./dev.py user setup-link gives a new one", user_id=user.id)
+        return revoked
+    return await token_service.retire_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)
+
+
 async def set_user_active(
     session: AsyncSession,
     username: str,
@@ -425,7 +455,9 @@ async def set_user_active(
     instance would be left with nobody to administer it. Deactivating ends every session of the account,
     so that a later activation does not bring them back. Either way the account's email-verification links are
     revoked: the operator has decided, so the account no longer waits for one (workstream E). Activating retires the
-    setup links of the initial administrator: set up another way, it waits no more (A-32).
+    setup links of the initial administrator: set up another way, it waits no more (A-32). Deactivating the initial
+    administrator waiting for its setup revokes its setup links — the cancellation: it keeps waiting —; deactivating
+    any other account retires the setup links it never used (A-43). Protection is not checked: the operator's power.
 
     Args:
         session: Database session
@@ -444,6 +476,8 @@ async def set_user_active(
 
     # Store user_id before commit (to avoid lazy load after commit)
     user_id = user.id
+    # Read before any change: whether the account is the initial administrator waiting for its setup (F02)
+    waiting = not active and await _is_pending_admin(session, user)
 
     user.is_active = active
     if not active:
@@ -452,6 +486,9 @@ async def set_user_active(
     if active:
         # Activated another way, the initial administrator is set up: its setup link is retired (A-32)
         await token_service.retire_tokens(session, user_id=user_id, purpose=AccountTokenPurpose.ADMIN_SETUP)
+    else:
+        # The waiting administrator's link revoked (the cancellation), any other account's retired (A-43)
+        await _end_setup_links(session, user, waiting)
     user.updated_at = utcnow()
     session.add(user)
     await session.commit()
@@ -470,8 +507,8 @@ async def set_user_admin(
     Promote or demote a user to/from admin.
 
     The last active administrator cannot be demoted: the instance would be left with nobody to
-    administer it. Demoting an inactive administrator removes no active one, and is allowed. Demoting
-    ends every session of the account.
+    administer it. Demoting an inactive administrator removes no active one, and is allowed, except the initial
+    administrator waiting for its setup: it keeps its role until then (A-43). Demoting ends every session of the account.
 
     Args:
         session: Database session
@@ -491,6 +528,9 @@ async def set_user_admin(
 
     if not is_admin and await _is_last_active_admin(session, user):
         return False, f"User '{username}' is the last active administrator: promote another user first"
+
+    if not is_admin and await _is_pending_admin(session, user):
+        return False, f"User '{username}' is the initial administrator waiting for its setup: it keeps its role until then; deactivate it to cancel its setup link, or delete it from Settings › Administration › Users"
 
     # Store user_id before commit (to avoid lazy load after commit)
     user_id = user.id

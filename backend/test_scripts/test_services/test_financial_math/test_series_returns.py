@@ -22,6 +22,13 @@ second implementation.
 Red on HEAD (b05b80201): both names are imported at module level, so the whole file fails at collection with an
 ``ImportError`` (``cannot import name 'float_price_return'``).
 
+MF-D3 (rule 10, the formula has one home): ``observations_per_year(n_observations, calendar_days) -> float`` is
+``n_observations × 365 / calendar_days`` itself, ValueError for a span that is not positive; ``observed_annualization``
+computes its factor with it, and the risk schemas' validators check a contract's factor against it (their guard is in
+``test_schemas/test_risk_schemas.py``). Its tests read it as ``returns.observations_per_year`` inside the test body, never
+with a module-level import, so the file still collects where the function does not exist: red on HEAD (f252acb4a) is an
+``AttributeError`` in each of them, the MF-D1 tests above staying green.
+
 Pure: no database, no server, no network.
 """
 
@@ -77,6 +84,86 @@ def test_observed_annualization_factor_is_a_float_even_when_the_quotient_is_whol
     assert calendar_days == 365
     assert type(factor) is float
     assert factor == 365.0
+
+
+# =============================================================================
+# observations_per_year — the one home of the annualization formula (MF-D3)
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("n_observations", "calendar_days", "expected"),
+    [
+        pytest.param(252, 365, 252.0, id="a-year-of-trading-days"),
+        pytest.param(10, 7, 521.4285714285714, id="ten-in-a-week"),
+        pytest.param(64, 90, 259.55555555555554, id="a-quarter"),
+        pytest.param(253, 366, 252.3087431693989, id="a-leap-year"),
+        pytest.param(7, 3, 851.6666666666666, id="more-observations-than-days"),
+        pytest.param(365, 365, 365.0, id="one-a-day"),
+    ],
+)
+def test_observations_per_year_is_the_observations_times_365_over_the_span(n_observations, calendar_days, expected):
+    factor = returns.observations_per_year(n_observations, calendar_days)
+
+    # A float even where the quotient is whole (252.0, 365.0): the factor a contract carries, never an int.
+    assert type(factor) is float
+    # The contract, to the bit: the expression the validators and observed_annualization used to write themselves.
+    assert factor == n_observations * 365 / calendar_days
+    assert factor == expected
+
+
+@pytest.mark.parametrize(
+    ("n_observations", "calendar_days"),
+    [
+        pytest.param(252, 365, id="a-year-of-trading-days"),
+        pytest.param(7, 3, id="more-observations-than-days"),
+    ],
+)
+def test_observations_per_year_multiplies_before_it_divides(n_observations, calendar_days):
+    # The trap is real: dividing first gives another float on these spans (252.00000000000003 and 851.6666666666667), so
+    # the equality to the expression above does tell a reordered formula apart.
+    assert n_observations / calendar_days * 365 != n_observations * 365 / calendar_days
+
+    assert returns.observations_per_year(n_observations, calendar_days) == n_observations * 365 / calendar_days
+
+
+@pytest.mark.parametrize("calendar_days", [0, -1, -365])
+def test_observations_per_year_refuses_a_span_that_is_not_positive(calendar_days):
+    with pytest.raises(ValueError, match="calendar_days"):
+        returns.observations_per_year(10, calendar_days)
+
+
+@pytest.mark.parametrize(
+    ("n_observations", "baseline_date", "final_date", "calendar_days"),
+    [
+        pytest.param(252, date(2025, 1, 1), date(2026, 1, 1), 365, id="a-year"),
+        pytest.param(253, date(2024, 1, 1), date(2025, 1, 1), 366, id="a-leap-year"),
+        pytest.param(64, date(2026, 1, 1), date(2026, 4, 1), 90, id="a-quarter"),
+        pytest.param(10, date(2026, 1, 1), date(2026, 1, 8), 7, id="a-week"),
+        pytest.param(7, date(2026, 1, 1), date(2026, 1, 4), 3, id="more-observations-than-days"),
+    ],
+)
+def test_observed_annualization_factor_is_observations_per_year_of_its_span(n_observations, baseline_date, final_date, calendar_days):
+    span, factor = observed_annualization(n_observations, baseline_date, final_date)
+
+    assert span == calendar_days
+    assert factor == returns.observations_per_year(n_observations, calendar_days)
+
+
+def test_observed_annualization_computes_its_factor_with_observations_per_year(monkeypatch):
+    # Equal values could still be two copies of one formula: with the house function replaced, observed_annualization
+    # must answer the replacement's value for the span it measured. raising=True (the default): where the function does
+    # not exist, the patch itself fails.
+    calls: list[tuple[int, int]] = []
+
+    def stub(n_observations: int, calendar_days: int) -> float:
+        calls.append((n_observations, calendar_days))
+        return 42.0
+
+    monkeypatch.setattr(returns, "observations_per_year", stub)
+
+    assert observed_annualization(64, date(2026, 1, 1), date(2026, 4, 1)) == (90, 42.0)
+    assert calls == [(64, 90)]
 
 
 # =============================================================================

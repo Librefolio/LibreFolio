@@ -7,7 +7,6 @@ import json
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date as date_type
-from datetime import timedelta
 from decimal import Decimal
 from typing import Literal, Sequence
 
@@ -30,6 +29,7 @@ from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
 from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FragmentInterval
 from backend.app.services.financial_math.splits import SplitLink, is_valid_split_ratio, load_split_links
 from backend.app.services.fx.conversion import convert_bulk
+from backend.app.utils.datetime_utils import day_before, shift_date
 
 logger = structlog.get_logger(__name__)
 
@@ -170,7 +170,8 @@ async def calculate_yield_on_cost_for_positions(
         if position.wac_per_unit is not None and position.wac_currency and Currency.validate_code(position.wac_currency) != target_currency:
             raise ValueError(f"The WAC of asset {position.asset_id} on broker {position.broker_id} is in {position.wac_currency}: it must already be in the report currency {target_currency}, since a historical average cost has no date to convert it at.")
     position_by_key = {(position.asset_id, position.broker_id): position for position in positions}
-    window_start = as_of_date - timedelta(days=364)
+    # The trailing year; it starts on date.min at the earliest for an as_of in year 1 (MF-SEC8-2b: it raised before).
+    window_start = shift_date(as_of_date, -364)
     transaction_context = await _load_transaction_context(
         db,
         user_id=user_id,
@@ -628,7 +629,7 @@ def _calculate_income_position(
             replay,
             fragments_by_lot,
             broker_id,
-            transaction.date - timedelta(days=1),
+            day_before(transaction.date),
         )
         if eligible_quantity <= 0:
             return _unavailable(
@@ -681,8 +682,11 @@ def _eligible_position_quantity(
     replay: FifoEngineResult,
     fragments_by_lot: dict[int, list[FragmentInterval]],
     broker_id: int,
-    cutoff: date_type,
+    cutoff: date_type | None,
 ) -> Decimal:
+    """The LONG quantity held at the end of ``cutoff``; 0 without a cutoff (an income on ``date.min``: no day before)."""
+    if cutoff is None:
+        return Decimal("0")
     return sum(
         (
             eligible_income_quantity(

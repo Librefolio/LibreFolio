@@ -5610,3 +5610,184 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 > - **Backlog**: Y-29 ✅. Nessun E2E: cambia solo un test e una pagina per sviluppatori.
 >
 > ### Y-29 — checkpoint 🧊 FROZEN (11:1x)
+
+## J-12, la metà del pannello (N81, opzione A) — analisi (dalle 11:20; HEAD `ce2452615`, sola lettura)
+
+Dal coordinatore (dalla sezione di J). **Metà di J**: con `FAILED` la risposta dei lotti tiene stato, issue, metadati,
+prezzi e righe WAC; tornano vuote le sezioni derivate dai lotti (lotti, Gantt, eventi, custodia, valore, rendimento,
+performance, eventi di reddito). **Metà mia**: con `FAILED` nessun disegno dei lotti; una spiegazione semplice e, per ogni
+issue, il **nome** del broker, la data e un link alla transazione da correggere (oggi il messaggio dice «(broker 7)»).
+J parte dopo J-50. Il piano di J (05) non ha ancora un'analisi di J-12: solo le menzioni `:1615` e `:5406`.
+
+**Stato reale (verificato)**
+- `LotsAnalysisPanel.svelte`: avviso rosso `lots-analysis-panel-failed` (`:476-480`, chiave `brokers.lots.analysisFailed`,
+  «… figures may be incomplete»), poi disegna **sempre** grafico WAC/prezzo, Gantt, tabella e confronto (`:486-547`);
+  modale della custodia a `:551`. Lo stato e le issue arrivano da `applyMain` (`:194-195`).
+- Con `lots` vuoto `effectiveSelectionIds` è vuoto, quindi la seconda richiesta (valore e rendimento) già non parte
+  (`loadSelectionHistories`, `ids.length === 0`).
+- `LotDataQualityBanner.svelte`: raggruppa **per codice** e mostra i parametri della **prima** issue del gruppo; le chip
+  solo per i lotti visibili (con `FAILED` e lotti vuoti: nessuna chip).
+- «(broker 7)» viene dai testi `dataQuality.shortTransferNotSupported`, `shortAdjustmentNotSupported` e
+  `fifoSourceQuantityMissing` (`{broker_id}`); `transferPairMissing` non ha il broker.
+- **Cosa porta oggi ogni issue** (`lots_analysis_service.py::_build_data_quality_report`): `message_params` con
+  `transaction_id`, `lot_id`, `broker_id`, `related_transaction_id`, più i parametri del motore (`missing_quantity`).
+  **Nessuna data.** I codici che danno `FAILED` sono `_QUANTITATIVE_FAILURE_CODES` (`fifo/models.py:28`); severità ERROR.
+  Il frontend non ha copia di quella lista.
+- Le altre issue della stessa risposta (`_report_gaps`: `MISSING_FX_RATES`, `MISSING_COST_BASIS`) riguardano le righe WAC,
+  che restano: sono fissate da `data-quality-real.spec.ts` e `data-quality-legacy.spec.ts`.
+- Il nome del broker si risolve già nel client: `resolveBrokerName` (`lotChartShared.ts:95`) sulla prop `brokers`
+  (Dashboard: `allBrokers`, ⊇ il perimetro; pagina broker: il broker stesso).
+- Il link esiste: `handleGotoTransaction(id)` → `/transactions?highlight=<id>`; la pagina carica la riga per id se non è
+  nella finestra e apre la sua modale (`consumeHighlightParam`).
+- Nessun test fissa l'avviso `FAILED` (né Vitest né E2E). Documentazione: `developer/frontend/components/features/
+  lots-analysis.md:121` dice «warn but show»; la pagina utente `user/dashboard/positions.en.md` (pannello dei lotti, `:207`).
+
+**Contratto chiesto a J** (proposta, da concordare in breve)
+1. Con `FAILED`: vuote (`[]` o `null`) le sezioni dei lotti; restano `price_history`, `broker_wac_history`,
+   `cumulative_wac_history`, `quote_base_quantity`, `calculation_metadata`, `data_quality` (tutte le issue).
+2. Ogni issue di un codice che fa `FAILED` porta in `message_params`, oltre ai campi di oggi: `transaction_date` (ISO,
+   nuovo) e un segnalino `fails_analysis: true` (nuovo, così il frontend non copia la lista dei codici).
+3. Nessun nome di broker dal backend; `message_i18n_key` invariata.
+
+**Proposta per il pannello**
+- Con `FAILED`: un avviso nuovo (`LotAnalysisFailedNotice.svelte`, file nuovo, solo ruoli `-lf-`) con la spiegazione e una
+  riga per issue: broker per nome, data, messaggio, «Apri la transazione». Il banner tiene le sole issue che non fanno
+  `FAILED`. Nascosti Gantt, tabella e confronto; il grafico prezzo/WAC resta con le sole linee (decisione D1).
+- Helper puro per dividere e ordinare le issue (data, poi id; dedup per codice e transazione) in
+  `lotDataQualityHelpers.ts`.
+- Testi: `brokers.lots.analysisFailed` riscritto (le cifre non si vedono più); i tre `dataQuality.*` senza
+  «(broker {broker_id})»; chiavi nuove per il link; 4 lingue.
+
+**Decisioni**: D1 il grafico prezzo/WAC resta con `FAILED` (proposta: sì, è a livello di posizione e giusto); D2 le issue
+non bloccanti restano nel banner (proposta: sì, senza doppioni); D3 i testi nelle 4 lingue li scrivo io.
+
+**Lotto unico**, dopo il sì di J sul contratto: rossi (`test-author`: Vitest dell'helper e dell'avviso), cura, testi;
+E2E in `brokers-detail.spec.ts` (`front-broker detail`, nessun cambio del runner) quando la metà di J è in dev; scenario
+proposto: broker con `allow_asset_shorting`, una SELL che apre uno short, un ADJUSTMENT− → `SHORT_ADJUSTMENT_NOT_SUPPORTED`.
+Documentazione (`docs-writer`): `lots-analysis.md:121` e la pagina utente. Checkpoint FROZEN.
+
+> **Inviata** al coordinatore e a J (proposta del contratto, domande (a) id sempre apribile, anche con le copie di J-10/J-47?
+> (b) più issue per riga e codice?) alle 11:27.
+>
+> **Coordinatore (11:28)**: **D1 sì** (grafico prezzo/WAC con le sole linee; Gantt, tabella e confronto nascosti), **D2 sì**,
+> **D3 sì** (4 lingue con `dev.py i18n add`/edit). Nessun ramo BK tocca `features/brokers/lots/` o `positions.en.md`;
+> pagine divise con J come proposto. **I rossi partono quando J accetta il contratto** (`transaction_date` +
+> `fails_analysis`); l'E2E aspetta la metà di J in dev.
+>
+> **J (11:3x): contratto sì**, con correzioni:
+> - con `FAILED` le sezioni tornano **`null`** (default dello schema, come `_empty_response`): `lots`, `gantt_segments`,
+>   `custody_history`, `lot_events`, `value_history`, `return_history`, `performance_history`, `income_events`,
+>   `economic_allocation_groups`, **`price_history`** (è per lotto: `LotPriceHistoryPoint.lot_id`) e
+>   `asset_orphan_income/fees/taxes`. Restano `broker_wac_history`, `cumulative_wac_history`, `quote_base_quantity`,
+>   `calculation_metadata`, `data_quality` con tutte le issue;
+> - `transaction_date` e `fails_analysis: true` solo sulle issue dei codici di `_QUANTITATIVE_FAILURE_CODES`;
+> - (a) `transaction_id` è sempre una riga vera del perimetro (anche con le copie di J-10/J-47). J corregge nel backend,
+>   con un rosso, l'id di un trasferimento in eccesso e di `SHORT_TRANSFER_NOT_SUPPORTED`: la gamba che dà, non l'id più
+>   basso della coppia. **Mai collegare `related_transaction_id`** (può nominare una compagna che l'utente non vede);
+> - (b) di regola una issue per riga e codice; deduplicare copre i dati corrotti.
+> - J parte dopo il checkpoint di J-50.
+>
+> **⚠️ Fuori pista (D1)**: la linea del prezzo di mercato del grafico WAC nasce dall'unione per data dei punti per lotto di
+> `price_history` (`LotWacPriceChart.svelte:747-764`), quindi con `FAILED` il grafico tiene **solo le linee del costo
+> medio**. Proposta al coordinatore (11:4x): va bene così; una serie del prezzo senza lotti sarebbe un campo nuovo di J,
+> da indice. Chiesto anche l'OK per la riga del runner: il test del componente va in `_frontend_broker.py`
+> (`front_broker_unit`, accanto a `LotCustodyModal.test.ts`); i test dell'helper in `lotDataQualityHelpers.test.ts`, già
+> in `core-unit`.
+>
+> **Rossi** (`test-author`, dalle 11:4x): `partitionLotIssues` e `buildFailureRows` in `lotDataQualityHelpers.ts`;
+> componente nuovo `LotAnalysisFailedNotice.svelte` (test id `lots-analysis-panel-failed` tenuto, righe
+> `lots-analysis-failed-row-{code}-{tx}`, link `lots-analysis-failed-goto-{tx}`); quantità formattata e mascherata come
+> nella modale della custodia (D5′).
+>
+> **Coordinatore (11:4x)**: (1) OK, con `FAILED` solo le linee del costo medio, niente linea del prezzo; la serie del
+> prezzo senza lotti è una voce a parte nella sezione Y, per J → **Y-30** nell'indice. (2) OK alla riga additiva in
+> `_frontend_broker.py` (`front_broker_unit`, accanto a `LotCustodyModal.test.ts`) e alla frase della docstring: fatta
+> (lista, docstring e `desc` di `broker-unit`).
+>
+> **J (12:0x), issue con `FAILED`: la mia proposta, nel backend.** Restano le bloccanti (`fails_analysis: true`) e le lacune
+> delle righe WAC di `_report_gaps` (cambi mancanti delle righe WAC, `MISSING_COST_BASIS`); vanno via
+> `REFERENCE_PRICE_FALLBACK/_UNAVAILABLE`, `ASSET_INCOME/COST_NO_ELIGIBLE_LOTS`, `CURRENT_PRICE_ASSUMED_AT_COST` e le
+> lacune di cambio delle cifre dei lotti (quelle sezioni non si calcolano più). L'AI Export porta solo i `failure_codes`
+> bloccanti: già coerente. J lo fissa in un test del servizio.
+>
+> **Rossi ✅** (`test-author` `b73cf952`, 11:4x–12:0x; logs `files/logs/j12_*_run1.json`):
+> - `lotDataQualityHelpers.test.ts`: 75 test, **58 rossi** (`partitionLotIssues is not a function` ×9,
+>   `buildFailureRows is not a function` ×49), i 17 preesistenti verdi.
+> - `LotAnalysisFailedNotice.test.ts` (nuovo, jsdom, 10 test): non si raccoglie (`Failed to resolve import
+>   "./LotAnalysisFailedNotice.svelte"`). Dopo il componente resta rosso «never shows a bare broker id» finché i testi
+>   del catalogo stampano `{broker_id}`. Privacy fissata anche col commutatore in posto (`setPrivacyEnabled`).
+> - Osservazioni del test-author, accolte: l'ordine d'ingresso (se la mia metà entra prima di quella di J, una risposta
+>   `FAILED` non ha issue segnalate: l'avviso mostra solo la spiegazione e le bloccanti tornano al banner senza broker) →
+>   **il lotto entra in dev con o dopo la metà di J**; due issue dello stesso codice senza id di transazione collassano
+>   (`CODE:none`, solo dati corrotti); `#<id>` resta il ripiego di `resolveBrokerName` (le due chiamate passano una
+>   lista che copre il perimetro).
+>
+> **Cura ✅** (12:0x–12:15):
+> - `lotDataQualityHelpers.ts`: `partitionLotIssues` (solo con `FAILED`, il segnalino `fails_analysis === true` decide;
+>   ordine d'ingresso) e `buildFailureRows` (id solo da `transaction_id`, intero sicuro positivo; giorno ISO nudo o null;
+>   nome del broker con `resolveBrokerName`; `missing_quantity`, e solo lui, dal formattatore iniettato; una riga per
+>   (codice, transazione), la prima vince; ordine giorno → id → codice, i null in fondo). Import di `resolveBrokerName` da
+>   `lotChartShared.ts` (nessun ciclo).
+> - `LotAnalysisFailedNotice.svelte` (nuovo, solo ruoli: il contenitore dell'avviso di prima, `AlertCircle`, il bottone
+>   sottolineato nel colore del testo dell'avviso con `focus-visible:outline-lf-focus`; la quantità come nella modale,
+>   `maskableQuantity(formatExactDecimal(…))`; righe `$derived`, quindi seguono la privacy). Etichetta del bottone:
+>   `brokers.lots.modal.goToTransaction`, già esistente.
+> - `LotsAnalysisPanel.svelte`: `applyMain` con `FAILED` non prende sezioni dei lotti (`lotSection`), anche da una
+>   risposta in cache; `analysisFailed` + `issueParts`; l'avviso prima del banner (che riceve solo `issueParts.banner`);
+>   Gantt, tabella e confronto sotto `{#if !analysisFailed}`; commento d'intestazione.
+> - Testi (`dev.py i18n update/add`, 4 lingue): `brokers.lots.analysisFailed` riscritto; `brokers.lots.analysisFailedFix`
+>   nuovo; i tre `dataQuality.*` senza «(broker {broker_id})» (`fifoSourceQuantityMissing` = «Removes {missing_quantity}
+>   more than the broker held that day»). `i18n check` strict ok, diff di 24+/20−.
+> - **Prove leggere** (`files/scripts/j12_light.sh`, `j12_gates.sh`; 12:03–12:15): `lotDataQualityHelpers` **75/75**,
+>   `LotAnalysisFailedNotice` **10/10**, `themeRoles.gate` 80, `moneyRenderSites` 7, `htmlInterpolation.gate` 26,
+>   `financialMathExceptions.gate` 19; Prettier pulito; `theme-roles --check` pulito; `git diff --check` pulito;
+>   `front-broker broker-unit` **7 file / 70** (il file nuovo registrato); `gate-i18n-catalog` **176**; `gate-i18n-usage`
+>   **195**; svelte-check **0/0**.
+> - **⚠️ Fuori pista**: il primo svelte-check dava 2 errori in `features/legal/` (A9: `InstanceConfigResponse.legal`): il
+>   client generato del worktree (ignorato, 10:52) era più vecchio del fast-forward a `ce2452615`. `dev.py api sync`
+>   (scrive solo file ignorati) → 0/0. Non è del lotto.
+> - In corso: `docs-writer` (`lots-analysis.md:121`, `positions.en.md` «When the panel warns you», senza timbro) e il
+>   `test-author` per l'E2E in `brokers-detail.spec.ts` (scritto ora, lanciato dopo la metà di J in dev).
+>
+> **Documentazione ✅** (`docs-writer` `187113c2`, 12:12–12:19; +18 −10):
+> - `user/dashboard/positions.en.md:208`: il punto «A red message» riscritto (le transazioni da correggere col giorno, il
+>   broker e **Go to transaction**; lotti, cronologia e confronto nascosti; il primo grafico con le sole linee del costo
+>   medio). Debito di traduzione IT/FR/ES reale: **nessun timbro**.
+> - `developer/frontend/components/features/lots-analysis.md`: riga di `LotAnalysisFailedNotice` nella tabella dei
+>   componenti; ordine di disegno (l'avviso prima di `LotDataQualityBanner`, nome corretto); flusso §1 (con `FAILED`
+>   nessuna richiesta della selezione); «warn but show» → «explains and hides» (J-12) in cinque punti; tabella dei test id;
+>   link alla pagina del servizio.
+> - Osservazione accolta: il commento «never shown as an id» di `buildFailureRows` esagerava (`#<id>` per un broker che la
+>   lista non ha, `—` senza broker): corretto, anche nella devWiki.
+> - **devWiki**: revisione datata 17/10 in `decisions/fifo-v4-gross-net-status-model.md` (la scelta «warn but show» del
+>   22/07 superata da N81, le due metà del contratto, Y-30), riga dell'indice, voce in `log.md`; detto a J (12:1x), che
+>   non tocca quella pagina. `check_source_paths.py`: i soliti 7.
+> - **Prove** (`files/scripts/j12_docs_check.sh`, 12:20–12:22): `mkdocs build` (strict) rc 0, 0 WARNING; `check-links`
+>   **97**.
+>
+> **E2E scritta, non lanciata** (`test-author` `b73cf952`, 12:1x–12:3x; +365 righe in coda a `brokers-detail.spec.ts`,
+> più due import; Prettier pulito; il tipo controllato, nessun errore nel file):
+> - describe «Broker detail — a FAILED lots analysis names the transaction to fix (J-12)»: **J12-1** (lo scenario, il
+>   controllo prima della riga che rompe, la riga col nome del broker e il giorno, nessun id nudo, solo le linee del costo
+>   medio, niente Gantt/tabella/confronto, nessun gruppo bloccante nel banner) e **J12-2** (il bottone apre la transazione
+>   in sola lettura nella pagina delle transazioni: navigazione `?highlight=<id>`, il bottone di modifica, `#<id>` nel piede,
+>   Save nascosto, come T11 di `transactions-modals.spec.ts`).
+> - Scenario: broker del test con `allow_cash_overdraft` e `allow_asset_shorting` (il controllo dei saldi salta solo con
+>   tutti e due); asset manuale in EUR, chiusure a −40/−30/−20/−5 giorni; BUY 10 a 100 (−40), SELL 15 a 110 (−30: chiude il
+>   lungo, apre uno short di 5; il controllo: non `FAILED`, Gantt, tabella e confronto si disegnano), ADJUSTMENT −2 (−20) →
+>   `SHORT_ADJUSTMENT_NOT_SUPPORTED` (manca 2) → `FAILED`. Ogni test crea e cancella i suoi dati.
+> - Premessa via API prima della pagina: stato `FAILED` e una sola issue con `fails_analysis`, con id, broker e giorno.
+>   **Finché la metà di J non è in dev, cade lì con un messaggio che nomina il segnalino mancante**, non per un'attesa.
+> - Da confermare solo con una corsa: la storia WAC del broker resta con `FAILED`; il banner assente (tollerato se c'è);
+>   la lingua `en-US` del browser; la navigazione colta da `waitForURL` (`commit`); 90 s per test sotto carico.
+> - Punti deboli segnalati → **Y-31** (basso): la regola M-18 ricopiata nella spec; nessuno stato pubblicato per il «nessun
+>   dato» del grafico WAC e per la riga evidenziata.
+>
+> ### J-12 metà del pannello — checkpoint 🧊 FROZEN (12:4x), senza l'E2E lanciata
+>
+> - Delta: 20 file tracciati modificati + 2 nuovi (`LotAnalysisFailedNotice.svelte` e il suo test). Esclusi: il client
+>   generato (`openapi.json`, `generated.ts`, ignorati, rigenerati da `api sync`), il catalogo i18n generato, i log.
+> - Prove finali: Prettier pulito sui file toccati, `git diff --check` pulito, porta 6189 libera.
+> - **Ordine d'ingresso**: il commit sul mio ramo ora; l'ingresso in dev **con o dopo la metà di J** (senza, l'avviso non ha
+>   righe e le bloccanti tornano al banner senza broker); poi lo slot `front-broker detail` per l'E2E, prima della consegna
+>   finale.

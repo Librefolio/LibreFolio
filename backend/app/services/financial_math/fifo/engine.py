@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from typing import Callable, Literal, Sequence
 
@@ -37,6 +37,7 @@ from backend.app.services.financial_math.fifo.models import (
     _require_id,
 )
 from backend.app.services.financial_math.splits import is_valid_split_ratio
+from backend.app.utils.datetime_utils import day_before
 
 # Tolerance for the split cost invariant (q*p0 = const). Division by a ratio that
 # doesn't divide evenly (e.g. a 3:1 split) produces a non-terminating decimal that
@@ -443,13 +444,16 @@ class FifoLotEngine:
 
     def _apply_transfer_depart(self, event: FifoEvent) -> None:
         pair_id = _require_id(event.pair_id)
+        # An issue names the giving leg, the row to fix (J-12): the departure event carries the lower id of a same-day
+        # pair, or the leg dated first, which can be the receiving one.
+        giving_leg_id = event.raw_transaction_ids[0] if event.raw_transaction_ids else event.transaction_id
         source_broker_id = _require_id(event.source_broker_id)
         destination_broker_id = _require_id(event.destination_broker_id)
         quantity = _require_decimal(event.quantity)
         if self.signed_quantity_for_broker(source_broker_id) < Decimal("0") or any(fragment.direction == "SHORT" for fragment in self._broker_fragments(source_broker_id, "SHORT")):
             self._issue(
                 code="SHORT_TRANSFER_NOT_SUPPORTED",
-                transaction_id=event.transaction_id,
+                transaction_id=giving_leg_id,
                 broker_id=source_broker_id,
                 related_transaction_id=pair_id,
                 message="Transfer of SHORT position is not supported in phase 1.",
@@ -467,7 +471,7 @@ class FifoLotEngine:
         if remainder > Decimal("0"):
             self._issue(
                 code="FIFO_SOURCE_QUANTITY_MISSING",
-                transaction_id=event.transaction_id,
+                transaction_id=giving_leg_id,
                 broker_id=source_broker_id,
                 related_transaction_id=pair_id,
                 message="TRANSFER exceeds available LONG quantity on source broker.",
@@ -879,10 +883,11 @@ class FifoLotEngine:
         for key in sorted(pools, key=lambda item: (item[1], item[0], str(item[2]), str(item[3] or ""))):
             broker_id, event_date, economic_type, native_currency, target_currency = key
             pool_events = pools[key]
-            cutoff = event_date - timedelta(days=1)
+            # MF-SEC8-2b: an event on date.min has no day before, so no lot was held then: orphan, never an OverflowError.
+            cutoff = day_before(event_date)
             eligible: list[tuple[int, Decimal]] = []
             for lot_id, lot in self._lots.items():
-                if lot.direction != "LONG":
+                if lot.direction != "LONG" or cutoff is None:
                     continue
                 quantity = eligible_income_quantity(fragments_by_lot.get(lot_id, ()), broker_id, cutoff)
                 if quantity > Decimal("0"):
@@ -1077,27 +1082,28 @@ class FifoLotEngine:
         ``rule`` records the level that failed (e.g. ``SAME_DAY_INCOME`` when a taxed income pool
         was itself orphan -> the whole TAX pool is orphan, no mixed allocated/orphan).
         """
-        previous_day = event_date - timedelta(days=1)
+        # MF-SEC8-2b: None on date.min (no day before): every D-1 rule finds nothing, the same-day ones still apply.
+        previous_day = day_before(event_date)
         if economic_type == "TAX":
             if self._income_on(broker_id, event_date):
                 # TAX follows the income it taxes: same D-1 holding weights (§4.2). If that income
                 # was orphan (no eligible lot) the whole TAX pool is orphan -> stop here.
-                ops = self._holding_operations(broker_id, event_date - timedelta(days=1), native_pool, target_pool, fragments_by_lot, "INCOME")
+                ops = self._holding_operations(broker_id, previous_day, native_pool, target_pool, fragments_by_lot, "INCOME")
                 return ops, "SAME_DAY_INCOME"
             same_day_trades = self._trades_on(broker_id, event_date)
             if same_day_trades:
                 ops = self._trade_operations(same_day_trades, native_pool, target_pool)
                 if ops is not None:
                     return ops, self._trade_rule(same_day_trades)
-            if self._income_on(broker_id, previous_day):
-                ops = self._holding_operations(broker_id, previous_day - timedelta(days=1), native_pool, target_pool, fragments_by_lot, "INCOME")
+            if previous_day is not None and self._income_on(broker_id, previous_day):
+                ops = self._holding_operations(broker_id, day_before(previous_day), native_pool, target_pool, fragments_by_lot, "INCOME")
                 return ops, "PREVIOUS_DAY_INCOME"
-            previous_day_trades = self._trades_on(broker_id, previous_day)
+            previous_day_trades = self._trades_on(broker_id, previous_day) if previous_day is not None else []
             if previous_day_trades:
                 ops = self._trade_operations(previous_day_trades, native_pool, target_pool)
                 if ops is not None:
                     return ops, "PREVIOUS_DAY_TRADES"
-            ops = self._holding_operations(broker_id, event_date - timedelta(days=1), native_pool, target_pool, fragments_by_lot, "HOLDING")
+            ops = self._holding_operations(broker_id, previous_day, native_pool, target_pool, fragments_by_lot, "HOLDING")
             return ops, "OPEN_LOTS_FALLBACK"
 
         # FEE
@@ -1106,12 +1112,12 @@ class FifoLotEngine:
             ops = self._trade_operations(same_day_trades, native_pool, target_pool)
             if ops is not None:
                 return ops, self._trade_rule(same_day_trades)
-        previous_day_trades = self._trades_on(broker_id, previous_day)
+        previous_day_trades = self._trades_on(broker_id, previous_day) if previous_day is not None else []
         if previous_day_trades:
             ops = self._trade_operations(previous_day_trades, native_pool, target_pool)
             if ops is not None:
                 return ops, "PREVIOUS_DAY_TRADES"
-        ops = self._holding_operations(broker_id, event_date - timedelta(days=1), native_pool, target_pool, fragments_by_lot, "HOLDING")
+        ops = self._holding_operations(broker_id, previous_day, native_pool, target_pool, fragments_by_lot, "HOLDING")
         return ops, "OPEN_LOTS_FALLBACK"
 
     def _income_on(self, broker_id: int, on_date: date) -> bool:
@@ -1205,15 +1211,18 @@ class FifoLotEngine:
     def _holding_operations(
         self,
         broker_id: int,
-        cutoff: date,
+        cutoff: date | None,
         native_pool: Decimal,
         target_pool: Decimal,
         fragments_by_lot: dict[int, list[FragmentInterval]],
         context: AllocationContext,
     ) -> list[TargetOperationAllocation] | None:
         """Distribute the whole pool over LONG lots open at ``cutoff`` (D-1 holdings). ``None`` when
-        no lot is eligible (orphan). Reused for the FEE/TAX holdings fallback and for TAX-on-income
-        (same D-1 eligibility as the income, ``context=INCOME``)."""
+        no lot is eligible (orphan), or without a cutoff (an event on ``date.min``: no day before).
+        Reused for the FEE/TAX holdings fallback and for TAX-on-income (same D-1 eligibility as the
+        income, ``context=INCOME``)."""
+        if cutoff is None:
+            return None
         eligible: list[tuple[int, Decimal]] = []
         for lot_id, lot in self._lots.items():
             if lot.direction != "LONG":
