@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 
 from backend.app.config import TEST_LANE_HEADER, is_test_mode
-from backend.app.config.platform import owning_test_lane_id
+from backend.app.config.platform import TEST_LANE_ID_MAX_LENGTH, TEST_LANE_ID_MIN_LENGTH, owning_test_lane_id
 from backend.app.schemas.system import HealthCheckResponse
 
 health_router = APIRouter()
@@ -30,7 +30,7 @@ async def health_check():
     include_in_schema=False,
 )
 def test_lane_health(
-    token: Annotated[str, Query(min_length=16, max_length=128)],
+    token: Annotated[str, Query(min_length=TEST_LANE_ID_MIN_LENGTH, max_length=TEST_LANE_ID_MAX_LENGTH)],
 ) -> JSONResponse:
     """Confirm readiness only for the test process tree that owns this server."""
     expected = owning_test_lane_id()
