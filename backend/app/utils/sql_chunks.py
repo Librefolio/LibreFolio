@@ -2,8 +2,13 @@
 
 SQLite parses ``a OR b OR c …`` as a chain one level deeper per term and refuses a chain of a thousand
 («Expression tree is too large (maximum depth 1000)»): a bulk statement with one OR term per item failed from 1 000
-items, a 500 to the user. Every such statement runs once per chunk of ``OR_TERMS_PER_QUERY`` terms instead, in the
-same transaction, and its caller merges the rows.
+items, a 500 to the user. The statements that build such a chain from a request's items run once per chunk of
+``OR_TERMS_PER_QUERY`` terms instead, in the same transaction, and their caller merges the rows: the FX rate reads of
+``convert_bulk`` and of the fixed-period changes, the FX rate writes and their sync, the price deletion, the BRIM
+candidate search and the PAC planner's WAC evidence.
+
+``chunks()`` counts elements, and SQLite counts terms: SQLAlchemy writes a nested ``or_()`` out flat, into the same
+chain, so each element of a chunk must be one term (an ``and_()`` inside is fine: it adds depth, not length).
 """
 
 from collections.abc import Iterator, Sequence
