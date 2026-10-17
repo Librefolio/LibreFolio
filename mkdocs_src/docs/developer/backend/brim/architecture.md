@@ -324,8 +324,8 @@ Before final import, BRIM compares each parsed transaction against the database 
 | `broker_id` | ✅ |
 | `date` | ✅ |
 | `type` | ✅ — a `DEPOSIT` or `WITHDRAWAL` also meets saved transfer and exchange legs ([below](#dedup-merged-legs)) |
-| `quantity` | ✅ |
-| `amount` | ✅ |
+| `quantity` | ✅ — the same once both are rounded half-up to the decimals of the less precise one, and never more than 0.0001 apart (`_same_quantity`, W-B51): a report that rounds still meets the stored value, two crypto buys of one day stay two rows; a stored quantity that reads back unreadable matches nothing |
+| `amount` | ✅ — within 0.01, same currency |
 | `description` | Used for confidence upgrade |
 | `asset_id` | Used for confidence upgrade |
 
