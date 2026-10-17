@@ -8158,6 +8158,24 @@ da Y il 15/10.
   - ✅ 17/10: dopo il clic, prima l'URL (tetto 30 s), poi la radice (10 s), nell'aiuto e nella copia in riga del test della
     cache degli eventi; commento di `:332` senza totali (`test-author`). E2E `front-asset asset-detail` 39/39. Review di X.
     Dettagli: piano di Y, «Y-33».
+- **Y-34 · `brokers-detail.spec.ts`: 5 s per il pannello dei lotti dopo «analizza i lotti», sotto carico** — minimo, stabilità
+  dei test; gate I, via il coordinatore, 17/10. Review di X.
+  - `:355` («right-clicking a holding row shows a context menu with both actions») aspetta 5 s `lots-analysis-panel` dopo
+    l'azione: caduto una volta col carico vicino a 90, verde da solo col carico a 28 (40/40). La stessa attesa di 5 s è in 12
+    test del file (`:314`…`:610`). L'azione scrive `?asset=<id>` nell'URL (`assetPanelUrl.ts`), la pagina lo legge in un `$:`
+    (`brokers/[id]/+page.svelte` ~:185-189) e monta il pannello sotto `{#if open && assetId != null}`
+    (`LotsAnalysisPanel.svelte:470`): una navigazione nella stessa rotta più un montaggio, che sotto carico aspettano un thread
+    principale occupato. Stessa classe di Y-33.
+  - Rimedio deciso: un aiuto, prima l'URL con `?asset=` (tetto 30 s), poi il pannello (10 s), per i 12 punti.
+  - Dentro anche la nota di X sulla review di Y-33: in `asset-detail.spec.ts` i quattro test «Live price direction flash»
+    (`:8265`, `:8279`, `:8316`, `:8351`) abbassano il loro timeout a 20 s, sotto il tetto di 30 s dell'URL di
+    `goToSeededAssetDetail`: sotto carico cadrebbero su «Test timeout of 20000ms exceeded». Un
+    `test.describe.configure({timeout: 60_000})` sul loro describe.
+  - **Residuo, da instradare**: `dashboard-cache.spec.ts:295` (`analyzeLots`) è della stessa classe (azione → `?asset=` →
+    pannello) con un'attesa sola di 30 s per navigazione e montaggio: regge, ma cadrebbe su «pannello non visibile» invece che
+    sull'URL. Le altre attese del pannello (`data-quality-real`, `data-quality-legacy`, `stale-price-banner`) seguono un deep
+    link: fuori classe.
+  - Dettagli: piano di Y, «Y-34».
 
 ## MF · Matematica finanziaria (fase 01)
 
