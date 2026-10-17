@@ -19,7 +19,6 @@
     import {safeString} from '$lib/types';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {SIGN_BAR, SIGN_TEXT} from '$lib/theme/toneClasses';
-    import {timingEffectColor} from '$lib/theme/chartColorScales';
 
     interface Props {
         summary: PortfolioSummary | null;
@@ -226,17 +225,14 @@
     const mwrrAnnVal = $derived(summary ? returnPct(summary.mwrr_annualized_percent) : null);
     // The timing effect is the backend's (`timing_effect_percent`, null when either return is missing), in percentage points.
     const timingEffectVal = $derived(summary ? returnPct(summary.timing_effect_percent) : null);
-    const timingIntensity = $derived(timingEffectVal != null ? Math.min(Math.abs(timingEffectVal) / 3, 1) : 0);
-    const timingLabel = $derived.by(() => {
-        if (timingEffectVal == null) return '';
-        if (Math.abs(timingEffectVal) < 0.05) return $_('dashboard.timingNeutral');
-        return timingEffectVal > 0 ? $_('dashboard.timingFavorable') : $_('dashboard.timingUnfavorable');
-    });
-    function timingColor(base: number, span: number): string | undefined {
-        if (timingEffectVal == null) return undefined;
-        const alpha = base + timingIntensity * span;
-        return `color: ${timingEffectColor(timingEffectVal >= 0, alpha)}`;
-    }
+    /**
+     * Its reading, published as `data-direction`: neutral within ±0.05 pp, favourable above, unfavourable below. The
+     * colour agrees, with the sign classes of the other KPIs (round 3, §1.7): green and red, grey when neutral.
+     */
+    const timingDirection = $derived(timingEffectVal == null ? undefined : Math.abs(timingEffectVal) < 0.05 ? 'neutral' : timingEffectVal > 0 ? 'favorable' : 'unfavorable');
+    const timingLabel = $derived(timingDirection === 'neutral' ? $_('dashboard.timingNeutral') : timingDirection === 'favorable' ? $_('dashboard.timingFavorable') : timingDirection === 'unfavorable' ? $_('dashboard.timingUnfavorable') : '');
+    const timingValueTone = $derived(timingDirection === 'favorable' ? SIGN_TEXT.headline.gain : timingDirection === 'unfavorable' ? SIGN_TEXT.headline.loss : timingDirection === 'neutral' ? SIGN_TEXT.headline.neutral : 'text-lf-muted');
+    const timingLabelTone = $derived(timingDirection === 'favorable' ? SIGN_TEXT.kpi.gain : timingDirection === 'unfavorable' ? SIGN_TEXT.kpi.loss : 'text-lf-muted');
     const roiPct = $derived(summary ? formatPercent(roiVal, {signed: false}) : '—');
     const twrrCumPct = $derived(twrrCumVal != null ? formatPercent(twrrCumVal, {signed: false}) : '—');
     const mwrrCumPct = $derived(mwrrCumVal != null ? formatPercent(mwrrCumVal, {signed: false}) : '—');
@@ -325,10 +321,10 @@
                 <Tooltip text={$_('dashboard.timingEffectTooltip')} position="top">
                     <div class="flex flex-col cursor-help">
                         <span class="text-[10px] text-lf-muted uppercase tracking-wide border-b border-dotted border-lf-input inline-block">{$_('dashboard.timingEffect')}</span>
-                        <span class="text-[10px] italic" data-testid="kpi-timing-effect-label" style={timingColor(0.4, 0.6)}>{timingLabel}</span>
+                        <span class="text-[10px] italic {timingLabelTone}" data-testid="kpi-timing-effect-label" data-direction={timingDirection}>{timingLabel}</span>
                     </div>
                 </Tooltip>
-                <span class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold tabular-nums transition-colors {timingEffectVal == null ? 'text-lf-muted' : ''}" data-testid="kpi-timing-effect-value" style={timingColor(0.3, 0.7)}>
+                <span class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold tabular-nums transition-colors {timingValueTone}" data-testid="kpi-timing-effect-value" data-direction={timingDirection}>
                     {#if timingEffectVal == null}—{:else}<TweenedValue value={timingEffectVal} format={(v) => `${formatFixed(v, 2, {signed: true})} ${$_('dashboard.pp')}`} />{/if}
                 </span>
             </div>

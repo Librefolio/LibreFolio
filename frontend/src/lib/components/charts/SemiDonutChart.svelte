@@ -11,8 +11,8 @@
   - "Available" slice for unallocated percentage
   - Dark mode support: redraws when the theme switches, or when the chart colours change (Designer Lab, C4)
   - ResizeObserver for responsive sizing
-  - Owners coloured in order with the first eight asset types of the designer's palette, a version per
-    theme (GR5.2), shaded past the eighth
+  - Owners coloured by their key, never by the order of the data (round 3, §1.5): sorted by key, they take
+    the first eight asset types of the designer's palette, a version per theme, shaded past the eighth
 
   Used by:
   - BrokerSharingModal (ownership distribution)
@@ -40,6 +40,8 @@
     // =========================================================================
 
     interface OwnerSlice {
+        /** The owner's stable key (its user id): the colour follows it, whatever the order of the data. */
+        key: string | number;
         /** Display name */
         name: string;
         /** Percentage (0-100) */
@@ -195,6 +197,11 @@
         return generation === renderGeneration && chartContainer === container && container.isConnected;
     }
 
+    /** The owners in the order of their colours: by key, numbers by value, so a colour stays with its owner. */
+    function compareKeys(a: OwnerSlice, b: OwnerSlice): number {
+        return typeof a.key === 'number' && typeof b.key === 'number' ? a.key - b.key : String(a.key).localeCompare(String(b.key));
+    }
+
     async function renderChart(generation: number, slices: OwnerSlice[], label: string) {
         const container = chartContainer;
         if (!container) return;
@@ -212,11 +219,13 @@
         const avatarSize = 44;
         const borderColor = neutrals.semiDonut.avatarBorder;
         const borderWidth = 2;
-        // GR5.2: the owners take the first eight asset types in order, then a shade of them (GR4) past the eighth. The
-        // roles are read once, from the chart's own element.
+        // §1.5: an owner's colour is read by its key, never by the order of the data. Sorted by key, the owners take the
+        // first eight asset types in order, then a shade of them (GR4) past the eighth. The card is read once, from the
+        // chart's own element.
         const roles = chartRoles(isDark, container);
         const poles = shadePoles(isDark, roles.color('--lf-surface-card'));
-        const ownerColor = (index: number) => sequenceColor('type', CATEGORY_SEQUENCE, index, isDark, poles);
+        const rankByKey = new Map([...slices].sort(compareKeys).map((slice, rank) => [slice, rank]));
+        const ownerColor = (slice: OwnerSlice) => sequenceColor(CATEGORY_SEQUENCE, rankByKey.get(slice) ?? 0, isDark, poles);
 
         // Pre-load circular avatars in parallel
         const avatarPromises: Array<{index: number; promise: Promise<string>}> = [];
@@ -242,8 +251,8 @@
         slices.forEach((slice, i) => {
             if (slice.percentage <= 0) return;
 
-            // The slice and its avatar's disc are one colour, the owner's: by its place among the owners.
-            const color = ownerColor(i);
+            // The slice and its avatar's disc are one colour, the owner's: by its key among the owners'.
+            const color = ownerColor(slice);
             const initial = slice.name.charAt(0).toUpperCase();
             const totalIconSize = avatarSize + borderWidth * 2;
             const rich: Record<string, any> = {

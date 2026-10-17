@@ -2946,6 +2946,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - **Per la designer:** quando decide il punto 2.2, la barra della liquidità potrebbe leggere il colore della
       categoria Liquidità dei grafici: lo stesso salvia, e la stessa misura in tutta l'app.
     - Il valore contabile resta da decidere insieme alle altre categorie.
+    - **Decise dal giro 3** (designer e developer, 17/10, `decisioni.md` §1.7): il valore contabile nel blu dell'ETF
+      (K1-a), la liquidità nel colore della Liquidità, ora blu ardesia. Le fa DV in **R3-5**, dopo i ruoli
+      `--lf-cat-etf` e `--lf-cat-liquidity` di T (§1.9, decisione (A)).
   - **Non di DV**, annotati per non perderli:
     - ✅ `INPUT` e `TITLE_INPUT` di `planner/ui.ts`: migrati dal lotto di T sull'input, `37972b529` (16/10);
     - ✅ i 6 campi di testo e numerici di `components/charts/` (W5-charts, 42 classi): stesso lotto di T, `37972b529`;
@@ -2991,8 +2994,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
       bordo neutro di tutti gli altri tooltip.
   - **Restano in `chartTheme.ts` coi valori legacy:** le serie, gli stati, i segni (guadagno e perdita aspettano un
     lotto con lei: fondono il rosso dei prezzi e quello del portafoglio), i punti del rischio/rendimento.
-  - **`GEO_MAP_COLORS.land`** non va su un ruolo: su `neutral` starebbe a ΔE00 4,1/3,7 dal primo gradino della scala
-    (GR5.1). È lo zero della scala, da decidere con lei.
+  - ✅ **`GEO_MAP_COLORS.land`** non va su un ruolo: su `neutral` starebbe a ΔE00 4,1/3,7 dal primo gradino della scala
+    (GR5.1). È lo zero della scala, da decidere con lei. **Decisa dal giro 3** (17/10, `decisioni.md` §1.6): il «senza
+    dati» `#D5D9E0`/`#343B46`, con la scala nuova dei sei blu; lotto R3-2 di DV, in attesa del commit del coordinatore.
   - **Il testo dei bottoni di stato del Gantt** (`on-status`) resta sotto 4,5:1 sui pieni legacy ambra e cielo di
     `LOT_STATE_COLORS` (3,07 e 3,95:1 in chiaro), come prima: si cura coi pieni di stato.
   - **Quattro helper puri leggono i ruoli su `<html>`,** non sull'elemento del grafico (`buildSecondaryYAxes`,
@@ -3003,6 +3007,15 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     oklab`); da estendere se una miscela o una modifica del Lab usa un altro spazio.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
     «B4».
+- **DV-11 · I colori dei tipi in due copie, finché il Lab non passa ai ruoli** — medio; DV, 17/10 (giro 3, §1.9).
+  - Decisione (A) del coordinatore, in due passi. Il primo è del giro 3: i valori in `lib/theme/chartCategories.ts`,
+    i ruoli `--lf-cat-*` di T in `tokens.css` coi valori uguali, e il test di parità di `chartCategories.test.ts` che
+    blocca le due copie (flag di consegna alla `PENDING_READERS`).
+  - **Resta il secondo:** il layer `category` del Designer Lab diventa una vista dei ruoli, e `chartCategories.ts`
+    legge i tipi dai ruoli col ponte di `roleColors`; allora la copia nel file sparisce. Lotto da programmare con L
+    (archiviato), coordinatore, 17/10.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
+    «Giro 3».
 
 ---
 

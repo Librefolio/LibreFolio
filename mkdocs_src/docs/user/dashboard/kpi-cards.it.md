@@ -92,7 +92,7 @@ Quanto bene ha lavorato il tuo denaro, qualunque sia la dimensione del tuo porta
 
 **Come leggerla**
 
-- **Timing favorevole** (verde): tendevi a depositare prima che i prezzi salissero. **Timing sfavorevole** (rosso): tendevi a depositare sui massimi. Vicino allo zero si legge **Timing neutro**, e più forte è il colore, maggiore è l'effetto.
+- **Timing favorevole** (verde): tendevi a depositare prima che i prezzi salissero. **Timing sfavorevole** (rosso): tendevi a depositare sui massimi. Vicino allo zero si legge **Timing neutro**, né verde né rosso.
 - **Il TWRR giudica la strategia, il MWRR il tuo risultato personale** — come per un gestore di fondi e un investitore.
 - **Le quattro righe coprono l'intero periodo**; la piccola percentuale copre solo oggi.
 - **`—` significa nessun valore**: un rendimento che LibreFolio non può calcolare per il periodo mostra `—` al posto di un numero. L'effetto timing richiede sia il TWRR sia il MWRR: quando ne manca uno, mostra un `—` grigio, senza etichetta di timing.
