@@ -127,6 +127,7 @@ RestoreErrorCode = Literal[
     "manifest_unreadable",
     "manifest_too_large",
     "too_many_entries",
+    "unpacked_too_large",
     "duplicate_entry",
     "unexpected_entry",
     "not_a_file",

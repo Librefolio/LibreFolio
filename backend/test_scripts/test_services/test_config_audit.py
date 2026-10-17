@@ -70,15 +70,28 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
     uvicorn itself: a ``LIBREFOLIO_TEST_MODE`` left on in a container's environment serves the test-only providers, keeps
     the data in the test data directory and stops ``.env`` from being read. ``check_test_mode`` (``platform.test_mode``)
     gives the same result in every profile. Test mode off, as ``is_test_mode()`` reads it (unset, ``0``, ``on``, `` 1``
-    included), is ok, ``instance.checks.testMode.off``, whatever the lane id holds; on with a lane id that is not blank,
-    ok, ``instance.checks.testMode.testLane``; on with the lane id unset, empty or blank, an error,
-    ``instance.checks.testMode.outsideTestLane``, whose detail ``data_dir`` is the test data directory (``get_data_dir()``)
-    and whose summary is ``TEST_MODE_OUTSIDE_LANE_SUMMARY`` filled with it. An ok state has no detail and no summary. The
-    check runs last of the platform's, right after ``check_log_level``. At startup, in ``managed``, its error stops the
-    start (``ManagedTestModeError``, a ``RuntimeError``, its message word for word) right after the short-key stop of
-    (e), which stays first: before the block's warning, nothing logged first. Self-hosted, the profile unset included, it
-    is logged as an error and the start goes on. ``_configure`` puts every test-mode configuration in this file's own
-    lane, ``FAKE_LANE_ID``, and production in none, so no case depends on the runner's environment.
+    included), is ok, ``instance.checks.testMode.off``, whatever the lane id holds; on in a test lane, ok,
+    ``instance.checks.testMode.testLane``; on outside one — the lane id unset, empty or blank, or, since H-49, out of the
+    bounds of (i) —, an error, ``instance.checks.testMode.outsideTestLane``, whose detail ``data_dir`` is the test data
+    directory (``get_data_dir()``) and whose summary is ``TEST_MODE_OUTSIDE_LANE_SUMMARY`` filled with it. An ok state
+    has no detail and no summary. The check runs last of the platform's, right after ``check_log_level``. At startup, in
+    ``managed``, its error stops the start (``ManagedTestModeError``, a ``RuntimeError``, its message word for word)
+    right after the short-key stop of (e), which stays first: before the block's warning, nothing logged first.
+    Self-hosted, the profile unset included, it is logged as an error and the start goes on. ``_configure`` puts every
+    test-mode configuration in this file's own lane, ``FAKE_LANE_ID``, and production in none, so no case depends on the
+    runner's environment.
+(i) The test lane id within the readiness probe's bounds (H-49). The runner makes the lane id with
+    ``secrets.token_hex(16)``, 32 characters (``scripts/cli_base.ensure_test_lane_id``), and the readiness probe
+    ``GET /api/v1/system/test-lane-health`` (``backend/app/api/v1/system/health.py``) takes a ``token`` of 16 to 128
+    characters: a lane id the probe would refuse is no working lane. ``backend/app/config/platform.py`` holds the two
+    bounds beside ``owning_test_lane_id()``, which stays the variable as set: ``TEST_LANE_ID_MIN_LENGTH``, 16, and
+    ``TEST_LANE_ID_MAX_LENGTH``, 128; the ``Query`` of the probe's ``token`` takes the same values. Test mode on is in a
+    test lane when the lane id, stripped, holds between the two bounds of characters, both included: 16 and 128
+    characters are a lane, 15 and 129 are not, a 16-character id padded with spaces to 20 is one, a 15-character id
+    padded to 20 is not. Out of the bounds the check is the error of (h), its detail and its summary as there, and a
+    managed start stops with the ``ManagedTestModeError`` of (h), its message word for word, nothing logged first;
+    within them the check is ok, ``testLane``, and a managed start goes on with nothing logged about test mode.
+    ``FAKE_LANE_ID``, 30 characters, is within the bounds, so no case of (h) changes its outcome.
 
 Pure: the data directory is in ``tmp_path``, every variable the checks read is set or removed through ``monkeypatch``
 (environment values win over a ``.env``), the forwarding notes of (f) are emptied the same way, and the module's logger
@@ -87,7 +100,10 @@ be reached is set up in a production data directory in ``tmp_path`` (``LIBREFOLI
 of test roots stops on it first, by a rule of its own. The names H-46 adds to the module (``check_test_mode``,
 ``ManagedTestModeError``, ``TEST_MODE_OUTSIDE_LANE_SUMMARY``) are read by name, with ``getattr``, in the tests that need
 them (``_h46``), as ``test_managed_headers.py`` reads H-42's ``PAGE_POLICY``: before H-46 those tests fail naming it,
-while every other test still collects and runs.
+while every other test still collects and runs. So are the two bounds H-49 adds to ``backend/app/config/platform.py``
+(``_h49``). The probe's own bounds are read from the ``Annotated`` metadata of the ``token`` parameter of
+``test_lane_health``, imported and never called, so no request is made: FastAPI's ``Query`` is a pydantic ``FieldInfo``,
+which keeps ``min_length`` and ``max_length`` as ``annotated_types.MinLen`` and ``MaxLen``.
 """
 
 from __future__ import annotations
@@ -98,11 +114,15 @@ import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, get_args, get_origin, get_type_hints
 
 import pytest
+from annotated_types import MaxLen, MinLen
+from fastapi import params as fastapi_params
 
+from backend.app.api.v1.system import health as health_api
 from backend.app.config import PROFILE_DEFAULTS, SECRET_FILE_MAX_BYTES, SecretFileError, get_data_dir, get_settings, is_test_mode
+from backend.app.config import platform as platform_config
 from backend.app.config.platform import instance_blocked
 from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS, check_login_limit
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS, check_email_links, check_smtp_configuration, check_smtp_encryption
@@ -124,7 +144,7 @@ from backend.app.services.platform.config_audit import (
     log_configuration_audit,
     run_config_checks,
 )
-from backend.app.services.platform.instance_backup.checks import BACKUP_CONFIG_CHECKS, check_panel_token, check_upload_limit
+from backend.app.services.platform.instance_backup.checks import BACKUP_CONFIG_CHECKS, check_panel_token, check_restore_limit, check_upload_limit
 from backend.app.services.platform.instance_key import INSTANCE_KEY_FILE, InstanceKeyError, derive_key, instance_key_path
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -151,6 +171,7 @@ CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     **({_TEST_MODE_CHECK: "platform.test_mode"} if _TEST_MODE_CHECK is not None else {}),
     check_panel_token: "backup.panel_token",
     check_upload_limit: "backup.upload_limit",
+    check_restore_limit: "backup.restore_limit",
     check_login_limit: "accounts.login_limit",
     check_smtp_configuration: "email.smtp",
     check_smtp_encryption: "email.smtp_encryption",
@@ -164,13 +185,20 @@ GOOD_INSTANCE_KEY = "instance-key-of-a-careful-admin-0123456789"
 #: Marks every secret of the leak tests: no field of a result, no log record, no startup error may contain it.
 CANARY = "Zq7canary"
 #: H-46: the lane of every test-mode configuration here (``_configure``), so that no case depends on the runner's
-#: environment; clearly fake, and not the 32 hexadecimal characters ``ensure_test_lane_id()`` makes.
+#: environment; clearly fake, and not the 32 hexadecimal characters ``ensure_test_lane_id()`` makes. H-49: 30
+#: characters, within the bounds of (i), so it stays a lane.
 FAKE_LANE_ID = "h46-fake-lane-0123456789abcdef"
 #: H-46: the names the module gains, each with what it is, for the message of a test that reads one before it exists.
 H46_NAMES = {
     "check_test_mode": "the check of LIBREFOLIO_TEST_MODE outside a test lane (platform.test_mode), the platform's last check, right after check_log_level",
     "ManagedTestModeError": "the RuntimeError that stops a managed start with LIBREFOLIO_TEST_MODE on outside a test lane, right after the short-key stop",
     "TEST_MODE_OUTSIDE_LANE_SUMMARY": "the summary of check_test_mode outside a test lane, with the data directory as {data_dir}",
+}
+#: H-49: the bounds ``backend/app/config/platform.py`` gains beside ``owning_test_lane_id()``, each with what it is, for
+#: the message of a test that reads one before it exists.
+H49_NAMES = {
+    "TEST_LANE_ID_MIN_LENGTH": "the fewest characters of a LIBREFOLIO_TEST_LANE_ID, once stripped, that make a test lane: 16, the min_length of the token of GET /api/v1/system/test-lane-health",
+    "TEST_LANE_ID_MAX_LENGTH": "the most characters of a LIBREFOLIO_TEST_LANE_ID, once stripped, that make a test lane: 128, the max_length of the token of GET /api/v1/system/test-lane-health",
 }
 
 
@@ -218,8 +246,9 @@ def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: b
     # Workstream E: email off whatever the environment holds, so its three checks are ok
     for variable in [name for name in os.environ if name.startswith("LIBREFOLIO_SMTP_")]:
         monkeypatch.delenv(variable)
-    # Workstream B: no panel token and no upload limit whatever the environment holds, so its two checks are ok
-    for variable in ("LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN", "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"):
+    # Workstream B: no panel token, no upload limit and no restore limit (B-35) whatever the environment holds, so its
+    # three checks are ok
+    for variable in ("LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN", "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB", "LIBREFOLIO_BACKUP_MAX_RESTORE_MB"):
         monkeypatch.delenv(variable, raising=False)
     # Workstream A: the login limit on whatever the environment holds (the lane's server runs with it off), so its check
     # is ok and the variable cannot stop the audit
@@ -298,6 +327,13 @@ def _h46(name: str) -> Any:
     """``config_audit.<name>``, a name H-46 adds, read when the test runs (as ``test_managed_headers.py`` reads H-42's ``PAGE_POLICY``): until the module has it, the test fails naming H-46, while the rest of this file collects and runs."""
     value = getattr(config_audit, name, None)
     assert value is not None, f"H-46: config_audit has no {name}, {H46_NAMES[name]}"
+    return value
+
+
+def _h49(name: str) -> Any:
+    """``backend.app.config.platform.<name>``, a bound H-49 adds, read when the test runs, as ``_h46`` reads H-46's names: until the module has it, the test fails naming H-49, while the rest of this file collects and runs."""
+    value = getattr(platform_config, name, None)
+    assert value is not None, f"H-49: backend.app.config.platform has no {name}, {H49_NAMES[name]}"
     return value
 
 
@@ -1167,9 +1203,10 @@ def test_startup_logs_neither_switch_off_in_the_selfhosted_profile(configuration
 #: (``config_audit.TEST_MODE_OUTSIDE_LANE_SUMMARY``).
 TEST_MODE_OUTSIDE_LANE = "LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory {data_dir} and .env is not read; unset it on a production instance"
 #: (h) The error that stops a managed start with test mode on outside a test lane, word for word, its ``{data_dir}`` to
-#: fill (``config_audit.ManagedTestModeError``).
-MANAGED_TEST_MODE_STOP = "In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID): test-only providers would be served and the data kept in the test data directory {data_dir}; unset LIBREFOLIO_TEST_MODE"
-#: (h) A lane id that gives no lane: unset, empty or blank.
+#: fill (``config_audit.ManagedTestModeError``). Since H-49 it names the lane id's bounds: an id can be set and still
+#: give no lane.
+MANAGED_TEST_MODE_STOP = "In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID of 16 to 128 characters): test-only providers would be served and the data kept in the test data directory {data_dir}; unset LIBREFOLIO_TEST_MODE"
+#: (h) A lane id that gives no lane: unset, empty or blank; (i) has the lane ids out of the bounds (H-49).
 NO_LANE = [pytest.param(None, id="lane-unset"), pytest.param("", id="lane-empty"), pytest.param("   ", id="lane-blank")]
 
 
@@ -1422,3 +1459,153 @@ def test_a_short_jwt_secret_stops_a_managed_start_before_test_mode_outside_a_tes
     assert str(raised.value) == expected, f"the startup error must be the short key's:\n  expected {expected!r}\n  got      {str(raised.value)!r}"
     assert logged == [], f"nothing is logged before the start is stopped: {logged}"
     print_success(f"start stopped first by the short key: {raised.value}")
+
+
+# =============================================================================
+# (i) The test lane id within the readiness probe's bounds (H-49)
+# =============================================================================
+
+
+def _lane_id(length: int) -> str:
+    """(i) A lane id of ``length`` characters, clearly fake and without whitespace: ``h49-lane-``, then hexadecimal digits."""
+    return ("h49-lane-" + "0123456789abcdef" * 8)[:length]
+
+
+#: (i) Lane ids within the bounds, so a test lane: each with its length as set and once stripped.
+LANES_WITHIN_THE_BOUNDS = [
+    pytest.param(_lane_id(16), 16, 16, id="16-characters-the-minimum"),
+    pytest.param(_lane_id(128), 128, 128, id="128-characters-the-maximum"),
+    pytest.param(f"  {_lane_id(16)}  ", 20, 16, id="16-characters-padded-with-spaces-to-20"),
+]
+#: (i) Lane ids out of the bounds, so no test lane: the same shape.
+LANES_OUT_OF_THE_BOUNDS = [
+    pytest.param(_lane_id(15), 15, 15, id="15-characters-one-below-the-minimum"),
+    pytest.param(_lane_id(129), 129, 129, id="129-characters-one-above-the-maximum"),
+    pytest.param(f"  {_lane_id(15)}   ", 20, 15, id="15-characters-padded-with-spaces-to-20"),
+]
+
+
+def _with_lane_id(configuration: Configuration, lane: str, length: int, stripped: int) -> str:
+    """(i) Test mode on with ``LIBREFOLIO_TEST_LANE_ID`` set to ``lane``, verified to hold ``length`` characters as set and
+    ``stripped`` once stripped. Returns the data directory the check names, verified to be this test's own test data
+    directory."""
+    configuration.set(LIBREFOLIO_TEST_LANE_ID=lane)
+    assert (len(lane), len(lane.strip())) == (length, stripped), f"Precondition: the lane id of this case must hold {length} characters, {stripped} once stripped, not {len(lane)} and {len(lane.strip())}"
+    assert is_test_mode(), f"Precondition: LIBREFOLIO_TEST_MODE={os.environ.get('LIBREFOLIO_TEST_MODE')!r} must turn test mode on"
+    data_dir = str(get_data_dir())
+    assert data_dir == str(configuration.data_dir), f"Precondition: in test mode the data directory must be this test's test data directory, {configuration.data_dir}, not {data_dir}"
+    return data_dir
+
+
+@pytest.mark.parametrize(("name", "expected"), [pytest.param("TEST_LANE_ID_MIN_LENGTH", 16, id="minimum-16"), pytest.param("TEST_LANE_ID_MAX_LENGTH", 128, id="maximum-128")])
+def test_the_lane_id_bounds_are_pinned_by_value(name, expected):
+    """(i) H-49: the bounds of a test lane id are these integers, the bounds the readiness probe has always given its
+    token: 16 and 128 characters."""
+    print_section("H-49: the test lane id within the readiness probe's bounds")
+
+    bound = _h49(name)
+
+    assert (type(bound), bound) == (int, expected), f"H-49: backend.app.config.platform.{name} must be the integer {expected}, not {bound!r}"
+    print_success(f"{name} = {bound}")
+
+
+def test_the_readiness_probe_takes_a_token_within_the_same_bounds():
+    """(i) H-49: the ``token`` of ``GET /api/v1/system/test-lane-health`` is a ``str`` whose ``Query`` has
+    ``TEST_LANE_ID_MIN_LENGTH`` as its ``min_length`` and ``TEST_LANE_ID_MAX_LENGTH`` as its ``max_length``: a lane id
+    the check counts as a lane is a token the probe takes, and one the probe refuses is no lane. Read from the
+    ``Annotated`` metadata of the parameter, where pydantic keeps the two as ``MinLen`` and ``MaxLen``;
+    ``test_lane_health`` is never called."""
+    bounds = (_h49("TEST_LANE_ID_MIN_LENGTH"), _h49("TEST_LANE_ID_MAX_LENGTH"))
+    token = get_type_hints(health_api.test_lane_health, include_extras=True).get("token")
+    assert get_origin(token) is Annotated, f"Precondition: the token of test_lane_health must be Annotated with its Query, not {token!r}"
+    queries = [extra for extra in get_args(token)[1:] if isinstance(extra, fastapi_params.Query)]
+    assert get_args(token)[0] is str and len(queries) == 1, f"Precondition: the token of test_lane_health must be a str with one Query: {token!r}"
+
+    metadata = queries[0].metadata
+    probe = ([item.min_length for item in metadata if isinstance(item, MinLen)], [item.max_length for item in metadata if isinstance(item, MaxLen)])
+
+    assert probe == ([bounds[0]], [bounds[1]]), f"H-49: the probe must take a token of TEST_LANE_ID_MIN_LENGTH to TEST_LANE_ID_MAX_LENGTH characters, {bounds[0]} to {bounds[1]}: its Query has the minimum lengths {probe[0]} and the maximum lengths {probe[1]}"
+    print_success(f"test_lane_health's token: {bounds[0]} to {bounds[1]} characters, the bounds of a lane id")
+
+
+def test_the_lane_of_this_file_stays_within_the_bounds():
+    """(i) H-49: ``FAKE_LANE_ID``, the lane ``_configure`` gives every test-mode configuration of this file, is within the
+    bounds: every case of (h) in a test lane stays in one, and none changes its outcome."""
+    minimum, maximum = _h49("TEST_LANE_ID_MIN_LENGTH"), _h49("TEST_LANE_ID_MAX_LENGTH")
+
+    length = len(FAKE_LANE_ID.strip())
+
+    assert minimum <= length <= maximum, f"FAKE_LANE_ID must stay a test lane: it holds {length} characters once stripped, the bounds are {minimum} to {maximum}"
+    print_success(f"FAKE_LANE_ID: {length} characters, within {minimum} to {maximum}")
+
+
+@pytest.mark.parametrize(("lane", "length", "stripped"), LANES_WITHIN_THE_BOUNDS)
+def test_the_test_mode_check_is_ok_with_a_lane_id_within_the_bounds(configuration, lane, length, stripped):
+    """(i) H-49: test mode on with a lane id that holds, once stripped, between the two bounds of characters, both
+    included, is in a test lane: ok, ``instance.checks.testMode.testLane``, with no detail and no summary. A control,
+    green before H-49 and after: a cure off by one at a bound, or refusing an id padded with spaces, turns it red."""
+    check_test_mode = _h46("check_test_mode")
+    _with_lane_id(configuration, lane, length, stripped)
+
+    result = check_test_mode()
+
+    _assert_check(result, check_test_mode, "ok", "testMode.testLane", {})
+    assert result.summary == "", f"an ok check has no summary: {result.summary!r}"
+    print_success(f"LIBREFOLIO_TEST_LANE_ID of {length} characters, {stripped} once stripped: ok {result.i18n_key}")
+
+
+@pytest.mark.parametrize(("lane", "length", "stripped"), LANES_OUT_OF_THE_BOUNDS)
+def test_the_test_mode_check_is_an_error_with_a_lane_id_out_of_the_bounds(configuration, lane, length, stripped):
+    """(i) H-49: test mode on with a lane id that holds, once stripped, fewer characters than the minimum or more than the
+    maximum is outside a test lane, as without a lane id (h): an error, ``instance.checks.testMode.outsideTestLane``,
+    naming the test data directory in its detail and in its summary."""
+    check_test_mode = _h46("check_test_mode")
+    summary = _h46("TEST_MODE_OUTSIDE_LANE_SUMMARY")
+    data_dir = _with_lane_id(configuration, lane, length, stripped)
+
+    result = check_test_mode()
+
+    _assert_check(result, check_test_mode, "error", "testMode.outsideTestLane", {"data_dir": data_dir})
+    expected = summary.format(data_dir=data_dir)
+    assert result.summary == expected, f"check_test_mode() outside a test lane: its summary must be TEST_MODE_OUTSIDE_LANE_SUMMARY with the data directory, word for word:\n  expected {expected!r}\n  got      {result.summary!r}"
+    print_success(f"LIBREFOLIO_TEST_LANE_ID of {length} characters, {stripped} once stripped: error {result.i18n_key}")
+
+
+@pytest.mark.parametrize(("lane", "length", "stripped"), LANES_OUT_OF_THE_BOUNDS)
+def test_startup_stops_on_a_lane_id_out_of_the_bounds_in_the_managed_profile(configuration, logged, lane, length, stripped):
+    """(i)(h) H-49: managed, test mode on with a lane id out of the bounds stops the start as outside a test lane:
+    ``ManagedTestModeError``, the message of (h) word for word, nothing logged first."""
+    error = _h46("ManagedTestModeError")
+    data_dir = _with_lane_id(configuration, lane, length, stripped)
+    configuration.set(LIBREFOLIO_PROFILE="managed")
+    assert get_settings().LIBREFOLIO_PROFILE == "managed", "Precondition: Settings must read LIBREFOLIO_PROFILE=managed as managed"
+    assert getattr(config_audit.logger, "records", None) is logged, "Precondition: the module's logger is this test's recorder, so a record logged before the stop would be heard"
+
+    with pytest.raises(error) as raised:
+        log_configuration_audit()
+
+    expected = MANAGED_TEST_MODE_STOP.format(data_dir=data_dir)
+    assert str(raised.value) == expected, f"the startup error must be the one of test mode outside a test lane, word for word:\n  expected {expected!r}\n  got      {str(raised.value)!r}"
+    assert logged == [], f"nothing is logged before the start is stopped: {logged}"
+    print_success(f"LIBREFOLIO_TEST_LANE_ID of {length} characters, {stripped} once stripped: start stopped")
+
+
+@pytest.mark.parametrize(("lane", "length", "stripped"), LANES_WITHIN_THE_BOUNDS)
+def test_a_managed_start_goes_on_with_a_lane_id_within_the_bounds(configuration, logged, lane, length, stripped):
+    """(i)(h) H-49: managed, test mode on with a lane id within the bounds is in a test lane: the start goes on, with
+    nothing logged about test mode. Barriers: the check evaluated ok, the unset JWT secret's info heard. A control, green
+    before H-49 and after."""
+    _h46("check_test_mode")
+    _with_lane_id(configuration, lane, length, stripped)
+    configuration.set(LIBREFOLIO_PROFILE="managed")
+    assert get_settings().LIBREFOLIO_PROFILE == "managed", "Precondition: Settings must read LIBREFOLIO_PROFILE=managed as managed"
+    states = {result.check_id: (result.severity, result.i18n_key) for result in run_config_checks() if result.check_id == "platform.test_mode"}
+    assert states == {"platform.test_mode": ("ok", "instance.checks.testMode.testLane")}, f"Precondition: the audit evaluates check_test_mode, ok in a test lane: {states}"
+
+    returned = log_configuration_audit()
+
+    assert returned is None, f"the start goes on: log_configuration_audit() returns None, not {returned!r}"
+    checks = [fields.get("check") for _, _, fields in logged]
+    assert "platform.jwt_secret" in checks, f"Barrier: the audit's record of the unset JWT secret must reach the recorder, or the silence about test mode proves nothing: {logged}"
+    assert "platform.test_mode" not in checks, f"in a test lane, nothing about test mode is logged: {logged}"
+    print_success(f"LIBREFOLIO_TEST_LANE_ID of {length} characters, {stripped} once stripped: the start went on, nothing logged about test mode")

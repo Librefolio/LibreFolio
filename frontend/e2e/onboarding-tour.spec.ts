@@ -50,7 +50,7 @@ const DESCRIPTION_ID = 'onboarding-coachmark-description';
 const CORE_ORDER = ['intro.scene', 'intro.navigation', 'intro.dashboard', 'intro.transactions_nav', 'intro.brokers_nav', 'intro.fx_nav', 'intro.assets_nav', 'intro.tools_nav', 'intro.settings_nav'] as const;
 const BULK_STEPS = ['transaction.bulk.workspace', 'transaction.bulk.validation', 'transaction.bulk.selection', 'transaction.bulk.save'] as const;
 const BULK_ACCOUNT_SETUP_SKIPS = ['transactions_page_guide', 'transaction_create_guide'] as const;
-const TRANSACTION_FORM_GUIDE_STEPS = [
+const TRANSACTION_FORM_GUIDE_STEPS: ReadonlyArray<Pick<Parameters<typeof expectGuideStep>[1], 'stepId' | 'pointer' | 'highlight' | 'placement' | 'allowTargetOverlap'> & {targetId: string}> = [
     {stepId: 'transaction.create.basics', targetId: 'tx-form-type-wrap', pointer: 'none', highlight: 'pulse'},
     {stepId: 'transaction.create.amounts', targetId: 'tx-form-required', pointer: 'none', highlight: 'pulse', allowTargetOverlap: true},
     {stepId: 'transaction.create.details', targetId: 'tx-form-optional-toggle', pointer: 'none', highlight: 'pulse'},
@@ -860,6 +860,7 @@ test.describe('Onboarding Round 5', () => {
                     target,
                     pointer: guideStep.pointer,
                     highlight: guideStep.highlight,
+                    backdrop: false,
                     placement: 'placement' in guideStep ? guideStep.placement : undefined,
                     allowTargetOverlap: 'allowTargetOverlap' in guideStep ? guideStep.allowTargetOverlap : undefined,
                 });

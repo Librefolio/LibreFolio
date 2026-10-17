@@ -195,8 +195,10 @@ returned value on the object with `set_committed_value()`: two such requests rai
 Activation, promotion, logout and every refused operation leave the version alone: a new password that misses a
 [password rule](#password-rules), wherever it is chosen; a wrong current password, or a new password equal to it, on
 `change-password`; a missing or wrong current password, or an address or a username already
-taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *already an admin* or *not an admin*; a
-reset or setup link that is not valid. So do issuing a reset or setup link, which ends nothing until it is spent, a
+taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *already an admin* or *not an admin*; the
+demotion of the initial administrator waiting for its setup (lot A-43,
+[The Setup Link's Lifecycle](#setup-link-lifecycle)); a reset or setup link that is not valid, a link refused because
+its account was set up before included. So do issuing a reset or setup link, which ends nothing until it is spent, a
 `PATCH` whose values equal the current ones, and a profile change that changes no email (a new username, or the
 stored email sent again, as written or in another A–Z case).
 
@@ -1005,10 +1007,11 @@ part on its own, the locks held, the links, a part that raises, a clean data dir
 
 #### Configuration Checks of the Backup {: #backup-config-checks }
 
-`backend/app/services/platform/instance_backup/checks.py` (lot B-9) gives two checks in the shape of H's `ConfigCheck`
+`backend/app/services/platform/instance_backup/checks.py` (lot B-9) gives three checks in the shape of H's `ConfigCheck`
 ([Configuration Checks](#configuration-checks)), under the same rules: they change nothing, never raise, and never put
-the token or a file's content in a result. With them, an unusable token or upload limit shows in the start log, not only
-at the hosting panel's first call or at the first restore upload.
+the token or a file's content in a result. With them, an unusable token, upload limit or restore limit shows in the
+start log, not only at the hosting panel's first call, at the first restore upload or at the first check (the third,
+`backup.restore_limit`, since lot B-35).
 
 | `check_id` | State | `i18n_key` | `detail` | Severity |
 |------------|-------|------------|----------|----------|
@@ -1021,12 +1024,15 @@ at the hosting panel's first call or at the first restore upload.
 | `backup.upload_limit` | No limit: `0`, or unset in the self-hosted profile | `backup.checks.uploadLimit.unlimited` | — | `ok` |
 | `backup.upload_limit` | `BackupConfigError` `BACKUP_MAX_UPLOAD_MB_INVALID`: not a whole number | `backup.checks.uploadLimit.invalid` | — | `error` |
 | `backup.upload_limit` | `ProfileDefaultError`: the entry of `ENVIRONMENT_PROFILE_DEFAULTS`, asked only while the variable is unset, is missing or of the wrong type (H-27, H-37; [Settings](settings.md)) | `backup.checks.uploadLimit.profileTable` | — | `error` |
+| `backup.restore_limit` (reads `backup_max_restore_mb()`, [The Restore Limit](#backup-restore-limit)) | A limit: the value set, or, while it is unset outside `selfhosted`, 8 times the upload limit, 4000 in `managed` | `backup.checks.restoreLimit.limited` | `{"limit_mb": n}` | `ok` |
+| `backup.restore_limit` | No limit: `0`, unset in the self-hosted profile, or unset with an upload limit of `0` | `backup.checks.restoreLimit.unlimited` | — | `ok` |
+| `backup.restore_limit` | `BackupConfigError`: `BACKUP_MAX_RESTORE_MB_INVALID`, not a whole number; or, while it is unset outside `selfhosted`, the upload limit's `BACKUP_MAX_UPLOAD_MB_INVALID` | `backup.checks.restoreLimit.invalid` | `{"variable": …}`, from `exc.variable`: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`, or `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` in the second case | `error` |
+| `backup.restore_limit` | `ProfileDefaultError`: while it is unset outside `selfhosted`, the upload limit's entry of `ENVIRONMENT_PROFILE_DEFAULTS` is missing or of the wrong type | `backup.checks.restoreLimit.profileTable` | — | `error` |
 
-- **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit)` is unpacked in
+- **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit, check_restore_limit)` is unpacked in
   `CONFIG_CHECKS` right after `check_log_level`, before workstream A's `ACCOUNTS_CONFIG_CHECKS` and E's
-  `*EMAIL_CONFIG_CHECKS`, which still close the tuple. The startup audit logs the two
-  error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of
-  [Configuration](../../admin/configuration.md)), and the start goes on. The routes are unchanged: `503`, and their own
+  `*EMAIL_CONFIG_CHECKS`, which still close the tuple. The startup audit logs their
+  error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of [Configuration](../../admin/configuration.md)), and the start goes on. The routes are unchanged: `503`, and their own
   error line at each call.
 - **The import.** `config_audit` imports this module to build its tuple, so `checks.py` imports `ConfigCheck` only
   when a check runs, as E's `checks.py` does ([Email Service](../backend/email.md#configuration-checks)): either module
@@ -1046,7 +1052,7 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 |-------|---------|
 | `check_id` | Stable id, such as `platform.jwt_secret` |
 | `severity` | `ok`, `info`, `warning` or `error` |
-| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 27 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose nine messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). The «Security» tab of Settings › Administration shows these messages, all four subsystems', from [`GET /security/checks`](#security-checks-endpoint) ([SecurityTab](../frontend/components/features/settings.md#securitytab)); the log has the English `summary` instead |
+| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 27 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose thirteen messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). The «Security» tab of Settings › Administration shows these messages, all four subsystems', from [`GET /security/checks`](#security-checks-endpoint) ([SecurityTab](../frontend/components/features/settings.md#securitytab)); the log has the English `summary` instead |
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
@@ -1069,9 +1075,10 @@ started: it is `ok` at startup, so the startup audit never logs it.
 | `platform.frame_protection` | `LIBREFOLIO_FRAME_PROTECTION` is off with `LIBREFOLIO_PROFILE=managed`, whose entry in `PROFILE_DEFAULTS` turns it on ([Frame Protection and the Report-Only Policy](#managed-headers)): a value set in the environment or in `.env`, or the entry lost from the table. `instance.checks.frameProtection.offManaged`, summary `LIBREFOLIO_FRAME_PROTECTION is off in the managed profile: any site can show LibreFolio in a frame; the managed profile turns it on` | `warning` |
 | `platform.csp_report_only` | `LIBREFOLIO_CSP_REPORT_ONLY` is off with `LIBREFOLIO_PROFILE=managed`, the same way: `instance.checks.cspReportOnly.offManaged`, summary `LIBREFOLIO_CSP_REPORT_ONLY is off in the managed profile: browsers list no Content-Security-Policy violation; the managed profile turns it on`. Only an `info`: the policy reports, and never blocks | `info` |
 | `platform.log_level` | `LOG_LEVEL`, after the `LIBREFOLIO_LOG_LEVEL` override, is `DEBUG` or `TRACE` | `info` |
-| `platform.test_mode` | `LIBREFOLIO_TEST_MODE` is on (`is_test_mode()`: `1`, `true` or `yes`, in any case) outside a test lane, with `LIBREFOLIO_TEST_LANE_ID` unset, empty or blank (`owning_test_lane_id()`): `instance.checks.testMode.outsideTestLane`, `detail` `{"data_dir": …}`, the test data directory in use (`str(get_data_dir())`), summary `TEST_MODE_OUTSIDE_LANE_SUMMARY`, `LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory <data_dir> and .env is not read; unset it on a production instance`. The same in every profile (below) | `error`; with `LIBREFOLIO_PROFILE=managed`, `log_configuration_audit()` stops the startup first |
+| `platform.test_mode` | `LIBREFOLIO_TEST_MODE` is on (`is_test_mode()`: `1`, `true` or `yes`, in any case) outside a test lane, with `LIBREFOLIO_TEST_LANE_ID` unset, or not 16 to 128 characters once stripped (`owning_test_lane_id()`, H-49): `instance.checks.testMode.outsideTestLane`, `detail` `{"data_dir": …}`, the test data directory in use (`str(get_data_dir())`), summary `TEST_MODE_OUTSIDE_LANE_SUMMARY`, `LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory <data_dir> and .env is not read; unset it on a production instance`. The same in every profile (below) | `error`; with `LIBREFOLIO_PROFILE=managed`, `log_configuration_audit()` stops the startup first |
 | `backup.panel_token` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, or its `_FILE`, is set but cannot be used: `backup.checks.panelToken.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `backup.upload_limit` | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, or the profile's entry for it, cannot be used: `backup.checks.uploadLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
+| `backup.restore_limit` | `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` cannot be used, or, while it is unset outside `selfhosted`, the upload limit it follows: `backup.checks.restoreLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `accounts.login_limit` | `LIBREFOLIO_LOGIN_LIMIT=off`, in any case: the [failed sign-in limit](#login-limit) is off. `auth.checks.loginLimit.off`, and one fixed summary however `off` is written: `LIBREFOLIO_LOGIN_LIMIT=off: failed sign-ins are not limited; turn it back on unless this is a test instance` | `warning` |
 | `accounts.login_limit` | Any value other than `on` or `off`: `auth.checks.loginLimit.invalid`, `detail` `{"value": <the value, stripped>}`, as `login_limit_value()` reads it. `log_configuration_audit()` stops the start on such a value (below), so the error shows only for a value read after the start | `error` |
 
@@ -1087,10 +1094,12 @@ and the checks only show it, in the startup log and in [the checks on demand](#s
 
 The check of test mode (lot H-46), `check_test_mode()`, the last of the platform's in `CONFIG_CHECKS`, gives the same
 result in every profile. It is `ok` while test mode is off (`instance.checks.testMode.off`), and while it is on in a
-test lane (`instance.checks.testMode.testLane`): a process that owns a `LIBREFOLIO_TEST_LANE_ID` that is not blank
-(`owning_test_lane_id()` in `backend/app/config/platform.py`). `configure_test_runtime()` in `scripts/cli_base.py` sets
-it, with `ensure_test_lane_id()`, for the test runner (`dev.py test`, its shared backend and its in-process pytest), for
-`dev.py server --test` and for the gallery's servers; `configure_server_runtime()` (`dev.py server`) sets
+test lane (`instance.checks.testMode.testLane`): a process that owns a `LIBREFOLIO_TEST_LANE_ID` the readiness probe
+accepts, 16 to 128 characters once stripped (`owning_test_lane_id()`, `TEST_LANE_ID_MIN_LENGTH` and
+`TEST_LANE_ID_MAX_LENGTH` in `backend/app/config/platform.py`, lot H-49; `GET /system/test-lane-health` declares its
+token with the same two constants). `configure_test_runtime()` in `scripts/cli_base.py` sets it, with
+`ensure_test_lane_id()`, 32 characters, for the test runner (`dev.py test`, its shared backend and its in-process
+pytest), for `dev.py server --test` and for the gallery's servers; `configure_server_runtime()` (`dev.py server`) sets
 `LIBREFOLIO_TEST_MODE=0` and removes it. The lane id is no barrier against an attacker, since whoever writes the
 environment is the operator: it tells a configuration mistake from a test lane.
 
@@ -1110,9 +1119,9 @@ and reproduced outside a container with a folder the server cannot write; it is 
 managed profile the start stops on the error (`ManagedTestModeError`, below); in the
 self-hosted profile it goes on, with the error in the log and in [the checks on demand](#security-checks-endpoint).
 The profile that counts is the one in the process environment, where a container's `environment:` or `env_file:` puts
-it: in test mode `Settings` reads no `.env`. Its tests are section (h) of `./dev.py test services config-audit`
+it: in test mode `Settings` reads no `.env`. Its tests are sections (h) and (i), lot H-49, of `./dev.py test services config-audit`
 (`backend/test_scripts/test_services/test_config_audit.py`): the three states, with the true and false spellings of
-the variable and a blank lane id; the same result in every profile; the startup log record; the managed stop with its
+the variable, a blank lane id and lane ids around the probe's two bounds; the same result in every profile; the startup log record; the managed stop with its
 exact message, the JWT stop staying first.
 
 Workstream A's check, `ok` as `auth.checks.loginLimit.ok` while the limit is on, is `check_login_limit()` in
@@ -1124,7 +1133,7 @@ never from `os.environ`: the rule of the configuration package ([Settings System
 `checks.py` imports `ConfigCheck` inside the check, when it runs, and under `TYPE_CHECKING` for its annotation:
 `config_audit` imports it to build its tuple, so either module can be imported first.
 
-So `CONFIG_CHECKS` is the platform's checks, then workstream B's two
+So `CONFIG_CHECKS` is the platform's checks, then workstream B's three
 ([Configuration Checks of the Backup](#backup-config-checks)), then A's, then E's three, which close it.
 
 At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
@@ -1137,7 +1146,7 @@ At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
    self-hosted profile it stays the `warning` of the table above.
 2. Test mode on outside a test lane, the `error` of `platform.test_mode`: with `LIBREFOLIO_PROFILE=managed`, it
    raises `ManagedTestModeError` (a `RuntimeError`), whose message names the test data directory in use:
-   `In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID): test-only providers would be served and the data kept in the test data directory <path>; unset LIBREFOLIO_TEST_MODE`.
+   `In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID of 16 to 128 characters): test-only providers would be served and the data kept in the test data directory <path>; unset LIBREFOLIO_TEST_MODE`.
    In the self-hosted profile it stays the `error` of the table above, and the start goes on.
 3. `instance_blocked()` and `instance_deletion_date()` (`backend/app/config/platform.py`): a value
    they cannot read raises `ValueError`. On a blocked instance, a warning
@@ -1155,7 +1164,7 @@ At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
    and `detail` as fields. A generated key file gone bad or out of reach is logged as an error, and the
    start goes on.
 
-Tests: `./dev.py test services config-audit` (the order of `CONFIG_CHECKS` included: the platform's checks, B's two,
+Tests: `./dev.py test services config-audit` (the order of `CONFIG_CHECKS` included: the platform's checks, B's three,
 A's, then E's three; and the two checks of the managed profile's switches in every state, a `PROFILE_DEFAULTS` entry
 removed included); the stop on a `LIBREFOLIO_ADMIN_*` value is in `./dev.py test services admin-bootstrap`, the check
 `accounts.login_limit` and the stop on a `LIBREFOLIO_LOGIN_LIMIT` value in `./dev.py test services accounts-checks`.
@@ -1637,19 +1646,23 @@ Only `admin_setup` tokens are retired today, and there the difference matters. T
 setup links is consumed (`registration_service.pending_admin_filter()`): a revoked link leaves it waiting, for a new
 link; a retired one ends the wait, so an account set up another way never waits for its setup again, not even once
 deactivated. Every account that holds a setup link follows the same rules, waiting or not, in the transaction of the
-change:
+change; what each rule guards against is in [The Setup Link's Lifecycle](#setup-link-lifecycle):
 
 | Change | Entry point | Its setup links |
 |--------|-------------|-----------------|
 | An activation | `./dev.py user activate` → `user_service.set_user_active(…, True)`, the waiting administrator included; `PATCH /api/v1/users/{user_id}` with `is_active: true` → `user_service.update_user_status()`, which the waiting administrator never reaches (`409` `PENDING_SETUP` first) | Retired |
 | A new password | `./dev.py user reset` → `user_service.reset_password()`; a [reset link](access_control.md#reset-links) spent → `user_service.complete_password_reset()`; `POST /api/v1/auth/change-password` | Retired |
-| A setup link presented for an account already active | `POST /api/v1/auth/setup` → `bootstrap_admin_service.complete_admin_setup()`, which refuses it (`400` `TOKEN_INVALID`) | Every one retired, not only the one presented |
+| A setup link presented for an account already active, or for an account another of whose setup links was already consumed (lot A-42) | `POST /api/v1/auth/setup` → `bootstrap_admin_service.complete_admin_setup()`, which refuses it (`400` `TOKEN_INVALID`) | Every one not consumed retired, not only the one presented |
+| A deactivation of the initial administrator waiting for its setup: the cancellation of its link (lot A-43) | `./dev.py user deactivate` → `user_service.set_user_active(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_active: false` → `user_service.update_user_status()`, refused for a [protected account](access_control.md#account-protection) | Revoked, not retired: the account still waits, for a new link |
+| A deactivation of any other account (lot A-43) | The same entry points | Retired |
 | A new address, not the same one in another A–Z case (decision P18) | `LIBREFOLIO_ADMIN_EMAIL` at a start (`bootstrap_admin_service._follow_variables()`); `user_service.update_profile()`, behind `./dev.py user set-email` and `PUT /api/v1/auth/profile` | Revoked, not retired: they went to the earlier address, and the account still waits, for a link that reaches the new one |
 | The setup | A live setup link spent by `POST /api/v1/auth/setup` | That one consumed, the others revoked |
-| A new setup link | `./dev.py user setup-link` (`issue_setup_link()`); a `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` never stored, at a start | The earlier ones revoked |
+| A new setup link | `./dev.py user setup-link` (`issue_setup_link()`); a `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` never stored, at a start | The earlier ones revoked first; an account set up in the meantime gets no new link (lot A-42) |
 
-The retirements are logged as *Account tokens retired* (`count`, `user_id`, `purpose`); a refused setup adds the
-WARNING *Setup link refused and retired: the account is already active* (`user_id`).
+The retirements are logged as *Account tokens retired* (`count`, `user_id`, `purpose`); a refused setup adds a WARNING
+with the `user_id`, *Setup link refused and retired: the account is already active* or *Setup link refused and
+retired: the account was set up before*, and a cancellation the WARNING of
+[The Setup Link's Lifecycle](#setup-link-lifecycle).
 
 A restore revokes the live tokens of the whole restored database at once, at its first start
 ([Restoring a Backup](#backup-restore)): in the transaction that sets the session versions
@@ -1667,6 +1680,82 @@ it (`PATCH /users/{user_id}`, `email_verified_at` stays `NULL`), or deletes it s
 account never signed in, so it holds no data. Towards the administrator, the report of the check gives one notice only
 (developer decision P11, `scripts/backup_cli.py`): the invitations and links sent before the restore will have expired,
 and can be sent again.
+
+### ♻️ The Setup Link's Lifecycle {: #setup-link-lifecycle }
+
+Lots A-42 and A-43 (release 1.3) make sure that no setup link left behind sets its account up again, and that
+deactivating the [initial administrator](access_control.md#initial-admin) while it waits cancels the link handed over.
+Two words, as the code uses them:
+
+- **Revoke** (`revoke_tokens()`): the link stops working (`revoked_at`). The waiting administrator keeps waiting, for
+  a new link.
+- **Retire** (`retire_tokens()`): revoked and counted as used (`consumed_at` too). The account no longer counts as
+  waiting (`pending_admin_filter()`), so no new link is issued for it.
+
+**Issuing under the write lock** (A-42). `issue_setup_link()`, behind `./dev.py user setup-link`, and the re-arm of a
+start by a `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` never stored (`_keep_pending_admin()`) find the waiting administrator by
+a read, and a setup could commit between that read and their write: the new link would then be live on an account
+already set up, able to set its password again. Both now revoke the earlier setup links first, with one `UPDATE` that
+takes SQLite's write lock («Several workers» in [The Initial Administrator](access_control.md#initial-admin)), then
+read «waiting» again under that lock (`registration_service.is_pending_admin()`), where no setup can commit any more.
+An account set up in the meantime gets nothing, and the transaction is rolled back:
+
+- `issue_setup_link()` returns `None`, with the INFO line *No setup link issued: the initial administrator was set up
+  meanwhile*; the command prints `❌ No administrator account is waiting for its setup link` and exits with `1`;
+- the start answers `ignored`, with the INFO line *LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN not re-armed: the initial
+  administrator was set up meanwhile*: no link is stored, none is logged or emailed.
+
+«Waiting» is read on what the database holds under the lock, not on what the `UPDATE` changed: a rival that only
+revoked the links, as a new address does, leaves the account waiting, and the link is issued. So `revoke_tokens()`
+always runs its `UPDATE`, even when no live token can match: selecting the live ids first, and skipping the write when
+there are none, would give the lock up.
+
+**Spending refused once the account was set up** (A-42). `complete_admin_setup()` spends the link first
+(`consume_token()`, which takes the write lock too), then refuses it in two cases, with the same `400`
+`TOKEN_INVALID` as a link that is not valid: the account is already active (lot A7b-2), or another setup link of the
+account was already consumed (`_setup_spent_before()`): the setup done through it, or the links retired. A link left
+live by the race above, or in the database of an earlier 1.3 build, so sets no password. Either way the spending is
+rolled back, the account's setup links not consumed are retired, the one presented included, and a WARNING is logged
+with the `user_id`: *Setup link refused and retired: the account is already active*, or *Setup link refused and
+retired: the account was set up before*. Both refusals come before bcrypt, which a refused link never costs. Only a
+consumed sibling counts: a link re-armed after a revoked or an expired one still sets the account up.
+
+**Deactivating is the cancellation** (A-43). A deactivation ends the account's setup links in its own transaction,
+through `user_service._end_setup_links()`, behind `set_user_active(…, False)` (`./dev.py user deactivate`) and
+`update_user_status()` (`PATCH /api/v1/users/{user_id}` with `is_active: false`). Whether the account waits is read
+before anything changes:
+
+- **The initial administrator waiting for its setup**, inactive already: its setup links are **revoked**. That is the
+  cancellation of the link handed over, the **Cancel setup link** of the Users tab
+  ([UserRow](../frontend/components/features/settings.md#userrow)): whoever holds the link can no longer set the
+  account up, and the account keeps waiting, still `pending_setup` and still holding its place, for a new link from
+  `./dev.py user setup-link` or from a new `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`. The same token at a restart re-arms
+  nothing, its value being stored already (`_token_known()`): the start finds no live link and answers `expired`, with
+  its WARNING and its remedy. A cancellation that revokes a link logs the WARNING *Setup link of the initial
+  administrator revoked: its setup was cancelled; ./dev.py user setup-link gives a new one* (`user_id`).
+- **Any other account**: its setup links not consumed are **retired**, so that none sets it up again. An account that
+  holds a stray live setup link and no consumed one would otherwise start waiting for its setup once deactivated:
+  inactive, with a setup link, none of them consumed. `update_user_status()` retires directly the links of an account
+  it deactivates while active, which cannot be waiting.
+
+**Protection and the other actions.** A [protected account](access_control.md#account-protection) refuses the
+cancellation on the administrator API as it refuses a deactivation: `update_account()` reads «waiting» once, and asks
+the hook about a cancellation (`is_active: false` on the waiting administrator, inactive already) as about a
+deactivation or a demotion, before any other refusal. The answer is `409` `ACCOUNT_PROTECTED`, and nothing changes: the
+link handed over keeps working. The Users tab turns **Cancel setup link** off for such an account, with the reason
+`protected`. The command line stays above protection, as for every protected action.
+
+The waiting administrator keeps its role until its setup: its demotion is refused (`409` `PENDING_SETUP`;
+`./dev.py user demote` stops with an error), while its deletion needs no demotion first:
+`DELETE /api/v1/users/{user_id}` is the hard cancellation, its setup links going with it by the cascade of
+`account_tokens.user_id`. The routes and their answers are in
+[The Initial Administrator](access_control.md#initial-admin).
+
+Tests: A42-001 to A42-006 and A43-001 to A43-005 of `./dev.py test services admin-bootstrap`, SETUP-016 to SETUP-018
+of `./dev.py test api admin-setup`, and UADM-072 to UADM-079 of `./dev.py test api users-admin` (UADM-079: the
+cancellation of a protected waiting administrator refused, its link still working); the Users tab's side, UTAB-55 to
+UTAB-60 and UPS-12 to UPS-23, is in
+[Users Tab and Account Deletion Tests](../frontend/components/features/settings.md#users-tests).
 
 ### 🧾 Transactions and Logs
 
@@ -1705,11 +1794,14 @@ email verification in [Email Verification](../backend/email.md#verification); th
 - **Only the newest reset or setup link of an account works.** Issuing a reset link revokes the account's live
   reset links, and spending one revokes any other. Likewise, a setup link re-armed by a new
   `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, or issued by `setup-link`, revokes the earlier ones, and the setup revokes
-  any other. A password change, an email change and `./dev.py user reset` also revoke the account's live reset
-  links (lot A-27, [Session Revocation](#session-revocation)).
+  any other; a setup link left live beside a consumed one sets nothing
+  ([The Setup Link's Lifecycle](#setup-link-lifecycle)). A password change, an email change and
+  `./dev.py user reset` also revoke the account's live reset links (lot A-27,
+  [Session Revocation](#session-revocation)).
 - **A setup link works only while its account waits for it.** An activation or a new password, by any way but the
-  link, retires the account's setup links in the same commit, and a new address revokes them: the table of
-  [Revocation](#account-token-revocation) lists every case.
+  link, retires the account's setup links in the same commit, and a new address revokes them. A deactivation revokes
+  those of the waiting administrator, the cancellation after which it waits for a new link, and retires those of any
+  other account: the table of [Revocation](#account-token-revocation) lists every case.
 - **A verification link is never shown, only emailed, and only to the account's own address.** Registration
   issues a token without an address (the «hold»), whose text never leaves the server; the link itself goes by
   email, built from `LIBREFOLIO_PUBLIC_URL`, and «send the link again» asks for the account's password first.
@@ -1720,7 +1812,8 @@ email verification in [Email Verification](../backend/email.md#verification); th
   a reset link in the commit that sets the new password, raises the session version and revokes the other links;
   a setup link in the commit that sets the password, activates the account, raises the session version and revokes
   the other setup links. If the account cannot be created, the invitation stays unspent. A setup link presented
-  for an account already active is refused, and every setup link of that account retired.
+  for an account already active, or for an account another of whose setup links was consumed, is refused, and every
+  setup link of that account retired.
 - **Inspecting tells a guesser nothing.** `POST /api/v1/auth/tokens/inspect` is public and writes nothing. Only a
   valid token gets details: the expiry, plus the role and email of an invitation or the username of a reset or
   setup link. Any other token gets its status alone, and a token presented for another purpose is `unknown`.
@@ -1827,6 +1920,41 @@ Tests: `./dev.py test services backup-staging` (`backend/test_scripts/test_servi
 parse, `database_damaged`; the head database, tables and indexes only, a guard for the day a migration adds a trigger
 or a view; `trusted_schema` off first on every connection of a whole check).
 
+### 📏 The Restore Limit {: #backup-restore-limit }
+
+The upload limit bounds the archive as it travels, compressed. The check unpacks what the manifest declares: those
+sizes equal the zip's headers and the reads stop at them, so nothing unpacks past its declared size, but a small
+archive can declare far more than the disk holds, deflate reaching about 1000:1. `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`
+caps the declared total (lot B-35).
+
+- **The reader.** `backup_max_restore_mb()` (`config/backup.py`, beside the upload limit's), in megabytes, `0` for no
+  limit. A value set wins, `0` included; anything but a whole number of ASCII digits raises `BackupConfigError`
+  `BACKUP_MAX_RESTORE_MB_INVALID`. Unset or blank: `0` in the `selfhosted` profile; in any other,
+  `RESTORE_TO_UPLOAD_RATIO` (8) times `backup_max_upload_mb()`, `0` when that is `0`, raising what it raises
+  (`BackupConfigError`, `ProfileDefaultError`): it fails closed through the upload limit's own entry. It has no entry
+  of its own in `ENVIRONMENT_PROFILE_DEFAULTS` ([Settings](settings.md)): a multiple, it follows a provider's own
+  upload limit. In `managed`, 500 MB gives 4000 MB.
+- **Why 8.** SQLite databases deflate about 4:1 (measured: the test database 4.1×, a 52 MB synthetic price history
+  3.9×), uploads (images, PDF, XLSX) about 1:1. An archive heavy with its database sits near 4×: a ratio of 4 would
+  refuse it at the upload limit; 8 leaves it twice its room, and still cuts deflate's worst case by more than 100.
+- **The check.** `stage_archive(..., max_unpacked=)`, in bytes, `None` for no limit: `_stage` adds up the sizes of
+  `manifest.files` after `_checked_entries()`, which holds each entry to the manifest, and before `_check_space()`, so
+  a total above it is refused first, `StagingError` `unpacked_too_large`, «Unpacked, the archive is larger than this
+  LibreFolio accepts for a restore»: nothing unpacked, and the stage removed, as for any refusal. A secure archive is
+  decrypted first, about its own size, which the upload limit bounds, then measured the same way.
+  `unpacked_too_large` is one of `RestoreErrorCode` (`schemas/backup.py`).
+- **Its callers.** `POST /backup/restore/stage` reads it with `_restore_limit()`, as `_upload_limit()` reads the upload
+  limit, turns megabytes into bytes (× 1024²) and `0` into `None`, and passes it through
+  `restore_jobs.start_check(..., max_unpacked=)` and `_run_check()`; a limit it cannot read is logged as an error and
+  answered `503` `backup_restore_unavailable` ([The Routes](#backup-restore-routes)). `backup restore` reads the same
+  variable in `_check_on_a_copy()`: `❌ <message> (backup_restore_unavailable)` and exit `1` before the check, the usual
+  `❌ … (unpacked_too_large)` when it refuses; `LIBREFOLIO_BACKUP_MAX_RESTORE_MB=0` lifts it for one command. The
+  startup checks report a limit that cannot be read (`backup.restore_limit`,
+  [Configuration Checks of the Backup](#backup-config-checks)).
+
+Tests: `./dev.py test services backup-staging` (under, at and over the limit, refused before any byte is written, a
+secure archive, `None` as before) and `./dev.py test services backup-checks` (the reader in each profile, and its check).
+
 ### 🔐 The Routes {: #backup-restore-routes }
 
 Every route under `/backup/restore` requires an administrator (`require_admin`), but `GET /backup/restore/outcome`,
@@ -1836,7 +1964,7 @@ only one in `ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error
 
 | Route | What it does |
 |-------|--------------|
-| `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2); the password of a secure backup comes with `POST /backup/restore/stage`, tried in the request ([Secure Backups](#secure-backups)). At its start (its folders, its first state), `POST /backup/restore/stage` answers `507` `no_space`, the check's own code, on a full disk or quota, logged as a warning, `A check of a backup archive could not start: not enough free space`, and `500` `stage_failed` on any other failure of the file system (permissions, a read-only disk, `EIO`), logged as an error, `A check of a backup archive could not start`, with the error's type and the system's reason; either way the upload stays, for another try (lot B-30) |
+| `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2); the password of a secure backup comes with `POST /backup/restore/stage`, tried in the request ([Secure Backups](#secure-backups)). At its start (its folders, its first state), `POST /backup/restore/stage` answers `507` `no_space`, the check's own code, on a full disk or quota, logged as a warning, `A check of a backup archive could not start: not enough free space`, and `500` `stage_failed` on any other failure of the file system (permissions, a read-only disk, `EIO`), logged as an error, `A check of a backup archive could not start`, with the error's type and the system's reason; either way the upload stays, for another try (lot B-30). When the restore limit cannot be read (`_restore_limit()`, [The Restore Limit](#backup-restore-limit)), it answers `503` `backup_restore_unavailable`, «The restore limit of this instance cannot be read», logged as an error: no check starts, and the upload stays (lot B-35) |
 | `DELETE /backup/restore/stage/{stage_id}` | Drops an ended check and its copy; `409` `restore_pending` for the copy of a restore not finished yet |
 | `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable`. A full disk or quota anywhere in the confirmation (the `.restore` folder, the lock, the state's write) is `507` `backup_no_space`, logged as a warning, `A restore could not be confirmed: not enough free space`; any other failure of the file system is `500` `restore_confirm_failed`, logged as an error, `A restore could not be confirmed`, with the error's type and the system's reason. Either way nothing is confirmed, as the state is written last and atomically, and the check and its copy stay: the same confirmation answers `202` once the failure is gone (lot B-31). A state the file system cannot read, met under the lock, is `500` `restore_state_unreadable`, and nothing is written: the restore it holds may be half applied, and its journal must not be overwritten (lot B-32) |
 | `GET /backup/restore/status` | `RestoreStatus`: its `state` is `none`, `pending`, `in_progress` (`applying`, `applied` or `rolling_back`), `committed` or `rolled_back`, with `reason`, and `waiting` (`backup_running`, `other_data_directory`, `server_running` or `instance_blocked`) on a restore a start left waiting. `500` `restore_state_unreadable`, «The state of the restore cannot be read: the server's log has the cause», when the file system cannot read the state: it never answers `none` then (lot B-32) |
@@ -2212,6 +2340,18 @@ No gate sees a raw `innerHTML` assignment that involves no template: do not writ
 `./dev.py test front-asset asset-name-xss` (`frontend/e2e/assets/asset-name-xss.spec.ts`)
 creates an asset whose name and icon URL carry markup, through the API, and checks in a real
 browser that the table and card views of `/assets` show it as text and run nothing.
+
+A file opened in a spreadsheet is an output too. The CSV series exports of `/api/v1/backup`
+(`GET /backup/asset/{asset_id}/prices` and `…/events`, `GET /backup/fx/{base}/{quote}/rates`),
+written by `series_export.stream_rows_as_csv`, put one more leading apostrophe (`'`) in front of a
+text cell that starts, after any apostrophes, with `=`, `+`, `-`, `@`, a tab or a carriage return,
+so that Excel, LibreOffice or Google Sheets show it as text and never run it as a formula (OWASP
+«CSV injection», lot B-39). A plain number (`-1.5`, `+2`, `-1E+2`) is never touched, and the JSON
+exports are unchanged. Counting the apostrophes already there keeps the round trip exact: the
+events import drops exactly one from `notes` (`unescapeFormulaText`,
+[Data Editor](../frontend/components/core-ui/data-editor.md)), so a note `=SUM(A1)` exports as
+`'=SUM(A1)` and imports back as `=SUM(A1)`. Tests:
+`backend/test_scripts/test_services/test_series_export_csv.py`.
 
 !!! warning "Fixed in 1.2: a stored XSS present since v1.1.0"
 

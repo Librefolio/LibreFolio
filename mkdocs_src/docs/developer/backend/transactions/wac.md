@@ -569,11 +569,21 @@ Rule 12 of `validate_transaction_business_rules()`
 `cost_basis_allowed()`: a row sent with a `cost_basis_mode` is refused
 (`costBasisModeIncompatible`) when the rule of its side — picked at call time by
 `_cost_basis_rule()`, shared with `cost_basis_required()` — is `forbidden`, or
-`required_qty_pos` without a positive quantity. It is the test the frontend makes
-before sending a cost basis (`cbAllowed` in
-`frontend/src/lib/features/transactions/txPayloadHelpers.ts`), and with today's
-table it admits exactly the rows that need an override: a `TRANSFER` or
-`ADJUSTMENT` adding quantity.
+`required_qty_pos` without a positive quantity. Rule 12b (W-B72, night decision
+N78) holds to the same test the non-null `cost_basis_override` a create or an
+update sets without a mode — with one, rule 12 speaks alone — and refuses it with
+`costBasisNotAllowed`, params `{type, qty}`. Its exception is an `ADJUSTMENT` taking
+units out, whose cost is the handover cost of decision 47, which an update of the
+split's own batch may set (decision 4; see
+[Split & Promote](split_promote.md#transfer-giving-leg)). Rule 12b never judges a
+cost basis the row already stores, nor an explicit `null`; before W-B72, a cost
+basis sent without a mode was stored on any type (see
+[Per-type rules](service.md#per-type-rules), and
+[Promote boundary](#promote-boundary) for the cost basis a promote resolves).
+`cost_basis_allowed()` is the test the frontend makes before sending a cost basis
+(`cbAllowed` in `frontend/src/lib/features/transactions/txPayloadHelpers.ts`), and
+with today's table it admits exactly the rows that need an override: a `TRANSFER`
+or `ADJUSTMENT` adding quantity.
 
 The batch rejects such a row without an override (`costBasisRequired`) when it is
 created or made the receiving side of a promoted pair (see
@@ -768,7 +778,10 @@ sender ends without one: before it applies
 `resolved_fields`, `apply_promotes()` clears `cost_basis_override` and
 `cost_basis_currency` on a side whose new type takes none (`cost_basis_allowed()`),
 such as an `ADJUSTMENT` taking units out that a split left with a cost (decision
-47).
+47). A cash pair (`CASH_TRANSFER`, `FX_CONVERSION`) has no leg that takes one: a
+non-null value refuses the promote with `costBasisNotAllowed`
+(`_resolved_cost_issues()`, W-B72), where it was written on both legs before; a
+`null` passes.
 
 Rows that are also present in `creates[]` or `updates[]` enter auto-WAC only
 because that create/update item requested an auto mode, never because of the

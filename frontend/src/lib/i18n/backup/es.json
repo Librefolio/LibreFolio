@@ -173,6 +173,7 @@
         "backup_too_large": "El archivo es más grande de lo que acepta este LibreFolio ({limit} MB).",
         "backup_no_space": "No hay espacio libre suficiente en el servidor para este archivo.",
         "backup_upload_unavailable": "LibreFolio no puede leer ahora su límite de subida: inténtalo más tarde.",
+        "backup_restore_unavailable": "LibreFolio no puede leer ahora su límite de restauración: inténtalo más tarde.",
         "backup_upload_failed": "El archivo no se pudo guardar en el servidor: el registro del servidor tiene la causa.",
         "backup_upload_not_found": "El archivo subido ya no está: vuelve a enviarlo.",
         "restore_folder_unusable": "La carpeta de restauración de la carpeta de datos no es una carpeta normal: quien gestiona el servidor debe corregirla.",
@@ -187,6 +188,7 @@
         "manifest_unreadable": "La descripción del archivo no se puede leer.",
         "manifest_too_large": "La descripción del archivo es demasiado grande.",
         "too_many_entries": "El archivo contiene demasiados elementos.",
+        "unpacked_too_large": "Descomprimido, el archivo es más grande de lo que este LibreFolio acepta para una restauración.",
         "duplicate_entry": "El archivo contiene dos veces el mismo elemento.",
         "unexpected_entry": "El archivo contiene un elemento que su descripción no lista.",
         "not_a_file": "El archivo contiene un elemento que no es un fichero normal.",
@@ -242,6 +244,12 @@
         "unlimited": "Una restauración acepta archivos de cualquier tamaño.",
         "invalid": "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB no se puede usar (un número entero de megabytes, 0 para ningún límite): las subidas para una restauración se rechazan hasta que se corrija.",
         "profileTable": "Los valores predeterminados del perfil de LibreFolio no dan ningún valor al límite de subida, o le dan uno del tipo equivocado, así que las subidas para una restauración se rechazan: define LIBREFOLIO_BACKUP_MAX_UPLOAD_MB como un número entero de megabytes e informa del error."
+      },
+      "restoreLimit": {
+        "limited": "Una verificación para una restauración acepta archivos que, descomprimidos, ocupan hasta {limit_mb} MB.",
+        "unlimited": "Una verificación para una restauración acepta archivos que, descomprimidos, ocupan cualquier tamaño.",
+        "invalid": "{variable} no se puede usar (un número entero de megabytes, 0 para ningún límite): las verificaciones para una restauración se rechazan hasta que se corrija.",
+        "profileTable": "Los valores predeterminados del perfil de LibreFolio no dan ningún valor al límite de subida, o le dan uno del tipo equivocado, así que las verificaciones para una restauración se rechazan: define LIBREFOLIO_BACKUP_MAX_RESTORE_MB como un número entero de megabytes e informa del error."
       }
     }
   }

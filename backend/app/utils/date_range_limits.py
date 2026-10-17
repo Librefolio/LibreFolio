@@ -16,9 +16,12 @@ RANGE_SPAN_LIMIT_DAYS = 36_525
 #: How many items one bulk request of prices (``POST /assets/prices/query``) or rates (``POST /fx/currencies/convert``)
 #: may hold (Z-25). The web app sends a whole list page in one request, one item per asset or pair.
 MAX_BULK_ITEMS = 1_000
-#: How many per-day points or conversions one bulk request may build, all its items together (Z-25). The asset list on
-#: "All" (from 2000) of 300 assets builds about 2.9 million; a thousand rates over 100 years would build 36.5 million.
-MAX_BULK_ITEM_DAYS = 5_000_000
+#: How many per-day points or conversions one bulk request may build, all its items together (Z-25). Lowered from 5
+#: million by R13-SEC9-2: a point costs about 25.5 µs to fill, about as much to serialize, and about 1.9 KB, so a million
+#: is still close to a minute of the event loop and a few GB. The web app splits its lists into batches under it (Z-27,
+#: `frontend/src/lib/api/bulkBatches.ts`); the in-process callers (risk, AI Export) share it: about 100 assets over
+#: "All" (from 2000, nearly 9,800 days each), about 550 over five years.
+MAX_BULK_ITEM_DAYS = 1_000_000
 
 
 class BulkTooManyDaysError(Exception):
