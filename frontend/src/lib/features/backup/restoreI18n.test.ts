@@ -272,6 +272,10 @@ const CODE_LISTS: Array<[string, string[]]> = [
             'restore_already_pending',
             'restore_not_pending',
             'restore_pending',
+            // B-31: a confirmation, a cancellation or a restart the server could not carry out.
+            'restore_confirm_failed',
+            'restore_cancel_failed',
+            'restore_restart_failed',
             'network',
             'unexpected',
         ],
