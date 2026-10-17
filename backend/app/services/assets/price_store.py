@@ -117,7 +117,7 @@ def storable_current_value(current: Optional[FACurrentValue], asset_id: int, pro
     """A provider's live quote as the price columns keep it, or None when they cannot (X-R40, W-B62).
 
     ``storable_price`` decides (W-B58): a value that is not finite, has more than 12 digits before the decimal point, or
-    is above 0 and truncates to 0 (``1E-13``) is refused — never served, never cached, never written: the current price
+    is not 0 and truncates to 0 (``1E-13``) is refused — never served, never cached, never written: the current price
     falls back to the last stored one, as after a provider failure — and logged once (``_report_unstorable_quote``). A
     value the truncation leaves as it is comes back as it came, its form included (``101.5`` stays ``101.5``); one it
     changes comes back truncated, as the history and today's row keep it (``65432.1234567890999`` → ``65432.123456789``).
@@ -136,6 +136,13 @@ def storable_current_value(current: Optional[FACurrentValue], asset_id: int, pro
         return None
     served = value if stored == value else stored
     return current if served is raw else current.model_copy(update={"value": served})
+
+
+def unstorable_quote_reason(value: object) -> str:
+    """Why a provider's current value was refused, for a refresh result (X-R51): the value, shortened, and the limits of
+    a price column, read from the model."""
+    _precision, scale = get_model_column_precision(PriceHistory, "close")
+    return f"Current price {_quote_text(value)} not saved: a price keeps at most {max_integer_digits(PriceHistory, 'close')} digits before the decimal point, and is never 0 once cut to {scale} decimal places"
 
 
 PRICE_UPSERT_CHUNK_SIZE = 1000
