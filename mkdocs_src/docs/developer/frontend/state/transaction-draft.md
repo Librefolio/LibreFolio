@@ -155,7 +155,14 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   from merging. The 💡 opens `TransactionPickerModal` on those candidates; once one is added, the
   banner offers the pair.
 * **Merge** (`promote-suggest-link-<idx>`) promotes one pair: `executePromote` at once, or
-  `PromoteMergeModal` first when the two rows differ in description or tags.
+  `PromoteMergeModal` first when the two rows differ in description or tags. Where the
+  descriptions differ, the dialog counts the merged one under its textarea
+  (`promote-merge-desc-counter`, `data-state` `ok` or `over`), in code points as Python's
+  `len()` counts them (`textLength()` and `TX_DESCRIPTION_MAX_LENGTH`, 500, in
+  `promoteHelpers.ts`). Past 500 — 500 itself fits — the textarea is `aria-invalid`, a message
+  names the limit (`promote-merge-desc-too-long`) and **Confirm promotion**
+  (`promote-merge-confirm`) is disabled: the backend would refuse the merged notes with
+  `string_too_long` (W-B70).
 * **Merge all (N)** (`promote-suggest-merge-all`, when `mergeAllPairs` holds more than one pair)
   opens `PromoteAllModal.svelte` (`promote-all-modal`), which asks one `PromoteAllStrategy` for every
   pair, `merge` preselected at each opening: `left` (*All left*, the description and tags of the
@@ -165,9 +172,14 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   shown), without any pair that shares a row with an earlier one: when two suggestions share a
   row, only the first is kept and the row is merged once. *N*, and the count the dialog shows, is
   `mergeAllPairs.length`: the pairs to merge, not the suggestions. `mergeAllSuggestions` then walks
-  `mergeAllPairs` and passes the chosen values to `executePromote` where a pair differs in
-  description or tags; it skips a pair whose rows no longer match a rule, or with a row already
-  merged (`isPaired`).
+  `mergeAllPairs`; it skips a pair whose rows no longer match a rule, or with a row already merged
+  (`isPaired`), and passes `executePromote` what `resolvePromoteAllFields(strategy, left, right)`
+  (`promoteHelpers.ts`) returns: `{}` when the two rows agree on description and tags, otherwise
+  the chosen side's values or both combined. With `merge`, a pair whose combined description would
+  pass 500 characters gets `null` instead: it is left unpromoted, for **Merge** and its dialog,
+  and never saved with one side's notes only. After the walk, `notify()` counts those pairs in a
+  warning toast (`transactions.promote.mergeAllLeftTooLong`) and the app event
+  `tx.bulk.promote-all.left-for-manual-merge`, detail `{pairs}` (W-B70).
 * **The save gate.** `requestCommit` first counts the suggestions nobody looked at
   (`unseenSuggestionCount`): the 💡 candidates until the picker has been opened once
   (`suggestPickerSeen`), and the banner's pairs until a click lands anywhere in the banner
@@ -181,7 +193,11 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
 `PromoteAllModal.test.ts` (Vitest, jsdom) pins the dialog: the three answers, *Combine* by default
 and again at every opening, and cancelling. `e2e/transactions/tx-import-scalable-transfers.spec.ts`
 runs the whole path on two Scalable exports: the banner's **Merge** (S1), the 💡 and a new + saved
-pair (S2), the save gate (S3) and **Merge all** (S4).
+pair (S2), the save gate (S3) and **Merge all** (S4). The 500-character limit (W-B70) is pinned by
+`promoteHelpers.test.ts` (`textLength()`, `resolvePromoteAllFields()`), `PromoteMergeModal.test.ts`
+(the counter and the disabled confirmation) and `e2e/transactions/tx-bulk-promote-cost-basis.spec.ts`
+(PC7: **Merge all** merges the pair that fits and leaves the one past it, with the toast and the app
+event).
 
 ---
 
