@@ -14,8 +14,18 @@
  * The flag is module-level `$state` and the reset is registered at import, so every test takes a freshly imported
  * graph (`vi.resetModules()` + `import()`): the store, the client session it registers with, and the rune helpers of
  * the same graph, so that an effect of the test tracks the store's own signal. jsdom, because effects run only there.
+ *
+ * Workstream Z, Z-20 (N-Z20-2, H's option A): the state moves into the plain `instanceBlockState.ts` — no runes, so that
+ * the API client, which marks it on a 423, loads without Svelte's compiler (the AI Export probe) — and this module stays
+ * its reactive face for the `(app)` layout: a `$state` read from the plain state when the face is imported, kept in step
+ * by a synchronous subscription, with `markBlocked`/`clear` the plain module's own. The cases of the last describe pin
+ * what the layout relies on: a change made through the plain module shows in `instanceBlock.blocked` before anything is
+ * awaited; a block marked before the face is imported is on from the face's first read (H's condition 2); one session
+ * reset, registered by the plain module and by nothing else, clears both (H's condition 3). The plain module is loaded by
+ * a computed specifier, so while it does not exist those cases fail with the contract in their message and the cases
+ * above stay as they are. Red until `src/lib/features/instance/instanceBlockState.ts` exists.
  */
-import {describe, expect, it, vi} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 
 /** The store of a page load that has just begun, with the client session and the rune helpers of the same graph. */
 async function freshPageLoad() {
@@ -118,5 +128,96 @@ describe('instanceBlock — a change of account clears it', () => {
 
         expect(transitionClientSession(7), 'Barrier: the first identity is resolved').toBe(true);
         expect(instanceBlock.blocked, 'resolving the account that got the refusal must not lift the block').toBe(true);
+    });
+});
+
+/** Z-20's plain state (`$lib/features/instance/instanceBlockState`), by a computed specifier: Vite does not resolve it when it transforms this file. */
+const PLAIN_STATE_MODULE = './instanceBlockState';
+
+/** The plain state as N-Z20-2 gives it: no runes, listeners called synchronously on every change. */
+interface InstanceBlockState {
+    readonly blocked: boolean;
+    markBlocked(): void;
+    clear(): void;
+    subscribe(listener: () => void): () => void;
+}
+
+/** `instanceBlockState` from the module graph the case is in. */
+async function importPlainState(): Promise<InstanceBlockState> {
+    let module: Record<string, unknown>;
+    try {
+        module = (await import(/* @vite-ignore */ PLAIN_STATE_MODULE)) as Record<string, unknown>;
+    } catch (error) {
+        throw new Error(`src/lib/features/instance/instanceBlockState.ts does not exist yet: the block still lives in the module-level $state of instanceBlock.svelte.ts, which the API client imports and the AI Export probe cannot load without Svelte's compiler (${String(error)})`);
+    }
+    const state = module.instanceBlockState as Partial<InstanceBlockState> | undefined;
+    for (const name of ['markBlocked', 'clear', 'subscribe'] as const) {
+        expect(typeof state?.[name], `instanceBlockState.ts exports no instanceBlockState.${name}()`).toBe('function');
+    }
+    return state as InstanceBlockState;
+}
+
+describe('instanceBlock — the reactive face of the plain state (workstream Z, Z-20)', () => {
+    const CLIENT_SESSION = '$lib/stores/app/clientSession';
+
+    afterEach(() => {
+        vi.doUnmock(CLIENT_SESSION);
+        vi.resetModules();
+    });
+
+    it('instanceBlockState.markBlocked() and clear() turn instanceBlock.blocked on and off at once, nothing awaited between the call and the read', async () => {
+        const {instanceBlock} = await freshPageLoad();
+        const instanceBlockState = await importPlainState();
+        expect(instanceBlock.blocked, 'premise: a page load starts unblocked').toBe(false);
+
+        instanceBlockState.markBlocked();
+        expect(instanceBlock.blocked, 'the API client marks the plain state on a 423: the face the (app) layout reads must be on in the same tick').toBe(true);
+        instanceBlockState.clear();
+        expect(instanceBlock.blocked, 'and off again the same way').toBe(false);
+    });
+
+    it('a block marked before the face is imported is on from the face’s first read (H’s condition 2)', async () => {
+        vi.resetModules();
+        const instanceBlockState = await importPlainState();
+        instanceBlockState.markBlocked();
+
+        const {instanceBlock} = await import('./instanceBlock.svelte');
+
+        expect(instanceBlock.blocked, 'the face starts from the plain state as it is when the face is imported: a 423 that came before the layout loaded is not lost').toBe(true);
+        instanceBlockState.clear();
+        expect(instanceBlock.blocked, 'and it follows the plain state from then on').toBe(false);
+    });
+
+    it('one session reset, registered by the plain module, clears both — the face registers none of its own (H’s condition 3)', async () => {
+        vi.resetModules();
+        const registrations: string[] = [];
+        vi.doMock(CLIENT_SESSION, async (importOriginal) => {
+            const original = await importOriginal<typeof import('$lib/stores/app/clientSession')>();
+            return {
+                ...original,
+                registerClientSessionReset: (...args: Parameters<typeof original.registerClientSessionReset>) => {
+                    registrations.push(args[0]);
+                    return original.registerClientSessionReset(...args);
+                },
+            };
+        });
+
+        const instanceBlockState = await importPlainState();
+        expect(
+            registrations.filter((key) => key === 'instanceBlock'),
+            'the plain module, which holds the state, registers its reset when it is imported, once',
+        ).toEqual(['instanceBlock']);
+        const before = registrations.length;
+        const {instanceBlock} = await import('./instanceBlock.svelte');
+        expect(registrations.slice(before), 'the reactive face registers no reset of its own: one state, one reset').toEqual([]);
+
+        const {transitionClientSession} = await import('$lib/stores/app/clientSession');
+        transitionClientSession(7);
+        instanceBlockState.markBlocked();
+        expect(instanceBlock.blocked, 'premise: blocked').toBe(true);
+        expect(transitionClientSession(8), 'Barrier: another account is a transition').toBe(true);
+
+        expect(instanceBlockState.blocked, 'the change of account clears the plain state').toBe(false);
+        expect(instanceBlock.blocked, 'and the face with it').toBe(false);
     });
 });
