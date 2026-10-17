@@ -4,7 +4,7 @@ Date and time utilities for LibreFolio.
 Provides timezone-aware datetime helpers and date manipulation functions.
 """
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 from pydantic import BeforeValidator, PlainSerializer
@@ -97,6 +97,20 @@ def today_date() -> date:
         True
     """
     return datetime.now(UTC).date()
+
+
+def latest_range_end() -> date:
+    """The latest day a requested date range may reach: tomorrow, by the server's calendar (R13-SEC7-1).
+
+    Portfolio, lots and AI Export ranges are walked day by day, so an end far in the future held the instance for
+    minutes. One day past today is the slack for a user east of the server, whose today is already the server's
+    tomorrow; a later day holds no data. It is read where a range enters: ``PortfolioCalculationEngine.calculate``,
+    ``PortfolioService.get_summary`` / ``get_report``, ``LotsAnalysisService.get_lots_analysis``, risk's portfolio scope
+    (``risk.scope.load_scope_inputs``) and ``AiExportRuntimeService.prepare_request``.
+
+    The server's local date, like ``date.today()`` in those modules (``today_date()`` above is UTC's).
+    """
+    return date.today() + timedelta(days=1)
 
 
 def parse_ISO_date(v) -> date:
