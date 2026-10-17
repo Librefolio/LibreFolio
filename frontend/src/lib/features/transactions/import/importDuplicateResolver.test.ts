@@ -295,7 +295,7 @@ describe('keeper precedence: a twin that collides firmly (DB likely / editor pen
  * unresolved at the duplicates step is bound at review, while the rows — the members — stay put.
  */
 describe('U5: carryResolverChoices', () => {
-    /** Every key field but the asset identity, as `describeDedupKey` renders it (no cost override). */
+    /** Every key field but the asset identity, in the shape of a group's key (no cost override): `describeDedupKey` writes exact numbers since W-B81 (`11|BUY|2024-01-03|3|EUR|-30|`); the carry reads a key as a label only, so the old fixed precision below changes nothing. */
     const BUY = '11|BUY|2024-01-03|3.0000|EUR|-30.00|';
     const SELL = '11|SELL|2024-02-01|1.0000|EUR|12.00|';
     /** The same BUY before and after its instrument was bound at review. */
