@@ -5546,3 +5546,38 @@ di MF (`1b4e4a27d`, rivisto qui sopra); a me il batch, col pavimento condiviso `
 4. ✅ **Doc**: `wac.md#unreadable-pool` (il paragrafo finale: il batch ora rifiuta), `split_promote.md` (il rifiuto della divisione e la
    riga della tabella dei codici), `service.md` (il pavimento di N74 è `EARLIEST_RANGE_START`).
 5. ⏳ **Simulazione e handoff**.
+
+### W-B74 — una riga illeggibile e il giro dei saldi ✅ (2026-10-17) — 🧊 FROZEN
+
+**Base**: HEAD `6eaf0774c` (dev con la metà del batch di W-B69: `18fc070c8` + `729d6edee` → `eee5dad17`; CHANGELOG `6eaf0774c`, la riga
+di MF estesa). Disegno: sezione «W-B71, W-B72, W-B74 — analisi».
+
+1. ✅ **Rossi** (test-author `6341ec42`, 11:2x–11:4x, carico 32–45): **17 nuovi** — `test_transaction_service.py`
+   `TestWB74AnUnreadableRowInTheReplay` (a: un WITHDRAWAL illeggibile prima del batch, oggi il batch passa con 20 dove il saldo è −80;
+   b: dentro la finestra, oggi l'errore senza codice «Balance validation error: unsupported operand…»; c: la quantità; d: il conteggio,
+   una riga con due valori illeggibili conta 1; e: i codici), `test_brim_gap_fix.py` (`get_balances_at_end_of` ×3, `compute_gap_fix`
+   ×2: oggi propone un WITHDRAWAL che duplica la riga che non legge); **8 guardie** verdi (broker con scoperto e allo scoperto: niente
+   giro; un altro broker; il registro leggibile; righe dopo `as_of` o fra quelle da cancellare); **24 aggiornamenti di contratto** dei
+   rossi di W-B69 (il batch che rigioca il broker d'origine porta anche `ledgerUnreadable`: esattamente due issue; la guardia
+   `another-asset-create` diventa un test proprio, un solo `ledgerUnreadable`). I casi del costo salvato illeggibile restano a un issue:
+   nessun saldo legge un costo, e così fanno anche da guardia (il conteggio del giro senza il costo).
+   > **Note implementazione**: nessun altro test cambia (grep del test-author): il test della quantità infinita cancellata dal batch
+   > resta verde perché `validate_balances` fa il flush prima del giro, e il conteggio non vede più la riga cancellata; quelli di MF non
+   > passano dal giro. Dubbi annotati senza azione: `BrokerService.update_bulk` rigioca da capo quando si stringono i flag di un broker
+   > e risponde `error=str(e)` (in inglese, come già il saldo negativo su quella via); una sola issue di saldo per batch (il primo
+   > broker): come prima.
+2. ✅ **Cura**: `files/scripts/wb74_cure.py --apply` (nuovo `backend/app/services/transactions/unreadable_rows.py` con
+   `count_unreadable_rows()` e `UnreadableLedgerError`; `auto_cost._unreadable_pool_rows` di MF passa da lì, condiviso e non copiato;
+   `balances.py`: il conteggio all'inizio di `_validate_broker_balances`, dopo i ritorni anticipati, → `BalanceValidationError`
+   `ledgerUnreadable {brokerId, count}` all'indice −1, e in `get_balances_at_end_of` → `UnreadableLedgerError`; `brim_gap_fix._state_at`
+   → `BRIMLedgerUnreadable` (409, `ledger_unreadable`, in `brim_report_sets.py` coi fratelli); `TXValidationCode.LEDGER_UNREADABLE`) e
+   `files/scripts/wb74_i18n.sh` (`transactions.errors.ledgerUnreadable`, 4 lingue, `{brokerName}` dal risolutore, plurale su
+   `{count}`, il FR col ramo `many`). Black ha rimesso su una riga il `raise` lungo di `brim_gap_fix.py`.
+3. ✅ **Verdi** (11:51–12:00, carico 33–47): `services transaction` 120, `services brim-gap-fix` 115, `services
+   transaction-cost-basis-rule` 137, `services auto-cost-unreadable-pool` 17, `services lone-transfer-legs` 20, `services
+   transaction-decimal-places` 195, `services broker` 81, `services financial-math` 1145 (le frontiere dei livelli); `i18n check`
+   (5026 chiavi), Vitest 70 (ICU per lingua, il risolutore).
+4. ✅ **Doc**: `balance_validation.md` (il terzo codice prima del giro), `service.md` (il modulo nuovo nella tabella,
+   `get_balances_at_end_of` che rifiuta), `wac.md` (il conteggio condiviso), `brim_plugin_guide.md` (il 409 `ledger_unreadable` del
+   gap-fix).
+5. ⏳ **Simulazione e handoff**.

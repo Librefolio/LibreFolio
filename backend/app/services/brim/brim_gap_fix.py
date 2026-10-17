@@ -39,9 +39,10 @@ from backend.app.schemas.brim import (
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMProvider
-from backend.app.services.brim.brim_report_sets import GAP_FIX_TAG, BRIMSetPluginNotFound
+from backend.app.services.brim.brim_report_sets import GAP_FIX_TAG, BRIMLedgerUnreadable, BRIMSetPluginNotFound
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.transactions.transaction_service import TransactionService
+from backend.app.services.transactions.unreadable_rows import UnreadableLedgerError
 
 # Differences at or below one cent are rounding, not a gap.
 CASH_TOLERANCE = Decimal("0.01")
@@ -70,8 +71,12 @@ def _in_memory(items: Iterable[TXCreateItem], broker_id: int, as_of: date) -> Tu
 
 
 async def _state_at(session: AsyncSession, request: BRIMGapFixRequest, as_of: date, proposals: Sequence[TXCreateItem]) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
-    """What LibreFolio will know at the end of ``as_of``."""
-    db_cash, db_quantities = await TransactionService(session).get_balances_at_end_of(request.broker_id, as_of, exclude_tx_ids=request.pending_delete_tx_ids)
+    """What LibreFolio will know at the end of ``as_of``; refused when the broker's transactions up to it hold a value that
+    is no number (W-B74): compared with the bank, a wrong balance would propose a wrong correction."""
+    try:
+        db_cash, db_quantities = await TransactionService(session).get_balances_at_end_of(request.broker_id, as_of, exclude_tx_ids=request.pending_delete_tx_ids)
+    except UnreadableLedgerError as exc:
+        raise BRIMLedgerUnreadable(f"LibreFolio's balances of this broker cannot be compared with the bank: {exc.count} of its transactions hold a value that is not a number. Ask the administrator to repair them.") from exc
     cash: Dict[str, Decimal] = defaultdict(lambda: ZERO, {code: Decimal(amount or 0) for code, amount in db_cash.items()})
     quantities: Dict[int, Decimal] = defaultdict(lambda: ZERO, {asset_id: Decimal(quantity or 0) for asset_id, quantity in db_quantities.items()})
     mem_cash, mem_quantities = _in_memory([*request.pending_creates, *request.selection, *proposals], request.broker_id, as_of)
