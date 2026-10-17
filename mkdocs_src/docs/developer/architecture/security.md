@@ -541,8 +541,9 @@ Nor does a broken `LIBREFOLIO_SMTP_PASSWORD_FILE`: email is optional, so `email_
 it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged at startup and shown to
 administrators in Settings › Email ([Email Service](../backend/email.md#config-state)).
 Nor does an unusable `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`: `backup_download_token()` in
-`backend/app/config/backup.py` reads it only when the hosting panel calls one of its routes, never at
-startup, so the server starts anyway. Besides the `SecretFileError` of a broken `_FILE`, it raises
+`backend/app/config/backup.py` reads it for the startup checks (`check_panel_token()`, `backup.panel_token`: one error
+line in the start log, never a stop; [Configuration Checks of the Backup](#backup-config-checks)) and at each call of
+the hosting panel's routes, so the server starts anyway. Besides the `SecretFileError` of a broken `_FILE`, it raises
 `BackupConfigError` for a token with anything but visible ASCII characters, spaces included
 (`BACKUP_DOWNLOAD_TOKEN_NOT_VISIBLE_ASCII`), or shorter than 32 characters
 (`BACKUP_DOWNLOAD_TOKEN_TOO_SHORT`). `require_panel_token()` in `backend/app/api/v1/backup/panel.py` turns
@@ -930,6 +931,40 @@ part on its own, the locks held, the links, a part that raises, a clean data dir
 `restore-commit` before `backup-leftovers` in `./dev.py test services backup-apply` (`test_backup_apply.py`, section
 (j)).
 
+#### Configuration Checks of the Backup {: #backup-config-checks }
+
+`backend/app/services/platform/instance_backup/checks.py` (lot B-9) gives two checks in the shape of H's `ConfigCheck`
+([Configuration Checks](#configuration-checks)), under the same rules: they change nothing, never raise, and never put
+the token or a file's content in a result. With them, an unusable token or upload limit shows in the start log, not only
+at the hosting panel's first call or at the first restore upload.
+
+| `check_id` | State | `i18n_key` | `detail` | Severity |
+|------------|-------|------------|----------|----------|
+| `backup.panel_token` (reads `backup_download_token()`) | Neither `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` nor its `_FILE` is set, the default: the panel's routes answer `404` | `backup.checks.panelToken.off` | — | `ok`: a default start logs nothing new, as email off is `ok` too |
+| `backup.panel_token` | A usable token | `backup.checks.panelToken.ok` | — | `ok` |
+| `backup.panel_token` | `BackupConfigError` `BACKUP_DOWNLOAD_TOKEN_NOT_VISIBLE_ASCII`: a space, a tab or a character outside visible ASCII | `backup.checks.panelToken.notVisibleAscii` | — | `error` |
+| `backup.panel_token` | `BackupConfigError` `BACKUP_DOWNLOAD_TOKEN_TOO_SHORT` | `backup.checks.panelToken.tooShort` | `{"minimum": 32}` | `error` |
+| `backup.panel_token` | `SecretFileError`: the `_FILE` cannot give the token | `backup.checks.panelToken.unreadable` | `{"reason": …}`, the error's text: the variable and the path, never the content | `error` |
+| `backup.upload_limit` (reads `backup_max_upload_mb()`) | A limit, the managed profile's 500 included | `backup.checks.uploadLimit.limited` | `{"limit_mb": n}` | `ok` |
+| `backup.upload_limit` | No limit: `0`, or unset in the self-hosted profile | `backup.checks.uploadLimit.unlimited` | — | `ok` |
+| `backup.upload_limit` | `BackupConfigError` `BACKUP_MAX_UPLOAD_MB_INVALID`: not a whole number | `backup.checks.uploadLimit.invalid` | — | `error` |
+| `backup.upload_limit` | `ProfileDefaultError`: the entry of `ENVIRONMENT_PROFILE_DEFAULTS`, asked only while the variable is unset, is missing or of the wrong type (H-27, H-37; [Settings](settings.md)) | `backup.checks.uploadLimit.profileTable` | — | `error` |
+
+- **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit)` is unpacked in
+  `CONFIG_CHECKS` right after `check_log_level`, before workstream A's `ACCOUNTS_CONFIG_CHECKS` and E's
+  `*EMAIL_CONFIG_CHECKS`, which still close the tuple. The startup audit logs the two
+  error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of
+  [Configuration](../../admin/configuration.md)), and the start goes on. The routes are unchanged: `503`, and their own
+  error line at each call.
+- **The import.** `config_audit` imports this module to build its tuple, so `checks.py` imports `ConfigCheck` only
+  when a check runs, as E's `checks.py` does ([Email Service](../backend/email.md#configuration-checks)): either module
+  can be imported first.
+- **The messages.** `backup.checks.*`, in the `backup` i18n subsystem, written whole in the module for the i18n usage
+  scan; no page shows them until the «Security» tab.
+
+Tests: `./dev.py test services backup-checks` (`backend/test_scripts/test_services/test_backup_checks.py`), and
+`./dev.py test services config-audit`.
+
 ## 🩺 Configuration Checks {: #configuration-checks }
 
 `backend/app/services/platform/config_audit.py` checks the settings that leave an instance weaker than
@@ -939,7 +974,7 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 |-------|---------|
 | `check_id` | Stable id, such as `platform.jwt_secret` |
 | `severity` | `ok`, `info`, `warning` or `error` |
-| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 18 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). No page shows the `instance` and `auth` messages yet: the checks reach the log, and [`GET /security/checks`](#security-checks-endpoint) returns them for the «Security» tab of the admin settings, which does not exist yet |
+| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 18 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose nine messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). No page shows the `instance`, `auth` and `backup` messages yet: the checks reach the log, and [`GET /security/checks`](#security-checks-endpoint) returns them for the «Security» tab of the admin settings, which does not exist yet |
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
@@ -960,6 +995,8 @@ started: it is `ok` at startup, so the startup audit never logs it.
 | `platform.client_address` | Since the start, forwarding headers came from an untrusted local peer ([Behind a Proxy Nobody Trusts](#untrusted-proxy)): `instance.checks.clientAddress.untrustedProxy`, `detail` `{"headers": …}` with the names met, such as `"X-Forwarded-For, X-Real-IP"`, summary `UNTRUSTED_PROXY_SUMMARY` | `warning` |
 | `platform.client_address` | Since the start, they came from untrusted public peers only: `instance.checks.clientAddress.publicForwarding`, the names met in `headers`, summary `PUBLIC_FORWARDING_SUMMARY` | `info` |
 | `platform.log_level` | `LOG_LEVEL`, after the `LIBREFOLIO_LOG_LEVEL` override, is `DEBUG` or `TRACE` | `info` |
+| `backup.panel_token` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, or its `_FILE`, is set but cannot be used: `backup.checks.panelToken.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
+| `backup.upload_limit` | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, or the profile's entry for it, cannot be used: `backup.checks.uploadLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `accounts.login_limit` | `LIBREFOLIO_LOGIN_LIMIT=off`, in any case: the [failed sign-in limit](#login-limit) is off. `auth.checks.loginLimit.off`, and one fixed summary however `off` is written: `LIBREFOLIO_LOGIN_LIMIT=off: failed sign-ins are not limited; turn it back on unless this is a test instance` | `warning` |
 | `accounts.login_limit` | Any value other than `on` or `off`: `auth.checks.loginLimit.invalid`, `detail` `{"value": <the value, stripped>}`, as `login_limit_value()` reads it. `log_configuration_audit()` stops the start on such a value (below), so the error shows only for a value read after the start | `error` |
 
@@ -971,6 +1008,9 @@ reads the variable only through `backend/app/config/accounts.py`, `login_limit_e
 never from `os.environ`: the rule of the configuration package ([Settings System](settings.md)). Like E's module,
 `checks.py` imports `ConfigCheck` inside the check, when it runs, and under `TYPE_CHECKING` for its annotation:
 `config_audit` imports it to build its tuple, so either module can be imported first.
+
+So `CONFIG_CHECKS` is the platform's checks, then workstream B's two
+([Configuration Checks of the Backup](#backup-config-checks)), then A's, then E's three, which close it.
 
 At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
 `backend/app/services/platform/app_lifespan.py`) runs `log_configuration_audit()` in a thread
@@ -1662,7 +1702,8 @@ the answer, in megabytes: `0` for no limit, `null` when the limit cannot be read
 `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is not a whole number (`BackupConfigError`), or when `ENVIRONMENT_PROFILE_DEFAULTS`
 gives the active profile no value for it (any profile but `selfhosted`, H-37) or a value of the wrong type
 (`ProfileDefaultError`, [Settings](settings.md); B-21): `_upload_limit()` and `_readable_limit_mb()` in `restore.py`
-treat the two alike, so the status still answers `200`.
+treat the two alike, so the status still answers `200`. The startup checks report it too (`backup.upload_limit`,
+[Configuration Checks of the Backup](#backup-config-checks)).
 
 On the server, `./dev.py backup restore ARCHIVE` confirms as `cli`, once the word `restore` is typed at a terminal or
 with `--yes`, and `./dev.py backup pending [--cancel]` shows the restore, or drops it with its copy. The command prints
