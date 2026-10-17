@@ -3718,3 +3718,22 @@ stay in the plan. `developer/backend/email.md` still shows the masked notice and
 `check_source_paths.py`: 5 missing (8 occurrences) of 4108, all pre-existing, none on this page.
 Updated: [[domains/email]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | Workstream H: the platform's night discoveries (H-24r, H-26, H-28/29, H-32, H-33)
+Filed at the coordinator's request, after lots H-24 … H-33 of release 1.3 entered `dev_release2` the night of 17/10.
+Each page carries its «why», checked in the code at `5bba93280`:
+- the frontend rebuilt for files it never bundles, and a folder's time cannot tell a `.DS_Store` from a removed file,
+  so the last successful build records the listing of the Tool codegen inputs;
+- no route serves a hidden file of the build or of the site;
+- the test runner refuses names an action cannot apply, before any side effect;
+- request floats refuse infinity and NaN, field by field, with a guard over every route;
+- a response that breaks its model no longer leaves its content in the log.
+The concept page collects five FastAPI 0.141 behaviours measured in process: included routers hidden from
+`app.routes`, `scope["route"]` without the include prefix, infinity serialised as `null`, the stock 422 that echoes the
+input and fails with a 500 on a non-finite value, and no handler for `ResponseValidationError`. Sources: plan
+`Phase_1/01_platform` §14, with the lots, measurements and real checks; backlog section H (H-24 … H-34).
+`check_source_paths.py`: 7 missing (12 occurrences) of 4149, all pre-existing, none on these pages.
+Filed: [[problems/frontend-build-looked-stale-for-files-it-never-bundles]], [[problems/static-site-served-hidden-build-files]],
+[[decisions/test-runner-refuses-test-names-it-cannot-apply]], [[decisions/request-floats-refuse-inf-and-nan]],
+[[problems/response-validation-error-wrote-the-response-to-the-log]], [[concepts/fastapi-0141-routing-and-validation-gotchas]].
+Graph: not updated; graphify is not available in this worktree.
