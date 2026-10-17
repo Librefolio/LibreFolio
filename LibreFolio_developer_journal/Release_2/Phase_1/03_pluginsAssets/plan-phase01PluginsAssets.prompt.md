@@ -5609,3 +5609,34 @@ Seguito di X-R40/W-B62 (vedi sopra, «Fuori pista»):
 - **Consegna** (05:15, FROZEN): HEAD `fd6886bb0`; 10 file tracciati, nessun file nuovo; ruff e black puliti sui 6 file
   Python; `git diff --check` pulito; porta 6183 libera. Commit proposti: `fix(assets): refresh names a refused live quote`
   (codice, test, documentazione) e `docs(journal): X-R51, backlog closures`.
+
+**X-R51 entrato** (coordinatore, 05:08): dev `b3cae6e0e` (commit `ce798e36a`, `584f147f8`); HEAD avanzato, pulito. Le 3
+corse `api` non girate vanno nel prossimo cancello del coordinatore. Ordine: X-R52 → X-R47 → X-R48 → X-R44 → X-R49. Nel
+backlog: X-R51 chiusa; aggiunta X-R53 (usare il campo dei periodi fissi che MF porta nel backend, quando MF manda il
+contratto).
+
+### X-R52 — ECB: un valore che non è un numero fa perdere tutta la valuta ✅ (2026-10-17, 05:10–05:35; consegnato)
+
+**Stato verificato** (su `b3cae6e0e`, `fx_providers/ecb/plugin.py` ~188–251):
+- il ciclo delle osservazioni fa `Decimal(str(obs_value[0]))` senza un `try` per osservazione;
+- un valore che non è un numero (anche un `null` JSON, che diventa `Decimal("None")`) solleva `InvalidOperation`, che
+  l'`except (KeyError, IndexError, ValueError)` di `_fetch_one` non cattura;
+- il ciclo seriale lo prende con `except Exception` («ECB fetch failed for X, skipping») e mette la valuta a `[]`. Si
+  perdono tutte le date di quella valuta, non tutto il fetch: il docs-writer di X-R50 diceva il giusto.
+
+**Disegno**: un `try` attorno al solo `Decimal(...)`: con `ArithmeticError` si salta l'osservazione (log a debug, col
+valore), come per BOE, SNB e FED in X-R50. Un problema di struttura (indice, chiave) resta come oggi, «Unexpected ECB
+response format». Script `files/checks/xr52_code.py`, una sostituzione, provato a secco: ruff e black puliti.
+**Rossi**: al test-author di X-R50, in `test_fx_parse_errors.py`, con `httpx` doppiato: mai l'ECB vero.
+- Rossi (05:14, prima del codice): `services provider-errors` 3/195 (`abc`, `1.2.3`, `null`): `{'USD': []}`, tutta la valuta
+  persa, per la ragione giusta. Il test-author ha riusato il doppio HTTP di ECB di `test_rate_limit_http_providers.py`.
+- Codice (05:15): `xr52_code.py` applicato. Nel runner: ECB e X-R52 nella descrizione di `provider-errors`.
+- Verdi: `provider-errors` 195, `rate-limit-http-providers` 18, `fx-sync-service` 35.
+- Documentazione: la frase di `patterns/fx_plugin_guide.md` (L71) nomina anche ECB, e il suo «prima». `mkdocs build`
+  stretto ✅, `check-links` ✅.
+- CHANGELOG: «European Central Bank» aggiunto alla frase sui parser, nella riga di X-R38.
+> **⚠️ Fuori pista (05:20) — MF-P2.** MF mi ha chiesto la forma del campo dei periodi fissi (X-R53). Ho risposto: endpoint
+> dedicati; `as_of` = la fine dell'intervallo (le serie sono giornaliere e riempite all'indietro, quindi i numeri restano
+> quelli di oggi); la regola delle colonne resta; il cambio di ogni giorno. MF scrive il backend, in modo additivo, e io
+> lo rivedo; il frontend è mio. L'ho detto al coordinatore, e i dettagli sono nel backlog, X-R53.
+- **Consegna** (05:35, FROZEN): commit proposti `fix(fx): ECB skips a non-number day` e `docs(journal): X-R52, X-R53`.
