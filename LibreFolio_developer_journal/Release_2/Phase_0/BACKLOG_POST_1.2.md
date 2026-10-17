@@ -7843,7 +7843,7 @@ da Y il 15/10.
   (G-12), via il coordinatore, 15/10. Righe 16–17 e 306–310: `selectIndicatorFromTree` della galleria vi espande la
   famiglia con un clic e clicca l'opzione, mentre da G-9 (`1470bd693`) la galleria sceglie l'indicatore da tastiera. Va
   corretto solo il testo dei commenti, quando Y passa da quei file (FE2, lotto Y4). Dettagli: piano di Y, §2.
-- **Y-5 · Il commento di `headerTooltip` in `table/types.ts:291` promette un'icona che non c'è** — minimo; `docs-writer`
+- ✅ **Y-5 · Il commento di `headerTooltip` in `table/types.ts:291` promette un'icona che non c'è** — minimo; `docs-writer`
   di Y, 15/10 (Y2). ✅ 16/10: ora il commento dice che il tooltip sta sull'etichetta dell'intestazione e che l'icona
   compare solo con `headerTooltipUrl`; svelte-check 0/0. Nel checkpoint di Y-21. Diceva «(info icon)», ma `headerTooltip` da solo mette un tooltip sull'etichetta dell'intestazione:
   l'icona compare solo con `headerTooltipUrl`. La pagina `core-ui/data-table.md` è già corretta (Y2). Va corretto solo
@@ -7922,7 +7922,7 @@ da Y il 15/10.
   - La regola 10 della skill design-system vuole lo stato, non le classi: la riga pubblica già `data-selected`
     (`DataTable.svelte:1098-1149`).
   - Rimedio: `test-author` passa a `toHaveAttribute('data-selected', 'true')`. Dettagli: piano di Y, «Y-12».
-- **Y-14 · «Aggiorna» della lista dei broker non ricalcola le cifre delle schede** — minimo, già presente prima di Y11;
+- ✅ **Y-14 · «Aggiorna» della lista dei broker non ricalcola le cifre delle schede** — minimo, già presente prima di Y11;
   `test-author` di Y, 16/10. ✅ 16/10: si sceglie «forzare» (coordinatore, 21:2x). `brokers-refresh` fa
   `requestPortfolioRefresh()` e chiede il report delle schede con `force`; rosso 9/10, verde 10/10 su
   `front-broker list`. Nel checkpoint di Y-14.
@@ -7952,7 +7952,7 @@ da Y il 15/10.
     cambio di `canAsk`, quando i broker diventano noti, a farlo ripartire.
   - Oggi lo fissa solo in modo indiretto la precondizione del test E2E di N55. Da rendere esplicito. Dettagli: piano di
     Y, «Passo 4b».
-- **Y-17 · I pulsanti Holdings/Performance di `PositionsPanel` non pubblicano `aria-pressed`** — minimo, già presente
+- ✅ **Y-17 · I pulsanti Holdings/Performance di `PositionsPanel` non pubblicano `aria-pressed`** — minimo, già presente
   prima di Y11; `test-author` di Y, 16/10. ✅ 16/10, chiusa da DV nel W6-d (`3805bf2ca`): `aria-pressed` sui 4 pulsanti
   Holdings/Performance e Table/Map.
   - I pulsanti di `GrowthChart` lo pubblicano. Quindi il test E2E di N55 legge la vista Performance da
@@ -7963,7 +7963,7 @@ da Y il 15/10.
   - `GrowthChart` ha solo lo scheletro della storia (`loading`), quindi finché le candele non arrivano nessun
     indicatore lo segnala. Era così anche prima di Y11. Il contributo invece ha `contributionLoading`.
   - Dettagli: piano di Y, «Passo 4b».
-- **Y-19 · La durata della caduta peggiore può venire da una fonte diversa da quella della profondità** — minimo, già
+- ✅ **Y-19 · La durata della caduta peggiore può venire da una fonte diversa da quella della profondità** — minimo, già
   presente prima di Y12b; `test-author` di Y, 16/10. ✅ 16/10: ora la durata segue la fonte della profondità, con una
   riga in `levelHelpers.ts`. Il rosso era 1/513, il verde 513/513; nel checkpoint di Y-19.
   - In `buildHurtRows` (`levelHelpers.ts`) la durata è `maximum_drawdown_duration_days` del riepilogo, con ripiego sul
@@ -7971,7 +7971,7 @@ da Y il 15/10.
   - Se il riepilogo c'è ma la sua profondità ha il segno sbagliato, si mostrano la profondità del KPI e la durata del
     riepilogo.
   - Y12b ha legato alla stessa fonte solo il recupero (`summaryDepth`). Dettagli: piano di Y, «Y12b».
-- **Y-20 · `risk-lab.md`: numeri di riga scaduti fuori dal paragrafo di L1** — minimo, documentazione per sviluppatori;
+- ✅ **Y-20 · `risk-lab.md`: numeri di riga scaduti fuori dal paragrafo di L1** — minimo, documentazione per sviluppatori;
   `docs-writer` di Y, 16/10. ✅ 16/10: aggiornati 20 riferimenti, nelle sezioni Requests, L1 e host, più quattro
   precisazioni di testo; `check-links` verde. Nel checkpoint di Y-20.
   - Y12b ha aggiornato solo il paragrafo di L1. Restano scaduti i riferimenti delle righe 302–310 e 119 della pagina:
@@ -7980,7 +7980,7 @@ da Y il 15/10.
     - `DOC_PATHS` e `TAIL_DOCS`;
     - `riskAnalysisHelpers.ts`.
   - La tabella con i valori di oggi è nel piano di Y, «Y12b».
-- **Y-21 · L4 (D377): un `poll` di 3 s che non resiste al carico** — piccolo; Y, 16/10 (triage dell'E2E di Y12b,
+- ✅ **Y-21 · L4 (D377): un `poll` di 3 s che non resiste al carico** — piccolo; Y, 16/10 (triage dell'E2E di Y12b,
   decisione del coordinatore delle 21:20). ✅ 17/10: D377 è verde nelle due corse, in 11,7 s e in 22,2 s, con le
   scadenze vere (`L4_OFFER_DEADLINE_MS`, 10 s) sui suoi quattro `poll`. Il budget di 90 s per tutto il blocco
   «functional integration» (opzione A del coordinatore) rende verdi D378 e il benchmark condiviso, rossi alle 23:25
@@ -7992,7 +7992,7 @@ da Y il 15/10.
     Alle 20:45, con il carico a 35, era verde.
   - Rimedio: una scadenza vera per i `poll` di quel test, oppure un'apertura del replay che costi meno.
   - Prove in `files/logs/y12b_l4_*` della sessione di Y. Dettagli: piano di Y, «Y12b · E2E».
-- **Y-22 · `risk-analysis.spec.ts` sotto carico 100+: due interazioni che non reggono** — piccolo; Y, 17/10 (seconda
+- ✅ **Y-22 · `risk-analysis.spec.ts` sotto carico 100+: due interazioni che non reggono** — piccolo; Y, 17/10 (seconda
   corsa di Y-21 sulla revisione combinata `a49a86a7b`, carico 94–115). Tutti e due i test erano verdi nelle tre corse
   precedenti. ✅ 17/10: `:3736` ha una scadenza più larga (20 s, con 3 s per tentativo), e da solo ×4 è verde.
   `:2871` ha la sua traccia: ×4 verde, il clic è subito eseguibile. Il verdetto è ambiente, non riprodotto; il test
@@ -8017,8 +8017,19 @@ da Y il 15/10.
     onboarding-component-unit`, con la causa «No "onNavigate" export is defined on the "$app/navigation" mock».
   - Allora quell'azione non era fra le mie prove leggere.
   - ✅ 17/10: `onNavigate: vi.fn()` nei due mock (`test-author`); 454/454. Nel checkpoint successivo a Y-21.
-- **Y-24 · La richiesta delle candele (e del contributo) si riarma da sola dopo ogni errore, senza limite** — medio,
+- ✅ **Y-24 · La richiesta delle candele (e del contributo) si riarma da sola dopo ogni errore, senza limite** — medio,
   per il developer, insieme a Y-18; Y, 17/10 (analisi di Y-16). Comportamento preesistente.
+  - ✅ 17/10, **la parte del giro** (proposta di Y, via del coordinatore alle 17:47): `createLazyReportRetry`
+    (`frontend/src/lib/stores/portfolio/lazyReportRetry.svelte.ts`) — dopo un errore, al più tre nuove richieste, 2, 4 e
+    8 s dopo, poi nessuna finché cambia l'ambito (broker, periodo, valuta) o arriva un Refresh; nessuna UI nuova. Sulla
+    Dashboard e sulla pagina del broker, per le candele e per il contributo; una risposta di un ambito già cambiato non si
+    applica più. Sulla pagina del broker le candele, prima, non riprovavano mai (il loro flag non era un segnale): ora
+    seguono la stessa regola. Rossi prima (20 d'unità; 7 E2E con l'orologio di Playwright, due dei quali per un buco
+    trovato da `docs-writer` e chiuso nello stesso lotto), poi verdi; regressioni `page-busy`, `dashboard`,
+    `dashboard-cache`, `front-broker detail`. Dettagli: piano di Y, «Y-24».
+  - **Resta per il developer, con Y-18**: l'indicatore e lo stato d'errore delle candele (oggi lo schermo resta vuoto
+    durante l'attesa e dopo l'ultimo tentativo).
+  - Era:
   - `requestReport` (`stores/portfolio/portfolioStore.svelte.ts`) intercetta l'errore e restituisce `null`.
   - Nella Dashboard e nella pagina del broker, `loadPnlCandles` legge `pnlCandlesLoading` (e `pnlCandles`) dentro
     l'`$effect` di `GrowthChart` (`:975-979`), che quindi ne dipende: alla fine di una richiesta fallita il `finally`

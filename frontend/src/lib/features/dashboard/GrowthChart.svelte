@@ -975,8 +975,9 @@
     // The callback runs TRACKED on purpose (Y-16): what the caller reads synchronously inside
     // it becomes a dependency of this effect. The Dashboard's loader reads `canAsk` there, so a
     // saved Candles view on a fresh page asks again once the brokers are known; an `untrack`
-    // around the call would leave it empty (pinned in e2e/portfolio/page-busy.spec.ts). The same
-    // tracking re-arms the request after a failed one (backlog Y-24, a decision with Y-18).
+    // around the call would leave it empty (pinned in e2e/portfolio/page-busy.spec.ts). After a failed
+    // request the page's retry (`createLazyReportRetry`, Y-24) says when the loader may ask again — at most
+    // three times, 2, 4 and 8 s later: its `canAsk`, read in the loader's guard, is what wakes this effect.
     $effect(() => {
         if (viewMode === 'pnl' && pnlSubmode === 'candles' && pnlCandles == null) {
             onRequestPnlCandles?.();
