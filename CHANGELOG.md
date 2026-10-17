@@ -381,6 +381,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⚠️ Breaking changes
 
+- `POST /api/v1/fx/currencies/rate`: when every rate in a request is refused, the 400 answer's `detail` is now an object `{code: "fx_rates_refused", message, rejected}` instead of a plain string (the `message` keeps the old text). API clients that read `detail` as a string should read `detail.message`.
 - The global setting `enable_registration` becomes `registration_mode` (`open`, `invite`, `disabled`): an API client that read the old key must read the new one.
 - **`DELETE /api/v1/assets/events` requires `asset_id`.** Only that asset's events are deleted, so a wrong or crafted request can no longer delete another asset's events. A request with `ids` alone is refused (422), and an id of another asset answers `not_found`, its event untouched. A client deleting events must send their asset.
 - **`POST /api/v1/assets/events` answers a refusal with an object.** `detail` is `{error_code, message, params}` instead of a sentence; `params` names the item (`item_index`, `asset_id`) and the events at fault. A missing asset is now a 400 instead of a 200 that saved nothing. A client showing `detail` as text must read `detail.message`.
