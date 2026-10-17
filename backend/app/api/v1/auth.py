@@ -348,10 +348,11 @@ async def change_password(
         raise HTTPException(status_code=400, detail="New password must be different from current password")
 
     # Update password, and end every session of the account: this one gets a new cookie below. The live password-reset
-    # links of the account die with the old password (A-27), in the same commit.
+    # links of the account die with the old password (A-27), in the same commit; a setup link left is retired (A-32).
     current_user.hashed_password = await asyncio.to_thread(hash_password, request.new_password)
     user_service.end_sessions(current_user)
     await token_service.revoke_tokens(session, user_id=current_user.id, purpose=AccountTokenPurpose.PASSWORD_RESET)
+    await token_service.retire_tokens(session, user_id=current_user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)
     session.add(current_user)
     await session.commit()
     _issue_session_cookie(response, http_request, current_user, await _session_ttl_hours(session))
@@ -515,8 +516,8 @@ async def setup_admin(
     Spend the setup link of the initial administrator (F02): choose the password, activate the account, sign in.
 
     The password rules come first (400 ``PASSWORD_TOO_WEAK``). A link that is not a live setup link (used, expired,
-    revoked, unknown, of another purpose, or of an account already active, whose link is then revoked) answers 400
-    ``TOKEN_INVALID``. On success the answer and the session cookie are the login's.
+    revoked, unknown, of another purpose, or of an account already active, whose setup links are then retired) answers
+    400 ``TOKEN_INVALID``. On success the answer and the session cookie are the login's.
     """
     _refuse_weak_password(request.new_password)
     user = await bootstrap_admin_service.complete_admin_setup(session, request.token, request.new_password)

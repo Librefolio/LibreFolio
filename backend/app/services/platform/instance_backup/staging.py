@@ -3,6 +3,10 @@ app's schema on the copy, and described in a report. The live data directory is 
 
 The steps, each refusing with a stable ``code`` (``StagingError``):
 
+0. **A secure backup** (an ``.lfbk`` envelope, lot B4) is first decrypted beside the copy with the key its password
+   gave (``envelope.unlock``): without one, ``password_required``; a chunk that fails, ``envelope_damaged``. The
+   decrypted archive is removed once unpacked. A secure backup's archive carries the instance key when LibreFolio
+   generated it, announced by its manifest: it is read, never unpacked, and ``secrets/`` is never part of the copy.
 1. **A LibreFolio backup.** The archive is a zip whose manifest LibreFolio wrote: a copy of a data directory made by
    hand is not restored from here (decision 42: it is put back by pointing the server at it). Every entry is checked
    before a byte is written: the manifest lists it, it is a plain file (no folder, link or encrypted entry), its name
@@ -18,6 +22,9 @@ The steps, each refusing with a stable ``code`` (``StagingError``):
    with those before: a migration may change data, so a difference is a warning, not a refusal.
 5. **Administrators** (decision 40): after a restore, one signs in with an account of the backup, with its password
    of then; the report names the copy's active administrators. With none, the restore is blocked.
+6. **Plugin secrets** (decision 39): the instance keeps its own key. The copy's secrets are re-encrypted with it from
+   the archive's key, when the archive carries one; the others stay as they are, counted: «set but unreadable, enter it
+   again». This instance's key is derived only when the copy holds secrets.
 
 The report is written beside the copy (``report.json``). A confirmed restore (lot B3) moves the copy into place; the
 copy of an archive nobody confirms is removed after ``STAGE_LIFETIME``.
@@ -27,6 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import secrets
 import shutil
 import sqlite3
 import stat
@@ -48,13 +56,16 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from backend.app.config import PROJECT_ROOT, get_version
 from backend.app.db.post_migration import run_post_migration_fixes
 from backend.app.logging_config import get_logger
-from backend.app.services.platform.instance_backup.archive import read_manifest
+from backend.app.services.platform.instance_backup.archive import INSTANCE_KEY_MAX_BYTES, read_instance_key, read_manifest
+from backend.app.services.platform.instance_backup.envelope import EnvelopeError, EnvelopeKey, decrypt_file, is_envelope
 from backend.app.services.platform.instance_backup.jobs import _out_of_space, _RunLock
 from backend.app.services.platform.instance_backup.manifest import BackupManifest, BackupOrigin, ManifestError, ManifestFile
 from backend.app.services.platform.instance_backup.paths import (
     DATABASE_ENTRY,
+    INSTANCE_KEY_ENTRY,
     MANIFEST_ENTRY,
     STAGE_DATA_FOLDER,
+    STAGE_DECRYPTED_ARCHIVE,
     STAGE_LOCK_FILE,
     STAGE_REPORT_FILE,
     BackupPathError,
@@ -66,6 +77,8 @@ from backend.app.services.platform.instance_backup.paths import (
 )
 from backend.app.services.platform.instance_backup.snapshot import DatabaseDescription, describe_database
 from backend.app.services.platform.instance_backup.totals import TotalsComparison, TotalsDifference, TotalsStatus, compare_totals, ledger_totals_of
+from backend.app.services.platform.instance_key import InstanceKeyError, derive_key_from
+from backend.app.services.plugin_settings.crypto import SUBKEY_LENGTH, SUBKEY_PURPOSE, count_unreadable_secrets, rekey_plugin_secrets, settings_subkey
 
 logger = get_logger(__name__)
 
@@ -82,7 +95,7 @@ _CHUNK = 1024 * 1024
 _ZIP_MAGIC = b"PK\x03\x04"
 _ZIP_READ_ERRORS = (zipfile.BadZipFile, zlib.error, EOFError)
 
-StagePhase = Literal["checking", "unpacking", "upgrading", "verifying"]
+StagePhase = Literal["decrypting", "checking", "unpacking", "upgrading", "verifying"]
 StageProgress = Callable[[StagePhase, int, int], None]
 #: What a restore does to the backup's database: nothing (it is at this LibreFolio's head), or an upgrade.
 RevisionAction = Literal["same", "upgrade"]
@@ -118,6 +131,15 @@ class AppliedMigration(BaseModel):
     message: str
 
 
+class SecretCounts(BaseModel):
+    """Saved plugin secrets, by scope: the instance's settings and the users' own."""
+
+    model_config = ConfigDict(frozen=True)
+
+    system: int = Field(default=0, ge=0)
+    user: int = Field(default=0, ge=0)
+
+
 class StagedBackup(BaseModel):
     """What the manifest says of the backup."""
 
@@ -138,7 +160,8 @@ class StagingReport(BaseModel):
     control totals of the copy differ from those the backup recorded: ``control_totals_differences``),
     ``control_totals_unreadable`` (the copy's could not be read). A blocker forbids it: ``no_administrator``.
     ``control_totals``: ``same``, ``changed``, ``absent`` (not in the archive), ``other_version`` (another version of
-    J's method: not compared) or ``unreadable``.
+    J's method: not compared) or ``unreadable``. ``encrypted``: a secure backup (lot B4). ``secrets_rekeyed``: the
+    plugin secrets re-encrypted with this instance's key; ``secrets_unreadable``: those that stay unreadable.
     """
 
     model_config = ConfigDict(extra="ignore", frozen=True)
@@ -159,6 +182,10 @@ class StagingReport(BaseModel):
     files_size: int = Field(ge=0)
     database_size: int = Field(ge=0)
     instance_key_included: bool
+    #: Lot B4; defaults, so that a report written before still reads.
+    encrypted: bool = False
+    secrets_rekeyed: int = Field(default=0, ge=0)
+    secrets_unreadable: SecretCounts = SecretCounts()
     administrators: list[str]
     #: Defaults, so that a report written before lot B-13 still reads.
     control_totals: TotalsStatus = "absent"
@@ -177,8 +204,11 @@ def new_stage_id() -> str:
     return uuid4().hex
 
 
-def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = None, progress: StageProgress | None = None, lock: _RunLock | None = None) -> StagingReport:
+def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = None, progress: StageProgress | None = None, lock: _RunLock | None = None, key: EnvelopeKey | None = None) -> StagingReport:
     """Check the archive at ``archive_path`` for a restore into ``data_dir``, on a copy, and return the report.
+
+    ``key``: the key of a secure backup (``envelope.unlock``); without it, such an archive is refused
+    (``password_required``).
 
     The copy and its report stay in ``.restore/stage/<stage id>/``; on any refusal nothing of them is left. One archive
     is checked at a time: ``StagingBusyError`` while another is. ``StagingError`` says why an archive is refused.
@@ -197,7 +227,7 @@ def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = 
         root = stage_dir(data_dir, stage_id)
         root.mkdir(mode=0o700)
         try:
-            report = _stage(archive_path, root, stage_id, progress if progress is not None else _no_progress)
+            report = _stage(archive_path, root, stage_id, progress if progress is not None else _no_progress, key)
         except BaseException:
             shutil.rmtree(root, ignore_errors=True)
             raise
@@ -245,14 +275,20 @@ def _no_progress(phase: StagePhase, done: int, total: int) -> None:
     return None
 
 
-def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgress) -> StagingReport:
+def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgress, key: EnvelopeKey | None = None) -> StagingReport:
     data_root = root / STAGE_DATA_FOLDER
+    encrypted = is_envelope(archive_path)
+    if encrypted:
+        archive_path = _decrypt(archive_path, root, key, progress)
     progress("checking", 0, 0)
     with _open_archive(archive_path) as archive:
         manifest = _read_manifest(archive)
         entries = _checked_entries(archive, manifest)
         _check_space(root, manifest)
+        archive_key = _archive_instance_key(archive, manifest) if INSTANCE_KEY_ENTRY in entries else None
         _unpack(archive, manifest, entries, root, data_root, progress)
+    if encrypted:
+        archive_path.unlink(missing_ok=True)
 
     database = data_root / DATABASE_ENTRY
     before = describe_database(database)
@@ -263,6 +299,7 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
         _upgrade(database)
         progress("upgrading", len(migrations), len(migrations))
     fixes = _post_migration_fixes(database, data_root)
+    rekeyed, unreadable = _plugin_secrets(database, archive_key)
 
     progress("verifying", 0, 0)
     after = describe_database(database)
@@ -271,9 +308,31 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
     if after.alembic_revision != head:
         raise StagingError("upgrade_failed", "The copy of the backup's database did not reach this LibreFolio's revision")
     totals = compare_totals(manifest.database.control_totals, ledger_totals_of(database))
-    report = _report(stage_id, manifest, before, after, action, migrations, head, fixes, _administrators(database), totals)
+    report = _report(stage_id, manifest, before, after, action, migrations, head, fixes, _administrators(database), totals, encrypted=encrypted, secrets_rekeyed=rekeyed, secrets_unreadable=unreadable)
     _write_report(root, report)
     return report
+
+
+def _decrypt(envelope: Path, root: Path, key: EnvelopeKey | None, progress: StageProgress) -> Path:
+    """Decrypt a secure backup beside its copy, once the space for it is checked; the archive it holds."""
+    if key is None:
+        raise StagingError("password_required", "The backup is protected by a password")
+    size = envelope.stat().st_size
+    if shutil.disk_usage(root).free < size + _SPACE_MARGIN:
+        raise StagingError("no_space", f"Not enough free space to check the archive: {size + _SPACE_MARGIN} bytes are needed")
+    target = root / STAGE_DECRYPTED_ARCHIVE
+    progress("decrypting", 0, size)
+    try:
+        decrypt_file(envelope, target, key, progress=lambda done, total: progress("decrypting", done, total))
+    except EnvelopeError:
+        # With its key given, an envelope can only fail here as damaged: a tag, a cut, a header changed since.
+        raise StagingError("envelope_damaged", "The secure backup is damaged or was changed") from None
+    except OSError as exc:
+        if _out_of_space(exc):
+            raise StagingError("no_space", "Not enough free space to check the archive") from None
+        logger.error("A secure backup could not be decrypted for a check", error=f"{type(exc).__name__}: {exc.strerror or exc}")
+        raise StagingError("stage_failed", "The archive could not be decrypted: the log of the server has the details") from None
+    return target
 
 
 def _open_archive(path: Path) -> zipfile.ZipFile:
@@ -301,23 +360,31 @@ def _read_manifest(archive: zipfile.ZipFile) -> BackupManifest:
 
 
 def _checked_entries(archive: zipfile.ZipFile, manifest: BackupManifest) -> dict[str, zipfile.ZipInfo]:
-    """Every entry of the archive, checked against the manifest before anything is written; by path."""
+    """Every entry of the archive, checked against the manifest before anything is written; by path.
+
+    The instance key is expected when the manifest announces it (lot B4): checked here, read later, never unpacked.
+    """
     infos = archive.infolist()
     if len(infos) > MAX_ENTRIES + 1:
         raise StagingError("too_many_entries", f"The archive holds more than {MAX_ENTRIES} entries")
     if _repeated(info.filename for info in infos) or _repeated(entry.path for entry in manifest.files) or _nested(entry.path for entry in manifest.files):
         raise StagingError("duplicate_entry", "An entry appears twice in the archive, with only its case changed, or as the folder of another")
     expected = {entry.path: entry for entry in manifest.files}
+    key_expected = manifest.instance_key.included
     entries: dict[str, zipfile.ZipInfo] = {}
     for info in infos:
         if info.filename == MANIFEST_ENTRY:
+            continue
+        if key_expected and info.filename == INSTANCE_KEY_ENTRY:
+            _check_key_entry(info)
+            entries[info.filename] = info
             continue
         entry = expected.get(info.filename)
         if entry is None:
             raise StagingError("unexpected_entry", "The archive holds an entry its manifest does not list")
         _check_entry(info, entry)
         entries[info.filename] = info
-    missing = len(expected) - len(entries)
+    missing = len(expected) + key_expected - len(entries)
     if missing:
         raise StagingError("missing_entry", f"{missing} entr{'y' if missing == 1 else 'ies'} of the manifest missing from the archive")
     return entries
@@ -351,6 +418,27 @@ def _check_entry(info: zipfile.ZipInfo, entry: ManifestFile) -> None:
         raise StagingError("unsupported_entry", "An entry of the archive uses a compression LibreFolio does not write")
     if info.file_size != entry.size:
         raise StagingError("checksum_mismatch", "An entry of the archive differs from its manifest: the archive is damaged or was changed")
+
+
+def _check_key_entry(info: zipfile.ZipInfo) -> None:
+    """The instance key entry is a small plain file, stored or deflated, unencrypted."""
+    mode = info.external_attr >> 16
+    if info.is_dir() or (mode and not stat.S_ISREG(mode)):
+        raise StagingError("not_a_file", "An entry of the archive is not a plain file: a folder or a link")
+    if info.flag_bits & 0x1:
+        raise StagingError("encrypted_entry", "An entry of the archive is encrypted")
+    if info.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+        raise StagingError("unsupported_entry", "An entry of the archive uses a compression LibreFolio does not write")
+    if info.file_size > INSTANCE_KEY_MAX_BYTES:
+        raise StagingError("checksum_mismatch", "The instance key of the archive differs from its manifest: the archive is damaged or was changed")
+
+
+def _archive_instance_key(archive: zipfile.ZipFile, manifest: BackupManifest) -> str:
+    """The text of the instance key the archive carries, once it matches its manifest."""
+    key = read_instance_key(archive, manifest.instance_key.sha256)
+    if key is None:
+        raise StagingError("checksum_mismatch", "The instance key of the archive differs from its manifest: the archive is damaged or was changed")
+    return key
 
 
 def space_needed(manifest: BackupManifest) -> int:
@@ -468,6 +556,36 @@ def _post_migration_fixes(database: Path, data_root: Path) -> list[str]:
     return sorted(fix_id for fix_id, outcome in report.outcomes.items() if outcome == "applied")
 
 
+def _plugin_secrets(database: Path, archive_key: str | None) -> tuple[int, SecretCounts]:
+    """The copy's plugin secrets after its upgrade: how many were re-encrypted with this instance's key, how many stay
+    unreadable. X's functions, on a connection of the copy; this instance's key is derived only when there are secrets."""
+    with closing(sqlite3.connect(database)) as conn:
+        # A random key reads no secret: what it counts as unreadable is every secret the copy holds.
+        if count_unreadable_secrets(conn, secrets.token_bytes(SUBKEY_LENGTH)).total == 0:
+            return 0, SecretCounts()
+        try:
+            current = settings_subkey()
+        except InstanceKeyError:
+            current = None
+        old = _archive_subkey(archive_key) if current is not None else None
+        if current is not None and old is not None:
+            report = rekey_plugin_secrets(conn, old, current)
+            conn.commit()
+            return report.rekeyed, SecretCounts(system=report.unreadable_system, user=report.unreadable_user)
+        unreadable = count_unreadable_secrets(conn, current if current is not None else secrets.token_bytes(SUBKEY_LENGTH))
+        return 0, SecretCounts(system=unreadable.system, user=unreadable.user)
+
+
+def _archive_subkey(archive_key: str | None) -> bytes | None:
+    """The subkey of the plugin secrets on the instance the archive came from; ``None`` without a key it accepts."""
+    if archive_key is None:
+        return None
+    try:
+        return derive_key_from(archive_key, SUBKEY_PURPOSE, SUBKEY_LENGTH)
+    except (InstanceKeyError, ValueError, TypeError):
+        return None
+
+
 def _administrators(database: Path) -> list[str]:
     """The user names of the copy's active administrators, in order."""
     with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
@@ -486,6 +604,10 @@ def _report(
     fixes: list[str],
     administrators: list[str],
     totals: TotalsComparison | None = None,
+    *,
+    encrypted: bool = False,
+    secrets_rekeyed: int = 0,
+    secrets_unreadable: SecretCounts | None = None,
 ) -> StagingReport:
     tables = {name: TableRows(before=before.tables.get(name), after=after.tables.get(name)) for name in sorted(set(before.tables) | set(after.tables))}
     warnings = []
@@ -521,6 +643,9 @@ def _report(
         files_size=sum(entry.size for entry in files),
         database_size=after.size,
         instance_key_included=manifest.instance_key.included,
+        encrypted=encrypted,
+        secrets_rekeyed=secrets_rekeyed,
+        secrets_unreadable=secrets_unreadable or SecretCounts(),
         administrators=administrators,
         control_totals=totals.status,
         control_totals_differences=list(totals.differences),

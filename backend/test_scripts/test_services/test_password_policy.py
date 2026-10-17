@@ -240,3 +240,176 @@ def test_the_unicode_category_decides_where_the_str_methods_disagree(password: s
     found = password_policy.failed_rules(password)
 
     assert found == missed, f"failed_rules({_describe(password)}): the category decides, expected {missed}, got {found}"
+
+
+# =============================================================================
+# B4 (workstream B): rule lists
+# =============================================================================
+#
+# Release 1.3, workstream B, lot B4, the «secure» backup (decision P12): the password of an archive follows these rules
+# with at least 12 characters, and never a copy of them. B writes three changes in this module and A reviews them
+# (``b4-test-brief.md`` §2):
+#
+# - ``failed_rules(password, rules=None)`` and ``password_rules_public(rules=None)`` apply, or publish, the rules they
+#   are given. ``None`` is this module's ``PASSWORD_RULES`` READ AT CALL TIME, never a default bound at import, so a
+#   change of A's rules reaches every caller. Without ``rules=`` both answer exactly as before: POLICY-000 to POLICY-006
+#   above are unchanged, and B4-RULES-09 compares the forms.
+# - ``rules_with_minimum_length(minimum, rules=None)``: a tuple of the rules with ``min_length`` at ``max(its value,
+#   minimum)``, never lowered, the rules' order kept and the other rules as they are; a list without ``min_length``
+#   gains it first; ``ValueError`` for a minimum below 1.
+#
+# Red until B4: ``rules_with_minimum_length`` does not exist and neither function takes ``rules=``. Each new name is
+# read through the module inside the tests, never imported at the top, so the tests above still collect and pass.
+
+#: The archive's minimum (P12), and a minimum A might one day raise its own to, above the archive's.
+B4_ARCHIVE_MINIMUM = 12
+B4_RAISED_POLICY_MINIMUM = 14
+#: The rules of an archive as (code, value): A's five in A's order, ``min_length`` at 12.
+B4_ARCHIVE_RULES = [(code, B4_ARCHIVE_MINIMUM if code == "min_length" else None) for code in RULE_CODES]
+
+
+def _b4_rule(code: str, value: int | None = None) -> Any:
+    """A rule of the policy's own type, for the lists a test gives."""
+    return password_policy.PasswordRule(code, value)
+
+
+def _b4_rule_pairs(rules: Any) -> Any:
+    """``(code, value)`` of each rule; anything but a sequence of ``PasswordRule`` as it is, so that the comparison fails and shows it."""
+    if not isinstance(rules, (list, tuple)) or not all(isinstance(rule, password_policy.PasswordRule) for rule in rules):
+        return rules
+    return [(rule.code, rule.value) for rule in rules]
+
+
+def _b4_meeting_every_class(length: int) -> str:
+    """``length`` characters, at least four, meeting every class: ``Aa1!``, then lowercase letters."""
+    return "Aa1!" + "a" * (length - 4)
+
+
+#: (password, the codes it misses) against the archive's rules, ``rules_with_minimum_length(12)``.
+B4_ARCHIVE_CASES = [
+    pytest.param(_b4_meeting_every_class(11), ["min_length"], id="eleven-characters-meeting-every-class"),
+    pytest.param(_b4_meeting_every_class(12), [], id="twelve-characters-meeting-every-class"),
+    pytest.param("Aa!" + "a" * 9, ["digit"], id="twelve-characters-without-a-digit"),
+    pytest.param("Abcdef1!", ["min_length"], id="eight-characters-enough-for-the-policy-alone"),
+    pytest.param("abc", ["min_length", "uppercase", "digit", "special"], id="several-missed-in-the-rules-order"),
+    pytest.param(_UNICODE_QUARTET * 3, [], id="twelve-characters-twenty-seven-utf8-bytes"),
+    pytest.param((_UNICODE_QUARTET * 3)[:11], ["min_length"], id="eleven-characters-twenty-four-utf8-bytes"),
+]
+
+#: (the rules given, as (code, value); what ``rules_with_minimum_length(12, rules=…)`` answers, as (code, value)).
+B4_GIVEN_LISTS = [
+    pytest.param([("digit", None), ("special", None)], [("min_length", 12), ("digit", None), ("special", None)], id="without-min-length-gains-it-first"),
+    pytest.param([], [("min_length", 12)], id="an-empty-list-is-not-none-and-gains-min-length-alone"),
+    pytest.param([("digit", None), ("min_length", 10), ("special", None)], [("digit", None), ("min_length", 12), ("special", None)], id="min-length-raised-where-it-stands"),
+    pytest.param([("min_length", 16), ("uppercase", None)], [("min_length", 16), ("uppercase", None)], id="a-higher-minimum-kept"),
+]
+
+#: Every password of the cases above, and the empty one: what the forms of ``failed_rules`` must answer alike.
+B4_SAMPLE_PASSWORDS = ["", *(case.values[0] for case in (*ONE_RULE_CASES, *SEVERAL_RULES_CASES, *CATEGORY_DECIDES_CASES))]
+
+
+def test_b4_rules_with_minimum_length_raises_min_length_and_keeps_the_rest() -> None:
+    """B4-RULES-01: ``rules_with_minimum_length(12)`` is a tuple of ``PasswordRule``: A's codes in A's order, ``min_length`` at 12, every other rule exactly as A has it; A's own ``PASSWORD_RULES`` are left as they were, ``min_length`` 8."""
+    print_section("B4-RULES-01: A's rules with a minimum of 12")
+    policy = password_policy.PASSWORD_RULES
+
+    rules = password_policy.rules_with_minimum_length(B4_ARCHIVE_MINIMUM)
+
+    assert isinstance(rules, tuple) and all(isinstance(rule, password_policy.PasswordRule) for rule in rules), f"rules_with_minimum_length must answer a tuple of PasswordRule: got {rules!r}"
+    assert [rule.code for rule in rules] == [rule.code for rule in policy], f"the codes of PASSWORD_RULES in their order, {[rule.code for rule in policy]}: got {[rule.code for rule in rules]}"
+    assert _b4_rule_pairs(rules) == B4_ARCHIVE_RULES, f"min_length at {B4_ARCHIVE_MINIMUM}, the other rules without a value: expected {B4_ARCHIVE_RULES}, got {_b4_rule_pairs(rules)}"
+    others = [rule for rule in rules if rule.code != "min_length"]
+    assert others == [rule for rule in policy if rule.code != "min_length"], f"every rule but min_length exactly as A has it: got {others!r}"
+    assert password_policy.PASSWORD_RULES is policy and _b4_rule_pairs(policy) == PUBLIC_RULES, f"A's own rules are never changed: PASSWORD_RULES is now {password_policy.PASSWORD_RULES!r}"
+    print_success(f"rules_with_minimum_length(12) = {_b4_rule_pairs(rules)}")
+
+
+@pytest.mark.parametrize("minimum", [pytest.param(1, id="1"), pytest.param(4, id="4"), pytest.param(8, id="8-the-policys-own")])
+def test_b4_rules_with_minimum_length_never_lowers_the_minimum(minimum: int) -> None:
+    """B4-RULES-02: a minimum at or below A's 8 changes nothing: ``rules_with_minimum_length(4)`` keeps A's 8, the rules as A has them."""
+    rules = password_policy.rules_with_minimum_length(minimum)
+
+    assert _b4_rule_pairs(rules) == PUBLIC_RULES, f"rules_with_minimum_length({minimum}) never lowers A's minimum: expected A's rules {PUBLIC_RULES}, got {_b4_rule_pairs(rules)}"
+
+
+@pytest.mark.parametrize(("given", "expected"), B4_GIVEN_LISTS)
+def test_b4_rules_with_minimum_length_on_the_rules_it_is_given(given: list[tuple[str, int | None]], expected: list[tuple[str, int | None]]) -> None:
+    """B4-RULES-03: on the rules it is given (``rules=``, an empty list included, which is not ``None``): a list without ``min_length`` gains it first, ``min_length`` is raised where it stands, a higher minimum is kept, the other rules keep their order; the list given is never changed."""
+    rules = [_b4_rule(code, value) for code, value in given]
+    untouched = list(rules)
+
+    result = password_policy.rules_with_minimum_length(B4_ARCHIVE_MINIMUM, rules=rules)
+
+    assert _b4_rule_pairs(result) == expected, f"rules_with_minimum_length(12, rules={given}): expected {expected}, got {result!r}"
+    assert rules == untouched, f"the list given must never be changed: it is now {rules!r}"
+
+
+@pytest.mark.parametrize("minimum", [pytest.param(0, id="0"), pytest.param(-1, id="-1")])
+def test_b4_rules_with_minimum_length_refuses_a_minimum_below_1(minimum: int) -> None:
+    """B4-RULES-04: a minimum below 1 is a ``ValueError``."""
+    rules_with_minimum_length = password_policy.rules_with_minimum_length
+
+    with pytest.raises(ValueError):
+        rules_with_minimum_length(minimum)
+
+
+def test_b4_without_rules_the_policys_rules_are_read_at_call_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    """B4-RULES-05: no ``rules`` (or ``rules=None``) is ``PASSWORD_RULES`` as it is at the call, never a default bound at import. With A's minimum raised to 14 (``PASSWORD_RULES`` replaced): ``rules_with_minimum_length(12)`` gives 14; ``failed_rules`` reports ``min_length`` for 13 characters meeting every class and nothing for 14; ``password_rules_public`` publishes 14."""
+    print_section("B4-RULES-05: A's rules read at call time")
+    raised = tuple(dataclasses.replace(rule, value=B4_RAISED_POLICY_MINIMUM) if rule.code == "min_length" else rule for rule in password_policy.PASSWORD_RULES)
+    monkeypatch.setattr(password_policy, "PASSWORD_RULES", raised)
+    expected = [(code, B4_RAISED_POLICY_MINIMUM if code == "min_length" else None) for code in RULE_CODES]
+    thirteen, fourteen = _b4_meeting_every_class(13), _b4_meeting_every_class(14)
+
+    archive = password_policy.rules_with_minimum_length(B4_ARCHIVE_MINIMUM)
+
+    assert _b4_rule_pairs(archive) == expected, f"A's minimum raised to 14: rules_with_minimum_length(12) must give 14, expected {expected}, got {_b4_rule_pairs(archive)}"
+    for given in ({}, {"rules": None}):
+        form = "rules=None" if given else "without rules="
+        assert password_policy.failed_rules(thirteen, **given) == ["min_length"], f"failed_rules({thirteen!r}), {form}: 13 characters, A's minimum is now 14: got {password_policy.failed_rules(thirteen, **given)}"
+        assert password_policy.failed_rules(fourteen, **given) == [], f"failed_rules({fourteen!r}), {form}: 14 characters meeting every class: got {password_policy.failed_rules(fourteen, **given)}"
+        assert _pairs(password_policy.password_rules_public(**given)) == expected, f"password_rules_public, {form}: A's rules as they are now, {expected}: got {password_policy.password_rules_public(**given)!r}"
+    print_success("rules_with_minimum_length(12), failed_rules and password_rules_public follow A's 14")
+
+
+@pytest.mark.parametrize(("password", "missed"), B4_ARCHIVE_CASES)
+def test_b4_failed_rules_applies_the_rules_it_is_given(password: str, missed: list[str]) -> None:
+    """B4-RULES-06: ``failed_rules(password, rules=rules_with_minimum_length(12))``: 11 characters meeting every class miss ``min_length`` alone, 12 meet them all, 12 without a digit miss ``digit`` alone; 8, enough for A's rules, miss ``min_length``; several codes come back in the rules' order; the length counts characters, Unicode ones included."""
+    found = password_policy.failed_rules(password, rules=password_policy.rules_with_minimum_length(B4_ARCHIVE_MINIMUM))
+
+    assert found == missed, f"failed_rules({_describe(password)}, rules=rules_with_minimum_length(12)), {len(password)} characters: expected {missed}, got {found}"
+
+
+def test_b4_failed_rules_answers_in_the_order_of_the_rules_it_is_given() -> None:
+    """B4-RULES-07: the codes come back in the order of the rules given, not A's, and only the rules given apply: ``"ABC"`` against special, digit, min_length 12 and uppercase misses the first three, and no ``lowercase``, a rule it was not given."""
+    rules = (_b4_rule("special"), _b4_rule("digit"), _b4_rule("min_length", B4_ARCHIVE_MINIMUM), _b4_rule("uppercase"))
+
+    found = password_policy.failed_rules("ABC", rules=rules)
+
+    assert found == ["special", "digit", "min_length"], f"failed_rules('ABC', rules={_b4_rule_pairs(rules)}): expected ['special', 'digit', 'min_length'], in the order given and without lowercase, a rule not given: got {found}"
+
+
+def test_b4_password_rules_public_publishes_the_rules_it_is_given() -> None:
+    """B4-RULES-08: ``password_rules_public(rules=…)`` publishes the rules given, in their order, as ``code`` and ``value``: 12 for the archive's ``min_length``, null (or left out, as POLICY-001 allows) for a rule without a value."""
+    archive = password_policy.password_rules_public(rules=password_policy.rules_with_minimum_length(B4_ARCHIVE_MINIMUM))
+    given = password_policy.password_rules_public(rules=(_b4_rule("digit"), _b4_rule("min_length", 20)))
+
+    assert isinstance(archive, list) and _pairs(archive) == B4_ARCHIVE_RULES, f"the archive's rules as published: expected {B4_ARCHIVE_RULES} as (code, value), keys code and value only, got {archive!r}"
+    assert _pairs(given) == [("digit", None), ("min_length", 20)], f"the rules given, in their order: expected [('digit', None), ('min_length', 20)], got {given!r}"
+
+
+def test_b4_without_rules_both_functions_answer_as_with_the_policys_rules() -> None:
+    """B4-RULES-09: without ``rules=``, both functions answer exactly as with ``rules=PASSWORD_RULES`` and with ``rules=None``: ``failed_rules`` on every password of the cases above and on the empty one, ``password_rules_public`` as a whole."""
+    print_section("B4-RULES-09: without rules=, A's rules")
+    policy = password_policy.PASSWORD_RULES
+    differ = []
+
+    for password in B4_SAMPLE_PASSWORDS:
+        without, explicit, none = password_policy.failed_rules(password), password_policy.failed_rules(password, rules=policy), password_policy.failed_rules(password, rules=None)
+        if not without == explicit == none:
+            differ.append(f"{_describe(password)}: without rules= {without}, rules=PASSWORD_RULES {explicit}, rules=None {none}")
+    published = (password_policy.password_rules_public(), password_policy.password_rules_public(rules=policy), password_policy.password_rules_public(rules=None))
+
+    assert differ == [], "failed_rules answers differently with and without rules=:\n- " + "\n- ".join(differ)
+    assert published[0] == published[1] == published[2], f"password_rules_public: without rules= {published[0]}, rules=PASSWORD_RULES {published[1]}, rules=None {published[2]}"
+    print_success(f"{len(B4_SAMPLE_PASSWORDS)} passwords and the published rules, alike in the three forms")

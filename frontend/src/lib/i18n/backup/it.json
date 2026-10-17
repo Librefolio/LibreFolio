@@ -4,8 +4,20 @@
     "intro": "I dati di questo LibreFolio in un solo archivio, da conservare al sicuro o da portare in un'altra installazione.",
     "download": {
       "title": "Backup dell'istanza",
-      "description": "Un archivio con il database, i file caricati, i report dei broker e gli scenari di rischio. I log e la chiave dell'istanza non sono inclusi.",
+      "description": "Un archivio con il database, i file caricati, i report dei broker e gli scenari di rischio. I log non sono mai inclusi; la chiave dell'istanza solo in un backup sicuro.",
       "privacy": "L'archivio contiene i dati di tutti gli utenti e non è cifrato: conservalo in un posto riservato.",
+      "mode": {
+        "legend": "Tipo di backup",
+        "clear": "In chiaro",
+        "clearDescription": "Un normale .zip: chi ha il file vede tutti i dati, e su un'altra istanza le chiavi dei fornitori di dati vanno reinserite.",
+        "secure": "Sicuro",
+        "secureDescription": "Un .lfbk cifrato con una password che scegli tu: solo quella password lo apre, e se la perdi non si recupera. Porta con sé anche le chiavi dei fornitori di dati."
+      },
+      "password": {
+        "label": "Password del backup",
+        "confirmLabel": "Ripeti la password",
+        "mismatch": "Le due password sono diverse."
+      },
       "create": "Crea backup",
       "createAgain": "Crea un nuovo backup",
       "creating": "Creazione del backup…",
@@ -14,11 +26,13 @@
         "preparing": "Preparazione",
         "database": "Copia del database",
         "files": "Aggiunta dei file",
-        "finalizing": "Chiusura"
+        "finalizing": "Chiusura",
+        "encrypting": "Cifratura con la tua password"
       },
       "progress": "{done} di {total}",
       "ready": "Backup pronto",
       "readyDetails": "{name}, {size}, creato il {date}",
+      "readyEncrypted": "Cifrato con la tua password: conservala bene, LibreFolio non può recuperarla.",
       "download": "Scarica",
       "delete": "Elimina dal server",
       "deleting": "Eliminazione del backup…",
@@ -29,7 +43,8 @@
       "warnings": {
         "database_integrity": "Il database non ha superato il controllo d'integrità: è stato archiviato così com'è.",
         "foreign_key_violations": "Il database ha riferimenti non validi fra le tabelle: è stato archiviato così com'è.",
-        "files_skipped": "Alcuni file sono stati esclusi: collegamenti, file speciali, file o cartelle illeggibili, o file eliminati durante il backup."
+        "files_skipped": "Alcuni file sono stati esclusi: collegamenti, file speciali, file o cartelle illeggibili, o file eliminati durante il backup.",
+        "instance_key_unusable": "La chiave dell'istanza non è utilizzabile: il backup è stato fatto senza, quindi dopo un ripristino le chiavi dei fornitori di dati vanno reinserite."
       },
       "errors": {
         "backup_busy": "È già in corso un altro backup: riprova quando finisce.",
@@ -39,7 +54,8 @@
         "backup_interrupted": "Il backup è stato interrotto, per esempio da un riavvio: creane uno nuovo.",
         "backup_job_not_found": "Questo backup non è più sul server: creane uno nuovo.",
         "network": "Il server non risponde.",
-        "unexpected": "Il server ha risposto con un errore: ricarica la pagina e riprova."
+        "unexpected": "Il server ha risposto con un errore: ricarica la pagina e riprova.",
+        "password_too_weak": "La password non rispetta le regole della password di un backup."
       },
       "toast": {
         "warnings": "Backup pronto, con avvisi: controllali prima di farci affidamento."
@@ -57,6 +73,7 @@
       "progress": "{done} di {total}",
       "cancelUpload": "Interrompi l'invio",
       "phase": {
+        "decrypting": "Decifratura del backup",
         "checking": "Controllo dell'archivio",
         "unpacking": "Estrazione su una copia",
         "upgrading": "Aggiornamento del database della copia",
@@ -104,8 +121,10 @@
         "fixes": "Correzioni applicate alla copia: {fixes}.",
         "contents": "{files, plural, one {# file} other {# file}} ({filesSize}); database {databaseSize}.",
         "tablesChanged": "Tabelle di cui l'aggiornamento ha cambiato le righe:",
-        "keyIncluded": "La chiave dell'istanza è inclusa.",
+        "keyIncluded": "Il backup porta la chiave dell'istanza da cui viene: questo LibreFolio tiene la sua.",
         "keyNotIncluded": "La chiave dell'istanza non è inclusa: questo LibreFolio tiene la sua.",
+        "secretsRekeyed": "{count, plural, one {# chiave salvata di un fornitore di dati viene ricifrata con la chiave di questa istanza.} other {# chiavi salvate di fornitori di dati vengono ricifrate con la chiave di questa istanza.}}",
+        "secretsUnreadable": "{count, plural, one {# chiave salvata di un fornitore di dati non è leggibile con la chiave di questa istanza: reinseriscila dopo il ripristino.} other {# chiavi salvate di fornitori di dati non sono leggibili con la chiave di questa istanza: reinseriscile dopo il ripristino.}}",
         "totals": {
           "same": "Totali del registro: uguali a quando è stato fatto il backup.",
           "changed": "I totali del registro differiscono da quelli del backup su {count, plural, one {# riga} other {# righe}}:",
@@ -191,7 +210,17 @@
         "restore_not_pending": "Nessun ripristino attende il prossimo avvio.",
         "restore_pending": "Un ripristino attende di applicare questa copia: annullalo prima.",
         "network": "Il server non risponde: controlla la connessione e riprova.",
-        "unexpected": "Il server ha risposto con un errore: la causa è nel log del server."
+        "unexpected": "Il server ha risposto con un errore: la causa è nel log del server.",
+        "wrong_password": "Password sbagliata, oppure il file è stato modificato: riscrivi la password.",
+        "password_required": "È un backup sicuro: scrivi la sua password.",
+        "envelope_damaged": "Il backup sicuro è danneggiato o è stato modificato: non si può aprire.",
+        "envelope_unsupported": "Il backup sicuro viene da un LibreFolio più recente: aggiorna prima LibreFolio."
+      },
+      "password": {
+        "intro": "Un backup sicuro: scrivi la password con cui è stato fatto.",
+        "label": "Password del backup",
+        "submit": "Controlla il backup",
+        "cancel": "Annulla"
       }
     }
   }

@@ -72,7 +72,8 @@ This skill is intentionally **high-level and durable**. For the precise, current
 - **Instructions** — `.github/instructions/backend-signals.instructions.md` (backend) and
   `.github/instructions/frontend-signals.instructions.md` (frontend renderer)
 - **Reference code** — `backend/app/services/signals/base.py` and simple plugins such
-  as `sma/plugin.py` and `rsi/plugin.py`; the runtime in `services/signals/service.py`.
+  as `sma/plugin.py` and `rsi/plugin.py`; the runtime in `services/signals/` (`service.py` is the façade over
+  `planning.py`, `execution.py` and `validation.py`).
 
 Do not rely on this page for method signatures or exact conventions — they can change; the
 developer guide is kept up to date.

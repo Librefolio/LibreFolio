@@ -53,8 +53,17 @@
  *   - FBKP-107: the whole path, real but for the restart: the instance's own backup uploaded, checked (`checking`, its
  *     first read held for as long as the test looks at it), reported, the word typed key by key, the restore confirmed on
  *     the lane's server; then restarted, the server down and up, the outcome `committed` read with the ticket, and the
- *     page on the sign-in page, saying nothing.
- * FBKP-103 to FBKP-105 restart a restore found waiting on a faked status: none of them confirms anything on the server.
+ *     page on the sign-in page, saying nothing;
+ *   - FBKP-108: a secure backup (lot B4, decision 39) from the card: «secure», its password typed twice under the rules of
+ *     `GET /backup/instance/options` (one character short refused), followed to done, the card and the job saying
+ *     `encrypted`; its `.lfbk` downloaded (`LFBK`), then chosen in the restore card: the password asked before anything is
+ *     sent, the envelope sent once and checked on the lane's server (`decrypting` first), the report as the server's,
+ *     dropped; the password kept nowhere a script of the page could read;
+ *   - FBKP-109: a wrong password: the case's own secure archive, made with the page's session through the API, chosen in
+ *     the restore card; a wrong password refused (400 `wrong_password`) and asked again, the right one checking the same
+ *     upload — one `PUT` of the archive, two `POST`s of its check —; dropped, the check and the upload gone.
+ * FBKP-103 to FBKP-105 restart a restore found waiting on a faked status: none of them confirms anything on the server,
+ * nor do FBKP-108 and FBKP-109, which drop what they check.
  * Not here either: the restore's states one by one, which restoreFlow.test.ts, RestoreCard.test.ts,
  * RestoreReportModal.test.ts and RestartOverlay.test.ts drive with a faked API.
  *
@@ -70,8 +79,9 @@
  * session, apart from the page's cookies (two cases clear them): after it, red or green, whatever waits for the next
  * start of the lane's server is cancelled (`DELETE /backup/restore/pending`, 404 `restore_not_pending` the usual answer) —
  * a restore left confirmed there would be applied at that start —, and every check it started is waited out and dropped,
- * or found gone with the cancel (B-17). The archive the two real cases upload is the instance's own backup, made through
- * the API the first time one of them needs it, its job deleted at once, its file removed after the block.
+ * or found gone with the cancel (B-17). The archive FBKP-106 and FBKP-107 upload is the instance's own backup, made through
+ * the API the first time one of them needs it, its job deleted at once, its file removed after the block. FBKP-108 and
+ * FBKP-109 each make a secure one of their own, kept in the test's output folder; its job is the test's like any other.
  *
  * Registered in scripts/test_runner/_frontend_utility.py, action `backup` of front-utility.
  */
@@ -80,7 +90,7 @@ import {mkdtemp, open, readFile, rm, stat, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {schemas} from '../../src/lib/api/generated';
-import {expect, test, type APIRequestContext, type Locator, type Page} from '../fixtures/playwright';
+import {expect, test, type APIRequestContext, type Locator, type Page, type Request as PageRequest} from '../fixtures/playwright';
 import {eventSeq, waitForEvent} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from '../fixtures/test-users';
@@ -629,7 +639,7 @@ async function fakeTheCheck(page: Page, size: number): Promise<{calls: string[]}
     const uploadId = randomBytes(16).toString('hex');
     const stageId = randomBytes(16).toString('hex');
     const createdAt = '2026-10-15T09:41:20Z';
-    const upload = schemas.RestoreUpload.parse({upload_id: uploadId, size});
+    const upload = schemas.RestoreUpload.parse({upload_id: uploadId, size, kind: 'zip'});
     const running = schemas.RestoreStage.parse({stage_id: stageId, status: 'running', phase: 'checking', done_bytes: 0, total_bytes: 0, created_at: createdAt, finished_at: null, error_code: null, report: null});
     const done = schemas.RestoreStage.parse({
         stage_id: stageId,
@@ -657,6 +667,9 @@ async function fakeTheCheck(page: Page, size: number): Promise<{calls: string[]}
             files_size: 2_097_152,
             database_size: 1_048_576,
             instance_key_included: true,
+            encrypted: false,
+            secrets_rekeyed: 0,
+            secrets_unreadable: {system: 0, user: 0},
             administrators: [TEST_ADMIN.username],
             warnings: [],
             blockers: [],
@@ -785,6 +798,135 @@ async function confirmThroughApi(lane: RestoreLane, stageId: string): Promise<vo
 }
 
 // ---------------------------------------------------------------------------
+// A secure backup (lot B4): its password, its envelope, and what the page sends of it
+// ---------------------------------------------------------------------------
+
+/** What a secure backup's password must meet: the accounts' rules, with a longer minimum (P12). */
+const BACKUP_OPTIONS = `${BACKUP_API}/options`;
+/** A secure backup's archive: `archive_name(created_at, encrypted=True)` of jobs.py. */
+const ENVELOPE_NAME = /^librefolio-backup-\d{8}-\d{6}\.lfbk$/;
+/** An envelope opens with `LFBK` (`MAGIC` of envelope.py), in hex. */
+const ENVELOPE_MAGIC = '4c46424b';
+/** P12: a backup's password has at least this many characters (`ARCHIVE_PASSWORD_MIN_LENGTH` of secure.py). */
+const ARCHIVE_MIN_LENGTH = 12;
+/**
+ * The row of the strength meter's checklist that draws each rule, by the rule's code: `password-rule-<key>` of
+ * PasswordStrength.svelte (`RULE_UI_KEYS` of passwordRules.ts), written out here: the test id is the contract.
+ */
+const RULE_ROWS: Readonly<Record<string, string>> = {min_length: 'minLength', uppercase: 'hasUppercase', lowercase: 'hasLowercase', digit: 'hasNumber', special: 'hasSpecial'};
+/** The archive sent to the server, and the start of its check: the requests a restore of an envelope is counted by. */
+const UPLOAD_CALL = `PUT ${RESTORE_UPLOAD}`;
+const CHECK_CALL = `POST ${RESTORE_STAGE}`;
+
+type PasswordRule = {code: string; value: number | null};
+/** One request the page sent: what, its JSON body (a start of a check's), and what the server answered, once it did. */
+type SentRequest = {call: string; body: unknown; answer: Promise<{status: number; json: unknown} | null>};
+
+/** The rules of a secure backup's password, as the server gives them, checked against the generated client's schema. */
+async function archivePasswordRules(api: APIRequestContext): Promise<PasswordRule[]> {
+    const response = await api.get(BACKUP_OPTIONS);
+    expect(response.status(), `GET ${BACKUP_OPTIONS}`).toBe(200);
+    // The client's explicit type widens `value` to an array branch its schema never lets through: narrowed here.
+    return schemas.InstanceBackupOptions.parse(await response.json()).password_rules.map(({code, value}) => ({code, value: typeof value === 'number' ? value : null}));
+}
+
+/**
+ * The length those rules ask for, once each of them is known to be a rule `passwordOf()` meets: a rule this case does
+ * not know fails it here, by its code, rather than as a backup refused further on.
+ */
+function minLengthOf(rules: PasswordRule[]): number {
+    expect(
+        rules.map(({code}) => code).filter((code) => !Object.hasOwn(RULE_ROWS, code)),
+        'the options name a rule the passwords of this case are not built for',
+    ).toEqual([]);
+    const minimum = rules.find(({code}) => code === 'min_length')?.value ?? null;
+    expect(minimum, `the options ask a backup's password for at least ${ARCHIVE_MIN_LENGTH} characters (P12)`).toBeGreaterThanOrEqual(ARCHIVE_MIN_LENGTH);
+    return minimum ?? ARCHIVE_MIN_LENGTH;
+}
+
+/**
+ * A password of `length` characters: an upper-case letter, a lower-case one, a digit and a symbol — every class a rule
+ * can ask for —, the rest random, so that nothing on a page could hold it by chance.
+ */
+function passwordOf(length: number): string {
+    return `Aa1!${randomBytes(length).toString('hex')}`.slice(0, length);
+}
+
+/**
+ * A secure backup made through the API, with the session of `api`, followed to done: its envelope saved as
+ * `outputPath(<its name>)`, then its job deleted. The job is the test's from the server's first answer: the afterEach
+ * deletes it too, whatever happens here.
+ */
+async function secureArchiveThroughApi(api: APIRequestContext, password: string, outputPath: (name: string) => string): Promise<InstanceArchive> {
+    const started = await api.post(BACKUP_API, {data: {password}});
+    expect(started.status(), `POST ${BACKUP_API} with a password`).toBe(202);
+    const jobId = schemas.InstanceBackupJob.parse(await started.json()).job_id;
+    owned.jobs.add(jobId);
+    try {
+        await expect.poll(() => jobStatus(api, jobId), {message: `secure backup job ${jobId} has ended`, timeout: BACKUP_MS}).toMatch(/^(gone|done|failed)$/);
+        const read = await api.get(jobUrl(jobId));
+        expect(read.status(), `GET ${jobUrl(jobId)}`).toBe(200);
+        const job = schemas.InstanceBackupJob.parse(await read.json());
+        // The reason before the state: a backup that failed reds with its code.
+        expect(job.error_code ?? null, 'the secure backup ended without an error').toBeNull();
+        expect(job.status).toBe('done');
+        expect(job.encrypted, 'the job of a secure backup says its archive is encrypted').toBe(true);
+        const name = job.file_name ?? '';
+        expect(name).toMatch(ENVELOPE_NAME);
+
+        const file = await api.get(`${jobUrl(jobId)}/file`, {timeout: BACKUP_MS});
+        expect(file.status(), `GET ${jobUrl(jobId)}/file`).toBe(200);
+        expect(file.headers()['content-type'], 'an envelope is not served as a zip').toMatch(/^application\/octet-stream/);
+        const body = await file.body();
+        expect(body.length, 'the whole envelope: as many bytes as the job reported').toBe(job.file_size);
+        expect(body.subarray(0, 4).toString('hex'), 'an envelope: it opens with LFBK').toBe(ENVELOPE_MAGIC);
+        const path = outputPath(name);
+        await writeFile(path, body);
+        return {path, size: body.length};
+    } finally {
+        // The envelope is on disk now: its job need not stay on the server for its hour.
+        await discardJob(api, jobId);
+    }
+}
+
+/** What the server answered a request of the page, once it did: its status and its JSON (`null` when it had none). */
+async function answerOf(request: PageRequest): Promise<{status: number; json: unknown} | null> {
+    const response = await request.response().catch(() => null);
+    if (response === null) return null;
+    return {status: response.status(), json: await response.json().catch(() => null)};
+}
+
+/**
+ * Record, in the order the page sends them, every upload of an archive and every start of its check — the requests
+ * themselves, not the card's account of them —, with the body of each start, and each answer once it comes.
+ */
+function watchUploadsAndChecks(page: Page): SentRequest[] {
+    const sent: SentRequest[] = [];
+    page.on('request', (request) => {
+        const call = `${request.method()} ${new URL(request.url()).pathname}`;
+        if (call !== UPLOAD_CALL && call !== CHECK_CALL) return;
+        // The upload's body is the archive itself, not read; a start's is JSON.
+        let body: unknown = null;
+        if (call === CHECK_CALL) {
+            try {
+                body = request.postDataJSON();
+            } catch {
+                body = request.postData();
+            }
+        }
+        sent.push({call, body, answer: answerOf(request)});
+    });
+    return sent;
+}
+
+/** The server's report of a check, checked against the schema. */
+async function readReport(api: APIRequestContext, stageId: string): Promise<ReturnType<typeof schemas.RestoreStageReport.parse>> {
+    const response = await api.get(checkUrl(stageId));
+    expect(response.status(), `GET ${checkUrl(stageId)}`).toBe(200);
+    return schemas.RestoreStageReport.parse(schemas.RestoreStage.parse(await response.json()).report);
+}
+
+// ---------------------------------------------------------------------------
 // The page
 // ---------------------------------------------------------------------------
 
@@ -813,6 +955,42 @@ async function confirmationWord(page: Page): Promise<string> {
     const shown = page.getByTestId('restore-confirm-word');
     await expect(shown, 'the report shows a word to type').toHaveText(/^\s*\S+\s*$/);
     return ((await shown.textContent()) ?? '').trim();
+}
+
+/** Choose a secure backup's envelope in the restore card: its password is asked first, and nothing is sent before it. */
+async function chooseEnvelope(page: Page, card: Locator, path: string, sent: SentRequest[]): Promise<void> {
+    await expect(page.getByTestId('restore-file-input'), 'the picker suggests secure backups too').toHaveAttribute('accept', /\.lfbk/);
+    await chooseArchive(page, path);
+    await expect(card, 'a secure backup: its password first').toHaveAttribute('data-state', 'password', {timeout: PAGE_MS});
+    await expect(card, 'the card waits for the administrator, not for the server').toHaveAttribute('data-busy', 'false');
+    await expect(card.getByTestId('restore-password-form')).toBeVisible();
+    await expect(card.getByTestId('restore-password-error'), 'no password tried yet: no error').toHaveCount(0);
+    expect(
+        sent.map(({call}) => call),
+        'nothing is sent before the password',
+    ).toEqual([]);
+}
+
+/** Type a secure backup's password in the restore card, and send it. */
+async function submitRestorePassword(card: Locator, password: string): Promise<void> {
+    const field = card.getByTestId('restore-password');
+    await field.fill(password);
+    await expect(field).toHaveValue(password);
+    await card.getByTestId('restore-password-submit').click();
+}
+
+/** Drop the checked archive from its report, as the administrator does: the card idle again, the check gone from the server, nothing restored. */
+async function dropTheReport(page: Page, card: Locator, lane: RestoreLane, stageId: string): Promise<void> {
+    const since = await eventSeq(page);
+    await page.getByTestId('restore-drop').click();
+    await expect(card).toHaveAttribute('data-state', 'idle', {timeout: PAGE_MS});
+    const cancelled = await waitForEvent(page, 'backup.restore.cancelled', {since});
+    expect(cancelled.detail).toEqual({what: 'check'});
+    const gone = await lane.admin.get(checkUrl(stageId));
+    expect(gone.status(), `GET ${checkUrl(stageId)} after the drop`).toBe(404);
+    expect(await errorCode(gone)).toBe('restore_stage_not_found');
+    expect((await readStatus(lane.admin)).state, 'nothing restored: no restore waits for the next start').not.toBe('pending');
+    expect(lane.restarts, 'nothing restarted').toBe(0);
 }
 
 /**
@@ -969,8 +1147,9 @@ const restoreTest = test.extend<{lane: RestoreLane}>({
 
 restoreTest.describe('Settings › Backup — a restore of the instance', () => {
     // Serial: one check at a time on a server (409 `restore_busy`) and one restore waiting (409 `restore_already_pending`):
-    // FBKP-106 and FBKP-107 take turns on the lane's server, each one cancelling and dropping what it left before the
-    // next one begins. The faked cases come first, so that a broken real path cannot hide them.
+    // FBKP-106 to FBKP-109 take turns on the lane's server, each one cancelling and dropping what it left before the
+    // next one begins; FBKP-108 and FBKP-109 also make a backup each, one at a time on the instance (409 `backup_busy`).
+    // The faked cases come first, so that a broken real path cannot hide them.
     restoreTest.describe.configure({mode: 'serial', timeout: RESTORE_TEST_MS});
     // The app's offline-fallback service worker blocked, as in default-currency.spec.ts: every request of these cases
     // meets `page.route` — above all the restart, which must never reach the lane's server. Local to this block.
@@ -1269,5 +1448,211 @@ restoreTest.describe('Settings › Backup — a restore of the instance', () => 
         expectTicketInItsHeaderOnly(lane);
         expect(lane.restarts, 'still one restart, never sent on').toBe(1);
         expect((await readStatus(lane.admin)).state, "the restart never reached the lane's server: the restore still waits there, for the clean-up to cancel").toBe('pending');
+    });
+
+    restoreTest('FBKP-108: a secure backup from the card, its password typed twice under the rules of the options; its .lfbk downloaded and chosen in the restore card: the password asked first, the envelope checked, then dropped; the password kept nowhere', async ({page, lane}, testInfo) => {
+        recordStartedChecks(page, lane);
+        const sent = watchUploadsAndChecks(page);
+        const card = await openRestoreCard(page);
+        await expect(card, "precondition: nothing waits on the lane's server, the card takes an archive").toHaveAttribute('data-state', 'idle');
+        const backupCard = page.getByTestId('backup-download-card');
+
+        // The password, built from the rules the server gives a backup's password.
+        const rules = await archivePasswordRules(page.request);
+        const minLength = minLengthOf(rules);
+        const password = passwordOf(minLength + 4);
+        const oneShort = passwordOf(minLength - 1);
+
+        // «Secure»: the password asked twice, under the strength meter. A backup is clear until the administrator chooses.
+        await expect(backupCard.getByTestId('backup-mode-clear')).toBeChecked();
+        await backupCard.getByTestId('backup-mode-secure').check();
+        await expect(backupCard.getByTestId('backup-mode')).toHaveAttribute('data-mode', 'secure');
+        const create = backupCard.getByTestId('backup-create');
+        await expect(create, 'no password yet: nothing to start').toBeDisabled();
+        const first = backupCard.getByTestId('backup-password');
+        const second = backupCard.getByTestId('backup-password-confirm');
+        await expect(first).toHaveAttribute('type', 'password');
+        await expect(second).toHaveAttribute('type', 'password');
+
+        // One character short of the options' minimum, every class in it, typed twice alike: the meter holds it to the
+        // options' rules — once they are in: the accounts' own ask fewer characters —, and the backup cannot start.
+        await first.fill(oneShort);
+        await second.fill(oneShort);
+        await expect(backupCard.getByTestId('password-rule-minLength'), `${minLength - 1} characters: one short of the options' minimum`).toHaveAttribute('data-passed', 'false', {timeout: PAGE_MS});
+        await expect(create).toBeDisabled();
+
+        await first.fill(password);
+        await second.fill(password);
+        for (const {code} of rules) {
+            await expect(backupCard.getByTestId(`password-rule-${RULE_ROWS[code]}`), `the rule ${code} holds`).toHaveAttribute('data-passed', 'true');
+        }
+        await expect(backupCard.getByTestId('backup-password-mismatch')).toHaveCount(0);
+        await expect(create, 'a valid password, typed twice alike: the backup can start').toBeEnabled();
+
+        // Started and followed to done, as FBKP-002 does: the archive is the secure one.
+        const creating = await eventSeq(page);
+        const {jobId, fileSize} = await createBackup(page, backupCard);
+        const created = await waitForEvent(page, 'backup.created', {since: creating});
+        expect(created.detail?.encrypted, 'backup.created says the archive is encrypted').toBe(true);
+        // The password left its fields as the job started; «secure» is still the choice.
+        await expect(backupCard.getByTestId('backup-mode')).toHaveAttribute('data-mode', 'secure');
+        await expect(first, 'the password left its field').toHaveValue('');
+        await expect(second, 'and its repetition').toHaveValue('');
+
+        // The job, by its id, as the server tells it; and the card's encrypted ready state.
+        const read = await page.request.get(jobUrl(jobId));
+        expect(read.status(), `GET ${jobUrl(jobId)}`).toBe(200);
+        const job = schemas.InstanceBackupJob.parse(await read.json());
+        expect(job.encrypted, 'the job of a secure backup says its archive is encrypted').toBe(true);
+        expect(job.file_size, 'the job and backup.created give the same size').toBe(fileSize);
+        await expect(backupCard.getByTestId('backup-ready')).toBeVisible();
+        await expect(backupCard.getByTestId('backup-encrypted-note'), 'the card says its archive is encrypted').toBeVisible();
+        const link = backupCard.getByTestId('backup-download-link');
+        await expect(link).toHaveAttribute('href', new RegExp(`/jobs/${jobId}/file$`));
+        await expect(link).toHaveAttribute('download', ENVELOPE_NAME);
+        const name = (await link.getAttribute('download')) ?? '';
+        expect(job.file_name, 'the link names the envelope of this very job').toBe(name);
+
+        // Downloaded as FBKP-002 does, then kept under its own name in the test's output folder, to be chosen below.
+        const downloading = page.waitForEvent('download', {timeout: PAGE_MS});
+        await link.click();
+        const download = await downloading;
+        expect(download.suggestedFilename(), 'the browser saves the envelope under the name the link gives').toBe(name);
+        expect(await download.failure(), 'the download completes').toBeNull();
+        const saved = testInfo.outputPath(name);
+        await download.saveAs(saved);
+        expect((await stat(saved)).size, 'the whole envelope arrived: as many bytes as the job reported').toBe(fileSize);
+        expect(await leadingBytes(saved, 4), 'an envelope: it opens with LFBK').toBe(ENVELOPE_MAGIC);
+
+        // Chosen in the restore card: its password first, nothing sent.
+        await chooseEnvelope(page, card, saved, sent);
+
+        // Its password: the envelope sent once, then checked — decrypted first, the page's reads of the check held while
+        // the test looks at it.
+        const submitted = await eventSeq(page);
+        const releaseChecks = await holdCheckReads(page);
+        try {
+            await submitRestorePassword(card, password);
+            await expect(card).toHaveAttribute('data-state', /^(checking|failed)$/, {timeout: UPLOAD_MS});
+            await expect(card, 'the envelope was received and its check started').toHaveAttribute('data-error-code', '');
+            await expect(card).toHaveAttribute('data-state', 'checking');
+            await expect(card.getByTestId('restore-check-progress'), 'an envelope is decrypted first').toHaveAttribute('data-phase', 'decrypting');
+        } finally {
+            releaseChecks();
+        }
+        await expect(card).toHaveAttribute('data-state', /^(report|failed)$/, {timeout: CHECK_MS});
+        await expect(card, 'the check opened the envelope and accepted its archive').toHaveAttribute('data-error-code', '');
+        await expect(card).toHaveAttribute('data-state', 'report');
+        const staged = await waitForEvent(page, 'backup.restore.staged', {since: submitted});
+        const stageId = String(staged.detail?.stage_id);
+        expect(staged.detail, "the instance's own archive: restorable, of this very version").toEqual({stage_id: stageId, restorable: true, action: 'same'});
+        await Promise.all(lane.reading);
+        expect([...lane.checks], 'the check the card announces is the one the server started for this envelope').toEqual([stageId]);
+
+        // What the page sent: the envelope once, then its check, with the password.
+        expect(
+            sent.map(({call}) => call),
+            'the envelope sent once, then its check started once',
+        ).toEqual([UPLOAD_CALL, CHECK_CALL]);
+        const [upload, check] = await Promise.all(sent.map(({answer}) => answer));
+        expect(upload?.status, UPLOAD_CALL).toBe(201);
+        // Playwright cannot read the body answering a large XHR upload, while the page did: the id is the check's own.
+        const uploadId = String((sent[1].body as {upload_id?: unknown} | null)?.upload_id);
+        expect(uploadId, 'the check names an upload').toMatch(JOB_ID);
+        expect(check?.status, CHECK_CALL).toBe(202);
+        expect(sent[1].body, 'the check asked of that upload, with the password').toEqual({upload_id: uploadId, password});
+
+        // The report: a secure archive by the server's report of this very check — the modal publishes no handle for it —,
+        // and what the modal shows of the key and of the secrets is what that report says, whatever the lane's secrets are.
+        const serverReport = await readReport(lane.admin, stageId);
+        expect(serverReport.encrypted, "the server's report of this check: a secure archive").toBe(true);
+        const report = page.getByTestId('restore-report');
+        await expect(report, 'the report opens by itself').toBeVisible();
+        await expect(report.getByTestId('restore-report-key'), 'the instance key, as the report says').toHaveAttribute('data-included', String(serverReport.instance_key_included));
+        const rekeyed = report.getByTestId('restore-report-secrets-rekeyed');
+        await expect(rekeyed, 'the line of the secrets re-encrypted: there exactly when the report counts some').toHaveCount(serverReport.secrets_rekeyed > 0 ? 1 : 0);
+        if (serverReport.secrets_rekeyed > 0) await expect(rekeyed).toHaveAttribute('data-count', String(serverReport.secrets_rekeyed));
+        const unreadable = serverReport.secrets_unreadable.system + serverReport.secrets_unreadable.user;
+        const unreadableLine = report.getByTestId('restore-report-secrets-unreadable');
+        await expect(unreadableLine, 'the line of the secrets this LibreFolio cannot read: there exactly when the report counts some').toHaveCount(unreadable > 0 ? 1 : 0);
+        if (unreadable > 0) await expect(unreadableLine).toHaveAttribute('data-count', String(unreadable));
+
+        // Dropped, as FBKP-102 does: nothing restored, the check gone.
+        await dropTheReport(page, card, lane, stageId);
+
+        // Never kept: what a script of the page could read later holds the backup the page follows, and neither password.
+        const kept = await pageKeeps(page);
+        expect(kept, 'precondition: what the page keeps is read — the backup it follows').toContain(jobId);
+        for (const typed of [password, oneShort]) expect(kept, 'a password typed is kept where a script of the page could read it').not.toContain(typed);
+    });
+
+    restoreTest('FBKP-109: a wrong password is refused and asked again, the envelope not sent again: the right one checks the same upload — one PUT, two POSTs of the check —, and the archive is dropped', async ({page, lane}, testInfo) => {
+        recordStartedChecks(page, lane);
+        const sent = watchUploadsAndChecks(page);
+        // Signed in first: the archive is made with the page's own session.
+        const card = await openRestoreCard(page);
+        await expect(card, "precondition: nothing waits on the lane's server, the card takes an archive").toHaveAttribute('data-state', 'idle');
+        const length = minLengthOf(await archivePasswordRules(page.request)) + 4;
+        const password = passwordOf(length);
+        const wrong = passwordOf(length);
+        expect(wrong, 'precondition: two passwords').not.toBe(password);
+        const archive = await secureArchiveThroughApi(page.request, password, (name) => testInfo.outputPath(name));
+
+        await chooseEnvelope(page, card, archive.path, sent);
+
+        // A wrong password: the envelope sent, its check refused, the password asked again.
+        await submitRestorePassword(card, wrong);
+        // The reason first: the card was on the password already before the server answered.
+        await expect(card.getByTestId('restore-password-error'), 'the wrong password is said, by its code').toHaveAttribute('data-error-code', 'wrong_password', {timeout: UPLOAD_MS});
+        await expect(card).toHaveAttribute('data-error-code', 'wrong_password');
+        await expect(card, 'still on the password').toHaveAttribute('data-state', 'password');
+        await expect(card).toHaveAttribute('data-busy', 'false');
+        await expect(card.getByTestId('restore-password'), 'the field empty again, for the next try').toHaveValue('');
+        expect(
+            sent.map(({call}) => call),
+            'the envelope sent once, its check asked once',
+        ).toEqual([UPLOAD_CALL, CHECK_CALL]);
+
+        // The right one: the same upload checked, nothing sent again.
+        const submitted = await eventSeq(page);
+        await submitRestorePassword(card, password);
+        await expect(card, 'the check started').toHaveAttribute('data-state', /^(checking|report|failed)$/, {timeout: PAGE_MS});
+        await expect(card).toHaveAttribute('data-state', /^(report|failed)$/, {timeout: CHECK_MS});
+        await expect(card, 'the right password opened the envelope').toHaveAttribute('data-error-code', '');
+        await expect(card).toHaveAttribute('data-state', 'report');
+        await expect(page.getByTestId('restore-report')).toBeVisible();
+        const staged = await waitForEvent(page, 'backup.restore.staged', {since: submitted});
+        const stageId = String(staged.detail?.stage_id);
+        await Promise.all(lane.reading);
+        expect([...lane.checks], 'the check the card announces is the one the server started for this envelope').toEqual([stageId]);
+
+        // What the page sent across both tries: the envelope once, its check twice — the first refused.
+        expect(
+            sent.map(({call}) => call),
+            'one upload across both tries, and two starts of its check',
+        ).toEqual([UPLOAD_CALL, CHECK_CALL, CHECK_CALL]);
+        const [upload, refused, accepted] = await Promise.all(sent.map(({answer}) => answer));
+        expect(upload?.status, UPLOAD_CALL).toBe(201);
+        // Playwright cannot read the body answering a large XHR upload, while the page did: the id is the first check's.
+        const uploadId = String((sent[1].body as {upload_id?: unknown} | null)?.upload_id);
+        expect(uploadId, 'the first check names an upload').toMatch(JOB_ID);
+        expect(refused?.status, `the first ${CHECK_CALL}`).toBe(400);
+        expect((refused?.json as {detail?: {code?: unknown}} | null)?.detail?.code).toBe('wrong_password');
+        expect(accepted?.status, `the second ${CHECK_CALL}`).toBe(202);
+        expect(
+            sent.filter(({call}) => call === CHECK_CALL).map(({body}) => body),
+            'both checks asked of the same upload: the wrong password, then the right one',
+        ).toEqual([
+            {upload_id: uploadId, password: wrong},
+            {upload_id: uploadId, password},
+        ]);
+
+        // Dropped: the check gone, and the upload went with it — nothing of the archive is left on the server.
+        await dropTheReport(page, card, lane, stageId);
+        const again = await lane.admin.post(RESTORE_STAGE, {data: {upload_id: uploadId, password}});
+        // A check this would start after all is the case's own: dropped after it.
+        if (again.status() === 202) lane.checks.add(schemas.RestoreStage.parse(await again.json()).stage_id);
+        expect(again.status(), `${CHECK_CALL} of that upload again`).toBe(404);
+        expect(await errorCode(again), 'the upload went with its check').toBe('backup_upload_not_found');
     });
 });
