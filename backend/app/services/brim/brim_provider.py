@@ -80,6 +80,7 @@ from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.sql_chunks import chunks
 
 logger = structlog.get_logger(__name__)
 
@@ -1978,7 +1979,8 @@ async def search_asset_candidates_bulk(  # noqa: C901 — flat priority chain ov
     extractions: List[Tuple[Optional[str], Optional[str], Optional[str]]],
 ) -> Dict[Tuple[Optional[str], Optional[str], Optional[str]], Tuple[List, Optional[int]]]:
     """
-    Candidate search for many extracted assets in **one** database round-trip.
+    Candidate search for many extracted assets in **one** database round-trip (one per ``OR_TERMS_PER_QUERY``
+    conditions, MF-SEC9a: a usual report needs one).
 
     ``search_asset_candidates`` issues up to five queries per extracted asset. A
     Crédit Agricole report with thirty instruments therefore spent a hundred-odd
@@ -1992,7 +1994,7 @@ async def search_asset_candidates_bulk(  # noqa: C901 — flat priority chain ov
     row by row, which is what makes the duplication safe to keep.
 
     Args:
-        session: AsyncSession for the single query.
+        session: AsyncSession for the query (one per chunk of conditions).
         extractions: ``(symbol, isin, name)`` triples, duplicates allowed.
 
     Returns:
@@ -2019,8 +2021,10 @@ async def search_asset_candidates_bulk(  # noqa: C901 — flat priority chain ov
             conditions.append(Asset.identifier_ticker == symbol.upper())
         if name:
             pattern = f"%{name}%"
-            conditions.append(
-                or_(
+            # One condition per column, not a nested or_(): SQLAlchemy writes a nested OR out flat, so SQLite counts each
+            # of them, and the chunks below must count what SQLite counts
+            conditions.extend(
+                (
                     Asset.identifier_isin.ilike(pattern),
                     Asset.identifier_ticker.ilike(pattern),
                     Asset.identifier_cusip.ilike(pattern),
@@ -2032,9 +2036,16 @@ async def search_asset_candidates_bulk(  # noqa: C901 — flat priority chain ov
             )
             conditions.append(Asset.display_name.ilike(pattern))
 
-    # Same ordering as the per-asset path, so the candidate lists come out identical.
-    result = await session.execute(select(Asset).where(or_(*conditions)).order_by(Asset.display_name.asc()))
-    universe = list(result.scalars().unique().all())
+    # One query per chunk of conditions (MF-SEC9a): SQLite refuses an OR of a thousand terms, and a report with about
+    # ninety distinct securities, each with ISIN, ticker and name (11 terms), has that many. Merged by id, then in the
+    # per-asset path's order, so the candidate lists come out identical: display_name is unique and never null, and
+    # SQLite orders text by code point, as Python does.
+    universe_by_id: Dict[int, Asset] = {}
+    for chunk in chunks(conditions):
+        result = await session.execute(select(Asset).where(or_(*chunk)))
+        for asset in result.scalars().unique().all():
+            universe_by_id.setdefault(asset.id, asset)
+    universe = sorted(universe_by_id.values(), key=lambda asset: asset.display_name)
 
     out: Dict[Tuple[Optional[str], Optional[str], Optional[str]], Tuple[List, Optional[int]]] = {}
 

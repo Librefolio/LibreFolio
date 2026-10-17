@@ -23,7 +23,12 @@ The cure's contract, pinned here:
    the rate inverted) — stores every rate at its value and answers ``inserted`` for each; called again with new values,
    ``updated`` for each and every value replaced.
 3. ``delete_rates_bulk`` with 1 500 single days and four ranges answers each deletion its exact counts — a range counts
-   its own pair's rates only, a pair without rates 0 — and every other rate stays stored.
+   its own pair's rates only, a pair without rates 0 — and every other rate stays stored. Its matching is O(N log D), not
+   O(N × D) (E's review of MF-SEC9a, LOW-1): each deletion finds its rates by bisection over its pair's sorted dates, so
+   2 000 deletions over 2 000 dates compare their bounds at most 4 × ⌈log₂(D + 1)⌉ times each, never once per date of
+   the pair. On random requests — overlapping ranges, ranges whose end is before their start, pairs without rates, single
+   days given with or without an end, pairs given either way round — the counts and the ids deleted are those of a
+   brute-force scan of the stored rates.
 4. ``bulk_delete_prices`` with 1 500 ranges over two assets: ``total_deleted`` and each asset's count exact, every other
    price kept, a third asset's untouched.
 5. ``fx/sync._stored_rates`` reads every rate matching 1 500 conditions; ``ensure_rates_multi_source`` over 46 currencies
@@ -42,6 +47,11 @@ The cases of 2-4 also run at 500 and 501 OR terms, the edge of one chunk. The ba
 ``test_barrier_this_sqlite_refuses_one_or_of_1500_terms``, proves the SQLite these tests run on answers one OR of 500
 terms and refuses one of 1 500: without it a build with a higher limit would let the import-sized cases pass untested.
 
+Red on HEAD d63558abb (the chunks in, the matching still a scan):
+``test_delete_rates_bulk_matching_is_bisection_not_a_scan`` (both cases): every deletion compared with every date of its
+pair (``start <= day <= end``: 4 000 - k comparisons for the k-th single day), the budget of 88 000 passed within its
+first 25 deletions of 2 000 — at least N × D = 4 000 000 comparisons for the whole call.
+
 Red on HEAD 04955c498:
 
 - ``test_chunks_*`` (every case): no ``utils/sql_chunks.py``;
@@ -57,7 +67,9 @@ Red on HEAD 04955c498:
 
 Green before and after (guards): the barrier; the cases of 2-4 at 500 and 501 OR terms (under SQLite's limit);
 ``test_guard_fx_upsert_route_stores_1500_rates`` (the route upserts one rate at a time, so an import of any size passed);
-``test_guard_exactly_10000_items_pass``; ``test_guard_post_prices_value_error_keeps_its_domain_message``.
+``test_guard_exactly_10000_items_pass``; ``test_guard_post_prices_value_error_keeps_its_domain_message``;
+``test_guard_delete_rates_bulk_matches_a_brute_force_scan`` (every seed: the scan of d63558abb is the reference's own
+algorithm — the guard is there for the bisection, whose ends and empty slices a scan never had to get right).
 
 Isolation: PURE — no lane database, no server, no network. Each test that stores anything has its own in-memory SQLite
 database (``SQLModel.metadata.create_all``), closed and disposed at teardown; the services, the provider lookup and the
@@ -73,6 +85,8 @@ backend/app/api/v1/assets/prices.py (upsert_prices_bulk, delete_prices_bulk, syn
 from __future__ import annotations
 
 import importlib
+import math
+import random
 import sys
 from collections import Counter
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
@@ -366,6 +380,209 @@ async def test_delete_rates_bulk_counts_each_deletion_of_an_import(session, sing
     stored = await _stored_fx(session)
     assert stored == expected, _differences(stored, expected)
     print_success(f"{terms} deletions counted exactly, {singles + 15} rates deleted, {len(expected)} kept")
+
+
+class _PastTheBudget(Exception):
+    """Raised by ``_Comparisons`` once past its budget: the call stops there instead of finishing a quadratic scan."""
+
+
+class _Comparisons:
+    """Counts the comparisons the deletions' bounds take part in, and stops the call once past ``budget``."""
+
+    def __init__(self, budget: int) -> None:
+        self.budget = budget
+        self.count = 0
+
+    def tick(self) -> None:
+        self.count += 1
+        if self.count > self.budget:
+            raise _PastTheBudget(f"{self.count} comparisons, past the budget of {self.budget}")
+
+
+def _counted_day_type(comparisons: _Comparisons) -> type[date]:
+    """A ``date`` whose every comparison is counted by ``comparisons``, whichever side of it the day is on.
+
+    On the left it is its own method; on the right Python asks the subclass first (its reflected method), so ``d < day``
+    is counted as well as ``day < d`` — in a scan (``start <= stored <= end``) and in a bisection (``a[mid] < start``,
+    ``end < a[mid]``) alike. Its hash is the date's: a dict lookup finds it as it finds the day.
+    """
+
+    class CountedDay(date):
+        __hash__ = date.__hash__
+
+        def __lt__(self, other: object) -> bool:
+            comparisons.tick()
+            return date.__lt__(self, other)
+
+        def __le__(self, other: object) -> bool:
+            comparisons.tick()
+            return date.__le__(self, other)
+
+        def __gt__(self, other: object) -> bool:
+            comparisons.tick()
+            return date.__gt__(self, other)
+
+        def __ge__(self, other: object) -> bool:
+            comparisons.tick()
+            return date.__ge__(self, other)
+
+        def __eq__(self, other: object) -> bool:
+            comparisons.tick()
+            return date.__eq__(self, other)
+
+        def __ne__(self, other: object) -> bool:
+            comparisons.tick()
+            return date.__ne__(self, other)
+
+    return CountedDay
+
+
+#: The step-count case: N deletions over D stored dates of one pair (E's example).
+STEP_DELETIONS = 2_000
+STEP_DATES = 2_000
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("span", [pytest.param(0, id="2000-single-days"), pytest.param(6, id="2000-week-ranges")])
+async def test_delete_rates_bulk_matching_is_bisection_not_a_scan(session, span):
+    """2 000 deletions of EUR/USD — single days, or overlapping week-long ranges — over its 2 000 stored dates: the
+    deletions' bounds (dates that count their comparisons) are compared at most 4 × ⌈log₂(D + 1)⌉ = 44 times per
+    deletion — two bisections and room to spare, 88 000 in all — where a scan of the pair compares at least once per
+    stored date per deletion, N × D = 4 000 000. The count is a step count, not a time: the same on any machine and under
+    any load. Past the budget the call stops (``_PastTheBudget``), so a scan fails fast. Barrier: every deletion is
+    compared at least once — the counter sees the matching, else «at most 88 000» would hold for a matching it cannot
+    see. The counts stay exact.
+
+    Red on HEAD d63558abb: each deletion scans every date of its pair (``start <= day <= end``, one or two comparisons
+    per date), the budget passed within the first 25 deletions.
+    """
+    print_section(f"MF-SEC9a LOW-1: delete_rates_bulk, {STEP_DELETIONS} deletions over {STEP_DATES} dates of one pair")
+    budget = STEP_DELETIONS * 4 * math.ceil(math.log2(STEP_DATES + 1))
+    comparisons = _Comparisons(budget)
+    counted_day = _counted_day_type(comparisons)
+
+    def counted(offset: int) -> date:
+        day = _day(offset)
+        return counted_day(day.year, day.month, day.day)
+
+    await _seed_fx(session, [(_day(offset), "EUR", "USD", Decimal("1.1")) for offset in range(STEP_DATES)])
+    deletions = [("EUR", "USD", counted(offset), counted(offset + span) if span else None) for offset in range(STEP_DELETIONS)]
+    comparisons.count = 0  # building the deletions compared nothing; the count is the call's alone
+
+    try:
+        results = await delete_rates_bulk(session, deletions)
+    except _PastTheBudget as stopped:
+        pytest.fail(f"the matching is a scan: {stopped} (O(N log D) for N = {STEP_DELETIONS}, D = {STEP_DATES}; a scan at least N × D = {STEP_DELETIONS * STEP_DATES})")
+
+    assert comparisons.count >= STEP_DELETIONS, f"{comparisons.count} comparisons for {STEP_DELETIONS} deletions: the counter does not see the matching, so it measures nothing"
+    expected = [min(span + 1, STEP_DATES - offset) for offset in range(STEP_DELETIONS)]
+    counts = [existing for _success, existing, _deleted, _message in results]
+    wrong = [(offset, got, want) for offset, (got, want) in enumerate(zip(counts, expected, strict=False)) if got != want]
+    assert len(counts) == STEP_DELETIONS and not wrong, f"{len(counts)} answers; (deletion, count, expected): {wrong[:5]}"
+    print_success(f"{comparisons.count} comparisons for {STEP_DELETIONS} deletions (budget {budget}, a scan at least {STEP_DELETIONS * STEP_DATES})")
+
+
+#: The guard's stored pairs (EUR/USD, GBP/USD, CHF/JPY) and one without any rate.
+GUARD_PAIRS = (("EUR", "USD"), ("GBP", "USD"), ("CHF", "JPY"))
+GUARD_MISSING = ("NOK", "SEK")
+GUARD_WINDOW = 400  # days of the window the stored dates are drawn from
+GUARD_RANDOM_DELETIONS = 650  # with the fixed ones, past one chunk of OR terms: rows of one pair read by two statements
+
+
+def _guard_rows(rng: random.Random) -> list[tuple[date, str, str, Decimal]]:
+    """About half of the window's days for each stored pair, drawn at random, and always its first and last day."""
+    return [(_day(offset), base, quote, Decimal("1.5")) for base, quote in GUARD_PAIRS for offset in range(GUARD_WINDOW) if offset in (0, GUARD_WINDOW - 1) or rng.random() < 0.5]
+
+
+def _either_way(rng: random.Random, pair: tuple[str, str]) -> tuple[str, str]:
+    return pair if rng.random() < 0.5 else (pair[1], pair[0])
+
+
+def _guard_deletions(rng: random.Random, stored: dict[tuple[str, str], dict[date, int]]) -> list[tuple[str, str, date, date | None]]:
+    """Random deletions — single days without an end and with ``end == start``, ranges up to 40 days (overlapping one
+    another), ranges whose end is before their start, the pair without rates —, each pair given either way round, some
+    reaching past the window; every inverted range comes with a range covering it on the same pair, so the pair's sorted
+    dates hold days between its ends (a slice whose end is before its start, a negative count unless clamped). Then, for
+    each stored pair, its first day, its last day, both, and a range before and one after every stored date."""
+    deletions: list[tuple[str, str, date, date | None]] = []
+    while len(deletions) < GUARD_RANDOM_DELETIONS:
+        pair = GUARD_MISSING if rng.random() < 0.1 else rng.choice(GUARD_PAIRS)
+        start = _day(rng.randrange(-20, GUARD_WINDOW + 20))
+        kind = rng.choice(("single", "single-with-end", "range", "range", "inverted"))
+        if kind == "single":
+            deletions.append((*_either_way(rng, pair), start, None))
+        elif kind == "single-with-end":
+            deletions.append((*_either_way(rng, pair), start, start))
+        elif kind == "range":
+            deletions.append((*_either_way(rng, pair), start, start + timedelta(days=rng.randint(1, 40))))
+        else:
+            end = start - timedelta(days=rng.randint(1, 30))
+            deletions.append((*_either_way(rng, pair), start, end))
+            deletions.append((*_either_way(rng, pair), end - timedelta(days=3), start + timedelta(days=3)))
+    for pair in GUARD_PAIRS:
+        first, last = min(stored[pair]), max(stored[pair])
+        deletions += [
+            (*pair, first, None),
+            (*pair, last, last),
+            (*pair, first, last),
+            (*pair, first - timedelta(days=10), first - timedelta(days=1)),
+            (*pair, last + timedelta(days=1), last + timedelta(days=10)),
+        ]
+    return deletions
+
+
+def _brute_force(stored: dict[tuple[str, str], dict[date, int]], deletions: list[tuple[str, str, date, date | None]]) -> tuple[list[int], set[int]]:
+    """Each deletion's count and every id deleted, by scanning every stored rate of the deletion's pair: a rate on a day
+    from ``start`` to ``end`` (``start`` alone without an end) — none when the end is before the start."""
+    counts: list[int] = []
+    deleted: set[int] = set()
+    for from_currency, to_currency, start, end in deletions:
+        last = end if end is not None else start
+        matched = [rate_id for day, rate_id in stored.get(tuple(sorted((from_currency, to_currency))), {}).items() if start <= day <= last]
+        counts.append(len(matched))
+        deleted.update(matched)
+    return counts, deleted
+
+
+async def _stored_ids(session: AsyncSession) -> dict[tuple[str, str], dict[date, int]]:
+    result = await session.execute(select(FxRate.id, FxRate.base, FxRate.quote, FxRate.date))
+    stored: dict[tuple[str, str], dict[date, int]] = {}
+    for row in result.all():
+        stored.setdefault((row.base, row.quote), {})[row.date] = row.id
+    return stored
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("seed", [pytest.param(seed, id=f"seed-{seed}") for seed in range(5)])
+async def test_guard_delete_rates_bulk_matches_a_brute_force_scan(session, seed):
+    """``delete_rates_bulk`` on random requests (``_guard_deletions``, a fixed seed each: reproducible) answers each
+    deletion the count of a brute-force scan of the stored rates — overlapping deletions each count the rates they share,
+    an end before the start counts 0, a pair without rates 0 — with ``deleted_count`` equal to it and a message only
+    where it is 0; the rates deleted are exactly the union the scan finds, by id; every other rate stays stored.
+
+    Green on HEAD d63558abb too: its scan is the reference's algorithm. A guard for the bisection: its inclusive end, its
+    first and last day, and its empty slices are what a scan never had to get right.
+    """
+    rng = random.Random(seed)
+    await _seed_fx(session, _guard_rows(rng))
+    stored = await _stored_ids(session)
+    assert set(stored) == set(GUARD_PAIRS), f"seeded pairs: {sorted(stored)}"
+    deletions = _guard_deletions(rng, stored)
+    expected_counts, expected_deleted = _brute_force(stored, deletions)
+    inverted = sum(1 for _from, _to, start, end in deletions if end is not None and end < start)
+    print_section(f"MF-SEC9a LOW-1 guard (seed {seed}): {len(deletions)} deletions, {inverted} inverted, {sum(len(days) for days in stored.values())} rates")
+    assert inverted and expected_deleted and 0 in expected_counts, "the draw must hold inverted ranges, matches and misses"
+
+    results = await delete_rates_bulk(session, deletions)
+
+    answered = [(success, existing, deleted, message is None) for success, existing, deleted, message in results]
+    expected = [(True, count, count, count > 0) for count in expected_counts]
+    wrong = [(index, deletions[index], got, want) for index, (got, want) in enumerate(zip(answered, expected, strict=False)) if got != want]
+    assert len(answered) == len(deletions) and not wrong, f"{len(answered)} answers for {len(deletions)} deletions; (index, deletion, (success, existing, deleted, no message), expected): {wrong[:5]}"
+    remaining = {rate_id for days in (await _stored_ids(session)).values() for rate_id in days.values()}
+    all_ids = {rate_id for days in stored.values() for rate_id in days.values()}
+    assert remaining == all_ids - expected_deleted, f"{len(remaining & expected_deleted)} ids kept that should go, {len(all_ids - remaining - expected_deleted)} deleted that should stay"
+    print_success(f"{len(deletions)} counts and {len(expected_deleted)} deleted ids as the brute-force scan")
 
 
 # =============================================================================

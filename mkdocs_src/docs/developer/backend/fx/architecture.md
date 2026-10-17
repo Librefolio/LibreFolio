@@ -266,7 +266,9 @@ saves a CSV import in one request, and daily rates since 1999 are about 7,000 ro
 one `OR` term per rate or deletion, so they run in chunks of `OR_TERMS_PER_QUERY` (500, `utils/sql_chunks.py`, the
 value of `FX_PAIRS_PER_QUERY`), in the same transaction: the read of the stored rates and the
 `INSERT … ON CONFLICT` of `upsert_rates_bulk()`, the read of the matching rates of `delete_rates_bulk()` (a deletion
-of more than 1,000 separate days, which the FX page sends as as many ranges, answered 500), and the read of the
+of more than 1,000 separate days, which the FX page sends as as many ranges, answered 500; each deletion then takes
+its rates by bisection over its pair's sorted dates, not by a scan of them, which at the cap held the event loop for
+seconds), and the read of the
 stored rates a provider sync compares with (`_stored_rates()`; refused, it was taken for a missing table and every
 rate counted as new). An error answers with a fixed message, never the database's, and is logged.
 {: #rate-write-limits }
