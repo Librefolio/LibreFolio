@@ -706,7 +706,7 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
 - **T-U6 · Finestre di detenzione dal FIFO** — medio; T, 11/10. Comprende L1 e L2 di I e T-B4. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezioni «2.5» e «7.1».
 - **T-U7 · Pesi e concentrazione** — medio; T, 11/10. Comprende W1 (l'allocazione senza il valore in viaggio). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «2.8» e «7.1».
-- **T-U8 · Il frontend solo di presentazione: Δ, KPI, lotti** — medio-alto; T, 11/10. Comprende il valore d'apertura
+- **T-U8 · Il frontend solo di presentazione: Δ, KPI, lotti** — medio-alto; T, 11/10. **Stato al 17/10 (coordinatore)**: con Y12a, MF-P e il lotto R17/W8/P4 di Y (dev `1565b6bbb`) restano solo V11 e P5, legati a MF-E e a CP-7b di J; la dichiarazione delle misure è coperta per `MeasureSignal.ts` da CP-14b. Comprende il valore d'apertura
   che il modale della custodia ricalcola come quantità × prezzo d'apertura (`LotCustodyModal.svelte`) invece di
   leggere `original_cost`, trovato in B3b, e la dichiarazione nel codice delle misure interattive che la regola
   ammette (`MeasureSignal.ts`, `CompoundSignal.ts`, `LinearSignal.ts`, `SineSignal.ts`; docs-writer di T-1). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «7.1».
@@ -716,7 +716,7 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   cambia il contratto, quindi la v2. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «7.1» e «C-55 — analisi».
 - **T-U10 · Interessi e convenzioni di calendario (`interest.py`)** — basso-medio; T, 11/10, decisione D-8. Dettagli:
   [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «2.10» e «7.1».
-- **T-D9 · MeasureSignal: la soglia dei 30 giorni sull'annualizzato** — minimo; T, 11/10, decisione D-9. Dettagli:
+- ✅ **T-D9 · MeasureSignal: la soglia dei 30 giorni sull'annualizzato** — **chiusa il 17/10 da CP-14b di J** (dev `4111239a7`): `MIN_ANNUALIZATION_DAYS = 30` in `MeasureSignal.ts`, `—` sotto i 30 giorni e su un inizio a 0 (N65). Era: minimo; T, 11/10, decisione D-9. Dettagli:
   [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «2.1», riga R18.
 - **P-5 (di P) · Migrare `roi_utils` e `valuation_utils` in `financial_math`** — basso, refactor; decisione D1 del
   developer, registrata da P (09/10). Coperta da T-1 e BU1 se entrano nella 1.2. Dettagli:
@@ -3284,6 +3284,9 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     «Limits» in `connection_checks`, e una riga in `configuration` che punta a `connection_checks.md#client-address`.
     **Ordine**: `configuration` va tradotta insieme a `connection_checks` o dopo, che deve tenere
     `{: #client-address }`; altrimenti la build rigorosa di quella lingua non trova l'ancora.
+  - 17/10, H-36: un blocco nuovo in fondo a `#client-address` di `connection_checks` (un paragrafo, quattro punti, un
+    paragrafo) e due frasi nel §2 di `docker_advanced`, che rimandano a `connection_checks.md#client-address`.
+    **Ordine**: `docker_advanced` va tradotta insieme a `connection_checks` o dopo, per la stessa ancora.
 
   Dettagli: piano H, §14 «CP5a passo 2», «CP6 passo 4» e «Lotto b-doc-notes».
 - ✅ **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
@@ -3645,6 +3648,52 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     potrebbe poi elencarli.
 
   Dettagli: piano H, §14, lotto «H-32».
+- **H-35 · Dopo A8a: la docstring di `log_configuration_audit()` e la pulizia di `test_config_audit.py`** — minimo; H
+  (review di A8a), via coordinatore, 17/10.
+  - La docstring non nomina il `ValueError` di `LIBREFOLIO_LOGIN_LIMIT` né l'`AdminBootstrapConfigError` di F02.
+  - `test_config_audit.py`: togliere i 9 segni «updated in A8a (accounts check, H reviews)» e l'impalcatura «red until
+    A8a» (`_accounts_checks()` con `importlib`). `ACCOUNTS_CONFIG_CHECKS` e `check_login_limit` vanno importati in cima,
+    e l'id di A va in `CHECK_IDS`.
+  - In più, dal test-author di H-36: `_configure` deve svuotare le note di `client_address._untrusted_forwarding`. Così
+    una nota lasciata da un altro file nello stesso processo non rompe i test che vogliono ogni controllo `ok`.
+  - Si fa dopo l'ingresso di A8a e l'avanzamento del ramo di H.
+
+  Dettagli: piano H, §14, «Review di A8a» e lotto «H-36».
+- **H-36 · Dietro un proxy che uvicorn non considera fidato, i limiti per indirizzo contano tutti i visitatori
+  insieme** — medio, sicurezza; E (R13-SEC6), via coordinatore, 17/10. Decisione notturna N70.
+  - L'immagine Docker avvia uvicorn con i suoi default, che seguono `X-Forwarded-For` solo da `127.0.0.1`. Un proxy
+    davanti al container si collega dalla rete Docker (per esempio `172.18.0.2`), e ogni visitatore prende il suo
+    indirizzo. Il limite per indirizzo di A8a (50 tentativi) bloccherebbe allora l'accesso di tutti.
+  - Cura fatta il 17/10 (lotto «H-36», piano H §14):
+    - in `client_address.py`, `forwarded_by_untrusted_proxy(request)`: vero per un header di inoltro (`X-Forwarded-For`,
+      `Forwarded`, `X-Real-IP`) da un peer locale secondo `classify_ip`, quando né `LIBREFOLIO_CLIENT_IP_HEADER` né
+      uvicorn hanno sostituito l'indirizzo;
+    - `rate_limit_address(request)`: `None` in quel caso, cioè nessun conteggio per indirizzo, altrimenti
+      `client_address`;
+    - le note tengono solo i nomi degli header (N58); la prima di ogni classe va nel log, una volta per processo;
+    - il controllo `platform.client_address`, con le tre chiavi `instance.checks.clientAddress.*`.
+  - Restano ad A e a E: passare i punti di chiamata a `rate_limit_address` (A in A8a, E in E-13) e aggiornare le loro
+    frasi nei documenti, in «Callers.» di `security.md`, `connection_checks`, `configuration` ed `email`.
+
+  Dettagli: piano H, §14, lotto «H-36».
+- **H-37 · Se manca una voce del profilo `managed`, `profile_default` dà il fallback del codice, cioè nessun limite** —
+  basso, sicurezza; E (R13-SEC7), via coordinatore, 17/10.
+  - `profile_default` (`config/__init__.py`, ~584) usa il fallback del codice quando il profilo `managed` non elenca la
+    variabile, e per un limite il fallback 0 vuol dire «nessun limite».
+  - Deve fallire chiuso: rifiutare l'avvio, oppure un default sicuro dichiarato per ogni campo. Oggi il profilo
+    `managed` ha una sola voce, `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`: 500.
+  - Prima i rossi; E rivede. Si fa dopo H-36.
+- **H-38 · Tailscale Serve davanti al container, e Docker Desktop: cosa mettere in `FORWARDED_ALLOW_IPS`** — basso,
+  documentazione; H (dal docs-writer di H-36), 17/10.
+  - Tailscale Serve sull'host inoltra a `127.0.0.1:6040`. Con Docker su Linux il container vede probabilmente il gateway
+    della rete Docker (il proxy di Docker), quindi H-36 avvisa se Serve manda un header di inoltro; se non ne manda,
+    nessuno può accorgersene.
+  - Elencare il gateway sembra sicuro su Linux, dove gli altri visitatori arrivano col loro indirizzo. Non lo è con
+    Docker Desktop, dove tutti arrivano dal gateway.
+  - Da provare su un Docker vero (il demone oggi è spento, come per CP7a), poi una frase in `service_exposure` e in
+    `docker_advanced`.
+
+  Dettagli: piano H, §14, lotto «H-36».
 
 ## A · Account e accessi (fase 01)
 
@@ -5543,7 +5592,11 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - la liquidazione senza mora va in **CP-14b**, coi valori dichiarati, il rosso prima e una riga 🐛;
     - la parte della mora aspetta il developer (la domanda è nella lista del mattino);
     - `get_current_value` contro `get_history_value` dopo la scadenza si verifica nell'analisi di CP-14b.
-  - Dettagli: piano J, §10 «CP-14a».
+  - **Liquidazione senza mora: curata in CP-14b (17/10)** — è il capitale quando l'ultima cedola cade alla scadenza,
+    altrimenti il valore del giorno; `get_current_value` e `get_history_value` dopo la scadenza la seguono. Rosso prima,
+    8 punti della rete dichiarati (le liquidazioni di `s4_annual_settlement` al capitale). **Resta aperta la parte
+    della mora**: base, liquidazione che si sposta con `end_date`, cedole della mora senza azzeramento (developer).
+  - Dettagli: piano J, §10 «CP-14a» e «CP-14b».
 - **J-40 · Lo svuotamento dei dati di mercato toglie gli SPLIT e lascia rettifiche senza costo (il buco di P-10 dal
   lato asset)** — medio, numeri, da decidere; test-author di J (CP-14a, V-4), 17/10, letto nel codice. Area di X.
   - `POST /assets/{id}/market-data/wipe` (`market_data.py:46-71`) è il flusso del cambio di valuta
@@ -5569,6 +5622,20 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   Area di X. Un rapporto 0 o negativo si salva (P-10 lascia passare la modifica, il tipo non cambia). Quando una
   transazione lo lega, il motore solleva `ValueError` (`engine.py:226-227`) e il rapporto della Dashboard risponde
   500. `is_valid_split_ratio` della casa (`splits.py`) esiste già. **→ X** (coordinatore, 17/10).
+- **J-43 · L'avviso delle quote diverse fra le due gambe di un trasferimento tace se cadono lo stesso giorno** —
+  minimo, qualità dei dati; MF (MF-J4), assegnata a J dal coordinatore il 17/10, dopo CP-14b.
+  - In `financial_math/portfolio/classifier.py:131-149` l'avviso `share mismatch` sta dentro il ramo
+    `if pair_key not in processed_pairs and tx.date != paired.date:`, quello che costruisce l'intervallo in transito.
+  - Due gambe collegate dello stesso giorno, fra broker con quote di proprietà diverse, non producono nessun avviso
+    (`share_mismatch_warnings`, `schemas/portfolio.py:239`).
+  - Cura: l'avviso esce dal ramo delle date diverse e resta una volta per coppia. Prima il rosso.
+- **J-44 · Il Δ% del tooltip del grafico dà 0 % quando il primo valore è 0** — minimo, numeri; J, 17/10, letto nel
+  codice durante CP-14b. `components/charts/priceChartHelpers.ts::buildDeltaHtml` calcola il Δ% dal primo valore del
+  grafico e, per scelta scritta nel suo JSDoc, dà 0 % su un primo valore 0. È lo stesso numero sbagliato che la
+  decisione N65 toglie al righello (CP-14b: `—`), in una seconda copia del Δ% nel frontend (regola 10: va segnalata).
+  Da instradare: il file ha storia dei colori (lotto B) e di X (helper della pagina asset). Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «CP-14b».
+  - 17/10, coordinatore: **a J**, dopo F5, riusando `changePct` di `MeasureSignal.ts` (stessa regola di N65); X rivede in sola lettura, nessuna classe di colore toccata.
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -5692,12 +5759,13 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   finché non si ricaricano. Da decidere con Y dopo Y11: per esempio i pannelli si ricaricano da soli su
   `{kind: 'prices'}`, fuori da `pageBusy`. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-13», passo 6.
-- **Z-16 · `admin/filesystem`: l'albero tradotto è indietro** — minimo, traduzione; Z, 16/10 (Z-12). In
-  `filesystem.es.md` gli altri nove commenti dell'albero sono ancora in inglese, e gli alberi IT, FR ed ES non hanno le
-  tre righe aggiunte dopo in inglese (`backups/`, `secrets/` e `instance.key`). La pagina ha già debito di traduzione
-  (la cache di Aphra è del 10/10, l'inglese è cambiato dopo), quindi niente stamp: da chiudere col prossimo giro di
-  traduzione, verificando che i commenti dell'albero spagnolo vengano tradotti, oppure a mano in un lotto di doc.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-12».
+- ✅ **Z-16 · `admin/filesystem`: l'albero tradotto è indietro** — minimo, traduzione; Z, 16/10 (Z-12). **Chiusa il
+  17/10 a mano** (il commit è del coordinatore; via del 17/10 ~05:32, senza stamp): gli alberi IT, FR ed ES hanno le
+  tre righe (`backups/`, `secrets/`, `instance.key`), con la colonna dei commenti allineata all'inglese, e i nove
+  commenti dello spagnolo sono tradotti. La pagina resta con il suo debito di traduzione fuori dall'albero (la cache
+  di Aphra è del 10/10): il prossimo giro lo chiude. Era: in `filesystem.es.md` nove commenti in inglese, e i tre
+  alberi senza le tre righe aggiunte in inglese. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-16».
 - ✅ **Z-17 · `developer/backend/scheduler.md`: «The backend does not validate these values»** — minimo, doc;
   docs-writer di Z, 16/10 (Z-5). **Chiusa il 16/10 col mini-lotto Z-17** (il commit è del coordinatore): la frase dice
   ora che `PATCH /api/v1/settings/global/bulk` controlla ogni valore con `validate_global_setting_value()` contro
@@ -5969,7 +6037,7 @@ sulla base `23f6578f3`.
 
   ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): `exportable_instance_key()` e `generated_key_unusable()` usano
   il limite di 4096 byte in UTF-8 (`INSTANCE_KEY_MAX_BYTES`).
-- **B-27 · Dopo un ripristino riuscito la scheda Backup non dice nulla** — piccolo; G (G-20) tramite il coordinatore,
+- ✅ **B-27 · Dopo un ripristino riuscito la scheda Backup non dice nulla** — piccolo; G (G-20) tramite il coordinatore,
   17/10, decisione notturna N67 (la rivede il developer). Dopo un ripristino `committed` la pagina va al login senza
   dire niente (FBKP-107), e al rientro la scheda tace: `restore-last-result` c'è solo per `rolled_back`
   (`RestoreCard.svelte:64`). Si aggiunge l'avviso «applied on {date}, backup of {date} (LibreFolio {version}),
@@ -5977,6 +6045,39 @@ sulla base `23f6578f3`.
   `GET /restore/status` dà già `finished_at`, `backup_created_at`, `backup_app_version` e `confirmed_by`. Con i casi
   Vitest, una chiave i18n in 4 lingue, un E2E su uno stato finto (come FBKP-103, e dà la foto a G) e una riga nella
   guida. Dopo B4b. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
+
+  ✅ **Chiusa il 17/10, non da fare** (coordinatore, 05:00): N67 è ritirato e resta la decisione P8 del developer
+  (16/10, 11:25): un ripristino riuscito non dice nulla, «se ha funzionato lo vedi». Nell'elenco del developer va solo
+  come nota. L'analisi è pronta nel piano 07, «B-27», se un giorno servisse.
+- ✅ **B-28 · I trigger del DB caricato girano nel processo del server, senza limite di tempo** — basso (un DoS fuori dal
+  perimetro: serve un admin che carichi l'archivio); E (revisione di sicurezza di B3) tramite il coordinatore, 17/10.
+  Il coordinatore lo chiamava «B-19», ma quell'ID è già usato: un DB caricato può portare trigger propri, e scattano
+  quando il controllo scrive sulla copia. Succede con l'`alembic upgrade` di un archivio più vecchio, con le correzioni
+  post-migrazione (`_post_migration_fixes`, `staging.py`) e col rekey dei segreti. Una CTE ricorsiva in un trigger:
+  - tiene `.stage.lock` fino al riavvio, quindi nessun altro controllo parte;
+  - sul profilo `managed` tiene l'istanza sveglia, perché `backup_in_progress` vale vero.
+
+  Direzione: un limite di tempo sulle scritture della copia (`set_progress_handler` di sqlite3, o un sottoprocesso con
+  un tempo massimo), più `PRAGMA trusted_schema=OFF` sulle connessioni della copia. Dopo B4. Dettagli: piano 07, «B-27».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 05:50), con la strada (B) decisa dal coordinatore. Subito dopo lo
+  spacchettamento, il controllo legge `sqlite_master` in sola lettura e classifica ogni oggetto dal suo testo SQL. Un
+  trigger, una vista o una tabella virtuale, che LibreFolio non crea mai, fanno rifiutare l'archivio con
+  `database_foreign_objects` prima di ogni altro accesso; uno schema che SQLite non legge dà `database_damaged`. In
+  più `trusted_schema=OFF` sulle cinque connessioni di B alla copia. L'`alembic upgrade` girava già in un processo a
+  sé, col suo tempo massimo.
+- ✅ **B-29 · Un totale della copia che J non rilegge fa fallire tutto il controllo** — basso (robustezza, solo admin); E
+  (revisione R13-SEC2) tramite il coordinatore, 17/10. In `compare_totals` (`instance_backup/totals.py`)
+  `ControlTotals.from_json(current)` sta fuori dal `try`. Se i dati della copia danno un importo che il lettore di J
+  rifiuta (oltre 60 cifre, J-27), il `ValueError` esce, e il controllo finisce con `stage_failed` invece di dire i
+  totali `unreadable`. Correzione: leggere `current` dentro un `try` che risponde `unreadable`, con un WARNING come per
+  i totali registrati. Dettagli: piano 07, «B-29».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 06:10): `current` si legge dentro un `try`; un documento che J rifiuta dà
+  `unreadable` col WARNING «The control totals of the copy cannot be read: they are not compared», mai un controllo
+  fallito. Test: 5 casi in `test_backup_totals.py`, più uno di staging (un registro con una quantità esatta 1e70).
+  Nota di TA-B sulla gravità: il crollo richiedeva un manifesto riscritto (i totali registrati che J legge accanto a
+  una copia che J non rilegge), perché un backup vero registra la stessa riga, e allora vince `absent`.
 
 ## E · Email (fase 01)
 
@@ -6124,8 +6225,10 @@ da Y il 15/10.
   scattava solo per la vista % ripristinata al caricamento (`GrowthChart.svelte:785-789`, dal 24/09); cambiando periodo
   o broker verso una storia senza dati in percentuale, il bottone restava premuto e disabilitato (`:2539-2546`).
   Dettagli: piano di Y, §2 e §7 «Y8 — passo 2».
-- **Y-2 · Nella cascata settimanale una linea di broker che finisce a metà settimana diventa un buco** — basso, da
-  verificare; `test-author` di Y, 15/10 (Y1). Comportamento preesistente, spostato alla lettera in
+- ✅ **Y-2 · Nella cascata settimanale una linea di broker che finisce a metà settimana diventa un buco** — basso, da
+  verificare; `test-author` di Y, 15/10 (Y1). ✅ 17/10: `aggregateMetric` cerca il valore per `bucketEnd`, il secchio di
+  calendario, invece che per `bucket.date`. Tre rossi in `chartCoreHelpers.test.ts` (settimanale, due settimane,
+  mensile), poi verdi; E2E `dashboard` 27/27. Comportamento preesistente, spostato alla lettera in
   `dashboard/growthChartData.ts` (`aggregateMetric`): il valore di un secchio si cerca sull'ultimo giorno della settimana
   presente in storia (`bucket.date`), mentre `aggregateLineSeries` lo mette sull'ultimo giorno con un valore. Una serie
   con valori a inizio settimana e `null` l'ultimo giorno (una linea di broker che esce dal perimetro) mostra un buco in
@@ -6205,9 +6308,10 @@ da Y il 15/10.
   - Nello stesso test, `:577` seleziona per classe CSS (`.checkbox-btn`), contro le regole dei test frontend.
   - Due strade: togliere la coda del test, oppure riscriverla sui controlli di oggi.
   - Dettagli: piano di Y, «Corsa E2E unica…», Fuori pista.
-- **Y-13 · Due test dei lotti controllano la selezione con la classe `selected`** — minimo; `test-author` di Y, 16/10
+- ✅ **Y-13 · Due test dei lotti controllano la selezione con la classe `selected`** — minimo; `test-author` di Y, 16/10
   (riscrittura di Y-12). **→ T** (coordinatore, 16/10 14:20): lo chiude T, nel suo lotto dei token dei componenti, su
-  `brokers-detail.spec.ts:392-419` con `toHaveAttribute('data-selected', …)`; Y non lo tocca.
+  `brokers-detail.spec.ts:392-419` con `toHaveAttribute('data-selected', …)`; Y non lo tocca. ✅ 17/10: chiuso da T in
+  `4a7ba1d7e`; il file usa `data-selected` (`:392-419`). Verificato da Y il 17/10.
   - In `e2e/brokers/brokers-detail.spec.ts`, il clic su un segmento del Gantt e quello sulla cella della custodia
     fanno `toHaveClass(/selected/)` sulla riga.
   - La regola 10 della skill design-system vuole lo stato, non le classi: la riga pubblica già `data-selected`
@@ -6231,8 +6335,12 @@ da Y il 15/10.
     «Passo 4 · BK e TR».
   - **Rimedio** (coordinatore, 16/10): Y propone la parola, «Refresh» o «Reload», nelle quattro lingue, insieme agli
     altri pulsanti «Aggiorna» delle pagine; la scelta spetta al developer.
-- **Y-16 · Una vista Candele salvata si carica, su una Dashboard nuova, solo grazie a una dipendenza involontaria** —
-  minimo, già presente prima di Y11; `test-author` di Y, 16/10.
+- ✅ **Y-16 · Una vista Candele salvata si carica, su una Dashboard nuova, solo grazie a una dipendenza involontaria** —
+  minimo, già presente prima di Y11; `test-author` di Y, 16/10. ✅ 17/10, opzione A (coordinatore): il comportamento è
+  fissato in modo esplicito da un E2E (`page-busy.spec.ts:867`), con una prova di mutazione. Con un `untrack` attorno
+  alla chiamata vanno rossi questo test e la precondizione di N55 (`:774`); sul codice vero, 17/17. Più due commenti
+  (`GrowthChart.svelte`, `loadPnlCandles` della Dashboard). La correzione vera, cioè dipendenza esplicita e niente
+  ciclo, è Y-24, per il developer.
   - Il `$effect` di `GrowthChart` (976–980) chiama `onRequestPnlCandles()`. Il caricatore parte in modo sincrono,
     sia con `join` sia, prima, con `track`.
   - Le sue letture (`canAsk`, `pnlCandles`, la cache dei report) diventano così dipendenze di quell'effetto. È il
@@ -6304,6 +6412,20 @@ da Y il 15/10.
     onboarding-component-unit`, con la causa «No "onNavigate" export is defined on the "$app/navigation" mock».
   - Allora quell'azione non era fra le mie prove leggere.
   - ✅ 17/10: `onNavigate: vi.fn()` nei due mock (`test-author`); 454/454. Nel checkpoint successivo a Y-21.
+- **Y-24 · La richiesta delle candele (e del contributo) si riarma da sola dopo ogni errore, senza limite** — medio,
+  per il developer, insieme a Y-18; Y, 17/10 (analisi di Y-16). Comportamento preesistente.
+  - `requestReport` (`stores/portfolio/portfolioStore.svelte.ts`) intercetta l'errore e restituisce `null`.
+  - Nella Dashboard e nella pagina del broker, `loadPnlCandles` legge `pnlCandlesLoading` (e `pnlCandles`) dentro
+    l'`$effect` di `GrowthChart` (`:975-979`), che quindi ne dipende: alla fine di una richiesta fallita il `finally`
+    rimette `loading` a false, l'effetto riparte e chiede di nuovo.
+  - Finché il backend fallisce, la vista Candele manda una richiesta dopo l'altra, senza limite e senza attesa.
+    `PositionsPanel` (`:112-116`) fa lo stesso per il contributo, ma attraverso la sua prop dichiarata
+    `contributionLoading`.
+  - Oggi non si vede: lo schermo resta vuoto, come durante il caricamento.
+  - Da decidere con Y-18 (l'indicatore e lo stato d'errore delle candele): l'opzione B di Y-16 (una prop esplicita
+    `canRequestPnlCandles` più `untrack`) toglie il ciclo, ma serve una «chiave di scope» perché un cambio di periodo
+    o un Refresh dopo un errore chiedano di nuovo.
+  - Dettagli: piano di Y, «Y-16».
 
 ## MF · Matematica finanziaria (fase 01)
 

@@ -501,3 +501,51 @@ class FXDeleteRoutesResponse(BaseBulkDeleteResponse[FXDeleteRouteResult]):
 # GET /fx/providers which now includes target_currencies per provider.
 # FXPairItem/FXPairsListResponse were removed too — the GET /currencies/pairs
 # endpoint they were pre-written for never shipped (audit 08/G2).
+
+
+# ============================================================================
+# FX FIXED-PERIOD CHANGES (MF-P2, D-MF6 b)
+# ============================================================================
+
+
+class FXPeriodChangesRequest(StrictModel):
+    """One pair of a fixed-period changes request: the FX table's Δ columns (1D … 5Y), up to ``as_of``."""
+
+    base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217): the rate is quote per 1 base")
+    quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
+    as_of: date_type = Field(..., description="Anchor day: the end of the range the table shows")
+
+    @field_validator("base", "quote", mode="before")
+    @classmethod
+    def validate_codes(cls, v):
+        return Currency.validate_code(v)
+
+    @model_validator(mode="after")
+    def validate_distinct(self) -> FXPeriodChangesRequest:
+        if self.base == self.quote:
+            raise ValueError("base and quote must differ")
+        return self
+
+
+class FXPeriodChange(StrictModel):
+    """The change of a rate over one fixed period, as fractions (0.05 = +5 %), in both orientations of the pair."""
+
+    key: str = Field(..., description="Period key: 1D, 1W, 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y")
+    days: int = Field(..., ge=1, description="Calendar days of the period")
+    change_ratio: Optional[SafeDecimal] = Field(None, description="Rate on as_of / rate on as_of − days − 1 (quote per base); null without a rate on either day")
+    inverse_change_ratio: Optional[SafeDecimal] = Field(None, description="The same change with the pair inverted (base per quote): rate on as_of − days / rate on as_of − 1")
+
+
+class FXPeriodChangesResult(StrictModel):
+    """The fixed-period changes of one pair. The rate on a day is the conversion of 1 base on that day, with the
+    conversion's unlimited backward fill — the rates the FX page shows."""
+
+    base: str = Field(..., description="Base currency")
+    quote: str = Field(..., description="Quote currency")
+    as_of: date_type = Field(..., description="Anchor day")
+    periods: List[FXPeriodChange] = Field(default_factory=list, description="One entry per fixed period, in display order")
+    errors: List[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. no rate on a day)")
+
+
+class FXPeriodChangesResponse(BaseListResponse[FXPeriodChangesResult]):
+    """Bulk response of fixed-period changes: one item per requested pair, in request order."""
