@@ -119,12 +119,15 @@ class TransactionPromotionMixin:
             # Raw dicts (not TXCreateItem) because they go into execute_batch(creates_raw=...)
             # which does per-row model_validate() in try/except, collecting ALL errors
             # in one response instead of failing on the first one.
+            # The values as str, the signs with copy_abs/copy_negate: no fixed point and no context, so a quantity of
+            # 1E+1000000 neither overflows (abs() does, past the context's Emax) nor expands into a million digits; the
+            # batch refuses it past its column's limits (W-B58, R13-SEC7-3).
             create_from_dict = {
                 "broker_id": from_broker_id,
                 "asset_id": req.asset_id,
                 "type": TransactionType.TRANSFER.value,
                 "date": from_date.isoformat(),
-                "quantity": format(-abs(qty), "f"),
+                "quantity": str(qty.copy_abs().copy_negate()),
                 "link_uuid": link_uuid,
                 "tags": from_tags,
                 "description": from_description,
@@ -134,11 +137,11 @@ class TransactionPromotionMixin:
                 "asset_id": req.asset_id,
                 "type": TransactionType.TRANSFER.value,
                 "date": to_date.isoformat(),
-                "quantity": format(abs(qty), "f"),
+                "quantity": str(qty.copy_abs()),
                 "link_uuid": link_uuid,
                 "tags": to_tags,
                 "description": to_description,
-                "cost_basis_override": {"code": req.cost_basis_override.code, "amount": format(req.cost_basis_override.amount, "f")} if req.cost_basis_override is not None else None,
+                "cost_basis_override": {"code": req.cost_basis_override.code, "amount": str(req.cost_basis_override.amount)} if req.cost_basis_override is not None else None,
             }
         else:  # FX_CONVERSION
             if from_currency is None or to_currency is None:

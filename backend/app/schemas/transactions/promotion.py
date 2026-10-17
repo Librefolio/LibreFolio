@@ -8,13 +8,14 @@ from __future__ import annotations
 from datetime import date as date_type
 from typing import Dict, List, Literal, Optional
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import (
     Currency,
     SafeDecimal,
     StrictModel,
+    check_decimal_exponent,
 )
 
 # =============================================================================
@@ -45,6 +46,12 @@ class TXTransferPromoteRequest(StrictModel):
     # destination item; if None the service will not set it.
     # Object {code, amount} — e.g. {"code": "EUR", "amount": "42.50"}
     cost_basis_override: Optional[Currency] = None
+
+    @field_validator("quantity")
+    @classmethod
+    def _quantity_exponent(cls, v: Optional[SafeDecimal]) -> Optional[SafeDecimal]:
+        """Refuse a quantity whose exponent is past ±100 (R13-SEC7-3): a 422 before the promotion does any work."""
+        return None if v is None else check_decimal_exponent(v)
 
 
 class TXTransferPromoteResponse(StrictModel):

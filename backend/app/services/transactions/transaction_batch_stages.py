@@ -6,6 +6,7 @@ splits, updates), ``batch_creates`` (creates, promotes, links) and ``batch_costs
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Iterator, Optional, Tuple
 
@@ -13,7 +14,6 @@ from pydantic import ValidationError
 
 from backend.app.db.models import Transaction, UserRole
 from backend.app.db.precision import DECIMAL_PLACES_EXCEEDED, INTEGER_DIGITS_EXCEEDED, SIGNIFICANT_DIGITS_EXCEEDED, decimal_limit_issue, integer_digits_issue
-from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXBatchOperation, TXBatchResponse, TXPromoteBatchItem, TXSplitBatchItem, TXValidationCode, TXValidationIssue
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXUpdateItem
 from backend.app.services.transactions.transaction_batch_context import (
@@ -22,14 +22,21 @@ from backend.app.services.transactions.transaction_batch_context import (
     cost_fields,
     rule_values,
 )
+from backend.app.utils.datetime_utils import today_date
 
 if TYPE_CHECKING:
     from backend.app.services.transactions.transaction_service import TransactionService
 
 
 def _loc_to_field(loc: tuple | list) -> Optional[str]:
-    """Convert a Pydantic location tuple to a dotted field path."""
+    """Convert a Pydantic location tuple to a dotted field path.
+
+    A promotion's merged value is named by its own field — ``resolved_fields.date`` is ``date`` (H-41) — so the issue
+    carries that field's label.
+    """
     parts = [str(part) for part in loc if not isinstance(part, int)]
+    if len(parts) > 1 and parts[0] == "resolved_fields":
+        parts = parts[1:]
     return ".".join(parts) if parts else None
 
 
@@ -109,15 +116,11 @@ def _decimal_limit_values(item: Any) -> Iterator[tuple[str, str, Decimal]]:
 def _promote_cost_amount(item: TXPromoteBatchItem) -> Optional[Decimal]:
     """The amount of the cost basis a promotion resolves (``resolved_fields.cost_basis_override``), or None.
 
-    One that does not parse is left to the promotion, which refuses it as before.
+    Typed since H-41: one the currency schema refuses — no number, or an exponent past ±100 (R13-SEC7-3) — never parses,
+    and the batch's parse refuses it on ``cost_basis_override.amount``.
     """
-    raw = (item.resolved_fields or {}).get("cost_basis_override")
-    if raw is None:
-        return None
-    try:
-        return Currency.model_validate(raw).amount
-    except (ValidationError, TypeError, ValueError):
-        return None
+    cost = item.resolved_fields.cost_basis_override if item.resolved_fields is not None else None
+    return cost.amount if cost is not None else None
 
 
 def check_decimal_limits(context: TransactionBatchContext) -> bool:
@@ -167,6 +170,61 @@ def _check_limit(context: TransactionBatchContext, operation: str, index: int, r
             )
         )
     return integer_digits_issue(value, Transaction, column) is not None
+
+
+# N74 (R13-SEC7-3): the dates a transaction may carry, from 1900-01-01 to a year after today. The interface never offers a
+# future date; a year covers the time zones and the settlement dates a broker's report puts ahead.
+TRANSACTION_DATE_MIN = date(1900, 1, 1)
+TRANSACTION_DATE_YEARS_AHEAD = 1
+
+
+def transaction_date_bounds(today: Optional[date] = None) -> tuple[date, date]:
+    """The first and the last date a transaction may carry (N74): 1900-01-01, and ``today`` (UTC by default) a year on —
+    28 February for a 29 February."""
+    today = today or today_date()
+    year = today.year + TRANSACTION_DATE_YEARS_AHEAD
+    latest = today.replace(year=year, day=28) if (today.month, today.day) == (2, 29) else today.replace(year=year)
+    return TRANSACTION_DATE_MIN, latest
+
+
+def _promote_date(item: TXPromoteBatchItem) -> Optional[date]:
+    """The date a promotion resolves (``resolved_fields.date``), or None; typed since H-41, so one that is no date never
+    parses."""
+    return item.resolved_fields.date if item.resolved_fields is not None else None
+
+
+def check_dates(context: TransactionBatchContext) -> bool:
+    """Refuse a transaction date outside ``transaction_date_bounds`` (decision N74, R13-SEC7-3).
+
+    Checked on a create, on an update that sets a date, and on the date a promotion resolves; an update that leaves an
+    older row's date alone is not refused for it. Out of the bounds the row gets ``dateOutOfRange`` on ``date``,
+    ``params`` ``{"min", "max"}`` (ISO dates), and the batch is not saved. A broker import confirms through this batch, so
+    its rows are checked here too.
+
+    Returns:
+        True when a date is refused: ``execute_batch`` then stops after the access check, as for the integer digits —
+        the stages after it replay a broker's days and look rates up at the row's date.
+    """
+    earliest, latest = transaction_date_bounds()
+    candidates = [("create", index, None, item.date) for index, item in context.parsed_creates]
+    candidates += [("update", index, item.id, item.date) for index, item in context.parsed_updates]
+    candidates += [("promote", index, None, _promote_date(item)) for index, item in context.parsed_promotes]
+    refused = False
+    for operation, index, ref_id, value in candidates:
+        if value is not None and not earliest <= value <= latest:
+            refused = True
+            context.issues.append(
+                TXValidationIssue(
+                    operation=operation,
+                    index=index,
+                    ref_id=ref_id,
+                    error=f"Date: between {earliest.isoformat()} and {latest.isoformat()}",
+                    code=TXValidationCode.DATE_OUT_OF_RANGE.value,
+                    params={"min": earliest.isoformat(), "max": latest.isoformat()},
+                    field="date",
+                )
+            )
+    return refused
 
 
 async def preload_and_authorize(
