@@ -10,6 +10,10 @@
  * - Stale rows toggle, on an asset of the test's own with a gap in its prices
  * - Event writes: a retyped event is updated in place, the events export imports
  *   back, a new row deleted before saving sends no delete
+ * - What a save says (O-8): every save is published as `assets.data.saved` with its
+ *   counts, a refused one as `assets.data.saveFailed` with its cause. The toast's
+ *   words are translated, so a test reads the event, the toast variant and the
+ *   editor's error state (`asset-editor-error`), never a message
  *
  * Prerequisites:
  * - Test server running (./dev.py server --test)
@@ -21,7 +25,7 @@ import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
-import {waitForChart, waitForSettled} from '../fixtures/app-events';
+import {eventSeq, waitForChart, waitForEvent, waitForSettled} from '../fixtures/app-events';
 import {daysAgoIso, todayIso} from '../fixtures/dates';
 import {uniqueSuffix} from '../fixtures/unique';
 import {API_BASE, goToAssetsPage, navigateToAssetByName} from './assets-helpers';
@@ -119,6 +123,14 @@ test.describe('Asset Data Editor', () => {
     async function priceRowIds(panel: Locator): Promise<string[]> {
         const ids = await panel.locator('tbody tr[data-row-id]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id') ?? ''));
         return ids.sort();
+    }
+
+    // ========================================================================
+    // Helper: The names of the app events recorded after `since`, in order
+    // ========================================================================
+    async function eventNamesSince(page: Page, since: number): Promise<string[]> {
+        // The ring of notify.svelte.ts is a state: once an event is in it, every earlier one of the same page is too.
+        return page.evaluate((s) => ((window as unknown as {__lf?: {events?: Array<{seq: number; name: string}>}}).__lf?.events ?? []).filter((e) => e.seq > s).map((e) => e.name), since);
     }
 
     // ========================================================================
@@ -479,6 +491,102 @@ test.describe('Asset Data Editor', () => {
     });
 
     // ========================================================================
+    // Test 24: A price save the server refuses, then the retry (O-8)
+    // ========================================================================
+    test('a refused price save is published as a failure and keeps the edits; the retry is published with what it did', async ({page}) => {
+        // One page load, two saves.
+        test.setTimeout(60_000);
+        // O-8. The editor wrote what a save did, and why one failed, in English whatever the
+        // interface language. Both now come from the catalogue, and both are published:
+        // `assets.data.saved` with the save's counts, `assets.data.saveFailed` with its cause.
+        // The words are translated, so this reads the events, the toast variant and the
+        // editor's error state by its handle.
+        //
+        // An asset of this test's own, with closes on two consecutive days: its editor lists
+        // those two rows and nothing else. What the retry writes goes with the asset afterwards.
+        const [d0, d1] = [daysAgoIso(20), daysAgoIso(19)];
+        // The days of the two rows the test adds: one imported before the stored closes, and
+        // the blank one Add Row appends on the day after the last of them.
+        const [importedDay, blankDay] = [daysAgoIso(22), daysAgoIso(18)];
+        const asset = await createOwnedAsset(page, owned, {
+            label: 'E2E price save',
+            closes: [
+                {date: d0, close: 10},
+                {date: d1, close: 11},
+            ],
+        });
+        // The page polls POST /assets/prices/current, which may ask live providers and write
+        // today's price into the shared database. Nothing here is about live prices.
+        await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+
+        const panel = await openOwnPricesEditor(page, asset.id, d0, d1);
+        await expect.poll(() => priceRowIds(panel), {message: 'the two stored closes', timeout: 10_000}).toEqual([d0, d1]);
+
+        // A price to save: a new day with a valid close, through the CSV import.
+        await panel.getByTestId('fx-data-import-btn').click();
+        const modal = page.getByTestId('data-import-modal');
+        await expect(modal).toBeVisible();
+        const csv = `date;currency;close;open;high;low;volume\n${importedDay};USD;12;;;;`;
+        const input = modal.getByTestId('csv-editor-input');
+        await input.fill(csv);
+        await expect(input).toHaveValue(csv);
+        const confirm = modal.getByTestId('data-import-confirm');
+        await expect(confirm, 'the line is a valid price row').toHaveAttribute('data-valid-rows', '1');
+        await confirm.click();
+        await expect(modal).toBeHidden();
+        // A price to delete: the first stored close.
+        await panel.getByTestId(`row-actions-${d0}`).click();
+        const deleteAction = page.getByTestId('context-menu-action-delete');
+        await deleteAction.click();
+        await expect(deleteAction).toBeHidden();
+        // A price to skip: a new row left blank, without the close a price needs.
+        await panel.getByTestId('fx-data-add-row-btn').click();
+        await expect.poll(() => priceRowIds(panel), {message: 'the stored closes, the imported day and the blank day', timeout: 10_000}).toEqual([importedDay, d0, d1, blankDay]);
+
+        // The server refuses the save: the upsert of the prices — POST on this exact path — is
+        // answered 500 here, so nothing reaches the database. The delete shares the path, not
+        // the method: it falls through, and the editor sends it only once the upsert is answered.
+        const pricesPath = `${API_BASE}/assets/prices`;
+        const isPricesPath = (url: URL) => url.pathname === pricesPath;
+        const refuse = async (route: Route) => {
+            if (route.request().method() !== 'POST') {
+                await route.fallback();
+                return;
+            }
+            await route.fulfill({status: 500, json: {detail: 'refused by the spec'}});
+        };
+        await page.route(isPricesPath, refuse);
+        const saveButton = panel.getByTestId('asset-editor-save-btn');
+        await expect(saveButton).toBeEnabled();
+        const refused = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === pricesPath, {timeout: 15_000});
+        const beforeFailure = await eventSeq(page);
+        await saveButton.click();
+        expect((await refused).status(), 'the price upsert reached the refusal').toBe(500);
+
+        const failed = await waitForEvent(page, 'assets.data.saveFailed', {since: beforeFailure, timeout: 5_000});
+        const cause = failed.detail?.error;
+        expect(typeof cause === 'string' && cause.length > 0, `the failure carries its cause: ${JSON.stringify(failed.detail)}`).toBe(true);
+        // The editor's error state, by its handle and by the cause it names — never by its words.
+        const errorState = panel.getByTestId('asset-editor-error');
+        await expect(errorState, 'the editor shows the failure').toBeVisible();
+        await expect(errorState, 'naming its cause').toContainText(String(cause));
+        await expect(page.getByTestId('toast-error'), 'the user is told').toBeVisible();
+        expect(await eventNamesSince(page, beforeFailure), 'a refused save is not also published as saved').not.toContain('assets.data.saved');
+        // Nothing is lost: the editor stays open on its edits, ready to save again.
+        await expect(panel).toBeVisible();
+        await expect(saveButton).toBeEnabled();
+
+        // The retry reaches the server. Its counts prove the three edits outlived the failure.
+        await page.unroute(isPricesPath, refuse);
+        const beforeRetry = await eventSeq(page);
+        await saveButton.click();
+        // The page closes the editor only once every write has been answered.
+        await expect(panel).toBeHidden({timeout: 15_000});
+        const saved = await waitForEvent(page, 'assets.data.saved', {since: beforeRetry, timeout: 5_000});
+        expect(saved.detail, 'the imported close saved, the first stored one deleted, the blank row skipped').toEqual({pricesSaved: 1, pricesDeleted: 1, pricesSkipped: 1, eventsDeleted: 0, eventsSaved: 0});
+    });
+
+    // ========================================================================
     // Event writes — each test owns the events it writes and deletes them by id
     // ========================================================================
     test.describe('event writes', () => {
@@ -583,10 +691,16 @@ test.describe('Asset Data Editor', () => {
                 await expect(saveButton).toBeEnabled();
 
                 const upsert = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === EVENTS_URL, {timeout: 15_000});
+                const beforeSave = await eventSeq(page);
                 await saveButton.click();
                 expect((await upsert).status(), 'the events upsert must succeed').toBe(200);
                 // The page closes the editor only once every write has been answered.
                 await expect(panel).toBeHidden({timeout: 15_000});
+                // O-8: the save is published with what it did, in counts — the toast's words are
+                // translated, never read. Having something to report, it tells the user too.
+                const saved = await waitForEvent(page, 'assets.data.saved', {since: beforeSave, timeout: 5_000});
+                expect(saved.detail, 'one event saved, nothing else').toEqual({pricesSaved: 0, pricesDeleted: 0, pricesSkipped: 0, eventsDeleted: 0, eventsSaved: 1});
+                await expect(page.getByTestId('toast-success'), 'a save with something to report is told').toBeVisible();
 
                 const stored = (await markerEvents(page, assetId, date, marker)).map(({id, type}) => ({id, type})).sort((a, b) => a.id - b.id);
                 expect(stored, 'the same event, now INTEREST, and no second one').toEqual([{id: eventId, type: 'INTEREST'}]);
@@ -701,11 +815,18 @@ test.describe('Asset Data Editor', () => {
                 // must send no item at all, or the editor stays open below.
                 const saveButton = panel.getByTestId('asset-editor-save-btn');
                 await expect(saveButton).toBeEnabled();
+                const beforeSave = await eventSeq(page);
                 await saveButton.click();
                 // The page closes the editor only once every write has been answered.
                 await expect(panel).toBeHidden({timeout: 15_000});
                 expect(deletes, 'a row that was never saved must not reach the server').toEqual([]);
                 expect(sentDeleteIds, 'nor travel in a save as an id taken from its date (the year)').toEqual([]);
+                // O-8: a save with nothing to report is published all the same, every count zero —
+                // the blank row is no event, the deleted one was never saved — and raises no toast.
+                // The event is the barrier: once it is recorded, the toast has been decided.
+                const saved = await waitForEvent(page, 'assets.data.saved', {since: beforeSave, timeout: 5_000});
+                expect(saved.detail, 'nothing saved, deleted or skipped').toEqual({pricesSaved: 0, pricesDeleted: 0, pricesSkipped: 0, eventsDeleted: 0, eventsSaved: 0});
+                await expect(page.getByTestId('toast-success'), 'nothing to report: no success toast').toHaveCount(0);
             } finally {
                 await page.unroute(isApi, handler);
             }

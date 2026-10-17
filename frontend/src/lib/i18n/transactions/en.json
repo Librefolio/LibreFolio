@@ -244,7 +244,8 @@
       "pairBrokerMismatch": "Both sides of a currency exchange must be on the same broker",
       "cashNonzero": "{type} requires a non-zero cash amount",
       "decimalPlacesExceeded": "At most {max} decimal places",
-      "significantDigitsExceeded": "At most {max} significant digits"
+      "significantDigitsExceeded": "At most {max} significant digits",
+      "integerDigitsExceeded": "At most {max} digits before the decimal point"
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",

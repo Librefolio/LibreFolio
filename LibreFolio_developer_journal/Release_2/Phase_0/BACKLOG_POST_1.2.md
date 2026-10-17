@@ -2761,16 +2761,18 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   nessun difetto del prodotto né del lotto, che cambia solo gli stili. Cura per il proprietario della spec delle
   transazioni: togliere i budget brevi espliciti e lasciare il timeout di `expect` della configurazione. Dettagli: piano
   di T, «Sesto slot» e «La spec del rischio sui ruoli», passo 3.
-- **TC-18 · Il commit rifiuta il costo del ricevente di un TRANSFER con più di 12 decimali (FM6 di `tx-wac-formmodal`)**
-  — alto; T, 17/10, mini-lotto `CompactCashCell`. Nel bulk, un BUY di 10 Apple su Interactive Brokers a 1000 e un
-  TRANSFER di 5 verso Directa: il commit risponde 200 con `committed: false`, «Row 2b: Cost basis override: At most 12
-  decimal places». Il WAC proposto al ricevente si vede arrotondato («💡 170.36 $ USD per unit») ma parte intero, e lo
-  stadio di precisione del batch lo rifiuta (`transaction_batch_stages.py:117`, `decimal_limit_issue` di
-  `backend/app/db/precision.py`). Riproducibile: lo stesso rosso tre volte, due col lotto e una con i due file del lotto
-  riportati a HEAD (`9016f47c3`, build rifatta); il lotto cambia solo lo `<style>` e l'import, quindi non c'entra. Il
-  modulo di precisione è cambiato il 16/10 sera (`bab52635d`, `0c3275057`); la spec è ferma dal 13/10. Verdetto della
-  triage: difetto del prodotto. Cura per il proprietario del WAC: arrotondare il costo proposto alla scala della colonna
-  prima del commit, o quantizzarlo nel backend; il test resta com'è. Dettagli: piano di T, «`CompactCashCell`», passo 4.
+- ✅ **TC-18 · Il commit rifiuta il costo del ricevente di un TRANSFER con più di 12 decimali (FM6 di
+  `tx-wac-formmodal`)** — alto; T, 17/10, mini-lotto `CompactCashCell`; **chiusa il 17/10 come duplicato di W-B56**:
+  corretta da W in `de901f228` (sul target con `c91bd41b2`), FM6 verde sulla punta `b58108665` (`tx-wac-formmodal`
+  10/10). La segnalazione com'era: nel bulk, un BUY di 10 Apple su Interactive Brokers a 1000 e un TRANSFER di 5 verso
+  Directa: il commit risponde 200 con `committed: false`, «Row 2b: Cost basis override: At most 12 decimal places». Il
+  WAC proposto al ricevente si vede arrotondato («💡 170.36 $ USD per unit») ma parte intero, e lo stadio di precisione
+  del batch lo rifiuta (`transaction_batch_stages.py:117`, `decimal_limit_issue` di `backend/app/db/precision.py`).
+  Riproducibile: lo stesso rosso tre volte, due col lotto e una con i due file del lotto riportati a HEAD (`9016f47c3`,
+  build rifatta); il lotto cambia solo lo `<style>` e l'import, quindi non c'entra. Il modulo di precisione è cambiato
+  il 16/10 sera (`bab52635d`, `0c3275057`); la spec è ferma dal 13/10. Verdetto della triage: difetto del prodotto. Cura
+  per il proprietario del WAC: arrotondare il costo proposto alla scala della colonna prima del commit, o quantizzarlo
+  nel backend; il test resta com'è. Dettagli: piano di T, «`CompactCashCell`», passo 4.
 
 ---
 
@@ -2920,6 +2922,27 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
       `SIGN_BADGE.loss`, che escono dal baseline.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
     «W6», passi W6-a e DV-9.
+- **DV-10 · B4: quel che i neutri dei grafici sui ruoli lasciano alla designer** — minimo; DV, 16/10 notte (B4,
+  D-T27).
+  - **Da rivedere con lei:** la mappa voce → ruolo è il ruolo più vicino. In scuro assi e griglie passano da 1,93 a
+    1,21:1 sulla card (`border-subtle`, come i divisori); i riquadri dei tooltip sono popover (`card`, `raised`).
+    - I tooltip di correlazione e rischio/rendimento prendono il riquadro comune: il loro bordo non riprende più il
+      colore del punto o della cella sotto il puntatore (ECharts lo faceva quando il bordo non era indicato), ed è il
+      bordo neutro di tutti gli altri tooltip.
+  - **Restano in `chartTheme.ts` coi valori legacy:** le serie, gli stati, i segni (guadagno e perdita aspettano un
+    lotto con lei: fondono il rosso dei prezzi e quello del portafoglio), i punti del rischio/rendimento.
+  - **`GEO_MAP_COLORS.land`** non va su un ruolo: su `neutral` starebbe a ΔE00 4,1/3,7 dal primo gradino della scala
+    (GR5.1). È lo zero della scala, da decidere con lei.
+  - **Il testo dei bottoni di stato del Gantt** (`on-status`) resta sotto 4,5:1 sui pieni legacy ambra e cielo di
+    `LOT_STATE_COLORS` (3,07 e 3,95:1 in chiaro), come prima: si cura coi pieni di stato.
+  - **Quattro helper puri leggono i ruoli su `<html>`,** non sull'elemento del grafico (`buildSecondaryYAxes`,
+    `buildSignalReferencePrimitives`, `buildScatterOption`, `buildGrowthFullSeries`): oggi nessun effetto, da
+    sistemare se un grafico entra in un sottoalbero a tema forzato.
+  - **Il ponte riporta in sRGB `oklab()`, `oklch()` e `color(srgb …)`** (B4b); `lab()`, `lch()`, `color(display-p3 …)`
+    e `color(srgb-linear …)` vanno allo stand-in senza segnale. Oggi nessun effetto (`tokens.css` mescola solo `in
+    oklab`); da estendere se una miscela o una modifica del Lab usa un altro spazio.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
+    «B4».
 
 ---
 
@@ -3454,6 +3477,12 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     percorsi nascosti, i file `.test.`/`.spec.` e le cartelle `__tests__`/`__mocks__` (33 file di supporto ai test, che
     nessun codice dell'app importa). Prova reale: con il solo `.DS_Store` più recente della build, la risposta passa
     da True a False.
+  - Residuo chiuso il 17/10 (lotto «Residuo di H-24 e H-28», piano H §14). `cmd_fe_build` registra in
+    `frontend/build/.tool-contract-inputs` l'impronta dell'elenco degli ingressi, solo se la build riesce. Il
+    controllo la confronta: un file aggiunto, tolto o rinominato fa ricostruire; un `.DS_Store`, un file nascosto o
+    `__pycache__/` no. Senza la registrazione vale la regola vecchia, con le mtime delle cartelle.
+    - Prova reale sul vero albero dopo una build vera: con un `.DS_Store` in `backend/app/schemas` la build resta
+      fresca, dove la regola vecchia l'avrebbe data stale.
 - **H-25 · Con `--workers` sopra 1, un'azione da sola fa girare il pre-passaggio parallelo di tutta la categoria** —
   basso, runner; H (analisi di H-23), 16/10.
   - `_run_parallel_prepass()` → `_parallel_for_scope()` → `plan(scope)` pianifica tutta la categoria, non l'azione
@@ -3475,6 +3504,65 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     decisa col coordinatore. Con un test.
 
   Dettagli: piano H, §14, lotto «H-25», passo 2.
+  - Cura fatta il 17/10 (lotto «H-26», piano H §14), con la regola unica scelta dal coordinatore.
+    - `_refused_test_names()` in `_cli.py`: i nomi dati a una qualunque delle 36 azioni registrate senza nomi (le 16
+      `all`, `db create`/`populate`, 18 unità Vitest) danno exit 2 e un messaggio: «name the action» dopo `all`, «takes
+      no test names» dopo le altre.
+    - Il controllo avviene prima di ogni effetto collaterale, in `_dispatch_test_command` e in `main()`, `--list`
+      compreso.
+    - Prova reale: 6 comandi rifiutati, nulla cambiato.
+- **H-27 · `profile_default` non controlla il tipo del valore del profilo** — basso, configurazione; E (R13-SEC3), via
+  coordinatore, 17/10.
+  - `profile_default(name, fallback)` (`backend/app/config/__init__.py` ~579) restituisce con un `cast` il valore di
+    `ENVIRONMENT_PROFILE_DEFAULTS[<profilo>]`, senza controllarne il tipo. Oggi l'unica voce è `managed`:
+    `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` = 500, letta da `backup_max_upload_mb()` (`config/backup.py` ~78) con ripiego `0`,
+    che vuol dire «nessun limite».
+  - Se la voce sparisce, il profilo gestito si comporta come il self-hosted e non mette limiti alla dimensione di un
+    restore, senza avviso. Se vale `None`, quel valore passa e viene trattato anche lui come «nessun limite».
+  - Cura proposta: il tipo del valore deve essere quello del ripiego (`bool` a parte), altrimenti un errore chiaro
+    all'avvio; più un test che fissa le voci di `managed` insieme ai loro lettori. Dopo il lotto H-26 / residuo di H-24
+    / H-28.
+
+  Dettagli: piano H, §14, «Residuo di H-24».
+  - Cura fatta il 17/10 (lotto «H-27», piano H §14).
+    - `profile_default()` accetta solo un valore del tipo esatto del ripiego; un altro tipo alza
+      `ProfileDefaultError` (un `TypeError`) e il lettore si ferma: un `None` non diventa più «nessun limite».
+    - Una guardia statica in `services profile-defaults` confronta il ripiego letterale di ogni chiamata con le voci
+      dei profili.
+    - Nessun controllo all'avvio: il tipo atteso lo conosce solo il lettore.
+    - Resta a B, se lo vuole: con una tabella sbagliata le due rotte di `restore.py` rispondono 500, perché catturano
+      solo `BackupConfigError`; per il suo 503 basta catturare anche `ProfileDefaultError`.
+- **H-28 · Il catch-all della SPA serve i file nascosti di `frontend/build/`** — basso, sicurezza (informazione); H
+  (analisi del residuo di H-24), 17/10.
+  - `frontend_catchall()` (`backend/app/services/platform/static_site.py` ~130) serve qualunque file che
+    `confined_path` trova dentro la build, dotfile compresi. Rispondono `GET /.build-debug` (dice se la build è di
+    debug) e `GET /.build-version` (la versione, già pubblica), anche dall'immagine. Risponde anche
+    `/fonts/noto-color-emoji/.cache_manifest.json`, che l'app non chiede mai: lo legge solo `update_js_cache.py`, dal
+    disco.
+  - Cura, nel lotto H-26 / residuo di H-24: un file con una parte nascosta nel percorso risolto dentro la build va al
+    fallback della SPA, come un percorso fuori dalla build. `/assets/../favicon.png` resta servito. Con un test.
+
+  Dettagli: piano H, §14, «Residuo di H-24».
+  - Cura fatta il 17/10: `_hidden_in_build()` in `static_site.py`.
+    - Prova reale su un server della corsia: i quattro percorsi nascosti danno `200.html`; `robots.txt` e
+      `manifest.json` restano serviti.
+- **H-29 · Il mount di `/_app` e `/mkdocs` servono ancora i file nascosti** — basso, sicurezza (informazione); H
+  (residuo di H-28), 17/10.
+  - H-28 ha chiuso il catch-all della SPA. `ImmutableStaticFiles` (`/_app`) e `mkdocs_static` (`/mkdocs`) non filtrano
+    i nomi che iniziano con `.`.
+  - Oggi non ce ne sono: SvelteKit e MkDocs non ne producono, e l'immagine non ne contiene. Su un Mac di sviluppo, però,
+    un `.DS_Store` del Finder dentro `frontend/build/_app/` o `mkdocs_src/site/` sarebbe servito.
+  - Cura proposta: la stessa regola di `_hidden_in_build()` nei due percorsi, con un test ciascuno.
+
+  Dettagli: piano H, §14, «Residuo di H-24 e H-28».
+- **H-30 · `python -m scripts.test_runner --log-file` non fotografa il DB se il corpo alza un'eccezione** — basso,
+  runner; H (test-author di H-26), 17/10.
+  - Nel ramo `--log-file` di `main()` (`scripts/test_runner/_cli.py`), `_snapshot_log_dir_db()` segue
+    `_timed_run(...)` senza `try/finally`, a differenza di `_dispatch_test_command` (il percorso di `dev.py test`).
+  - Effetto: un crash del corpo lascia i log senza la copia del DB. Riguarda solo l'ingresso `python -m`.
+  - Cura proposta: lo stesso `try/finally`, con un test.
+
+  Dettagli: piano H, §14, «Residuo di H-24 e H-28».
 
 ## A · Account e accessi (fase 01)
 
@@ -4023,7 +4111,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - `afterEach` aspetta `vi.dynamicImportSettled()`, alla sua prima volta nel repo.
   - Il file da solo dà 5/5, e il primo caso passa da 437 a 57 ms; `core-unit` è verde.
   - Commit del coordinatore, lotto X-R21. Dettagli: piano 03, sezione «X-R21».
-- **X-R22 · L'invito a reinserire un segreto illeggibile non dice di ripristinare prima la vecchia chiave** — basso,
+- ✅ **X-R22 · L'invito a reinserire un segreto illeggibile non dice di ripristinare prima la vecchia chiave** (chiusa il
+  17/10: `375d09db3`, entrata in dev `618563949`) — basso,
   testi; da H (H-3, opzione B), girata a X dal coordinatore il 16/10.
   - **Il problema**: salvare un segreto riscrive la sua riga con la chiave attuale. Se l'amministratore ripristina poi
     la vecchia chiave d'istanza, il segreto appena reinserito diventa illeggibile a sua volta.
@@ -4156,7 +4245,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
 - **X-R34 · Doc: `asset_plugin_guide.md` «How It Works» dice che il frontend chiama `GET …/search`** — basso; X, 17/10
   (trovato dal docs-writer).
   - In realtà il frontend usa prima lo streaming (`…/search/stream`), e il REST solo come ripiego.
-- **X-R35 · `env_url` accetta `user:pass@` e lo pubblica** — piccolo, **prima del rilascio**; da E (piano 08,
+- ✅ **X-R35 · `env_url` accetta `user:pass@` e lo pubblica** (chiusa il 17/10: `4e06d78ff`, entrata in dev
+  `67668f5ce`) — piccolo, **prima del rilascio**; da E (piano 08,
   revisione di sicurezza «R13-SEC2»), assegnata a X dal coordinatore il 17/10.
   - Un indirizzo con utente e password passa il validatore e finisce sull'anonimo `GET /system/instance`.
   - Cura: il validatore della configurazione rifiuta utente e password. Copre anche `LIBREFOLIO_PUBLIC_URL` e
@@ -4165,7 +4255,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - `services/assets/core.py:81`. Oggi è innocuo: i prezzi sono condivisi e una collisione mescola solo due asset con
     parametri diversi.
   - Diventa **MEDIO** il giorno in cui gli asset avranno un proprietario: allora serve un'impronta piena.
-- **X-R37 · P20 nell'interfaccia: le 4 note di E** — piccolo, **prima di O-8**; da E («R13-SEC2/SEC3»), 17/10.
+- ✅ **X-R37 · P20 nell'interfaccia: le 4 note di E** (chiusa il 17/10: `c7434f00c`, entrata in dev `908fe6c90`) —
+  piccolo, **prima di O-8**; da E («R13-SEC2/SEC3»), 17/10.
   1. `assetSearchReport.ts:70-74`: il controllo legge il valore senza base, così `https:host` passa e, come `href`, si
      risolve sull'istanza. Usare `url.href`.
   2. **N61** (decisione notturna del coordinatore): su `managed`, senza un `support_url` valido, o con
@@ -4182,6 +4273,24 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - **Direzione** (la stessa di W-B58): un limite alle cifre intere in ogni scrittura dei cambi (manuale, provider,
     inverso), una lettura che non solleva mai, un 4xx e mai un 500.
   - Riusare l'helper di W `max_integer_digits(model, column)` in `db/precision.py`, che entra con W-B58.
+- **X-R39 · Editor dei dati dell'asset: le stranezze trovate con O-8** — basso; X, 17/10 (dal test-author di O-8; già
+  presenti prima di O-8).
+  - I conteggi non sono simmetrici: gli eventi eliminati vengono dal server, quelli salvati dal client. Le righe di
+    evento non valide si scartano in silenzio, mentre per i prezzi c'è il conteggio delle righe scartate.
+  - Un salvataggio sono tre richieste separate (prezzi aggiornati, prezzi cancellati, eventi): un errore può arrivare
+    dopo una scrittura parziale, e il messaggio non lo dice.
+  - Le righe di prezzo vuote, scartate, allargano lo stesso l'intervallo del grafico dopo un salvataggio riuscito
+    (`expandedRange` legge tutte le righe `appended`).
+  - `onsave` non è atteso: un errore nel ricaricamento della pagina dopo il salvataggio non viene mai mostrato.
+  - Il banner d'errore dell'editor dei cambi non ha un `data-testid` (quello degli asset l'ha avuto con O-8).
+- **X-R40 · Prezzo corrente: la quotazione rifiutata torna lo stesso come prezzo dal vivo** — basso, **dopo X-R38**; X,
+  17/10 (le mie due note alla revisione di W-B58, accettate dal coordinatore).
+  - `services/assets/price_query.py` ~862–866: una quotazione che `storable_price` non può tenere non si salva, ma la
+    risposta la restituisce (`FACurrentPriceItem.value`, sorgente `provider:…`): un 1E+60 compare nella UI come prezzo
+    dal vivo, anche se il DB l'ha rifiutato. Cura: rispondere con un errore per la voce, come «No price data available».
+  - ~865: l'avviso si ripete a ogni interrogazione della stessa quotazione (lo scheduler ogni 10 minuti, più ogni pagina
+    aperta). Cura: una volta per (asset, valore) per processo (`functools.cache`, come `_report_invalid`), oppure
+    `info`.
 
 ## W · Import e transazioni (fase 01)
 
@@ -4588,6 +4697,38 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   costo manuale la conferma la rifiuta (oltre 12 decimali, D2). Proposta del coordinatore: `round_computed_value` alla
   fonte, come D6 per i valori calcolati. Da decidere con MF (avvisato dal coordinatore). La parte urgente, il controllo
   dei decimali che rifiutava l'importo di un costo Auto, è nel checkpoint «C-97a, il costo Auto». Dettagli: piano 04.
+- **W-B58 · Un valore enorme blocca gli asset di tutti (C-97a)** — medio, sicurezza e dati; E, 17/10 (R13-SEC2,
+  reperto 1, MEDIUM 8/10; note 1, 2, 4, 5). `RealDecimal` solleva leggendo un REAL ±inf o da 1e54 in su, e nessuno limita la
+  grandezza (`1E+60` passa `decimal_limit_issue`): un BUY da `1E+60` su un broker con scoperto e short dà 500 a ogni utente su
+  `/assets/all`, e un provider che risponde `1e400` rende illeggibile la riga di oggi del prezzo. Cura: una lettura che non
+  solleva mai, il limite delle cifre intere a ogni scrittore (codice `integerDigitsExceeded`), il prezzo corrente troncato, la
+  promozione controllata, i blocchi dei provider senza eccezioni a metà. Da chiudere prima del rilascio. Cifre intere: 15 per
+  quantità e importo (decisione notturna N63 del coordinatore, da rivedere col developer), le altre colonne come dichiarate (12
+  prezzi, costo per unità e valore dell'evento; 24 il volume). Dettagli: piano 04, sezione «W-B58 e W-B59».
+- **W-B59 · Il precaricamento del pool BRIM ferma il server al primo import (W-B53)** — medio, disponibilità; E, 17/10
+  (R13-SEC2, nota 12, 9/10, provata). `_get_pool()` imposta il precaricamento anche col prewarm spento: su 3.13 il primo parse
+  dopo un avvio blocca il loop per tutto l'import di BRIM (~4 s a riposo, 30–50 s sotto carico), contro N56. Cura: il
+  precaricamento solo col prewarm acceso. Dettagli: piano 04, sezione «W-B58 e W-B59».
+- **W-B60 · Gli importi tornano col rumore del double (C-97)** — minimo, numeri; W, 17/10 (W-B58, N63). `Transaction.amount` e
+  `AssetEvent.value` sono `Numeric(18, 6)`, che SQLAlchemy rilegge col formato `'%.6f'`: da 11 cifre intere il rumore del double
+  compare nei decimali (`123456789012.345` torna `123456789012.345001`; con le 15 cifre intere di N63 `99999999999999.9` torna
+  `99999999999999.906250`). Gli importi interi (VND, IDR) tornano esatti. Cura: `RealDecimal(18, 6)` (stesso DDL, nessuna
+  migrazione), dopo aver controllato le `SUM` in SQL su quelle colonne; rossi prima. Chiude anche metà di W-B63. Dettagli: piano 04,
+  sezione «W-B58 e W-B59».
+- **W-B61 · I cambi senza limite di grandezza (classe di W-B58)** — medio, dati; W per X, 17/10 (W-B58). Il cambio manuale
+  (`api/v1/fx/currencies.py:92` → `services/fx/storage.py:60`) non ha limite: `1E+400` si salva come REAL inf, e il suo inverso
+  `1E-400` come 0; dei provider, `truncate_fx_rate` (`db/precision.py`) solleva `InvalidOperation` da `1E+50`. Codice di X (il
+  coordinatore lo avvisa). Cura: `decimal_limit_issue` e `storable_value` di W-B58 sulla colonna `FxRate.rate`. Dettagli: piano 04,
+  sezione «W-B58 e W-B59».
+- **W-B62 · `/prices/current` risponde per intero un prezzo enorme del provider** — basso, disponibilità; W, 17/10 (R13-SEC2, nota
+  6). Il serializzatore `format(v, "f")` (`backend/app/schemas/common.py:47`) scrive per intero un `1E+50000000`: ~50 MB per
+  risposta, che la cache di 2 minuti riserve. Dopo W-B58 il valore non si salva più, ma la risposta lo porta ancora. Cura: la
+  quotazione non memorizzabile risponde come non disponibile, o il serializzatore rifiuta un esponente oltre una soglia. Dettagli:
+  piano 04, sezione «W-B58 e W-B59».
+- **W-B63 · Un inf già salvato in una colonna `Numeric` rompe le risposte** — basso, dati; W, 17/10 (W-B58). Importo, valore di
+  evento, volume e cambio si rileggono `Decimal('Infinity')` (formato `'%.Nf'`), che il JSON scrive `Infinity`. Solo dati scritti
+  prima di W-B58 o a mano. Importo e valore dell'evento li chiude W-B60; volume e cambio restano. Dettagli: piano 04, sezione
+  «W-B58 e W-B59».
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
@@ -5185,13 +5326,24 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   alza solo un contatore non reattivo): la pagina già sullo schermo mostrava le cifre nuove al prossimo caricamento o
   con «Aggiorna». Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z5 —
   codice» e «Z-13».
-- **Z-14 · Le pagine di un asset e di un cambio non vedono un recupero dei prezzi** — basso; docs-writer di Z, 16/10
-  (Z-13). I grafici dei prezzi e dei cambi usano cache di sessione proprie (`assetPriceStoreRegistry.ts`,
-  `fxStoreRegistry.ts`) che il bus del portafoglio non tocca. Dopo un recupero, un intervallo già caricato nella
-  sessione torna dalla cache finché non si preme «Aggiorna» su quella pagina. Il problema c'era già prima di Z5, che
-  però lo rende più visibile. Cura possibile: le due cache ascoltano `{kind: 'prices'}` e segnano stale. Il dettaglio
-  di un asset è di X fino a FE5c. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
-  sezione «Z-13», passo 4.
+- ✅ **Z-14 · Le pagine di un asset e di un cambio non vedono un recupero dei prezzi** — basso; docs-writer di Z, 16/10
+  (Z-13). **Chiusa il 17/10 col lotto Z-14** (il commit è del coordinatore): `TimeSeriesStore.markStale()` tiene i
+  punti e fa chiedere di nuovo la lettura successiva, anche dove ci sono dati (le risposte riempiono all'indietro i
+  giorni); i due registri ascoltano il bus e segnano stale tutti i negozi solo su `{kind: 'prices'}`; `lookupFxRate`
+  tratta un giorno stale come mancante. Dopo un recupero la visita successiva di una pagina dei prezzi o dei cambi, o
+  un cambio d'intervallo, chiede di nuovo, una volta. Una pagina già aperta resta com'è: Z-14b. Era: un intervallo
+  già caricato nella sessione tornava dalla cache finché non si premeva «Aggiorna» su quella pagina. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-14 — analisi».
+- **Z-14b · Una pagina dei prezzi o dei cambi aperta durante un recupero non si ricarica da sola** — basso, UX;
+  Z, 17/10 (Z-14). Con Z-14 i negozi dei prezzi e dei cambi diventano stale su `{kind: 'prices'}` e la lettura
+  successiva chiede di nuovo; ma una pagina già aperta (lista e dettaglio degli asset, lista e dettaglio dei cambi)
+  tiene il suo grafico finché non cambia intervallo, non si naviga o non si preme «Aggiorna», mentre Dashboard e
+  broker si ricaricano in background (Z-13). Cura possibile: un ascoltatore di `{kind: 'prices'}` nelle quattro
+  pagine e una ricarica silenziosa (niente `aria-busy` né spinner, la lezione di Z-18). Nello stesso spirito: al
+  ritorno dopo un recupero la pagina mostra il caricamento, come una prima visita, invece dei punti vecchi che il
+  negozio tiene. Decisione di UX del developer, fra le domande del mattino del coordinatore; il dettaglio asset è
+  ora di Y. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-14 — analisi», punto B.
 - **Z-15 · Dopo un recupero dei prezzi i pannelli di rischio e dei lotti restano indietro** — basso; coordinatore e Y,
   16/10 (Z-13b, vincolo Y11). La ricarica in background di Z-13 chiede di nuovo solo il report della pagina: non tocca
   `refreshVersion` né `requestPortfolioRefresh()`, che sono l'«Aggiorna» dell'utente e con Y11 farebbero girare
@@ -5239,14 +5391,12 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   livello, importato da `zodios-client.ts` dal 15/10 (`cb34327e9`), sulla riga dopo `priceRefresh`: disaccoppiare
   il solo `instanceNotices` non basta a togliere il plugin, serve anche H. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Wiki-file di Z-3 e Z-20/Z-21».
-- **Z-21 · N58: altre quattro funzioni di Z usate solo dai test** — basso; Z, 16/10 (lotto A, `lint --dead-code`).
-  Vulture le mette fra le «Referenced only by tests»: `cooldown_snapshot()` (`services/platform/provider_cooldown.py`,
-  Z7a), la proprietà `ShutdownWatchdog.armed_at` e `current_shutdown_watchdog()`
-  (`services/platform/shutdown_budget.py`, Z6b), `ActivityTracker.is_busy` (`services/platform/sleep_wake/activity.py`,
-  Z2a). Cura: per ognuna, o un lettore di prodotto (per esempio il pannello dello scheduler per `cooldown_snapshot`),
-  o via, coi test riscritti sul comportamento. Da decidere col coordinatore; fuori dal lotto A per tenerlo corto.
-  Nata come Z-20, rinominata il 16/10 (il numero era già di J-26).
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto A».
+- ✅ **Z-21 · N58: altre quattro funzioni di Z usate solo dai test** — basso; Z, 16/10 (lotto A, `lint --dead-code`).
+  **Chiusa il 17/10 col lotto Z-21** (il commit è del coordinatore): tolte `cooldown_snapshot()`, la proprietà
+  `ShutdownWatchdog.armed_at`, `current_shutdown_watchdog()` e `Activity.is_busy()`, con le due menzioni del runner. I
+  test leggono l'istanza in uso, il `deadline`, `shutdown_budget._watchdog` e `busy_reasons()`; nessun caso tolto.
+  `lint --dead-code` non le segnala più. Nata come Z-20, rinominata il 16/10 (il numero era già di J-26). Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-21».
 
 ## B · Backup e Docker (fase 01)
 
@@ -5451,13 +5601,24 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   rivedere). L'azione manda l'invito sempre nella lingua predefinita dell'istanza; `POST /email/links` accetterebbe
   `language`, ma la 1.3 non mostra un selettore. Da aggiungere se serve invitare chi parla un'altra lingua.
   Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E4.1».
-- **E-9 · I limiti per casella non vedono gli alias (`+tag`, i punti di Gmail)** — piccolo; E, 16/10 (revisione di
+- ✅ **E-9 · I limiti per casella non vedono gli alias (`+tag`, i punti di Gmail)** — piccolo; E, 16/10 (revisione di
   sicurezza finale, nota sotto la soglia). `strip().casefold()` fa di `victim+1@…` e `victim+2@…` caselle diverse:
   con la registrazione aperta si può puntare il budget orario dell'istanza su una casella sola, e ogni email porta lo
   username, testo libero di 50 caratteri. Il tetto resta `LIBREFOLIO_SMTP_MAX_PER_HOUR` per processo. Da valutare: una
   chiave che tolga il `+tag` (e i punti per i domini che li ignorano), oppure un controllo sullo username nelle
   email. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E6.9».
-- **E-11 · Su un'istanza bloccata, «Send the link again» legge il 401 del blocco come credenziali sbagliate** —
+  - 17/10, E: chiusa con la decisione notturna **N62** del coordinatore, da rivedere col developer. Le due cure
+    servono entrambe.
+    - (a) I tre limiti per casella contano su `delivery.mailbox_budget_key()`: `casefold`, il `+tag` tagliato su ogni
+      dominio, i punti tolti per Gmail e `googlemail.com`. Solo come chiave: l'email va all'indirizzo salvato.
+    - (b) Reset, verifica e avviso di cambio salutano senza username.
+    - (c) L'avviso non mostra più niente del nuovo indirizzo, perché senza DNS anche il TLD è testo libero.
+    - L'invariante: nessuna email che un estraneo può indirizzare porta testo scelto da lui.
+    - Il DoS sul budget d'istanza, fatto con tante caselle diverse, è una domanda del cloud per il developer
+      (coordinatore). Resta E-12.
+    - Dettagli: piano 08, «E-9.0»…«E-9.2».
+    - Commit `3dd23eaa4` (codice), `bb392de35` (docs), `7fc549fea` (journal); in `dev_release2` col merge `49c07a95a`.
+- ✅ **E-11 · Su un'istanza bloccata, «Send the link again» legge il 401 del blocco come credenziali sbagliate** —
   minimo; E, 16/10 (E-10, nota del `test-author`).
   - `POST /email/verification/resend` è fuori da `ALLOWED_WHEN_BLOCKED`, quindi un chiamante anonimo riceve il 401 di
     `get_current_user`, e `readResendFailure()` legge ogni 401 come `INVALID_CREDENTIALS`: l'avviso dice che username
@@ -5472,6 +5633,24 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - leggere il testo di `detail`, che è fragile.
 
   Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-10».
+  - 17/10, E: chiusa.
+    - A7b non la risolve: A-13 tiene fuori dal redirect al login solo le pagine dei link, mentre «Send the link again»
+      sta su `/`.
+    - La strada scelta sta tutta nei file di E:
+      - il 401 della rotta è ora codificato (`{"error_code": "INVALID_CREDENTIALS", …}`);
+      - `readResendFailure()` legge ogni altro 401, o il 423 `instance_blocked`, come il blocco;
+      - l'avviso mostra `auth.instanceBlocked`, la chiave di A7b.
+    - Resta giusta anche se H darà un codice al rifiuto anonimo del blocco.
+    - EVA-017 fissa `confirm` e `resend` fuori da `ALLOWED_WHEN_BLOCKED`.
+    - Dettagli: piano 08, «E-11.0» e seguenti.
+- **E-12 · I domini catch-all e i sottodomini di Fastmail aggirano la chiave per casella** — basso; E, 17/10 (E-9).
+  `mailbox_budget_key()` unisce gli alias `+tag` e i punti di Gmail. Restano due casi:
+  - un dominio catch-all, dove ogni parte locale arriva alla stessa casella;
+  - gli indirizzi a sottodominio di Fastmail (`qualsiasi@utente.fastmail.com`).
+
+  In questi casi ogni parte locale è una chiave nuova, e li limita solo il budget orario dell'istanza. Un limite per
+  dominio colpirebbe i grandi provider condivisi, quindi servirebbe un elenco di domini o un'altra idea. Dettagli:
+  [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-9.0», «Resti fuori da E-9».
 
 ## Y · Cruscotto e grafici (fase 01)
 
@@ -5739,3 +5918,14 @@ punto di partenza, l'audit dello stesso giorno:
   «negative-sum»). Proposta: con una somma ≤ 0 le fette restano `value` null («—») e gli importi restano; serve l'ok
   del developer (cambia il grafico, lo schema — `AllocationItem.value` oggi obbligatorio — e il dataset AI Export
   che lo copia, `portfolio_financial.py:251-253`). Dettagli: piano MF, sezione «Lotto C».
+- **MF-W56 · L'anteprima del WAC arrotondata alla colonna dov'è usata** — basso, numeri oltre la 12ª cifra; W (W-B56) e
+  MF, 17/10. `compute_wac_iterative` (facciata di `portfolio_service`) restituisce un WAC non arrotondato, a volte
+  periodico: «congelato» in un costo manuale è rifiutato da C-97a (D2), e il costo automatico
+  (`auto_cost._write_auto_cost`) lo scrive così in `cost_basis_override`. Cura concordata: alla facciata
+  `round_computed_value(…, Transaction, "cost_basis_override")` (D6), mai nella casa (`average_cost` resta esatto). Di
+  MF dopo MF-E, rossi prima. Dettagli: piano MF, sezione «MF-W56».
+- **MF-A2 · Documentare l'annualizzato delle posizioni chiuse nel periodo e la definizione del non realizzato** — basso,
+  doc; MF (docs-writer), 17/10. `period-pnl`/`net-annualized-return` non dicono che una posizione chiusa nel periodo
+  annualizza sul costo venduto e sul suo tempo di volo; `portfolio-engine/index` §5 definisce il non realizzato come
+  NAV − Book (transito incluso) mentre il periodo usa valore di mercato − costo aperto (§7 ora lo dice). Dettagli:
+  piano MF, sezione «MF-A — codice».

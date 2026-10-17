@@ -249,10 +249,6 @@ class Activity:
                 reasons.append(name)
         return tuple(dict.fromkeys(reasons))
 
-    def is_busy(self) -> bool:
-        """True while ``busy_reasons()`` is not empty."""
-        return bool(self.busy_reasons())
-
 
 #: The process's record, read at call time by ``current_activity()``.
 ACTIVITY = Activity()

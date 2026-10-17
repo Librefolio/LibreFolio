@@ -934,6 +934,10 @@ class LotTimelineEventSchema(StrictModel):
     realized_pnl: Optional[SafeDecimal] = Field(None, description="Closure realized P&L in target_currency.")
     proceeds: Optional[SafeDecimal] = Field(None, description="Closure proceeds in target_currency.")
     ratio: Optional[SafeDecimal] = Field(None, description="Split ratio for SPLIT events.")
+    opening_value: Optional[SafeDecimal] = Field(
+        None,
+        description="For the event that opens a lot (BUY, ADJUSTMENT_IN): the lot's original cost in target_currency, converted at the opening date — the lot summary's original_cost, in the currency of unit_price. None on every other kind and when the conversion is missing.",
+    )
 
 
 class LotValueHistoryPoint(StrictModel):

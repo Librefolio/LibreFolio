@@ -3336,7 +3336,7 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 > coordinatore, è scritto qui. Al coordinatore mando solo le note che chiedono un'azione (1, 2 e 5 per A, la 2 di B3
 > per B), come per la nota 3 di E6.9 che è diventata A-27.
 
-### R13-SEC2 — Revisione di sicurezza del resto di `ebe9eb346..dev_release2` (2026-10-16, 23:40–00:2x)
+### R13-SEC2 — Revisione di sicurezza del resto di `ebe9eb346..dev_release2` (2026-10-16, 23:37 – 17/10, 00:05)
 > **Il compito del coordinatore** (23:3x): una revisione `security-review` in sola lettura, fatta sui diff, di ciò che è
 > entrato dall'ultimo push, fuori dai tre perimetri di R13-SEC. Senza correzioni; i reperti con gravità e confidenza a
 > lui; se non c'è niente, una riga qui. I lotti: C-97a/`RealDecimal` di W e il suo fix del costo automatico (input,
@@ -3441,7 +3441,7 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 >     - Il primo parse dopo ogni avvio blocca quindi ogni richiesta per tutto l'import di BRIM e dei 33 plugin: ~4 s a
 >       riposo, 30–50 s sotto carico. Prima quell'import girava dentro il worker.
 >     - Va contro la regola della specifica: «il default lascia invariato il self-hosted».
->     - **Provato** (00:2x, carico 45,7): `files/sec2/wb53_stall.py` con `files/sec2/run_wb53.sh` (libreria standard,
+>     - **Provato** (00:03, carico 45,7): `files/sec2/wb53_stall.py` con `files/sec2/run_wb53.sh` (libreria standard,
 >       nessun import dell'app, venv del progetto, Python 3.13.16). Un modulo che dorme 3 s all'import:
 >       - senza precaricamento: primo parse 3,14 s, **stallo massimo del loop 0,18 s**;
 >       - col precaricamento e il prewarm spento: primo parse 3,15 s, **stallo massimo del loop 3,14 s**.
@@ -3500,3 +3500,594 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 > - la domanda D-SEC2-1.
 >
 > Nessuna correzione da parte mia.
+
+### R13-SEC3 — Revisione di sicurezza: la UI di P20, i sei commit rimasti, A7b (2026-10-17, 00:07–)
+> **Il compito del coordinatore** (00:0x), in sola lettura e nel formato di prima:
+> 1. la UI di P20 di X, `2c6fa9cfb`, con le regole della nota 11 di R13-SEC2. Il commit non è ancora in dev: sta sul ramo
+>    di X `e-alfy-x-plugin-asset-e-ricerca`, un commit sopra `b3e2fae02`, e l'ho letto dagli oggetti git senza cambiare
+>    ramo;
+> 2. i sei commit fuori lista di R13-SEC2;
+> 3. A7b, quando entra: lo SHA me lo dà lui.
+>
+> **La base**: il journal è committato (`d0be286e6`) ed entrato in dev; il mio ramo è portato a `6cadaf427`, pulito. dev
+> è a `149157025`.
+>
+> **⚠️ Fuori pista: gli orari di R13-SEC2 erano sbagliati.** Avevo scritto «00:2x» quando non erano ancora le 00:05. Gli
+> orari veri, presi dai file della sessione, sono revisione 23:37–00:05 e prova 00:03; li ho corretti sopra.
+>
+> **Tre revisioni in parallelo** (00:07–00:15), sola lettura, nessuno snippet eseguito (carico 57–67):
+> - la UI di P20;
+> - i quattro commit di backend: W-B32 `77fbc8687`, P6 `7ad5a8849`, H-17 `8f7e086e9` e `465c27939`;
+> - le icone dei plugin `aaff7df04` e A-25 `c85b7d8eb`.
+
+> **UI di P20** (X, `2c6fa9cfb`): **nessun reperto sopra la soglia.** Le sei regole sono rispettate, la 2 con la nota 1.
+> - **Cosa esce**, sempre e solo con un clic:
+>   - l'oggetto, o il titolo GitHub, `LibreFolio: asset not found — <ricerca, al più 80 caratteri>`;
+>   - il corpo: la ricerca; una riga per provider con i soli codici (`N results`, `error <error_code>`, `error`,
+>     `no answer`); valuta, tipo e identificativi non vuoti del modulo; `LibreFolio <versione>, <profilo>, language
+>     <lingua>`.
+> - **Non esce**: utente, email, indirizzo dell'istanza, `support_url`, e soprattutto il testo libero `error` del backend,
+>   dove lo scraper CSS mette l'URL della sua richiesta (`css_scraper/plugin.py:254`).
+> - Nessun `fetch`, `sendBeacon` o `window.open` nuovo.
+>
+> Note sotto la soglia, per X:
+> 1. `assetSearchReport.ts:70-74`: il controllo legge il valore senza base, mentre l'`href` si risolve sulla pagina. Così
+>    `https:host` passa e diventa un link all'istanza stessa. È innocuo, e `env_url` lo rifiuta già; restituire `url.href`
+>    chiude il caso.
+> 2. Sul profilo `managed`, se `support_url` manca, non è valido o `/system/instance` è fallita, si ricade su una issue
+>    GitHub **pubblica**, con `managed`, i codici dei provider, la versione e gli identificativi. L'utente la vede e il
+>    tooltip dice «pubblica». Proposta: niente ricaduta su GitHub quando il profilo è `managed`.
+> 3. `AssetModal.svelte:393-396`: il rapporto porta anche valuta, tipo e identificativi del modulo. In modifica sono quelli
+>    dell'asset esistente (ISIN, ticker, UUID, OTHER). Si vedono nel corpo, ma il commit e la doc dicono «ricerca ed esito
+>    dei provider»: la doc utente (`create-edit.en.md`) dovrebbe elencarli.
+> 4. Un `support_url` http(s) con `user:pass@` ora è un link per tutti gli utenti. Era già pubblico con `/system/instance`
+>    (nota 10 di R13-SEC2, già girata a X); il frontend potrebbe ricadere su GitHub quando `url.username` o `url.password`
+>    ci sono.
+> 5. Minime: `error NOT_CONFIGURED` dice che l'utente non ha configurato quel plugin (nessun valore); nessun limite di
+>    lunghezza sulla ricerca e sul corpo (URL lunghi, nessun effetto sulla sicurezza).
+
+> **I quattro commit di backend**: **nessun reperto sopra la soglia.**
+> - **W-B32** (`77fbc8687`): l'esposizione si restringe.
+>   - Un report senza broker lo vedono solo chi l'ha caricato e gli admin.
+>   - I `broker_ids` chiesti si intersecano coi ruoli di chi chiama.
+>   - Ogni rotta del file passa da `_get_brim_file_with_access`; il parse e la cancellazione chiedono EDITOR.
+> - **P6** (`7ad5a8849`):
+>   - ogni update si confronta con la fotografia della riga presa prima del batch, quindi nessun aggiramento in due passi;
+>   - i controlli leggono la riga fusa, dopo `preload_and_authorize`;
+>   - `cashNonzero` ripete solo il tipo; non si salva niente a metà;
+>   - nota: una riga già fuori dalla tabella dei tipi tiene il suo difetto finché non cambiano cassa, quantità o tipo.
+>     Voluto.
+> - **H-17** (`8f7e086e9`):
+>   - il default self-hosted non cambia (0, cioè nessun limite, come prima); `managed` vale 500 MB;
+>   - un valore vuoto, negativo o illeggibile dà 503.
+>   - Nota per H: `profile_default` (`config/__init__.py:579`) restituisce il valore della tabella con `cast`, senza
+>     controllarne il tipo. Una voce `managed` tolta o messa a `None` vorrebbe dire «nessun limite». Può farlo solo il
+>     codice, e un test fissa i 500.
+> - **`465c27939`**:
+>   - l'elenco dei permessi confronta la funzione della rotta, non il percorso (`instance_block.py:92`);
+>   - l'esito vuole il biglietto (256 bit, solo in un header, `compare_digest`), con lo stesso 404 per ogni rifiuto;
+>   - nessun cambio di stato, salvo la rimozione di un biglietto scaduto.
+>   - Effetto collaterale buono: su un'istanza bloccata un anonimo riceve 404 invece del 401 del blocco, cioè un modo in
+>     meno per capire che è bloccata.
+
+> **Le icone dei plugin e A-25**: **nessun reperto sopra la soglia.**
+> - **Le icone** (`aaff7df04`):
+>   - l'icona è una costante nel sorgente del plugin: un URL di favicon remoto, o `generate_static_url`;
+>   - si mostra come `<img src>`, mai `{@html}`; l'icona della famiglia viene da una mappa statica di lucide;
+>   - nessuna lettura dal disco; sono le stesse costanti che pubblicano già `/assets/provider` e `/fx/providers`.
+>   - **Nota**: aprire Impostazioni › Plugin ora carica da soli i favicon di Borsa Italiana e justETF, quindi quei siti
+>     vedono l'IP di chi visita e sanno che l'istanza esiste.
+>     - `referrerpolicy="no-referrer"` limita il resto.
+>     - Le stesse icone si caricano già altrove, senza politica del referrer (`AssetSearchAutocomplete.svelte:456`).
+>     - La CSP ha `img-src … https:` ed è in sola segnalazione.
+>     - → domanda D-SEC3-1.
+> - **A-25** (`c85b7d8eb`):
+>   - il server decide da solo: `auth.py:389` confronta `request.email` con l'utente letto dal DB;
+>   - ogni cambio che non tocca solo le maiuscole chiede la password e la verifica, e il servizio ricontrolla
+>     (`user_service.py:499`);
+>   - le due pieghe coincidono: solo A–Z, da tutte e due le parti.
+>   - Note:
+>     1. **UX, per A.** Il client confronta le stringhe grezze, il server il valore normalizzato da `EmailStr`. Dove
+>        divergono (spazi, `Nome <indirizzo>`, NFC, IDNA, un indirizzo salvato e mai normalizzato), il server risponde
+>        `CURRENT_PASSWORD_REQUIRED` mentre il campo della password è nascosto. È un vicolo cieco, non un aggiramento.
+>     2. Teorica, P18 (decisione del developer): con la sola sessione si cambiano le maiuscole della parte locale senza
+>        password, e `email_verified_at` resta. Conta solo per un server di posta con la parte locale sensibile alle
+>        maiuscole (l'RFC 5321 lo permette, ma è raro). Nessuna azione.
+
+> **Domanda per il developer** (regola della notte):
+> - **D-SEC3-1**: nel profilo `managed` (UE), la UI deve continuare a caricare da sola le icone di terzi (i favicon di
+>   Borsa Italiana, justETF, Schwab… dai loro siti)?
+>   - Così l'IP di chi visita va a quei siti senza consenso: si pensi alla sentenza del LG München I del 2022 sui Google
+>     Fonts.
+>   - L'alternativa: le copie locali, come già per alcuni plugin con `generate_static_url` (M-7).
+>   - Il caricamento c'era già (e la decisione su Schwab resta); Impostazioni › Plugin (`aaff7df04`) ne aggiunge uno.
+
+> **Stato**: (1) e (2) fatti, (3) A7b aspetta lo SHA. Al coordinatore:
+> - per X, le note 1–4;
+> - per H, `profile_default`;
+> - per A, la UX di A-25;
+> - la domanda D-SEC3-1.
+
+> **Smistamento del coordinatore** (per tracciare dove sono andate le note):
+> - **R13-SEC2** (insieme al commit `d0be286e6`, 00:0x):
+>   - W-B58 (il reperto 1) e W-B59 (il precaricamento) a W, con priorità, prima di C-97b;
+>   - X-R35 e X-R36, con le regole della UI di P20, a X;
+>   - la nota di `totals.py` a B, perché il file è suo;
+>   - D-SEC2-1 fra le domande per il developer.
+> - **R13-SEC3** (00:19):
+>   - X-R37 (le mie quattro note per X), con **N61**: nessuna ricaduta su GitHub con `managed`;
+>   - H-27 (`profile_default`) ad H;
+>   - A-36 (la UX di A-25) ad A;
+>   - D-SEC3-1 fra le domande per il developer.
+>
+> Il piano resta fuori dal commit fino ad A7b (il coordinatore è d'accordo), che arriva con il suo SHA.
+
+> **Punto 3, A7b** (`f99edbf6b` per il codice, `8513677f1` per le docs; in dev `3e5336a0a`; `security-review` in
+> background, 00:25–00:33): **nessun reperto sopra la soglia.**
+>
+> Note:
+> 1. **A-31 chiuso solo in parte: MEDIUM 4/10, solo l'operatore.**
+>    - Il PATCH è chiuso (409 `PENDING_SETUP`, `users.py:190-194`).
+>    - Il `user activate` della CLI (`set_user_active`, `user_service.py:372-413`) non controlla `PENDING_SETUP` e revoca
+>      solo i link di verifica.
+>    - La disattivazione e `reset_password` lasciano vivo `admin_setup`, e `complete_admin_setup` guarda solo
+>      `is_active`.
+>    - Quindi un admin attivato da CLI e poi disattivato entro 72 ore torna in vita con il vecchio link, anche quello
+>      letto nel WARNING del log.
+>    - La direzione: revocare `admin_setup` a ogni attivazione, disattivazione e password impostata, oppure rifiutare
+>      `user activate` come fa il PATCH.
+> 2. **LOW**: `pending_admin_filter` (`registration_service.py:283-290`) conta come «in attesa» anche i link revocati o
+>    scaduti. Un admin disattivato apposta prende il badge «Waiting for setup» e il 409, e il suggerimento manda a
+>    `user setup-link`.
+> 3. **Solo `vite dev`**: `/setup` non è fra i percorsi pubblici di `hooks.server.ts`, quindi il frammento segue il
+>    redirect a `/?redirect=%2Fsetup`. Vale già per le altre pagine dei link; non si raggiunge in produzione.
+>
+> Sani:
+> - il token: letto solo dal frammento, tolto prima della chiamata, `no-referrer`, mai nel log né salvato;
+> - dopo il successo, `goto('/dashboard')` fisso;
+> - `isLinkPage` è un confronto esatto su `pathname`, e il redirect non porta il frammento;
+> - `pending_setup` solo in `AdminUserRead`, dietro `require_admin`;
+> - l'avviso della registrazione aperta non fa chiamate di rete;
+> - nessun `{@html}`; i controlli dei token invariati.
+>
+> **R13-SEC3 chiusa**: in nessuno dei tre punti c'è un reperto sopra la soglia. Le note di A7b vanno al coordinatore
+> (00:3x), con una domanda per E-9: la docstring di `update_profile` (`auth.py:381-382`, file di A) dice ancora «with the
+> new one masked».
+
+### E-9 — I limiti per casella e gli alias
+
+#### E-9.0 — Analisi ✅ (2026-10-17, 00:19–00:30)
+> **Il compito del coordinatore** (00:19), mentre aspetto A7b, nell'ordine analisi nel piano → rossi → codice, con un
+> checkpoint per lotto:
+> - **E-9**: «una chiave normalizzata solo per il budget, mai per l'indirizzo salvato: togliere il `+tag` ovunque, e i
+>   punti solo per i domini che li ignorano (gmail.com/googlemail.com)»;
+> - se un controllo sullo username nelle email è più efficace, glielo mostro qui.
+> - Dopo, **E-11**, quando A7b è entrato.
+> - E-7 ed E-8 restano nel backlog.
+>
+> Base: HEAD `6cadaf427`. Dev è a `3e5336a0a`, con A7b; non tocca i file dell'email.
+
+**Stato reale**
+- **Tre limiti per casella**, tutti con la chiave `strip().casefold()`:
+  - `FORGOT_BY_MAILBOX`, sull'indirizzo dell'account (`flows.py:270`);
+  - `EMAIL_CHANGE_NOTICES_BY_MAILBOX`, sul vecchio indirizzo (`flows.py:336`);
+  - `VERIFICATION_BY_MAILBOX`, sul destinatario (`verification.py:233`).
+
+  Ognuno vale 3 l'ora. I limiti per account (contati sui token nel DB), quelli per client (`client_rate_key` di H) e
+  `FORGOT_BY_IDENTIFIER` restano come sono.
+- **Lo username è testo libero** da 3 a 50 caratteri (`schemas/auth.py:30`), URL compresi. Il saluto
+  `common.greeting`, «Hello $username,», apre le email di reset, verifica, setup dell'admin, prova e avviso di cambio.
+  L'invito usa già `common.greeting_anonymous` («Hello,», «Ciao,», «Bonjour,», «Hola:»), tradotto nelle 4 lingue.
+  `$username` compare solo nel saluto.
+- **L'avviso di cambio** mostra anche `masked_address(new)` = `***@<dominio del nuovo indirizzo>`
+  (`messages.py:191-201`): un dominio che sceglie chi cambia l'indirizzo, e che non riceve niente.
+
+**Chi fa scrivere l'istanza a un indirizzo scelto da lui**
+
+| Email | Chi la provoca | A chi | Testo suo | Limiti di oggi |
+|---|---|---|---|---|
+| Verifica (registrazione, «rispedisci») | Un anonimo (registrazione aperta; con invito, una per invito) | L'indirizzo scritto alla registrazione | Lo username | 10/h per client (/64), 3/h per account, 3/h per casella, 50/h per istanza |
+| Password dimenticata | Un anonimo, per un account attivo: con la verifica spenta e la registrazione aperta, l'indirizzo è uno qualsiasi | L'indirizzo dell'account | Lo username | 10/15 min per client, 3/h per identificativo, 3/h per account, 3/h per casella, istanza |
+| Avviso di cambio | Ogni utente collegato: imposta l'indirizzo della vittima (senza verifica), poi lo cambia | Il vecchio indirizzo | Lo username e il dominio del nuovo indirizzo | 3/h per account, 3/h per casella, istanza |
+
+Gli invii dell'admin, il setup e la prova vengono da soggetti fidati.
+
+**Due abusi, che chiedono due cure diverse**
+- **(A) Inondare una casella sola.** Con `victim+1@…`, `victim+2@…` e i punti di Gmail ogni alias ha il suo budget,
+  quindi in una casella arriva fino al budget dell'istanza (50/h per processo). Lo stesso budget lo perdono gli altri
+  utenti, reset compresi.
+  - **Cura (a), la proposta del coordinatore**: la chiave normalizzata, solo per il budget.
+  - Effetto: al più 3/h per tipo e per casella, cioè 9/h sui tre tipi.
+- **(B) L'istanza come relay di spam.** Il testo di chi attacca (lo username, 50 caratteri, URL compresi) arriva a
+  **tante** caselle diverse, fino al budget dell'istanza. La normalizzazione non lo tocca.
+  - Nel cloud conta di più: le segnalazioni di spam colpiscono la chiave Brevo dell'istanza e il dominio
+    `mail.librefolio.eu`, che tutte le istanze condividono.
+  - **Cura (b), il «controllo sullo username nelle email»**: il saluto senza username, cioè il `greeting_anonymous` che
+    esiste già, nelle tre email che chi non è fidato può indirizzare: reset, verifica e avviso.
+  - Lo username resta dove chi scrive è fidato: il setup dell'admin (l'operatore) e la prova (l'admin a se stesso).
+  - Costo: il saluto perde il nome. Lo username si vede comunque sulle pagine dei link, dopo il clic: reset
+    (`TokenInspectResponse.username`) e verifica (la risposta della conferma, per riempire il login). Nessuna
+    traduzione nuova.
+  - **Validare lo username alla registrazione** sarebbe meno efficace:
+    - è codice di A, una scelta di prodotto, e tocca gli utenti esistenti;
+    - un alfabeto permesso scrive comunque dei domini (`www-pills-com`, o `cheap.pills` con i punti).
+  - Il controllo che funziona è **non mettere lo username nelle email che un estraneo può indirizzare**.
+- **(c) Il resto nell'avviso**: il dominio del nuovo indirizzo esce per intero. È un nome host scelto liberamente, fino a
+  253 caratteri, e i client lo rendono un link.
+  - Opzione: una maschera più stretta solo per l'avviso, per esempio `***@***.com` (solo il TLD).
+  - `masked_address` resta com'è per gli altri usi: i log e il rifiuto `RECIPIENT_REFUSED`.
+  - Con (b)+(c) vale un invariante semplice da provare: **nessuna email che un estraneo può indirizzare porta testo
+    scelto da lui**.
+
+**Proposta**: (a) subito, come chiesto. (b) e (c) cambiano ciò che l'utente vede nelle email: le consiglio tutte e due,
+nello stesso lotto se arriva il via, altrimenti in un lotto a sé, E-9b.
+
+**Disegno di (a)**
+- `delivery.mailbox_budget_key(address) -> str`, nel modulo del budget d'istanza, che `flows` e `verification` importano
+  già:
+  1. `strip().casefold()`;
+  2. divido all'ultima `@`;
+  3. la parte locale si taglia al primo `+`, se resta non vuota;
+  4. `googlemail.com` diventa `gmail.com`;
+  5. per `gmail.com` tolgo tutti i punti della parte locale.
+- La chiave non si salva, non si scrive nel log e non si spedisce: l'email va all'indirizzo salvato com'è, alias
+  compreso.
+- I tre punti di chiamata la usano; commenti e docstring dicono «aliases folded».
+- `FORGOT_BY_IDENTIFIER` resta sul testo scritto: limita chi chiede. È il limite per casella che protegge chi riceve.
+
+**Resti fuori da E-9**, da annotare:
+1. I domini catch-all e gli indirizzi a sottodominio di Fastmail (`x@victim.fastmail.com`): ogni parte locale è una
+   chiave nuova. Un limite per dominio colpirebbe i grandi provider condivisi; resta il budget d'istanza.
+2. Prosciugare il budget d'istanza con tante caselle diverse da tanti IP blocca i reset di tutti: un DoS che la
+   registrazione aperta espone. Le cure non sono di E: captcha o proof-of-work, limiti alla registrazione (A8/H).
+   → Nota per il coordinatore.
+3. Con N worker i budget sono N volte; è già documentato.
+
+**Rossi** (`test-author`, solo nei file esistenti, nessuna riga nuova nel catalogo)
+
+Per (a):
+- `services email-delivery`, da EMD-050: la tabella della chiave:
+  - i punti di Gmail, e `googlemail.com`;
+  - il `+tag` su ogni dominio, e la base vuota;
+  - i punti che restano fuori da Gmail;
+  - `casefold`, e un dominio IDN intatto.
+- `services email-flows`, da EMF-060: per «password dimenticata» e per l'avviso:
+  - tre alias passano, il quarto è soppresso in silenzio, con la sua riga `info`;
+  - l'email va all'indirizzo salvato con l'alias (`rcpt_tos`);
+  - due caselle vere diverse non condividono il budget.
+- `services email-verification`, da EMV-049: lo stesso per la verifica, dove il quarto riceve
+  `EmailRateLimitedError`.
+
+Se arriva il via a (b) e (c):
+- `services email-messages`, da EMM-039, e le attese di EMM-035:
+  - reset, verifica e avviso salutano senza username, e non contengono mai uno username preparato, né nell'oggetto né
+    nel testo né nell'HTML;
+  - nell'avviso il dominio preparato non compare;
+  - setup e prova tengono lo username.
+
+**Prove**
+- `services email-delivery`, `services email-flows`, `services email-verification`;
+- `services email-messages` con (b) e (c);
+- `api email`, `api email-verification`, `api email-change-notice`;
+- `ruff` e `black`; `mkdocs build` stretto e `check-links`.
+
+**Docs** (`docs-writer`)
+- `admin/email.en.md`: le righe «in capitals or not» (:397, :498, :526) e l'elenco di sicurezza (:684-690);
+- `developer/backend/email.md`: le chiavi «stripped and case-folded» (:595, :634, :768, :848), la tabella Testing e il
+  limite noto E-9 (:1332);
+- con (b) e (c), anche la tabella dei messaggi (:300-305) e la descrizione dell'avviso (:636).
+
+**Il resto**
+- devWiki `domains/email.md`: E-9 chiuso.
+- Backlog: E-9 ✅, e una riga per il resto 1.
+- CHANGELOG: il testo va al coordinatore.
+
+**Peso**: (a) piccolo; (b) e (c) piccoli, il grosso è nei test dei messaggi.
+
+#### E-9.1 — Decisione N62 e rossi ⏳ (2026-10-17, 00:31–)
+> **Il via del coordinatore** (00:3x): **(a), (b) e (c) nello stesso lotto**, decisione notturna **N62**, da rivedere
+> col developer.
+> - Le ragioni sono sue: il saluto anonimo esiste già nelle 4 lingue; la maschera vale solo per l'avviso; l'invariante
+>   protegge la chiave Brevo e `mail.librefolio.eu`, condivisi dal cloud.
+> - CHANGELOG: una riga 🔒 per tutto il lotto, che dice cosa cambia per chi legge e mai come si sfrutta.
+> - Catch-all e Fastmail vanno nel backlog come riga bassa.
+> - Il DoS sul budget d'istanza passa al developer, come domanda per il cloud.
+>
+> **⚠️ Fuori pista: la mia proposta (c) era sbagliata.** Senza un controllo DNS anche l'ultima etichetta è testo libero
+> (`x@y.buy-cheap-pills-now`, fino a 63 caratteri), quindi la maschera al TLD rompeva l'invariante. La correzione,
+> detta al coordinatore, dentro N62:
+> - **l'avviso non mostra più il nuovo indirizzo**, in nessuna forma;
+> - `intro` perde `$address` nelle 4 lingue (una frase ciascuna, scritta da me);
+> - `masked_address` sparisce: l'avviso era il suo unico uso. La redazione dei rifiuti SMTP in `delivery.py:158`
+>   resta.
+>
+> **Il contratto della cura**
+> - (a) `delivery.mailbox_budget_key()` (E-9.0) nei tre punti di chiamata.
+> - (b) `build_password_reset` e `build_verification` perdono `username`; salutano con `greeting_anonymous`.
+> - (c) `build_email_changed` perde `username` e `new_address`; `masked_address` viene tolto.
+> - `build_admin_setup` e `build_test_message` restano col nome. Il loro mittente è fidato: l'operatore, o l'admin
+>   che scrive a se stesso.
+> - Le chiamate da adeguare: `flows.py:181` (il reset spedito dall'admin), `:286` (il «dimenticata»), `:343`
+>   (l'avviso), `verification.py:264`.
+> - Con le firme nuove, i tre costruttori **non possono nemmeno ricevere** testo di un estraneo.
+>
+> **Rossi**: `test-author` in background (00:30, prima solo (a), poi esteso a (b) e (c)).
+> - (a): EMD-050…, EMF-060…, EMV-049…;
+> - (b) e (c): EMM-039…, più le riscritture di EMM-035…038 e delle asserzioni ECN e simili che fissano lo username o
+>   l'indirizzo mascherato.
+>
+> Li faccio girare io, a carico sotto 50.
+>
+> **Rossi scritti** (`test-author`, 00:31–00:56): sette file. L'agente ha eseguito solo `py_compile`, poi `ruff` e
+> `black` puliti a carico 40.
+> - **(a)**:
+>   - EMD-050 (15 righe) ed EMD-051;
+>   - EMF-060 («dimenticata») ed EMF-061 (avviso), che contano sotto `zqvictim@gmail.com`; EMF-062 è una guardia (due
+>     caselle vere di outlook);
+>   - EMV-049 (alias Gmail con l'email della registrazione) ed EMV-050 (`+tag` su example.com con «rispedisci»).
+> - **(b) e (c)**:
+>   - EMM-039 (3 tipi × 4 lingue: la firma senza `username`, il saluto anonimo, niente dello username preparato) ed
+>     EMM-041 (i cataloghi); EMM-040 è una guardia (setup e prova salutano col nome);
+>   - riscritti, con gli stessi ID: EMM-005, 010, 033…038; EMF-017, 025, 044, 045; EMV-012 e `_expected`; EMA-031 e
+>     038; EVA-005; ECN-001, che ora controlla nel messaggio ricevuto che non ci siano né il nuovo indirizzo né il suo
+>     dominio né lo username.
+> - Fuori dal suo perimetro, ha segnalato `scripts/test_runner/_backend_api.py:1131`: la descrizione di ECN dice «the new
+>   one masked», e il catalogo è condiviso, quindi chiedo al coordinatore. Ha segnalato anche
+>   `developer/backend/email.md:55`, `:315` e `:1266` per il docs-writer.
+>
+> **Rossi visti** ✅ (00:54–01:05, nel mio corridoio, una suite alla volta, carico 48–82 con l'attesa;
+> `files/tools/e9_suites.sh reds …`; log in `files/logs/e9_reds_*.log`):
+>
+> | Suite | Falliti / passati |
+> |---|---|
+> | `services email-delivery` | 16 / 108 |
+> | `services email-messages` | 143 / 186 |
+> | `services email-flows` | 13 / 136 |
+> | `services email-verification` | 8 / 119 |
+> | `api email` | 3 / 155 |
+> | `api email-verification` | 2 / 47 |
+> | `api email-change-notice` | 2 / 12 |
+>
+> **Ogni rosso fallisce per la ragione giusta.** Ho controllato le righe `E` dei log:
+> - «`delivery.mailbox_budget_key` does not exist»;
+> - «the 4th alias of one mailbox got its own budget», per reset, avviso e verifica;
+> - «a reset email greets nobody by name … (N62)»;
+> - «the notice shows ['example.org', 'zq_alice']»;
+> - «build_* still takes a username»;
+> - «email_changed.intro still has a place for the new address»;
+> - i `TypeError` delle firme nuove.
+>
+> Porta 6188 libera.
+
+
+#### E-9.2 — Cura, verdi, docs ✅ (2026-10-17, 01:05–01:33)
+> **Cura** (01:05, `files/e9/e9_cure.py --apply`: 23 modifiche in 9 file, dry run pulito prima):
+> - `delivery.mailbox_budget_key()` nei tre punti di chiamata;
+> - le tre firme senza `username` né `new_address`, con il saluto `greeting_anonymous`;
+> - `masked_address` tolto, e `intro` di `email_changed` senza `$address` nelle 4 lingue;
+> - commenti e docstring di `flows.py` e `verification.py`;
+> - la docstring di `update_profile` in `auth.py:381-382`, file di A, col via del coordinatore («which shows nothing of
+>   the new one (N62)»).
+>
+> **Col via del coordinatore, nel catalogo condiviso**: `scripts/test_runner/_backend_api.py`, la `desc` di
+> `email-change-notice` (:1131) e il `print_info` della stessa funzione (:787), che diceva la stessa cosa e me l'ha
+> segnalato il historian.
+>
+> **X-R35** (coordinatore, 01:2x, entrato in dev `67668f5ce`: `env_url` rifiuta lo user info). La docstring di
+> `links._usable_base` diceva che `public_url()` «controlla solo lo schema»: ora elenca ciò che `env_url` rifiuta già
+> (spazi, schema, host, e da X-R35 lo user info) e ciò che il controllo aggiunge (`?`, `#`, una porta non valida).
+> - Il controllo delle credenziali **resta, e la docstring lo dice**: è una seconda guardia, perché la base apre ogni
+>   link di ogni email.
+> - Toglierlo ora romperebbe i test dei link sul mio ramo, che non ha ancora X-R35.
+> - `_usable_base` ha un solo chiamante, `links_state()`, che legge `public_url()`.
+>
+> **⚠️ Fuori pista**: un `git fetch` lanciato per abitudine in una lettura su dev restava appeso. L'ho fermato: non
+> serve, `dev_release2` è locale e lo aggiorna il coordinatore. Nessun ref toccato.
+>
+> **Verdi** (01:06–01:27, `files/tools/e9_checks.sh`, nel mio corridoio, uno alla volta, carico 48–87 con l'attesa;
+> log `files/logs/e9_greens_*`):
+> - `ruff` e `black` sui 12 file: puliti;
+> - `services`:
+>   - `email-delivery` 124;
+>   - `email-messages` 329;
+>   - `email-flows` 149;
+>   - `email-verification` 127;
+>   - `email-verification-hooks` 32;
+>   - `email-links` 74;
+>   - `email-checks` 87;
+>   - `email-config` 144;
+>   - `email-case` 67;
+> - `api`:
+>   - `email` 158;
+>   - `email-verification` 49;
+>   - `email-verification-hooks` 16;
+>   - `email-change-notice` 14;
+>   - `profile` 28;
+> - `schemas openapi-client-text` 78;
+> - `api sync` (il client generato è ignorato da git);
+> - `lint --dead-code`: 49 reperti vecchi, nessuno nei file di E;
+> - `git diff --check` pulito; porta 6188 libera.
+>
+> **Docs** (`docs-writer`, 01:05–01:17):
+> - `admin/email.en.md`:
+>   - il paragrafo «One mailbox, however its address is written»;
+>   - le righe dei limiti;
+>   - l'avviso, «Nothing of the new address, and no username»;
+>   - la nota di sicurezza «No stranger's words in an email».
+> - `developer/backend/email.md`:
+>   - le sezioni nuove «The Key of a Mailbox» (`#mailbox-key`) e «No Stranger's Text» (`#no-strangers-text`);
+>   - la tabella dei tipi con la colonna Greeting;
+>   - i passi del flusso, la tabella «Testing» e i limiti noti (E-9 risolto, resta E-12).
+> - `developer/architecture/security.md`: la sola frase dell'avviso (:215).
+> - `user/settings/profile.en.md:42`: la riga è mia (E4b, `dfc7847fb`). Nessun timbro di traduzione: le versioni
+>   IT/FR/ES non hanno quel punto, quindi il debito è vero e resta.
+> - Il docs-writer ha corretto il brief in due punti:
+>   - la pagina di verifica mette lo username nel messaggio di successo del login, non nel campo;
+>   - un valore senza `@` viene anche spogliato degli spazi.
+>
+> **devWiki** (`project-historian`, 01:05–01:11):
+> - `domains/email.md`: l'avviso, i limiti per casella, N62, E-9 risolto con E-12 come resto, la domanda del cloud sul
+>   budget;
+> - una riga in `log.md`.
+>
+> **Prove delle docs** (01:26–01:33, `files/tools/e9_docs.sh`):
+> - `ruff` e `black` su `_backend_api.py` e `links.py`: puliti;
+> - `services email-links` di nuovo: 74;
+> - `mkdocs build` stretto: 0 WARNING, e gli URL relativi del sito risolvono tutti;
+> - `check-links`: 97 validi;
+> - `check_source_paths.py`: i 5 percorsi mancanti di sempre (le cartelle di coverage), nessuno in `email.md`.
+>
+> **Backlog**: E-9 ✅ (N62, 17/10; lo SHA dopo il commit) ed E-12 nuovo, basso (catch-all e Fastmail).
+>
+> **Conflitti previsti** con dev `67668f5ce`:
+> - `auth.py`: dev alle righe 294-297 (A7b), io a 381-382;
+> - `security.md`: dev a 170, 643, 808 e 995, io a 215;
+> - `BACKLOG`: gli hunk di dev sono fuori dalla sezione E;
+> - `devWiki/log.md`: due aggiunte in coda, da risolvere per unione.
+
+> **E-9 committato** (coordinatore, 01:34):
+> - `3dd23eaa4` (fix: codice, test, `auth.py`, `_backend_api.py` col `print_info`, approvato), `bb392de35` (docs),
+>   `7fc549fea` (journal);
+> - base aggiornata: merge di dev `b36e3873f`, con A7b e X-R35, pulito; HEAD `169a9d798`.
+>
+> **Validazione combinata** ✅ (01:35–01:50, `files/tools/e9_combined.sh`, carico sotto 50, una alla volta):
+> - `services email-*`: 124, 329, 149, 127, 32, 74, 87, 144, 67;
+> - `api`: `email` 158, `email-verification` 49, `email-verification-hooks` 16, `email-change-notice` 14, `profile` 28,
+>   `auth` 95;
+> - `schemas openapi-client-text` 78; `api sync`;
+> - `mkdocs build` stretto con 0 avvisi; `check-links` 97;
+> - worktree pulito, porta libera.
+>
+> **E-9 entrato in dev** (`49c07a95a`; la riga 🔒 del CHANGELOG in `3a5ff5194`). `_usable_base` resta com'è (OK del
+> coordinatore).
+
+### E-11 — «Send the link again» su un'istanza bloccata
+
+#### E-11.0 — Analisi ✅ (2026-10-17, 01:15–01:25, in sola lettura su `dev_release2` `3e5336a0a`)
+> **Il compito del coordinatore** (00:19): E-11 «dopo l'ingresso di A7b, perché A-13 cambia come `zodios-client` legge
+> il 401 di un'istanza bloccata. Prima verificare se A7b lo risolve già, poi chiuderlo o correggerlo sopra».
+
+**A7b non lo risolve**
+- **A-13 tocca solo il redirect.** In `zodios-client.ts`, `LINK_PAGES` tiene fuori dal redirect al login, su un 401,
+  solo `/setup`, `/invite`, `/reset-password` e `/verify-email`. «Send the link again» sta in `VerificationNotice`, sulla
+  pagina `/`, dove l'intercettore non ha mai rediretto.
+- **Il lettore è invariato.** `readResendFailure()` (`features/email/verificationApi.ts:48-53`) legge ancora ogni 401
+  come `INVALID_CREDENTIALS`.
+- **Il rifiuto anonimo del blocco** resta il 401 di `get_current_user`, senza codice (`instance_block.py:18-31` in dev).
+  La proposta ad H, un codice suo, non è entrata.
+- **A7b porta la chiave `auth.instanceBlocked`**: «This instance is blocked by its hosting provider: try again once it
+  is unblocked.». `registrationErrors.ts` legge con lei il 401 di `/auth/register`, con lo stesso ragionamento di E-10:
+  una rotta pubblica fuori dall'elenco dei permessi risponde 401 solo col blocco.
+
+**Perché «rispedisci» è diverso**: la sua rotta risponde 401 anche da sé, per le credenziali sbagliate
+(`api/v1/email.py:207`, `detail="Invalid credentials"`). Oggi tutti e due i 401 sono stringhe nude, e li distingue solo
+il testo inglese.
+
+**Proposta, tutta nei file di E**
+1. **Backend**: il 401 della rotta diventa strutturato come gli altri rifiuti di E,
+   `detail={"error_code": "INVALID_CREDENTIALS", "message": "Invalid credentials"}`. Lo stato non cambia.
+2. **Frontend**, `readResendFailure()`:
+   - un 401 con `error_code === 'INVALID_CREDENTIALS'` → `INVALID_CREDENTIALS`;
+   - **ogni altro 401 → `INSTANCE_BLOCKED`**: la rotta è fuori da `ALLOWED_WHEN_BLOCKED`, quindi l'unico altro 401
+     possibile è il blocco, l'invariante scritto in `instance_block.py`;
+   - un 423 che `isInstanceBlockedError()` riconosce → `INSTANCE_BLOCKED`, come in E-10.
+3. **L'avviso** mostra `auth.instanceBlocked`, la chiave di A7b: il testo ha una casa sola, nessuna chiave nuova. Il
+   pulsante resta, perché dopo lo sblocco il clic funziona.
+4. **Il resto**:
+   - la descrizione della rotta;
+   - EVA, che oggi legge la stringa;
+   - i Vitest di `verificationApi` e dell'avviso;
+   - la doc developer, «Testing» e il flusso «resend».
+- **Alternativa, di H**: un codice nel rifiuto anonimo del blocco. Sarebbe più pulita per tutte le rotte, ma la cura di
+  E non ne ha bisogno e resta giusta anche se il codice arriva dopo.
+
+**Serve**: un aggiornamento di base con A7b prima del codice, per `auth.instanceBlocked`; il mio ramo è a `6cadaf427`.
+
+**Peso**: minimo. Rossi (`test-author`):
+- EVA: il corpo del 401 è strutturato;
+- VFA: il 401 con codice, il 401 nudo e il 423;
+- l'avviso mostra la chiave del blocco.
+
+**Prove**:
+- `api email-verification`;
+- i Vitest di `features/email`;
+- `front check`, `i18n check`, `api sync`;
+- `mkdocs build` stretto.
+
+#### E-11.1 — Rossi ✅ (2026-10-17, 01:5x–02:07)
+> **Il via del coordinatore** (01:5x), sulla mia base `169a9d798`, che ha dentro A7b. Il `desc` di `email-verification`
+> nel catalogo condiviso (`_backend_api.py:1109`) va in questo lotto, col suo via; la nota su `instance_block.py`, che
+> non nomina `resend`, va ad H.
+>
+> **Rossi scritti** (`test-author`, 01:53–02:05; l'agente ha eseguito solo `py_compile`, `ruff`, `black` e `prettier`,
+> tutti puliti):
+> - `test_email_verification_api.py`:
+>   - EVA-006 riscritto: il 401 codificato, uguale per un account sconosciuto e una password sbagliata;
+>   - EVA-014: le due righe riscritte;
+>   - **EVA-017** nuovo, una guardia: `confirm` e `resend` fuori da `ALLOWED_WHEN_BLOCKED`, con due controlli contro un
+>     verde a vuoto;
+>   - il contratto 6 dice che il modulo non monta la dipendenza del blocco.
+> - `verificationApi.test.ts`:
+>   - VFA-08 riscritto: il 401 codificato dà `INVALID_CREDENTIALS`;
+>   - **VFA-23**: ogni altro 401 dà `INSTANCE_BLOCKED`, su 12 corpi × 2 tipi d'errore;
+>   - **VFA-24**: il 423 `instance_blocked`;
+>   - **VFA-25**, una guardia: un 423 senza il codice, e il corpo del blocco su 403 o 500, danno `UNKNOWN`;
+>   - **VFA-26**: col client vero.
+> - `emailText.test.ts`: la riga `INSTANCE_BLOCKED` → `auth.instanceBlocked` (ETX-09 ed ETX-10).
+> - `VerificationNotice.test.ts`:
+>   - VNT-05 e VNT-06 usano il 401 codificato;
+>   - **VNT-08**: un 401 nudo mostra `auth.instanceBlocked`, l'evento porta `INSTANCE_BLOCKED` e il pulsante resta
+>     acceso.
+>
+> **Rossi visti** ✅ (02:06–02:07, `files/tools/e11_checks.sh reds`):
+> - `api email-verification`: **6 falliti** e 44 passati (EVA-006 ×4, EVA-014 ×2), perché la rotta risponde ancora
+>   con la stringa;
+> - Vitest sui 3 file: **32 falliti** e 427 passati (VFA-23 ×24, VFA-24 ×4, VFA-26 ×2, ETX-09, VNT-08).
+>
+> I 38 previsti dall'agente, tutti per la ragione giusta: il lettore dà `INVALID_CREDENTIALS` a ogni 401 e `UNKNOWN`
+> al 423, e il testo non ha il caso `INSTANCE_BLOCKED`.
+
+#### E-11.2 — Cura e docs ✅ (2026-10-17, 02:07–02:2x)
+> **Cura** (02:07, `files/e9/e11_cure.py --apply`, 5 modifiche in 3 file, dry run pulito prima):
+> - `api/v1/email.py`: il 401 della rotta diventa `{"error_code": "INVALID_CREDENTIALS", "message": "Invalid
+>   credentials"}`. La docstring lo dice, e dice che ogni altro 401 di questa rotta pubblica è del blocco (E-11).
+> - `features/email/verificationApi.ts`, `readResendFailure()`:
+>   - un 401 col codice dà `INVALID_CREDENTIALS`;
+>   - ogni altro 401, o il 423 che `isInstanceBlockedError()` riconosce, dà `INSTANCE_BLOCKED`, come oggetto
+>     `{errorCode}` esatto, senza `retryAfter`, come chiedono VFA-08 e VFA-23.
+> - `features/email/emailText.ts`: `INSTANCE_BLOCKED` → `auth.instanceBlocked`, la chiave di A7b; nessuna chiave nuova.
+> - Nessun `.svelte` toccato.
+>
+> **Col via del coordinatore**: il `desc` di `email-verification` nel catalogo condiviso
+> (`scripts/test_runner/_backend_api.py:1109`): «401 INVALID_CREDENTIALS (coded: any other 401 is the block's) and 403
+> byte for byte the login's».
+>
+> **Docs** (`docs-writer`, 02:12–02:20):
+> - `developer/backend/email.md`:
+>   - la tabella delle risposte di «resend», col 401 codificato e un paragrafo sul 401 del blocco;
+>   - la sezione frontend: `readResendFailure()`, `resendFailureMessage()` e `VerificationNotice` su un'istanza
+>     bloccata;
+>   - «Testing»: EVA-001…017, VFA-01…26, VNT-01…08.
+> - `admin/email.en.md`: il punto dell'istanza bloccata dice cosa mostra «Send the link again».
+> - Corretti per strada, perché la doc contraddiceva il codice:
+>   - la riga 502 di «resend» citava `smtp_code`, che la rotta non manda;
+>   - la pagina admin dava un testo vecchio per la registrazione su un'istanza bloccata, mentre il codice mostra
+>     `auth.instanceBlocked`, come dopo A-13.
+> - Fuori dai miei file, per H: la riga «Public routes outside the list» di `security.md` (Instance Block) non nomina
+>   le rotte email, come la docstring di `instance_block.py`.
+
+#### E-11.3 — Verdi ✅ (2026-10-17, 02:08–02:37)
+> **Verdi** (`files/tools/e11_checks.sh greens`, una alla volta, carico sotto 50; dalle 02:11 alle 02:29 in pausa per
+> il freeze della galleria, a carico 109–184):
+> - `api email-verification` 50; `api email` 158;
+> - Vitest sui 3 file 459, e su tutto `features/email` 837 in 12 file;
+> - `ruff`, `black` e `prettier` puliti;
+> - `api sync`; `schemas openapi-client-text` 78;
+> - `i18n check` stretto, 4938 chiavi;
+> - `front check`: 0 errori e 0 avvisi;
+> - `git diff --check` pulito, porta 6188 libera.
+>
+> **Docs** (`files/tools/e11_docs.sh`, 02:37–02:49, dopo l'attesa del carico): `mkdocs build` stretto con 0
+> WARNING; `check-links` 97 validi; `git diff --check` pulito; porta 6188 libera.
+>
+> **Checkpoint mandato al coordinatore** (02:5x). FROZEN.

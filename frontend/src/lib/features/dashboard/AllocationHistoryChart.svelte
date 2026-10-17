@@ -38,8 +38,7 @@
     import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {withHexAlpha} from '$lib/theme/colorAlpha';
-    import {themed} from '$lib/theme/themePair';
-    import {ALLOCATION_CHART_COLORS, CHART_NEUTRALS, CHART_TOOLTIP_COLORS} from '$lib/theme/chartTheme';
+    import {chartNeutrals} from '$lib/theme/chartTheme';
     import {categoryColor, isUnclassifiedCountry, KEYLESS_SEQUENCE, sequenceColor} from '$lib/theme/chartCategories';
     import {shadePoles} from '$lib/theme/chartShades';
     import {chartRoles} from '$lib/theme/roleColors';
@@ -638,10 +637,11 @@
     }
 
     function buildChartOption(dataset: AggregatedAllocationDataset, isDark: boolean, skipAnimation: boolean): echarts.EChartsOption {
-        const textColor = themed(CHART_NEUTRALS.dashboard.text, isDark);
-        const gridColor = themed(CHART_NEUTRALS.dashboard.gridLine, isDark);
-        const tooltipBg = themed(CHART_TOOLTIP_COLORS.box.background, isDark);
-        const tooltipBorder = themed(CHART_TOOLTIP_COLORS.box.border, isDark);
+        const neutrals = chartNeutrals(isDark, chartContainer);
+        const textColor = neutrals.dashboard.text;
+        const gridColor = neutrals.dashboard.gridLine;
+        const tooltipBg = neutrals.tooltip.box.background;
+        const tooltipBorder = neutrals.tooltip.box.border;
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: chartContainer?.clientWidth ?? 0,
             values: dataset.dates,
@@ -705,8 +705,8 @@
                           position: 'inside',
                           formatter: () => emoji,
                           fontSize: 14,
-                          color: themed(ALLOCATION_CHART_COLORS.historyAreaLabel, isDark),
-                          textShadowColor: themed(ALLOCATION_CHART_COLORS.historyAreaLabelShadow, isDark),
+                          color: neutrals.allocation.historyAreaLabel,
+                          textShadowColor: neutrals.allocation.historyAreaLabelShadow,
                           textShadowBlur: 2,
                       }
                     : {show: false},
@@ -733,18 +733,18 @@
                 // has no `overflow-hidden` ancestor around the chart itself.
                 confine: true,
                 position: tooltipPositionSide,
-                axisPointer: {type: 'line'},
+                axisPointer: {type: 'line', lineStyle: {color: neutrals.axisPointer.line}},
                 backgroundColor: tooltipBg,
                 borderColor: tooltipBorder,
                 borderWidth: 1,
-                textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark), fontSize: 12},
+                textStyle: {color: neutrals.tooltip.box.text, fontSize: 12},
                 formatter: (params: unknown) => {
                     const items = Array.isArray(params) ? params : [params];
                     const idx = (items[0] as {dataIndex?: number} | undefined)?.dataIndex ?? 0;
                     const row = dataset.rows[idx];
                     if (!row) return '';
 
-                    const theme = buildTooltipTheme(isDark);
+                    const theme = buildTooltipTheme(isDark, chartContainer);
                     const header = buildAllocationTooltipHeader(row, theme.mutedColor);
                     const remainingLabel = $_('common.remaining') || 'Remaining';
                     if (dimension === 'type') return header + buildFamilyTooltipRows(styling, dataset, idx, theme, remainingLabel);
@@ -784,7 +784,7 @@
                 width: '90%',
                 pageTextStyle: {color: textColor},
                 pageIconColor: textColor,
-                pageIconInactiveColor: themed(CHART_NEUTRALS.legendPageIconInactive, isDark),
+                pageIconInactiveColor: neutrals.legendPageIconInactive,
             },
             dataZoom: buildDataZoomOption(dataset, logicalRange),
             xAxis: {

@@ -573,15 +573,31 @@ def get_settings() -> Settings:
     return settings
 
 
+class ProfileDefaultError(TypeError):
+    """A profile's value in ``ENVIRONMENT_PROFILE_DEFAULTS`` that is not of the type of its reader's own default (H-27).
+
+    The table is code, so such a value is a bug: the reader stops on it rather than use it. Read as it is, a ``None``
+    upload limit would mean no limit at all.
+    """
+
+
 def profile_default[T](name: str, fallback: T) -> T:
     """What the active profile gives ``name``, a variable a section module reads from the environment, else ``fallback``.
 
     ``ENVIRONMENT_PROFILE_DEFAULTS`` holds the profile's values; ``fallback`` is the code's own default, the one a
     self-hosted install gets. The section module asks only while its variable is unset, and keeps its own rules for a
-    blank or an invalid value. The profile is read at each call, normalised by ``Settings``.
+    blank or an invalid value. The profile is read at each call, normalised by ``Settings``. A profile's value is of the
+    exact type of ``fallback`` (``500`` for ``0``; never ``None``, ``"500"``, ``500.0`` nor ``True``): any other raises
+    ``ProfileDefaultError``.
     """
-    values = ENVIRONMENT_PROFILE_DEFAULTS.get(get_settings().LIBREFOLIO_PROFILE, {})
-    return cast(T, values[name]) if name in values else fallback
+    profile = get_settings().LIBREFOLIO_PROFILE
+    values = ENVIRONMENT_PROFILE_DEFAULTS.get(profile, {})
+    if name not in values:
+        return fallback
+    value = values[name]
+    if type(value) is not type(fallback):
+        raise ProfileDefaultError(f"{name}: the {profile} profile gives {value!r}, a {type(value).__name__}, where its reader expects a {type(fallback).__name__} like its own default {fallback!r}: ENVIRONMENT_PROFILE_DEFAULTS is wrong")
+    return cast(T, value)
 
 
 def ensure_data_dirs() -> None:

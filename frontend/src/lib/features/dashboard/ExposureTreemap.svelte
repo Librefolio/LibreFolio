@@ -29,9 +29,9 @@
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
-    import {CHART_GAIN_LOSS, TREEMAP_COLORS} from '$lib/theme/chartTheme';
+    import {CHART_GAIN_LOSS, chartNeutrals, TREEMAP_COLORS} from '$lib/theme/chartTheme';
     import {treemapPnlColor} from '$lib/theme/chartColorScales';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     interface Holding {
         asset_id: number;
@@ -95,6 +95,7 @@
 
     onMount(() => {
         const observer = onThemeClassChange(() => renderChart());
+        const chartColors = onChartColorsChange(() => renderChart());
         windowResizeHandler = () => updateChartSize();
         window.addEventListener('resize', windowResizeHandler);
         resizeObserver = new ResizeObserver(() => updateChartSize());
@@ -110,6 +111,7 @@
         })();
         return () => {
             observer.disconnect();
+            chartColors.disconnect();
             cleanup();
         };
     });
@@ -544,6 +546,7 @@
     function renderChart() {
         if (!chartContainer || chartWidth <= 0 || chartHeight <= 0) return;
         const isDark = isDarkTheme();
+        const neutrals = chartNeutrals(isDark, chartContainer);
         applyTouchScrollHint();
 
         if (!chartInstance) {
@@ -567,7 +570,7 @@
             chartContainer.addEventListener('touchcancel', handleTouchPanEnd, {passive: true});
         }
 
-        const theme = buildTooltipTheme(isDark);
+        const theme = buildTooltipTheme(isDark, chartContainer);
         const data = buildTreeData();
         const upperLabelRich = buildUpperLabelRich(data);
 
@@ -658,9 +661,9 @@
                             height: 20,
                             formatter: formatUpperLabel,
                             rich: upperLabelRich,
-                            color: themed(TREEMAP_COLORS.groupLabel, isDark),
+                            color: neutrals.treemap.groupLabel,
                             fontSize: 10,
-                            backgroundColor: themed(TREEMAP_COLORS.groupLabelBackground, isDark),
+                            backgroundColor: neutrals.treemap.groupLabelBackground,
                         },
                         label: {
                             show: true,
@@ -670,7 +673,7 @@
                             textShadowColor: TREEMAP_COLORS.tileLabelShadow,
                             textShadowBlur: 2,
                         },
-                        levels: [{itemStyle: {borderWidth: 2, borderColor: themed(TREEMAP_COLORS.groupBorder, isDark), gapWidth: 2}}, {itemStyle: {borderWidth: 1, borderColor: themed(TREEMAP_COLORS.tileBorder, isDark), gapWidth: 1}}, {itemStyle: {borderWidth: 0, gapWidth: 1}}],
+                        levels: [{itemStyle: {borderWidth: 2, borderColor: neutrals.treemap.groupBorder, gapWidth: 2}}, {itemStyle: {borderWidth: 1, borderColor: neutrals.treemap.tileBorder, gapWidth: 1}}, {itemStyle: {borderWidth: 0, gapWidth: 1}}],
                     },
                 ],
             },
