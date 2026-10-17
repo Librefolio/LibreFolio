@@ -5473,6 +5473,10 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   passare. Cura: il conteggio delle righe illeggibili del broker all'inizio del giro e in `get_balances_at_end_of`, rifiuto
   `ledgerUnreadable {brokerId, count}` (4 lingue, il messaggio manda all'amministratore: la lista non le mostra). Primo dei tre, dopo la
   metà del batch di W-B69, con l'aiuto di query condiviso con quello di MF. Dettagli: piano 04, «W-B71, W-B72, W-B74 — analisi».
+  ✅ 17/10: `count_unreadable_rows()` (nuovo `unreadable_rows.py`, condiviso col conteggio dell'insieme di W-B69); il giro di un broker
+  con righe illeggibili rifiutato con `ledgerUnreadable {brokerId, count}` (indice −1, 4 lingue), il gap-fix con 409
+  `ledger_unreadable`; 17 rossi verdi, i 24 contratti di W-B69 aggiornati (due issue). Resta la via d'uscita dei dati: W-B63. Dettagli:
+  piano 04, sezione «W-B74».
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il

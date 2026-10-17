@@ -1484,6 +1484,14 @@ never a proposal. The proposals are ordinary `TXCreateItem`s described as
 bulk editor saves them like any other row. The endpoint accepts any registered plugin, since it
 only reads `history_tag` and `provider_name`.
 
+When a transaction of the broker dated up to a checkpoint's `as_of` (and not among
+`pending_delete_tx_ids`) holds a value that is no number — a quantity or an amount that reads
+`None`, which an older version or another tool left — LibreFolio's side cannot be summed: the
+endpoint answers **409** `{"code": "ledger_unreadable", "message": …}` instead of comparing a
+wrong balance with the bank, which would propose a correction duplicating the row it cannot read
+(`get_balances_at_end_of` raises `UnreadableLedgerError`, `brim_gap_fix` turns it into
+`BRIMLedgerUnreadable`; W-B74). The wizard shows the message in that broker's group.
+
 ### 🧪 Testing a report-set plugin {: #report-set-tests }
 
 1. Put **synthetic** members (invented values, the real column layout) in `sample_reports/`,
