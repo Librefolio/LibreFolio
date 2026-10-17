@@ -164,11 +164,15 @@ first drops every event whose value `asset_events.value` cannot hold — not fin
 digits before the decimal point (`_storable_events()`, `integer_digits_issue()`) — and, among the
 others, every `SPLIT` whose ratio is not above 0 (`is_valid_split_ratio()`, X-R47), then writes
 the rest (W-B58: a value past a double's range, stored as a REAL inf, broke every response of
-the asset's events, for every user). A dropped event is only logged, as a warning: the sync
+the asset's events, for every user). A raw event the event schema itself refuses — a value that
+is no number, or whose exponent is past ±100 (`check_decimal_exponent()`, R13-SEC7-3) — is
+dropped the same way, one event at a time: parsed in one go, it made the sync lose every event
+it fetched. A dropped event is only logged, as a warning: the sync
 result does not report it, and its `events_fetched` still counts it. A call logs at most one
 warning per reason, *Events skipped: no event value can keep them* for the values and *Splits
 skipped: a split's ratio must be a number above 0* for the splits, each with `asset_id`, `count`
-and the first five dropped (`events`).
+and the first five dropped (`events`); an event the schema refused is listed by its date and
+type only, as *(refused by the schema)*, never with its value, which can be of any length.
 
 Every refusal below stops the whole request:
 
