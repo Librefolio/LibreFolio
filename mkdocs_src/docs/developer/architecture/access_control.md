@@ -169,9 +169,9 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
 - **Password reset** (`user reset`, `user_service.reset_password()`) sets the new hash, computed
   in a worker thread off the event loop, and ends every session of the account in the same
   commit: each device gets `401` at its next request, and signs in again with the new password.
-  The same commit revokes the account's live [password-reset links](#reset-links) (A-27). A
-  password-reset link does the same when it is spent. To keep the account out altogether,
-  deactivate it.
+  The same commit revokes the account's live [password-reset links](#reset-links) (A-27) and
+  retires its setup links (A-32, [The Initial Administrator](#initial-admin)). A password-reset
+  link does the same when it is spent. To keep the account out altogether, deactivate it.
 - **The account's own changes** end its other sessions as well: a password change
   (`POST /api/v1/auth/change-password`) and an email change (`PUT /api/v1/auth/profile`, which asks
   for the current password: see [Changing the Email](security.md#email-change)). The device that
@@ -319,7 +319,7 @@ or *links show the bare path until it is fixed*.
 | Route | Body | Does | Answers |
 |-------|------|------|---------|
 | `GET /users` | — | Every account, oldest first (`id`, `username`, `email`, `is_active`, `is_superuser`, `created_at`, `protected`: see [Protected Accounts](#account-protection), `holds_place`: inactive and waiting for its email verification with a live link, so its place is already counted, from `place_holders()` in one query — see [Email Verification](../backend/email.md#verification) —, and `pending_setup`: the [initial administrator](#initial-admin) waiting for its setup, from `registration_service.pending_admin_ids()` in one query), with `usage: {used, max_users, billing_url}` | `200` |
-| `PATCH /users/{user_id}` | `{is_active?, is_superuser?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing, with one exception: `is_active: false` on an account waiting for its email verification, inactive already, ends the wait as `user deactivate` does — its links revoked, its place free. A deactivation or a demotion ends every session of the account. A change of `is_active` revokes the account's email-verification links | `200` with the account, `holds_place` and `pending_setup` included (`holds_place` `false` once a wait has ended); `404`; `409` `ACCOUNT_PROTECTED` for a deactivation or a demotion of a [protected account](#account-protection), checked first; `409` `PENDING_SETUP` for `is_active: true` on the initial administrator waiting for its setup (`is_pending_admin()`), checked before the user limit, nothing changed; `409` `LAST_ADMIN` for the last active administrator; `409` `USER_LIMIT_REACHED` for a reactivation over the limit, unless the account `holds_place` |
+| `PATCH /users/{user_id}` | `{is_active?, is_superuser?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing, with one exception: `is_active: false` on an account waiting for its email verification, inactive already, ends the wait as `user deactivate` does — its links revoked, its place free. A deactivation or a demotion ends every session of the account. A change of `is_active` revokes the account's email-verification links, and an activation also retires its setup links ([The Initial Administrator](#initial-admin)) | `200` with the account, `holds_place` and `pending_setup` included (`holds_place` `false` once a wait has ended); `404`; `409` `ACCOUNT_PROTECTED` for a deactivation or a demotion of a [protected account](#account-protection), checked first; `409` `PENDING_SETUP` for `is_active: true` on the initial administrator waiting for its setup (`is_pending_admin()`), checked before the user limit, nothing changed; `409` `LAST_ADMIN` for the last active administrator; `409` `USER_LIMIT_REACHED` for a reactivation over the limit, unless the account `holds_place` |
 | `GET /users/{user_id}/deletion-preview` | — | `preview_user_deletion()`: what [deleting the account](#admin-account-deletion) would take with it. Writes nothing | `200` `AccountDeletionPreviewRead`; `404` |
 | `DELETE /users/{user_id}` | — | `delete_account()`: the account, and the brokers it is the only `OWNER` of, all or nothing. Cannot be undone: see [Deleting an Account](#admin-account-deletion) | `204` with an empty body; `404`; `409` `SELF_DELETION`, `ACCOUNT_PROTECTED` or `DEMOTE_FIRST`; `500` when the deletion fails, nothing deleted |
 | `POST /users/{user_id}/password-reset-link` | — | A [reset link](#reset-links), shown once | `201` `{token, path, url, expires_at}`; `404` |
@@ -406,8 +406,9 @@ the administrator does not choose the new password: whoever spends the link does
   `new_password` must meet the [password rules](security.md#password-rules), checked before the
   token is read: a weak one is `400` `PASSWORD_TOO_WEAK`, and the link is neither spent nor
   inspected, so a valid link stays valid. `complete_password_reset()` consumes the
-  token, hashes the new password with bcrypt in a worker thread, ends every session of the account and
-  revokes its other live reset links, in one commit; the answer is `200`. A link that is not valid
+  token, hashes the new password with bcrypt in a worker thread, ends every session of the account,
+  revokes its other live reset links and retires its setup links
+  ([The Initial Administrator](#initial-admin)), in one commit; the answer is `200`. A link that is not valid
   (used, expired, revoked, unknown or of another purpose) changes nothing: `400` `TOKEN_INVALID`.
 - **Revoked** with the account's password or address: a password change, an email change (the same
   address in another A–Z case is none) and `./dev.py user reset` revoke its live reset links,
@@ -466,18 +467,31 @@ what it writes, and returns a `BootstrapResult` whose `action` (`BootstrapAction
 | `action` | When | What it does |
 |----------|------|--------------|
 | `off` | F02 off | Nothing |
-| `ignored` | Accounts exist and none is waiting, the setup done included | Logs `LIBREFOLIO_ADMIN_* ignored: this instance already has accounts` (INFO) |
+| `ignored` | Accounts exist and none is waiting, the setup done included, through the link or another way (below) | Logs `LIBREFOLIO_ADMIN_* ignored: this instance already has accounts` (INFO) |
 | `created` | No account at all | In one transaction: the `registration_mode` row set to `invite` (inserted when missing, `updated_by_user_id` `NULL`); the administrator, superuser and inactive (`create_user(..., is_superuser=True, is_active=False, commit=False)`), whose password is the bcrypt hash of `secrets.token_urlsafe(32)`, a secret nobody ever sees, so no password signs in and a login attempt costs what it costs for any account; an `admin_setup` token for it, the variable's or a generated one, 72 hours. A variable's token already stored once (an instance emptied after an earlier setup) is not stored again: a token is generated instead, with a warning naming the variable. `link_token` holds the plaintext of a generated token, and only of that |
 | `rearmed` | An administrator waits, and the variable's token was never stored (`_token_known()`: no row has its hash, whatever its account or purpose) | Revokes the administrator's setup links and stores the new token, 72 hours. The token is neither logged nor emailed |
 | `pending` | An administrator waits, with a live setup link | Nothing new: no link issued, none logged |
-| `expired` | An administrator waits, with no live setup link | Logs the WARNING `The initial administrator's setup link has expired: run ./dev.py user setup-link`, followed by `, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` when the variable is set |
+| `expired` | An administrator waits, with no live setup link | Logs the WARNING `The initial administrator's setup link has expired: run ./dev.py user setup-link`, followed by `, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` when the variable is set; at the start that writes a new address, the WARNING of the address change instead, with the same ending (below) |
 
 - **The waiting administrator** is `pending_admin(session)`, built on
   `registration_service.pending_admin_filter()`: an inactive account with at least one `admin_setup`
   token, none of them consumed. An expired or revoked link keeps it waiting; a spent one ends the
-  wait. Before `rearmed`, `pending` or `expired`, the account follows the variables
-  (`_follow_variables()`): a different `username` or `email` is written, unless another account
-  holds it, which logs an ERROR and keeps the account's own.
+  wait, and so does a retired one, the account set up another way (below). Before `rearmed`,
+  `pending` or `expired`, the account follows the variables (`_follow_variables()`): a different
+  `username` or `email` is written, unless another account holds it, which logs an ERROR and keeps
+  the account's own.
+- **A new address** (lot A7b-2, A-33) — not the same one in another A–Z case, whose spelling the
+  account simply takes (decision P18) — revokes the account's setup links in the transaction that
+  writes it: they went to the earlier address. Revoked, not retired: the account still waits. A
+  token of the variable never stored re-arms it at that start (`rearmed`); otherwise no live link is
+  left and the start is `expired`, with the WARNING
+  `The initial administrator's address changed: the setup link handed over before no longer works; run ./dev.py user setup-link`
+  (and `, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` when the variable is set), once: the next
+  starts log the expiry. A new username alone, or an address another account holds, revokes
+  nothing. `user_service.update_profile()` revokes them the same way on a real change of the
+  address (`./dev.py user set-email`): the account then waits for a link of
+  `./dev.py user setup-link`, and a next start whose `LIBREFOLIO_ADMIN_EMAIL` names another
+  address, the earlier one for instance, writes it, which revokes them again.
 - **Registration.** The waiting administrator is a `users` row, so `first_account_open()` is false
   from the first start, and nobody registers as the first account: `register_user()` applies the
   mode, `invite` unless `LIBREFOLIO_REGISTRATION` pins another. The step writes `registration_mode`
@@ -512,8 +526,11 @@ most 200 characters) is public:
 2. `complete_admin_setup(session, token, new_password)` spends the token first, with
    `consume_token()`, as a reset link does: of two requests racing for one link, only one gets it.
    A link that is not a live setup link (used, expired, revoked, unknown, of another purpose)
-   changes nothing: `400` `TOKEN_INVALID`. The link of an account that is already active, activated
-   another way, is refused the same way, and revoked.
+   changes nothing: `400` `TOKEN_INVALID`. The link of an account that is already active is refused
+   the same way: the spending is rolled back, and every setup link of the account is retired
+   (`token_service.retire_tokens()`, lot A7b-2), with the WARNING *Setup link refused and retired:
+   the account is already active*. Once the account is set up, by any way, none of its links may set
+   its password, nor make it wait for its setup again once deactivated.
 3. Otherwise, in one commit: the bcrypt hash of the new password, computed in a worker thread; the
    account active; its sessions ended (`end_sessions()`: `session_version` + 1); the link's
    `consumed_by_user_id` set to the account; its other setup links revoked.
@@ -534,20 +551,46 @@ full address with `LIBREFOLIO_PUBLIC_URL`, otherwise the path and a note. It sen
 a waiting administrator it prints `❌ No administrator account is waiting for its setup link` and
 exits with `1`.
 
+**Set up another way** (lot A7b-2, A-32). The setup link is not the only way in, and the command
+line stays permissive on purpose: `./dev.py user activate` and `./dev.py user reset` on the waiting
+administrator are how an operator sets it up without its link (`activate` alone leaves an active
+account whose password nobody knows, until `user reset` or a [reset link](#reset-links) gives it
+one). Whatever the way, the account's setup links are retired in the transaction of the change,
+with `token_service.retire_tokens(…, purpose=AccountTokenPurpose.ADMIN_SETUP)`: revoked and
+consumed at once ([Revocation](security.md#account-token-revocation)). The callers:
+
+- an activation: `user_service.set_user_active()`, behind `user activate`, and
+  `user_service.update_user_status()`, behind `PATCH /users/{user_id}`, which refuses the waiting
+  administrator itself first (`409` `PENDING_SETUP`);
+- a new password: `user_service.reset_password()` (`user reset`),
+  `user_service.complete_password_reset()` (a reset link spent, one an administrator issued for the
+  waiting account included) and `POST /auth/change-password`;
+- `complete_admin_setup()`, when it refuses the link of an account already active (above).
+
+This applies to every account with a setup link, not only the waiting one. Afterwards the old
+link inspects `revoked` (the setup page's *withdrawn* card) and sets nothing (`400`
+`TOKEN_INVALID`), and the account is out of `pending_admin_filter()`, inactive or not:
+`pending_setup` is `false`, `PATCH /users/{user_id}` reactivates it as any inactive account (no
+`409` `PENDING_SETUP`), `issue_setup_link()` returns `None` (`user setup-link` prints its error),
+and the startup answers `ignored`. A reset link issued and never spent, a demotion or a
+deactivation retires nothing: the account keeps waiting, and its link still works.
+
 **The user limit.** `user_usage()` counts the waiting administrator (`pending_admin_filter()`)
 beside the active accounts and the live invitations, its link live or not: it holds a place from
-its creation, and keeps it once active.
+its creation, and keeps it once active. Set up another way but still inactive, it waits no more and
+holds no place, as any inactive account.
 
 **The administrator API and the Users tab** (lot A7b). The account waiting for its setup is marked:
 
 - `GET /users` and the answer of `PATCH /users/{user_id}` carry `pending_setup` (`AdminUserRead`,
   default `false`), true for an account of `pending_admin_filter()`: inactive, with at least one
   `admin_setup` token and none of them consumed — live, expired or revoked alike, an administrator or
-  not. `registration_service.pending_admin_ids()` reads it for the list, `is_pending_admin()` for one
+  not; a retired token is consumed, so an account set up another way is `false`.
+  `registration_service.pending_admin_ids()` reads it for the list, `is_pending_admin()` for one
   account. An expired link keeps the account waiting: `./dev.py user setup-link` gives it a new one.
 - `PATCH /users/{user_id}` with `is_active: true` on that account, alone or with `is_superuser`,
   answers `409` with `detail: {error_code: "PENDING_SETUP", message}` and changes nothing: nobody
-  knows its password, and once it is active its setup link would be refused. The check comes before
+  knows its password, and an activation would retire its setup links (above). The check comes before
   the user limit. Any other change is accepted: a demotion, for one, leaves the account waiting.
 - The Users tab draws the account with the badge *Waiting for setup*, without **Reactivate**, and
   with a hint that names `dev.py user setup-link` ([UserRow](../frontend/components/features/settings.md#userrow));
@@ -573,4 +616,9 @@ administrator, and on the lane's server only refusals that write nothing). The a
 side is UADM-060 to UADM-067 of `./dev.py test api users-admin`
 (`backend/test_scripts/test_api/test_users_admin_api.py`), in process, on a private database where
 the bootstrap itself creates the waiting administrator: `pending_setup` on each state of a setup
-link, the `409` `PENDING_SETUP`, and what that refusal must not reach.
+link, the `409` `PENDING_SETUP`, and what that refusal must not reach. Lot A7b-2 adds A32-001 to
+A32-007 and A33-001 to A33-003 to `admin-bootstrap` (set up another way, the refused link of an
+active account, a new address in the variables), SETUP-014 and SETUP-015 to `admin-setup`,
+UADM-068 to UADM-071 to `users-admin`, UPROF-003 to UPROF-005 of
+`./dev.py test services user-profile` (a new address through `update_profile()`), and contract 9 of
+`./dev.py test services account-tokens` (`retire_tokens()`).
