@@ -5937,7 +5937,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     8 punti della rete dichiarati (le liquidazioni di `s4_annual_settlement` al capitale). **Resta aperta la parte
     della mora**: base, liquidazione che si sposta con `end_date`, cedole della mora senza azzeramento (developer).
   - Dettagli: piano J, §10 «CP-14a» e «CP-14b».
-- **J-40 · Lo svuotamento dei dati di mercato toglie gli SPLIT e lascia rettifiche senza costo (il buco di P-10 dal
+- ✅ **J-40 · Lo svuotamento dei dati di mercato toglie gli SPLIT e lascia rettifiche senza costo (il buco di P-10 dal
   lato asset)** — medio, numeri, da decidere; test-author di J (CP-14a, V-4), 17/10, letto nel codice. Area di X.
   - `POST /assets/{id}/market-data/wipe` (`market_data.py:46-71`) è il flusso del cambio di valuta
     (`AssetCurrencyChangeModal.svelte:103-109`), ma si può chiamare anche da solo.
@@ -5949,6 +5949,9 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     coerente con la decisione 27 A. **→ X** (anche il parente minore).
   - Parente minore: il cambio dei parametri di un investimento programmato stacca e cancella gli eventi del provider
     (`provider_management.py:212-221`). Conta solo se l'utente ha scritto uno SPLIT negli eventi del calendario.
+  - ✅ 17/10: fatta da X come **X-R48** (dev `2ea54ff76`): il rifiuto `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST` (409)
+    usa `costless_incoming_split_adjustments` di J; J ha rivisto dopo (OK). Il parente minore resta aperto come
+    **X-R49** (di X).
 - **J-41 · Il costo Auto può finire sulla riga sbagliata** — medio, numeri; test-author di J, 17/10, letto nel codice,
   **da provare con un rosso**. Area di W.
   - Senza legame, `_find_created_tx_for_wac` (`auto_cost.py:158-183`) prende la riga più recente con stesso broker,
@@ -5994,13 +5997,16 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   Decisione del coordinatore (17/10): nell'indice, non in SEC7-1. **→ MF** (coordinatore, 17/10 07:00: `run_in_executor` con un
   pool dedicato, `max_workers=2`, insieme a MF-D4 dopo l'ingresso di J-43/SEC7-1; J rivede). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «R13-SEC7-1».
-- **J-47 · Un trasferimento ancora in viaggio alla fine dell'intervallo manda i lotti in `FAILED`** — medio, numeri;
+- ✅ **J-47 · Un trasferimento ancora in viaggio alla fine dell'intervallo manda i lotti in `FAILED`** — medio, numeri;
   J, 17/10, letto nel codice durante l'analisi di J-10, non ancora riprodotto. Con partenza ≤ `date_to` < arrivo,
   `LotsAnalysisService._load_transactions` taglia a `date_to` e la gamba d'arrivo manca: `TRANSFER_PAIR_MISSING`
   anche col perimetro intero (periodi dell'AI Export, intervalli della Dashboard che finiscono durante il viaggio).
   Coordinatore (17/10 08:05): subito dopo J-10, prima di J-12. Prima il rosso, poi la lettura al confine del tempo,
   coerente col transito della Dashboard (`in_transit_intervals`). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+  - ✅ 17/10: fatta da J (checkpoint J-47). La compagna in arrivo nel perimetro va solo al motore, che si ferma a
+    `date_to` (`replay_until`): le unità restano in viaggio, come nella Dashboard. Nessun arrivo nella cronologia.
+    Dettagli: piano 05, sezione «J-47».
 - **J-48 · Le gambe di un trasferimento lette al confine del perimetro si vedono come «rettifiche» nei lotti** —
   basso, chiarezza; J, 17/10, da J-10 (N76). Nella modale della custodia, nel Gantt e nel grafico WAC una gamba che
   attraversa il perimetro compare come «Adjustment In/Out». La sistemazione: etichette esplicite di trasferimento,

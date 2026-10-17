@@ -589,11 +589,15 @@ unknown cost therefore comes from:
 
 - data the batch never checked: written outside it, or promoted by an earlier
   version, which did not check promoted pairs; or
-- an `ADJUSTMENT` linked to a `SPLIT` event that is later retyped. Auto stores no
-  cost on a split-linked row (see
-  [Split-linked adjustment skip](#split-linked-adjustment-skip)), so once the
-  event is no longer a `SPLIT` its units have an unknown cost
-  (`test_forward_split_relabelled_as_price_adjustment_becomes_an_unknown_cost_acquisition`
+- an `ADJUSTMENT` linked to a `SPLIT` event retyped before release 1.3. Auto stores
+  no cost on a split-linked row (see
+  [Split-linked adjustment skip](#split-linked-adjustment-skip)), so without the
+  split its units would have an unknown cost. Since P-10 the app refuses to take
+  the split away while such a row has no cost: the retype answers 409
+  `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`, the market-data wipe of a currency change
+  409 `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`; once the row has a cost, 0
+  included, both go through
+  (`test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one`
   in `backend/test_scripts/test_api/test_portfolio_wac.py`).
 
 **An explicit `null` in an update** (decision P5, coordinator reading B, 16/10).
