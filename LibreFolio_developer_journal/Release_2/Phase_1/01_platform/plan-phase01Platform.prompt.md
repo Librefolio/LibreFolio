@@ -4972,3 +4972,83 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
      blocco della galleria fino alle 04:45. Va nel cancello del coordinatore.
 - **Backlog**: **H-34** (bassa), il JSON libero delle richieste accetta `Infinity` al suo interno. I proprietari sono X
   (`provider_params` ×2) e J (`RiskAnalyticRequest.parameters`); `ToolComputeItem.parameters` è da verificare.
+
+### Lotto «H-33: una risposta che rompe il suo modello finisce nel log senza il suo contenuto» (2026-10-17, notte) — ✅ provato
+
+> **Via** del coordinatore (04:17): A7b-2 è in dev, quindi H-33 può partire. H-32 è entrato (dev `ec6aa2007`; la riga
+> di X l'ha rivista il coordinatore). Base: fast-forward a `ec6aa2007`, verificata pulita. Disegno e OK da writer su
+> `_backend_services.py` per `response-validation` (04:25). Origine: E, R13-SEC4.
+
+1. ✅ **Analisi** (04:17–04:25, sola lettura).
+   - FastAPI 0.141.1 registra di suo i gestori di `HTTPException`, `RequestValidationError` e WebSocket, non quello di
+     `ResponseValidationError`. `ValidationException.__str__` scrive ogni errore con il suo `input`, e l'eccezione
+     porta anche `body`.
+   - Così, quando un endpoint restituisce ciò che il suo `response_model` rifiuta, `ServerErrorMiddleware` risponde
+     500 «Internal Server Error» in testo semplice, e uvicorn scrive nel log un traceback che contiene la risposta:
+     i dati dell'utente che l'ha chiesta.
+   - A7b-2 ha messo il gestore dei 422 in `backend/app/api/validation_errors.py` (file di A), con una riga in
+     `main.py`.
+   - **Cura**:
+     - `backend/app/api/response_validation.py`, nuovo e mio: `install_response_validation_handler(app)`, più una
+       riga in `main.py` subito dopo quella di A, con l'import in ordine alfabetico;
+     - il gestore registra in un solo evento di log il metodo, la rotta (il percorso modello) e l'endpoint, e per ogni
+       errore solo `type` e `loc`. Mai l'`input`, né il `msg` (un validatore può costruirlo con il valore), né il
+       traceback (il suo messaggio è `str(exc)`);
+     - risponde lo stesso 500 di oggi.
+     - ~~In più, la risposta ora attraversa i middleware dell'utente: il 500 riceve anche gli header di sicurezza e
+       il CORS, che il 500 di `ServerErrorMiddleware` non aveva.~~
+       > **⚠️ Fuori pista**, corretto dal docs-writer: era sbagliato. `SecurityHeadersMiddleware` risponde già il 500
+       > di un'eccezione con gli header di sicurezza (il suo `except Exception:`), e poi la rialza; uvicorn la scrive
+       > nel log. Cambia questo: l'eccezione si ferma al gestore, quindi niente traceback nel log, e il 500 diventa la
+       > risposta del gestore, che attraversa anche gzip e CORS.
+       > Inoltre il gestore usa di proposito `logger.error` e non `logger.exception`, contro la convenzione TRY400 di
+       > `lint_gates.md`, perché il traceback riporterebbe `str(exc)` con gli `input`. Un commento nel codice lo
+       > dice.
+   - Doc: `architecture/security.md` «📜 Request Logs», più la frase di `architecture/overview.md:94` sui passi di
+     `main.py`.
+2. ✅ **Rossi, doc, cura a secco e registrazione** (04:25–04:40).
+   - **Rossi** (test-author, file nuovo `backend/test_scripts/test_services/test_response_validation.py`, 10 casi):
+     - il gestore installato una sola volta e senza toccare gli altri, e quello dell'app vera è lo stesso;
+     - il gestore dei 422 di A ancora al suo posto;
+     - 2 corpi rotti (un testo dove serve un numero; un numero mancante, il caso peggiore, perché l'`input` è
+       l'oggetto intero): 500 in testo semplice, un solo evento di log con il logger del modulo, nessun marcatore né
+       negli eventi né nei record di `caplog`, e l'eccezione non esce dall'app;
+     - la rotta di un router incluso registrata con il percorso modello completo;
+     - una risposta valida resta com'è;
+     - il controllo senza gestore: il marcatore sta in `str(exc)`, cioè in quello che uvicorn avrebbe scritto;
+     - una premessa: solo l'eccezione nomina per intero la rotta inclusa.
+   > **⚠️ Fuori pista** (dal test-author, letto nel codice di FastAPI 0.141.1):
+   > - `scope["route"]` è l'`APIRoute` del router, **senza** il prefisso di `include_router`: la prima cura avrebbe
+   >   scritto `/auth/login` invece di `/api/v1/auth/login`. Il percorso modello completo sta nel pubblico
+   >   `exc.endpoint_path` («GET /api/v1/…»): ora si usa quello, tolto il metodo;
+   > - `endpoint_function` è una stringa e può valere `None`: il nome ora viene da `scope["endpoint"].__name__`;
+   > - fuori perimetro: un endpoint generatore con elementi tipizzati (streaming di FastAPI) fallisce la convalida
+   >   dopo l'inizio della risposta, e Starlette alza un `RuntimeError` concatenato, con `str(exc)` nel traceback.
+   >   LibreFolio oggi non ne ha.
+   - **Doc** (docs-writer):
+     - `architecture/security.md:1732–1742`, un paragrafo in «📜 Request Logs»;
+     - una frase alla fine della sezione di A sui 422, con il rimando;
+     - `architecture/overview.md:94`, la chiamata nuova di `main.py`.
+     - Ha corretto la mia analisi sugli header (sopra) e segnalato la trappola TRY400.
+   - **Registrazione** (OK da writer): `services_response_validation()` e `add_test(cat, "response-validation", …,
+     isolation="pure")` accanto a `request-float-inputs`.
+   - **Cura a secco**: il modulo e la riga di `main.py`. Con l'input da stdin, ruff segnava I001 sull'import nuovo
+     perché il modulo non esisteva ancora; a cura applicata, l'ordine è quello giusto.
+3. ✅ **Rosso → cura → verdi** (04:42–04:45, ogni passo a carico < 50; `files/runs/h33-*.sh`, log in `files/runs/h33/`).
+   - **Rosso**: `services response-validation` **6 failed / 4 passed**, tutti e 6 sulla barriera «response_validation.py
+     is missing». `check-orphans` verde.
+   - **Cura** applicata, uguale alla prova a secco.
+   - **Verdi**:
+
+     | Selettore | Risultato |
+     |---|---|
+     | `services response-validation` | 10/10 |
+     | `services app-lifecycle` | 51 |
+     | `services security-headers` | 15 |
+     | `services request-float-inputs` | 33 |
+     | `utils static-route-confinement` | 51 |
+
+   - **Statici**: ruff e black 0 su `main.py`, sul modulo, su `_backend_services.py` e sul test; `mkdocs build` exit 0;
+     `check-links` 97; `git diff --check` pulito.
+   - Non eseguito: `api validation-errors` di A, un passo pesante che va nel cancello. Il gestore dei 422 è ancora al suo
+     posto: lo controlla il caso 3.

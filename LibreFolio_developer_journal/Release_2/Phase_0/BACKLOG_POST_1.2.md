@@ -3608,6 +3608,13 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     errori senza il valore e risponde 500.
 
   Dettagli: piano H, §14, lotto «H-29 e H-30».
+  - Cura fatta il 17/10 (lotto «H-33», piano H §14).
+    - `backend/app/api/response_validation.py`, installato da `main.py` subito dopo il gestore dei 422 di A.
+    - Un solo evento di log: metodo, percorso modello completo (`exc.endpoint_path`), endpoint, e per ogni errore
+      `type` e `loc`. Mai l'`input`, il `msg` o il traceback.
+    - La risposta è lo stesso 500 in testo semplice.
+    - Resto latente: un endpoint generatore tipizzato (streaming di FastAPI) fallirebbe la convalida a risposta già
+      iniziata, e Starlette scriverebbe ancora `str(exc)` nel traceback. Oggi LibreFolio non ne ha.
 - **H-34 · Il JSON libero di una richiesta accetta `Infinity` e `NaN` al suo interno** — basso, API; H (residuo di
   H-32, dal test-author e dal docs-writer), 17/10.
   - La regola di H-32 riguarda i campi `float`. I campi `Any` o `JsonValue` raggiungibili da una richiesta accettano
