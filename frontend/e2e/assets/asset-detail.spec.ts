@@ -8756,9 +8756,11 @@ test.describe('Asset detail — the page sync dialog warns before replacing stor
 
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
-        // The page polls live prices whenever its period reaches today — by its UTC reckoning, which a local «yesterday»
-        // can still reach just after midnight — and a fresh quote is written as today's price of the shared asset.
-        // Answered here, empty: no provider is called, nothing is written. The warning reads the stored prices.
+        // The page polls live prices while its period reaches today: the user's today since Z-3 (`todayIso()`), the local
+        // calendar `daysAgoIso` reads too — the config sets no `timezoneId` — so a period ending yesterday never does. A
+        // poll would ask the provider and write the fresh quote as today's price of the shared asset: answered here,
+        // empty, so that «no provider is called, nothing is written» does not rest on the period's arithmetic. The
+        // warning reads the stored prices.
         await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
     });
 
