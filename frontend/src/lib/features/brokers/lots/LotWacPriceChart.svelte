@@ -34,6 +34,7 @@
         computePaddedValueBounds,
         computeVisibleLogicalRange,
         eventCategory,
+        eventOpeningValue,
         eventKey,
         eventTimelineOrder as eventTimelineOrderShared,
         findTransferArriveEvent,
@@ -1417,7 +1418,8 @@
         if (event.kind === 'BUY') {
             const quantity = parseNumber(event.quantity);
             const unitPrice = parseNumber(event.unit_price);
-            const openingValue = quantity != null && unitPrice != null ? Math.abs(quantity) * unitPrice : null;
+            // The backend's opening value, never quantity × price (V11).
+            const openingValue = eventOpeningValue(event);
             rows.push(markerTooltipRow(labels.quantity, quantity == null ? '—' : formatQuantityValue(quantity)));
             rows.push(markerTooltipRow(labels.unitPrice, formatMaybePrice(unitPrice)));
             rows.push(markerTooltipRow(labels.openingValue, formatMaybeMoney(openingValue)));
