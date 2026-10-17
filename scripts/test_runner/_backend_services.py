@@ -1087,6 +1087,15 @@ def services_market_data_wipe_split_guard(verbose: bool = False, test_names: lis
     return run_command(cmd, "Market data wipe split guard tests", verbose=verbose)
 
 
+def services_provider_wipe_split_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R49: a parametric provider's change refuses while a SPLIT it generated has incoming adjustments without a purchase cost."""
+    print_section("Services: Provider Wipe Split Guard")
+    print_info("Testing: backend/app/services/assets/provider_management.py (bulk_assign_providers), backend/app/services/assets/split_guard.py, backend/app/api/v1/assets/providers.py")
+    print_info("Tests: a plan's new params or leaving it refused with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409), only the caller's adjustments named, nothing written; else the save is as before")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_wipe_split_guard.py", test_names)
+    return run_command(cmd, "Provider wipe split guard tests", verbose=verbose)
+
+
 def services_event_split_ratio(verbose: bool = False, test_names: list = None) -> bool:
     """Run X-R47: a SPLIT event's ratio checked when it is written, manual SPLITs of 0 or below refused, a provider's dropped; and R13-SEC7: the P-10 refusal shows only the caller's transactions."""
     print_section("Services: Event Split Ratio")
@@ -2373,6 +2382,15 @@ Note: No backend server required.
         desc="X-R48: POST /assets/{id}/market-data/wipe refused before any write with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) while a SPLIT of the asset, manual or provider, has linked incoming ADJUSTMENTs without a purchase cost; details list every such SPLIT by date then id with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller); a cost of 0, an outgoing row, a SPLIT without links, another asset's SPLIT and the dry run leave the wipe as before",
         # WRITE-SCOPED, the category default: every row is this unit's own (assets, brokers, users and accesses under a
         # unique marker), wiped by asset and broker id; the route runs in process on an app of the call's own.
+    )
+    add_test(
+        cat,
+        "provider-wipe-split-guard",
+        services_provider_wipe_split_guard,
+        name="Provider Wipe Split Guard",
+        desc="X-R49: POST /assets/provider refused before any write of the request with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) when an item would wipe the events a parametric provider generated (new params of the plan, or leaving it for another provider) while a SPLIT among them has linked incoming ADJUSTMENTs without a purchase cost; details name the item (asset_id, item_index) and each such SPLIT with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message the totals only; the items before the refused one are not written either. With a cost (0 included), a manual SPLIT, the same params, an online provider's params change or a new assignment the save is as before",
+        # WRITE-SCOPED, the category default: four assets, three assignments, two users and two brokers under a unique
+        # marker; each test restores the assignments by id and wipes by asset and broker id.
     )
     add_test(
         cat,

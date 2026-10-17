@@ -4816,7 +4816,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Il riepilogo (dry run) non rifiuta mai, quindi il pannello di conferma non può avvisare: l'utente incontra il 409
     solo dopo aver confermato.
   - Cura facoltativa: il riepilogo porta il numero degli SPLIT che bloccano, e la modale avvisa prima della conferma.
-- **X-R49 · Lo stesso buco di X-R48 dal cambio dei parametri di un Scheduled Investment** — basso; X, 17/10 (J, F2,
+- ✅ **X-R49 · Lo stesso buco di X-R48 dal cambio dei parametri di un Scheduled Investment** (chiusa il 17/10, in attesa del commit del coordinatore: rifiuto 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` prima di ogni scrittura, frase tradotta nella modale dell'asset; dettagli nel piano 03, «X-R49») — basso; X, 17/10 (J, F2,
   girato dal coordinatore).
   - `provider_management.py:212-221`: vale solo se un utente ha scritto uno SPLIT fra gli eventi del piano.
   - Ordine deciso dal coordinatore dopo X-R40/W-B62: X-R47 → X-R48 → X-R44 → X-R49.
@@ -4909,12 +4909,26 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   2. Il nuovo tentativo dei segnali e il cambio delle impostazioni richiedono anche i periodi, che non ne dipendono.
   3. Un errore cancella le Δ ancora valide per lo stesso `dateEnd`.
 - **X-R61 · Il Sync di una sola card o riga sovrascrive i prezzi salvati senza l'avviso di C-66** — basso, domanda di
-  prodotto per il developer; X, 17/10 (il test-author di Y-28).
+  prodotto per il developer (nel file delle domande del coordinatore, 17/10); X, 17/10 (il test-author di Y-28).
   - `handleSyncAsset` (la card o la riga della lista) parte subito, senza la finestra: nessun avviso prima di
     sostituire i prezzi salvati del periodo, modifiche manuali comprese. L'avviso c'è solo nella finestra (Sync all, il
     Sync della selezione, la pagina dell'asset).
   - Da decidere: aprire la finestra anche lì, o un avviso leggero, o lasciare com'è.
-- **X-R57 · Il commento C-66 di `asset-detail.spec.ts` dà una ragione superata** — minimo; X, 17/10 (Z, dopo Z-3).
+- **X-R62 · «Nessun provider» fallisce quando un evento del provider è collegato a una transazione** — basso (fallisce
+  chiuso, nessun costo corrotto), **dopo la 1.3** salvo che costi poco; X, 17/10 (trovato leggendo X-R49, non
+  riprodotto).
+  - `bulk_remove_providers` cancella l'assegnazione; `AssetEvent.provider_assignment_id` è `ON DELETE CASCADE`,
+    `Transaction.asset_event_id` è `ON DELETE RESTRICT` e SQLite applica le chiavi (`PRAGMA foreign_keys=ON`): con un
+    dividendo Yahoo o uno SPLIT del piano collegato a una transazione, la rimozione fallisce con un errore d'integrità,
+    che la modale mostra come errore generico.
+  - Da decidere: scollegare prima, come il wipe di X-R48 (con la regola degli SPLIT senza costo), o rifiutare con un
+    codice e i collegamenti. Prima un rosso che lo riproduca.
+- **X-R63 · Due vuoti vecchi nella documentazione degli asset** — minimo, al prossimo tocco di quelle pagine; X, 17/10
+  (il docs-writer di X-R49).
+  - `developer/backend/assets/architecture.md`: la tabella dei moduli non elenca `provider_policy.py`.
+  - `user/assets/providers/scheduled-investment.en.md`, tabella degli eventi del piano: manca **Maturity Settlement**,
+    che l'editor offre (la pagina ha traduzioni: debito da tradurre).
+- ✅ **X-R57 · Il commento C-66 di `asset-detail.spec.ts` dà una ragione superata** (chiusa il 17/10 con Y-28: `c18517e31`, entrata in dev `8aafffad8`) — minimo; X, 17/10 (Z, dopo Z-3).
   - Verso la riga 8672 di `e2e/assets/asset-detail.spec.ts` il commento dice «by its UTC reckoning…»; dopo Z-3 (dev
     `0f55265a1`) le pagine degli asset leggono il giorno dell'utente (`todayIso()`). Lo stub resta giusto: cambia solo
     la ragione scritta. Da fare al prossimo tocco di quel file.
