@@ -6305,6 +6305,49 @@ non sposti il registro.
 > - Un codice di truth non ISO oggi non si raggiunge. Se arrivasse, ora alzerebbe un errore dentro `_cash_proposals`.
 > - La cura, se la si vuole: saltare quella valuta con un avviso.
 
+#### E-18.3 — Il giro combinato prima dell'ingresso ✅ (2026-10-17, 14:40–14:52; corsia 6188, HEAD `dce27360a`)
+> **Il compito** (coordinatore, 14:3x):
+> - E-18 è nel mio ramo: `ed8b3c28e` codice, `601b3714b` docs, `c6a996275` diario.
+> - Poi il merge di dev `942934dd6`, con dentro MF-SEC9a: HEAD `dce27360a`.
+> - La mia base era vecchia di circa 25 entrate, ed E-18 stringe ogni scrittura: un giro combinato prima dell'ingresso.
+>
+> **Note implementazione**:
+> - `wac-inline` non è una suite a sé: è `test_wac_inline.py`, che gira dentro `api transactions-wac`. L'ho girata una
+>   volta sola.
+> - **Due suite `services` in più**, fuori dalla lista: i due file entrati dopo la mia base che costruiscono le classi
+>   rese strette da E-18.
+>   - `test_bulk_writes_chunked.py` (MF-SEC9a, 26 usi) e `test_provider_removal_link_guard.py` (X-R62, 18 usi).
+>   - Gli altri file cambiati (i lotti di J-33, il backup) non le toccano.
+>   - I loro letterali di valuta sono tutti ISO. `SEC9A` è il codice del provider FX di prova, non una valuta.
+>
+> **⚠️ Fuori pista: `api transactions-wac`, 20 errori di setup. Verdetto: ambiente.**
+> - Alle 14:44, subito dopo un'attesa col carico a 60, i 20 test sono andati in errore al setup: `Failed to start test
+>   server`.
+> - Sopra il primo test: `Server didn't start within 10 seconds`. È il `SERVER_START_TIMEOUT` fisso dell'aiuto condiviso
+>   (`test_server_helper.py:344`). L'avvio era in corso: il DB era pronto dopo 2 secondi.
+> - Le altre suite API fanno lo stesso avvio sullo stesso codice, e sono verdi prima e dopo.
+> - Rigirata da sola a carico 25 (14:52): 20 verdi. Non è E-18.
+>
+> **Prove** (`files/tools/e9_suites.sh e18c …`, poi `e18d`):
+>
+> | Suite | Verdi |
+> |---|---|
+> | `schemas all` | 2 816 |
+> | api `transactions` | 26 |
+> | api `batch-split-promote` | 38 |
+> | api `transactions-wac` (`wac-inline`) | 20, rigirata da sola |
+> | api `portfolio-wac` | 12 |
+> | api `fx` | 26 (25 prima: in più il test MAD/PKR di MF-SEC9a) |
+> | api `assets-price` | 21 |
+> | api `assets-crud` | 35 |
+> | api `assets-events` | 45 |
+> | api `brim` | 118 |
+> | services `bulk-writes-chunked` (aggiunta) | 42 |
+> | services `provider-removal-link-guard` (aggiunta) | 20 |
+>
+> - **3 219 verdi, 0 rossi**, di cui 3 157 nella lista del coordinatore. La porta 6188 è libera.
+> - Log: `files/logs/e18c_suites.out`, `e18d_wac_rerun.out`, `e9_e18c_*.log`, `e9_e18d_*.log`.
+
 ### SEC9-1 — La revisione della cura di MF (2026-10-17, 13:4x; sola lettura, ramo di MF `ad399d383`)
 > **Esito: OK, nessun reperto.** Ogni punto della mia cura c'è.
 > - **`/prices/current`**:
