@@ -130,12 +130,14 @@ sequenceDiagram
         S->>P: compute(neutral points, params, context)
         P-->>S: SignalComputation
         S->>S: Validate canonical outputs and isolate failures
+        S->>S: Slice to visible range and assign status
+        S->>S: Keep the extended series for annotations
     end
     opt Annotation requests
-        S->>N: Derive crossings and threshold events
-        N-->>S: Canonical annotations
+        S->>N: Derive crossings and threshold events on the extended series
+        N-->>S: Events within the visible range
+        S->>S: Attach events and warnings to their target results
     end
-    S->>S: Slice to visible range and assign status
     S-->>A: SignalResult[]
     A-->>C: One canonical bulk response
 ```
@@ -192,7 +194,23 @@ sequenceDiagram
 - aggregates the union of required price fields/events;
 - records per-instance preflight failures without aborting the remaining batch.
 
-The chart Asset/FX adapter or AI Export domain assembler uses that plan to load one
+A preflight failure stays with its instance, but an incoherent batch stops entirely.
+`prepare_signal_plan` then raises `SignalRequestValidationError`, and no instance gets a
+plan or a result. The incoherent cases are:
+
+- duplicate `instance_id` values, or duplicate annotation request keys;
+- an annotation whose target (`attach_to_instance_id`) or source instance is not a
+  requested signal instance;
+- a `band` source naming a series that its plugin does not declare, or that is not a band;
+- a scalar `signal` source naming a band series.
+
+The chart endpoints answer it with HTTP 422, the message as `detail`:
+`POST /api/v1/signals/preview` (`api/v1/signals.py`), the Asset price query
+`POST /api/v1/assets/prices/query` (`api/v1/assets/prices.py`), and the FX endpoint
+`POST /api/v1/fx/currencies/convert` (`api/v1/fx/currencies.py`). An Asset or FX request
+then returns no prices either.
+
+The chart Asset/FX adapter or AI Export domain assembler uses the plan to load one
 extended input range. For the plain price input, the warm-up in calendar days is
 `SignalExecutionPlan.max_history_days_before_visible`: the larger of the session
 warm-up times `SESSION_WARMUP_DAY_MULTIPLIER` and the calendar warm-up. The multiplier
@@ -235,12 +253,34 @@ For each plugin, the service:
 Coverage (`SignalInputCoverage`) is measured before step 3 and stays calendar-based,
 so the UI coverage thresholds in [Status and Data Policy](#status-and-data-policy)
 keep their meaning. A quote-day plugin's output is dated on sessions; the chart aligns
-it by date and bridges the days without a point.
+it by date and bridges the days without a point. A point the plugin returns **without a
+value** is different: a warm-up, an undefined window, a missing reference price. The
+chart renderer (`frontend/src/lib/charts/signals/backendRenderer.ts`) breaks a line or
+area output there, drawing each stretch between two such points as its own series, so no
+segment crosses a day on which nothing was measured. Bars simply skip those points.
 
 ### 3. 🎯 Annotations
 
-Optional annotation requests run after indicator calculation against the extended series.
-This allows boundary crossovers to be detected correctly before output is sliced.
+Execution slices each signal's result right after validating it (step 7 above).
+`execute_signal_plan` keeps the unsliced series of each `ok` or `partial` instance aside, in
+`extended_series_by_instance`.
+
+Optional annotation requests run once every planned signal has executed.
+`attach_annotations` hands those extended series and the loaded prices to
+`SignalAnnotationService.compute()`. Crossings are detected across the warm-up too, so a
+crossover on the first visible date is still found. Only the events dated inside the
+requested visible range are kept.
+
+`attach_annotations` adds those events to their target results, merged with any
+annotations the plugin itself returned, and sorted by date. Problems become
+`annotation_unavailable` warnings on the target result:
+
+- a request whose source has no usable series, such as an `unavailable` or `failed`
+  instance, gets `Annotation '<key>' is unavailable`, and the others still run;
+- events whose target status is not `ok` or `partial` are dropped, and the warning
+  `Annotation '<key>' could not be attached` gives that status as its reason;
+- if the whole annotation computation raises, every request gets the
+  `Annotation '<key>' is unavailable` warning on its target, and the signal results are kept.
 
 Supported primitives:
 

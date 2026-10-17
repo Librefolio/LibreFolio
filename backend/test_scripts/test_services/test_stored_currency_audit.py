@@ -42,7 +42,20 @@ file collects and each test fails on its own. The one GUARD (green today) checks
 red can only be about the product. Two tests rest on an assumption the contract does not state (valid JSON of another
 shape, a path with a space and a ``#``): their docstrings say so.
 
-Pure: no server, no network, no shared database; only files of ``tmp_path`` (and one subprocess run of the module).
+Lot E-19b1.3 (B's review of E-19b1) adds two rules, RED until it (``# red until E-19b1.3``):
+
+- A currency stored as a BLOB is a finding. A TEXT column keeps a value bound as bytes as a BLOB, and a restored archive
+  can carry one. Its value is SQLite's ``quote()`` of it, ``X'`` and its bytes in upper-case hex and ``'`` (the bytes of
+  ``EUR``: ``X'455552'``): never canonical, never a suggestion. Today ``_as_text`` gives the bytes to ``json.dumps``,
+  whose ``TypeError`` ends the whole audit: no finding at all, the startup's check «could not be checked», and
+  ``./dev.py db currencies`` ends with a traceback (SCA-015, SCA-035, SCA-044, SCA-045).
+- The warning of a check that fails names the class of the error (and SQLite's error name), never the error's text: a
+  currency stored as TEXT that is not UTF-8 makes ``sqlite3`` raise an ``OperationalError`` whose message quotes it, and
+  after a restore those are an archive's bytes (SCA-036).
+
+The preconditions of these tests (a BLOB, a text that is not UTF-8) are read by SQL, never through the audit.
+
+Pure: no server, no network, no shared database; only files of ``tmp_path`` (and subprocess runs of the module).
 """
 
 from __future__ import annotations
@@ -96,13 +109,18 @@ Finding = tuple[str, str, int, Optional[str]]
 WARNING_LEVELS = frozenset({"warning", "warn"})
 WARNING_OR_ABOVE = WARNING_LEVELS | {"error", "exception", "critical", "fatal"}
 
+#: The lot that adds what the audit does with a value it cannot read as text (B's review of E-19b1), and why its reds fail.
+READ_LOT = "E-19b1.3"
+BLOB_RED = "_as_text does not handle a BLOB yet"
+LOG_RED = "the failure log still carries the error's text"
+
 # =============================================================================
 # THE MODULE UNDER TEST, LOOKED UP WHEN A TEST RUNS (absent before E-19a)
 # =============================================================================
 
 
-def _red(what: str) -> NoReturn:
-    pytest.fail(f"red until E-19a: {what}", pytrace=False)
+def _red(what: str, lot: str = "E-19a") -> NoReturn:
+    pytest.fail(f"red until {lot}: {what}", pytrace=False)
 
 
 def _audit_module() -> ModuleType:
@@ -156,7 +174,8 @@ def _users(count: int) -> list[dict[str, Any]]:
     return [{"id": user_id, "username": f"audit_user_{user_id}", "email": f"audit_user_{user_id}@example.test", **base} for user_id in range(1, count + 1)]
 
 
-def _assets(currencies: Sequence[str]) -> list[dict[str, Any]]:
+def _assets(currencies: Sequence[str | bytes]) -> list[dict[str, Any]]:
+    """One asset per currency, from asset 1: a ``bytes`` currency is bound, so stored, as a BLOB."""
     base = {"asset_type": "OTHER", "active": 1, "is_benchmark": 0, "quote_base_quantity": 1, "created_at": STAMP, "updated_at": STAMP}
     return [{"id": asset_id, "display_name": f"Audit asset {asset_id}", "currency": currency, **base} for asset_id, currency in enumerate(currencies, start=1)]
 
@@ -341,6 +360,34 @@ CLI_FINDINGS: list[Finding] = [
     ("global_settings.default_currency", "EURO", 1, "EUR"),
 ]
 
+#: E-19b1.3: currencies stored as BLOBs, as a crafted archive can carry them: the bytes of ``EUR`` in two assets and
+#: ``00 FF`` in one, beside the text ``EUR``; ordinary findings in a place before theirs (``transactions.currency``) and
+#: in one after it (``user_settings.base_currency``).
+BLOB_TABLES: dict[str, list[dict[str, Any]]] = {
+    "users": _users(1),
+    "assets": _assets(["EUR", b"EUR", b"\x00\xff", b"EUR"]),
+    "transactions": _transactions([("978", None), ("978", None), ("EUR", None)]),
+    "user_settings": _user_settings(["978"]),
+}
+#: What it holds that is no canonical code: a BLOB as SQLite's ``quote()`` writes it, without a suggestion.
+BLOB_FINDINGS: list[Finding] = [
+    ("transactions.currency", "978", 2, "EUR"),
+    ("assets.currency", "X'455552'", 2, None),
+    ("assets.currency", "X'00FF'", 1, None),
+    ("user_settings.base_currency", "978", 1, "EUR"),
+]
+#: How the assets of ``BLOB_TABLES`` store their currency, read by SQL: (id, storage class, its bytes in hex).
+BLOB_STORAGE = [(1, "text", "455552"), (2, "blob", "455552"), (3, "blob", "00FF"), (4, "blob", "455552")]
+
+#: E-19b1.3: a currency stored as TEXT whose bytes are not UTF-8 (a ``CAST`` of bytes writes one: SQLite checks no
+#: encoding). ``sqlite3`` cannot read it back as text, and the message of its ``OperationalError`` quotes it, the byte
+#: replaced by U+FFFD: «Could not decode to UTF-8 column 'currency' with text '…'».
+NOT_UTF8_MARKER = "sca-stored-text"
+NOT_UTF8 = b"E\xffR " + NOT_UTF8_MARKER.encode()
+#: What no line of the log may hold of that error: the stored text (its ASCII part; as the message quotes it) and the
+#: words of the message.
+NOT_UTF8_FRAGMENTS = (NOT_UTF8_MARKER, "E\ufffdR", "\ufffd", "Could not decode", "with text")
+
 
 def _fingerprint(path: Path) -> tuple[Optional[str], tuple[str, ...]]:
     """The sha256 of a file (None when absent) and the names in its folder: a read-only audit changes neither."""
@@ -363,6 +410,64 @@ def _find(path: Path) -> list[Finding]:
     assert state == (0, False), f"a read-only audit changes no row and leaves no transaction open on its connection: (total_changes, in_transaction) = {state}"
     assert _fingerprint(path) == before, "the audit changed the database file or its folder"
     return _as_tuples(found)
+
+
+def _reader(path: Path) -> sqlite3.Connection:
+    """A connection that reads the file at ``path`` and leaves nothing beside it. Read-write with ``query_only``, as the
+    audit's own reader, never ``mode=ro``: on these WAL databases a ``mode=ro`` connection leaves the ``-wal`` and
+    ``-shm`` files behind, and a fingerprint taken after it would no longer be the database as built."""
+    connection = sqlite3.connect(path)
+    connection.execute("PRAGMA query_only = ON")
+    return connection
+
+
+def _stored(path: Path, sql: str, *, as_bytes: bool = False) -> list[tuple[Any, ...]]:
+    """What ``sql`` reads of the file at ``path``, never through the audit; with ``as_bytes``, every text as its bytes (a
+    text that is not UTF-8 included)."""
+    connection = _reader(path)
+    try:
+        if as_bytes:
+            connection.text_factory = bytes
+        return connection.execute(sql).fetchall()
+    finally:
+        connection.close()
+
+
+def _blob_database(tmp_path: Path) -> Path:
+    """The database of ``BLOB_TABLES``. Verified by SQL, not assumed: the BLOBs are stored as BLOBs, the ``EUR`` beside
+    them as text; and the reads that verify it leave the file and its folder as built."""
+    path = _build(tmp_path / "app.db", BLOB_TABLES)
+    built = _fingerprint(path)
+    stored = _stored(path, "SELECT id, typeof(currency), hex(currency) FROM assets ORDER BY id")
+    assert stored == BLOB_STORAGE, f"precondition: the assets store their currencies as {BLOB_STORAGE}: {stored}"
+    assert _fingerprint(path) == built, "precondition: reading the database as built changed it or its folder"
+    return path
+
+
+def _not_utf8_database(tmp_path: Path) -> Path:
+    """A database whose asset 2 stores ``NOT_UTF8`` as TEXT, beside asset 1's ``EUR`` and a ``978`` in
+    ``transactions.currency``. Verified, not assumed: read back as bytes, the value is TEXT, its bytes as written; the
+    audit fails on the file with an ``OperationalError`` whose message quotes it, so a log of that message would hold it;
+    and the reads that verify it leave the file and its folder as written."""
+    path = _build(tmp_path / "app.db", {"assets": _assets(["EUR", "EUR"]), "transactions": _transactions([("978", None)])})
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("UPDATE assets SET currency = CAST(? AS TEXT) WHERE id = 2", (NOT_UTF8,))
+        connection.commit()
+    finally:
+        connection.close()
+    written = _fingerprint(path)
+    stored = _stored(path, "SELECT id, typeof(currency), currency FROM assets ORDER BY id", as_bytes=True)
+    assert stored == [(1, b"text", b"EUR"), (2, b"text", NOT_UTF8)], f"precondition: asset 2 stores its currency as TEXT that is not UTF-8: {stored}"
+    connection = _reader(path)
+    try:
+        with pytest.raises(sqlite3.OperationalError) as raised:
+            _audit("find_stored_currency_findings")(connection)
+    finally:
+        connection.close()
+    assert NOT_UTF8_MARKER in str(raised.value), f"precondition: the error the audit fails with quotes the stored text: {raised.value}"
+    assert _fingerprint(path) == written, "precondition: reading the database as written changed it or its folder"
+    return path
 
 
 # =============================================================================
@@ -457,6 +562,23 @@ def test_json_of_another_shape_is_ignored(tmp_path):  # red until E-19a
         ("fx_conversion_routes.chain_steps.from", "826", 1, "GBP"),
         ("asset_provider_assignments.provider_params.currency", "lek", 1, "ALL"),
     ]
+
+
+def test_a_blob_is_a_finding_as_sqlite_quotes_it(tmp_path):  # red until E-19b1.3: _as_text does not handle a BLOB yet
+    """SCA-015 — RED until E-19b1.3: a currency stored as a BLOB is a finding, as any value that is no canonical code:
+    its value is SQLite's ``quote()`` of it (``X'455552'`` for the bytes of ``EUR``, ``X'00FF'``), with its rows and no
+    suggestion. The BLOB of ``EUR`` is not the text ``EUR`` beside it, which is not reported. The places before and
+    after its own keep their findings: all of them are returned, sorted as ever.
+
+    Precondition, read by SQL (``_blob_database``): the BLOBs are stored as BLOBs. Today ``_as_text`` gives the bytes to
+    ``json.dumps``, whose ``TypeError`` ends the whole audit.
+    """
+    path = _blob_database(tmp_path)
+    try:
+        found = _find(path)
+    except TypeError as exc:
+        _red(f"{BLOB_RED}: {type(exc).__name__}: {exc}", lot=READ_LOT)
+    assert found == BLOB_FINDINGS
 
 
 # =============================================================================
@@ -593,6 +715,45 @@ def test_log_audit_opens_a_path_with_a_space_and_a_hash(tmp_path):  # red until 
     assert _fingerprint(path) == before, "the audit changed the database file or its folder"
 
 
+def test_log_audit_of_blobs_warns_of_their_findings(tmp_path):  # red until E-19b1.3: _as_text does not handle a BLOB yet
+    """SCA-035 — RED until E-19b1.3: on the database of SCA-015, the startup's check returns its findings and logs the one
+    warning of findings (``ISO 4217``, their count, a summary naming the BLOBs), never one saying it could not check:
+    today the BLOB's ``TypeError`` makes it lose every finding of every place."""
+    path = _blob_database(tmp_path)
+    before = _fingerprint(path)
+    result, logs = _audit_and_capture(path)
+    if result is None:
+        _red(f"{BLOB_RED}: the startup's check lost every finding, logging {_at_least_warning(logs)}", lot=READ_LOT)
+    _assert_logged_findings(result, logs, BLOB_FINDINGS)
+    summary = str(_one_warning(logs).get("summary"))
+    assert all(value in summary for value in ("X'455552'", "X'00FF'")), f"the summary names the BLOBs: {summary}"
+    assert _fingerprint(path) == before, "the audit changed the database file or its folder"
+
+
+def test_log_audit_that_fails_names_the_class_of_the_error_never_its_text(tmp_path):  # red until E-19b1.3: the failure log still carries the error's text
+    """SCA-036 — RED until E-19b1.3: the warning of a check that fails names the class of the error (and SQLite's error
+    name), never the error's text, which can quote what the database stores: after a restore, an archive's bytes. A
+    currency stored as TEXT that is not UTF-8 makes ``sqlite3`` raise an ``OperationalError`` quoting it: the check
+    returns None and logs one warning whose event says ``could not``, a field of which names ``OperationalError``; no
+    line of the log holds the stored text or the words of the message (``NOT_UTF8_FRAGMENTS``).
+
+    Preconditions (``_not_utf8_database``): the value is stored as TEXT, its bytes as written, and the audit fails on the
+    file with that ``OperationalError``, its message quoting the text. Today the warning carries ``str(error)``.
+    """
+    path = _not_utf8_database(tmp_path)
+    before = _fingerprint(path)
+    result, logs = _audit_and_capture(path)
+    assert result is None, f"a check that fails gives None, got {result!r}"
+    entry = _one_warning(logs)
+    assert "could not" in str(entry.get("event")).lower(), entry
+    told = [line for line in logs if any(fragment in repr(line) for fragment in NOT_UTF8_FRAGMENTS)]
+    if told:
+        _red(f"{LOG_RED}: {told}", lot=READ_LOT)
+    fields = {key: value for key, value in entry.items() if key not in ("event", "log_level")}
+    assert any(isinstance(value, str) and "OperationalError" in value for value in fields.values()), f"a field of the warning names the class of the error, OperationalError: {fields}"
+    assert _fingerprint(path) == before, "the audit changed the database file or its folder"
+
+
 # =============================================================================
 # 5. The command line: main(argv) and python -m
 # =============================================================================
@@ -648,6 +809,20 @@ def test_cli_of_an_unreadable_file_exits_2(tmp_path, capsys, kind):  # red until
     assert _fingerprint(path) == before, f"the command created or changed {path.name} ({kind})"
 
 
+def _module_env(tmp_path: Path) -> dict[str, str]:
+    """The environment of a ``python -m`` run of the module: UTF-8 output, no test mode, and a data dir in ``tmp_path``,
+    so a command that ignored ``--db-file`` would never reach a real database."""
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "LIBREFOLIO_DATA_DIR": str(tmp_path / "data")}
+    env.pop("LIBREFOLIO_TEST_MODE", None)
+    return env
+
+
+def _run_as_module(path: Path, env: Mapping[str, str]) -> subprocess.CompletedProcess[str]:
+    """``python -m backend.app.services.platform.stored_currencies --db-file <path>``, what ``./dev.py db currencies``
+    runs, in a process of its own."""
+    return subprocess.run([sys.executable, "-m", AUDIT_MODULE, "--db-file", str(path)], cwd=WORKTREE_ROOT, env=dict(env), capture_output=True, text=True, encoding="utf-8", timeout=300, check=False)
+
+
 def test_cli_as_a_module_exits_1_0_2(tmp_path):  # red until E-19a
     """SCA-043 — RED: ``python -m backend.app.services.platform.stored_currencies --db-file <path>`` exits 1 with
     findings (each finding's place printed), 0 when clean, 2 when the file is no database; never with a traceback.
@@ -659,11 +834,10 @@ def test_cli_as_a_module_exits_1_0_2(tmp_path):  # red until E-19a
     garbage = tmp_path / "garbage.db"
     garbage.write_bytes(b"This is no SQLite database, only text.\n" * 200)
     cases = (("findings", _build(tmp_path / "findings" / "app.db", CLI_TABLES), 1), ("clean", _build(tmp_path / "clean" / "app.db", CLEAN_TABLES), 0), ("unreadable", garbage, 2))
-    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "LIBREFOLIO_DATA_DIR": str(tmp_path / "data")}
-    env.pop("LIBREFOLIO_TEST_MODE", None)
+    env = _module_env(tmp_path)
     for name, path, expected in cases:
         before = _fingerprint(path)
-        done = subprocess.run([sys.executable, "-m", AUDIT_MODULE, "--db-file", str(path)], cwd=WORKTREE_ROOT, env=env, capture_output=True, text=True, encoding="utf-8", timeout=300, check=False)
+        done = _run_as_module(path, env)
         said = f"{name}: exit {done.returncode}\nstdout: {done.stdout[-2000:]}\nstderr: {done.stderr[-2000:]}"
         assert done.returncode == expected, said
         assert "Traceback" not in done.stderr, said
@@ -672,6 +846,45 @@ def test_cli_as_a_module_exits_1_0_2(tmp_path):  # red until E-19a
             assert all(place in done.stdout for place, _, _, _ in CLI_FINDINGS), said
         if name == "unreadable":
             assert done.stderr.strip(), said
+
+
+def test_cli_lists_blobs_and_exits_1(tmp_path, capsys):  # red until E-19b1.3: _as_text does not handle a BLOB yet
+    """SCA-044 — RED until E-19b1.3: ``main`` on the database of SCA-015 returns 1, never raises, and prints one line per
+    finding: a BLOB's value as SQLite's ``quote()`` writes it, its rows, ``—`` for its suggestion. Today the
+    ``TypeError`` of ``_as_text`` escapes ``main``, which catches only what cannot be read."""
+    main = _audit("main")
+    path = _blob_database(tmp_path)
+    before = _fingerprint(path)
+    try:
+        with capture_logs():
+            code = main(["--db-file", str(path)])
+    except TypeError as exc:
+        _red(f"{BLOB_RED}: main raised {type(exc).__name__}: {exc}", lot=READ_LOT)
+    out, _ = capsys.readouterr()
+    assert code == 1, f"findings: exit 1 expected, got {code!r}; printed {out!r}"
+    lines = {finding: _lines_naming(out, finding) for finding in BLOB_FINDINGS}
+    assert all(len(found) == 1 for found in lines.values()), f"one line per finding expected: {lines}\n{out}"
+    assert _fingerprint(path) == before, "the audit changed the database file or its folder"
+
+
+def test_cli_as_a_module_lists_blobs_without_a_traceback(tmp_path):  # red until E-19b1.3: _as_text does not handle a BLOB yet
+    """SCA-045 — RED until E-19b1.3: what ``./dev.py db currencies`` runs (``python -m``) on the database of SCA-015
+    exits 1 and prints one line per finding, the BLOBs' among them, never a traceback.
+
+    The exit code alone proves nothing: Python's own exit on an uncaught exception is 1 too. Today the command ends
+    with the traceback of the ``TypeError`` of ``_as_text``, no finding printed.
+    """
+    _audit_module()
+    path = _blob_database(tmp_path)
+    before = _fingerprint(path)
+    done = _run_as_module(path, _module_env(tmp_path))
+    said = f"exit {done.returncode}\nstdout: {done.stdout[-2000:]}\nstderr: {done.stderr[-2000:]}"
+    if "Traceback" in done.stderr:
+        _red(f"{BLOB_RED}: the command ends with a traceback\n{said}", lot=READ_LOT)
+    assert done.returncode == 1, said
+    lines = {finding: _lines_naming(done.stdout, finding) for finding in BLOB_FINDINGS}
+    assert all(len(found) == 1 for found in lines.values()), f"one line per finding expected: {lines}\n{said}"
+    assert _fingerprint(path) == before, "the command changed the database file or its folder"
 
 
 # =============================================================================

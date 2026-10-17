@@ -21,7 +21,7 @@ the first two is in [Risk UI](../../frontend/components/features/risk-lab.md).
 
 | Caller | Scope it sends | Entry point |
 |---|---|---|
-| Dashboard, **Risk** tab | `{kind: "portfolio", broker_ids}`: the brokers the user **owns** with a positive share, a share never set counting as 100% for the owner (`getOwnedBrokers()`, `stores/reference/brokerStore.ts:262`), whatever the broker filter. The panel mounts only once they are known: without `broker_ids` the backend would widen the scope to every broker the user can see, editor and viewer ones included (`routes/(app)/dashboard/+page.svelte:1032-1041`) | `levels/RiskLevelsPanel.svelte` |
+| Dashboard, **Risk** tab | `{kind: "portfolio", broker_ids}`: the brokers the user **owns** with a positive share, a share never set counting as 100% for the owner (`getOwnedBrokers()`, `stores/reference/brokerStore.ts:262`), whatever the broker filter. The panel mounts only once they are known: without `broker_ids` the backend would widen the scope to every broker the user can see, editor and viewer ones included (`routes/(app)/dashboard/+page.svelte:1101-1110`) | `levels/RiskLevelsPanel.svelte` |
 | Broker Detail, **Risk** tab | `{kind: "portfolio", broker_ids: [id]}` | `levels/RiskLevelsPanel.svelte` |
 | Assets page, **Correlation** tab (the *Asset Global* lab) | `{kind: "asset_set", asset_ids: [...]}` | `AssetSetRiskPanel.svelte` |
 | Asset Detail, **Risk & Scenarios** tab | `{kind: "asset", asset_id}` | `AssetRiskScenariosView.svelte` → `RiskAnalysisPanel.svelte` |

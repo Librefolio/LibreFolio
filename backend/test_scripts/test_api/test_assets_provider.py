@@ -1521,7 +1521,7 @@ _Z32_YAHOO = {"provider_code": "yfinance", "identifier": "{ticker}", "identifier
 #: An assignment without an identifier: AUTO_GENERATED, sent empty, stored NULL.
 _Z32_AUTO = {"provider_code": "mockprov", "identifier": "", "identifier_type": "AUTO_GENERATED", "provider_params": {"note": "Z-32 first save"}}
 _Z32_SECOND_PARAMS = {"note": "Z-32 second save"}
-SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
+SOLE_ADMIN_DELETE_DETAIL = {"error_code": "LAST_ADMIN", "message": "Cannot delete account: you are the last active administrator"}
 
 
 def _z32_lane_engine():

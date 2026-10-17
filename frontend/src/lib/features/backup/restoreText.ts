@@ -26,6 +26,7 @@ export const WARNING_KEYS: Record<string, string> = {
     foreign_key_violations_added: 'backup.restore.report.warning.foreign_key_violations_added',
     control_totals_changed: 'backup.restore.report.warning.control_totals_changed',
     control_totals_unreadable: 'backup.restore.report.warning.control_totals_unreadable',
+    non_iso_currencies: 'backup.restore.report.warning.non_iso_currencies',
 };
 
 /** How the ledger's control totals compare (lot B-13). */

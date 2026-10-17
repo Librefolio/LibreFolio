@@ -145,7 +145,8 @@
           "foreign_key_violations_added": "La actualización añadió referencias rotas a la copia.",
           "control_totals_changed": "Los totales del registro difieren de los registrados en la copia de seguridad (listados arriba).",
           "control_totals_unreadable": "No se pudieron leer los totales del registro en la copia.",
-          "unknown": "Algo del archivo merece una revisión: el registro del servidor tiene los detalles."
+          "unknown": "Algo del archivo merece una revisión: el registro del servidor tiene los detalles.",
+          "non_iso_currencies": "Algunos códigos de divisa de la copia de seguridad no son códigos ISO (nombres o números guardados por una versión anterior): la edición de esas filas se rechaza hasta que se corrija el código."
         },
         "expires": "La copia comprobada se conserva hasta el {date}.",
         "drop": "Descartar este archivo"

@@ -125,6 +125,11 @@
       "tooManyItems": "No se han podido cargar algunos valores: el servidor acepta como máximo {max, number} elementos por solicitud, y esta tenía {count, number}.",
       "tooManyDays": "No se han podido cargar algunos valores: el servidor genera como máximo {max, number} valores diarios por solicitud, y esta necesitaba más. Elige un periodo más corto."
     },
+    "nonIsoCurrency": {
+      "suggestion": "{value} no es un código ISO: equivale a {suggestion}",
+      "candidates": "{value} no es un código ISO: puede equivaler a {candidates}",
+      "unknown": "{value} no es un código de divisa ISO"
+    },
     "writeRefusal": {
       "dateOutOfRange": "{count, plural, one {# fecha está} other {# fechas están}} fuera del intervalo {min} – {max}: {dates}. No se ha guardado nada.",
       "currencyMismatch": "{count, plural, one {# precio está} other {# precios están}} en {found}, no en la moneda del activo {expected}: {dates}. No se ha guardado nada.",
@@ -140,7 +145,7 @@
         "internal_error": "error del servidor",
         "other": "rechazado por el servidor"
       },
-      "tooManyItems": "No se ha guardado nada: el servidor acepta como máximo {max, number} valores por guardado, y este contenía {count, number}. Guárdelos en varias partes."
+      "tooManyItems": "No se ha guardado nada: el servidor acepta como máximo {max, number} valores por guardado, y este contenía {count, number}. Guárdalos en varias partes."
     }
   },
   "csvImport": {
