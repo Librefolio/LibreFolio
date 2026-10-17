@@ -730,10 +730,30 @@ check derives the archive's subkey with `derive_key_from(archive_key, SUBKEY_PUR
 `rekey_plugin_secrets(conn, old_subkey, new_subkey)` in
 `backend/app/services/plugin_settings/crypto.py`, on a connection to the copy's database. It derives
 this instance's subkey only when the copy holds secrets, so the check of an archive without any never
-generates the key file. Without the archive's key, or with one `derive_key_from()` refuses, it only
-counts the secrets this instance cannot read (`count_unreadable_secrets()`). No path gives the restore
-a key the administrator kept, such as a copy of the old `secrets/instance.key`: that is backlog item
-B-18 (`restore --instance-key-file`).
+generates the key file. Without a key, the archive's or one given for the restore (below), or with an
+archive's key that `derive_key_from()` refuses, it only counts the secrets this instance cannot read
+(`count_unreadable_secrets()`).
+
+A key the administrator kept, such as a copy of the old `secrets/instance.key`, reaches the restore
+from the command line only (lot B-18): `dev.py backup restore --instance-key-file FILE`. An upload from
+the app never brings one: `RestoreStageRequest` holds only `upload_id` and `password`, and the check it
+starts calls `stage_archive()` without `instance_key` (`restore_jobs._run_check()`);
+`instance_key_invalid`, below, is one of `RestoreErrorCode` only because that list holds every code
+`stage_archive()` can raise. The command reads the file before it switches to the data directory's
+owner, so that, started as root (`docker compose exec`), it reads a Docker secret only root can read;
+read as root, the file must be a regular file, reached through no link inside the data directory (lot
+B-38, the bullet «Secret files read as root» of [Secure Backups](#secure-backups)).
+`stage_archive(..., instance_key=…)` checks the key before anything else, before the lock, any folder
+or the archive (`_refuse_unusable_instance_key()`). A key `derive_key_from()` cannot use, that is a
+text shorter than `INSTANCE_KEY_MIN_LENGTH` (32 characters, the one rule it holds a key's text to), is
+`StagingError` `instance_key_invalid`, «The instance key given is too short: an instance key has at
+least 32 characters», a message without the key or its length. A key long enough but not the old
+instance's is no error: the secrets it should open stay counted as unreadable, and the command warns
+that it reads none of them (decision D2). When the archive carries its own key, the entry
+`secrets/instance.key`, that key wins over the one given (decision D1, `_stage()`), and the command
+says that it does not use the file. Tests: section (i) of `./dev.py test services backup-secure` and
+the B-18 cases of `./dev.py test utils backup-cli-restore`; the administrator's side is
+«The Instance Key of Another Installation» in [Command-Line Tools](../../admin/cli_tools.md).
 
 The generated file (`_create_key_file()`):
 
@@ -1966,6 +1986,15 @@ anything of it can run.
   of its own, stopped after an hour (`UPGRADE_TIMEOUT_SECONDS`), and `backend/alembic/env.py` turns it off on every
   connection with a `connect` listener, `_schema_untrusted`, whatever the URL: the copy's, given with
   `-x sqlalchemy.url`, and the live database's alike (lot B-37).
+- **Why the upgrade needs it.** SQLAlchemy's SQLite dialects (`pysqlite`, which `aiosqlite` inherits; SQLAlchemy
+  2.0.52, `SQLiteDialect_pysqlite.on_connect()`) register two Python functions on every connection: `regexp`
+  (`re.search`), behind the `REGEXP` operator, and `floor` (`math.floor`), in place of SQLite's own `floor()` where the
+  build has one. The upgrade runs on such connections. With `_schema_untrusted`, an insert of the upgrade that needs an
+  archive's `DEFAULT` calling them is refused («unsafe use of …»), and the upgrade fails (`upgrade_failed`) instead of
+  running Python code on the archive's pattern. A `CHECK` or an index's expression calling `regexp` is refused there
+  only since lot H-51, at the first statement: before it, `set_sqlite_pragma()` read the schema on those connections
+  before the dialect registered the functions, and such a call then ran at the insert
+  ([`trusted_schema` Off in the Server's Engines](#trusted-schema-server)).
 
 Tests: `./dev.py test services backup-staging` (`backend/test_scripts/test_services/test_backup_staging.py`, section
 (l): a trigger, a recursive view, an `fts5` virtual table and a comment between the keywords, each refused before
@@ -1975,6 +2004,50 @@ or a view; `trusted_schema` off first on every connection of a whole check, the 
 B-37), `./dev.py test db post-migration` (`backend/test_scripts/test_db/test_post_migration.py`: tables named `x"y` or
 `a" WHERE 1 --`, counted while a fix runs, lot B-36) and `./dev.py test utils dev-cli-db-path`
 (`backend/test_scripts/test_utilities/test_dev_cli_db_path.py`: the `connect` listener of `env.py`, lot B-37).
+
+#### `trusted_schema` Off in the Server's Engines {: #trusted-schema-server }
+
+`set_sqlite_pragma()` in `backend/app/db/session.py` is the `connect` listener every SQLAlchemy engine of the process
+gets: it is registered on the `Engine` class, so it holds for each engine, the synchronous one under the async engine
+included. Since lot H-51 it turns `trusted_schema` off first, before `foreign_keys`, WAL and `busy_timeout`, and ends
+with `PRAGMA writable_schema=RESET`.
+
+- **Why.** The check refuses triggers, views and virtual tables by their kind (lot B-28), but does not read the
+  expressions inside tables and indexes, and its plain `sqlite3` connections never evaluate a `DEFAULT`:
+  `PRAGMA integrity_check` answers `ok`. Before H-51, an archive whose column had `DEFAULT (regexp(…))` passed the
+  check, and in the server every insert that omitted that column ran SQLAlchemy's Python `regexp` with the archive's
+  pattern and value, through the async engine too. A `CHECK` or an index's expression calling a function plain
+  `sqlite3` lacks, such as `regexp`, stops the check at the `PRAGMA integrity_check` of `describe_database()`
+  («unknown function»), before the upgrade runs.
+- **Why the reset, last.** SQLAlchemy calls the listeners registered on a class before those of one engine, so this
+  one runs before the dialect's `on_connect()` registers `regexp` and `floor`, and its `PRAGMA journal_mode=WAL` makes
+  SQLite read the schema right then. SQLite marks a call as the schema's own only when it finds the function, and
+  checks nothing again later: read then, a `CHECK` or an index's expression calling `regexp` would run SQLAlchemy's
+  Python function at each insert into its table, `trusted_schema` off or not. `writable_schema=RESET` drops that
+  reading: SQLite reads the schema again at the next statement that needs it, with the functions registered and
+  `trusted_schema` off. It costs one more read of the schema per new connection, and both engines of `session.py` open
+  a new connection for each use (`NullPool`).
+- **When SQLite refuses.** A `CHECK` or an index's expression calling `regexp`: at the first statement of the
+  connection that needs the schema, a `SELECT` of another table included
+  (`malformed database schema (<object>) - unsafe use of REGEXP()`). A `DEFAULT` calling `regexp` or `floor`: at the
+  insert that needs it («unsafe use of regexp()»). The refusal comes at a statement, never inside the listener:
+  SQLAlchemy's pool does not close a connection whose `connect` listener raised (`_ConnectionRecord.__connect()`).
+- **Nothing of the app changes.** LibreFolio's own schema calls only the built-in `lower()` (the index
+  `ux_users_email_lower`, migration 009), and the pragma restricts only the SQL the schema holds, never top-level SQL.
+- **In the upgrade's process too.** `backend/alembic/env.py` imports `backend.app.db.base`, so the package's
+  `backend/app/db/__init__.py`, which imports `session.py`: the upgrade's connections get `set_sqlite_pragma()` as
+  well, before `_schema_untrusted`, which `env.py` registers on its own engine. Before H-51, `set_sqlite_pragma()`
+  read the schema there before `_schema_untrusted` turned the pragma off and before the functions existed:
+  `_schema_untrusted` stopped a `DEFAULT`, refused at the insert, but not a `CHECK` or an index's expression. Since
+  H-51, with the pragma off first and the schema reset last, the rule holds for all of them there too.
+
+Tests: `./dev.py test db session-pragmas` (`backend/test_scripts/test_db/test_session_pragmas.py`, through a sync and
+an async engine: `trusted_schema` at 0 on two new connections in a row; a `DEFAULT` calling `regexp` or `floor`
+refused at the insert that needs it, nothing written; a `CHECK` calling `regexp` through `REGEXP` refused at the first
+statement of every new connection, a `SELECT` of another table included, both tables left as the archive wrote them;
+guards: `foreign_keys`, WAL and `busy_timeout` as before, `lower()`, `length()` and `abs()` in the schema, `REGEXP`,
+`regexp_match` and `floor` in a statement's own SQL, and the schema at head, migrated under the listener, taking a
+user through the async engine).
 
 ### 📏 The Restore Limit {: #backup-restore-limit }
 

@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Optional
 
 import structlog
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
@@ -50,7 +50,7 @@ from backend.app.services.series_preparation import mark_market_closed_carries, 
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
 from backend.app.services.signals.service import SignalService
 from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS, BulkTooManyDaysError
-from backend.app.utils.datetime_utils import latest_range_end, utcnow
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end, utcnow
 
 logger = structlog.get_logger(__name__)
 
@@ -78,6 +78,32 @@ async def _last_readable_price(session: AsyncSession, asset_id: int) -> Optional
             return None
         offset += page
         page = _FALLBACK_PAGE
+
+
+async def _last_readable_prices(session: AsyncSession, asset_ids: list[int]) -> dict[int, PriceHistory]:
+    """Each asset's most recent price row whose close reads a number (``_last_readable_price``), for many assets at once.
+
+    One grouped query for the latest row of every asset (MF-SEC9c), run once the live quotes are in: the fallbacks used
+    to read the session from the parallel quote tasks, which one ``AsyncSession`` does not allow. An asset whose latest
+    close does not read (W-B62) is looked up alone, older rows a page at a time, one after the other. An asset without a
+    readable price is absent.
+    """
+    if not asset_ids:
+        return {}
+    latest = select(PriceHistory.asset_id, func.max(PriceHistory.date).label("latest")).where(PriceHistory.asset_id.in_(asset_ids)).group_by(PriceHistory.asset_id).subquery()
+    rows = (await session.execute(select(PriceHistory).join(latest, and_(PriceHistory.asset_id == latest.c.asset_id, PriceHistory.date == latest.c.latest)))).scalars().all()
+    found: dict[int, PriceHistory] = {}
+    unreadable: list[int] = []
+    for row in rows:
+        if row.close is not None:
+            found[row.asset_id] = row
+        else:
+            unreadable.append(row.asset_id)
+    for asset_id in sorted(unreadable):
+        row = await _last_readable_price(session, asset_id)
+        if row is not None:
+            found[asset_id] = row
+    return found
 
 
 def _quote_item(asset_id: int, quote: FACurrentValue, source: str) -> FACurrentPriceItem:
@@ -310,17 +336,21 @@ class PriceQueryOperations:
                 context,
                 req.annotation_requests,
             )
+            # Point-derived warm-up, for every signal of the plan.
+            warmup_days = max(
+                plan.max_history_days_before_visible,
+                plan.max_prepared_history_points_before_visible * RISK_WARMUP_DAY_MULTIPLIER,
+            )
             # E1: a full-history computation (e.g. underwater drawdown, whose
             # relevant peak may predate the visible range by years) loads from
-            # the beginning of the available history; the min() cap below then
-            # resolves to exactly date.min. Point-derived warm-up otherwise.
+            # the beginning of the available history, which Z-30 sets at
+            # EARLIEST_RANGE_START (1900-01-01, the floor of every stored date):
+            # the load starts at the earlier of that floor and the warm-up's
+            # start above. A row an older version stored before 1900 is at most
+            # the fill's seed, so a price left at 0001-01-01 no longer makes one
+            # visible day walk ~740,000 days.
             if plan.requires_full_history:
-                warmup_days = (req.date_range.start - date_type.min).days
-            else:
-                warmup_days = max(
-                    plan.max_history_days_before_visible,
-                    plan.max_prepared_history_points_before_visible * RISK_WARMUP_DAY_MULTIPLIER,
-                )
+                warmup_days = max(warmup_days, (req.date_range.start - EARLIEST_RANGE_START).days)
             warmup_days = min(
                 warmup_days,
                 (req.date_range.start - date_type.min).days,
@@ -392,8 +422,9 @@ class PriceQueryOperations:
                     seed_prices[aid] = seed_row
 
         # Z-25: the per-day points the fills will build, comparison series included, against the request's budget. The
-        # count follows the fill, not the request: a full-history signal loads from date.min, and its fill emits from
-        # the first stored price even when the visible range is one day.
+        # count follows the fill, not the request: a full-history signal loads from 1900-01-01 at the latest (Z-30), and
+        # its fill emits from the first stored price, or from the load start when an older row seeds it, even when the
+        # visible range is one day.
         item_days = 0
         for req, plan, (start, end) in zip(requests, signal_plans, load_ranges, strict=True):
             item_days += PriceQueryOperations._fill_span(price_maps.get(req.asset_id, {}), start, end, seed_prices.get(req.asset_id))
@@ -886,47 +917,45 @@ class PriceQueryOperations:
         assign_res = await session.execute(assign_stmt)
         assign_map = {a.asset_id: a for a in assign_res.scalars().all()}
 
-        async def _fetch_one(asset_id: int) -> FACurrentPriceItem:
-            """Fetch current price for one asset via provider or DB fallback."""
-            asset = asset_map.get(asset_id)
-            if not asset:
-                return FACurrentPriceItem(asset_id=asset_id, error="Asset not found")
-
+        async def _live_one(asset_id: int) -> tuple[Optional[FACurrentPriceItem], Optional[AssetRateLimitedError]]:
+            """One asset's live quote from its provider, or why there is none. It never reads the session: the quotes
+            run in parallel, and one ``AsyncSession`` cannot serve concurrent tasks (MF-SEC9c)."""
             assignment = assign_map.get(asset_id)
-            refusal: AssetRateLimitedError | None = None
+            if asset_id not in asset_map or assignment is None:
+                return None, None
+            return await _live_quote_item(asset_id, assignment, sem)
 
-            # --- Try provider ---
-            if assignment:
-                item, refusal = await _live_quote_item(asset_id, assignment, sem)
-                if item is not None:
-                    return item
+        # The live quotes in parallel, one per distinct id (R13-SEC9-1: a repeated id is fetched, and written back, once)
+        distinct_ids = list(dict.fromkeys(asset_ids))
+        live = dict(zip(distinct_ids, await asyncio.gather(*(_live_one(aid) for aid in distinct_ids)), strict=True))
 
+        # Fallback: the last known price from the DB, for the assets without a live quote, in one grouped read once the
+        # quotes are in (MF-SEC9c). The latest close that reads a number: one the file holds as ±inf reads None, and is
+        # passed over (W-B62)
+        stored = await _last_readable_prices(session, [aid for aid in distinct_ids if aid in asset_map and live[aid][0] is None])
+        fetched: dict[int, FACurrentPriceItem] = {}
+        for aid in distinct_ids:
+            item, refusal = live[aid]
+            if aid not in asset_map:
+                fetched[aid] = FACurrentPriceItem(asset_id=aid, error="Asset not found")
+                continue
+            if item is not None:
+                fetched[aid] = item
+                continue
             refusal_fields = {"error_code": refusal.error_code, "retry_after": refusal.retry_after} if refusal is not None else {}
-
-            # --- Fallback: last known price from DB ---
-            # The latest close that reads a number: one the file holds as ±inf reads None, and is passed over (W-B62)
-            last_price = await _last_readable_price(session, asset_id)
-
-            if last_price:
-                return FACurrentPriceItem(
-                    asset_id=asset_id,
+            last_price = stored.get(aid)
+            if last_price is not None:
+                fetched[aid] = FACurrentPriceItem(
+                    asset_id=aid,
                     value=Decimal(str(last_price.close)),
                     currency=last_price.currency,
                     as_of_date=last_price.date,
                     source="db:last_known",
                     **refusal_fields,
                 )
-
-            return FACurrentPriceItem(
-                asset_id=asset_id,
-                error="No price data available",
-                **refusal_fields,
-            )
-
-        # Run all fetches in parallel, one per distinct id (R13-SEC9-1: a repeated id is fetched, and written back,
-        # once), the answer in request order
-        distinct_ids = list(dict.fromkeys(asset_ids))
-        fetched = dict(zip(distinct_ids, await asyncio.gather(*(_fetch_one(aid) for aid in distinct_ids)), strict=True))
+            else:
+                fetched[aid] = FACurrentPriceItem(asset_id=aid, error="No price data available", **refusal_fields)
+        # The answer in request order
         results = [fetched[aid] for aid in distinct_ids]
 
         # F.2 + F.3 — persist current-price snapshots to PriceHistory.

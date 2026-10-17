@@ -128,6 +128,23 @@ $$
 
 where $N_{b,c}(t)$ is the balance of broker $b$ in currency $c$ after its movements dated on or before $t$, scaled by the broker's [ownership share](../../../../user/brokers/sharing.md), and $\mathrm{fx}(c, C^*, t)$ is the latest rate on or before $t$ ($1$ for $c = C^*$). The same term is in NAV and in Book, so the exchange-rate effect on cash cancels in UGL: it is booked as an exchange result (§6) and belongs to the Total P&L.
 
+### 🔀 Two Unrealized Figures {: #two-unrealized-figures }
+
+$\mathrm{InTransit}(t)$ and $\mathrm{InTransitBook}(t)$ hold the same cash in transit, and the securities travelling between two brokers of $S$ at market value, $\mathrm{MV}^{\mathrm{tr}}(t)$, in the first and at historical cost, $\mathrm{CB}^{\mathrm{tr}}(t)$, in the second. Cash cancels, so with $\mathrm{OCB}(t)$ the cost basis of the positions held (§3):
+
+$$
+\mathrm{UGL}(t) = \bigl[\mathrm{MV}(t) - \mathrm{OCB}(t)\bigr] + \bigl[\mathrm{MV}^{\mathrm{tr}}(t) - \mathrm{CB}^{\mathrm{tr}}(t)\bigr]
+$$
+
+The engine reports two unrealized figures:
+
+| Figure | Definition | Where it shows |
+|--------|-----------|----------------|
+| Portfolio unrealized | $\mathrm{UGL}(t) = \mathrm{NAV}(t) - \mathrm{Book}(t)$, securities in transit included | `unrealized_gain_loss` of the portfolio report's summary and history points (`POST /portfolio/report`) and of the AI Export portfolio and broker summaries; [Book Value — Unrealized](book-value.md) |
+| Period unrealized | $\mathrm{MV}(t) - \mathrm{OCB}(t)$ at each period boundary, positions held only | `period_unrealized_gain_loss_start`, `_end`, `_delta` and their split by currency; the Dashboard's **Unrealized change**; the $\Delta\mathrm{UGL}$ of [Period P&L](period-pnl.md) and the per-position rows of §7 |
+
+They differ only by the securities in transit: on a day when none is travelling, they are equal. A security in transit on a period boundary is in NAV, so in the period P&L, but in no position's state: its part of the result is in the residual of §7, not in $\Delta\mathrm{UGL}$.
+
 ---
 
 ## 📐 6. Three-Pool Cash Model — Per-Broker $(K_b, R_b, W)$ {: #6-three-pool-cash-model-per-broker-k_b-r_b-w }
@@ -226,7 +243,7 @@ $$
 \mathcal{P} = \text{positions with BUY/SELL/ADJUSTMENT/TRANSFER activity or boundary quantity}
 $$
 
-$\mathrm{UGL}(a,b,t)$ is the position state of §3 at the end of day $t$, the one the portfolio aggregates (§5): the mark of §2 — a trade-derived mark restated through any later split —, the cost basis when the asset has no mark at all, the exchange rate of $t$ itself. A position not held on $t$ counts 0. A position held on $t$ whose $\mathrm{UGL}(a,b,t)$ is unknown — no rate, an incomplete cost — makes $\Delta\mathrm{UGL}(a,b)$ unknown, never the known side minus zero. When every row is known, the rows add up to the portfolio's change, that of the positions held:
+$\mathrm{UGL}(a,b,t)$ is the position state of §3 at the end of day $t$, the one the portfolio aggregates (§5): the mark of §2 — a trade-derived mark restated through any later split —, the cost basis when the asset has no mark at all, the exchange rate of $t$ itself. A position not held on $t$ counts 0. A position held on $t$ whose $\mathrm{UGL}(a,b,t)$ is unknown — no rate, an incomplete cost — makes $\Delta\mathrm{UGL}(a,b)$ unknown, never the known side minus zero. When every row is known, the rows add up to the portfolio's change, that of the positions held — the period unrealized of [§5](#two-unrealized-figures), securities in transit left out:
 
 $$
 \sum_{(a,b) \in \mathcal{P}} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL} = \bigl[\mathrm{MV}(t_1) - \mathrm{OCB}(t_1)\bigr] - \bigl[\mathrm{MV}(t_0) - \mathrm{OCB}(t_0)\bigr]
