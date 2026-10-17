@@ -28,6 +28,7 @@ This module provides:
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import hashlib
 import io
@@ -41,7 +42,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Tuple
 
 try:
     import fcntl
@@ -1988,14 +1989,98 @@ def _other_as_text(value: Optional[List[str]]) -> str:
     return json.dumps(value)
 
 
-def _contains(haystack: Optional[str], needle: str) -> bool:
-    """SQL ``ilike('%needle%')`` — wildcards inside *needle* are honoured."""
-    if not haystack:
-        return False
-    return _like_to_regex(f"%{needle}%").match(haystack) is not None
+def _contains_matcher(needle: str) -> Callable[[Optional[str]], bool]:
+    """SQL ``ilike('%needle%')`` as a test of one text — wildcards inside *needle* are honoured. Compiled once per needle
+    (MF-SEC9g): the bulk classification tests it against every candidate of the universe."""
+    pattern = _like_to_regex(f"%{needle}%")
+    return lambda haystack: bool(haystack) and pattern.match(haystack) is not None
 
 
-async def search_asset_candidates_bulk(  # noqa: C901 — flat priority chain over in-memory universe; mirrors search_asset_candidates
+class _CandidateView(NamedTuple):
+    """What the bulk classification reads of one stored asset, read once off the ORM object (MF-SEC9g): the thread that
+    classifies never touches the session or a lazy attribute. ``_add_candidate`` reads ``id``, ``identifier_ticker``,
+    ``identifier_isin`` and ``display_name``; ``name_fields`` are the identifier texts the name is matched against, in the
+    per-asset path's order, ``identifier_other`` as SQL's cast sees it."""
+
+    id: int
+    display_name: str
+    identifier_isin: Optional[str]
+    identifier_ticker: Optional[str]
+    other_text: str
+    name_fields: Tuple[Optional[str], ...]
+
+
+def _candidate_view(asset) -> _CandidateView:
+    other_text = _other_as_text(asset.identifier_other)
+    return _CandidateView(
+        id=asset.id,
+        display_name=asset.display_name,
+        identifier_isin=asset.identifier_isin,
+        identifier_ticker=asset.identifier_ticker,
+        other_text=other_text,
+        name_fields=(asset.identifier_isin, asset.identifier_ticker, asset.identifier_cusip, asset.identifier_sedol, asset.identifier_figi, asset.identifier_uuid, other_text),
+    )
+
+
+def _classify_candidates(  # noqa: C901 — flat priority chain over the universe; mirrors search_asset_candidates
+    unique: List[Tuple[Optional[str], Optional[str], Optional[str]]],
+    universe: List[_CandidateView],
+) -> Dict[Tuple[Optional[str], Optional[str], Optional[str]], Tuple[List, Optional[int]]]:
+    """The per-asset path's five-step priority, in memory, for every distinct extraction (``search_asset_candidates_bulk``).
+
+    Pure CPU over plain views, run in a worker thread (MF-SEC9g): over a large universe with generic names it took
+    seconds to minutes, on the event loop. The exact ISIN and ticker steps read an index that keeps the universe's order;
+    each needle's LIKE pattern is compiled once, and each asset's ``identifier_other`` text is built once.
+    """
+    by_isin: Dict[str, List[_CandidateView]] = {}
+    by_ticker: Dict[str, List[_CandidateView]] = {}
+    for view in universe:
+        by_isin.setdefault(view.identifier_isin or "", []).append(view)
+        by_ticker.setdefault(view.identifier_ticker or "", []).append(view)
+
+    out: Dict[Tuple[Optional[str], Optional[str], Optional[str]], Tuple[List, Optional[int]]] = {}
+    for symbol, isin, name in unique:
+        candidates: List[BRIMAssetCandidate] = []
+        by_id: dict = {}
+
+        def _add(view: _CandidateView, confidence: BRIMMatchConfidence, _c=candidates, _b=by_id) -> None:
+            _add_candidate(_c, _b, view, confidence)
+
+        # Priority 1 + 2: the ISIN, primary column then alternates. Run together and
+        # merged, exactly as in the per-asset path — see its docstring for why.
+        if isin:
+            for view in by_isin.get(isin.upper(), ()):
+                _add(view, BRIMMatchConfidence.EXACT)
+            isin_in = _contains_matcher(isin)
+            for view in universe:
+                if isin_in(view.other_text):
+                    _add(view, BRIMMatchConfidence.HIGH)
+
+        # Priority 3: ticker.
+        if symbol and not candidates:
+            for view in by_ticker.get(symbol.upper(), ()):
+                _add(view, BRIMMatchConfidence.MEDIUM)
+
+        # Priority 4: the name, across identifiers first and display name second.
+        name_in = _contains_matcher(name) if name else None
+        if name_in is not None and not candidates:
+            hits = [view for view in universe if any(name_in(field) for field in view.name_fields)]
+            if not hits:
+                hits = [view for view in universe if name_in(view.display_name)]
+            for view in hits:
+                _add(view, BRIMMatchConfidence.LOW)
+
+        # Priority 5: the soft broker label saved on a previous import.
+        if name_in is not None and not candidates:
+            for view in universe:
+                if name_in(view.other_text):
+                    _add(view, BRIMMatchConfidence.LOW)
+
+        out[(symbol, isin, name)] = (candidates, candidates[0].asset_id if len(candidates) == 1 else None)
+    return out
+
+
+async def search_asset_candidates_bulk(
     session,
     extractions: List[Tuple[Optional[str], Optional[str], Optional[str]]],
 ) -> Dict[Tuple[Optional[str], Optional[str], Optional[str]], Tuple[List, Optional[int]]]:
@@ -2010,9 +2095,11 @@ async def search_asset_candidates_bulk(  # noqa: C901 — flat priority chain ov
 
     Here the superset of possibly-relevant assets is fetched once with the union of
     every condition, and the *same* five-step priority is then applied in memory,
-    per extraction. The classification logic is duplicated on purpose rather than
-    approximated: ``test_brim_bulk_candidates.py`` asserts the two functions agree
-    row by row, which is what makes the duplication safe to keep.
+    per extraction (``_classify_candidates``), in a worker thread: over a large universe
+    with generic names it ran for seconds to minutes on the event loop (MF-SEC9g). The
+    classification logic is duplicated on purpose rather than approximated:
+    ``test_brim_bulk_candidates.py`` and ``test_bulk_reads_chunked.py`` assert the two
+    functions agree row by row, which is what makes the duplication safe to keep.
 
     Args:
         session: AsyncSession for the query (one per chunk of conditions).
@@ -2068,58 +2155,9 @@ async def search_asset_candidates_bulk(  # noqa: C901 — flat priority chain ov
             universe_by_id.setdefault(asset.id, asset)
     universe = sorted(universe_by_id.values(), key=lambda asset: asset.display_name)
 
-    out: Dict[Tuple[Optional[str], Optional[str], Optional[str]], Tuple[List, Optional[int]]] = {}
-
-    for symbol, isin, name in unique:
-        candidates: List[BRIMAssetCandidate] = []
-        by_id: dict = {}
-
-        def _add(asset, confidence: BRIMMatchConfidence, _c=candidates, _b=by_id) -> None:
-            _add_candidate(_c, _b, asset, confidence)
-
-        # Priority 1 + 2: the ISIN, primary column then alternates. Run together and
-        # merged, exactly as in the per-asset path — see its docstring for why.
-        if isin:
-            for asset in universe:
-                if (asset.identifier_isin or "") == isin.upper():
-                    _add(asset, BRIMMatchConfidence.EXACT)
-            for asset in universe:
-                if _contains(_other_as_text(asset.identifier_other), isin):
-                    _add(asset, BRIMMatchConfidence.HIGH)
-
-        # Priority 3: ticker.
-        if symbol and not candidates:
-            for asset in universe:
-                if (asset.identifier_ticker or "") == symbol.upper():
-                    _add(asset, BRIMMatchConfidence.MEDIUM)
-
-        # Priority 4: the name, across identifiers first and display name second.
-        if name and not candidates:
-            hits = [
-                a
-                for a in universe
-                if _contains(a.identifier_isin, name)
-                or _contains(a.identifier_ticker, name)
-                or _contains(a.identifier_cusip, name)
-                or _contains(a.identifier_sedol, name)
-                or _contains(a.identifier_figi, name)
-                or _contains(a.identifier_uuid, name)
-                or _contains(_other_as_text(a.identifier_other), name)
-            ]
-            if not hits:
-                hits = [a for a in universe if _contains(a.display_name, name)]
-            for asset in hits:
-                _add(asset, BRIMMatchConfidence.LOW)
-
-        # Priority 5: the soft broker label saved on a previous import.
-        if name and not candidates:
-            for asset in universe:
-                if _contains(_other_as_text(asset.identifier_other), name):
-                    _add(asset, BRIMMatchConfidence.LOW)
-
-        out[(symbol, isin, name)] = (candidates, candidates[0].asset_id if len(candidates) == 1 else None)
-
-    return out
+    # The classification off the event loop (MF-SEC9g): plain views, read here from the loaded objects, go to a thread
+    views = [_candidate_view(asset) for asset in universe]
+    return await asyncio.to_thread(_classify_candidates, unique, views)
 
 
 # =============================================================================
