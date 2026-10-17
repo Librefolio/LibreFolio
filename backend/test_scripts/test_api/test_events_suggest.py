@@ -27,6 +27,8 @@ For each ``(asset_id, date, type, tolerance_days)`` return candidate
   is required.
 - ``tolerance_days=0`` matches only the exact date.
 - ``tolerance_days`` is capped at 7 by the schema (422 beyond).
+- The window is cut at the calendar's edge: an item dated 0001-01-01 or
+  9999-12-31 is answered like any other, not with a 500 (W-B71).
 - Large batches (>500 requests) are delegated without a cap.
 
 Plan: ``plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md`` §G.4.
@@ -343,3 +345,132 @@ async def test_suggest_accepts_more_than_500_requests(monkeypatch: pytest.Monkey
     assert captured["count"] == 501
     assert len(result) == 501
     print_success(">500 requests accepted and delegated (no cap)")
+
+
+# ============================================================================
+# W-B71 — the window at the calendar's edges
+# ============================================================================
+#
+# suggest_events_bulk searches date ± tolerance_days. From 0001-01-01 back and from 9999-12-31 on, any tolerance above
+# 0 leaves the calendar: OverflowError, a 500 for the whole batch. The guard (G.4.9) and the red (G.4.10) send the same
+# batch — an ordinary DIVIDEND at tolerance_days=3, then one dated 0001-01-01 and one dated 9999-12-31 — except for
+# the edge items' tolerance: 0 in the guard (the day itself, answered today), 3 in the red.
+
+#: The calendar's edge days, where a window around the date leaves the calendar.
+CALENDAR_EDGES = (date.min, date.max)
+#: At tolerance_days=3 the events 3 days either side of the day are inside the window, those 4 days away just outside.
+WINDOW_TOLERANCE = 3
+WINDOW_INSIDE = (-3, 3)
+WINDOW_OUTSIDE = (-4, 4)
+
+
+async def _drop_asset(client: httpx.AsyncClient, asset_id: int) -> list[str]:
+    """Delete an asset the test created; its events cascade. Returns the problems instead of raising, so that a failed cleanup never hides the test's own failure."""
+    try:
+        resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+    except httpx.HTTPError as exc:
+        return [f"asset {asset_id}: cleanup request failed: {exc!r}"]
+    done = resp.status_code == 200 and any(item.get("asset_id") == asset_id and item.get("success") for item in resp.json().get("results", []))
+    return [] if done else [f"asset {asset_id} not deleted: HTTP {resp.status_code} {resp.text}"]
+
+
+async def _upsert_window_events(client: httpx.AsyncClient, asset_id: int, day: date) -> None:
+    """A manual DIVIDEND of the asset at each offset of WINDOW_INSIDE and WINDOW_OUTSIDE from ``day``."""
+    await _upsert_events(client, asset_id, [{"date": (day + timedelta(days=offset)).isoformat(), "type": "DIVIDEND", "value": {"code": "EUR", "amount": "1.00"}} for offset in (*WINDOW_INSIDE, *WINDOW_OUTSIDE)])
+
+
+def _dividend(asset_id: int, day: date, tolerance_days: int) -> dict:
+    """One suggest request item: a DIVIDEND of the asset dated ``day``."""
+    return {"asset_id": asset_id, "date": day.isoformat(), "type": "DIVIDEND", "tolerance_days": tolerance_days}
+
+
+async def _post_on_its_own_connection(client: httpx.AsyncClient, url: str, **kwargs) -> httpx.Response:
+    """POST with ``client``'s session on a connection of its own, for a request that may end in an unhandled exception.
+
+    After such a 500 the server closes the connection; sent on the client's own, the next request (the cleanup) could be
+    written to it and fail with a ReadError, leaving the test's asset behind.
+    """
+    async with httpx.AsyncClient(cookies=client.cookies) as own:
+        return await own.post(url, **kwargs)
+
+
+def _assert_edge_batch_answer(results: list[dict], asset_id: int, day: date) -> None:
+    """The answer to [ordinary DIVIDEND dated ``day`` at tolerance 3, DIVIDEND dated 0001-01-01, DIVIDEND dated 9999-12-31].
+
+    One result per item, in input order; the ordinary item is offered the events 3 days either side of ``day``, never
+    those 4 days away; the edge items have no candidate (the asset has no event near either edge) and no skipped_reason.
+    """
+    expected_items = [(asset_id, day.isoformat(), "DIVIDEND"), *((asset_id, edge.isoformat(), "DIVIDEND") for edge in CALENDAR_EDGES)]
+    assert [(r["asset_id"], r["date"], r["type"]) for r in results] == expected_items, f"One result per item, in input order: {results}"
+    ordinary, *edges = results
+    inside = sorted((day + timedelta(days=offset)).isoformat() for offset in WINDOW_INSIDE)
+    outside = sorted((day + timedelta(days=offset)).isoformat() for offset in WINDOW_OUTSIDE)
+    found = sorted(candidate["date"] for candidate in ordinary["candidates"])
+    assert (ordinary["skipped_reason"], found) == (None, inside), f"At tolerance_days={WINDOW_TOLERANCE} the DIVIDEND dated {day} must be offered the events of {inside}, never those of {outside}: {ordinary}"
+    for edge, result in zip(CALENDAR_EDGES, edges, strict=True):
+        assert (result["skipped_reason"], result["candidates"]) == (None, []), f"The asset has no event near {edge}: the DIVIDEND dated {edge} gets no candidate and no skipped_reason: {result}"
+
+
+@pytest.mark.asyncio
+async def test_suggest_window_guard_inside_the_calendar(test_server):
+    """G.4.9 — W-B71 guard (passes before and after the cure): the edge days at tolerance_days=0, next to an ordinary window.
+
+    The batch: a DIVIDEND dated ``d`` at tolerance_days=3, then DIVIDENDs dated 0001-01-01 and 9999-12-31 at
+    tolerance_days=0 (the schema's default), whose window is the day itself, which moves nothing past the calendar.
+    Answered in input order: the ordinary item is offered the events 3 days either side and not those 4 days away, the
+    edge items nothing. So the edge dates are accepted as such: what G.4.10 adds is a window around them.
+    """
+    print_section("G.4.9 — the window inside the calendar (W-B71 guard)")
+    async with httpx.AsyncClient() as client:
+        await create_test_user(client)
+        asset_id = await _create_asset(client)
+        cleanup_problems: list[str] = []
+        try:
+            d = date.today() - timedelta(days=30)
+            await _upsert_window_events(client, asset_id, d)
+
+            results = await _suggest(client, [_dividend(asset_id, d, WINDOW_TOLERANCE), *(_dividend(asset_id, edge, 0) for edge in CALENDAR_EDGES)])
+
+            _assert_edge_batch_answer(results, asset_id, d)
+            print_success("Edge days answered at tolerance 0; the ordinary window reaches 3 days and no further")
+        finally:
+            cleanup_problems = await _drop_asset(client, asset_id)
+        assert cleanup_problems == [], f"Cleanup of the test's asset: {cleanup_problems}"
+
+
+@pytest.mark.asyncio
+async def test_suggest_cuts_the_window_at_the_calendar_edges(test_server):
+    """G.4.10 — RED until W-B71: DIVIDENDs dated 0001-01-01 and 9999-12-31 at tolerance_days=3 are answered with no candidate, and the ordinary item of the same batch keeps its events.
+
+    suggest_events_bulk searches date ± tolerance_days: 3 days before 0001-01-01 or after 9999-12-31 is outside the
+    calendar, OverflowError, a 500 for the whole batch: every draft of the bulk editor loses its event suggestions for
+    one row with a mistyped year. The window must be cut at the calendar's edge (shift_date, saturating at date.min /
+    date.max); not a 422, since the save refuses such a date already (N74). The batch is G.4.9's, with the edge items
+    at tolerance_days=3 instead of 0, and the answer must be the same.
+    """
+    print_section("G.4.10 — the window cut at the calendar's edges (W-B71)")
+    async with httpx.AsyncClient() as client:
+        await create_test_user(client)
+        asset_id = await _create_asset(client)
+        cleanup_problems: list[str] = []
+        try:
+            d = date.today() - timedelta(days=30)
+            await _upsert_window_events(client, asset_id, d)
+            batch = [_dividend(asset_id, d, WINDOW_TOLERANCE), *(_dividend(asset_id, edge, WINDOW_TOLERANCE) for edge in CALENDAR_EDGES)]
+
+            resp = await _post_on_its_own_connection(client, f"{API_BASE}/transactions/events/suggest", json=batch, timeout=TIMEOUT)
+            if resp.status_code != 200:
+                alone: dict[str, int] = {}
+                for edge in CALENDAR_EDGES:
+                    probe = await _post_on_its_own_connection(client, f"{API_BASE}/transactions/events/suggest", json=[_dividend(asset_id, edge, WINDOW_TOLERANCE)], timeout=TIMEOUT)
+                    alone[edge.isoformat()] = probe.status_code
+                pytest.fail(
+                    f"W-B71: events/suggest answered HTTP {resp.status_code} ({resp.text[:200]}) to a batch with a DIVIDEND dated 0001-01-01 and one dated 9999-12-31 at tolerance_days={WINDOW_TOLERANCE}, next to an ordinary DIVIDEND dated {d}; each edge item alone: {alone}. suggest_events_bulk computes date ∓ timedelta(days={WINDOW_TOLERANCE}), which raises OverflowError (a 500) past the calendar, so the whole batch loses its suggestions; a window at the calendar's edge must be cut there (shift_date, saturating at date.min / date.max)",
+                    pytrace=False,
+                )
+
+            _assert_edge_batch_answer(resp.json(), asset_id, d)
+            print_success("Window cut at the calendar's edges; the batch keeps its suggestions")
+        finally:
+            cleanup_problems = await _drop_asset(client, asset_id)
+        assert cleanup_problems == [], f"Cleanup of the test's asset: {cleanup_problems}"

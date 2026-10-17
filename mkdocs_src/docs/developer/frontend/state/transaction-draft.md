@@ -144,7 +144,9 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   standalone saved rows and on the new rows that have a type, a broker, a date and an amount or a
   quantity, asked about under a negative id (`newRowSuggestId`). It uses the banner's *Max Δ days*
   window: the slider's value (`maxDeltaDays`) goes as `tolerance_days`, and the backend searches
-  each row's date ± that many days, so 0 means the same day only. The window is part of the search
+  each row's date ± that many days, so 0 means the same day only. A row dated at the calendar's
+  edge (0001-01-01, 9999-12-31) gets its window cut there (`shift_date()`, W-B71) and simply finds
+  nothing; it used to fail the whole search. The window is part of the search
   key, so moving the slider starts a new search, debounced like any other change. Each input also
   carries the row's `asset_event_id` (`TXPromoteSuggestInput`, where `null` or `0` means not
   linked): the backend skips, for a linked row, every rule whose target type refuses the link —

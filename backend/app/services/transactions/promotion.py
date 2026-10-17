@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date as date_type
-from datetime import timedelta
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
@@ -16,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Transaction, TransactionType, UserRole
 from backend.app.schemas.transactions.promotion import TXPromoteSuggestCandidate, TXPromoteSuggestResponse, TXTransferPromoteRequest, TXTransferPromoteResponse
 from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA, PairFieldConstraint
+from backend.app.utils.datetime_utils import shift_date
 
 
 @dataclass(frozen=True)
@@ -312,8 +312,9 @@ class TransactionPromotionMixin:
 
             # Query DB: standalone TX with complementary type, date ±tolerance, accessible broker
             comp_types = list({ct for ct, _, _ in complementary})
-            lo = inp.date - timedelta(days=tolerance_days)
-            hi = inp.date + timedelta(days=tolerance_days)
+            # W-B71: a draft's date at the calendar's edge narrows the window, never raises (a 500 for the whole request).
+            lo = shift_date(inp.date, -tolerance_days)
+            hi = shift_date(inp.date, tolerance_days)
 
             stmt = select(Transaction).where(Transaction.type.in_(comp_types)).where(Transaction.related_transaction_id.is_(None)).where(Transaction.date >= lo).where(Transaction.date <= hi).where(Transaction.broker_id.in_(accessible))
             if input_positive_ids:
