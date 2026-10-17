@@ -84,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- **Lots with a broken history**: when an asset's lots cannot be rebuilt (for example a sale of more units than were held), the lots panel no longer draws lots it cannot trust. It says why, lists each transaction to fix (day, broker, a link) and keeps only the average-cost lines; AI Export lists the asset as failed instead of adding wrong figures to the totals.
 - On a managed instance (`LIBREFOLIO_PROFILE=managed`) the app no longer invites users to donate (no coffee links, no popup) and never checks for updates (no «Check for updates» in the changelog). «Forgot password?» asks users to contact their administrator instead of showing server commands. None of this shows before the server has said which kind of instance it is.
 - An empty or blank secret counts as not set, as if the variable were absent.
 - Changing your password or your email signs out every other device; the one you changed it from stays signed in.
