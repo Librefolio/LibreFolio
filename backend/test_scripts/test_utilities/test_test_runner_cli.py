@@ -74,6 +74,27 @@ throwaway categories through ``monkeypatch.setitem``, a private ``_SETUP_DONE``,
 only records, and ``_services_setup``, ``db_create`` and ``subprocess.run`` fail the
 test if reached.
 
+The H-43 regressions pin how an action that runs only when named stays out of the
+consolidated frontend pass. ``in_all=False`` is read by the serial ``all`` alone
+(``_get_category_tests_for_all``, ``nothing_left_to_run``):
+``_consolidate.group_frontend_units`` groups whatever ``_inventory.collect_launches``
+reports, and that dry run invokes every action but ``all``, whatever its ``in_all``.
+That is right for the AI Export and Designer Lab per-spec actions, ``in_all=False``
+because an alias runs their specs in one invocation: they stay claimants, each with a
+verdict and a ``--resume`` entry of its own. It is wrong for ``front-utility
+cloud-smoke``, which refuses any lane but a managed one: on a managed lane it passes
+that check during the dry run, so ``front-utility all`` would run the cloud smoke, and
+``all-frontend`` seven specs of other categories twice. ``_common.add_test(...,
+named_only=True)`` stores ``named_only: True`` and ``in_all`` False (without it, or
+with ``named_only=False``: no ``named_only`` key, ``in_all`` as given), and
+``group_frontend_units`` leaves a ``named_only`` action out, whatever it launches.
+Pure: throwaway category dicts; a fake frontend category through
+``monkeypatch.setitem``, ``collect_launches`` stubbed; and on the real catalogue the
+real dry run, which launches nothing, behind a recorder, in a lane exporting what
+``--lane-setting LIBREFOLIO_PROFILE=managed`` exports (the profile, and the lane
+settings that carry it through the ``configure_test_runtime()`` the dry run's ``db``
+actions run in this process) or neither, the whole environment put back afterwards.
+
 The H-25 regressions pin which invocations the parallel pre-pass serves. With
 ``--workers`` above 1, ``_cli._run_parallel_prepass`` handed the whole category to
 ``_parallel_for_scope`` whatever the action and the test names:
@@ -131,6 +152,7 @@ import argparse
 import ast
 import contextlib
 import importlib
+import os
 import re
 import sqlite3
 import sys
@@ -144,7 +166,7 @@ from scripts.test_runner import _backend_db as backend_db
 from scripts.test_runner import _backend_services as backend_services
 from scripts.test_runner import _backend_utils as backend_utils
 from scripts.test_runner import _cli as runner_cli
-from scripts.test_runner import _common, _executor, _frontend_common, _inventory, _scheduler
+from scripts.test_runner import _common, _consolidate, _executor, _frontend_common, _frontend_utility, _inventory, _scheduler
 from scripts.test_runner._consolidate_backend import CONSOLIDATABLE, _junit_results
 from scripts.test_runner._registry import TEST_REGISTRY
 
@@ -1436,6 +1458,305 @@ class TestServicesClientAddressKeepsTheLaneDatabase:
         assert services_setup_unreachable == ["services"], f"the setup must run once, through _common.run_category_setup (asked for: {services_setup_unreachable})"
         assert result is True
         assert runner_lines.info == [], f"the setup ran: no line may say the lane's database was left as it is ({runner_lines.info})"
+
+
+# ── H-43: an action that runs only when named stays out of the consolidated frontend pass ─────────────────────────────
+# ``add_test`` is called with ``named_only`` through ``_registered``: while it does not take the keyword, those cases
+# fail on the named "H-43: add_test takes no named_only" barrier, and the cases that leave it out are guards, green
+# before and after. The fake category's named-only entry is written by hand, as the cure's ``add_test`` stores it, so
+# its cases reach ``group_frontend_units`` today: three of them fail there, on what the named-only action claims, and
+# the in_all=False one is a guard, green before and after. On the real catalogue the managed lane fails today on the
+# cloud smoke's specs in front-utility's group; the self-hosted lane is a control, green before and after: there the
+# cloud smoke refuses during the dry run, before it launches anything. That dry run reconfigures the lane in this
+# process (its ``db`` actions run ``configure_test_runtime()``, which drops the instance's settings, the profile
+# included): the managed lane exports what ``--lane-setting`` does, the profile and the lane settings carrying it, and
+# ``lane_environ`` puts the whole environment back.
+
+#: A keyword left out of the ``add_test`` call, which then stores the keyword's default.
+H43_NOT_GIVEN = object()
+#: ``in_all`` left out of the call, or given either way.
+H43_IN_ALL_GIVEN = [pytest.param(H43_NOT_GIVEN, id="in-all-not-given"), pytest.param(True, id="in-all-true"), pytest.param(False, id="in-all-false")]
+#: A frontend category of these tests only: ``group_frontend_units`` keeps the categories whose name starts with ``front``.
+H43_CATEGORY = "front-h43-fake-category"
+#: Its three actions: one every ``all`` runs (front-utility auth, front-ai-export cutover); one registered
+#: ``in_all=False`` because another action runs its spec in one invocation (front-ai-export panel, whose spec cutover
+#: runs); one registered ``named_only`` (front-utility cloud-smoke).
+H43_IN_ALL = "h43-in-all"
+H43_NOT_IN_ALL = "h43-not-in-all"
+H43_NAMED_ONLY = "h43-named-only"
+#: What they launch, each unit named after the actions that launch it. In front-utility the cloud smoke shares
+#: auth.spec.ts with auth, and launches portfolio/dashboard.spec.ts alone.
+H43_SPEC_IN_ALL_AND_NOT_IN_ALL = "h43/in-all-and-not-in-all.spec.ts"
+H43_SPEC_IN_ALL_AND_NAMED_ONLY = "h43/in-all-and-named-only.spec.ts"
+H43_SPEC_NAMED_ONLY_ALONE = "h43/named-only-alone.spec.ts"
+H43_VITEST_NAMED_ONLY_ALONE = "src/lib/h43-named-only-alone.test.ts"
+#: What ``collect_launches`` answers for the fake category, in its own shape: the named-only action's launches are
+#: reported, as the real dry run reports the cloud smoke's on a managed lane.
+H43_LAUNCHES = {
+    (H43_CATEGORY, H43_IN_ALL): [("playwright", H43_SPEC_IN_ALL_AND_NAMED_ONLY, "desktop"), ("playwright", H43_SPEC_IN_ALL_AND_NOT_IN_ALL, "desktop")],
+    (H43_CATEGORY, H43_NOT_IN_ALL): [("playwright", H43_SPEC_IN_ALL_AND_NOT_IN_ALL, "desktop")],
+    (H43_CATEGORY, H43_NAMED_ONLY): [("playwright", H43_SPEC_IN_ALL_AND_NAMED_ONLY, "desktop"), ("playwright", H43_SPEC_NAMED_ONLY_ALONE, "desktop"), ("vitest", H43_VITEST_NAMED_ONLY_ALONE, "")],
+}
+#: The scopes ``group_frontend_units`` is asked for the fake category: the category's own ``all``, and ``all-frontend``.
+H43_FAKE_SCOPES = [pytest.param(H43_CATEGORY, id="category-all"), pytest.param(None, id="all-frontend")]
+#: The cloud smoke's category and action, as the catalogue and ``collect_launches`` key them.
+H43_UTILITY = "front-utility"
+H43_CLOUD_SMOKE = "cloud-smoke"
+#: The scopes ``group_frontend_units`` is asked on the real catalogue: ``front-utility all``, and ``all-frontend``.
+H43_REAL_SCOPES = [pytest.param(H43_UTILITY, id="front-utility-all"), pytest.param(None, id="all-frontend")]
+#: What ``--lane-setting LIBREFOLIO_PROFILE=managed`` exports to every process of a lane: the profile, and the variable
+#: carrying the lane's settings (``cli_base.TEST_LANE_SETTINGS``, spelled here, pinned by ``utils runtime-isolation``),
+#: which every nested ``configure_test_runtime()`` applies again after dropping the instance's settings. The dry run runs
+#: one before it reaches front-utility (its ``db`` actions ask ``get_test_db_path()``): the profile alone would be gone
+#: by the time the cloud smoke checks it. A self-hosted lane exports neither.
+H43_MANAGED_LANE = {"LIBREFOLIO_PROFILE": "managed", "LIBREFOLIO_TEST_LANE_SETTINGS": "LIBREFOLIO_PROFILE=managed"}
+
+
+@pytest.fixture
+def lane_environ(monkeypatch):
+    """``monkeypatch``, and the whole environment put back after the test, whatever the real dry run changed in it.
+
+    The dry run reconfigures the lane in this process: its ``db`` actions ask ``get_test_db_path()``, which runs
+    ``configure_test_runtime()`` (the instance's settings dropped, the lane's own applied again, port, data directory and
+    test mode exported). Inside a lane that changes nothing; run anywhere else it would, and no later test may inherit it.
+    """
+    snapshot = dict(os.environ)
+    yield monkeypatch
+    os.environ.clear()
+    os.environ.update(snapshot)
+
+
+def _never_run(action: str):
+    """The function registered for ``action``: it fails the test if anything runs it."""
+
+    def run(*_args, **_kwargs):
+        pytest.fail(f"{action}: an action of the H-43 tests ran; add_test only stores it, and group_frontend_units reads what it launches from the stubbed collect_launches")
+
+    return run
+
+
+def _given(**keywords) -> dict:
+    """``keywords`` but those left out of the call (``H43_NOT_GIVEN``)."""
+    return {name: value for name, value in keywords.items() if value is not H43_NOT_GIVEN}
+
+
+def _shown(**keywords) -> str:
+    """The keywords given, as the call reads them (``named_only=True, in_all=False``), or ``no keyword``."""
+    return ", ".join(f"{name}={value!r}" for name, value in _given(**keywords).items()) or "no keyword"
+
+
+def _registered(action: str, **keywords) -> dict:
+    """The entry ``_common.add_test`` stores for ``action`` in a throwaway category dict, given ``keywords``.
+
+    The H-43 barrier while ``add_test`` takes no ``named_only``; a ``TypeError`` about anything else goes through.
+    """
+    category: dict = {}
+    try:
+        _common.add_test(category, action, _never_run(action), name=f"H-43 {action}", desc="An action of this test only", **_given(**keywords))
+    except TypeError as exc:
+        if "named_only" not in str(exc):
+            raise
+        pytest.fail(f"H-43: add_test takes no named_only ({exc}): an action cannot say it runs only when named, and the consolidated pass has nothing to read")
+    return category[action]
+
+
+def _register_h43_category(monkeypatch) -> None:
+    """The fake category, built with the real ``make_category``/``add_test`` and injected with ``monkeypatch.setitem``.
+
+    The named-only action is registered ``in_all=False`` and given ``named_only: True`` by hand: the entry the cure's
+    ``add_test(..., named_only=True)`` stores. These cases reach ``group_frontend_units`` even while ``add_test`` does
+    not take the keyword (that is ``TestAddTestStoresNamedOnly``'s barrier, not theirs).
+    """
+    category = _common.make_category("H-43 fake category", "A frontend category of this test only")
+    _common.add_test(category, H43_IN_ALL, _never_run(H43_IN_ALL), name="H-43 in every all", desc="Run by every all, as front-utility auth or front-ai-export cutover")
+    _common.add_test(category, H43_NOT_IN_ALL, _never_run(H43_NOT_IN_ALL), name="H-43 run by another action", desc="Its spec run by another action in one invocation, as front-ai-export panel", in_all=False)
+    _common.add_test(category, H43_NAMED_ONLY, _never_run(H43_NAMED_ONLY), name="H-43 named only", desc="Run only when named, as front-utility cloud-smoke", in_all=False)
+    category[H43_NAMED_ONLY]["named_only"] = True
+    monkeypatch.setitem(TEST_REGISTRY, H43_CATEGORY, category)
+
+
+def _claims(group: dict) -> dict[tuple[str, str, str], list[str]]:
+    """One category's consolidated group, flat: ``{(kind, project, path): sorted claimants}``, project '' for vitest."""
+    claims = {("playwright", project, path): sorted(actions) for project, specs in group["playwright"].items() for path, actions in specs.items()}
+    claims.update({("vitest", "", path): sorted(actions) for path, actions in group["vitest"].items()})
+    return claims
+
+
+def _h43_claims(monkeypatch, scope: str | None) -> dict[tuple[str, str, str], list[str]]:
+    """The fake category's group, flat, from ``group_frontend_units(scope)`` with ``collect_launches`` answering ``H43_LAUNCHES``."""
+    _register_h43_category(monkeypatch)
+    _stub_launches(monkeypatch, H43_LAUNCHES)
+
+    groups = _consolidate.group_frontend_units(scope)
+
+    assert set(groups) == {H43_CATEGORY}, f"precondition: group_frontend_units must group the stubbed launches, the fake category's alone (groups: {sorted(groups)})"
+    return _claims(groups[H43_CATEGORY])
+
+
+def _record_real_launches(monkeypatch) -> SimpleNamespace:
+    """``_inventory.collect_launches`` behind a recorder that runs the real dry run and keeps what it answered.
+
+    The real one invokes every action of the catalogue but ``all`` with every launch point replaced by a collector, the
+    side-effecting actions neutralised and any deletion refused (``_inventory._collecting``): it launches nothing, as on
+    every run of the consolidated passes and the scheduler. ``group_frontend_units`` imports it from ``_inventory`` when
+    it runs, so the recorder is what it calls.
+    """
+    real_collect = _inventory.collect_launches
+    seen = SimpleNamespace(calls=0, launches={}, errors={})
+
+    def record(only_all: bool = False):
+        seen.calls += 1
+        seen.launches, seen.errors = real_collect(only_all=only_all)
+        return seen.launches, seen.errors
+
+    monkeypatch.setattr(_inventory, "collect_launches", record)
+    return seen
+
+
+def _front_groups_on_lane(lane_environ, lane: dict[str, str], scope: str | None) -> tuple[dict, SimpleNamespace]:
+    """``group_frontend_units(scope)`` on the real catalogue, in a lane exporting ``lane`` alone of ``H43_MANAGED_LANE``'s names, and what its dry run answered."""
+    for name in H43_MANAGED_LANE:
+        lane_environ.delenv(name, raising=False)
+    for name, value in lane.items():
+        lane_environ.setenv(name, value)
+    seen = _record_real_launches(lane_environ)
+
+    groups = _consolidate.group_frontend_units(scope)
+
+    assert seen.calls == 1, f"precondition: group_frontend_units must read the launches from _inventory.collect_launches when it runs, once (read {seen.calls} time(s))"
+    assert seen.errors == {}, f"precondition: the dry run reported errors, and group_frontend_units answers {{}} on any, where every negative below would hold: {seen.errors}"
+    assert H43_UTILITY in groups, f"precondition: front-utility's consolidated group must exist, or the negatives below prove nothing (groups: {sorted(groups)})"
+    return groups, seen
+
+
+def _launched_specs(launches: dict, keep) -> dict[str, list[str]]:
+    """``{spec: ["category action", …]}``: the Playwright specs the ``(category, action)`` pairs ``keep`` accepts launch, in the groups' form (``_norm_spec``)."""
+    specs: dict[str, set[str]] = {}
+    for (category, action), units in launches.items():
+        if not keep(category, action):
+            continue
+        for engine, path, _project in units:
+            if engine == "playwright":
+                specs.setdefault(_consolidate._norm_spec(path), set()).add(f"{category} {action}")
+    return {spec: sorted(owners) for spec, owners in specs.items()}
+
+
+def _cloud_smoke_specs() -> set[str]:
+    """``_frontend_utility.CLOUD_SMOKE_SPECS`` in the groups' form (``_norm_spec``)."""
+    return {_consolidate._norm_spec(spec) for spec in _frontend_utility.CLOUD_SMOKE_SPECS}
+
+
+def _foreign_smoke_specs(seen) -> dict[str, list[str]]:
+    """The cloud smoke's specs no other front-utility action launches, each with the actions of other categories that do.
+
+    Computed, not listed: ``CLOUD_SMOKE_SPECS`` less what front-utility's other actions launch in the dry run ``seen``
+    recorded, so a spec added to the smoke is covered as well.
+    """
+    utility = _launched_specs(seen.launches, lambda category, action: category == H43_UTILITY and action != H43_CLOUD_SMOKE)
+    elsewhere = _launched_specs(seen.launches, lambda category, _action: category != H43_UTILITY)
+    foreign = {spec: elsewhere.get(spec, []) for spec in sorted(_cloud_smoke_specs() - set(utility))}
+    assert foreign, f"precondition: front-utility's other actions launch every spec of CLOUD_SMOKE_SPECS, so no spec of another category is at stake here ({sorted(_cloud_smoke_specs())})"
+    return foreign
+
+
+def _assert_nothing_of_the_cloud_smoke_in(groups: dict, foreign: dict[str, list[str]], lane: str, scope: str | None) -> None:
+    """front-utility's consolidated group holds none of the ``foreign`` specs, and none of its units is claimed by the cloud smoke."""
+    suite = "all-frontend" if scope is None else f"{scope} all"
+    claims = _claims(groups[H43_UTILITY])
+    paths = {path for _kind, _project, path in claims}
+    held = {spec: owners for spec, owners in foreign.items() if spec in paths}
+    assert held == {}, f"H-43: on a {lane} lane, {suite} would run in front-utility's consolidated invocation specs only the cloud smoke launches there, which these actions of their own categories run already: {held}"
+    claimed = sorted(unit for unit, actions in claims.items() if H43_CLOUD_SMOKE in actions)
+    assert claimed == [], f"H-43: on a {lane} lane, {suite} would run front-utility cloud-smoke, which claims {claimed} in the consolidated group: it runs only when named (named_only)"
+
+
+class TestAddTestStoresNamedOnly:
+    """``add_test(..., named_only=True)``: the entry says so, ``named_only: True``, and is in no ``all``, ``in_all`` False.
+
+    Without it, or with ``named_only=False``, the entry has no ``named_only`` key, as ``prereq``, ``tests``, ``note`` and
+    ``isolation`` have none when not given, and its ``in_all`` is the one given, True by default.
+    """
+
+    @pytest.mark.parametrize("in_all", H43_IN_ALL_GIVEN)
+    def test_named_only_is_stored_and_leaves_the_action_out_of_every_all(self, in_all):
+        entry = _registered(H43_NAMED_ONLY, named_only=True, in_all=in_all)
+
+        shown = _shown(named_only=True, in_all=in_all)
+        assert entry.get("named_only") is True, f"H-43: add_test with {shown} stored named_only={entry.get('named_only')!r}: the consolidated pass reads it to leave out an action that runs only when named"
+        assert entry["in_all"] is False, f"H-43: add_test with {shown} stored in_all={entry['in_all']!r}: an action that runs only when named is in no all, whatever in_all it is given, and the serial all reads in_all"
+
+    @pytest.mark.parametrize("named_only", [pytest.param(H43_NOT_GIVEN, id="named-only-not-given"), pytest.param(False, id="named-only-false")])
+    @pytest.mark.parametrize("in_all", H43_IN_ALL_GIVEN)
+    def test_without_named_only_there_is_no_key_and_in_all_is_the_one_given(self, named_only, in_all):
+        """Left out, green before and after; ``named_only=False``, on the barrier until ``add_test`` takes the keyword."""
+        entry = _registered(H43_IN_ALL, named_only=named_only, in_all=in_all)
+
+        shown = _shown(named_only=named_only, in_all=in_all)
+        expected = True if in_all is H43_NOT_GIVEN else in_all
+        assert "named_only" not in entry, f"H-43: add_test with {shown} stored named_only={entry['named_only']!r}: the key is stored only when named_only is set"
+        assert entry["in_all"] is expected, f"H-43: add_test with {shown} stored in_all={entry['in_all']!r}, not {expected}: without named_only, in_all is the one given, True by default"
+
+
+@pytest.mark.parametrize("scope", H43_FAKE_SCOPES)
+class TestGroupFrontendUnitsLeavesANamedOnlyActionOut:
+    """``group_frontend_units`` groups what the dry run reports of every action but one registered ``named_only``.
+
+    ``collect_launches`` reports the named-only action's launches (``H43_LAUNCHES``), as the real dry run reports the
+    cloud smoke's on a managed lane. The action must claim nothing, a unit only it launches must stay out of the group,
+    and a spec another action launches too must stay in, claimed by that action alone. An ``in_all=False`` action is no
+    named-only one: it stays a claimant, as the AI Export and Designer Lab per-spec actions must, to keep a verdict and a
+    ``--resume`` entry of their own. Each case runs for the category's ``all`` and for ``all-frontend``.
+    """
+
+    def test_a_named_only_action_claims_nothing(self, monkeypatch, scope):
+        claims = _h43_claims(monkeypatch, scope)
+
+        claimed = sorted(unit for unit, actions in claims.items() if H43_NAMED_ONLY in actions)
+        assert claimed == [], f"H-43: {H43_NAMED_ONLY}, registered named_only, claims {claimed} in the consolidated group: the pass would run it and give it a verdict, though only a command line naming it may run it"
+
+    def test_a_unit_only_a_named_only_action_launches_is_left_out(self, monkeypatch, scope):
+        claims = _h43_claims(monkeypatch, scope)
+
+        held = sorted({H43_SPEC_NAMED_ONLY_ALONE, H43_VITEST_NAMED_ONLY_ALONE} & {path for _kind, _project, path in claims})
+        assert held == [], f"H-43: the consolidated group holds {held}, which only {H43_NAMED_ONLY}, registered named_only, launches: the category's all and all-frontend would run them"
+
+    def test_a_spec_shared_with_a_named_only_action_stays_claimed_by_the_other_action_alone(self, monkeypatch, scope):
+        claims = _h43_claims(monkeypatch, scope)
+
+        claimants = claims.get(("playwright", "desktop", H43_SPEC_IN_ALL_AND_NAMED_ONLY))
+        assert claimants == [H43_IN_ALL], f"H-43: {H43_SPEC_IN_ALL_AND_NAMED_ONLY} must stay in the group, claimed by {H43_IN_ALL} alone, as front-utility's auth.spec.ts by auth alone (claimed by: {claimants})"
+
+    def test_an_in_all_false_action_stays_a_claimant(self, monkeypatch, scope):
+        """Guard, green before and after: ``in_all=False`` is not ``named_only``."""
+        claims = _h43_claims(monkeypatch, scope)
+
+        claimants = claims.get(("playwright", "desktop", H43_SPEC_IN_ALL_AND_NOT_IN_ALL))
+        expected = sorted([H43_IN_ALL, H43_NOT_IN_ALL])
+        assert claimants == expected, f"{H43_NOT_IN_ALL}, registered in_all=False, must stay a claimant of {H43_SPEC_IN_ALL_AND_NOT_IN_ALL} beside {H43_IN_ALL}, as front-ai-export panel beside cutover (claimed by: {claimants})"
+
+
+@pytest.mark.parametrize("scope", H43_REAL_SCOPES)
+class TestTheCloudSmokeStaysOutOfTheConsolidatedPass:
+    """On the real catalogue and the real dry run, front-utility's consolidated group holds nothing of the cloud smoke.
+
+    The lane's variables (``H43_MANAGED_LANE``) are set or removed through ``lane_environ``, which puts the whole
+    environment back. The specs at stake are those of ``CLOUD_SMOKE_SPECS`` front-utility's other actions do not
+    launch, computed from the same dry run: seven on today's catalogue, the dashboard's and the brokers' among them,
+    which their own categories run. Each case runs for ``front-utility all`` and for ``all-frontend``.
+    """
+
+    def test_on_a_managed_lane_the_cloud_smoke_is_not_consolidated(self, lane_environ, scope):
+        groups, seen = _front_groups_on_lane(lane_environ, H43_MANAGED_LANE, scope)
+        smoke = _launched_specs(seen.launches, lambda category, action: (category, action) == (H43_UTILITY, H43_CLOUD_SMOKE))
+        assert set(smoke) == _cloud_smoke_specs(), f"precondition: on a managed lane the cloud smoke passes its profile check during the dry run and reports every spec of CLOUD_SMOKE_SPECS, or the negatives below hold for the wrong reason (reported: {sorted(smoke)})"
+
+        _assert_nothing_of_the_cloud_smoke_in(groups, _foreign_smoke_specs(seen), "managed", scope)
+
+    def test_on_a_self_hosted_lane_the_cloud_smoke_is_not_consolidated_either(self, lane_environ, scope):
+        """Control, green before and after: there the cloud smoke refuses during the dry run, before it launches anything."""
+        groups, seen = _front_groups_on_lane(lane_environ, {}, scope)
+
+        _assert_nothing_of_the_cloud_smoke_in(groups, _foreign_smoke_specs(seen), "self-hosted", scope)
 
 
 # ── H-25: the parallel pre-pass serves a whole category or a whole suite, as the consolidated pre-passes do ────────────
