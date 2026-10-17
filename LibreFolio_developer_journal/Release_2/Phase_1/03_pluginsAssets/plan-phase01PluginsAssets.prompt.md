@@ -6452,3 +6452,75 @@ Simulazione della fusione con dev: pulita. Rilievi:
   > (`loadPairSources(true)`). Se proprio lì arriva un rifiuto per dimensione, compare il toast del rifiuto e quello della
   > sincronizzazione diventa un avviso. Accettabile: il rifiuto è quasi irraggiungibile dopo Z-27.
 - ✅ **X-R58 chiuso il 17/10 (15:50)**, in attesa del commit del coordinatore.
+
+### X-R74 ✅ — le rotte di asset e cambi rispondono un 500 generico (16:05–16:50)
+
+Decisione del coordinatore (17/10 15:50): tutti e 6 i file in un solo lotto, un rosso parametrizzato, la sonda che
+registra il suo errore, una riga 🔒 nel CHANGELOG. Base `1bef78be1` (X-R58 entrato).
+- **Siti**: 26 in 6 file, rotta per rotta:
+  - `assets/providers.py` 7: sonda, assegnazione ×2, rimozione ×2, letture delle assegnazioni, refresh;
+  - `assets/crud.py` 7;
+  - `assets/events.py` 5;
+  - `assets/market_data.py` 2;
+  - `fx/providers.py` 4;
+  - `fx/currencies.py` 1, il catch-all del sync.
+  La sonda e le 5 rotte dei cambi non registrano nemmeno l'errore.
+- **Cura** (`xr74_code.py`, a secco pulito su `1bef78be1`, black e ruff puliti):
+  - un messaggio fisso per rotta, «Internal error while …», come `prices.py` di MF;
+  - `logger.exception(...)` dove manca;
+  - i rifiuti scritti apposta restano: 400, 404, 409, e il 502 del sync dei cambi.
+  Lo script verifica che nessun 500 ripeta più l'errore prima di scrivere.
+- **Rossi** affidati a un test-author (16:06): `test_routes_generic_500.py` (nuovo, PURE), un `pytest.param` per sito,
+  più qualche guardia sui rifiuti scritti. Registrato `services routes-generic-500`.
+- **Backlog**: X-R71 di B (col disegno di B, X rivede); il gemello trovato da B in X-R46; X-R74 ⏳.
+- **Rossi** (test-author, 16:18): `test_routes_generic_500.py` (PURE).
+  - 26 `pytest.param`, uno per sito. Una barriera prova che il doppio che fallisce è stato chiamato; poi 500, `detail`
+    non vuoto, nessuna parola della fuga, l'errore registrato con la sua eccezione.
+  - 7 guardie sui rifiuti scritti apposta:
+    - sonda 400;
+    - 409 di assegnazione, rimozione, eventi e wipe;
+    - 404 `ASSET_NOT_FOUND`;
+    - il 502 del sync dei cambi (codice oggi morto: `sync_pairs_bulk` non lo solleva).
+  - Prima del codice: **26 failed, 7 passed**: la fuga ovunque, e «not logged» per la sonda e i 5 siti dei cambi.
+- **Codice applicato** (16:20, `xr74_code.py`): 26 siti in 6 file; ruff e black puliti, `import backend.app.main` ok, 0
+  `detail=str(e)` / `{e!s}` rimasti in `backend/app/api`.
+- **Verdi**: `services routes-generic-500` **33 passed**; `provider-wipe-split-guard` 12, `market-data-wipe-split-guard`
+  13, `test-only-providers` 31; `check-orphans` raggiungibile. Le suite API non sono state lanciate: serve una finestra
+  del coordinatore, e il cambio tocca solo il testo dei 500 e il log.
+- **CHANGELOG** 🔒 (riga dopo l'ultima della sicurezza): gli errori inattesi delle richieste di asset e cambi non mostrano
+  più dettagli interni.
+- **Documentazione** (docs-writer, 16:24): una sottosezione «Error Answers» in `developer/architecture/security.md`.
+- **⚠️ Fuori pista — la fusione** (16:30, trovata dal docs-writer leggendo il codice): `merge_assets` risponde un
+  `AssetSourceError` con il suo testo, 404 o 400. I messaggi sono scritti apposta, tranne `MERGE_FAILED`.
+  - `AssetCRUDService.merge_assets()` lo solleva per qualunque errore che ferma la fusione, uno del database compreso,
+    come «Merge failed: » più il testo dell'errore: la stessa fuga, passata per un 400.
+  - Il sito `MERGE_ASSETS` del test sostituisce tutto il servizio e non poteva vederla.
+  - Ripresa nel lotto: è la stessa fuga, sul mio percorso, e costa una riga.
+  - **Rosso** (test-author): `test_xr74_a_failed_merge_names_no_error_and_logs_it`. Chiama la rotta col servizio vero;
+    il doppio della sessione risponde alle due letture dell'asset e fallisce alla terza (lo storico dei prezzi). La
+    barriera prova la terza lettura; poi 400 tenuto, nessuna parola dell'errore, l'errore nel log del servizio.
+    Prima del codice: **1 failed, 33 passed**, «Merge failed: SELECT secret_column FROM secret_table».
+  - **Cura** (`xr74b_code.py`, una riga in `services/assets/crud.py`): «Merge failed: internal error», stesso codice
+    `MERGE_FAILED`, stesso 400, il log com'era. Nessun test, frontend o doc leggeva quel testo (grep).
+  - **Verde**: `services routes-generic-500` **34 passed**; ruff e black puliti.
+  - Doc: il punto «Not covered» di `security.md` è diventato «A failed merge», più la riga dei test (solo testo, nessun
+    link, dopo la build stretta verde del docs-writer).
+- Restano, scritti apposta: `merge_assets` 404/400 per `NOT_FOUND`, `SAME_ASSET`, `INVALID_PRIMARY`; `sync_rates` 400
+  `str(e)` per un `ValueError`. Un errore del database non è mai un `ValueError` (SQLAlchemy ha le sue classi, che
+  finiscono nel 500 generico); i testi possibili sono quelli di una coppia o di una rotta malformata, di una validazione
+  (`ValidationError` di pydantic deriva da `ValueError`) o di `fx/sync.py:195` («Provider … does not support … as
+  base»): nessun SQL, lasciato così.
+- **Doc** (docs-writer, verificata): sottosezione «🧯 Error Answers» `{: #error-answers }` in
+  `developer/architecture/security.md`, dopo «🔢 Numbers in Requests». Dice R13-SEC9-3, poi MF-SEC9a, poi X-R74. `mkdocs
+  build` stretta verde (61,8 s, carico 44), `check-links` verde (97 link).
+- **Finestra API** (via del coordinatore, 16:46–17:00, una suite alla volta, carico a 5 minuti sotto 50): `api
+  assets-provider` 24, `assets-crud` 35, `asset-merge` 7, `assets-events` 45, `market-data-wipe` 5, `fx` 27, `fx-sync`
+  10, `db asset-merge` 12: **165 passed**, 0 failed; porta 6183 libera alla fine.
+- ✅ **Chiusa il 17/10**, in attesa del commit del coordinatore.
+
+### X-R75 registrata (17/10, 16:55) — la modale delle rotte di un cambio cancella prima di salvare
+
+Trovata da E (E-19), girata dal coordinatore. In modifica `FxPairAddModal` cancella tutte le rotte della coppia e poi
+le rimanda: un POST fallito le perde. Gemello da provare: togliendo tutti i provider la coppia resta senza rotte,
+nemmeno MANUAL (`delete_routes_bulk` rimette la sentinella solo dopo una cancellazione con priorità). Cura proposta:
+una sostituzione atomica nel backend; peso come X-R58. Dettagli nel backlog, «X-R75».

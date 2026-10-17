@@ -282,7 +282,8 @@ async def probe_provider_config(
     except AssetSourceError as e:
         raise HTTPException(status_code=400, detail=e.message) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.exception(f"Error in provider probe: {e}")
+        raise HTTPException(status_code=500, detail="Internal error while probing the provider") from e
 
 
 @provider_router.post("", response_model=FABulkAssignResponse)
@@ -307,10 +308,10 @@ async def assign_providers_bulk(
         if e.error_code == "PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST":
             raise HTTPException(status_code=409, detail={"error_code": e.error_code, "message": e.message, "params": jsonable_encoder(e.details)}) from e
         logger.exception(f"Error in bulk assign providers: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while assigning providers") from e
     except Exception as e:
         logger.exception(f"Error in bulk assign providers: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while assigning providers") from e
 
 
 @provider_router.delete("", response_model=FABulkRemoveResponse)
@@ -334,10 +335,10 @@ async def remove_providers_bulk(
         if e.error_code in ("PROVIDER_REMOVAL_LINKED_TRANSACTIONS", "PROVIDER_REMOVAL_CONFLICT"):
             raise HTTPException(status_code=409, detail={"error_code": e.error_code, "message": e.message, "params": jsonable_encoder(e.details)}) from e
         logger.exception(f"Error in bulk remove providers: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while removing providers") from e
     except Exception as e:
         logger.exception(f"Error in bulk remove providers: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while removing providers") from e
 
 
 @provider_router.get("/assignments", response_model=List[FAProviderAssignmentReadItem])
@@ -402,7 +403,7 @@ async def get_provider_assignments(
         return items
     except Exception as e:
         logger.exception(f"Error getting provider assignments: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while reading provider assignments") from e
 
 
 # ============================================================================
@@ -477,4 +478,4 @@ async def refresh_assets_from_provider(
         return result
     except Exception as e:
         logger.exception(f"Error refreshing assets from provider: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while refreshing assets from their provider") from e

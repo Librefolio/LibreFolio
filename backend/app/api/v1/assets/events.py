@@ -110,11 +110,11 @@ async def upsert_events_bulk(
         status = _REFUSAL_STATUS.get(e.error_code)
         if status is None:
             logger.exception(f"Error in bulk upsert events: {e}")
-            raise HTTPException(status_code=500, detail=str(e)) from e
+            raise HTTPException(status_code=500, detail="Internal error while saving events") from e
         raise HTTPException(status_code=status, detail={"error_code": e.error_code, "message": e.message, "params": jsonable_encoder(e.details)}) from e
     except Exception as e:
         logger.exception(f"Error in bulk upsert events: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while saving events") from e
 
 
 @event_router.delete("", response_model=FAEventBulkDeleteResponse)
@@ -142,7 +142,7 @@ async def delete_events_bulk(
         return await AssetSourceManager.delete_events_bulk(asset_id, ids, session, current_user)
     except Exception as e:
         logger.exception(f"Error in bulk delete events: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while deleting events") from e
 
 
 @event_router.post("/query", response_model=FAEventQueryResponse)
@@ -160,7 +160,7 @@ async def query_events_bulk(
         return FAEventQueryResponse(items=results)
     except Exception as e:
         logger.exception(f"Error querying events bulk: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while querying events") from e
 
 
 @event_router.get("", response_model=FAEventQueryResponse)
@@ -209,4 +209,4 @@ async def get_events_by_ids(
         return FAEventQueryResponse(items=results)
     except Exception as e:
         logger.exception(f"Error fetching events by IDs: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while reading events") from e

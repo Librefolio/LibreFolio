@@ -4960,6 +4960,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     - (b) lo stesso filtro, `usable_fx_rate_bounds()`, in ogni lettore: molti file di J e dell'AI Export.
 - **X-R46 · Editor dei cambi (e degli asset): i rifiuti del server non si vedono** — basso-medio, **subito dopo X-R38**; X, 17/10
   (trovato dal docs-writer di X-R38).
+  - Gemello trovato da B (17/10): `AssetDataEditorSection.svelte` (~316) conta come salvata ogni riga inviata e non legge
+    `results[].message`, così una data scartata dal controllo OHLC è annunciata come salvata.
   - Allargata il 17/10 (revisione di X-R65 e nota di Z): anche `AssetDataEditorSection.svelte`, e il nuovo 422
     `date_out_of_range` (`items`, `count`, `params.min`/`max`): oggi entrambi gli editor mostrano solo «Request failed with
     status code 422» (`e.message`), senza la data né i limiti. Un refuso come 2062 per 2026 basta a farlo comparire.
@@ -4973,6 +4975,34 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Cura: mostrare il `detail` del 400 e gli `errors` del 200 (per data), contarli a parte. Prove: Vitest e
     `front-fx fx-editor`. Poi la frase della pagina utente (`user/fx/detail/data-editor.en.md`) può dire «con un messaggio
     che nomina la data».
+- **X-R75 · La modale delle rotte di un cambio cancella prima di salvare** — piccolo-medio, perdita di dati a ogni
+  salvataggio fallito, **nella 1.3, insieme a X-R46** (stesso editor dei cambi, stessa finestra E2E); X, 17/10 (E, E-19,
+  girata dal coordinatore).
+  - `FxPairAddModal.svelte` (~321-339), `handleSave()` in modifica: prima `DELETE /fx/providers/routes` con
+    `[{base, quote}]` (tutte le priorità della coppia), poi `POST /fx/providers/routes` con le rotte nuove. Due richieste,
+    due transazioni.
+  - Se il POST fallisce, le rotte vecchie sono già cancellate e la coppia resta senza rotte. Può fallire per un 422
+    (un lato non ISO), un 400 (un provider sconosciuto, con il rollback del solo POST), un 409 (una scrittura
+    concorrente) o la rete.
+  - **Gemello, da provare con un rosso**: togliendo tutti i provider in modifica, la modale salta il POST, convinta
+    che il backend rimetta la sentinella MANUAL. Ma `delete_routes_bulk` la rimette solo dopo una cancellazione con
+    priorità: `fully_deleted_pairs` esclude quelle senza. La coppia resta senza nessuna rotta, nemmeno MANUAL, mentre
+    la creazione nello stesso caso salva MANUAL (priorità 999).
+  - **Cura proposta, nel backend**: le rotte di una coppia si sostituiscono in una sola transazione.
+    - Tutto convalidato prima di scrivere; cancellazione e inserimento insieme; la sentinella MANUAL quando non resta
+      un provider vero.
+    - La modale in modifica fa una sola chiamata.
+    - Forma da decidere nell'analisi: un `PUT /fx/providers/routes` o un parametro `replace` del POST.
+    - Le coppie intermedie (le gambe delle catene) restano un'aggiunta, mai una sostituzione.
+  - **Alternativa solo frontend**, più piccola ma non atomica: prima il POST (un upsert per priorità), poi la
+    cancellazione mirata delle sole priorità in più. Un secondo passo fallito lascia rotte in più, non ne perde.
+  - **Prove**:
+    - rossi API: un rifiuto lascia intatte le rotte; un insieme vuoto dà MANUAL; il riordino delle priorità;
+    - Vitest della modale: in modifica una sola chiamata, nessun DELETE prima;
+    - E2E `front-fx fx-add-pair`: una modifica che fallisce lascia le rotte com'erano.
+    Doc: le rotte nella pagina dev dei cambi; `api sync`.
+  - **Peso**: come X-R58: una rotta del backend, la modale, tre livelli di test, una finestra E2E (`fx-add-pair`).
+    L'alternativa solo frontend è piccola.
 - ✅ **X-R47 · Il rapporto di uno SPLIT non è mai validato** (chiusa il 17/10: `5f68a8db0`, la regola (d) con `1b6d65da7`; entrata in dev `952c68cd5`; gli SPLIT già salvati sono MF-D4) — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
   V-4 di CP-14a, F4, girato dal coordinatore).
   - Si salva uno SPLIT con rapporto 0 o negativo. Appena una transazione lo collega, il motore solleva un `ValueError` e
@@ -5134,10 +5164,12 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
 - **X-R70 · Il refresh conta le date rifiutate dal controllo OHLC** — basso; X, 17/10 (Z, nota di X-R65).
   - `_persist_refresh_item` toglie dal conteggio le date che nessuna colonna tiene e quelle fuori intervallo, ma non
     quelle che `bulk_upsert_prices` rifiuta per OHLC impossibile (chiusura fuori da [minimo, massimo]).
-- **X-R71 · Il caricamento manuale dei prezzi non è tutto o niente sulla valuta** — basso-medio; X, 17/10 (Z, nota di
-  X-R65).
+- **X-R71 · Il caricamento manuale dei prezzi non è tutto o niente sulla valuta** — basso-medio, **nella 1.3, fatta da B**
+  (il coordinatore, 17/10; X rivede); X, 17/10 (Z, nota di X-R65).
   - Una valuta diversa da quella dell'asset è rifiutata asset per asset, dopo che gli asset precedenti sono stati
     scritti. Il controllo va prima della prima scrittura, come X-R65 fa ora per le date.
+  - Il disegno di B: il caricamento manuale controlla la valuta di ogni asset prima della prima scrittura, 422
+    `price_currency_mismatch` con `items`; B tocca una riga di descrizione in `schemas/prices.py`.
 - **X-R72 · Le date degli eventi degli asset senza pavimento al 1900** — basso, prima da verificare; X, 17/10 (Z, nota di
   X-R65).
   - I periodi di un piano Scheduled Investment sono già limitati a 1900-2200 (`SCHEDULE_MIN_DATE`). La data aperta è
@@ -5146,7 +5178,9 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
 - **X-R73 · `_range_start_in_bounds` ripete `stored_date_bounds()`** — minimo; X, 17/10 (Z, nota di X-R65).
   - `api/v1/assets/prices.py` (di MF, R13-SEC9-4) confronta a mano [`EARLIEST_RANGE_START`, `latest_range_end()`]:
     deve chiamare l'aiuto unico di `utils/date_range_limits.py`.
-- **X-R74 · Le rotte di asset e cambi rispondono 500 con il testo dell'errore** — basso, sicurezza (fuga di testo SQL),
+- ✅ **X-R74 · Le rotte di asset e cambi rispondono 500 con il testo dell'errore** (chiusa il 17/10, in attesa del commit
+  del coordinatore: 26 siti in 6 file rispondono «Internal error while …» e registrano l'errore; in più il 400
+  `MERGE_FAILED` della fusione, «Merge failed: internal error»; `services routes-generic-500` 34 passed, 8 suite API e DB 165 passed) — basso, sicurezza (fuga di testo SQL),
   **nella 1.3, primo lotto dopo X-R58**; X, 17/10 (revisione di X-R62, punto 1 di J; decisione del coordinatore).
   - X-R62 ha tolto l'`IntegrityError` dal 500 (ora `PROVIDER_REMOVAL_CONFLICT`, senza SQL). Il `except Exception` di
     `remove_providers_bulk`, e il ripiego per gli altri `AssetSourceError`, rispondono ancora `detail=str(e)`: un altro

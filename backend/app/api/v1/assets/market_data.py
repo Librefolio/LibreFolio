@@ -41,7 +41,7 @@ async def market_data_summary(
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:
         logger.exception(f"Error in market-data summary for asset {asset_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while reading the asset's market data") from e
 
 
 @market_data_router.post("/{asset_id}/market-data/wipe", tags=["FA CRUD"])
@@ -84,4 +84,4 @@ async def wipe_market_data(
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:
         logger.exception(f"Error in market-data wipe for asset {asset_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while deleting the asset's market data") from e
