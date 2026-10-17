@@ -7322,6 +7322,23 @@ da Y il 15/10.
   fuori dai file dichiarati) non guarda più dentro i tre moduli dei lotti di D-MF6(b), che sommano, mediano e ribasano ma non
   annualizzano. Un'annualizzazione aggiunta un giorno lì passerebbe in silenzio. Rimedio possibile: un segnalino per voce
   («può annualizzare»), vero solo per `MeasureSignal.ts` e le curve di R19. Dettagli: piano di Y, «Y12b, il resto».
+- **Y-30 · Con l'analisi dei lotti `FAILED` il grafico prezzo/WAC perde la linea del prezzo di mercato** — basso,
+  chiarezza; **per J** (backend); Y, 17/10 (J-12, metà del pannello). Il coordinatore (11:4x) l'ha tenuta fuori da J-12.
+  - Con `FAILED` (J-12, N81 opzione A) `price_history` torna `null`, perché è per lotto (`LotPriceHistoryPoint.lot_id`,
+    un punto per ogni giorno di vita di ogni lotto). Il grafico costruisce la linea del prezzo dall'unione per data di quei
+    punti (`LotWacPriceChart.svelte:747-764`), quindi mostra solo le linee del costo medio.
+  - Rimedio possibile: una serie del prezzo senza lotti sull'intervallo calcolato, un campo nuovo della risposta (e il
+    suo contratto nell'AI Export, se serve); il pannello la userebbe solo con `FAILED`, o sempre al posto dell'unione.
+  - Dettagli: piano di Y, «J-12, la metà del pannello».
+- **Y-31 · E2E di J-12: la regola della lingua dell'interfaccia (M-18) ricopiata in una spec, e due stati non
+  pubblicati** — basso, test; Y, 17/10 (test-author di J-12).
+  - `brokers-detail.spec.ts::dayAsThePanelWritesIt` ricopia `resolveUiLocale`, perché Playwright non può importare
+    `uiLocale.ts`; anche `fixtures/dates.ts` ricopia `dateOnly`. Se M-18 cambia, J12-1 diventa rosso per un motivo che
+    non c'entra. Rimedio: una fixture condivisa della lingua dell'interfaccia.
+  - Il grafico WAC non pubblica il suo stato «nessun dato» (il test guarda la tela). La pagina delle transazioni non
+    lascia un segno durevole sulla riga di `?highlight=` (il test guarda la navigazione e la modale). Un `data-state` o un
+    `data-highlighted` li renderebbe espliciti.
+  - Dettagli: piano di Y, «J-12, la metà del pannello».
 
 ## MF · Matematica finanziaria (fase 01)
 

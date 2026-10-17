@@ -128,7 +128,7 @@
       "shortLotLabel": "Short {date}",
       "detailTitle": "FIFO Lot Detail",
       "loadFailed": "Failed to load lot data",
-      "analysisFailed": "Lot analysis could not be reconstructed reliably (inconsistent quantities or transfers) — figures may be incomplete.",
+      "analysisFailed": "This asset's lots can't be rebuilt: some of its transactions don't add up. The lots, their timeline and the comparison are hidden; the average-cost lines below are not affected.",
       "combined": "Combined",
       "chartMarkers": {
         "legend": {
@@ -284,7 +284,8 @@
       "yAxisAuto": "Auto",
       "yAxisFromZero": "From 0",
       "annualizedReturn": "Annualized",
-      "annualizedReturnTooltip": "Net annualized return (CAGR) of this single lot over its holding window, net of income and fees, for comparison across lots held for different durations."
+      "annualizedReturnTooltip": "Net annualized return (CAGR) of this single lot over its holding window, net of income and fees, for comparison across lots held for different durations.",
+      "analysisFailedFix": "Fix these transactions and the lots come back:"
     },
     "createdInSystem": "Created in System",
     "deleteBlockedTitle": "Cannot delete broker",
