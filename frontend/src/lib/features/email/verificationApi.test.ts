@@ -16,9 +16,15 @@
  *     caller without a session — and a 423 whose `detail.code` is `instance_blocked` (workstream H's
  *     `isInstanceBlockedError`), to a signed-in one; a 423 without that code, and that code under another status, are
  *     `null` like any other failure;
- *   - `readResendFailure(error)`: any 401 is `INVALID_CREDENTIALS` (the login's answer is a plain-text `detail`); a coded
- *     refusal is its `error_code`, with `retryAfter` when `retry_after` is a finite number; no `detail` object — a
- *     validation list, a plain-text `detail` other than a 401, no answer — is `UNKNOWN`;
+ *   - `readResendFailure(error)`: a coded refusal is its `error_code`, with `retryAfter` when `retry_after` is a finite
+ *     number; no `detail` object — a validation list, a plain-text `detail` other than a 401's, no answer — is `UNKNOWN`;
+ *   - a 401 of «resend» (lot E-11): one whose `detail` object is coded `INVALID_CREDENTIALS` — the route's own refusal of
+ *     wrong credentials — is `INVALID_CREDENTIALS` alone; any other 401 — a plain-text `detail` (`Not authenticated`,
+ *     `Session expired or invalid`, even `Invalid credentials`), no body, a `detail` object without that code — is
+ *     `INSTANCE_BLOCKED` alone: the route is public and outside the block's allow-list (EVA-017 pins it), so its only
+ *     other 401 is the block's, to a caller without a session; a 423 whose `detail.code` is `instance_blocked` (workstream
+ *     H's `isInstanceBlockedError`), to a signed-in one, is `INSTANCE_BLOCKED` alone too; a 423 without that code, and
+ *     that code under another status, are not the block: `UNKNOWN`, like any refusal without an `error_code`;
  *   - both readers read a refusal carried by axios's own `AxiosError` (what the generated client rejects with) or by an
  *     `ApiError`;
  *   - through the real client, only the transport faked: the requests reach it as described, and what a refusal rejects
@@ -43,6 +49,9 @@ const TOKEN = 'zq-Verify_Token-0123';
 
 /** What a blocked instance answers a signed-in caller (`refuse_when_blocked`, workstream H): a 423 with this body. */
 const BLOCKED_BODY = {detail: {code: 'instance_blocked', message: 'This instance is blocked by its hosting provider'}};
+
+/** What «resend» answers wrong credentials since lot E-11 (`api/v1/email.py`): its own 401, coded like E's other refusals. */
+const INVALID_CREDENTIALS_BODY = {detail: {error_code: 'INVALID_CREDENTIALS', message: 'Invalid credentials'}};
 
 /** The config axios attaches to an error raised outside a request. */
 const REQUEST = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
@@ -93,7 +102,7 @@ describe('confirmEmailVerification and resendEmailVerification — through their
 
     it('VFA-03: a refusal of either reaches the caller as the client raised it', async () => {
         const refusedLink = axiosRefusal(400, {detail: {error_code: 'TOKEN_INVALID', status: 'expired'}});
-        const refusedResend = axiosRefusal(401, {detail: 'Invalid credentials'});
+        const refusedResend = axiosRefusal(401, INVALID_CREDENTIALS_BODY);
         vi.spyOn(zodiosApi, CONFIRM_ALIAS).mockRejectedValueOnce(refusedLink);
         vi.spyOn(zodiosApi, RESEND_ALIAS).mockRejectedValueOnce(refusedResend);
 
@@ -172,11 +181,10 @@ describe.each(CARRIERS)('readLinkRefusal — the refusal of a blocked instance (
 // =====================================================================================================================
 describe.each(CARRIERS)('readResendFailure — a refusal carried by $carrier', ({refuse}) => {
     it.each<{label: string; body: unknown}>([
-        {label: 'the login’s plain-text detail', body: {detail: 'Invalid credentials'}},
-        {label: 'a coded detail', body: {detail: {error_code: 'SOMETHING_ELSE', retry_after: 30}}},
-        {label: 'no body', body: undefined},
-    ])('VFA-08: any 401 — $label — is INVALID_CREDENTIALS alone', ({body}) => {
-        expect(readResendFailure(refuse(401, body))).toStrictEqual({errorCode: 'INVALID_CREDENTIALS'});
+        {label: 'with its message', body: INVALID_CREDENTIALS_BODY},
+        {label: 'the code alone', body: {detail: {error_code: 'INVALID_CREDENTIALS'}}},
+    ])('VFA-08: a 401 coded INVALID_CREDENTIALS — $label — is INVALID_CREDENTIALS alone: the route’s own refusal of wrong credentials (lot E-11)', ({body}) => {
+        expect(readResendFailure(refuse(401, body)), 'the route’s own coded 401 says the credentials are wrong').toStrictEqual({errorCode: 'INVALID_CREDENTIALS'});
     });
 
     it.each<{status: number; detail: Record<string, unknown>; failure: ResendFailure}>([
@@ -220,6 +228,44 @@ describe.each(CARRIERS)('readResendFailure — a refusal carried by $carrier', (
 describe('readResendFailure — what carries no answer is UNKNOWN', () => {
     it.each(NO_ANSWER)('VFA-12: $label', ({make}) => {
         expect(readResendFailure(make())).toStrictEqual({errorCode: 'UNKNOWN'});
+    });
+});
+
+// =====================================================================================================================
+describe.each(CARRIERS)('readResendFailure — the refusal of a blocked instance (lot E-11), carried by $carrier', ({refuse}) => {
+    it.each<{label: string; body: unknown}>([
+        {label: 'the plain-text detail of a caller without a session', body: {detail: 'Not authenticated'}},
+        {label: 'the plain-text detail of a stale session', body: {detail: 'Session expired or invalid'}},
+        {label: 'the login’s plain-text detail, which this route no longer sends', body: {detail: 'Invalid credentials'}},
+        {label: 'the code as a plain-text detail', body: {detail: 'INVALID_CREDENTIALS'}},
+        {label: 'no body', body: undefined},
+        {label: 'an empty body', body: ''},
+        {label: 'no detail', body: {}},
+        {label: 'a detail object without a code', body: {detail: {message: 'Invalid credentials'}}},
+        {label: 'another code, its retry_after not read', body: {detail: {error_code: 'SOMETHING_ELSE', retry_after: 30}}},
+        {label: 'the code in another case', body: {detail: {error_code: 'invalid_credentials'}}},
+        {label: 'the code outside detail', body: {error_code: 'INVALID_CREDENTIALS'}},
+        {label: 'the block’s own body', body: BLOCKED_BODY},
+    ])('VFA-23: any other 401 — $label — is INSTANCE_BLOCKED alone: on this public route outside the allow-list only the block answers another 401', ({body}) => {
+        expect(readResendFailure(refuse(401, body)), 'a 401 that is not the route’s own is the instance’s block, not wrong credentials').toStrictEqual({errorCode: 'INSTANCE_BLOCKED'});
+    });
+
+    it.each<{label: string; body: unknown}>([
+        {label: 'with its message', body: BLOCKED_BODY},
+        {label: 'the code alone', body: {detail: {code: 'instance_blocked'}}},
+    ])('VFA-24: a 423 instance_blocked — $label — is INSTANCE_BLOCKED alone: the refusal a signed-in caller gets', ({body}) => {
+        expect(readResendFailure(refuse(423, body)), 'the 423 that isInstanceBlockedError recognises is the instance’s block').toStrictEqual({errorCode: 'INSTANCE_BLOCKED'});
+    });
+
+    it.each<{label: string; status: number; body: unknown}>([
+        {label: 'a 423 with another code', status: 423, body: {detail: {code: 'locked'}}},
+        {label: 'a 423 with the code outside detail', status: 423, body: {code: 'instance_blocked'}},
+        {label: 'a 423 with a plain-text detail', status: 423, body: {detail: 'instance_blocked'}},
+        {label: 'a 423 without a body', status: 423, body: undefined},
+        {label: 'the block’s body with a 403', status: 403, body: BLOCKED_BODY},
+        {label: 'the block’s body with a 500', status: 500, body: BLOCKED_BODY},
+    ])('VFA-25: $label is UNKNOWN — not the block’s refusal', ({status, body}) => {
+        expect(readResendFailure(refuse(status, body)).errorCode, 'only a 401 or the 423 isInstanceBlockedError recognises is the block').toBe('UNKNOWN');
     });
 });
 
@@ -294,7 +340,7 @@ describe('through the real client, only the transport faked', () => {
     });
 
     it.each<{label: string; status: number; body: unknown; failure: ResendFailure}>([
-        {label: '401 Invalid credentials', status: 401, body: {detail: 'Invalid credentials'}, failure: {errorCode: 'INVALID_CREDENTIALS'}},
+        {label: '401 INVALID_CREDENTIALS, the route’s own refusal', status: 401, body: INVALID_CREDENTIALS_BODY, failure: {errorCode: 'INVALID_CREDENTIALS'}},
         {label: '403 ACCOUNT_DISABLED', status: 403, body: {detail: {error_code: 'ACCOUNT_DISABLED', message: 'Account is disabled'}}, failure: {errorCode: 'ACCOUNT_DISABLED'}},
         {label: '409 EMAIL_UNAVAILABLE', status: 409, body: {detail: {error_code: 'EMAIL_UNAVAILABLE', message: 'This instance cannot send emails'}}, failure: {errorCode: 'EMAIL_UNAVAILABLE'}},
         {label: '429 EMAIL_RATE_LIMITED', status: 429, body: {detail: {error_code: 'EMAIL_RATE_LIMITED', retry_after: 840, message: 'Too many requests: try again later'}}, failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 840}},
@@ -322,5 +368,17 @@ describe('through the real client, only the transport faked', () => {
 
         await expect(confirmEmailVerification(TOKEN).then(() => 'resolved', readLinkRefusal)).resolves.toBe('blocked');
         expect(received, 'premise: the request reached the transport').toHaveLength(1);
+    });
+
+    it.each<{label: string; status: number; body: unknown}>([
+        {label: 'the 401 of a caller without a session', status: 401, body: {detail: 'Not authenticated'}},
+        {label: 'the 423 instance_blocked of a signed-in caller', status: 423, body: BLOCKED_BODY},
+    ])('VFA-26: on a blocked instance (lot E-11), $label, as the client raises it, is read by readResendFailure as INSTANCE_BLOCKED', async ({status, body}) => {
+        serverAnswers(status, body);
+
+        const read = await resendEmailVerification('zq_alice', 'Pass-2026').then(() => null, readResendFailure);
+
+        expect(received, 'premise: the request reached the transport').toHaveLength(1);
+        expect(read, 'the block’s refusal says the instance is blocked, never that the credentials are wrong').toStrictEqual({errorCode: 'INSTANCE_BLOCKED'});
     });
 });
