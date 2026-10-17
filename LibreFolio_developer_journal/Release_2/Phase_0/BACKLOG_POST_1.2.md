@@ -5600,13 +5600,21 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   rifiuta un costo su FX_CONVERSION; `costBasisNotAllowed` e `costBasisModeIncompatible` in 4 lingue, cancello su tutti i codici delle
   regole (22). 21 rossi verdi: `transaction-cost-basis-rule` 164, `transaction` 125, `transaction-decimal-places` 201; BRIM
   (`brim-create-transaction` 14, `brim-gap-fix` 115, `external brim-providers` 736) e gate i18n verdi. Dettagli: piano 04, sezione
-  «W-B72 — … (N78): cura».
+  «W-B72 — … (N78): cura». Dopo l'ingresso, un rosso di dev (X): il cancello dell'HTML
+  (`frontend/src/htmlInterpolation.gate.test.ts`) non ammetteva il `<b>` delle due chiavi nuove. Ora sono testo semplice; il
+  cancello dà 26 verdi e `core-unit` 8 378 verdi.
 - **W-B75 · Un errore di campo di un plugin BRIM può rendere la risposta del parse non serializzabile** — minimo, disponibilità; W,
   17/10 (W-B72). `BRIMProvider._create_transaction` (`backend/app/services/brim/brim_provider.py`) copia in `params` il contesto di ogni
   errore solo così com'è; quello di un `value_error` porta l'oggetto eccezione, e `BRIMValidationIssue.model_dump(mode="json")` alza
   `PydanticSerializationError` (verificato): un 500 sul parse. Oggi non è raggiungibile: i plugin passano istanze di `Currency` (non
   rivalidate) e liste di stringhe. È latente per un plugin nuovo. Cura: lo stesso filtro dei dati semplici di `_lone_error_params`
   (W-B72), con un rosso su un plugin finto. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
+- **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
+  coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
+  `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
+  J-12 può solo controllare che la modale si apra. Cura, economica: un segno che resta, `data-highlighted="true"` sulla riga fino
+  alla prossima evidenziazione o al cambio di pagina, con un ruolo visibile del design system (un ruolo `-lf-`, niente palette);
+  l'E2E di J-12 lo legge. Dopo la 1.3, salvo spazio. Dettagli: questa voce.
 - **W-B73 · La pagina utente delle transazioni dice che l'unione sceglie anche data e costo** — minimo, doc; W, 17/10 (docs-writer).
   `mkdocs_src/docs/user/transactions/index.en.md` descrive il dialogo «Promote pair» con la scelta di data e costo; `PromoteMergeModal`
   offre solo descrizione e tag dal maggio 2026 (SP-C Step 5). La pagina ha già un debito di traduzione non timbrato (la cache di Aphra
@@ -6059,7 +6067,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   `user/dashboard/kpi-cards`. `translate-validate` (16/10): 63 errori strutturali nuovi da J-24. `adjustment`, `fifo-engine/index` e
   `fifo-lot-analysis` avevano già debito (J-25). Tradurle nello stesso giro, con `index` (l'ancora del §8). Dettagli: piano
   J, §10 «J-24».
-- **J-33 · Lo storico della performance dei lotti salta i giorni senza prezzo, la Dashboard li valuta al costo** —
+- ✅ **J-33 · Lo storico della performance dei lotti salta i giorni senza prezzo, la Dashboard li valuta al costo** —
   medio-basso, numeri; J, 16/10, trovata in CP-7b.
   - Dove: `lots/histories.py::build_performance_history` (ROI e TWRR dei lotti, `PERFORMANCE_HISTORY`). Fa la NAV solo
     nei giorni con un prezzo; i flussi di prima li porta al primo giorno con la NAV.
@@ -6075,6 +6083,10 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     aperti (costo noto, cambio all'apertura; un giorno con un lotto SHORT aperto o un costo ignoto resta senza punto), con
     le stesse `at_cost_until`; rosso prima. Dichiarare prima i valori che cambiano.
   - Dettagli: piano J, §10 «CP-7b — codice».
+  - ✅ 17/10: fatta da J (checkpoint J-33). Nei giorni senza osservazione la NAV è al costo dei lotti LONG aperti (cambio
+    d'apertura) e un trasferimento sposta il costo delle sue unità; il TWRR comprende il salto dal costo al primo
+    prezzo, come il ROI. Una rettifica senza costo conta 0 come nella storia del valore (J-35 resta al developer).
+    Dettagli: piano 05, sezione «J-33».
 - **J-34 · Debito di traduzione di CP-7b (il riferimento dei lotti e i giorni al costo)** — basso, documentazione; J,
   16/10. Pagine EN cambiate di senso, senza stamp:
   - `financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis`:
@@ -6287,6 +6299,12 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   La cura naturale è la lettura al confine di J-10 (`financial_math/lots/scope_boundary.py`), applicata ai broker
   visibili al posto della gamba aggiunta. Prima un rosso. Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+- **J-52 · Due convenzioni d'eco per la finestra del rigioco fuori dai limiti** — minimo, chiarezza; nota cosmetica di E
+  alla revisione di SEC8-1b (17/10), facoltativa. Per una richiesta fuori dai limiti la finestra preparata
+  (`requested_range`, che fa da ripiego di `metadata.analyzed_range`) è quella limitata, mentre `output.replay_range` e
+  `metadata.params` ripetono la richiesta. Visibile solo fuori dai limiti. Da scegliere una convenzione sola, o da dire
+  nella pagina. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione
+  «SEC8-1b».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -6910,7 +6928,7 @@ sulla base `23f6578f3`.
   - Un test per la FIFO al posto dello stato ora si può scrivere, con un timeout: la lettura `lstat`-prima la ignora,
     prima restava appesa.
   Dettagli: piano 07, «B-32».
-- **B-34 · `--instance-key-file`: la causa giusta quando questa istanza non ha ancora una chiave, e due frasi della doc**
+- ✅ **B-34 · `--instance-key-file`: la causa giusta quando questa istanza non ha ancora una chiave, e due frasi della doc**
   — basso; B, 17/10 (revisione di H su B-18: LOW-1 e due appunti; piano di H §14 «Review di B-18»).
   - **LOW-1**: su un'istanza senza chiave (dal cloud a un server nuovo), se la verifica non può crearla (`secrets/` non
     scrivibile) tutto resta illeggibile. Però `instance_key_status()` dice ancora `not_created` con `problem=None`, e la
@@ -6919,6 +6937,14 @@ sulla base `23f6578f3`.
   - **Doc**: `cli_tools` deve dire che un vecchio `LIBREFOLIO_INSTANCE_KEY` vale «as written, spaces included»;
     `backup_restore` deve aggiungere `chmod 600` sul file della chiave vecchia mentre sta in `backups/`.
   Niente codice prima del via del coordinatore. Dettagli: piano 07, «B-18».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 14:10).
+  - `_print_given_key` prende il ramo dell'eccezione anche con `not_created`: «`<path>`: there is no instance key yet,
+    and it could not be created». Un test accanto a c7.
+  - `cli_tools`: «as written in the variable, spaces included», e la riga dell'eccezione.
+  - Il `chmod 600`: dopo B-38 la chiave non passa più da `backups/`; va sul file `old-instance.key` dell'host
+    (`backup_restore` l.320).
+  Dettagli: piano 07, «B-34».
 - ✅ **B-35 · Il limite di caricamento non limita quanto un archivio scompatta** — 🟡 MEDIO nel profilo ospitato, basso
   nel self-hosted; B, 17/10 (BZ parte 1, F3).
   - `staging.space_needed` e `_check_space` (`staging.py:462-470`) confrontano le dimensioni dichiarate dal manifest
@@ -7600,23 +7626,31 @@ punto di partenza, l'audit dello stesso giorno:
   a quote diverse sta dentro il ramo `tx.date != paired.date`: una coppia dello stesso giorno non lo produce. Il divario
   è un risultato nel P&L (J2), l'avviso spiega perché. Da vedere con chi possiede la qualità dei dati (J). Dettagli:
   piano MF, sezione «MF-J2 — codice e misura».
-- **MF-D3 · Il fattore d'annualizzazione riscritto nei validatori degli schemi del rischio** — minimo, nessun numero;
+- ✅ **MF-D3 · Il fattore d'annualizzazione riscritto nei validatori degli schemi del rischio** — minimo, nessun numero;
+  **chiusa il 17/10**: `returns.observations_per_year`, letto dai due validatori (decisione D3 del coordinatore: uno
+  schema può importare una funzione pura della casa; regola 8), commit `ad399d383`, entrato in dev `482343eb3`.
   MF, 17/10 (MF-D resto). `schemas/risk.py:514` e `:595` ricalcolano `n_observations * 365 / calendar_days` per
   controllare l'invariante del contratto, accanto alla funzione della casa `returns.observed_annualization`. Gli
   schemi non importano servizi per scelta: oggi è un controllo dichiarato, non una seconda implementazione. Da
   decidere se resta così (riga nella pagina dev) o se la formula scende in un modulo che entrambi possono leggere.
   Dettagli: piano MF, sezione «MF-D resto».
-- **MF-SI1 · La storia della Scheduled Investment da «min» solleva** — basso, preesistente; test-author di MF, 17/10
+- ✅ **MF-SI1 · La storia della Scheduled Investment da «min» solleva** — basso, preesistente; test-author di MF, 17/10
+  **chiusa il 17/10**: commit `f37b1d0ea`, entrato in dev `16f8c74ed`.
   (R13-SEC7-2). `get_history_value(start_date="min")` confronta il letterale `"min"` con le date
   (`start_date < min(cached.keys())`) e filtra gli eventi con `start_date` invece di `effective_start`: solleva
   `CALCULATION_ERROR`, su HEAD come dopo SEC7-2. La via del refresh può passare `"min"`. Cura: `effective_start` in quei
   due punti, rossi prima. Dettagli: piano MF, sezione «R13-SEC7-2».
-- **MF-SI2 · Scheduled Investment: un tetto agli `asset_events` e un limite per utente alla sonda** — basso,
+- ✅ **MF-SI2 · Scheduled Investment: un tetto agli `asset_events` e un limite per utente alla sonda** — basso,
+  **chiusa il 17/10**: `SCHEDULE_MAX_EVENTS` 10 000, la sonda a 30 al minuto per utente (`LIBREFOLIO_PROBE_RATE_LIMIT`,
+  0 = spento, le corsie spente), commit `ad399d383`, entrato in dev `482343eb3`; la lettura a ogni sonda col lotto
+  MF-SEC9a.
   sicurezza sotto soglia; E, 17/10 (revisione di R13-SEC7-2). Gli eventi manuali di un piano non hanno un numero
   massimo (costo lineare, solo il corpo della richiesta li limita), e `POST /assets/provider/probe` non ha un limite
   per utente. Proposta: un tetto agli eventi (p. es. 10 000) nello schema, e il limite della sonda dove vivono gli altri
   limiti delle richieste. Dettagli: piano MF, sezione «SEC7-2 entrato; MF-SI1».
-- **MF-J45a · L'esecutore del motore non è chiuso allo spegnimento** — minimo; docs-writer di MF, 17/10 (J-45).
+- ✅ **MF-J45a · L'esecutore del motore non è chiuso allo spegnimento** — minimo; docs-writer di MF, 17/10 (J-45).
+  **Chiusa il 17/10**: `shutdown_engine_executor()` nel passo `portfolio-engine` dello spegnimento, commit
+  `ad399d383`, entrato in dev `482343eb3`.
   `_ENGINE_EXECUTOR` (`financial_math/portfolio/engine.py`) non è nella sequenza di spegnimento dell'app: una
   ricostruzione in corso tiene il processo fino alla fine, come l'esecutore predefinito di `asyncio.to_thread`.
   Proposta, se serve: `shutdown(wait=False, cancel_futures=True)` nel lifespan. Dettagli: piano MF, sezione «J-45».
@@ -7624,11 +7658,14 @@ punto di partenza, l'audit dello stesso giorno:
   lettura della cache `portfolio_blob` (`portfolio/engine.py` ~:316) e la sua scrittura (~:457) nessun lucchetto: due
   richieste identiche concorrenti ricostruiscono entrambe (con J-45 occupano i due worker). Nessuna azione ora; cura
   possibile: un `asyncio.Future` per chiave in volo. Dettagli: piano MF, sezione «J-45».
-- **MF-SEC8-2a · Un avviso di qualità dati per le righe datate prima del 1900** — basso; coordinatore, 17/10 (decisione 2
+- ✅ **MF-SEC8-2a · Un avviso di qualità dati per le righe datate prima del 1900** — basso; coordinatore, 17/10 (decisione 2
+  **chiusa il 17/10**: avviso `TRANSACTIONS_BEFORE_FLOOR` (warning, senza CTA), commit `871f75a38`, entrato in dev
+  `482343eb3`; il caso API con `ad399d383`.
   di MF-SEC8-2). N74 impedisce le nuove; quelle già salvate si rigiocano ma la storia parte dal 1900-01-01 senza dirlo.
   Proposta: un codice `TRANSACTION_BEFORE_FLOOR` (INFO) con `navigate_asset`/il broker. Dettagli: piano MF, sezione
   «MF-SEC8-2».
-- **MF-SEC8-2b · `date.min − 1 giorno` fuori dalla ricostruzione** — minimo, preesistente; MF, 17/10 (decisione 3 di
+- ✅ **MF-SEC8-2b · `date.min − 1 giorno` fuori dalla ricostruzione** — minimo, preesistente; MF, 17/10 (decisione 3 di
+  **chiusa il 17/10**: `day_before()` accanto a `shift_date()`, commit `e864827d3`, entrato in dev `482343eb3`.
   MF-SEC8-2). Una coppia con l'arrivo datato `0001-01-01` (`portfolio/classifier.py:217`, `arrival.date − 1`) e un
   provento datato `0001-01-01` (`financial_math/yield_on_cost.py:631`) sollevano `OverflowError`. Cura: confrontare prima
   di sottrarre, o partire da `EARLIEST_RANGE_START`. Rossi prima. Dettagli: piano MF, sezione «MF-SEC8-2».
@@ -7639,6 +7676,15 @@ punto di partenza, l'audit dello stesso giorno:
   ripete l'SQL. Altre query con un termine OR per elemento, da verificare se raggiungibili con tanti elementi:
   `fx/storage.py:262`, `brim_provider.py:2030`, `fx/sync.py:234`, `pac_allocator/source/wac.py:44`. Cura: messaggio
   generico + log, `MAX_BULK_ITEMS`, blocchi come `FX_PAIRS_PER_QUERY`. Dettagli: piano MF, sezione «R13-SEC9».
+  **In corso (17/10)**, allargata da E (revisione di R13-SEC9): anche `fx/storage.py:139`/`:262`, `price_store.py:461`,
+  `fx/sync.py:234` in blocchi (`utils/sql_chunks.OR_TERMS_PER_QUERY`), un tetto di scrittura `MAX_BULK_WRITE_ITEMS`
+  (10 000) su `POST`/`DELETE /fx/currencies/rate` e `DELETE /prices`, la sonda letta a ogni chiamata. Restano da
+  verificare `brim_provider.py:2030` e `pac_allocator/source/wac.py:44`. Dettagli: piano MF, sezione «MF-SEC9a».
+- **MF-SEC9d · Nessun tetto globale alle chiamate concorrenti per fornitore** — basso, carico; E, 17/10 (revisione di
+  R13-SEC9). Il semaforo di `get_current_prices_bulk` limita una richiesta, non il processo: 1 000 id distinti con un
+  fornitore lento sono ~33 minuti di chiamate in uscita per richiesta, e più richieste si sommano. Proposta: un
+  semaforo per fornitore, condiviso fra richieste e scheduler, accanto alle pause dopo un 429. Solo informazione per ora.
+  Dettagli: piano MF, sezione «MF-SEC9a».
 - **MF-SEC9b · `Currency.validate_code` accetta nomi e codici numerici** — basso, preesistente, tutta l'app;
   test-author di MF, 17/10 (Y D1). La ricerca generale di pycountry accetta `EURO`, `978`, `US Dollar` e restituisce
   l'input in maiuscolo (`EURO`, `978`, `US DOLLAR`), non il codice a tre lettere: ogni campo valuta li lascia passare

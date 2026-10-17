@@ -2,6 +2,7 @@
 
 import json
 import math
+from collections.abc import Callable
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -39,28 +40,44 @@ logger = get_logger(__name__)
 
 PROBE_WINDOW_SECONDS = 60
 
+#: The probe limiters (MF-SI2, E's review of R13-SEC7-2), one per limit the setting has had in this process: a probe is a
+#: dry run any user may start, which may call a provider or generate a schedule, so it is counted (in this process, like
+#: every ``SlidingWindowLimiter``). A new ``LIBREFOLIO_PROBE_RATE_LIMIT`` applies at the next probe, with no restart
+#: (E's review of R13-SEC9), and a limit the setting comes back to finds its counts.
+PROBES_BY_LIMIT: dict[int, SlidingWindowLimiter] = {}
+#: What the probe limit has logged already: once per value, never once per probe.
+_PROBE_SETTING_LOGGED: set[str] = set()
+
+
+def _log_probe_setting_once(key: str, log: Callable[[str], object], message: str) -> None:
+    if key not in _PROBE_SETTING_LOGGED:
+        _PROBE_SETTING_LOGGED.add(key)
+        log(message)
+
 
 def probe_limiter() -> SlidingWindowLimiter | None:
-    """The per-user limit of the provider probe (MF-SI2), from ``LIBREFOLIO_PROBE_RATE_LIMIT``: so many a minute.
+    """The per-user limit of the provider probe in force (MF-SI2): ``LIBREFOLIO_PROBE_RATE_LIMIT`` probes a minute.
 
-    None when the setting is 0 (off), with a warning in the log. A value that cannot be used is logged as an error and
-    the default applies (30): the limit never turns off by mistake.
+    Read at each probe, as ``login_limit_enabled()`` reads its variable. None when the setting is 0 (off), with a warning
+    in the log. A value that cannot be used is logged as an error and the default applies (30): the limit never turns off
+    by mistake. Each warning or error is logged once per value.
     """
     try:
         limit = probe_rate_limit()
     except ValueError as error:
-        logger.error(f"{error}; the default of {DEFAULT_PROBE_RATE_LIMIT} probes a minute applies")
+        _log_probe_setting_once(str(error), logger.error, f"{error}; the default of {DEFAULT_PROBE_RATE_LIMIT} probes a minute applies")
         limit = DEFAULT_PROBE_RATE_LIMIT
     if limit == 0:
-        logger.warning("LIBREFOLIO_PROBE_RATE_LIMIT=0: provider probes are not limited; set it back unless this is a test instance")
+        _log_probe_setting_once("off", logger.warning, "LIBREFOLIO_PROBE_RATE_LIMIT=0: provider probes are not limited; set it back unless this is a test instance")
         return None
-    return SlidingWindowLimiter(limit, PROBE_WINDOW_SECONDS)
+    limiter = PROBES_BY_LIMIT.get(limit)
+    if limiter is None:
+        limiter = PROBES_BY_LIMIT[limit] = SlidingWindowLimiter(limit, PROBE_WINDOW_SECONDS)
+    return limiter
 
 
-#: Probes per user (MF-SI2, E's review of R13-SEC7-2): a dry run any user may start, which may call a provider or
-#: generate a schedule, so it is counted (in this process, like every ``SlidingWindowLimiter``). Built when the server
-#: starts: a new ``LIBREFOLIO_PROBE_RATE_LIMIT`` applies at the next start. None: not limited.
-PROBES_BY_USER: SlidingWindowLimiter | None = probe_limiter()
+# Read once at import too: a server started with the limit off, or with a value it cannot use, says so in its log.
+probe_limiter()
 
 provider_router = APIRouter(prefix="/provider", tags=["FA Provider"])
 
@@ -246,7 +263,8 @@ async def probe_provider_config(
     At most 30 probes a minute per user (MF-SI2): past it, 429 `PROBE_RATE_LIMITED` with `Retry-After`.
     """.format(ops_list="\n    ".join(f"- `{op.value}`" for op in ProbeOperation))
 
-    decision = PROBES_BY_USER.hit(current_user.id) if PROBES_BY_USER is not None else None
+    limiter = probe_limiter()
+    decision = limiter.hit(current_user.id) if limiter is not None else None
     if decision is not None and not decision.allowed:
         seconds = max(1, math.ceil(decision.retry_after))
         raise HTTPException(
@@ -301,9 +319,22 @@ async def remove_providers_bulk(
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
-    """Bulk remove provider assignments (PRIMARY bulk endpoint)."""
+    """Bulk remove provider assignments (PRIMARY bulk endpoint).
+
+    Removing an assignment deletes the events its provider generated. Refused, nothing removed: 409
+    ``detail = {"error_code", "message", "params"}`` with ``PROVIDER_REMOVAL_LINKED_TRANSACTIONS`` (X-R62) when a
+    transaction is linked to one of those events; ``params`` holds ``asset_id``, ``item_index`` and ``events``
+    (``event_id``, ``date``, ``type``, ``transaction_ids`` — only those the caller can see — and
+    ``hidden_transactions_count``). ``PROVIDER_REMOVAL_CONFLICT`` when the delete still broke a reference (a link made
+    meanwhile); its ``params`` is empty.
+    """
     try:
-        return await AssetSourceManager.bulk_remove_providers(asset_ids, session)
+        return await AssetSourceManager.bulk_remove_providers(asset_ids, session, current_user_id=_current_user.id)
+    except AssetSourceError as e:
+        if e.error_code in ("PROVIDER_REMOVAL_LINKED_TRANSACTIONS", "PROVIDER_REMOVAL_CONFLICT"):
+            raise HTTPException(status_code=409, detail={"error_code": e.error_code, "message": e.message, "params": jsonable_encoder(e.details)}) from e
+        logger.exception(f"Error in bulk remove providers: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
     except Exception as e:
         logger.exception(f"Error in bulk remove providers: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e

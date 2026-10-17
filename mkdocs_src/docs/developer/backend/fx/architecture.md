@@ -260,6 +260,17 @@ Every write that changes stored rates drops the two portfolio cache layers, `por
 | Manual rates (`POST /api/v1/fx/currencies/rate`) | `upsert_rates_bulk()` | After the commit (any non-empty batch) |
 | Rate deletion (`DELETE /api/v1/fx/currencies/rate`) | `delete_rates_bulk()` | At least one row was deleted |
 
+**Limits and chunks** (MF-SEC9a, from E's review of R13-SEC9). `POST` and `DELETE /api/v1/fx/currencies/rate` take at
+most `MAX_BULK_WRITE_ITEMS` (10,000) rates or deletions, a 422 `bulk_too_many_items` before any write: the FX page
+saves a CSV import in one request, and daily rates since 1999 are about 7,000 rows. The statements behind them hold
+one `OR` term per rate or deletion, so they run in chunks of `OR_TERMS_PER_QUERY` (500, `utils/sql_chunks.py`, the
+value of `FX_PAIRS_PER_QUERY`), in the same transaction: the read of the stored rates and the
+`INSERT … ON CONFLICT` of `upsert_rates_bulk()`, the read of the matching rates of `delete_rates_bulk()` (a deletion
+of more than 1,000 separate days, which the FX page sends as as many ranges, answered 500), and the read of the
+stored rates a provider sync compares with (`_stored_rates()`; refused, it was taken for a missing table and every
+rate counted as new). An error answers with a fixed message, never the database's, and is logged.
+{: #rate-write-limits }
+
 Both layers also key their entries on an FX fingerprint of the scope
 (`compute_portfolio_fx_cache_identity()` in `financial_math/portfolio/engine.py`); the explicit clear drops entries
 right away instead of leaving them to their TTL. See [Cache Registry & Admin Endpoints](../../architecture/settings_cache.md)

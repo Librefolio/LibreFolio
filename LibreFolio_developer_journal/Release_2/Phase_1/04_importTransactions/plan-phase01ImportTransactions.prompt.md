@@ -5688,6 +5688,19 @@ righe già salvate restano. Solo TRANSFER e ADJUSTMENT a quantità > 0 prendono 
    (HEAD `e908f0d4f` antenato): 0 conflitti; ruff e black sui 9 `.py` uniti e `json.load` sui 4 cataloghi puliti; `mkdocs build`
    stretto e `check-links` con uscita 0 sull'albero simulato. Il `wac.md` di dev (J-12/N81, il paragrafo dei due wipe) si unisce da
    solo, venti righe sotto il nostro. `git diff --check` pulito; porta 6184 libera. Handoff FROZEN inviato al coordinatore.
+8. ✅ **Dopo l'ingresso: un rosso di dev** (17/10, trovato da X; ingresso `e71b68d50` + `19c2f596e` → `7bc66c7ca`). `front-utility
+   core-unit` → `src/htmlInterpolation.gate.test.ts`, «finds no markup in any translation outside the reviewed sanitized keys».
+   Le due chiavi nuove portavano `<b>…</b>` in tutte e 4 le lingue, sul modello di `costBasisRequired`. Il cancello ammette markup
+   solo nelle tre chiavi riviste di `SANITIZED_MARKUP_KEYS` (tutte `transactions.errors.*`, rese da `resolveIssueMessage` con
+   `{@html sanitizeHtml(…)}`).
+   - **Cura**: testo semplice, la scelta preferita dal coordinatore: le stesse parole senza `<b>`, nessuna eccezione nuova nel
+     cancello. Script `files/scripts/wb72_plain_i18n.sh`, con `dev.py i18n update`.
+   - **Prove** (carico < 50): il cancello da solo con Vitest, 26 verdi; `dev.py i18n check` stretto, 5 048 chiavi;
+     `front-utility core-unit` 207 file, 8 378 verdi.
+
+   > **⚠️ Fuori pista**: io non avevo fatto girare `core-unit`. Le mie prove i18n erano `gate-i18n-catalog`, `gate-i18n-usage`,
+   > `i18n check` e il Vitest ICU, ma il cancello dell'HTML sta in `core-unit`. Regola per i lotti con chiavi i18n nuove: girare
+   > anche il cancello dell'HTML (`src/htmlInterpolation.gate.test.ts`) o `core-unit`.
 
 > **Nota, nuova voce W-B75** (fuori perimetro, non toccata): `BRIMProvider._create_transaction` mette in `params` il contesto di ogni
 > errore solo così com'è. Quello di un `value_error` porta l'oggetto eccezione, e la risposta non si serializza (verificato:
@@ -5893,3 +5906,45 @@ nuova.
   incolla di 200 000 decimali con `min`/`max` resta reattivo, e `compareExact` non gira.
 
 Nessun backend, nessuna API.
+
+### W-B66 — cura (2026-10-17, in corso)
+
+**Base**: HEAD `f078b766c` = dev con W-B67 (`279b3d5bd` + `581757965` → `ac92e6fae`, CHANGELOG `f078b766c`).
+
+1. ✅ **Decisioni del coordinatore** (17/10, 14:00):
+   - **scrittore** di `utils/core/parseDecimalInput.ts` e `utils/core/formatDecimal.ts` (nessun worktree li ha aperti), oltre al
+     mio `ExactDecimalInput.svelte`;
+   - **D-W66-1 = (a)**: un esponente incollato è espanso esatto entro ±100; oltre, il testo resta, il campo è rosso e c'è il
+     messaggio;
+   - la chiave `common.decimalExponentOutOfRange` in `base`, 4 lingue: ok;
+   - cancello in più prima del checkpoint: `front-utility core-unit` e `component-unit` nella corsia.
+
+   Verificato in sola lettura: `canShowSignColor` di `ExactQuantityInput` chiede anche `digitsValid`, quindi il confronto saltato
+   oltre il budget non cambia nulla per i genitori. I test esistono già e sono registrati:
+   `src/lib/utils/__tests__/parseDecimalInput.test.ts` e `src/lib/utils/core/__tests__/formatDecimal.test.ts` (`core-unit`),
+   `src/lib/components/ui/input/ExactDecimalInput.test.ts` (`component-unit`).
+2. ⏳ **Rossi** (test-author `539999df`, Vitest).
+
+   > **⚠️ Fuori pista**, cose trovate mentre scrivevo la cura.
+   > - **Una terza regex quadratica**: `formatDecimalForDisplay` toglie gli zeri finali con `frac.replace(/0+$/, '')`, quadratica su
+   >   una lunga fila di zeri che non chiude il testo. La cella del Bulk passa `maxFrac: value.length`, quindi nulla la tronca prima.
+   >   Misurato con node (V8), a 10 000 / 20 000 / 40 000 caratteri:
+   >
+   >   | Caso | 10 000 | 20 000 | 40 000 |
+   >   |---|---|---|---|
+   >   | `/0+$/` | 170 ms | 711 ms | 3 632 ms |
+   >   | vecchia regex di visualizzazione | 164 ms | 692 ms | 3 332 ms |
+   >   | vecchio `CANONICAL` | 179 ms | 730 ms | 2 684 ms |
+   >
+   >   Le forme lineari, e `SCIENTIFIC`, stanno a 0,1 ms. I rossi di tempo sono dimensionati a 40 000 caratteri: un'espressione
+   >   regolare sincrona non si interrompe, e a 200 000 bloccherebbe Vitest per circa 90 s a test.
+   > - **`normalizeDecimalInput` toglie la `e` allo stesso modo** (`1e-8` → `18`). Lo chiamano molti campi senza
+   >   `filterDecimalInput`: data editor, tabelle, planner, import, mini-modale degli eventi, `CompactCashCell` all'uscita dal
+   >   campo. La stessa espansione esatta vale anche lì; fuori portata il testo torna intatto. Dentro l'approvazione: cambiano solo
+   >   i testi con un esponente.
+   > - **Le frecce**: su un `1e-200` tenuto, `normalizeDecimalInput` leggeva 1200, e una freccia lo faceva 1201. Né un valore
+   >   fuori budget né un esponente rifiutato si spostano con le frecce.
+   > - `ExactDecimalInput` accetta un esponente in portata anche dal `value` del genitore (un `Number` che stampa `1e-8`).
+3. ⏳ **Cura** pronta (`files/scripts/wb66_cure.py`, dry run pulito su 3 file) e i18n (`files/scripts/wb66_i18n.sh`: `{max}`
+   semplice, niente plurale, niente formato numerico; spagnolo col tu, come la maggior parte di `base`). Poi verdi (`core-unit`,
+   `component-unit`), doc, handoff.

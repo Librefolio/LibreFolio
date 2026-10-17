@@ -316,6 +316,7 @@ class LotsAnalysisService:
             closures=performance_context.engine_result.closures,
             lots_by_id=performance_context.lots_by_id,
             asset_currency=asset.currency,
+            at_cost_until=at_cost_until,
         )
         if needs_income_alloc and not failed and at_cost_until is not None:
             # Estimated-at-cost values the open portion at converted opening cost -> needs fx@opening.
@@ -501,6 +502,7 @@ class LotsAnalysisService:
                     fx_resolver=fx_resolver,
                     context=performance_context,
                     quote_base_quantity=quote_base_quantity,
+                    at_cost_until=at_cost_until,
                 ),
                 display_from,
                 actual_to,
