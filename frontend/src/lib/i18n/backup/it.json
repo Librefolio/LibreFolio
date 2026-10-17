@@ -224,6 +224,21 @@
         "submit": "Controlla il backup",
         "cancel": "Annulla"
       }
+    },
+    "checks": {
+      "panelToken": {
+        "ok": "Il token di backup del pannello del fornitore è impostato e si può usare.",
+        "off": "Nessun token di backup è impostato per un pannello del fornitore: le rotte di backup del pannello sono spente.",
+        "notVisibleAscii": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN contiene caratteri che un'intestazione di richiesta non porta così come sono (spazi, tabulazioni o caratteri fuori dall'ASCII visibile): le rotte di backup del pannello rispondono 503 finché non si corregge.",
+        "tooShort": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN è troppo corto: usa almeno {minimum} caratteri casuali. Le rotte di backup del pannello rispondono 503 finché non si corregge.",
+        "unreadable": "Il token di backup del pannello non si può leggere: {reason}"
+      },
+      "uploadLimit": {
+        "limited": "Un ripristino accetta archivi fino a {limit_mb} MB.",
+        "unlimited": "Un ripristino accetta archivi di qualsiasi dimensione.",
+        "invalid": "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB non si può usare (un numero intero di megabyte, 0 per nessun limite): i caricamenti per un ripristino sono rifiutati finché non si corregge.",
+        "profileTable": "Le impostazioni predefinite del profilo di LibreFolio non danno al limite di caricamento alcun valore, o gliene danno uno del tipo sbagliato, quindi i caricamenti per un ripristino sono rifiutati: imposta LIBREFOLIO_BACKUP_MAX_UPLOAD_MB a un numero intero di megabyte e segnala l'errore."
+      }
     }
   }
 }

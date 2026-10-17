@@ -39,6 +39,10 @@
  * tooltip, the candle's, and the tooltip of an event marker sitting on the point; the whole-period cases on
  * WEEK_ENDS and MONTH_ENDS are the guard of what does not change.
  *
+ * Y-8 (the last two describes). A zoom gesture re-aims the arrows of an overlay once it settles, not on every
+ * tick — on PriceChartFull and on its candles — and, once the chart has been rebuilt in other colours, the arrows'
+ * write-back brings none of the old ones back (a colour guard). Their docblocks say how.
+ *
  * How it is tested: the real component, with ECharts replaced by a recorder (the `GrowthChart.test.ts`
  * pattern: jsdom has no canvas, and pixels are not the subject). A tooltip is the formatter the component handed
  * ECharts, called with what ECharts hands it on a hover: the axis tooltip with the items under the pointer, an
@@ -61,22 +65,47 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest
  * an instance (`getZr()` for the pointer handlers, `getOption()` for the arrow markers, `getWidth()` for the
  * initial resolution), and keeping every `setOption` payload. `graphic.LinearGradient` is the main series'
  * area fill: kept as its arguments. `plot.width` is the width `getWidth()` reports: the resolution knob.
+ *
+ * For Y-8 it also acts as ECharts does where a zoom and the arrows' re-aim read it. `on` keeps the handlers it is
+ * given and `emit` calls them, as ECharts does when the user acts (LineChart.test.ts' pattern; event names compared
+ * in lower case); no case emits but the Y-8 ones. The option it holds, it holds as ECharts does: a `setOption`
+ * merges into it — an object key by key, anything else, an array included, replaced; a component (`series`,
+ * `xAxis`, `dataZoom`…) by its index — unless `notMerge` replaces it whole; `getOption()` answers a deep copy,
+ * every component a list, and counts its calls (`getOptionCount`): ECharts deep-clones the whole option on each.
+ * `convertToPixel` maps a `[category, value]` point on the first x-axis to a fixed grid — x 10 px a category,
+ * y 400 − value — so an arrow marker's rotation is computed, and written back, as on a screen. `resize` counts its
+ * calls (`resizeCount`): the first-render stability pass resizes.
  */
 const {chartInstances, echartsModule, plot} = vi.hoisted(() => {
+    type Handler = (params?: unknown) => void;
+    type ChartOption = Record<string, unknown>;
+
     interface FakeChart {
-        setOptionCalls: Array<{option: Record<string, unknown>}>;
-        setOption: (option: Record<string, unknown>) => void;
-        getOption: () => Record<string, unknown>;
+        setOptionCalls: Array<{option: ChartOption}>;
+        /** `setOption(option)`, `setOption(option, notMerge)` or `setOption(option, {notMerge, lazyUpdate})`. */
+        setOption: (option: ChartOption, opts?: unknown) => void;
+        getOption: () => ChartOption;
+        /** How many times `getOption()` was called (Y-8). */
+        getOptionCount: number;
+        /** How many times `resize()` was called (Y-8). */
+        resizeCount: number;
         getWidth: () => number;
         getHeight: () => number;
         getDom: () => unknown;
         getZr: () => {on: () => void; off: () => void};
-        on: () => void;
-        off: () => void;
+        /** `on(event, handler)` or `on(event, query, handler)`: the handler is the last argument. */
+        on: (event: string, ...rest: unknown[]) => void;
+        off: (event: string, handler?: unknown) => void;
+        /** Calls every handler registered for `event` with `params` (Y-8). */
+        emit: (event: string, params?: unknown) => void;
+        /** How many handlers are registered for `event`: the precondition that an emitted event reaches the chart (Y-8). */
+        handlerCount: (event: string) => number;
         dispatchAction: () => void;
         resize: () => void;
         containPixel: () => boolean;
         convertFromPixel: () => null;
+        /** A `[category, value]` point on the first x-axis, in px of a fixed grid: x 10 px a category, y 400 − value (Y-8). */
+        convertToPixel: (finder: unknown, value: unknown) => number[] | null;
         isDisposed: () => boolean;
         dispose: () => void;
     }
@@ -85,28 +114,95 @@ const {chartInstances, echartsModule, plot} = vi.hoisted(() => {
     /** The plot's width in px, as `getWidth()` reports it; set per case before mounting (see `beforeEach`). */
     const plot = {width: 1200};
 
+    /** ECharts' component types: `getOption()` answers each as a list, and a merge matches them by index. */
+    const COMPONENTS = new Set(['grid', 'xAxis', 'yAxis', 'dataZoom', 'series', 'tooltip', 'legend', 'title', 'visualMap', 'toolbox', 'graphic', 'dataset', 'axisPointer', 'polar', 'radiusAxis', 'angleAxis', 'singleAxis', 'parallel', 'parallelAxis', 'geo', 'calendar', 'brush', 'timeline', 'aria']);
+    /** The grid `convertToPixel` maps to: px per category, and the plot's height (`getHeight()`), y growing downwards. */
+    const PX_PER_CATEGORY = 10;
+    const PLOT_HEIGHT = 400;
+
+    const isPlain = (value: unknown): value is ChartOption => value !== null && typeof value === 'object' && [Object.prototype, null].includes(Object.getPrototypeOf(value));
+
+    /** A deep copy of the plain objects and arrays in `value`; anything else — a function, a gradient — is shared, as ECharts' clone shares a function. */
+    function copy(value: unknown): unknown {
+        if (Array.isArray(value)) return value.map((entry) => copy(entry));
+        if (isPlain(value)) return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, copy(entry)]));
+        return value;
+    }
+
+    /** `patch` merged into `target` as ECharts merges an option: an object key by key, anything else — an array too — replaced. */
+    function mergeInto(target: ChartOption, patch: ChartOption): void {
+        for (const [key, value] of Object.entries(patch)) {
+            const current = target[key];
+            if (isPlain(value) && isPlain(current)) mergeInto(current, value);
+            else target[key] = copy(value);
+        }
+    }
+
     function createFakeChart(dom: unknown): FakeChart {
-        let merged: Record<string, unknown> = {};
+        let held: ChartOption = {};
         let disposed = false;
+        const handlers = new Map<string, Handler[]>();
         const chart: FakeChart = {
             setOptionCalls: [],
-            setOption(option) {
+            setOption(option, opts) {
                 chart.setOptionCalls.push({option});
-                merged = {...merged, ...option};
+                if (opts === true || (isPlain(opts) && opts.notMerge === true)) held = {};
+                for (const [key, value] of Object.entries(option)) {
+                    if (!COMPONENTS.has(key)) {
+                        held[key] = copy(value);
+                        continue;
+                    }
+                    const existing = held[key];
+                    const list: unknown[] = Array.isArray(existing) ? existing : [];
+                    const entries: unknown[] = Array.isArray(value) ? value : value === undefined ? [] : [value];
+                    entries.forEach((entry, index) => {
+                        const current = list[index];
+                        if (isPlain(entry) && isPlain(current)) mergeInto(current, entry);
+                        else list[index] = copy(entry);
+                    });
+                    held[key] = list;
+                }
             },
-            getOption: () => merged,
+            getOption() {
+                chart.getOptionCount += 1;
+                return copy(held) as ChartOption;
+            },
+            getOptionCount: 0,
+            resizeCount: 0,
             // The density of points per pixel decides the resolution: a week and a half of daily points over
             // 1200 px keeps the chart at 'daily' (one event, one point); a narrow plot turns it weekly or monthly.
             getWidth: () => plot.width,
-            getHeight: () => 400,
+            getHeight: () => PLOT_HEIGHT,
             getDom: () => dom,
             getZr: () => ({on: () => {}, off: () => {}}),
-            on: () => {},
-            off: () => {},
+            on(event, ...rest) {
+                const handler = rest[rest.length - 1];
+                if (typeof handler !== 'function') return;
+                const name = event.toLowerCase();
+                handlers.set(name, [...(handlers.get(name) ?? []), handler as Handler]);
+            },
+            off(event, handler) {
+                const name = event.toLowerCase();
+                handlers.set(name, handler === undefined ? [] : (handlers.get(name) ?? []).filter((entry) => entry !== handler));
+            },
+            emit(event, params) {
+                // A copy: a handler that unregisters itself must not make its neighbour skip.
+                for (const handler of [...(handlers.get(event.toLowerCase()) ?? [])]) handler(params);
+            },
+            handlerCount: (event) => handlers.get(event.toLowerCase())?.length ?? 0,
             dispatchAction: () => {},
-            resize: () => {},
+            resize() {
+                chart.resizeCount += 1;
+            },
             containPixel: () => false,
             convertFromPixel: () => null,
+            convertToPixel(_finder, value) {
+                if (!Array.isArray(value)) return null;
+                const [category, amount] = value;
+                const categories = (held.xAxis as Array<{data?: unknown[]}> | undefined)?.[0]?.data ?? [];
+                const index = typeof category === 'number' ? category : categories.indexOf(category);
+                return index >= 0 && typeof amount === 'number' ? [index * PX_PER_CATEGORY, PLOT_HEIGHT - amount] : null;
+            },
             isDisposed: () => disposed,
             dispose: () => {
                 disposed = true;
@@ -136,6 +232,7 @@ import {_} from '$lib/i18n';
 import type {RenderedSignal} from '$lib/charts/signals';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {CHART_GAIN_LOSS, PRICE_SERIES} from '$lib/theme/chartTheme';
 import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
 import CandlestickChart from './CandlestickChart.svelte';
 import type {LineDataPoint} from './LineChart.svelte';
@@ -735,5 +832,298 @@ describe('the open week and month: a coarse tooltip spans up to the day its poin
             catalogue('chart.tooltip.monthLabel', {month: monthOf(OPEN_LAST_DAY, locale)}),
             catalogue('chart.tooltip.valueAt', {date: houseDay(OPEN_LAST_DAY, locale)}),
         ]);
+    });
+});
+
+// =========================================================================
+// Y-8 — the arrows a zoom re-aims: once the gesture settles, not on every tick
+// =========================================================================
+
+type FakeChart = (typeof chartInstances)[number];
+type ChartOption = Record<string, unknown>;
+
+/**
+ * A trend over CALENDAR_DAYS' last two weeks with an arrow at each end (`markerStart`/`markerEnd: 'arrow'`): the
+ * markers a zoom re-aims. It rises a unit a day, so each arrow has a slope to follow.
+ */
+const TREND: RenderedSignal = {
+    id: 'trend',
+    label: 'Trend',
+    data: CALENDAR_DAYS.slice(-14).map((point, index) => ({date: point.date, value: 120 + index})),
+    color: '#ff7f0e',
+    lineWidth: 2,
+    lineType: 'solid',
+    markerStart: 'arrow',
+    markerEnd: 'arrow',
+    yAxisIndex: 0,
+    aggregationProfile: 'last_with_range',
+};
+
+/** The days TREND's arrows sit on: its first and its last. */
+const TREND_ENDS = [TREND.data[0].date, TREND.data[TREND.data.length - 1].date];
+
+/**
+ * One zoom gesture as ECharts reports it: five ticks closing in on the period's middle. CandlestickChart reads the
+ * window off the event (47-1); PriceChartFull's handler takes none, and reads the settled window through `getOption()`.
+ */
+const GESTURE = [10, 20, 30, 40, 45].map((inset) => ({batch: [{start: inset, end: 100 - inset}]}));
+
+/** The series a `setOption` payload carries, as a list. */
+function seriesIn(option: ChartOption): ChartOption[] {
+    const series = option.series;
+    return (Array.isArray(series) ? series : series ? [series] : []) as ChartOption[];
+}
+
+/** The arrow markers a payload carries — each `markPoint` item drawn as an arrow — with its series, its day and its rotation. */
+function arrowsIn(option: ChartOption): Array<{series: string; day: unknown; rotate: unknown}> {
+    return seriesIn(option).flatMap((series) => {
+        const items = ((series.markPoint as {data?: unknown[]} | undefined)?.data ?? []) as Array<{symbol?: unknown; coord?: unknown[]; symbolRotate?: unknown}>;
+        return items.filter((item) => item.symbol === 'arrow').map((item) => ({series: String(series.name), day: item.coord?.[0], rotate: item.symbolRotate}));
+    });
+}
+
+/** Whether an arrow is aimed: a finite rotation other than the 0 a draw builds it with — what the recorder's pixel grid gives. */
+const aimed = (rotate: unknown): boolean => typeof rotate === 'number' && Number.isFinite(rotate) && rotate !== 0;
+
+/** The arrows of each payload, by day, aimed or not. */
+const aimOf = (options: ChartOption[]) => options.map((option) => arrowsIn(option).map(({day, rotate}) => ({day, aimed: aimed(rotate)})));
+
+/** The payloads from call `since` on that carry `series`: an arrows' write-back (`setOption({series}, false)`), or a full draw. */
+const seriesPayloadsSince = (chart: FakeChart, since: number): ChartOption[] =>
+    chart.setOptionCalls
+        .slice(since)
+        .map(({option}) => option)
+        .filter((option) => 'series' in option);
+
+/** The payloads from call `since` on that set the x-axis and no series: the labels a settled zoom re-spaces (47-1). */
+const labelPatchesSince = (chart: FakeChart, since: number): ChartOption[] =>
+    chart.setOptionCalls
+        .slice(since)
+        .map(({option}) => option)
+        .filter((option) => 'xAxis' in option && !('series' in option));
+
+/** The index of the chart's last full draw: its last `setOption` that carries the axis tooltip. */
+const lastDrawIndex = (chart: FakeChart): number => chart.setOptionCalls.findLastIndex((call) => typeof (call.option.tooltip as {formatter?: unknown} | undefined)?.formatter === 'function');
+
+/**
+ * Waits for the first-render stability pass to be over (`scheduleFirstRenderStabilityFix`): it resizes the chart — and
+ * re-aims its arrows — at once, and once more when the box has held still for two animation frames. On a loaded
+ * document, with no font face to await (jsdom has no `document.fonts`), those two are all of it. Fake timers go in only
+ * after both: the second would otherwise land inside the gesture a case counts.
+ */
+async function stabilityPassOver(chart: FakeChart): Promise<void> {
+    expect(document.readyState, 'premise: the document has loaded, so the stability pass awaits no load event').toBe('complete');
+    await waitFor(() => expect(chart.resizeCount, 'barrier: the stability pass resized the chart twice — at once, and once its box held still').toBeGreaterThanOrEqual(2), {timeout: 5_000});
+}
+
+/** An 800 px panel however a chart measures it: its box (file-level `beforeEach`), its client and offset widths — LineChart's 47-1 panel. */
+function panel800(): void {
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(800);
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(800);
+}
+
+/**
+ * The last chart, once drawn daily over CALENDAR_DAYS with TREND's arrows, past its stability pass. Checks what the Y-8
+ * cases stand on: the draw carries both arrows, unrotated as built; the chart listens to `dataZoom`; and the harness
+ * really aims them — after the draw, a series write-back whose arrows the recorder's pixel grid turned — or every count
+ * after it would be vacuous.
+ */
+async function armed(): Promise<FakeChart> {
+    await drawnOver(
+        CALENDAR_DAYS.map((point) => point.date),
+        'daily',
+    );
+    const chart = chartInstances.at(-1);
+    if (!chart) throw new Error('the chart was never created');
+    expect(arrowsIn(lastDraw()), 'precondition: the draw carries TREND’s two arrows, on its first and last day, unrotated as built').toEqual(TREND_ENDS.map((day) => ({series: TREND.label, day, rotate: 0})));
+    expect(chart.handlerCount('dataZoom'), 'precondition: the chart registered a dataZoom handler').toBeGreaterThan(0);
+    await stabilityPassOver(chart);
+    expect(aimOf(seriesPayloadsSince(chart, lastDrawIndex(chart) + 1)), 'precondition: the harness aims the arrows — after the draw, a series write-back carrying both, turned by the recorder’s pixel grid').toContainEqual(TREND_ENDS.map((day) => ({day, aimed: true})));
+    return chart;
+}
+
+/** PriceChartFull over CALENDAR_DAYS with TREND's arrows — `props` on top — daily on a wide plot, armed for a gesture. */
+async function mountTrendPriceChart(props: Partial<ComponentProps<typeof PriceChartFull>> = {}): Promise<FakeChart> {
+    panel800();
+    mountPriceChart({data: CALENDAR_DAYS, overlaySignals: [TREND], ...props}, DAILY_PLOT_WIDTH);
+    return armed();
+}
+
+/** CandlestickChart as PriceChartFull mounts it at the daily resolution (`synthesizeDailyOHLC`), over CALENDAR_DAYS with TREND's arrows, armed for a gesture. */
+async function mountTrendCandles(): Promise<FakeChart> {
+    panel800();
+    render(CandlestickChart, {props: {data: synthesizeDailyOHLC(CALENDAR_DAYS), resolution: 'daily', currency: 'EUR', overlaySignals: [TREND]}});
+    return armed();
+}
+
+/**
+ * Y-8 — a zoom gesture re-aims the arrows once it settles, not on every tick: PriceChartFull, and its candles.
+ *
+ * What it protects: the cost of a zoom (LineChart.test.ts tells the whole of it). An overlay's arrow markers are
+ * re-aimed on a zoom by `updateArrowRotations`, which reads `getOption()` — a deep clone of the whole option — and
+ * writes every series back; both charts' `dataZoom` handlers run it on every tick, up to ~60 a second while a gesture
+ * moves, right under PriceChartFull's note never to read `getOption()` there. The contract, after the cure: a tick
+ * reads no `getOption()` and writes no series; once the gesture pauses, the settle timer re-aims the arrows once —
+ * CandlestickChart's 47-1 timer (`ZOOM_LABEL_SETTLE_MS`), with one read; PriceChartFull's 200 ms debounce, in the
+ * branch that keeps the resolution, with two: the settled range it reads by design, and the arrows.
+ *
+ * Red today: each of the five ticks reads `getOption()` and writes the series back, and the settle re-aims nothing.
+ *
+ * How it is tested: as in LineChart.test.ts — the recorder holds the option as ECharts does and maps a point to a fixed
+ * pixel grid, so a re-aim is computed and written back as on a screen (`armed` proves it); five `dataZoom` events back
+ * to back, counted, then fake timers past any debounce, counted again. Both charts draw daily: CandlestickChart mounted
+ * as PriceChartFull mounts it at that resolution, PriceChartFull on a plot wide enough to stay daily — and its case
+ * proves the gesture settled at the resolution it began at (no redraw, the labels re-spaced: the kept-resolution
+ * branch, where the cure re-aims). Fake timers go in after the draw and its stability pass, which the barriers await on
+ * real ones. The counts of the ticks and of the settle are soft: one red run reports all three.
+ */
+describe('PriceChartFull and its candles — a zoom re-aims the arrows once the gesture settles, not on every tick (Y-8)', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('PriceChartFull: five zoom ticks read no getOption() and write no series back; once the gesture settles at the daily resolution it began at, the arrows are re-aimed once', async () => {
+        const chart = await mountTrendPriceChart();
+
+        vi.useFakeTimers();
+        chart.getOptionCount = 0;
+        const since = chart.setOptionCalls.length;
+        for (const event of GESTURE) chart.emit('dataZoom', event);
+
+        expect
+            .soft({getOptionReads: chart.getOptionCount, seriesWriteBacks: seriesPayloadsSince(chart, since).length}, 'Y-8: a zoom tick read getOption(), which deep-clones the whole option, and wrote every series back to re-aim the arrows — on each tick of one gesture')
+            .toEqual({getOptionReads: 0, seriesWriteBacks: 0});
+
+        const afterTicks = chart.setOptionCalls.length;
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(
+            {redrawn: lastDrawIndex(chart) >= since, labelsRespaced: labelPatchesSince(chart, afterTicks).length > 0, axis: axisDays()},
+            'barrier: the gesture settled at the resolution it began at — no redraw, the x labels re-spaced on the window (the debounce’s kept-resolution branch), the axis still daily',
+        ).toEqual({redrawn: false, labelsRespaced: true, axis: CALENDAR_DAYS.map((point) => point.date)});
+
+        expect.soft(aimOf(seriesPayloadsSince(chart, afterTicks)), 'Y-8: once the gesture settled, the arrows were not re-aimed exactly once — one series write-back, carrying both arrows, aimed').toEqual([TREND_ENDS.map((day) => ({day, aimed: true}))]);
+        expect(chart.getOptionCount, 'Y-8: one gesture — its five ticks and its settle — read getOption() more than twice: the settled range, read once by design, and the arrows, once it settles').toBeLessThanOrEqual(2);
+    });
+
+    it('CandlestickChart: five zoom ticks read no getOption() and write no series back; once the gesture settles, the arrows are re-aimed once', async () => {
+        const chart = await mountTrendCandles();
+
+        vi.useFakeTimers();
+        chart.getOptionCount = 0;
+        const since = chart.setOptionCalls.length;
+        for (const event of GESTURE) chart.emit('dataZoom', event);
+
+        expect
+            .soft({getOptionReads: chart.getOptionCount, seriesWriteBacks: seriesPayloadsSince(chart, since).length}, 'Y-8: a zoom tick read getOption(), which deep-clones the whole option, and wrote every series back to re-aim the arrows — on each tick of one gesture')
+            .toEqual({getOptionReads: 0, seriesWriteBacks: 0});
+
+        const afterTicks = chart.setOptionCalls.length;
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(labelPatchesSince(chart, afterTicks).length, 'barrier: the gesture settled — the 47-1 timer re-spaced the x labels on its window').toBeGreaterThan(0);
+
+        expect.soft(aimOf(seriesPayloadsSince(chart, afterTicks)), 'Y-8: once the gesture settled, the arrows were not re-aimed exactly once — one series write-back, carrying both arrows, aimed').toEqual([TREND_ENDS.map((day) => ({day, aimed: true}))]);
+        expect(chart.getOptionCount, 'Y-8: one gesture — its five ticks and its settle — read getOption() more than once: the arrows need one read, once it settles').toBeLessThanOrEqual(1);
+    });
+});
+
+/** A colour before a rebuild, and after it. */
+interface Repaint {
+    before: string;
+    after: string;
+}
+
+/** Whether `value` carries the colour `hex` (`#rrggbb`) anywhere: as the hex itself, or as `rgb()`/`rgba()` of its channels at any alpha — a gradient stop included. */
+function carries(value: unknown, hex: string): boolean {
+    const written = JSON.stringify(value) ?? '';
+    const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+    return written.toLowerCase().includes(hex.toLowerCase()) || new RegExp(`rgba?\\(\\s*${r}\\s*,\\s*${g}\\s*,\\s*${b}\\s*[,)]`).test(written);
+}
+
+/** Which of `repaint`'s colours the series of `option` that `pick` selects carry; `absent` when the payload has no such series. */
+function paintOf(option: ChartOption, pick: (series: ChartOption) => boolean, repaint: Repaint): 'absent' | 'before' | 'after' | 'both' | 'neither' {
+    const picked = seriesIn(option).filter(pick);
+    if (picked.length === 0) return 'absent';
+    const before = carries(picked, repaint.before);
+    const after = carries(picked, repaint.after);
+    return before && after ? 'both' : before ? 'before' : after ? 'after' : 'neither';
+}
+
+/** The write-backs that bring a colour of before the rebuild back: carrying it anywhere, or with the picked series not in the new colour. */
+function stalePaints(writeBacks: ChartOption[], pick: (series: ChartOption) => boolean, repaint: Repaint) {
+    return writeBacks.map((option, index) => ({writeBack: index + 1, carriesBefore: carries(option, repaint.before), picked: paintOf(option, pick, repaint)})).filter(({carriesBefore, picked}) => carriesBefore || (picked !== 'absent' && picked !== 'after'));
+}
+
+/** One zoom step, its settle included — fake timers from here on — and the series write-backs it brought. */
+async function zoomOneStep(chart: FakeChart): Promise<ChartOption[]> {
+    vi.useFakeTimers();
+    const since = chart.setOptionCalls.length;
+    chart.emit('dataZoom', {batch: [{start: 40, end: 60}]});
+    await vi.advanceTimersByTimeAsync(1_000);
+    return seriesPayloadsSince(chart, since);
+}
+
+/**
+ * Y-8, colour guard — after a rebuild, the arrows' write-back carries the rebuild's colours: PriceChartFull, and its
+ * candles.
+ *
+ * What it protects: what LineChart.test.ts' colour guard protects. The arrows' write-back carries every series, colours
+ * included, so an option kept between zoom steps across a rebuild — a theme switch (`onThemeClassChange`), a Designer
+ * Lab colour edit (`onChartColorsChange`) — would paint the old colours back at the next zoom. The contract: once the
+ * chart is rebuilt, every series write-back a zoom brings carries the new colours, or none at all.
+ *
+ * Green today, and after the cure, by construction: `updateArrowRotations` reads `getOption()` afresh on each call. A
+ * variant that keeps the first `getOption()` of a chart and never drops it on a rebuild turns both cases red.
+ *
+ * How it is tested: built in light, rebuilt in dark (the `dark` class on `<html>`, as the theme store writes it), then
+ * one zoom step, its settle included (fake timers, after the barriers). The colours are the theme's own pairs:
+ * PriceChartFull's price line, its baseline colouring off (`PRICE_SERIES.line`), and the candles' gain and loss
+ * (`CHART_GAIN_LOSS.price`). A colour is found in any notation the chart writes it: the hex, or `toRgba`'s
+ * `rgba(r,g,b,a)` at any alpha, a gradient stop included. At least one write-back must come, or the guard reads
+ * nothing. The `dark` class is reset after each case.
+ */
+describe('PriceChartFull and its candles — after a rebuild, the arrows’ write-back carries the rebuild’s colours (Y-8, colour guard)', () => {
+    /** PriceChartFull's price line, light and dark, when it is not coloured against the baseline. */
+    const LINE: Repaint = {before: PRICE_SERIES.line.light, after: PRICE_SERIES.line.dark};
+    /** The candles' gain and loss, light and dark. */
+    const GAIN: Repaint = {before: CHART_GAIN_LOSS.price.gain.light, after: CHART_GAIN_LOSS.price.gain.dark};
+    const LOSS: Repaint = {before: CHART_GAIN_LOSS.price.loss.light, after: CHART_GAIN_LOSS.price.loss.dark};
+    /** The price line's series — one, with its baseline colouring off — and the candles'. */
+    const priceLine = (series: ChartOption) => series.name === 'EUR' && series.type === 'line';
+    const candles = (series: ChartOption) => series.type === 'candlestick';
+
+    beforeEach(() => {
+        document.documentElement.classList.remove('dark');
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        // Module-level state every case of the file shares: the theme of <html>.
+        document.documentElement.classList.remove('dark');
+    });
+
+    it('PriceChartFull: built in light, rebuilt in dark, one zoom step: every series write-back carries the dark price line, never the light one', async () => {
+        const chart = await mountTrendPriceChart({colorByBaseline: false});
+        expect(paintOf(lastDraw(), priceLine, LINE), 'precondition: the price line is drawn in its light colour').toBe('before');
+
+        document.documentElement.classList.add('dark');
+        await waitFor(() => expect(paintOf(lastDraw(), priceLine, LINE), 'barrier: the theme switch rebuilt the chart, the price line in its dark colour').toBe('after'), {timeout: 5_000});
+
+        const writeBacks = await zoomOneStep(chart);
+
+        expect(writeBacks.length, 'the zoom step brought no series write-back: the guard has nothing to read').toBeGreaterThan(0);
+        expect(stalePaints(writeBacks, priceLine, LINE), 'Y-8 guard: a series write-back after the zoom brought the light price line back over the dark rebuild — an option kept from before the theme switch').toEqual([]);
+    });
+
+    it('CandlestickChart: built in light, rebuilt in dark, one zoom step: every series write-back carries the dark candles, never the light ones', async () => {
+        const chart = await mountTrendCandles();
+        expect({gain: paintOf(lastDraw(), candles, GAIN), loss: paintOf(lastDraw(), candles, LOSS)}, 'precondition: the candles are drawn in their light gain and loss').toEqual({gain: 'before', loss: 'before'});
+
+        document.documentElement.classList.add('dark');
+        await waitFor(() => expect({gain: paintOf(lastDraw(), candles, GAIN), loss: paintOf(lastDraw(), candles, LOSS)}, 'barrier: the theme switch rebuilt the chart, the candles in their dark gain and loss').toEqual({gain: 'after', loss: 'after'}), {timeout: 5_000});
+
+        const writeBacks = await zoomOneStep(chart);
+
+        expect(writeBacks.length, 'the zoom step brought no series write-back: the guard has nothing to read').toBeGreaterThan(0);
+        expect({gain: stalePaints(writeBacks, candles, GAIN), loss: stalePaints(writeBacks, candles, LOSS)}, 'Y-8 guard: a series write-back after the zoom brought the light candles back over the dark rebuild — an option kept from before the theme switch').toEqual({gain: [], loss: []});
     });
 });

@@ -431,8 +431,10 @@
             if (nextResolution !== resolution) {
                 resolution = nextResolution;
             } else {
-                // No new resolution means no redraw: the labels are re-spaced on the settled window here (47-1).
+                // No new resolution means no redraw: the labels are re-spaced, and the arrow markers re-aimed, on the settled
+                // window here (47-1, Y-8). A new resolution redraws, and renderChart() re-aims them itself.
                 applyZoomedAxisLabels();
+                updateArrowRotations(chartInstance);
             }
         }, 200);
     }
@@ -603,16 +605,16 @@
                 });
             });
 
-            // Recompute arrow rotations when zoom changes (aspect ratio shifts).
+            // A zoom changes the pixel aspect, so the arrow markers must be re-aimed.
             // NOTE: do NOT read chartInstance.getOption() here — it deep-clones the entire
             // chart option (documented ECharts behavior) and this handler fires on every
             // single dataZoom tick during an interactive zoom/pan (up to ~60/sec), which
             // caused severe stutter on charts with years of daily data. The logical-range
-            // read (which internally calls getOption()) is deferred to the debounced body
-            // of scheduleResolutionRecompute(), so it only runs once the gesture settles.
+            // read and updateArrowRotations() both call getOption(): they are deferred to the
+            // debounced body of scheduleResolutionRecompute(), so they only run once the
+            // gesture settles (Y-8).
             chartInstance.on('dataZoom', () => {
                 if (!chartInstance) return;
-                updateArrowRotations(chartInstance);
                 scheduleResolutionRecompute();
             });
 
