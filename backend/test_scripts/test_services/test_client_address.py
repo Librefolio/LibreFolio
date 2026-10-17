@@ -38,6 +38,27 @@ module ``backend/app/services/platform/client_address.py``. The contract:
 (g) Nothing in the module exists only for the tests (N58, H-22): no ``reset_client_address_cache()``, since the tests
     start the module's state over themselves, and no ``mask_client_address()``, since no log writes a client's address,
     so it has no caller. Red until H-22 removes both.
+(h) ``forwarded_by_untrusted_proxy(connection)`` (H-36, decision N70), a ``Request`` and a ``WebSocket`` alike: whether
+    the request came through a local reverse proxy LibreFolio does not trust, behind which every visitor has the proxy's
+    address (R13-SEC6), so that the per-address limits skip it. In order: no forwarding header (``X-Forwarded-For``,
+    ``Forwarded``, ``X-Real-IP``: a line of any of them, in any case, whatever its value, even empty) is ``False``; the
+    configured header carried once and holding one IP address, as ``client_address`` reads it, is ``False``, while
+    absent or unusable it is as if unset, and only ``client_address`` warns about it; a peer ``classify_ip`` calls
+    ``unknown`` (no client, ``testclient``, ``0.0.0.0``, ``::``, multicast) is ``False``; a peer uvicorn took from
+    ``X-Forwarded-For``, equal through ``parse_ip`` to one value of its lines (brackets, a port and an IPv4-mapped form
+    undone), is ``False``; then a loopback, LAN or VPN peer (an IPv4-mapped one as its IPv4) is ``True`` and a public
+    one ``False``. Only these two last outcomes note the forwarding headers the request carries, in
+    ``_untrusted_forwarding["local"]`` or ``["public"]``, and the first noting of each class in the process logs one
+    record through the module's ``logger``, word for word: ``logger.warning(UNTRUSTED_PROXY_SUMMARY, headers=...)`` for
+    ``local``, ``logger.info(PUBLIC_FORWARDING_SUMMARY, headers=...)`` for ``public``, ``headers`` being this request's
+    names in the order X-Forwarded-For, Forwarded, X-Real-IP, joined by ``", "``, and no other field. A later noting of
+    a class logs nothing and only adds its names; each class logs its own first one. The names noted come back from
+    ``untrusted_forwarding_seen(peer_class)`` in that order, ``()`` before any. ``rate_limit_address(connection)``, the
+    address every per-address limit counts a request by: ``None`` when the request came through such a proxy,
+    otherwise exactly ``client_address(connection)``, which it calls first, so the warning of (d) is never hidden;
+    nothing else is logged. Behind uvicorn's own ``ProxyHeadersMiddleware``, a proxy ``FORWARDED_ALLOW_IPS`` trusts
+    gives ``False`` and one it does not trust gives ``True``, and the configuration check ``check_client_address`` then
+    warns the admin. No log record holds an address (N58). Red until H-36 lands; (a) to (g) do not depend on it.
 
 How. Every test runs with ``LIBREFOLIO_TEST_MODE=1`` (``get_settings()`` reads no ``.env``), ``LIBREFOLIO_TEST_DATA_DIR``
 under ``tmp_path`` (``get_settings()`` never looks at the lane's data), the profile and the setting removed, all through
@@ -52,11 +73,16 @@ a repeated header as repeated lines, another header between them as when a proxy
 ``logger`` is replaced by a recorder of ``(level, summary, fields)``. The module is imported when a test runs and the
 setting is looked up in ``Settings.model_fields``, so this file collects before either exists and each test fails on its
 own barrier: ``backend/app/services/platform/client_address.py is missing (P17)``, or ``LIBREFOLIO_CLIENT_IP_HEADER is
-not a Settings field (P17)``. Red until P17 lands. No DB, no server, no network, no clock.
+not a Settings field (P17)``. Red until P17 lands. The tests of (h) also start ``_untrusted_forwarding`` over themselves,
+emptying its two sets in place before and after each test (their own fixture; H-22: no production reset), and drive
+uvicorn's ``ProxyHeadersMiddleware`` on a raw scope with ``asyncio.run``. Before H-36 that fixture fails on its barrier,
+``backend/app/services/platform/client_address.py has no _untrusted_forwarding, ... (H-36, N70)``, and only the (h) tests
+use it. No DB, no server, no network, no clock.
 """
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
@@ -69,6 +95,7 @@ from pydantic import ValidationError
 from pydantic.fields import FieldInfo
 from starlette.requests import HTTPConnection, Request
 from starlette.websockets import WebSocket
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from backend.app import config
 from backend.test_scripts.test_utils import print_section, print_success
@@ -828,3 +855,749 @@ def test_the_module_has_no_function_only_for_the_tests(name: str, why: str) -> N
 
     assert not present, f"{MODULE_PATH} still has {name}() (N58, H-22): {why}"
     print_success(f"✓ no {name}()")
+
+
+# =============================================================================
+# (h) forwarded_by_untrusted_proxy: A LOCAL PROXY NOBODY TRUSTS (H-36, N70)
+# =============================================================================
+
+
+#: (h) The three forwarding headers, written as the contract writes them, in its order: the order of the log record and of
+#: untrusted_forwarding_seen().
+XFF = "X-Forwarded-For"
+FORWARDED = "Forwarded"
+REAL_IP = "X-Real-IP"
+FORWARDING_HEADERS = (XFF, FORWARDED, REAL_IP)
+#: (h) The two classes of peer whose forwarding headers are noted.
+PEER_CLASSES = ("local", "public")
+#: (h) The two texts, word for word: the warning of the first local noting, the info of the first public one.
+UNTRUSTED_PROXY = "Requests come through a reverse proxy that LibreFolio does not trust: the limits per client address skip them. List the proxy in FORWARDED_ALLOW_IPS, or name the header it sets in LIBREFOLIO_CLIENT_IP_HEADER"
+PUBLIC_FORWARDING = "Forwarding headers from a public address were ignored: if a proxy on a public address forwards the requests, list it in FORWARDED_ALLOW_IPS"
+#: (h) A reverse proxy in front of the container, as the Docker network gives it (R13-SEC6), and the one proxy uvicorn
+#: trusts by default (FORWARDED_ALLOW_IPS), as the Docker image keeps it.
+DOCKER_PROXY: tuple[str, int] = ("172.18.0.2", 40000)
+TRUSTED_BY_DEFAULT = "127.0.0.1"
+#: (h) Every address the headers of (h) carry inside a longer value (a list, a for= pair, brackets, a port): with the peer
+#: and the values themselves, what no log record may hold (N58).
+CARRIED = ("198.51.100.4", "198.51.100.5", "192.0.2.1", "192.0.2.77", "203.0.113.7", "10.0.0.1", "10.0.0.9", "2001:db8::5", "2001:db8::7", "fd7a:115c:a1e0::5")
+#: (h) Where H-36 adds the configuration check that reads what was noted.
+CONFIG_AUDIT = "backend.app.services.platform.config_audit"
+CONFIG_AUDIT_PATH = "backend/app/services/platform/config_audit.py"
+
+#: (h) A connection from a peer, carrying headers: a Request or a WebSocket.
+Connect = Callable[[Sequence[Header], tuple[str, int] | None], HTTPConnection]
+#: (h) A Request and a WebSocket alike.
+CONNECTIONS = [pytest.param(http_request, id="request"), pytest.param(websocket, id="websocket")]
+
+
+def untrusted_forwarding() -> dict[str, set[str]]:
+    """(h) The module's own ``_untrusted_forwarding``, where ``forwarded_by_untrusted_proxy`` notes the forwarding headers
+    it sees, by the class of the peer. Before H-36, the (h) test that asks for it fails here, and only that test."""
+    module = client_address_module()
+    assert hasattr(module, "_untrusted_forwarding"), f"{MODULE_PATH} has no _untrusted_forwarding, where forwarded_by_untrusted_proxy() notes the forwarding headers it sees by the class of the peer (H-36, N70)"
+    state = module._untrusted_forwarding
+    assert isinstance(state, dict) and all(isinstance(state.get(peer_class), set) for peer_class in PEER_CLASSES), f"{MODULE_PATH}: _untrusted_forwarding is {state!r}, not a dict of the two sets 'local' and 'public' (H-36, N70)"
+    return state
+
+
+def forget_untrusted_forwarding() -> None:
+    """(h) Both sets emptied in place, as a new process finds them: the next noting of each class is the first again, and
+    logs. No production function does this for the tests (N58, H-22): they start the state over themselves."""
+    state = untrusted_forwarding()
+    for peer_class in PEER_CLASSES:
+        state[peer_class].clear()
+
+
+@pytest.fixture
+def fresh_untrusted_forwarding() -> Iterator[None]:
+    """(h) Nothing noted before the test and nothing left after it: no test inherits the names another noted, nor finds the
+    first noting of a class spent, and whatever runs after this file finds the state as a new process does. It is also
+    the red barrier of the (h) tests, and of them only: before H-36 it fails on ``untrusted_forwarding()``."""
+    forget_untrusted_forwarding()
+    yield
+    forget_untrusted_forwarding()
+
+
+#: (h) Every test of (h) starts with nothing noted and leaves nothing noted.
+untrusted_forwarding_started_over = pytest.mark.usefixtures("fresh_untrusted_forwarding")
+
+
+@dataclass(frozen=True)
+class ProxyUnderTest(UnderTest):
+    """``UnderTest``, and what the cases of (h) call: the predicate, and the names it noted."""
+
+    forwarded_by_untrusted_proxy: Callable[[HTTPConnection], bool]
+    untrusted_forwarding_seen: Callable[[str], tuple[str, ...]]
+
+
+def h36_function_of(module: ModuleType, name: str, path: str = MODULE_PATH) -> Callable[..., Any]:
+    """The function ``name`` H-36 adds to ``module``: before it lands, the (h) test that asks for it fails here, naming it."""
+    function = getattr(module, name, None)
+    assert callable(function), f"{path} has no function {name}() (H-36, N70)"
+    return function
+
+
+def noted(api: ProxyUnderTest, local: Sequence[str], public: Sequence[str], when: str) -> None:
+    """(h) What ``untrusted_forwarding_seen`` gives for each class ``when``: the names noted under it, a tuple in the
+    contract's order, ``()`` when none."""
+    for peer_class, names in (("local", local), ("public", public)):
+        seen, expected = api.untrusted_forwarding_seen(peer_class), tuple(names)
+        assert exactly(seen, expected), f"{when}: untrusted_forwarding_seen({peer_class!r}) is {seen!r}, not {expected!r}: the names noted under {peer_class!r}, a tuple in the order {FORWARDING_HEADERS}, () when none"
+
+
+def proxy_under_test(monkeypatch: pytest.MonkeyPatch, written: str | None = None) -> ProxyUnderTest:
+    """``forwarded_by_untrusted_proxy`` and ``untrusted_forwarding_seen``, with ``client_address``, ``start_over`` as the
+    reset and the module's logger recorded; the setting made ``written`` (``None``: unset) through ``configure`` and its
+    barrier. Nothing is noted yet: the fixture emptied both sets, and ``untrusted_forwarding_seen`` must say so."""
+    module = client_address_module()
+    api = ProxyUnderTest(
+        client_address=function_of(module, "client_address"),
+        reset=start_over,
+        log=record_logs(monkeypatch, module),
+        forwarded_by_untrusted_proxy=h36_function_of(module, "forwarded_by_untrusted_proxy"),
+        untrusted_forwarding_seen=h36_function_of(module, "untrusted_forwarding_seen"),
+    )
+    configure(monkeypatch, api, written)
+    noted(api, (), (), "at the start of the test, both sets emptied in place")
+    return api
+
+
+def rate_limit_address_function() -> Callable[[HTTPConnection], str | None]:
+    """(h) ``rate_limit_address``, the address every per-address limit counts a request by."""
+    return h36_function_of(client_address_module(), "rate_limit_address")
+
+
+def untrusted_proxy(names: Sequence[str]) -> Record:
+    """(h) The warning of the first local noting, word for word: this request's names in the contract's order, joined by
+    ``", "``, and no other field."""
+    return ("warning", UNTRUSTED_PROXY, {"headers": ", ".join(names)})
+
+
+def public_forwarding(names: Sequence[str]) -> Record:
+    """(h) The info of the first public noting, word for word, as the warning is."""
+    return ("info", PUBLIC_FORWARDING, {"headers": ", ".join(names)})
+
+
+def first_noting(local: Sequence[str], public: Sequence[str]) -> list[Record]:
+    """(h) What one request logs when it is the first of its class to be noted: the warning, the info, or nothing."""
+    if local:
+        return [untrusted_proxy(local)]
+    if public:
+        return [public_forwarding(public)]
+    return []
+
+
+def no_address_logged(api: ProxyUnderTest, headers: Sequence[Header], client: tuple[str, int] | None) -> None:
+    """(h) No record, at any level, holds the peer, a value of ``headers`` (one that is not blank) nor an address carried
+    inside one (N58): the peer and the forwarding headers hold a client's address."""
+    peer = [client[0]] if client else []
+    leaked = leaks(api.log.records, [value for _, value in headers], [*peer, *CARRIED])
+    assert not leaked, f"an address reached the log ((text, record)): {leaked}. The peer and the forwarding headers hold a client's address, and no log record may hold one (N58)"
+
+
+async def _nothing_to_receive() -> dict[str, Any]:
+    raise AssertionError("the app behind ProxyHeadersMiddleware reads nothing from the connection")
+
+
+async def _nothing_to_send(message: dict[str, Any]) -> None:
+    raise AssertionError(f"the app behind ProxyHeadersMiddleware sends nothing: {message}")
+
+
+def through_uvicorn(api: ProxyUnderTest, trusted_hosts: str, headers: Sequence[Header], client: tuple[str, int] | None) -> tuple[str | None, bool]:
+    """``forwarded_by_untrusted_proxy`` called by an app behind uvicorn's own ``ProxyHeadersMiddleware``, as uvicorn wraps
+    the app with ``FORWARDED_ALLOW_IPS=<trusted_hosts>``: the host of the client the app sees, and the answer. A raw http
+    scope driven by ``asyncio.run``, no server."""
+    seen: list[tuple[str | None, bool]] = []
+
+    async def app(scope: dict[str, Any], receive: Any, send: Any) -> None:
+        request = Request(scope)
+        seen.append((request.client.host if request.client else None, api.forwarded_by_untrusted_proxy(request)))
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/",
+        "raw_path": b"/",
+        "root_path": "",
+        "query_string": b"",
+        "headers": raw_headers(headers),
+        "client": client,
+        "server": ("172.18.0.3", 8000),
+    }
+    asyncio.run(ProxyHeadersMiddleware(app, trusted_hosts=trusted_hosts)(scope, _nothing_to_receive, _nothing_to_send))
+    assert len(seen) == 1, f"barrier: the app behind ProxyHeadersMiddleware ran {len(seen)} times, not once"
+    return seen[0]
+
+
+# --- The two texts -----------------------------------------------------------
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize(("name", "text"), [pytest.param("UNTRUSTED_PROXY_SUMMARY", UNTRUSTED_PROXY, id="untrusted-proxy"), pytest.param("PUBLIC_FORWARDING_SUMMARY", PUBLIC_FORWARDING, id="public-forwarding")])
+def test_the_two_summaries_word_for_word(name: str, text: str) -> None:
+    print_section(f"{MODULE_PATH}: {name} (H-36)")
+    module = client_address_module()
+
+    value = getattr(module, name, None)
+
+    assert exactly(value, text), f"{MODULE_PATH}: {name} is {value!r}, not, word for word, {text!r} (H-36, N70): the log record and the configuration check of the admin both show it"
+    print_success(f"✓ {name}")
+
+
+# --- Step 1: no forwarding header, no proxy ------------------------------------
+
+
+#: (h) Headers that are not forwarding headers: the client-address headers of other proxies (Fly-Client-IP not configured
+#: here), and the X-Forwarded-* headers that carry no address.
+NOT_FORWARDING: tuple[Header, ...] = (
+    ("CF-Connecting-IP", "198.51.100.9"),
+    ("True-Client-IP", "192.0.2.55"),
+    (FLY, "203.0.113.70"),
+    ("X-Forwarded-Proto", "https"),
+    ("X-Forwarded-Host", "librefolio.example"),
+)
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize("headers", [pytest.param((), id="no-header-at-all"), pytest.param(NOT_FORWARDING, id="only-headers-that-are-not-forwarding-ones")])
+@pytest.mark.parametrize(
+    "client",
+    [
+        pytest.param(("10.0.0.1", 50000), id="lan"),
+        pytest.param(("127.0.0.1", 50000), id="loopback"),
+        pytest.param(("::1", 50000), id="ipv6-loopback"),
+        pytest.param(DOCKER_PROXY, id="the-docker-network"),
+        pytest.param(("203.0.113.7", 50000), id="public"),
+        pytest.param(("2001:db8::1", 50000), id="public-ipv6"),
+    ],
+)
+@pytest.mark.parametrize("connect", CONNECTIONS)
+def test_without_a_forwarding_header_no_proxy_is_suspected(monkeypatch: pytest.MonkeyPatch, connect: Connect, client: tuple[str, int], headers: tuple[Header, ...]) -> None:
+    print_section(f"{[name for name, _ in headers]} from {client[0]}")
+    api = proxy_under_test(monkeypatch)
+
+    result = api.forwarded_by_untrusted_proxy(connect(headers, client))
+
+    assert result is False, f"no forwarding header ({', '.join(FORWARDING_HEADERS)}) from {client[0]}: forwarded_by_untrusted_proxy gives {result!r}, not False: without one, no proxy forwarded the request"
+    noted(api, (), (), "without a forwarding header")
+    assert api.log.records == [], f"nothing noted, nothing to log: {api.log.records}"
+    print_success("✓ False, nothing noted")
+
+
+# --- Step 5: a local peer is a proxy nobody trusts, a public one is not --------
+
+
+#: (h) Peers of every local class, as uvicorn gives them: loopback, LAN (private, link-local, unique-local) and VPN (the
+#: CGNAT range and Tailscale's prefix), the edges of the ranges included, and an IPv4-mapped form, read as its IPv4.
+LOCAL_PEERS = [
+    pytest.param(("127.0.0.1", 50000), id="loopback"),
+    pytest.param(("127.1.2.3", 50000), id="loopback-anywhere-in-127-8"),
+    pytest.param(("::1", 50000), id="ipv6-loopback"),
+    pytest.param(("10.0.0.1", 50000), id="lan-10-8"),
+    pytest.param(("172.16.0.1", 50000), id="lan-172-16-12-first"),
+    pytest.param(("172.31.255.254", 50000), id="lan-172-16-12-last"),
+    pytest.param(("192.168.1.10", 50000), id="lan-192-168-16"),
+    pytest.param(("169.254.10.20", 50000), id="link-local"),
+    pytest.param(("100.64.0.1", 50000), id="vpn-cgnat-first"),
+    pytest.param(("100.127.255.254", 50000), id="vpn-cgnat-last"),
+    pytest.param(("fd00::1", 50000), id="ipv6-unique-local"),
+    pytest.param(("fd7a:115c:a1e0::1", 50000), id="vpn-tailscale-ipv6"),
+    pytest.param(("fe80::1", 50000), id="ipv6-link-local"),
+    pytest.param(("::ffff:10.0.0.1", 50000), id="ipv4-mapped-lan"),
+]
+
+#: (h) Public peers, the edges just outside the local ranges included, and an IPv4-mapped public address.
+PUBLIC_PEERS = [
+    pytest.param(("203.0.113.7", 50000), id="ipv4-documentation"),
+    pytest.param(("8.8.8.8", 50000), id="8-8-8-8"),
+    pytest.param(("1.1.1.1", 50000), id="1-1-1-1"),
+    pytest.param(("2001:db8::1", 50000), id="ipv6-documentation"),
+    pytest.param(("2606:4700::1111", 50000), id="ipv6-public"),
+    pytest.param(("::ffff:8.8.8.8", 50000), id="ipv4-mapped-public"),
+    pytest.param(("172.32.0.1", 50000), id="just-above-172-16-12"),
+    pytest.param(("100.128.0.1", 50000), id="just-above-the-cgnat-range"),
+    pytest.param(("11.0.0.1", 50000), id="just-above-10-8"),
+    pytest.param(("192.169.0.1", 50000), id="just-above-192-168-16"),
+    pytest.param(("169.255.0.1", 50000), id="just-above-link-local"),
+]
+
+#: (h) The three forwarding headers as a proxy sets them, in another order than the contract's, and the names noted.
+ALL_THREE: tuple[Header, ...] = ((REAL_IP, "192.0.2.1"), (FORWARDED, 'for="[2001:db8::5]:4711"'), (XFF, "198.51.100.4, 192.0.2.77"))
+#: (h) Forwarding headers, and the names noted. No value is the address of a peer of these cases: uvicorn followed none.
+FORWARDING = [
+    pytest.param(((XFF, "198.51.100.4"),), (XFF,), id="x-forwarded-for"),
+    pytest.param(((FORWARDED, "for=198.51.100.5;proto=https"),), (FORWARDED,), id="forwarded"),
+    pytest.param(((REAL_IP, "192.0.2.1"),), (REAL_IP,), id="x-real-ip"),
+    pytest.param(ALL_THREE, FORWARDING_HEADERS, id="all-three-in-another-order"),
+]
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize(("headers", "names"), FORWARDING)
+@pytest.mark.parametrize("client", LOCAL_PEERS)
+def test_forwarding_headers_from_a_local_peer_mean_a_proxy_nobody_trusts(monkeypatch: pytest.MonkeyPatch, client: tuple[str, int], headers: tuple[Header, ...], names: tuple[str, ...]) -> None:
+    print_section(f"{list(names)} from the local peer {client[0]}")
+    api = proxy_under_test(monkeypatch)
+
+    result = api.forwarded_by_untrusted_proxy(http_request(headers, client))
+
+    assert result is True, f"{list(names)} from {client[0]}, a loopback, LAN or VPN peer uvicorn did not take from X-Forwarded-For: forwarded_by_untrusted_proxy gives {result!r}, not True: a local proxy LibreFolio does not trust forwarded the request (R13-SEC6)"
+    noted(api, names, (), f"after {list(names)} from {client[0]}")
+    assert api.log.records == [untrusted_proxy(names)], f"the first local noting logs one warning, word for word, with headers={', '.join(names)!r} and no other field: {api.log.records}"
+    no_address_logged(api, headers, client)
+    print_success(f"✓ True, noted local: {', '.join(names)}")
+
+
+#: (h) A forwarding header holding no address at all: present all the same.
+WHATEVER_THE_VALUE = [
+    pytest.param(XFF, "", id="x-forwarded-for-empty"),
+    pytest.param(XFF, "   ", id="x-forwarded-for-blank"),
+    pytest.param(XFF, "unknown", id="x-forwarded-for-unknown"),
+    pytest.param(FORWARDED, "", id="forwarded-empty"),
+    pytest.param(FORWARDED, "for=unknown", id="forwarded-for-unknown"),
+    pytest.param(REAL_IP, "", id="x-real-ip-empty"),
+    pytest.param(REAL_IP, "not-an-ip", id="x-real-ip-text"),
+]
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize(("name", "value"), WHATEVER_THE_VALUE)
+def test_a_forwarding_header_is_present_whatever_its_value(monkeypatch: pytest.MonkeyPatch, name: str, value: str) -> None:
+    print_section(f"{name}: {value!r} from {DOCKER_PROXY[0]}")
+    api = proxy_under_test(monkeypatch)
+
+    result = api.forwarded_by_untrusted_proxy(http_request([(name, value)], DOCKER_PROXY))
+
+    assert result is True, f"{name}: {value!r} from {DOCKER_PROXY[0]}: forwarded_by_untrusted_proxy gives {result!r}, not True: a line of a forwarding header is present whatever its value, even empty"
+    noted(api, (name,), (), f"after {name}: {value!r}")
+    assert api.log.records == [untrusted_proxy((name,))], f"one warning, word for word: {api.log.records}"
+    print_success(f"✓ True, noted local: {name}")
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize("connect", CONNECTIONS)
+def test_the_names_are_noted_as_the_contract_writes_them_whatever_the_case(monkeypatch: pytest.MonkeyPatch, connect: Connect) -> None:
+    print_section("The three forwarding headers written in any case")
+    api = proxy_under_test(monkeypatch)
+    # As the client wrote them; in the scope in lower case, as uvicorn puts every name there (raw_headers)
+    headers = (("x-REAL-ip", "192.0.2.1"), ("FORWARDED", "for=198.51.100.5"), ("x-forwarded-FOR", "198.51.100.4"))
+
+    result = api.forwarded_by_untrusted_proxy(connect(headers, DOCKER_PROXY))
+
+    assert result is True, f"{[name for name, _ in headers]} from {DOCKER_PROXY[0]}: forwarded_by_untrusted_proxy gives {result!r}, not True: a header name matches whatever the case it is written in"
+    noted(api, FORWARDING_HEADERS, (), "after the three headers written in any case")
+    assert api.log.records == [untrusted_proxy(FORWARDING_HEADERS)], f"the names are noted and logged as the contract writes them, {FORWARDING_HEADERS}, not as the request did: {api.log.records}"
+    no_address_logged(api, headers, DOCKER_PROXY)
+    print_success(f"✓ True, noted local: {', '.join(FORWARDING_HEADERS)}")
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize(("headers", "names"), FORWARDING)
+@pytest.mark.parametrize("client", PUBLIC_PEERS)
+def test_forwarding_headers_from_a_public_peer_are_ignored_and_noted_public(monkeypatch: pytest.MonkeyPatch, client: tuple[str, int], headers: tuple[Header, ...], names: tuple[str, ...]) -> None:
+    print_section(f"{list(names)} from the public peer {client[0]}")
+    api = proxy_under_test(monkeypatch)
+
+    result = api.forwarded_by_untrusted_proxy(http_request(headers, client))
+
+    assert result is False, f"{list(names)} from {client[0]}, a public peer: forwarded_by_untrusted_proxy gives {result!r}, not False: only a local proxy is one the per-address limits skip; a public peer is counted by its own address"
+    noted(api, (), names, f"after {list(names)} from {client[0]}")
+    assert api.log.records == [public_forwarding(names)], f"the first public noting logs one info, word for word, with headers={', '.join(names)!r} and no other field: {api.log.records}"
+    no_address_logged(api, headers, client)
+    print_success(f"✓ False, noted public: {', '.join(names)}")
+
+
+# --- Step 3: a peer classify_ip cannot class ------------------------------------
+
+
+#: (h) Peers classify_ip calls unknown: no client, the test client's name, the unspecified addresses, a multicast one.
+UNKNOWN_PEERS = [
+    pytest.param(None, id="no-client"),
+    pytest.param(("testclient", 50000), id="testclient"),
+    pytest.param(("0.0.0.0", 50000), id="ipv4-unspecified"),
+    pytest.param(("::", 50000), id="ipv6-unspecified"),
+    pytest.param(("224.0.0.1", 50000), id="multicast"),
+]
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize("client", UNKNOWN_PEERS)
+@pytest.mark.parametrize("connect", CONNECTIONS)
+def test_a_peer_classify_ip_cannot_class_is_never_a_proxy(monkeypatch: pytest.MonkeyPatch, connect: Connect, client: tuple[str, int] | None) -> None:
+    print_section(f"The three forwarding headers from {client!r}")
+    api = proxy_under_test(monkeypatch)
+
+    result = api.forwarded_by_untrusted_proxy(connect(ALL_THREE, client))
+
+    assert result is False, f"the three forwarding headers from {client!r}, a peer classify_ip calls unknown: forwarded_by_untrusted_proxy gives {result!r}, not False"
+    noted(api, (), (), f"after a request from {client!r}")
+    assert api.log.records == [], f"a peer that cannot be classed is noted nowhere and logs nothing: {api.log.records}"
+    print_success("✓ False, nothing noted")
+
+
+# --- Step 4: uvicorn already followed X-Forwarded-For --------------------------
+
+
+#: (h) A peer uvicorn took from X-Forwarded-For, trusting the proxy that set it: equal, both read by parse_ip, to one value
+#: of its lines. (peer, the lines of X-Forwarded-For.)
+FOLLOWED = [
+    pytest.param(("10.0.0.9", 0), ("198.51.100.4, 10.0.0.9",), id="a-private-client-the-last-of-the-list"),
+    pytest.param(("192.168.1.10", 0), ("192.168.1.10",), id="a-private-client-the-only-value"),
+    pytest.param(("127.0.0.1", 0), ("127.0.0.1",), id="a-loopback-client"),
+    pytest.param(("10.0.0.9", 0), ("198.51.100.4", "10.0.0.9"), id="two-lines-the-peer-in-the-second"),
+    pytest.param(("10.0.0.9", 0), ("  198.51.100.4 ,   10.0.0.9  ",), id="spaces-around-the-values"),
+    pytest.param(("203.0.113.7", 51000), ("203.0.113.7:51000",), id="a-port"),
+    pytest.param(("2001:db8::7", 443), ("[2001:db8::7]:443",), id="ipv6-brackets-and-a-port"),
+    pytest.param(("fd7a:115c:a1e0::5", 0), ("[fd7a:115c:a1e0::5]",), id="ipv6-brackets-without-a-port"),
+    pytest.param(("2001:db8::7", 0), ("2001:0DB8:0000:0000:0000:0000:0000:0007",), id="ipv6-written-another-way"),
+    pytest.param(("::ffff:203.0.113.7", 0), ("203.0.113.7",), id="an-ipv4-mapped-peer"),
+    pytest.param(("10.0.0.9", 0), ("::ffff:10.0.0.9",), id="an-ipv4-mapped-value"),
+]
+#: (h) The other forwarding headers beside X-Forwarded-For: once uvicorn followed it, they change nothing.
+BESIDE = [
+    pytest.param((), id="x-forwarded-for-alone"),
+    pytest.param(((REAL_IP, "192.0.2.1"), (FORWARDED, "for=192.0.2.1")), id="with-x-real-ip-and-forwarded"),
+]
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize("beside", BESIDE)
+@pytest.mark.parametrize(("client", "lines"), FOLLOWED)
+def test_a_peer_uvicorn_took_from_x_forwarded_for_is_no_proxy(monkeypatch: pytest.MonkeyPatch, client: tuple[str, int], lines: tuple[str, ...], beside: tuple[Header, ...]) -> None:
+    print_section(f"Peer {client[0]}, X-Forwarded-For lines {list(lines)!r}, {[name for name, _ in beside]}")
+    api = proxy_under_test(monkeypatch)
+    headers = [*header_lines(XFF, lines), *beside]
+
+    result = api.forwarded_by_untrusted_proxy(http_request(headers, client))
+
+    assert result is False, f"peer {client[0]}, X-Forwarded-For lines {list(lines)!r}: forwarded_by_untrusted_proxy gives {result!r}, not False: the peer is one of the values (both read by parse_ip), so uvicorn already followed X-Forwarded-For from a proxy it trusts"
+    noted(api, (), (), "after a request uvicorn followed")
+    assert api.log.records == [], f"a request uvicorn followed is noted nowhere and logs nothing: {api.log.records}"
+    print_success("✓ False, nothing noted")
+
+
+#: (h) A local peer that is none of the X-Forwarded-For values: uvicorn followed nothing. (headers, the names noted.)
+NOT_FOLLOWED = [
+    pytest.param(((XFF, "10.0.0.90"),), (XFF,), id="a-longer-address"),
+    pytest.param(((XFF, "198.51.100.4, 10.0.0.1"),), (XFF,), id="other-addresses-only"),
+    pytest.param(((REAL_IP, "10.0.0.9"),), (REAL_IP,), id="x-real-ip-naming-the-peer-which-uvicorn-never-follows"),
+    pytest.param(((FORWARDED, "for=10.0.0.9"),), (FORWARDED,), id="forwarded-naming-the-peer-which-uvicorn-never-follows"),
+]
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize(("headers", "names"), NOT_FOLLOWED)
+def test_a_local_peer_uvicorn_did_not_take_from_x_forwarded_for_is_a_proxy(monkeypatch: pytest.MonkeyPatch, headers: tuple[Header, ...], names: tuple[str, ...]) -> None:
+    client = ("10.0.0.9", 50000)
+    print_section(f"Peer {client[0]}, {headers!r}")
+    api = proxy_under_test(monkeypatch)
+
+    result = api.forwarded_by_untrusted_proxy(http_request(headers, client))
+
+    assert result is True, f"peer {client[0]}, {headers!r}: forwarded_by_untrusted_proxy gives {result!r}, not True: the peer is none of the X-Forwarded-For values, so uvicorn followed nothing, and only X-Forwarded-For is one uvicorn follows"
+    noted(api, names, (), f"after {headers!r}")
+    assert api.log.records == [untrusted_proxy(names)], f"one warning, word for word: {api.log.records}"
+    no_address_logged(api, headers, client)
+    print_success(f"✓ True, noted local: {', '.join(names)}")
+
+
+# --- Step 2: the configured header ---------------------------------------------
+
+
+#: (h) LIBREFOLIO_CLIENT_IP_HEADER and a request: (setting, peer, headers, what forwarded_by_untrusted_proxy says, the names
+#: noted local). Carried once, holding one IP address, the configured header vouches for the address; absent or unusable,
+#: it is as if unset.
+CONFIGURED = [
+    pytest.param(FLY, DOCKER_PROXY, ((FLY, "203.0.113.7"), (XFF, "203.0.113.7")), False, (), id="fly-client-ip-usable"),
+    pytest.param("  fLy-ClIeNt-Ip ", DOCKER_PROXY, ((FLY, "203.0.113.7"), (XFF, "203.0.113.7")), False, (), id="fly-client-ip-usable-the-name-in-any-case"),
+    pytest.param(REAL_IP, DOCKER_PROXY, ((REAL_IP, "203.0.113.7"),), False, (), id="x-real-ip-usable"),
+    pytest.param(FLY, ("203.0.113.9", 50000), ((FLY, "198.51.100.4"), (XFF, "198.51.100.4")), False, (), id="fly-client-ip-usable-from-a-public-peer-not-even-noted-public"),
+    pytest.param(FLY, DOCKER_PROXY, ((XFF, "203.0.113.7"),), True, (XFF,), id="fly-client-ip-absent"),
+    pytest.param(FLY, DOCKER_PROXY, (*header_lines(FLY, ("203.0.113.7", "198.51.100.9")), (XFF, "203.0.113.7")), True, (XFF,), id="fly-client-ip-on-two-lines"),
+    pytest.param(FLY, DOCKER_PROXY, ((FLY, "203.0.113.7:80"), (XFF, "203.0.113.7")), True, (XFF,), id="fly-client-ip-with-a-port"),
+    pytest.param(REAL_IP, DOCKER_PROXY, tuple(header_lines(REAL_IP, ("203.0.113.7", "203.0.113.7"))), True, (REAL_IP,), id="x-real-ip-on-two-lines"),
+]
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize(("written", "client", "headers", "expected", "local"), CONFIGURED)
+def test_the_configured_header_vouches_for_the_address_only_when_usable(monkeypatch: pytest.MonkeyPatch, written: str, client: tuple[str, int], headers: tuple[Header, ...], expected: bool, local: tuple[str, ...]) -> None:
+    print_section(f"{HEADER_VARIABLE}={written!r}: {[name for name, _ in headers]} from {client[0]}")
+    api = proxy_under_test(monkeypatch, written)
+
+    result = api.forwarded_by_untrusted_proxy(http_request(headers, client))
+
+    assert result is expected, f"{HEADER_VARIABLE}={written!r}, {headers!r} from {client[0]}: forwarded_by_untrusted_proxy gives {result!r}, not {expected!r}: the configured header carried once and holding one IP address vouches for the address; absent or unusable, it is as if unset"
+    noted(api, local, (), f"with {HEADER_VARIABLE}={written!r}")
+    warned = [record for record in api.log.records if record[1] == UNUSABLE]
+    assert not warned, f"forwarded_by_untrusted_proxy never logs the warning of an unusable header: only client_address does, once per process: {warned}"
+    assert api.log.records == first_noting(local, ()), f"only the first local noting logs, its one warning: {api.log.records}"
+    no_address_logged(api, headers, client)
+    print_success(f"✓ {result!r}")
+
+
+# --- Noting and logging --------------------------------------------------------
+
+
+@untrusted_forwarding_started_over
+def test_the_first_local_noting_warns_once_and_later_ones_only_add_their_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    print_section("Three requests through local proxies nobody trusts: one warning")
+    api = proxy_under_test(monkeypatch)
+    first, first_peer = [(REAL_IP, "192.0.2.1"), *header_lines(XFF, ("198.51.100.4", "192.0.2.77"))], DOCKER_PROXY
+    second, second_peer = [(FORWARDED, "for=198.51.100.5")], ("10.0.0.1", 50000)
+    third, third_peer = [(XFF, "203.0.113.7")], ("::1", 50000)
+
+    assert api.forwarded_by_untrusted_proxy(http_request(first, first_peer)) is True, "barrier: X-Real-IP and two X-Forwarded-For lines from the proxy on the Docker network come through a proxy nobody trusts"
+    assert api.log.records == [untrusted_proxy((XFF, REAL_IP))], f"the first local noting logs one warning, word for word, with this request's names, each once, in the contract's order, and no other field: {api.log.records}"
+    noted(api, (XFF, REAL_IP), (), "after the first request")
+
+    later = [api.forwarded_by_untrusted_proxy(http_request(second, second_peer)), api.forwarded_by_untrusted_proxy(websocket(third, third_peer))]
+
+    assert later == [True, True], f"barrier: Forwarded from 10.0.0.1 and X-Forwarded-For from ::1 come through proxies nobody trusts too: {later}"
+    assert api.log.records == [untrusted_proxy((XFF, REAL_IP))], f"a later local noting logs nothing more, even with another header: {api.log.records}"
+    noted(api, FORWARDING_HEADERS, (), "after the three requests")
+    for headers, client in ((first, first_peer), (second, second_peer), (third, third_peer)):
+        no_address_logged(api, headers, client)
+    print_success(f"✓ one warning; noted local: {', '.join(FORWARDING_HEADERS)}")
+
+
+@untrusted_forwarding_started_over
+def test_the_first_public_noting_logs_one_info_and_later_ones_only_add_their_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    print_section("Two requests with forwarding headers from public peers: one info")
+    api = proxy_under_test(monkeypatch)
+    first, first_peer = [(XFF, "198.51.100.4")], ("203.0.113.9", 50000)
+    second, second_peer = [(REAL_IP, "192.0.2.1"), (FORWARDED, "for=192.0.2.1")], ("8.8.8.8", 50000)
+
+    assert api.forwarded_by_untrusted_proxy(http_request(first, first_peer)) is False, "barrier: X-Forwarded-For from a public peer is no proxy to skip"
+    assert api.log.records == [public_forwarding((XFF,))], f"the first public noting logs one info, word for word, with this request's names and no other field: {api.log.records}"
+    noted(api, (), (XFF,), "after the first request")
+
+    again = api.forwarded_by_untrusted_proxy(http_request(second, second_peer))
+
+    assert again is False, "barrier: X-Real-IP and Forwarded from a public peer are no proxy to skip either"
+    assert api.log.records == [public_forwarding((XFF,))], f"a later public noting logs nothing more, even with other headers: {api.log.records}"
+    noted(api, (), FORWARDING_HEADERS, "after the two requests")
+    for headers, client in ((first, first_peer), (second, second_peer)):
+        no_address_logged(api, headers, client)
+    print_success(f"✓ one info; noted public: {', '.join(FORWARDING_HEADERS)}")
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize("order", [pytest.param(("local", "public"), id="local-first"), pytest.param(("public", "local"), id="public-first")])
+def test_each_class_logs_its_own_first_noting(monkeypatch: pytest.MonkeyPatch, order: tuple[str, str]) -> None:
+    print_section(f"A {order[0]} noting, then a {order[1]} one, then both again")
+    api = proxy_under_test(monkeypatch)
+    # Each class: (headers, peer, what forwarded_by_untrusted_proxy says, the record of its first noting)
+    requests: dict[str, tuple[list[Header], tuple[str, int], bool, Record]] = {
+        "local": ([(XFF, "198.51.100.4")], DOCKER_PROXY, True, untrusted_proxy((XFF,))),
+        "public": ([(REAL_IP, "192.0.2.1")], ("203.0.113.9", 50000), False, public_forwarding((REAL_IP,))),
+    }
+    results: list[bool] = []
+
+    for peer_class in (*order, *order):
+        headers, client, _, _ = requests[peer_class]
+        results.append(api.forwarded_by_untrusted_proxy(http_request(headers, client)))
+
+    assert results == [requests[peer_class][2] for peer_class in (*order, *order)], f"barrier: the local request comes through a proxy nobody trusts, the public one does not: {results}"
+    assert api.log.records == [requests[peer_class][3] for peer_class in order], f"each class logs its own first noting, whichever came first, and nothing more: {api.log.records}"
+    noted(api, (XFF,), (REAL_IP,), "after both classes, twice each")
+    for headers, client, _, _ in requests.values():
+        no_address_logged(api, headers, client)
+    print_success(f"✓ {[record[0] for record in api.log.records]}")
+
+
+#: (h) Names as the module may hold them, in any order, and as untrusted_forwarding_seen gives them back.
+HELD = [
+    pytest.param({REAL_IP}, (REAL_IP,), id="one"),
+    pytest.param({REAL_IP, FORWARDED}, (FORWARDED, REAL_IP), id="two"),
+    pytest.param({REAL_IP, XFF, FORWARDED}, FORWARDING_HEADERS, id="all-three"),
+]
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize("peer_class", PEER_CLASSES)
+@pytest.mark.parametrize(("held", "given"), HELD)
+def test_untrusted_forwarding_seen_gives_the_names_in_the_contracts_order(monkeypatch: pytest.MonkeyPatch, peer_class: str, held: set[str], given: tuple[str, ...]) -> None:
+    print_section(f"untrusted_forwarding_seen({peer_class!r}) with {sorted(held)} noted")
+    api = proxy_under_test(monkeypatch)
+    untrusted_forwarding()[peer_class].update(held)  # emptied in place again after the test, by its fixture
+
+    expected = {peer_class: given, **{other: () for other in PEER_CLASSES if other != peer_class}}
+
+    noted(api, expected["local"], expected["public"], f"with {sorted(held)} noted under {peer_class!r}")
+    print_success(f"✓ {given}")
+
+
+# --- A Request and a WebSocket alike ---------------------------------------------
+
+
+#: (h) The core cases: (setting, peer, headers, what forwarded_by_untrusted_proxy says, the names noted local and public).
+CORE = [
+    pytest.param(None, DOCKER_PROXY, ((XFF, "203.0.113.7"),), True, (XFF,), (), id="a-proxy-on-the-docker-network"),
+    pytest.param(None, ("127.0.0.1", 50000), ((REAL_IP, "203.0.113.7"),), True, (REAL_IP,), (), id="a-proxy-on-the-same-host-x-real-ip"),
+    pytest.param(None, ("10.0.0.1", 50000), ((FORWARDED, "for=203.0.113.7"),), True, (FORWARDED,), (), id="a-proxy-on-the-lan-forwarded"),
+    pytest.param(None, ("203.0.113.9", 50000), ((XFF, "198.51.100.4"),), False, (), (XFF,), id="a-public-peer"),
+    pytest.param(None, ("10.0.0.9", 0), ((XFF, "198.51.100.4, 10.0.0.9"),), False, (), (), id="a-client-uvicorn-took-from-x-forwarded-for"),
+    pytest.param(None, None, ((XFF, "203.0.113.7"),), False, (), (), id="no-client"),
+    pytest.param(None, DOCKER_PROXY, (), False, (), (), id="no-forwarding-header"),
+    pytest.param(FLY, DOCKER_PROXY, ((FLY, "203.0.113.7"), (XFF, "203.0.113.7")), False, (), (), id="the-configured-header-usable"),
+    pytest.param(FLY, DOCKER_PROXY, ((FLY, "203.0.113.7:80"), (XFF, "203.0.113.7")), True, (XFF,), (), id="the-configured-header-unusable"),
+]
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize(("written", "client", "headers", "expected", "local", "public"), CORE)
+@pytest.mark.parametrize("connect", CONNECTIONS)
+def test_a_request_and_a_websocket_alike(monkeypatch: pytest.MonkeyPatch, connect: Connect, written: str | None, client: tuple[str, int] | None, headers: tuple[Header, ...], expected: bool, local: tuple[str, ...], public: tuple[str, ...]) -> None:
+    print_section(f"{HEADER_VARIABLE}={written!r}: {[name for name, _ in headers]} from {client!r}")
+    api = proxy_under_test(monkeypatch, written)
+
+    result = api.forwarded_by_untrusted_proxy(connect(headers, client))
+
+    assert result is expected, f"{HEADER_VARIABLE}={written!r}, {headers!r} from {client!r}: forwarded_by_untrusted_proxy gives {result!r}, not {expected!r}: a WebSocket is an HTTPConnection as a Request is"
+    noted(api, local, public, f"after {headers!r} from {client!r}")
+    assert api.log.records == first_noting(local, public), f"the first noting of its class logs, and only it: {api.log.records}"
+    no_address_logged(api, headers, client)
+    print_success(f"✓ {result!r}")
+
+
+# --- Behind uvicorn's own ProxyHeadersMiddleware -----------------------------------
+
+
+#: (h) uvicorn's own ProxyHeadersMiddleware in front of the app, as the server runs it: (FORWARDED_ALLOW_IPS, the peer, the
+#: headers, the host of the client the app sees, what forwarded_by_untrusted_proxy says, the names noted local and public).
+THROUGH_UVICORN = [
+    pytest.param(TRUSTED_BY_DEFAULT, ("127.0.0.1", 50000), ((XFF, "203.0.113.7"),), "203.0.113.7", False, (), (), id="by-default-a-proxy-on-the-same-host-is-trusted"),
+    pytest.param(TRUSTED_BY_DEFAULT, DOCKER_PROXY, ((XFF, "203.0.113.7"),), "172.18.0.2", True, (XFF,), (), id="by-default-a-proxy-on-the-docker-network-is-not-r13-sec6"),
+    pytest.param("172.16.0.0/12", DOCKER_PROXY, ((XFF, "203.0.113.7"),), "203.0.113.7", False, (), (), id="the-docker-network-trusted"),
+    pytest.param("172.16.0.0/12", DOCKER_PROXY, ((XFF, "203.0.113.7:51000"),), "203.0.113.7", False, (), (), id="the-docker-network-trusted-a-port"),
+    pytest.param("*", DOCKER_PROXY, ((XFF, "198.51.100.4, 203.0.113.7"),), "198.51.100.4", False, (), (), id="every-proxy-trusted-the-first-value"),
+    pytest.param(TRUSTED_BY_DEFAULT, DOCKER_PROXY, ((REAL_IP, "203.0.113.7"),), "172.18.0.2", True, (REAL_IP,), (), id="x-real-ip-alone-which-uvicorn-ignores"),
+    pytest.param(TRUSTED_BY_DEFAULT, ("127.0.0.1", 50000), ((FORWARDED, "for=203.0.113.7"),), "127.0.0.1", True, (FORWARDED,), (), id="forwarded-alone-which-uvicorn-ignores-even-from-a-proxy-it-trusts"),
+    pytest.param(TRUSTED_BY_DEFAULT, ("203.0.113.9", 50000), ((XFF, "198.51.100.4"),), "203.0.113.9", False, (), (XFF,), id="by-default-a-public-peer-is-not-trusted"),
+]
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize(("trusted_hosts", "client", "headers", "host", "expected", "local", "public"), THROUGH_UVICORN)
+def test_behind_uvicorns_own_proxy_headers_middleware(monkeypatch: pytest.MonkeyPatch, trusted_hosts: str, client: tuple[str, int], headers: tuple[Header, ...], host: str, expected: bool, local: tuple[str, ...], public: tuple[str, ...]) -> None:
+    print_section(f"FORWARDED_ALLOW_IPS={trusted_hosts!r}: {[name for name, _ in headers]} from {client[0]}")
+    api = proxy_under_test(monkeypatch)
+
+    seen_host, result = through_uvicorn(api, trusted_hosts, headers, client)
+
+    assert seen_host == host, f"barrier: behind ProxyHeadersMiddleware(trusted_hosts={trusted_hosts!r}) the app sees the client {seen_host!r}, not {host!r}: uvicorn no longer does what this case describes"
+    assert result is expected, f"FORWARDED_ALLOW_IPS={trusted_hosts!r}, {headers!r} from {client[0]}, the app seeing {seen_host!r}: forwarded_by_untrusted_proxy gives {result!r}, not {expected!r}"
+    noted(api, local, public, f"after {headers!r} from {client[0]} through uvicorn")
+    assert api.log.records == first_noting(local, public), f"the first noting of its class logs, and only it: {api.log.records}"
+    no_address_logged(api, headers, client)
+    print_success(f"✓ the app sees {seen_host!r}: {result!r}")
+
+
+# --- rate_limit_address: the address the per-address limits count -------------------
+
+
+#: (h) Requests through a local proxy nobody trusts: (peer, headers, the names noted local).
+THROUGH_A_PROXY_NOBODY_TRUSTS = [
+    pytest.param(DOCKER_PROXY, ((XFF, "203.0.113.7"),), (XFF,), id="x-forwarded-for-from-the-docker-network"),
+    pytest.param(("127.0.0.1", 50000), ((REAL_IP, "203.0.113.7"),), (REAL_IP,), id="x-real-ip-from-the-same-host"),
+    pytest.param(("10.0.0.1", 50000), ((FORWARDED, "for=203.0.113.7"),), (FORWARDED,), id="forwarded-from-the-lan"),
+]
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize(("client", "headers", "names"), THROUGH_A_PROXY_NOBODY_TRUSTS)
+@pytest.mark.parametrize("connect", CONNECTIONS)
+def test_rate_limit_address_is_none_through_a_proxy_nobody_trusts(monkeypatch: pytest.MonkeyPatch, connect: Connect, client: tuple[str, int], headers: tuple[Header, ...], names: tuple[str, ...]) -> None:
+    print_section(f"rate_limit_address: {list(names)} from {client[0]}")
+    api = proxy_under_test(monkeypatch)
+    rate_limit_address = rate_limit_address_function()
+    connection = connect(headers, client)
+
+    first, again = rate_limit_address(connection), rate_limit_address(connection)
+
+    assert first is None and again is None, f"{list(names)} from {client[0]}, through a local proxy nobody trusts: rate_limit_address gives {first!r}, then {again!r}, not None: no per-address limit counts a request whose address is the proxy's"
+    assert api.log.records == [untrusted_proxy(names)], f"the warning of the proxy nobody trusts, once: a second call logs nothing more, and rate_limit_address logs nothing of its own: {api.log.records}"
+    assert api.forwarded_by_untrusted_proxy(connection) is True, "barrier: forwarded_by_untrusted_proxy says the same of this request"
+    noted(api, names, (), "after two calls of rate_limit_address")
+    no_address_logged(api, headers, client)
+    print_success("✓ None twice, one warning")
+
+
+#: (h) Requests the per-address limits count: (setting, peer, headers, the address, the names noted public). The address is
+#: each time exactly what client_address gives.
+COUNTED = [
+    pytest.param(None, ("10.0.0.1", 50000), (), "10.0.0.1", (), id="no-forwarding-header-the-peer"),
+    pytest.param(None, ("testclient", 50000), (), "testclient", (), id="no-forwarding-header-a-name-as-written"),
+    pytest.param(None, None, (), None, (), id="no-forwarding-header-no-client"),
+    pytest.param(None, ("203.0.113.9", 50000), ((XFF, "198.51.100.4"),), "203.0.113.9", (XFF,), id="a-public-peer-its-own-address-noted-public"),
+    pytest.param(None, ("10.0.0.9", 0), ((XFF, "198.51.100.4, 10.0.0.9"),), "10.0.0.9", (), id="the-client-uvicorn-took-from-x-forwarded-for"),
+    pytest.param(FLY, DOCKER_PROXY, ((FLY, "2001:db8::7"), (XFF, "2001:db8::7")), "2001:db8::7", (), id="the-configured-header-its-address"),
+    pytest.param(FLY, DOCKER_PROXY, ((FLY, "2001:0DB8:0000:0000:0000:0000:0000:0007"), (XFF, "203.0.113.7")), "2001:db8::7", (), id="the-configured-header-its-address-normalised"),
+]
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize(("written", "client", "headers", "address", "public"), COUNTED)
+@pytest.mark.parametrize("connect", CONNECTIONS)
+def test_rate_limit_address_is_exactly_the_client_address_otherwise(monkeypatch: pytest.MonkeyPatch, connect: Connect, written: str | None, client: tuple[str, int] | None, headers: tuple[Header, ...], address: str | None, public: tuple[str, ...]) -> None:
+    print_section(f"rate_limit_address: {HEADER_VARIABLE}={written!r}, {[name for name, _ in headers]} from {client!r}")
+    api = proxy_under_test(monkeypatch, written)
+    rate_limit_address = rate_limit_address_function()
+    connection = connect(headers, client)
+
+    result = rate_limit_address(connection)
+
+    given = api.client_address(connection)
+    assert exactly(given, address), f"barrier: client_address gives {given!r}, not {address!r}"
+    assert exactly(result, given), f"{HEADER_VARIABLE}={written!r}, {headers!r} from {client!r}, no proxy nobody trusts: rate_limit_address gives {result!r}, not exactly client_address's {given!r}"
+    assert api.forwarded_by_untrusted_proxy(connection) is False, "barrier: this request did not come through a local proxy nobody trusts"
+    noted(api, (), public, "after rate_limit_address")
+    assert api.log.records == first_noting((), public), f"rate_limit_address logs nothing of its own: only the first public noting logs, its one info: {api.log.records}"
+    no_address_logged(api, headers, client)
+    print_success(f"✓ {result!r}")
+
+
+@untrusted_forwarding_started_over
+@pytest.mark.parametrize("connect", CONNECTIONS)
+def test_rate_limit_address_hides_neither_warning(monkeypatch: pytest.MonkeyPatch, connect: Connect) -> None:
+    print_section(f"rate_limit_address: {FLY} malformed and X-Forwarded-For from {DOCKER_PROXY[0]}")
+    api = proxy_under_test(monkeypatch, FLY)
+    rate_limit_address = rate_limit_address_function()
+    lines = ("203.0.113.7:80",)
+    headers = [*header_lines(FLY, lines), (XFF, "203.0.113.7")]
+    connection = connect(headers, DOCKER_PROXY)
+
+    first, again = rate_limit_address(connection), rate_limit_address(connection)
+
+    assert first is None and again is None, f"{FLY} unusable, so as if unset, and X-Forwarded-For from {DOCKER_PROXY[0]}: rate_limit_address gives {first!r}, then {again!r}, not None"
+    expected = [unusable(FLY_LOWER, lines), untrusted_proxy((XFF,))]
+    assert api.log.records == expected, f"exactly two warnings, each once, word for word: client_address's (called first, so never hidden), then the one of the proxy nobody trusts:\n  expected {expected}\n  got      {api.log.records}"
+    no_address_logged(api, headers, DOCKER_PROXY)
+    print_success("✓ None twice; the two warnings, once each")
+
+
+# --- What the admin sees ------------------------------------------------------------
+
+
+@untrusted_forwarding_started_over
+def test_the_admin_check_warns_once_a_request_came_through_a_proxy_nobody_trusts(monkeypatch: pytest.MonkeyPatch) -> None:
+    print_section("check_client_address, before and after a request through a proxy nobody trusts")
+    api = proxy_under_test(monkeypatch)
+    check_client_address = h36_function_of(importlib.import_module(CONFIG_AUDIT), "check_client_address", CONFIG_AUDIT_PATH)
+    before = check_client_address()
+    assert (before.check_id, before.severity, before.i18n_key, before.detail) == ("platform.client_address", "ok", "instance.checks.clientAddress.ok", {}), f"nothing noted yet, as at startup: the check is ok, not {before}"
+    request = http_request([(XFF, "203.0.113.7")], DOCKER_PROXY)
+    assert api.forwarded_by_untrusted_proxy(request) is True, "barrier: X-Forwarded-For from the proxy on the Docker network comes through a proxy nobody trusts"
+
+    after = check_client_address()
+
+    actual = (after.check_id, after.severity, after.i18n_key, after.detail, after.summary)
+    expected = ("platform.client_address", "warning", "instance.checks.clientAddress.untrustedProxy", {"headers": XFF}, UNTRUSTED_PROXY)
+    assert actual == expected, f"after a request through a proxy nobody trusts, the admin's check warns, naming its header:\n  expected {expected}\n  got      {actual}"
+    shown = [address for address in (DOCKER_PROXY[0], "203.0.113.7") if address in repr(after)]
+    assert not shown, f"the check holds no address (N58): {shown} in {after}"
+    print_success(f"✓ ok, then {after.severity} {after.i18n_key}")
