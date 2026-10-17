@@ -88,7 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The same portfolio report requested twice at once (two tabs, a refresh during a slow load) is computed once.
 - **One change over the range, from the server.** The change over the selected range on the Assets cards, in the FX table and cards, on an FX pair's page and on an asset's page is now computed by the server, so the same figure appears everywhere; beside a live price it is the change up to that price. A price written down to 0 shows −100 %, and a change that cannot be computed in the display currency is left out instead of mixing currencies.
-- AI Export: when a value is unavailable in every row of a table, the prompt now names that column right after the table instead of leaving it out silently, so the AI can tell missing data from data that isn't part of the export.
+- AI Export: when a value is unavailable in every row of a table, the prompt now names that column right after the table instead of leaving it out silently (unless a null there only means "none", such as an open lot's closing date or a single asset's portfolio weight), so the AI can tell missing data from data that isn't part of the export.
 - A user's base currency is saved only as an ISO 4217 code, and a refused currency now names the ISO code it stands for (`'840'`: USD).
 - Requests that save a currency accept only ISO 4217 alphabetic codes; names such as "Euro" or numeric codes such as "978" are refused (422). Stored data is read as before.
 - After a cancelled setup link, the startup log says the link was withdrawn, not that it expired.
