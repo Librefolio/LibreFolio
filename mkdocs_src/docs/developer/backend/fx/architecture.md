@@ -90,11 +90,21 @@ asset price queries, risk eligibility and AI Export components call it with a li
 1. **Identity**: same currency in and out — the amount is returned as is, with no lookup.
 2. **Stored pair**: the pair is normalized alphabetically, the way rates are stored. The amount is
    multiplied by the rate when converting from the stored base, divided by it otherwise.
-3. **Backward fill**: the rate is the latest one on or before the requested date, with no time limit.
-   The result carries the rate's date and whether backward fill applied; the convert endpoint turns them
-   into `backward_fill_info` (`actual_rate_date`, `days_back`).
-4. **No rate**: when the pair has no rate on or before the date, the item fails —
-   `RateNotFoundError` with `raise_on_error=True`, or a `None` result plus an error message otherwise.
+3. **Backward fill**: the rate is the latest usable one on or before the requested date, with no time
+   limit. The result carries the rate's date and whether backward fill applied; the convert endpoint
+   turns them into `backward_fill_info` (`actual_rate_date`, `days_back`).
+4. **No rate**: when the pair has no usable rate on or before the date, the item fails —
+   `RateNotFoundError` with `raise_on_error=True`, or a `None` result plus an error message otherwise
+   (*No FX rate found for B/Q on or before D*).
+
+A usable rate is one `fx_rates.rate` can keep (X-R38, see
+[Chain Dates, Writes and Counters](configuration.md#chain-dates-writes-and-counters)). A row the
+column cannot keep, written by an older release (an infinite rate, 0, 20 digits before the decimal
+point), is a missing rate for its date: backward-filled from the latest usable rate before it, as a
+date without a row would be, or the missing-rate error. A conversion never divides by zero nor
+returns an infinite amount. Read through the model, such a row still gives `Decimal('Infinity')` for
+a stored inf (see [Decimal Columns](../../architecture/database/index.md#decimal-columns)); the FX
+writers no longer send one.
 
 There is no triangulation at conversion time. A pair that no provider quotes directly gets its rates at
 sync time from a multi-step chain route, which stores the composite rate under the pair itself
@@ -110,12 +120,21 @@ use, in one query for all pairs:
 - it loads the rows from the **backward-fill anchor** — the last rate on or before `min_date`, a
   `MAX(date)` scalar subquery — up to `max_date`. The anchor keeps the unlimited backward fill exact:
   the earliest item still finds its rate, however old;
+- it reads only the usable rates (X-R38): `rate >= 1E-10 AND rate < 1E+14`, the bounds of
+  `usable_fx_rate_bounds()` (`backend/app/db/precision.py`), in the anchor subquery as in the window,
+  so a legacy unusable row neither anchors the window nor is loaded. There is no per-row check in
+  Python: any double within those bounds reads back as a rate `storable_fx_rate()` keeps, and this
+  path is hot;
 - it selects plain columns (`base`, `quote`, `date`, `rate`), not ORM objects;
 - each item finds its rate with `bisect_right` over the pair's ascending dates.
 
-Return values and errors are those of the full-history version this replaced, which loaded every pair's
-whole history up to the latest requested date and scanned it linearly for each item (PR #30 by Martin
-Sova, commit `5aa267f11`).
+The limit is on the digits, as for W-B58: SQLite keeps the rate as a double, so a rate a few
+thousandths below `1E+14` with more digits than a double holds (`99999999999999.999`, accepted by the
+writers) is stored as `1E+14`, which these bounds then skip as unusable.
+
+Apart from the unusable rates left out, return values and errors are those of the full-history version
+this replaced, which loaded every pair's whole history up to the latest requested date and scanned it
+linearly for each item (PR #30 by Martin Sova, commit `5aa267f11`).
 
 ## 🧹 Rate writes clear the portfolio caches {: #portfolio-cache-invalidation }
 

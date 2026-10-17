@@ -30,7 +30,7 @@ from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest
 from backend.app.schemas.signals import SignalCadence, SignalCatalogResponse, SignalDomain, SignalExecutionContext, SignalPricePoint
 from backend.app.services.fx.base import FXServiceError
 from backend.app.services.fx.conversion import convert_bulk
-from backend.app.services.fx.storage import delete_rates_bulk, upsert_rates_bulk
+from backend.app.services.fx.storage import delete_rates_bulk, fx_rate_refusal, normalize_storable_rate, upsert_rates_bulk
 from backend.app.services.fx.sync import sync_pairs_bulk
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.service import SignalExecutionPlan, SignalRequestValidationError, SignalService
@@ -122,15 +122,14 @@ async def upsert_rates_endpoint(
             errors.append(error_msg)
             continue
 
-        # Ensure alphabetical ordering (base < quote)
-        if base > quote:
-            base, quote = quote, base
-            # Invert rate
-            rate_value = Decimal("1") / rate_item.rate
-        else:
-            rate_value = rate_item.rate
-
         try:
+            # Alphabetical ordering (base < quote), the rate inverted: inside the item's try, since the inverse of a tiny
+            # rate overflows (1 / 1E-1000000) and a rate fx_rates.rate cannot keep is the item's error, never a 500 (X-R38)
+            normalized = normalize_storable_rate(base, quote, rate_item.rate)
+            if normalized is None:
+                raise ValueError(fx_rate_refusal(base, quote, rate_item.rate_date))
+            base, quote, rate_value = normalized
+
             # Use bulk service function
             rate_results = await upsert_rates_bulk(session, [(rate_item.rate_date, base, quote, rate_value, rate_item.source)])
 
