@@ -2606,6 +2606,57 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «Dopo G-18», «Punto 33 della designer».
+- **G-24 · Lo scatto della modale «What's new» (C-54)** — basso; coordinatore, 18/10 01:24, dalla coda della 1.3
+  (17/10 17:48, dopo `331cee121`). Non nella galleria del giro 3.
+  - La modale «What's new since your last version» (`frontend/src/lib/features/changelog/WhatsNewModal.svelte`) non ha
+    uno scatto. La apre `DeferredAppPopups`, prima fra i popup automatici, quando `user.whats_new` (login e
+    `GET /api/v1/auth/me`) nomina capitoli rilasciati di `CHANGELOG.md` che l'utente non ha visto.
+  - Per gli utenti di test `whats_new` è `null`: nessuno scatto di oggi la incontra per caso.
+  - Il metodo è quello di `frontend/e2e/layout/whats-new.spec.ts`: la risposta vera di `GET /api/v1/auth/me`, con
+    `user.whats_new` sostituito (`route.fetch()`, poi `fulfill`). Lo stub vale per il contesto che lo installa.
+  - Da decidere scrivendolo:
+    - `since` e `release` fra i capitoli già rilasciati (oggi 1.1.0, 1.2.0, 1.2.1), così lo scatto non cambia a ogni
+      nuova versione;
+    - la chiusura scrive `POST /api/v1/auth/whats-new/seen` sul DB condiviso: lo scatto non la chiude, o la intercetta;
+    - nelle quattro lingue: il capitolo tradotto dove il bundle lo traduce, altrimenti in inglese con la pillola
+      (`whats-new-not-translated`).
+  - Il test lo scrive test-author, nel perimetro di G (`gallery.spec.ts`, una fixture in `frontend/e2e/fixtures/`). Poi
+    un doppio a/b filtrato, e la riga di `mkdocs_src/docs/gallery/*.en.md` scritta da docs-writer.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Galleria del giro 3».
+- **G-25 · `onboarding/welcome-setup` su mobile: in francese e spagnolo la pagina non sta più nell'inquadratura** —
+  basso; G, 18/10, dalla galleria del giro 3. Il coordinatore l'ha accettata alle 02:36.
+  - Dal 17/10 la pagina di benvenuto ha la nota legale sotto la card (A9, `b1b647edc`, `LegalNotice`).
+  - Lo scatto la guarda dal fondo: `frameWelcome` (`frontend/e2e/fixtures/galleryOnboarding.ts`) scorre in fondo e
+    vuole interi nell'inquadratura i cinque controlli, cioè l'avatar, la lingua, la valuta, «salta» e «continua».
+  - Su mobile, in francese e spagnolo, coi testi più lunghi, la pagina non ci sta più e l'avatar esce in alto: è
+    visibile al 78,75 %. Il test fallisce nelle 4 varianti, chiaro e scuro, e quelle immagini mancano. In inglese e
+    italiano passa; su desktop tutte e 8 le varianti passano.
+  - Non è carico né tempo: lo stesso rapporto in nove esecuzioni del 18/10, cioè le tre gallerie complete e i loro fill
+    a 2 e a 1 worker. Verdetto `test-triage`: assunzione del test. Il prodotto è corretto. `designer-16b` (16/10, prima
+    di A9) aveva tutte e 16 le varianti.
+  - Proposta: per quello scatto, uno schermo alto quanto la pagina (`extendScreenToBlock` di `galleryTallShots.ts`),
+    così nell'immagine entra anche la nota legale. In alternativa l'inquadratura sulla sola card, con la nota fuori. La
+    scelta la conferma A, il proprietario di A9.
+  - Il test lo ripara test-author, nel perimetro di G. Poi un doppio a/b filtrato, in francese e spagnolo su mobile.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Galleria del giro 3».
+- **G-26 · `settings/password-modal` su mobile: la pagina sotto la modale si ferma a scorrimenti diversi** — basso; G,
+  18/10, dal rumore della galleria del giro 3.
+  - Nelle due catture identiche del dopo (`cd686f445`, 18/10), su mobile in spagnolo scuro, la modale è uguale ma la
+    pagina dietro no: in una si vedono il nome utente ed «Eliminar Cuenta», nell'altra l'avatar e «Seguridad». È il
+    15,4 % dei pixel, in una variante su 16.
+  - Nel rumore del 13/10 (`g-ref13`) lo scatto era «basso»; oggi è «instabile». Nei confronti dello stesso giorno le
+    sue zone di rumore lo coprono, ma il riferimento resta meno pulito.
+  - Da fare con `test-triage`, partendo dall'ipotesi del tempo: la pagina che scorre mentre la modale si apre, o
+    l'avatar che si carica e la sposta. Poi fermare lo scorrimento prima di aprire la modale, come negli altri scatti a
+    pagina ferma.
+  - Il test lo ripara test-author, nel perimetro di G. Poi un doppio a/b filtrato su mobile.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Galleria del giro 3».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
