@@ -439,3 +439,25 @@ describe('B-35 — an archive too large once unpacked; a restore limit the serve
         expect(placeholdersOf(messageOf(en, key) as string)).toEqual([]);
     });
 });
+
+// =====================================================================================================================
+// B-15 — a proxy's refusal of the archive (written red first)
+// =====================================================================================================================
+
+/*
+ * A 413 the upload of an archive gets with no LibreFolio code comes from a proxy in front of LibreFolio (nginx's
+ * `client_max_body_size`, Fly, a CDN), whose refusal LibreFolio's log knows nothing of: the page reads it as
+ * `proxy_too_large` (B-15), worded by restoreText.ts with `backup.restore.errors.proxy_too_large`. A message of the four
+ * catalogues naming no placeholder, as the English one of the contract names none: the proxy's limit is not known
+ * (`errorLimitMb` null), so a `{limit}` would have nothing to show, in the card or in its toast. Once the entry exists,
+ * the scan of restoreText.ts above (B4's guard) requires its key too; this case requires the entry itself, by name.
+ * Red today: neither the entry of `ERROR_KEYS` nor the key exists.
+ */
+describe('B-15 — a proxy refused the archive', () => {
+    it('ERROR_KEYS.proxy_too_large is backup.restore.errors.proxy_too_large, a message of the four catalogues naming no placeholder', () => {
+        expect(ERROR_KEYS.proxy_too_large, 'restoreText.ts words the code').toBe('backup.restore.errors.proxy_too_large');
+
+        expectMessage('backup.restore.errors.proxy_too_large');
+        expect(placeholdersOf(messageOf(en, 'backup.restore.errors.proxy_too_large') as string)).toEqual([]);
+    });
+});

@@ -870,7 +870,12 @@ encrypt (`backend/app/api/v1/backup/panel.py` passes no password). The format is
 alike). `jobs.start_backup()` creates the job's folder and its first state before the thread runs: a full disk or quota
 there (`jobs.out_of_space()`) answers `507` `backup_no_space`, `Not enough free space to start the backup`, logged as a
 warning, `Instance backup could not start: not enough free space` (lot B-30). Another backup running stays `409`
-`backup_busy`, and any other failure `500` `backup_folder_unusable` or `backup_failed`.
+`backup_busy`, and any other failure `500` `backup_folder_unusable` or `backup_failed`. The `backup_busy` detail names
+the running backup, `job_id` and `origin`, to a caller that can read it: the Backup tab always, the hosting panel only
+a backup of its own (lot B-8). A run records its job id in the lock it holds (`backups/.jobs/.lock`, its content), once
+its first state is written; a refused start reads it back, never through a link, and names the job only while its state
+says it runs. The tab follows a backup of its own kind (`ui`) whose start answer was lost; one of the command line or
+of the panel it does not.
 
 **The creation** (`jobs._run()`). With a password, `build_archive()` writes the zip as for a clear backup, in the
 job's folder `backups/.jobs/<id>/` (`0700`, the zip `0600`), with the instance key entry when there is one to carry

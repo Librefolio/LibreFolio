@@ -223,7 +223,8 @@
         "wrong_password": "Wrong password, or the file was changed: type the password again.",
         "password_required": "This is a secure backup: type its password.",
         "envelope_damaged": "The secure backup is damaged or was changed: it cannot be opened.",
-        "envelope_unsupported": "The secure backup comes from a newer LibreFolio: update LibreFolio first."
+        "envelope_unsupported": "The secure backup comes from a newer LibreFolio: update LibreFolio first.",
+        "proxy_too_large": "A proxy in front of LibreFolio refused an archive this large: ask whoever runs it to accept larger uploads, or restore from the command line."
       },
       "password": {
         "intro": "A secure backup: type the password it was made with.",

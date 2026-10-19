@@ -3036,3 +3036,116 @@ describe('B4 — an envelope: the password asked before anything is sent', () =>
         expect(zodios.start_restore_check_api_v1_backup_restore_stage_post.mock.calls[0][0], 'the body of POST /restore/stage').toStrictEqual({upload_id: UPLOAD_ID, password: PASSWORD});
     });
 });
+
+// =====================================================================================================================
+// B-15 — a proxy's 413 on the upload of the archive says so (written red first)
+// =====================================================================================================================
+
+/*
+ * The contract under test (the B-15 + B-8 contract, B-15): the PUT of the archive answered 413 with no LibreFolio code —
+ * the page of a proxy in front of LibreFolio (nginx's `client_max_body_size`, Fly, a CDN), an empty body, JSON without
+ * `detail.code` — fails as any refused upload, with the code `proxy_too_large` (`uploadFailureCode` of backupApi.ts):
+ * `failed`, failure `upload`, no limit (`errorLimitMb` null: the proxy's is not known), nothing checked nor remembered,
+ * `backup.restore.failed {code: 'proxy_too_large', what: 'upload'}` once (the event whose code words the card's toast),
+ * and the sentence the card shows is `backup.restore.errors.proxy_too_large` (`restoreErrorKey`, as RestoreCard.svelte
+ * resolves it). The envelope of a secure backup, sent once its password is given, is the same upload.
+ * LibreFolio's own 413 keeps `backup_too_large` and its `limit_mb`; a proxy page of another status stays `unexpected`;
+ * a proxy that drops the connection stays `network`. The upload is the one request read this way: the start of the
+ * check, refused 413 without a code, stays `unexpected`.
+ *
+ * The archive of these cases is under the limit the server announces, as it is when a proxy refuses what LibreFolio
+ * would take.
+ *
+ * Red today: the upload reads such a 413 as `unexpected`, and `restoreErrorKey` knows no `proxy_too_large`. Green today,
+ * and to stay so: LibreFolio's own 413, a 502 page, no answer, and the start of the check.
+ */
+
+/** What nginx answers an upload over its `client_max_body_size`: its own HTML page, nothing of LibreFolio's. */
+const NGINX_413 = '<html>\r\n<head><title>413 Request Entity Too Large</title></head>\r\n<body>\r\n<center><h1>413 Request Entity Too Large</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n';
+
+/** An answer of `status` whose body is `data`, raised by axios: a refusal of LibreFolio's only when `data` is one. */
+function answered(status: number, data: unknown) {
+    return {isAxiosError: true, message: `Request failed with status code ${status}`, response: {status, data}};
+}
+
+/** The limit the server announces, and an archive under it. */
+const LIMIT_MB = 500;
+const UNDER_THE_LIMIT = 200 * MIB;
+
+describe('B-15 — a proxy refused the archive: proxy_too_large', () => {
+    it.each<[string, () => unknown]>([
+        ["nginx's page (client_max_body_size)", () => answered(413, NGINX_413)],
+        ['an empty body', () => answered(413, '')],
+        ['JSON without detail.code (an API gateway)', () => answered(413, {message: 'Request Too Long'})],
+    ])('a 413 with %s: failed (upload) with proxy_too_large, no limit, announced once, nothing checked nor remembered, worded by backup.restore.errors.proxy_too_large', async (_case, refused) => {
+        const {controller, api, storage, events} = await idle({upload_limit_mb: LIMIT_MB});
+        api.upload.mockRejectedValueOnce(refused());
+
+        await controller.upload(archive(UNDER_THE_LIMIT));
+        await flush();
+
+        expect(api.upload, 'precondition: under the limit the server announces, the archive was sent').toHaveBeenCalledTimes(1);
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe('proxy_too_large');
+        expect(controller.failure).toBe('upload');
+        expect(controller.errorLimitMb, "the proxy's limit is not known").toBeNull();
+        expect(controller.busy).toBe(false);
+        expect(api.startCheck).not.toHaveBeenCalled();
+        expect(storage.setItem).not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.failed', {code: 'proxy_too_large', what: 'upload'}]]);
+        expect(restoreErrorKey(controller.errorCode), 'the sentence the card shows').toBe('backup.restore.errors.proxy_too_large');
+    });
+
+    it.each<[string, () => unknown, string, number | null]>([
+        ["LibreFolio's own 413: backup_too_large, with the limit it names", () => refusal(413, 'backup_too_large', {limit_mb: 250}), 'backup_too_large', 250],
+        ['a proxy page of another status (502): unexpected', () => answered(502, '<html><body>Bad Gateway</body></html>'), 'unexpected', null],
+        ['a proxy that drops the connection, no answer: network', noAnswer, 'network', null],
+    ])('%s, as before (green today: the guard)', async (_case, refused, code, limit) => {
+        const {controller, api, events} = await idle({upload_limit_mb: LIMIT_MB});
+        api.upload.mockRejectedValueOnce(refused());
+
+        await controller.upload(archive(UNDER_THE_LIMIT));
+        await flush();
+
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('upload');
+        expect(controller.errorLimitMb).toBe(limit);
+        expect(events()).toEqual([['backup.restore.failed', {code, what: 'upload'}]]);
+        expect(restoreErrorKey(controller.errorCode), 'the sentence the card shows').toBe(`backup.restore.errors.${code}`);
+    });
+
+    it("the envelope of a secure backup, sent once its password is given, refused with nginx's 413: failed (upload) with proxy_too_large, no limit, announced once", async () => {
+        const {flow, api, events} = await passwordAsked();
+        api.upload.mockRejectedValueOnce(answered(413, NGINX_413));
+
+        void flow.submitPassword(PASSWORD);
+        await flush();
+
+        expect(api.upload, 'precondition: the envelope was sent').toHaveBeenCalledTimes(1);
+        expect(api.startCheck).not.toHaveBeenCalled();
+        expect(flow.state).toBe('failed');
+        expect(flow.errorCode).toBe('proxy_too_large');
+        expect(flow.failure).toBe('upload');
+        expect(flow.errorLimitMb).toBeNull();
+        expect(events()).toEqual([['backup.restore.failed', {code: 'proxy_too_large', what: 'upload'}]]);
+    });
+
+    it("the start of the check, not the upload, refused with nginx's 413: unexpected, as before (green today: the guard)", async () => {
+        const {controller, api, events} = await idle();
+        api.upload.mockResolvedValueOnce(uploaded());
+        api.startCheck.mockRejectedValueOnce(answered(413, NGINX_413));
+
+        await controller.upload(archive());
+        await flush();
+
+        expect(api.startCheck.mock.calls).toEqual([[UPLOAD_ID]]);
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe('unexpected');
+        expect(controller.failure).toBe('check');
+        expect(events()).toEqual([
+            ['backup.restore.uploaded', {upload_id: UPLOAD_ID, size: 4096}],
+            ['backup.restore.failed', {code: 'unexpected', what: 'check'}],
+        ]);
+    });
+});

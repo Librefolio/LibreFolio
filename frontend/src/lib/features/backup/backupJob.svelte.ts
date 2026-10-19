@@ -18,7 +18,7 @@
  * `job`) once, and only for a job this controller started or saw running: an archive picked up already finished, or
  * read again, is not news.
  */
-import {backupErrorCode, backupFailureCode, deleteInstanceBackupJob, getInstanceBackupJob, startInstanceBackup, type InstanceBackupJob} from './backupApi';
+import {backupBusyJob, backupErrorCode, backupFailureCode, deleteInstanceBackupJob, getInstanceBackupJob, startInstanceBackup, type InstanceBackupJob} from './backupApi';
 
 export type BackupJobState = 'idle' | 'loading' | 'starting' | 'running' | 'done' | 'deleting' | 'failed';
 
@@ -137,6 +137,18 @@ export class BackupJobController {
             this.#settle(job, generation, true);
         } catch (error) {
             if (this.#stale(generation)) return;
+            // B-8: refused because a backup started from the Backup tab runs — this one, whose answer was lost, or one of
+            // another tab: followed as if started here. One started from the command line or the hosting panel is not:
+            // its archive goes elsewhere, or is the panel's. With an archive on offer, the offer stays (developer, 19/10).
+            const running = backupBusyJob(error);
+            if (running !== null && running.origin === 'ui' && offered === null) {
+                this.#watched = running.jobId;
+                // Remembered before its first read (developer, 19/10): when that read fails, «Check again» reads it.
+                this.#remember(running.jobId);
+                this.state = 'loading';
+                await this.#read(running.jobId, generation, true);
+                return;
+            }
             const code = backupFailureCode(error);
             if (offered === null) {
                 this.#fail(code, 'start', null, true);

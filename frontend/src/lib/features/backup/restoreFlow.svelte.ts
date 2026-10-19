@@ -39,6 +39,7 @@ import {
     requestRestart,
     restoreOutcome,
     startRestoreCheck,
+    uploadFailureCode,
     uploadRestoreArchive,
     type RestoreOutcomeRead,
     type RestoreRestartAccepted,
@@ -331,7 +332,8 @@ export class RestoreFlowController {
             if (this.#stale(generation)) return;
             this.#abort = null;
             this.#envelope = null;
-            const code = backupFailureCode(error);
+            // A proxy's 413 is `proxy_too_large` (B-15): the server never saw the archive.
+            const code = uploadFailureCode(error);
             this.errorLimitMb = code === 'backup_too_large' ? backupErrorLimitMb(error) : null;
             this.#fail(code, 'upload');
             return;
