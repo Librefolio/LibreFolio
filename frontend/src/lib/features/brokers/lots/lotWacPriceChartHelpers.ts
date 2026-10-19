@@ -28,6 +28,7 @@ import {safeDecimal} from '$lib/types';
 import {mapDateToBucket} from '$lib/components/charts/timeSeriesAggregation';
 import {themed} from '$lib/theme/themePair';
 import {CHART_GAIN_LOSS, LOT_WAC_COLORS} from '$lib/theme/chartTheme';
+import type {ScopeBoundary} from './lotChartShared';
 
 /** The seven presentation-level lot chronology event kinds. */
 export type LotEventKind = 'BUY' | 'SELL' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT' | 'TRANSFER_DEPART' | 'TRANSFER_ARRIVE';
@@ -386,8 +387,10 @@ export function eventKey(event: LotEventIdentity): string {
     return `${event.lot_id}:${event.date}:${event.kind}:${event.transaction_id}:${event.related_transaction_id ?? ''}:${event.fragment_id ?? ''}`;
 }
 
-/** The marker series an event kind belongs to, or `null` if it draws no marker. */
-export function eventCategory(kind: LotEventKind): 'buy' | 'sell' | 'transfer' | 'adjustment' | 'split' | null {
+/** The marker series an event kind belongs to, or `null` if it draws no marker. A transfer leg read at the scope's edge
+ *  (`scopeBoundary`, J-48) is a transfer marker, whatever adjustment kind carries its figures. */
+export function eventCategory(kind: LotEventKind, scopeBoundary?: ScopeBoundary | null): 'buy' | 'sell' | 'transfer' | 'adjustment' | 'split' | null {
+    if (scopeBoundary === 'IN' || scopeBoundary === 'OUT') return 'transfer';
     if (kind === 'BUY') return 'buy';
     if (kind === 'SELL') return 'sell';
     if (kind === 'TRANSFER_ARRIVE') return 'transfer';

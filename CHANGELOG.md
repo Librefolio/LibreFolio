@@ -157,6 +157,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sign-in pages, new look:** icons in the fields, a highlighted border under the pointer and in focus, the password requirements in a box of their own, no subtitle under the logo, and the recovery commands in a dark terminal box.
 - **Charts: every asset type and sector keeps one colour everywhere:** the same in the allocation pie and in its history, in every portfolio, broker and period. Liquidity has a colour of its own, subtypes are shades of their family, and the maps, the sharing semi-donut and the correlation matrix follow the light and dark theme.
 - **Several server processes (`--workers`): any of them runs the scheduled jobs**, one at a time through a lock file in the data directory: a scheduled wake-up and a user's return no longer depend on the leader process (Windows keeps the leader).
+- **Lots: a transfer with a broker outside the panel now reads as a transfer.** In a lot's History, on Lot Life & Custody and on the Avg. Cost / Market Price markers, units moved to or from a broker the panel doesn't include were shown as adjustments. They now show as transfers (TRANSFER+ / TRANSFER- in the History, Transfer In / Transfer Out on the markers), without naming the other broker. No figure changes.
 
 ### 🧹 Repository cleanup
 

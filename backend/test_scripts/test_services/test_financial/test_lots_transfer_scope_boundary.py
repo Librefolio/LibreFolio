@@ -590,3 +590,249 @@ async def test_r12_a_legacy_arrival_without_cost_is_degraded_not_failed(session)
         "TRANSFER_PAIR_MISSING": False,
         "lots": [{"lot_id": book.in_leg.id, "opening_unit_price": D("0"), "open_quantity": D("6")}],
     }
+
+
+# --------------------------------------------------------------------------- #
+# J-48: the rows of a leg read at the edge say so (``scope_boundary``)
+# --------------------------------------------------------------------------- #
+#
+# J-10 reads a boundary leg as an ADJUSTMENT, so its rows are of kind ADJUSTMENT_IN / ADJUSTMENT_OUT and the three lot
+# views print «Adjustment In/Out». J-48 adds a label, never a kind: ``LotTimelineEventSchema.scope_boundary``,
+# ``Optional[Literal["IN", "OUT"]] = None``, set from ``ScopeBoundaryReading.legs`` on the rows built from a TRANSFER leg
+# read at the scope's edge:
+# - "IN" on the arriving leg's opening row (ADJUSTMENT_IN, ``transaction_id`` the leg), in ``lot_events`` and in
+#   ``custody_history`` alike;
+# - "OUT" on every closure of the departing leg (ADJUSTMENT_OUT, ``transaction_id`` the leg), in ``lot_events`` only: the
+#   custody keeps no closure;
+# - None on every other row, the closures of a lot an arriving leg opened included.
+# The economics stay on ``kind``; the partner broker is never named (R13-SEC7). The label is read through
+# ``model_dump()``: until the cure the field does not exist, and a red must fail on its value, never on an AttributeError.
+
+from backend.app.schemas.portfolio import LotTimelineEventSchema
+
+CUSTODY = LotAnalysisType.CUSTODY_HISTORY
+_BROKER_FIELDS = ("broker_id", "source_broker_id", "destination_broker_id")
+
+
+def _scope_boundary(row: LotTimelineEventSchema) -> str | None:
+    """The row's J-48 label, from its dump (the section's note: never the attribute)."""
+    return row.model_dump().get("scope_boundary")
+
+
+def _histories(result: LotsAnalysisResponse) -> dict[str, list[LotTimelineEventSchema]]:
+    """The two histories made of timeline rows, by name: ``lot_events``, every kind; ``custody_history``, BUY,
+    ADJUSTMENT_IN and the transfer kinds — no closure. Empty when not asked for."""
+    return {"lot_events": list(result.lot_events or []), "custody_history": list(result.custody_history or [])}
+
+
+def _overview(histories: dict[str, list[LotTimelineEventSchema]]) -> dict[str, list[tuple]]:
+    """(kind, transaction_id, lot_id) of every row, by history: what a failed precondition prints."""
+    return {name: sorted((str(row.kind), row.transaction_id, row.lot_id) for row in rows) for name, rows in histories.items()}
+
+
+def _labels(rows: list[LotTimelineEventSchema], transaction_id: int) -> set[tuple[str, str | None]]:
+    """The (kind, label) pairs of the rows of ``transaction_id``: a single pair when they all agree."""
+    return {(str(row.kind), _scope_boundary(row)) for row in rows if row.transaction_id == transaction_id}
+
+
+def _labelled(rows: list[LotTimelineEventSchema], *, besides: int | None = None) -> list[tuple]:
+    """(kind, transaction_id, lot_id, label) of every row that carries a label, the rows of ``besides`` left out."""
+    return sorted((str(row.kind), row.transaction_id, row.lot_id, _scope_boundary(row)) for row in rows if row.transaction_id != besides and _scope_boundary(row) is not None)
+
+
+def _leg_reading(rows: list[LotTimelineEventSchema], leg_id: int) -> dict:
+    """One history as J-48 reads it for one leg: the (kind, label) pairs of the leg's rows, and the other rows that carry
+    a label — none, by the contract."""
+    return {"the leg's rows": _labels(rows, leg_id), "other labelled rows": _labelled(rows, besides=leg_id)}
+
+
+_ARRIVAL_LABELLED_IN = {"the leg's rows": {("ADJUSTMENT_IN", "IN")}, "other labelled rows": []}
+
+
+@pytest.mark.asyncio
+async def test_j48_r1_the_owner_filtering_the_receiver_reads_the_arrival_labelled_in(session):
+    """RED until J-48's cure. R1 — IN: U filters B (``broker_ids=[B]``), so B's leg, whose partner sits at A outside the
+    scope, reads as an ADJUSTMENT-in (J-10's R1). Its opening row — ``transaction_id`` B's leg — is labelled
+    ``scope_boundary="IN"`` in ``lot_events`` and in ``custody_history`` alike, and keeps the kind ADJUSTMENT_IN. No other
+    row carries a label, the sale that closes 4 of that lot (``lot_id`` B's leg too) included.
+
+    Today: the field does not exist — the row reads ``("ADJUSTMENT_IN", None)`` in both histories.
+    """
+    book = await seed_l1(session)
+
+    result = await _analysis(session, book.owner, book.asset, broker_ids=[book.broker_b.id], analyses=[CUSTODY, EVENTS])
+
+    histories = _histories(result)
+    # Precondition, green today (J-10's R1): B's leg opens a lot of its own, shown in both histories.
+    assert all(any(row.transaction_id == book.in_leg.id for row in rows) for rows in histories.values()), _overview(histories)
+    assert {name: _leg_reading(rows, book.in_leg.id) for name, rows in histories.items()} == {"lot_events": _ARRIVAL_LABELLED_IN, "custody_history": _ARRIVAL_LABELLED_IN}
+
+
+@pytest.mark.asyncio
+async def test_j48_r2_the_owner_filtering_the_sender_reads_the_departure_labelled_out(session):
+    """RED until J-48's cure. R2 — OUT: U filters A (``broker_ids=[A]``), so A's leg, whose partner sits at B outside the
+    scope, reads as an ADJUSTMENT-out at the market of 12 Jan (J-10's R2). Every row of that leg in ``lot_events`` — the
+    closures it makes, ``transaction_id`` A's leg — is labelled ``scope_boundary="OUT"`` and keeps the kind
+    ADJUSTMENT_OUT; the BUY that opened the lot carries no label. (``custody_history`` keeps no closure: a departure
+    shows in ``lot_events`` only.)
+
+    Today: the field does not exist — the closure reads ``("ADJUSTMENT_OUT", None)``.
+    """
+    book = await seed_l1(session)
+
+    result = await _analysis(session, book.owner, book.asset, broker_ids=[book.broker_a.id], analyses=[EVENTS])
+
+    events = _histories(result)["lot_events"]
+    # Precondition, green today (J-10's R2): A's leg closes the BUY lot.
+    assert any(row.transaction_id == book.out_leg.id for row in events), _overview({"lot_events": events})
+    assert _leg_reading(events, book.out_leg.id) == {"the leg's rows": {("ADJUSTMENT_OUT", "OUT")}, "other labelled rows": []}
+
+
+@pytest.mark.asyncio
+async def test_j48_r3_the_sender_without_any_price_labels_its_own_cost_closures_out(session):
+    """RED until J-48's cure. R3 — OUT at own cost: J-10's R7 book, an asset without any price. U filters A, and A's leg
+    hands each unit over at its own FIFO cost: one ADJUSTMENT_OUT closure per lot (J-10's R7). Both are labelled
+    ``scope_boundary="OUT"``; the two ordinary ADJUSTMENTs +5 that opened those lots, no TRANSFER leg, carry no label.
+
+    Today: the field does not exist — both closures read ``("ADJUSTMENT_OUT", None)``.
+    """
+    book = await _seed_no_price_sender(session)
+    out_leg, first, second = book["out_leg"].id, book["first"].id, book["second"].id
+
+    result = await _analysis(session, book["owner"], book["asset"], broker_ids=[book["broker_a"].id], analyses=[EVENTS])
+
+    events = _histories(result)["lot_events"]
+    # Precondition, green today (J-10's R7): A's leg closes both lots.
+    assert {row.lot_id for row in events if row.transaction_id == out_leg} == {first, second}, _overview({"lot_events": events})
+    assert {
+        **_leg_reading(events, out_leg),
+        "the ordinary adjustments' rows": [_labels(events, first), _labels(events, second)],
+    } == {
+        "the leg's rows": {("ADJUSTMENT_OUT", "OUT")},
+        "other labelled rows": [],
+        "the ordinary adjustments' rows": [{("ADJUSTMENT_IN", None)}, {("ADJUSTMENT_IN", None)}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_j48_r4_a_co_owner_who_sees_only_the_receiver_reads_the_arrival_labelled_in(session):
+    """RED until J-48's cure. R4 — IN without a filter: V is an OWNER of B only — A is not V's to see — and asks for every
+    broker it sees (``broker_ids=None``): B. R1's label: B's leg's opening row is ``scope_boundary="IN"`` in both
+    histories, of kind ADJUSTMENT_IN; no other row carries a label.
+
+    Today: the field does not exist — the row reads ``("ADJUSTMENT_IN", None)`` in both histories.
+    """
+    book = await seed_l1(session)
+    co_owner = await new_user(session, "co_owner_of_b")
+    await grant_owner(session, book.broker_b, co_owner)
+
+    result = await _analysis(session, co_owner, book.asset, broker_ids=None, analyses=[CUSTODY, EVENTS])
+
+    histories = _histories(result)
+    # Precondition, green today (J-10's R4): B's leg opens a lot of its own, shown in both histories.
+    assert all(any(row.transaction_id == book.in_leg.id for row in rows) for rows in histories.values()), _overview(histories)
+    assert {name: _leg_reading(rows, book.in_leg.id) for name, rows in histories.items()} == {"lot_events": _ARRIVAL_LABELLED_IN, "custody_history": _ARRIVAL_LABELLED_IN}
+
+
+_A_TIMELINE_ROW = {"lot_id": 1, "date": L1_ARRIVAL_DAY, "kind": "ADJUSTMENT_IN", "transaction_id": 1, "quantity": D("10")}
+
+
+def _validates(row: dict) -> bool:
+    """Whether ``row`` is a valid timeline row (pydantic's ValidationError is a ValueError)."""
+    try:
+        LotTimelineEventSchema.model_validate(row)
+    except ValueError:
+        return False
+    return True
+
+
+def test_j48_r5_the_timeline_row_declares_an_optional_in_or_out_label():
+    """RED until J-48's cure. R5 — the schema: ``LotTimelineEventSchema`` declares ``scope_boundary``, None by default,
+    which takes "IN", "OUT" or None and nothing else (``Optional[Literal["IN", "OUT"]]``).
+
+    Today: no such field — and the model forbids the fields it does not declare, so even None is refused.
+    """
+    field = LotTimelineEventSchema.model_fields.get("scope_boundary")
+
+    assert {
+        "declared": field is not None,
+        "default": field.default if field is not None else "no such field",
+        "a row without it": _validates(_A_TIMELINE_ROW),
+        "accepted": {repr(value): _validates({**_A_TIMELINE_ROW, "scope_boundary": value}) for value in ("IN", "OUT", None, "TRANSFER")},
+    } == {
+        "declared": True,
+        "default": None,
+        "a row without it": True,
+        "accepted": {"'IN'": True, "'OUT'": True, "None": True, "'TRANSFER'": False},
+    }
+
+
+@pytest.mark.asyncio
+async def test_j48_c1_control_a_transfer_inside_the_scope_labels_no_row(session):
+    """C1 — control (green today and after): U without a filter sees A and B, so the pair is inside the scope and stays a
+    real transfer — TRANSFER_DEPART and TRANSFER_ARRIVE in both histories (J-10's R3). No row carries a label."""
+    book = await seed_l1(session)
+
+    result = await _analysis(session, book.owner, book.asset, broker_ids=None, analyses=[CUSTODY, EVENTS])
+
+    histories = _histories(result)
+    assert {
+        "transfer kinds": {name: sorted({str(row.kind) for row in rows} & _TRANSFER_KINDS) for name, rows in histories.items()},
+        "labelled rows": {name: _labelled(rows) for name, rows in histories.items()},
+    } == {
+        "transfer kinds": {"lot_events": ["TRANSFER_ARRIVE", "TRANSFER_DEPART"], "custody_history": ["TRANSFER_ARRIVE", "TRANSFER_DEPART"]},
+        "labelled rows": {"lot_events": [], "custody_history": []},
+    }
+
+
+@pytest.mark.asyncio
+async def test_j48_c2_control_an_ordinary_adjustment_carries_no_label(session):
+    """C2 — control (green today and after): ADJUSTMENTs that are no TRANSFER leg. One broker, an asset with L1's
+    prices: BUY 10 on 10 Jan, ADJUSTMENT +5 on 11 Jan at a cost of 120, ADJUSTMENT −3 on 13 Jan at 130, which hands 3 of
+    the BUY lot over. The ADJUSTMENT_IN row of the first, in both histories, and the ADJUSTMENT_OUT closure of the second
+    carry no label, and no other row does."""
+    owner = await new_user(session, "owner")
+    broker = await new_broker(session, "A", owner)
+    asset = await new_asset(session, "j48-ordinary")
+    add_prices(session, asset, L1_PRICES)
+    buy = asset_row(broker, asset, TransactionType.BUY, L1_BUY_DAY, "10", amount="-1000")
+    adjustment_in = asset_row(broker, asset, TransactionType.ADJUSTMENT, date(2025, 1, 11), "5", currency=None, cost="120")
+    adjustment_out = asset_row(broker, asset, TransactionType.ADJUSTMENT, date(2025, 1, 13), "-3", currency=None, cost="130")
+    session.add_all([buy, adjustment_in, adjustment_out])
+    await session.flush()
+
+    result = await _analysis(session, owner, asset, broker_ids=None, analyses=[CUSTODY, EVENTS])
+
+    histories = _histories(result)
+    assert {
+        "the adjustment in": {name: _labels(rows, adjustment_in.id) for name, rows in histories.items()},
+        "the adjustment out": _labels(histories["lot_events"], adjustment_out.id),
+        "labelled rows": {name: _labelled(rows) for name, rows in histories.items()},
+    } == {
+        "the adjustment in": {"lot_events": {("ADJUSTMENT_IN", None)}, "custody_history": {("ADJUSTMENT_IN", None)}},
+        "the adjustment out": {("ADJUSTMENT_OUT", None)},
+        "labelled rows": {"lot_events": [], "custody_history": []},
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("side", ["receiver", "sender"])
+async def test_j48_c3_control_no_row_names_the_partner_broker(session, side):
+    """C3 — control (green today and after): U filters one broker of L1 — B, the receiver, or A, the sender. In both
+    histories every row's ``broker_id``, ``source_broker_id`` and ``destination_broker_id`` is None or the filtered
+    broker: the partner's broker, outside the scope, never appears (R13-SEC7). The label says the units crossed the
+    scope's edge, never where they went."""
+    book = await seed_l1(session)
+    scope = book.broker_b if side == "receiver" else book.broker_a
+
+    result = await _analysis(session, book.owner, book.asset, broker_ids=[scope.id], analyses=[CUSTODY, EVENTS])
+
+    histories = _histories(result)
+    named = {name: {getattr(row, field) for row in rows for field in _BROKER_FIELDS} - {None} for name, rows in histories.items()}
+    assert {
+        "rows": {name: bool(rows) for name, rows in histories.items()},
+        "brokers named outside the scope": {name: sorted(brokers - {scope.id}) for name, brokers in named.items()},
+    } == {
+        "rows": {"lot_events": True, "custody_history": True},
+        "brokers named outside the scope": {"lot_events": [], "custody_history": []},
+    }

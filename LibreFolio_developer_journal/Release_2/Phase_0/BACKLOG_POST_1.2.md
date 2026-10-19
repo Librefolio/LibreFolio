@@ -6473,6 +6473,9 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     oltre la finestra di riempimento di `convert_bulk`, la cassa resta valutata e i titoli no. Una sola regola per i
     buchi → U1, CP-11. CP-6 usa una sola funzione dei giorni di cambio, che riceve la lettura del chiamante.
 
+  - **17/10**: il punto di `risk/metrics.py:741`, con la sua inversa a `risk/quant/resampling.py:235`, passa a MF
+    (J-1 punto 1), con le 6 condizioni di J riferite dal coordinatore. Dettagli: piano 05, §10 «J-19 entrata…».
+
   Dettagli: [piano J](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §1.2 «Copie nuove».
 - ↪ **J-2 · Il server di test costruisce frontend e documentazione dentro i 300 s d'avvio** — spostata nella sezione C
   dal coordinatore il 15/10 (runner condiviso), come C-94.
@@ -6487,6 +6490,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     storia. Il bootstrap (algoritmo 4.0.0) converte i giorni nei passi osservati (`calendar_days_to_observations`), e
     `resampling.py:235` è solo la conversione inversa per dichiarare la lunghezza del blocco. Dettagli:
     [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-49».
+    Prova: la verifica nel diario `0767fba38`, senza codice.
 - ✅ **G-8 · Il catalogo dei Tool sotto carico supera i 2 s d'ingresso** — basso; G (galleria del programma colori),
   assegnata a J dal coordinatore il 14/10, dopo CP-1. Sotto carico la lettura del catalogo supera
   `ToolRoute.ingress_timeout_ms` (2 000 ms, `schemas/tools.py:83`, applicato in `api/v1/tools.py:92`) e la pagina
@@ -6559,7 +6563,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   ✅ Chiusa da J il 15/10 in CP-16 (decisione del coordinatore, 23:00): il lotto prende `cost_basis_currency` quando il
   prezzo viene dall'override; la riga d'apertura della cronologia converte con la valuta del lotto e la cronologia
   registra quel cambio. Rossi in `test_fifo_adjustment_out_with_cost.py` e `test_lots_analysis_pure.py`. Commit: il
-  checkpoint di CP-16. Dettagli: piano J, §10 «CP-16».
+  checkpoint di CP-16, `335fb89cf` → dev `240675ad1`. Dettagli: piano J, §10 «CP-16».
 - ✅ **J-10 · I lotti falliscono quando il broker mittente di un TRANSFER è fuori dallo scope** — medio, numeri e
   chiarezza; trovata dal test-author di W, allargata da J il 15/10. Letta nel codice, non provata.
   `_load_transactions` (`lots_analysis_service.py:518-520`) carica solo i broker dello scope, e la pagina del broker
@@ -6651,7 +6655,8 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   -   Va con CP-10a, insieme al punto 29 (un solo Rolling Return a giorni di calendario, approvato dal developer il 15/10).
   ✅ Chiusa da J il 16/10 in CP-10a: le tre finestre dichiarano `"x-suffix": "observations"`, con la chiave nuova
   `signals.units.observations` nei 4 cataloghi; il tooltip `signals.tooltips.riskWindow` resta. Nessun calcolo cambia.
-  La matrice dei plugin lo fissa (`test_period_params_declare_their_unit_and_tooltip`). Commit: il checkpoint di CP-10a.
+  La matrice dei plugin lo fissa (`test_period_params_declare_their_unit_and_tooltip`). Commit: il checkpoint di CP-10a,
+  `af919560c` → dev `82e9c5305`.
 
   Dettagli: piano J, §10 «Decisioni 26–30 (15/10) e piano dei lotti sbloccati».
 - ✅ **J-14 · Copie del realizzato e della G/L % da portare alla regola del punto 26** — medio, numeri; J, 15/10. Il
@@ -6686,6 +6691,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     con HEAD). Se i conteggi non tornano, il messaggio dà `(status, error)` di ogni elemento, l'`execution_id` e
     le metriche di quello che non è riuscito (servono anche per J-19), e `server_processing_ms`. Il piano resta
     fuori. `api pac-planner-tool` 12/12. Rivede X. Il triage, alla prossima caduta. Dettagli: piano 05, §10 «J-16».
+    Commit `59233f44b` → dev `78e2171ee`.
 - ✅ **J-17 · Una rettifica col costo segna il prezzo dell'asset a quel costo** — medio, numeri (titoli quotati di rado);
   J, 15/10, in CP-16. Letta nel codice, non provata. `build_asset_price_series` (`financial_math/price_marks.py:307-309`)
   prende ogni ADJUSTMENT con `cost_basis_override` diverso da zero come un'osservazione TRADE, in entrata e in uscita.
@@ -6715,6 +6721,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     limiti della colonna è rifiutato (`backend-db.instructions.md`, «Conventions»). La pagina dev del DB
     (`architecture/database/index.md`, «Decimal Columns») dice che SQLite tiene un `NUMERIC` come double e ignora
     la precisione dichiarata, con gli esempi di lettura. Dettagli: piano 05, §10 «Documentazione».
+    Prova: la verifica nel diario `e0996ab26` → dev `78e2171ee`, senza cambi.
 - **J-19 · Il PAC finisce in `worker_crashed` sotto carico** — da capire: OOM o timeout del worker; basso, robustezza;
   segnalata da G tramite il coordinatore, 16/10. Il 15/10 alle 23:05, nella galleria G-13 dei colori, il 4° e il 5°
   calcolo del PAC sono finiti in `tool_error` con `worker_crashed`: il processo isolato dello strumento è uscito prima
@@ -6727,7 +6734,8 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - **Proposta**: registrare nel log, e nelle metriche dell'elemento, il codice d'uscita del figlio (negativo = il
     segnale) e il picco di memoria osservato. Alla prossima caduta, il triage con la skill `test-triage`. Il file è dei
     Tools: lotto piccolo, d'accordo col proprietario del runtime.
-  - ✅ 17/10, **strumentazione fatta** (J; via del coordinatore, `schemas/tools.py` ed `executor.py` a J per il lotto).
+  - ✅ 17/10, **strumentazione fatta** (J; via del coordinatore, `schemas/tools.py` ed `executor.py` a J per il lotto):
+    `a8299354f` → dev `635b50537`.
     - `ToolItemMetrics.worker_exit_code`: lo stato d'uscita del worker caduto, letto prima della pulizia che lo
       segnalerebbe (attesa di raccolta 0,5 s): il codice, o il segnale in negativo (−9 = SIGKILL, come l'OOM killer
       del kernel). È null per ogni altro esito, e per una caduta vista col figlio ancora vivo.
@@ -6745,7 +6753,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   dentro CP-6.
   ✅ Chiusa da J il 16/10 in CP-6: la descrizione dice la formula (`amount / sum of all slices × 100`, arrotondata a
   0,01) e che con la liquidità negativa la fetta della cassa va sotto zero e le altre possono superare 100. `api sync`
-  senza file tracciati cambiati. Commit: il checkpoint di CP-6.
+  senza file tracciati cambiati. Commit: il checkpoint di CP-6, `58c10197c` → dev `628e3e49e`.
 - ✅ **J-21 · La linea di un segnale del backend scavalca i punti che non hanno un valore** — basso, chiarezza; trovata dal
   test-author di J (CP-10a), 16/10. Il renderer toglie i punti senza numero (`charts/signals/backendRenderer.ts:215`),
   giustamente: mai uno zero finto. Ma `components/charts/chartCoreHelpers.ts:334` mette `connectNulls` a `true` quando
@@ -6763,6 +6771,8 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     di tratti, cioè di serie. Tetto `MAX_LINE_RUNS = 30`: oltre il tetto, un'uscita senza stile (o un'area) è una linea
     unita, chiamata «(gaps joined)», più un avviso nel risultato, in 4 lingue. Nessun tratto di un punto con una
     finestra di 3 o più. La cura vera è J-59. Dettagli: piano 05, §10 «J-21 bis».
+  - Commit: J-21 `85a1c6f89` → dev `78e2171ee`; J-21 bis `def1d5259` → dev `539371064`. Revisione a posteriori di Y
+    (19/10): OK, con tre seguiti in J-61 (l'avviso del tetto non arriva all'utente).
 - **J-22 · Debito di traduzione di CP-10a (un solo Rolling Return, J-13)** — basso, documentazione; J, 16/10. Pagine EN
   cambiate di senso, senza stamp: `financial-theory/fundamentals/returns` (tutta la sezione Rolling Return; esce l'ancora
   `#rolling-return-sessions`), `financial-theory/technical-analysis/indicators/index` (introduzione, righe Rolling Return e
@@ -6778,6 +6788,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - ✅ 17/10: fatta da J nelle 4 lingue, due link. Il Rolling Return rimanda a Returns; la riga Underwater Drawdown
     a `current-drawdown`. `technical-analysis/index` timbrata. `indicators/index` ha già un debito di traduzione
     da `af919560c` (CP-10a, solo EN), lasciato alla pipeline. Dettagli: piano 05, §10 «Documentazione».
+    Commit `bb8dca7d3` → dev `78e2171ee`.
 - ✅ **J-24 · Consegna al costo d'un titolo estero: i lotti e la Dashboard danno totali diversi** — basso, numeri (caso
   raro); trovata dal docs-writer di J (CP-7a), 16/10, già da CP-16. Una rettifica in uscita col costo, su un titolo in
   un'altra valuta: i lotti valutano la consegna al cambio del giorno (da CP-7a la differenza di cambio dal giorno
@@ -6817,6 +6828,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   sé in B-13 (solo testo decimale semplice prima di `from_json`). Proposta: `_as_amount` rifiuta esponenti e lunghezze
   oltre la precisione del suo contesto (`_EXACT`, 60 cifre), così ogni chiamante è protetto; rosso prima (test-author).
   Dopo CP-10a e CP-7a. Dettagli: piano J, §10 «CP-15».
+  ✅ 16/10: fatta da J (checkpoint J-27), `7336722ad` → dev `e221a0544`.
 - ✅ **J-28 · L'avviso dei lotti «nessun prezzo di mercato, valore al costo» scatta anche quando gli scambi prezzano
   l'asset** — basso, chiarezza; J, 16/10 (letto durante J-17). **Chiusa da CP-7b il 16/10** (commit al checkpoint):
   l'avviso e il valore al costo seguono la regola per giorno della Dashboard (nessuna osservazione ≤ il giorno, né
@@ -6831,6 +6843,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   (`schemas/portfolio.py:829`: «MARKET_PRICE quando c'è un prezzo reale, se no ESTIMATED_AT_COST»), che è anche
   `MARKET_PRICE` per un prezzo di scambio e `None` senza segno con l'asset quotato; `api sync`. Dopo CP-7b (V1 tocca la
   stessa sintesi). Dettagli: piano J, §10 «J-17», rapporto degli specialisti.
+  Commit (CP-7b): `0bd9ecd82` → dev `48da9bf3c`.
 - **J-29 · Debito di traduzione di J-17 (una rettifica non è un prezzo; valore al costo)** — basso, documentazione; J,
   16/10. Pagine EN cambiate di senso, senza stamp, tutte sotto `financial-theory/technical-analysis/`:
   - in `performance-metrics/portfolio-engine/`: `price-resolution`, `index` (§2, §3), `nav`, `deposited-capital`,
@@ -6892,6 +6905,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     d'apertura) e un trasferimento sposta il costo delle sue unità; il TWRR comprende il salto dal costo al primo
     prezzo, come il ROI. Una rettifica senza costo conta 0 come nella storia del valore (J-35 resta al developer).
     Dettagli: piano 05, sezione «J-33».
+    Commit `2434588ca` → dev `104333567`.
 - **J-34 · Debito di traduzione di CP-7b (il riferimento dei lotti e i giorni al costo)** — basso, documentazione; J,
   16/10. Pagine EN cambiate di senso, senza stamp:
   - `financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis`:
@@ -6916,6 +6930,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - Testo proposto nel passaggio di CP-7b.
   - Quando: il file è condiviso e A ce l'ha aperto (A7b). Lo scrive J dopo l'ingresso di A, su indicazione del
     coordinatore (16/10 22:22).
+  - ✅ 17/10: fatta in CP-14a, `ec8a0b31e` → dev `03101ddad`.
 - **J-35 · Un lotto aperto da una rettifica senza costo vale 0 nei giorni al costo, la Dashboard lo lascia senza
   valore** — basso, numeri; J, 16/10 (docs-writer di CP-7b).
   - Il motore FIFO apre il lotto a costo zero («a zero-cost quantity correction»). Il costo medio della Dashboard invece
@@ -6948,6 +6963,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     banner dei lotti raggruppa le issue per codice in un messaggio solo (i parametri della prima) con un chip per lotto,
     quindi un prezzo non può valere per tutti. Il parametro `reference_price` resta nei `message_params`, non letto.
     Dettagli: piano 05, sezione «J-36».
+    Commit `ff84d674f` → dev `e5a975c8b`.
 - ✅ **J-38 · La guida dei plugin dei segnali descrive male l'ordine del taglio e il piano** — minimo, documentazione; J,
   17/10 (docs-writer di CP-10c). Pagina `developer/architecture/patterns/signal_plugin_guide.md`, solo inglese.
   - Il diagramma di sequenza del grafico disegna «Slice to visible range and assign status» dopo le annotazioni. Nel
@@ -6960,6 +6976,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - ✅ 17/10: fatta da J (docs-writer). Il diagramma taglia e assegna lo stato dentro il ciclo; le annotazioni
     girano dopo, sulle serie estese. «3. Annotations» è riscritta. Il Piano dice che un lotto incoerente solleva
     `SignalRequestValidationError`, ferma tutto il lotto e diventa un 422. Dettagli: piano 05, §10 «Documentazione».
+    Commit `bb8dca7d3` → dev `78e2171ee`.
 - **J-39 · Investimento programmato: l'ultima cedola contata due volte, e la mora che parte dal valore prima della
   cedola** — medio, numeri; J, 17/10 (docs-writer di CP-14a, verificata da J in memoria). Preesistente: viene da
   I-bis #26, che emette alle date di maturazione il valore prima dell'azzeramento della cedola, giusto per il grafico.
@@ -6987,7 +7004,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - la liquidazione senza mora va in **CP-14b**, coi valori dichiarati, il rosso prima e una riga 🐛;
     - la parte della mora aspetta il developer (la domanda è nella lista del mattino);
     - `get_current_value` contro `get_history_value` dopo la scadenza si verifica nell'analisi di CP-14b.
-  - **Liquidazione senza mora: curata in CP-14b (17/10)** — è il capitale quando l'ultima cedola cade alla scadenza,
+  - **Liquidazione senza mora: curata in CP-14b (17/10, `69cc2faac` → dev `4111239a7`)** — è il capitale quando l'ultima cedola cade alla scadenza,
     altrimenti il valore del giorno; `get_current_value` e `get_history_value` dopo la scadenza la seguono. Rosso prima,
     8 punti della rete dichiarati (le liquidazioni di `s4_annual_settlement` al capitale). **Resta aperta la parte
     della mora**: base, liquidazione che si sposta con `end_date`, cedole della mora senza azzeramento (developer).
@@ -7058,6 +7075,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - 17/10, coordinatore: **a J**, dopo F5, riusando `changePct` di `MeasureSignal.ts` (stessa regola di N65); X rivede in sola lettura, nessuna classe di colore toccata.
   - ✅ 17/10: fatta da J nel checkpoint di F5 (`changePct` esportato da `MeasureSignal.ts`, `buildDeltaHtml` con «—» su un
     primo valore 0); il coordinatore l'aveva passata a Y mentre era già fatta: resta nel checkpoint di J, **Y rivede**.
+    Commit `824b27437` → dev `b6b615c3d`.
 - ✅ **J-45 (SEC7-1b) · Il rigioco del motore del portafoglio gira sul ciclo degli eventi** — medio, sicurezza
   (disponibilità); J, 17/10, nell'analisi di R13-SEC7-1. `PortfolioCalculationEngine.calculate` chiama
   `builder.build()` (`engine.py:424`), lavoro di CPU sincrono, dentro una funzione `async`: un rapporto lungo ferma
@@ -7067,6 +7085,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   Decisione del coordinatore (17/10): nell'indice, non in SEC7-1. **→ MF** (coordinatore, 17/10 07:00: `run_in_executor` con un
   pool dedicato, `max_workers=2`, insieme a MF-D4 dopo l'ingresso di J-43/SEC7-1; J rivede). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «R13-SEC7-1».
+  ✅ 17/10: fatta da MF, `43a7f0156` → dev `15d414a69`; J ha rivisto (OK).
 - ✅ **J-47 · Un trasferimento ancora in viaggio alla fine dell'intervallo manda i lotti in `FAILED`** — medio, numeri;
   J, 17/10, letto nel codice durante l'analisi di J-10, non ancora riprodotto. Con partenza ≤ `date_to` < arrivo,
   `LotsAnalysisService._load_transactions` taglia a `date_to` e la gamba d'arrivo manca: `TRANSFER_PAIR_MISSING`
@@ -7077,12 +7096,28 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - ✅ 17/10: fatta da J (checkpoint J-47). La compagna in arrivo nel perimetro va solo al motore, che si ferma a
     `date_to` (`replay_until`): le unità restano in viaggio, come nella Dashboard. Nessun arrivo nella cronologia.
     Dettagli: piano 05, sezione «J-47».
-- **J-48 · Le gambe di un trasferimento lette al confine del perimetro si vedono come «rettifiche» nei lotti** —
+    Commit `f40c598ba` → dev `647efcc28`.
+- ✅ **J-48 · Le gambe di un trasferimento lette al confine del perimetro si vedono come «rettifiche» nei lotti** —
   basso, chiarezza; J, 17/10, da J-10 (N76). Nella modale della custodia, nel Gantt e nel grafico WAC una gamba che
   attraversa il perimetro compare come «Adjustment In/Out». La sistemazione: etichette esplicite di trasferimento,
   cioè un campo del backend sulle righe della cronologia, le 3 viste e l'i18n. In J-10 solo l'etichetta neutra della
   modale (scelta (a') del coordinatore, 17/10 08:05). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+  - 17/10: via del coordinatore al campo additivo `scope_boundary` (solo etichette, l'economia resta su `kind`, mai
+    il broker compagno), con il codice dopo l'ingresso di Y-30. Lo stop del developer è arrivato prima di ogni file
+    di prodotto.
+  - ⏸️ **19/10, sospesa**: è fra gli ampliamenti che il developer sta leggendo. Il lavoro a metà è parcheggiato
+    nella cartella di sessione di J, `files/parked/`: `j48-backend-scope-boundary.patch` (schema e servizio, mai
+    applicata) e `j48-test-probe.patch` (solo la sonda del test-author, nessun test di J-48). `git apply --check` OK
+    su `635b50537`. Dettagli: piano 05, §10 «J-19 entrata; MF-A12, J-1 di MF, analisi di J-48».
+  - ✅ **19/10, fatta da J** (via del coordinatore delle 11:42, col developer: «se lo riesci a risolvere ok»).
+    - Il backend dà `LotTimelineEventSchema.scope_boundary` (`IN`/`OUT`) sulle righe di una gamba letta al confine.
+    - Le tre viste la mostrano come trasferimento: «TRANSFER+»/«TRANSFER-» nello Storico, il ◆ su Lot Life, «Transfer
+      In»/«Out» sui segni del costo medio. Solo etichette: ogni cifra legge `kind`, e il broker compagno non compare.
+    - Rossi prima: 5 backend, 30 Vitest, 2 della modale.
+    - Verdi: `roi-fifo-utils` 1512, `api portfolio` 56, `core-unit` 9331, E2E `front-broker detail` 40.
+    - Dettagli: piano 05, §10 «J-48 — le etichette esplicite di trasferimento». I commit li scrive il coordinatore
+      all'ingresso.
 - ✅ **SEC8-1b (da R13-SEC8 di E) · Il rigioco storico del rischio cammina un intervallo senza limiti** — alto,
   sicurezza (disponibilità); assegnata a J dal coordinatore (17/10 08:22), dopo J-10 e J-47. `replay_range` di
   `/risk/query` non ha limiti (`DateRangeModel` controlla solo `end >= start`) e arriva al caricamento dei prezzi e
@@ -7094,6 +7129,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     la finestra del rigioco, proposta compresa: prima un prezzo piantato all'anno 1 faceva proporre una finestra
     dall'anno 1 (~739 000 giorni). La cura alla fonte, un pavimento sulle date dei prezzi scritti a mano, è **N83** di X.
     Dettagli: piano 05, sezione «SEC8-1b».
+    Commit `949825b8b` → dev `a565e06d0`.
 - ✅ **J-49 · Un controllo statico per i lettori di `latest_range_end`** — basso, test; proposta del test-author di Z
   con X-R55, girata dal coordinatore (17/10 08:30), non ora. La cucitura di SEC7-1
   (`test_scripts/test_services/_range_bounds.py`, `RANGE_BOUND_CONSUMERS`) toglie il limite solo nei moduli della
@@ -7107,6 +7143,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     prova del rilevatore su 10 sorgenti finte. Il rosso ha trovato due lettori arrivati oggi e mancanti dalla lista:
     `utils/date_range_limits.py` (X-R65) e `api/v1/assets/prices.py` (R13-SEC9-4). Erano una lacuna latente, nessuna
     suite ci passava. Aggiunti alla lista. Dettagli: piano 05, sezione «J-49».
+    Commit `42185231b` → dev `e2e883136`.
 - ✅ **J-50 · Il rifiuto dei troppi giorni di `get_prices_bulk` diventa un 500 nel rischio e nell'AI Export** — basso,
   chiarezza (è già un rifiuto, non un DoS); dal coordinatore (17/10 08:34), dopo SEC8-1b. Con Z-25 (N77)
   `get_prices_bulk` alza `BulkTooManyDaysError` (il nome lo darà Z all'ingresso di Z-25) oltre 5 M giorni-asset per
@@ -7122,6 +7159,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - 17/10 13:45: dev rosso sulla guardia dei rimedi (il rimedio era un letterale fuori dalla tabella): curato in
       J-50b, una tabella e un costruttore in `risk/base.py` e una scansione che vieta un rimedio scritto altrove.
       Dettagli: piano 05, sezione «J-50b».
+    - Commit: J-50 `11ef9ab6f` → dev `5bfdbe0af`; J-50b `d9da0ff54` → dev `ef74ff9fc`.
 - ✅ **J-51 · Lo YoC di un co-proprietario manca sulle unità ricevute da un broker che non vede** — medio, numeri;
   J, 17/10, letto nel codice durante J-10, non riprodotto. `yield_on_cost._include_external_transfer_legs` aggiunge
   al rigioco la sola gamba della compagna. Se quel broker non è visibile, il componente {A, B} parte da un A senza
@@ -7134,6 +7172,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     (`read_arrivals_at_scope_boundary`); una partenza tiene la compagna (le unità in viaggio contano per l'origine). Il
     costo resta il WAC della posizione della Dashboard: con la base della gamba un valore, senza `MISSING_WAC`.
     Dettagli: piano 05, sezione «J-51».
+    Commit `45c4c098e` → dev `1becf502f`.
 - ✅ **J-53 · Il banner dei lotti mostra un solo fondo orfano per codice** — medio, numeri e chiarezza; J, 17/10 (analisi
   di J-36). **Titolare: Y** (frontend, decisione del coordinatore 17/10), dopo i lotti A/B di X-R59, nella 1.3.
   `lotDataQualityHelpers.buildIssueGroups` raggruppa le issue per codice e mostra il messaggio coi parametri della
@@ -7152,6 +7191,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - ✅ 17/10: fatta da J (checkpoint J-52). `metadata.params` ripete la richiesta; l'output (`replay_range`) e
     `metadata.analyzed_range` dicono la finestra rigiocata, quella limitata. Lo stress passa a `algorithm_version` 3.0.1,
     un salto solo per SEC8-1b e J-52. Dettagli: piano 05, sezione «J-52».
+    Commit `2684dc6c1` → dev `df1194de4`.
 - ✅ **J-54 · Nell'AI Export `null` vuol dire anche «nessuno», e T-B7 lo nomina come «non disponibile»** — minimo,
   chiarezza; J, 17/10 (rossi di T-B7, letto nel codice).
   - Il backend scrive ogni `None` come `null` (`model_dump(mode="json")`, senza `exclude_none`), anche dove vuol dire
@@ -7247,6 +7287,10 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - Verdi: `transaction-cost-basis-rule` 189, `api transactions-wac` 20, `roi-fifo-utils` 1 439, e i 6 E2E del costo
       Auto.
     - Dettagli: piano 05, §10 «J-57».
+    - Commit `b7e2bb3bd` → dev `539371064`; CHANGELOG `c80031659`.
+  - **19/10, il developer**: J-57 resta e si completa. Lo 0 scritto a mano resta permesso, per il regalo, sia nel
+    form sia nell'import col wizard, e il messaggio suggerisce «Manuale e 0». Analisi in sola lettura: piano 05,
+    §10 «Ripartenza del 19/10». Le domande al developer passano dal coordinatore.
 - **J-58 · Il costo Auto di un pool in parte a costo ignoto è sottostimato, in silenzio** — medio, numeri; J, 17/10
   (analisi di J-57). **Da decidere (developer)**; proposta: rifiutare, come N88.
   - Un'acquisizione senza costo entra nel motore come `ADD_UNKNOWN_COST`: la quantità sale, il costo no, e il pool
@@ -7258,6 +7302,43 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - Cura proposta: lo stesso rifiuto quando il pool è incompleto, con un codice proprio. In alternativa, un avviso
     nell'anteprima. Un controllo che fissa il valore di oggi c'è già (J-57, C4).
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-57».
+- **J-60 · Un costo di carico scritto a mano può essere negativo** — basso, numeri e dati; J, 19/10 (analisi di J-57
+  completa, letto nel codice). **Da decidere (developer)**.
+  - Il backend non guarda il segno: `Currency.amount` può essere negativo (`schemas/common.py:188`) e
+    `IsoCurrencyAmount` controlla solo il codice (`:498-504`). Il batch controlla solo le cifre
+    (`transaction_batch_stages.py:96-102`). Nel form la cella del costo diventa rossa sotto lo 0
+    (`signHint="positive"`), ma non blocca.
+  - Quindi una rettifica in entrata, o la gamba che riceve un trasferimento, si salva con un costo per unità
+    negativo, e il WAC e i lotti lo usano.
+  - La sfumatura: per N92 un prezzo negativo esiste (alcuni strumenti), quindi rifiutarlo sempre è una scelta.
+  - Opzioni: (a) rifiutare un costo < 0 con un codice tradotto; (b) accettarlo con un avviso; (c) com'è oggi.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Ripartenza del
+    19/10».
+- **J-61 · Tre seguiti della revisione di Y a J-21 bis** — minimo, chiarezza e documentazione; Y, 19/10 (revisione a
+  posteriori di `def1d5259`: OK). Niente codice adesso (coordinatore, 19/10). Dettagli: piano 09 di Y, «19/10 ·
+  Revisione a posteriori di J-21 bis».
+  - **L'avviso non arriva all'utente.** `outcome.warnings` di `renderBackendSignalResult` (`backendRenderer.ts:370`)
+    non lo legge nessuna pagina: le pagine leggono gli avvisi del backend (`item.result.warnings`). Di «gaps
+    joined» resta solo il nome nella legenda e nel tooltip. Y consiglia (i): togliere l'avviso, con la chiave
+    `signals.gapsJoined.warning` nei 4 cataloghi, e correggere il commento e J-59; nulla di visibile cambia.
+    Mostrarlo nel pannello cambierebbe l'interfaccia: è una domanda per il developer.
+  - **La guida dei plugin dei segnali** (`signal_plugin_guide.md:255-260`) dice ancora che il renderer spezza
+    sempre una linea o un'area dove manca il valore: manca la frase sul tetto dei 30 tratti.
+  - **CHANGELOG, riga 308**: «more than 30 gaps» → «30 gaps or more». La linea si unisce oltre 30 tratti
+    (`runs.length > MAX_LINE_RUNS`), cioè da 30 vuoti in su.
+- **J-62 · R11: i gemelli pandas di volatilità e Sharpe mobili, senza parità e con due copie del validatore** — basso,
+  numeri (regola 10); J, 19/10 (revisione della voce 1 di J-1 di MF, `068d5dd51`). Coordinatore, 19/10: in R11, nella
+  sezione J.
+  - `signals/risk_adapters.py` calcola volatilità e Sharpe mobili con pandas, gemelli di `risk/metrics.py`
+    (`annualized_volatility`, `annualized_sharpe`). Nessun test fissa la loro parità: è R11 del piano 43 (resto di
+    CP-10, a J).
+  - Le stesse due funzioni ripetono la regola del fattore d'annualizzazione (`:191-193`, `:222-224`: finito e
+    positivo, altrimenti `ValueError`). Dopo `068d5dd51` quella regola ha una casa sola,
+    `financial_math.returns.positive_annualization_factor`, e le due copie la devono leggere.
+  - Da fare: il test di parità (test-author), poi le due copie sostituite dalla funzione della casa. Nessun valore
+    cambia. Dopo J-48.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Revisione della
+    voce 1 di J-1 di MF».
 
 ## Z · Sospensione e risveglio (fase 01)
 

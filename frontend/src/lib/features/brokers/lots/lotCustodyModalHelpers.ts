@@ -20,6 +20,7 @@
 
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 import {safeDecimal} from '$lib/types';
+import {scopeBoundaryOf} from './lotChartShared';
 
 /** The marker kinds the modal's timeline draws. */
 export type EventMarkerKind = 'open' | 'transfer' | 'close' | 'split';
@@ -67,9 +68,11 @@ export function historyKey(event: HistoryKeyEvent): string {
 /**
  * Classify an event kind into a timeline marker: buys and inbound adjustments
  * open, transfers are transfers, a split is a split, and everything else
- * (sells, outbound adjustments) closes.
+ * (sells, outbound adjustments) closes. A transfer leg read at the scope's edge
+ * (`scope_boundary`, J-48) is a transfer, whatever adjustment kind carries it.
  */
-export function eventMarkerKind(event: {kind: string}): EventMarkerKind {
+export function eventMarkerKind(event: {kind: string; scope_boundary?: unknown}): EventMarkerKind {
+    if (scopeBoundaryOf(event) != null) return 'transfer';
     if (event.kind === 'BUY' || event.kind === 'ADJUSTMENT_IN') return 'open';
     if (event.kind === 'TRANSFER_DEPART' || event.kind === 'TRANSFER_ARRIVE') return 'transfer';
     if (event.kind === 'SPLIT') return 'split';

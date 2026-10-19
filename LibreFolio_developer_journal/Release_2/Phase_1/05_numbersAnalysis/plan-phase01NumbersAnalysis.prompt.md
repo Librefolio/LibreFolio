@@ -1,12 +1,17 @@
 # Piano — fase 01, 05: J · Numeri e analisi (1.3.0)
 
-> **Stato**: 🧊 J-0 consegnato (2026-10-14), FROZEN fino al commit del coordinatore; poi CP-1. Via libera
-> **parziale**: solo J-0 e CP-1 (§0.2). Il resto aspetta le risposte del developer alle decisioni di prodotto (§3) e il
-> via del coordinatore.
+> **Stato** (19/10, ripartenza dopo lo stop del developer del 17/10 sera): in dev J-0, CP-1, CP-2, CP-4, CP-6, CP-7,
+> CP-9a, CP-10a–d, CP-13a, CP-14, CP-15, CP-16 e i lotti J del §10, con i commit nella tabella del §4. Passati a MF il
+> 16/10: CP-3, CP-5, U3/U7, la matematica di CP-12, CP-13 meno 13a. Aperti a J: CP-8, CP-9b/9c con gli schemi dei
+> segnali, R11, U1, B15. J-48 sospeso; J-57 completa in analisi (§10, «Ripartenza del 19/10»).
+> Regole dal 19/10: nessuna decisione di prodotto da J (ogni scelta che cambia ciò che l'utente vede, i numeri o i dati
+> diventa una domanda al coordinatore, con le opzioni e un consiglio); codice solo col via esplicito; carichi pesanti
+> solo negli slot.
 >
 > - **Workstream J** · worktree `LibreFolio-worktrees/e-alfy-crispy-goggles` · ramo `e-alfy-j-numeri-e-analisi`
 >   (rinominato dall'app all'avvio; prima `e-alfy-crispy-goggles`).
-> - **Base**: `c9bb8f257643c0b770788033789425b41ba16715`. Il worktree è nato a `459131eb8` (piano della fase); il
+> - **Base attuale**: `0df8245c6` (19/10). **Base di partenza**: `c9bb8f257643c0b770788033789425b41ba16715`. Il
+>   worktree è nato a `459131eb8` (piano della fase); il
 >   coordinatore l'ha portato in fast-forward a `c9bb8f257` prima del via. In mezzo solo journal,
 >   `scripts/visual_review/gallery_snapshot.sh` e `TODO_FUTURI.md`: nessun file del codice.
 > - **Corsia**: `--test-port 6185 --data-dir /tmp/librefolio-r13-j`, con
@@ -212,25 +217,54 @@ Contraddetta: **B12** (sezione I), i tre chiamanti di `_get_transactions` passan
 
 Ordine: prima i lotti indipendenti; il portafoglio si sposta solo dopo che la sua matematica è uscita (§P2.2 del 43);
 rischio e segnali dopo il PL2 di X; i numeri sbagliati per gli utenti prima dei consolidamenti. Se una decisione tarda,
-il suo lotto scivola senza fermare gli altri. **Ora autorizzati: J-0 e CP-1.**
+il suo lotto scivola senza fermare gli altri.
 
-| CP | Contenuto | Dipende da | Peso |
+**Stato al 19/10** (contabilità rimessa in pari il 19/10 sulla base `0df8245c6`). La prova è il commit del codice → il
+merge che l'ha portato in `dev_release2`. «→ MF» vuol dire passato a MF con la ripartizione del 16/10, approvata dal
+developer alle 13:26 (testa della sezione J del backlog).
+
+| CP | Contenuto | Stato | Prova |
 |---|---|---|---|
-| J-0 | piano nel repo, sezione J del backlog, base (`all-backend`, statici, generati dell'API, mkdocs, devWiki) | — | — |
-| CP-1 | PAC: sorgente, evaluator e schemi in pacchetti (C1, C3, C4); guardia D-J18 | J-0 | medio |
-| CP-2 | PAC: C-75 (backend), C-76, C-73, C-74 | via | basso |
-| CP-3 | U5a: B8 + V2/P2 + R4 (+ B19), conferma di B12 | via | medio |
-| CP-4 | U4b (R1/R2, R3, R5 e `:824`, P1, C1) + V-11 | via, D-J15 | medio |
-| CP-5 | U2 + U6 + T-B4 | CP-3, CP-4 | medio |
-| CP-6 | B11 | D-J3 | medio-basso |
-| CP-7 | Lotti: T-B5, T-B6, V1 | D-J1 | medio |
-| CP-8 | `services/portfolio/` (+ `lots_analysis_service`) + schemi del portafoglio | CP-3, CP-4, CP-5 | medio |
-| CP-9 | rischio diviso + T-R1 + schemi del rischio | PL2 di X | medio-basso |
-| CP-10 | PL1 + U4a + schemi dei segnali + C-71 | PL2 di X, CP-9, D-J6 | medio |
-| CP-11 | U1 (X1, X3, X9, `:184`; X6–X8 e `fx.py:717` dopo il PL4) + U3 + U7 + B15 lato PAC | CP-8 | medio |
-| CP-12 | AI Export: U9, parti AI di U3/U7, T-B7, T-B8, T-B9, T-U9; sonde | CP-7, CP-11 | medio |
-| CP-13 | U8 lato backend per Y | CP-3, CP-4 | medio-alto |
-| CP-14 | U10, T-D9, i rossi di V-3, P-10 | D-J2, D-J11, D-J12 | basso |
+| J-0 | piano nel repo, sezione J del backlog, base (`all-backend`, statici, generati dell'API, mkdocs, devWiki) | ✅ 14/10 | `d672b45da` |
+| CP-1 | PAC: sorgente, evaluator e schemi in pacchetti (C1, C3, C4); guardia D-J18 | ✅ 15/10 | `e1fbc801f`, registro `0bf727b1e` |
+| CP-2 | PAC: C-75 (backend), C-76, C-73, C-74 | ✅ 15/10 | `5810e03d2` → `2faa88a34` (con C-94) |
+| CP-3 | U5a: B8 + V2/P2 + R4 (+ B19), conferma di B12 | → MF | — |
+| CP-4 | U4b (R1/R2, R3, R5 e `:824`, P1, C1) + V-11 | ✅ 15/10 | 4a/4b `58f8e3967` → `322d55042`; 4c `70bc2d290` → `a180ea0b7`; 4d `4ea6cc61e` → `40f44f364` |
+| CP-5 | U2 + U6 + T-B4 | → MF | — |
+| CP-6 | B11 (con J-20) | ✅ 16/10 | `58c10197c` → `628e3e49e` |
+| CP-7 | Lotti: T-B5, T-B6, V1 | ✅ 16/10 | 7a `abcfef29c` → `4f9e94420`; 7b `0bd9ecd82` → `48da9bf3c` |
+| CP-8 | `services/portfolio/` (+ `lots_analysis_service`) + schemi del portafoglio | ⏳ in attesa del via (doveva seguire J-48, ora sospeso) | — |
+| CP-9 | rischio diviso + T-R1 + schemi del rischio | 9a ✅ 17/10; 9b/9c ⏳ (finestra quieta) | 9a `b6d45f026` → `c4eeaef14` |
+| CP-10 | PL1 + U4a + schemi dei segnali + C-71 | 10a–10d ✅ 16–17/10; schemi dei segnali ⏳ (con 9b/9c); R11 ⏳; la matematica di U4a → MF-D | 10a `af919560c` → `82e9c5305`; 10b `3aa2e412e` → `b36e3873f`; 10c `539351fd9` → `69e1c58e9`; 10d `de5846a0b` → `0cf8eb4d5` |
+| CP-11 | U1 (X1, X3, X9, `:184`; X6–X8 e `fx.py:717` dopo il PL4) + U3 + U7 + B15 lato PAC | U1 e B15 ⏳ a J (dopo CP-8); U3/U7 → MF | — |
+| CP-12 | AI Export: U9, parti AI di U3/U7, T-B7, T-B8, T-B9, T-U9; sonde | T-B7 ✅ 17/10; T-B9 ✅ 17/10 (verificata, senza codice); U9 (T-U9) e T-B8 → MF | T-B7 `32c479945` → `36d24e7d2`; T-B9 `f5b17f06e` |
+| CP-13 | U8 lato backend per Y | 13a ✅ 16/10 (P19); il resto → MF; T-U8 chiusa dal coordinatore | 13a `cdeb77b8e` → `0452e592c`; T-U8 `ff260eacf` |
+| CP-14 | U10, T-D9, i rossi di V-3, P-10 | ✅ 17/10. I rossi di V-3 li ha scritti W (D-J4), J li ha rivisti | 14a `ec8a0b31e` + `475bb9270` → `03101ddad`; 14b `69cc2faac` + `35f8495ff` → `4111239a7` |
+| CP-15 | totali di controllo del backup (richiesta di B) | ✅ 16/10 | `5254faa17` → `fd41a0996` |
+| CP-16 | decisione 47: la rettifica in uscita col costo, nei lotti | ✅ 15/10 | `335fb89cf` → `240675ad1` |
+
+**Lotti J fuori dalla tabella** (dettagli nel §10):
+
+| Lotto | Stato | Prova |
+|---|---|---|
+| C-93, G-8, J-6, C-94 | ✅ 15/10 | `12bcf7e99` → `c412f8dad`; `47e0f9eec` → `c75f08101`; `b49a54645` → `e2cb55054`; `1c67dd5d9` → `2faa88a34` |
+| J-17, J-24, J-27 | ✅ 16/10 | `638213507` → `94321d7db`; `9d702ae8d` → `31a59bdb1`; `7336722ad` → `e221a0544` |
+| J-26 (sonda dell'AI Export) | ✅ 16/10 | rapporto nel diario `e2a956999` |
+| J-43 + R13-SEC7-1 | ✅ 17/10 | `a46f85bda` (i due insieme) → `09cb9231a` |
+| F5 + J-44 | ✅ 17/10 | `8452e5e5d`, `824b27437` → `b6b615c3d` |
+| J-10, J-47 | ✅ 17/10 | `11f5cb0d7` → `ba612882a`; `f40c598ba` → `647efcc28` |
+| J-50, J-50b | ✅ 17/10 | `11ef9ab6f` → `5bfdbe0af`; `d9da0ff54` → `ef74ff9fc` |
+| J-12 | ✅ 17/10 | `4195fa857` → `2fa8ec1a8`; metà del pannello di Y → `46b5fbc0e` |
+| SEC8-1b, J-33, J-51, J-36, J-49 | ✅ 17/10 | `949825b8b` → `a565e06d0`; `2434588ca` → `104333567`; `45c4c098e` → `1becf502f`; `ff84d674f` → `e5a975c8b`; `42185231b` → `e2e883136` |
+| guardia `Intl`, T-B7, J-54, J-53, J-52 | ✅ 17/10 | `b32430e35` → `b13ed7944`; `32c479945` → `36d24e7d2`; `96889bbfc` → `f9aef5d99`; `fd8aeaf18` → `fb6d58d17`; `2684dc6c1` → `df1194de4` |
+| W-B55 (solo test, W rivede) | ✅ 17/10 | `2a35c1b73` → `bea6b1ac0` |
+| J-21, J-16, documentazione (J-18, J-23, J-38) | ✅ 17/10 | `85a1c6f89`, `59233f44b`, `bb8dca7d3` → `78e2171ee` |
+| J-14 (fatta da MF, J rivede) | ✅ 17/10 | `8cc5661bc` → `f44340118` |
+| J-57 (N88) + J-21 bis | ✅ 17/10 | `b7e2bb3bd`, `def1d5259` → `539371064` |
+| J-19 (strumentazione) | ✅ 17/10; la causa resta aperta | `a8299354f` → `635b50537` |
+| J-41, J-42 | doppioni: W-B67 (`279b3d5bd`); X-R47 + MF-D4 | — |
+| J-48 | ⏸️ sospeso (19/10) | patch parcheggiate (§10, «J-19 entrata…») |
+| J-57 completa | analisi (19/10) | §10, «Ripartenza del 19/10» |
 
 ### J-0 — il piano e la base
 
@@ -277,21 +311,28 @@ Nessun cambio di comportamento. Due commit: A (rinomina) committato da solo dal 
   `api tools`, `api portfolio`; poi `all-backend` con gli stessi conteggi; generati dell'API identici; ruff, black,
   dead code; grep dei vecchi percorsi a zero; `mkdocs build` e `check-links`; `check_source_paths.py`.
 
-### Gli altri lotti (in attesa del via)
+### Gli altri lotti (stato al 19/10)
 
-- **CP-2**: rossi C-75 (un limite −0.0 → «0»), C-76 (`localProblems` a tabella per segno e zero, chiavi nuove nei 4
-  cataloghi di `pacAllocator`; il percorso giusto in `normalize.py:449-450`), C-73 (percentuali con `roundDecimal`, con
-  i pareggi), C-74 (i due testi d'aiuto nei 4 cataloghi); gate del PAC e Prettier del planner.
-- **CP-3**: contributi e variazione a 1 giorno dai prezzi del motore (ripiego, split, conversioni), TRANSFER, ordine
-  degli unallocati; valori dichiarati prima.
-- **CP-4**: un ribasamento solo nella casa; via la riprova MWRR solo con la parità provata; R3, R5, `:824`, P1, C1 dalla
-  casa; V-11 secondo D-J15.
-- **CP-5**: `financial_math/splits.py`; finestre di detenzione dal FIFO (data d'origine, D-7); soglia della polvere nel
-  FIFO; annualizzati che cambiano elencati prima.
-- **CP-6**: giorni «dirty» anche per le valute dei titoli; golden rigenerato col suo comando.
-- **CP-7**: T-B5 secondo D-J1; T-B6; prezzi dei lotti dalla regola della casa; sonda mirata su un Asset coi lotti
-  esteri (DB copiato della corsia).
-- **CP-8…CP-14**: come nella tabella; i dettagli si scrivono qui quando arriva il via.
+Le descrizioni del 14/10 di CP-2…CP-7 sono nella storia di git; ciò che è stato fatto, coi commit, sta nella tabella
+del §4 e nelle sezioni del §10.
+
+- **Fatti**: CP-2, CP-4, CP-6, CP-7, CP-9a, CP-10a–d, CP-13a, CP-14, CP-15, CP-16 (§4).
+- **Passati a MF** (16/10): CP-3, CP-5, U3/U7 di CP-11 con O4, la matematica di CP-12 (U9, T-B8), CP-13 meno 13a, i
+  residui R6–R10 di T-U4.
+- **Aperti a J, in attesa del via** (l'ordine lo decide il coordinatore):
+  - **CP-8**: `portfolio_service.py` e `lots_analysis_service.py` in `services/portfolio/`, più gli schemi del
+    portafoglio. Doveva seguire J-48, ora sospeso.
+  - **CP-9b/9c e gli schemi dei segnali**: `schemas/risk.py` e `schemas/signals.py` in pacchetti, ~45 importatori.
+    Serve una finestra quieta (§10, «CP-9»).
+  - **R11** (resto di CP-10): un test di parità fra le versioni pandas di volatilità e Sharpe mobili
+    (`signals/risk_adapters.py`) e `risk/metrics.py`.
+  - **U1** (CP-11): X1, X3, X9 e il fattore di cambio di `market_series.py` (era `series_preparation.py:184`); X6–X8 e
+    `fx.py:717` nei file di X dopo il suo PL4 (D-J17); una regola sola per i buchi di cambio (J-1).
+  - **B15 lato PAC** (CP-11), dopo CP-8.
+- **Sospeso**: J-48 (fra gli ampliamenti che il developer sta leggendo). Le patch sono parcheggiate.
+- **In analisi**: J-57 completa (§10, «Ripartenza del 19/10»).
+- **Aspettano il developer**: J-11/J-35 (costo zero contro costo ignoto), J-58, la mora di J-39, la proposta della base
+  unica di MF-A9, e le domande di J-57 completa.
 
 ## 5. Conflitti
 
@@ -6973,3 +7014,442 @@ prossimo checkpoint.
   - `api sync` (nessun file tracciato), `front check` 0/0, `front-utility core-unit` **9 244**;
   - `mkdocs build` stretto ✓, `check-links` ✓.
   - Porta 6185 libera.
+
+#### J-19 entrata; MF-A12, J-1 di MF, analisi di J-48 (17/10, dalle ~21:35; base `635b50537`)
+
+- ✅ **J-19 entrata**: dev `635b50537` (`a8299354f`, `e17e81190`).
+- ✅ **devWiki**: `problems/multiline-docstring-backticks-break-generated-client.md`, più la riga dell'indice e il log
+  (il fuori pista di J-19, suggerito dal coordinatore).
+- ✅ **Revisione MF-A12** (`29aa1a8a5`): OK.
+  - `change_ratio` dà lo stesso valore per un prezzo precedente positivo; la colonna del valore è identica a prima.
+  - N92 è corretta: un prezzo negativo segue il movimento.
+  - Nessun rapporto di variazione scritto a mano resta fuori dalla casa (grep).
+- ✅ **J-1 di MF, punto 1** (`calendar_days_to_observations` e la sua inversa a `risk/quant/resampling.py:235` →
+  `financial_math/returns.py`): OK, con condizioni:
+  - un 365 con nome solo;
+  - l'inversa come funzione della casa, senza rifiutare valori che oggi passano;
+  - un validatore solo;
+  - niente shim, 5 chiamanti più 2 test, grep a zero;
+  - nessun `algorithm_version` cambia, `risk-all` e `financial-math` con gli stessi conteggi;
+  - la mappa della casa aggiornata.
+- **Analisi di J-48** (sola lettura, inviata):
+  - le gambe del confine sono `ADJUSTMENT` per la FIFO, quindi le viste stampano «Adjustment In/Out»;
+  - `ScopeBoundaryReading.legs` sa già quali sono, ma nulla arriva all'uscita; l'AI Export non espone i tipi della
+    cronologia dei lotti.
+  - Proposta: un campo additivo `LotTimelineEventSchema.scope_boundary: "IN"|"OUT"|None`, non tipi nuovi, che
+    toccherebbero ~28 rami economici in 6 file del frontend. Mai il broker compagno (R13-SEC7).
+  - Backend in `lots_analysis_service.py` (`:965`, `:1111`).
+  - Frontend solo nelle etichette: `eventKindLabel` della modale, `eventMarkerKind` del Gantt (il ◆ «Transfer»), e
+    l'etichetta e la categoria del grafico WAC. Una coppia di chiavi i18n.
+  - Rossi: R1–R2 nel backend, R3–R5 Vitest, più i controlli. Circa 3 h.
+  - File da avere: `features/brokers/lots/` (Y e W gli ultimi a toccarli) e `i18n/brokers/*`. In attesa del via.
+- **Via di J-48, poi lo stop**: il via è arrivato (il campo additivo, solo etichette; codice dopo l'entrata di Y-30).
+  Poi lo **stop del developer** ha congelato tutto, prima di qualunque file di prodotto.
+- ⏸️ **J-48 sospeso** (ripartenza del 19/10: è fra gli ampliamenti che il developer sta leggendo). Il lavoro a metà è
+  parcheggiato nella cartella di sessione di J, `files/parked/`, e il worktree è tornato pulito:
+  - `j48-backend-scope-boundary.patch`: lo schema e il servizio, mai applicata;
+  - `j48-backend-scope-boundary.patch_script.py`: lo script da cui viene;
+  - `j48-test-probe.patch`: solo la sonda del test-author, che fallisce apposta. Nessun test di J-48 era ancora
+    scritto.
+  - Prova: `git apply --check` delle due patch su `635b50537` è OK.
+  - Il file di test è tornato allo stato del commit.
+
+#### Ripartenza del 19/10 — contabilità e analisi di J-57 completa (base `0df8245c6`)
+
+Regole nuove del coordinatore (19/10): nessuna decisione di prodotto da J; codice solo col via esplicito; carichi
+pesanti solo negli slot. Fonte delle decisioni: risposte del developer al resoconto del 17/10, §2 e §6 (file del
+coordinatore, riferito il 19/10).
+
+- ✅ **Fase 1, pulizia** (19/10 ~11:10): J-48 parcheggiato (sopra). Il diario l'ha committato il coordinatore
+  (`bce97e80d`), poi il merge di `dev_release2` (`0df8245c6`). L'unico conflitto, su `devWiki/log.md` (la voce di J-19
+  contro quella di Y-30), l'ha risolto il coordinatore tenendo le due voci.
+- ✅ **Fase 2 (i), contabilità** (19/10, base `0df8245c6`):
+  - qui: la testa del piano, la tabella del §4 (stato e prova di ogni CP, più i lotti J fuori dalla tabella) e «Gli
+    altri lotti (stato al 19/10)»;
+  - nella sezione J del backlog (script `files/j/j57c/backlog_edits.py`: ogni ancora una volta sola, solo dentro la
+    sezione J):
+    - il commit come prova su 22 voci ✅ che non l'avevano;
+    - J-19 col commit della strumentazione, J-39 con quello della liquidazione (CP-14b), J-57 col commit e il
+      completamento chiesto dal developer, J-1 col punto 1 passato a MF, SEC8-1b;
+    - J-48 ⏸️ sospesa, con le patch;
+    - nuove: J-60 (il costo negativo, sotto) e J-61 (i seguiti di Y su J-21 bis).
+  - **Fuori dalla mia sezione** (le marca il coordinatore): voci chiuse dai miei lotti, ancora senza ✅, con la prova.
+    - Sezione T:
+      - **T-D9** è già marcata (`252835dce`);
+      - **T-PL1** è chiusa da CP-10b e CP-10c (`3aa2e412e` → `b36e3873f`, `539351fd9` → `69e1c58e9`). Il ciclo non
+        c'è più: i segnali leggono solo `risk.metrics`, e il rischio non importa i segnali (resta un nome in una
+        docstring);
+      - **T-R1** è chiusa in due metà: quella del rischio da CP-9a (`b6d45f026`), quella del motore da `9a1d57bfa`
+        (`compute_tx_fingerprint` pubblico);
+      - **T-U10** è chiusa da CP-14a (`ec8a0b31e` → `03101ddad`);
+      - **T-U4** è fatta in parte: R1/R2, R3, R5, P1 e C1 in CP-4; R6–R10 sono di MF; R11 resta a J;
+      - **T-P2.2** è fatta in parte: CP-1, CP-9a, CP-10c. Restano CP-8 e gli schemi.
+    - Sezione C: **C-73, C-74, C-75, C-76** sono chiuse da CP-2 (`5810e03d2` → `2faa88a34`).
+    - Sezione P: **P-10** è chiusa da CP-14a (`475bb9270`) e F5 (`8452e5e5d`), più `1b6d65da7` (un rifiuto che
+      fallisce chiuso).
+    - Sezione V:
+      - **V-11** è chiusa da CP-4a/4b (`58f8e3967` → `322d55042`);
+      - **V-3** è chiusa dal lotto di W (W-B6, D-J4), più la decisione 47 nei lotti (CP-16, `335fb89cf` →
+        `240675ad1`). I rossi li ha scritti W; J li ha rivisti il 15/10.
+- ✅ **Revisione di Y a J-21 bis** (riferita dal coordinatore, 19/10): OK. Tre seguiti, verificati nel codice e scritti
+  in **J-61**. Niente codice adesso.
+  - L'avviso del tetto non lo legge nessuna pagina (`backendRenderer.ts:370`).
+  - La guida dei plugin dei segnali non nomina il tetto (`signal_plugin_guide.md:255-260`).
+  - Il CHANGELOG (`:308`) deve dire «30 gaps or more», perché la condizione è `runs.length > MAX_LINE_RUNS`.
+
+##### Analisi di J-57 completa (19/10, sola lettura, nessun codice)
+
+- **La decisione del developer** (§2 e §6 delle risposte): J-57 resta. Un «Auto» con niente da mediare è rifiutato. Lo
+  0 scritto a mano resta permesso, per il regalo, sia nel form sia nell'import col wizard. Il messaggio suggerisce
+  «Manuale e 0» per un regalo di asset in entrata.
+- **La revisione di W sul percorso dell'import** (piano 04 di W, «Revisione dopo l'ingresso — J-57»: non è ancora
+  committata, la riporto dal messaggio del coordinatore):
+  - backend OK: il pool di un import è giusto; con Manuale 0 la media è 0, senza rifiuti falsi; lo 0 a mano passa
+    anche nell'import, dal Bulk;
+  - i plugin non mandano mai Auto: lo mette il frontend in due punti. Il form apre in Auto una riga senza modalità, e
+    un todo bloccante del costo (`gap_fix_cost`, la scissione di Danske Bank, `corporate_action` del CSV generico) si
+    chiude con Auto;
+  - le domande Q-J57-1 e Q-J57-2 / W-B82, e il suggerimento di portare l'utente alla prima riga rifiutata.
+
+**1. Lo 0 scritto a mano, percorso per percorso.** Passa ovunque.
+
+| Percorso | Come viaggia lo 0 | Chi lo prova oggi |
+|---|---|---|
+| Form, una rettifica nuova | `CompactCashCell` emette `{amount: "0", code}`; `draftToTxFields` scarta solo il vuoto (`TransactionFormModal.svelte:1011-1012`); `buildCreatePayload` manda l'override in Manuale (`txPayloadHelpers.ts:281`) | backend: `test_manual_zero_cost_on_a_broker_that_never_held_the_asset_commits` (`test_transaction_cost_basis_rule.py:2885`); nessun E2E |
+| Form, una modifica (anche quella di P-10) | `buildUpdateDiff`: in Manuale l'override entra nel diff (`txPayloadHelpers.ts:314`) | nessun test sullo 0 |
+| Modifica multipla | la riga si modifica nel suo form (`_cost_basis_mode`); il payload manda l'override (`TransactionBulkModal.svelte:1114`) | la revisione di W; nessun E2E |
+| Promozione | la gamba che riceve tiene il proprio costo, Manuale 0 compreso, oppure lo prende da `resolved_fields.cost_basis_override`, dove solo `null` cancella (`schemas/transactions/batch.py:203`) | nessun test sullo 0 |
+| Import col wizard | il wizard consegna le righe all'editor multiplo (`ImportWizardModal.svelte:1387-1392`); da lì è la modifica multipla | la revisione di W; nessun E2E |
+
+- **Backend**: `cost_basis_override` è un `IsoCurrencyAmount`, che controlla solo il codice (`schemas/common.py:498-504`);
+  `Currency.amount` non ha un vincolo di segno (`:188`); il batch controlla solo le cifre. Quindi lo 0 passa
+  ovunque. Passa anche un costo **negativo**: è **J-60** (sotto).
+- In Auto il form e l'editor mandano `{code, amount: '0'}` (`TransactionFormModal.svelte:1014`,
+  `TransactionBulkModal.svelte:1114`). È solo la valuta suggerita, non un costo: il batch lo ricalcola. La modalità lo
+  separa dal Manuale 0.
+
+**2. Il rifiuto nel percorso dell'import.**
+
+- **Nel wizard non compare**: i suoi passi (file, analisi, asset, correzioni, doppioni, revisione, allineamento con la
+  banca) non validano i costi. Il wizard consegna le righe all'editor multiplo, che la guida dell'import conta come suo
+  ultimo passo (`bulkProgress`, `ImportWizardModal.svelte:1387-1392`).
+- **Nell'editor** una riga creata senza costo e senza modalità prende Auto (`TransactionBulkModal.svelte:817-826`). È il
+  caso tipico delle «Receive / Transfer in» degli exchange crypto: i plugin le scrivono come rettifica +q, senza costo e
+  senza todo (Coinbase, Crypto.com, Bitvavo, CoinTracking).
+- **Alla validazione** (⚡ o Salva tutto) il rifiuto è una voce della lista dei problemi.
+  - Ha il messaggio tradotto (`transactions.errors.<code>`, `resolveValidationMessage.ts:231`) e il numero della riga,
+    cliccabile, che porta alla riga (`TxBulkBanners.svelte:121-127`, `jumpToIssue`).
+  - Il batch è atomico: finché una riga è rifiutata, dell'import non si salva nulla.
+- **La riga passa a Manuale senza uscire.** Si apre il suo form dall'editor, si sceglie Manuale nell'interruttore Auto |
+  Manuale (`WacPreviewSection.svelte`), si scrive 0, si applica e si valida di nuovo. Le righe dell'import restano
+  nell'editor, non salvate.
+- **La cascata.** Due o più righe Auto sullo stesso pool vuoto sono rifiutate tutte, perché ognuna esclude dal suo pool
+  le righe Auto non ancora costate (`test_two_auto_adjustments_on_an_empty_broker_are_both_refused`).
+  - Corretta la prima con Manuale 0, le successive in Auto passano con 0: unità gratuite tengono il loro 0 (N88).
+  - È giusto se sono regali anche loro. È sottostimato se sono unità proprie arrivate da un altro wallet.
+  - Il testo proposto dice prima «quanto ti sono costate»: aiuta, ma non lo impedisce.
+- **I todo bloccanti del costo** (il punto di W).
+  - `remainingTodos` considera risposto un todo su `cost_basis_override` quando la riga è in Auto (`bulkTodos.ts:22`).
+  - Il form apre in Auto una riga senza modalità (`TransactionFormModal.svelte:450`). Basta premere Applica: il todo
+    sparisce, poi la validazione dà `autoCostEmptyPool`.
+  - Per `gap_fix_cost` il pool è corto per definizione: mancano unità (`brim/brim_gap_fix.py:217-225`). Per una
+    scissione o un'operazione societaria l'asset nuovo non ha pool.
+  - Quindi lì Auto è quasi sempre rifiutato. Quando passa (pool corto ma non vuoto) dà la media delle unità note, non
+    il costo di quelle che mancano.
+- **Nel form, fuori dall'import**: il rifiuto è una voce del banner dei problemi (`TxFormBanners.svelte:46`), e
+  l'interruttore Manuale è nello stesso form. Col Manuale vuoto c'è già un avviso (`TxFormSingleSection.svelte:316-320`).
+
+**3. Il testo nelle 4 lingue** (letto con `dev.py i18n search`; chiavi `transactions.errors.autoCostEmptyPool` e
+`.autoCostUnknownPool`, sorgente `transactions`).
+
+- **Oggi** (IT): «Costo automatico non disponibile: in quella data non c'erano unità di questo asset di cui fare la
+  media. Inserisci il costo a mano (0 se sono arrivate gratis).» e «… non hanno un costo noto di cui fare la media.
+  Inserisci il costo a mano.» L'interruttore si chiama Auto | Manual / Manuale / Manuel / Manual
+  (`transactions.wacPreview.toggle*`).
+- La prima frase resta com'è nelle due chiavi: dice perché Auto non c'è. Cambia la seconda, uguale per tutte e due.
+- **Proposta A** (consigliata): prima il caso comune, poi il regalo.
+  - EN: «… Choose Manual and enter what these units cost you; if you received them as a gift, enter 0.»
+  - IT: «… Scegli Manuale e scrivi quanto ti sono costate; se le hai ricevute in regalo, scrivi 0.»
+  - FR: «… Choisissez Manuel et saisissez ce que ces unités vous ont coûté ; si vous les avez reçues en don,
+    saisissez 0.»
+  - ES: «… Elige Manual e introduce lo que te costaron estas unidades; si las recibiste como regalo, escribe 0.»
+- **Proposta B** (l'esempio del developer): resta «Inserisci il costo a mano.», più «Se le hai ricevute in regalo,
+  scegli Manuale e scrivi 0.»
+  - EN: «… Enter the cost by hand. If you received them as a gift, choose Manual and enter 0.»
+  - FR: «… Saisissez le coût à la main. Si vous les avez reçues en don, choisissez Manuel et saisissez 0.»
+  - ES: «… Introduce el coste a mano. Si las recibiste como regalo, elige Manual y escribe 0.»
+- **Perché A**: negli exchange crypto il caso tipico di una «Receive» non è un regalo, ma unità proprie spostate da un
+  altro wallet, che valgono quanto sono state pagate. A lo dice per primo.
+- Si scrive con `dev.py i18n update` nei 4 cataloghi, senza chiavi nuove. Il francese tiene lo spazio prima di «:» e
+  «;»; «don» come nell'avviso di C-48.
+
+**4. Le domande per il developer** (le porta il coordinatore; nessuna decisione da J).
+
+- **Q-J57-1** (di W): Auto chiude ancora un todo bloccante del costo?
+  - (a) Com'è oggi.
+  - (b) Lo chiude solo un valore, Manuale e 0 compreso (consiglio di W).
+  - (c) Come (b), e il form apre la riga in Manuale vuoto.
+  - **Il mio consiglio: (c).** Per questi todo Auto non dà il costo che serve (punto 2). Con la sola (b) il form apre
+    ancora in Auto: l'utente preme Applica e il todo resta, senza capire perché. Con (c) vede subito il campo vuoto e
+    l'avviso che c'è già. Tocca solo le righe con quel todo: le altre restano in Auto.
+  - Costo: (b) è una riga in `bulkTodos.ts`. (c) aggiunge la modalità iniziale delle righe create con quel todo
+    (`TransactionBulkModal.svelte:817-826`), che il form già rispetta (`:450`), e una frase nella guida dell'import.
+- **Q-J57-3** (nuova, di J): per un regalo, che costo suggeriscono i testi?
+  - L'avviso del Manuale vuoto (`transactions.costBasisOverride.warningAdjustment`) e `user/transactions/form.en.md:40`
+    dicono: 0 per le azioni nuove di uno split, **il costo originale del donante per un regalo**. Viene da C-48 (11/10,
+    `bdec709d2`, decisione del coordinatore di allora). Il developer ora chiede «Manuale e 0» per un regalo.
+  - Senza una scelta, lo stesso form dà due risposte diverse.
+  - (a) 0 per un regalo, ovunque: i testi di J-57 come sopra, e l'avviso di C-48 e `form.en.md` riportati a 0. C-48 si
+    rovescia.
+  - (b) Il costo del donante, ovunque: i testi di J-57 dicono «se le hai ricevute in regalo, scegli Manuale e scrivi il
+    costo originale di chi te le ha date».
+  - (c) I due casi insieme: «un regalo: il costo originale del donante, se lo sai; altrimenti 0».
+  - **Il mio consiglio: (a).** È la parola del developer, la più recente. LibreFolio misura il rendimento di chi tiene
+    il portafoglio, non le tasse, e un utente non esperto spesso il costo del donante non lo sa. Il prezzo: con 0 tutto
+    il valore del regalo conta come guadagno. Se il developer vuole la regola fiscale, (b).
+- **Q-J57-4** (il suggerimento di W): dopo la validazione, l'editor porta l'utente alla prima riga rifiutata?
+  - Oggi la lista dei problemi ha già il salto alla riga, a un clic.
+  - **Il mio consiglio: sì, alla prima per data dello stesso broker e asset**, perché correggere quella può liberare
+    le altre (la cascata). È un cambio d'interfaccia dell'editor, quindi una domanda.
+- **Q-J57-2 / W-B82** (di W): un costo senza modalità che arriva da un plugin o dal gap-fix si perde. Oggi nessun
+  plugin lo manda. Non tocca J-57: resta a W.
+
+**5. Documentazione.**
+
+- `user/transactions/form.en.md:40` dice ancora che, con niente da mediare, «the cost is 0 by design». Dal 17/10 è
+  falso: è un rifiuto.
+  - Non serve una decisione: è la doc di J-57, mancata nel suo lotto, che ha toccato solo le pagine dev `wac.md` e
+    `service.md`.
+  - Si corregge in EN via docs-writer, nello stesso lotto. IT, FR ed ES (riga 39) diventano debito di traduzione per
+    la pipeline, su richiesta del developer.
+- Con Q-J57-3 (a): nella stessa riga, la frase sul regalo.
+- Con Q-J57-1 (b) o (c): una frase in `user/transactions/import/how-to.en.md` sulle correzioni col costo da inserire.
+
+**6. Test.**
+
+- **Il testo**: nessun rosso, per la regola (nessuna asserzione sul testo tradotto). Le prove sono `i18n check`,
+  `utils gate-i18n-catalog` e la lettura delle 4 stringhe nell'handoff.
+- **Testabilità**: le voci del banner del form (`tx-form-issue`) non portano il codice; quelle dell'editor sì
+  (`data-code`). Per provare il rifiuto nel form senza leggere il testo serve `data-code={issue.code}` in
+  `TxFormBanners.svelte`: una riga.
+- **I controlli che mancano** (verdi oggi; fissano quello che il developer ha chiesto):
+  - E1, form: una rettifica +5 in Auto su un broker che non ha mai avuto l'asset dà un problema `autoCostEmptyPool`;
+    poi Manuale, 0, salva: la riga ha costo 0, letto dall'API.
+  - E2, import: un report crypto con una «Receive» prima di ogni acquisto. Nell'editor c'è un problema
+    `autoCostEmptyPool` su quella riga, e il salto porta alla riga; con Manuale 0 si salva tutto, a costo 0.
+  - E3, la cascata: due «Receive» sullo stesso broker danno due rifiuti; con Manuale 0 sulla prima, la seconda passa in
+    Auto con 0.
+  - B1, backend: la gamba che riceve un TRANSFER, su un mittente col pool tutto a costo ignoto, dà
+    `autoCostUnknownPool`; con Manuale 0 si salva. La classe N88 oggi copre solo rettifiche e una modifica.
+- **I rossi, solo se le risposte cambiano un comportamento**:
+  - Q-J57-1 (b) o (c): un Vitest in `bulkTodos.test.ts`, «Auto non risponde più a un todo bloccante del costo», rosso
+    oggi. Per (c) anche un Vitest o un E2E: la riga con quel todo si apre in Manuale vuoto.
+  - Q-J57-4: un E2E, «dopo la validazione la griglia è sulla prima riga rifiutata».
+  - Q-J57-3: nessun rosso (sono testi).
+
+**7. Superfici, proprietari, peso.**
+
+- Miei: l'i18n `transactions` (2 chiavi, più `warningAdjustment` con Q-J57-3 (a)), la doc `form.en.md`, il test B1.
+- Frontend delle transazioni (W, o chi lo ha aperto): `TxFormBanners.svelte` per `data-code`; con Q-J57-1 anche
+  `bulkTodos.ts` e `TransactionBulkModal.svelte`. Gli E2E E1–E3 vanno in `frontend/e2e/transactions/` (test-author).
+  Chi scrive lo decide il coordinatore.
+- Peso: piccolo. Testi e doc ~1 h; E1–E3 e B1 ~2 h col test-author, più uno slot E2E (`front-transaction`); Q-J57-1 (c)
+  ~1 h in più.
+
+**8. Reperto: J-60** (nel backlog). Un costo scritto a mano negativo si salva: nessun controllo di segno, né nel backend
+né nel form, che lo colora soltanto. Da decidere (developer): (a) rifiutarlo con un codice tradotto; (b) un avviso;
+(c) com'è oggi. La sfumatura: per N92 un prezzo negativo esiste.
+
+- **Stato**: consegnato al coordinatore; FROZEN. Nessun server avviato, porta 6185 libera.
+
+#### J-48 — le etichette esplicite di trasferimento (via del 19/10 ~11:42; base `5da188c15`)
+
+- **Via del coordinatore**, col developer: «se lo riesci a risolvere ok». Si riapplicano le patch parcheggiate: prima i
+  rossi, poi la cura. Adesso codice e controlli leggeri, solo con carico sotto 50. Suite pesanti ed E2E dopo le 14:00,
+  in uno slot del coordinatore. **J-57 non parte**: Q-J57-1/3/4 e J-60 aspettano il developer.
+- **Forma, già approvata il 17/10**: un campo additivo `LotTimelineEventSchema.scope_boundary: "IN" | "OUT" | None`.
+  Solo etichette: l'economia resta su `kind`, il broker compagno non compare mai (R13-SEC7). Y rivede il frontend.
+- **Base**: `5da188c15`, pulita. Y-30 è entrata (`6db475ac9`): ha toccato `lots_analysis_service.py`,
+  `schemas/portfolio.py`, `LotWacPriceChart.svelte` e `lotWacPriceChartHelpers.ts`. La patch del backend parcheggiata
+  si applica ancora (`git apply --check`, spostamento di 13 righe).
+- **Passi**:
+  1. rossi del backend (test-author), visti fallire sul codice di oggi;
+  2. la cura del backend (schema e servizio), `api sync`, verdi;
+  3. rossi Vitest dei tre aiuti (test-author), visti fallire;
+  4. la cura del frontend (le tre viste, solo etichette) e la coppia di chiavi i18n in `brokers`, verdi;
+  5. doc (pagina utente dei lotti, `lots-analysis.md` per gli sviluppatori);
+  6. slot dopo le 14:00: suite dei lotti, E2E dei broker; checkpoint FROZEN.
+- ✅ **Passo 1 — rossi del backend** (19/10, test-author, 11:45–11:57; corsa 11:59 a carico 18): 9 casi in coda a
+  `test_lots_transfer_scope_boundary.py`, tutti col prefisso `j48`.
+  - Rossi R1–R5: l'arrivo visto dal ricevente (`IN`, nelle due cronologie), la partenza vista dal mittente (`OUT`), il
+    mittente senza prezzi (le chiusure al costo proprio, `OUT`), il co-proprietario del solo ricevente (`IN`), e il campo
+    dichiarato nello schema (default `None`; `IN`, `OUT` e `None` accettati, `TRANSFER` rifiutato).
+  - Controlli C1–C3: un trasferimento tutto dentro il perimetro non ha etichette; una rettifica normale nemmeno; nessuna
+    riga nomina il broker compagno (C3 per ricevente e mittente).
+  - Ogni rosso controlla anche che nessun'altra riga abbia un'etichetta: una cura che etichettasse per `lot_id` invece
+    che per `transaction_id` fallirebbe.
+  - Prova: `services roi-fifo-utils test_lots_transfer_scope_boundary` → **5 failed, 20 passed**. I 5 falliscono sul
+    valore dell'etichetta (`None` invece di `IN`/`OUT`; campo non dichiarato), nessun `AttributeError`.
+  > **⚠️ Fuori pista**: `dev.py test` non accetta `-k`. Un sottoinsieme si sceglie col nome del modulo dopo l'azione;
+  > `runs.sh` corretto.
+- ✅ **Passo 2 — la cura del backend** (19/10, 12:00): la patch parcheggiata, applicata con `git apply` (spostamento di
+  13 righe dopo Y-30).
+  - `schemas/portfolio.py`: `LotTimelineEventSchema.scope_boundary: Optional[Literal["IN", "OUT"]] = None`, con una
+    descrizione di una riga sola (niente backtick: `generated.ts` resta valido).
+  - `lots_analysis_service.py`: `_build_lot_event_rows` riceve `boundary.legs` e lo passa alle righe d'apertura e di
+    chiusura; `_boundary_direction(legs, transaction_id)` dà la direzione della gamba della riga, o `None`. Le righe
+    dei trasferimenti dentro il perimetro non cambiano. Nessuna cifra cambia.
+  - Prove: ruff e black puliti; `roi-fifo-utils test_lots_transfer_scope_boundary` **25 passed**;
+    `lots-analysis-pure` **198 passed**; `api sync` senza file tracciati cambiati. Il client generato ha
+    `scope_boundary: z.union([z.enum(['IN', 'OUT']), z.null()]).optional()`.
+- ✅ **Passo 3 — rossi Vitest** (19/10, test-author, 11:45–12:03; corsa 12:04 a carico 25): 43 casi, 30 rossi e 13
+  controlli.
+  - `lotChartShared.scopeBoundary.test.ts`, nuovo: `scopeBoundaryOf` (anche la forma ad array del client) ed
+    `eventLabelKind` (`TRANSFER_IN`/`TRANSFER_OUT`; ogni altro tipo resta il suo).
+  - `lotGanttChartHelpers.test.ts`: `eventMarkerKind(kind, boundary)` → `TRANSFER`; il nuovo `eventMarkerLabelKey`.
+  - `lotWacPriceChartHelpers.test.ts`: `eventCategory(kind, boundary)` → `transfer`. Controlli: `applyLotEvent` dà lo
+    stesso stato con e senza l'etichetta, quindi l'economia non si muove.
+  - `lotCustodyModalHelpers.test.ts`: `eventMarkerKind(event)` → `transfer`. Controllo: la chiusura di una gamba in
+    uscita resta «handed over».
+  - Prova: le 4 suite → **30 failed, 258 passed**. Le funzioni che esistono falliscono sul valore («expected 'open' to
+    be 'transfer'»); le nuove per l'export che manca.
+  - Il file nuovo è registrato nel runner (`_frontend_utility.py`, dopo `lotChartShared.test.ts`; le mie righe).
+- ✅ **Passo 4 — la cura del frontend e l'i18n** (19/10, 12:05–12:09): script `files/j/j48/patch_frontend.py`, 24
+  modifiche in 7 file, solo etichette e categoria dei segni.
+  - `lotChartShared.ts`: `ScopeBoundary`, `scopeBoundaryOf` (scioglie la forma ad array del client) ed
+    `eventLabelKind`. È il posto unico della regola, letto dalle tre viste.
+  - Gantt: `eventMarkerKind(kind, boundary)` dà il ◆ `TRANSFER`, e `eventMarkerLabelKey` la chiave dell'etichetta.
+  - Grafico WAC: `eventCategory(kind, boundary)` mette il segno nella serie dei trasferimenti. Il titolo del tooltip
+    legge l'etichetta del trasferimento; la riga «Adjustment type» cade per una riga di confine.
+  - Modale: l'etichetta della riga dello Storico, e il suo segno (`eventMarkerKind`).
+  - `applyLotEvent` e ogni ramo di quantità e prezzo leggono ancora `kind`.
+  - i18n, 4 chiavi in `brokers` con `dev.py i18n add`, ognuna nello stile della sua vista:
+    - la modale usa il maiuscolo: `brokers.lots.modal.event.TRANSFER_IN`/`TRANSFER_OUT`, «TRANSFER+»/«TRANSFER-»,
+      «TRASFERIMENTO+»/«-», «TRANSFERT+»/«-», «TRANSFERENCIA+»/«-»;
+    - i grafici usano le iniziali maiuscole: `brokers.lots.chartMarkers.eventType.TRANSFER_IN`/`TRANSFER_OUT`, «Transfer
+      In»/«Out», «Trasferimento in entrata»/«in uscita», «Transfert entrant»/«sortant», «Transferencia de
+      entrada»/«de salida».
+  - Prove: le 7 suite Vitest dei lotti **325 passed**; svelte-check **0 e 0**; `gate-i18n-catalog` **176 passed**;
+    `gate-i18n-usage` **195 passed**. L'audit non mette nessuna delle 4 chiavi fra le inutilizzate o le non verificate.
+    Prettier pulito, dopo un `--write` su `LotGanttChart.svelte`, che ha rimesso su una riga il ternario delle
+    etichette.
+  > **⚠️ Fuori pista**: le chiavi sono due coppie, non una come nell'analisi del 17/10. La modale scrive i tipi in
+  > maiuscolo («ADJUSTMENT+»), i grafici con le iniziali maiuscole («Adjustment In»): una coppia sola non sta in tutti e
+  > due gli stili.
+- ✅ **Passo 4b — la modale nel suo test di componente** (19/10, test-author, 12:10–12:19): 7 casi in coda a
+  `LotCustodyModal.test.ts`, 2 rossi e 5 controlli. L'i18n è quella vera, il lotto passa dallo schema generato, e
+  l'etichetta attesa viene dallo stesso runtime (`get(_)`), mai una stringa fissa.
+  - Prova rossa: con la sola `LotCustodyModal.svelte` di HEAD al suo posto (copia della curata nella cartella di
+    sessione, poi rimessa e confrontata byte per byte) → **2 failed, 13 passed**: «expected [...] to include
+    'TRANSFER+'».
+  - Prova verde: le 7 suite Vitest dei lotti **332 passed**.
+  - Il controllo 7 verifica che i dettagli della chiusura seguano ancora `kind`: prezzo di chiusura e «handed over».
+- ✅ **Passo 5 — documentazione** (docs-writer, 12:10–12:19; tre pagine EN):
+  - `user/dashboard/positions.en.md`, «Lot Detail»: nella frase sui trasferimenti col broker fuori dal pannello, lo
+    Storico scrive TRANSFER+/TRANSFER-, Lot Life mette il ◆, il grafico Avg. Cost dà «Transfer In»/«Transfer Out»;
+    l'altro broker non è nominato. IT, FR ed ES non hanno mai avuto il punto di J-10: è debito di traduzione vero,
+    quindi niente stamp;
+  - `developer/backend/transactions/lots_analysis_service.md`, il punto «**Labels.**» della sezione sul confine;
+  - `developer/frontend/components/features/lots-analysis.md`, la sottosezione «Transfers across the scope's edge».
+  - Prova: `mkdocs build` stretto ✓, `check-links` ✓ (97 validi).
+  > **⚠️ Fuori pista**: l'etichetta dei segni del Gantt si calcola ma non si vede: la serie dei segni ha il tooltip
+  > spento (`LotGanttChart.svelte:979`), e `meta.label` non lo legge nessuno. Era già così prima di J-48. Lì si vede il
+  > ◆ col colore dei trasferimenti. Mostrare l'etichetta sarebbe un cambio d'interfaccia: lo segnalo a Y.
+- **Restano per lo slot dopo le 14:00**: `services roi-fifo-utils` intera, `api portfolio`, `front-utility core-unit`,
+  l'E2E `front-broker detail`. Poi il checkpoint.
+
+#### Revisione della voce 1 di J-1 di MF (`068d5dd51`, la parte del rischio; 19/10 ~12:20, sola lettura)
+
+- **OK, con un reperto per R11.** Le mie 6 condizioni del 17/10:
+  1. **Un 365 con nome solo** ✓: `DAYS_PER_YEAR` in `returns.py`, letto dal fattore e dalle due conversioni. Nel
+     codice di `risk/`, `risk_plugins/`, `financial_math/` e dei segnali non resta un 365 scritto. In
+     `schemas/risk.py` il 365 compare solo nel testo dei messaggi: il conto passa da `observations_per_year`.
+  2. **L'inversa nella casa, senza rifiuti nuovi** ✓. `observations_to_calendar_days` fa gli stessi conti
+     dell'inline (`max(1, round(n × 365 / f))`), quindi i valori sono identici.
+     - Rifiuta `n ≤ 0` e un fattore non positivo o non finito, che l'inline accettava.
+     - Ma in `run_block_bootstrap` il fattore è già validato prima (`:179`, `calendar_days_to_observations`), e
+       `block_length ≥ 1` (`resolve_block_length`, più la divisione a `:183`): nessun valore che passa oggi è
+       rifiutato.
+  3. **Un validatore solo**, in parte: `positive_annualization_factor` è nella casa e `metrics.py` lo usa. Restano però
+     due copie della stessa regola in `signals/risk_adapters.py:191-193` e `:222-224` (volatilità e Sharpe mobili, i
+     gemelli pandas di R11). Il file è mio: propongo di chiuderle in R11, col suo test di parità. Non blocca la voce di
+     MF.
+  4. **Niente shim** ✓: 5 chiamanti e 2 test spostati; nel codice dell'app non resta né il vecchio percorso né il nome
+     privato (solo nel test nuovo, come guardia).
+  5. **Nessun `algorithm_version`**, stessi conteggi ✓: lo dichiara il piano di MF (`risk-all` 918, uguale; parità
+     con le copie di HEAD).
+  6. **La mappa della casa** ✓: `financial_math/__init__.py`, `backend.instructions.md` e `financial_math.md`.
+- **In coda dopo J-48** (coordinatore, 19/10 12:19): R1 (il rischio sulle osservazioni, dopo Q1 di X) e L1 (i lotti
+  solo nei giorni d'evento, i costi medi solo nei giorni di transazione, con Y per i grafici), dal piano «formule
+  veloci» di MF (`6fcde8176`). Prima un'analisi breve, valori identici e test di parità.
+- ✅ **Passo 6 — slot** (coordinatore: «slot tuo» 12:24–13:00; finito 12:32), `files/j/j48/slot.sh`, una corsa alla
+  volta, carico a 1 minuto fra 13 e 41:
+  - `services roi-fifo-utils` (tutto `test_financial`) **1512 passed**;
+  - `api portfolio` **56 passed**;
+  - `front-utility core-unit` **218 file, 9331 passed**;
+  - E2E `front-broker detail` (`brokers-detail.spec.ts`, col pannello dei lotti) **40 passed**.
+  - Porta 6185 libera.
+- **Checkpoint J-48** (19/10 ~12:35): consegnato al coordinatore, FROZEN.
+
+#### Analisi breve di R1 e L1 («formule veloci» di MF, `6fcde8176`; 19/10 ~12:35, sola lettura)
+
+Fonti: la sezione «Piano «formule veloci»» del piano di MF; due mappe `explore` in sola lettura (rischio, lotti),
+riverificate da me nei punti decisivi. Nessun codice.
+
+**L1 — i lotti nei soli giorni d'evento.**
+- **Oggi.** `history_dates` è ogni giorno da `computed_from` a `actual_to` (`lots_analysis_service.py:258`); poi si
+  taglia alla finestra visibile (`trim_dates`, `:426-528`). Su quei giorni lavorano:
+  - il prezzo del giorno e la sua conversione (`:355-374`): una risoluzione e una conversione al giorno;
+  - i fabbisogni di cambio, un tasso per giorno per valuta (`lots/conversions.py:176-185`), caricati però in una sola
+    `convert_bulk`;
+  - valore, rendimento e prezzo per lotto (`lots/histories.py:313-483`): lotti × giorni, con le somme dei frammenti e
+    i prefissi di proventi e costi;
+  - il NAV della performance (`:57-201`): giorni × lotti × frammenti;
+  - le linee del costo medio (`lots/average_cost_lines.py:43-55`): giorni × linee;
+  - `last_day_without_observation`, che cammina i giorni (`lots/prices.py:43-55`).
+- **La condizione per avere valori identici.** Ogni segno è convertito al cambio **del suo giorno** (`:357-374`). Un
+  prezzo estero portato avanti cambia valore ogni giorno col cambio. Quindi i giorni d'evento sono: transazioni,
+  chiusure, giorni con un prezzo salvato, **giorni in cui cambia il cambio**, e i confini (`at_cost_until`,
+  `display_from`, il primo flusso, `invalid_external_flow_from`). In mezzo nulla si muove: le formule non hanno termini
+  di tempo (giorni tenuti, annualizzati, interessi).
+- **Il contratto d'uscita resta un punto per giorno.** Il frontend conta i punti per scegliere la risoluzione
+  (`computeLineBucketCounts`), somma i lotti per data (`aggregateValuePoints`), e una data assente è un buco
+  (`connectNulls: false`). Quindi il backend **calcola** nei giorni d'evento e **espande** i valori portati solo nella
+  finestra visibile. Le serie a gradini sarebbero un cambio d'interfaccia (Y e il developer, come D1 di MF): non stanno
+  in L1.
+- **Due lotti**:
+  - **L1a**: calcolo nei soli giorni di cambiamento ed espansione nella finestra. I giorni di cambio si ricavano dai
+    tassi già caricati, confrontando giorno con giorno; `last_day_without_observation` in forma chiusa, dalla prima
+    osservazione. Non dipende da nessuno.
+  - **L1b**: dopo P3 (MF e X), si caricano solo i gradini del cambio invece di un tasso al giorno.
+- **Test**: parità campo per campo fra le serie di oggi (una copia dei costruttori di HEAD nel test) e quelle nuove,
+  su libri con valuta estera e cambi giornalieri, trasferimenti, split, giorni al costo, chiusure, proventi e costi,
+  e il broker co-posseduto. Restano verdi i test che fissano la forma giornaliera (`test_lots_analysis_service.py:73-86`,
+  `test_lots_analysis_pure.py`).
+- **Peso**: L1a medio (~5–6 h, più i test di parità col test-author); L1b piccolo, dopo P3. Rischio medio: i confini.
+
+**R1 — il rischio sulle osservazioni.**
+- **Il livello del rischio non cammina i giorni.** `prepare_asset_series_set` riduce già la serie alle sole quotazioni
+  (`market_series.py:249`, `:269`; i punti riempiti non contano). `calendar_days` è una differenza di date
+  (`:385-389`), e il controllo della finestra del replay è SQL (`risk/eligibility.py:241-253`). Il cammino giornaliero
+  è nel livello dei prezzi: `price_query._build_backward_filled_series` (`:174-222`), cioè Q1 di X.
+- **Il punto delicato**: nelle date comuni (la quotazione di un altro asset) il rischio legge il punto denso **già
+  convertito al cambio di quel giorno** (`_valuation_point(item.target_points[d])`, `market_series.py:155-170`,
+  `:332`). Dopo Q1 a R1 serve, per ogni data richiesta, l'ultimo prezzo ≤ d convertito al cambio di d: va concordato
+  con X nel disegno di Q1/Q2.
+- **La parte di J**:
+  - `prepare_asset_series` (`risk/scope.py:338-386`) e il replay (`risk/replay.py:101-106`) passano alla lettura per
+    osservazioni di Q1;
+  - `market_series` chiede le sole date di osservazione e le date comuni;
+  - il limite di risorse «punti per giorno» (`scope.py:371-379`) segue il nuovo budget di X.
+  - La storia del portafoglio non cambia: `portfolio_twrr_returns` legge il TWRR cumulato alla base e alle date
+    d'osservazione (`risk/results.py:61-105`), e dopo P2/P4 di MF costa la sola finestra.
+- **Valori identici**: la stessa `PreparedSeries` (date, rendimenti, annualizzazione, copertura) dalla serie densa e
+  da quella per osservazioni, su asset con festivi, prezzi portati, date comuni, buchi, split ed esteri. Più il replay
+  dello stress (`3.0.1`).
+- **Il pavimento SEC8-1b** (`bounded_range`) si toglie dopo, nel suo lotto (D2 di MF). I test che lo fissano sono
+  `test_risk_replay_range_bounds.py` r2, r5, r6 e r7 (`algorithm_version` 3.0.1), più `test_range_ceiling.py`.
+- **Peso**: piccolo-medio, dopo Q1 (~3 h più la parità). Rischio: il punto delle date comuni.
+
+**Domande**: nessuna di prodotto per L1a e R1 (valori identici, uscita invariata). Con X, per R1: la forma della
+lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il developer la vuole (come D1).

@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
+from types import MappingProxyType
 from typing import Iterable, Mapping, Sequence
 
 from sqlalchemy import func, or_, select
@@ -49,7 +50,7 @@ from backend.app.services.financial_math.lots.histories import (
     trim_dates,
 )
 from backend.app.services.financial_math.lots.prices import last_day_without_observation, opening_reference_price
-from backend.app.services.financial_math.lots.scope_boundary import ScopeBoundaryReading, TransferPartner, partner_ids_to_load, read_transfers_at_scope_boundary
+from backend.app.services.financial_math.lots.scope_boundary import BoundaryDirection, BoundaryLeg, ScopeBoundaryReading, TransferPartner, partner_ids_to_load, read_transfers_at_scope_boundary
 from backend.app.services.financial_math.lots.summary import lot_summary_figures
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, load_configured_fx_pair_sets
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, MarkSource, build_asset_price_series
@@ -80,6 +81,8 @@ _CUSTODY_KINDS = {
     LotTimelineEventKind.TRANSFER_DEPART,
     LotTimelineEventKind.TRANSFER_ARRIVE,
 }
+
+_NO_BOUNDARY_LEGS: Mapping[int, BoundaryLeg] = MappingProxyType({})
 
 
 class LotsAnalysisService:
@@ -409,6 +412,7 @@ class LotsAnalysisService:
                 selected_ids=selected_ids,
                 fx_resolver=fx_resolver,
                 lots_by_id=lots_by_id,
+                boundary_legs=boundary.legs,
             )
 
         custody_history = None
@@ -945,12 +949,13 @@ class LotsAnalysisService:
         selected_ids: Sequence[int],
         fx_resolver: FxRateResolver,
         lots_by_id: dict[int, FifoLot],
+        boundary_legs: Mapping[int, BoundaryLeg] = _NO_BOUNDARY_LEGS,
     ) -> list[LotTimelineEventSchema]:
         selected = set(selected_ids)
         rows: list[LotTimelineEventSchema] = []
-        rows.extend(self._build_opening_and_split_rows(engine_result, selected, fx_resolver, lots_by_id))
+        rows.extend(self._build_opening_and_split_rows(engine_result, selected, fx_resolver, lots_by_id, boundary_legs))
         rows.extend(self._build_transfer_rows(engine_result.fragment_intervals, selected, lots_by_id, fx_resolver))
-        rows.extend(self._build_closure_rows(engine_result.closures, selected, lots_by_id, fx_resolver))
+        rows.extend(self._build_closure_rows(engine_result.closures, selected, lots_by_id, fx_resolver, boundary_legs))
         return sorted(rows, key=lambda row: (row.date, row.lot_id, row.transaction_id, row.kind))
 
     def _build_opening_and_split_rows(
@@ -959,6 +964,7 @@ class LotsAnalysisService:
         selected: set[int],
         fx_resolver: FxRateResolver,
         lots_by_id: dict[int, FifoLot],
+        boundary_legs: Mapping[int, BoundaryLeg] = _NO_BOUNDARY_LEGS,
     ) -> list[LotTimelineEventSchema]:
         rows: list[LotTimelineEventSchema] = []
         for event in engine_result.classified_events:
@@ -990,6 +996,7 @@ class LotsAnalysisService:
                         proceeds=None,
                         ratio=event.ratio,
                         opening_value=opening_value,
+                        scope_boundary=_boundary_direction(boundary_legs, event.transaction_id),
                     )
                 )
             elif event.kind == "SPLIT":
@@ -1110,6 +1117,7 @@ class LotsAnalysisService:
         selected: set[int],
         lots_by_id: dict[int, FifoLot],
         fx_resolver: FxRateResolver,
+        boundary_legs: Mapping[int, BoundaryLeg] = _NO_BOUNDARY_LEGS,
     ) -> list[LotTimelineEventSchema]:
         rows: list[LotTimelineEventSchema] = []
         for closure in closures:
@@ -1135,6 +1143,7 @@ class LotsAnalysisService:
                     realized_pnl=converted.realized_pnl,
                     proceeds=converted.proceeds,
                     ratio=None,
+                    scope_boundary=_boundary_direction(boundary_legs, closure.transaction_id),
                 )
             )
         return rows
@@ -1244,6 +1253,12 @@ def _message_key_for_issue(code: IssueCode) -> str:
         IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS: "dataQuality.assetCostNoEligibleLots",
     }
     return mapping[code]
+
+
+def _boundary_direction(legs: Mapping[int, BoundaryLeg], transaction_id: int) -> BoundaryDirection | None:
+    """J-48: the direction of a TRANSFER leg read at the scope's edge, for its rows' label; None for any other row."""
+    leg = legs.get(transaction_id)
+    return leg.direction if leg is not None else None
 
 
 def _parse_transfer_pair_id(fragment_id: str) -> int:
