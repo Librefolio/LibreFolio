@@ -49,7 +49,7 @@ This section answers *which of these move together?* — to spot the assets that
 
 **How to read it**
 
-- **One square per pair**: blue when the two assets move together, red when they move in opposite directions, pale when they move independently. Hover or tap it for the value in words.
+- **One square per pair**: blue when the two assets move together, red when they move in opposite directions, grey when they move independently. Hover or tap it for the value in words.
 - **Start from the two lists**: **The most alike** names the pairs that are almost the same exposure, **The ones that offset** the pairs that cushion each other. An empty list is a finding. Click a pair to find it in the matrix.
 - **A dash is not a zero**: the pair could not be measured — too little history, or a price that never moved.
 - **The order buttons** rearrange the matrix; they never change a value.

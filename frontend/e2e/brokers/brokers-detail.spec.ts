@@ -142,12 +142,9 @@ async function goToPosizioniTab(page: Page): Promise<void> {
  * load near 90, while the same test passed in a run alone at a load of 28 (40/40). Why the URL
  * gets a ceiling of its own, and why the action is not retried: the Y-33 paragraph of
  * `goToSeededAssetDetail`, in `assets/asset-detail.spec.ts`.
- *
- * `assetId`, when the caller knows it, pins the URL to that asset; without it any id will do.
  */
-async function expectLotsPanelOpen(page: Page, assetId?: number): Promise<void> {
-    const assetParam = assetId === undefined ? /[?&]asset=\d+/ : new RegExp(`[?&]asset=${assetId}(?:[&#]|$)`);
-    await expect(page, `the "Analyze Lots" action opens the lots panel — the URL carries ?asset=${assetId ?? '<id>'}`).toHaveURL(assetParam, {timeout: 30_000});
+async function expectLotsPanelOpen(page: Page): Promise<void> {
+    await expect(page, 'the "Analyze Lots" action opens the lots panel — the URL carries ?asset=<id>').toHaveURL(/[?&]asset=\d+/, {timeout: 30_000});
     await expect(page.getByTestId('lots-analysis-panel'), 'the lots panel mounts once ?asset= is in the URL').toBeVisible({timeout: 10_000});
 }
 
@@ -1881,7 +1878,8 @@ test.describe('Broker detail — the quota badge in the UI language', () => {
  * panel half; the developer's decision N81, option A).
  *
  * The contract. On `calculation_status: FAILED` the panel takes no lot-derived section of the answer (lots, Gantt,
- * events, price history, income): the WAC/price chart keeps its average-cost lines, and the Gantt, the lots table and
+ * events, per-lot price history, income): the WAC/price chart keeps its average-cost lines and the market price line,
+ * which comes from the lot-independent `market_price_history` (Y-30), and the Gantt, the lots table and
  * the comparison chart are not rendered. `LotAnalysisFailedNotice` (`lots-analysis-panel-failed`) explains, then lists
  * each issue flagged `fails_analysis` as `lots-analysis-failed-row-{code}-{transaction id}`: the broker's name, the day
  * of the transaction, the message, and a button to `/transactions?highlight=<id>`. The banner keeps the other issues.
@@ -1912,6 +1910,10 @@ test.describe('Broker detail — the quota badge in the UI language', () => {
  * - The WAC chart out of its «no data» state: the chart publishes it on its root, `data-state="drawn"` exactly when it
  *   draws (`showChart`: no «no data» overlay) and `"empty"` otherwise; a finished render (`data-chart-ready`) then says
  *   the drawing is complete.
+ * - The market price line with it (Y-30): the chart publishes on the same root `data-price-line="drawn"` when it draws
+ *   that line — out of «no data», some point of the line valued in the current display mode — and `"absent"` otherwise.
+ *   The line is `market_price_history`, the asset's marks whatever lots are open, so the FAILED analysis keeps it; the
+ *   control draws it first, from the asset's closes and the BUY and SELL marks.
  * - The banner is drawn from the same answer, in the same update, as the notice: once the notice row is on screen its
  *   presence is settled, and reading it is not a probe. With this data it should be absent; present, it is opened
  *   first, since its groups are rendered only open.
@@ -2155,7 +2157,7 @@ test.describe('Broker detail — a FAILED lots analysis names the transaction to
         await deleteUnbuildableOwned(page, owned);
     });
 
-    test('J12-1 an ADJUSTMENT on a short fails the analysis BUY and SELL had drawn: one row with the broker’s name and the day, the average-cost lines only, no Gantt, table, comparison or banner group', async ({page}) => {
+    test('J12-1 an ADJUSTMENT on a short fails the analysis BUY and SELL had drawn: one row with the broker’s name and the day, the average-cost lines and the market price line, no Gantt, table, comparison or banner group', async ({page}) => {
         const position = await seedShortPosition(page, owned);
 
         // The control, on the same broker and asset before the row that breaks them: the replay goes through and the
@@ -2168,6 +2170,8 @@ test.describe('Broker detail — a FAILED lots analysis names the transaction to
             await expect(lotsTable.locator(`tbody tr[data-row-id="${lotId}"]`), `control: lot ${lotId} has its row in the lots table`).toBeVisible({timeout: 10_000});
         }
         await expect(page.getByTestId('lot-comparison-chart'), 'control: the comparison chart is drawn').toBeVisible();
+        // The market price line, which the failure below keeps (Y-30): the asset's closes mark every day from the BUY's on.
+        await expect(page.getByTestId('lot-wac-price-chart'), 'control: the WAC chart draws the market price line, from the asset’s closes and the BUY and SELL marks').toHaveAttribute('data-price-line', 'drawn', {timeout: 10_000});
         await expect(page.getByTestId('lots-analysis-panel-failed'), 'control: an analysis that replays has no failure notice').toHaveCount(0);
 
         const adjustmentId = await commitShortAdjustment(page, position);
@@ -2203,9 +2207,12 @@ test.describe('Broker detail — a FAILED lots analysis names the transaction to
         expect(rowText, 'control: the row holds the day read above').toContain(dayText);
         expect(numbersIn(rowText.replace(dayText, ' ')), `the row writes no bare broker id (${position.broker.id}), it names the broker — «${rowText.trim()}»`).not.toContain(String(position.broker.id));
 
-        // 2. The average-cost lines only: the WAC chart drawn, and none of the three lot sections the control showed.
+        // 2. The average-cost lines and the market price line: the WAC chart drawn with both — the price line is the asset's
+        //    own series, not the lots', so a FAILED analysis keeps it (Y-30) — and none of the three lot sections the
+        //    control showed.
         await expect(page.getByTestId('lot-wac-price-chart'), 'the WAC chart draws its average-cost lines, not its «no data» state').toHaveAttribute('data-state', 'drawn', {timeout: 10_000});
         await expect(page.getByTestId('lot-wac-price-chart').locator('[data-chart-ready]'), 'the WAC chart finished drawing its average-cost lines').toHaveAttribute('data-chart-ready', 'true', {timeout: 10_000});
+        await expect(page.getByTestId('lot-wac-price-chart'), 'the market price line stays with a FAILED analysis: it is the asset’s series, not the lots’ (Y-30)').toHaveAttribute('data-price-line', 'drawn', {timeout: 10_000});
         for (const section of ['lot-gantt-chart', 'unified-lots-table', 'lot-comparison-chart']) {
             await expect(page.getByTestId(section), `${section} is not rendered for a FAILED analysis`).toHaveCount(0);
         }

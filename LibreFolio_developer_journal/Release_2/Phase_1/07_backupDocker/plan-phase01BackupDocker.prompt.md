@@ -5366,6 +5366,105 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-49 — un testo non UTF-8 nei dati di un backup: la verifica lo rifiuta (2026-10-17, 20:2x-21:26) — ✅ 🧊 FROZEN (checkpoint delle 21:26)
+
+> **Assegnazione** (coordinatore, 20:2x, dopo l'ingresso di X-R79 in dev `6f11a6790`): B-49, analisi e decisione mia
+> («rifiutare alla verifica, `database_damaged`, nulla applicato, o avvisare come E-19b1?»; il coordinatore tende a
+> rifiutare). Prima provare in processo che le letture del server falliscono dopo il ripristino, e misurare il costo
+> della scansione su un archivio grande, come per l'audit di E. Poi B-15 + B-8.
+> Nello stesso giro: la riga X-R79 (sezione di X, su richiesta del coordinatore) aggiornata coi tre residui e chiusa (✅).
+>
+> **Analisi** (20:2x-20:45; `files/b49-analysis.md`, sonda `files/b49-wip/probe_b49.py`, solo file usa e getta in
+> `/tmp/lf_b49_probe`, il DB della corsia copiato in sola lettura con l'API di backup di SQLite):
+> - ✅ **La rottura dopo il ripristino, provata in processo**: un valore `CAST(x'45ff52' AS TEXT)` in
+>   `transactions.description`, `assets.display_name`, `brokers.name`, `price_history.currency` e `fx_rates.date` (una
+>   colonna DATE: affinità NUMERIC, valori di testo), letto col motore dell'app (`sqlite+aiosqlite`, il listener di
+>   `session.py`, NullPool). Ogni `select(Model)` fallisce: `sqlalchemy.exc.OperationalError` ←
+>   `sqlite3.OperationalError: Could not decode to UTF-8 column … with text 'E�R'`. È la lettura intera a fallire, non la
+>   riga; `select(Model.id)` funziona ancora. Quindi ogni elenco di quelle righe risponde 500, e il messaggio cita i
+>   byte. Prima della modifica, le cinque letture rendono 76, 17, 8, 2 733 e 4 185 righe (`b49_probe_read.log`).
+> - ✅ **Il costo**, su una copia cresciuta a **488 MB** (2 040 000 prezzi, 1 004 185 cambi, 200 076 transazioni; carico
+>   45-66, tempi alti):
+>   - (d), per tabella una passata per finestra di 200 000 righe, ogni colonna concatenata da SQLite in una riga:
+>     **3,6 s** pulita, **2,4 s** con un valore cattivo in fondo a `price_history`;
+>   - (b), per colonna: 4,8 s; (c), byte decodificati in Python: 11,3 s; (a), riga per riga: 13,8 s;
+>   - l'audit E-19a sulla stessa copia: 2,0 s; `PRAGMA integrity_check`: 8,6 s (la verifica lo fa due volte).
+>   - **⚠️ Fuori pista**: la prima misura di (c) dava 0,00 s, per un errore della sonda: con `text_factory = bytes` i nomi
+>     delle tabelle tornano come byte, e non si leggeva nulla. Corretto e rimisurato (`b49_probe_rescan.log`).
+> - **Decisione (mia): rifiutare**, con `database_damaged`:
+>   - nessun codice nuovo, quindi niente `RestoreErrorCode`, i18n o CLI da cambiare; la frase della UI è giusta;
+>   - un messaggio inglese proprio, e un avviso nel log col solo numero di tabelle;
+>   - un passo nuovo nell'involucro di B-43, dopo `_check_against_manifest` e prima dell'upgrade;
+>   - il metodo (d) su ogni tabella tranne `sqlite_%`, per classe di memorizzazione del valore;
+>   - un `text_factory` severo, che fa lanciare `UnicodeDecodeError`;
+>   - la connessione in `staging.py`, `mode=ro`, `trusted_schema=OFF` per primo.
+>   - Perché non avvisare: l'istanza ripristinata fallirebbe quegli elenchi, e la UI non può riparare righe che non
+>     legge. LibreFolio scrive solo UTF-8, e le checksum fermano un archivio danneggiato.
+> - **Cambia RNW-109 di E**: i suoi archivi finirebbero in `database_damaged` prima della lettura E-19a; la nota di E
+>   (BACKLOG l.7942) lo prevede già. Da concordare chi lo riscrive.
+> - Mandata al coordinatore alle 20:45. 🧊 Nessun codice prima del via.
+> - **Via del coordinatore** (20:5x): **rifiutare**, come disegnato. `database_damaged`, un passo nell'involucro di B-43
+>   dopo `_check_against_manifest` e prima dell'upgrade; `text_factory` severo, connessione propria `mode=ro` +
+>   `trusted_schema=OFF`; nel log solo conteggi; BLOB fuori; **nessuna riga di CHANGELOG** (il ripristino è nuovo nella
+>   1.3). **RNW-109 lo riscrivo io** nei rossi: ora si aspetta `database_damaged` prima dell'audit, nessuna riga
+>   dell'audit; il ramo del guasto resta coperto da RNW-107. Doc: `backup_restore.en.md` è mio; **`security.md` è aperto
+>   da H (H-52)**: non lo tocco, il paragrafo va al coordinatore col checkpoint.
+> - **Contratto** (`files/b49-contract.md`); **patch** `files/b49-wip/apply_b49.py` (4 operazioni in `staging.py`: la
+>   docstring del modulo, l'import di `_identifier` da `snapshot`, il passo in `_stage`, la scansione).
+> - ✅ **Rossi scritti** (TA-B49, 20:5x-21:03), sezione (o) di `test_backup_staging.py` (la (n) era già B-43):
+>   - rossi: 4 posti (colonna TEXT, colonna DATE, tabella sconosciuta, i tre insieme), l'archivio più vecchio rifiutato
+>     prima dell'upgrade, il log (un avviso, solo interi, niente testo, byte, nomi o percorsi), un carattere spezzato su
+>     due righe, i rowid ai due estremi (con un limite di 60 s), la connessione della scansione (`mode=ro`,
+>     `trusted_schema=OFF` per primo, `typeof(` e `'text'`);
+>   - guardie: testo valido oltre l'ASCII (`é`, `日本`, `💶`, `𝄞`), gli stessi byte come BLOB, il manifest sbagliato
+>     ancora `manifest_mismatch`;
+>   - RNW-109 riscritto (`test_restore_non_iso_warning.py`): `database_damaged`, l'audit mai chiamato, nessun report.
+> - ✅ **Rossi** (corsia 6187, 21:04-21:05, carico 10): `services backup-staging` **13 falliti**, 187 passati
+>   (`b49_red_staging.log`); `services restore-non-iso-warning` **4 falliti**, 42 passati (`b49_red_rnw.log`). Sono
+>   esattamente i casi nuovi, ognuno alla sua ragione: il controllo arriva alle correzioni o all'upgrade, «DID NOT RAISE»,
+>   nessuna connessione che legga per classe.
+> - **⚠️ Fuori pista — due buchi della mia scansione, trovati prima di applicarla**:
+>   - il test del carattere spezzato (TA-B49): unire i valori con `''` ricompone `C3` + `A9` in `é`, e i due valori
+>     sbagliati passano. Ora li unisce una virgola, un byte suo (provato: `''` passa, `','` trova);
+>   - `pragma_table_info` nasconde le colonne generate (provato: `table_xinfo` le mostra, `hidden` = 2). Una colonna
+>     generata con un valore non UTF-8, chiamata come una colonna che il server legge, sfuggirebbe. Ora `table_xinfo`;
+>     il rosso relativo chiesto a TA-B49;
+>   - in più: una finestra oltre il limite di lunghezza di SQLite (`DataError`, provato) continua riga per riga.
+> - ✅ **La scansione provata a parte** (`files/b49-wip/harness_b49.py`, sul codice emesso, prima di applicarlo): la
+>   copia pulita passa; tutti i casi limite validi passano (rowid −2⁶³ e 2⁶³−1, i tre nomi del rowid coperti, `WITHOUT
+>   ROWID`, nomi con virgolette); ogni caso con testo cattivo è rifiutato, compresi il carattere spezzato e la colonna
+>   generata; il log ha solo `tables=5`. Sulla copia da 488 MB: **3,3 s** pulita, 2,7 s con un valore cattivo, contro
+>   5,5 s per un `integrity_check` (carico 9-10).
+> - ✅ **Il rosso della colonna generata** (TA-B49, due varianti, VIRTUAL e STORED, in una tabella sconosciuta, con le
+>   precondizioni: `table_info` non la elenca, `table_xinfo` sì; né B-28 né B-43 la fermano; `VACUUM INTO` la copia):
+>   **2 falliti** alla ragione attesa (21:16; `b49_red_generated.log`).
+> - ✅ **Patch applicata** (21:17): 4 operazioni in `staging.py` (+76 righe).
+> - ✅ **Verdi** (21:17-21:21, carico 12-24):
+>   - `services backup-staging` **202** e `services restore-non-iso-warning` **46**;
+>   - `services backup-secure` 77, `services backup-apply` 255, `utils backup-cli` 102, `utils backup-cli-restore` 109,
+>     `utils backup-cli-secure` 106, `utils dev-cli-db-path` 17;
+>   - ruff e black puliti sui 3 file Python;
+>   - doc: build stretta, `check-links`, `utils gate-docs-links` 63. `git diff --check` pulito; porta 6187 libera.
+> - **Doc**:
+>   - `admin/backup_restore.en.md`, la riga di `database_damaged` della tabella dei rifiuti (pagina senza traduzioni);
+>   - `admin/cli_tools.en.md`, il passo 4 della prova su copia e la riga di `database_damaged`. Debito di traduzione
+>     vero, niente stamp, come per B-38.
+>   - `security.md`: non toccato (H-52). Il paragrafo è in `files/b49-security-paragraph.md`, mandato col checkpoint.
+> - **Non fatti**: `api backup-restore` e `api backup-restore-apply` (serve la corsia col server); la `desc` di
+>   `backup-staging` nel runner non nomina B-49 (file condiviso, non assegnato).
+> - File della sonda (`/tmp/lf_b49_probe`, 488 MB) cancellati.
+> - 🧊 **CHECKPOINT READY** (21:26): 7 file tracciati, nessun file nuovo; FROZEN.
+> - **Entrato in dev** (coordinatore, 21:34): `709dfb1e4`, dopo l'unione di dev nel mio ramo (`74c08dafe`; conflitto
+>   solo nel backlog, X-R79 contro X-R80 di X, tenuti entrambi). Sull'albero unito il coordinatore ha fatto girare
+>   `backup-staging` 202, `restore-non-iso-warning` 46, `api backup-restore` 161, `api backup-restore-apply` 215: verdi.
+> - ✅ **Coda** (coordinatore, 21:34; H-52 entrato, `security.md` libero; 21:34-21:37):
+>   - `developer/architecture/security.md`: il paragrafo di B-49 dopo «What the check cannot read», e
+>     `_refuse_undecodable_text()` nell'elenco delle connessioni del punto `trusted_schema`. Nello stesso elenco mancava
+>     la lettura E-19b1 (`_holds_non_iso_currencies()`, `mode=ro`, `trusted_schema=OFF` per primo): aggiunta, detto al
+>     coordinatore;
+>   - la `desc` di `backup-staging` nel runner nomina B-49 (o); ruff e black puliti, il runner si carica;
+>   - doc: build stretta, `check-links`, `utils gate-docs-links` 63; `git diff --check` pulito. CHECKPOINT READY 21:37.
+
 ### W-B64 + W-B65 (per W) — il budget delle cifre contato come il backend; e un «Applica» senza modifiche nel Bulk (2026-10-17, 18:31-19:56) — ✅ 🧊 FROZEN (checkpoint delle 19:56)
 
 > **Assegnazione** (coordinatore, 18:31): «W-B64 + W-B65 as one small lot», dalla sezione di W (BACKLOG l.5660 e

@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.config.accounts import REGISTRATION_MODES, billing_url, public_url, registration_mode_override
 from backend.app.config.accounts import max_users as configured_max_users
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User
+from backend.app.db.session import begin_writes
 from backend.app.schemas.settings import SETTINGS_REGISTRY
 from backend.app.services.accounts import token_service, user_service
 from backend.app.services.accounts.global_settings_service import get_setting_value
@@ -177,12 +178,15 @@ async def create_invite(
 ) -> token_service.IssuedToken:
     """Issue an invitation (flushed, not committed). Refused when the registration is disabled or no place is left.
 
-    ``enforce_limit=False`` is for the command line, which the operator may use past the limit.
+    The place is counted under SQLite's write lock (A-56): of two invitations that saw the last free place, the second
+    sees the first. ``enforce_limit=False`` is for the command line, which the operator may use past the limit.
     """
     if (await effective_registration_mode(session)).mode == "disabled":
         raise RegistrationError("REGISTRATION_DISABLED", "Registration is disabled: invitations cannot be created")
-    if enforce_limit and (await user_usage(session, now=now)).full:
-        raise RegistrationError("USER_LIMIT_REACHED", "The instance has reached its maximum number of users")
+    if enforce_limit:
+        await begin_writes(session, AccountToken)
+        if (await user_usage(session, now=now)).full:
+            raise RegistrationError("USER_LIMIT_REACHED", "The instance has reached its maximum number of users")
     issued = await token_service.issue_token(session, AccountTokenPurpose.INVITE, email=email, grants_admin=grants_admin, created_by_user_id=created_by_user_id, now=now)
     logger.info("Invitation created", invite_id=issued.record.id, grants_admin=grants_admin, created_by_user_id=created_by_user_id)
     return issued

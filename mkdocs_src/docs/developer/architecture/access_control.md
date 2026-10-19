@@ -158,7 +158,8 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
   demotion also ends every session of the account (`user_service.end_sessions()` raises
   `users.session_version`, see [Session Revocation](security.md#session-revocation)); a promotion
   does not. Self-deletion has the same guard: `DELETE /api/v1/auth/users/me` answers `400` to an
-  administrator when no other active administrator remains (`count_active_superusers()`), with
+  administrator when no other active administrator remains (`count_active_superusers()`, counted
+  under the write lock since lot A-52: see [Decided under the write lock](#decided-under-the-lock)), with
   `detail` `{"error_code": "LAST_ADMIN", "message": "Cannot delete account: you are the last active administrator"}`
   since lot A-16 (a bare sentence before); the deletion dialog words it with its own key
   ([Account Errors](../frontend/components/features/settings.md#account-errors)). The
@@ -166,19 +167,19 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
   `409` `DEMOTE_FIRST` until the account is demoted ([Deleting an Account](#admin-account-deletion)),
   except for the initial administrator waiting for its setup, which cannot be demoted and is deleted
   directly.
-- **Decided under the write lock** (lot A-51): `set_user_active()` (`user deactivate`,
+- **Stale reads** (lot A-51): `set_user_active()` (`user deactivate`,
   `user activate`), `set_user_admin()` (`user promote`, `user demote`) and `update_user_status()`
-  (the administrator API) take SQLite's write lock (`backend.app.db.session.begin_writes()`) and
-  read the account again before they decide: the last-administrator guard, then «waiting», which
-  `set_user_admin()` reads to refuse a demotion, and `set_user_active()` and `update_user_status()`
-  to tell a cancellation from a deactivation
+  (the administrator API) read the account again under SQLite's write lock before they decide
+  (`refreshed_under_lock()`, see [Decided under the write lock](#decided-under-the-lock)): the
+  last-administrator guard, then «waiting», which `set_user_admin()` reads to refuse a demotion, and
+  `set_user_active()` and `update_user_status()` to tell a cancellation from a deactivation
   ([A setup completed meanwhile](#setup-completed-meanwhile)). The account they
   first read may be stale: on a new instance whose only account is the
   [initial administrator](#initial-admin) waiting for its setup, the setup can complete in the same
   millisecond as the command. Read stale, `user demote` used to remove the only administrator, and
   `user deactivate` to answer success and end the new owner's sessions without deactivating it,
   since the column it set was equal to the stale value. Both now refuse it as the last active
-  administrator, nothing changed. A refusal rolls back, and lets the lock go.
+  administrator, nothing changed.
 - **Applied at the next request**: the user CLI writes the database directly, with the server
   running or not, and `get_current_user()` reloads the user on every request. A deactivated
   account (`user deactivate`, `user_service.set_user_active()`, or the administrator API) gets `401`
@@ -328,8 +329,8 @@ live. A value that is not a whole number of at least 1 is a limit of 0, logged l
 |---------|--------------------------|
 | `POST /auth/register` without an invitation | The account is inserted, then counted in the same transaction: over the limit, rollback and `409` `USER_LIMIT_REACHED`, with no numbers and no link, as the caller is anonymous. The first writer holds SQLite's write lock until it commits, so two registrations racing for the last place cannot both take it |
 | `POST /auth/register` with a valid invitation, or for the first account | Not checked |
-| `POST /users/invites` | `409` `USER_LIMIT_REACHED` with `limit`, `used` and `billing_url` |
-| `PATCH /users/{user_id}` reactivating an account | The same `409`, except for an account waiting for its email verification whose link is live: `holds_place()` says that its place is already counted. Once the link has expired, the account needs a free place like any other. Promotions, demotions and deactivations are not checked |
+| `POST /users/invites` | `409` `USER_LIMIT_REACHED` with `limit`, `used` and `billing_url`, counted under SQLite's write lock (lot A-56: [Decided under the write lock](#decided-under-the-lock)) |
+| `PATCH /users/{user_id}` reactivating an account | The same `409`, counted under the write lock too (lot A-56), except for an account waiting for its email verification whose link is live: `holds_place()` says that its place is already counted. Once the link has expired, the account needs a free place like any other. Promotions, demotions and deactivations are not checked |
 | `./dev.py user create`, `./dev.py user invite`, `./dev.py user activate` of an inactive account | The warning `The instance is at its limit (LIBREFOLIO_MAX_USERS: <used> of <max> places taken): the command line <action> anyway`, `<action>` being `creates the account`, `creates the invitation` or `reactivates the account`; then the command goes ahead. `user activate` prints none for an account that already holds its place: one waiting for its email verification whose link is live (`holds_place()`), or, since lot A-40, the initial administrator waiting for its setup (`registration_service.is_pending_admin()`, the filter `user_usage()` counts it with; IMG-030f of `./dev.py test utils dev-cli-image`) |
 
 `billing_link()` returns `LIBREFOLIO_BILLING_URL` to administrators only: in `usage.billing_url` of
@@ -349,12 +350,12 @@ or *links show the bare path until it is fixed*.
 | Route | Body | Does | Answers |
 |-------|------|------|---------|
 | `GET /users` | — | Every account, oldest first (`id`, `username`, `email`, `is_active`, `is_superuser`, `created_at`, `protected`: see [Protected Accounts](#account-protection), `holds_place`: inactive and waiting for its email verification with a live link, so its place is already counted, from `place_holders()` in one query — see [Email Verification](../backend/email.md#verification) —, and `pending_setup`: the [initial administrator](#initial-admin) waiting for its setup, from `registration_service.pending_admin_ids()` in one query), with `usage: {used, max_users, billing_url}` | `200` |
-| `PATCH /users/{user_id}` | `{is_active?, is_superuser?, cancel_setup?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing, with two exceptions for `is_active: false` on an account inactive already: one waiting for its email verification ends the wait as `user deactivate` does — its links revoked, its place free —, and the initial administrator waiting for its setup has its setup links revoked, the [cancellation](#setup-cancel) of its link (any other account has the setup links it never consumed retired). `cancel_setup: true` (default `false`, lot A-51) makes the request that cancellation and nothing else: an account that does not wait for its setup is left as it is. The service takes SQLite's write lock (`begin_writes()`) and reads the account again before its own decisions — a deactivation or a demotion, the last active administrator, «waiting» —, so a change committed since the route's first read, a setup completed for one, is seen. A deactivation or a demotion ends every session of the account. A change of `is_active` revokes the account's email-verification links and retires its setup links ([The Initial Administrator](#initial-admin)) | `200` with the account, `holds_place` and `pending_setup` included (`holds_place` `false` once a wait has ended; `pending_setup` still `true` after a cancellation); `404`; `422` for `cancel_setup: true` without `is_active: false`; `409` `ACCOUNT_PROTECTED` for a deactivation, a demotion or a cancellation of a [protected account](#account-protection), checked first; `409` `PENDING_SETUP` for `is_superuser: false` or `is_active: true` on the initial administrator waiting for its setup (`is_pending_admin()`), checked before the user limit, nothing changed; `409` `LAST_ADMIN` for the last active administrator; `409` `SETUP_COMPLETED` for `cancel_setup: true` on an account that does not wait for its setup, its setup completed since the caller looked ([A setup completed meanwhile](#setup-completed-meanwhile)), nothing changed; `409` `USER_LIMIT_REACHED` for a reactivation over the limit, unless the account `holds_place` |
+| `PATCH /users/{user_id}` | `{is_active?, is_superuser?, cancel_setup?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing, with two exceptions for `is_active: false` on an account inactive already: one waiting for its email verification ends the wait as `user deactivate` does — its links revoked, its place free —, and the initial administrator waiting for its setup has its setup links revoked, the [cancellation](#setup-cancel) of its link (any other account has the setup links it never consumed retired). `cancel_setup: true` (default `false`, lot A-51) makes the request that cancellation and nothing else: an account that does not wait for its setup is left as it is. The service reads the account again under SQLite's write lock before its own decisions — a deactivation or a demotion, the last active administrator, «waiting» —, so a change committed since the route's first read, a setup completed for one, is seen ([Decided under the write lock](#decided-under-the-lock)). A deactivation or a demotion ends every session of the account. A change of `is_active` revokes the account's email-verification links and retires its setup links ([The Initial Administrator](#initial-admin)) | `200` with the account, `holds_place` and `pending_setup` included (`holds_place` `false` once a wait has ended; `pending_setup` still `true` after a cancellation); `404`, also for an account deleted since the route's first read (lot A-54); `422` for `cancel_setup: true` without `is_active: false`; `409` `ACCOUNT_PROTECTED` for a deactivation, a demotion or a cancellation of a [protected account](#account-protection), checked first; `409` `PENDING_SETUP` for `is_superuser: false` or `is_active: true` on the initial administrator waiting for its setup (`is_pending_admin()`), checked before the user limit, nothing changed; `409` `LAST_ADMIN` for the last active administrator; `409` `SETUP_COMPLETED` for `cancel_setup: true` on an account that does not wait for its setup, its setup completed since the caller looked ([A setup completed meanwhile](#setup-completed-meanwhile)), nothing changed; `409` `USER_LIMIT_REACHED` for a reactivation over the limit, counted under the write lock (lot A-56), unless the account `holds_place` |
 | `GET /users/{user_id}/deletion-preview` | — | `preview_user_deletion()`: what [deleting the account](#admin-account-deletion) would take with it. Writes nothing | `200` `AccountDeletionPreviewRead`; `404` |
-| `DELETE /users/{user_id}` | — | `delete_account()`: the account, and the brokers it is the only `OWNER` of, all or nothing. Cannot be undone: see [Deleting an Account](#admin-account-deletion) | `204` with an empty body; `404`; `409` `SELF_DELETION`, `ACCOUNT_PROTECTED` or `DEMOTE_FIRST` (never for the initial administrator waiting for its setup, deleted directly, unless its setup completed since the route's first read: «waiting» is read again under SQLite's write lock, lot A-51); `500` when the deletion fails, nothing deleted |
-| `POST /users/{user_id}/password-reset-link` | — | A [reset link](#reset-links), shown once | `201` `{token, path, url, expires_at}`; `404` |
-| `POST /users/{user_id}/sessions/revoke` | — | `end_sessions()`: every device of the account is signed out at its next request | `204`; `404` |
-| `POST /users/{user_id}/onboarding/reset` | optional `{flow}` | `reset_onboarding_progress()`: that flow, or every flow, back to `pending`, steps included, with `completed_at` and `skipped_at` cleared (backlog item 21-5) | `204`; `404`; `422` for a flow that does not exist |
+| `DELETE /users/{user_id}` | — | `delete_account()`: the account, and the brokers it is the only `OWNER` of, all or nothing. Cannot be undone: see [Deleting an Account](#admin-account-deletion) | `204` with an empty body; `404`, also for an account deleted since the route's first read; `409` `SELF_DELETION`, `ACCOUNT_PROTECTED` or `DEMOTE_FIRST` (never for the initial administrator waiting for its setup, deleted directly; whether the account is an administrator, and whether it still waits, is read under SQLite's write lock, so one set up or promoted since the route's first read answers `DEMOTE_FIRST`, lots A-51 and A-55: [Decided under the write lock](#decided-under-the-lock)); `500` when the deletion fails, nothing deleted |
+| `POST /users/{user_id}/password-reset-link` | — | A [reset link](#reset-links), shown once | `201` `{token, path, url, expires_at}`; `404`, also for an account deleted since the route's first read ([under the write lock](#decided-under-the-lock), lot A-54) |
+| `POST /users/{user_id}/sessions/revoke` | — | `end_sessions()`: every device of the account is signed out at its next request | `204`; `404`, as above |
+| `POST /users/{user_id}/onboarding/reset` | optional `{flow}` | `reset_onboarding_progress()`: that flow, or every flow, back to `pending`, steps included, with `completed_at` and `skipped_at` cleared (backlog item 21-5) | `204`; `404`, as above; `422` for a flow that does not exist |
 | `GET /users/invites` | — | The live invitations, oldest first (`id`, `grants_admin`, `email`, `created_at`, `expires_at`, `created_by_user_id`), with `usage` | `200` |
 | `POST /users/invites` | `{grants_admin=false, email?}` | `create_invite()`; the link is shown once | `201` `{invite, token, path, url}`; `409` `REGISTRATION_DISABLED`; `409` `USER_LIMIT_REACHED` |
 | `DELETE /users/invites/{invite_id}` | — | `revoke_invite()`: the link stops working and its place is freed | `204`; `404` when it is not a live invitation |
@@ -370,6 +371,38 @@ or *links show the bare path until it is fixed*.
   administrator*, *Account deleted by an administrator*, *Password reset link created*, *Sessions
   ended by an administrator*, *Onboarding reset by an administrator*. None carries the token or its
   hash.
+
+**Decided under the write lock** (lots A-51 to A-56). A path that changes an account reads it, then
+takes SQLite's write lock and reads it again before its first write:
+`user_service.refreshed_under_lock(session, user)` calls `backend.app.db.session.begin_writes()`, then
+selects the id. When the account was deleted in between, it rolls back and answers `False`, and the
+caller answers as for an account that does not exist: `404` *User not found*, the bare string of
+`_user_or_404()`, or `User '<username>' not found` on the command line (lot A-54; before, the API
+answered a `500`, or a success for nothing done, and the command line printed a traceback). Otherwise
+it refreshes the account, and the decisions listed below read it as it is under the lock: a setup
+completed or a promotion committed by another request since the first read is seen. The refusals a
+route makes on its first read (`SELF_DELETION`, `ACCOUNT_PROTECTED`, `PENDING_SETUP`) write nothing.
+{: #decided-under-the-lock }
+
+- `PATCH /users/{user_id}` (`update_user_status()`, `"NOT_FOUND"` for an account gone): the
+  last-administrator rule, «waiting» for a [cancellation](#setup-completed-meanwhile), and the change;
+- `DELETE /users/{user_id}`: whether the account is an administrator and whether it still waits for
+  its setup, so one set up (A-51) or promoted (A-55) since the first read answers `409` `DEMOTE_FIRST`;
+- `POST /users/{user_id}/password-reset-link`, `/sessions/revoke` and `/onboarding/reset` (A-54);
+- `DELETE /api/v1/auth/users/me` (A-52): the other active administrators are counted under the lock,
+  so of the last two active administrators deleting their own accounts at once, the second gets `400`
+  `LAST_ADMIN`;
+- `./dev.py user activate`, `deactivate`, `promote` and `demote` (`set_user_active()`,
+  `set_user_admin()`): the last-administrator guard, then «waiting».
+
+The [user limit](#user-limit) is counted under the lock too (A-56): the `PATCH` reactivating an account
+takes it before `user_usage()`, and `create_invite()` (`POST /users/invites`) before its count, so of two
+requests that saw the last free place, the second sees the first and answers `409`
+`USER_LIMIT_REACHED`, the `PATCH`'s with the counts read under the lock. A refusal rolls back, and lets
+the lock go. Tests: `TestDecidedUnderTheWriteLock` of `./dev.py test api users-admin` (UADM-LOCK-01 to
+UADM-LOCK-15) and of `./dev.py test api account-deletion` (ACCDEL-LOCK-01 to ACCDEL-LOCK-03), and
+LOCK-CLI-01 and LOCK-CLI-02 of `./dev.py test services admin-bootstrap`: without threads, a rival commits
+on another connection right before the code's first write.
 
 ### 🗑️ Deleting an Account {: #admin-account-deletion }
 
@@ -397,10 +430,11 @@ After `require_admin`, the deletion refuses, in this order:
    links go with it (`account_tokens.user_id` cascades), its place is freed, and nobody waits any
    more: `./dev.py user setup-link` finds nobody, and a next start with the variables still set
    answers `ignored`, since the instance has accounts ([The Initial Administrator](#initial-admin)).
-   Since lot A-51 the route reads «waiting» a second time when the first read says so, under
-   SQLite's write lock (`begin_writes()`) and on the account read again: a setup completed in the
-   meantime has made it an active administrator, so the deletion is rolled back and answers
-   `DEMOTE_FIRST`, nothing deleted.
+   Whether the account is an administrator, and whether it still waits, is read under SQLite's
+   write lock, on the account read again ([Decided under the write lock](#decided-under-the-lock)):
+   one set up (lot A-51) or promoted (lot A-55) since the route's first read answers
+   `DEMOTE_FIRST`, rolled back, nothing deleted; one deleted meanwhile answers the `404` of point 1
+   (lot A-54).
 
 Each `409` carries `detail` `{error_code, message}`, plus `reason` for `ACCOUNT_PROTECTED`. Otherwise the
 route calls `user_service.delete_account()`, the helper of `DELETE /auth/users/me` too, and answers `204`

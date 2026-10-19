@@ -1861,17 +1861,20 @@ removed an active administrator never demoted; and on a new instance, where the 
 account, `./dev.py user demote` removed the only administrator, while `./dev.py user deactivate` answered success and
 ended the new owner's sessions without deactivating it. The cure is the one of A-42, the write lock first:
 
-- `update_user_status()`, `set_user_active()` and `set_user_admin()` take SQLite's write lock
-  (`backend.app.db.session.begin_writes()`), read the account again (`session.refresh()`), and only then decide: a
+- `update_user_status()`, `set_user_active()` and `set_user_admin()` take SQLite's write lock and read the account
+  again (`user_service.refreshed_under_lock()`: `backend.app.db.session.begin_writes()`, then `session.refresh()`; an
+  account deleted meanwhile is not found, lot A-54), and only then decide: a
   deactivation or a demotion, the last active administrator, «waiting». On a new instance, the command line's two then
   refuse the administrator just set up as the last active one, nothing changed.
 - The Users tab cancels with `{is_active: false, cancel_setup: true}`: the cancellation and nothing else. An account
   that no longer waits answers `409` `SETUP_COMPLETED`, rolled back, with an INFO line. A plain `{is_active: false}`
   keeps its meaning, a deactivation decided on the account as the lock finds it, and its answer matches the database.
-- `DELETE /api/v1/users/{user_id}`, when its first read says «waiting», takes the lock, reads the account again and
-  asks once more: a setup completed in the meantime makes it `409` `DEMOTE_FIRST`, nothing deleted.
+- `DELETE /api/v1/users/{user_id}` reads under the lock, on the account read again, whether it is an administrator and
+  whether it still waits (every deletion since lot A-55, which also catches a promotion): a setup completed in the
+  meantime makes it `409` `DEMOTE_FIRST`, nothing deleted.
 
-The details, with the answers of each route: [A setup completed meanwhile](access_control.md#setup-completed-meanwhile).
+The details, with the answers of each route: [A setup completed meanwhile](access_control.md#setup-completed-meanwhile);
+every path decided this way: [Decided under the write lock](access_control.md#decided-under-the-lock).
 
 Tests: A42-001 to A42-006, A43-001 to A43-005, A50-001 to A50-004 (the WARNING of a start after a cancellation or
 an address change, and of an expiry) and A51-007 and A51-008 (`user deactivate` and `user demote` while the setup
@@ -2053,10 +2056,29 @@ anything of it can run.
   after a restore, the writes that need them fail, and nothing of the archive runs (backlog B-45). When the copy needs
   an upgrade, the upgrade runs first: a `CHECK` calling `regexp`, which its connections refuse since H-51 (below), or
   one on a table it writes, ends the check there, as `upgrade_failed`.
+- **Text that is not UTF-8** is `database_damaged` too (lot B-49). The server's driver decodes every text it reads,
+  and a value that is not UTF-8 makes it raise («Could not decode to UTF-8 column …»): the whole read fails, not the
+  row, so after a restore every list holding such a value would fail, and no page could correct what it cannot read
+  (checked in process through the app's own engine, on SQLite 3.54.0). LibreFolio writes UTF-8 only: such text means
+  that another program wrote to the database, or that the archive was changed. `_refuse_undecodable_text()` reads
+  every text value of the copy right after the manifest's counts are compared, before the upgrade, so no migration
+  meets it first: every table but SQLite's own, unknown ones included, every column, generated ones included
+  (`table_xinfo`: `table_info` hides them), values by storage class (`typeof(…) = 'text'`: dates and timestamps are
+  text in their `DATE` and `DATETIME` columns). It reads each table by keyset windows of its rowid, 200 000 rows a
+  query, each column's text values joined by SQLite with a comma and decoded once by a strict `text_factory` that
+  raises `UnicodeDecodeError`. The comma, a byte of its own, never completes a character split over two values. A
+  table without a rowid, or whose columns take all of `rowid`, `_rowid_` and `oid`, is read row by row, in constant
+  memory, and so is the rest of a table whose window SQLite cannot join (texts past its length limit, `DataError`).
+  On a 488 MB database (2 million prices, 1 million exchange rates, 200 000 transactions) it took 3.3 s, against
+  5.5 s for one `integrity_check` (checked at a normal load). The refusal says
+  `The backup's database holds text that is not UTF-8: it cannot be restored`, and logs one warning,
+  `A backup's database holds text that is not UTF-8`, with the number of tables (`tables`): never a text, its bytes,
+  a table or a column name, which are the archive's.
 - **`trusted_schema` off on every connection to the copy.** Every connection to the copy runs
   `PRAGMA trusted_schema=OFF` before any other statement: this read, `describe_database()` (`snapshot.py`, which also
-  describes the backup's own snapshot), `_plugin_secrets()` and `_administrators()` (`staging.py`), the totals'
-  `aiosqlite` connection (`totals.py`), the post-migration fixes and the upgrade. The SQL the schema keeps in its tables
+  describes the backup's own snapshot), `_refuse_undecodable_text()`, `_plugin_secrets()`, `_administrators()` and
+  E-19b1's `_holds_non_iso_currencies()` (`staging.py`), the totals' `aiosqlite` connection (`totals.py`), the
+  post-migration fixes and the upgrade. The SQL the schema keeps in its tables
   and indexes (a `CHECK`, a `DEFAULT`, a generated column, an index's expression) may then call only the functions
   SQLite marks innocuous. `run_post_migration_fixes()` (`db/post_migration/__init__.py`), shared code that runs after
   the refusal, turns it off first on its own connection, on the live database too, where nothing changes, since
@@ -2748,7 +2770,7 @@ an `info` (H-39).
 | `LIBREFOLIO_FRAME_PROTECTION` | `X-Frame-Options` | `SAMEORIGIN` | Every HTTP response, a `304` included |
 | `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `PAGE_POLICY`: `frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'` | Documents, whatever the path (H-45): HTML (the web app's pages, the documentation, Swagger UI and ReDoc), XHTML, SVG and XML, any type ending with `+xml` included; never a `304` |
 | `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `frame-ancestors 'self'`, that directive only | Every other response but a `304` |
-| `LIBREFOLIO_CSP_REPORT_ONLY` | `Content-Security-Policy-Report-Only` | `CSP_REPORT_ONLY_POLICY`, below | The HTML pages of the web app (`text/html` exactly); never a `304` |
+| `LIBREFOLIO_CSP_REPORT_ONLY` | `Content-Security-Policy-Report-Only` | `CSP_REPORT_ONLY_POLICY`, below, with the hashes of the build's inline scripts in its `script-src` (`report_only_policy()`, H-52) | The HTML pages of the web app (`text/html` exactly); never a `304` |
 
 - **Frame protection** (`FRAME_HEADERS`, or `PAGE_FRAME_HEADERS` on a document) is enforced: only the app's own
   pages may frame it, so a hosting panel or a dashboard on another origin that shows the app in a frame is refused by
@@ -2813,6 +2835,10 @@ an `info` (H-39).
 - **The report-only policy blocks nothing**: the browser lists each violation in its developer console. There is no
   report endpoint: the policy has no `report-uri` or `report-to`, and no `Report-To` or `Reporting-Endpoints` header
   is sent.
+- **`'report-sample'`** (H-52). With it in `script-src`, Chromium puts the first 40 characters of a blocked script or
+  `eval` in the violation's `sample`. Today only the page's own `securitypolicyviolation` event sees them, since the
+  policy names no report endpoint; if one is ever added (`report-uri`, `report-to`), those characters leave the
+  browser with every report.
 - **Where the report-only policy goes.** `_is_web_app_page()` decides at `http.response.start`, from the response's
   `Content-Type` and `scope["path"]`: the media type `_media_type()` reads must be exactly `text/html` (`_is_html()`),
   and the path must be outside `/mkdocs` (bare or `/mkdocs/…`) and `/api` (bare or `/api/…`); a `304` never gets the
@@ -2824,17 +2850,27 @@ an `info` (H-39).
   path; every other document, an SVG or an XHTML page even on a web-app path, which gets `PAGE_POLICY` and no
   report-only header; and every response that is not a document: JavaScript, JSON, text files, and the CORS
   preflights and the 500, which are plain text.
+- **The inline scripts, by their hashes** (H-52). `spa_inline_script_hashes(build_dir)`
+  (`backend/app/services/platform/static_site.py`) reads every top-level `*.html` of the build, `frontend/build/`
+  (today `index.html`, `200.html` and `offline.html`; never a hidden one, which no route serves), and gives the CSP
+  source expression `'sha256-<base64>'` of every `<script>` without `src`, whatever its `type`: its text with the line
+  ends the HTML parser leaves (CR LF and a lone CR become LF), encoded in UTF-8, each expression once, sorted.
+  `report_only_policy(hashes)` (`security_headers.py`) appends them to the `script-src` of `CSP_REPORT_ONLY_POLICY`.
+  Without a build there is no hash, and a page that cannot be read is left out with a warning: the server starts all
+  the same, and the browser reports what the policy then lacks.
 - **Read once.** `SecurityHeadersMiddleware.__init__` reads both switches from `get_settings()`, so they are read when
   the middleware is built, never per request. Starlette builds the middleware stack lazily, at the app's first ASGI
   call: for the real app, the lifespan startup. Changing a switch takes a restart, and the tests build a fresh app for
-  each configuration.
+  each configuration. With the report-only policy on, `__init__` also builds that header, once, with the hashes of the
+  build it finds then; with the policy off, the build is never read. A new frontend build therefore takes a restart
+  too: SvelteKit's start script names the build's own chunks, so its hash changes with every build.
 
 `CSP_REPORT_ONLY_POLICY`, directive by directive:
 
 | Directive | Sources | Why |
 |-----------|---------|-----|
 | `default-src` | `'self'` | Every fetch directive the policy does not name falls back to the app's own origin |
-| `script-src` | `'self' 'wasm-unsafe-eval'` | Script files from the app's origin, no inline script; WebAssembly may compile, for the PDF viewer (its PDFium engine) |
+| `script-src` | `'self' 'wasm-unsafe-eval' 'report-sample'`, then the hashes of the build's inline scripts | Script files from the app's origin, and an inline script only by its hash; WebAssembly may compile, for the PDF viewer (its PDFium engine); a violation carries the first 40 characters of the blocked code (above) |
 | `style-src` | `'self' 'unsafe-inline'` | The app's inline styles are allowed |
 | `img-src` | `'self' data: blob: https:` | Images from any HTTPS address: asset and broker icons are set by URL |
 | `font-src` | `'self' data:` | Fonts from the app's origin, or inlined as `data:` URLs |
@@ -2846,16 +2882,20 @@ an `info` (H-39).
 | `form-action` | `'self'` | Forms submit to the app's origin only |
 | `frame-ancestors` | `'self'` | Only the app's own pages may frame the page, as with frame protection |
 
-Today a page of the web app reports at least its inline scripts: the one of `frontend/src/app.html`, which applies the
-theme before the first paint and registers the service worker, and the start script SvelteKit writes into the page
-(`frontend/svelte.config.js` has no `csp` option, so SvelteKit adds no hash or nonce to it);
-`frontend/static/offline.html`, the page the service worker shows when the server cannot be reached, has one too. These
-reports are expected until the scripts move to files or get hashes: the report-only phase is there to list what an
-enforced policy would block. The managed lane's cloud smoke met two more, both recorded in the
+The inline scripts of the build's pages are all allowed by their hashes, so none of them is reported any more (H-52):
+the script of `frontend/src/app.html`, in `index.html` and `200.html`, which applies the theme before the first paint,
+keeps the PWA install prompt and registers the service worker; the start script SvelteKit writes into each of those two
+pages, a different one in `200.html`, the SPA fallback (`base: ""`, absolute imports), since
+`frontend/svelte.config.js` has no `csp` option and SvelteKit adds no hash or nonce itself; and the script of
+`frontend/static/offline.html`, the page the service worker shows when the server cannot be reached. That page's retry
+button listens through its script (`addEventListener`), not an inline `onclick`: an inline event handler falls under
+`script-src-attr`, which no hash of `script-src` covers, and the policy does not use `'unsafe-hashes'`. The managed
+lane's cloud smoke met two more violations, both recorded in the
 [E2E baseline](../test-walkthrough/e2e.md#csp-baseline): cheetah-grid's `eval`, a harmless probe of the global object,
-and the `connect-src` of the [address check](#address-probe) of a link, which fetches the address the administrator
-typed. That check is what an enforced `connect-src 'self'` would break: for an origin other than the page's it would
-read *unverifiable* (backlog H-53, workstream A for the experience).
+known only by its exact sample, so any other `eval` fails a test; and the `connect-src` of the
+[address check](#address-probe) of a link, which fetches the address the administrator typed. That check is what an
+enforced `connect-src 'self'` would break: for an origin other than the page's it would read *unverifiable* (backlog
+H-53, workstream A for the experience).
 
 Tests: `./dev.py test services security-headers` (`backend/test_scripts/test_services/test_security_headers.py`:
 `nosniff` and `Referrer-Policy` exactly once on every kind of response, a route's own kept, the 500 with its exception
@@ -2874,7 +2914,12 @@ an XHTML on a web-app path, with `PAGE_POLICY` and no report-only header; a `304
 of `StaticFiles` under `/_app`, an SVG whose `200` carries `PAGE_POLICY` and whose `304` no policy; the report-only
 policy on the web app's HTML only, compressed too, never on the documentation, the API's JSON or HTML, a JavaScript
 chunk, a text file, a CORS preflight or a 500; the policy read directive by directive, each directive once, with no
-report endpoint; a route's own header kept alone and the others added, its own `Content-Security-Policy` on an HTML
+report endpoint, its `script-src` exactly `'self' 'wasm-unsafe-eval' 'report-sample'` and then the hashes of the fake
+build's inline scripts (H-52: `spa_inline_script_hashes()` alone, on builds written for each of its rules, against a
+published vector, with no build or no page, and with a page that cannot be decoded, skipped with one warning;
+`report_only_policy()` appending the hashes in the order given; the header built once, when the middleware is built, a
+build changed afterwards leaving it as it was, and the build never read with the policy off); a route's own header kept
+alone and the others added, its own `Content-Security-Policy` on an HTML
 page never replaced by `PAGE_POLICY`; the switches read when the middleware is built, never per request)
 and `./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`:
 the type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
@@ -2893,7 +2938,10 @@ controls come first, on the sign-in page: an injected `<object>` typed `applicat
 origin and a form posted to another origin must each be refused with an enforced violation. The `<object>` is plugin
 content on purpose: in Chromium 149, an untyped `<object>` of an image, inserted in the same task as the form's
 submission, is fetched as an image with no `object-src` check. Then a documentation page and its search, the PDF
-preview and the Dashboard must raise none.
+preview and the Dashboard must raise none. `./dev.py test front-utility csp-collector` checks the hashes end to end: it
+computes the policy itself from the lane's three pages, requires a managed lane's header to equal it on each, and finds
+that the sign-in page and the offline page report nothing under it (see
+[CSP Collector](../test-walkthrough/front-utility.md#csp-collector)).
 
 ## 🌐 HTTPS & Deployment Architecture
 
