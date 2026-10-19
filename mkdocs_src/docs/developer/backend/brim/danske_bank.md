@@ -3,7 +3,7 @@
 `broker_danske_bank` imports the **equity savings account** (*osakesäästötili*) of Danske Bank
 Finland from two exports that only make sense together: the custody transactions (XLSX) and the
 cash statement (CSV). It lives in `backend/app/services/brim_providers/broker_danske_bank/plugin.py`
-(`plugin_version` 1.0.1, 🔬 Alpha — built from the exports of one account, shared in
+(`plugin_version` 1.0.2, 🔬 Alpha — built from the exports of one account, shared in
 [issue #26](https://github.com/Librefolio/LibreFolio/issues/26)) and is LibreFolio's reference
 **report-set plugin**.
 
@@ -94,9 +94,11 @@ A known order type with other signs is `invalid`.
 
 ### 💳 Cash rows
 
-`_classify_cash()`: a `Tila` other than `Toteutunut`, or the label `Varaus` (a reservation), is
-`status`; a row without a date, or with a zero or missing amount, is `invalid`. Then the label
-(`Saaja/Maksaja`) and the sign decide (`_cash_label_class`):
+`_classify_cash()`: the label (`Saaja/Maksaja`) `Varaus` is checked first, before `Tila`: it makes
+the row `reservation`, whatever its `Tila`. A reservation is a hold the bank replaces with the
+booked movement: a known row, left out without a notice ([Finnish notices](#finnish-notices)). Then
+a `Tila` other than `Toteutunut` is `status`; a row without a date, or with a zero or missing
+amount, is `invalid`. Then the label and the sign decide (`_cash_label_class`):
 
 | Label | Sign | Class | Becomes |
 |---|---|---|---|
@@ -181,7 +183,7 @@ Every row gets exactly one outcome (`_Analysis._settle`):
 | Demerger line | `standalone` |
 | Cash trade or income without counterpart | `summarized` in the zone's checkpoint in `before` and `gap`, and in its own segment's checkpoint inside the border; valued after the segment's last day, `summarized` in the next segment's checkpoint, or `deferred` when there is none; `deferred` in `after`; elsewhere `excluded` (`no_counterpart`) |
 | Custody trade or income without counterpart | `excluded`: `not_yet_settled` (valued after the cash statement's last day), `outside_cash_coverage` (outside the statement's spans), else `no_counterpart` |
-| Ambiguous; superseded; `status`, `unknown_type`, `invalid` | `excluded` with that reason |
+| Ambiguous; superseded; `status`, `reservation`, `unknown_type`, `invalid` | `excluded` with that reason |
 
 The cash rows of the `before` zone — standalone, `ambiguous` or `unknown_type` — are also absorbed
 by the first checkpoint. The full matrix, zone by zone, is in the plugin guide, under *Zones and
@@ -198,7 +200,8 @@ one row per reason
 | `ambiguous` | ambiguous | candidates that cannot be told apart |
 | `not_yet_settled` | not settled yet | a custody trade valued after the cash statement's last day |
 | `outside_cash_coverage` | settled before the cash statement starts | a custody trade valued outside the cash statement's spans |
-| `status` | not executed or not booked | `Tila` other than `Toteutettu` / `Toteutunut`, or a `Varaus` |
+| `status` | not executed or not booked | a custody `Tila` other than `Toteutettu`, or a cash `Tila` other than `Toteutunut` on a row that is no `Varaus`: the `excluded_status` warning, with the link to open an issue |
+| `reservation` | reserved, not booked | a cash row labelled `Varaus`: no notice, one log line |
 | `unknown_type` | unknown type | an order type or a label the plugin does not know |
 | `invalid` | invalid | missing or inconsistent values |
 | `superseded` | replaced by a newer file | rule M |
@@ -270,7 +273,8 @@ balance, and the wizard titles it *End-of-period check · ‹date›*. It is nev
 import brings the `not_yet_settled` and `deferred` trades one by one, and a correction there would
 count them twice (the safety rule of the plugin guide).
 
-The running balance (`_chain`) takes the booked rows by value date — within a day in reverse file
+The running balance (`_chain`) takes the booked rows (every class but `status`, `reservation` and
+`invalid`: `_UNBOOKED_CLASSES`) by value date — within a day in reverse file
 order, since the statement lists the newest rows first — and checks each day against `Saldo`, row
 by row or at least as a day total. A day that does not add up is a break: the chain goes on from
 that day's last `Saldo`, and the cash of every checkpoint becomes a verification instead
@@ -351,13 +355,20 @@ are in Finnish. Evidence tables are titled `Arvopaperitapahtumat` (custody colum
 
 | Notice | Severity | Says |
 |---|---|---|
-| `excluded_<reason>` | warning | One per exclusion reason, with its rows: they are not imported. Every reason but `not_yet_settled`, `excluded_status` included |
+| `excluded_<reason>` | warning | One per exclusion reason, with its rows: they are not imported. Every reason but `not_yet_settled` (an info note), `status` (its own row) and `reservation` (no notice). No `report_issue` |
+| `excluded_status` | warning | The rows whose `Tila` the plugin does not know (`status`): not imported. `context.report_issue` is `true`, so the wizard shows the link *open an issue on GitHub* under the message, which asks the user to open one if the rows are real movements, so that the plugin learns the case (the plugin guide's rule *Known rows quietly, unknown rows loudly*, under [Import philosophy](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)) |
 | `excluded_not_yet_settled` | info | Custody trades valued after the cash statement's last day: not imported this time, they come with the next import. A note since N74, no longer a warning: nothing is wrong (the plugin guide's rule *Only safe rows*, under [Import philosophy](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)) |
 | `deferred_rows` | info | Cash trades after the last custody day come with the next import |
 | `name_mismatch` | warning | Paired trades whose names differ: check them |
 | `proof_discarded` | info | Holdings the files could not prove reliably (`context.proofs`) |
 | `balance_chain_broken` | warning | The statement's balances are only compared, never used for corrections |
 | `deposit_assumed` | info | Credits read as deposits: check them |
+
+A reservation (`reservation`, in `_SILENT_EXCLUSIONS`) gives no notice: the parse writes one
+backend log line, `logger.info` with its `reason` and `count`, and the rows keep their place in the
+set's accounting: `excluded` lines of the combined file, counted in the summary's `reasons` and
+labelled *reserved, not booked* (`importWizard.reportSet.reason.reservation`). `status` is the one
+reason in `_REPORTED_EXCLUSIONS`, the only `excluded_<reason>` notice with `report_issue`.
 
 The todo codes — `danske_trade_charges_included`, `demerger`, `demerger_old_leg` — are in the
 contract suite's `KNOWN_REASON_CODES`. The set warnings of `describe_set` (`empty_member`,
