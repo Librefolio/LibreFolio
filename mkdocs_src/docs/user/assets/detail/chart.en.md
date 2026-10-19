@@ -2,7 +2,7 @@
 
 The chart is the heart of the asset page: the price history, or how much the price moved over a rolling window. Scroll to zoom, drag to pan, and hover a point for its values.
 
-_Last updated: 2026-10-11_
+_Last updated: 2026-10-19_
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Price Chart" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -58,7 +58,7 @@ How to read it:
 
 ### 📅 Date range
 
-The date range in the page toolbar sets the dates on screen: **1W**, **1M**, **3M**, **6M**, **1Y**, **2Y**, **YTD**, **All**, or **Custom** with a calendar. With spare room on the bar, more presets appear (3Y, 5Y, 10Y, WTD, MTD, QTD). The range you pick follows you to the Dashboard, broker, asset and FX pages of the same browser tab.
+The date range in the page toolbar sets the dates on screen: **1W**, **1M**, **3M**, **6M**, **1Y**, **2Y**, **YTD**, **All**, or **Custom**, a number of days, weeks, months or years back from today; click a date to pick the two ends on a calendar. The two ends must be different days: the day you click first cannot be clicked again, and a typed date equal to the other end turns red. With spare room on the bar, more presets appear (3Y, 5Y, 10Y, WTD, MTD, QTD). The range you pick follows you to the Dashboard, broker, asset and FX pages of the same browser tab.
 
 On a long range the chart may group the days into weeks or months to stay readable: a **Weekly** or **Monthly** badge at its top left says so.
 
