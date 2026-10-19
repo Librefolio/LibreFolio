@@ -9,7 +9,7 @@ from datetime import date
 
 import numpy as np
 
-from backend.app.services.financial_math.returns import required_recovery_return
+from backend.app.services.financial_math.returns import positive_annualization_factor, required_recovery_return
 
 ZERO_TOLERANCE = 1e-15
 """Absolute tolerance below which a dispersion statistic counts as exactly zero.
@@ -126,13 +126,6 @@ def _finite_values(
     return normalized
 
 
-def _positive_annualization_factor(annualization_factor: float) -> float:
-    normalized = float(annualization_factor)
-    if normalized <= 0 or not math.isfinite(normalized):
-        raise ValueError("annualization_factor must be finite and positive")
-    return normalized
-
-
 def compounded_return(returns: Sequence[float]) -> float:
     """Compound simple returns into one holding-period return."""
     wealth = 1.0
@@ -175,7 +168,7 @@ def annualized_volatility(
     annualization_factor: float,
 ) -> float:
     """Annualize sample volatility with the observed factor."""
-    return sample_standard_deviation(returns) * math.sqrt(_positive_annualization_factor(annualization_factor))
+    return sample_standard_deviation(returns) * math.sqrt(positive_annualization_factor(annualization_factor))
 
 
 def annualized_expected_return(
@@ -210,7 +203,7 @@ def annualized_expected_return(
     values = _finite_values(returns, name="returns")
     if not values:
         raise ValueError("expected return requires at least one observation")
-    return math.fsum(values) / len(values) * _positive_annualization_factor(annualization_factor)
+    return math.fsum(values) / len(values) * positive_annualization_factor(annualization_factor)
 
 
 def daily_risk_free_rate(annual_rate: float, periods_per_year: float) -> float:
@@ -227,7 +220,7 @@ def daily_risk_free_rate(annual_rate: float, periods_per_year: float) -> float:
     """
     if not math.isfinite(annual_rate) or annual_rate <= -1.0:
         raise ValueError("annual risk-free rate must be finite and greater than -1")
-    return math.expm1(math.log1p(annual_rate) / _positive_annualization_factor(periods_per_year))
+    return math.expm1(math.log1p(annual_rate) / positive_annualization_factor(periods_per_year))
 
 
 def annualized_sharpe(
@@ -237,7 +230,7 @@ def annualized_sharpe(
     annual_risk_free_rate: float = 0.0,
 ) -> float | None:
     """Return annualized Sharpe, or None when sample volatility is zero."""
-    annualization_factor = _positive_annualization_factor(annualization_factor)
+    annualization_factor = positive_annualization_factor(annualization_factor)
     volatility = sample_standard_deviation(returns)
     if math.isclose(volatility, 0.0, rel_tol=0.0, abs_tol=ZERO_TOLERANCE):
         return None
@@ -256,7 +249,7 @@ def annualized_sortino(
     values = _finite_values(returns, name="returns")
     if len(values) < 2:
         raise ValueError("Sortino requires at least two observations")
-    annualization_factor = _positive_annualization_factor(annualization_factor)
+    annualization_factor = positive_annualization_factor(annualization_factor)
     target_daily = daily_risk_free_rate(annual_target_return, annualization_factor)
     downside_variance = math.fsum(min(value - target_daily, 0.0) ** 2 for value in values) / len(values)
     downside_deviation = math.sqrt(downside_variance)
@@ -603,7 +596,7 @@ def risk_contributions_from_covariance(
     annualization_factor: float = 1.0,
 ) -> ContributionSummary:
     """Return MCTR, CCTR, and PCTR from one common covariance matrix."""
-    annualization_factor = _positive_annualization_factor(annualization_factor)
+    annualization_factor = positive_annualization_factor(annualization_factor)
     normalized_weights = _finite_values(weights, name="weights")
     size = len(normalized_weights)
     matrix = [tuple(_finite_values(row, name="covariance row")) for row in covariance]
@@ -713,7 +706,7 @@ def comparison_summary(
         raise ValueError("comparison inputs must have the same length")
     if len(primary) < 2:
         raise ValueError("comparison requires at least two observations")
-    annualization_factor = _positive_annualization_factor(annualization_factor)
+    annualization_factor = positive_annualization_factor(annualization_factor)
     active = [left - right for left, right in zip(primary, comparison, strict=True)]
     active_std = sample_standard_deviation(active)
     tracking_error = active_std * math.sqrt(annualization_factor)
@@ -736,19 +729,6 @@ def comparison_summary(
         primary_drawdowns=tuple(underwater_drawdown(primary_wealth)[1:]),
         comparison_drawdowns=tuple(underwater_drawdown(comparison_wealth)[1:]),
     )
-
-
-def calendar_days_to_observations(calendar_days: int, per_year: float) -> int:
-    """Return how many observations a span of calendar days holds at an observed frequency.
-
-    The inverse of observed annualization: a series observed ``per_year`` times a
-    year holds ``calendar_days × per_year / 365`` observations over the span, and
-    never fewer than one. So a month is 30 calendar days on every series — 21
-    observations of one quoted on trading days, 30 of one quoted every day.
-    """
-    if isinstance(calendar_days, bool) or calendar_days <= 0:
-        raise ValueError("calendar_days must be a positive integer")
-    return max(1, round(calendar_days * _positive_annualization_factor(per_year) / 365))
 
 
 def horizon_compounded_returns(
@@ -960,7 +940,6 @@ __all__ = [
     "annualized_sortino",
     "annualized_volatility",
     "beta",
-    "calendar_days_to_observations",
     "comparison_summary",
     "compounded_return",
     "correlation_matrix",
