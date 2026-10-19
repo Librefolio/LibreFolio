@@ -4756,15 +4756,17 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
   `update_user_status`, `create_invite` conta prima di ogni scrittura: due operazioni concorrenti a limite − 1 lo
   superano di uno. La registrazione è già sicura: riconta dopo la sua scrittura, sotto il lock. Cura: contare dopo
   `begin_writes`.
-- **A-57 · `legal-and-managed.spec.ts`: LGM-E-01 e LGM-E-03 devono leggere il profilo della corsia** — basso, solo test;
+- ✅ **A-57 · `legal-and-managed.spec.ts`: LGM-E-01 e LGM-E-03 devono leggere il profilo della corsia** — basso, solo test;
+  chiusa il 19/10 (commit del coordinatore): i due test leggono prima la risposta della corsia e verificano la sua
+  variante; verde su una corsia self-hosted e su una gestita (5/5 e 5/5). Il ritorno in `CLOUD_SMOKE_SPECS` è di H;
   in 1.3, prima della fase 2 di H-43 (il cancello RC di H); dal coordinatore (17/10, da H-43, dev `a6adb0066`, la corsia
   di prova gestita). I due casi danno per scontata la variante self-hosted: su una corsia gestita falliscono per
   costruzione. Cura: leggere `GET /api/v1/system/instance` della corsia e verificare la variante corrispondente; poi H
   rimette la spec in `CLOUD_SMOKE_SPECS`. Dopo il lotto in corso.
-  - **Sospesa** (19/10, il developer): analisi e prova 1 fatte il 17/10 (su una corsia gestita LGM-E-01/03 rossi, gli
-    altri verdi); il resto aspetta che il developer finisca di leggere i lotti piccoli. Con lei aspetta la frase
-    sulle pre-release in `developer/frontend/onboarding.md` (nota 2 di E su C-54). Dettagli: [piano
-    02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-57» e «A57.1».
+  - Sospesa dal developer il 19/10 mattina, poi il suo «ok» (11:42). Analisi e prova 1 il 17/10 (su una corsia
+    gestita LGM-E-01/03 rossi, gli altri verdi); spec riscritta e verde il 19/10, insieme alla frase sulle pre-release
+    in `developer/frontend/onboarding.md` (nota 2 di E su C-54). Dettagli: [piano
+    02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-57» e «A57.1»–«A57.4».
 - **A-58 · Con `connect-src 'self'` imposto, la verifica dell'indirizzo di un link verso un'altra origine è bloccata** —
   basso, UX; dopo la 1.3, la metà UX di H-53; dal coordinatore (17/10). Il dialogo d'invito della scheda Utenti
   (`LinkShare` → `checkAddress()`) oggi dice «non verificabile»: decidere cosa vede l'admin. Decisione aperta.
