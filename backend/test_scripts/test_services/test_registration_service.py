@@ -6,9 +6,10 @@ on a row (``registration_mode``), on a variable that overrides it (``LIBREFOLIO_
 holds the whole rule, so that the API and the command line apply the same one. The contract pinned here:
 
 2. The settings registry: ``registration_mode`` replaces ``enable_registration`` — ``value_type`` ``str``, the type of
-   every text setting in ``schemas/settings.py`` and the one migration 006 writes, so a new install and an upgraded one
-   hold the same row —, default ``invite`` (lot A6d, decision 36), choices open, invite and disabled and nothing else;
-   ``SETTINGS_REGISTRY.global_.REGISTRATION_MODE``; ``ENABLE_REGISTRATION`` gone.
+   every text setting in ``schemas/settings.py`` and the one the 1.3 migration (``005_release_1_3_0_schema``, step 3)
+   writes, so a new install and an upgraded one hold the same row —, default ``invite`` (lot A6d, decision 36), choices
+   open, invite and disabled and nothing else; ``SETTINGS_REGISTRY.global_.REGISTRATION_MODE``; ``ENABLE_REGISTRATION``
+   gone.
 3. The variables, one accessor each in ``backend/app/config/accounts.py``, read at every call, each in ``.env.example``'s
    Accounts section as a commented line:
    - ``registration_mode_override()`` — ``LIBREFOLIO_REGISTRATION``, stripped and lower-cased; unset, empty or blank →
@@ -55,7 +56,7 @@ holds the whole rule, so that the API and the command line apply the same one. T
 Refusals are ``RegistrationError`` carrying its code (``.code``, or else its first argument). The helpers that call the
 service commit after a refusal on purpose: whatever its caller does next, a refused call must have written nothing.
 
-Every database is a private SQLite file under ``tmp_path`` built with ``create_all`` (``test_migration_005_accounts``
+Every database is a private SQLite file under ``tmp_path`` built with ``create_all`` (``test_migration_005_release_1_3``
 keeps that schema equal to the migrated one), opened as production opens its own: aiosqlite, NullPool — a session is a
 connection —, and the PRAGMA listener of ``backend.app.db.session`` (foreign keys, WAL, busy_timeout). The accounts
 variables are removed from this process's environment before each test and set through ``monkeypatch`` where a test is
@@ -408,8 +409,8 @@ def test_registration_mode_replaces_enable_registration_in_the_registry() -> Non
     """Contract 2: ``SETTINGS_REGISTRY.global_.REGISTRATION_MODE`` is the global key ``registration_mode``, a ``str`` defaulting to ``invite`` (lot A6d, decision 36); ``enable_registration`` and ``ENABLE_REGISTRATION`` are gone.
 
     ``str`` (review of 15/10): the documented type of every text setting in ``schemas/settings.py`` — "str", "int",
-    "bool", "json" —, and the one migration 006 writes: a new install, seeded from the registry, and an upgraded one hold
-    the same row. ``invite`` (A6d): a new install registers by invitation; its first account is always creatable.
+    "bool", "json" —, and the one the 1.3 migration writes: a new install, seeded from the registry, and an upgraded one
+    hold the same row. ``invite`` (A6d): a new install registers by invitation; its first account is always creatable.
     """
     print_section("Contract 2: registration_mode in the registry")
     spec = SETTINGS_REGISTRY.global_.REGISTRATION_MODE

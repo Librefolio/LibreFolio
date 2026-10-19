@@ -37,10 +37,11 @@ handed; the market holiday table is an empty one.
 Red before the change (HEAD eed325d99), each for the reason its docstring gives ("Red before Z-25"): BL-001, BL-002,
 BL-I01…I03, BL-A01, BL-A03…A07, BL-F01…F03. Green then too — behaviour the change has to keep: BL-I04, BL-A02.
 
-Z-30 (coordinator decision, 17/10; X-R65's D3) bounds how far back a full-history item loads. Since X-R65 a price
-dated before 1900-01-01 is refused when it is written, but a row an older version stored stays, and a full-history item
-loaded from ``date.min``: one row dated 0001-01-01 made the fill of ONE visible day emit about 740 000 days — under the
-budget, so they were built. The contract pinned here (BL-L):
+Z-30 (coordinator decision, 17/10; X-R65's D3) bounds how far back a full-history item loads. No write of a price or a
+rate has a floor since N83's revision (developer, 19/10; X-R65 had refused a date before 1900-01-01): a row dated
+0001-01-01 can be written today, as an older version stored one. And a full-history item loaded from ``date.min``: one
+row dated 0001-01-01 made the fill of ONE visible day emit about 740 000 days — under the budget, so they were built.
+Z-30 still bounds that load at 1900-01-01, whatever rows lie before it. The contract pinned here (BL-L):
 
 5. ``get_prices_bulk`` changes the full-history warm-up, and nothing else (decision A, coordinator, 17/10): an item whose
    signals need the whole history (``requires_full_history``) warms up for ``max(finite warm-up, visible start -
@@ -58,7 +59,8 @@ budget, so they were built. The contract pinned here (BL-L):
    and the events read the same per-item load ranges. An asset with no row before 1900 is filled from its first stored
    price, as before, and a visible range before 1900 keeps its own rows.
 
-The old rows are written through the ORM, as an older version stored them: the upsert now refuses their dates.
+The old rows are written through the ORM, straight into the private database, as an older version stored them; since
+N83's revision the upsert would take their dates as well.
 Red before Z-30 (HEAD d12153a1f), each for the reason its docstring gives ("Red before Z-30"): BL-L01…L03. Green then
 too — behaviour the change has to keep: BL-L04…L07. Red under the full history first narrowed (from the earlier of
 1900-01-01 and the visible start, in place of the finite warm-up): BL-L01's three cases at or before the floor, and
@@ -738,7 +740,8 @@ LEGACY_CLOSE = 90  # the old row's close: below every recent one, so it is never
 async def _priced_asset(engine: AsyncEngine, closes: dict[date, int], *, dividends_on: Iterable[date] = ()) -> int:
     """An asset of the private database with ``closes`` (day → close) and a dividend on each day of ``dividends_on``.
 
-    Written through the ORM, as an older version stored its rows: X-R65 checks the day in the upsert, not in the table.
+    Written through the ORM, as an older version stored its rows, straight into the table; since N83's revision (19/10)
+    the upsert would take a day before 1900-01-01 as well.
     """
     async with AsyncSession(engine, expire_on_commit=False) as session:
         asset = Asset(display_name=f"Bulk limits {uuid.uuid4().hex[:8]}", currency="EUR", asset_type=AssetType.STOCK)

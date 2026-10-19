@@ -219,7 +219,7 @@ def services_range_ceiling(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: get_prices_bulk + _build_backward_filled_series, the POST /fx/currencies/convert handler, refresh._fetch_refresh_item")
     print_info("Extreme ranges (0001-01-01 … 9999-12-31) bounded by the wall clock and by fuses inside the per-day loops")
     print_info("Bulk caps: 1 000 items per request, 1 M item-days (R13-SEC9-2) (the fill's span, warm-up and comparisons included), lowered per case")
-    print_info("X-R65 (N83): stored date bounds, 1900-01-01 … tomorrow: the helpers, and the 422 date_out_of_range of POST /assets/prices and POST /fx/currencies/rate")
+    print_info("X-R65 (N83): a stored date no later than tomorrow, no floor since 19/10: the helpers, and the 422 date_out_of_range of POST /assets/prices and POST /fx/currencies/rate")
     print_info("Z-30: a full-history price load starts at the earlier of 1900-01-01 and the finite warm-up's start; an older row only seeds the fill")
     cmd = [*pipenv_prefix(), "python", "-m", "pytest", *RANGE_CEILING_TEST_PATHS, "-v"]
     if test_names:
@@ -1127,7 +1127,7 @@ def services_asset_digit_limits(verbose: bool = False, test_names: list = None) 
 
 
 def services_current_price_storable(verbose: bool = False, test_names: list = None) -> bool:
-    """Run X-R40 + W-B62: the current price and the price refresh serve, cache and announce only what the database can keep."""
+    """Run X-R40 + W-B62 + N92: the current price and the price refresh serve, cache and announce only what the database can keep."""
     print_section("Services: Current Price Storable")
     print_info("Testing: backend/app/services/assets/price_query.py (get_current_prices_bulk), refresh.py (bulk_refresh_prices)")
     print_info("Tests: an unstorable quote never served nor cached (database fallback) and logged once per value, a valid one served and cached as the database keeps it, a refresh's changed_points and current-value cache limited to what is stored, a fallback past an unreadable close")
@@ -1672,7 +1672,7 @@ def services_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
     """Test FX pair-sync orchestration branches in services/fx/sync.py."""
     print_section("Services: FX Sync Orchestration")
     print_info("Testing: backend/app/services/fx/sync.py")
-    print_info("Tests: _is_date_within_sync_range (X-R65 floor 1900-01-01), sync_pairs_bulk._process_route/._compute_multi_step")
+    print_info("Tests: _is_date_within_sync_range (N83: no 1900-01-01 floor), sync_pairs_bulk._process_route/._compute_multi_step")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_sync_service.py", test_names)
     return run_command(cmd, "FX sync service tests", verbose=verbose)
 
@@ -1968,7 +1968,7 @@ Note: No backend server required.
         "range-ceiling",
         services_range_ceiling,
         name="Date Range Ceiling",
-        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 by the server calendar, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses. Z-25 (N77): 1 000 items per price/FX request, refused before any read; 1 M item-days (R13-SEC9-2), counted as the span the price fill emits (warm-up and comparison series included) and as the daily + signal items a conversion builds, all counted before any is built; X-R65 (N83): stored_date_bounds (1900-01-01 … the ceiling, read at the call), DateOutOfRangeError and the 422 date_out_of_range detail; POST /assets/prices and POST /fx/currencies/rate refuse a date outside before any statement or write. Z-30: a full-history price item loads from the earlier of 1900-01-01 and the start of its finite warm-up; a row stored before 1900 only seeds that fill, and the count follows",
+        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 by the server calendar, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses. Z-25 (N77): 1 000 items per price/FX request, refused before any read; 1 M item-days (R13-SEC9-2), counted as the span the price fill emits (warm-up and comparison series included) and as the daily + signal items a conversion builds, all counted before any is built; X-R65 (N83): latest_stored_date (the ceiling, read at the call; no floor since N83's revision), DateOutOfRangeError and the 422 date_out_of_range detail; POST /assets/prices and POST /fx/currencies/rate refuse a date after it before any statement or write. Z-30: a full-history price item loads from the earlier of 1900-01-01 and the start of its finite warm-up; a row stored before 1900 only seeds that fill, and the count follows",
         # PURE: no lane DB, no server, no network. The price queries run on a private SQLite file under tmp_path built
         # with create_all (or on a stand-in session that reads nothing); the FX handler is called directly with
         # convert_bulk replaced by an in-process converter; the sync step runs with an in-process provider double and
@@ -2520,7 +2520,7 @@ Note: No backend server required.
         "asset-source-guards",
         services_asset_source_guards,
         name="Asset Source Guards",
-        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion; X-R65 (N83): a manual price outside [1900-01-01, tomorrow] refuses the whole upsert before any statement (DateOutOfRangeError: items per asset, count), a provider's is dropped, named and logged, the others stored; X-R71: a manual currency mismatch refuses the whole upsert after one SELECT of the assets' currencies, nothing written (PriceCurrencyMismatchError, no ValueError: items per asset at fault with expected, found first seen, ten dates at most; count every date; the 422 detail keeps ten items), the dates checked first, a provider's mismatch still a ValueError",
+        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion; X-R65 (N83): a manual price after tomorrow refuses the whole upsert before any statement (DateOutOfRangeError: items per asset, count), a provider's is dropped, named and logged; one before 1900 is stored, the others stored; X-R71: a manual currency mismatch refuses the whole upsert after one SELECT of the assets' currencies, nothing written (PriceCurrencyMismatchError, no ValueError: items per asset at fault with expected, found first seen, ten dates at most; count every date; the 422 detail keeps ten items), the dates checked first, a provider's mismatch still a ValueError",
         # WRITE_GLOBAL: Asset, PriceHistory and AssetEvent carry no user_id, so the
         # assets this unit creates (one for the module, a second for one X-R65 test, twelve for one X-R71 test)
         # and every price/event row written against them are visible to all
@@ -2545,7 +2545,7 @@ Note: No backend server required.
         "asset-digit-limits",
         services_asset_digit_limits,
         name="Asset Digit Limits",
-        desc="C-97a: a manual price whose open/high/low/close exceeds 12 decimals or 15 significant digits refused (ValueError naming the asset, the maximum and the dates) before anything of the call is written, for every asset and every chunk; the -1 sentinel, trailing zeros and values at the limits accepted; a provider price truncated (12 decimals, 15 significant digits, ROUND_DOWN) and stored; a manual event beyond 6 decimals or 15 significant digits refused with EVENT_TOO_MANY_DIGITS (HTTP 400), nothing written; what fits read back exactly and in today's form",
+        desc="C-97a: a manual price whose open/high/low/close exceeds 12 decimals or 15 significant digits refused (ValueError naming the asset, the maximum and the dates) before anything of the call is written, for every asset and every chunk; the 'clear' marker (N92), trailing zeros and values at the limits accepted; a provider price truncated (12 decimals, 15 significant digits, ROUND_DOWN) and stored; a manual event beyond 6 decimals or 15 significant digits refused with EVENT_TOO_MANY_DIGITS (HTTP 400), nothing written; what fits read back exactly and in today's form",
         # WRITE-SCOPED, the category default, as asset-source: every row is this unit's own -- two assets
         # created under a unique name, and only their prices and events, written, read and wiped by asset id.
         # Nothing here counts or reads a row it did not write.
@@ -2555,7 +2555,7 @@ Note: No backend server required.
         "current-price-storable",
         services_current_price_storable,
         name="Current Price Storable",
-        desc="X-R40 + W-B62: a current quote no price column keeps (storable_price None: 1E+50000000, 1E+60, 1E-13, a float inf) never served nor cached -- the item falls back to the latest stored close that reads a number (db:last_known) or to an error, the next call asks the provider again -- and its refusal logged once per (asset, provider, value), never at every poll; a valid quote served and cached as the database keeps it (65432.1234567890999 -> 65432.123456789), one that already fits served in its own form; a refresh leaves out of changed_points a date no column keeps, and neither caches nor stores nor announces an unstorable current value, while it caches a valid one as stored; the database fallback passes over a close that reads None and never raises",
+        desc="X-R40 + W-B62: a current quote no price column keeps (storable_price None: 1E+50000000, 1E+60, 1E-13, a float inf) never served nor cached -- the item falls back to the latest stored close that reads a number (db:last_known) or to an error, the next call asks the provider again -- and its refusal logged once per (asset, provider, value), never at every poll; a valid quote served and cached as the database keeps it (65432.1234567890999 -> 65432.123456789), one that already fits served in its own form; a refresh leaves out of changed_points a date no column keeps, and neither caches nor stores nor announces an unstorable current value, while it caches a valid one as stored; the database fallback passes over a close that reads None and never raises; N92: a provider's day with a close not above 0 or a negative open, high, low or volume discarded before the upsert, named in the result (PARTIAL; FAILED when every day is) and logged, a zero open or volume kept; a current value not above 0 refused as an unstorable one, named as written",
         # WRITE-SCOPED, the category default, as asset-digit-limits: every row is this unit's own -- two assets
         # created under a unique name, and only their prices, events and provider assignment, written, read and
         # wiped by asset id. The provider codes are unique per test, so the current-value cache entries and the
@@ -2991,7 +2991,7 @@ Note: No backend server required.
         "fx-sync-service",
         services_fx_sync,
         name="FX Sync Orchestration",
-        desc="_is_date_within_sync_range (X-R65: no day before 1900-01-01, whatever the start), _process_route/_compute_multi_step",
+        desc="_is_date_within_sync_range (N83: an old rate is kept too, no 1900-01-01 floor), _process_route/_compute_multi_step",
         exclusive_because="an autouse fixture truncates fx_rates and fx_conversion_routes before every test, so any concurrent unit reading rates or routes loses them mid-test",
     )
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")

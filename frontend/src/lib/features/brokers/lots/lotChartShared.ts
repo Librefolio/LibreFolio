@@ -108,3 +108,27 @@ export function resolveBrokerName(brokerId: number | null, brokers: ReadonlyArra
     if (brokerId == null) return missing;
     return brokers.find((broker) => broker.id === brokerId)?.name ?? unknown(brokerId);
 }
+
+/** The side of the lots' broker scope a transfer leg crossed (J-48): `IN` brought units in, `OUT` took them out. */
+export type ScopeBoundary = 'IN' | 'OUT';
+
+/**
+ * An event's `scope_boundary`, or `null` (J-48). The backend sets it on a row of a transfer leg whose partner sits at a
+ * broker outside the analysis scope; the generated client types it scalar-or-array, like the other optional fields.
+ */
+export function scopeBoundaryOf(event: {scope_boundary?: unknown}): ScopeBoundary | null {
+    const value = Array.isArray(event.scope_boundary) ? event.scope_boundary[0] : event.scope_boundary;
+    return value === 'IN' || value === 'OUT' ? value : null;
+}
+
+/**
+ * The kind a lot view labels an event with (J-48). A transfer leg read at the scope's edge arrives as an adjustment,
+ * whose `kind` carries the economics; its label is `TRANSFER_IN` or `TRANSFER_OUT`. Every other event keeps its kind.
+ * Labels only: no figure reads this.
+ */
+export function eventLabelKind<K extends string>(event: {kind: K; scope_boundary?: unknown}): K | 'TRANSFER_IN' | 'TRANSFER_OUT' {
+    const boundary = scopeBoundaryOf(event);
+    if (boundary === 'IN') return 'TRANSFER_IN';
+    if (boundary === 'OUT') return 'TRANSFER_OUT';
+    return event.kind;
+}
