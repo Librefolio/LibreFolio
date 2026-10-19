@@ -2,6 +2,7 @@
     import {AlertTriangle, Info} from 'lucide-svelte';
 
     import {_ as t} from '$lib/i18n';
+    import {STATUS_TONES} from '$lib/theme/toneClasses';
 
     import type {ResultHealth, ResultReason} from './levelHelpers';
     import {analyticNameKey} from './partialNotice';
@@ -46,9 +47,15 @@
         info: 'border-lf-info-line bg-lf-info-soft text-lf-info-on-soft',
         warning: 'border-lf-warning-line bg-lf-warning-soft text-lf-warning-on-soft',
     } as const;
+    /** The icon of the title in the state's own colour (designer, round 3). */
+    const ICON_CLASSES = {
+        info: 'text-lf-info',
+        warning: 'text-lf-warning',
+    } as const;
+    /** A measurement is a pill, no control: the banner chip of round 3 (proposal a), without its hover. */
     const CHIP_CLASSES = {
-        info: 'border-lf-info-line bg-lf-card/70',
-        warning: 'border-lf-warning-line bg-lf-card/70',
+        info: STATUS_TONES.bannerChip.info.base,
+        warning: STATUS_TONES.bannerChip.warning.base,
     } as const;
 
     let title = $derived(partial.length === 0 ? $t('risk.levels.notice.notesTitle') : tone === 'info' ? $t('risk.levels.notice.noPriceSourceTitle') : $t('risk.levels.notice.partialTitle'));
@@ -79,9 +86,9 @@
     <div class="rounded-lg border px-3 py-2 text-xs {TONE_CLASSES[tone]}" data-testid="risk-partial-notice" data-partial-count={partial.length} data-tone={tone}>
         <p class="flex items-center gap-1.5 font-medium" data-testid="risk-partial-title">
             {#if tone === 'info'}
-                <Info size={14} class="shrink-0" />
+                <Info size={14} class="shrink-0 {ICON_CLASSES.info}" />
             {:else}
-                <AlertTriangle size={14} class="shrink-0" />
+                <AlertTriangle size={14} class="shrink-0 {ICON_CLASSES.warning}" />
             {/if}
             {title}
         </p>
@@ -101,7 +108,7 @@
                 {#each groups as group (group.level ?? 'none')}
                     <div class="flex flex-wrap items-center gap-1.5" data-testid="risk-partial-level" data-level={group.level ?? 'none'}>
                         {#if group.level !== null}
-                            <span class="opacity-80">{levelTitle(group.level)}</span>
+                            <span>{levelTitle(group.level)}</span>
                         {/if}
                         {#each group.entries as entry (entry.instanceId)}
                             <span class="rounded-full border px-2 py-0.5 {CHIP_CLASSES[tone]}" data-testid="risk-partial-measurement" data-instance={entry.instanceId}>{measurementName(entry)}</span>

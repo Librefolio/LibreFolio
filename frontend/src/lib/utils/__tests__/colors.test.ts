@@ -6,10 +6,10 @@
  * (within one unit per channel, the rounding of `hslToHex`) and if a malformed colour degrades to `null`, a branch the
  * caller can handle, rather than to black — a black slice is an invisible bug.
  *
- * **The colours it is proven on are the ones the charts draw today**: the category colours of the designer's round 2
- * (GR1, D-T17) — every asset-type family, every sector and the engine's two buckets, in both themes — read through
- * `categoryColor` (`$lib/theme/chartCategories`), the charts' one read point. So an edit of the designer's tables is
- * measured here.
+ * **The colours it is proven on are the ones the charts draw today**: the category colours of the designer's round 3,
+ * her final palette on the rule of her round 2 (GR1, D-T17) — every asset-type family, every sector and the engine's
+ * two buckets, in both themes — read through `categoryColor` (`$lib/theme/chartCategories`), the charts' one read
+ * point. So an edit of the designer's tables is measured here.
  *
  * Until round 2 the allocation charts derived a family's shades in HSL from hand-written 14-slot palettes, and this file
  * measured those palettes. The shades are now OKLab mixes (`$lib/theme/chartShades`) and the palettes are gone, so

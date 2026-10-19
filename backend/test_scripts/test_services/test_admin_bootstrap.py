@@ -97,6 +97,15 @@ last active administrator —, nothing changed since the setup. A51-007 (``user 
 «deactivated», while the account stays active and only its sessions end) and A51-008 (``user demote``; today ``(True,
 None)``, the only active administrator demoted). The window is played as A42's, without threads: the setup lands after
 the command's load of the account or before its first write, whichever comes first.
+
+The lot «decide under the write lock» (A-52, A-54; contract approved by the coordinator, 17/10) adds one section right
+after A51's, every new red labelled ``# red until A-54``. LOCK-CLI — ``set_user_active`` and ``set_user_admin``
+(``./dev.py user deactivate|activate|promote|demote``) on an account another process deletes in A-51's window, between
+their load of the account and their write lock, answer what their first check answers for an unknown username —
+``(False, "User '<username>' not found")`` — and change nothing (LOCK-CLI-01; today ``InvalidRequestError`` escapes the
+refresh under the lock, and the CLI prints a traceback). LOCK-CLI-02, a guard: the same window with nobody deleted in it,
+the four commands work as today. The self-deletion twin is ACCDEL-LOCK-03, in ``test_account_deletion_api.py``, which
+imports this file's window (``_issuer_engine``, ``_rival_before_the_first_write``).
 """
 
 from __future__ import annotations
@@ -2939,6 +2948,162 @@ async def test_user_demote_refuses_the_only_administrator_set_up_while_it_ran(en
     assert await _snapshot(engine) == set_up, "a refused demotion must change nothing: every account, token and setting as the setup left them"
     assert (after.is_active, after.is_superuser) == (True, True), "the account must stay active, an administrator"
     print_success("refused: the last active administrator; nothing changed")
+
+
+# =============================================================================
+# LOCK-CLI — LOT «DECIDE UNDER THE WRITE LOCK», A-54: THE ACCOUNT DELETED WHILE THE CLI CHANGES IT
+# =============================================================================
+# A-54: since A-51, ``set_user_active`` (``./dev.py user activate|deactivate``) and ``set_user_admin`` (``user
+# promote|demote``) load the account by its username, then take SQLite's write lock and refresh the account before
+# deciding. Another process may delete the account between the load and the lock — ``user_service.delete_user``, what an
+# administrator's ``DELETE /users/{id}`` and the account's own ``DELETE /auth/users/me`` run —: ``session.refresh(user)``
+# then raises ``InvalidRequestError``, which today escapes the service, and the CLI prints a traceback. The contract (lot
+# «decide under the write lock», approved by the coordinator, 17/10): the command answers what its first check answers
+# for an unknown username, ``(False, "User '<username>' not found")``, and nothing else changes.
+#
+# The window is A-51's: the deletion commits on another connection right after the command loaded the account
+# (``_rival_after_the_load``) or right before its first write (``_rival_before_the_first_write``, the command on an
+# engine of its own), whichever comes first. The barrier records how far the command had got when the deletion landed:
+# carol loaded, nothing written. The scene is rows — carol, the account of the command, as each command can change her,
+# and root, an active administrator, beside —; the commands read the clock, and nothing here depends on it. The
+# self-deletion twin of these tests is ACCDEL-LOCK-03 (``test_account_deletion_api.py``).
+
+CAROL = "carol"
+CAROL_EMAIL = f"{CAROL}@example.com"
+
+
+@dataclass(frozen=True)
+class CliChange:
+    """A command of A-54 on carol: carol's ``(is_active, is_superuser)`` before it, the command, and carol's flags after it when nothing gets in its way."""
+
+    before: tuple[bool, bool]
+    command: Command
+    after: tuple[bool, bool]
+
+
+async def _user_deactivate(session: AsyncSession) -> tuple[bool, Optional[str]]:
+    """``./dev.py user deactivate carol``: ``set_user_active(session, "carol", False)``."""
+    return await user_service.set_user_active(session, CAROL, False)
+
+
+async def _user_activate(session: AsyncSession) -> tuple[bool, Optional[str]]:
+    """``./dev.py user activate carol``: ``set_user_active(session, "carol", True)``."""
+    return await user_service.set_user_active(session, CAROL, True)
+
+
+async def _user_promote(session: AsyncSession) -> tuple[bool, Optional[str]]:
+    """``./dev.py user promote carol``: ``set_user_admin(session, "carol", True)``."""
+    return await user_service.set_user_admin(session, CAROL, True)
+
+
+async def _user_demote(session: AsyncSession) -> tuple[bool, Optional[str]]:
+    """``./dev.py user demote carol``: ``set_user_admin(session, "carol", False)``."""
+    return await user_service.set_user_admin(session, CAROL, False)
+
+
+#: The four commands of A-54, each on a carol it changes: active or not, an administrator or not.
+CLI_CHANGES = [
+    pytest.param(CliChange(before=(True, False), command=_user_deactivate, after=(False, False)), id="user-deactivate"),
+    pytest.param(CliChange(before=(False, False), command=_user_activate, after=(True, False)), id="user-activate"),
+    pytest.param(CliChange(before=(True, False), command=_user_promote, after=(True, True)), id="user-promote"),
+    pytest.param(CliChange(before=(True, True), command=_user_demote, after=(True, False)), id="user-demote"),
+]
+
+
+@dataclass
+class CliWindow:
+    """What A-54's window saw: the usernames the command loaded and the write statements of its engine, filled as they come; how far each had got when the rival landed; what the rival's deletion answered; the database as the rival left it."""
+
+    loaded: list[str] = dataclasses.field(default_factory=list)
+    writes: list[str] = dataclasses.field(default_factory=list)
+    landings: list[tuple[list[str], list[str]]] = dataclasses.field(default_factory=list)
+    deletions: list[object] = dataclasses.field(default_factory=list)
+    landed: Landed = dataclasses.field(default_factory=list)
+
+
+async def _carol_beside_root(engine: AsyncEngine, change: CliChange) -> tuple[int, dict[str, tuple[int, str, bool, bool]]]:
+    """root, an active administrator, and carol as ``change`` needs her, written as rows: (carol's id, every account). Barrier: the instance holds exactly them."""
+    root = await _add_user(engine, ROOT_USERNAME, admin=True)
+    carol = await _add_user(engine, CAROL, active=change.before[0], admin=change.before[1])
+    accounts = await _accounts(engine)
+    assert accounts == {ROOT_USERNAME: (root, f"{ROOT_USERNAME}@example.com", True, True), CAROL: (carol, CAROL_EMAIL, *change.before)}, f"barrier: root and carol, as the command needs her: {accounts}"
+    return carol, accounts
+
+
+async def _the_command_through_the_window(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, command: Command, deleted: Optional[int]) -> tuple[Optional[tuple[bool, Optional[str]]], Optional[Exception], CliWindow]:
+    """A-54's window: ``command`` on a session of an engine of its own while the account ``deleted`` — or nobody, with None — is deleted through ``user_service.delete_user`` on another connection, right after the command's load of carol or right before its first write, whichever comes first. (What the command answered, what escaped it instead, the window.)
+
+    What escapes the deletion is recorded, not raised: raised inside the window, it would surface as the command's own failure.
+    """
+    window = CliWindow()
+
+    async def rival() -> None:
+        window.landings.append((list(window.loaded), list(window.writes)))
+        if deleted is not None:
+            try:
+                async with AsyncSession(engine) as session:
+                    window.deletions.append(await user_service.delete_user(session, deleted))
+            except Exception as failure:  # recorded for the barrier: see above
+                window.deletions.append(failure)
+        window.landed.append(await _snapshot(engine))
+
+    once = _once(rival)
+    window.loaded = _rival_after_the_load(monkeypatch, CAROL, once)
+    outcome: Optional[tuple[bool, Optional[str]]] = None
+    escaped: Optional[Exception] = None
+    async with _issuer_engine(engine) as own:
+        with _rival_before_the_first_write(own, once) as fired:
+            window.writes = fired
+            async with AsyncSession(own) as session:
+                try:
+                    outcome = await command(session)
+                except Exception as raised:  # the red of A-54 today: reported by the test, never raised past it
+                    escaped = raised
+    return outcome, escaped, window
+
+
+# red until A-54
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change", CLI_CHANGES)
+async def test_the_cli_says_not_found_of_an_account_deleted_while_it_ran(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, change: CliChange) -> None:
+    """LOCK-CLI-01 — NEW, red until A-54 (today ``InvalidRequestError`` «Could not refresh instance '<User at 0x…>'» escapes ``session.refresh(user)``, under the write lock just taken — nothing is written, the session rolls back —: the CLI prints a traceback): ``./dev.py user deactivate``, ``activate``, ``promote`` or ``demote`` of carol — ``set_user_active(session, "carol", False|True)``, ``set_user_admin(session, "carol", True|False)`` —, carol deleted on another connection (``user_service.delete_user``) after the command loaded her and before its first write. The command answers exactly what its first check answers for an unknown username, ``(False, "User 'carol' not found")``, and nothing else changes: every account, token and setting as the deletion left them.
+
+    Barrier: the deletion lands once — the command had loaded carol and written nothing —, deletes carol, and the command's first write comes after it (the statement is reported: today ``begin_writes``' ``UPDATE users … WHERE 0 = 1``).
+    """
+    print_section(f"LOCK-CLI-01: {_named(change.command)}, carol deleted while it ran")
+    carol, _ = await _carol_beside_root(engine, change)
+
+    outcome, escaped, window = await _the_command_through_the_window(engine, monkeypatch, change.command, carol)
+
+    did = f"raised {type(escaped).__name__}: {escaped}" if escaped is not None else f"answered {outcome!r}"
+    assert len(window.landed) == 1 and window.landings == [([CAROL], [])], f"barrier: carol's deletion must land once, the command having loaded carol and written nothing: it landed {len(window.landed)} time(s), with (loaded, written) {window.landings}; the command {did}"
+    assert [type(deletion).__name__ for deletion in window.deletions] == ["AccountDeletion"] and CAROL not in [row["username"] for row in window.landed[0]["users"]], f"barrier: the rival must delete carol: it answered {window.deletions}"
+    assert await _snapshot(engine) == window.landed[0], f"nothing else may change: every account, token and setting as carol's deletion left them; the command {did}"
+    expected = (False, f"User '{CAROL}' not found")
+    assert escaped is None and outcome == expected, f"red until A-54: carol was deleted after the command loaded her and before its first write {window.writes[:1]}: it must answer {expected}, its first check's answer for an unknown username; it {did}"
+    print_success("not found; nothing changed")
+
+
+# guard
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change", CLI_CHANGES)
+async def test_the_cli_works_as_today_when_nothing_is_deleted_while_it_runs(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, change: CliChange) -> None:
+    """LOCK-CLI-02 — GUARD, green today and after: the scene and the window of LOCK-CLI-01 with nobody deleted in it — no rival —: each command works as today, ``(True, None)``; carol deactivated, activated, promoted or demoted; root untouched.
+
+    Barrier: the window opened — the command had loaded carol and written nothing —, and nothing was deleted in it.
+    """
+    print_section(f"LOCK-CLI-02: {_named(change.command)}, nothing deleted while it ran")
+    carol, before = await _carol_beside_root(engine, change)
+
+    outcome, escaped, window = await _the_command_through_the_window(engine, monkeypatch, change.command, None)
+
+    did = f"raised {type(escaped).__name__}: {escaped}" if escaped is not None else f"answered {outcome!r}"
+    opened = len(window.landed) == 1 and window.landings == [([CAROL], [])] and window.deletions == []
+    assert opened, f"barrier: the window must open once, the command having loaded carol and written nothing, with nothing deleted in it: (loaded, written) {window.landings}, deletions {window.deletions}; the command {did}"
+    assert escaped is None and outcome == (True, None), f"nobody was deleted: {_named(change.command)} must work as today, (True, None); it {did}"
+    expected = {**before, CAROL: (carol, CAROL_EMAIL, *change.after)}
+    assert await _accounts(engine) == expected, f"carol must be as {_named(change.command)} leaves her and root untouched: expected {expected}"
+    print_success("done as today")
 
 
 # =============================================================================

@@ -75,7 +75,7 @@
 | [Piano della 52](52_timeAxisLastLabel/plan-phase00TimeAxisLastLabel.prompt.md) | L'ultima etichetta degli assi del tempo sui telefoni, le date dei tooltip, il periodo in corso di Growth, Alloc e lotti | chiuso nel treno 97 |
 | [Piano della 53](53_pacTests/plan-phase00PacTests.prompt.md) | I test del PAC (T-PAC): mappa, coperture, test che mentono, difetti D1–D4, lotti A–C | aperto: tutto dopo la 1.2 (C-69, C-73…C-78) |
 | [Piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md) | La fixture della galleria: quote, YoC e variazione di un giorno non più scalate (I-M30) | chiuso nel treno 99; la privacy resta una domanda del developer |
-| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto; 16/10 sera: il 93,9 % delle classi sui ruoli (m1 697 nel target), il resto aspetta la designer; 17/10 notte: m1 674, token di componente letterali 583 → 6, i neutri dei grafici sui ruoli (B4), `drawnColors` sui ruoli |
+| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto; 16/10 sera: il 93,9 % delle classi sui ruoli (m1 697 nel target), il resto aspetta la designer; 17/10 notte: m1 674, token di componente letterali 583 → 6, i neutri dei grafici sui ruoli (B4), `drawnColors` sui ruoli; 18/10 notte: giro 3 della designer applicato (grafici, toast e banner, badge dei tipi sui ruoli `--lf-cat-*`), m1 590, galleria prima/dopo e zip per la designer |
 | [Gallery deterministica](../Phase_1/10_colorSystem/G-galleryDeterminism/README.md) | Gallery deterministica: 27 schermate instabili su 177, fallimenti sotto carico; workstream G | aperto il 14/10; ora in `10_colorSystem/G-galleryDeterminism` (era la 56) |
 | [Rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md) | La run completa con coverage sull'albero candidato al tag (`10e646f79`): 0 rossi | C-79 |
 | [README della 09](09_feedbackJobs/README.md) | Backlog strutturale P4 e feedback, «Cosa resta aperto» in cima (09/10) | 7 voci: 6 nella sezione 09, SP14 nella D |
@@ -2606,6 +2606,57 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «Dopo G-18», «Punto 33 della designer».
+- **G-24 · Lo scatto della modale «What's new» (C-54)** — basso; coordinatore, 18/10 01:24, dalla coda della 1.3
+  (17/10 17:48, dopo `331cee121`). Non nella galleria del giro 3.
+  - La modale «What's new since your last version» (`frontend/src/lib/features/changelog/WhatsNewModal.svelte`) non ha
+    uno scatto. La apre `DeferredAppPopups`, prima fra i popup automatici, quando `user.whats_new` (login e
+    `GET /api/v1/auth/me`) nomina capitoli rilasciati di `CHANGELOG.md` che l'utente non ha visto.
+  - Per gli utenti di test `whats_new` è `null`: nessuno scatto di oggi la incontra per caso.
+  - Il metodo è quello di `frontend/e2e/layout/whats-new.spec.ts`: la risposta vera di `GET /api/v1/auth/me`, con
+    `user.whats_new` sostituito (`route.fetch()`, poi `fulfill`). Lo stub vale per il contesto che lo installa.
+  - Da decidere scrivendolo:
+    - `since` e `release` fra i capitoli già rilasciati (oggi 1.1.0, 1.2.0, 1.2.1), così lo scatto non cambia a ogni
+      nuova versione;
+    - la chiusura scrive `POST /api/v1/auth/whats-new/seen` sul DB condiviso: lo scatto non la chiude, o la intercetta;
+    - nelle quattro lingue: il capitolo tradotto dove il bundle lo traduce, altrimenti in inglese con la pillola
+      (`whats-new-not-translated`).
+  - Il test lo scrive test-author, nel perimetro di G (`gallery.spec.ts`, una fixture in `frontend/e2e/fixtures/`). Poi
+    un doppio a/b filtrato, e la riga di `mkdocs_src/docs/gallery/*.en.md` scritta da docs-writer.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Galleria del giro 3».
+- **G-25 · `onboarding/welcome-setup` su mobile: in francese e spagnolo la pagina non sta più nell'inquadratura** —
+  basso; G, 18/10, dalla galleria del giro 3. Il coordinatore l'ha accettata alle 02:36.
+  - Dal 17/10 la pagina di benvenuto ha la nota legale sotto la card (A9, `b1b647edc`, `LegalNotice`).
+  - Lo scatto la guarda dal fondo: `frameWelcome` (`frontend/e2e/fixtures/galleryOnboarding.ts`) scorre in fondo e
+    vuole interi nell'inquadratura i cinque controlli, cioè l'avatar, la lingua, la valuta, «salta» e «continua».
+  - Su mobile, in francese e spagnolo, coi testi più lunghi, la pagina non ci sta più e l'avatar esce in alto: è
+    visibile al 78,75 %. Il test fallisce nelle 4 varianti, chiaro e scuro, e quelle immagini mancano. In inglese e
+    italiano passa; su desktop tutte e 8 le varianti passano.
+  - Non è carico né tempo: lo stesso rapporto in nove esecuzioni del 18/10, cioè le tre gallerie complete e i loro fill
+    a 2 e a 1 worker. Verdetto `test-triage`: assunzione del test. Il prodotto è corretto. `designer-16b` (16/10, prima
+    di A9) aveva tutte e 16 le varianti.
+  - Proposta: per quello scatto, uno schermo alto quanto la pagina (`extendScreenToBlock` di `galleryTallShots.ts`),
+    così nell'immagine entra anche la nota legale. In alternativa l'inquadratura sulla sola card, con la nota fuori. La
+    scelta la conferma A, il proprietario di A9.
+  - Il test lo ripara test-author, nel perimetro di G. Poi un doppio a/b filtrato, in francese e spagnolo su mobile.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Galleria del giro 3».
+- **G-26 · `settings/password-modal` su mobile: la pagina sotto la modale si ferma a scorrimenti diversi** — basso; G,
+  18/10, dal rumore della galleria del giro 3.
+  - Nelle due catture identiche del dopo (`cd686f445`, 18/10), su mobile in spagnolo scuro, la modale è uguale ma la
+    pagina dietro no: in una si vedono il nome utente ed «Eliminar Cuenta», nell'altra l'avatar e «Seguridad». È il
+    15,4 % dei pixel, in una variante su 16.
+  - Nel rumore del 13/10 (`g-ref13`) lo scatto era «basso»; oggi è «instabile». Nei confronti dello stesso giorno le
+    sue zone di rumore lo coprono, ma il riferimento resta meno pulito.
+  - Da fare con `test-triage`, partendo dall'ipotesi del tempo: la pagina che scorre mentre la modale si apre, o
+    l'avatar che si carica e la sposta. Poi fermare lo scorrimento prima di aprire la modale, come negli altri scatti a
+    pagina ferma.
+  - Il test lo ripara test-author, nel perimetro di G. Poi un doppio a/b filtrato su mobile.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Galleria del giro 3».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -2833,6 +2884,24 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   il 16/10 sera (`bab52635d`, `0c3275057`); la spec è ferma dal 13/10. Verdetto della triage: difetto del prodotto. Cura
   per il proprietario del WAC: arrotondare il costo proposto alla scala della colonna prima del commit, o quantizzarlo
   nel backend; il test resta com'è. Dettagli: piano di T, «`CompactCashCell`», passo 4.
+- **TC-19 · La pagina per sviluppatori del banner della qualità dei dati dice ancora «amber/sky»** — minimo, docs; T,
+  17/10, R3-a (giro 3). `mkdocs_src/docs/developer/frontend/data-quality-banner.md`, riga ~46, descrive il modo
+  raggruppato come «Single amber/sky container»: da R3-a il contenitore prende il tono del problema più grave (`danger`,
+  `warning` o `info`, via `DATA_QUALITY_TONE`), ogni riga il suo, e i chip stanno sulla card col bordo nel colore dello
+  stato (proposta a, T3-b). Va scritta anche la regola del developer per i banner (rosso per gli errori veri, ambra per
+  i dati mancanti, blu per le note, verde per i successi) e il `MISSING_PRICE` del rischio diventato un avviso. Per la
+  passata della documentazione a fine programma (docs-writer). Dettagli: piano di T, «Giro 3 della designer».
+- ✅ **TC-20 · Il caso «export JSON, reset all, import back» del Lab dava per diverse due sorgenti di colore diventate
+  una** — basso, test; T, 18/10, verifica per l'ingresso di DV; **chiusa il 18/10 nel checkpoint di R3-c**: per il passo
+  L2 il caso usa la radice della pagina delle transazioni (`transactionsPageRoot`, `text-lf-primary`), con le
+  precondizioni che le due sorgenti siano diverse e che dopo L1 la radice tenga il suo colore; `front-designer-lab live`
+  12/12 sulla punta `b238d5b6e` più l'albero (01:11–01:14). La segnalazione com'era:
+  `frontend/e2e/designer-lab/designer-lab-live.spec.ts:673` cambia nella stessa run la variabile del sottotitolo delle
+  transazioni (L1, rosa) e il letterale dell'intestazione della data di `DataTable` (L2, blu); dal 16/10 leggono
+  entrambi `--lf-text-muted` (`546204732`, e il lotto delle tabelle di T `77bfa6a39`), così l'override di L1 vince e
+  l'intestazione resta rosa: rosso deterministico, anche sul target senza DV (`7845fc3d3`: 11 verdi e 1 rosso). Verdetto
+  della triage: un'assunzione del test. La spec era di L (archiviato): la prende T. Dettagli: piano di T, «Una verifica
+  per l'ingresso di DV» e «R3-c e TC-20».
 
 ---
 
@@ -2940,12 +3009,17 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     133/141, 155/162 e 176/184.
     - Il coordinatore (02:50) li vuole nel lotto di T sugli interruttori, tutti insieme con quelli dell'app (riga Q2
       della skill), così in scuro non ce n'è uno diverso dagli altri.
-  - **Le barre «valore contabile» e «liquidità» dei KPI** (`features/dashboard/KpiSection.svelte` @405 e @417, 4
+  - ✅ **Le barre «valore contabile» e «liquidità» dei KPI** (`features/dashboard/KpiSection.svelte` @405 e @417, 4
     classi: `bg-blue-500` e `bg-emerald-500` con le loro metà scure). Sono colori d'identità di due misure, non segni né
     stati: restano categorie (coordinatore, 16/10 12:07, regola 11 dello skill `design-system`).
     - **Per la designer:** quando decide il punto 2.2, la barra della liquidità potrebbe leggere il colore della
       categoria Liquidità dei grafici: lo stesso salvia, e la stessa misura in tutta l'app.
     - Il valore contabile resta da decidere insieme alle altre categorie.
+    - **Decise dal giro 3** (designer e developer, 17/10, `decisioni.md` §1.7): il valore contabile nel blu dell'ETF
+      (K1-a), la liquidità nel colore della Liquidità, ora blu ardesia. Le fa DV in **R3-5**, dopo i ruoli
+      `--lf-cat-etf` e `--lf-cat-liquidity` di T (§1.9, decisione (A)).
+    - **Fatto il 18/10** (R3-5, sulla base merge `3dba7f894`, in attesa del commit del coordinatore): `bg-lf-cat-etf` e
+      `bg-lf-cat-liquidity`; le 4 classi escono dal baseline del ratchet (m1 594 → 590).
   - **Non di DV**, annotati per non perderli:
     - ✅ `INPUT` e `TITLE_INPUT` di `planner/ui.ts`: migrati dal lotto di T sull'input, `37972b529` (16/10);
     - ✅ i 6 campi di testo e numerici di `components/charts/` (W5-charts, 42 classi): stesso lotto di T, `37972b529`;
@@ -2991,8 +3065,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
       bordo neutro di tutti gli altri tooltip.
   - **Restano in `chartTheme.ts` coi valori legacy:** le serie, gli stati, i segni (guadagno e perdita aspettano un
     lotto con lei: fondono il rosso dei prezzi e quello del portafoglio), i punti del rischio/rendimento.
-  - **`GEO_MAP_COLORS.land`** non va su un ruolo: su `neutral` starebbe a ΔE00 4,1/3,7 dal primo gradino della scala
-    (GR5.1). È lo zero della scala, da decidere con lei.
+  - ✅ **`GEO_MAP_COLORS.land`** non va su un ruolo: su `neutral` starebbe a ΔE00 4,1/3,7 dal primo gradino della scala
+    (GR5.1). È lo zero della scala, da decidere con lei. **Decisa dal giro 3** (17/10, `decisioni.md` §1.6): il «senza
+    dati» `#D5D9E0`/`#343B46`, con la scala nuova dei sei blu; lotto R3-2 di DV, in attesa del commit del coordinatore.
   - **Il testo dei bottoni di stato del Gantt** (`on-status`) resta sotto 4,5:1 sui pieni legacy ambra e cielo di
     `LOT_STATE_COLORS` (3,07 e 3,95:1 in chiaro), come prima: si cura coi pieni di stato.
   - **Quattro helper puri leggono i ruoli su `<html>`,** non sull'elemento del grafico (`buildSecondaryYAxes`,
@@ -3003,6 +3078,34 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     oklab`); da estendere se una miscela o una modifica del Lab usa un altro spazio.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
     «B4».
+- **DV-11 · I colori dei tipi in due copie, finché il Lab non passa ai ruoli** — medio; DV, 17/10 (giro 3, §1.9).
+  - Decisione (A) del coordinatore, in due passi. Il primo è del giro 3: i valori in `lib/theme/chartCategories.ts`,
+    i ruoli `--lf-cat-*` di T in `tokens.css` coi valori uguali, e il test di parità di `chartCategories.test.ts` che
+    blocca le due copie (flag di consegna alla `PENDING_READERS`).
+    - Fatto il 18/10: T è entrato per primo (R3-b, `7845fc3d3`), DV ha girato il flag `CATEGORY_ROLES_IN_TOKENS` al
+      merge del target (`3dba7f894`); da allora i 12 ruoli sono tenuti uguali ai colori dei grafici, nei due temi.
+  - **Resta il secondo:** il layer `category` del Designer Lab diventa una vista dei ruoli, e `chartCategories.ts`
+    legge i tipi dai ruoli col ponte di `roleColors`; allora la copia nel file sparisce. Lotto da programmare con L
+    (archiviato), coordinatore, 17/10.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
+    «Giro 3».
+- **DV-12 · L'E2E del pannello posizioni trattiene la «prima» richiesta del report, non quella della pagina sotto
+  prova** — minimo, test; DV, 18/10 (slot del giro 3, fuori area: `e2e/portfolio/dashboard.spec.ts`, «Positions panel
+  publishes its loading state through data-busy»).
+  - Rosso nella run intera su `08512c952`, verde da solo; verde nello slot di B4 (`f35fd9026`), con lo stesso ordine.
+  - `login()` atterra su `/dashboard` e aspetta solo che l'app arrivi: una POST `/portfolio/report` della pagina
+    d'atterraggio partita dopo la rotta è «la prima», il `goto` la abbandona, e il pannello non è mai occupato.
+  - Rimedio nel test (`test-author`, proprietario dello spec): `page.goto('about:blank')` prima della rotta, oppure
+    trattenere la richiesta della pagina sotto prova.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), passo G3-9.
+- **DV-13 · L'E2E «export JSON, reset all, import back» del Lab vuole due fonti di colore che dal 16/10 sono una** —
+  minimo, test; DV, 18/10 (slot del giro 3, fuori area: `e2e/designer-lab/designer-lab-live.spec.ts`).
+  - Deterministico: il sottotitolo delle transazioni e l'intestazione di `DataTable` leggono tutti e due
+    `--lf-text-muted` (`546204732` e `77bfa6a39`, 16/10). La modifica della variabile vince su quella del letterale, e
+    l'intestazione esce rosa invece che blu.
+  - Rimedio nel test (`test-author`; il Lab, L, è archiviato): due elementi con fonti diverse, con la precondizione
+    scritta.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), passo G3-9.
 
 ---
 
@@ -4105,6 +4208,14 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
   Dettagli: piano H, §14, lotto «H-52», passo 3.
 
+  ✅ **Fatto il 17/10** (checkpoint delle 21:41).
+  - L'impronta dell'elenco registrata dopo ogni build riuscita (`tool_contract_fingerprint()`) contiene ora anche i file
+    contati di `frontend/src/` e `frontend/static/`, tolti i cataloghi generati; il formato è `/2`.
+  - Un file cancellato, rinominato o arrivato con una data vecchia fa ricostruire. Dopo l'aggiornamento c'è una
+    ricostruzione, una volta sola.
+  - Provato dal vivo: dopo la build, l'impronta registrata e quella attuale sono uguali e non si ricostruisce più.
+  - Test: `utils runtime-isolation` 454 (+67).
+
 ## A · Account e accessi (fase 01)
 
 Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
@@ -4569,25 +4680,32 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   attivato senza `DEMOTE_FIRST`; in più la scheda annulla con lo stesso corpo di una disattivazione (una riga vecchia
   disattiva il proprietario nuovo), e `user deactivate` può disattivare l'unico admin. Dettagli:
   [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-51».
-- **A-52 · L'eliminazione di sé conta gli admin attivi prima del lock di scrittura** — basso (classe A-51); A (17/10,
+- ✅ **A-52 · L'eliminazione di sé conta gli admin attivi prima del lock di scrittura** — basso (classe A-51); chiusa il
+  17/10 (commit del coordinatore): `refreshed_under_lock`, poi il conteggio (ACCDEL-LOCK-01…03); A (17/10,
   analisi del lotto A-11/A-16/A-40/A-26). `DELETE /auth/users/me` legge `count_active_superusers()` senza
   `begin_writes`: gli ultimi due admin attivi che si eliminano nello stesso istante passerebbero entrambi, e l'istanza
   resterebbe senza admin. `DELETE /users/{id}` e il PATCH decidono già sotto il lock. Cura: `begin_writes(session,
   User)` e il conteggio ripetuto, rosso prima. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Lotto A-11/A-16/A-40/A-26».
-- **A-53 · `developer/api/curl-testing.md`: l'esempio «Update preferences» usa una rotta che non esiste** — minimo
-  (doc); dal `docs-writer` del lotto A-11/A-16/A-40 (17/10). `PATCH /api/v1/auth/users/me/preferences` con
+- ✅ **A-53 · `developer/api/curl-testing.md`: l'esempio «Update preferences» usa una rotta che non esiste** — minimo;
+  chiusa il 17/10 (commit del coordinatore): l'esempio usa `GET` e `PUT /api/v1/settings/user`. Doc; dal `docs-writer` del lotto A-11/A-16/A-40 (17/10). `PATCH /api/v1/auth/users/me/preferences` con
   `{language, currency}`: le preferenze sono `PUT /api/v1/settings/user` (`language`, `base_currency`, `theme`,
   `avatar_url`). Pagina solo EN.
-- **A-54 · Un account cancellato da un altro admin nella stessa finestra risponde 500, non 404** — basso (classe A-51);
+- ✅ **A-54 · Un account cancellato da un altro admin nella stessa finestra risponde 500, non 404** — basso (classe A-51);
+  chiusa il 17/10 (commit del coordinatore): `user_service.refreshed_under_lock` nei quattro punti e, approvate dal
+  coordinatore, in tre rotte con lo stesso difetto (link di reset, revoca delle sessioni, reset dell'onboarding): il 404
+  di `_user_or_404` (la stringa nuda: decisione del coordinatore), «User 'x' not found» nella CLI (UADM-LOCK-01/02/10–12, LOCK-CLI-01, ACCDEL-LOCK-03);
   dalla revisione di E di A-51 (17/10), tramite il coordinatore. Dopo `begin_writes`, `session.refresh(user)` solleva
   `InvalidRequestError` su una riga appena cancellata (prima era `StaleDataError`, sempre un 500), in quattro punti:
   `update_user_status` (PATCH), `set_user_active` e `set_user_admin` (CLI), il ramo «in attesa» di `DELETE /users/{id}`.
   Cura: un aiuto che la intercetta, fa rollback e risponde il 404 di `_user_or_404` (con `USER_NOT_FOUND`: da decidere),
   nella CLI «User 'x' not found». Proposta nel lotto «decidere sotto il lock» (A-52, A-54, A-55, A-56).
-- **A-55 · `DELETE /users/{id}` rilegge sotto il lock solo l'admin in attesa** — basso; da E (17/10), come A-54. Un
+- ✅ **A-55 · `DELETE /users/{id}` rilegge sotto il lock solo l'admin in attesa** — basso; chiusa il 17/10 (commit del
+  coordinatore): ogni cancellazione decide sotto il lock (UADM-LOCK-03); da E (17/10), come A-54. Un
   account promosso da un altro admin nella finestra viene cancellato senza `DEMOTE_FIRST` (non può togliere l'ultimo
   admin attivo: chi cancella lo è). Cura: rileggere sotto il lock per ogni cancellazione.
-- **A-56 · Il limite di utenti si conta prima del lock** — basso (conta per i limiti dei piani); da E (17/10, la
+- ✅ **A-56 · Il limite di utenti si conta prima del lock** — basso (conta per i limiti dei piani); chiusa il 17/10
+  (commit del coordinatore): la riattivazione del PATCH e `create_invite` contano dopo `begin_writes` (UADM-LOCK-04/05);
+  da E (17/10, la
   riattivazione, preesistente), e da A la creazione degli inviti. Il PATCH guarda `usage.full` prima di
   `update_user_status`, `create_invite` conta prima di ogni scrittura: due operazioni concorrenti a limite − 1 lo
   superano di uno. La registrazione è già sicura: riconta dopo la sua scrittura, sotto il lock. Cura: contare dopo
@@ -5122,7 +5240,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     Doc: le rotte nella pagina dev dei cambi; `api sync`.
   - **Peso**: come X-R58: una rotta del backend, la modale, tre livelli di test, una finestra E2E (`fx-add-pair`).
     L'alternativa solo frontend è piccola.
-- **X-R79 · Il `replace` di X-R75 sostituisce anche le gambe delle catene** — basso, **nella 1.3, fatta da B**, dopo
+- ✅ **X-R79 · Il `replace` di X-R75 sostituisce anche le gambe delle catene** (chiusa il 17/10 da B: `b4a66be9a` +
+  `13db415b8`, entrata in dev `6f11a6790`; opzione A, solo frontend) — basso, **nella 1.3, fatta da B**, dopo
   W-B64/65 (decisione del coordinatore, 17/10 19:05); X, 17/10 (revisione di X-R75).
   - `POST /fx/providers/routes?replace=true` vale per ogni coppia della richiesta, anche per le gambe che la modale
     aggiunge con «crea le coppie intermedie». La voce X-R75 le voleva solo aggiunte, mai sostituite.
@@ -5131,6 +5250,13 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     e cancella le altre. È una corsa stretta, e la docstring di B la dice.
   - Cura (frontend): in modifica, prima le gambe con un upsert semplice (solo aggiunta), poi la sola coppia principale
     con `replace=true`; un Vitest fissa l'ordine delle due richieste. Se fallisce la seconda, restano solo gambe nuove.
+  - Residui noti (accettati dal coordinatore, 17/10 20:2x):
+    - l'upsert semplice non è solo aggiunta: una gamba configurata nel frattempo ha ancora la sua priorità 1 riscritta
+      (le altre restano). L'opzione B, una bandiera `create_only` del backend, va a X dopo la 1.3;
+    - un 409 sulla richiesta della coppia, dopo le gambe scritte, mostra `fx.addPair.createConflict` («Nothing was
+      saved»), che per le gambe non è vero. È raro: serve un inserimento concorrente della stessa priorità;
+    - dopo le gambe scritte e la coppia rifiutata, lo store delle rotte non le conosce: un nuovo tentativo le riscrive
+      uguali.
 - **X-R80 · Le gambe delle catene non sono mai davvero «solo aggiunte»** — basso, **dopo la 1.3**; X, 17/10 (dall'analisi
   di B per X-R79, girata dal coordinatore).
   - `create_routes_bulk` fa un upsert per (base, quote, priorità): a una priorità esistente sovrascrive `chain_steps`
@@ -6404,6 +6530,16 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - **Proposta**: registrare nel log, e nelle metriche dell'elemento, il codice d'uscita del figlio (negativo = il
     segnale) e il picco di memoria osservato. Alla prossima caduta, il triage con la skill `test-triage`. Il file è dei
     Tools: lotto piccolo, d'accordo col proprietario del runtime.
+  - ✅ 17/10, **strumentazione fatta** (J; via del coordinatore, `schemas/tools.py` ed `executor.py` a J per il lotto).
+    - `ToolItemMetrics.worker_exit_code`: lo stato d'uscita del worker caduto, letto prima della pulizia che lo
+      segnalerebbe (attesa di raccolta 0,5 s): il codice, o il segnale in negativo (−9 = SIGKILL, come l'OOM killer
+      del kernel). È null per ogni altro esito, e per una caduta vista col figlio ancora vivo.
+    - Il padre scarta un valore mandato dal worker.
+    - Una riga `Tool worker crashed` (identificativi, stato d'uscita, memoria, tempo; mai input né risultato).
+    - Il picco di memoria era già nelle metriche (`resources.memory`).
+    - 7 test in `tools-lifecycle`: 23, −9, figlio vivo → null, la riga di log, più i controlli.
+    - **Resta aperta la causa**: alla prossima caduta, il triage con questi dati (skill `test-triage`). Dettagli:
+      piano 05, §10 «J-42 e J-19».
 - ✅ **J-20 · `AllocationItem.value` si dice «0-100» ma con la liquidità negativa esce da quei limiti** — minimo,
   chiarezza (contratto dell'API); segnalata da Y (Y10, decisione 49) tramite il coordinatore, 16/10.
   `backend/app/schemas/portfolio.py:79` descrive `value` come «Percentage share (0-100)»: con la liquidità negativa le
@@ -6689,10 +6825,19 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     average_before_the_other` e `test_auto_then_manual_on_one_key_each_row_keeps_its_own_cost`
     (`services transaction-cost-basis-rule`). La variante del modale bulk non può più accadere: nessuna riga resta
     senza costo. Nessun codice da J. Vicina ma diversa: **J-57**. Dettagli: piano 05, §10 «J-41».
-- **J-42 · Il rapporto di uno SPLIT non è mai validato** — basso, numeri; test-author di J, 17/10, letto nel codice.
+- ✅ **J-42 · Il rapporto di uno SPLIT non è mai validato** — basso, numeri; test-author di J, 17/10, letto nel codice.
   Area di X. Un rapporto 0 o negativo si salva (P-10 lascia passare la modifica, il tipo non cambia). Quando una
   transazione lo lega, il motore solleva `ValueError` (`engine.py:226-227`) e il rapporto della Dashboard risponde
   500. `is_valid_split_ratio` della casa (`splits.py`) esiste già. **→ X** (coordinatore, 17/10).
+  - ✅ 17/10: già fatta, nessun codice da J (tornata da X a J il 17/10, verificata).
+    - La scrittura è **X-R47** (`5f68a8db0`): `bulk_upsert_events` → `_reject_invalid_split_ratios` con
+      `is_valid_split_ratio`. Copre ogni modo di scrivere uno SPLIT a mano, anche una modifica che tiene il tipo e
+      che P-10 lascia passare, con un 400 `EVENT_INVALID_SPLIT_RATIO` tradotto in 4 lingue; un aggiornamento del
+      provider lo scarta.
+    - La lettura è **MF-D4**: un rapporto salvato non valido conta come mancante e non fa più rispondere 500, con
+      l'avviso `INVALID_SPLIT_RATIO`.
+    - Verdi su HEAD: `services event-split-ratio` 78, `roi-fifo-utils -k invalid_split` 69. Dettagli: piano 05, §10
+      «J-42 e J-19».
 - ✅ **J-43 · L'avviso delle quote diverse fra le due gambe di un trasferimento tace se cadono lo stesso giorno** —
   minimo, qualità dei dati; MF (MF-J4), assegnata a J dal coordinatore il 17/10, dopo CP-14b.
   - In `financial_math/portfolio/classifier.py:131-149` l'avviso `share mismatch` sta dentro il ramo
@@ -7227,6 +7372,16 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     corrente. **Chiusa il 17/10 col lotto Z-33** (il commit è del coordinatore; revisori X, H, MF, W).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-33 — … analisi» e
   «Z-33 — … lavoro».
+- **Z-36 · `tzdata` da PyPI: un server senza database dei fusi non risolve il fuso della borsa** — basso, ambiente,
+  **domanda per lo sviluppatore**; Z, 17/10 (dalla revisione di H a Z-33, archiviato su richiesta del coordinatore).
+  - Su un host senza database dei fusi (Windows fuori da Docker, un container minimo) o con un nome che tzdata non ha,
+    `exchange_zone()` dà None: un'assegnazione Yahoo ancora segnata dalla migrazione 011 non scrive nulla a ogni giro.
+    L'immagine Docker è a posto.
+  - Fatto nella 1.3 (la metà a basso costo): un avviso nel log, una volta per nome e processo (Z-33, terzo seguito).
+  - Da decidere: aggiungere `tzdata` (PyPI) alle dipendenze, così `zoneinfo` ha sempre i fusi. Cambia l'ambiente:
+    decisione dello sviluppatore. Nota (docs-writer, 17/10): pandas 3.0.5 dichiara `tzdata` per `win32`, ma il
+    `Pipfile.lock`, risolto su macOS, non lo porta: su Windows c'è o no a seconda di come si è installato.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro», passo 12.
 - **Z-35 · Le chiusure Yahoo salvate con la rettifica del giorno in cui sono state lette** — medio, dati, **dopo la
   1.3**, decisione dello sviluppatore; proprietari X e MF; Z, 17/10 (trovato nell'analisi di Z-33, archiviato dal
   coordinatore).
@@ -7796,7 +7951,8 @@ sulla base `23f6578f3`.
   - Un commento vecchio in `frontend/e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` dice ancora «the form
     (12 integer digits, 6 decimals)».
   Dettagli: piano 07, «W-B64 + W-B65 (per W)».
-- **B-49 · Un testo non UTF-8 nei dati di un backup passa la verifica del ripristino** — basso, da decidere dopo
+- ✅ **B-49 · Un testo non UTF-8 nei dati di un backup passa la verifica del ripristino** (fatta il 17/10 da B,
+  checkpoint delle 21:26: la verifica lo rifiuta, `database_damaged`, prima dell'upgrade) — basso, da decidere dopo
   W-B65; E, 17/10 (RNW-109 e la barriera SCA-036 di E; la decisione è di B).
   - E l'ha trovato in 4 posti: un valore TEXT con byte non UTF-8 passa la verifica su copia. `integrity_check`, i
     conteggi e i totali non leggono quei testi.
@@ -7808,7 +7964,11 @@ sulla base `23f6578f3`.
   - Da decidere: la verifica rifiuta (un codice suo, senza mai citare il testo, che è dell'archivio) o avvisa come
     E-19b1. Per trovarli serve leggere i testi come byte (`text_factory = bytes`) e provarne la decodifica: un costo
     sui backup grandi.
-  Dettagli: piano 07, «W-B64 + W-B65 (per W)», punto di E-19b1.
+  - ✅ **Decisione e cura** (17/10): rifiutare (il coordinatore d'accordo). Il passo `_refuse_undecodable_text()` di
+    `staging.py` legge ogni testo della copia, prima dell'upgrade, e rifiuta con `database_damaged`; il log ha il solo
+    numero di tabelle. RNW-109 di E riscritto da B (ora si aspetta il rifiuto). Il paragrafo di `security.md` va nel
+    passaggio H-52 di H.
+  Dettagli: piano 07, «B-49».
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo

@@ -27,7 +27,7 @@ from multiprocessing.connection import Connection
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Literal, Self, cast
+from typing import Any, Literal, NoReturn, Self, cast
 
 import psutil
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -43,6 +43,8 @@ _SETUP_TIMEOUT = 30.0
 _CLEANUP_TIMEOUT = 5.0
 _CHILD_CONTROL: Connection | None = None
 _CHILD_EXECUTION_ID: str | None = None
+# The real worker's response endpoint, published only to the close_and_linger scenario.
+_CHILD_RESPONSE: Connection | None = None
 FIXTURE_TOOL_CODE = "private_executor_fixture"
 
 type Frame = dict[str, Any]
@@ -203,6 +205,8 @@ class FixtureInput(BaseModel):
         "echo",
         "hold",
         "crash",
+        "signal_kill",
+        "close_and_linger",
         "oversize",
         "unicode",
         "invalid_output",
@@ -263,6 +267,29 @@ def _wait_for_release(text: str) -> None:
     raise _PrivateFixtureFailure(f"Unexpected private fixture command: {command!r}")
 
 
+def _close_response_and_linger(execution_id: str) -> NoReturn:
+    """Break the result protocol and stay alive: the crash is seen while this child still runs."""
+    if _CHILD_RESPONSE is None:
+        raise _PrivateFixtureFailure("close_and_linger requires the private control wrapper")
+    # Report first: once the response pipe closes, production may terminate this process at any instant.
+    _report("lingering", execution_id)
+    _CHILD_RESPONSE.close()
+    # No clock guess: only production cleanup may end this owned, still-running process.
+    threading.Event().wait()
+    raise _PrivateFixtureFailure("The close_and_linger fixture outlived its indefinite wait")
+
+
+def _end_without_a_result(scenario: str, execution_id: str) -> None:
+    """End this worker before any result frame, each scenario its own way; return for every other scenario."""
+    if scenario == "crash":
+        os._exit(23)
+    if scenario == "signal_kill":
+        os.kill(os.getpid(), signal.SIGKILL)
+        raise _PrivateFixtureFailure("SIGKILL returned control to the fixture worker")
+    if scenario == "close_and_linger":
+        _close_response_and_linger(execution_id)
+
+
 @register_plugin(FixtureRegistry)
 class FixturePlugin(ToolPlugin):
     contract_version = "1.0.0"
@@ -320,8 +347,7 @@ class FixturePlugin(ToolPlugin):
         if parameters.ignore_term:
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
         _report("compute", context.execution_id, tool_code=tool_code)
-        if parameters.scenario == "crash":
-            os._exit(23)
+        _end_without_a_result(parameters.scenario, context.execution_id)
         if parameters.scenario == "descendants":
             if _CHILD_CONTROL is None:
                 raise _PrivateFixtureFailure("Descendants require the private control wrapper")
@@ -385,7 +411,7 @@ def _stall_after_partial_frame(job: ToolWorkerJob, response: Connection, cancell
 
 def controlled_worker_entry(target: Callable[..., object], args: tuple[object, ...], control_connection: Connection) -> None:
     """Gate a real worker entrypoint without bypassing its production handshake."""
-    global _CHILD_CONTROL, _CHILD_EXECUTION_ID
+    global _CHILD_CONTROL, _CHILD_EXECUTION_ID, _CHILD_RESPONSE
     try:
         job = _worker_job(args)
         _CHILD_CONTROL = control_connection
@@ -399,10 +425,17 @@ def controlled_worker_entry(target: Callable[..., object], args: tuple[object, .
                 raise AssertionError("Partial-frame fixture received unexpected worker arguments")
             _stall_after_partial_frame(job, response, cancellation)
         else:
+            if isinstance(parameters, dict) and parameters.get("scenario") == "close_and_linger":
+                # The real worker still runs the handshake and compute; compute then closes this same endpoint.
+                response = args[1] if len(args) > 1 else None
+                if not isinstance(response, Connection):
+                    raise AssertionError("Close-and-linger fixture received unexpected worker arguments")
+                _CHILD_RESPONSE = response
             target(*args)
     finally:
         _CHILD_CONTROL = None
         _CHILD_EXECUTION_ID = None
+        _CHILD_RESPONSE = None
         control_connection.close()
 
 

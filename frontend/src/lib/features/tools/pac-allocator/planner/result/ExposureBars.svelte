@@ -3,7 +3,7 @@
   and the weight after the plan, side by side. The numbers on the bars and in the box are the
   backend's exact weights, formatted; the lengths are drawing only. Weights are public: nothing to mask.
   TD-1: the weight after the plan in its category's colour, as on the dashboard (`./exposureBarColours`);
-  the target in a neutral role.
+  the target in the designer's neutral grey (`PAC_EXPOSURE_COLORS.ideal`, round 3, §1.7).
 -->
 <script lang="ts">
     import {onMount, tick} from 'svelte';
@@ -96,7 +96,7 @@
         const theme = buildTooltipTheme(dark, container ?? null);
         const neutrals = chartNeutrals(dark, container ?? null);
         const roles = chartRoles(dark, container ?? null);
-        const ideal = idealColour(roles);
+        const ideal = idealColour(dark);
         const card = roles.color('--lf-surface-card');
         const shown = [...rows];
         const actual = actualColours(shown, dimension, dark, shadePoles(dark, card));

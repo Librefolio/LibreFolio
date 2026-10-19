@@ -125,9 +125,10 @@ export const POLARITY_TONES = {
 /**
  * Colours of states — badges, notices, chips, toasts — one table per surface, on the state roles (W3-c), with X one of
  * `success`, `warning`, `danger`, `info`: a tint is `bg-lf-X-soft text-lf-X-on-soft`, with `border-lf-X-line` when it
- * has an edge; a solid fill is `bg-lf-X text-lf-on-status`; a neutral chip is `bg-lf-neutral text-lf-secondary`. The
- * data-quality banner still draws errors in the warning tone, like warnings (only its icon tells them apart), as it did
- * before the roles. Layout classes stay with the components; only colours live here.
+ * has an edge; a solid fill is `bg-lf-X text-lf-on-status`; a neutral chip is `bg-lf-neutral text-lf-secondary`. Since
+ * the designer's round 3 (17/10) the toasts are tints as well, a chip or a button inside a banner stands on the card
+ * (`bannerChip`), and the data-quality banners draw each severity in its own state. Layout classes stay with the
+ * components; only colours live here.
  */
 export const STATUS_TONES = {
     /** Sync result icons. */
@@ -173,12 +174,40 @@ export const STATUS_TONES = {
         missing: 'text-lf-warning',
         unknown: 'text-lf-muted',
     },
-    /** Toasts: solid fills; `ToastContainer` draws the dismiss button and the countdown in the same `on-status` colour. */
+    /**
+     * Toasts: tints, like the banners (designer, round 3): the `X-soft` fill and its `X-line` edge (`ToastContainer`
+     * adds the border width), the text in `X-on-soft`, the icon in `X`; the dismiss button and the countdown in the
+     * same `X-on-soft`, the button's hover a step down the family, on `X-line`.
+     */
     toast: {
-        success: 'bg-lf-success text-lf-on-status',
-        error: 'bg-lf-danger text-lf-on-status',
-        warning: 'bg-lf-warning text-lf-on-status',
-        info: 'bg-lf-info text-lf-on-status',
+        success: {
+            container: 'bg-lf-success-soft border-lf-success-line text-lf-success-on-soft',
+            icon: 'text-lf-success',
+            dismiss: 'hover:bg-lf-success-line',
+            track: 'bg-lf-success-on-soft/15',
+            bar: 'bg-lf-success-on-soft/40',
+        },
+        error: {
+            container: 'bg-lf-danger-soft border-lf-danger-line text-lf-danger-on-soft',
+            icon: 'text-lf-danger',
+            dismiss: 'hover:bg-lf-danger-line',
+            track: 'bg-lf-danger-on-soft/15',
+            bar: 'bg-lf-danger-on-soft/40',
+        },
+        warning: {
+            container: 'bg-lf-warning-soft border-lf-warning-line text-lf-warning-on-soft',
+            icon: 'text-lf-warning',
+            dismiss: 'hover:bg-lf-warning-line',
+            track: 'bg-lf-warning-on-soft/15',
+            bar: 'bg-lf-warning-on-soft/40',
+        },
+        info: {
+            container: 'bg-lf-info-soft border-lf-info-line text-lf-info-on-soft',
+            icon: 'text-lf-info',
+            dismiss: 'hover:bg-lf-info-line',
+            track: 'bg-lf-info-on-soft/15',
+            bar: 'bg-lf-info-on-soft/40',
+        },
     },
     /** Import wizard, status of a report set. */
     reportSet: {
@@ -205,24 +234,42 @@ export const STATUS_TONES = {
         excluded: 'border-lf-subtle text-lf-muted',
     },
     /**
-     * Data-quality banner: errors and warnings share the warning tone; info is the info tone. Its buttons stand a step
-     * above the tint, on its edge colour.
+     * A chip or a button inside a banner (designer, round 3, proposal a): it stands on the card, out of the tint, with
+     * its text in `X-on-soft`, 6.8–12.4:1 there, and its edge in `X`, 4.6–9.6:1 on the card and on the tint: the
+     * developer and the designer chose it on 17/10 (T3-b) over the `X-line` of her proposal, 1.1–1.6:1, under the
+     * 3:1 of a control's border. `hover` is a step into the family, the `X-soft` fill: a button takes it, a pill
+     * that is no control does not. The component adds the border width.
+     */
+    bannerChip: {
+        success: {base: 'border-lf-success bg-lf-card text-lf-success-on-soft', hover: 'hover:bg-lf-success-soft'},
+        warning: {base: 'border-lf-warning bg-lf-card text-lf-warning-on-soft', hover: 'hover:bg-lf-warning-soft'},
+        danger: {base: 'border-lf-danger bg-lf-card text-lf-danger-on-soft', hover: 'hover:bg-lf-danger-soft'},
+        info: {base: 'border-lf-info bg-lf-card text-lf-info-on-soft', hover: 'hover:bg-lf-info-soft'},
+    },
+    /**
+     * Data-quality banners (`DataQualityBanner`, `LotDataQualityBanner`): each severity in its own state since round
+     * 3, through `DATA_QUALITY_TONE` — before, errors shared the warning tone. A grouped banner takes the tone of its
+     * worst issue and each row the tone of its own; their chips and buttons are `bannerChip`. The rule for any banner
+     * (the developer, 17/10): red for a real error, one that stops a calculation or makes it wrong; amber for missing
+     * data, which once supplied lets the work go on; blue for information and notes; green for a success.
      */
     dataQuality: {
-        attention: {
-            container: 'bg-lf-warning-soft border-lf-warning-line text-lf-warning-on-soft',
-            button: 'bg-lf-warning-line/50 hover:bg-lf-warning-line',
-        },
-        info: {
-            container: 'bg-lf-info-soft border-lf-info-line text-lf-info-on-soft',
-            button: 'bg-lf-info-line/50 hover:bg-lf-info-line',
-        },
+        danger: {container: 'bg-lf-danger-soft border-lf-danger-line text-lf-danger-on-soft', icon: 'text-lf-danger', divider: 'border-lf-danger-line'},
+        warning: {container: 'bg-lf-warning-soft border-lf-warning-line text-lf-warning-on-soft', icon: 'text-lf-warning', divider: 'border-lf-warning-line'},
+        info: {container: 'bg-lf-info-soft border-lf-info-line text-lf-info-on-soft', icon: 'text-lf-info', divider: 'border-lf-info-line'},
     },
     /** The «Updates paused» pill of the live prices: a neutral chip. */
     liveUpdates: {
         paused: 'bg-lf-neutral text-lf-secondary',
     },
 } as const;
+
+/**
+ * The state a data-quality severity is drawn in (designer, round 3): an error in danger, a warning in warning, an info
+ * in info. Which conditions are errors is the backend's call, condition by condition (17/10: the portfolio's missing
+ * price and the four codes that fail the lots' replay are errors; the risk lab's missing price is a warning).
+ */
+export const DATA_QUALITY_TONE = {error: 'danger', warning: 'warning', info: 'info'} as const;
 
 /**
  * Badges that tell kinds apart rather than states: one hue per kind. Categorical, so still palette classes, until the

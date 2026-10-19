@@ -85,16 +85,27 @@ def pending_for(user: User) -> Optional[WhatsNew]:
 async def mark_seen(session: AsyncSession, user: User) -> Optional[str]:
     """The user closed the modal: the running release becomes the last one it saw (never a version from the client).
 
-    Commits when it changes something; idempotent. Returns the release written, or None when the running one is
-    unknown (nothing written).
+    Never backwards: the account is read again under SQLite's write lock, and a stored release as new as the running one
+    or newer — the same one, a downgrade, an older worker of a rolling update — is kept, nothing written. A stored value
+    that names no release counts as nothing seen, as in ``pending_for``. Commits when it changes something; idempotent.
+    Returns the last release the account saw; None when the running one is unknown or the account was deleted meanwhile
+    (nothing written).
     """
     release = current_release()
     if release is None:
         return None
-    if user.last_seen_version != release:
-        user_id = user.id
-        user.last_seen_version = release
-        session.add(user)
-        await session.commit()
-        logger.info("What's new seen", user_id=user_id, release=release)
+    # user_service imports this module (a new account's release): the import waits for the call
+    from backend.app.services.accounts.user_service import refreshed_under_lock  # noqa: PLC0415
+
+    if not await refreshed_under_lock(session, user):
+        return None
+    seen = release_of(user.last_seen_version)
+    if seen is not None and _key(seen) >= _key(release):
+        await session.rollback()
+        return seen
+    user_id = user.id
+    user.last_seen_version = release
+    session.add(user)
+    await session.commit()
+    logger.info("What's new seen", user_id=user_id, release=release)
     return release

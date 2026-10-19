@@ -173,6 +173,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Deleting a broker also removes its leftover import folders and lock file**, which used to pile up in the broker reports storage.
 - **Signing in, and opening or saving your settings, no longer fail when your account's saved theme is one this version doesn't know** (a hand-edited database, or a downgrade): the app shows the instance's default theme, or Auto.
 - **When the last active administrator tries to delete their own account, the dialog now says in your language what to do first** — make another account an administrator — instead of an English server message.
+- Two administrators acting on the same accounts at the same moment can no longer leave the instance without an active administrator, or one place over its user limit; an account deleted in the meantime now answers "not found" instead of a server error.
 - Sign-in errors (the server does not answer, a server error, too many attempts) now appear in your language, no longer as technical English text.
 - The show/hide button of password fields can be reached with the keyboard and has a translated name.
 - The import wizard counts assets in the singular too ("1 unique asset, 1 needs resolution").
