@@ -3357,3 +3357,66 @@ dell'arrotondamento (da provare con un corpus). Proposta: voce MF a sé, dopo J-
 - ✅ **Slot** (GO 21:17; HEAD `efef5c876`): `api portfolio` **53** passati; porta 6190 libera. **CHECKPOINT READY** inviato,
   FROZEN. In coda: revisione di X-R45 (siti del PAC `pac_allocator/source/fx_quotes.py` e `wac.py`, dev `b690c0785`, di X
   `629304ab3`).
+- Revisione X-R45 (siti del PAC, `629304ab3`, dev `b690c0785`), sola lettura: **OK**. `fx_quotes`: `max(date)` fra le
+  righe utilizzabili, unione sul vincolo unico `(date, base, quote)` → la riga è quella; la stessa regola dell'ancora di
+  `convert_bulk`. `wac._load_wac_fx_rows`: rilegge la riga scelta da `convert_bulk` con la stessa clausola, difensiva.
+  Nit: il ramo `saved_fx_invalid` (`rate > 0`) è irraggiungibile dal DB. Domanda fuori perimetro (preesistente): la
+  ricerca in `build_planner_fx_quotes` usa la coppia della richiesta, non quella normalizzata — una coppia chiesta al
+  rovescio non trova la sua riga, salvo che i chiamanti mandino coppie già normalizzate.
+
+#### A12 entrato (dev `5a6d71a1e`); J-1 — riconciliazione (sola lettura, 17/10, 21:3x; base `5d87dec28`)
+- Coordinatore: A12 **entrato** (dev `5a6d71a1e`, miei `29aa1a8a5` + `9a633d9a7`, CHANGELOG `5d87dec28`); worktree a
+  `5d87dec28`. Prossimo: **J-1** (le copie della matematica comune fuori dall'inventario del 43, lista di J), sola
+  lettura: stato per voce, poi proposta; in particolare la doppia lettura dei buchi nei cambi.
+
+| # | Voce di J-1 | Oggi | Stato |
+|---|---|---|---|
+| 1 | 365 in `risk/metrics.py:741` (→ U4a, CP-10) | `calendar_days_to_observations` (`:741-751`) è **l'unica** conversione giorni → osservazioni (5 chiamanti: `asset_set_var`, `historical_var`, `simulation` ×2, `quant/models.py`, `quant/resampling.py`); l'inversa è in linea in `quant/resampling.py:235` (`block_length × 365 / steps_per_year`); `quantlib_worker.py:116,195` è la convenzione di calendario verificata da J (J-49, non un difetto) | **aperta (casa)**: una funzione, ma nel rischio e non in `financial_math`; l'inversa in linea |
+| 2 | G/L % `portfolio_service.py:824` (→ CP-4) | `returns.gain_loss_ratio` (`:730`, `:842`, `:915`) | **chiusa** (CP-4, `58f8e3967`) |
+| 3 | `series_preparation.py:184` fattore di cambio ricavato dal close (→ U1, CP-11) | ora `market_series.py:167` (`fx_rate = close / native_close`), più due gemelli: `ai_export/components/asset_resources.py:209` e `assets/price_query.py:651-652` (`fx_factor = convertito / originale`, X6 del 43) | **aperta**: il tasso usato da `convert_bulk` si ricava tre volte per divisione |
+| 4 | `fx.py:717` inversione nella catena (→ U1, file di X) | quattro copie di «tasso orientato»: `fx/conversion.py:78` (passo della rotta), `fx/storage.py:55` (normalizzazione per il salvataggio), PAC `evaluation/scenario.py:90` (`fx_rate`, `ExactRatio`), PAC `source/wac.py:157` (prova del WAC) | **aperta**: nessuna casa per `1/rate` secondo l'ordine alfabetico |
+| 5 | `fx_timing_context.py:361-362` rendimenti dal minimo/massimo (→ MF-D) | `returns.price_return` (`:362-363`) | **chiusa** (MF-D, `30b464272`) |
+| 6a | `CompoundSignal.ts:69` curva what-if (Y, R19) | eccezione dichiarata (`@financial-math-exception`, `annualizes: true`) nel gate `financialMathExceptions.gate.test.ts` | **chiusa** (`37c441a76`) |
+| 6b | `levelHelpers.ts:359` rendimento che recupera una perdita (Y) | ora `features/risk/levels/levelHelpers.ts:408/442` legge i campi del backend (`maximum_drawdown_trough_to_peak_ratio`, `remaining_to_peak_ratio` ← `returns.required_recovery_return`) | **chiusa** (CP-13a + Y, `c3d0a7fa7`) |
+| 7 | quantità per posizione a una data (→ MF-G) | `ledger_totals.position_quantities` letta da `transactions/balances.py` (`:168`, `get_asset_holdings :216`) e da MF-G1; il `cumulative_qty` del motore è lo stato corrente del replay (alla quota), non un conteggio a una data | **chiusa** per le quantità (C-97, `bab52635d`; MF-G1); la metà della cassa è W-B19 di W |
+| 8 | doppia lettura dei buchi nei cambi (CP-6 → U1) | vedi sotto | **senza oggetto** (una regola sola già oggi); resta la staleness silenziosa |
+
+**Voce 8, verificata nel codice.**
+- `convert_bulk` (`fx/conversion.py:91-277`) riempie all'indietro **senza limite** («Uses unlimited backward-fill», da
+  sempre: nessuna «finestra» da superare, la premessa di CP-6), saltando le righe inutilizzabili
+  (`usable_fx_rate_clause`, X-R38/X-R45).
+- Il motore chiede un tasso per **ogni giorno valutato** (`engine._preload_fx_rates :596-708`: ogni giorno di
+  `[actual_from, actual_to]` per le valute di prezzi e asset, ogni giorno di transito della cassa, ogni data di
+  transazione e di gamba): la lettura a giorno esatto di `DailyStateBuilder._convert` (`daily_state.py:928-935`) trova
+  sempre il tasso già riempito; manca solo prima del primo tasso utilizzabile.
+- La cassa nativa (`compute_native_cash`, `rates_until = actual_to`, `engine.py:524-529`) chiede, con la **stessa**
+  chiamata, un tasso per ogni giorno dalla prima movimentazione; la bisezione di `_rate_at` (`native_cash.py:194-199`)
+  porta avanti solo sui giorni non chiesti — dopo `actual_to`, o fra i movimenti anteriori a `EARLIEST_RANGE_START` —
+  che il motore non valuta mai; e `_foreign_value` (`:226-234`) **solleva** invece di valutare un saldo contato senza
+  tasso.
+- Dunque oggi un buco nei cambi si legge in un modo solo. Il residuo vero è un altro: **il riempimento è illimitato e
+  silenzioso per i cambi** — i prezzi hanno `STALE_PRICE` (`data_quality.py:225`), i cambi nessun avviso: un NAV può
+  poggiare su un tasso vecchio di anni senza che la qualità dei dati lo dica.
+
+**Proposta.**
+- (8a) Una **guardia** che fissa la regola unica, senza codice: su un libro con un buco nei cambi, `fx_rate_map` del
+  motore e i `unit_rates` della cassa nativa coincidono su ogni (valuta, giorno) comune, e valgono l'ultimo tasso
+  utilizzabile prima del buco. test-author, `test_financial/`.
+- (8b) **Da decidere (developer)**: un avviso `STALE_FX` quando il riempimento supera una soglia (la stessa di
+  `STALE_PRICE`?), dai `(rate_date, backward_fill_applied)` che `convert_bulk` già restituisce; nessun valore cambia
+  (codice nuovo, schema, i18n). Sconsigliato: un limite al riempimento (i valori sparirebbero).
+- (1) `calendar_days_to_observations` e la sua inversa (oggi in linea in `resampling.py:235`) in `financial_math/returns.py`,
+  accanto a `observations_per_year` / `observed_annualization`; i 6 import aggiornati; nessun valore cambia (parità
+  esatta, int). File del rischio (J). Piccola.
+- (3) Il tasso, non ricavato: `price_query` conosce il tasso che ha usato — portarlo sul punto (`backward_fill_info` o un
+  campo) e leggerlo in `market_series` e `asset_resources` invece di `close / native_close`. Valori: la divisione d'un
+  prodotto per il suo fattore restituisce il tasso salvo l'arrotondamento a 28 cifre (differenze all'ultima cifra,
+  da misurare). File di X (`price_query`, schema dei prezzi), di J (`market_series`) e AI Export; media; dopo il PL4 di
+  X come previsto da D-J17.
+- (4) Una funzione «tasso orientato» nella casa — `oriented_rate(stored, source, destination)`, generica sul tipo
+  (`Decimal` e `ExactRatio`: `type(rate)(1) / rate`) — per i quattro siti; nessun valore cambia. File di X (fx, PAC).
+  Piccola.
+- Coordinatore (21:34): **8a GO** (sola guardia); **1 GO dopo l'OK di J**; **4 GO**, la scrivo io, rivede X (prima
+  controllare che nessuno dei 4 file sia aperto: X è su X-R16/48b altrove); **3 dopo la 1.3** → backlog **MF-A13** con
+  il piano di misura; **8b** (`STALE_FX`) nelle domande del developer (avviso sì, limite al riempimento no). Ordine
+  8a → 1 → 4. In corso: test-author `j1-8a-tests`.
