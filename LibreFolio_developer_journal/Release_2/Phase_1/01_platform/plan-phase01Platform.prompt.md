@@ -8108,3 +8108,156 @@ indice non lo eviterebbe. Il costo sta invece nella **forma** di due query, che 
 - la tabella della scheda Sicurezza in `settings.en.md`, con le parole nuove;
 - se si sceglie b), il campo in `ConfigCheck`.
 - A fa il bottone, il link e il suo test.
+
+#### Analisi: H-55 v2, la CSP sempre applicata, senza interruttore (19/10, sola lettura) ✅
+
+> Decisione del developer (19/10, via coordinatore), testuale: «di default ti direi di averlo sempre attivo, da subito,
+> e lavorare ad allargare le maglie solo dove serve, se serve davvero, e non avere questa sicurezza disattivabile».
+> Quindi niente `LIBREFOLIO_CSP_ENFORCE`: la CSP si applica in ogni profilo. La regola «default invariato per il
+> self-hosted» qui la supera il developer stesso.
+
+**Cosa si applica sempre**, in un solo header `Content-Security-Policy` per risposta:
+
+| Risposte | Direttive applicate |
+|---|---|
+| ogni documento (HTML, XHTML, SVG, XML; non i PDF), `/mkdocs` e la doc dell'API comprese | `object-src 'none'; base-uri 'self'; form-action 'self'`: il trio di H-42, oggi solo con la protezione dai frame, ora sempre |
+| le pagine della web app (`text/html`, non `/mkdocs`, non `/api/`) | in più `script-src 'self' 'wasm-unsafe-eval' 'report-sample' <hash>`, `worker-src 'self' blob:` e `connect-src 'self' <origine di LIBREFOLIO_PUBLIC_URL> <https://api.github.com nel self-hosted>` |
+| ogni risposta, con `LIBREFOLIO_FRAME_PROTECTION` accesa | `frame-ancestors 'self'` e `X-Frame-Options`, come oggi |
+
+- **Perché `worker-src`**: senza, i worker usano le regole di `script-src`, che non ammette `blob:`, e i worker del
+  visore PDF si bloccano.
+- **I frame restano fuori di proposito**: incorporare l'app (i pannelli di Home Assistant) è un uso legittimo del
+  self-hosted, non una maglia allargata.
+- **Niente `default-src` nell'header applicato.** Così stili, immagini, font e frame restano liberi:
+  - `img-src` ha già `https:`, quindi le icone esterne non si rompono;
+  - la privacy delle icone (D-SEC3-1) è un'altra questione.
+- **Resta solo segnalato** (report-only, dove `LIBREFOLIO_CSP_REPORT_ONLY` è accesa, nel managed per default): la policy
+  intera di oggi, con le sorgenti di `connect-src` aggiunte. Il report-only tiene anche `script-src` con gli hash:
+  senza, la sua `default-src 'self'` segnalerebbe a torto gli script inline.
+- `api.github.com`: il controllo degli aggiornamenti gira nel browser degli admin di ogni istanza self-hosted, e il
+  server non può sapere se è attivo. Quindi va ammesso per profilo, non per impostazione.
+- **Il premio**: tutte le corse E2E e la galleria girano sotto la policy applicata, perché ogni corsia la manda. Il
+  raccoglitore di H-43 diventa la prova di ogni spec.
+
+**I tre rischi, come lavori (nessun interruttore)**:
+1. **Script iniettati da un proxy, da una CDN o da un'estensione del browser**: vengono bloccati, e la pagina si rompe
+   o perde pezzi. Esempi: Rocket Loader, Email Address Obfuscation e Web Analytics automatico di Cloudflare; un
+   `sub_filter` di Nginx.
+   - **Doc**: una sezione nuova della guida admin, «🛡️ La Content-Security-Policy», con l'ancora `#csp`: cosa si
+     applica e perché, come si riconosce il problema, come si spegne l'iniezione per l'host di LibreFolio, e che la
+     policy non si allarga.
+   - **Avviso nella console**: un listener `securitypolicyviolation` in testa allo script inline di `app.html`, che
+     prende le violazioni presto. In più un `ReportingObserver` con `buffered: true` nel bundle, che in Chromium
+     dovrebbe recuperare anche quelle avvenute prima del listener (da provare).
+     - Una violazione applicata che LibreFolio non conosce (fuori da F1, il campione di cheetah-grid) dà un solo
+       messaggio chiaro: «LibreFolio ha bloccato uno script che non ha inviato (<origine o inline>): lo aggiunge un
+       proxy, una CDN o un'estensione del browser. Guida: …».
+     - `app.html` è vicino al programma colori: serve il suo OK. L'hash dello script cambia da solo, perché si calcola
+       all'avvio.
+   - **Nei controlli**: un controllo del browser nella scheda Sicurezza (A), come quello della registrazione aperta.
+     Il browser dell'admin conserva in `sessionStorage` le origini bloccate. Nessun endpoint di segnalazione (E5).
+2. **Gli hash riletti quando la build cambia**. Oggi si leggono alla costruzione del middleware (E4), quindi una build
+   a server acceso lascia una pagina bianca.
+   - Cura: una cache legata alla firma (`st_mtime_ns`, `st_size`) delle pagine `*.html` della build. Un `stat` di tre
+     file per risposta HTML della web app, nessuna lettura se la firma non cambia.
+   - Se una pagina manca a metà della scrittura della build, restano gli ultimi hash buoni.
+   - L'immagine Docker non cambia (è immutabile); la doc toglie «dopo una build, riavvia».
+3. **La verifica dell'indirizzo** (`addressProbe.ts` di A, riusato da E in `emailLinks.ts`). Oggi fa `fetch` di
+   `<indirizzo>/api/v1/auth/address-probe`: con `connect-src` applicata, ogni origine diversa da quella della pagina e
+   da `LIBREFOLIO_PUBLIC_URL` dà «non verificabile».
+   - Proposta, consigliata: la sonda **per immagine**. `GET /api/v1/auth/address-probe.png?nonce=…` risponde con
+     un'immagine 1×1 se il nonce è di questa istanza e 2×1 se no; il browser legge `naturalWidth` anche da un'altra
+     origine.
+     - Restano i tre verdetti: `match`, `mismatch` e `unverifiable` (con `onerror` o il timeout).
+     - `img-src` non è applicata, quindi nessuna maglia allargata.
+     - La rotta va nell'elenco di quelle che rispondono anche a istanza bloccata.
+   - Alternativa: solo l'origine pubblica (E3), e «non verificabile» spiegato meglio da A.
+   - Lavoro di A (sonda, rotta, AUSR-E-07) e di H (la policy). Tolta la voce F3 dalla baseline.
+
+**I rossi parcheggiati** (`files/parked/h55-csp-enforce-reds-on-d6c252ec4.patch`):
+
+| File | Cosa si riusa | Cosa cade o cambia |
+|---|---|---|
+| `test_managed_headers.py` (+542) | la sezione (k), circa a metà: header sulle pagine della web app, hash, sorgenti di `connect-src`, esclusioni (304, `/mkdocs`, `/api`, header della rotta) | l'interruttore on/off; il contenuto dell'header applicato (solo le direttive scelte più `worker-src`); il report-only, che ora resta accanto; «letto una volta», che diventa «riletto se la build cambia» |
+| `test_config_audit.py` (+273) | la verifica delle chiavi nel catalogo | il controllo `platform.csp_enforce` (cade); al suo posto il testo nuovo di `cspReportOnly.on`, che oggi dice «non blocca nulla» |
+| `test_runtime_isolation.py` (+138) | niente | cade tutto: nessuna impostazione di corsia nuova, nessuna guardia della copertura |
+| `csp-collector.spec.ts` (+695/−185) | circa il 40 %: il controllo che dà `EvalError`, le pagine, i calcoli | il riconoscimento delle tre corsie diventa «ogni corsia applica»; niente iniezione della policy applicata |
+
+Il test-author li rifà in circa mezza giornata.
+
+**Ordine e costo**:
+0. **Inventario prima di cambiare**, senza codice, in uno slot di circa un'ora: `all-frontend` con
+   `--lane-setting LIBREFOLIO_CSP_REPORT_ONLY=true` su una corsia self-hosted. Il raccoglitore elenca tutto ciò che la
+   policy fermerebbe negli spec fuori dalla Cloud Smoke (designer lab, galleria, import, AI Export…).
+1. H: gli hash riletti quando la build cambia (S). È indipendente e va prima, altrimenti la policy applicata rompe chi
+   ricostruisce a server acceso.
+2. A con H: la sonda per immagine (S). Va prima del passo 3, altrimenti AUSR-E-07 diventa rosso in ogni corsa.
+3. H: la policy sempre applicata, il trio su ogni documento, i testi dei controlli, la doc, il CHANGELOG (M). Il
+   CHANGELOG va sotto «⚠️ Breaking changes», per chi ha una CDN che inietta script.
+4. H con A: l'avviso nella console e il controllo del browser, più la sezione della guida (S/M). Entra con il 3.
+5. Uno slot: E2E completa, Cloud Smoke e una corsa con la copertura. La copertura non rischia: istanbul usa
+   `globalThis` e non `new Function`; il motivo scritto nella voce F1 della baseline va corretto.
+
+Totale: circa 1,5–2 giorni di H e 0,5–1 di A.
+
+#### Analisi: le categorie del cloud nel runner (19/10, sola lettura) ✅
+
+> Decisione del developer: una o più categorie apposite, sia per i test backend del profilo gestito
+> (`managed-headers`, `donation-managed`, i default del profilo, l'header IP del client…) sia per le E2E della Cloud
+> Smoke.
+
+**Stato vero**:
+- Le categorie backend sono cartelle (`BACKEND_TEST_PATHS` in `_suites.py`: `external`, `db`, `services`, `utils`,
+  `schemas`, `api`, `e2e`). `all-backend` fa girare il loro `all`, consolidato in una sola chiamata di pytest per
+  categoria.
+- I test del profilo gestito sono 17 file, sparsi fra `services` e `api`. Tutti girano **dentro il processo**: ciascuno
+  si mette il profilo che gli serve, quindi non serve una corsia gestita.
+- La Cloud Smoke è `front-utility cloud-smoke` (13 spec, `named_only`) e rifiuta una corsia che non sia managed. Il
+  runner non riusa mai un server già acceso, quindi ogni corsa parte con le impostazioni della sua corsia.
+
+**Proposta**:
+- **`cloud`**, una categoria backend **virtuale**: le sue azioni richiamano le funzioni che già esistono, e nessun file
+  si sposta.
+  - Contenuto:
+    - `services`: `managed-headers`, `profile-defaults`, `donation-managed`, `client-address` (anche l'header IP del
+      client), `config-audit`, `config-misc`, `accounts-checks`, `backup-checks`, `email-checks`,
+      `plugin-settings-guards`, `plugin-settings-service`;
+    - `api`: `instance-block`, `system`, `instance-legal`, `backup-secure`, `backup-restore`;
+    - `utils`: `backup-cli-restore`.
+  - Sono le azioni dei 17 file (nomi verificati nel registro).
+  - Si lancia con `dev.py test … cloud all`, su qualunque corsia.
+  - **Effetto su `all-backend`: nessuno.** `cloud` non entra in `_BACKEND_CATEGORIES`: gli stessi file girano una volta
+    sola, nella loro categoria.
+  - Una guardia: ogni file di test che mette il profilo managed è in `cloud`, o in un elenco di esclusioni con il
+    motivo (oggi i due file degli strumenti del runner). Così un test managed nuovo non sfugge.
+  - Alternativa, sconsigliata: una cartella `test_cloud/` con i file spostati dentro. Sposta file di A, B ed E, e molti
+    provano entrambi i profili.
+- **`front-cloud`**, una categoria E2E vera (`_frontend_cloud.py`):
+  - `smoke`: i 13 spec di oggi, tolti da `front-utility`;
+  - posto per le E2E che chiedono una corsia managed: per esempio i casi managed di `legal-and-managed.spec.ts`, se A
+    li divide.
+  - **Corsia**: la categoria dichiara il profilo managed, e `_configure_runtime` aggiunge da sé
+    `LIBREFOLIO_PROFILE=managed`. Rifiuta `--lane-setting LIBREFOLIO_PROFILE=selfhosted` e una corsa che la mescoli con
+    altre categorie.
+  - Fuori da `all-frontend` e da `all`: `named_only` non serve più, ci pensa la categoria.
+- **Cancelli** (§9 del piano generale):
+  - checkpoint: `cloud all` per i lotti che toccano piattaforma, profilo o sicurezza. È leggero e gira comunque in
+    `all-backend`;
+  - prima dell'integrazione: `front-cloud all` in uno slot per i lotti che toccano header, CSP, configurazione
+    dell'istanza o le schermate managed;
+  - rilascio: `front-cloud all`, più la fase 2 di H-43 (`all-frontend` una volta su una corsia managed).
+- **Superfici**: `_suites.py`, `_registry.py`, `_cli.py`, `_frontend_utility.py` (togliere `cloud-smoke`), un modulo
+  nuovo per categoria, i test `test-runner-cli` e `runtime-isolation`, la doc `test-walkthrough` e gli skill
+  `testing-backend`/`testing-frontend`. Sono file condivisi, quindi serve il via del coordinatore.
+- Costo: S–M, circa mezza giornata o una, con test e doc.
+
+**Domande** (per il developer, tramite il coordinatore):
+1. La verifica dell'indirizzo: sonda per immagine, con i tre verdetti (**consiglio**), oppure solo l'origine pubblica
+   e «non verificabile» per le altre.
+2. Gli script iniettati: avviso nella console più un controllo del browser nella scheda Sicurezza (**consiglio**),
+   oppure solo la console.
+3. Il trio `object-src`, `base-uri` e `form-action` sempre su ogni documento, anche `/mkdocs` e la doc dell'API, come
+   segue dalla direzione: confermi?
+4. Le categorie: `cloud` virtuale e `front-cloud` con la corsia managed messa da sé (**consiglio**), oppure le cartelle
+   spostate.
+5. Lo slot del passo 0 (inventario, circa un'ora), prima di ogni codice.
