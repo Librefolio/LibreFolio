@@ -6603,3 +6603,62 @@ disabilitato che c'è già: un avviso a T, tramite il coordinatore.
 **Definizione di fatto, dopo il via**: prima i rossi (Vitest; nessuna E2E nuova necessaria), poi la cura; `front check`,
 Prettier, `theme-roles --check`; le due pagine utente in inglese (il debito di traduzione resta visibile); checkpoint
 FROZEN.
+
+## 19/10 · Revisione a posteriori di J-21 bis (`def1d5259`, in dev `539371064`), sola lettura
+
+Via del coordinatore alle 11:28, sulla base `41fbfe3ea` (il giornale del 19/10 committato). Nessun test lanciato: lettura
+del commit, del codice di oggi, dei chiamanti, dei plugin e della documentazione.
+
+**Cosa fa.** `MAX_LINE_RUNS = 30` in `charts/signals/backendRenderer.ts`. In `renderScalarSeries` una linea senza regioni
+di stile, o un'area, con **più di 30 tratti** (31 o più) torna una serie sola che unisce i vuoti, com'era prima di J-21.
+Il nome prende « (gaps joined)» e `outcome.warnings` riceve un avviso. Le linee con regioni di stile e le barre non
+cambiano. Chiavi `signals.gapsJoined.{label,warning}` nelle 4 lingue. Nessun file di test o di catalogo nuovo: 230 righe
+in `backendRendererSegments.test.ts`.
+
+**Verdetto: OK, con tre note e un rischio latente.**
+
+Verificato e giusto:
+- **La logica.** Il tetto vale solo per linea e area. «Con stile» è `series.kind === 'line'` e una regione con `lineStyle`,
+  quindi un'area si unisce anche con regioni di stile. La serie unita tiene `id` (`${config.id}:${key}`), i due
+  indicatori agli estremi, i livelli e le regioni. `renderedSignalPointCount` non cambia, perché conta le date.
+- **I test**, completi sul renderer: 30 tratti restano divisi e 31 si uniscono; l'area si unisce anche con regioni di
+  stile; livelli e regioni restano; una linea con stile resta un tratto per pezzo; si unisce solo l'uscita oltre il
+  tetto, con un avviso dopo quelli del backend; `translate` con il ripiego in inglese; la barra resta intera. Il test di
+  J-21 «120 tratti restano 120 linee» è riscritto per il tetto.
+- **I18n**: le due chiavi sono a `signals.gapsJoined.*` in `charts/{en,it,fr,es}.json`, dove il codice le cerca.
+- **Il costo**: 30 tratti × circa 2 500 giorni di borsa ≈ 75 000 punti, come dice il commento. Nessun colore, nessun
+  calcolo finanziario nel frontend.
+
+Le note:
+1. **L'avviso non arriva all'utente** (basso, chiarezza). I sei chiamanti di `renderBackendSignalResult` (`fx/+page`
+   ×2, `fx/[pair]`, `assets/+page` ×2, `assets/[id]`) leggono solo `outcome.signals`; `outcome.warnings` non è letto da
+   nessuno, nemmeno prima di J-21 bis. Il pannello dei segnali costruisce i suoi avvisi da `item.result.warnings` del
+   backend (`signalProblem.ts:162`); `warningMessages` di `assets/[id]:1015` va solo nel log di debug. Si vede quindi
+   solo il nome «(gaps joined)», nel tooltip del grafico (`PriceChartFull.svelte:981-987`; i grafici non hanno una
+   legenda delle serie). Il messaggio del commit («plus
+   warning»), il commento di `MAX_LINE_RUNS` («its name and the outcome's warnings say so») e J-59 («con un avviso»)
+   descrivono un avviso che non si vede. Due strade, la scelta non è mia:
+   - (i) togliere l'avviso e lasciare il nome, che già lo dice (commento e J-59 da correggere): il mio consiglio, perché
+     non cambia nulla di visibile;
+   - (ii) mostrare gli avvisi del renderer nel pannello dei segnali: un cambio d'interfaccia, quindi una domanda per il
+     developer.
+2. **La guida per sviluppatori è rimasta indietro** (minimo, documentazione). `signal_plugin_guide.md:255-259` dice che
+   il renderer spezza sempre una linea o un'area ai punti senza valore, «so no segment crosses a day on which nothing was
+   measured». Da J-21 bis, oltre 30 tratti, una linea senza stile o un'area unisce i vuoti. Basta una frase, con
+   `docs-writer`.
+3. **Il CHANGELOG sbaglia di uno** (minimo; il file è del coordinatore). Dice «more than 30 gaps». Il tetto conta i
+   tratti: si unisce da 31 tratti, cioè da 30 vuoti, come fissano i test (30 tratti divisi, 31 uniti). Meglio «30 gaps or
+   more».
+
+Il rischio latente, nessuna azione per la 1.3:
+- Le linee con stile sono esenti dal tetto, per scelta e fissate da un test, e `limitStyledSegments` non unisce mai oltre
+  un vuoto. Quindi una linea con stile e N tratti resta almeno N serie lunghe quanto l'asse.
+- Oggi le linee con stile sono RSI, CCI, MFI e Stochastic RSI (le sole con `line_style` nelle regioni), e tutte chiamano
+  pandas-ta-classic con `talib=True`. TA-Lib dà 0, non NaN, su una finestra piatta, quindi i punti senza valore restano
+  quelli del riscaldamento, all'inizio, che non aprono un tratto. Letto nel codice, non misurato.
+- Morderebbe solo con un'uscita con stile che manda vuoti a metà serie. Anche uno stile di partizione scelto
+  dall'utente (`config.partitionStyles`) rende «con stile» una regione senza `line_style`, e la fa uscire dal tetto.
+- J-59, una serie sola per uscita, toglie sia il tetto sia questa esenzione. Da annotare in J-59 quando si fa.
+
+**Per dopo la 1.3**: J-56 (il gradino nel secchio del taglio) e J-59 stanno nella sezione di J del backlog, ma sono per Y
+(FE2): li prendo io quando il coordinatore li assegna. Non tocco la sezione di J.
