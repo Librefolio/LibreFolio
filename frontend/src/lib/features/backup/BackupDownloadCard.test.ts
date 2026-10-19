@@ -1360,3 +1360,145 @@ describe('BackupDownloadCard — B-8, developer 19/10: the card never names the 
         expectOneLine(JOB_ID, 'ui', 'the follow wrote another line: the line is written once, at the refusal');
     });
 });
+
+// =====================================================================================================================
+// B-8, defect of the review (19/10) — a secure request never follows a running backup; a clear one never presents a
+// secure end (workstream B; written red first)
+// =====================================================================================================================
+
+/*
+ * The defect, found by the automatic review and relayed by the coordinator: the secure mode chosen, the password typed
+ * twice, «Create» refused `409 backup_busy` naming a running backup of origin `ui`, nothing on offer — the card followed
+ * that backup whatever its mode (the B-8 group above follows one from the clear mode only). It may be another tab's, or
+ * another administrator's, and clear: the card then said «Archive ready» for a clear .zip, without the privacy notice
+ * (drawn in clear mode only), and `backup.created` announced it as the user's own. Conversely, a clear request could be
+ * offered an .lfbk sealed with someone else's password. The server sets `encrypted` only when a backup ends: a running
+ * one reads `encrypted: false`.
+ *
+ * The decision (the coordinator, 19/10 17:37), verbatim: «confermo la tabella di destra. Con una password, dal 409
+ * nessun seguito; in chiaro, il controllo alla fine (`encrypted: true`, quindi non presentato, id dimenticato,
+ * `backup_busy`)». Through the card, the refusal naming the running backup `RUNNING_JOB_ID`, nothing on offer:
+ *   - secure, the password typed twice, «Create»: `failed` and the busy alert; never `backup-ready` nor the download
+ *     link; `getInstanceBackupJob` never called; no `backup.created`; one `backup.failed`, with the busy toast;
+ *   - clear, «Create», the backup named running, then done with `encrypted: true`: its progress while it runs, as
+ *     today; at its end `failed` and the busy alert, no `backup-ready`, no link, no `backup.created`, one busy toast;
+ *   - the guard: clear, the same backup done with `encrypted: false` — offered, the privacy notice on the card,
+ *     `backup.created` once.
+ * backupJob.test.ts pins the rest: the storage and the adoption key, a reload, «Check again», the console line.
+ *
+ * Red today: the first two cases — the card follows the backup named, then offers its archive and announces it. Green
+ * today, and to stay so: the third.
+ */
+
+describe('BackupDownloadCard — B-8, defect of the review (19/10): a secure request never follows a running backup; a clear one never presents a secure end', () => {
+    let warn: MockInstance<typeof console.warn>;
+
+    // Every refusal here names a running backup: one console.warn each (the group above), kept off the run's output.
+    beforeEach(() => {
+        warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        warn.mockRestore();
+    });
+
+    /** Clear (the default), «Create»: refused by the running backup `RUNNING_JOB_ID` of origin ui, nothing on offer — followed as today, its progress drawn while it runs, up to its last phase; the read after that answers `end`. */
+    async function clearRequestFollowedUntil(end: InstanceBackupJob): Promise<void> {
+        api.start.mockRejectedValueOnce(busyRefusalNaming(RUNNING_JOB_ID, 'ui'));
+        api.get.mockResolvedValueOnce(running({job_id: RUNNING_JOB_ID, phase: 'database', done_bytes: 250, total_bytes: 1000}));
+        api.get.mockResolvedValueOnce(running({job_id: RUNNING_JOB_ID, phase: ENCRYPTING, done_bytes: 900, total_bytes: 1000})).mockResolvedValueOnce(end);
+        render(BackupDownloadCard);
+        expect(modeClear(), 'precondition: clear, the default').toBeChecked();
+
+        await clickCreate();
+
+        expect(startArguments(), 'precondition: a clear request, no password').toEqual([]);
+        expect(api.get.mock.calls, 'the backup the refusal names is read').toEqual([[RUNNING_JOB_ID]]);
+        expect(card(), 'followed as today: its progress while it runs').toHaveAttribute('data-state', 'running');
+        expect(screen.getByTestId('backup-progress')).toHaveAttribute('data-phase', 'database');
+        expect(progressBar()).toHaveAttribute('aria-valuenow', '25');
+        expect(sessionStorage.getItem(KEY), 'precondition: the backup followed is remembered').toBe(RUNNING_JOB_ID);
+
+        await elapse(POLL_MS);
+
+        expect(card(), 'followed up to its last phase: the check is at the end').toHaveAttribute('data-state', 'running');
+        expect(screen.getByTestId('backup-progress')).toHaveAttribute('data-phase', 'encrypting');
+        expect(progressBar()).toHaveAttribute('aria-valuenow', '90');
+        expect(screen.queryByTestId('backup-error'), 'no error while it runs').toBeNull();
+        expect(notify, 'nothing to announce while it runs').not.toHaveBeenCalled();
+
+        await elapse(POLL_MS);
+
+        expect(api.get, 'precondition: read three times, the last one its end').toHaveBeenCalledTimes(3);
+    }
+
+    it('secure, the password typed twice, «Create» refused by a running backup of origin ui, nothing on offer: failed, the busy alert; never an archive nor its link, that backup never read, no backup.created, one backup.failed with the busy toast (red today)', async () => {
+        api.start.mockRejectedValueOnce(busyRefusalNaming(RUNNING_JOB_ID, 'ui'));
+        // Another tab's or another administrator's clear backup: a read would find it running, then its .zip ready, and
+        // the assertions below would say so.
+        api.get.mockResolvedValueOnce(running({job_id: RUNNING_JOB_ID})).mockResolvedValue(done({job_id: RUNNING_JOB_ID}));
+        render(BackupDownloadCard);
+
+        await startSecure();
+
+        expect(api.start.mock.calls, 'precondition: a secure request, its password sent').toEqual([[PASSWORD]]);
+        expect(card(), 'a secure request followed a backup it may not have started').toHaveAttribute('data-state', 'failed');
+        expect(card()).toHaveAttribute('data-error-code', 'backup_busy');
+        expect(card()).toHaveAttribute('data-busy', 'false');
+        const alert = screen.getByRole('alert');
+        expect(alert, 'the alert is the error of the card').toHaveAttribute('data-testid', 'backup-error');
+        expect(alert).toHaveAttribute('data-error-code', 'backup_busy');
+        expect(alert, 'the alert says the busy sentence, and nothing else').toHaveTextContent(exactly(BUSY));
+
+        await elapse(10 * POLL_MS);
+
+        expect(api.get, 'the backup the 409 names was read: nothing proves it is the one asked for').not.toHaveBeenCalled();
+        expect(card(), 'still failed: nothing followed').toHaveAttribute('data-state', 'failed');
+        expect(screen.queryByTestId('backup-ready'), 'an archive offered to a secure request that may not be its own').toBeNull();
+        expect(screen.queryByTestId('backup-download-link')).toBeNull();
+        expect(screen.queryByTestId('backup-progress'), 'a backup this card did not start followed').toBeNull();
+        expect(sessionStorage.getItem(KEY), 'a backup this card did not start remembered').toBeNull();
+        expect(events('backup.created'), 'no archive announced').toEqual([]);
+        expect(events(), 'one backup.failed, the refused start, with the busy toast').toEqual([{name: 'backup.failed', detail: {code: 'backup_busy', what: 'start', job_id: null}, toast: {variant: 'error', message: BUSY}}]);
+    });
+
+    it('clear, «Create» refused by a running backup of origin ui that runs, then ends done with encrypted: true: its progress while it runs, then failed with the busy alert — no archive, no link, no backup.created, one busy toast (red today)', async () => {
+        await clearRequestFollowedUntil(done({job_id: RUNNING_JOB_ID, file_name: SECURE_FILE_NAME, encrypted: true}));
+
+        expect(card(), 'a sealed archive offered to a clear request: another administrator may have asked for it, with a password this user never knew').toHaveAttribute('data-state', 'failed');
+        expect(card()).toHaveAttribute('data-error-code', 'backup_busy');
+        expect(card()).toHaveAttribute('data-busy', 'false');
+        const alert = screen.getByRole('alert');
+        expect(alert, 'the alert is the error of the card').toHaveAttribute('data-testid', 'backup-error');
+        expect(alert, 'the alert says the busy sentence, and nothing else').toHaveTextContent(exactly(BUSY));
+        expect(screen.queryByTestId('backup-ready'), 'not presented').toBeNull();
+        expect(screen.queryByTestId('backup-download-link'), 'not presented: no link to it').toBeNull();
+        expect(screen.queryByTestId('backup-encrypted-note')).toBeNull();
+        expect(screen.queryByTestId('backup-progress'), 'its end is known: no progress left').toBeNull();
+        expect(screen.queryByTestId('backup-recheck'), 'forgotten: nothing to check again').toBeNull();
+        expect(sessionStorage.getItem(KEY), 'forgotten').toBeNull();
+        expect(events('backup.created'), 'not presented: not announced as an archive either').toEqual([]);
+        expect(events(), 'one backup.failed, with the busy toast').toEqual([{name: 'backup.failed', detail: {code: 'backup_busy', what: 'start', job_id: null}, toast: {variant: 'error', message: BUSY}}]);
+
+        await elapse(10 * POLL_MS);
+
+        expect(api.get, 'a forgotten backup was read again').toHaveBeenCalledTimes(3);
+        expect(card()).toHaveAttribute('data-state', 'failed');
+    });
+
+    it('clear, the same backup ending done with encrypted: false: offered — its archive, its link, the privacy notice on the card —, backup.created once (green today: the guard)', async () => {
+        await clearRequestFollowedUntil(done({job_id: RUNNING_JOB_ID}));
+
+        expect(card()).toHaveAttribute('data-state', 'done');
+        expect(card()).toHaveAttribute('data-error-code', '');
+        const ready = screen.getByTestId('backup-ready');
+        const link = within(ready).getByTestId('backup-download-link');
+        expect(link).toHaveAttribute('href', `/api/v1/backup/instance/jobs/${RUNNING_JOB_ID}/file`);
+        expect(link).toHaveAttribute('download', FILE_NAME);
+        expect(within(ready).queryByTestId('backup-encrypted-note'), 'a clear archive').toBeNull();
+        expect(screen.getByTestId('backup-privacy-notice'), 'a clear archive: the privacy notice is on the card').toHaveTextContent(exactly('backup.download.privacy'));
+        expect(screen.queryByTestId('backup-error'), 'the backup asked for: no error').toBeNull();
+        expect(sessionStorage.getItem(KEY), 'the archive must stay downloadable after a reload').toBe(RUNNING_JOB_ID);
+        expect(events(), 'followed as one started here: its end announced, once, with no toast').toEqual([{name: 'backup.created', detail: {job_id: RUNNING_JOB_ID, file_size: FILE_SIZE, warnings: [], encrypted: false}}]);
+    });
+});
