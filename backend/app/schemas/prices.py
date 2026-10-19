@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
-from typing import List, Literal, Optional
+from typing import Annotated, List, Literal, Optional, Union
 
 from pydantic import (
     ConfigDict,
@@ -90,31 +90,24 @@ class AssetBackwardFillInfo(BackwardFillInfo, FxBackwardFillInfo):
 class FAPricePoint(StrictModel):
     """Single price point with OHLC data.
 
-    Used for both:
-    - Upsert operations (backward_fill_info is None)
-    - Query results (backward_fill_info may be present)
+    Used for:
+    - a provider's history (``FAHistoricalData``) and the Sync's ``changed_points`` (backward_fill_info is None);
+    - query results (backward_fill_info may be present).
 
     The API contract uses separate `close: Decimal` and `currency: str` fields
     for JSON compatibility. Build a `Currency(code=…, amount=…)` inline where
     a Currency object is needed (project-wide style).
 
-    **F.4 sentinel rules on upsert** (applied per-field, for ``open/high/low/volume``):
-
-    - ``None`` / omitted → **no-op**: existing DB value is preserved (partial merge).
-    - ``>= 0`` → write the provided value.
-    - ``-1`` → ``SET NULL`` on the DB column.
-
-    ``close`` is **not** affected by the sentinel rules: it is always required
-    and always written verbatim. To "clear" a row use the DELETE endpoint on
-    that date; to clear OHLC auxiliary fields use ``-1``.
+    A manual write uses ``FAPriceWritePoint`` (N92), where ``"clear"`` empties a stored field. This model checks no
+    sign: the refresh discards a provider's point with a price not above 0, and the write model refuses one (N92).
     """
 
     date: date_type = Field(..., description="Price date")
-    open: Optional[SafeDecimal] = Field(None, description="Opening price (upsert: None=no-op, -1=SET NULL, >=0=write)")
-    high: Optional[SafeDecimal] = Field(None, description="High price (upsert: None=no-op, -1=SET NULL, >=0=write)")
-    low: Optional[SafeDecimal] = Field(None, description="Low price (upsert: None=no-op, -1=SET NULL, >=0=write)")
-    close: SafeDecimal = Field(..., description="Closing price (required; not affected by -1 sentinel)")
-    volume: Optional[SafeDecimal] = Field(None, description="Trading volume (upsert: None=no-op, -1=SET NULL, >=0=write)")
+    open: Optional[SafeDecimal] = Field(None, description="Opening price (None when unknown)")
+    high: Optional[SafeDecimal] = Field(None, description="High price (None when unknown)")
+    low: Optional[SafeDecimal] = Field(None, description="Low price (None when unknown)")
+    close: SafeDecimal = Field(..., description="Closing price")
+    volume: Optional[SafeDecimal] = Field(None, description="Trading volume (None when unknown)")
     currency: Optional[str] = Field(
         None,
         description=(
@@ -148,23 +141,57 @@ class FAPricePoint(StrictModel):
             return None
         return Decimal(str(v))
 
-    @field_validator("close", mode="after")
-    @classmethod
-    def close_must_be_positive(cls, v: Decimal) -> Decimal:
-        if v <= 0:
-            raise ValueError("close price must be positive (> 0)")
-        return v
 
-    @field_validator("open", "high", "low", "volume", "original_open", "original_high", "original_low", "original_close", mode="after")
+#: The value of a manual write that empties a stored open, high, low or volume (N92); ``null`` or no field leaves it.
+CLEAR = "clear"
+
+#: A manual write's open, high, low or volume (N92): a number, written; ``"clear"``, which empties the stored value; or
+#: ``null``. Read left to right, so ``"clear"`` is never taken for a number; any other text is refused. The ``enum``
+#: beside pydantic's ``const`` makes the generated client read ``'clear'`` as a literal (openapi-zod-client 1.18.3
+#: ignores ``const``), as in ``schemas/signals.py``.
+PriceWriteValue = Annotated[Union[Annotated[Literal["clear"], Field(json_schema_extra={"enum": [CLEAR]})], SafeDecimal, None], Field(union_mode="left_to_right")]
+
+
+class FAPriceWritePoint(StrictModel):
+    """One price point of a manual write (``POST /assets/prices``), N92.
+
+    ``open``, ``high``, ``low`` and ``volume`` each take a number of 0 or more, written as it is; the string ``"clear"``,
+    which empties the stored value (NULL); or ``null``, or no field at all, which leaves the stored value as it is.
+    ``close`` is required and above 0: LibreFolio keeps no negative price. The ``-1`` that emptied a field before N92 is
+    a negative number now, refused. ``from_attributes``: a ``FAPricePoint`` can be given, read field by field.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    date: date_type = Field(..., description="Price date")
+    open: PriceWriteValue = Field(None, description="Opening price: a number (0 or more) writes it, 'clear' empties the stored value, null or absent leaves it")
+    high: PriceWriteValue = Field(None, description="High price: a number (0 or more) writes it, 'clear' empties the stored value, null or absent leaves it")
+    low: PriceWriteValue = Field(None, description="Low price: a number (0 or more) writes it, 'clear' empties the stored value, null or absent leaves it")
+    close: SafeDecimal = Field(..., description="Closing price, above 0 (required)")
+    volume: PriceWriteValue = Field(None, description="Trading volume: a number (0 or more) writes it, 'clear' empties the stored value, null or absent leaves it")
+    currency: Optional[str] = Field(None, description="Currency code (ISO 4217), optional: if omitted the backend uses `asset.currency`; if provided and != asset.currency, the whole upsert is refused with HTTP 422 price_currency_mismatch before anything is written.")
+
+    @field_validator("currency")
     @classmethod
-    def ohlcv_must_be_positive_or_sentinel(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+    def currency_validate(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return None
-        # -1 is the "SET NULL" sentinel — allowed
-        if v == Decimal("-1"):
+        return Currency.validate_code(v)
+
+    @field_validator("close", mode="after")
+    @classmethod
+    def close_above_zero(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("close price must be above 0")
+        return v
+
+    @field_validator("open", "high", "low", "volume", mode="after")
+    @classmethod
+    def zero_or_more_or_clear(cls, v: Decimal | str | None) -> Decimal | str | None:
+        if v is None or v == CLEAR:
             return v
         if v < 0:
-            raise ValueError("price/volume fields must be >= 0 (or -1 sentinel to clear)")
+            raise ValueError('price and volume fields must be 0 or more, or "clear" to empty the stored value')
         return v
 
 
@@ -175,7 +202,7 @@ class FAUpsert(StrictModel):
     """
 
     asset_id: int = Field(..., description="Asset ID")
-    prices: List[FAPricePoint] = Field(..., min_length=1, description="List of price points")
+    prices: List[FAPriceWritePoint] = Field(..., min_length=1, description="List of price points (N92: open, high, low and volume take a number, 'clear' or null)")
 
 
 class FAPriceRejection(StrictModel):

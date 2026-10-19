@@ -26,7 +26,7 @@ from backend.app.schemas import (
     FAPricePoint,
     FAUpsert,
 )
-from backend.app.schemas.prices import FACurrentValue
+from backend.app.schemas.prices import CLEAR, FACurrentValue
 from backend.app.utils.date_range_limits import DateOutOfRangeError, latest_stored_date
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.sql_chunks import chunks
@@ -36,13 +36,12 @@ logger = structlog.get_logger(__name__)
 #: The prices a user types (C-97): over the column's limit they are refused, never truncated. Volume is a count: only
 #: its size is limited (W-B58), its decimals are read back rounded, as always.
 _PRICE_LIMIT_FIELDS = ("open", "high", "low", "close")
-_SENTINEL = Decimal("-1")
 
 
 def _price_limit_issue(price: FAPricePoint, name: str) -> Optional[tuple[str, int]]:
     """What keeps the typed ``name`` of ``price`` out of its column (``decimal_limit_issue``; a volume, its size only)."""
     value = getattr(price, name)
-    if value is None:
+    if value is None or value == CLEAR:
         return None
     if name == "volume":
         return integer_digits_issue(value, PriceHistory, name)
@@ -55,7 +54,7 @@ def _reject_prices_over_the_limit(data: List[FAUpsert]) -> None:
     A price keeps 12 digits before the decimal point, 12 decimal places and 15 significant digits
     (``db/precision.decimal_limit_issue``; the digits before the point since W-B58); a volume, 24 digits before the
     point: a typed value over any of them is refused, naming the asset, the maxima and the dates, never truncated in
-    silence. The ``-1`` sentinel has none of them. A provider's prices are not checked here: their long floats are
+    silence. ``"clear"`` has none of them (N92). A provider's prices are not checked here: their long floats are
     truncated (``truncate_priceHistory``), and a date with a value no column can keep is skipped
     (``_unstorable_provider_point``).
 
@@ -146,16 +145,16 @@ def _unstorable_provider_point(price: FAPricePoint) -> Optional[str]:
     """Why a provider's price point cannot be stored, as ``name=value``, or None (W-B58).
 
     A price that is not finite, has more digits before the decimal point than its column, or turns into 0 when truncated
-    (``storable_price``); a volume past its column's digits (``integer_digits_issue``). The ``-1`` sentinel is no value.
+    (``storable_price``); a volume past its column's digits (``integer_digits_issue``).
     """
     for name in _PRICE_LIMIT_FIELDS:
         value = getattr(price, name)
-        if value is None or (name != "close" and value == _SENTINEL):
+        if value is None:
             continue
         if storable_price(value, name) is None:
             return f"{name}={value}"
     volume = price.volume
-    if volume is not None and volume != _SENTINEL and integer_digits_issue(volume, PriceHistory, "volume") is not None:
+    if volume is not None and integer_digits_issue(volume, PriceHistory, "volume") is not None:
         return f"volume={volume}"
     return None
 
@@ -174,10 +173,11 @@ def _kept_volume(value: Optional[Decimal]) -> Optional[Decimal]:
 
 @functools.lru_cache(maxsize=1024)
 def _report_unstorable_quote(asset_id: int, provider_code: str, value: str) -> None:
-    """Log a live quote no price column can keep once per process for each asset, provider and value (X-R40): it is asked
+    """Log a refused live quote (no price column can keep it, or not above 0, N92) once per process for each asset,
+    provider and value (X-R40): it is asked
     for again at every poll (the scheduler every 10 minutes, each open asset page every 30 seconds), and the same refusal
     said each time is noise. Bounded, so that a provider answering a new absurd value at every poll cannot grow it."""
-    logger.warning("Live quote refused: no price column can keep it, the last stored price stands", asset_id=asset_id, provider=provider_code, value=value)
+    logger.warning("Live quote refused: not above 0 or no price column can keep it, the last stored price stands", asset_id=asset_id, provider=provider_code, value=value)
 
 
 def _quote_text(value: object) -> str:
@@ -194,7 +194,8 @@ def storable_current_value(current: Optional[FACurrentValue], asset_id: int, pro
     falls back to the last stored one, as after a provider failure — and logged once (``_report_unstorable_quote``). A
     value the truncation leaves as it is comes back as it came, its form included (``101.5`` stays ``101.5``); one it
     changes comes back truncated, as the history and today's row keep it (``65432.1234567890999`` → ``65432.123456789``).
-    Never raises: a value that is no number at all, from a plugin that skips the schema, is refused too.
+    A value of 0 or less is refused the same way (N92): the history keeps no such price either. Never raises: a value
+    that is no number at all, from a plugin that skips the schema, is refused too.
     """
     if current is None:
         return None
@@ -204,6 +205,8 @@ def storable_current_value(current: Optional[FACurrentValue], asset_id: int, pro
         stored = storable_price(value)
     except (ArithmeticError, TypeError, ValueError):
         value = stored = None
+    if stored is not None and stored <= 0:
+        stored = None  # N92: LibreFolio keeps no price of 0 or less
     if stored is None:
         _report_unstorable_quote(asset_id, provider_code, _quote_text(raw))
         return None
@@ -215,7 +218,7 @@ def unstorable_quote_reason(value: object) -> str:
     """Why a provider's current value was refused, for a refresh result (X-R51): the value, shortened, and the limits of
     a price column, read from the model."""
     _precision, scale = get_model_column_precision(PriceHistory, "close")
-    return f"Current price {_quote_text(value)} not saved: a price keeps at most {max_integer_digits(PriceHistory, 'close')} digits before the decimal point, and is never 0 once cut to {scale} decimal places"
+    return f"Current price {_quote_text(value)} not saved: a price is above 0, keeps at most {max_integer_digits(PriceHistory, 'close')} digits before the decimal point, and is never 0 once cut to {scale} decimal places"
 
 
 PRICE_UPSERT_CHUNK_SIZE = 1000
@@ -225,7 +228,7 @@ class PriceStoreOperations:
     """Asset price persistence operations."""
 
     @staticmethod
-    async def bulk_upsert_prices(data: List[FAUpsert], session: AsyncSession, source_plugin_key: str = "MANUAL") -> dict:  # noqa: C901 — chunked batch upsert, per-date sentinel merge
+    async def bulk_upsert_prices(data: List[FAUpsert], session: AsyncSession, source_plugin_key: str = "MANUAL") -> dict:  # noqa: C901 — chunked batch upsert, per-date F.4 merge
         """
         Bulk upsert prices manually (PRIMARY bulk method).
 
@@ -287,11 +290,11 @@ class PriceStoreOperations:
 
             default_currency = asset.currency
 
-            # Build PriceHistory objects for upsert (F.4 MERGE + sentinel semantics)
+            # Build PriceHistory objects for upsert (F.4 MERGE; the clear marker of N92)
             # Strategy: fetch existing rows, merge per-field, DELETE affected dates, INSERT merged rows.
-            # Sentinel rules apply to open/high/low/volume only (close stays required and is written verbatim):
+            # For open/high/low/volume only (close stays required and is written verbatim):
             #   - field == None (omitted)  → preserve existing DB value (no-op)
-            #   - field == -1              → write NULL
+            #   - field == "clear"         → write NULL (a manual write only, N92)
             #   - field >= 0               → write the provided value
             # I.2 — Currency coherence validation (Supersedes E.3).
             # Hard reject (not per-item skip): if ANY point has a currency that doesn't
@@ -314,12 +317,12 @@ class PriceStoreOperations:
             for price in prices:
                 valid_inputs[price.date] = price
 
-            # F.4 sentinel helper: -1 → None (SET NULL), None → preserve, else → write
+            # F.4 merge helper (N92): "clear" → None (SET NULL), None → preserve, else → write
             def _merge_field(new_val, existing_val):
-                """F.4 sentinel merge for open/high/low/volume."""
+                """F.4 merge for open/high/low/volume: the clear marker of N92 empties the column."""
                 if new_val is None:
                     return existing_val  # no-op: preserve
-                if new_val == Decimal("-1"):
+                if new_val == CLEAR:
                     return None  # SET NULL
                 return new_val  # write
 
@@ -377,7 +380,7 @@ class PriceStoreOperations:
                 for date_key in chunk_dates:
                     price = valid_inputs[date_key]
                     existing = existing_rows.get(date_key)
-                    # Sentinel merge for auxiliary OHLC fields (open/high/low) + volume
+                    # F.4 merge for auxiliary OHLC fields (open/high/low) + volume ("clear" empties, N92)
                     merged_open = _merge_field(price.open, existing.open if existing else None)
                     merged_high = _merge_field(price.high, existing.high if existing else None)
                     merged_low = _merge_field(price.low, existing.low if existing else None)
@@ -391,10 +394,10 @@ class PriceStoreOperations:
                     #   the justETF/scheduled-investment case and the original
                     #   production incident alike. In that branch we widen the merged
                     #   [low, high] bounds around the new close instead.
-                    # An erased bound (the -1 sentinel, SET NULL) is no bound: only two real incoming bounds are
-                    # held to the close (X-R46: the data editor's erase of High or Low was refused as inconsistent)
-                    incoming_low = None if price.low == Decimal("-1") else price.low
-                    incoming_high = None if price.high == Decimal("-1") else price.high
+                    # An erased bound ("clear", SET NULL; the -1 before N92) is no bound: only two real incoming
+                    # bounds are held to the close (X-R46: the data editor's erase of High or Low was refused)
+                    incoming_low = None if price.low == CLEAR else price.low
+                    incoming_high = None if price.high == CLEAR else price.high
                     if incoming_low is not None and incoming_high is not None:
                         if incoming_low > incoming_high or not (incoming_low <= price.close <= incoming_high):
                             rejected_dates.append(f"{date_key.isoformat()} (close={price.close}, low={merged_low}, high={merged_high})")
@@ -428,7 +431,7 @@ class PriceStoreOperations:
                     price_objects.append(price_obj)
 
                 # One native upsert instead of DELETE + INSERT. Python above has already
-                # resolved every F.4 sentinel and run the integrity guard, so the merge
+                # resolved every F.4 merge and run the integrity guard, so the merge
                 # semantics stay where they can be read and SQL only decides insert vs
                 # update. A date rejected by the guard is simply absent from the VALUES,
                 # which preserves its stored row — the DELETE had to be filtered by hand
