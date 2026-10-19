@@ -7401,3 +7401,70 @@ componenti delle impostazioni), `admin/cli_tools.en.md` (A-40, solo EN: le tradu
   toccati.
 - **Lotto «decidere sotto il lock» + C-54 monotòno: definizione di fatto ✅.** Non eseguiti: E2E (nessuno toccato),
   `all-backend`.
+
+## Lotto «decidere sotto il lock» — Entrato; A-57 (17/10, 21:40–; base `98b0fc974`)
+- **Entrato**: dev `119230f9f` (i miei `09ee732e2`, `9e67c0c85`, `089be17d7`, `f83f75ca6`); CHANGELOG 🐛 `98b0fc974` (il
+  testo approvato). Controlli combinati del coordinatore verdi. Worktree avanzato a `98b0fc974`, pulito.
+- Revisione di E del backend di C-54: nota 1 (`mark_seen` all'indietro) già nel checkpoint (LOCK.4); nota 2 (una
+  pre-release vale la sua release: chi ha chiuso la finestra su `1.3.0-rc1` non rivede il capitolo `1.3.0`, anche se è
+  cresciuto) → una frase in `developer/frontend/onboarding.md` dopo gli esempi di `release_of()`, **nel checkpoint di
+  A-57** (coordinatore). Le note di E su C-54 sono chiuse dal coordinatore.
+- Dal coordinatore, per dopo A-57: H prepara `LIBREFOLIO_CSP_ENFORCE` (spento di default; `connect-src` solo `'self'` e
+  l'origine di `LIBREFOLIO_PUBLIC_URL`): la verifica dell'indirizzo (F3, A-58) leggerà «non verificabile» ogni altro
+  indirizzo. Due cose per me, quando H manda la politica esatta: le parole per l'admin, e le attese di AUSR-E-07 su una
+  corsia che la applica (prova apposta altre origini http).
+- **Coordinatore: GO per l'analisi di A-57** (serve poi uno slot E2E).
+
+### A-57 — LGM-E-01 e LGM-E-03 leggono il profilo della corsia: analisi (21:45, sola lettura)
+**Stato reale**
+- `frontend/e2e/layout/legal-and-managed.spec.ts` (lotto A9, mio): LGM-E-01 (senza sessione) e LGM-E-03 (con sessione)
+  osservano la risposta della corsia attraverso lo stub con una patch vuota (`serveInstanceConfig(page, {})`) e prendono
+  come prova «configurazione applicata» il link della donazione (`auth-donate-link`, `header-donate-link`), poi fissano
+  `expectServed(… {profile: 'selfhosted', legal: LANE_LEGAL})`. Su una corsia gestita il link non compare mai: la prova
+  scade, il test fallisce per costruzione (H-43, reperto F2). LGM-E-02/04/05 simulano il profilo o i link e girano su ogni
+  corsia.
+- Una corsia imposta solo `LIBREFOLIO_PROFILE`, `LIBREFOLIO_FRAME_PROTECTION`, `LIBREFOLIO_CSP_REPORT_ONLY`
+  (`TEST_LANE_SETTABLE`): **nessuna corsia ha pagine legali**, gestita o no.
+- Gli elementi disegnati solo «a server che ha detto gestito» (`managedConfirmed()`): uno solo, in
+  `ForgotPasswordCard` (`forgot-ask-admin`, senza sessione). Con la sessione non ce n'è nessuno: ciò che un'istanza
+  gestita toglie manca anche prima della risposta.
+- `CLOUD_SMOKE_SPECS` (`scripts/test_runner/_frontend_utility.py`, di H) ne è fuori, col commento e la frase in
+  `developer/test-walkthrough/front-utility.md:112`; la registrazione `legal-managed` dice «the lane self-hosted
+  (LIBREFOLIO_PROFILE unset)» nel `prereq`.
+
+**Disegno** (solo test)
+1. Prima di caricare la pagina, il test legge il profilo della corsia: `GET /api/v1/system/instance` (pubblico) con
+   `page.request`, `profile` ∈ {`selfhosted`, `managed`} e `legal`; poi la pagina lo rilegge attraverso lo stub, e
+   `expectServed` vuole lo stesso.
+2. **LGM-E-01**: self-hosted come oggi. Gestita: la prova è `forgot-ask-admin` (login → «password dimenticata» → la prova
+   → «torna al login», stessa esecuzione dell'app, marcata); poi la scheda del login con `auth-legal-links` sotto, i link
+   come dice il `legal` della corsia (nessuno), nessun `auth-donate-link` e nessun link alla pagina della donazione.
+3. **LGM-E-03**: self-hosted come oggi. Gestita: senza un elemento solo-gestito con la sessione, la prova viene da uno stub
+   dei soli `legal` (il profilo resta quello vero della corsia), come in LGM-E-04: la riga legale della barra laterale
+   punta alla pagina dei termini dello stub = la risposta applicata; poi il contrasto sugli stessi percorsi (niente
+   controllo degli aggiornamenti, nessun caffè in intestazione, aiuto e About, la condivisione resta).
+4. Stessi ID; l'intestazione della spec («Covered») aggiornata; il `prereq` di `legal-managed` → «either profile».
+5. La spec di nuovo in `CLOUD_SMOKE_SPECS` (lista, commento, frase della doc, eventuali conteggi «13») resta di H.
+**Superfici**: la spec (mia); una riga del registro in `_frontend_utility.py` (condiviso con H: righe lontane da
+`CLOUD_SMOKE_SPECS`); la frase rc in `onboarding.md`; l'indice (A-57 ✅, A-58 con il punto di AUSR-E-07).
+**Prove** (slot E2E, ~10 min): (1) la spec di oggi su una corsia gestita → LGM-E-01/03 rossi, gli altri verdi; (2) la
+spec nuova su una self-hosted → 5/5; (3) su una gestita → 5/5. La spec nuova scritta da `test-author` nella cartella di
+sessione e copiata nell'albero dopo (1). Corsia: la mia (6182, `/tmp/librefolio-r13-a`), gestita con `--lane-setting
+LIBREFOLIO_PROFILE=managed`. **Peso**: basso.
+
+### A57.1 — GO, prova 1, poi STOP (17/10, 21:44–21:52); sospeso (19/10)
+- **Coordinatore (21:44)**: GO «as designed (test only, same IDs)»; write OK sulla sola riga `prereq` di
+  `legal-managed` in `scripts/test_runner/_frontend_utility.py` (W ha lo stesso file aperto, K3, un'altra regione);
+  stessa cartella dati per le corse gestite; slot E2E (3 corse) GO; il ritorno in `CLOUD_SMOKE_SPECS` resta di H.
+- **Prova 1** (`work/slot_a57/slot.sh 98b0fc974 red`, 21:44–21:51): la spec di oggi su una corsia gestita
+  (`--lane-setting LIBREFOLIO_PROFILE=managed front-utility legal-managed`; il runner stampa `Test lane settings:
+  LIBREFOLIO_PROFILE=managed`): **2 rossi, 3 verdi**. LGM-E-01 e LGM-E-03 cadono sulla prova di presenza del link della
+  donazione (`auth-donate-link`, riga 189; `header-donate-link`, riga 239: «element(s) not found»), come previsto;
+  LGM-E-02/04/05 verdi. Impronta dell'albero invariata, porta 6182 libera.
+- **STOP del developer** (17/10, ~21:52), subito dopo la prova 1: nulla scritto dopo (né la spec nuova, né la riga
+  `prereq`, né la frase rc in `onboarding.md`, né l'indice); nessun `test-author` avviato.
+- **Ripartenza 19/10** (coordinatore; regole nuove: nessuna decisione di prodotto dai figli, ogni scelta diventa una
+  domanda con opzioni e consiglio; implementazione solo dopo il via esplicito; niente carichi pesanti senza slot):
+  **A-57 sospeso** finché il developer non finisce di leggere i lotti piccoli. In attesa con lui: la frase rc in
+  `developer/frontend/onboarding.md` (nota 2 di E su C-54, legata al checkpoint di A-57). Il punto AUSR-E-07 di A-58 va
+  nella contabilità dell'indice (fase 2).
