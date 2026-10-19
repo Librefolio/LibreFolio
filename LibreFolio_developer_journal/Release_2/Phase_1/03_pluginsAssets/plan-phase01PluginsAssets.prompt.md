@@ -7644,3 +7644,123 @@ al coordinatore come slot.
 >   fra 10 e 20).
 > - **Osservazione per chi possiede la shell del frontend, non per questo lotto:** con un chunk che non si carica,
 >   l'utente vede «500 Internal Error» dopo il login, e SvelteKit non riprova. Va girata al coordinatore.
+
+### Rovescio di X-R45 — via (19/10, base `f7bfffb0d`)
+
+Decisione del developer, girata dal coordinatore: si tengono i due lettori che filtravano già prima, `convert_bulk`
+(X-R38) e la variazione dei periodi (X-R59), com'erano prima di X-R45. Il rovescio toglie tutto il resto:
+- la condizione nei tre lettori nuovi;
+- la guardia strutturale e i suoi test;
+- la doc, il runner e la riga del CHANGELOG.
+
+Coda del coordinatore: rovescio di X-R45 → funzione «a gradini» per P3 (scritta da X, rivista da MF) → N64 → Q1–Q3/S1.
+
+**Stato verificato sull'albero di oggi** (l'analisi breve di prima resta valida):
+- Il rovescio automatico (`git apply --check -R` file per file sul diff di `629304ab3`) è pulito per 11 file su 13.
+- Falliscono `fx/conversion.py`, dove J-1 (`068d5dd51`) ha aggiunto l'import di `oriented_rate` dentro il contesto, e il
+  CHANGELOG. I due si fanno a mano.
+- Sul `/tmp` il rovescio ridà in `fx/architecture.md` il testo di X-R38 (limiti in linea, `usable_fx_rate_bounds()`),
+  e `wac.py` torna senza l'import della condizione.
+- Riferimento nuovo, da un altro lotto: `test_financial/test_fx_gap_single_reading.py` (MF, J-1) cita
+  `usable_fx_rate_clause` solo nella docstring (righe 5 e 58), come nome del filtro di `convert_bulk`. Non lo importa,
+  e il suo comportamento resta valido, perché `convert_bulk` filtra ancora. Va corretto solo il nome.
+- I test dei due filtri che restano non sono di X-R45: `test_fx_conversion.py` e `test_fx_core.py` per X-R38,
+  `test_period_changes.py` per X-R59.
+
+**Rossi** (test-author): i test di X-R45 sui tre lettori nuovi diventano i test della decisione del 19/10, rossi oggi e
+verdi dopo il rovescio.
+- PAC `fx_quotes`: vince l'ultima riga salvata anche se inutilizzabile (0, inf, 1E+14). Uno 0 dà
+  `allocation.saved_fx_invalid` per quel giorno, cioè il ramo di X-R82 torna raggiungibile.
+- PAC `wac`: la riga del giorno esatto si legge anche se inutilizzabile.
+- Scheduler `_last_fx_dates`: risponde l'ultimo giorno salvato anche se inutilizzabile, quindi il Sync non lo riscarica
+  (nessuna bonifica automatica; D-W63-1: no).
+- Restano le guardie, «vince l'ultimo tasso usabile».
+- Se mancano, una guardia per `convert_bulk` e per i period changes, che scartano ancora le righe inutilizzabili.
+- La guardia strutturale `test_usable_fx_rate_gate.py` si toglie nella cura, con la sua azione del runner.
+
+**Cura**:
+- il rovescio file per file (`git apply -R --include`, nessun comando git che scrive la storia);
+- a mano: `conversion.py` e la riga di X-R45 nel CHANGELOG;
+- il runner, a mano, secondo i file che restano;
+- nel backlog: X-R45 «annullata il 19/10», X-R82 decaduta.
+
+**Prove**: `fx-core`, `fx-conversion`, `period-changes`, `api fx`, `portfolio-allocation-source`, `bulk-reads-chunked`,
+`scheduler-last-fx-dates` (se il file resta), `scheduler-jobs`, `fx-gap-single-reading`, `check-orphans`,
+`mkdocs build`, `check-links`.
+
+Nota: il coordinatore aggiorna la base dopo il gate della fusione delle migrazioni. La 011 sparisce, e la corsia va
+ripopolata con `test db populate --force --clean` prima della prossima corsa.
+- **Cura preparata** (`xr45r_code.py`, con la patch di `629304ab3` salvata nella cartella di sessione, sha256 `9d26c706…`):
+  - il rovescio file per file, preceduto da un `--check` per ogni file;
+  - a mano, contate: `conversion.py` (import e `usable` in linea, come prima di X-R45) e la riga del CHANGELOG.
+  - A secco su `/tmp`: `precision.py`, `period_changes.py`, `fx_quotes.py` e `jobs.py` tornano byte per byte come in
+    `629304ab3^`. `conversion.py` e `wac.py` differiscono solo per `oriented_rate` di J-1.
+  - Il file della guardia sparisce, nessun riferimento resta nel prodotto, nel runner e nella doc; black e ruff puliti.
+
+**Rossi** ✅ 19/10. I test li ha scritti un test-author, che non ha lanciato nulla; li ho girati io.
+- `services bulk-reads-chunked`: 16 rossi e 38 verdi, fra cui 24 guardie.
+  - Le guardie nuove: `convert_bulk` (àncora e finestra) e `_first_rate_days_inside` leggono 1E-10, 1.5 e
+    99999999999999, e scartano 0, 1E-11, −1.5, inf, 1E+14 e 1E+19: i nove casi della guardia che si toglie.
+  - `test_fx_conversion.py` copriva solo 0, inf e 1e19; `_first_rate_days_inside` non aveva nessun caso.
+  - Il test WAC di X-R45 è riscritto al suo posto.
+- `services scheduler-last-fx-dates`: 6 rossi e 3 guardie.
+- `test_fx_gap_single_reading.py` (MF): solo le parole della docstring.
+
+> **⚠️ Fuori pista — l'analisi del 19/10 era sbagliata su `inf`.**
+> - L'avevo scritto «passa come valore». Il test-author ha letto il codice: senza filtro, `build_planner_fx_quotes`
+>   costruisce `PortfolioPlannerSourceFxQuote(rate=Infinity)`. Lo schema rifiuta i Decimal non finiti, quindi
+>   `POST /portfolio/allocation-source` risponde 500 per ogni richiesta che chiede quella coppia.
+> - Lo 0 dà `saved_fx_invalid`, 1E+14 passa come valore.
+> - Il test fissa `inf` solo al caricatore, senza fissare il crash.
+> - Domanda al coordinatore (19/10, 15:25), con le opzioni:
+>   - (a) lasciarlo così;
+>   - (b) un tasso non finito trattato come lo 0, cioè l'avviso con la data, senza filtro (consigliata);
+>   - (c) la condizione nelle sole quote del PAC.
+> - Lato WAC, un `inf` sul giorno esatto passerebbe `_rates_match` e farebbe sollevare lo schema. Nei fatti non si
+>   raggiunge: le chiavi WAC sono i giorni scelti da `convert_bulk`, che filtra ancora.
+
+**Cura** ✅ 19/10:
+- `xr45r_code.py`: 8 file rovesciati, più `conversion.py` e il CHANGELOG a mano;
+- `xr45r_runner.py`: le voci `bulk-reads-chunked` e `scheduler-last-fx-dates`, con le parole proposte dal
+  test-author;
+- nel backlog, X-R45 «annullata il 19/10» e X-R82 decaduta per il ramo, mentre resta aperta la docstring di
+  `_validate_canonical_fx_pair`. La «riga facoltativa del conteggio all'avvio» non c'era nella mia sezione.
+- black e ruff puliti su 11 file.
+- Primi verdi: bulk-reads ` 54 passed`, scheduler ` 9 passed`.
+
+**Decisione del developer sul tasso infinito nel PAC** (19/10, girata dal coordinatore), testuale: «facciamo che se succede
+compare l'avviso, ma per non bloccare filtriamo quel punto, ma nella comunicazione lo diciamo che stiamo saltando quel
+punto e che va corretto, e che quindi i risultati potrebbero essere lievemente sbagliati».
+
+La mia proposta (19/10, 15:50), in attesa del via:
+- «saltare il punto» vuol dire usare il tasso valido precedente (finito e > 0), con un avviso *warning* che nomina coppia,
+  data saltata e data del tasso usato; senza nessun tasso valido prima, un errore come oggi;
+- unificare lo 0, che oggi è `saved_fx_invalid` con gravità *error* e blocca la coppia;
+- 1E+14 resta un valore.
+- Costo: un codice nuovo tocca i due enum, OpenAPI, il contratto del tool `pac_allocator` (`contract_version` 1.0.0)
+  e le chiavi i18n. Il testo in 4 lingue lo porta il coordinatore al developer.
+
+Verifica degli altri lettori senza filtro: nessun altro crash da infinito.
+- Il WAC legge la riga scelta da `convert_bulk`, che filtra; lo scheduler legge solo la data.
+- La sovrascrittura e il conteggio del Sync, il conteggio della cancellazione, l'impronta del motore, l'export di
+  backup (`_to_str`, «Infinity» come testo) e la fonte dell'AI Export non calcolano con il valore.
+
+**Verdi** ✅ 19/10, sulla corsia 6183, una corsa alla volta. Carico fra 22 e 50; il cancello ha fatto aspettare oltre
+110.
+
+| Corsa | Esito |
+|---|---|
+| `services`: `bulk-reads-chunked` / `scheduler-last-fx-dates` / `scheduler-jobs` | 54 / 9 / 73 |
+| `services`: `fx-core` / `fx-conversion` / `fx-pairs-per-query` / `fx-sync-service` | 42 / 44 / 6 / 38 |
+| `services`: `period-changes` / `portfolio-allocation-source` | 60 / 98 |
+| `services roi-fifo-utils`, con `test_fx_gap_single_reading.py` | 1 517 |
+| `db fx-rates` | 6 |
+| `api`: `period-changes` / `fx` / `pac-planner-tool` | 36 / 34 / 12 |
+| `check-orphans` | 495 file backend raggiungibili: uno in meno, la guardia |
+| `mkdocs build` strict; `check-links` | 0 avvisi; 97 link validi |
+| black e ruff sugli 11 file toccati | puliti |
+
+- Restano **fuori dal rovescio**, in attesa del via e del testo dell'avviso, il tasso infinito nel PAC e l'eventuale
+  unificazione dello 0.
+- Fino ad allora, un `inf` salvato come ultima riga di una coppia dà un 500 sul PAC, com'era prima di X-R45. Il developer
+  è sicuro al 99,9% che righe così non esistono.
