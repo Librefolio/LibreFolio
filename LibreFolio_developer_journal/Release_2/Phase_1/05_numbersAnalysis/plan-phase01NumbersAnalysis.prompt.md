@@ -7800,3 +7800,64 @@ lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il deve
   `TransactionBulkModal.svelte`, `TxBulkBanners.svelte`, `TxFormBanners.svelte`; W o B) e il batch
   (`transaction_batch_stages.py`, W). Il CHANGELOG: una riga 🐛 o 🔄.
 - **Peso**: ~1 giornata, più uno slot E2E (`front-transaction`).
+- **19/10 ~15:40 — testi approvati**: il developer approva i testi proposti così come sono (le 4 chiavi, nelle 4
+  lingue). Il lotto parte dopo la revisione di P2 di MF. I file di W (`bulkTodos.ts`, `TransactionBulkModal.svelte`, i
+  banner, `transaction_batch_stages.py`) li assegna il coordinatore al momento: oggi W lavora su Fineco, nel plugin.
+
+#### Revisione di P2 di MF (`82e9454eb`, le viste costruite solo per la finestra; 19/10 ~15:25–16:30, sola lettura)
+
+- **Richiesta del coordinatore** (19/10 ~15:22): come per P1. Da verificare i confini (`[from, to]` contro
+  `(from, to]` per il finanziamento) e la finestra senza stati. MF dichiara il report identico (4 copie × 16 finestre,
+  0 differenze).
+- **Cosa fa P2**: `DerivedViewsBuilder._window` trova la finestra per bisezione sulle date degli stati. Storia, P&L per
+  broker e candele costruiscono `[date_from, date_to]`, il finanziamento degli acquisti `(date_from, date_to]`.
+  `build_performance_inputs(date_from)` restituisce solo ciò che `rebase_to_period` tiene. 6 chiamate in
+  `portfolio_service.py` passano la finestra; per una finestra senza stati `get_broker_pnl_history` rimette ogni
+  broker senza punti. Più 8 righe in `financial_math.md` e 894 righe di test (`test_windowed_views.py`).
+- **Lettura del codice**:
+  - `_window`: `bisect_left` sull'inizio (`bisect_right` se escluso), `bisect_right` sulla fine. Un estremo aperto
+    arriva al bordo della storia; una finestra rovesciata dà la fetta vuota. Serve un giorno per stato in ordine
+    crescente, e c'è: ogni chiamata calcola il motore da t=0 (`date_from=None`).
+  - Storia, P&L per broker, candele e finanziamento: ogni punto legge solo il proprio stato, senza termini del giorno
+    prima. Ogni chiamata tiene il suo vecchio taglio, che ora non toglie nulla. Il vecchio taglio del finanziamento era
+    `date > date_from and date <= date_to`, cioè proprio `(from, to]`.
+  - Gli input della performance: lo stato d'apertura è l'ultimo con data ≤ `date_from`, altrimenti il primo. La base
+    di partenza è il capitale cumulato di quello stato, quindi ogni delta è la stessa sottrazione `Decimal` di prima.
+    `rebase_to_period` tiene proprio questo: le istantanee dallo stesso stato e i flussi con data strettamente
+    successiva. Quando `date_from` precede tutto, apre sul primo stato a NAV 0 e lascia fuori i flussi di quel giorno,
+    che gli input con la finestra non producono. Casi visti: apertura trovata, `date_from` prima di tutto, `None`,
+    nessuno stato, `date_from` dopo l'ultimo stato. I due chiamanti, `get_summary` e `get_history`, usano gli input
+    solo attraverso il rebase.
+  - Il P&L per broker: `all_broker_ids` è un insieme solo per costruzione. Ogni stato valutato lo percorre e ogni
+    stato riportato copia il dizionario di prima, quindi ogni stato porta ogni broker nello stesso ordine. Così una
+    finestra non vuota elenca i broker come l'intera storia; il ripiego per la finestra senza stati rifà l'elenco
+    vecchio. P2 inchioda l'invariante del motore (`TestTheEngineListsEveryBrokerEveryDay`).
+  - La finestra senza stati: da `get_report` non arriva mai. `OpenDateRangeModel` rifiuta una fine prima dell'inizio,
+    e un inizio dopo la fine limitata viene spostato su di essa. Una corsa del motore senza stati esce prima in ogni
+    metodo. Il ripiego serve alle chiamate dirette dei metodi.
+  - Altri chiamanti dei cinque metodi: nessuno, solo le 6 chiamate. La pagina `financial_math.md` dice il vero.
+- **Sonda indipendente** (`files/j/p2review/`): albero `bbbc085d2` (padre di P2) contro `82e9454eb`, ognuno sulla sua
+  copia fresca dello stesso DB (schema 011, come l'albero di MF). Differiscono solo i 2 file del prodotto più il test.
+  Si confronta lo SHA-256 del JSON di `get_report` con tutte le viste (`include_*` tutti veri), tolto `generated_at`.
+  12 finestre per ogni utente e perimetro: nessuna, aperta in fondo, 1M, 1A, dal primo giorno, da prima del primo,
+  centrale, dall'ultimo BUY, fino all'ultimo BUY, inizio dopo la fine, un giorno solo, prima della storia.
+
+  | Copia | Richieste | Punti | Errori (uguali nei due) | Differenze | Secondi prima → dopo |
+  |---|---|---|---|---|---|
+  | populate | 432 | 246 116 | 36 | **0** | 106,6 → 77,3 |
+  | populate col BUY del 1900 (3 utenti, 6 perimetri pesanti) | 216 | 5 405 171 | 18 | **0** | 1 293,9 → 1 147,9 |
+  | chiamate dirette dei 4 metodi (populate) | 720 | 239 | 0 | **0** | 22,5 → 26,4 |
+
+  > Gli errori sono `OpenDateRangeModel` che rifiuta la finestra «inizio dopo la fine», uguale nei due alberi. Per
+  > questo la sonda diretta chiama i quattro metodi coi casi che il modello non fa passare: inizio dopo la fine, inizio
+  > dopo l'ultimo stato, solo il primo giorno, il giorno prima del primo, fine prima dell'inizio sul primo giorno. Il
+  > ripiego del P&L per broker è passato 71 volte, con lo stesso elenco del vecchio (ogni broker, nessun punto).
+  > Sul 1900 il guadagno è sulle finestre corte (centrale 60,9 → 2,4 s, fino all'ultimo BUY 49,5 → 2,8 s); le finestre
+  > su tutta la storia restano pari, perché domina il motore. I totali sono rumorosi: durante la corsa di P2 il carico
+  > è arrivato a 105. La corsa del vecchio albero sul 1900 l'ho fermata dopo 3 utenti su 9 (circa 15 s a richiesta):
+  > il confronto è su quei 3, tutti i loro perimetri.
+- **Esito: OK.** Report identico; i confini e la finestra senza stati sono quelli di prima, dimostrati dal codice e
+  dalle sonde. Note senza azione:
+  - i tagli vecchi dei chiamanti ora non tolgono nulla: si possono lasciare come difesa;
+  - il ripiego della finestra senza stati poggia sull'invariante «ogni stato porta ogni broker», che P2 inchioda con
+    un test.
