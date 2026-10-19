@@ -371,11 +371,12 @@ class TestOneFlowBuilder:
         (−1000 at day 0, once); those of the end date join the final value."""
         calls: list[tuple[list[tuple[float, float]], float]] = []
 
-        def recording_solver(flows, x0):
+        def recording_solver(flows, x0, scale):
             calls.append((sorted(flows), x0))
             return 0.05
 
-        monkeypatch.setattr(returns, "_solve_xirr", recording_solver)
+        # P1: a series point after the first may solve through the Newton step directly, not through _solve_xirr.
+        monkeypatch.setattr(returns, "_newton_xirr", recording_solver)
 
         navs = _navs("2025-01-01 1000  2025-07-01 1450  2026-01-01 1300")
         flows = _flows("2025-01-01 -600  2025-01-01 -400  2025-05-15 -0.10  2025-05-15 -0.20  2025-07-01 -150  2025-07-01 -50  2026-01-01 250  2026-01-01 -50")
