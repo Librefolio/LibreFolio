@@ -14,7 +14,7 @@ responsibility:
 | `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation, refused, nothing of the request written, while a `SPLIT` it would delete has linked incoming adjustments without a cost ([Parametric Provider Change](events.md#parametric-provider-change)); the removal, refused, nothing removed, while a transaction is linked to an event the removed assignment generated ([Provider Removal](events.md#provider-removal)); and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
-| `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price or volume refused; a provider's truncated, and a provider's date with a value no column can keep skipped and reported), the [date bounds](#stored-date-bounds) of a stored price (a manual date outside refused, a provider's skipped and reported), the [currency](#price-currency-coherence) of a manual call's prices (refused before any write), and bounded write chunks. |
+| `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price or volume refused; a provider's truncated, and a provider's date with a value no column can keep skipped and reported), the [last storable date](#stored-date-bounds) of a stored price (a manual date after it refused, a provider's skipped and reported), the [currency](#price-currency-coherence) of a manual call's prices (refused before any write), and bounded write chunks. |
 | `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked; refused, nothing written, while a `SPLIT` of the asset has linked incoming adjustments without a cost ([Market-Data Wipe](events.md#market-data-wipe)). |
 | `split_guard.py` | The `SPLIT`s among the events a wipe would delete that have linked incoming adjustments without a cost, named as the caller may see them (`splits_with_costless_adjustments()`, `adjustments_count()`): the refusal of the currency-change wipe and of the parametric provider change. |
 | `event_links.py` | The transactions linked to asset events, as a refusal names them for its caller: `visible_transaction_ids()`, the ids on a broker the caller holds an access to, none without a caller (the rule `split_guard.py` imports), and `events_with_linked_transactions()`, the events among those given that transactions are linked to, each with the caller's view: the refusal of the provider removal. |
@@ -190,8 +190,9 @@ the dropped ones in the asset's result message (*rejected N date(s) with a value
 column can keep*, the first five dates with the field and value), which the sync adds to
 the asset's errors as it does the OHLC rejections. The sync's change count, which runs
 before this (`_count_actual_price_changes()` in `refresh.py`), and its fallback take only the
-points dated within the [date bounds](#stored-date-bounds) that `_unstorable_provider_point()`
-accepts (`kept_items` in `_persist_refresh_item()`, W-B62; the date check since X-R65): a date
+points that `_unstorable_provider_point()` accepts, dated no later than the
+[last storable date](#stored-date-bounds) (`kept_items` in `_persist_refresh_item()`, W-B62;
+the date check since X-R65): a date
 skipped for either reason is neither counted in `inserted_count` / `updated_count` nor listed
 in `changed_points`, from which the asset page's chart would draw a point the database never
 got; `points_fetched` still counts it. Before W-B62, the count took every point: truncating the
@@ -222,38 +223,44 @@ maxima (the volume's included) and the dates. Two more checks follow, in this or
 still before any write: the [dates](#stored-date-bounds) (X-R65) and the
 [currency](#price-currency-coherence) of the prices (X-R71).
 
-`bulk_upsert_prices()` also keeps every date it stores within `stored_date_bounds()` (X-R65,
-night decision N83): from `EARLIEST_RANGE_START` (1900-01-01, the floor every replay and
-history walk starts from) to `latest_range_end()`, tomorrow by the server's calendar, both
-included. The helper lives in `backend/app/utils/date_range_limits.py`, with
-`DateOutOfRangeError` and `date_out_of_range_detail()`, the builder of the 422 `detail`. The
-reason is J's SEC8-1b: a price stored at 0001-01-01 made a backward fill or a risk replay walk
-about 740,000 days per asset. A price row an older version stored before 1900 stays, but since
-Z-30 a full history reaches back no further than 1900-01-01, where such a row at most seeds the
-fill, and never cuts a point-derived warm-up that starts earlier
-([bulk request limits](#bulk-request-limits)).
+`bulk_upsert_prices()` also keeps every date it stores no later than `latest_stored_date()`
+(X-R65, night decision N83): `latest_range_end()`, tomorrow by the server's calendar, included.
+There is no first date. X-R65 also kept stored dates from 1900-01-01 on; the developer lifted
+that floor from every price and rate write, a provider's included, on 19/10 (N83's revision),
+so a date before 1900, 0001-01-01 included, is stored like any other. The helper lives in
+`backend/app/utils/date_range_limits.py`, with `DateOutOfRangeError` and
+`date_out_of_range_detail()`, the builder of the 422 `detail`. The floor's reason was J's
+SEC8-1b: a price stored at 0001-01-01 made a backward fill or a risk replay walk about 740,000
+days per asset. The walks' own floors now carry that protection. `EARLIEST_RANGE_START`
+(1900-01-01) is the first day of every replay (R13-SEC8) and of every full history: since Z-30
+a full history reaches back no further, where an older row at most seeds the fill, and never
+cuts a point-derived warm-up that starts earlier ([bulk request limits](#bulk-request-limits)).
+A risk range starts no earlier than `range_span_floor()`, 100 years before its end
+(`bounded_range()` in `backend/app/services/risk/scope.py`, R13-SEC8-1b).
 {: #stored-date-bounds }
 
 - **Manual call**: right after the digit check, `_reject_dates_out_of_range()` refuses the
-  whole call when any date is outside, before the call reads or writes anything (a call that
-  fails both gets the digits' 400). The `DateOutOfRangeError` becomes a 422
-  `{"code": "date_out_of_range", "message", "params": {"min", "max"}, "items", "count"}`
-  (`message`: *Dates must lie between 1900-01-01 and …: N do not*, or *1 does not*). `items`
+  whole call when any date is after tomorrow, before the call reads or writes anything (a call
+  that fails both gets the digits' 400). The `DateOutOfRangeError` becomes a 422
+  `{"code": "date_out_of_range", "message", "params": {"max"}, "items", "count"}`
+  (`message`: *Dates must lie on or before …: N do not*, or *1 does not*). `items`
   lists, in request order, each asset with such dates as `{"asset_id", "dates"}`, its first ten
-  dates (at most ten assets); `count` is every date refused.
-- **Provider call**: the dates outside are dropped before any slice is written, like the
+  dates (at most ten assets); `count` is every date refused. An earlier date, 0001-01-01
+  included, passes this check.
+- **Provider call**: the dates after tomorrow are dropped before any slice is written, like the
   unstorable ones: the call logs a warning, *Provider prices skipped: date out of range*, writes
   the other dates, and reports the dropped ones in the asset's result message (*rejected N
-  date(s) outside 1900-01-01 to …*, the first five dates), which the sync adds to the asset's
-  errors.
+  date(s) after …*, the first five dates), which the sync adds to the asset's errors. An older
+  point, before 1900 included, is stored and counted.
 
-The [FX rate writes](../fx/architecture.md#stored-rate-dates) keep to the same bounds, and
-transactions have had the same floor since N74, with an end a year ahead
+The [FX rate writes](../fx/architecture.md#stored-rate-dates) keep to the same last date.
+Transactions keep their own floor, 1900-01-01 since N74, with an end a year ahead
 ([Transaction dates](../transactions/service.md#transaction-dates), where the code is
-`dateOutOfRange`). Price and rate rows already stored before 1900 are left as they are (Z-30).
-The web app's data editors tell these 422s in the interface language, naming the dates refused
-and the bounds (`writeRefusalMessage()` in `frontend/src/lib/api/writeRefusal.ts`, X-R46);
-before, they showed Axios's *Request failed with status code 422*.
+`dateOutOfRange`). The web app's data editors tell these 422s in the interface language, naming
+the dates refused and the last day a date may carry (*N dates are after …*,
+`common.writeRefusal.dateOutOfRange`; `writeRefusalMessage()` in
+`frontend/src/lib/api/writeRefusal.ts`, X-R46); before, they showed Axios's *Request failed with
+status code 422*.
 
 A manual call is all or nothing on the currency of its prices, as on its digits and dates
 (X-R71). Its third check, `_reject_currency_mismatches()`, runs right after
@@ -290,13 +297,13 @@ in date order, and an empty list when none is (an unknown asset's result, *Asset
 names none). `count` counts only the dates written, and the
 English `message` keeps its sentences unchanged: the sync still copies it into the item's `errors`
 when it holds *rejected* (`_persist_refresh_item()` in `refresh.py`). A manual call meets only
-`ohlc_inconsistent`: a date out of bounds or a value over the limits refuses it whole instead.
+`ohlc_inconsistent`: a date after tomorrow or a value over the limits refuses it whole instead.
 {: #rejected-price-dates }
 
 | `reason` | The date is left out because | Met by |
 |---|---|---|
 | `ohlc_inconsistent` | Its point carries two real bounds, a `low` and a `high` that are not the `-1` erase, and `low > high` or its close lies outside `[low, high]`, the values compared as sent; its stored row is kept | Manual and provider calls |
-| `date_out_of_range` | It lies outside the [date bounds](#stored-date-bounds) | Provider calls; a manual call is refused whole (422 `date_out_of_range`) |
+| `date_out_of_range` | It lies after tomorrow, the [last storable date](#stored-date-bounds) | Provider calls; a manual call is refused whole (422 `date_out_of_range`) |
 | `value_not_storable` | It holds a value no price column can keep (`_unstorable_provider_point()`) | Provider calls; a manual call is refused whole (400) |
 
 The integrity guard behind `ohlc_inconsistent` runs in the upsert loop and skips one date, never
@@ -526,7 +533,7 @@ The count follows the fill, not the requested range. A full-history signal (`RIS
 from the earlier of `EARLIEST_RANGE_START` (1900-01-01) and the start of the item's point-derived
 warm-up (Z-30): the full history can lengthen that warm-up, never shorten it, and adds nothing
 before a range that starts before 1900. The fill emits from the first stored price, or from the
-load start when an older version's row, dated before it, seeds the fill. So a full history over a
+load start when a row dated before it (writes have no floor since N83) seeds the fill. So a full history over a
 visible range of one day, today, still counts about 9,800 days for an asset priced since
 2000-01-01, and about 46,300 with such a row (before Z-30 the load started at `date.min`; a row
 stored at 0001-01-01 made it about 740,000).
@@ -981,7 +988,7 @@ cost unknown it stays `MISSING`.
 | `DELETE /api/v1/assets/provider` | DELETE | Bulk remove providers (`asset_ids` in the query): deletes each assignment and the events it generated, manual events staying; a 409 `PROVIDER_REMOVAL_LINKED_TRANSACTIONS`, nothing of the request removed, while a transaction is linked to one of those events, whatever its type; `params` names the refused asset (`asset_id`, `item_index`) and, in `events`, only the transactions the caller can see; a 409 `PROVIDER_REMOVAL_CONFLICT`, nothing removed and no SQL in the answer, when a link appears between the check and the delete ([Provider Removal](events.md#provider-removal)) |
 | `GET /api/v1/assets/provider/assignments` | GET | Read provider assignments |
 | `POST /api/v1/assets/provider/refresh` | POST | Refresh metadata from provider |
-| `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400), and so does a date before 1900-01-01 or after tomorrow (422 `date_out_of_range`, see [stored-date bounds](#stored-date-bounds)), or a price in a currency other than its asset's, on any asset of the request (422 `price_currency_mismatch`, see [price currency](#price-currency-coherence)); every refusal comes before anything is written; a date left out of a written call is named, with its reason, in its asset's `results[].rejected` (see [dates left out](#rejected-price-dates)) |
+| `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400), and so does a date after tomorrow (422 `date_out_of_range`, see [the last storable date](#stored-date-bounds)), or a price in a currency other than its asset's, on any asset of the request (422 `price_currency_mismatch`, see [price currency](#price-currency-coherence)); every refusal comes before anything is written; a date left out of a written call is named, with its reason, in its asset's `results[].rejected` (see [dates left out](#rejected-price-dates)) |
 | `DELETE /api/v1/assets/prices` | DELETE | Bulk delete price ranges |
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
 | `POST /api/v1/assets/prices/period-changes` | POST | Bulk fixed-period changes, 1D … 5Y, of the Assets table (DB-only, backward-fill, optional `target_currency`), and the whole-range change with an optional `range_start` |

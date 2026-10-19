@@ -7,14 +7,15 @@ value stored by hand with a later date is not returned), and the extra day cover
 server's tomorrow. A per-day walk with no data of its own to stop at goes back at most ``RANGE_SPAN_LIMIT_DAYS`` from
 its end (``range_span_floor``).
 
-A stored price or rate carries a date inside ``stored_date_bounds()`` (X-R65, night decision N83): a manual write with
-a date outside is refused, a provider's point outside is skipped. A price at 0001-01-01 made a backward fill or a risk
-replay walk about 740,000 days (J's SEC8-1b).
+A stored price or rate carries a date no later than ``latest_stored_date()``, tomorrow (X-R65, N83): a manual write with
+a later date is refused, a provider's later point is skipped. There is no first date (N83, developer, 19/10): the walks
+that read stored dates keep their own floors (``EARLIEST_RANGE_START`` for replays and full histories,
+``range_span_floor``), so a price at 0001-01-01 no longer makes a walk of about 740,000 days (J's SEC8-1b).
 """
 
 from datetime import date, timedelta
 
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end
+from backend.app.utils.datetime_utils import latest_range_end
 
 #: How far back a per-day walk may go from the end of its range: 100 years.
 RANGE_SPAN_LIMIT_DAYS = 36_525
@@ -71,30 +72,29 @@ def range_span_floor(end: date) -> date:
     return end - timedelta(days=RANGE_SPAN_LIMIT_DAYS)
 
 
-def stored_date_bounds() -> tuple[date, date]:
-    """The first and the last date a stored price or rate may carry (X-R65, N83): ``EARLIEST_RANGE_START`` (1900-01-01,
-    the floor of every replay and history walk) and ``latest_range_end()`` (tomorrow, by the server's calendar)."""
-    return EARLIEST_RANGE_START, latest_range_end()
+def latest_stored_date() -> date:
+    """The last date a stored price or rate may carry (X-R65, N83): ``latest_range_end()``, tomorrow by the server's
+    calendar. There is no first one: the developer lifted the 1900-01-01 floor of every write on 19/10 (N83)."""
+    return latest_range_end()
 
 
 class DateOutOfRangeError(Exception):
-    """A manual write holds dates outside ``stored_date_bounds()``: refused before anything is written (X-R65, N83)."""
+    """A manual write holds dates after ``latest_stored_date()``: refused before anything is written (X-R65, N83)."""
 
-    def __init__(self, items: list[dict], count: int, earliest: date, latest: date):
-        super().__init__(f"{count} date(s) outside {earliest.isoformat()} to {latest.isoformat()}")
+    def __init__(self, items: list[dict], count: int, latest: date):
+        super().__init__(f"{count} date(s) after {latest.isoformat()}")
         self.items = items
         self.count = count
-        self.earliest = earliest
         self.latest = latest
 
 
-def date_out_of_range_detail(items: list[dict], count: int, earliest: date, latest: date) -> dict:
-    """The ``detail`` of the 422 for a write with dates outside ``stored_date_bounds()``: at most 10 ``items``, and
+def date_out_of_range_detail(items: list[dict], count: int, latest: date) -> dict:
+    """The ``detail`` of the 422 for a write with dates after ``latest_stored_date()``: at most 10 ``items``, and
     ``count`` the dates refused in all."""
     return {
         "code": "date_out_of_range",
-        "message": f"Dates must lie between {earliest.isoformat()} and {latest.isoformat()}: {count} {'does' if count == 1 else 'do'} not",
-        "params": {"min": earliest.isoformat(), "max": latest.isoformat()},
+        "message": f"Dates must lie on or before {latest.isoformat()}: {count} {'does' if count == 1 else 'do'} not",
+        "params": {"max": latest.isoformat()},
         "items": items[:10],
         "count": count,
     }
