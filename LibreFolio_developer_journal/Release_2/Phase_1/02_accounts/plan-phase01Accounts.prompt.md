@@ -8224,3 +8224,76 @@ Ognuno con i rossi prima e uno slot. Uno slot API (`users-admin`) per N69-4 e N6
     al 95 %;
   - l'ho fermato dopo circa 30 s e ho cancellato la copia parziale (604 MB);
   - il worktree non è stato toccato (la copia lo leggeva soltanto); restano 20 GiB liberi.
+
+## A-CL1 — Revisione automatica di `5ccb495e5`: nessun Vitest prova la cura vera (19/10, 16:12–16:35; base `74539988e`)
+- **Coordinatore** (16:12): pagina devWiki `71670d3ec` e giornale `5926ed69d` committati.
+- **La lacuna**, solo nei test: M1/M2 sono diventati verdi perché la finta è passata a `SvelteMap`, non per
+  `changelog.ts`. Con `new Map` rimesso, ogni Vitest passerebbe ancora, e se ne accorgerebbe solo E1 (desktop).
+- **Cura proposta dal revisore**: in `changelog.test.ts`, `peek('it')` letto in un `$derived` sotto `$effect.root`; rosso
+  con `new Map` in un export fuori dal worktree, poi verde; un commit a parte.
+- **Non si può fare così.** Le verifiche, tutte in sola lettura o con file temporanei tolti dopo la corsa:
+  - **Ambiente node** (quello di `changelog.test.ts`): `svelte/reactivity` è la build server (`SvelteMap =
+    globalThis.Map`); `$derived` si calcola una volta sola e `$effect` non gira mai. Lo documenta
+    `src/__tests__/runes.svelte.ts`. Inoltre in un `.test.ts` non si possono scrivere rune.
+  - **jsdom**: Vite rifiuta l'import `?raw` del `CHANGELOG.md` alla radice del repo («Denied ID»,
+    `isServerAccessDeniedForTransform`), anche con il mock.
+    - Prova `work/acl1/probe-raw-mock.log`: tre forme di `vi.doMock`, relativa, assoluta e `/@fs`, tutte «Denied ID».
+- **Alternativa provata** (`work/acl1/seam/`, `work/acl1/probe-seam.log`, carico 47):
+  - l'import `?raw` e l'`import.meta.glob` vanno in un modulo a parte, che il test sostituisce con `vi.mock`;
+  - la `createLocalizedChangelog` vera, letta da un effetto con `recordReads` di `$test/runes.svelte`:
+    - **✓ con `SvelteMap`**;
+    - **✗ con `new Map`**, in una copia: «expected [ undefined ] to deeply equal [ undefined, 'it' ]».
+  - Nessun «Denied ID».
+- **Domanda al coordinatore**: l'alternativa tocca un file del prodotto (un modulo nuovo, 3 righe di `changelog.ts`,
+  nessun cambiamento di comportamento). Le opzioni, con il mio consiglio, sono nel messaggio. FROZEN fino al via.
+- **Via del coordinatore (16:2x): opzione 1**, la cucitura. Le opzioni 2 e 3 sono escluse (la config di tutti; la forma
+  invece del comportamento). Il test jsdom lo scrive il `test-author` e pilota la vera `createLocalizedChangelog`: rosso
+  con `new Map`, provato in una copia fuori dal worktree; verde con `SvelteMap`. Poi N69.
+
+### CLR.1 — La cucitura ✅ (19/10, 16:25)
+- `work/acl1/apply_seam.py` applicato (prova a vuoto pulita):
+  - `frontend/src/lib/features/changelog/changelogSources.ts`, nuovo: `englishChangelog` (l'import `?raw` di
+    `CHANGELOG.md`) e `translationModules` (l'`import.meta.glob` dei `CHANGELOG.<xx>.md`);
+  - in `changelog.ts` cambiano tre righe: l'import, `parseChangelog(englishChangelog)` e
+    `translationLoaders(translationModules)`; c'è anche una frase nel commento di testa.
+- Nessun cambiamento di comportamento: stesse chiavi del glob (stessa cartella), stesso testo. Prettier pulito.
+- `test-author` `5f7f850b`: `changelog.reactivity.test.ts` (jsdom; mock di `./changelogSources`; quattro casi:
+  - la cura;
+  - due lettori;
+  - un caricamento fallito non avvisa;
+  - l'inglese senza caricamento).
+- Rosso preparato in `work/acl1/red2/`:
+  - `changelog.acl1map-scratch.ts`: la copia di `changelog.ts` di oggi, con `new Map`;
+  - `run_red.sh`: copia il test cambiando il solo specificatore d'import, lo fa girare una volta, poi toglie i due file.
+
+### CLR.2 — Il test della cura vera: verde, rosso, registrazione ✅ (19/10, 16:25–16:55)
+- **`frontend/src/lib/features/changelog/changelog.reactivity.test.ts`**, nuovo (`test-author` `5f7f850b`). jsdom, con
+  `vi.mock('./changelogSources')`, un solo import del modulo in prova e `recordReads`/`assertEffectsRun` di
+  `$test/runes.svelte`. Quattro casi:
+  1. la cura: chi legge `peek('it')` viene avvisato quando `load('it')` riempie la cache;
+  2. due lettori indipendenti vedono un solo caricamento, partito da fuori (uno legge `peek('it-IT')`);
+  3. un caricamento fallito non avvisa e non salva; il successivo sì;
+  4. l'inglese non chiede caricamenti, e un riempimento italiano non fa ripartire i suoi lettori (con un controllo
+     positivo sul lettore italiano).
+- **Verde**: 4/4 tre volte; `changelog.test.ts` 189/189 (node, modulo vero); `ChangelogModal.test.ts` 50/50 (log
+  `work/acl1/reactivity-*.log`).
+- **Rosso** (`work/acl1/red2/run_red.sh`):
+  - il test, con il solo specificatore d'import cambiato, contro una copia di `changelog.ts` con `new Map`: **4 failed**;
+  - ognuno cade su «the reader was told», il caso 4 sul suo controllo positivo;
+  - i due file temporanei stavano nell'albero solo per la corsa; il `changelog.ts` vero non è mai cambiato.
+- **Registrazione** (ok del coordinatore sulle 2 righe):
+  - `check-orphans` trovava 2 orfani: questo test e **`Sidebar.changelog.test.ts` del lotto `5ccb495e5`, una mia
+    dimenticanza**;
+  - aggiunti in core-unit (dopo `changelog.test.ts`) e in component-unit (dopo `Sidebar.legal.test.ts`);
+  - ruff e black puliti; `check-orphans` passa: «all 569 unit tests registered», tutti raggiungibili da `all`.
+- **⚠️ Fuori pista**:
+  - il primo `front check` dava 4 errori su `scope_boundary` nei file dei lotti (J-48, entrato con la base): era il
+    client generato, ignorato da git, ormai vecchio;
+  - `dev.py api sync` lo rigenera, senza cambiare file tracciati; dopo, `front check` **0/0**.
+- **Vitest finale** (carico 45), 9 file, **322/322**:
+  - il test nuovo;
+  - `changelog`, `whatsNewStore`, `whatsNew`, `WhatsNewModal`, `ChangelogModal`, `Sidebar.changelog`;
+  - `DeferredAppPopups`, `layout.gate`.
+- **devWiki** (commit a parte): la pagina dava il modulo vero per non verificabile in jsdom. Aggiornata la «Prevention»
+  (i due muri, la cucitura, il test, la registrazione) e le fonti (due righe), più una voce «update» nel log.
+  `check_source_paths.py` non trova nulla sulla pagina.
