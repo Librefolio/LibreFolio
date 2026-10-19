@@ -3755,3 +3755,88 @@ e Q4 (Z) · poi R1 e L1 (J) · per ultimo, un lotto per pavimento, quando i suoi
 - **D2** — I pavimenti si tolgono tutti alla fine, uno per uno dopo la cura dei loro cammini (consigliato), o prima
   qualcuno? Consiglio: **alla fine**, uno per lotto.
 - **Coinvolgere J** (rischio R1, lotti L1) e **X** (Q1–Q3, S1, e la funzione dei gradini di P3) tramite il coordinatore.
+
+#### MF-E2 — gli short nello storico di performance dei lotti, opzione (b): analisi (19/10, sola lettura; base `068d5dd51`)
+
+**Decisione del developer**: opzione **(b)**, segni giusti e flussi completi. Il suo principio, testuale: «se i numeri vanno
+in negativo, bisogna mostrarli e comunicarli perché è la scelta dell'utente».
+
+##### Oggi
+
+- **Dove**: `financial_math/lots/histories.py::build_performance_history` (`:56-200`), la serie ROI/TWRR dell'asset nei
+  lotti dello scope (analisi `PERFORMANCE_HISTORY` di `/lots/analysis`, `lots_analysis_service.py:494-551`).
+- **Il valore**: un frammento corto ha la quantità positiva (`abs`, `fifo/engine.py:232-234`), e `_open_value_on_date`
+  (`:612-617`) la somma come un lungo: un corto aperto vale **+q·p** invece di **−q·p**. Nei giorni valutati al costo
+  `_cost_at_opening` (`:203-208`) dà None per un corto: quel giorno non ha punto.
+- **I flussi**: ogni BUY è un versamento (`:116-122`), quindi il riacquisto d'un corto c'è già; la **vendita che apre il
+  corto no** (i proventi entrano solo dalle chiusure dei lotti **lunghi**, `:133-144`).
+- **Le linee** partono dal primo flusso (`:186-191`): per un corto solo, dal giorno del riacquisto.
+- **Chi lo legge**: solo l'API e i test. Né il web app né l'AI Export chiedono `PERFORMANCE_HISTORY` (grep: nessun uso
+  fuori dal client generato). Test che lo fissano: `test_lots_performance_history_at_cost.py`,
+  `test_lots_analysis_pure.py`, `test_lots_analysis_service.py`, `test_lots_transfer_scope_boundary.py`,
+  `test_lots_transfer_in_transit_at_date_to.py`, `test_lots_failed_analysis_withholding.py`, `test_portfolio_api.py`.
+
+##### Segni e flussi giusti non bastano: serve una convenzione per i rendimenti
+
+Con il corto al segno giusto il «valore» dello scope è negativo (un debito), e i rendimenti di oggi dividono per il
+valore (TWRR) o per il capitale versato (ROI). Esempio (calcolato con le funzioni della casa, `files/n74/e2_example.py`):
+**vendo allo scoperto 10 a 100** il 5/1 (incasso 1 000), il prezzo scende a 90 e a 80, **ricompro 10 a 80** l'8/1
+(pago 800). Guadagno: **+200**, il 20 % dell'incasso.
+
+| | 5/1 | 6/1 | 7/1 | 8/1 |
+|---|---|---|---|---|
+| **Oggi** (corto come un lungo, la vendita non conta) | — | — | — | ROI **−100 %**, TWRR **−180 %** |
+| (b) senza convenzione nuova (segni giusti, rendimenti di oggi) | ROI 0 | TWRR **−10 %** | TWRR **−20 %** | ROI 0, TWRR −20 %: il segno è sbagliato (un debito che cala sembra una perdita) e il ROI non ha capitale |
+| **(b) + convenzione 1** (consigliata) | ROI 0 | ROI **+10 %**, TWRR **+10 %** | ROI **+20 %**, TWRR **+22,2 %** | ROI **+20 %**, TWRR **+22,2 %** |
+
+Le convenzioni possibili:
+1. **Base = esposizione lorda** (consigliata). TWRR: ogni sotto-periodo divide per |valore dei lunghi| + |valore dei
+   corti| all'inizio. ROI: guadagno diviso il capitale lordo impegnato, costo dei lunghi comprati + incasso dei corti
+   venduti. Per un asset **solo lungo non cambia nulla** (la base resta il valore e il versato). Per un corto il ROI
+   coincide con il rendimento sull'incasso della sintesi del lotto (E1). Il TWRR (+22,2 %) è più alto del ROI (+20 %)
+   perché si concatena su un'esposizione che cala col prezzo: è il rendimento d'un corto ribilanciato ogni giorno, la
+   definizione corrente; va scritto nella doc.
+2. **Base = nozionale d'apertura costante** (l'incasso del corto per tutta la vita). Il ROI viene uguale alla 1; un TWRR
+   concatenato su una base fissa non ha senso (darebbe +21 %), e non concatenarlo vuol dire non avere più un TWRR.
+   Sconsigliata.
+3. **Rendimenti «—» finché c'è un corto aperto**, solo importi. Va contro il principio («mostrarli e comunicarli»).
+   Sconsigliata.
+
+##### Cosa cambia
+
+- **Numeri**: solo `performance_history` di `/lots/analysis` per un asset con lotti **corti** nello scope; oggi nessuna
+  pagina la mostra. Asset solo lunghi: identici (prova di parità). Il valore e il rendimento per lotto (`value_history`,
+  `return_history`) e la sintesi del lotto tengono già conto della direzione (`lots/summary.lot_value`): non cambiano.
+- **Codice**:
+  - `lots/histories.py`: valore dei frammenti corti a −q·p; nei giorni al costo, un corto vale **−la sua quota
+    d'incasso d'apertura** (al cambio della vendita, regola 26), invece di nessun punto (domanda D3); il flusso della
+    vendita d'apertura, +incasso al cambio della vendita.
+  - `financial_math/returns.py`: due varianti della casa, una serie TWRR su una base data e un ROI su un capitale dato,
+    con il comportamento di oggi quando la base è il valore (le funzioni della Dashboard restano uguali).
+- **Schema e API**: nessun campo nuovo (gli stessi `roi`, `twrr` di `PerformanceHistoryPoint`).
+- **Doc**: la pagina dell'analisi dei lotti (la convenzione degli short) e una riga CHANGELOG 🐛.
+
+##### Costo, rischi, test
+
+- **Costo**: piccolo-medio (un file della casa, le due varianti, i test).
+- **Rischi**:
+  - lungo e corto insieme su broker diversi (l'esposizione lorda lo regge, un valore netto vicino a zero no);
+  - i giorni al costo dei corti;
+  - i trasferimenti di corti non esistono («fase 1», `fifo/engine.py:453-459`): niente casi di confine nuovi.
+- **Test** (test-author, rossi prima):
+  - il corto dell'esempio (oggi −100 % / −180 %; dopo +20 % / +22,2 %);
+  - un lungo e un corto insieme su due broker;
+  - un giorno al costo con un corto aperto;
+  - una vendita allo scoperto in un'altra valuta (incasso al cambio della vendita);
+  - **parità** campo per campo per gli asset solo lunghi su `test_lots_performance_history_at_cost.py` e
+    `test_lots_analysis_pure.py`;
+  - le due varianti pure della casa.
+
+##### Domande per il developer
+
+- **D1** — La convenzione dei rendimenti con gli short: **(1) esposizione lorda** (consigliata), (2) nozionale
+  costante, (3) «—» con un corto aperto?
+- **D2** — Con la (1), per lo stesso corto il TWRR (+22,2 %) e il ROI (+20 %) differiscono: va bene così, spiegato nella
+  doc? Consiglio: **sì**, è la definizione corrente.
+- **D3** — Nei giorni senza prezzo (valutati al costo), un corto aperto vale la sua quota d'incasso con il segno meno
+  (come un lungo vale il suo costo)? Consiglio: **sì**.
