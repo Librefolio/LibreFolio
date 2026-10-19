@@ -41,7 +41,7 @@ from backend.app.schemas.portfolio import (
     PortfolioReportResponse,
     PositionsContribution,
 )
-from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
+from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint, FAPriceQueryResult
 from backend.app.schemas.signals import (
     SignalBandComponent,
     SignalBandPoint,
@@ -60,6 +60,7 @@ from backend.app.schemas.signals import (
     SignalThresholdCrossingRequest,
 )
 from backend.app.services.ai_export.components import asset_fx_technical, portfolio_broker_technical, technical_context, technical_shared
+from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.resources import (
@@ -2769,3 +2770,261 @@ class TestQuoteDayWarmup:
 
         assert rate_calls == [(scope.period_end - load_start).days + 1]
         assert rate_series.observations[0].requested_date == load_start
+
+
+# =============================================================================
+# 13. E-AI503 - an eligible held asset whose price history returns no coherent series
+#
+# The valuation gives a held asset a value even without a stored price, so it is
+# eligible (not fully sold, non-zero end value). Its price query then answers
+# `FAPriceQueryResult(prices=[])` (never None), or points in two currencies, and
+# on HEAD 70ad4cec1 `{portfolio,broker}.technical_prices` and `asset.ohlc_returns`
+# write `coherent_price_currency(result)`, None, into a required `CurrencyCode`:
+# a ValidationError, a RequiredComponentBuildError, the 503
+# `snapshot_source_failure` without a reason_code.
+#
+# The criterion is ALWAYS the points the price history returns, NEVER the asset
+# type (developer's decision, 19/10/2026): every gap below is described by its
+# points alone, and the builders never read the type of `_contribution`.
+#
+# The contract's new names are read through their modules inside the tests, so
+# today only the tests that use them are red, never this file's collection.
+# =============================================================================
+
+
+def _gap_series(mode: str | None, points: list[FAPricePoint], *, visible_start: date, visible_end: date) -> tuple[list[FAPricePoint], list[FAPricePoint]]:
+    """(the points the price query returns, the points its signals compute on) for one gap mode.
+
+    - ``None``: the full synthetic series, as `_make_fake_get_prices_bulk` returns it;
+    - ``"empty"``: no stored price up to the period end: no point, and the signals compute on an empty series;
+    - ``"mixed"``: closes alternating between USD and EUR. The production query, asked for the native series
+      (``target_currency=None``), computes no signal on a mixed series, so its signals see an empty one;
+    - ``"stale"``: the stored prices end ten days before the period, so inside it there are only backward-filled
+      carries, in the asset's own currency.
+    """
+    if mode is None:
+        return points, points
+    if mode == "empty":
+        return [], []
+    if mode == "mixed":
+        return [point if index % 2 == 0 else point.model_copy(update={"currency": "EUR"}) for index, point in enumerate(points)], []
+    if mode == "stale":
+        cut = visible_start - timedelta(days=10)
+        observed = [point for point in points if point.date <= cut]
+        last = max(observed, key=lambda point: point.date)
+        carried = [last.model_copy(update={"date": day, "backward_fill_info": AssetBackwardFillInfo(actual_rate_date=last.date, days_back=(day - last.date).days)}) for day in _daterange(cut + timedelta(days=1), visible_end)]
+        return observed + carried, observed + carried
+    raise ValueError(f"unknown price gap mode: {mode!r}")
+
+
+def _patch_get_prices_bulk_with_gaps(monkeypatch: pytest.MonkeyPatch, gaps: dict[int, str]) -> None:
+    """`_patch_get_prices_bulk`, with the asset ids of ``gaps`` given a price-history gap (see `_gap_series`).
+
+    Drives the real `SignalService` per asset exactly as `_make_fake_get_prices_bulk` does - warm-up from the real plan,
+    signals on the series the production query would compute them on, `result.prices` sliced to the visible period.
+    """
+
+    async def _fake(requests, session):  # noqa: ARG001
+        signal_service = SignalService()
+        results: list[FAPriceQueryResult] = []
+        for req in requests:
+            visible_start = req.date_range.start
+            visible_end = req.date_range.end or visible_start
+            signal_context = SignalExecutionContext(domain=SignalDomain.ASSET, requested_range=req.date_range, cadence=SignalCadence.DAILY, source_reference=f"asset:{req.asset_id}")
+            plan = signal_service.prepare_plan(req.signals, signal_context, req.annotation_requests)
+            load_start = visible_start - timedelta(days=min(plan.max_history_points_before_visible, (visible_start - date.min).days))
+            full_series = [_fa_price_point(req.asset_id, day) for day in _daterange(load_start, visible_end)]
+            prices, signal_prices = _gap_series(gaps.get(req.asset_id), full_series, visible_start=visible_start, visible_end=visible_end)
+            signal_points = [SignalPricePoint(date=p.date, open=p.open, high=p.high, low=p.low, close=p.close, volume=p.volume, backward_fill_info=p.backward_fill_info) for p in signal_prices]
+            signals = await signal_service.compute(req.signals, signal_points, signal_context, annotation_requests=req.annotation_requests, source_capability=AssetSourceManager.derive_signal_source_capability(prices))
+            visible_prices = [p for p in prices if visible_start <= p.date <= visible_end] if req.include_price else []
+            results.append(FAPriceQueryResult(asset_id=req.asset_id, prices=visible_prices, events=[], errors=[], signals=signals))
+        return results
+
+    monkeypatch.setattr(AssetSourceManager, "get_prices_bulk", staticmethod(_fake))
+
+
+def _three_asset_context(monkeypatch: pytest.MonkeyPatch) -> BuildContext:
+    """A portfolio holding assets 1, 2 and 3 - end values 500/300/200, NAV weights 0.5/0.3/0.2 - listed out of id order.
+
+    Only the report is patched: each test patches the price query itself.
+    """
+    scope = _scope()
+    positions = [_contribution(3, end_value=200), _contribution(1, end_value=500), _contribution(2, end_value=300)]
+    _patch_get_report(monkeypatch, _report(scope, positions))
+    return _make_context(scope)
+
+
+class TestPriceSeriesGaps:
+    """E-AI503: the technical price components beside an eligible held asset with no coherent price series."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("mode", "reason_code"),
+        [
+            pytest.param("empty", "no_stored_price", id="AI503-C01-no-stored-price"),
+            pytest.param("mixed", "mixed_price_currencies", id="AI503-C02-mixed-currencies"),
+        ],
+    )
+    async def test_portfolio_prices_list_an_asset_without_a_coherent_series_as_uncovered(self, monkeypatch, mode, reason_code):
+        """AI503-C01 / AI503-C02 — asset 2 of three has no stored price (C01) or closes in two currencies (C02).
+
+        Guards: `portfolio.technical_prices` builds; asset 2 leaves `assets` for `uncovered_assets`, with its NAV
+        weight (computed as for the others) and its reason; assets 1 and 3 keep their series and weights; 3 eligible,
+        2 covered. Red until E-AI503 (today RequiredComponentBuildError, the 503).
+        """
+        _patch_get_prices_bulk_with_gaps(monkeypatch, {2: mode})
+        context = _three_asset_context(monkeypatch)
+
+        payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+
+        assert [asset["asset_id"] for asset in payload["assets"]] == [1, 3]
+        assert [asset["currency"] for asset in payload["assets"]] == [CURRENCY, CURRENCY]
+        assert [asset["portfolio_weight_ratio"] for asset in payload["assets"]] == pytest.approx([0.5, 0.2])
+        assert payload["uncovered_assets"] == [{"asset_id": 2, "portfolio_weight_ratio": pytest.approx(0.3), "reason_code": reason_code}]
+        assert (payload["eligible_asset_count"], payload["covered_asset_count"]) == (3, 2)
+
+    @pytest.mark.asyncio
+    async def test_portfolio_prices_with_no_series_at_all_list_every_asset_as_uncovered(self, monkeypatch):
+        """AI503-C03 — no asset of the universe has a stored price.
+
+        Guards: `portfolio.technical_prices` builds with no series; the three assets are uncovered in id order (the
+        positions arrive out of order), each `no_stored_price` with its NAV weight; 0 covered of 3 eligible. Red until
+        E-AI503.
+        """
+        _patch_get_prices_bulk_with_gaps(monkeypatch, dict.fromkeys((1, 2, 3), "empty"))
+        context = _three_asset_context(monkeypatch)
+
+        payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+
+        assert payload["assets"] == []
+        assert [(gap["asset_id"], gap["reason_code"]) for gap in payload["uncovered_assets"]] == [(1, "no_stored_price"), (2, "no_stored_price"), (3, "no_stored_price")]
+        assert [gap["portfolio_weight_ratio"] for gap in payload["uncovered_assets"]] == pytest.approx([0.5, 0.3, 0.2])
+        assert (payload["eligible_asset_count"], payload["covered_asset_count"]) == (3, 0)
+
+    @pytest.mark.asyncio
+    async def test_broker_prices_list_a_held_asset_without_stored_prices_as_uncovered(self, monkeypatch):
+        """AI503-C04 — broker 7 holds asset 1 (priced) and asset 2 (no stored price).
+
+        Guards: `broker.technical_prices` (the same builder on the broker's universe) builds; asset 1 in `assets`,
+        asset 2 in `uncovered_assets` with its weight in the broker (0.25) and `no_stored_price`; 1 covered of 2
+        eligible. Red until E-AI503.
+        """
+        scope = _broker_scope(broker_id=7)
+        _patch_get_prices_bulk_with_gaps(monkeypatch, {2: "empty"})
+        _patch_get_report(monkeypatch, _report(scope, [_contribution(1, end_value=900, broker_id=7), _contribution(2, end_value=300, broker_id=7)]))
+
+        payload = _envelope_payload(await _make_context(scope).resolve("broker.technical_prices", required=True))
+
+        assert [asset["asset_id"] for asset in payload["assets"]] == [1]
+        assert payload["uncovered_assets"] == [{"asset_id": 2, "portfolio_weight_ratio": pytest.approx(0.25), "reason_code": "no_stored_price"}]
+        assert (payload["eligible_asset_count"], payload["covered_asset_count"]) == (2, 1)
+
+    @pytest.mark.asyncio
+    async def test_components_sharing_the_universe_build_beside_an_uncovered_asset(self, monkeypatch):
+        """AI503-C05 — asset 2 of three has no stored price; the components reading the same universe build too.
+
+        Guards: `portfolio.technical_indicators`, `portfolio.technical_events` and `portfolio.technical_breadth` build
+        (required) and keep the eligible universe at 3 where they report it. Asset 2's indicator contents are not this
+        lot's and are not read. Red until E-AI503: today the indicators, which depend on the prices, fail with them.
+        """
+        _patch_get_prices_bulk_with_gaps(monkeypatch, {2: "empty"})
+        context = _three_asset_context(monkeypatch)
+
+        indicators = _envelope_payload(await context.resolve("portfolio.technical_indicators", required=True))
+        _envelope_payload(await context.resolve("portfolio.technical_events", required=True))
+        breadth = _envelope_payload(await context.resolve("portfolio.technical_breadth", required=True))
+
+        assert indicators["eligible_asset_count"] == breadth["eligible_asset_count"] == 3
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("mode", "reason_code"),
+        [
+            pytest.param("empty", "no_stored_price", id="AI503-C06-no-stored-price"),
+            pytest.param("mixed", "mixed_price_currencies", id="AI503-C07-mixed-currencies"),
+        ],
+    )
+    async def test_asset_ohlc_returns_without_a_coherent_series_has_a_null_currency_and_its_reason(self, monkeypatch, mode, reason_code):
+        """AI503-C06 / AI503-C07 — the single target has no stored price (C06) or closes in two currencies (C07).
+
+        Guards: `asset.ohlc_returns` builds at version 2 with `currency` None and the gap as `reason_code`, every
+        bucket of the plan empty and no latest close or date; `asset.indicators` (which depends on it) and
+        `asset.states_events` build too. Red until E-AI503.
+        """
+        _patch_get_prices_bulk_with_gaps(monkeypatch, {1: mode})
+        context = _make_context(_asset_scope(asset_id=1))
+
+        envelope = await context.resolve("asset.ohlc_returns", required=True)
+        payload = _envelope_payload(envelope)
+
+        assert envelope.component_version == 2
+        assert (payload["currency"], payload["reason_code"]) == (None, reason_code)
+        assert payload["buckets"], "the bucket plan still covers the period"
+        assert all(bucket["observation_count"] == 0 for bucket in payload["buckets"])
+        assert (payload["latest_close"], payload["latest_date"]) == (None, None)
+        for component_id in ("asset.indicators", "asset.states_events"):
+            _envelope_payload(await context.resolve(component_id, required=True))
+
+    def test_the_three_price_components_move_to_version_2(self):
+        """AI503-C08 — the builders and payloads of the three price components change, so each version goes 1 -> 2.
+
+        Guards: `portfolio.technical_prices`, `broker.technical_prices` and `asset.ohlc_returns` are at version 2 in
+        their specs and in the registry the runtime builds from the catalog (whose placeholders must agree); the
+        payload `schema_version` stays 1. Red until E-AI503.
+        """
+        specs = (portfolio_broker_technical.PORTFOLIO_TECHNICAL_PRICES_SPEC, portfolio_broker_technical.BROKER_TECHNICAL_PRICES_SPEC, asset_fx_technical.ASSET_OHLC_RETURNS_SPEC)
+        expected = {"portfolio.technical_prices": (2, 1), "broker.technical_prices": (2, 1), "asset.ohlc_returns": (2, 1)}
+        registry = build_component_registry()
+
+        assert {spec.component_id: (spec.version, spec.schema_version) for spec in specs} == expected
+        assert {component_id: (registry.get(component_id).version, registry.get(component_id).schema_version) for component_id in expected} == expected
+
+    @pytest.mark.asyncio
+    async def test_barrier_a_stale_series_stays_a_covered_asset(self, monkeypatch):
+        """AI503-C09 — barrier, green today: asset 2's stored prices end ten days before the period.
+
+        Guards the case left out of the lot: inside the period only carries, in the asset's currency. Asset 2 stays in
+        `assets` with currency USD, every bucket empty and no latest close, and counts as covered: 3 of 3. Only
+        today's fields are read.
+        """
+        _patch_get_prices_bulk_with_gaps(monkeypatch, {2: "stale"})
+        context = _three_asset_context(monkeypatch)
+
+        payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+
+        assert [asset["asset_id"] for asset in payload["assets"]] == [1, 2, 3]
+        stale = next(asset for asset in payload["assets"] if asset["asset_id"] == 2)
+        assert stale["currency"] == CURRENCY
+        assert stale["latest_close"] is None
+        assert all(bucket["observation_count"] == 0 for bucket in stale["buckets"])
+        assert (payload["eligible_asset_count"], payload["covered_asset_count"]) == (3, 3)
+
+    @pytest.mark.asyncio
+    async def test_a_stale_series_is_not_listed_as_uncovered(self, monkeypatch):
+        """AI503-C10 — the stale universe of AI503-C09 has no uncovered asset.
+
+        Guards: carries in the asset's own currency are points the history returns, so no gap: `uncovered_assets` is
+        empty (the stale case keeps today's behaviour). Red until E-AI503: today the payload has no `uncovered_assets`.
+        """
+        _patch_get_prices_bulk_with_gaps(monkeypatch, {2: "stale"})
+        context = _three_asset_context(monkeypatch)
+
+        payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+
+        assert payload.get("uncovered_assets") == []
+
+    @pytest.mark.asyncio
+    async def test_a_fully_priced_universe_has_no_uncovered_asset(self, monkeypatch):
+        """AI503-C11 — every asset priced, by the default fake series.
+
+        Guards: all three assets in `assets` and `uncovered_assets` present and empty. Red until E-AI503: today the
+        payload has no `uncovered_assets`.
+        """
+        _patch_get_prices_bulk(monkeypatch)
+        context = _three_asset_context(monkeypatch)
+
+        payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+
+        assert [asset["asset_id"] for asset in payload["assets"]] == [1, 2, 3]
+        assert payload.get("uncovered_assets") == []

@@ -152,6 +152,19 @@ Weight ratios use gross absolute open-position value:
 targets are not a universe: they report `selected`/`eligible`/`covered` entity
 tallies (0 or 1) and carry no portfolio weight.
 
+In the price components `portfolio.technical_prices` and `broker.technical_prices`
+(version 2), `covered_asset_count` counts instead the eligible assets with a native
+price series, the rows of `assets`. Every other eligible asset stays in
+`eligible_asset_count` and is listed in `uncovered_assets` (`asset_id`,
+`portfolio_weight_ratio`, `reason_code`, ordered by `asset_id`); the payload validator
+checks both counts against the two lists, with no asset listed twice. The
+`reason_code` is decided on the price points the price history returns, never on the
+asset type (E-AI503): `no_stored_price` when it returns none (no price stored up to
+the period end), `mixed_price_currencies` when they do not share one currency. A
+single Asset keeps its section: `asset.ohlc_returns` (version 2) then has a `null`
+`currency` and a `reason_code`, every bucket empty, and `latest_close` and
+`latest_date` `null` ([Snapshot Data Tables](#snapshot-data-tables)).
+
 ### 🏦 Portfolio Broker Universes
 
 Portfolio financial components distinguish calculation scope, current positions,
@@ -540,6 +553,21 @@ The compact renderer prints the failed Asset by its prompt ref. For this the FIF
 moved to v3 and the lot detail to v4; the summaries, already v3 in the same release,
 kept it.
 
+The price series renderer, `renderContinuousSeries()`, prints the eligible assets
+without a price series. In `portfolio.technical_prices` and `broker.technical_prices`
+the `SERIES` table is followed by a table titled `ASSETS WITHOUT PRICE SERIES` that
+lists them by prompt ref (`entity`, `portfolio_weight_percent`, `reason_code`), then by
+one `<code>=<meaning>` line per distinct code present, sorted by code. Without a
+series, `asset.ohlc_returns` gains a `reason_code` row in its SUMMARY table, after
+`price_basis`, and its `<code>=<meaning>` line follows that table; the `null`
+`currency`, `latest_value` and `latest_date` columns leave `SERIES` and are named on
+its `omitted_null_columns=` line. The meanings come from a local allow-list,
+`PRICE_SERIES_GAP_MEANINGS`, as the frontend never takes presentation text from the
+backend: an unknown code, or an `uncovered_assets` that is not a list of records, sends
+the section to the generic renderer, with its raw values and no meaning invented.
+`COMPACT_COMPONENT_VERSIONS` lists versions 1 and 2 of the three components, and a
+section without a gap renders exactly as its version 1.
+
 `portfolio.reconciliation` and `broker.reconciliation` state `residual`, the exact
 period P&L minus its components, and `reconciled`: `null` if a term is missing, true
 below `CONVERSION_DUST` (`1e-9`) in absolute value, since `period_other_result` closes
@@ -697,6 +725,7 @@ and without `-O`, and expects the typed error each time.
 | Required dataset component raises                 | Analysis fails closed.                                                                                             |
 | Optional dataset has a required-component failure | Entire optional dataset is skipped.                                                                                |
 | Builder returns an empty valid payload            | Section remains successful and included.                                                                           |
+| An eligible asset has no price series (no stored price up to the period end, or stored prices in mixed currencies) | Section stays successful; the asset is listed in `uncovered_assets` with its `reason_code` (a single Asset: `currency` `null` and a `reason_code`), never a `503`. |
 | Analysis facts fail applicability                 | `422 selection_not_applicable`.                                                                                    |
 | Signal result is `unavailable` or `failed`        | Only that indicator instance is omitted.                                                                           |
 | Signal result is `ok` or `partial`                | Indicator is exported with its available canonical series.                                                         |

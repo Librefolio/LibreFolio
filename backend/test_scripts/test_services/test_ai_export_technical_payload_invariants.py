@@ -16,6 +16,8 @@ Isolation: PURE (models only, no DB/server/network).
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
 
 import pytest
@@ -27,10 +29,15 @@ from backend.app.schemas.signals import (
     SignalStatus,
     SignalTemporalClass,
 )
+from backend.app.services.ai_export.components import technical_payloads
 from backend.app.services.ai_export.components.technical_payloads import (
+    AssetOhlcReturnsPayload,
+    AssetPriceSeriesPayload,
     IndicatorBucketRow,
     IndicatorOutputColumn,
     IndicatorTablePayload,
+    PortfolioTechnicalPricesPayload,
+    PriceBucket,
     TechnicalBucket,
     TechnicalDatedValue,
     TechnicalEventBucket,
@@ -515,3 +522,212 @@ def test_events_payload_rejects_duplicate_summary_groups():
             exported_event_count=2,
             selection_summaries=(_selection_summary(), _selection_summary()),
         )
+
+
+# ---------------------------------------------------------------------------
+# E-AI503 - a held asset whose price history returns no coherent series
+# ---------------------------------------------------------------------------
+#
+# Such an asset (no stored price up to the period end, or closes in two
+# currencies) is not a series: Portfolio/Broker list it in `uncovered_assets`
+# with its reason, the single Asset target carries a null currency with its
+# reason. The criterion is the points the history returns, never the asset type.
+#
+# The new names (`AssetPriceSeriesGapPayload`) are read through the module, so
+# today only the tests that use them are red, never this file's collection. And
+# every rejection test first builds its VALID sibling: today `uncovered_assets`
+# and `reason_code` are forbidden extra fields and a null currency is refused,
+# so a bare `pytest.raises(ValidationError)` would already pass on HEAD.
+
+
+@contextmanager
+def _rejected_by(fragment: str) -> Iterator[None]:
+    """``pytest.raises(ValidationError, match=fragment)``, with ``fragment`` in a validator's own message.
+
+    ``match`` reads the whole error text, which also echoes the input it refused: its keys are field names, so a field
+    name would match whatever the error was. A validator's message is what must name it.
+    """
+    with pytest.raises(ValidationError, match=fragment) as raised:
+        yield
+    messages = [error["msg"] for error in raised.value.errors()]
+    assert any(fragment in message for message in messages), messages
+
+
+def _price_bucket(**overrides) -> PriceBucket:
+    kwargs = {
+        "start_date": D1,
+        "end_date": D3,
+        "calendar_days": 3,
+        "first": {"close": 10.0},
+        "minimum": {"close": 9.0},
+        "maximum": {"close": 11.0},
+        "last": {"close": 10.5},
+        "observation_count": 3,
+    }
+    kwargs.update(overrides)
+    return PriceBucket(**kwargs)
+
+
+def _empty_price_bucket() -> PriceBucket:
+    return _price_bucket(first=None, minimum=None, maximum=None, last=None, observation_count=0)
+
+
+def _series(asset_id: int, weight: float) -> AssetPriceSeriesPayload:
+    return AssetPriceSeriesPayload(asset_id=asset_id, portfolio_weight_ratio=weight, currency="USD", buckets=(_price_bucket(),), latest_close=10.5, latest_date=D3)
+
+
+def _gap(asset_id: int, *, reason_code: str = "no_stored_price", weight: float | None = 0.3) -> technical_payloads.AssetPriceSeriesGapPayload:
+    return technical_payloads.AssetPriceSeriesGapPayload(asset_id=asset_id, portfolio_weight_ratio=weight, reason_code=reason_code)
+
+
+def _prices_payload(**overrides) -> PortfolioTechnicalPricesPayload:
+    """Assets 1 and 3 with a series, asset 2 uncovered: 3 eligible = 2 covered + 1 uncovered.
+
+    The period counts leave room (a fourth asset sold inside the period, at two brokers) so that only the rule under
+    test can refuse a payload.
+    """
+    kwargs = {
+        "assets": (_series(1, 0.5), _series(3, 0.2)),
+        "uncovered_assets": (_gap(2),),
+        "eligible_asset_count": 3,
+        "period_position_leg_count": 5,
+        "period_contributor_asset_count": 4,
+        "covered_asset_count": 2,
+    }
+    kwargs.update(overrides)
+    return PortfolioTechnicalPricesPayload(**kwargs)
+
+
+def _ohlc_payload(**overrides) -> AssetOhlcReturnsPayload:
+    """The single target with no stored price: null currency, its reason, an empty bucket, no latest observation."""
+    kwargs = {
+        "asset_id": 7,
+        "currency": None,
+        "reason_code": "no_stored_price",
+        "buckets": (_empty_price_bucket(),),
+        "latest_close": None,
+        "latest_date": None,
+    }
+    kwargs.update(overrides)
+    return AssetOhlcReturnsPayload(**kwargs)
+
+
+# ---------------------------------------------------------------------------
+# 9. PortfolioTechnicalPricesPayload - every eligible asset is a series or a gap
+# ---------------------------------------------------------------------------
+
+
+def test_prices_payload_accepts_an_uncovered_asset_beside_the_series():
+    """AI503-P01 — red until E-AI503: assets 1 and 3 with a series, asset 2 uncovered for ``no_stored_price``."""
+    payload = _prices_payload()
+
+    assert [asset.asset_id for asset in payload.assets] == [1, 3]
+    assert [(gap.asset_id, gap.portfolio_weight_ratio, gap.reason_code) for gap in payload.uncovered_assets] == [(2, 0.3, "no_stored_price")]
+    assert (payload.eligible_asset_count, payload.covered_asset_count) == (3, 2)
+
+
+def test_prices_payload_rejects_a_covered_count_other_than_its_series():
+    """AI503-P02 — red until E-AI503: ``covered_asset_count`` counts the series in ``assets``.
+
+    Situation: the count is taken before the gaps are set apart, so the prompt would call an asset with no price covered.
+    """
+    _prices_payload()  # the valid sibling first
+    with _rejected_by("covered_asset_count"):
+        _prices_payload(covered_asset_count=3)
+
+
+def test_prices_payload_rejects_an_eligible_count_other_than_its_series_and_gaps():
+    """AI503-P03 — red until E-AI503: every eligible asset is either a series or a gap.
+
+    Situation: an asset with no price is dropped from both lists, and the reader can no longer tell which one is missing.
+    """
+    _prices_payload()  # the valid sibling first
+    with _rejected_by("eligible_asset_count"):
+        _prices_payload(eligible_asset_count=4)
+
+
+def test_prices_payload_rejects_an_asset_with_a_series_that_is_also_uncovered():
+    """AI503-P04 — red until E-AI503: an asset id appears at most once across ``assets`` and ``uncovered_assets``."""
+    _prices_payload()  # the valid sibling first
+    with _rejected_by("at most once"):
+        _prices_payload(uncovered_assets=(_gap(1),))
+
+
+def test_prices_payload_rejects_an_asset_uncovered_twice():
+    """AI503-P05 — red until E-AI503: an asset id appears at most once inside ``uncovered_assets``."""
+    _prices_payload()  # the valid sibling first
+    with _rejected_by("at most once"):
+        _prices_payload(uncovered_assets=(_gap(2), _gap(2)), eligible_asset_count=4)
+
+
+def test_gap_rejects_a_reason_outside_its_closed_set():
+    """AI503-P06 — red until E-AI503: the reason is ``no_stored_price`` or ``mixed_price_currencies``, nothing else.
+
+    A reason named after the asset's type is exactly what the criterion forbids: the points decide, never the type.
+    """
+    assert _gap(2, reason_code="mixed_price_currencies").reason_code == "mixed_price_currencies"  # the valid sibling first
+    with pytest.raises(ValidationError) as raised:
+        _gap(2, reason_code="crowdfund_without_prices")
+    assert [error["loc"] for error in raised.value.errors()] == [("reason_code",)]
+
+
+def test_prices_payload_requires_its_uncovered_assets_even_when_empty():
+    """AI503-P13 — red until E-AI503: ``uncovered_assets`` is required; a fully priced universe says so with ``()``."""
+    assert _prices_payload(uncovered_assets=(), eligible_asset_count=2).uncovered_assets == ()  # the valid sibling first
+    with pytest.raises(ValidationError) as raised:
+        PortfolioTechnicalPricesPayload(assets=(_series(1, 0.5), _series(3, 0.2)), eligible_asset_count=2, period_position_leg_count=5, period_contributor_asset_count=4, covered_asset_count=2)
+    assert [(error["loc"], error["type"]) for error in raised.value.errors()] == [(("uncovered_assets",), "missing")]
+
+
+# ---------------------------------------------------------------------------
+# 10. AssetOhlcReturnsPayload - a null currency exactly when there is a gap
+# ---------------------------------------------------------------------------
+
+
+def test_ohlc_payload_accepts_a_null_currency_with_its_reason_and_an_empty_series():
+    """AI503-P07 — red until E-AI503: no coherent series: null ``currency``, its ``reason_code``, every bucket empty."""
+    payload = _ohlc_payload()
+
+    assert (payload.currency, payload.reason_code) == (None, "no_stored_price")
+    assert all(bucket.observation_count == 0 for bucket in payload.buckets)
+    assert (payload.latest_close, payload.latest_date) == (None, None)
+
+
+def test_ohlc_payload_rejects_a_null_currency_without_a_reason():
+    """AI503-P08 — red until E-AI503: a null currency must say why, or the prompt could not."""
+    _ohlc_payload()  # the valid sibling first
+    with _rejected_by("reason_code"):
+        _ohlc_payload(reason_code=None)
+
+
+def test_ohlc_payload_rejects_a_reason_beside_a_currency():
+    """AI503-P09 — red until E-AI503: a series with its currency has no gap to explain."""
+    _ohlc_payload()  # the valid sibling first
+    with _rejected_by("reason_code"):
+        _ohlc_payload(currency="USD", buckets=(_price_bucket(),), latest_close=10.5, latest_date=D3)
+
+
+def test_ohlc_payload_rejects_a_null_currency_beside_a_populated_bucket():
+    """AI503-P10 — red until E-AI503: a populated bucket with no currency is a price the reader cannot place."""
+    _ohlc_payload()  # the valid sibling first
+    with _rejected_by("no bucket is populated"):
+        _ohlc_payload(buckets=(_price_bucket(),))
+
+
+@pytest.mark.parametrize("latest", [pytest.param({"latest_close": 10.5}, id="latest-close"), pytest.param({"latest_date": D3}, id="latest-date")])
+def test_ohlc_payload_rejects_a_null_currency_beside_a_latest_observation(latest: dict):
+    """AI503-P11 — red until E-AI503: with a null currency there is no latest close, nor a date for one."""
+    _ohlc_payload()  # the valid sibling first
+    with _rejected_by("no bucket is populated"):
+        _ohlc_payload(**latest)
+
+
+def test_ohlc_payload_requires_its_currency_even_when_null():
+    """AI503-P12 — red until E-AI503: ``currency`` is required and nullable, not optional.
+
+    Situation: a builder that forgets the field would otherwise export a silent null, with or without its reason.
+    """
+    _ohlc_payload()  # the valid sibling first
+    with pytest.raises(ValidationError) as raised:
+        AssetOhlcReturnsPayload(asset_id=7, reason_code="no_stored_price", buckets=(_empty_price_bucket(),))
+    assert [(error["loc"], error["type"]) for error in raised.value.errors()] == [(("currency",), "missing")]
