@@ -8461,7 +8461,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   Dettagli: piano 08, «E2.4».
   - 16/10, E: chiusa, con il via del coordinatore e di A (il file è di A). Le quattro righe ora usano
     `status.HTTP_422_UNPROCESSABLE_CONTENT`, con lo stesso codice 422 e senza avviso. In `backend/` non resta nessun
-    `HTTP_422_UNPROCESSABLE_ENTITY`. Dettagli: piano 08, «E6.12».
+    `HTTP_422_UNPROCESSABLE_ENTITY`. Dettagli: piano 08, «E6.12». In `dev_release2` col merge `07700355f`.
 - ✅ **E-5 · `api sync` non sfugge i backtick delle descrizioni su più righe** — piccolo; E, 15/10 (E2b).
   `openapi-zod-client` scrive una descrizione di più righe come template literal JavaScript senza sfuggire i
   backtick: una docstring di schema su più righe con ``` ``codice`` ``` rompe `generated.ts` al caricamento
@@ -8504,12 +8504,14 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
       risposta.
     - **Parte 2**, dopo A8b: i percorsi «Settings › Administration › Email». Sono 8 valori i18n più circa 15 righe;
       A8b aveva già allineato il resto.
-    - Commit: la parte 1 fino a `443eda316`, la parte 2 al checkpoint. Dettagli: piano 08, da «E-8.2» a «E-8.4».
+    - Commit: la parte 1 fino a `443eda316`, la parte 2 fino a `73decbb99`; tutte e due in `dev_release2` col merge
+      `2aab994b8` (CHANGELOG `231566116`). Dettagli: piano 08, da «E-8.2» a «E-8.4».
   - 17/10, E: dopo l'ingresso, il gate G del coordinatore (dev `91f4de9cb`) ha trovato due rossi Vitest di E.
     - ETX-14 si aspettava ancora solo `{to}` in «sent».
     - Il mock di `$lib/i18n` di `linkShareRegistration.test.ts` non dava `DEFAULT_LOCALE` allo store della lingua, che
       il barile delle select carica.
-    - Curati nei soli test (E-8.5); tutta la cartella `features/email` è verde. Dettagli: piano 08, «E-8.5».
+    - Curati nei soli test (E-8.5); tutta la cartella `features/email` è verde. Dettagli: piano 08, «E-8.5». In
+      `dev_release2` col merge `b49a2a716`.
 - ✅ **E-9 · I limiti per casella non vedono gli alias (`+tag`, i punti di Gmail)** — piccolo; E, 16/10 (revisione di
   sicurezza finale, nota sotto la soglia). `strip().casefold()` fa di `victim+1@…` e `victim+2@…` caselle diverse:
   con la registrazione aperta si può puntare il budget orario dell'istanza su una casella sola, e ogni email porta lo
@@ -8586,7 +8588,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - Il caso migliore per l'attaccante costa ora circa 10 000 richieste per tentativo, e nessuno spruzzo libera una
       chiave più pesante.
     - I docs «310 contro 100 000» sono corretti.
-    - Commit al checkpoint di E-14.
+    - In `dev_release2` col merge `70dccc16f` (CHANGELOG `c2b4ec20e`).
 - ✅ **E-15 · Nei run combinati il limite dei login si accende da solo, e i test di E vanno rossi** — piccolo; E, 17/10
   (triage dell'`all-backend` di W, coordinatore).
   - `conftest.py` mette `LIBREFOLIO_LOGIN_LIMIT=off` una volta sola, all'avvio.
@@ -8604,14 +8606,15 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - `security.md` è allineato.
     - Prova: il modulo più un modulo che configura la corsia, prima 21 rossi, ora 179 verdi. Tutti i 13 moduli di E in
       un processo: 1 453 verdi.
-    - Commit al checkpoint di E-15.
+    - In `dev_release2` col merge `da02ed816`.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-15».
 - ✅ **E-16 · Le due frasi di E sulla «password dimenticata» non dicono la richiesta della configurazione fallita** —
   minimo (doc, solo inglese); E, 17/10 (seguito della revisione di A9 e di FPM-08 di A, `d04ffde90`).
   - `admin/email.en.md` e `developer/backend/email.md` descrivono self-hosted e managed, non il caso in cui
     `GET /system/instance` fallisce: lì la scheda mostra solo «Ask your administrator…», in tutti e due i profili.
   - Una frase per pagina. Nessuna decisione.
-  - 17/10, E: fatta (via del coordinatore, 12:22). Build stretta e `check-links` puliti. Commit al checkpoint di E-16.
+  - 17/10, E: fatta (via del coordinatore, 12:22). Build stretta e `check-links` puliti. In `dev_release2` col merge
+    `ac3c03177`.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-16».
 - ✅ **E-17 · Due errori di `tsc -p frontend/tsconfig.e2e.json`** — piccolo (test e configurazione); coordinatore, 17/10.
   - `onboarding-tour.spec.ts:863`: la lista dei passi è tipizzata dalle opzioni di `expectGuideStep`. Dietro c'era
@@ -8619,7 +8622,8 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - `tsconfig.e2e.json`: la mappa `$lib`.
   - Nessun cambio a runtime, `tsc` senza i due errori, Prettier pulito.
   - Restano 3 TS2769 di C-66 (`c18517e31`): l'allargamento di E-2 contro `isStoredPoint`, di un ramo attivo.
-  - Commit al checkpoint di E-17. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-17».
+  - In `dev_release2` col merge `fc979d0b4`. Dettagli:
+    [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-17».
 - ✅ **E-18 · Codici di valuta stretti sulle scritture (MF-SEC9b)** — piccolo; coordinatore, 17/10 (analisi di E, 13:2x).
   - `Currency.validate_code` accetta nomi e numeri (`EURO`, `978`, `US DOLLAR`) e li salva così, senza
     canonicalizzarli; nelle transazioni senza limite di lunghezza.
@@ -8634,7 +8638,8 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - Prova: 17 selettori, 3 674 verdi, 0 rossi; build stretta e `check-links` puliti.
     - Restano fuori, aperti: l'avviso di qualità dei dati; il gap-fix del BRIM che costruisce `TXCreateItem` senza
       prendere l'errore (oggi irraggiungibile).
-    - Commit al checkpoint di E-18.
+    - Commit `ed8b3c28e` (codice), `601b3714b` (docs), `c6a996275` (journal); in `dev_release2` col merge
+      `73366626e` (CHANGELOG `e743fc6a3`).
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «MF-SEC9b» ed «E-18».
 - **E-19 · L'avviso dei codici di valuta non ISO salvati** — medio-piccolo (avviso), medio (correzione); coordinatore,
   17/10 (seguito di E-18).
@@ -8659,7 +8664,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - `stored_currencies.py`: 14 posti, l'avviso d'avvio e `dev.py db currencies`.
     - La guardia del gap-fix (W rivede) e il passo d'avvio (H rivede).
     - 14 suite, 3 800 verdi; OpenAPI identico; build stretta e `check-links` puliti.
-    - Commit al checkpoint di E-19a.
+    - In `dev_release2` col merge `c7c6f94f0` (CHANGELOG `e98934eed`); il fix-forward col merge `09fe3f470`.
   - Resta **E-19b**: `IssueCode.NON_ISO_CURRENCY` al posto di `MISSING_FX_*`, il banner senza bottone, il selettore
     col valore salvato, l'avviso del ripristino (via di B), i18n nelle 4 lingue, `api sync`.
   - 17/10, E: **E-19b1** (il selettore, l'endpoint `suggest`, l'avviso `non_iso_currencies` del ripristino): parte 1 nel
@@ -8669,6 +8674,12 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     lettura, l'audit d'avvio in background dopo `plugin-secrets-check`). **E-19b2 fatto** (rossi `0e787dfb4`, codice al
     checkpoint): una voce `NON_ISO_CURRENCY` per valore salvato, senza CTA fino a D1/D2, e `MISSING_FX_*` senza le
     coppie con un lato non ISO. Resta di E-19 solo la correzione (D1/D2, dallo sviluppatore) ed E-20.
+  - ✅ 19/10, contabilità: l'avviso è entrato tutto in `dev_release2`.
+    - E-19a: merge `c7c6f94f0` (CHANGELOG `e98934eed`), col fix-forward `09fe3f470`.
+    - E-19b1: merge `1742aaaaa` (CHANGELOG `2fbbf4c4c`).
+    - Le due LOW di H su E-19a: merge `0897502a9`.
+    - E-19b2: merge `b878f043c` (CHANGELOG `9e6faacf4`).
+    - La voce resta aperta per la correzione, D1/D2, che sono dello sviluppatore.
   - Per D1, se si sceglie C: la rietichettatura automatica deve escludere anche `GBp`, non solo GBX/ZAC/ILA.
   - ✅ Il pezzo di J: la guardia di `Intl` in `riskAnalysisHelpers.ts:168`, entrata in dev `b13ed7944` (CHANGELOG
     `826f99f17`).
@@ -8697,6 +8708,24 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     quattro posti) e poi, con ogni probabilità, fa fallire le letture del server di quelle righe (pysqlite alza al
     `fetch`, come prova la barriera di SCA-036; non misurato sul server). Segnalato al coordinatore.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19b1.3».
+- **E-21 · Le frasi `BRIMParseError` dei plugin arrivano in inglese, dentro la cornice tradotta** — medio, chiarezza;
+  coordinatore, 17/10 (decisione (c) di C-70b). Da C-70b il 400 del parse è `parse_failed`, con una cornice tradotta
+  («Il plugin X non ha potuto leggere Y: …»), ma il motivo resta la frase inglese del plugin: circa 60 `raise
+  BRIMParseError(...)` in più di 30 plugin (`backend/app/services/brim_providers/*/plugin.py`). La cura, nello stile di
+  K2a: un codice e un contesto per ogni causa che l'utente può correggere (`BRIMParseError(message, details={"code": …,
+  "context": …})`, o un campo dedicato), tradotti in `importWizard.parseRefusal.<code>` dove lo dice la regola R1, e il
+  risolutore di C-70b che li preferisce alla frase. Dopo la 1.3; W rivede. Dettagli: piano 08, «C-70b».
+- **E-22 · A ogni risveglio un'istanza gestita rifà la scansione delle valute salvate** — piccolo, prestazioni; H,
+  17/10 (revisione del seguito di E-19a, riferita dal coordinatore). Un'idea per dopo la 1.3: aperta, nessuna
+  decisione.
+  - Il passo d'avvio `stored-currencies` rifà l'audit di `stored_currencies.py` a ogni avvio, quindi a ogni risveglio
+    di un'istanza gestita che si sospende. Da E-19a.4 gira in background, ma resta un picco di CPU e I/O accanto alle
+    prime richieste: 0,6 s a un milione di righe di prezzi, 1,6 s a tre milioni (misure sintetiche di E-19a.4).
+  - Dalla 1.3 le scritture rifiutano i codici non ISO: solo un aggiornamento o un ripristino possono riportarne, a
+    parte una modifica a mano del database.
+  - L'idea di H: un piccolo segno nella cartella dei dati, legato alla versione dell'app e alla testa di alembic e
+    cancellato dal commit di un ripristino, con cui i risvegli normali saltano la scansione.
+  - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19a.4».
 
 ## Y · Cruscotto e grafici (fase 01)
 
