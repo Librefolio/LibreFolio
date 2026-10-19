@@ -121,7 +121,12 @@ Quattro lotti del riordino pianificato in testa alla 1.3 non sono mai partiti. A
     IBKR (FX senza ISIN). Quantità dopo uno split, costi e tasse escono sbagliati senza che l'utente lo sappia.
     Proposta: almeno l'avviso con `report_issue`; l'import vero, plugin per plugin, dopo.
 - **Decisione del 19/10**: il principio va solo sui plugin non in beta; quelli in beta si saltano, perché non abbiamo
-  campioni affidabili.
+  campioni affidabili. I plugin stabili oggi (pagina degli import, verificato da W il 19/10) sono 4: **DEGIRO**
+  (`report_issue` in un punto, S), **Crédit Agricole** (due codici, S–M), **Scalable** (due codici, più separare gli
+  stati noti da quelli ignoti, M), **Directa** (4 avvisi a stringa da convertire, S). Danske, unico in alpha, l'ha già
+  avuto con W-B85. Il CSV generico resta fuori: è la mappatura dell'utente.
+- **Da decidere (D-W85-4)**: i plugin di W-B87 sono tutti in beta. Per la regola sopra resterebbero fuori, ma lì il
+  problema non è la chiarezza: sono numeri sbagliati in silenzio.
 - **Stato**: ❌ non iniziato; analisi e inventario fatti.
 - **Dove**: [piano 04, «W-B85 · «Noto in silenzio, ignoto con avviso»: analisi», punti 3 e
   4](04_importTransactions/plan-phase01ImportTransactions.prompt.md);
