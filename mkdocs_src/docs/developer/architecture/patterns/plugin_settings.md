@@ -42,7 +42,7 @@ Paths are relative to `backend/`.
 | `app/services/fx/runtime.py` | `configured_fx_provider()`, `call_fx_provider()` (the boundary of every FX provider call), `settings_cache_part()` |
 | `app/utils/runtime/secret_masking.py` | The masking of the secrets in flight, in log lines and in exceptions, each text either masked in place or, with `whole`, hidden entirely; and the check that an error still shows one |
 | `app/config/plugins.py` | `plugin_setting_env()` and `plugin_setting_env_origin()`: the environment variables of the fields |
-| `app/db/models.py`, `alembic/versions/007_plugin_settings.py` | The tables `plugin_system_settings` and `plugin_user_settings` |
+| `app/db/models.py`, `alembic/versions/005_release_1_3_0_schema.py` (step 4) | The tables `plugin_system_settings` and `plugin_user_settings` |
 
 The interface is in `frontend/src/lib/features/plugin-settings/` ([The Interface](#interface)), its
 texts in the `pluginSettings` subsystem of the catalogue and, for each plugin's fields, in the
@@ -833,7 +833,7 @@ The other units that touch the plugin settings:
 | Selector | Covers |
 |----------|--------|
 | `./dev.py test api plugin-settings` | The two endpoints on the lane's server: roles, write-only secrets, the 422 with every item and no input echo, user isolation, delivery to `mockprov`, CASCADE and SET NULL; justETF and Borsa Italiana in the full catalogue, each entry with its plugin's icon. It runs alone: it writes `mockprov`'s instance-wide fields |
-| `./dev.py test db migration-007` | Migration `007_plugin_settings`, up and down, on temporary databases |
+| `./dev.py test db migration-005` | Migration `005_release_1_3_0_schema`, on temporary databases: among its steps, the two tables with their CHECKs, one value per field, `CASCADE` and `SET NULL`, created empty on a 1.2 install, and the downgrade that drops them |
 | `./dev.py test utils gate-plugin-i18n-ownership` | The settings' keys in each plugin's fragment ([Labels and Translations](#translations)) |
 | `./dev.py test services provider-errors` | Among the provider error paths, justETF's `preferred_currency` declaration and the rows its search keeps |
 | `./dev.py test services borsa-italiana-search` | Borsa Italiana's `preferred_language` on a fund and on a share, the site searched in Italian whatever the preference |
