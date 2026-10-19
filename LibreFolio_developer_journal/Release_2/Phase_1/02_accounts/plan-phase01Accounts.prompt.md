@@ -8200,3 +8200,27 @@ Ognuno con i rossi prima e uno slot. Uno slot API (`users-admin`) per N69-4 e N6
   - **`BACKLOG_POST_1.2.md`**: 37 commit di dev, `merge-file` pulito.
   - **Nessun altro file**: il diff a tre punti è vuoto su ogni ramo locale.
 - Checkpoint mandato al coordinatore; FROZEN.
+
+## A-CL1 — Entrato; pagina della devWiki (19/10, 16:05–16:20; base `74539988e`)
+- **Commit del coordinatore**:
+  - `5ccb495e5` `fix(changelog): one window, reactive translations`;
+  - `be69c7eee`, la doc;
+  - `3184bf83e`, il giornale.
+- **Base aggiornata**: merge di `dev_release2` (`a397812d1`) → `74539988e`, pulito. Il coordinatore riporta al
+  developer i due effetti della decisione e scrive lui la riga del CHANGELOG all'ingresso.
+- **Corsia ripopolata**, come chiesto, prima di qualsiasi altro lancio:
+  - comando: `dev.py test --test-port 6182 --data-dir /tmp/librefolio-r13-a db populate --force --clean`;
+  - carico 32, ✅ in 20 s (16:06–16:07), con istantanea del DB di test in `00_archive/`;
+  - log in `work/acl1/populate-74539988e.log`.
+- **devWiki** (via del coordinatore: un commit a parte, con solo la pagina, l'indice e il log):
+  - `wiki/problems/svelte5-derived-stale-over-non-reactive-cache.md`, nuova;
+  - `index.md`: una riga in cima alla tabella «Problems» e una riga 2026-10-19 nel registro cronologico;
+  - `log.md`: una voce «file».
+  - `check_source_paths.py` non trova percorsi inesistenti nella pagina. I 7 inesistenti che segnala sono in altre 7
+    pagine: cartelle di coverage, e due css dei componenti tolti dal lavoro R.
+  - Il grafo non è aggiornato, perché graphify non c'è in questo worktree (lo dice anche il log).
+- **⚠️ Fuori pista**:
+  - un mio comando di confronto ha cominciato a copiare `frontend/` (con `node_modules`) in `/tmp/acl1_head`, col disco
+    al 95 %;
+  - l'ho fermato dopo circa 30 s e ho cancellato la copia parziale (604 MB);
+  - il worktree non è stato toccato (la copia lo leggeva soltanto); restano 20 GiB liberi.
