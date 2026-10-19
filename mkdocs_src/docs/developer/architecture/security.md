@@ -2145,7 +2145,7 @@ with `PRAGMA writable_schema=RESET`.
   insert that needs it («unsafe use of regexp()»). The refusal comes at a statement, never inside the listener:
   SQLAlchemy's pool does not close a connection whose `connect` listener raised (`_ConnectionRecord.__connect()`).
 - **Nothing of the app changes.** LibreFolio's own schema calls only the built-in `lower()` (the index
-  `ux_users_email_lower`, migration 009), and the pragma restricts only the SQL the schema holds, never top-level SQL.
+  `ux_users_email_lower`, step 6 of migration `005_release_1_3_0_schema`), and the pragma restricts only the SQL the schema holds, never top-level SQL.
 - **In the upgrade's process too.** `backend/alembic/env.py` imports `backend.app.db.base`, so the package's
   `backend/app/db/__init__.py`, which imports `session.py`: the upgrade's connections get `set_sqlite_pragma()` as
   well, before `_schema_untrusted`, which `env.py` registers on its own engine. Before H-51, `set_sqlite_pragma()`

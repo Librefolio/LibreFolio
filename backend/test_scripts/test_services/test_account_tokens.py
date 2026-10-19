@@ -32,8 +32,8 @@ contract pinned here:
    consumed tokens, its tokens of the other purposes and every other user's are untouched; a second call finds nothing;
    it flushes without committing. A retired token is ``REVOKED`` to ``inspect_token`` and refused by ``consume_token``.
 
-Every database is a private file under ``tmp_path``, built by ``SQLModel.metadata.create_all`` (contract 3 of
-``test_migration_005_accounts`` keeps that schema equal to the migrated one) and opened the way production opens its own:
+Every database is a private file under ``tmp_path``, built by ``SQLModel.metadata.create_all`` (contract 5 of
+``test_migration_005_release_1_3`` keeps that schema equal to the migrated one) and opened the way production opens its own:
 ``sqlite+aiosqlite``, NullPool — a session is a connection —, and the connect listener of ``backend.app.db.session``
 (foreign keys, WAL, busy_timeout). No test reads the clock to decide anything: every call gets its ``now``, but for the
 defaults, which are bracketed.

@@ -823,136 +823,6 @@ class TestTransactionsBeforeFloorIssue:
 
 
 # =============================================================================
-# QUOTE_IN_MINOR_UNIT (Z-32 (c))
-# =============================================================================
-
-QUOTE_IN_MINOR_UNIT = "QUOTE_IN_MINOR_UNIT"
-#: Two London lines, in an order that is not the ids': the issue lists them as given.
-QUOTED_IN_PENCE = [(9, "Vodafone Group"), (4, "Lloyds Banking Group")]
-
-
-def _quote_report(quote_in_minor_unit_assets, views: DerivedViewsBuilder | None = None):
-    """The report of one complete day (or of ``views``), given ``quote_in_minor_unit_assets``: a TypeError (no such
-    parameter) fails the test."""
-    views = views or _make_views([_complete_state("2025-06-30")])
-    try:
-        return views.build_data_quality_report(quote_in_minor_unit_assets=quote_in_minor_unit_assets)
-    except TypeError as exc:
-        pytest.fail(f"build_data_quality_report(…, quote_in_minor_unit_assets=…) raised {exc!r}: it takes the held assets whose provider quotes them in a minor unit the quote base does not account for (Z-32 (c) §6)")
-
-
-def _quote_issues(report) -> list:
-    """The report's QUOTE_IN_MINOR_UNIT issues, matched on the code's value (HEAD has no enum member to name)."""
-    return [i for i in report.issues if i.code == QUOTE_IN_MINOR_UNIT]
-
-
-class TestQuoteInMinorUnitIssue:
-    """Z-32 (c) §6: Yahoo quotes a London line in pence (``GBp``); the price schemas fold the code to ``GBP``
-    and keep the numbers, so a holding is worth a hundred times too much until its quote base is set to 100 by hand, and
-    nothing told the user. ``build_data_quality_report(quote_in_minor_unit_assets=[(asset_id, name), …])`` — the held
-    assets whose provider reported a minor unit the quote base does not account for (``PortfolioService`` decides who,
-    pinned end to end in ``test_portfolio_api.py::TestQuoteInMinorUnitDataQuality``) — gives one issue shaped exactly as
-    INVALID_SPLIT_RATIO's: domain ``portfolio``, code ``QUOTE_IN_MINOR_UNIT``, WARNING, key
-    ``dataQuality.quoteInMinorUnit``, params ``{count}``, ``count``, the assets by id and name in the order given, a
-    ``navigate_asset`` CTA to the first one, group ``quote_in_minor_unit``. None or an empty list gives none. Like
-    INVALID_SPLIT_RATIO it fills no legacy field: every other field of the report, ``data_quality_status`` included, is
-    what it is without it.
-
-    On HEAD 80cef0e43 ``IssueCode`` has no ``QUOTE_IN_MINOR_UNIT`` and the builder no ``quote_in_minor_unit_assets``
-    (TypeError): each test that needs one of them fails on that alone, and the module still collects.
-    """
-
-    def test_quote_in_minor_unit_is_a_portfolio_issue_code(self):
-        """Red on HEAD: IssueCode has no QUOTE_IN_MINOR_UNIT (the frontend keys on the string)."""
-        assert getattr(IssueCode, QUOTE_IN_MINOR_UNIT, None) == QUOTE_IN_MINOR_UNIT, "schemas.portfolio.IssueCode has no QUOTE_IN_MINOR_UNIT (Z-32 (c))"
-
-    def test_listed_assets_produce_one_warning_with_their_shape(self):
-        """Red on HEAD (TypeError: no ``quote_in_minor_unit_assets``). Vodafone (9) then Lloyds (4): one WARNING with
-        the contract's shape — the assets in the order given, the CTA to the first given, not to the lowest id."""
-        report = _quote_report(QUOTED_IN_PENCE)
-
-        matching = _quote_issues(report)
-        assert len(matching) == 1, [i.code for i in report.issues]
-        issue = matching[0]
-        assert {
-            "domain": issue.domain,
-            "severity": issue.severity,
-            "message_i18n_key": issue.message_i18n_key,
-            "message_params": issue.message_params,
-            "count": issue.count,
-            "affected_asset_ids": issue.affected_asset_ids,
-            "affected_asset_names": issue.affected_asset_names,
-            "affected_fx_pairs": issue.affected_fx_pairs,
-            "cta_action": issue.cta_action,
-            "cta_target": issue.cta_target,
-            "group_key": issue.group_key,
-        } == {
-            "domain": IssueDomain.PORTFOLIO,
-            "severity": IssueSeverity.WARNING,
-            "message_i18n_key": "dataQuality.quoteInMinorUnit",
-            "message_params": {"count": 2},
-            "count": 2,
-            "affected_asset_ids": [9, 4],
-            "affected_asset_names": ["Vodafone Group", "Lloyds Banking Group"],
-            "affected_fx_pairs": [],
-            "cta_action": "navigate_asset",
-            "cta_target": "9",
-            "group_key": "quote_in_minor_unit",
-        }
-
-    def test_the_issue_is_shaped_as_invalid_split_ratio_s(self):
-        """Red on HEAD (TypeError). The same two assets given to INVALID_SPLIT_RATIO (green on HEAD: the barrier) and to
-        the new list: the two issues are the same object but for the code, the key and the group (§6: «exactly like
-        INVALID_SPLIT_RATIO's shape»)."""
-        views = _make_views([_complete_state("2025-06-30")])
-        split = views.build_data_quality_report(invalid_split_assets=QUOTED_IN_PENCE)
-        assert [i.code for i in split.issues] == [IssueCode.INVALID_SPLIT_RATIO], "barrier: the comparison is INVALID_SPLIT_RATIO, alone"
-
-        matching = _quote_issues(_quote_report(QUOTED_IN_PENCE, views))
-
-        assert len(matching) == 1, matching
-        expected = split.issues[0].model_dump(mode="json") | {"code": QUOTE_IN_MINOR_UNIT, "message_i18n_key": "dataQuality.quoteInMinorUnit", "group_key": "quote_in_minor_unit"}
-        assert matching[0].model_dump(mode="json") == expected
-
-    def test_one_asset_counts_one(self):
-        """Red on HEAD (TypeError). One asset: count 1, its id the CTA's target — the params follow the list, they are
-        not a constant."""
-        issues = _quote_issues(_quote_report([(31, "Tesco")]))
-
-        assert [(i.count, i.message_params, i.affected_asset_ids, i.affected_asset_names, i.cta_target) for i in issues] == [(1, {"count": 1}, [31], ["Tesco"], "31")], issues
-
-    @pytest.mark.parametrize("listed", [pytest.param(None, id="none"), pytest.param([], id="empty")])
-    def test_nothing_listed_produces_no_issue(self, listed):
-        """Red on HEAD only by construction (TypeError: no ``quote_in_minor_unit_assets``). After the cure it guards that
-        nothing to report gives no issue, not one counting 0."""
-        report = _quote_report(listed)
-
-        assert _quote_issues(report) == []
-        assert report.issues == [], [i.code for i in report.issues]
-
-    def test_guard_the_default_call_gives_no_issue(self):
-        """Green on HEAD and after: a caller that does not pass the parameter gets no such issue."""
-        report = _make_views([_complete_state("2025-06-30")]).build_data_quality_report()
-
-        assert _quote_issues(report) == []
-
-    def test_the_rest_of_the_report_moves_as_with_an_invalid_split_ratio(self):
-        """Red on HEAD (TypeError). Barrier first, green on HEAD: INVALID_SPLIT_RATIO alone leaves every other field of
-        the report — the legacy lists, the counters, ``data_quality_status`` (``ok``) — as the report without it. Then
-        the new warning alone leaves them exactly as INVALID_SPLIT_RATIO does."""
-        views = _make_views([_complete_state("2025-06-29"), _complete_state("2025-06-30")])
-        plain = views.build_data_quality_report()
-        split = views.build_data_quality_report(invalid_split_assets=QUOTED_IN_PENCE)
-        assert split.model_dump(mode="json", exclude={"issues"}) == plain.model_dump(mode="json", exclude={"issues"}), "barrier: INVALID_SPLIT_RATIO moves no other field"
-        assert split.data_quality_status == DataQualityStatus.OK, "barrier: INVALID_SPLIT_RATIO alone leaves the status ok"
-
-        quote = _quote_report(QUOTED_IN_PENCE, views)
-
-        assert [i.code for i in quote.issues] == [QUOTE_IN_MINOR_UNIT], [i.code for i in quote.issues]
-        assert quote.model_dump(mode="json", exclude={"issues"}) == split.model_dump(mode="json", exclude={"issues"})
-
-
-# =============================================================================
 # NON_ISO_CURRENCY (E-19b2) — a currency stored as no ISO 4217 code is named, never asked for as an FX pair
 # =============================================================================
 
@@ -1032,10 +902,9 @@ def _named_pairs(report) -> list[tuple[str, str]]:
     return listed + targeted
 
 
-def _held(asset_id: int, name: str, currency: str, *, reported_currency: str | None = None) -> HeldAssetQuoteFacts:
-    """A held asset as ``PortfolioService._held_asset_quote_facts`` reads it: quote base 1, a provider only when one
-    reported a currency."""
-    return HeldAssetQuoteFacts(asset_id=asset_id, name=name, currency=currency, quote_base_quantity=1, provider_code="mockprov" if reported_currency else None, reported_currency=reported_currency)
+def _held(asset_id: int, name: str, currency: str) -> HeldAssetQuoteFacts:
+    """A held asset as ``PortfolioService._held_asset_quote_facts`` reads it: its id, its name, its currency as stored."""
+    return HeldAssetQuoteFacts(asset_id=asset_id, name=name, currency=currency)
 
 
 class TestNonIsoCurrencyIssue:
@@ -1048,7 +917,7 @@ class TestNonIsoCurrencyIssue:
     every value ``is_canonical_iso_currency`` refuses: each such side of a missing pair (its TO side is ``report_currency``
     when the pair ends with ``"/" + report_currency``, else the pair splits at its last ``/``: a value holding a ``/``
     stays whole), the currency of each listed asset, and ``report_currency`` itself. One WARNING ``NON_ISO_CURRENCY`` per
-    value, sorted by value, right after QUOTE_IN_MINOR_UNIT and before TRANSACTIONS_BEFORE_FLOOR: domain ``portfolio``, no
+    value, sorted by value, right after INVALID_SPLIT_RATIO and before TRANSACTIONS_BEFORE_FLOOR: domain ``portfolio``, no
     CTA, no pair, group ``non_iso_currency:<value>`` (the whole value: the banner keys its rows on code and group), the
     listed assets stored in that value by id and name (``count`` their number, None without one), and the value as
     ``shown_currency_text`` quotes it (16 characters, then ``…``) in ``message_params["value"]``. The key: for the report
@@ -1065,13 +934,14 @@ class TestNonIsoCurrencyIssue:
     one fails on its TypeError alone, the lots form on its assertions; the guards are green.
     """
 
-    def test_non_iso_currency_is_a_portfolio_issue_code_right_after_quote_in_minor_unit(self):
+    def test_non_iso_currency_is_a_portfolio_issue_code_right_after_invalid_split_ratio(self):
         """Red until E-19b2: IssueCode has no NON_ISO_CURRENCY (the frontend keys on the string). It is declared right
-        after QUOTE_IN_MINOR_UNIT, as its issues are placed."""
+        after INVALID_SPLIT_RATIO, as its issues are placed. Red on HEAD 065c9df77 too: the pence warning's code still
+        sits between the two (Z-32cr removes it)."""
         members = [member.value for member in IssueCode]
 
         assert NON_ISO_CURRENCY in members, "red until E-19b2: schemas.portfolio.IssueCode has no NON_ISO_CURRENCY"
-        assert members[members.index(QUOTE_IN_MINOR_UNIT) + 1] == NON_ISO_CURRENCY, members
+        assert members[members.index(IssueCode.INVALID_SPLIT_RATIO) + 1] == NON_ISO_CURRENCY, members
 
     def test_a_numeric_code_alone_gives_one_warning_and_no_fx_issue(self):
         """Red until E-19b2 (TypeError). ``978/EUR`` into EUR, no pair configured: the code is named — one WARNING with the
@@ -1252,17 +1122,15 @@ class TestNonIsoCurrencyIssue:
         assert [pair.model_dump(mode="json") for pair in report.missing_fx_pairs] == [pair.model_dump(mode="json") for pair in pairs]
         assert report.data_quality_status == DataQualityStatus.PARTIAL
 
-    def test_the_issues_sit_after_quote_in_minor_unit_and_before_the_floor(self):
+    def test_the_issues_sit_after_invalid_split_ratio_and_before_the_floor(self):
         """Red until E-19b2 (TypeError). With the issues around them in the report — INVALID_SPLIT_RATIO,
-        QUOTE_IN_MINOR_UNIT, TRANSACTIONS_BEFORE_FLOOR, both MISSING_FX_* codes, NAV_INCOMPLETE —, the NON_ISO_CURRENCY
-        issues come right after QUOTE_IN_MINOR_UNIT, sorted, and before TRANSACTIONS_BEFORE_FLOOR: before every
-        MISSING_FX_* issue."""
+        TRANSACTIONS_BEFORE_FLOOR, both MISSING_FX_* codes, NAV_INCOMPLETE —, the NON_ISO_CURRENCY issues come right
+        after INVALID_SPLIT_RATIO, sorted, and before TRANSACTIONS_BEFORE_FLOOR: before every MISSING_FX_* issue."""
         report = _non_iso_report(
             [_fx("978/EUR"), _fx("USD/EUR"), _fx("RON/EUR")],
             assets=[(5, "Old ledger fund", "eur")],
             views=_make_views([_incomplete_state("2025-06-30")]),
             invalid_split_assets=[(6, "Split fund")],
-            quote_in_minor_unit_assets=[(9, "Vodafone Group")],
             rows_before_floor=portfolio_models.RowsBeforeFloor(count=1, earliest=date(1899, 12, 31)),
             configured_fx_pairs={"EUR-RON"},
             real_provider_fx_pairs={"EUR-RON"},
@@ -1270,7 +1138,6 @@ class TestNonIsoCurrencyIssue:
 
         assert [(i.code, i.group_key) for i in report.issues] == [
             (IssueCode.INVALID_SPLIT_RATIO, "invalid_split_ratio"),
-            (IssueCode.QUOTE_IN_MINOR_UNIT, "quote_in_minor_unit"),
             (NON_ISO_CURRENCY, "non_iso_currency:978"),
             (NON_ISO_CURRENCY, "non_iso_currency:eur"),
             (IssueCode.TRANSACTIONS_BEFORE_FLOOR, "transactions_before_floor"),
@@ -1296,9 +1163,9 @@ class TestNonIsoCurrencyIssue:
         new parameters gives: no issue added or dropped, no field moved."""
         views = _make_views([_incomplete_state("2025-06-29"), _complete_state("2025-06-30")])
         pairs = [_fx("USD/EUR", "2025-06-29"), _fx("RON/EUR", "2025-06-29"), _fx("NOK/EUR", "2025-06-29")]
-        other = {"configured_fx_pairs": {"EUR-RON", "EUR-NOK"}, "real_provider_fx_pairs": {"EUR-RON"}, "quote_in_minor_unit_assets": [(9, "Vodafone Group")]}
+        other = {"configured_fx_pairs": {"EUR-RON", "EUR-NOK"}, "real_provider_fx_pairs": {"EUR-RON"}, "invalid_split_assets": [(6, "Split fund")]}
         plain = views.build_data_quality_report(missing_fx_pairs_dto=pairs, **other)
-        expected_codes = [IssueCode.QUOTE_IN_MINOR_UNIT, IssueCode.MISSING_FX_MARKET, IssueCode.MISSING_FX_RATES, IssueCode.MISSING_FX_RATES, IssueCode.NAV_INCOMPLETE]
+        expected_codes = [IssueCode.INVALID_SPLIT_RATIO, IssueCode.MISSING_FX_MARKET, IssueCode.MISSING_FX_RATES, IssueCode.MISSING_FX_RATES, IssueCode.NAV_INCOMPLETE]
         assert [i.code for i in plain.issues] == expected_codes, "barrier: the comparison holds issues to keep"
 
         with_parameters = _non_iso_report(pairs, assets=assets, views=views, **other)
@@ -1307,13 +1174,15 @@ class TestNonIsoCurrencyIssue:
 
 
 class TestNonIsoCurrencyAssets:
-    """E-19b2: ``PortfolioService._non_iso_currency_assets(facts)``, a staticmethod beside ``_quote_in_minor_unit_assets``,
-    lists ``(asset_id, name, currency)`` of the held assets (``HeldAssetQuoteFacts``, read once by
-    ``_held_asset_quote_facts``) whose currency ``is_canonical_iso_currency`` refuses, in the facts' order. Both report call
-    sites pass it as ``non_iso_currency_assets`` (``or None``), with ``report_currency=base_currency``: pinned end to end in
+    """E-19b2: ``PortfolioService._non_iso_currency_assets(facts)``, a staticmethod, lists ``(asset_id, name, currency)``
+    of the held assets (``HeldAssetQuoteFacts``: id, name and stored currency, read once by ``_held_asset_quote_facts``)
+    whose currency ``is_canonical_iso_currency`` refuses, in the facts' order. Both report call sites pass it as
+    ``non_iso_currency_assets`` (``or None``), with ``report_currency=base_currency``: pinned end to end in
     ``test_portfolio_api.py::TestNonIsoCurrencyDataQuality``.
 
-    On HEAD 2fbbf4c4c ``PortfolioService`` has no such method: both tests fail on that alone.
+    On HEAD 2fbbf4c4c ``PortfolioService`` has no such method: both tests fail on that alone. On HEAD 065c9df77
+    ``HeldAssetQuoteFacts`` still requires the quote base, provider code and reported currency only the pence warning
+    read (Z-32cr removes the three): ``_held`` fails on its TypeError, in both tests.
     """
 
     @staticmethod
@@ -1325,14 +1194,14 @@ class TestNonIsoCurrencyAssets:
         return lister
 
     def test_the_held_assets_stored_in_no_iso_code_are_listed_in_the_facts_order(self):
-        """Red until E-19b2. Eight held assets, in an order that is not the ids': EUR, GBP (quoted in GBp by its provider:
-        Z-32's case, not this one) and XXX (an ISO 4217 code) are canonical; 978, eur, `` EUR`` (padded), GBp and
-        Bolívar Soberano are not, and are listed as given — id, name, the currency as stored."""
+        """Red until E-19b2. Eight held assets, in an order that is not the ids': EUR, GBP (a London line in pounds) and
+        XXX (an ISO 4217 code) are canonical; 978, eur, `` EUR`` (padded), GBp and Bolívar Soberano are not, and are
+        listed as given — id, name, the currency as stored."""
         facts = [
             _held(12, "Fund in euro", "EUR"),
             _held(3, "Fund in 978", "978"),
             _held(8, "Lower-case fund", "eur"),
-            _held(17, "London line in pounds", "GBP", reported_currency="GBp"),
+            _held(17, "London line in pounds", "GBP"),
             _held(5, "Padded fund", " EUR"),
             _held(21, "London line in pence", "GBp"),
             _held(2, "Test-code fund", "XXX"),
@@ -1348,7 +1217,7 @@ class TestNonIsoCurrencyAssets:
         lister = self._lister()
 
         assert lister([]) == []
-        assert lister([_held(12, "Fund in euro", "EUR"), _held(17, "London line in pounds", "GBP", reported_currency="GBp")]) == []
+        assert lister([_held(12, "Fund in euro", "EUR"), _held(17, "London line in pounds", "GBP")]) == []
 
 
 # =============================================================================
