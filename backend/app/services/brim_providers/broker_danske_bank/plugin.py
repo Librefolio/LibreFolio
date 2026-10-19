@@ -1498,7 +1498,10 @@ class _CombinedParser:
         for reason in sorted(self.excluded, key=lambda item: (_EXCLUDED_ORDER.index(item) if item in _EXCLUDED_ORDER else len(_EXCLUDED_ORDER), item)):
             lines = self.excluded[reason]
             message = _EXCLUDED_MESSAGES.get(reason, "{n} riviä jätettiin pois.").format(n=len(lines))
-            notices.append(BRIMNotice(severity="warning", code=f"excluded_{reason}", message=message, evidence=_row_evidence(lines, _EXCLUDED_COMMENT), context={"count": len(lines), "reason": reason}))
+            # A trade not settled yet is no problem: it arrives with the next import (only safe rows, N74): a note. The other
+            # reasons ask the user to look.
+            severity = "info" if reason == "not_yet_settled" else "warning"
+            notices.append(BRIMNotice(severity=severity, code=f"excluded_{reason}", message=message, evidence=_row_evidence(lines, _EXCLUDED_COMMENT), context={"count": len(lines), "reason": reason}))
         notices.extend(self._info_notices())
         return notices
 
@@ -1626,7 +1629,8 @@ class DanskeBankBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        return "1.0.0"
+        # 1.0.1 — excluded_not_yet_settled is an info note, no longer a warning (N74: only safe rows).
+        return "1.0.1"
 
     @property
     def test_file_pattern(self) -> Optional[str]:
