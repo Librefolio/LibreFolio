@@ -26,37 +26,53 @@ Ramo di integrazione: `dev_release2` (condiviso con il programma colori). Corsie
 
 | Lettera | Sessione | Corsia | Data-dir | Ramo | HEAD | Stato |
 |---|---|---|---|---|---|---|
-| — | Coordinatore 1.3 (in place) | 6180 | `/tmp/librefolio-r13-main` | `dev_release2` | — | attivo |
-| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | `e-alfy-h-piattaforma` | `338eaa240` | ✅ CP1 (`6a605904c`), CP2a (`60f8a35ce`, pacchetto `config/`), CP3 (`d08d9358f`: segreti da `*_FILE`, chiave d'istanza, controlli all'avvio), il lotto `web_link_finder` (`9dda5ccd9`), CP4 (`1b3eb54c7`: router di sistema per risorsa, `/system/instance`, area degli avvisi) e CP5a (`9deb0ea08`: `/system/ready`, `/system/info` minimo senza sessione, R2) integrati; CP5b e CP6 (blocco dell'istanza) committati sul ramo (`5b2b9061f`, con la base), entrano dopo la finestra della galleria; scritti, da provare: CP7a (Docker), C-96 (corsie dei test senza la configurazione del `.env`), filtro dei token nel log d'accesso; CP2b sbloccato: la 1.2.1 è in `dev_release2` (`6c349f907`) (sessione `8490facf`) |
-| A | A - Account e accessi | 6182 | `/tmp/librefolio-r13-a` | `e-alfy-a-account-e-accessi` | `5e21149e5` | ✅ A1 (`769cc31cb`), A2 (`76e61889b`, frontend in `lib/features/`), A3 (`90491071d`: registro delle schede, O-15, K-17, L12), A4 (`e476d2ed4`: migrazione 005, token monouso) e A4b (`dbf89cdd5`: versione di sessione `sv`) integrati; A5a committato sul ramo (`7da2cd9a2`, base aggiornata in `8e049474e`); in corso A5b (frontend, token nel frammento dei link); A5a e A5b entrano insieme dopo la finestra della galleria (sessione `119ed166`) |
-| X | X - Plugin asset e ricerca | 6183 | `/tmp/librefolio-r13-x` | `e-alfy-x-plugin-asset-e-ricerca` | `e78eb7b6f` | ✅ CP1 (registri per famiglia), CP2a (`services/assets/`, senza shim, `64a5a3fe7`), CP2b (`92b42d796`: asset per tema, router per risorsa, eventi nei loro moduli), CP3 (`8000aba5a`: cambi per tema in `services/fx/` e `api/v1/fx/`), CP3b (`63a1f675c`: test dei cambi senza rete, W-B9, W-B13, X-R5, X-R7), CP4 (`7f4618494`: schemi degli asset per tema), J-5 (`743fca514`) e X-R8 (`173ba19e2`: elenchi delle valute dei fornitori in cache) integrati; committati sul ramo, entrano dopo la finestra con le loro E2E: FE5b-1 (`37532d558`, `AssetModal` in sei pezzi), FE5b-2 (`fc6220d28`, logica in moduli puri), X-R11a (`ac89cea72`), X-R1 e X-R2 (`f8d87ed9c`); disegno del ripristino per B nel CP10 (sessione `ad5f37c8`) |
-| W | W - Import e transazioni | 6184 | `/tmp/librefolio-r13-w` | `e-alfy-w-import-e-transazioni` | `9ccbdb3a2` | ✅ W1 e W2 (`998fd2701`), I1 (`dc7e4e48e`: V-23, C-65b, L5, C-79/C-3), K1 (`d915c869f`: O-12, C-89, V-38, P-15), W4 CP6 (`155d9b050`, BRIM in `services/brim/`), W7 (`1cd7300f3`, `schemas/transactions/` per tema), K2a (`62c964242`: rifiuti a codice, L6) ed E0 (`d226bc69e`: eventi distinti per data e tipo, X-R9 per la parte di W, W-B15) integrati; FE8a committato sul ramo a tre pezzi (Form `8a62cea7f`, Bulk `464350cc7`, Wizard `b92e655d9`, quest'ultimo prima delle prove), entra dopo la finestra; N1 committato sul ramo (`6be11ecf3`: cassa del broker al giorno dell'utente, metà spaiate dei trasferimenti, con J), con la correzione post-migrazione N1b-2 (`5e19c6018`, entra solo con il via sul punto 46) e la sua doc (`3f42dda9d`); in corso N1b-3 (W-B22, W-B23); E1 aspetta le decisioni 20–23; CP7, W3 e W5–W6 sbloccati: la 1.2.1 è in `dev_release2` (`6c349f907`) (sessione `e71e0e34`) |
-| J | J - Numeri e analisi | 6185 | `/tmp/librefolio-r13-j` | `e-alfy-j-numeri-e-analisi` | `1ce3cc85c` | ✅ CP-1 (`e1fbc801f`: PAC per tema in `schemas/pac_allocator/` e `services/pac_allocator/`, guardia dei confini D-J18), C-93 (`c412f8dad`), G-8 (`c75f08101`) e J-6 (`e2cb55054`: guardia di suite sulle connessioni aiosqlite) integrati; CP-2 e seguenti aspettano le decisioni 26–30 (D-J1, D-J2, D-J3, D-J6, D-J15) (sessione `4c677a01`) |
-| Z | Z - Sospensione e risveglio | 6186 | `/tmp/librefolio-r13-z` | `e-alfy-z-sospensione-e-risveglio` | `da07f6366` | analisi consegnata; aspetta le decisioni 31 e 32 del developer (sessione `d401e062`) |
-| B | B - Backup e Docker | 6187 | `/tmp/librefolio-r13-b` | `e-alfy-b-backup-e-docker` | `25cd742cf` | avviata il 15/10 alle 11:25, su delega del developer: B0 (divisione di `api/v1/backup.py`, `backup_service.py` → `series_export.py`) e B1 (backup dell'istanza, backend e CLI); B2–B4 aspettano i punti 38–43 e, B4, la finestra delle dipendenze (sessione `5618ecee`) |
-| E | E - Email | 6188 | `/tmp/librefolio-r13-e` | `e-alfy-e-email` | `f4f995ce7` | avviata il 15/10 alle 11:25, su delega del developer: E0 ed E1 (configurazione SMTP, invio, testi, limitatore), senza `links.py` e senza la riga in `config_audit.py`; E3 aspetta il punto 45, E5 il 44 (sessione `877410cd`) |
-| Y | Y - Cruscotto e grafici | 6189 | `/tmp/librefolio-r13-y` | `e-alfy-y-cruscotto-e-grafici` | `428170b0c` | analisi consegnata il 15/10 alle 12:00, aspetta il via del developer; avviata alle 11:28, dopo l'ingresso dei lotti A–D di R (sessione `17050e81`) |
+| — | Coordinatore 1.3 (in place) | 6180 | `/tmp/librefolio-r13-main` | `dev_release2` | `ede7adf75` | attivo; slot pesanti: 2 (vedi «Ripartenza del 19/10») |
+| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | `e-alfy-h-piattaforma` | `742b4c5ff` | 10/11 lotti in `dev_release2` (manca TS1, decisione P23); analisi del 19/10 consegnate (indici del DB, testi dei controlli, H-55 per direttiva); H-55 parcheggiato; FROZEN |
+| A | A - Account e accessi | 6182 | `/tmp/librefolio-r13-a` | `e-alfy-a-account-e-accessi` | `d28d0841d` | 10/11 lotti in `dev_release2` (manca A10, il giro finale di doc); analisi N69 consegnata; **in corso A-57** (solo test, via del developer 19/10) |
+| X | X - Plugin asset e ricerca | 6183 | `/tmp/librefolio-r13-x` | `e-alfy-x-plugin-asset-e-ricerca` | `e3c6f5782` | 11/17 lotti (aperti CP5, CP6, CP7, CP8, CP12, finale: domande al developer); analisi N64/N92 consegnate; **in corso X-R16** (approvata 19/10), poi N83 e N92 (i) |
+| W | W - Import e transazioni | 6184 | `/tmp/librefolio-r13-w` | `e-alfy-w-import-e-transazioni` | `cfc572f0a` | lotti pianificati: mancano W3, W4 CP7, W5–W6, K2b/c (domanda al developer); K3a parcheggiato; analisi N78-bis, inventario delle regole, N74 consegnate; FROZEN |
+| J | J - Numeri e analisi | 6185 | `/tmp/librefolio-r13-j` | `e-alfy-j-numeri-e-analisi` | `5da188c15` | 11/13 CP (aperti CP-8, CP-11); analisi J-57 consegnata; **in corso J-48** (approvata 19/10) |
+| Z | Z - Sospensione e risveglio | 6186 | `/tmp/librefolio-r13-z` | `e-alfy-z-sospensione-e-risveglio` | `97fe88996` | piano originale 100 %; Z-29 parcheggiata (N90 in ridisegno); **in corso Z-33 ridotta** (togliere la riparazione e la 011, decisione del developer 19/10) |
+| B | B - Backup e Docker | 6187 | `/tmp/librefolio-r13-b` | `e-alfy-b-backup-e-docker` | `ca9dbe9e5` | 9/11 lotti (aperti B7 Litestream, D1–D10 del developer; BZ parte 2); **in corso B-15 e B-8** (approvate 19/10) |
+| E | E - Email | 6188 | `/tmp/librefolio-r13-e` | `e-alfy-e-email` | `269690e78` | 7/7 lotti in `dev_release2`; C-70b parcheggiato; FROZEN |
+| Y | Y - Cruscotto e grafici | 6189 | `/tmp/librefolio-r13-y` | `e-alfy-y-cruscotto-e-grafici` | `88fdf4517` | 11/13 lotti; Y-30 entrata (`ede7adf75`); analisi N65 consegnata; FROZEN |
+| MF | MF - Matematica finanziaria | 6190 | `/tmp/librefolio-r13-mf` | `e-alfy-mf-matematica-finanziaria` | `8eb783b0b` | 14/16 lotti (aperti E2, L); analisi N74 consegnata; **in corso J-1** (voci 1, 4, 8a, approvata 19/10) |
+
+### Ripartenza del 19/10
+
+Il 17/10 alle 21:45 il developer ha fermato tutto. Il 19/10 ha letto il resoconto, ha deciso punto per punto e ha fatto
+ripartire i figli con regole nuove:
+- nessuna decisione di prodotto dai figli né dal coordinatore: ogni scelta diventa una domanda per il developer;
+- si implementa solo dopo il via esplicito;
+- prima della ripartenza, ogni lavoro a metà è stato messo da parte come patch nella cartella di sessione del figlio,
+  il giornale committato e la base portata a `dev_release2` (`ede7adf75`);
+- poi contabilità (tabelle dei lotti e ✅ del backlog, con la prova del commit) e un'analisi in sola lettura per figlio.
+
+Le decisioni e le domande del giorno sono raccolte nel file del coordinatore `risposte-resoconto-20261019.md` (cartella
+di sessione) e riportate nel §12 del [piano generale](plan-phase01Release13.prompt.md). Slot pesanti: 2 alla volta,
+lavori leggeri solo con carico a 1 minuto sotto 50.
 
 Corsie del programma colori, da non usare: 6150–6154 e 6160. Lettere riservate ai colori:
 L, R, G, T, C, U, S, P.
 
 ## Funzioni per il cloud
 
-| Ondata | Funzione | Sessione | Stato |
+| Ondata | Funzione | Sessione | Stato (19/10) |
 |---|---|---|---|
-| 1 | Pausa degli aggiornamenti e sospensione (F26) | Z | ⏳ analisi pronta; aspetta le decisioni 31 e 32 |
-| 1 | Segreti e configurazione (F03) | H | 🟡 backend integrato (CP2a `60f8a35ce`, CP3 `d08d9358f`): segreti da `*_FILE`, chiave d'istanza, avvisi nel log, `.env.example` completo. Gli avvisi per l'admin arrivano con A8. `JWT_SECRET` resta casuale se manca, per la regola del developer sui default (piano H, §2) |
-| 1 | Prontezza e versione (F08) | H | 🟡 backend integrato (CP5a, `9deb0ea08`); CP5b dopo la finestra |
-| 1 | Profilo gestito (F05) | H, A, X | ⏳ la base c'è (`/system/instance`, CP4 di H); profilo e blocco dell'istanza con il CP6 di H |
-| 1 | Disclaimer e link legali (F09) | A | ⏳ |
-| 1 | Admin iniziale da variabili (F02) | A | ⏳ |
-| 1 | Inviti, registrazione e gestione utenti (F13) | A | ⏳ in corso (A5a e A5b); i token monouso sono già integrati (A4) |
-| 2 | Email facoltativa (F04) | E | 🟡 avviata (E0–E1); E3 aspetta il punto 45, E5 il 44 |
-| 2 | Backup e ripristino dalla UI (F01) | B | 🟡 avviata (B0–B1); B2–B4 aspettano i punti 38–43 |
-| 2 | Backup continuo con Litestream (F25) | B | ⏳ analisi pronta; il codice dopo il lotto Docker di H (CP7a) |
-| 2 | Avvio, aggiornamento all'accesso e risveglio (F07) | Z | ⏳ analisi pronta; aspetta le decisioni 31–35 e gli agganci d'avvio di H (CP2b) |
-| 2 | Impostazioni dei plugin | X | ⏳ dopo X-R8; migrazione 007, e `cryptography` nella finestra delle dipendenze |
-| 2 | Ordine dei fornitori nella ricerca (F21) | X | ⏳ |
+| 1 | Pausa degli aggiornamenti e sospensione (F26) | Z | ✅ in `dev_release2`; manca la prova vera su Fly (protocollo A1–A9, developer o pannello) |
+| 1 | Segreti e configurazione (F03) | H | ✅ |
+| 1 | Prontezza e versione (F08) | H | ✅ |
+| 1 | Profilo gestito (F05) | H, A, X | 🟡 parti di H e di A ✅; manca quella di X (CP6, elenchi dei fornitori permessi: domanda al developer) |
+| 1 | Disclaimer e link legali (F09) | A | ✅ (A9) |
+| 1 | Admin iniziale da variabili (F02) | A | ✅ (A7) |
+| 1 | Inviti, registrazione e gestione utenti (F13) | A | ✅ (A5, A6) |
+| 1 | Limite dei tentativi di accesso e header di sicurezza (F15) | A, H | ✅ (A8; CSP solo segnalata, H CP7b); la CSP applicata (H-55) è in decisione |
+| 2 | Email facoltativa (F04) | E | ✅ |
+| 2 | Backup e ripristino dalla UI (F01) | B | ✅ |
+| 2 | Backup continuo con Litestream (F25) | B | ⏳ non iniziato: aspetta le risposte D1–D10 del developer e Docker acceso |
+| 2 | Avvio, aggiornamento all'accesso e risveglio (F07) | Z | ✅ |
+| 2 | Impostazioni dei plugin | X | ✅ (CP10, CP11); per BRIM e Tool (CP12) proposta dopo la 1.3 |
+| 2 | Ordine dei fornitori nella ricerca (F21) | X | ✅ (CP13) |
 | 3 | Fornitore di prezzi a pagamento (F06) | X | quando sarà scelto |
 
 ## Riordino (ondata 0)
