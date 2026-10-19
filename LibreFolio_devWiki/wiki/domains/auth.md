@@ -55,7 +55,8 @@ graph LR
   email verification and the admin setup link share one table, `account_tokens`, and one service. Only the SHA-256
   of a token is stored, each token has one purpose, and it is spent by one conditional UPDATE, so two requests
   cannot both spend it. The service never commits: spending an invitation and creating its account fail together.
-  Migration `005_accounts_invites` adds the table with plain `ALTER TABLE`/`CREATE TABLE`, never a batch on
+  The 1.3 migration `005_release_1_3_0_schema` (written first as the unreleased `005_accounts_invites`, folded in by
+  lot H-57) adds the table with plain `ALTER TABLE`/`CREATE TABLE`, never a batch on
   `users`: with `PRAGMA foreign_keys=ON` a batch rebuild cascades deletes into every child table.
 - Session revocation by version (release 1.3, lot A4b, decision D-A17 of the developer, 14/10/2026) — the JWT
   carries `sv`, the account's `users.session_version`; `get_current_user` refuses a cookie of another version.
@@ -63,7 +64,8 @@ graph LR
   deactivation and a demotion raise it too. A cookie without `sv` is version 0, so the upgrade signed nobody out.
   Still no session store: the check reads the user row that every request already loads.
 - Registration modes, invitations and reset links (release 1.3, lot A5, 15/10/2026):
-  - migration `006_registration_mode` turns `enable_registration` into `registration_mode`;
+  - the 1.3 migration (`005_release_1_3_0_schema`; first the unreleased `006_registration_mode`) turns
+    `enable_registration` into `registration_mode`;
   - `registration_service` holds the rule and the limit;
   - an invitation's address is a suggestion, not a constraint (D-A16, rejected by the developer);
   - an anonymous refusal for the limit tells no count and no billing link;
@@ -98,8 +100,7 @@ Release 1.3, workstream A:
 | Auth store (frontend) | `frontend/src/lib/stores/app/auth.ts` |
 | DB model (User, UserRole, AccountToken) | `backend/app/db/models.py` |
 | Account token service | `backend/app/services/accounts/token_service.py` |
-| Migration of the accounts schema | `backend/alembic/versions/005_accounts_invites.py` |
-| Migration of the registration mode | `backend/alembic/versions/006_registration_mode.py` |
+| Migration of the 1.3 schema (account tokens, user columns, registration mode) | `backend/alembic/versions/005_release_1_3_0_schema.py` |
 | Registration rule, invitations, limit | `backend/app/services/accounts/registration_service.py` |
 | Account variables | `backend/app/config/accounts.py` |
 | Admin user API | `backend/app/api/v1/users.py` |

@@ -170,8 +170,8 @@ INSERT INTO user_settings (id, user_id, base_currency, language, theme, avatar_u
     (4, 4, 'EUR', 'es', 'dark',  NULL, '2025-04-13 12:00:00.000000', '2025-04-13 12:00:00.000000');
 
 INSERT INTO global_settings (key, value, value_type, description, updated_at, updated_by_user_id) VALUES
-    -- The registration switch as 1.1 named it: migration 006 converts it to registration_mode on the way to head
-    -- (test_migration_006_registration asserts it on these very rows). A 1.1 install never had the new key.
+    -- The registration switch as 1.1 named it: migration 005 converts it to registration_mode on the way to head
+    -- (test_migration_005_release_1_3 asserts it on these very rows). A 1.1 install never had the new key.
     ('enable_registration', 'false', 'bool',   'Allow new users to register', '2025-05-01 10:00:00.000000', 1),
     ('default_language',    'en',    'string', 'Language of new accounts',    '2025-05-02 10:00:00.000000', 2),
     ('scheduler_timezone',  'UTC',   'string', NULL,                          '2025-05-03 10:00:00.000000', NULL);

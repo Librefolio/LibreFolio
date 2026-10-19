@@ -1,0 +1,306 @@
+{
+ "about": "The schema the retired chain 005_accounts_invites ... 009_email_unique_ignoring_case left on a new database, with the 13 redundant indexes dropped (variant V4 of the 1.3 squash, decided 19/10/2026): every row of sqlite_master, its SQL with whitespace collapsed. Frozen when the chain was deleted; 005_release_1_3_0_schema must reproduce it exactly.",
+ "objects": [
+  [
+   "index",
+   "idx_asset_event_asset_date",
+   "asset_events",
+   "CREATE INDEX idx_asset_event_asset_date ON asset_events (asset_id, date)"
+  ],
+  [
+   "index",
+   "idx_asset_event_asset_type_date",
+   "asset_events",
+   "CREATE INDEX idx_asset_event_asset_type_date ON asset_events (asset_id, type, date)"
+  ],
+  [
+   "index",
+   "idx_asset_event_provider_assignment",
+   "asset_events",
+   "CREATE INDEX idx_asset_event_provider_assignment ON asset_events (provider_assignment_id)"
+  ],
+  [
+   "index",
+   "idx_fx_rates_base_quote_date",
+   "fx_rates",
+   "CREATE INDEX idx_fx_rates_base_quote_date ON fx_rates (base, quote, date)"
+  ],
+  [
+   "index",
+   "idx_transactions_asset_date",
+   "transactions",
+   "CREATE INDEX idx_transactions_asset_date ON transactions (asset_id, date)"
+  ],
+  [
+   "index",
+   "idx_transactions_asset_event",
+   "transactions",
+   "CREATE INDEX idx_transactions_asset_event ON transactions (asset_event_id)"
+  ],
+  [
+   "index",
+   "idx_transactions_broker_date",
+   "transactions",
+   "CREATE INDEX idx_transactions_broker_date ON transactions (broker_id, date, id)"
+  ],
+  [
+   "index",
+   "idx_transactions_related",
+   "transactions",
+   "CREATE INDEX idx_transactions_related ON transactions (related_transaction_id)"
+  ],
+  [
+   "index",
+   "ix_account_tokens_purpose_expires_at",
+   "account_tokens",
+   "CREATE INDEX ix_account_tokens_purpose_expires_at ON account_tokens (purpose, expires_at)"
+  ],
+  [
+   "index",
+   "ix_account_tokens_user_id",
+   "account_tokens",
+   "CREATE INDEX ix_account_tokens_user_id ON account_tokens (user_id)"
+  ],
+  [
+   "index",
+   "ix_assets_identifier_isin",
+   "assets",
+   "CREATE INDEX ix_assets_identifier_isin ON assets (identifier_isin)"
+  ],
+  [
+   "index",
+   "ix_assets_identifier_ticker",
+   "assets",
+   "CREATE INDEX ix_assets_identifier_ticker ON assets (identifier_ticker)"
+  ],
+  [
+   "index",
+   "ix_broker_user_access_broker_id",
+   "broker_user_access",
+   "CREATE INDEX ix_broker_user_access_broker_id ON broker_user_access (broker_id)"
+  ],
+  [
+   "index",
+   "sqlite_autoindex_account_tokens_1",
+   "account_tokens",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_alembic_version_1",
+   "alembic_version",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_asset_provider_assignments_1",
+   "asset_provider_assignments",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_assets_1",
+   "assets",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_broker_user_access_1",
+   "broker_user_access",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_brokers_1",
+   "brokers",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_fx_conversion_routes_1",
+   "fx_conversion_routes",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_fx_rates_1",
+   "fx_rates",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_global_settings_1",
+   "global_settings",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_plugin_system_settings_1",
+   "plugin_system_settings",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_plugin_user_settings_1",
+   "plugin_user_settings",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_price_history_1",
+   "price_history",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_user_onboarding_progress_1",
+   "user_onboarding_progress",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_user_onboarding_step_progress_1",
+   "user_onboarding_step_progress",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_user_settings_1",
+   "user_settings",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_users_1",
+   "users",
+   null
+  ],
+  [
+   "index",
+   "sqlite_autoindex_users_2",
+   "users",
+   null
+  ],
+  [
+   "index",
+   "ux_users_email_lower",
+   "users",
+   "CREATE UNIQUE INDEX ux_users_email_lower ON users (lower(email))"
+  ],
+  [
+   "table",
+   "account_tokens",
+   "account_tokens",
+   "CREATE TABLE account_tokens ( id INTEGER NOT NULL, purpose VARCHAR(32) NOT NULL, token_hash VARCHAR(64) NOT NULL, user_id INTEGER, email VARCHAR, grants_admin BOOLEAN DEFAULT 0 NOT NULL, created_by_user_id INTEGER, created_at DATETIME NOT NULL, expires_at DATETIME NOT NULL, consumed_at DATETIME, revoked_at DATETIME, consumed_by_user_id INTEGER, PRIMARY KEY (id), CONSTRAINT ck_account_tokens_purpose CHECK (purpose IN ('invite', 'password_reset', 'email_verification', 'admin_setup')), CONSTRAINT uq_account_tokens_token_hash UNIQUE (token_hash), FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE, FOREIGN KEY(created_by_user_id) REFERENCES users (id) ON DELETE SET NULL, FOREIGN KEY(consumed_by_user_id) REFERENCES users (id) ON DELETE SET NULL )"
+  ],
+  [
+   "table",
+   "alembic_version",
+   "alembic_version",
+   "CREATE TABLE alembic_version ( version_num VARCHAR(32) NOT NULL, CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num) )"
+  ],
+  [
+   "table",
+   "asset_events",
+   "asset_events",
+   "CREATE TABLE asset_events ( id INTEGER PRIMARY KEY AUTOINCREMENT, asset_id INTEGER NOT NULL, date DATE NOT NULL, type VARCHAR NOT NULL, value NUMERIC(18, 6) NOT NULL, currency VARCHAR NOT NULL, provider_assignment_id INTEGER, notes TEXT, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE, FOREIGN KEY (provider_assignment_id) REFERENCES asset_provider_assignments (id) ON DELETE CASCADE )"
+  ],
+  [
+   "table",
+   "asset_provider_assignments",
+   "asset_provider_assignments",
+   "CREATE TABLE asset_provider_assignments ( id INTEGER PRIMARY KEY, asset_id INTEGER NOT NULL UNIQUE, provider_code VARCHAR(50) NOT NULL, identifier VARCHAR, identifier_type VARCHAR(20) NOT NULL, provider_params TEXT, last_fetch_at DATETIME, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE, CONSTRAINT uq_asset_provider_asset_id UNIQUE (asset_id) )"
+  ],
+  [
+   "table",
+   "assets",
+   "assets",
+   "CREATE TABLE assets ( id INTEGER PRIMARY KEY AUTOINCREMENT, display_name VARCHAR NOT NULL UNIQUE, currency VARCHAR NOT NULL, icon_url VARCHAR, classification_params TEXT, asset_type VARCHAR(32) NOT NULL, quote_base_quantity INTEGER DEFAULT 1, active BOOLEAN NOT NULL, user_url VARCHAR DEFAULT NULL, identifier_isin VARCHAR(12), identifier_ticker VARCHAR(20), identifier_cusip VARCHAR(9), identifier_sedol VARCHAR(7), identifier_figi VARCHAR(12), identifier_uuid VARCHAR(36), identifier_other VARCHAR(100), created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL , is_benchmark BOOLEAN NOT NULL DEFAULT 0)"
+  ],
+  [
+   "table",
+   "broker_user_access",
+   "broker_user_access",
+   "CREATE TABLE broker_user_access ( id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, broker_id INTEGER NOT NULL, role VARCHAR(10) NOT NULL DEFAULT 'VIEWER', share_percentage NUMERIC(7, 6) NOT NULL DEFAULT 1, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE, FOREIGN KEY (broker_id) REFERENCES brokers (id) ON DELETE CASCADE, CONSTRAINT uq_broker_user_access UNIQUE (user_id, broker_id), CONSTRAINT chk_broker_user_access_role CHECK (role IN ('OWNER', 'EDITOR', 'VIEWER')), CONSTRAINT ck_broker_user_access_share_percentage CHECK (share_percentage >= 0 AND share_percentage <= 1) )"
+  ],
+  [
+   "table",
+   "brokers",
+   "brokers",
+   "CREATE TABLE brokers ( id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR NOT NULL UNIQUE, description TEXT, portal_url VARCHAR, icon_url VARCHAR, default_import_plugin VARCHAR, allow_cash_overdraft BOOLEAN NOT NULL DEFAULT 0, allow_asset_shorting BOOLEAN NOT NULL DEFAULT 0, is_active BOOLEAN NOT NULL DEFAULT 1, opened_at DATE, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL )"
+  ],
+  [
+   "table",
+   "fx_conversion_routes",
+   "fx_conversion_routes",
+   "CREATE TABLE fx_conversion_routes ( id INTEGER PRIMARY KEY AUTOINCREMENT, base VARCHAR NOT NULL, quote VARCHAR NOT NULL, priority INTEGER NOT NULL DEFAULT 1, chain_steps TEXT NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, CONSTRAINT uq_route_base_quote_priority UNIQUE (base, quote, priority), CONSTRAINT ck_route_base_less_than_quote CHECK (base < quote) )"
+  ],
+  [
+   "table",
+   "fx_rates",
+   "fx_rates",
+   "CREATE TABLE fx_rates ( id INTEGER PRIMARY KEY, date DATE NOT NULL, base VARCHAR NOT NULL, quote VARCHAR NOT NULL, rate NUMERIC(24, 10) NOT NULL, source VARCHAR NOT NULL, fetched_at DATETIME NOT NULL, CONSTRAINT ck_fx_rates_base_less_than_quote CHECK (base < quote), CONSTRAINT uq_fx_rates_date_base_quote UNIQUE (date, base, quote) )"
+  ],
+  [
+   "table",
+   "global_settings",
+   "global_settings",
+   "CREATE TABLE global_settings ( key VARCHAR(100) PRIMARY KEY, value TEXT NOT NULL, value_type VARCHAR(20) NOT NULL, description TEXT, updated_at DATETIME NOT NULL, updated_by_user_id INTEGER, FOREIGN KEY (updated_by_user_id) REFERENCES users (id) ON DELETE SET NULL )"
+  ],
+  [
+   "table",
+   "plugin_system_settings",
+   "plugin_system_settings",
+   "CREATE TABLE plugin_system_settings ( id INTEGER NOT NULL, family VARCHAR(16) NOT NULL, plugin_code VARCHAR(64) NOT NULL, field_key VARCHAR(64) NOT NULL, value_json TEXT, secret_ciphertext BLOB, key_id VARCHAR(32), updated_at DATETIME NOT NULL, updated_by_user_id INTEGER, PRIMARY KEY (id), CONSTRAINT uq_plugin_system_settings_field UNIQUE (family, plugin_code, field_key), CONSTRAINT ck_plugin_system_settings_one_value CHECK ((value_json IS NULL) <> (secret_ciphertext IS NULL)), CONSTRAINT ck_plugin_system_settings_key_id CHECK ((secret_ciphertext IS NULL) = (key_id IS NULL)), FOREIGN KEY(updated_by_user_id) REFERENCES users (id) ON DELETE SET NULL )"
+  ],
+  [
+   "table",
+   "plugin_user_settings",
+   "plugin_user_settings",
+   "CREATE TABLE plugin_user_settings ( id INTEGER NOT NULL, user_id INTEGER NOT NULL, family VARCHAR(16) NOT NULL, plugin_code VARCHAR(64) NOT NULL, field_key VARCHAR(64) NOT NULL, value_json TEXT, secret_ciphertext BLOB, key_id VARCHAR(32), updated_at DATETIME NOT NULL, PRIMARY KEY (id), CONSTRAINT uq_plugin_user_settings_field UNIQUE (user_id, family, plugin_code, field_key), CONSTRAINT ck_plugin_user_settings_one_value CHECK ((value_json IS NULL) <> (secret_ciphertext IS NULL)), CONSTRAINT ck_plugin_user_settings_key_id CHECK ((secret_ciphertext IS NULL) = (key_id IS NULL)), FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE )"
+  ],
+  [
+   "table",
+   "price_history",
+   "price_history",
+   "CREATE TABLE price_history ( id INTEGER PRIMARY KEY, asset_id INTEGER NOT NULL, date DATE NOT NULL, open NUMERIC(24, 12), high NUMERIC(24, 12), low NUMERIC(24, 12), close NUMERIC(24, 12), volume NUMERIC(24, 0), adjusted_close NUMERIC(24, 12), currency VARCHAR NOT NULL, source_plugin_key VARCHAR NOT NULL, fetched_at DATETIME NOT NULL, FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE, CONSTRAINT uq_price_history_asset_date UNIQUE (asset_id, date) )"
+  ],
+  [
+   "table",
+   "sqlite_sequence",
+   "sqlite_sequence",
+   "CREATE TABLE sqlite_sequence(name,seq)"
+  ],
+  [
+   "table",
+   "transactions",
+   "transactions",
+   "CREATE TABLE transactions ( id INTEGER PRIMARY KEY AUTOINCREMENT, broker_id INTEGER NOT NULL, asset_id INTEGER, type VARCHAR(32) NOT NULL, date DATE NOT NULL, quantity NUMERIC(22, 10) NOT NULL DEFAULT 0, amount NUMERIC(18, 6) NOT NULL DEFAULT 0, currency VARCHAR(3), related_transaction_id INTEGER, tags TEXT, description TEXT, cost_basis_override NUMERIC(24, 12), cost_basis_currency VARCHAR(3), asset_event_id INTEGER, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, FOREIGN KEY (broker_id) REFERENCES brokers (id), FOREIGN KEY (asset_id) REFERENCES assets (id), FOREIGN KEY (related_transaction_id) REFERENCES transactions (id) DEFERRABLE INITIALLY DEFERRED, FOREIGN KEY (asset_event_id) REFERENCES asset_events (id) ON DELETE RESTRICT )"
+  ],
+  [
+   "table",
+   "user_onboarding_progress",
+   "user_onboarding_progress",
+   "CREATE TABLE user_onboarding_progress ( id INTEGER NOT NULL, user_id INTEGER NOT NULL, flow VARCHAR(50) NOT NULL, status VARCHAR(20) NOT NULL, version INTEGER NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, completed_at DATETIME, skipped_at DATETIME, PRIMARY KEY (id), CONSTRAINT ck_user_onboarding_progress_status CHECK (status IN ('pending', 'completed', 'skipped')), CONSTRAINT ck_user_onboarding_progress_version CHECK (version >= 1), FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE, CONSTRAINT uq_user_onboarding_progress_user_flow UNIQUE (user_id, flow) )"
+  ],
+  [
+   "table",
+   "user_onboarding_step_progress",
+   "user_onboarding_step_progress",
+   "CREATE TABLE user_onboarding_step_progress ( id INTEGER NOT NULL, user_id INTEGER NOT NULL, flow VARCHAR(50) NOT NULL, step_id VARCHAR(100) NOT NULL, status VARCHAR(20) NOT NULL, version INTEGER NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, completed_at DATETIME, skipped_at DATETIME, PRIMARY KEY (id), CONSTRAINT ck_user_onboarding_step_progress_status CHECK (status IN ('pending', 'completed', 'skipped')), CONSTRAINT ck_user_onboarding_step_progress_version CHECK (version >= 1), FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE, CONSTRAINT uq_user_onboarding_step_progress_user_flow_step UNIQUE (user_id, flow, step_id) )"
+  ],
+  [
+   "table",
+   "user_settings",
+   "user_settings",
+   "CREATE TABLE user_settings ( id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE, base_currency VARCHAR(3) NOT NULL DEFAULT 'EUR', language VARCHAR(5) NOT NULL DEFAULT 'en', theme VARCHAR(20) NOT NULL DEFAULT 'light', avatar_url VARCHAR(500) DEFAULT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE, CONSTRAINT uq_user_settings_user_id UNIQUE (user_id) )"
+  ],
+  [
+   "table",
+   "users",
+   "users",
+   "CREATE TABLE users ( id INTEGER PRIMARY KEY AUTOINCREMENT, username VARCHAR(50) NOT NULL UNIQUE, email VARCHAR NOT NULL UNIQUE, hashed_password VARCHAR NOT NULL, is_active BOOLEAN NOT NULL DEFAULT 1, is_superuser BOOLEAN NOT NULL DEFAULT 0, login_count INTEGER NOT NULL DEFAULT 0, donation_popup_last_shown_at DATETIME DEFAULT NULL, donation_popup_logins_since_shown INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL , session_version INTEGER NOT NULL DEFAULT 0, email_verified_at DATETIME DEFAULT NULL, last_seen_version VARCHAR(40) DEFAULT NULL)"
+  ]
+ ],
+ "rows": {}
+}

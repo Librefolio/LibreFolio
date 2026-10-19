@@ -61,7 +61,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from backend.app.db import session as db_session  # importing it registers set_sqlite_pragma() for every engine of the process
-from backend.test_scripts.test_db.test_migration_005_accounts import _migrate
+from backend.test_scripts.test_db.alembic_harness import _migrate
 from backend.test_scripts.test_utils import print_section, print_success
 
 #: The two engines ``backend.app.db.session`` builds: ``get_sync_engine`` (pysqlite) and ``get_async_engine`` (aiosqlite,
@@ -307,7 +307,7 @@ def no_lane_database(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def at_head(tmp_path: Path) -> Path:
-    """A new database taken to head by the real migrations, in this process and under the listener: migration-005's harness, on this file alone, with foreign keys on."""
+    """A new database taken to head by the real migrations, in this process and under the listener: the shared ``alembic_harness.py``, on this file alone, with foreign keys on."""
     db = tmp_path / "app.db"
     _migrate(db, "upgrade", "head")
     return db

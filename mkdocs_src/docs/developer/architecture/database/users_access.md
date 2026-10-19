@@ -107,9 +107,9 @@ erDiagram
 
 ### 👤 `USER` {: #user }
 
-The core identity table. Each user has a unique `username`, compared exactly, and a unique `email`, compared regardless of A–Z case (migration `009_email_unique_ignoring_case`, below). Since lot A-21a a new username holds no `@`, since lot A-46 it has 3 to 50 characters whatever the way it is written, `./dev.py user create` included, and a new email address cannot be another account's username, A–Z case aside (`user_service.address_is_a_username()`, a comparison of `lower(username)` that no index serves: an instance has few accounts). All three are checks of the service, not constraints of the table (SQLite does not enforce the `VARCHAR(50)` of the column): the usernames written before keep their `@` or their length, with no migration (see [Which Account an Identifier Names](../security.md#sign-in-identifier)). The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`), whatever the registration mode: registration accepts it while `users` is empty, an inactive account counting as a row (`first_account_open()`); a later one gets the role of its invitation (`grants_admin`), or a regular account without one. From the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers) and [Registration, Invitations and the Admin API](../access_control.md#registration)). With `LIBREFOLIO_ADMIN_EMAIL`, the startup creates the first row itself: a superuser with `is_active` false, whose `hashed_password` is the hash of a random secret nobody knows, until its setup link is spent ([The Initial Administrator](../access_control.md#initial-admin)).
+The core identity table. Each user has a unique `username`, compared exactly, and a unique `email`, compared regardless of A–Z case (step 6 of migration `005_release_1_3_0_schema`, below). Since lot A-21a a new username holds no `@`, since lot A-46 it has 3 to 50 characters whatever the way it is written, `./dev.py user create` included, and a new email address cannot be another account's username, A–Z case aside (`user_service.address_is_a_username()`, a comparison of `lower(username)` that no index serves: an instance has few accounts). All three are checks of the service, not constraints of the table (SQLite does not enforce the `VARCHAR(50)` of the column): the usernames written before keep their `@` or their length, with no migration (see [Which Account an Identifier Names](../security.md#sign-in-identifier)). The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`), whatever the registration mode: registration accepts it while `users` is empty, an inactive account counting as a row (`first_account_open()`); a later one gets the role of its invitation (`grants_admin`), or a regular account without one. From the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers) and [Registration, Invitations and the Admin API](../access_control.md#registration)). With `LIBREFOLIO_ADMIN_EMAIL`, the startup creates the first row itself: a superuser with `is_active` false, whose `hashed_password` is the hash of a random secret nobody knows, until its setup link is spent ([The Initial Administrator](../access_control.md#initial-admin)).
 
-Migration `005_accounts_invites` added three columns:
+Step 1 of migration `005_release_1_3_0_schema` adds three columns:
 
 - 🔄 **`session_version`** (`INTEGER NOT NULL DEFAULT 0`): the session generation of the account. Each session
   cookie carries the version it was issued at (the JWT's `sv` claim), and `get_current_user()` refuses, on every
@@ -147,31 +147,33 @@ original fires the `ON DELETE` actions of every table that references it (the sa
 [Post-migration fixes](index.md#post-migration-fixes)). Its downgrade removes them with `DROP COLUMN`, which
 rewrites the table in place and fires no foreign-key action.
 
-Migration `009_email_unique_ignoring_case` makes the email unique regardless of case (developer decision P18):
-`alice@example.com` and `Alice@Example.com` are one address, which only one account can hold. Beside `ix_users_email`,
-unique on the address as written, it creates `ux_users_email_lower`, a unique index on `lower(email)`; the model
-declares it after the `User` class (`backend/app/db/models.py`), so `create_all` builds it too. SQLite's built-in
-`lower()` folds A–Z and nothing else, so letters outside ASCII compare as written: `Émile@example.com` and
-`émile@example.com` are two different addresses, a documented limit. `user_service.email_fold()` is the same fold in
-Python, and `same_email()` compares two addresses with it. `get_user_by_email()` and the email half of
-`get_user_by_username_or_email()` — tried first, and only for an identifier holding `@` (lot A-21a) — compare
+Step 6 of migration `005_release_1_3_0_schema` makes the email unique regardless of case (developer decision P18):
+`alice@example.com` and `Alice@Example.com` are one address, which only one account can hold. Beside the `UNIQUE`
+constraint on `email`, which compares the address as written, it creates `ux_users_email_lower`, a unique index on
+`lower(email)`; the model declares it after the `User` class (`backend/app/db/models.py`), so `create_all` builds it
+too. SQLite's built-in `lower()` folds A–Z and nothing else, so letters outside ASCII compare as written:
+`Émile@example.com` and `émile@example.com` are two different addresses, a documented limit. `user_service.email_fold()`
+is the same fold in Python, and `same_email()` compares two addresses with it. `get_user_by_email()` and the email half
+of `get_user_by_username_or_email()` — tried first, and only for an identifier holding `@` (lot A-21a) — compare
 `lower(email)`, so sign-in, «forgot password» and the duplicate checks of
 `create_user()` and `update_profile()` find an address whatever its case; the username half stays exact. The stored
 email keeps the form last written: its owner changing its case alone is no email change
 ([Changing the Email](../security.md#email-change)).
 
-Before writing anything, the upgrade groups the accounts by that fold. If two accounts share an address apart from
-case, it stops with a `RuntimeError` that names them as `#id 'username'`, never by address (workstream E's rule: no
-address in a log), and gives the remedy: `./dev.py user set-email <username> <address>` on all but one account of each
-group (what the administrator does: [Command-Line Tools](../../../admin/cli_tools.md), «Two Accounts with the Same
-Email Address»). No account is changed, and accounts are never merged. Otherwise it creates the index. On SQLite
-Alembic commits each revision on its own (no transactional DDL), so a stop leaves the revisions before 009 applied: an
-install upgraded from an earlier release stays at `008_registration_invite_default`, where `set-email` works (the 1.3
-model needs nothing 009 adds), and the next start resumes at 009. The upgrade checks before it acts, so it can
-run again; the downgrade drops the index. `./dev.py test db migration-009`
-(`backend/test_scripts/test_db/test_migration_009_email_case.py`) covers it on temporary databases, the `set-email`
-remedy included, and `./dev.py test services email-case` (`backend/test_scripts/test_services/test_email_case.py`)
-the fold, the index and the lookups.
+Before the index, the upgrade groups the accounts by that fold: after steps 1 to 5, as the retired `009` ran after
+`005` to `008`. If two accounts share an address apart from case, it stops with a `RuntimeError` that names them as
+`#id 'username'`, never by address (workstream E's rule: no address in a log), and gives the remedy:
+`./dev.py user set-email <username> <address>` on all but one account of each group (what the administrator does:
+[Command-Line Tools](../../../admin/cli_tools.md), «Two Accounts with the Same Email Address»). No account is changed,
+and accounts are never merged. The database stays at `004_release_1_2_0_schema`, yet it holds what the 1.3 model, and
+so `set-email`, needs: pysqlite opens a transaction only before the first data change, so the DDL of steps 1 and 2,
+which change no data, is committed as it runs, and the three `users` columns and `account_tokens` are there. The first
+data change — step 3, or step 5 when there is no `enable_registration` row to convert — opens the transaction that the
+stop rolls back, with everything after it. The next start runs `005` again from the top, and every step checks before
+it acts. Otherwise the upgrade creates the index; the downgrade drops it. `./dev.py test db migration-005`
+(`backend/test_scripts/test_db/test_migration_005_release_1_3.py`) covers the stop on temporary databases, the
+`set-email` remedy included, and `./dev.py test services email-case`
+(`backend/test_scripts/test_services/test_email_case.py`) the fold, the index and the lookups.
 
 ### ⚙️ `USER_SETTINGS`
 
@@ -181,33 +183,31 @@ One-to-one with `USER`. Stores user-specific preferences: display language, base
 
 System-wide configuration managed by the admin. Includes settings like `session_ttl_hours`, `max_file_upload_mb`, `registration_mode` (who may create an account), and default values for user preferences. The startup seeding creates only the rows that are missing, each with its default from `GLOBAL_SETTINGS_DEFAULTS`: for `registration_mode`, `invite` since decision 36. The startup step that creates the [initial administrator](../access_control.md#initial-admin) writes `registration_mode` = `invite` too, in the same transaction, with `updated_by_user_id` `NULL`.
 
-Migration `006_registration_mode` changes data only: the row `enable_registration` (`bool`) becomes
+Step 3 of migration `005_release_1_3_0_schema` changes data only: the row `enable_registration` (`bool`) becomes
 `registration_mode` (`value_type` `str`). The new value is `open` when the old one, lower-cased, was `true`, `1`,
 `yes` or `on` — what the settings service read as true — and `disabled` otherwise, so an odd value stays closed; the
-`updated_at` and `updated_by_user_id` of the row are kept. A database without the old row has nothing to convert: if
-it already holds accounts, `008_registration_invite_default` writes `open`; otherwise the startup seeding creates
-`registration_mode` with its default, `invite`. The downgrade writes `true` for `open`, and
-`false` for `invite` and `disabled`, since the old setting had no middle ground. Each direction checks before it acts,
-so an interrupted run can be repeated. `./dev.py test db migration-006`
-(`backend/test_scripts/test_db/test_migration_006_registration.py`) covers both directions, the metadata and the
-idempotence, on temporary databases.
+`updated_at` and `updated_by_user_id` of the row are kept, and the old row is deleted (a `registration_mode` already
+there is kept as it is). A database without the old row has nothing to convert: if it already holds accounts, step 5
+writes `open`; otherwise the startup seeding creates `registration_mode` with its default, `invite`. The downgrade
+writes `true` for `open`, and `false` for `invite` and `disabled`, since the old setting had no middle ground. Each
+direction checks before it acts, so an interrupted run can be repeated.
 
-Migration `008_registration_invite_default` changes data only too: an install upgraded with accounts keeps the
+Step 5 changes data only too: an install upgraded with accounts keeps the
 registration it had. Releases before the `invite` default read a missing row as open, so where `registration_mode`
 is missing and `users` holds at least one row, active or not, it inserts `registration_mode` = `open`, the earlier
 default made explicit: `value_type` `str`, the registry's description (a copy frozen in the migration), `updated_at`
 the time of the upgrade, `updated_by_user_id` `NULL`. The migration runs at the `database` step of the startup, before
 the seeding of the `global-settings` step could write the new default. A row that is there is never touched, whatever
 its value, and a database without accounts gets nothing: it is a new install, and the seeding gives it `invite`. The
-upgrade checks before it acts, so it can run again; the downgrade does nothing, since an `open` row is what the
-earlier default meant (006's downgrade turns it into `enable_registration` = `true`). `./dev.py test db migration-008`
-(`backend/test_scripts/test_db/test_migration_008_registration_default.py`) covers it on temporary databases, a
-1.1 install taken to the head included.
+step checks before it acts, so it can run again. The downgrade has no step of its own for it: an `open` row, what the
+earlier default meant, becomes `enable_registration` = `true` like any other. `./dev.py test db migration-005`
+(`backend/test_scripts/test_db/test_migration_005_release_1_3.py`) covers steps 3 and 5 on temporary databases: both
+directions, the metadata, the idempotence, and a populated 1.2 install taken to the revision.
 
 ### 🏢 `PLUGIN_SYSTEM_SETTING` {: #plugin-system-setting }
 
-Table `plugin_system_settings`, created by migration `007_plugin_settings`: one row per plugin setting of the whole
-instance (a `system` field), written by an administrator. What the plugins declare, and how the values are resolved,
+Table `plugin_system_settings`, created by step 4 of migration `005_release_1_3_0_schema`: one row per plugin setting
+of the whole instance (a `system` field), written by an administrator. What the plugins declare, and how the values are resolved,
 encrypted and delivered to a call, is in [Plugin Settings](../patterns/plugin_settings.md).
 
 - 🏷️ **`family`** (`VARCHAR(16)`), **`plugin_code`** and **`field_key`** (`VARCHAR(64)`): the field, `UNIQUE (family,
@@ -249,9 +249,9 @@ table would need two partial unique indexes, which nothing else in the schema us
 only indexes: their leading columns serve the reads of one plugin's rows and, in `plugin_user_settings`, of one user's
 rows and the cascade. The ids are plain `INTEGER PRIMARY KEY`, without `AUTOINCREMENT`: no row id leaves the backend.
 
-Migration `007_plugin_settings` creates both tables empty: no setting existed before. The downgrade drops them, and
-the values and secrets in them are lost. Each direction checks before it acts, so a run that stopped half way can be
-run again.
+Step 4 of migration `005_release_1_3_0_schema` creates both tables empty: no setting existed before. The downgrade
+drops them, and the values and secrets in them are lost. Each direction checks before it acts, so a run that stopped
+half way can be run again.
 
 ### 🔑 `BROKER_USER_ACCESS`
 
@@ -310,9 +310,9 @@ version, then `skipped` if all of them were skipped, `completed` otherwise.
 
 ### 🎟️ `ACCOUNT_TOKEN` {: #account-token }
 
-Table `account_tokens`, created by migration `005_accounts_invites`: one row per single-use account link — an
-invitation, a password-reset link, an email verification or the setup link of the initial administrator. The row
-holds the SHA-256 of the token, never the token itself. How tokens are issued, checked, spent and revoked is in
+Table `account_tokens`, created by step 2 of migration `005_release_1_3_0_schema`: one row per single-use account
+link — an invitation, a password-reset link, an email verification or the setup link of the initial administrator. The
+row holds the SHA-256 of the token, never the token itself. How tokens are issued, checked, spent and revoked is in
 [Single-use Account Tokens](../security.md#account-tokens).
 
 - 🎯 **`purpose`** (`VARCHAR(32)`): an `AccountTokenPurpose` value — `invite`, `password_reset`,
@@ -365,10 +365,11 @@ The service never deletes a token — consuming or revoking one sets a timestamp
 twice. The one exception is the cascade from a deleted account: if its tokens include the newest ones, the next
 tokens issued get their ids again.
 
-`./dev.py test db migration-005` (`backend/test_scripts/test_db/test_migration_005_accounts.py`) checks the table
+`./dev.py test db migration-005` (`backend/test_scripts/test_db/test_migration_005_release_1_3.py`) checks the table
 and the three `users` columns on a new database and on an upgraded 1.2 install, the downgrade (which cascades
-into no other table), an upgrade interrupted half way, and that `SQLModel.metadata.create_all` builds the same
-`users` and `account_tokens` tables as the migration.
+into no other table), an upgrade interrupted half way, and that `SQLModel.metadata.create_all` builds `users`,
+`account_tokens` and the two plugin tables as the migration does. The test's in-process Alembic harness is
+`backend/test_scripts/test_db/alembic_harness.py`.
 
 ## 🔗 Related Documentation
 
