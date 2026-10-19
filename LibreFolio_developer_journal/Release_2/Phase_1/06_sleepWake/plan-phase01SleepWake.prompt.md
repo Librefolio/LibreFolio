@@ -6185,3 +6185,136 @@ base il **suo** primo valore allineato).
 - Chi tocca cosa: io, il backend della query e la sua doc, con MF che rivede la semantica dei campioni; X la lista e
   `AssetCard` (revisione); Y il dialogo e il renderer dei segnali (il renderer non cambia: disegna i punti che riceve);
   il proprietario di AI Export, se la scelta per secchio cambia sede.
+
+### Revisione di N92 (X): «clear» al posto del −1, nessun prezzo ≤ 0 (19/10 ~15:20, sola lettura)
+
+> Richiesta del coordinatore (19/10 ~14:55): revisione di `09721f87f` sul ramo `e-alfy-x-plugin-asset-e-ricerca`
+> (sopra `1b2304ff2`). Verificare la fusione F.4 con `"clear"` (OHLC e cifre), `null` e assente come «non toccare»,
+> `FAUpsert.model_construct` in `refresh.py`, il contratto OpenAPI e Zod, nessun lettore che tratti `"clear"` come
+> numero. Solo lettura, niente server.
+
+**Come.** `git show 09721f87f` (30 file); il backend del commit estratto con `git archive` in `/tmp/libreFolio_n92`
+e i modelli provati in Python (nessun server, nessun file del repo toccato); ricerche sul commit.
+
+**Esito: OK, nessun rilievo bloccante.** Due rilievi minimi e una nota.
+- **Fusione F.4** (`price_store.py`): `_merge_field` dà `"clear"` → NULL, `None` → il valore salvato, un numero → il
+  numero. Il controllo OHLC non conta un limite cancellato (`incoming_low/high`, X-R46 resta). Il controllo delle
+  cifre salta `"clear"` (`_price_limit_issue`). `_unstorable_provider_point` non tratta più il −1 a parte: giusto,
+  perché un −1 di un fornitore non arriva più (scartato come negativo).
+- **`null` e assente**: tutti e due danno `None`, cioè «non toccare». Provato sul modello; il salvataggio
+  dell'editor omette `undefined`, `null` e `''`.
+- **Validazione** (`FAPriceWritePoint`, unione da sinistra a destra):
+  - accettati: `"clear"`; 0 per open, high, low e volume;
+  - rifiutati: `"CLEAR"`, `""`, `true`, NaN, ∞; `-1` e `"-1"` (BREAKING, scritto nel commit e nel CHANGELOG);
+    chiusura 0; chiusura `"clear"`; volume negativo;
+  - `from_attributes` legge un `FAPricePoint`.
+- **`FAUpsert.model_construct`** (`refresh.py:747`), **minimo**:
+  - Oggi è sicuro. Il negozio legge solo attributi che `FAPricePoint` ha uguali, confronta con `"clear"` per
+    uguaglianza (un Decimal contro una stringa dà `False`, nessuna eccezione), e niente serializza l'oggetto.
+  - I punti arrivano già filtrati (`_price_not_above_zero`).
+  - Il motivo scritto nel commento non regge. La validazione piena passa anche con valori oltre i limiti delle colonne
+    (provato: chiusura a 17 cifre, volume a 30), perché `FAPriceWritePoint` non controlla le cifre; e dopo il filtro
+    non può fallire nemmeno per il segno.
+  - Proposta: costruire `FAUpsert(asset_id=…, prices=price_items)` normale (gli elementi diventano
+    `FAPriceWritePoint` e un errore sarebbe un vero difetto da vedere), o correggere il commento.
+- **Contratto**:
+  - OpenAPI: `anyOf` di `{const, enum: ["clear"], type: string}`, `number`, una stringa numerica e `null`.
+  - Il client generato rende `Literal` + `enum` come `z.literal(…)` (è già così per `kind` dei segnali).
+  - Il frontend manda un numero, `'clear'` o niente. `'clear'` è controllato prima di `Number()`
+    (`AssetDataEditorSection.svelte:306-311`), e nell'editor ordina e filtra come una cella vuota.
+- **Nessun lettore tratta `"clear"` come numero**: il negozio confronta prima di ogni conto; la rotta non legge OHLC;
+  l'editor dei cambi non usa celle cancellabili.
+- **Nota (letture permissive)**:
+  - `FAPricePoint` non rifiuta più una chiusura ≤ 0 (né gli `original_*`). Una riga così salvata da versioni vecchie
+    o da altri strumenti ora la query dei prezzi la serve, mentre prima la query falliva.
+  - A valle: le variazioni di periodo trattano un riferimento ≤ 0 come mancante (`returns.py:339`, `:381`); il
+    drawdown del rischio rifiuta i valori non positivi (`risk/metrics.py:284`).
+  - Coerente con «scritture severe, letture permissive» (E-18). Facoltativo: un test che lo pinni.
+- **Minimo**:
+  - `_price_not_above_zero` scarta tutto il giorno del fornitore anche per un solo volume negativo con la chiusura
+    buona;
+  - il messaggio dice «price not above 0» anche lì. Proposta: nominare il campo (`volume=-5`), come fa
+    `_unstorable_provider_point`.
+
+**Commit proposto per il giornale**: `docs(journal): N92 review, OK with two minor notes (Z)`.
+
+### Z-29 — piano breve del lotto intero, secondo la scelta del developer (19/10 ~15:35, sola lettura)
+
+> **Scelta del developer** (Q-Z29-2, dal coordinatore, 19/10 ~15:10), testuale: «segnali ridotti dal backend,
+> ricarica per scheda, e il bersaglio di un confronto chiesto con il passo della scheda»; prima: «se vogliamo renderlo
+> future proof, essendo un campo opzionale, mettiamolo come dato per ogni asset». Più Q-Z29-1: `sample_bounds` con
+> `first` e `last`. Il dialogo chiede la serie del bersaglio quando lo si sceglie. Niente codice prima del via.
+
+**Contratto.**
+- `FAPriceQueryItem`, due campi facoltativi, **uno o l'altro** (tutti e due: 422):
+  - `max_points` (1–10 000): il backend sceglie il passo sul riempimento dell'asset, come già;
+  - `resolution` (`daily` | `weekly` | `monthly`): il passo chiesto, per la voce che deve stare sui secchi di
+    un'altra (il bersaglio di un confronto). Generico, uno per asset, come chiede il developer.
+  - Con l'uno o l'altro: `signals` accettati; `include_events` e `annotation_requests` 422 (nessuno li chiede).
+- `FAPriceQueryResult`:
+  - `resolution` sempre presente: il passo di `prices` e delle serie dei segnali;
+  - `prices` ridotti = l'ultimo punto di ogni secchio, l'ultimo tagliato alla fine (quello che il grafico compatto
+    disegna oggi);
+  - `sample_bounds` = `{first, last}`, due `FAPricePoint` con la loro data, solo sulle voci settimanali o mensili:
+    `first` nel giorno F (base della percentuale, di «All», dei segnali), `last` alla fine (uguale all'ultimo di
+    `prices`);
+  - i segnali: ogni serie ridotta col profilo della sua uscita sui secchi del prezzo, alle date dei punti del prezzo.
+- Budget: una voce senza segnali conta i punti emessi (estremi compresi); con segnali, i giorni del riempimento,
+  come oggi.
+- Il confronto, nel frontend: il bersaglio si chiede con `resolution` = quella della scheda e `date_range.start` =
+  `first.date` della scheda. Così il suo `first` cade nel giorno da cui il confronto parte oggi (il più tardo fra i
+  due inizi). La percentuale del confronto prende la base dal `first` del bersaglio (`_baseValue`, una riga in
+  `AssetComparisonSignal`). Se la risposta della scheda del bersaglio serve già (stesso passo, e il bersaglio non
+  comincia prima della scheda), nessuna richiesta in più. Altrimenti, al primo caricamento, un secondo giro solo per
+  quelle voci.
+
+**Lotti, nell'ordine** (ognuno: rossi prima, codice, controlli leggeri; pesanti ed E2E in uno slot; checkpoint):
+1. **Z-29a — backend dei prezzi** (il parcheggiato v2, più gli estremi e `resolution` per voce). File:
+   `schemas/prices.py`, `price_query.py`, `price_sampling.py`, la docstring della rotta; `api sync`. Rossi: `prices`
+   senza F (salvo quando F chiude il suo secchio); `sample_bounds` solo sulle voci ridotte, `first` = il punto
+   giornaliero in F, `last` = quello alla fine = l'ultimo di `prices`; `resolution` chiesto (settimanale e mensile su
+   ogni intervallo, giornaliero = la risposta di oggi); i due campi insieme 422; il budget conta anche gli estremi;
+   PQS-Q14 resta. Revisori: MF (la semantica), X (il contratto). **1,25 giorni.**
+2. **Z-29r — la casa neutra della regola per secchio**: le funzioni di scelta di AI Export (primo, ultimo, minimo,
+   massimo col più vecchio a pari valore; la banda) spostate in `services/signals/aggregation.py` (proposta: il
+   profilo è dei segnali), importate da AI Export e dalla query dei prezzi. Rifattorizzazione pura: i test temporali
+   di AI Export restano verdi; la sonda mirata di AI Export, come vuole la sua skill. Revisori: chi possiede AI Export
+   e chi possiede i segnali. **0,5 giorni**; può andare in parallelo a Z-29a.
+3. **Z-29s — i segnali ridotti dal backend**: `signals` con `max_points` o `resolution`; dopo il calcolo sul
+   giornaliero, ogni serie ridotta col suo profilo (i tratti fra i buchi a parte, come il grafico; le bande solo coi
+   punti completi). Rossi: una tabella di casi comune `signalSamplingCases.json` (serie giornaliera, profilo, passo →
+   punti attesi), letta da pytest (il backend) e da Vitest (`downsampleRenderedSignal`); API: `max_points` con segnali
+   dà 200 con le serie ridotte (oggi 422); il budget di quelle voci conta i giorni. Revisori: MF, Y. **1,5 giorni.**
+4. **Z-29b — la lista** (file di X; io, con la sua revisione):
+   - `compactMaxPoints(w)` e la soglia spostati in `timeSeriesAggregation.ts` (da `LineChart.svelte`); la larghezza
+     misurata della scheda (`data-testid="asset-card-chart"`);
+   - la cache ridotta (chiave asset, inizio, fine, passo; il bus `{kind: 'prices'}`; `invalidate`/`remove`);
+   - `AssetCard`: disegno da `prices`, base da `first` (percentuale, segnali locali e del backend);
+   - «All» e l'avviso del sync da `first`;
+   - la ricarica per scheda (l'impronta comprende i bersagli dei confronti), tutte solo col globale;
+   - i bersagli dei confronti (col passo e l'inizio della scheda) e `_baseValue` (`AssetComparisonSignal`, file di Y:
+     una riga).
+   Rossi: Vitest (la tabella di densità, il piano delle voci, la cache, la base, i bersagli), E2E
+   `front-asset asset-list` (su «All» le voci portano `max_points`, le schede disegnano, il dettaglio resta
+   giornaliero, il bersaglio porta `resolution`). **2 giorni.**
+5. **Z-29d — il dialogo** (file di Y: lui, o io con la sua revisione): in modalità scheda, scegliendo il bersaglio di
+   un confronto, la pagina dà la serie allineata con un risolutore asincrono; Vitest e un caso E2E. **0,5 giorni.**
+6. **Doc** (docs-writer) delle pagine per sviluppatori: query dei prezzi, grafico compatto, riduzione dei segnali;
+   la riga del CHANGELOG al coordinatore. **0,5 giorni.**
+
+**Costo totale: circa 6,25 giorni.**
+
+**Effetti visibili da confermare** (decisioni di prodotto, consiglio fra parentesi):
+- al primo caricamento, una linea di confronto il cui bersaglio va chiesto di nuovo compare un attimo dopo la scheda
+  (accettare);
+- il badge «📈N» del pannello dei segnali conta i punti ridotti (accettare);
+- i due resti della riduzione dei segnali: un secchio a cavallo di un buco o di una regione con stile mostra un punto
+  invece di due (accettare).
+
+**Chi tocca cosa.**
+- Io: Z-29a, Z-29s, Z-29r se assegnato, Z-29b, la doc.
+- X rivede la lista, `AssetCard` e il contratto.
+- Y: `AssetComparisonSignal` (una riga) e Z-29d.
+- MF rivede la semantica.
+- Chi possiede AI Export rivede lo spostamento.
+- La casa neutra: `services/signals/aggregation.py`, oppure `services/temporal/`; decide il coordinatore.
