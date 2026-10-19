@@ -20,7 +20,7 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
-    import {assetTypeBadgeClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {assetTypeBadgeClass, assetTypeBadgeDotClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
@@ -187,9 +187,13 @@
             </div>
             <div class="flex items-center gap-1.5 shrink-0">
                 {#if asset.asset_type}
+                    {@const typeDot = assetTypeBadgeDotClass(asset.asset_type)}
                     <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded {typeBadgeClass(asset.asset_type)}">
                         <img src={getAssetTypeIconUrl(asset.asset_type)} alt="" class="w-3.5 h-3.5 object-contain" />
                         {$t(`assets.types.${asset.asset_type}`) || asset.asset_type}
+                        {#if typeDot}
+                            <span class="inline-block w-1.5 h-1.5 shrink-0 rounded-full {typeDot}" aria-hidden="true" data-testid="asset-type-dot"></span>
+                        {/if}
                     </span>
                 {/if}
                 {#if !asset.provider_code}

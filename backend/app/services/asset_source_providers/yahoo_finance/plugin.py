@@ -197,11 +197,10 @@ def _acquire_history_data(
             "Failed to fetch yfinance currency metadata; falling back to USD",
             identifier=identifier,
         )
-    # Z-33: the exchange's timezone, the one the dates were stamped in: the index's own, else Yahoo's metadata
+    # Z-33: the exchange's timezone, the one the dates were stamped in: the index's own when it names a known zone (a
+    # fixed offset names none), else Yahoo's metadata
     index_timezone = getattr(getattr(history, "index", None), "tz", None)
-    if index_timezone is not None:
-        reported_timezone = str(index_timezone)
-    zone = exchange_zone(reported_timezone)
+    zone = (exchange_zone(str(index_timezone)) if index_timezone is not None else None) or exchange_zone(reported_timezone)
 
     try:
         dividends = ticker.dividends

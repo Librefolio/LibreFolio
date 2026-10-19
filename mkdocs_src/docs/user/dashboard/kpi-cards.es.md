@@ -92,7 +92,7 @@ Hay una fila 📈 para cada divisa, incluido el euro, y una fila 💱 para cada 
 
 **Cómo interpretarlo**
 
-- **Timing favorable** (verde): tendiste a depositar antes de que subieran los precios. **Timing desfavorable** (rojo): tendiste a depositar en los picos. Cerca de cero se lee **Timing neutro**, y cuanto más fuerte es el color, mayor es el efecto.
+- **Timing favorable** (verde): tendiste a depositar antes de que subieran los precios. **Timing desfavorable** (rojo): tendiste a depositar en los picos. Cerca de cero se lee **Timing neutro**, ni verde ni rojo.
 - **El TWRR juzga la estrategia, el MWRR tu resultado personal** — como para un gestor de fondos y un inversor.
 - **Las cuatro filas cubren todo el periodo**; el porcentaje pequeño cubre solo hoy.
 - **`—` significa sin valor**: una rentabilidad que LibreFolio no puede calcular para el periodo muestra `—` en lugar de un número. El efecto timing necesita tanto el TWRR como el MWRR: cuando falta uno, muestra un `—` gris, sin etiqueta de timing.

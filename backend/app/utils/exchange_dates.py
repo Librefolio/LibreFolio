@@ -11,6 +11,8 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import structlog
+
 #: The value of ``AssetProviderAssignment.exchange_timezone`` migration 011 writes on the assignments whose rows an
 #: older version dated by UTC: not a timezone, the mark that their next fetch re-dates them once.
 LEGACY_UTC_DATES = "legacy-utc"
@@ -18,13 +20,31 @@ LEGACY_UTC_DATES = "legacy-utc"
 LEGACY_UTC_PROVIDER = "yfinance"
 
 
+logger = structlog.get_logger(__name__)
+
+#: The unknown Area/Location names already logged by ``exchange_zone``, once per name and process
+_UNKNOWN_ZONES_LOGGED: set[str] = set()
+
+
 def exchange_zone(name: str | None) -> ZoneInfo | None:
-    """The IANA timezone ``name`` as a ``ZoneInfo``, or None when it is empty, the legacy mark or no known zone."""
+    """The IANA timezone ``name`` as a ``ZoneInfo``, or None when it is empty, the legacy mark or no known zone.
+
+    An Area/Location name (``Europe/Rome``) the server's timezone database does not know is logged once per name and
+    process: on a host without one (Windows without the ``tzdata`` package, a minimal container) a Yahoo assignment
+    still marked by migration 011 writes nothing until the name resolves (backlog Z-36). A fixed offset or another
+    name without an area is not logged: no timezone database has it.
+    """
     if not name or name.strip() == LEGACY_UTC_DATES:
         return None
+    key = name.strip()
     try:
-        return ZoneInfo(name.strip())
-    except (ZoneInfoNotFoundError, ValueError):
+        return ZoneInfo(key)
+    except ZoneInfoNotFoundError:
+        if "/" in key and key not in _UNKNOWN_ZONES_LOGGED:
+            _UNKNOWN_ZONES_LOGGED.add(key)
+            logger.warning("Exchange timezone unknown to this server's timezone database: the stored dates awaiting their one-time check stay as they are until it resolves", timezone=key[:64])
+        return None
+    except ValueError:
         return None
 
 

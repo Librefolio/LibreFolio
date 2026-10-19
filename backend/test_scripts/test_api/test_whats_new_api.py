@@ -41,6 +41,14 @@ after a write, «nothing else» is the same comparison with ``users.last_seen_ve
 Red until C-54, each test on its own, at its first assertion: today the answers carry no ``user.whats_new`` (WN-API-01
 to 04) and ``POST /auth/whats-new/seen`` is a 404 (WN-API-05 to 07). WN-API-04 — the setup answer — and WN-API-07 — a
 client's version never taken — extend the brief's list with what the contract names: drop them if the coordinator does.
+
+Reviewer E's note 1 on C-54 — ``mark_seen`` monotonic (the coordinator's contract, 17/10; the service's side, with the
+window of the write lock, is WN-MONO-01 to 06 of the services file) — adds section 3 over HTTP: ``POST
+/auth/whats-new/seen`` by an account that saw a release newer than the running one is 204 and writes nothing — its
+``last_seen_version`` kept, every row as it was — (WNAPI-MONO-01, NEW, red until the cure: today the row is lowered to
+the running release); ``GET /auth/me`` then still answers null (WNAPI-MONO-02, a GUARD, green today and after); and
+after the next upgrade the release it saw is not shown again (WNAPI-MONO-03, NEW, red until the cure — the harm of
+WNAPI-MONO-01 as the user meets it, an extension of the brief's list: drop it if the coordinator does).
 """
 
 from __future__ import annotations
@@ -88,6 +96,10 @@ RUNNING_VERSION = "v1.3.0-7-gabc1234"
 RUNNING_RELEASE = "1.3.0"
 #: A release before the running one: not the lane's own 1.2.1, so an unpatched version shows in a failure.
 OLDER_RELEASE = "1.2.0"
+#: A release after the running one — an account that saw it before a downgrade, or on a newer worker during a rolling
+#: update —, and the version the instance runs once it is upgraded to it.
+NEWER_RELEASE = "1.4.0"
+NEWER_VERSION = "v1.4.0"
 #: The last_seen_version of an account behind the running release: NULL — from before C-54 — or an older release.
 BEHIND = [pytest.param(None, id="null-from-before-c54"), pytest.param(OLDER_RELEASE, id="an-older-release")]
 #: What a client might send as the version it saw: never taken.
@@ -474,3 +486,66 @@ async def test_marking_seen_never_takes_a_version_from_the_client(private: _Priv
     assert response.status_code == 204, f"red until C-54: POST /auth/whats-new/seen, signed in, must be 204 whatever the client sends: got {response.status_code} {response.text}"
     stored = _last_seen(private.db_path)[member.user_id]
     assert stored == RUNNING_RELEASE, f"the server writes its own running release {RUNNING_RELEASE!r}, never a version the client sends ({FORGED_VERSION!r}): the row holds {stored!r}"
+
+
+# =============================================================================
+# 3. NEVER BACKWARDS — E's note 1 on C-54, over HTTP
+# =============================================================================
+
+
+def _whats_new_in(response: httpx.Response, request: str) -> Any:
+    """``user.whats_new`` of a 200 that carries the account."""
+    user = (response.json().get("user") or {}) if response.status_code == 200 else {}
+    assert "whats_new" in user, f"setup: {request} must answer 200 with the account and its whats_new: {response.status_code} {response.text}"
+    return user["whats_new"]
+
+
+# NEW — red until E's note 1 on C-54
+@pytest.mark.asyncio
+async def test_marking_seen_on_an_older_release_writes_nothing(private: _Private) -> None:
+    """WNAPI-MONO-01 — E's note 1 on C-54, NEW, red until the cure (today the route lowers the row to the running ``1.3.0``): an account written as a row with ``last_seen_version`` ``1.4.0`` — it saw 1.4.0 before a downgrade, or on a newer worker during a rolling update —, signed in — its login answered ``user.whats_new`` null —, and another account with NULL. ``POST /auth/whats-new/seen`` with the account's cookie, served by a worker running ``v1.3.0-7-gabc1234``, is 204 and writes nothing: the account keeps ``1.4.0``, the last release it saw — every row of every table as it was, ``updated_at`` included."""
+    print_section(f"WNAPI-MONO-01: POST /auth/whats-new/seen by an account that saw {NEWER_RELEASE}, running {RUNNING_RELEASE}")
+    member = await _signed_in(private, last_seen_version=NEWER_RELEASE)
+    await _add_user(private.engine, email=_address("bystander"), last_seen_version=None)
+    _assert_whats_new(member.login, None, f"precondition: the login of an account that saw {NEWER_RELEASE!r}")
+    before = _rows(private.db_path)
+
+    response = await _request(private, "POST", SEEN, cookie=member.cookie)
+
+    assert response.status_code == 204, f"POST /auth/whats-new/seen, signed in, must be 204: got {response.status_code} {response.text}"
+    stored = _last_seen(private.db_path)[member.user_id]
+    assert stored == NEWER_RELEASE, f"red until E's note 1 on C-54: the account saw {NEWER_RELEASE!r}; a worker running {RUNNING_RELEASE!r} must never lower it — after the next upgrade the account would see again what it saw —: the row holds {stored!r}"
+    assert _changed(before, _rows(private.db_path)) == [], f"nothing to mark: every row of every table as it was, updated_at included: {_changed(before, _rows(private.db_path))}"
+    print_success(f"#{member.user_id}: 204, {NEWER_RELEASE!r} kept, nothing written")
+
+
+# GUARD — green today, must stay green
+@pytest.mark.asyncio
+async def test_after_marking_seen_on_an_older_release_nothing_is_new(private: _Private) -> None:
+    """WNAPI-MONO-02 — E's note 1 on C-54, GUARD (green today and after the cure): an account written as a row with ``last_seen_version`` ``1.4.0``, signed in. After its ``POST /auth/whats-new/seen`` — 204 — on a worker running ``v1.3.0-7-gabc1234``, ``GET /auth/me`` answers ``user.whats_new`` null: the modal does not come back there. Today null because the row now holds the running release; after the cure because it keeps ``1.4.0``. Barrier: an account with NULL, signed in beside it, has ``{"since": null, "release": "1.3.0"}`` at the same moment — the null is the account's own, not the instance's."""
+    member = await _signed_in(private, last_seen_version=NEWER_RELEASE)
+    witness = await _signed_in(private, last_seen_version=None)
+
+    response = await _request(private, "POST", SEEN, cookie=member.cookie)
+
+    assert response.status_code == 204, f"POST /auth/whats-new/seen, signed in, must be 204: got {response.status_code} {response.text}"
+    _assert_whats_new(await _me(private, member.cookie), None, f"GET /auth/me after POST /auth/whats-new/seen of an account that saw {NEWER_RELEASE!r}")
+    _assert_whats_new(await _me(private, witness.cookie), _pending(None), "barrier: GET /auth/me of an account with NULL, at the same moment")
+
+
+# NEW — red until E's note 1 on C-54 (an extension of the brief's list: drop it if the coordinator does)
+@pytest.mark.asyncio
+async def test_after_the_next_upgrade_the_release_seen_is_not_shown_again(private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+    """WNAPI-MONO-03 — E's note 1 on C-54, NEW, red until the cure (today ``{"since": "1.3.0", "release": "1.4.0"}``: the 1.4.0 chapter again); the harm of WNAPI-MONO-01 as the user meets it — an extension of the brief's list: drop it if the coordinator does. An account written as a row with ``last_seen_version`` ``1.4.0``, signed in, closes the modal on a worker running ``v1.3.0-7-gabc1234`` — ``POST /auth/whats-new/seen``, 204 —; then the instance runs ``v1.4.0``, the rolling update done or the upgrade back: ``GET /auth/me`` answers ``user.whats_new`` null — it saw 1.4.0 already. Barrier: an account that saw ``1.3.0``, signed in beside it, has ``{"since": "1.3.0", "release": "1.4.0"}`` at the same moment — the upgrade is seen."""
+    member = await _signed_in(private, last_seen_version=NEWER_RELEASE)
+    witness = await _signed_in(private, last_seen_version=RUNNING_RELEASE)
+    closed = await _request(private, "POST", SEEN, cookie=member.cookie)
+    assert closed.status_code == 204, f"setup: POST /auth/whats-new/seen, signed in, must be 204: got {closed.status_code} {closed.text}"
+
+    monkeypatch.setattr(app_config, "get_version", lambda: NEWER_VERSION)
+
+    upgrade = {"since": RUNNING_RELEASE, "release": NEWER_RELEASE}
+    seen = _whats_new_in(await _me(private, witness.cookie), "barrier: GET /auth/me of an account that saw 1.3.0")
+    assert seen == upgrade, f"barrier: running {NEWER_VERSION!r}, an account that saw {RUNNING_RELEASE!r} must have {upgrade}: GET /auth/me answered whats_new {seen!r}"
+    again = _whats_new_in(await _me(private, member.cookie), "GET /auth/me after the upgrade")
+    assert again is None, f"red until E's note 1 on C-54: the account saw {NEWER_RELEASE!r} before it closed the modal on a worker running {RUNNING_RELEASE!r}; running {NEWER_VERSION!r} now, GET /auth/me must answer whats_new null, nothing it has not seen: it answered {again!r}"
