@@ -167,8 +167,6 @@ test.describe('FX Data Editor', () => {
         const RATES_PATH = '/api/v1/fx/currencies/rate';
         /** Axios's own sentence for any answer outside 2xx: English, and none of the server's facts in it. */
         const AXIOS_GENERIC = 'Request failed with status code';
-        /** The first day a rate may carry (`stored_date_bounds()`); the last, in the answers below, is tomorrow. */
-        const MIN_DATE = '1900-01-01';
 
         /** One rate as the editor sends it. */
         type SentRate = {base: string; quote: string; date: string; rate: number | string};
@@ -242,30 +240,35 @@ test.describe('FX Data Editor', () => {
             await expect.soft(told, `${what} says what the server said, not Axios's sentence`).not.toContainText(AXIOS_GENERIC, {timeout: 2_000});
         }
 
-        test("a rate dated after the last storable day is told refused with that day and the bounds, not with Axios's sentence", async ({page}) => {
+        test("a rate dated after the last storable day is told refused with that day and the last storable day, not with Axios's sentence", async ({page}) => {
             // Pins: a 422 `date_out_of_range` is told, by the error toast and by the banner, with
-            // the day refused and the bounds the server gave, in ISO; the editor stays open on the
-            // rate, ready to be corrected.
-            // Red on HEAD: the toast reads «… Request failed with status code 422», and the banner,
-            // which holds the same sentence, publishes no `fx-editor-error`.
+            // the day refused and the last storable day the server gave (`params.max`), in ISO;
+            // the editor stays open on the rate, ready to be corrected.
+            // Red on HEAD (X-R46): the toast reads «… Request failed with status code 422», and the
+            // banner, which holds the same sentence, publishes no `fx-editor-error`.
+            // Red until N83's revision (19/10) reaches `writeRefusal.ts`: it reads no
+            // `date_out_of_range` detail without `params.min`, so the toast and the banner fall back
+            // to the server's message, which names the last storable day and not the day refused.
             const refused = daysAgoIso(-30);
             const max = daysAgoIso(-1);
             const panel = await editorWithImported(page, [[refused, '1.0823']]);
-            // The server's answer to a day after tomorrow (X-R65): the whole save refused. Its
-            // message says the bounds, never the day — that is in `items`.
+            // The server's answer to a day after tomorrow (X-R65): the whole save refused. A stored
+            // rate has no first day since N83's revision, so `params` holds the last storable day
+            // alone, tomorrow, and the day refused lies after it. The message says that last day,
+            // never the day refused — that is in `items`.
             const saves = await answerSaves(page, (sent) => ({
                 status: 422,
-                json: {detail: {code: 'date_out_of_range', message: `Dates must lie between ${MIN_DATE} and ${max}: 1 does not`, params: {min: MIN_DATE, max}, items: [{index: indexOf(sent, refused), date: refused}], count: 1}},
+                json: {detail: {code: 'date_out_of_range', message: `Dates must lie on or before ${max}: 1 does not`, params: {max}, items: [{index: indexOf(sent, refused), date: refused}], count: 1}},
             }));
 
             expect(await save(page, panel), 'the save reached the refusal').toBe(422);
             expect(sentDays(saves), 'one save, of the imported rate alone').toEqual([[refused]]);
 
-            await expectTold(page.getByTestId('toast-error'), 'the error toast', [refused, MIN_DATE]);
+            await expectTold(page.getByTestId('toast-error'), 'the error toast', [refused, max]);
             // Nothing is lost: the editor stays open on the imported rate, ready to save again.
             await expect(panel).toBeVisible();
             await expect(panel.getByTestId('fx-editor-save-btn')).toBeEnabled();
-            await expectTold(panel.getByTestId('fx-editor-error'), 'the banner', [refused, MIN_DATE, max]);
+            await expectTold(panel.getByTestId('fx-editor-error'), 'the banner', [refused, max]);
         });
 
         test('a save the server takes in part is told as a warning naming the refused day, not as a success', async ({page}) => {
