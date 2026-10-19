@@ -45,26 +45,35 @@ RC-B02…B04, RC-A01…A06, RC-F01…F05, RC-S01, RC-S04. Green then too — beh
 RC-S03. Written green, with no red phase: RC-001 (the lift reaches X-R55's consumers) and RC-F06 (the signal ranges
 echoed, a review fix).
 
-X-R65 (night decision N83; coordinator decisions D1–D3, 17/10) bounds the date a price or a rate is stored on — J's
-SEC8-1b: one price dated 0001-01-01 makes a backward fill or a risk replay walk about 740 000 days for its asset (RC-W):
+X-R65 (night decision N83; coordinator decisions D1–D3, 17/10) bounded the date a price or a rate is stored on to
+[1900-01-01, the ceiling] — J's SEC8-1b: one price dated 0001-01-01 made a backward fill or a risk replay walk about
+740 000 days for its asset. N83's revision (developer, 19/10: «se voglio leggere e salvare più indietro devo poterlo
+fare») takes the 1900 floor off every write of prices and rates and keeps the ceiling alone; the walks stay bounded
+where they read (the 100-year span of point 1, R13-SEC8's replay floors, Z-30's full-history load), and those read
+cuts do not change. The contract pinned here (RC-W):
 
-6. ``date_range_limits.stored_date_bounds()`` is ``(EARLIEST_RANGE_START, latest_range_end())``: 1900-01-01 and the
-   ceiling of point 1, both included, the ceiling read at the call through the name imported into ``date_range_limits``
-   — the name ``frozen_stored_ceiling`` replaces. ``DateOutOfRangeError`` (an ``Exception``, not a ``ValueError``)
-   carries ``items``, ``count``, ``earliest`` and ``latest``; ``date_out_of_range_detail(items, count, earliest,
-   latest)`` is the 422's detail: ``{"code": "date_out_of_range", "message", "params": {"min", "max"} in ISO,
-   "items": items[:10], "count"}``, the message ending with the count and a verb that agrees with it, ``": 1 does
-   not"``, ``": 2 do not"`` (RC-W08), its wording otherwise free.
+6. ``date_range_limits.latest_stored_date()`` is ``latest_range_end()``, the ceiling of point 1, included, read at the
+   call through the name imported into ``date_range_limits`` — the name ``frozen_stored_ceiling`` replaces;
+   ``stored_date_bounds`` is gone, with the floor it handed out. ``DateOutOfRangeError`` (an ``Exception``, not a
+   ``ValueError``) carries ``items``, ``count`` and ``latest``, and no ``earliest``; ``date_out_of_range_detail(items,
+   count, latest)`` is the 422's detail: ``{"code": "date_out_of_range", "message", "params": {"max"} in ISO, "items":
+   items[:10], "count"}`` — no ``min`` —, the message naming the ceiling and not 1900-01-01, and ending with the count
+   and a verb that agrees with it, ``": 1 does not"``, ``": 2 do not"`` (RC-W08), its wording otherwise free.
 7. ``POST /assets/prices`` (the handler, called directly here on a session that reads nothing) answers that 422 to
-   ``bulk_upsert_prices``'s ``DateOutOfRangeError``, raised before any statement; the asset side of it (items per
-   asset, nothing written, a provider's points dropped) is services asset-source-guards'. ``POST /fx/currencies/rate``
-   checks every item before its loop: one date outside answers the 422, ``items`` ``{"index", "date"}`` in input order,
-   and no rate is written, not even a valid one (``upsert_rates_bulk`` replaced by an in-process writer that records).
+   ``bulk_upsert_prices``'s ``DateOutOfRangeError``, raised before any statement, for a date after the ceiling; a date
+   before 1900 is no refusal (RC-W10). The asset side of it (items per asset, nothing written, a provider's points after
+   the ceiling dropped and before 1900 stored) is services asset-source-guards'. ``POST /fx/currencies/rate`` checks
+   every item before its loop: one date after the ceiling answers the 422, ``items`` ``{"index", "date"}`` in input
+   order, and no rate is written, not even a valid one (``upsert_rates_bulk`` replaced by an in-process writer that
+   records); a rate before 1900 is handed to the writer like any other (RC-W09).
 
 Red before X-R65 (HEAD f1786a883), each for the reason its docstring gives ("Red before X-R65"): RC-W01…W06. Green then
 too — behaviour the change has to keep: RC-W07. RC-000 now accepts the name ``latest_range_end`` in
 ``date_range_limits`` when it is ``datetime_utils``' own (X-R65 imports it there): green before X-R65 and after.
 RC-W08 (X's review of X-R65): red before the Z-30 lot's plural fix, for one date only — the message read «…: 1 do not».
+Red before N83's revision (HEAD f5135c9a1), each for the reason its docstring gives ("Red before N83's revision"):
+RC-W01…W05, RC-W08, RC-W09, RC-W10. Green then too, and guards of the cure: RC-W06 (its dates now after the ceiling)
+and RC-W07.
 """
 
 from __future__ import annotations
@@ -207,7 +216,7 @@ def frozen_ceiling(monkeypatch: pytest.MonkeyPatch) -> date:
 def test_rc000_one_ceiling_helper_and_the_span():
     """RC-000: the price query and the conversions read R13-SEC7-1's ``datetime_utils.latest_range_end`` itself, imported
     by name, and ``date_range_limits`` defines no ceiling of its own (since X-R65 it imports that same helper by name,
-    for ``stored_date_bounds``: RC-W01); it keeps the 100-year span and its floor, which never goes before ``date.min``.
+    for ``latest_stored_date``: RC-W01); it keeps the 100-year span and its floor, which never goes before ``date.min``.
 
     Two helpers for one day could drift apart (one in UTC, one by the server's calendar), and a name imported by value
     is the one a test or ``lift_range_bound`` replaces: a consumer reading the ceiling some other way escapes both.
@@ -994,16 +1003,16 @@ async def test_rcs04_extreme_range_guard(fetch_step):
 
 
 # =============================================================================
-# RC-W — X-R65: THE WINDOW A STORED DATE MUST FALL IN
+# RC-W — X-R65, N83 REVISED: THE LAST DAY A STORED DATE MAY CARRY, AND NO FIRST
 # =============================================================================
 
-STORED_FLOOR = date(1900, 1, 1)  # EARLIEST_RANGE_START: the contract's floor, written here and not read from the code
+OLD_FLOOR = date(1900, 1, 1)  # EARLIEST_RANGE_START: the floor X-R65 gave a stored date and N83's revision took away
 DAY_AFTER_CEILING = CEILING + timedelta(days=1)
 
 
 @pytest.fixture
 def frozen_stored_ceiling(monkeypatch: pytest.MonkeyPatch) -> date:
-    """``latest_range_end()`` answers ``CEILING`` where ``stored_date_bounds`` reads it: the name in ``date_range_limits``.
+    """``latest_range_end()`` answers ``CEILING`` where ``latest_stored_date`` reads it: the name in ``date_range_limits``.
 
     Set even where the name is missing (``raising=False``): on code without X-R65 the handlers then run as they always
     did, and the case fails on what they wrote, not on a missing attribute. Where the ceiling is read is RC-W01's
@@ -1014,7 +1023,7 @@ def frozen_stored_ceiling(monkeypatch: pytest.MonkeyPatch) -> date:
 
 
 def _contract_part(name: str) -> Any:
-    """A name X-R65 adds to ``date_range_limits``; the test fails, naming it, while it is missing."""
+    """A name X-R65 (or N83's revision) gives ``date_range_limits``; the test fails, naming it, while it is missing."""
     part = getattr(date_range_limits, name, None)
     assert part is not None, f"date_range_limits has no {name}"
     return part
@@ -1027,6 +1036,14 @@ async def _refusal(make_call: Callable[[], Awaitable[Any]], also: Callable[[], s
     except HTTPException as refused:
         return refused
     pytest.fail(f"no refusal: the handler answered {repr(answer)[:300]}{also()}")
+
+
+async def _answered(make_call: Callable[[], Awaitable[Any]], also: Callable[[], str]) -> Any:
+    """What a handler answers; when it raises an ``HTTPException`` instead, the test fails saying which, and ``also``."""
+    try:
+        return await make_call()
+    except HTTPException as refused:
+        pytest.fail(f"refused with {refused.status_code}: {refused.detail!r}{also()}")
 
 
 def _out_of_range_detail(refused: HTTPException) -> dict:
@@ -1098,49 +1115,57 @@ async def _upsert_rates(monkeypatch: pytest.MonkeyPatch, writer: _RateWriter, *r
     return await currencies.upsert_rates_endpoint(rates=list(rates), session=None, _current_user=None)
 
 
-def test_rcw01_stored_date_bounds_read_the_one_ceiling_at_the_call(monkeypatch):
-    """RC-W01: ``stored_date_bounds()`` is the tuple ``(1900-01-01, latest_range_end())``, the ceiling read at each call
-    through ``latest_range_end`` imported into ``date_range_limits`` by name: R13-SEC7-1's helper itself, and the name a
-    test freezes (``frozen_stored_ceiling`` here, and in services asset-source-guards).
+def test_rcw01_latest_stored_date_reads_the_one_ceiling_at_the_call(monkeypatch):
+    """RC-W01: ``latest_stored_date()`` is ``latest_range_end()``, read at each call through ``latest_range_end`` imported
+    into ``date_range_limits`` by name: R13-SEC7-1's helper itself, and the name a test freezes (``frozen_stored_ceiling``
+    here, and in services asset-source-guards). ``stored_date_bounds`` is gone: a stored date has one bound since N83's
+    revision (19/10), the ceiling, and no helper is left to hand out a floor.
 
-    Replaced there by one day, then by another, the upper bound follows each: read at the call, never kept from the
-    import or from an earlier call.
-    Red before X-R65: ``date_range_limits`` had no ``stored_date_bounds``.
+    Replaced there by one day, then by another, the answer follows each: read at the call, never kept from the import or
+    from an earlier call.
+    Red before X-R65: ``date_range_limits`` had neither name.
+    Red before N83's revision: ``date_range_limits`` has no ``latest_stored_date`` (its ``stored_date_bounds()`` answers
+    ``(1900-01-01, latest_range_end())``).
     """
-    bounds = _contract_part("stored_date_bounds")
+    latest = _contract_part("latest_stored_date")
     assert getattr(date_range_limits, "latest_range_end", None) is datetime_utils.latest_range_end, "date_range_limits must import datetime_utils.latest_range_end by name"
     for ceiling in (CEILING, CEILING + timedelta(days=40)):
         monkeypatch.setattr(date_range_limits, "latest_range_end", lambda ceiling=ceiling: ceiling)
-        answer = bounds()
-        assert isinstance(answer, tuple) and answer == (STORED_FLOOR, ceiling), f"stored_date_bounds() answered {answer!r} with the ceiling at {ceiling}"
+        answer = latest()
+        assert answer == ceiling, f"latest_stored_date() answered {answer!r} with the ceiling at {ceiling}"
+    assert not hasattr(date_range_limits, "stored_date_bounds"), "date_range_limits still has stored_date_bounds, the floor N83's revision took away"
 
 
 def test_rcw02_date_out_of_range_detail_is_the_422s_detail():
-    """RC-W02: ``date_out_of_range_detail(items, count, earliest, latest)`` is exactly ``{"code": "date_out_of_range",
-    "message": a non-empty text, "params": {"min": earliest, "max": latest} in ISO, "items": items[:10], "count":
+    """RC-W02: ``date_out_of_range_detail(items, count, latest)`` is exactly ``{"code": "date_out_of_range", "message": a
+    non-empty text naming ``latest`` and not 1900-01-01, "params": {"max": latest} in ISO, "items": items[:10], "count":
     count}``: the first ten items as given and in their order, whatever their shape (an asset's dates, a rate's index);
-    ``count`` as given, the request's total, larger than what the items show.
+    ``count`` as given, the request's total, larger than what the items show. No ``min``: a stored date has no floor since
+    N83's revision (19/10).
 
     Red before X-R65: ``date_range_limits`` had no ``date_out_of_range_detail``.
+    Red before N83's revision: ``TypeError``, the function still asks for ``earliest`` (its detail ``params`` ``{"min",
+    "max"}``, its message «Dates must lie between 1900-01-01 and …»).
     """
     detail_of = _contract_part("date_out_of_range_detail")
-    by_asset = [{"asset_id": 100 + n, "dates": [(STORED_FLOOR - timedelta(days=n + 1)).isoformat()]} for n in range(12)]
-    by_index = [{"index": 1, "date": "1899-12-31"}, {"index": 4, "date": DAY_AFTER_CEILING.isoformat()}]
+    by_asset = [{"asset_id": 100 + n, "dates": [(DAY_AFTER_CEILING + timedelta(days=n)).isoformat()]} for n in range(12)]
+    by_index = [{"index": 1, "date": DAY_AFTER_CEILING.isoformat()}, {"index": 4, "date": LAST_DAY.isoformat()}]
     for items, count in ((by_asset, 17), (by_index, 2)):
-        detail = detail_of(items=items, count=count, earliest=STORED_FLOOR, latest=CEILING)
+        detail = detail_of(items=items, count=count, latest=CEILING)
         assert isinstance(detail, dict) and set(detail) == {"code", "message", "params", "items", "count"}, detail
         assert detail["code"] == "date_out_of_range"
         assert isinstance(detail["message"], str) and detail["message"].strip(), detail
-        assert detail["params"] == {"min": "1900-01-01", "max": CEILING.isoformat()}
+        assert CEILING.isoformat() in detail["message"] and OLD_FLOOR.isoformat() not in detail["message"], f"the message must name the ceiling, and no floor: {detail['message']!r}"
+        assert detail["params"] == {"max": CEILING.isoformat()}
         assert detail["items"] == items[:10]
         assert detail["count"] == count
 
 
 _W08_ENDINGS = [
     # (the items, as RC-W02 builds them; the count; how the message ends)
-    pytest.param([{"index": 1, "date": "1899-12-31"}], 1, ": 1 does not", id="one-date"),
-    pytest.param([{"index": 1, "date": "1899-12-31"}, {"index": 4, "date": DAY_AFTER_CEILING.isoformat()}], 2, ": 2 do not", id="two-dates"),
-    pytest.param([{"asset_id": 100 + n, "dates": [(STORED_FLOOR - timedelta(days=n + 1)).isoformat()]} for n in range(12)], 17, ": 17 do not", id="seventeen-dates"),
+    pytest.param([{"index": 1, "date": DAY_AFTER_CEILING.isoformat()}], 1, ": 1 does not", id="one-date"),
+    pytest.param([{"index": 1, "date": DAY_AFTER_CEILING.isoformat()}, {"index": 4, "date": LAST_DAY.isoformat()}], 2, ": 2 do not", id="two-dates"),
+    pytest.param([{"asset_id": 100 + n, "dates": [(DAY_AFTER_CEILING + timedelta(days=n)).isoformat()]} for n in range(12)], 17, ": 17 do not", id="seventeen-dates"),
 ]
 
 
@@ -1152,84 +1177,96 @@ def test_rcw08_the_message_agrees_with_its_count(items, count, ending):
     leaves the wording free.
 
     Red before the Z-30 lot's plural fix, for one date: the message read «…: 1 do not».
+    Red before N83's revision: ``TypeError``, the function still asks for ``earliest``.
     """
     detail_of = _contract_part("date_out_of_range_detail")
 
-    message = detail_of(items=items, count=count, earliest=STORED_FLOOR, latest=CEILING)["message"]
+    message = detail_of(items=items, count=count, latest=CEILING)["message"]
 
     assert message.endswith(ending), f"the message for {count} date(s) does not end with {ending!r}: {message!r}"
 
 
 def test_rcw03_date_out_of_range_error_carries_its_numbers_and_is_no_value_error():
-    """RC-W03: ``DateOutOfRangeError`` is an ``Exception`` built with ``items``, ``count``, ``earliest`` and ``latest``
-    and carrying them — and not a ``ValueError``: ``POST /assets/prices`` answers 400 to a ``ValueError`` (a currency
-    mismatch, too many digits), and this refusal is a 422 of its own.
+    """RC-W03: ``DateOutOfRangeError`` is an ``Exception`` built with ``items``, ``count`` and ``latest`` and carrying
+    them, with no ``earliest`` (a stored date has no floor since N83's revision, 19/10) — and not a ``ValueError``:
+    ``POST /assets/prices`` answers 400 to a ``ValueError`` (a currency mismatch, too many digits), and this refusal is a
+    422 of its own.
 
     Red before X-R65: ``date_range_limits`` had no ``DateOutOfRangeError``.
+    Red before N83's revision: ``TypeError``, its ``__init__`` still asks for ``earliest``.
     """
     error_class = _contract_part("DateOutOfRangeError")
     assert isinstance(error_class, type) and issubclass(error_class, Exception), f"DateOutOfRangeError: {error_class!r}"
     assert not issubclass(error_class, ValueError), "DateOutOfRangeError must not be a ValueError: the price route answers 400 to those"
-    items = [{"asset_id": 7, "dates": ["1899-12-31"]}]
-    error = error_class(items=items, count=3, earliest=STORED_FLOOR, latest=CEILING)
-    assert (error.items, error.count, error.earliest, error.latest) == (items, 3, STORED_FLOOR, CEILING)
+    items = [{"asset_id": 7, "dates": [DAY_AFTER_CEILING.isoformat()]}]
+    error = error_class(items=items, count=3, latest=CEILING)
+    assert (error.items, error.count, error.latest) == (items, 3, CEILING)
+    assert not hasattr(error, "earliest"), f"DateOutOfRangeError still carries earliest={error.earliest!r}, the floor N83's revision took away"
 
 
 @pytest.mark.asyncio
 async def test_rcw04_price_route_answers_422_before_any_statement(frozen_stored_ceiling):
     """RC-W04: ``POST /assets/prices`` — the handler, called directly on a session that reads nothing — with eleven
-    assets holding a date outside [1900-01-01, ``CEILING``] (ten before the floor, the last after the ceiling, each beside
-    a valid day) and a clean asset among them answers 422 ``date_out_of_range``: ``params`` the bounds, ``items`` the
-    first ten offending assets in input order with their dates, ``count`` 11 — and the session never ran a statement.
+    assets each holding a date after ``CEILING`` (9999-12-31 the last), beside a valid day, and among them an asset whose
+    other days lie before 1900 (0001-01-01 and 1899-12-31, around a valid day) answers 422 ``date_out_of_range``:
+    ``params`` ``{"max": CEILING}``, ``items`` the first ten assets after the ceiling in input order with their dates,
+    ``count`` 11 — the days before 1900 in neither — and the session never ran a statement.
 
     Red before X-R65: 200 — the twelve assets read one by one (none exists on the stand-in), nothing refused.
+    Red before N83's revision: ``params`` is ``{"min": "1900-01-01", "max": CEILING}``; and the asset before 1900 is
+    refused too, fourth in ``items``, its two days in ``count``.
     """
     session = _ReadNothingSession()
-    offending = [(101 + n, STORED_FLOOR - timedelta(days=n + 1)) for n in range(10)] + [(111, DAY_AFTER_CEILING)]
+    offending = [(101 + n, DAY_AFTER_CEILING + timedelta(days=n)) for n in range(10)] + [(111, LAST_DAY)]
     assets = [FAUpsert(asset_id=asset_id, prices=[_price_point(FROZEN_TODAY), _price_point(day)]) for asset_id, day in offending]
-    assets.insert(3, FAUpsert(asset_id=500, prices=[_price_point(FROZEN_TODAY)]))
+    assets.insert(3, FAUpsert(asset_id=500, prices=[_price_point(YEAR_ONE), _price_point(FROZEN_TODAY), _price_point(OLD_FLOOR - timedelta(days=1))]))
 
     refused = await _refusal(lambda: prices.upsert_prices_bulk(assets=assets, session=session, _current_user=None), also=session.said)
 
     detail = _out_of_range_detail(refused)
-    assert detail["params"] == {"min": "1900-01-01", "max": CEILING.isoformat()}
-    assert detail["items"] == [{"asset_id": asset_id, "dates": [day.isoformat()]} for asset_id, day in offending[:10]]
-    assert detail["count"] == len(offending)
+    assert detail["params"] == {"max": CEILING.isoformat()}, detail
+    assert detail["items"] == [{"asset_id": asset_id, "dates": [day.isoformat()]} for asset_id, day in offending[:10]], detail["items"]
+    assert detail["count"] == len(offending), detail
     assert (session.statements, session.commits) == (0, 0), session.said()
 
 
 @pytest.mark.asyncio
 async def test_rcw05_rate_route_writes_no_rate_of_a_refused_request(monkeypatch, frozen_stored_ceiling):
     """RC-W05: ``POST /fx/currencies/rate`` — the handler, called directly — with five rates (a valid day, 1899-12-31,
-    1900-01-01, the day after ``CEILING``, ``CEILING`` itself) answers 422 ``date_out_of_range``: ``params`` the bounds,
-    ``items`` ``[{"index": 1, "date": "1899-12-31"}, {"index": 3, "date": the day after}]``, ``count`` 2 — and
-    ``upsert_rates_bulk`` is never called, not even for the three valid rates.
+    1900-01-01, the day after ``CEILING``, ``CEILING`` itself) answers 422 ``date_out_of_range``: ``params`` ``{"max":
+    CEILING}``, ``items`` ``[{"index": 3, "date": the day after}]``, ``count`` 1 — 1899-12-31 is no refusal — and
+    ``upsert_rates_bulk`` is never called, not even for the four valid rates.
 
     Red before X-R65: 200 — the five rates handed to ``upsert_rates_bulk`` one by one, the two refused days among them.
+    Red before N83's revision: ``params`` is ``{"min": "1900-01-01", "max": CEILING}``, and 1899-12-31 is refused too
+    (``{"index": 1, …}``, ``count`` 2).
     """
     writer = _RateWriter()
-    rates = (_rate_item(FROZEN_TODAY), _rate_item(STORED_FLOOR - timedelta(days=1)), _rate_item(STORED_FLOOR, "GBP"), _rate_item(DAY_AFTER_CEILING, "CHF"), _rate_item(CEILING, "JPY"))
+    rates = (_rate_item(FROZEN_TODAY), _rate_item(OLD_FLOOR - timedelta(days=1)), _rate_item(OLD_FLOOR, "GBP"), _rate_item(DAY_AFTER_CEILING, "CHF"), _rate_item(CEILING, "JPY"))
 
     refused = await _refusal(lambda: _upsert_rates(monkeypatch, writer, *rates), also=writer.said)
 
     detail = _out_of_range_detail(refused)
-    assert detail["params"] == {"min": "1900-01-01", "max": CEILING.isoformat()}
-    assert detail["items"] == [{"index": 1, "date": "1899-12-31"}, {"index": 3, "date": DAY_AFTER_CEILING.isoformat()}]
-    assert detail["count"] == 2
+    assert detail["params"] == {"max": CEILING.isoformat()}, detail
+    assert detail["items"] == [{"index": 3, "date": DAY_AFTER_CEILING.isoformat()}], detail["items"]
+    assert detail["count"] == 1, detail
     assert writer.handed == [], writer.said()
 
 
 @pytest.mark.asyncio
 async def test_rcw06_rate_route_shows_ten_items_and_counts_them_all(monkeypatch, frozen_stored_ceiling):
-    """RC-W06: twelve rates before the floor (0001-01-01 among them) around two valid ones answer 422 with the first ten
-    in input order, each with its index in the request, and ``count`` 12; ``upsert_rates_bulk`` is never called.
+    """RC-W06 (guard of N83's revision): twelve rates after the ceiling (9999-12-31 among them) around two valid ones
+    answer 422 with the first ten in input order, each with its index in the request, and ``count`` 12;
+    ``upsert_rates_bulk`` is never called.
 
     Red before X-R65: 200 — the fourteen rates handed to ``upsert_rates_bulk`` one by one.
+    Green before N83's revision and after: its twelve dates lay before 1900 until then, and those are written now
+    (RC-W09); the cap of ten and the count are the same for the dates after the ceiling.
     """
     writer = _RateWriter()
-    early = [YEAR_ONE] + [STORED_FLOOR - timedelta(days=n) for n in range(1, 12)]
-    rates = [_rate_item(FROZEN_TODAY)] + [_rate_item(day) for day in early[:6]] + [_rate_item(CEILING)] + [_rate_item(day) for day in early[6:]]
-    expected = [{"index": index, "date": item.rate_date.isoformat()} for index, item in enumerate(rates) if item.rate_date < STORED_FLOOR]
+    late = [LAST_DAY] + [DAY_AFTER_CEILING + timedelta(days=n) for n in range(11)]
+    rates = [_rate_item(FROZEN_TODAY)] + [_rate_item(day) for day in late[:6]] + [_rate_item(CEILING)] + [_rate_item(day) for day in late[6:]]
+    expected = [{"index": index, "date": item.rate_date.isoformat()} for index, item in enumerate(rates) if item.rate_date > CEILING]
     assert len(expected) == 12
 
     refused = await _refusal(lambda: _upsert_rates(monkeypatch, writer, *rates), also=writer.said)
@@ -1243,14 +1280,53 @@ async def test_rcw06_rate_route_shows_ten_items_and_counts_them_all(monkeypatch,
 @pytest.mark.asyncio
 async def test_rcw07_rate_route_unchanged_within_the_bounds(monkeypatch, frozen_stored_ceiling):
     """RC-W07: rates on 1900-01-01 and on ``CEILING`` itself are written as before, beside a valid day; an item whose
-    base is its quote stays an error of its own, the others written: the window adds a refusal, and changes nothing else.
+    base is its quote stays an error of its own, the others written: the ceiling adds a refusal, and changes nothing else.
 
-    Green before X-R65 too: it pins the bounds the check must let through, and the per-item behaviour it must keep.
+    Green before X-R65 too: it pins the ceiling the check must let through, and the per-item behaviour it must keep.
+    Green before N83's revision and after: 1900-01-01, the old floor, is a day like any other.
     """
     writer = _RateWriter()
 
-    response = await _upsert_rates(monkeypatch, writer, _rate_item(STORED_FLOOR), _rate_item(CEILING, "GBP"), _rate_item(FROZEN_TODAY, "EUR", "EUR"), _rate_item(FROZEN_TODAY, "CHF"))
+    response = await _upsert_rates(monkeypatch, writer, _rate_item(OLD_FLOOR), _rate_item(CEILING, "GBP"), _rate_item(FROZEN_TODAY, "EUR", "EUR"), _rate_item(FROZEN_TODAY, "CHF"))
 
-    assert [rate[0] for rate in writer.handed] == [STORED_FLOOR, CEILING, FROZEN_TODAY], writer.said()
+    assert [rate[0] for rate in writer.handed] == [OLD_FLOOR, CEILING, FROZEN_TODAY], writer.said()
     assert response.success_count == 3
     assert len(response.errors) == 1 and response.errors[0].startswith("Rate 2:"), response.errors
+
+
+@pytest.mark.asyncio
+async def test_rcw09_rate_route_writes_rates_before_1900(monkeypatch, frozen_stored_ceiling):
+    """RC-W09 (N83, revised 19/10): the fourteen rates RC-W06 sent before the revision — twelve before 1900-01-01,
+    0001-01-01 among them, around a valid day and ``CEILING`` — are no refusal: the handler answers, every rate is handed
+    to ``upsert_rates_bulk`` in input order, and each is a success of its own.
+
+    Red before N83's revision: 422 ``date_out_of_range`` for the twelve dates before the floor, ``upsert_rates_bulk``
+    never called.
+    """
+    writer = _RateWriter()
+    early = [YEAR_ONE] + [OLD_FLOOR - timedelta(days=n) for n in range(1, 12)]
+    rates = [_rate_item(FROZEN_TODAY)] + [_rate_item(day) for day in early[:6]] + [_rate_item(CEILING)] + [_rate_item(day) for day in early[6:]]
+
+    response = await _answered(lambda: _upsert_rates(monkeypatch, writer, *rates), also=writer.said)
+
+    assert [rate[0] for rate in writer.handed] == [item.rate_date for item in rates], writer.said()
+    assert (response.success_count, response.errors) == (len(rates), []), response
+
+
+@pytest.mark.asyncio
+async def test_rcw10_price_route_takes_prices_before_1900(frozen_stored_ceiling):
+    """RC-W10 (N83, revised 19/10): ``POST /assets/prices`` — the handler, called directly on a session that reads
+    nothing — with three assets each holding a price before 1900-01-01 (0001-01-01, 1850-06-01, 1899-12-31) beside a
+    valid day is no refusal: the handler answers, and each asset reaches the loop, in input order — on the stand-in,
+    which holds no asset, as «not found», nothing written. The session is reached: no check stopped the request first.
+
+    Red before N83's revision: 422 ``date_out_of_range`` for the three dates, before any statement.
+    """
+    session = _ReadNothingSession()
+    early = (YEAR_ONE, date(1850, 6, 1), OLD_FLOOR - timedelta(days=1))
+    assets = [FAUpsert(asset_id=201 + n, prices=[_price_point(FROZEN_TODAY), _price_point(day)]) for n, day in enumerate(early)]
+
+    response = await _answered(lambda: prices.upsert_prices_bulk(assets=assets, session=session, _current_user=None), also=session.said)
+
+    assert [(result.asset_id, result.count) for result in response.results] == [(asset.asset_id, 0) for asset in assets], response
+    assert session.statements > 0, session.said()

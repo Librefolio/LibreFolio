@@ -7340,3 +7340,114 @@ popolamento del DB.
     `check-orphans` OK (564 test unitari del frontend registrati); `mkdocs build` stretta pulita; `check-links` 97.
   - Porta 6183 libera alle 12:23.
 - Log in `files/checks/logs/` della sessione: `xr16-red-*`, `xr16-green-*`, `xr16-full-*`, `xr16_*`.
+
+### Revisione: J-1 voce 4 di MF, `oriented_rate` (19/10, in sola lettura) — OK
+
+Commit `068d5dd51` sul ramo di MF, letto dal commit stesso (`git show`), mai dall'altro worktree.
+`financial_math/fx_rates.py::oriented_rate(rate, source, destination)` dà `rate` quando `source` viene prima in ordine
+alfabetico, e `type(rate)(1) / rate` altrimenti. Sostituisce quattro copie, una per file:
+1. **`fx/conversion.py::compute_chain_rate`**: prima `rate` oppure `Decimal("1") / rate`; ora `Decimal(1) / rate`. Lo
+   stesso 1 esatto e lo stesso contesto decimale, quindi lo stesso quoziente. `_usable_rate` lo precede: nessuno zero.
+2. **`fx/storage.py::normalize_rate_for_storage`**: `min`/`max` dei codici più `oriented_rate(rate, base, quote)`.
+   - Con `base < quote` torna lo stesso oggetto, come prima.
+   - Con codici uguali inverte, come prima.
+   - Uno zero dà la stessa `DivisionByZero` di Decimal.
+3. **`pac_allocator/evaluation/scenario.py::fx_rate`**: `type(rate)(1)` è `pac_allocator.numeric.ExactRatio(1)`, cioè
+   proprio `_EXACT_ONE` (`:32`), che resta usato altrove nel file.
+4. **`pac_allocator/source/wac.py`**: `inverted` viene da `normalized_fx_pair(source_currency, target_currency)` (`:154`),
+   quindi vale `not source < target`, la stessa condizione di `oriented_rate` con gli stessi argomenti. La guardia
+   `saved_row.rate > 0` resta, e `inverted` serve ancora alle evidenze (`:167`, `:177`).
+
+- Nessun'altra copia dell'inversione in `backend/app/services` a quel commit (cercato con `git grep`).
+- I valori non cambiano, come dice il commit.
+- **Note, nessun difetto**:
+  - prima `Decimal("1") / x` con un float alzava `TypeError`; ora `type(rate)(1)` restituisce un float. Le firme dicono
+    `Decimal` e i chiamanti passano `Decimal`: è solo un allentamento;
+  - la rimozione di X-R45 tocca gli import degli stessi due file (`conversion.py`, `wac.py`). Se J-1 entra prima, il
+    rovescio di X-R45 si ricalcola a mano su quelle righe: un conflitto banale.
+
+### N83 — via (19/10): niente pavimento del 1900 sulle scritture di prezzi e cambi
+
+Via del coordinatore. Il pavimento si toglie da **tutte** le scritture, anche dai punti dei fornitori; resta «non oltre
+domani». Il developer, testuale: «se voglio leggere e salvare più indietro devo poterlo fare … esistono formule rapide,
+quelle devono usare». I tagli in lettura (N75, 100 anni) restano finché MF non porta il piano «formule veloci».
+
+**Disegno**:
+- `utils/date_range_limits.py`: `stored_date_bounds()` lascia il posto a `latest_stored_date()` (il domani del server).
+  - `DateOutOfRangeError` e `date_out_of_range_detail` portano solo il limite in avanti: `params: {max}`, e un messaggio
+    «Dates must not be after …».
+  - Il codice `date_out_of_range` resta.
+- **Scritture**:
+  - manuale dei prezzi: `price_store._reject_dates_out_of_range` (~76–93, ~264);
+  - manuale dei cambi: `api/v1/fx/currencies.py` ~126–138;
+  - punti dei fornitori: `price_store.py` ~339–346 e ~474, `refresh.py` ~737;
+  - Sync dei cambi: `fx/sync.py:38`.
+  - Docstring delle due route; la descrizione di `FAPriceRejection.reason` (`schemas/prices.py:185-187`).
+- **Frontend**: `writeRefusal.ts` (~85–89) dice la frase senza `min`. La chiave `common.writeRefusal.dateOutOfRange`
+  cambia testo in 4 lingue: «N date sono dopo {max}».
+- **Doc**:
+  - per lo sviluppatore: `developer/backend/assets/architecture.md`, `fx/architecture.md`, `fx/configuration.md`;
+  - per l'utente: `user/assets/detail/data-editor` (l. 30) e `user/fx/detail/data-editor` (l. 54), tolto «before
+    1900-01-01 or», nelle 4 lingue, a mano (modifica minima), poi `translate-stamp`.
+- **CHANGELOG**: la riga di X-R65 e quella di X-R46 non citano più il 1900.
+- **X-R72** si chiude: gli eventi senza pavimento vanno nella stessa direzione.
+- Non toccato: il `min="1900"` dell'anno in `CalendarMonth.svelte` è un attributo HTML che non blocca la digitazione,
+  in un componente condiviso. I tagli in lettura restano.
+- **Rossi affidati** (test-author): i test di X-R65 nei cinque file backend e `writeRefusal.test.ts`.
+- **Cura preparata** (provata a secco su `/tmp`; black, ruff e Prettier puliti):
+  - `n83_code.py`, 11 file: backend, `writeRefusal.ts`, CHANGELOG e le due pagine utente inglesi.
+    - Le pagine IT, FR e ES non hanno mai avuto quella frase: è un debito di traduzione che c'era già, quindi niente
+      `translate-stamp`.
+  - `n83_i18n.py`, una chiave aggiornata in 4 lingue.
+  - Le tre pagine per lo sviluppatore le riscrive un docs-writer dopo la cura.
+  - Resta il pavimento di lettura `range_start` di `POST /prices/current` (R13-SEC9-4), che è un taglio in lettura.
+- **Rossi N83** (test-author; lanciati da me con il carico basso, porta libera dopo):
+  - `services range-ceiling rcw`: **10 falliti**, 2 passati (le guardie RC-W06 e RC-W07).
+    - RC-W01 vuole `latest_stored_date()`, letta al momento della chiamata, e `stored_date_bounds` tolta.
+    - RC-W02 vuole il dettaglio con `params: {max}`; RC-W08 vuole che il messaggio finisca con «: 1 does not».
+  - `services asset-source-guards`: **8 falliti**, 47 passati. Fallisce il prima del 1900 a mano (anche 0001-01-01) e
+    dei fornitori; passano le guardie dopo il tetto.
+  - `services fx-sync-service xr65`: **3 falliti**: il Sync non tiene un tasso prima del 1900.
+  - `api assets-price` e `api fx` (`after_the_ceiling before_1900`): **2 + 2 falliti**: `params` con `min`, e il 422
+    sul 1899.
+  - Vitest `writeRefusal.test.ts`: **18 falliti**, 140 passati.
+- **⚠️ Fuori pista** (dal test-author):
+  - due spec E2E aspettano `1900-01-01` nel messaggio e mandano `params: {min, max}`: `asset-data-editor.spec.ts`
+    ~719–745 e `fx-data-editor.spec.ts` ~246–268. Riparazione affidata allo stesso test-author, da provare in uno slot;
+  - la funzione del Sync si chiama `_is_date_within_sync_range`, non `_in_requested_range`;
+  - RC-W08 tiene la desinenza «does not / do not», quindi il messaggio diventa «Dates must lie on or before …: N do
+    not»;
+  - il testo dei runner (`_backend_services.py`, quattro righe) e la docstring di `test_bulk_limits.py` dicevano ancora
+    1900. Le righe del runner sono nella cura (12 file); la docstring la ripara il test-author.
+- **Riparazioni del test-author**:
+  - le due spec E2E mandano `params: {max}` con date dopo il tetto, e si aspettano nel messaggio la data rifiutata e il
+    tetto. I titoli cominciano con «a price/rate dated after the last storable day»;
+  - le docstring di `test_bulk_limits.py` dicono che la scrittura non ha più pavimento.
+  - Prettier, black e ruff puliti.
+- **Cura applicata**: `n83_code.py` (12 file) e `n83_i18n.py` (`common.writeRefusal.dateOutOfRange`, 4 lingue). Poi
+  `api sync`. Nel client resta un «1900-01-01 to tomorrow»: è il `range_start` di `POST /prices/current`, un taglio in
+  lettura che resta.
+- **Verdi** (leggeri, carico sotto 50, porta 6183 libera dopo):
+  - `services range-ceiling` **74** (comprende `test_bulk_limits.py`), `asset-source-guards` **55**,
+    `fx-sync-service` **38**;
+  - `api assets-price` **23**, `api fx` **34**;
+  - Vitest **203** (`writeRefusal`, la guardia ICU del catalogo, la guardia HTML);
+  - `i18n check` rigoroso (5.098 chiavi), `gate-i18n-catalog` **176**, `gate-i18n-usage` **195**;
+  - `front check` 0/0; `theme-roles --check` pulito; `check-orphans` OK.
+- **Doc per lo sviluppatore**: affidata a un docs-writer (tre pagine). Le E2E dei due editor si provano nello slot.
+- **Doc per lo sviluppatore** (docs-writer): 12 paragrafi in `assets/architecture.md`, `fx/architecture.md` e
+  `fx/configuration.md`. La parte di lettura è intatta, e le ancore `#stored-date-bounds` e `#stored-rate-dates` restano.
+  - Le note del docs-writer:
+    - le transazioni tengono il loro pavimento (N74), come le date di un investimento programmato
+      (`SCHEDULE_MIN_DATE`);
+    - un commento di `price_query.py` (~344–351) e una parola di `assets/architecture.md` (~536) erano falsi dopo N83:
+      corretti da me dopo le E2E.
+  - **Da sapere, non un difetto**: con un prezzo salvato al 0001-01-01, un intervallo chiesto esplicitamente
+    dall'anno 1 cammina circa 740.000 giorni, dentro il budget di 1.000.000 per richiesta (Z-25). È il costo di lettura
+    che il piano «formule veloci» di MF (Q1–Q3) toglie.
+- **Slot E2E** (13:16–13:45, usati 13:18–13:22):
+  - i due test riparati **1/1** e **1/1**;
+  - le spec intere `asset-data-editor` **30 passati** e `fx-editor` **7 passati**;
+  - porta libera.
+- **Ultimi controlli**: black pulito; `mkdocs build` stretta pulita; `check-links` 97; `git diff --check` pulito.
+- **Backlog**: X-R72 ✅ (superata da N83); X-R65 annotata con la revisione.
