@@ -7115,3 +7115,72 @@ Quindi oggi un prezzo negativo non entra da nessuna strada dell'applicazione. St
 | (B) Un elenco esplicito per punto, `clear: ["low", "volume"]`; −1 torna un numero | il contratto di `POST /assets/prices`: OpenAPI, editor, CSV, doc, test | i client che mandano −1 oggi: un 422 chiaro per una transizione, oppure −1 letto ancora come «cancella» per un rilascio, con un avviso |
 | (C) `null` vuol dire «cancella», l'assenza «lascia» (`model_fields_set`) | nessun campo nuovo; l'editor omette già i campi vuoti | oggi `null` vuol dire «lascia» (`schemas/prices.py:103`): per i client che lo mandano è un cambio silenzioso, che cancella dati |
 | (D) Un valore che non può essere un numero, per esempio `"clear"` nel campo | nessuna ambiguità; per l'editor è come la gomma di oggi | il tipo del campo in OpenAPI diventa «numero o `"clear"`», e i client generati cambiano |
+
+### X-R16 ripresa, con X-R83 — via del developer (19/10, 11:50)
+
+Il developer approva X-R16 («allora ok, sono d'accordo»). Il coordinatore: solo X-R16, con i rossi parcheggiati, poi la
+cura; X-R83 nello stesso lotto, rosso prima; X-R48b resta sospesa (dipende da N68). Slot E2E da chiedere, dopo le 14:00.
+Base `aabd3dd12` (il giornale della fase 2 committato), albero pulito.
+- **Rossi ripresi**: dalla patch solo `frontend/e2e/*` (`git apply --include`), cioè le due spec di X-R16, 190 e 235 righe,
+  identiche. I quattro file di X-R48b restano nella patch.
+- **La cura sulla pagina di una coppia, rivista** (il fuori pista del 17/10):
+  - un modulo puro `components/fx/fxDetailConvertQuery.ts` con `parseFxConvertWithSignalIsolation(data)`, gemello di
+    `parseAssetPriceQueryWithSignalIsolation`. Valida la risposta come `FXConvertResponse` tenendo in ogni gruppo solo i
+    segnali validi, poi restituisce i gruppi con i segnali grezzi, così la pagina dice ancora quelli non validi. Lancia
+    se la risposta, `results`, `signal_results`, un gruppo o la sua raccolta di segnali sono malformati: un tasso rotto
+    resta un errore vero;
+  - nella pagina, `axiosInstance.post` più il parser al posto di `zodiosApi` (il client valida solo le risposte,
+    `validate: 'response'`, quindi non si perde nessun controllo della richiesta);
+  - poi il `try/catch` attorno alla lettura dei segnali della pagina, come sulla pagina dell'asset.
+- **X-R83**:
+  - un gancio per il test, senza effetto sul comportamento: `data-chart-last-close` sulla radice della pagina dell'asset,
+    come `data-chart-last-rate` sulla pagina di una coppia;
+  - la cura: nel ramo della fusione del Sync, invalidare la cache e riarmare «Tutto», come fanno già gli altri due rami.
+    Così la ricarica che segue legge dal server.
+  - Fondere il delta anche nella cache non basterebbe: i giorni riempiti all'indietro dopo un punto cambiato li calcola
+    il server, e resterebbero vecchi.
+  - Effetto visibile: dopo un Sync piccolo il grafico mostra un caricamento breve, come già dopo un Sync grande.
+- **Rossi nuovi affidati** (test-author):
+  - Vitest `fxDetailConvertQuery.test.ts`;
+  - E2E X-R83 in coda a `asset-detail.spec.ts`.
+- **⚠️ Fuori pista, X-R83 smentita** (12:05, prima di scrivere il suo rosso).
+  - Il Sync della barra passa dalla modale del sync della pagina: `handlePageSyncComplete` → `handleRefresh()`, che
+    invalida la cache e ricarica forzando.
+  - Il ramo `canMergeOnly` sta in `runSyncAsset`, che solo il Sync di una card di confronto chiama, e il proprio asset
+    non può essere un confronto (`availableAssets`, ~2341). È un ramo morto, non un difetto visibile.
+  - Tolta dal lotto la parte E2E del test-author; tolto il gancio `data-chart-last-close`, la pagina è tornata uguale al
+    HEAD.
+  - X-R83 riscritta nel backlog: togliere il ramo dopo la 1.3, come X-R68.
+- **Cura preparata** (12:20, provata a secco su `/tmp`, Prettier pulito): `xr16_fx_code.py`, che sostituisce la parte
+  `xr16` di `xr16_48b_code.py`.
+  - Il modulo nuovo `components/fx/fxDetailConvertQuery.ts`.
+  - Nella pagina di una coppia: `axiosInstance` e `convertBulkWithSignalIsolation()` al posto della chiamata Zodios,
+    più il `try/catch`.
+  - Nella pagina dell'asset, il `try/catch`.
+  - `developer/frontend/components/charts.md`, una frase sull'isolamento e sulla pagina di una coppia.
+  - Una riga 🐛 nel CHANGELOG, dopo quella di X-R45.
+  - Si applica dopo i rossi E2E, nello slot.
+
+### Decisioni del developer per dopo X-R16 (19/10, 11:42, dal coordinatore)
+- **N83**: per prezzi e cambi scritti a mano resta solo il limite in avanti (il domani del server); il limite
+  all'indietro (1900) si toglie. Testuale: «se è da sabato è stata una libertà di troppo, si limitiamo solo al domani».
+  Riguarda X-R65 (Z, `30e19b9d9`); l'analisi dei punti toccati viene prima del codice.
+- **N92**: i prezzi negativi **non** si accettano, opzione (i) con i tre ritocchi:
+  - un giorno negativo di un fornitore si salta con un avviso, invece di far fallire tutta la storia;
+  - il prezzo corrente ≤ 0 si rifiuta come la storia;
+  - la pagina utente lo dice.
+- **Il −1**: il coordinatore propone al developer la via standard (campo assente = non toccare, `null` = cancella,
+  numero = scrivi; nel DB NULL). Si aspetta il suo sì: non si parte.
+  - Mandati al coordinatore due vincoli (11:50).
+  - I fornitori scrivono con lo stesso modello e la stessa funzione (`refresh.py:751`), e passano `None` esplicito per un
+    campo mancante. Quindi «`null` = cancella» deve valere solo per la richiesta dell'API manuale.
+  - Per i client esterni che mandano `null` diventa una cancellazione: serve una riga ⚠️ Breaking.
+- **Rosso Vitest del parser dei cambi** (test-author, 12:10; rilanciato da me, carico 10):
+  `components/fx/fxDetailConvertQuery.test.ts`, 46 casi. Fallisce all'import: «Cannot find module
+  './fxDetailConvertQuery'» (`/tmp/libreFolio_xr16_vitest_red.log`).
+  - Coperti: la risposta valida, l'isolamento (sei forme non valide, più gruppi), le forme vuote, e i lanci. Lancia una
+    risposta che non è un oggetto, `results` mancante o rotto, un tasso rotto, un `signal_results` o una raccolta che
+    non sono liste, un gruppo che non è un oggetto.
+  - Guardia: lo schema generato rifiuta per intero la risposta con un segnale non valido.
+  - Il test-author ha provato i casi contro una copia in linea del parser (46/46), poi l'ha tolta.
+  - Prettier pulito. Registrato in `core-unit`, accanto al gemello degli asset (`_frontend_utility.py`).

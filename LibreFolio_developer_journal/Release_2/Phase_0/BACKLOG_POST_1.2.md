@@ -5556,18 +5556,17 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     tool e chiavi.
   - Accanto: la docstring di `_validate_canonical_fx_pair` (`schemas/portfolio.py:1255`) promette «'usd/eur' ->
     'EUR/USD'», ma il codice rifiuta l'ordine discendente con un 422. Da correggere la docstring.
-- **X-R83 · Pagina dell'asset: dopo un Sync con pochi punti cambiati il grafico torna ai prezzi della cache** — da
-  confermare con un rosso, basso-medio, visibile; X, 19/10 (lettura del codice per l'analisi di N64).
-  - Con al più 50 punti cambiati, senza eventi e senza conversione, il Sync fonde il delta solo in `chartData`
-    (`routes/(app)/assets/[id]/+page.svelte` ~2001, `canMergeOnly`): non lo scrive nella cache dei prezzi e non la
-    invalida.
-  - Subito dopo, `loadChartData(mainConversionFxAccepted, …)` (~2061, ~2066), senza forzare, legge la cache. La cache copre
-    l'intervallo, quindi `chartData` torna ai valori di prima del Sync, e un punto nuovo di oggi sparisce fino ad
-    «Aggiorna». Anche i segnali del backend, ricalcolati sul DB, non tornano più con la linea dei prezzi.
-  - È un'ipotesi da lettura statica. Un rosso E2E (Sync finto con `changed_points`, poi il valore sul grafico) la conferma
-    o la smentisce prima di ogni cura.
-  - Cura probabile: nel ramo della fusione, scrivere il delta anche nella cache (`store.merge`) o invalidarla. Si lega a
-    N64: ogni cache della pagina va aggiornata dove la pagina cambia i dati. Dettagli: piano 03, «Fase 2», N64.
+- **X-R83 · Pagina dell'asset: il ramo che fonde il Sync dell'asset della pagina non si raggiunge** — minimo, **dopo la
+  1.3**; X, 19/10 (lettura del codice per N64). L'ipotesi registrata qui come difetto visibile è smentita dalla lettura,
+  prima di scrivere il rosso.
+  - Il Sync della barra passa da `handlePageSyncComplete` → `handleRefresh()`, che invalida la cache dei prezzi e ricarica
+    forzando: il grafico finisce sulla risposta del server.
+  - Il ramo `canMergeOnly` sta in `runSyncAsset` (`routes/(app)/assets/[id]/+page.svelte` ~2001), con la condizione
+    `assetId === pageAssetId`. Lo raggiunge solo il Sync di una card di confronto, e la pagina esclude il proprio asset
+    dai confronti (`availableAssets`, ~2341): è un ramo morto.
+  - Se tornasse vivo, avrebbe il difetto: fonde il delta solo in `chartData`, poi la ricarica legge la cache, che non lo
+    ha, e il grafico torna ai valori di prima.
+  - Cura: togliere il ramo, come X-R68.
 
 ## W · Import e transazioni (fase 01)
 
