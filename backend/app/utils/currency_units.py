@@ -1,10 +1,10 @@
-"""Quote currencies a price provider reports in a minor unit (Z-32).
+"""Quote currencies a price provider reports in a minor unit.
 
 Yahoo Finance quotes London lines in pence and says so with the currency ``GBp``. The schemas accept a currency code
 whatever its case: the prices are stored as ``GBP`` with their numbers unchanged, pence read as pounds, until the
-asset's quote base (``quote_base_quantity``, "Units per single price") divides them back. The refresh keeps the
-provider's own code on the assignment (``AssetProviderAssignment.reported_currency``), and the portfolio data-quality
-report compares it with this table (``QUOTE_IN_MINOR_UNIT``).
+asset's quote base (``quote_base_quantity``, "Units per single price") divides them back. The portfolio data-quality
+report reads this table so that a currency stored as ``GBp`` is never suggested as ``GBP`` (``NON_ISO_CURRENCY``,
+E-19b): pence relabelled as pounds would count 100 times.
 """
 
 from __future__ import annotations

@@ -1256,11 +1256,6 @@ class AssetProviderAssignment(SQLModel, table=True):
         description="JSON configuration for provider (validated by plugin)",
     )
     last_fetch_at: Optional[datetime] = Field(default=None, description="Last fetch attempt timestamp (NULL = never fetched)")
-    reported_currency: Optional[str] = Field(
-        default=None,
-        max_length=8,
-        description="Quote currency the provider reported at its last history fetch, as reported (Yahoo's GBp: pence); NULL until then (Z-32)",
-    )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
