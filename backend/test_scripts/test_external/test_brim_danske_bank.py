@@ -23,12 +23,18 @@ What is pinned (B0, and design v5.3 §3.4.2–§3.4.4, §3.5, §7.1):
 - the combined format: headers, value formats, order, privacy (no ``Säilytystili``), purity;
 - the parse of the combined file: transactions, tags, descriptions, assets, todos,
   notices, evidence, and checkpoints and verifications rebuilt from the truth rows;
+- lot W-B85, known rows quietly and unknown rows loudly: a «Varaus» cash row is a
+  ``reservation``, left out with no notice and one backend log line; every other row not
+  booked stays ``status``, and its notice asks the user to open an issue (``report_issue``);
+  every other notice is left as it is;
 - the exact facts of the two synthetic sample sets, "main" and "gap".
 
 Edge cases are built in temporary folders by two small writers: an XLSX custody export
 (dates as text unless asked otherwise) and a cash statement written the way the bank
 writes it (Latin-1, ``;``, LF, newest first, the running ``Saldo`` computed from the
-rows). Every value is invented. No server, no database: this module is pure.
+rows). Every value is invented. No server, no database: this module is pure. The one log
+it reads is read with ``structlog.testing.capture_logs``, behind a barrier: a canary
+through the plugin module's own logger must reach it.
 
 Design: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md (v5.3)
 Plan: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §4 B0
@@ -37,6 +43,7 @@ Plan: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase
 from __future__ import annotations
 
 import csv
+import importlib
 import json
 import re
 from collections import Counter, defaultdict
@@ -48,6 +55,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 import openpyxl
 import pytest
+from structlog.testing import capture_logs
 
 from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.brim import COMBINED_REQUIRED_HEADERS, BRIMCombinedTable, BRIMCoverage, BRIMParseOutput, BRIMReportRole, BRIMSetShape, is_fake_asset_id
@@ -97,7 +105,7 @@ COMBINED_HEADERS = [
 DATA_KINDS = {"pair", "standalone", "excluded", "summarized", "deferred"}
 TRUTH_KINDS = {"truth_cash", "truth_position", "verification"}
 ZONES = {"before", "window", "gap", "after"}
-REASONS = {"no_counterpart", "ambiguous", "status", "unknown_type", "invalid", "not_yet_settled", "outside_cash_coverage", "superseded"}
+REASONS = {"no_counterpart", "ambiguous", "status", "unknown_type", "invalid", "not_yet_settled", "outside_cash_coverage", "superseded", "reservation"}
 
 SOURCE_RE = re.compile(r"^(custody|cash)(?:#([1-9]\d*))?:([1-9]\d*)$")
 PROOF_RE = re.compile(r"^(exact:E1|exact:E2|at_least:E3|discarded:E[1-4]:(recent_trades|window_not_covered|excluded_rows|same_day_movement|conflict))$")
@@ -113,11 +121,18 @@ DEMERGER = "demerger"
 DEMERGER_OLD = "demerger_old_leg"
 DANSKE_REASON_CODES = {CHARGES, DEMERGER, DEMERGER_OLD}
 # Parse notices and their severity; every excluded reason has its own "excluded_<reason>" notice, a warning except where
-# EXCLUDED_NOTICES says otherwise.
+# EXCLUDED_NOTICES says otherwise — but the silent reasons (SILENT_REASONS), which have none.
 PARSE_NOTICES = {"deferred_rows": "info", "name_mismatch": "warning", "proof_discarded": "info", "balance_chain_broken": "warning", "deposit_assumed": "info"}
 # Lot N74 (Fineco, safe rows): a trade the cash statement settles after its last row is not a fault — it comes with the
 # next import — so its notice is a note (info). Every other excluded reason stays a warning, excluded_status included.
 EXCLUDED_NOTICES = {"excluded_not_yet_settled": "info"}
+# Lot W-B85 (developer, 2026-10-19, a principle for every BRIM plugin): a row the plugin knows to be safe to drop is dropped
+# in silence — no notice, at most a backend log line; a row it does not know is dropped with a warning that says so and
+# asks the user to open an issue (context["report_issue"] is True: the wizard shows the link under the notice). For
+# Danske a «Varaus» cash row (a reservation) is known, and every other row not booked is not. The other reasons wait for a
+# decision (D-W85-1): their notices stay as they are, with no report_issue key.
+SILENT_REASONS = {"reservation"}
+REPORT_ISSUE_NOTICES = {"excluded_status"}
 SET_NOTICES = {"gap", "overlap_mismatch", "empty_member", "balance_chain_broken", "mixed_accounts_in_file"}
 # The todo context keys the wizard reads (developer guide, "context keys the frontend understands").
 CHARGES_CONTEXT = ("row", "cash", "currency", "compare_nominal", "split_hint", "split_suggestions")
@@ -885,7 +900,11 @@ def _empty_member(builder: _Builder) -> None:
 
 @scenario("classes")
 def _classes(builder: _Builder) -> None:
-    """One row per line of the S1 classes table (B0), in the window of one segment (03-01…03-31)."""
+    """One row per line of the S1 classes table (B0), in the window of one segment (03-01…03-31).
+
+    Lot W-B85: two «Varaus» cash rows, one ``Toteutunut`` and one ``Odottaa`` — the label makes a reservation whatever
+    the ``Tila``. The rows not booked that are no reservation are the custody ``Hylätty`` row and the cash ``Odottaa`` one.
+    """
     no_date = _trade("2021-03-22", "Aurora Metsä Oyj", 1, 5, -13, value="2021-03-24")
     no_date[0] = ""
     builder.add_custody(
@@ -933,6 +952,7 @@ def _classes(builder: _Builder) -> None:
             _Cash("31.02.2021", "Matti Meikäläinen", "10", "bad_date"),
             _Cash("2021-03-18", "Osto Aurora Metsä Oyj", "12,34,5", "bad_amount"),
             _Cash("2021-03-19", "Palvelumaksut 03/2021", "0", "zero_amount"),
+            _Cash("2021-03-26", "Varaus", "-75", "varaus_pending", status="Odottaa"),
             _Cash("2021-03-31", "Palvelumaksut 03/2021", "-3.5", "fee_end"),
             _Cash("2021-04-02", "Osto Kaamos Robotics AB", "-38", "p_k_end"),
         ]
@@ -960,7 +980,9 @@ CLASS_TABLE = {
     "k_end": ("pair", ""),
     # cash
     "deposit_before": ("standalone", ""),
-    "varaus_label": ("excluded", "status"),
+    # Lot W-B85: a «Varaus» row is a reservation, the label read before the Tila (red until the plugin says so).
+    "varaus_label": ("excluded", "reservation"),
+    "varaus_pending": ("excluded", "reservation"),
     "pending": ("excluded", "status"),
     "nosto": ("standalone", ""),
     "vero": ("standalone", ""),
@@ -981,6 +1003,32 @@ CLASS_TABLE = {
     "fee_end": ("standalone", ""),
 }
 CLASS_PAIRS = {"k0": "p_k0", "pika_buy": "p_pika", "paiva_sell": "p_paiva", "tuotto": "p_tuotto", "k_end": "p_k_end"}
+# Lot W-B85: the «Varaus» rows of the "classes" scenario, and its rows not booked that are no reservation.
+RESERVATION_KEYS = ("varaus_label", "varaus_pending")
+STATUS_KEYS = ("status", "pending")
+
+# Lot W-B85 leaves every other notice as it is (D-W85-1, pending). (source, set, codes or reasons it notes): together they
+# note every excluded reason but the silent ones, and every other parse notice (fixture guard in TestKnownAndUnknownRows).
+EXCLUDED_SOURCES = [
+    pytest.param("scenario", "classes", ("status", "invalid", "unknown_type"), id="classes"),
+    pytest.param("scenario", "direction", ("no_counterpart",), id="direction"),
+    pytest.param("scenario", "ambiguous", ("ambiguous",), id="ambiguous"),
+    pytest.param("scenario", "late", ("outside_cash_coverage",), id="late"),
+    pytest.param("scenario", "overlap_diff", ("superseded",), id="overlap_diff"),
+    pytest.param("scenario", "early_end", ("not_yet_settled",), id="early_end"),
+]
+NOTICE_SOURCES = [
+    pytest.param("sample", "main", ("deferred_rows", "deposit_assumed"), id="main"),
+    pytest.param("scenario", "same_day", ("proof_discarded",), id="same_day"),
+    pytest.param("scenario", "name_mismatch", ("name_mismatch",), id="name_mismatch"),
+    pytest.param("scenario", "chain", ("balance_chain_broken",), id="chain"),
+]
+# The notices of the sample sets, (code, severity, context): every row of the samples is booked and none is a «Varaus»,
+# so lot W-B85 changes nothing in them.
+SAMPLE_NOTICES = {
+    "main": [("deferred_rows", "info", {"count": 1}), ("deposit_assumed", "info", {"count": 2})],
+    "gap": [("deposit_assumed", "info", {"count": 2}), ("excluded_not_yet_settled", "info", {"count": 1, "reason": "not_yet_settled"})],
+}
 
 
 # =============================================================================
@@ -998,10 +1046,12 @@ class TestIdentity:
         assert type(plugin).__module__ == PLUGIN_MODULE
 
     def test_metadata(self) -> None:
+        """Name, extensions, priority, version, icon and docs page. The version is 1.0.2 (lot W-B85) — red until the plugin
+        bumps it from 1.0.1."""
         plugin = _danske()
 
-        # 1.0.1: lot N74, excluded_not_yet_settled is a note.
-        assert (plugin.provider_name, plugin.supported_extensions, plugin.detection_priority, plugin.plugin_version) == ("Danske Bank", [".xlsx", ".csv"], 100, "1.0.1")
+        # 1.0.2: lot W-B85, a «Varaus» row is left out in silence and excluded_status asks for an issue (1.0.1: lot N74).
+        assert (plugin.provider_name, plugin.supported_extensions, plugin.detection_priority, plugin.plugin_version) == ("Danske Bank", [".xlsx", ".csv"], 100, "1.0.2")
         assert plugin.description and plugin.description.strip()
         assert (plugin.icon_url, plugin.docs_url) == ("https://danskebank.fi/favicon.ico", "/mkdocs/user/transactions/import/danske-bank/")
         assert plugin.test_file_pattern == "danske_bank"
@@ -1021,13 +1071,15 @@ class TestIdentity:
         assert all(role.description.strip() for role in roles)
 
     def test_plugin_catalogue_shows_the_roles(self) -> None:
+        """The catalogue entry: identity, version 1.0.2 (lot W-B85) — red until the plugin bumps it from 1.0.1 — and the
+        two roles."""
         plugin = _danske()
 
         info = plugin.to_plugin_info()
         catalogue = {item.code: item for item in BRIMProviderRegistry.list_plugin_info()}
 
-        # 1.0.1: lot N74, excluded_not_yet_settled is a note.
-        assert (info.code, info.name, info.plugin_version, info.detection_priority, info.icon_url, info.docs_url) == (PLUGIN_CODE, "Danske Bank", "1.0.1", 100, plugin.icon_url, plugin.docs_url)
+        # 1.0.2: lot W-B85, a «Varaus» row is left out in silence and excluded_status asks for an issue (1.0.1: lot N74).
+        assert (info.code, info.name, info.plugin_version, info.detection_priority, info.icon_url, info.docs_url) == (PLUGIN_CODE, "Danske Bank", "1.0.2", 100, plugin.icon_url, plugin.docs_url)
         assert info.report_roles == plugin.report_roles
         assert [role.code for role in catalogue[PLUGIN_CODE].report_roles] == ["custody", "cash"]
 
@@ -1469,6 +1521,9 @@ class TestClassification:
 
     @pytest.mark.parametrize("key", sorted(CLASS_TABLE))
     def test_row_class(self, key: str, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """The row kind and reason of each row. Lot W-B85: the two «Varaus» rows (``varaus_label``, ``varaus_pending``) are
+        ``("excluded", "reservation")``, the label read before the ``Tila`` — red until the plugin gives them that reason
+        (today both are ``status``)."""
         builder, table = _scenario("classes", tmp_path_factory)
 
         row = builder.row(_records(table), key)
@@ -1519,15 +1574,180 @@ class TestClassification:
 
         assert notices and all(notice.severity == "info" for notice in notices)
 
-    def test_guard_an_excluded_row_stays_a_warning_unless_not_yet_settled(self, tmp_path_factory: pytest.TempPathFactory) -> None:
-        """Guard (lot N74): only ``excluded_not_yet_settled`` became a note. The rows this scenario excludes for their status,
-        as invalid or of an unknown type are still a warning each — green today and after."""
+    @pytest.mark.parametrize(("source", "name", "reasons"), EXCLUDED_SOURCES)
+    def test_guard_an_excluded_row_stays_a_warning_unless_not_yet_settled(self, source: str, name: str, reasons: Tuple[str, ...], tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Guard (lot N74, lot W-B85): only ``excluded_not_yet_settled`` became a note; every other excluded reason the parse
+        notes is still a warning, ``excluded_status`` included. And no excluded notice but ``excluded_status`` asks for an
+        issue: the other reasons wait for a decision (D-W85-1) and carry no ``report_issue`` key at all — green today and
+        after."""
+        _table, _path, output = _combined(source, name, tmp_path_factory)
+
+        excluded = {notice.code: notice for notice in output.warnings if notice.code.startswith("excluded_")}
+
+        assert {f"excluded_{reason}" for reason in reasons} <= set(excluded), f"premise: the {name} set excludes rows for {reasons}, the parse noted {sorted(excluded)}"
+        assert {code: notice.severity for code, notice in excluded.items()} == {code: EXCLUDED_NOTICES.get(code, "warning") for code in excluded}, "every excluded reason but not_yet_settled stays a warning"
+        asking = sorted(code for code, notice in excluded.items() if "report_issue" in (notice.context or {}))
+        assert set(asking) <= REPORT_ISSUE_NOTICES, f"only {sorted(REPORT_ISSUE_NOTICES)} may ask for an issue, not {asking}"
+
+
+# =============================================================================
+# 5b. KNOWN ROWS QUIETLY, UNKNOWN ROWS LOUDLY (lot W-B85)
+# =============================================================================
+
+LOG_CANARY = "danske-bank-test-log-canary"
+
+
+def _line_of(records: List[Dict[str, str]], record: Dict[str, str]) -> int:
+    """The line of ``record`` in the combined file written from ``records``: the header is line 1."""
+    return next(number for number, item in enumerate(records, start=2) if item is record)
+
+
+def _keyed_lines(builder: _Builder, records: List[Dict[str, str]], keys: Sequence[str]) -> Set[int]:
+    """The lines of the combined file that carry the keyed member rows."""
+    return {_line_of(records, builder.row(records, key)) for key in keys}
+
+
+def _shown(notice: Any) -> Set[int]:
+    """The lines of the combined file a notice shows as evidence."""
+    return {number for evidence in notice.evidence for number in evidence.row_numbers}
+
+
+def _one_notice(output: BRIMParseOutput, code: str) -> Any:
+    notices = [notice for notice in output.warnings if notice.code == code]
+    assert len(notices) == 1, f"premise: one {code} notice expected, the parse noted {_codes(output.warnings)}"
+    return notices[0]
+
+
+class TestKnownAndUnknownRows:
+    """Lot W-B85 on the "classes" scenario. A «Varaus» cash row is a reservation, known and safe to drop: left out in
+    silence, still counted in the set, logged once. Every other row not booked is unknown: left out with a warning that
+    asks the user to open an issue. Every other notice stays as it is."""
+
+    def test_fixture_guard_the_keys_are_the_scenarios_rows(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Fixture guard: RESERVATION_KEYS and STATUS_KEYS are exactly the rows the class table calls ``reservation`` and
+        ``status``, so every count below counts rows the scenario wrote; the two reservations are cash rows labelled
+        «Varaus», one booked and one not."""
+        builder = _scenario_files("classes", tmp_path_factory)
+        cells: Dict[str, List[str]] = {}
+        for key in RESERVATION_KEYS:
+            role, number, line = builder.where[key]
+            assert role == "cash", key
+            cells[key] = builder.cash[number - 1].read_bytes().decode("latin-1").split("\n")[line - 1].split(";")
+
+        assert sorted(RESERVATION_KEYS) == sorted(key for key, outcome in CLASS_TABLE.items() if outcome == ("excluded", "reservation"))
+        assert sorted(STATUS_KEYS) == sorted(key for key, outcome in CLASS_TABLE.items() if outcome == ("excluded", "status"))
+        label, status = CASH_HEADER.index("Saaja/Maksaja"), CASH_HEADER.index("Tila")
+        assert sorted((row[label], row[status]) for row in cells.values()) == [("Varaus", "Odottaa"), ("Varaus", "Toteutunut")]
+
+    def test_a_reservation_has_its_own_reason_in_the_set(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red until W-B85: the «Varaus» rows stay in the set's accounting, as excluded rows of reason ``reservation``, and
+        ``summary["reasons"]`` counts them under ``reservation`` — no longer under ``status``, which keeps the rows not
+        booked only. Today both are ``status`` (4) and there is no ``reservation``."""
+        _builder, table = _scenario("classes", tmp_path_factory)
+        reasons = table.summary["reasons"]
+
+        assert reasons == dict(Counter(record["lf_reason"] for record in _records(table) if record["lf_row_kind"] in DATA_KINDS and record["lf_reason"])), "premise: the summary counts the reason of every data row"
+        assert {reason: reasons.get(reason) for reason in ("reservation", "status")} == {"reservation": len(RESERVATION_KEYS), "status": len(STATUS_KEYS)}
+
+    def test_no_notice_shows_a_reservation(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red until W-B85: a reservation is known and safe to drop, so no notice tells the user about it — there is no
+        ``excluded_reservation``, no notice is about the reason ``reservation``, and no notice's evidence shows a «Varaus»
+        line. Today ``excluded_status`` shows both, as rows not booked."""
+        builder, table, _path, output = _scenario_parse("classes", tmp_path_factory)
+        lines = _keyed_lines(builder, _records(table), RESERVATION_KEYS)
+
+        assert [notice.code for notice in output.warnings if notice.code == "excluded_reservation" or (notice.context or {}).get("reason") == "reservation"] == []
+        assert {notice.code: sorted(_shown(notice) & lines) for notice in output.warnings if _shown(notice) & lines} == {}, "notices that show a «Varaus» line"
+
+    def test_excluded_status_counts_and_shows_only_the_rows_not_booked(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red until W-B85: ``excluded_status`` is about the rows not booked that are no reservation — the custody
+        ``Hylätty`` row and the cash ``Odottaa`` one — so its ``count`` and its evidence are those two rows. Today it
+        counts and shows the two «Varaus» rows as well (4)."""
+        builder, table, _path, output = _scenario_parse("classes", tmp_path_factory)
+        status = _one_notice(output, "excluded_status")
+
+        assert ((status.context or {}).get("count"), sorted(_shown(status))) == (len(STATUS_KEYS), sorted(_keyed_lines(builder, _records(table), STATUS_KEYS)))
+
+    def test_excluded_status_asks_for_an_issue(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red until W-B85: a row not booked that is no reservation is a row the plugin does not know, so ``excluded_status``
+        stays a warning about the reason ``status`` and carries ``context["report_issue"] is True`` — the wizard shows the
+        link to open an issue under it. Today its context is ``count`` and ``reason`` only."""
         _builder, _table, _path, output = _scenario_parse("classes", tmp_path_factory)
+        status = _one_notice(output, "excluded_status")
+        context = status.context or {}
 
-        excluded = {notice.code: notice.severity for notice in output.warnings if notice.code.startswith("excluded_") and notice.code != "excluded_not_yet_settled"}
+        assert (status.severity, context.get("reason")) == ("warning", "status")
+        assert context.get("report_issue") is True, f"excluded_status context: {context}"
 
-        assert {"excluded_status", "excluded_invalid", "excluded_unknown_type"} <= set(excluded), f"premise: the classes scenario excludes rows for these reasons, the parse noted {sorted(excluded)}"
-        assert excluded == dict.fromkeys(excluded, "warning"), f"every excluded reason but not_yet_settled stays a warning: {excluded}"
+    def test_a_reservation_is_logged_once_with_its_count(self, tmp_path: Path, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Red until W-B85: the backend logs what it leaves out in silence. Across the combine and the parse of the set,
+        exactly one structlog event carries ``reason="reservation"``, with ``count`` the «Varaus» rows the scenario wrote
+        (2); its wording and its level are not pinned. Read behind a barrier: a canary through the plugin module's own
+        logger must reach ``capture_logs``, or a missing event would prove nothing. Today no event carries the reason."""
+        plugin = _danske()
+        builder = _scenario_files("classes", tmp_path_factory)
+        plugin_logger = importlib.import_module(PLUGIN_MODULE).logger
+
+        with capture_logs() as events:
+            plugin_logger.info(LOG_CANARY)
+            assert any(event.get("event") == LOG_CANARY for event in events), f"barrier: the plugin module's logger does not reach capture_logs: {events}"
+            table = plugin.combine(builder.members())
+            path = tmp_path / "combined.csv"
+            write_combined_csv(path, table)
+            plugin.parse(path, broker_id=BROKER_ID)
+
+        logged = [event for event in events if event.get("reason") == "reservation"]
+        assert [event.get("count") for event in logged] == [len(RESERVATION_KEYS)], f"one event with reason=reservation and count={len(RESERVATION_KEYS)}; logged: {[event for event in events if event.get('event') != LOG_CANARY]}"
+
+    def test_guard_a_reservation_stays_out_of_the_running_balance(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Guard (W-B85), green today and after: a «Varaus» row does not move the bank's balance, so whatever its reason it
+        stays out of the running balance the plugin checks. The scenario's statement holds its chain in the combine, in
+        the parse and in the description of the set."""
+        builder, table, _path, output = _scenario_parse("classes", tmp_path_factory)
+
+        assert [path.name for path in builder.cash if _chain_breaks(path)] == [], "premise: the statement as written holds its chain"
+        assert table.summary["balance_chain"] == "ok"
+        assert "balance_chain_broken" not in _codes(output.warnings)
+        assert "balance_chain_broken" not in _codes(_danske().describe_set(builder.members()).notices)
+
+    @pytest.mark.parametrize(("source", "name", "codes"), NOTICE_SOURCES)
+    def test_guard_the_other_notices_are_unchanged(self, source: str, name: str, codes: Tuple[str, ...], tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Guard (W-B85, D-W85-1 pending), green today and after: the notes (``deferred_rows``, ``proof_discarded``,
+        ``deposit_assumed``), ``name_mismatch`` and ``balance_chain_broken`` keep their severity and never ask for an
+        issue — no ``report_issue`` key."""
+        _table, _path, output = _combined(source, name, tmp_path_factory)
+        notices = [notice for notice in output.warnings if notice.code in PARSE_NOTICES]
+
+        assert set(codes) <= set(_codes(notices)), f"premise: the {name} set notes {codes}, the parse noted {_codes(output.warnings)}"
+        assert sorted({(notice.code, notice.severity) for notice in notices}) == sorted({(notice.code, PARSE_NOTICES[notice.code]) for notice in notices})
+        assert [notice.code for notice in notices if "report_issue" in (notice.context or {})] == []
+
+    def test_fixture_guard_the_guards_see_every_other_notice(self) -> None:
+        """Fixture guard: the guards on the other notices see every excluded reason but the silent ones, and every other
+        parse notice."""
+        assert {reason for param in EXCLUDED_SOURCES for reason in param.values[2]} == REASONS - SILENT_REASONS
+        assert {code for param in NOTICE_SOURCES for code in param.values[2]} == set(PARSE_NOTICES)
+
+    @pytest.mark.parametrize("set_name", sorted(SAMPLE_SETS))
+    def test_guard_the_sample_notices_are_unchanged(self, set_name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Guard (W-B85), green today and after: the samples hold no reservation and no row not booked (fixture guard
+        below), so their notices stay exactly as they are — codes, severities, context, and no ``report_issue``."""
+        _table, _path, output = _sample_parse(set_name, tmp_path_factory)
+
+        assert sorted(((notice.code, notice.severity, notice.context) for notice in output.warnings), key=lambda item: item[:2]) == SAMPLE_NOTICES[set_name]
+
+    def test_fixture_guard_the_samples_hold_no_reservation_and_no_row_not_booked(self) -> None:
+        """Fixture guard: every custody row of the samples is ``Toteutettu``, every cash row ``Toteutunut``, and no cash
+        label is «Varaus»."""
+        label, status = CASH_HEADER.index("Saaja/Maksaja"), CASH_HEADER.index("Tila")
+        for name, role in sorted(SAMPLE_ROLES.items()):
+            if role == "custody":
+                header, rows = _sample_custody(name)
+                assert {row[header.index("Tila")] for row in rows} == {"Toteutettu"}, name
+            else:
+                rows = [line.split(";") for line in (SAMPLE_DIR / name).read_bytes().decode("latin-1").split("\n")[1:] if line]
+                assert {row[status] for row in rows} == {"Toteutunut"}, name
+                assert [row[label] for row in rows if row[label].strip().casefold() == "varaus"] == [], name
 
 
 # =============================================================================
@@ -2154,7 +2374,9 @@ class TestParseContract:
 
     @pytest.mark.parametrize(("source", "name"), PARSED_SETS)
     def test_notices(self, source: str, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
-        """Stable codes with their severity; one ``excluded_<reason>`` per reason, showing exactly those rows; the others when they apply."""
+        """Stable codes with their severity; one ``excluded_<reason>`` per reason, showing exactly those rows, but for the
+        silent reasons (lot W-B85: ``reservation``), whose rows no notice shows; the others when they apply. Only a code of
+        REPORT_ISSUE_NOTICES may carry ``report_issue`` (that ``excluded_status`` does is pinned in TestKnownAndUnknownRows)."""
         table, path, output = _combined(source, name, tmp_path_factory)
         records = _records(table)
         lines = _line_count(path)
@@ -2172,11 +2394,16 @@ class TestParseContract:
             for notice in notices:
                 assert notice.severity == severity, code
                 assert notice.message and notice.message.strip(), code
+                assert code in REPORT_ISSUE_NOTICES or "report_issue" not in (notice.context or {}), code
                 for evidence in notice.evidence:
                     assert evidence.title.strip() and evidence.comment and evidence.comment.strip(), code
                     assert all(1 <= number <= lines for number in evidence.row_numbers), code
-        assert sorted(code for code in by_code if code.startswith("excluded_")) == sorted(f"excluded_{reason}" for reason in excluded)
+        shown = {number for notices in by_code.values() for notice in notices for evidence in notice.evidence for number in evidence.row_numbers}
+        assert sorted(code for code in by_code if code.startswith("excluded_")) == sorted(f"excluded_{reason}" for reason in excluded if reason not in SILENT_REASONS)
         for reason, numbers in excluded.items():
+            if reason in SILENT_REASONS:
+                assert sorted(numbers & shown) == [], f"{reason}: rows left out in silence, shown by a notice"
+                continue
             notices = by_code[f"excluded_{reason}"]
             assert len(notices) == 1, reason
             assert {number for evidence in notices[0].evidence for number in evidence.row_numbers} == numbers, reason

@@ -58,13 +58,30 @@ converter.
 9. **Only safe rows.** Import only rows whose date the broker will not change any more:
    movements already settled, executed and booked. A provisional row — its value or
    settlement date after the server's today (`server_today()`, `backend/app/utils/datetime_utils.py`,
-   never the browser's date), or a status that says pending or reserved — is left out
-   **whole**, with every transaction it would have produced (its fee, its premium), and
-   arrives with the next import. Say so with one `severity="info"` note per reason (a
-   `code`, `context.count`, the rows as evidence), never a warning: nothing is wrong, the
-   rows are simply not final yet. When the report holds no export date and no status,
-   compare the row's own date with `server_today()` (Fineco); when it covers a known
-   period, its end (Danske Bank's cash file).
+   never the browser's date) — is left out **whole**, with every transaction it would have
+   produced (its fee, its premium), and arrives with the next import. Say so with one
+   `severity="info"` note per reason (a `code`, `context.count`, the rows as evidence), never a
+   warning: nothing is wrong, the rows are simply not final yet. When the report holds no export
+   date and no status, compare the row's own date with `server_today()` (Fineco); when it covers
+   a known period, its end (Danske Bank's cash file). A row the broker marks by its status
+   (reserved, cancelled, pending) follows rule 10.
+10. **Known rows quietly, unknown rows loudly.** Leave a row out only for a reason the plugin can
+    name (the developer's principle, 19/10/2026).
+    - **Known and safe to leave out** — a blank, header or total row, a reservation (Danske
+      Bank's «Varaus»), a row the broker marks as cancelled, a duplicate of another row: no
+      notice, at most one backend log line per reason (`logger.info(…, reason=…, count=…)`). In a
+      report set the row keeps its place in the set's accounting: an `excluded` outcome with its
+      reason, labelled by `importWizard.reportSet.reason.<reason>`.
+    - **Unknown or unreadable** — a type, status or description the plugin does not recognise;
+      a date, amount or required field it cannot read: leave it out, and say so with one
+      `severity="warning"` notice per reason (a `code`, `context.count`, the rows as evidence)
+      that carries `context.report_issue = True`. The wizard then shows the link «open an issue
+      on GitHub» under the warning, on every instance, self-hosted or hosted: the users become
+      the canaries of a broker whose export changes. Example: Danske Bank's `excluded_status`.
+    - **Never silently** leave out a row that may carry an economic effect (a split, a fee, a
+      tax, a currency conversion) unless the plugin knows that is safe: a row it cannot import
+      is unknown.
+    - Rule 9's rows not settled yet are neither: they keep their info note.
 
 ## 🛠️ Rough shape of the work
 

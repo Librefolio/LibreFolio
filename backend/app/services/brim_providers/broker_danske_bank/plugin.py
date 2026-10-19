@@ -125,7 +125,14 @@ _STANDALONE_TYPES = {
 _PAIRED = ("buy", "sell", "income")
 _MOVEMENTS = ("buy", "sell", "demerger_old", "demerger_new")
 _TRUTH_KINDS = ("truth_cash", "truth_position", "verification")
-_EXCLUDED_ORDER = ("no_counterpart", "ambiguous", "not_yet_settled", "outside_cash_coverage", "status", "unknown_type", "invalid", "superseded")
+_EXCLUDED_ORDER = ("no_counterpart", "ambiguous", "not_yet_settled", "outside_cash_coverage", "status", "reservation", "unknown_type", "invalid", "superseded")
+# W-B85, the developer's principle for BRIM plugins (19/10): a row the plugin knows it may leave out goes silently, with a log
+# line, and stays in the set's accounting; a row it does not know goes with a warning that asks the user to open an issue
+# (`context.report_issue`), so that the plugin learns the case.
+_SILENT_EXCLUSIONS = frozenset({"reservation"})
+_REPORTED_EXCLUSIONS = frozenset({"status"})
+# The cash classes that are no booked movement: the balance chain leaves them out.
+_UNBOOKED_CLASSES = frozenset({"status", "reservation", "invalid"})
 
 _BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _SPACES_RE = re.compile(r"\s+")
@@ -522,7 +529,10 @@ def _cash_label_class(label: str, amount: Decimal) -> Tuple[str, str]:
 
 
 def _classify_cash(row: _CashRow) -> Tuple[str, str]:
-    if _norm(row.status) != _CASH_BOOKED or _norm(row.label) == _RESERVATION:
+    # A reservation is a hold the bank replaces with the booked movement: known, so left out without a notice (W-B85).
+    if _norm(row.label) == _RESERVATION:
+        return "reservation", ""
+    if _norm(row.status) != _CASH_BOOKED:
         return "status", ""
     if row.value is None or not row.amount:
         return "invalid", ""
@@ -772,7 +782,7 @@ def _day_consistent(balance: Decimal, group: List[_CashRow], total: Decimal) -> 
 
 
 def _chain(rows: List[_CashRow]) -> _Chain:
-    booked = sorted((row for row in rows if row.klass not in ("status", "invalid")), key=lambda row: (row.value, row.file_index, -row.row))
+    booked = sorted((row for row in rows if row.klass not in _UNBOOKED_CLASSES), key=lambda row: (row.value, row.file_index, -row.row))
     if not booked:
         return _Chain()
     first = booked[0]
@@ -1245,7 +1255,7 @@ _EXCLUDED_MESSAGES = {
     "ambiguous": "{n} riviä, joita ei voitu yhdistää yksiselitteisesti: niitä ei tuoda.",
     "not_yet_settled": "{n} kauppaa maksetaan tilitiedoston viimeisen päivän jälkeen: ne tulevat seuraavassa tuonnissa.",
     "outside_cash_coverage": "{n} kauppaa maksettiin ennen tilitiedoston ensimmäistä päivää: niitä ei tuoda.",
-    "status": "{n} riviä ei ole toteutunut tai kirjattu: niitä ei tuoda.",
+    "status": "{n} riviä ei ole toteutunut tai kirjattu, eikä niiden tilaa tunneta: niitä ei tuoda. Jos ne ovat oikeita tapahtumia, avaa issue GitHubissa, jotta tapaus voidaan käsitellä:",
     "unknown_type": "{n} riviä on tuntematonta tyyppiä: niitä ei tuoda.",
     "invalid": "{n} riviä on virheellisiä: niitä ei tuoda.",
     "superseded": "{n} riviä korvattiin uudemmalla tiedostolla, joka kattaa samat päivät.",
@@ -1497,11 +1507,19 @@ class _CombinedParser:
         notices = []
         for reason in sorted(self.excluded, key=lambda item: (_EXCLUDED_ORDER.index(item) if item in _EXCLUDED_ORDER else len(_EXCLUDED_ORDER), item)):
             lines = self.excluded[reason]
+            if reason in _SILENT_EXCLUSIONS:
+                # Known and safe to leave out (W-B85): no notice, a log line; the rows stay in the set's accounting.
+                logger.info("Danske Bank rows left out without a notice", reason=reason, count=len(lines))
+                continue
             message = _EXCLUDED_MESSAGES.get(reason, "{n} riviä jätettiin pois.").format(n=len(lines))
             # A trade not settled yet is no problem: it arrives with the next import (only safe rows, N74): a note. The other
             # reasons ask the user to look.
             severity = "info" if reason == "not_yet_settled" else "warning"
-            notices.append(BRIMNotice(severity=severity, code=f"excluded_{reason}", message=message, evidence=_row_evidence(lines, _EXCLUDED_COMMENT), context={"count": len(lines), "reason": reason}))
+            context: Dict[str, Any] = {"count": len(lines), "reason": reason}
+            if reason in _REPORTED_EXCLUSIONS:
+                # Unknown (W-B85): the wizard shows the link «open an issue on GitHub» under this warning.
+                context["report_issue"] = True
+            notices.append(BRIMNotice(severity=severity, code=f"excluded_{reason}", message=message, evidence=_row_evidence(lines, _EXCLUDED_COMMENT), context=context))
         notices.extend(self._info_notices())
         return notices
 
@@ -1630,7 +1648,8 @@ class DanskeBankBrokerProvider(BRIMProvider):
     @property
     def plugin_version(self) -> str:
         # 1.0.1 — excluded_not_yet_settled is an info note, no longer a warning (N74: only safe rows).
-        return "1.0.1"
+        # 1.0.2 — a reservation («Varaus») is left out without a notice; excluded_status asks for an issue (W-B85).
+        return "1.0.2"
 
     @property
     def test_file_pattern(self) -> Optional[str]:

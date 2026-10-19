@@ -381,7 +381,8 @@
         "invalid": "no válidas",
         "not_yet_settled": "aún no liquidadas",
         "outside_cash_coverage": "liquidadas antes del inicio del extracto",
-        "superseded": "sustituidas por un archivo más reciente"
+        "superseded": "sustituidas por un archivo más reciente",
+        "reservation": "reservadas, no contabilizadas"
       },
       "downloadCombined": "Descargar el archivo combinado",
       "warning": {

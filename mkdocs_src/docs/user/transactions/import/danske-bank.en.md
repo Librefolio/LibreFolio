@@ -93,7 +93,10 @@ The securities export only goes back one year, so import **at least once a year*
 
 - Each transaction gets its **value date** (the day the money or the shares moved) and its amount in **euro**, as the bank wrote it.
 - The files give no ISIN or ticker: confirm each security in the wizard's [asset mapping](index.md#asset-mapping).
-- **Nothing is dropped silently**: rows left out — a missing payment, an order not executed, a trade paid after the statement ends… — are counted in the set's detail and listed in the importer's notices, in **Finnish** like the files. Check the matched trades a notice flags because their names differ.
+- **Every row is accounted for**: a row left out — a missing payment, a trade paid after the statement ends… — is still counted in the set's detail, with its reason, and listed in the importer's notices, in **Finnish** like the files. Two cases are handled differently:
+    - **Reservations** (`Varaus` in the cash statement) are holds that the bank replaces with the booked movement, and that movement is the one imported. They are counted in the set's detail as *reserved, not booked*, but not listed in the notices: there is nothing to check.
+    - **A status LibreFolio does not know**: a row whose `Tila` is anything but executed (`Toteutettu`) or booked (`Toteutunut`) — an order not executed, for instance — is left out with a **warning** and a link to **open an issue on GitHub**. Please open one, naming the `Tila` you see, so that the importer learns to handle it. Meanwhile, if one of those rows is a real movement, add it by hand.
+- Check the matched trades a notice flags because their names differ.
 
 ### 💶 Fees are included in the trade amounts
 
