@@ -17,6 +17,10 @@
  * an answer without a code), and `failure` what failed. The end of a job is announced (`onDone`, or `onFailed` with
  * `job`) once, and only for a job this controller started or saw running: an archive picked up already finished, or
  * read again, is not news.
+ *
+ * A start refused because another backup runs never names that backup on the card (developer, 19/10): the card says
+ * only that one runs, or follows it when the Backup tab started it (B-8). The browser console names it — its id, its
+ * origin and its state — with one `console.warn`, whatever the log level, for whoever has to find it.
  */
 import {backupBusyJob, backupErrorCode, backupFailureCode, deleteInstanceBackupJob, getInstanceBackupJob, startInstanceBackup, type InstanceBackupJob} from './backupApi';
 
@@ -141,6 +145,9 @@ export class BackupJobController {
             // another tab: followed as if started here. One started from the command line or the hosting panel is not:
             // its archive goes elsewhere, or is the panel's. With an archive on offer, the offer stays (developer, 19/10).
             const running = backupBusyJob(error);
+            // The card never names it; the console does, once per refusal, followed or not (developer, 19/10). The server
+            // names a job only while its state says it runs.
+            if (running !== null) console.warn('LibreFolio backup: another backup is running', {job_id: running.jobId, origin: running.origin, status: 'running'});
             if (running !== null && running.origin === 'ui' && offered === null) {
                 this.#watched = running.jobId;
                 // Remembered before its first read (developer, 19/10): when that read fails, «Check again» reads it.
