@@ -109,7 +109,11 @@ accumulators); `portfolio/models.py` holds `ValuationSource`, `EngineEndState` a
 every point of the line (developer decision D-MF5): no rate when the value is zero or less, or when the net invested
 capital up to that day — the first snapshot's value plus the flows after it (decision N54) — is zero or less; the
 series' last point is the card. `calculate_mwrr()` and `calculate_mwrr_series()` remain the bare solves, without that
-rule, and every point of the series is the single solve ending on its snapshot (one starting guess).
+rule, and every point of the series is the single solve ending on its snapshot (one starting guess). A series gives
+each point the rate of that single solve bit for bit, and is faster on long histories (P1, N74): when the cold Newton
+step from the starting guess fails, it skips the grid scan only where the scan's answer is known — the previous point's
+rate, by Newton, points at the one true root (one sign change in the flows, Descartes' rule), and the answer is the
+scan's own Brent call on that grid interval (`_mwrr_solve`, `_bracketed_xirr_at`); everywhere else the scan runs.
 
 `float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
 signal statistics read. `market_series.py`, which prepares those series, takes both from here and keeps no return
