@@ -6936,7 +6936,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >     - `docs(journal): B-15 + B-8 done, B-50 filed`: questo piano e il backlog.
 >   - Aperte: la domanda sul 409 di qualunque origine (variante pronta, non applicata) e B-50.
 
-### N74 di W — revisione: Fineco tiene solo le righe regolate, il batch arriva a domani (2026-10-19, 16:05-16:45) — ✅ 🧊 FROZEN
+### N74 di W — revisione: Fineco tiene solo le righe regolate, il batch arriva a domani (2026-10-19, 16:05-16:38) — ✅ 🧊 FROZEN
 
 > **Richiesta** (coordinatore, 16:05): revisione di **N74 di W**, commit `8a86011ce` sul ramo
 > `e-alfy-w-import-e-transazioni`, fuso con dev in `a68a26a75`. Da verificare: che «oggi» e «domani» vengano dal
@@ -7042,3 +7042,85 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > - **Backlog**: B-51 (R1) e B-52 (F2) nuove, area di W.
 > - **Pulizia**: l'albero estratto è tolto alla fine; gli script e i log restano nella cartella di sessione.
 > - **Commit proposto**: `docs(journal): B review of W N74`. 🧊 FROZEN.
+
+### B-8, seguito — la scheda dice solo «occupato», la console nomina il job (2026-10-19, 16:38-17:15) — ✅ 🧊 FROZEN (checkpoint delle 17:15)
+
+> **Il developer** (relayed dal coordinatore alle 16:38, testuale): «farei che a schermo compare solo "occupato", in
+> console magari più dettagli per permetterci di backuppare se serve, non è in vista ma se venisse letto da un utente
+> non sarebbe grave». **Coordinatore**: la risposta 409 resta com'è (id e origine del job); la scheda mostra solo
+> «occupato», senza nominare il backup, qualunque sia l'origine; in console id, origine e stato del job, sempre (non
+> al livello di log di H-60); nessun dato personale. Poi il lotto aggiornato sul ramo, con i rossi e un checkpoint
+> nuovo.
+>
+> - ✅ **Base**: HEAD `05dc41906` (la revisione di N74 committata alle 16:38), pulito; B-15 + B-8 (`0b8037b75`) è sul
+>   ramo, non ancora in dev.
+> - ✅ **Lettura** (16:38-16:41):
+>   - la card non nomina mai il job: per un `backup_busy` mostra solo «Another backup is running: try again when it
+>     ends.» (`backup.download.errors.backup_busy`), anche nel toast; seguendo un job `ui` ne mostra l'avanzamento e
+>     poi l'archivio, mai id né origine. Quindi «la scheda non nomina» è già vero: una guardia, non un rosso; il rosso
+>     è la riga in console;
+>   - `$lib/debug` scrive solo nelle build di debug (un no-op tolto dal minificatore in produzione): non va. H-60 non
+>     è in dev. Nessuna regola contro `console.*` (nessun ESLint, Vitest non fallisce sulla console; 117 usi nel
+>     codice di prodotto): un `console.warn` mirato;
+>   - lo stato non è nella risposta, che resta com'è: il server nomina un job solo mentre il suo stato dice che gira
+>     (`jobs._running_job`), quindi la riga dice `running`.
+> - ✅ **Domanda al coordinatore** (16:41): per un job `ui` nominato senza archivio in offerta, la scheda continua a
+>   seguirlo o mostra solo «occupato»? **Risposta** (16:43): **continua a seguirlo** — il «solo occupato» del
+>   developer riguardava il nominare i backup degli altri (gli id del pannello); seguire il proprio `ui`, senza
+>   mostrare id né origine, è la scelta 1–3 di stamattina. Il resto come proposto. Via, con i rossi.
+> - **Contratto** (`files/b8-console-contract.md`): un solo `console.warn` per ogni partenza rifiutata `backup_busy`
+>   che nomina un job, seguito o no: una stringa (testo libero), poi esattamente
+>   `{job_id, origin, status: 'running'}`; nessuna riga per un rifiuto che non nomina un job, per gli altri errori,
+>   per le letture successive. Rossi e guardie a TA-B8-CONSOLE (`backupJob.test.ts`, `BackupDownloadCard.test.ts`,
+>   sola scrittura). La cura: `apply_b8_console.py` (2 operazioni in `backupJob.svelte.ts`: il commento del modulo e
+>   la riga; `--check` OK, non applicata).
+> - ✅ **Doc** (16:44): `security.md`, nel paragrafo della partenza, «la scheda non nomina; la risposta sì» (la card
+>   dice solo che un altro backup gira, o segue il suo; id, origine e stato `running` vanno in console con un
+>   `console.warn` per rifiuto, a ogni livello di log; nessuno dei tre è un dato personale); `backup_restore.en.md`,
+>   la riga 🚦: la card non dice quale backup gira, la console del browser sì (l'id e da dove è partito).
+> - ✅ **Doc, i controlli** (16:49-16:51, carico 30-40): `mkdocs build` stretta exit 0 (3085 URL risolti),
+>   `check-links` pulito, `utils gate-docs-links` 63.
+> - ✅ **Rossi** (TA-B8-CONSOLE, 16:45-17:07, sola scrittura):
+>   - `backupJob.test.ts`, 16 rossi:
+>     - ogni origine, senza archivio in offerta (il job `ui` seguito compreso);
+>     - un job `ui` trovato già finito, fallito, sparito o senza risposta alla prima lettura;
+>     - ogni origine con un archivio in offerta;
+>     - tre rifiuti di fila danno tre righe;
+>     - la riga scritta una volta sola, al rifiuto: né il seguito, né una lettura fallita, né `recheck()` o `resume()`
+>       ne aggiungono altre.
+>   - Più 20 guardie: nessuna riga per un rifiuto che non nomina un job (o con id o origine non validi), per gli altri
+>     errori, per una partenza riuscita, per `resume()`, per «Check again».
+>   - Nei quattro gruppi B-8 di prima, `console.warn` è zittita, senza cambiare nessuna asserzione.
+>   - `BackupDownloadCard.test.ts`, 10 rossi (la riga attraverso la card) e guardie a schermo, per ogni origine:
+>     - con niente in offerta, solo la frase «occupato» nell'avviso;
+>     - con un archivio in offerta, l'archivio e la frase;
+>     - un job `ui` seguito fino all'archivio senza id né `ui` nel testo; il toast dice la frase.
+>     - Le «needle» (l'id ovunque, l'origine come parola intera) hanno una premessa verificata: assenti nella card
+>       «occupato» semplice, presenti in una frase o una chiave che nomina il job, assenti in `build`, `ui_`,
+>       `panels`, `pre-restored`.
+> - ✅ **Rosso** (17:08, carico 37): **26 falliti**, 259 passati. Gli 11 messaggi distinti (Vitest raggruppa quelli
+>   uguali) dicono tutti `expected "warn" to be called N times, but got 0 times`; nessun fallimento ha un'altra
+>   causa.
+> - ✅ **Cura** (17:09): `apply_b8_console.py`, 2 operazioni in `backupJob.svelte.ts` (+7 righe).
+> - ✅ **Verdi** (17:09-17:14):
+>   - Vitest di tutta la feature `backup`: 9 file, **1028 passati**;
+>   - prettier pulito sui 3 file;
+>   - `front check` 0 errori e 0 avvisi.
+> - **⚠️ Fuori pista**: il primo `front check` (17:11) trovava 4 errori su `scope_boundary` nei file dei lotti (non
+>   miei). Il client generato era delle 12:23, di prima del merge di dev delle 15:16, che ha portato il campo. Dopo
+>   `api sync` (exit 0): 0 errori.
+> - **Le 8 domande di test-author**, chiuse dal contratto o dalla cura, senza decisioni nuove:
+>   - la riga ha due argomenti, e i test fissano solo quelli;
+>   - un rifiuto arrivato dopo `dispose()` o `reset()` è scartato prima della riga (il controllo `#stale`);
+>   - la riga c'è già prima che la prima lettura risponda;
+>   - nessuna deduplica: due rifiuti dello stesso job danno due righe;
+>   - lo stato è quello del rifiuto, `running`, anche se la prima lettura trova il job finito;
+>   - «a schermo» è il testo: l'`href` del link di un archivio in offerta contiene il suo id per costruzione, come
+>     prima di B-8;
+>   - un avviso di Svelte in dev romperebbe il conteggio, e la precondizione «niente scritto prima» lo mostrerebbe;
+>   - un `backup_no_space` con `job_id` non scrive righe (il server non lo manda).
+> - ✅ **Backlog**: nella riga di B-8, la domanda sul 409 è chiusa dal developer.
+> - **CHANGELOG**: nessuna riga (backup e ripristino sono nuovi nella 1.3).
+> - ✅ **Checkpoint** (17:15), 🧊 FROZEN. Commit proposti:
+>   - `fix(backup): busy card stays silent, console names job`: `backupJob.svelte.ts`, i due test, le due doc;
+>   - `docs(journal): B-8 busy console, developer decision`: questo piano e il backlog.
