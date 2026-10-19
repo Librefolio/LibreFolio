@@ -8036,3 +8036,78 @@ non sposti il registro.
 >   prodotto e nessuna registrazione nel runner: i file sono già registrati e i nomi dei test non compaiono altrove.
 > - **I selettori**: `services email-flows` e `api email`, entrambi puri (la categoria api avvia comunque il backend
 >   della corsia), nella corsia 6188.
+
+#### E-EMF9.1 — R1, la riscrittura (via del coordinatore 2026-10-19, 14:23; base `f504cb61c`)
+> **Il via**: R1 scritto dal `test-author`.
+> - I due test tengono la barriera «un tema che questa versione non conosce», rifiutato dallo schema.
+> - Rinomina, e riallineamento di contratti, messaggi ed helper.
+> - In EMA-017 si toglie il motivo superato; EMA-018 resta com'è.
+> - La docstring di `account_language` si tocca solo se è falsa dopo A-11.
+> - Prima il rosso, poi il verde, nella corsia 6188 col carico sotto 50. Entra nel treno della fusione di H.
+>
+> **La docstring di `account_language` e `email.md` (:570, :1396) restano come sono.** «A settings row that no longer
+> validates (a theme outside light/dark/auto, say) never stops an email» è ancora vera: lo schema `UserSettingsRead`
+> rifiuta ancora quel tema, e la lingua arriva lo stesso. R1 tocca solo i due file di test.
+
+1. ✅ **Il rosso nella corsia** (2026-10-19, 14:24–14:25; HEAD `f504cb61c`)
+   > **Note implementazione**: `files/tools/e9_suites.sh emf9red services:email-flows api:email`, cioè
+   > `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6188 --data-dir
+   > /tmp/librefolio-r13-e services email-flows`, poi `… --no-shared-server api email` (il file è in-process: nessun
+   > server). Una corsa per volta, con `nice`.
+   > - `services email-flows`: **1 fallito, 148 passati**. È EMF-009,
+   >   `test_a_settings_row_the_read_model_refuses_still_gives_its_language`.
+   > - `api email`: **1 fallito, 167 passati**. È EMA-017,
+   >   `test_a_settings_row_the_read_model_refuses_still_gives_the_test_email_its_language`.
+   > - Entrambi con «DID NOT RAISE ValidationError». La porta 6188 è libera dopo.
+   >
+   > Log: `files/logs/e9_emf9red_*.log`, nella cartella della sessione.
+2. ✅ **La riscrittura** (`test-author` `emf9-r1-rewrite`, 14:2x–14:3x): `test_email_flows.py` e `test_email_api.py`.
+   > **Note implementazione**:
+   > - **I nomi**: EMF-009 diventa `test_a_theme_this_version_does_not_know_still_gives_its_language`, EMA-017
+   >   `test_a_theme_this_version_does_not_know_still_gives_the_test_email_its_language`. Restano gli ID e ogni asserzione.
+   > - **La barriera** è ora lo schema `UserSettingsRead` che rifiuta `STALE_THEME`, ed è il primo passo del test, prima
+   >   di ogni scrittura. Nei flussi è il nuovo `_unknown_theme_refusal()`, sincrono; nelle API si riusa
+   >   `_read_model_refusal()`, l'aiuto di EMA-018, senza toccarlo.
+   > - `_refused_by_the_read_model` sparisce dai due file, e così l'import di `get_user_settings`. Nei flussi si importa
+   >   `UserSettingsRead`.
+   > - **I testi**: il contratto 4 dei flussi, il contratto 3 delle API, le docstring, `print_section`, i messaggi e
+   >   `print_success` parlano di «un tema che questa versione non conosce». In EMA-017 il motivo superato («il login
+   >   legge la riga dal modello») è tolto; l'ordine (accesso, riga, `POST`) resta, senza un motivo nuovo.
+   > - Non toccati: `STALE_THEME` col suo commento (ancora vero), EMA-018 e `_read_model_refusal`.
+   > - Il `test-author` non ha eseguito niente (solo il controllo `ast`) e ha letto il piano con un `grep`.
+3. ✅ **La revisione del diff, poi ruff e black** (14:3x)
+   > **Note implementazione**: il diff è quello chiesto: 2 file, 29 righe aggiunte e 40 tolte (API +11 −21, flussi
+   > +18 −19).
+   > - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python -m ruff check <i due file>`: «All checks
+   >   passed!».
+   > - `… -m black --check --diff <i due file>`: «2 files would be left unchanged».
+   > - Una differenza di parole, solo un'informazione: la docstring di `_read_model_refusal` e EMA-018 dicono ancora «the
+   >   read model» per lo schema, che i testi nuovi chiamano «the schema». Restano così perché EMA-018 non si tocca.
+4. ✅ **La prova di mutazione** (14:3x; `files/tools/emf9_mutation.sh`)
+   > **Note implementazione**: un export di HEAD con i due file di test del worktree; `flows.account_language` mutato
+   > solo nell'export. Si eseguono i due test rinominati (`-k test_a_theme_this_version_does_not_know`).
+   > - **R1**, così come sono: **2 passati**.
+   > - **M1**, la riga validata con lo schema `UserSettingsRead`: **2 falliti**, per la ragione giusta: `ValidationError`
+   >   `literal_error` sul tema, alla riga mutata (`flows.py:101`).
+   > - **M2**, il flusso riscrive il tema sconosciuto (`'auto'`) e fa commit: **2 falliti**, per la ragione giusta: «must
+   >   leave the row as it was», `('it', 'auto') != ('it', 'sepia')`.
+   > - **M3**, il controllo: la lingua letta da `get_user_settings`, tollerante dopo A-11: **2 passati**. È il limite
+   >   onesto: dopo A-11 quella lettura non fa più danni, e i test non la vietano. Vietano che un flusso validi la riga
+   >   con lo schema o la riscriva.
+   >
+   > **⚠️ Fuori pista**: la prova gira in modalità test sulla data-dir della corsia, che il runner ha creato al passo 1
+   > (14:24). Così la fixture di sessione del conftest ha aperto il DB della corsia in sola lettura: il WAL cambia la
+   > cartella `sqlite` alle 14:32. Non ha scritto: `app.db` è del 14:24 e `registration_mode` è `open`, scritto alle
+   > 14:24:38 dal setup del runner. È la mia corsia, ed è lo stesso percorso del runner. La prova dell'analisi delle 14:1x
+   > non lo toccava, perché allora la cartella non c'era.
+5. ✅ **Il verde nella corsia** (2026-10-19, 14:33–14:34; HEAD `f504cb61c` più i due file)
+   > **Note implementazione**: gli stessi comandi del passo 1 (`files/tools/e9_suites.sh emf9green services:email-flows
+   > api:email`), col carico a 1 minuto a 15,9.
+   > - `services email-flows`: **149 passati**.
+   > - `api email`: **168 passati**.
+   >
+   > I totali sono quelli del rosso (1 + 148 e 1 + 167), quindi nessun test è andato perso. I due test rinominati sono
+   > nel log, con la loro riga di successo e `PASSED`. La porta 6188 è libera dopo. Log: `files/logs/e9_emf9green_*.log`.
+6. ✅ **Il checkpoint** al coordinatore (2026-10-19, 14:3x), poi FROZEN.
+   > **Note implementazione**: nel checkpoint vanno i due file di test e questo piano. Niente di generato. Nessuna riga
+   > nel backlog: E-EMF9 non lascia niente per dopo.
