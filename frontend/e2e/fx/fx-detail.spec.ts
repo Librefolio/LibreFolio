@@ -2865,3 +2865,238 @@ test.describe('FX pair page — the provider editor replaces the pair’s routes
         }
     });
 });
+
+// ============================================================================
+// X-R16 — an invalid backend signal result must not cost the pair page its rates
+// ============================================================================
+// With a backend signal configured, the page asks for the rates of its range and for the signal results in one
+// `POST /fx/currencies/convert` (`signals` on the item, `signal_results` on the answer). An invalid result in
+// `signal_results[request_index 0].signals` must cost the signal side alone — no result applied, and the
+// `signal-backend-error` banner saying the signal results are unavailable — while the rates stay on the chart and
+// «All» resolves its start to the first rate date.
+//
+// Today the invalid result throws, and no branch of the catch resolves «All»: the `withSignals` one never calls
+// `resolveMaxStartFromChartData()`. Read statically, the throw does not come from the page's own
+// `parseBackendSignalResults` (~563, called ~856) but earlier, from the API client: `zodiosApi` validates every JSON
+// answer (`validate: 'response'`, `lib/api/zodios-client.ts`), and `FXSignalQueryResult.signals` is
+// `z.array(SignalResult)`, the very schema the page parses with. The whole answer is rejected before its rates reach
+// the store, so the catch finds none to keep (`chartData = []`, the client's message in the page's error banner), and
+// the page's own parse only ever sees answers the client has already accepted. A try/catch around that parse alone
+// therefore leaves both REDs below red: they turn green once the answer is read with signal isolation, as the asset
+// page reads its own (`queryAssetPricesBulkWithSignalIsolation` → `parseAssetPriceQueryWithSignalIsolation`).
+//
+// The pair is the seeded EUR-USD, read and never written: its rates (60 daily rates ending yesterday), its signal
+// catalog (RSI alone, the definition «persists distinct primary scales and the semantic RSI scale across reload»
+// serves) and its signal results all come from route mocks. The RSI signal is stored in this context's localStorage,
+// where the chart settings live. «All» is opened by URL (`?start=min&end=max`, the form the page writes itself), so the
+// first load is the «All» load, signal included. Nothing reaches the database: there is nothing to clean up.
+// ============================================================================
+test.describe('X-R16 FX detail: an invalid signal result keeps the rates and the All range', () => {
+    // A ceiling, never a delay: a sign-in, the stored signal, a page load and the round trips each test waits for by name.
+    test.describe.configure({timeout: 60_000});
+
+    /** The seeded pair, canonical: read, never written — every rate on screen comes from the route below. */
+    const PAIR = 'EUR-USD';
+    /** The RSI signal stored on the pair: the page asks for it under this `instance_id`. */
+    const RSI_ID = 'x-r16-rsi';
+    /** The FX signal catalog the page loads: RSI alone, without parameters, so the stored signal needs none. */
+    const RSI_DEFINITION = {
+        signal_code: 'RSI',
+        implementation_version: '1.0.0',
+        category: 'momentum',
+        display_name_key: 'signals.rsi',
+        description_key: 'signals.rsi.description',
+        semantic_id: 'technical.rsi',
+        semantic_description: 'Relative Strength Index.',
+        icon: '📊',
+        params_schema: {type: 'object', properties: {}},
+        default_params: {},
+        input_requirements: {price_fields: ['close'], data_policy: 'strict_contiguous', minimum_coverage: 1},
+        output_specs: [
+            {
+                key: 'rsi',
+                label_key: 'signals.rsi.value',
+                semantic_id: 'technical.rsi.value',
+                semantic_description: 'Relative Strength Index values.',
+                unit: 'index',
+                axis: {key: 'rsi', role: 'independent', minimum: 0, maximum: 100},
+                view_transform: 'none',
+                kind: 'line',
+                aggregation_profile: 'last_with_range',
+            },
+        ],
+        compatible_domains: ['fx'],
+    };
+    /** The RSI series of a valid answer, without its points. */
+    const RSI_SERIES = {key: 'rsi', label_key: 'signals.rsi.value', semantic_id: 'technical.rsi.value', semantic_description: 'Relative Strength Index values.', unit: 'index', axis: {key: 'rsi', role: 'independent', minimum: 0, maximum: 100}, view_transform: 'none', kind: 'line'};
+
+    /** The fields of a `/fx/currencies/convert` item these tests read. */
+    type ConvertAsk = {from_amount?: {code?: string}; to?: string; date_range?: {start?: string; end?: string | null}; signals?: Array<{instance_id?: string; signal_code?: string}>};
+    /** An item the route has answered: logged once its answer is delivered, not when it is asked. */
+    type DeliveredAsk = {start: string | null; signalCodes: string[]};
+    /** How the route answers each signal asked: with a result the schema rejects, or with an RSI series over the rates it answers. */
+    type SignalAnswer = 'invalid' | 'valid';
+
+    /** Stores the RSI signal on the pair where the page reads it: this context's localStorage, under the signed-in user's key. */
+    async function storeRsiSignal(page: Page): Promise<void> {
+        const me = await page.request.get('/api/v1/auth/me');
+        expect(me.ok(), `GET /api/v1/auth/me answered HTTP ${me.status()}`).toBe(true);
+        const userId = ((await me.json()) as {user?: {id?: unknown}}).user?.id;
+        if (typeof userId !== 'number' || !Number.isSafeInteger(userId)) throw new Error('GET /api/v1/auth/me returned no user id, and the chart settings are stored under it');
+        const settings = (signals: object[]) => ({colorByBaseline: true, areaFill: true, gridLines: true, staleGradient: true, axisScales: {absolute: {mode: 'auto'}, percentage: {mode: 'include0'}, secondary: {}}, signals});
+        const rsi = {id: RSI_ID, signalType: 'rsi', params: {}, style: {color: '#7c3aed', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null}};
+        await page.evaluate(({key, value}) => localStorage.setItem(key, value), {key: `lf_${userId}_chartSettingsStore`, value: JSON.stringify({version: 3, globalSettings: settings([]), pairOverrides: [[PAIR, settings([rsi])]]})});
+    }
+
+    /** The FX signal catalog, RSI alone. */
+    async function routeRsiCatalog(page: Page): Promise<void> {
+        await page.route(
+            (url) => url.pathname === '/api/v1/fx/currencies/signals',
+            (route) => route.fulfill({status: 200, contentType: 'application/json', json: {items: [RSI_DEFINITION]}}),
+        );
+    }
+
+    /**
+     * Serves the pair's conversions: 60 daily rates ending yesterday, those inside each item's range, and for an item
+     * that asks for signals its `signal_results` group, answered as `answer` says. Returns the items delivered, the date
+     * of the first rate and the last rate as the page publishes it (`data-chart-last-rate`).
+     */
+    async function routePairRates(page: Page, answer: SignalAnswer) {
+        const history = Array.from({length: 60}, (_, index) => daysAgoIso(60 - index));
+        const rateAt = (index: number) => (1.1 + index / 1000).toFixed(4);
+        const delivered: DeliveredAsk[] = [];
+        await page.route(
+            (url) => url.pathname === '/api/v1/fx/currencies/convert',
+            async (route) => {
+                // postDataJSON throws on an empty or non-JSON body, and nobody awaits a route callback: read it as no item.
+                let asks: ConvertAsk[] = [];
+                try {
+                    const body: unknown = route.request().postDataJSON();
+                    asks = Array.isArray(body) ? body.filter((ask): ask is ConvertAsk => ask !== null && typeof ask === 'object') : [];
+                } catch {
+                    asks = [];
+                }
+                const results: object[] = [];
+                const signalResults: object[] = [];
+                asks.forEach((ask, requestIndex) => {
+                    const from = ask.from_amount?.code ?? 'EUR';
+                    const to = ask.to ?? 'USD';
+                    const start = ask.date_range?.start ?? '';
+                    const end = ask.date_range?.end ?? start;
+                    const days = history.flatMap((date, index) => (date >= start && date <= end ? [{date, rate: rateAt(index)}] : []));
+                    for (const day of days) results.push({from_amount: {code: from, amount: '1'}, to_amount: {code: to, amount: day.rate}, conversion_date: day.date, rate: day.rate, backward_fill_info: null});
+                    const asked = ask.signals ?? [];
+                    if (asked.length === 0) return;
+                    signalResults.push({
+                        request_index: requestIndex,
+                        from_currency: from,
+                        to_currency: to,
+                        date_range: {start, end},
+                        signals: asked.map((signal) => {
+                            const identity = {instance_id: signal.instance_id ?? RSI_ID, signal_code: signal.signal_code ?? 'RSI'};
+                            if (answer === 'invalid') return {...identity, status: 'not-a-status'};
+                            if (days.length === 0) return {...identity, status: 'unavailable'};
+                            return {...identity, implementation_version: '1.0.0', normalized_params: {}, status: 'ok', series: [{...RSI_SERIES, points: days.map((day, index) => ({date: day.date, value: 40 + (index % 20)}))}]};
+                        }),
+                    });
+                });
+                await route.fulfill({status: 200, contentType: 'application/json', json: {results, success_count: results.length, signal_results: signalResults}});
+                for (const ask of asks) delivered.push({start: ask.date_range?.start ?? null, signalCodes: (ask.signals ?? []).map((signal) => signal.signal_code ?? '')});
+            },
+        );
+        return {delivered, firstRateDate: history[0], lastRate: String(Number(rateAt(history.length - 1)))};
+    }
+
+    /** Opens the pair page on «All» by URL and verifies, rather than assumes, that «All» is the range on screen; returns the page's root and the start field of the range. */
+    async function openPairOnAll(page: Page): Promise<{root: Locator; startInput: Locator}> {
+        await navigateTo(page, `/fx/${PAIR}?start=min&end=max`);
+        const root = page.getByTestId('fx-detail-page');
+        await expect(root, 'the pair page renders once its URL has landed').toBeVisible({timeout: 10_000});
+        await waitForSettled(root, 20_000);
+        // By design the page keeps the generic sentinel in its URL for as long as «All» is selected.
+        await expect(page, '«All» is selected: the URL keeps its min sentinel').toHaveURL(/[?&]start=min(?:&|$)/, {timeout: 30_000});
+        const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+        await expect(picker.getByTestId('date-preset-max'), '«All» is the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+        return {root, startInput: picker.getByTestId('date-range-input-start')};
+    }
+
+    /**
+     * The first load was the «All» one with the stored signal: the rates were asked for from the 2000-01-01 sentinel
+     * together with RSI, and answered. The page builds that request only from the catalog's RSI definition — with the
+     * catalog failed it falls back to the local definitions, which hold no RSI — so this also proves the catalog loaded.
+     */
+    async function expectRsiAskedOverAll(delivered: DeliveredAsk[]): Promise<void> {
+        await expect.poll(() => delivered.some((ask) => ask.start === '2000-01-01' && ask.signalCodes.includes('RSI')), {message: 'the page asked for the «All» rates from the 2000-01-01 sentinel together with the stored RSI signal, and the route answered', timeout: 15_000}).toBe(true);
+    }
+
+    /** Unfolds the signals panel, and returns it once it lists the stored RSI signal. */
+    async function openSignalsPanel(page: Page): Promise<Locator> {
+        const toggle = page.getByTestId('fx-detail-signals-toggle');
+        const panel = page.getByTestId('fx-detail-signals-panel');
+        await expect(toggle).toBeVisible({timeout: 10_000});
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+        await expect(toggle, 'the toggle publishes open').toHaveAttribute('aria-expanded', 'true');
+        await expect(panel).toBeVisible();
+        await expect(panel.getByTestId(`signal-card-${RSI_ID}`), 'the panel lists the stored RSI signal').toBeVisible({timeout: 10_000});
+        return panel;
+    }
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    // RED — pins the «All» half on the pair page. Before the cure toHaveValue times out on the picker's pending label
+    // (`Received: "Finding…"` in English): no branch of the catch resolves «All». Green once the answer is read with
+    // signal isolation and the rates go on — not with a try/catch around the page's own parse alone (see above).
+    test('X-R16 RED FX: an invalid signal result still lets All resolve its start to the first rate date', async ({page}) => {
+        await storeRsiSignal(page);
+        await routeRsiCatalog(page);
+        const rates = await routePairRates(page, 'invalid');
+        const {startInput} = await openPairOnAll(page);
+        await expectRsiAskedOverAll(rates.delivered);
+
+        await expect(startInput, '«All» resolves its start to the first rate').toHaveValue(rates.firstRateDate, {timeout: 10_000});
+    });
+
+    // RED — pins the rates half: the rates of the answer stay on the chart. Before the cure the attribute is empty
+    // (`Received: ""`): the API client rejects the whole answer before its rates reach the store, so the catch has none
+    // to keep. Asserted apart from the start field, so each RED pins one of the two things the invalid result costs.
+    test('X-R16 RED FX: an invalid signal result still leaves the rates on the chart', async ({page}) => {
+        await storeRsiSignal(page);
+        await routeRsiCatalog(page);
+        const rates = await routePairRates(page, 'invalid');
+        const {root} = await openPairOnAll(page);
+        await expectRsiAskedOverAll(rates.delivered);
+
+        await expect(root, 'the chart ends on the last rate answered').toHaveAttribute('data-chart-last-rate', rates.lastRate, {timeout: 10_000});
+    });
+
+    // GUARD — the intended part, green before the cure and after it: the signal side fails, and says so. The banner can
+    // only be the signal results one: the request carried RSI, so the catalog loaded (expectRsiAskedOverAll), and the
+    // catalog banner needs the catalog failed. Asserted by its test id, never by its sentence.
+    test('X-R16 GUARD FX: an invalid signal result shows the signal results banner', async ({page}) => {
+        await storeRsiSignal(page);
+        await routeRsiCatalog(page);
+        const rates = await routePairRates(page, 'invalid');
+        await openPairOnAll(page);
+        await expectRsiAskedOverAll(rates.delivered);
+
+        const panel = await openSignalsPanel(page);
+        await expect(panel.getByTestId('signal-backend-error'), 'the panel says the signal results are unavailable').toBeVisible({timeout: 10_000});
+    });
+
+    // GUARD — the same flow with a valid RSI answer, green before the cure and after it: «All» resolves to the first
+    // rate, the rates stay on the chart, and no banner shows — absent once the panel and the signal's card are on screen.
+    test('X-R16 GUARD FX: with a valid signal result, All resolves, the rates stay and no banner shows', async ({page}) => {
+        await storeRsiSignal(page);
+        await routeRsiCatalog(page);
+        const rates = await routePairRates(page, 'valid');
+        const {root, startInput} = await openPairOnAll(page);
+        await expectRsiAskedOverAll(rates.delivered);
+
+        await expect(startInput, '«All» resolves its start to the first rate').toHaveValue(rates.firstRateDate, {timeout: 10_000});
+        await expect(root, 'the chart ends on the last rate answered').toHaveAttribute('data-chart-last-rate', rates.lastRate, {timeout: 10_000});
+        const panel = await openSignalsPanel(page);
+        await expect(panel.getByTestId('signal-backend-error'), 'a valid answer raises no banner').toHaveCount(0);
+    });
+});
