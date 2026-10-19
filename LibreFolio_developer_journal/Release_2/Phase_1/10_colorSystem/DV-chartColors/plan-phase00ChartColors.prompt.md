@@ -2417,6 +2417,32 @@ secondo la 1.3, tranne `PriceChartFull` e `CandlestickChart` (Y-N65, circa un gi
   >   4 → 4): niente ridisegnato dalle opzioni.
   > - Porta 6156 libera alla fine; HEAD `be7033b1c`. Da committare: lo spec rivisto, una clausola della `desc` del
   >   runner e il piano.
+- [x] ✅ (19/10/2026, 17:47) **DPR entrato:** `56666d2ce` (il commit `80636e16e`, base merge `be870c783` con
+  `98bee0d2b`, che contiene Y-N65 `5cb47395f`). Sul ramo unito: ratchet pulito, gate dei colori 119/119,
+  `chart-safety-unit` 144/144 con K-13 sulle versioni di Y dei due file, `api sync` senza cambi, `front check` 0 e 0.
+  Il worktree è sulla punta, pulito. Via a DV-14.
+- [x] ✅ (19/10/2026, 18:02) DPR-4 (DV-14), `PriceChartFull` e `CandlestickChart` su `chartInitOptions`.
+  > **Note implementazione:**
+  > - Le due chiamate (`PriceChartFull.svelte:540`, `CandlestickChart.svelte:304`) come le altre 16, con l'import.
+  >   Le righe di Y-N65 restano com'erano: il tipo e il commento di `onMeasureHover`, `measureHover` col suo `$effect`,
+  >   il `mousemove` di zr con `setCursorStyle`, `data-measure-hover`.
+  > - Il gate K-13 (`test-author`): `PIXEL_RATIO_PENDING` vuoto. **Decisione:** il meccanismo resta, per un grafico che
+  >   non possa migrare subito; il controllo di staleness resta coerente (vuoto passa sul codice, i controlli
+  >   sintetici mordono ancora).
+  > - La pagina sviluppatori (tabella delle guardie): nessuna deroga, il record resta vuoto per un caso futuro.
+  > - Backlog: DV-14 chiusa, in attesa del commit.
+  > - Nessuna migrazione dal mio ultimo slot (`be7033b1c..56666d2ce` non tocca `backend/alembic` né `backend/app/db`):
+  >   la corsia non si ripopola.
+  > - test-author: in `chartFlagFont.test.ts` il record vuoto, la sua doc e l'intestazione (Part B, «why it was
+  >   red»); gli altri quattro test dei due grafici non cambiano (i registratori di ECharts ignorano le opzioni, e lo
+  >   stub di `matchMedia` non emette mai il `change`).
+  > **Prove:**
+  > - leggere (carico 18–28): Prettier e compilatore puliti sui due componenti; Vitest di test-author: `chartFlagFont`
+  >   20, `chartPixelRatio` 49, `PriceChartFull` 58, `PriceChartFull.tooltipEscape` 17,
+  >   `CandlestickChart.tooltipEscape` 7, `candlestickChartHelpers` 44, `priceChartHelpers` 163; i 9 file di
+  >   `chart-safety-unit` in un colpo, 144 test; `front check` 0 errori e 0 avvisi; tutti verdi;
+  > - slot (17:52–18:02, `files/dv14-slot/`): E2E `asset-detail` 43 su 43, `fx-detail` 28 su 28, progetto
+  >   `[desktop]`; porta 6156 libera, HEAD `56666d2ce`.
 
 ## Definizione di fatto
 
