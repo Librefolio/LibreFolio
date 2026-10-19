@@ -7,6 +7,7 @@ from datetime import date as date_type
 
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
+    PortfolioPlannerSourceDateParam,
     PortfolioPlannerSourceFieldPath,
     PortfolioPlannerSourceIssue,
     PortfolioPlannerSourceTextParam,
@@ -94,6 +95,10 @@ def field_issue(
 
 def text_param(name: str, value: str) -> PortfolioPlannerSourceTextParam:
     return PortfolioPlannerSourceTextParam(kind="text", name=name, value=value)
+
+
+def date_param(name: str, value: date_type) -> PortfolioPlannerSourceDateParam:
+    return PortfolioPlannerSourceDateParam(kind="date", name=name, value=value)
 
 
 def validated_currency(value: str | None) -> str | None:

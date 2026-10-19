@@ -342,6 +342,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: converting an amount of 0 (`POST /api/v1/fx/currencies/convert`) answers 0 with the day's rate instead of a server error.
 - An invalid technical signal no longer breaks the chart of an asset or an exchange rate: the prices and rates stay on the chart and in the page's cache, and **All** resolves the start of the range; only the signals are reported as unavailable.
 - A provider that delivers a day with a price of 0 or less no longer makes the whole price download of the asset fail: that day is skipped and the sync says so. A current price of 0 or less from a provider is refused like an unusable one: the last stored price stays.
+- PAC planner: a saved exchange rate an older version could store but not use (0, or infinite) no longer blocks the pair, nor, when infinite, breaks the planner: the previous valid rate is used, and a warning names the pair, the day skipped and the day used, to correct in the pair's rate editor.
 
 #### 🔒 Security
 
