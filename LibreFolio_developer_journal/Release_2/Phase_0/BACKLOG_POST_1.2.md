@@ -8704,6 +8704,16 @@ punto di partenza, l'audit dello stesso giorno:
   precedente| × 100).quantize(0,01)` con la guardia `|precedente| > 0,01` (~:759), accanto a `returns.price_return`
   (`fine/inizio − 1`) e `returns.change_ratio`. Nella 1.3 dopo J-14 se resta piccola (coordinatore): test di parità, il
   pareggio dichiarato. Dettagli: piano MF, «J-14 — analisi».
+- **MF-A13 · Il tasso di cambio d'un punto di prezzo ricavato per divisione, tre volte** — medio, ultima cifra; **dopo la
+  1.3** (coordinatore, 17/10); MF, 17/10 (J-1, voce 3: `series_preparation.py:184`, U1/CP-11). `price_query` converte
+  il close con `convert_bulk` e poi ricava il fattore `convertito / originale` (`assets/price_query.py:651-652`);
+  `market_series.py:167` (`close / native_close`) e `ai_export/components/asset_resources.py:209` lo ricavano di nuovo.
+  Cura: portare sul punto il tasso usato (in `backward_fill_info` o in un campo dello schema dei prezzi) e leggerlo,
+  senza divisioni. **Misura prima**: sul DB di prova (o una copia), per ogni punto convertito, il fattore ricavato
+  contro il tasso di `convert_bulk` — quante differenze, a quale cifra, e se toccano valori arrotondati visibili
+  (serie di mercato, AI Export: la sonda mirata dice se serve un aumento di versione). File di X (`price_query`, schema
+  dei prezzi), di J (`market_series`) e AI Export; dopo il PL4 di X (D-J17). Dettagli: piano MF, «J-1 —
+  riconciliazione».
 - **MF-SEC9f · Altri OR per elemento, censiti da E** — minimo, informazione; E, 17/10 (revisione di MF-SEC9a).
   `scheduler/jobs.py:100` costruisce un termine per coppia configurata: rifiutato solo con ~1 000 coppie, improbabile.
   `portfolio/engine.py:133` è sicuro. Nessuna azione ora. Dettagli: piano 08 di E, «MF-SEC9a».
