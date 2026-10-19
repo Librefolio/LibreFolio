@@ -7883,3 +7883,120 @@ dell'avviso nelle 4 lingue è approvato così com'è.
 
 - **Niente stamp sulla guida del PAC.** La cache di Aphra ha l'MD5 `1e299f28…` (tradotta il 10/10), mentre la pagina EN a
   HEAD, prima della mia modifica, era già `f1d2f335…`. Il debito c'era già, e uno stamp lo nasconderebbe.
+
+### N61-form — analisi breve (19/10, sola lettura, base `51c5f1d2c`)
+
+Richiesta (developer, via coordinatore): con `LIBREFOLIO_SUPPORT_URL` pagina https (non mailto), la riga «Non lo trovi?»
+della ricerca asset passa alla pagina lo stesso oggetto e testo del mailto, `?title=…&body=…` come per GitHub, senza dati
+personali. Il modulo del sito cloud li leggerà.
+
+Oggi (`frontend/src/lib/components/assets/assetSearchReport.ts`, `reportHref`):
+- mailto: `mailto:addr?subject=<enc>&body=<enc, CRLF>` (RFC 6068);
+- github: `https://github.com/Librefolio/LibreFolio/issues/new?title=<enc>&body=<enc, LF>` (encodeURIComponent);
+- page: l'URL nudo; il clic copia il body negli appunti (`reportClicked`), toast «copiato»;
+- link con `target=_blank rel="noopener noreferrer"` per page e github: nessun Referer, l'indirizzo dell'istanza non esce.
+
+Forma proposta per la pagina:
+- parametri `title` (= oggetto del mailto) e `body` (= corpo), gli stessi nomi di GitHub;
+- codifica: UTF-8 percent-encoding con `encodeURIComponent`: spazio `%20` (mai `+`), `+` → `%2B`, a capo LF `%0A`
+  (non il CRLF del mailto). Si legge con qualunque parser standard (URLSearchParams, parse_qs, decodeURIComponent);
+- composizione: si aggiungono alla query già presente nell'URL configurato (`&` se c'è già una query), il frammento `#…`
+  resta in fondo; un `title`/`body` già presenti nell'URL configurato si sostituiscono;
+- contenuto (fisso, in inglese, come oggi): title «LibreFolio: asset not found — <testo cercato, max 80 code point, poi …>»;
+  body: «I searched LibreFolio for an asset and could not find it.» / riga vuota / «Search: <testo>» / «Providers:» con
+  «- <codice>: N result(s) | error <codice> | no answer» (o «Providers: none») / facoltativa «In the form: currency …,
+  type …, <tipo id> <valore>» / «LibreFolio <versione>, <profilo>, language <lingua>» / riga vuota / «Anything else that
+  helps (the exchange, a link to the asset's page):».
+- privacy: niente utente, email, indirizzo dell'istanza o dati del portafoglio (per costruzione); a differenza del mailto,
+  l'URL con i parametri finisce nei log del sito e nella cronologia del browser: stesso contenuto della mail o della issue.
+
+Note:
+- appunti: lascerei la copia negli appunti per la pagina, per le pagine che non leggono i parametri (nessun cambio
+  visibile; da togliere solo se il developer lo chiede);
+- lunghezza: la ricerca non ha un massimo (`q: Query(..., min_length=1)`), quindi un testo enorme farebbe un URL oltre gli
+  ~8 KB che molti server accettano (414); vale già oggi per GitHub. Nessun taglio proposto (nessuno digita 7 000 caratteri).
+- lavoro: `reportHref` (caso page), il Vitest `assetSearchReport.test.ts` (il caso «page: the page itself, nothing added»
+  si rovescia: rosso prima), eventuale E2E della riga, doc admin (`configuration.en.md`, `hosting_providers.en.md`),
+  doc utente (`user/assets/create-edit.md#let-us-know`), sviluppatore (`architecture/settings.md`), CHANGELOG. Piccolo.
+
+**N61-form — via** (19/10, developer): la forma proposta; la copia negli appunti resta; nessun taglio di lunghezza; prima
+il rosso. La forma la gira il coordinatore al coordinatore del cloud.
+- **Rossi**: un test-author nuovo, su due file Vitest.
+  - `assetSearchReport.test.ts`: il caso «page: the page itself, nothing added» si rovescia, più i casi con query,
+    frammento, `title`/`body` già presenti, e la codifica esatta.
+  - `AssetSearchAutocomplete.test.ts`, ASA-R9: l'`href` della pagina con i due parametri.
+  - Nessun E2E usa una pagina di supporto.
+- **Doc**: un docs-writer, solo EN (le traduzioni non hanno queste sezioni, debito già presente):
+  - la riga «A web page» di `user/assets/create-edit.en.md`;
+  - la riga di `LIBREFOLIO_SUPPORT_URL` in `admin/configuration.en.md`;
+  - il punto «Your own support page» di `admin/hosting_providers.en.md`, con il contratto del modulo e un esempio.
+- **CHANGELOG**: la voce «Can't find it? Let us know» è già in Unreleased, mai uscita. La aggiorno invece di aggiungere
+  una riga.
+- **Cura preparata**: `n61form_code.py`.
+  - `pageWithReport` dentro `reportHref`: la query della pagina resta, `title` e `body` già presenti si sostituiscono, il
+    frammento va in fondo.
+  - A secco su `/tmp`: Prettier pulito.
+  - Provato in Node su sei URL: andata e ritorno esatti con `URLSearchParams`, `%20`, `%2B`, `%0A`, nessun `%0D`, un
+    solo `title`, il frammento in fondo.
+
+### X-R45b-ui — l'avviso del tasso saltato arriva all'utente (19/10, base `51c5f1d2c`)
+
+**Il difetto**, trovato dalla revisione automatica di X-R45b e girato dal coordinatore: il backend è corretto, ma le due
+strade del frontend che chiedono `fx_quotes` scartano `source.issues`.
+- `FxRateReader.read()` (`planner/fxRead.svelte.ts`) usa solo `outcome.missing`.
+- `refreshCopiedFacts` (`copies.ts`) restituisce un `RefreshSummary` che non ha un campo per le issue.
+- Così il tasso più vecchio si copia senza nessun messaggio, mentre CHANGELOG, guida e i18n promettono l'avviso.
+
+**Domanda e decisione.** Il lettore Auto chiede solo `fx_quotes`; ogni card di coppia dice già «nessun tasso salvato».
+- Mostrare tutte le issue ripeterebbe «missing» due volte per ogni coppia senza tassi, il caso di un utente nuovo.
+- Ho proposto (a): nella card, sotto il tasso, senza `saved_fx_missing`; oppure (b): una lista unica in cima.
+- **Il developer sceglie (a).** La rilettura in `RefreshNotice` va come proposta: le issue della rilettura, senza la nota
+  strutturale dei Broker, come fa `CopyNotice`.
+
+**Cura** (`xr45bui_code.py`, provata a secco su `/tmp`, Prettier pulito):
+- `FxRateReader` tiene le issue dell'ultima lettura per coppia.
+  - Un metodo `issues(draft, pair)`, azzerato all'inizio di ogni lettura della coppia.
+  - Le issue sono quelle della quota FX della coppia (`fx:<coppia>:…`), meno `saved_fx_missing`.
+- In `FxStep`, nella card, solo in Auto, `IssueList` (`pac-planner-fx-issues`) con `presentSourceIssues` e `listIssue`.
+- In `RefreshSummary`, `issues`: quelle della rilettura, senza `broker_execution_profile_unsupported`.
+- `RefreshNotice` prende i props `draft` e `source` e mostra la lista (`…-issues`). Diventa *warning* anche quando c'è una
+  issue che non è *info*.
+- `PacPlannerTool` tiene la fonte della rilettura per i due punti dove mostra la nota.
+- Nessun colore nuovo: solo `mt-2` di layout e componenti esistenti sui ruoli (skill `design-system`).
+
+**Rossi**: un test-author nuovo, in quattro file nuovi da registrare: `copies.refresh.test.ts`,
+`result/RefreshNotice.test.ts`, `fxRead.test.ts`, `steps/FxStep.test.ts`.
+
+**N61-form — rossi e doc** (19/10):
+- **Rossi** ✅: Vitest sui due file, 7 rossi e 142 verdi.
+  - In `assetSearchReport.test.ts`, 6 casi pagina: senza query, con query, frammento, query e frammento, `title`/`body`
+    sostituiti, codifica esatta con andata e ritorno.
+  - In `AssetSearchAutocomplete.test.ts`, ASA-R9.
+  - Il test-author ha adattato anche ASA-S3 e ASA-S8, che confrontavano `href` con la pagina nuda: ora confrontano il
+    prefisso fino a `?` o `#`. Sono guardie, verdi prima e dopo.
+- **Doc** ✅, docs-writer, solo EN:
+  - `user/assets/create-edit.en.md`, la riga «A web page»;
+  - `admin/configuration.en.md`, la riga `LIBREFOLIO_SUPPORT_URL`, con il link a `#support-form`;
+  - `admin/hosting_providers.en.md`, il sottopunto nuovo `{: #support-form }`: codifica, posizione (con la barra
+    finale che il backend toglie), contenuto, log e cronologia, appunti, un esempio di link;
+  - `developer/backend/assets/search_link_finder.md`, il canale pagina.
+- **Nota mandata al coordinatore**, per il modulo del cloud: `env_url` toglie una barra finale, quindi `…/support/`
+  riceve `…/support?title=…`.
+- La cura (`n61form_code.py`, che corregge anche il commento di `AssetSearchAutocomplete.svelte`) si applica dopo il
+  checkpoint di X-R45b-ui, che ha la precedenza.
+
+**X-R45b-ui — rossi, cura, verdi** ✅ 19/10:
+- **Rossi**: un test-author, 4 file nuovi, tutti in jsdom come `request.test.ts`.
+  - `copies.refresh.test.ts` e `result/RefreshNotice.test.ts`.
+  - `fxRead.test.ts` e `steps/FxStep.test.ts`, con la coppia CHF/USD: `canonicalPair` ordina le valute, e USD/CHF non
+    sarebbe mai richiesta.
+  - Vitest: 10 rossi, 4 guardie verdi.
+  - Fuori dalla richiesta, il test-author ha aggiunto un rosso: una rilettura di CHF/USD pulisce solo la sua issue e
+    lascia l'avviso di EUR/USD.
+- **Cura**: `xr45bui_code.py`, 5 file. Registrati i 4 test nell'azione `component-unit` (`_frontend_utility.py`).
+- **Verdi**:
+  - Vitest sull'intera cartella `pac-allocator` più il test del cancello dei colori: 589/589 in 18 file;
+  - cancelli dei colori puliti; `front check` 0/0;
+  - `check-orphans`: 571 test frontend raggiungibili, 4 in più.
+- **Non girato**: l'E2E `pac-allocator-real.spec.ts`. La cura aggiunge DOM solo quando c'è un'issue, e i dati di prova
+  non hanno tassi saltati.
