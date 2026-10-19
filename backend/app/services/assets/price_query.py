@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -36,13 +37,14 @@ from backend.app.schemas.common import (
     DateRangeModel,
     FxBackwardFillInfo,
 )
-from backend.app.schemas.prices import AssetBackwardFillInfo, FACurrentPriceItem, FACurrentValue, FAPriceQueryResult
+from backend.app.schemas.prices import AssetBackwardFillInfo, FACurrentPriceItem, FACurrentValue, FAPriceQueryResult, FAPriceSampleBounds
 from backend.app.schemas.provider import (
     FAVolumeKind,
 )
 from backend.app.services.assets import core
 from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceProvider
 from backend.app.services.assets.market_calendar import ensure_market_holidays
+from backend.app.services.assets.price_sampling import SampleResolution, choose_resolution, resolve_sample_references, sample_dates
 from backend.app.services.assets.price_store import storable_current_value
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.fx.conversion import convert_bulk
@@ -58,6 +60,18 @@ RISK_WARMUP_DAY_MULTIPLIER = 2
 
 #: Rows read per page, after the latest one, while looking for the last close that reads a number (W-B62).
 _FALLBACK_PAGE = 32
+
+
+@dataclass(frozen=True)
+class _SamplePlan:
+    """Z-29: an item sampled weekly or monthly, before its bucket rows are read: its step, the fill's first day, the
+    buckets' dates (none: nothing to fill) and the rows already read (the seed, the first row in the range, and with
+    sample_like the last row on or before the first day)."""
+
+    resolution: SampleResolution
+    first: date_type | None
+    dates: tuple[date_type, ...]
+    edges: tuple[PriceHistory, ...]
 
 
 async def _last_readable_price(session: AsyncSession, asset_id: int) -> Optional[PriceHistory]:
@@ -189,37 +203,182 @@ class PriceQueryOperations:
             ph = price_map.get(current)
             if ph:
                 last_known = ph
-                results.append(
-                    FAPricePoint(
-                        date=current,
-                        open=ph.open,
-                        high=ph.high,
-                        low=ph.low,
-                        close=ph.close,
-                        volume=ph.volume,
-                        currency=ph.currency,
-                        source_plugin_key=ph.source_plugin_key,
-                        backward_fill_info=None,
-                    )
-                )
-            elif last_known:
-                days_back = (current - last_known.date).days
-                results.append(
-                    FAPricePoint(
-                        date=current,
-                        open=last_known.open,
-                        high=last_known.high,
-                        low=last_known.low,
-                        close=last_known.close,
-                        volume=last_known.volume,
-                        currency=last_known.currency,
-                        source_plugin_key=last_known.source_plugin_key,
-                        backward_fill_info=AssetBackwardFillInfo(actual_rate_date=last_known.date, days_back=days_back),
-                    )
-                )
+            if last_known:
+                results.append(PriceQueryOperations._fill_point(last_known, current))
             # else: skip days before first known price
             current += timedelta(days=1)
         return results
+
+    @staticmethod
+    def _fill_point(row: PriceHistory, day: date_type) -> FAPricePoint:
+        """The fill's point on ``day``, from ``row``, the last stored row on or before it: the row itself when it is stored
+        on that day, else its values filled backward, with how far. One rule for the daily fill and the sample (Z-29)."""
+        return FAPricePoint(
+            date=day,
+            open=row.open,
+            high=row.high,
+            low=row.low,
+            close=row.close,
+            volume=row.volume,
+            currency=row.currency,
+            source_plugin_key=row.source_plugin_key,
+            backward_fill_info=None if row.date == day else AssetBackwardFillInfo(actual_rate_date=row.date, days_back=(day - row.date).days),
+        )
+
+    @staticmethod
+    def _sample_series(known: list[PriceHistory], dates: list[date_type]) -> list[FAPricePoint]:
+        """The fill's point on each of ``dates`` (oldest first), from ``known`` (oldest first): the last row on or before
+        the date (Z-29)."""
+        points: list[FAPricePoint] = []
+        cursor = -1
+        for day in dates:
+            while cursor + 1 < len(known) and known[cursor + 1].date <= day:
+                cursor += 1
+            if cursor >= 0:
+                points.append(PriceQueryOperations._fill_point(known[cursor], day))
+        return points
+
+    @staticmethod
+    def _sampled_points(known: list[PriceHistory], plan: _SamplePlan) -> tuple[list[FAPricePoint], bool]:
+        """The points of ``plan``'s dates, the fill's first day in front when it is not one of them (it travels apart, in
+        ``sample_bounds``): the second value says it is (Z-29)."""
+        first_apart = plan.first != plan.dates[0]
+        return PriceQueryOperations._sample_series(known, [plan.first, *plan.dates] if first_apart else list(plan.dates)), first_apart
+
+    @staticmethod
+    async def _bucket_last_rows(session: AsyncSession, asset_ids: list[int], start: date_type, end: date_type, resolution: SampleResolution) -> dict[int, list[PriceHistory]]:
+        """The last row of each ISO week or calendar month of ``asset_ids`` from ``start`` to ``end``, by asset, oldest first
+        (Z-29). One statement: SQLite groups the rows and only the chosen ones are read."""
+        bucket = func.strftime("%Y-%m", PriceHistory.date) if resolution == "monthly" else func.date(PriceHistory.date, "-6 days", "weekday 1")
+        # SQLite takes a bare column from the row that holds its group's max() (lang_select.html, «bare columns in an
+        # aggregate query»): the id of each bucket's last row
+        last_ids = select(PriceHistory.id, func.max(PriceHistory.date)).where(PriceHistory.asset_id.in_(asset_ids), PriceHistory.date >= start, PriceHistory.date <= end).group_by(PriceHistory.asset_id, bucket).subquery()
+        rows = (await session.execute(select(PriceHistory).where(PriceHistory.id.in_(select(last_ids.c.id))).order_by(PriceHistory.asset_id, PriceHistory.date))).scalars().all()
+        by_asset: dict[int, list[PriceHistory]] = {}
+        for row in rows:
+            by_asset.setdefault(row.asset_id, []).append(row)
+        return by_asset
+
+    @staticmethod
+    async def _plan_samples(requests: list, session: AsyncSession) -> tuple[dict[int, _SamplePlan], dict[int, date_type]]:  # noqa: C901 — three ways to ask a step, one table
+        """Z-29: by item index, the plan of each item with ``max_points``, ``resolution`` or ``sample_like`` that is sampled
+        weekly or monthly, or has nothing to fill.
+
+        The fill's first day F: the range's start when a row of the asset precedes it (the fill's seed), else its first row
+        in the range. ``max_points``: the step ``choose_resolution`` gives on F … end; ``resolution``: that step;
+        ``sample_like``: the step of the item named (daily for an item without these fields) from the later of its F and
+        this item's own — or, when the item named has nothing to fill, the step its ``max_points`` or ``resolution`` gives
+        on this item's own fill. Only the seed and the first row in the range are read here (one index probe each, one
+        statement per range), plus, for a ``sample_like`` whose first day is later than its own F, the last row on or
+        before that day: the sample's dates are known, and counted against the day budget, before any bucket row is read.
+        A daily step is left out, to be read and filled day by day as without these fields — a ``sample_like`` from the
+        later first day, given back as the second mapping (by item index, the day its range now starts); nothing to fill
+        gives an empty series, as the fill does.
+        """
+        references = resolve_sample_references(requests)
+        asked = {index for index, req in enumerate(requests) if req.max_points is not None or req.resolution is not None or req.sample_like is not None}
+        if not asked:
+            return {}, {}
+        by_range: dict[tuple[date_type, date_type], set[int]] = {}
+        for index in asked | {references[index] for index in asked if index in references}:
+            req = requests[index]
+            by_range.setdefault((req.date_range.start, req.date_range.end or req.date_range.start), set()).add(index)
+        edges: dict[int, tuple[PriceHistory | None, PriceHistory | None]] = {}
+        for (start, end), indexes in by_range.items():
+            asset_ids = sorted({requests[index].asset_id for index in indexes})
+            # Each asset's first row in the range and its last one before it, the fill's seed: one index probe each
+            first_row_id = select(PriceHistory.id).where(PriceHistory.asset_id == Asset.id, PriceHistory.date >= start, PriceHistory.date <= end).order_by(PriceHistory.date).limit(1).scalar_subquery()
+            seed_row_id = select(PriceHistory.id).where(PriceHistory.asset_id == Asset.id, PriceHistory.date < start).order_by(PriceHistory.date.desc()).limit(1).scalar_subquery()
+            edge_ids = {asset_id: (first_id, seed_id) for asset_id, first_id, seed_id in (await session.execute(select(Asset.id, first_row_id, seed_row_id).where(Asset.id.in_(asset_ids)))).all()}
+            wanted = sorted({row_id for pair in edge_ids.values() for row_id in pair if row_id is not None})
+            rows = {row.id: row for row in (await session.execute(select(PriceHistory).where(PriceHistory.id.in_(wanted)))).scalars().all()} if wanted else {}
+            for index in indexes:
+                first_id, seed_id = edge_ids.get(requests[index].asset_id, (None, None))
+                edges[index] = (rows.get(seed_id), rows.get(first_id))
+
+        def own_first(index: int) -> date_type | None:
+            seed, first_row = edges[index]
+            return requests[index].date_range.start if seed is not None else (first_row.date if first_row is not None else None)
+
+        def asked_step(req: object, first: date_type, end: date_type) -> SampleResolution:
+            if req.resolution is not None:
+                return req.resolution
+            if req.max_points is not None:
+                return choose_resolution(first, end, req.max_points)
+            return "daily"
+
+        plans: dict[int, _SamplePlan] = {}
+        daily_starts: dict[int, date_type] = {}
+        anchored: list[int] = []
+        for index in sorted(asked):
+            req = requests[index]
+            end = req.date_range.end or req.date_range.start
+            first = own_first(index)
+            if first is None:
+                plans[index] = _SamplePlan(resolution="daily", first=None, dates=(), edges=())
+                continue
+            if index in references:
+                named = requests[references[index]]
+                named_first = own_first(references[index])
+                if named_first is None:
+                    resolution = asked_step(named, first, end)
+                else:
+                    resolution = asked_step(named, named_first, end)
+                    if named_first > first:
+                        first = named_first
+                        anchored.append(index)
+            else:
+                resolution = asked_step(req, first, end)
+            if resolution != "daily":
+                seed, first_row = edges[index]
+                plans[index] = _SamplePlan(resolution=resolution, first=first, dates=tuple(sample_dates(first, end, resolution)), edges=tuple(row for row in (seed, first_row) if row is not None))
+            elif index in anchored:
+                # A daily card: its follower is daily too, from the day the comparison starts
+                daily_starts[index] = first
+        for index in anchored:
+            plan = plans.get(index)
+            if plan is None:
+                continue
+            # The point on the later first day: the last row on or before it
+            row = (await session.execute(select(PriceHistory).where(PriceHistory.asset_id == requests[index].asset_id, PriceHistory.date <= plan.first).order_by(PriceHistory.date.desc()).limit(1))).scalars().first()
+            if row is not None:
+                plans[index] = _SamplePlan(resolution=plan.resolution, first=plan.first, dates=plan.dates, edges=(*plan.edges, row))
+        return plans, daily_starts
+
+    @staticmethod
+    async def _read_samples(
+        requests: list,
+        plans: dict[int, _SamplePlan],
+        session: AsyncSession,
+        price_maps: dict[int, dict[date_type, PriceHistory]],
+        seed_prices: dict[int, PriceHistory],
+        asset_ranges: dict[int, tuple[date_type, date_type]],
+    ) -> dict[int, tuple[list[FAPricePoint], bool]]:
+        """Z-29: the points of each planned item once the day budget has passed them, and whether its first one travels
+        apart (``_sampled_points``). Every asset is read once: one the request reads whole (a daily item, a signal's
+        comparison) on a range that holds the item's is sampled from those rows; the others with one statement per range
+        and step (``_bucket_last_rows``) for all of them. Each date gets the point the daily fill has there."""
+        sampled: dict[int, tuple[list[FAPricePoint], bool]] = {index: ([], False) for index, plan in plans.items() if not plan.dates}
+        groups: dict[tuple[date_type, date_type, SampleResolution], list[int]] = {}
+        for index, plan in plans.items():
+            if not plan.dates:
+                continue
+            req = requests[index]
+            start, end = req.date_range.start, req.date_range.end or req.date_range.start
+            loaded = asset_ranges.get(req.asset_id)
+            if loaded is not None and loaded[0] <= start and loaded[1] >= end:
+                seed = seed_prices.get(req.asset_id)
+                known = sorted({row.date: row for row in (*((seed,) if seed is not None else ()), *price_maps.get(req.asset_id, {}).values())}.values(), key=lambda row: row.date)
+                sampled[index] = PriceQueryOperations._sampled_points(known, plan)
+                continue
+            groups.setdefault((start, end, plan.resolution), []).append(index)
+        for (start, end, resolution), indexes in groups.items():
+            last_rows = await PriceQueryOperations._bucket_last_rows(session, sorted({requests[index].asset_id for index in indexes}), start, end, resolution)
+            for index in indexes:
+                plan = plans[index]
+                known = sorted({row.date: row for row in (*plan.edges, *last_rows.get(requests[index].asset_id, []))}.values(), key=lambda row: row.date)
+                sampled[index] = PriceQueryOperations._sampled_points(known, plan)
+        return sampled
 
     @staticmethod
     def _fill_span(
@@ -297,9 +456,18 @@ class PriceQueryOperations:
 
         Every item's range ends at ``latest_range_end()`` at the latest (X-R55): the series, the signals and the events
         see the cut range. An item that starts after it gets an empty result, in its place.
+
+        An item with ``max_points``, ``resolution`` or ``sample_like`` is sampled weekly or monthly when its step says so
+        (Z-29): planned on two rows per asset (``_plan_samples``), its points counted against the day budget, then read
+        once — from the day-by-day rows when the request reads its asset whole, else one statement per range and step
+        for every such asset (``_read_samples``). Each result says its step (``resolution``); a sampled one carries its
+        first and last points apart (``sample_bounds``). A ``sample_like`` that cannot be followed raises
+        ``SampleReferenceError`` before any read.
         """
         if not requests:
             return []
+        # Z-29: every sample_like names an item of the request, before anything is read
+        resolve_sample_references(requests)
 
         latest_end = latest_range_end()
         clamped: list = []
@@ -315,13 +483,19 @@ class PriceQueryOperations:
             present_results = iter(await PriceQueryOperations.get_prices_bulk(present, session) if present else [])
             return [FAPriceQueryResult(asset_id=req.asset_id) if index in future_positions else next(present_results) for index, req in enumerate(clamped)]
         requests = clamped
+        # Z-29: the items sampled weekly or monthly, planned on two rows per asset and kept out of the day-by-day read
+        # below; their points count against the day budget, their rows are read once it has passed. A follower of a
+        # daily card is read day by day from the day the comparison starts
+        sample_plans, daily_starts = await PriceQueryOperations._plan_samples(requests, session)
+        for index, start in daily_starts.items():
+            requests[index] = requests[index].model_copy(update={"date_range": DateRangeModel(start=start, end=requests[index].date_range.end or requests[index].date_range.start)})
 
         signal_service = SignalService()
         signal_plans = []
         request_ranges: list[tuple[date_type, date_type]] = []
         load_ranges: list[tuple[date_type, date_type]] = []
         asset_ranges: dict[int, tuple[date_type, date_type]] = {}
-        for req in requests:
+        for index, req in enumerate(requests):
             end = req.date_range.end or req.date_range.start
             requested_range = (req.date_range.start, end)
             context = SignalExecutionContext(
@@ -362,6 +536,8 @@ class PriceQueryOperations:
             request_ranges.append(requested_range)
             load_ranges.append(load_range)
             signal_plans.append(plan)
+            if index in sample_plans:
+                continue
             for asset_id in (
                 req.asset_id,
                 *sorted(plan.comparison_asset_ids),
@@ -374,9 +550,9 @@ class PriceQueryOperations:
 
         asset_ids = list(asset_ranges.keys())
 
-        # Compute global min/max date for single query
-        global_start = min(r[0] for r in asset_ranges.values())
-        global_end = max(r[1] for r in asset_ranges.values())
+        # Compute global min/max date for single query (none when every item is sampled, Z-29)
+        global_start = min((r[0] for r in asset_ranges.values()), default=date_type.max)
+        global_end = max((r[1] for r in asset_ranges.values()), default=date_type.min)
 
         # Single DB query for ALL assets in the date range
         stmt = (
@@ -390,8 +566,7 @@ class PriceQueryOperations:
             )
             .order_by(PriceHistory.asset_id, PriceHistory.date)
         )
-        db_result = await session.execute(stmt)
-        all_prices = db_result.scalars().all()
+        all_prices = (await session.execute(stmt)).scalars().all() if asset_ids else []
 
         # Partition by asset_id
         price_maps: dict[int, dict[date_type, PriceHistory]] = {aid: {} for aid in asset_ids}
@@ -424,9 +599,12 @@ class PriceQueryOperations:
         # Z-25: the per-day points the fills will build, comparison series included, against the request's budget. The
         # count follows the fill, not the request: a full-history signal loads from 1900-01-01 at the latest (Z-30), and
         # its fill emits from the first stored price, or from the load start when an older row seeds it, even when the
-        # visible range is one day.
+        # visible range is one day. A sampled item counts its points and its two bounds (Z-29).
         item_days = 0
-        for req, plan, (start, end) in zip(requests, signal_plans, load_ranges, strict=True):
+        for index, (req, plan, (start, end)) in enumerate(zip(requests, signal_plans, load_ranges, strict=True)):
+            if index in sample_plans:
+                item_days += len(sample_plans[index].dates) + 2 if sample_plans[index].dates else 0
+                continue
             item_days += PriceQueryOperations._fill_span(price_maps.get(req.asset_id, {}), start, end, seed_prices.get(req.asset_id))
             if plan.requires_prepared_asset_series:
                 for comparison_asset_id in plan.comparison_asset_ids:
@@ -434,6 +612,7 @@ class PriceQueryOperations:
                         item_days += PriceQueryOperations._fill_span(price_maps.get(comparison_asset_id, {}), start, end, seed_prices.get(comparison_asset_id))
         if item_days > MAX_BULK_ITEM_DAYS:
             raise BulkTooManyDaysError(item_days=item_days, max_item_days=MAX_BULK_ITEM_DAYS)
+        sampled = await PriceQueryOperations._read_samples(requests, sample_plans, session, price_maps, seed_prices, asset_ranges)
 
         # Build backward-filled series per asset (preserving request order)
         results = []
@@ -478,12 +657,11 @@ class PriceQueryOperations:
                     )
                 )
 
-        for req, (start, end) in zip(
-            requests,
-            load_ranges,
-            strict=True,
-        ):
+        for index, (req, (start, end)) in enumerate(zip(requests, load_ranges, strict=True)):
             aid = req.asset_id
+            if index in sampled:
+                results.append(FAPriceQueryResult(asset_id=aid, prices=sampled[index][0], resolution=sample_plans[index].resolution))
+                continue
             price_map = price_maps.get(aid, {})
             in_memory_seed = max(
                 (price for point_date, price in price_map.items() if point_date < start),
@@ -701,6 +879,13 @@ class PriceQueryOperations:
                 )
                 conv_idx += 1
 
+        # Z-29: a sampled series' first point travels apart, beside its last; prices keep the buckets' points, the ones
+        # the compact chart draws. Here, once every point is converted.
+        for index, (_points, first_apart) in sampled.items():
+            result = results[index]
+            first = result.prices.pop(0) if first_apart and result.prices else (result.prices[0] if result.prices else None)
+            result.sample_bounds = FAPriceSampleBounds(first=first, last=result.prices[-1]) if first is not None and result.prices else None
+
         # One table for the whole call, and only when something is computed from the prices: the
         # signals read it to tell a stored weekend or holiday repeat from a quote.
         market_holidays = await ensure_market_holidays() if any(req.signals for req in requests) else frozenset()
@@ -867,6 +1052,8 @@ class PriceQueryOperations:
 
             requested_start, requested_end = requested_range
             result.prices = [point for point in result.prices if requested_start <= point.date <= requested_end] if req.include_price else []
+            if not req.include_price:
+                result.sample_bounds = None
             result.events = [event for event in result.events if requested_start <= event.date <= requested_end] if req.include_events else []
 
         return results
