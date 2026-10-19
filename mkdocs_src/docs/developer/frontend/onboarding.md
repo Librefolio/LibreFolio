@@ -422,7 +422,9 @@ new after an update» in [Changelog Modal](../../user/settings/about.md#changelo
 - **Closing the window records it.** `POST /api/v1/auth/whats-new/seen` (`204`, a session required,
   idempotent) calls `mark_seen()`, which writes the server's own running release, never a value from
   the client, and logs *What's new seen* (`user_id`, `release`) when it changes the column. With
-  the running release unknown it writes nothing.
+  the running release unknown it writes nothing. It never goes backwards: it reads the account again
+  under SQLite's write lock, and a stored release as new as the running one or newer — a downgrade, an
+  older worker of a rolling update — stays as it is (E's note on C-54, WN-MONO and WNAPI-MONO).
 - **The app picks the chapters.** `whatsNewChapters(chapters, whatsNew)`
   (`lib/features/changelog/whatsNew.ts`) keeps the released chapters of the bundled changelog with
   `since < version ≤ release`, or the `release` chapter alone when `since` is null, never

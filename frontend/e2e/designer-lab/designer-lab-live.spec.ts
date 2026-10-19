@@ -9,11 +9,14 @@
  * and resume, reset all, import of the exported file.
  *
  * The elements are the app's own and exist whatever the data: the subtitle of the transactions page (a Tailwind
- * colour class: a palette class today, a colour-role utility once workstream T migrates the page), the login card a
- * visitor who is not logged in gets at `/` (a colour-role utility of workstream T), the date header of the transactions
- * table (a colour the stylesheets write as a literal — in DataTable's `th` rule once, in the `:root` token that rule
- * reads since R-3), the dashboard's growth chart. Which colour to change is read from them at run time, never written
- * down: a designer will change these colours, and the tests must keep following them. A colour class is followed to
+ * colour class: a colour-role utility of workstream T since the page migrated, a palette class before), the root of that
+ * page (the text colour its children inherit), the login card a visitor who is not logged in gets at `/` (a colour-role
+ * utility of workstream T), the date header of the transactions table (a colour the stylesheets write as a literal: in
+ * DataTable's `th` rule once, then in a `:root` token of the component (R-3), now in the definition of the subtitle's own
+ * role, which that rule reads since the tables moved to the colour roles), the dashboard's growth chart. Which colour to
+ * change is read from them at run time, never written down: a designer will change these colours, and the tests must
+ * keep following them. Nor is it assumed that two of them have different colour sources: a migration can give them one
+ * without notice, so the test that changes two at once proves them independent first. A colour class is followed to
  * what the Lab edits for it (`colourSourceOf`): a palette class to its variable, a role utility to the role its rule
  * reads in the page's CSSOM, through the chip of its `@theme inline` alias. Where the code writes a colour is not written
  * down either: the export is held to the verifier the Lab ships, which finds each occurrence in today's code.
@@ -76,6 +79,7 @@ import {
     setSlider,
     showAllocationNow,
     sourceLines,
+    transactionsPageRoot,
     transactionsSubtitle,
     transparentMixOf,
     verifyExport,
@@ -671,13 +675,23 @@ test.describe('Designer Lab — live preview in another tab', () => {
         });
 
         test('export JSON, reset all, import back: the same changes on the same elements', async ({page, context}, testInfo) => {
+            // L1 on the subtitle, through the variable its class reads; L2 on the root of the page, through the stylesheet
+            // literal it shows. L1 overrides its variable on <html>, which beats any rewrite of the variable's definition,
+            // so L2 shows only on an element whose colour has another source — and a migration can take that away without
+            // notice: the date header, the L2 element here until DataTable came to read the subtitle's role, stayed pink.
+            // So the root is proven independent, never assumed: a colour other than the subtitle's, not animated, and still
+            // its own once L1 is on screen.
             const subtitle = transactionsSubtitle(page);
-            const header = dateColumnHeader(page);
+            const root = transactionsPageRoot(page);
             const source = await colourSourceOf(subtitle, 'text');
             const subtitleOriginal = await computedStyle(subtitle);
-            const headerOriginal = await computedStyle(header);
-            const key = opaqueHexOf(headerOriginal);
-            if (!key) throw new Error(`the DataTable header must be coloured by an opaque sRGB stylesheet literal, it shows ${headerOriginal}`);
+            const rootOriginal = await computedStyle(root);
+            const key = opaqueHexOf(rootOriginal);
+            if (!key) throw new Error(`the root of the transactions page must be coloured by an opaque sRGB stylesheet literal, it shows ${rootOriginal}`);
+            const subtitleKey = opaqueHexOf(subtitleOriginal);
+            expect(key, `precondition: the page root shows ${key}, the subtitle ${subtitleKey ?? subtitleOriginal}: one colour for both most likely means one source, and the L1 change of ${source.target} would then hide the L2 rewrite of ${key}`).not.toBe(subtitleKey);
+            const motion = {duration: await computedStyle(root, 'transition-duration'), delay: await computedStyle(root, 'transition-delay')};
+            expect(motion, 'precondition: the page root does not animate its colour, so what it shows the moment L1 is on screen is final').toEqual({duration: '0s', delay: '0s'});
 
             const lab = await openLab(context);
             await editLightTheme(lab);
@@ -686,10 +700,12 @@ test.describe('Designer Lab — live preview in another tab', () => {
             const chartKey = (await listedKeys(lab, 'charts')).find((k) => k !== key);
             if (!chartKey) throw new Error(`the catalogue must list a chart colour other than ${key}`);
             await applyChange(lab, {tab: 'palette', search: source.chipVar, item: `lab-item-var-${source.chipVar}`, layer: 'css-var', target: source.target, to: PINK});
+            await expect(subtitle, `${source.className} reads ${source.target}: the L1 change reaches the app tab`).toHaveCSS('color', PINK_RGB, CROSS_TAB);
+            // Decisive in this order: L1 is on screen, and the root has not moved with it.
+            expect(await computedStyle(root), `precondition: the L1 change of ${source.target}, on screen in the subtitle, leaves the page root as it was: their colours have independent sources`).toBe(rootOriginal);
             await applyChange(lab, {tab: 'sheets', search: key, item: `lab-item-value-css-literal-${key}`, layer: 'css-literal', target: key, to: BLUE});
+            await expect(root, `the stylesheets write ${key}, which the page root shows: the app tab follows the Lab`).toHaveCSS('color', BLUE_RGB, CROSS_TAB);
             await applyChange(lab, {tab: 'charts', search: chartKey, item: `lab-item-value-chart-color-${chartKey}`, layer: 'chart-color', target: chartKey, to: GREEN});
-            await expect(subtitle).toHaveCSS('color', PINK_RGB, CROSS_TAB);
-            await expect(header).toHaveCSS('color', BLUE_RGB, CROSS_TAB);
 
             const {text, doc} = await downloadExport(lab);
             expect(doc.schema).toBe('lf-designer-lab/1');
@@ -701,9 +717,9 @@ test.describe('Designer Lab — live preview in another tab', () => {
             ]);
             const [varChange, literalChange, chartChange] = doc.changes;
             expect(varChange.impact?.uses, 'a variable change says how many uses it reaches').toBeGreaterThan(0);
-            // Where the stylesheets write the colour is the code's business, and it moves — DataTable's own `th` rule
-            // once, a `:root` token since R-3. So the export is held to what an agent does with it: each occurrence is a
-            // literal of the changed colour (an alpha variant counts), placed at a file and a line…
+            // Where the stylesheets write the colour is the code's business, and it moves — a component's own rule, a
+            // `:root` token, the definition of a role. So the export is held to what an agent does with it: each occurrence
+            // is a literal of the changed colour (an alpha variant counts), placed at a file and a line…
             expect(literalChange.occurrences.length, `the export lists where the stylesheets write ${key}`).toBeGreaterThan(0);
             const raws = literalChange.occurrences.map((o) => o.raw ?? '');
             const rawKeys = await opaqueKeysOf(page, raws);
@@ -730,13 +746,13 @@ test.describe('Designer Lab — live preview in another tab', () => {
             await expect.poll(() => labActive(page), CROSS_TAB).toBe(false);
             await expect.poll(() => labStats(page)).toEqual(IDLE_STATS);
             await expect(subtitle, 'reset: the app shows its own colours again').toHaveCSS('color', subtitleOriginal);
-            await expect(header).toHaveCSS('color', headerOriginal);
+            await expect(root).toHaveCSS('color', rootOriginal);
 
             await lab.getByTestId('lab-import-input').setInputFiles({name: 'designer-lab-changes.json', mimeType: 'application/json', buffer: Buffer.from(text)});
             await expectChanges(lab, 3);
             await expect(lab.getByTestId('lab-status'), 'the import is accepted').toHaveAttribute('data-kind', /^(ok|warn)$/);
             await expect(subtitle, 'imported: the same changes again').toHaveCSS('color', PINK_RGB, CROSS_TAB);
-            await expect(header).toHaveCSS('color', BLUE_RGB, CROSS_TAB);
+            await expect(root).toHaveCSS('color', BLUE_RGB, CROSS_TAB);
             await expect.poll(() => labActive(page)).toBe(true);
         });
     });
