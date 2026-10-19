@@ -632,7 +632,7 @@ _METRIC_PHASES = (
 
 
 def test_unobserved_metric_phases_serialize_as_null_not_zero():
-    expected = {**dict.fromkeys(_METRIC_PHASES), "resources": None}
+    expected = {**dict.fromkeys(_METRIC_PHASES), "resources": None, "worker_exit_code": None}
     assert ToolItemMetrics().model_dump(mode="json") == expected
     assert ToolItemMetrics.model_validate(expected).model_dump(mode="json") == expected
 
@@ -746,6 +746,7 @@ def test_item_resource_metrics_keep_bytes_nested_outside_duration_fields():
                 "peak_observed_bytes": 536_870_912,
             }
         },
+        "worker_exit_code": None,
     }
     with pytest.raises(ValidationError):
         ToolMemoryMetrics(
