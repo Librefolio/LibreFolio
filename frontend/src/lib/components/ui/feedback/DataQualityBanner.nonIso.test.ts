@@ -216,7 +216,7 @@ describe('the sentences of the NON_ISO_CURRENCY issue', () => {
 describe('the API client', () => {
     // red until E-19b2 (./dev.py api sync)
     it('DQN-04: the generated client accepts a NON_ISO_CURRENCY issue, which zodios checks on every report', () => {
-        expect(schemas.DataQualityIssue.safeParse({...SUGGESTED, code: 'QUOTE_IN_MINOR_UNIT'}).success, 'control: the same issue under a code the client knows parses').toBe(true);
+        expect(schemas.DataQualityIssue.safeParse({...SUGGESTED, code: 'MISSING_PRICE'}).success, 'control: the same issue under a code the client knows parses').toBe(true);
 
         expect(schemas.IssueCode.safeParse(NON_ISO).success, 'the generated IssueCode has no NON_ISO_CURRENCY: zodios rejects every report holding one').toBe(true);
         for (const issue of [SUGGESTED, AMBIGUOUS]) {

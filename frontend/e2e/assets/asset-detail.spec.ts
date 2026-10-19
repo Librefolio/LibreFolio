@@ -9246,3 +9246,193 @@ test.describe('Asset detail — the price summary shows the backend’s Δ over 
         await expect(summary.abs).toHaveText(absShown(LIVE.abs), {timeout: 10_000});
     });
 });
+
+// ============================================================================
+// X-R16 — an invalid backend signal result must not cost the page its prices
+// ============================================================================
+// The page asks for its prices, its events and its backend signal results in one `POST /assets/prices/query`, and
+// reads the answer with signal isolation (`parseAssetPriceQueryWithSignalIsolation`): an item whose signal results hold
+// an invalid one keeps its prices, and its raw `signals`. `loadChartData` then hands those raw results to
+// `parseBackendSignalResults` (`lib/charts/chartPageSignals.ts`), which throws on the first result the signal result
+// schema rejects — whenever the main item's `signals` holds one, with or without a signal configured. The throw lands
+// in the catch and skips the two statements after the parse:
+//   · the price-cache write (`store.merge` / `store.markFetched`): the next read of the same range asks for the prices
+//     again;
+//   · `resolveMaxStartFromChartData()`: on «All» the start stays the pending `min` sentinel, and the start field keeps
+//     its pending label for good.
+// The chart is still drawn — `chartData` is assigned before the parse — which is what keeps the defect quiet.
+//
+// Intended, and kept by the cure: an invalid result costs the signal side alone (no result applied; the
+// `signal-backend-error` banner when signals were asked — none are here), while the prices are cached and «All»
+// resolves to the first price date. The answer reaches the page through `axiosInstance`, not through the validating
+// API client, so containing the page's parse is enough on this page.
+//
+// Served by route mocks for synthetic asset ids no other spec uses (920 161 to 920 164): one EUR asset without a
+// provider, 90 daily closes ending yesterday. «All» is opened by URL (`?start=min&end=max`, the form the page writes
+// itself), so the first load is the «All» load. Nothing is written to the database and no signal is configured:
+// there is nothing to clean up.
+// ============================================================================
+test.describe('X-R16 asset detail: an invalid signal result keeps the prices and the All range', () => {
+    // A ceiling, never a delay: a sign-in, a page load and the round trips each test waits for by name.
+    test.describe.configure({timeout: 60_000});
+
+    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `priceChartHelpers.ts`). */
+    const CALENDAR_RETURN_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
+    /** A result the signal result schema rejects: a status outside ok, partial, unavailable and failed (as in `chartPageSignals.test.ts`). */
+    const INVALID_SIGNAL_RESULT = {instance_id: 'x-r16-sma', signal_code: 'SMA', status: 'not-a-status'};
+    /** The same result, valid. No signal is configured, so the page parses it and maps it to nothing. */
+    const VALID_SIGNAL_RESULT = {instance_id: 'x-r16-sma', signal_code: 'SMA', status: 'ok'};
+    /** The answers the GUARDs serve: each one passes the schema, so the page goes on as it always has. */
+    const GUARDED_ANSWERS: ReadonlyArray<{assetId: number; label: string; signals: readonly object[]}> = [
+        {assetId: 920_163, label: 'no signal result', signals: []},
+        {assetId: 920_164, label: 'a valid signal result', signals: [VALID_SIGNAL_RESULT]},
+    ];
+
+    /** The fields of a `/assets/prices/query` item these tests read. */
+    type PriceQueryItem = {asset_id?: number; include_price?: boolean; date_range?: {start?: string; end?: string}; signals?: Array<{signal_code?: string}>};
+    /** A query of the main asset the route has answered: logged once its answer is delivered, not when it is asked. */
+    type DeliveredMainQuery = {includePrice: boolean | null; start: string | null};
+
+    /** The items of a price query body; an unreadable body reads as none. */
+    function priceQueryItems(body: unknown): PriceQueryItem[] {
+        return Array.isArray(body) ? body.filter((item): item is PriceQueryItem => item !== null && typeof item === 'object') : [];
+    }
+
+    /**
+     * Serves the synthetic asset `assetId`: its list row, no live quote, and its price queries. Every item asked is
+     * answered with the closes inside its range (none when `include_price` is false) and no event; the main item carries
+     * `mainSignals` as its signal results. Returns the main queries delivered and the date of the first close.
+     */
+    async function routeSyntheticAsset(page: Page, assetId: number, mainSignals: readonly object[]) {
+        const asset = {id: assetId, display_name: `X-R16 synthetic asset ${assetId}`, currency: 'EUR', asset_type: 'STOCK', active: true, has_metadata: false, provider_code: null, tx_count: 0, tx_count_own: 0};
+        const history = Array.from({length: 90}, (_, index) => daysAgoIso(90 - index));
+        const delivered: DeliveredMainQuery[] = [];
+        await page.route(
+            (url) => url.pathname === '/api/v1/assets/query',
+            (route) => route.fulfill({json: [asset]}),
+        );
+        await page.route(
+            (url) => url.pathname === '/api/v1/assets/prices/current',
+            (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}),
+        );
+        await page.route(
+            (url) => url.pathname === '/api/v1/assets/prices/query',
+            async (route) => {
+                // postDataJSON throws on an empty or non-JSON body, and nobody awaits a route callback: read it as no item.
+                let requested: PriceQueryItem[] = [];
+                try {
+                    requested = priceQueryItems(route.request().postDataJSON());
+                } catch {
+                    requested = [];
+                }
+                const items = requested.map((item) => {
+                    const start = item.date_range?.start ?? '';
+                    const end = item.date_range?.end ?? '9999-12-31';
+                    return {
+                        asset_id: item.asset_id,
+                        prices: item.include_price === false ? [] : history.flatMap((date, index) => (date >= start && date <= end ? [{date, close: (100 + index / 10).toFixed(4), currency: 'EUR'}] : [])),
+                        events: [],
+                        errors: [],
+                        signals: item.asset_id === assetId ? [...mainSignals] : [],
+                    };
+                });
+                await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({items})});
+                for (const item of requested) {
+                    if (item.asset_id === assetId) delivered.push({includePrice: item.include_price ?? null, start: item.date_range?.start ?? null});
+                }
+            },
+        );
+        return {delivered, firstPriceDate: history[0]};
+    }
+
+    /** Opens the page on «All» by URL and verifies, rather than assumes, that «All» is the range on screen; returns the start field of the range. */
+    async function openOnAll(page: Page, assetId: number): Promise<Locator> {
+        await goToAssetDetailPage(page, String(assetId), {start: 'min', end: 'max'});
+        // By design the page keeps the generic sentinel in its URL for as long as «All» is selected.
+        await expect(page, '«All» is selected: the URL keeps its min sentinel').toHaveURL(/[?&]start=min(?:&|$)/, {timeout: 30_000});
+        const picker = page.getByTestId('asset-detail-controls').getByTestId('asset-detail-filter-bar').getByTestId('date-range-picker-root');
+        await expect(picker.getByTestId('date-preset-max'), '«All» is the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+        return picker.getByTestId('date-range-input-start');
+    }
+
+    /** The first load was the «All» one: the main prices were asked for from the 2000-01-01 sentinel, answered, and drawn. */
+    async function expectAllPricesDrawn(page: Page, delivered: DeliveredMainQuery[]): Promise<void> {
+        await expect.poll(() => delivered.some((query) => query.includePrice === true && query.start === '2000-01-01'), {message: 'the page asked for the «All» prices from the 2000-01-01 sentinel, and the route answered', timeout: 15_000}).toBe(true);
+        await expect(page.getByTestId('asset-detail-chart'), 'the prices are drawn').toHaveAttribute('data-series-state', 'ready', {timeout: 10_000});
+    }
+
+    /**
+     * Switches the chart to the calendar return and returns the main item of the price query the switch sends — the one
+     * asking for the calendar signal. The request is the subject here (does it ask for the prices again?), so it is
+     * waited for on the network.
+     */
+    async function calendarReturnMainItem(page: Page, assetId: number): Promise<PriceQueryItem | undefined> {
+        const asksForCalendarReturn = (request: Request): boolean => {
+            if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
+            let body: unknown;
+            try {
+                body = request.postDataJSON();
+            } catch {
+                return false;
+            }
+            return priceQueryItems(body).some((item) => item.asset_id === assetId && (item.signals ?? []).some((signal) => signal.signal_code === CALENDAR_RETURN_SIGNAL_CODE));
+        };
+        const chart = page.getByTestId('asset-detail-chart');
+        const toggle = chart.getByTestId('asset-chart-primary-calendar-return');
+        await expect(toggle, 'the calendar return is offered once the prices are drawn').toBeVisible({timeout: 10_000});
+        // Armed before the click and caught at once: a failure in between leaves no rejection unobserved.
+        const asked = page.waitForRequest(asksForCalendarReturn, {timeout: 10_000});
+        asked.catch(() => undefined);
+        await toggle.click();
+        const request = await asked;
+        await expect(chart, 'the chart shows the calendar return').toHaveAttribute('data-primary-mode', 'calendar-return');
+        return priceQueryItems(request.postDataJSON()).find((item) => item.asset_id === assetId);
+    }
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    // RED — pins the «All» half: the throw skips resolveMaxStartFromChartData(). The prices are drawn, yet the start
+    // of the range stays the pending `min`. Before the cure toHaveValue times out on the picker's pending label
+    // (`Received: "Finding…"` in English); once the parse failure is contained, the field shows the first close as an
+    // ISO date (the picker is compact).
+    test('X-R16 RED asset: an invalid signal result still lets All resolve its start to the first price date', async ({page}) => {
+        const assetId = 920_161;
+        const {delivered, firstPriceDate} = await routeSyntheticAsset(page, assetId, [INVALID_SIGNAL_RESULT]);
+        const startInput = await openOnAll(page, assetId);
+        await expectAllPricesDrawn(page, delivered);
+
+        await expect(startInput, '«All» resolves its start to the first close').toHaveValue(firstPriceDate, {timeout: 10_000});
+    });
+
+    // RED — pins the cache half: the throw skips store.merge/markFetched. The calendar return reads the same «All»
+    // range through the price cache (`include_price: !pricesFromCache`), misses, and asks for the prices again. Before
+    // the cure the last assertion fails on `Expected: false, Received: true`. The start field is deliberately not
+    // asserted here: a hit needs only the cache write, so each RED pins one of the two skipped statements.
+    test('X-R16 RED asset: an invalid signal result still caches the prices, so the calendar return does not ask for them again', async ({page}) => {
+        const assetId = 920_162;
+        const {delivered} = await routeSyntheticAsset(page, assetId, [INVALID_SIGNAL_RESULT]);
+        await openOnAll(page, assetId);
+        await expectAllPricesDrawn(page, delivered);
+
+        const mainItem = await calendarReturnMainItem(page, assetId);
+        expect(mainItem, 'the calendar return asks for this asset').toBeDefined();
+        expect(mainItem?.include_price, 'the calendar return reuses the cached «All» prices').toBe(false);
+    });
+
+    // GUARD — the same flow, with an answer the schema accepts: no signal result, or a valid one. Green before the cure
+    // and after it: «All» resolves to the first close, and the calendar return finds the prices cached.
+    for (const answer of GUARDED_ANSWERS) {
+        test(`X-R16 GUARD asset: with ${answer.label}, All resolves to the first price date and the calendar return reuses the cached prices`, async ({page}) => {
+            const {delivered, firstPriceDate} = await routeSyntheticAsset(page, answer.assetId, answer.signals);
+            const startInput = await openOnAll(page, answer.assetId);
+            await expectAllPricesDrawn(page, delivered);
+
+            await expect(startInput, '«All» resolves its start to the first close').toHaveValue(firstPriceDate, {timeout: 10_000});
+            const mainItem = await calendarReturnMainItem(page, answer.assetId);
+            expect(mainItem, 'the calendar return asks for this asset').toBeDefined();
+            expect(mainItem?.include_price, 'the calendar return reuses the cached «All» prices').toBe(false);
+        });
+    }
+});

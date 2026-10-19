@@ -266,10 +266,6 @@ class ProviderManagementOperations:
                     )
 
                 # UPDATE existing assignment (preserves id → FK stays valid)
-                # Z-32: the reported quote currency belongs to the line the provider fetched: another provider or
-                # identifier is another line, learnt again at its next fetch
-                if (existing.provider_code, existing.identifier, existing.identifier_type) != (a.provider_code, identifier_val, mapped_type):
-                    existing.reported_currency = None
                 existing.provider_code = a.provider_code
                 existing.identifier = identifier_val
                 existing.identifier_type = mapped_type

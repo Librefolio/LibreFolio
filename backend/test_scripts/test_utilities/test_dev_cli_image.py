@@ -2027,11 +2027,12 @@ class TestEmailAddressCase:
 
     Until P18 ``user_cli.py create-user`` and ``user create`` give a second account an address another account has in
     another A–Z case — the lookup compares exactly, and these commands do not validate the address —, and no command
-    changes an address. ``./dev.py user set-email <username> <address>`` is the remedy migration 009 names for the
-    accounts it finds colliding: it validates the address (``EmailStr``), refuses an unknown user and another account's
-    address in any A–Z case, and changes the address as an email change through ``update_profile`` does — a real change
-    resets the verification and raises the session version, a case-only change of the account's own address keeps both
-    (C5). It is registered next to the link commands, so ``user_cli.py`` and ``dev.py user`` both have it.
+    changes an address. ``./dev.py user set-email <username> <address>`` is the remedy the 1.3 migration
+    (``005_release_1_3_0_schema``) names for the accounts it finds colliding: it validates the address (``EmailStr``),
+    refuses an unknown user and another account's address in any A–Z case, and changes the address as an email change
+    through ``update_profile`` does — a real change resets the verification and raises the session version, a case-only
+    change of the account's own address keeps both (C5). It is registered next to the link commands, so ``user_cli.py``
+    and ``dev.py user`` both have it.
 
     Every address is in lower case at ``example.com``, with a local part of its own; a case variant changes the local
     part only, so the address stored is the one given whether the command keeps it as written or as ``EmailStr`` gives
