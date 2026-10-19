@@ -58,6 +58,14 @@ def schemas_period_changes_bounds(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Period changes bounds tests", verbose=verbose)
 
 
+def schemas_price_write_point(verbose: bool = False, test_names: list = None) -> bool:
+    """N92 (i): the write model of a manual price ("clear" | number | null) and an answer model that checks no sign."""
+    print_section("Schemas: Price Write Point (N92)")
+    print_info("Testing: backend/app/schemas/prices.py (FAPriceWritePoint, FAUpsert, FAPricePoint)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_price_write_point.py", test_names)
+    return run_command(cmd, "Price write point tests", verbose=verbose)
+
+
 def schemas_currency_write_strict(verbose: bool = False, test_names: list = None) -> bool:
     """MF-SEC9b (E-18): strict ISO 4217 codes on the write paths, tolerant reads."""
     print_section("Schemas: Currency Write Strict (MF-SEC9b, E-18)")
@@ -237,6 +245,15 @@ Tests for Pydantic/SQLModel schema validation:
         name="Period Changes Bounds",
         desc="R13-SEC8 (MF-P2b): the as_of of an asset or FX period-changes item is 1900-01-01 or later (no upper bound)",
         # PURE: imports schemas.prices and schemas.fx only and validates items; no row, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "price-write-point",
+        schemas_price_write_point,
+        name="Price Write Point",
+        desc="N92 (i): a manual price's open, high, low and volume take a number of 0 or more, 'clear' (empty the stored value) or null (leave it); -1, any other text, a value not finite and a boolean refused on their field (422); close above 0; FAUpsert reads write points; FAPricePoint, the provider's and the answer's model, checks no sign",
+        # PURE: imports schemas.prices only and validates items; no row, no server, no network, no file.
         isolation="pure",
     )
     add_test(

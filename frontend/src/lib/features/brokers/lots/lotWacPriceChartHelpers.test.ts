@@ -7,10 +7,14 @@
  * decision points of one function, not just its happy path, because the whole
  * point of the extraction was to make those branches reachable.
  *
- * The last two blocks pin V11 (workstream Y, lot Y12b): the opening value a BUY
+ * Two blocks then pin V11 (workstream Y, lot Y12b): the opening value a BUY
  * marker shows is the backend's `opening_value`, read by `eventOpeningValue`,
  * and LotWacPriceChart.svelte's source is read to pin the tooltip's glue, which
- * a node test cannot render.
+ * a node test cannot render. The next two pin Y-30 the same way: the market
+ * price line is the asset's own `market_price_history`, read by
+ * `marketPriceLine`, and the source is read to pin that the component reads it.
+ * The last pins J-48: a TRANSFER leg crossing the analysis scope is drawn in the
+ * transfer series, and replayed as the adjustment it is.
  */
 
 import {readFileSync} from 'node:fs';
@@ -33,6 +37,7 @@ import {
     LOT_BUBBLE_ZERO_EPS,
     lotBubbleRadius,
     lotBubbleSignColor,
+    marketPriceLine,
     nullifyZeroWac,
     orderDateBounds,
     padDateBoundsForBubbles,
@@ -647,5 +652,243 @@ describe('LotWacPriceChart BUY tooltip — the opening value’s glue on the sou
     // Red on bab5a8fb9: the component imports no eventOpeningValue.
     it('imports eventOpeningValue from ./lotWacPriceChartHelpers', () => {
         expect(withoutComments(componentSource()), 'V11: LotWacPriceChart.svelte does not import eventOpeningValue from ./lotWacPriceChartHelpers').toMatch(importFromHelpers('eventOpeningValue'));
+    });
+});
+
+/*
+ * Y-30 (workstream Y) — the market price line is the asset's own series, not a union of the lots'.
+ *
+ * The contract. The lots analysis answers `MARKET_PRICE_HISTORY` with `market_price_history`: the asset's market price on
+ * each day of the window that has a mark convertible to the target currency, `{date, market_price, currency, estimated}`
+ * with the price a decimal string, whatever lots are open — and kept when the analysis FAILED, where J-12 nulls every lot
+ * section, the per-lot `price_history` with them. The coordinator's decision («always», N89): the WAC chart draws its
+ * price line, its axis dates and the bubbles' opening price from that series, and the panel no longer asks for
+ * `PRICE_HISTORY`.
+ *
+ * The reader. `marketPriceLine(points)` turns the series into the line the chart draws: one point per date, in date order
+ * (`sortDates`), a repeated date keeping its first point; `value` parsed as the chart parses every amount (`safeDecimal`:
+ * null when absent or not a finite number — the date stays, a gap in the line, not a dropped day); `estimated` true only
+ * for `true`. It replaces the component's union by date of the per-lot `price_history` points.
+ *
+ * Red today. `lotWacPriceChartHelpers.ts` exports no `marketPriceLine`: the name imported at the top of this file is
+ * `undefined` at run time, so each case of the first block below fails with «marketPriceLine is not a function», and
+ * every block above stays green. The glue is pinned on the source, comments removed, as V11's is: today the component
+ * imports no `marketPriceLine`, and its `$props()` still takes the per-lot `priceHistory`.
+ *
+ * Fixtures are points as the client receives them (`MarketPriceHistoryPoint`, currency included), each case's series held
+ * in a typed constant so the field the reader ignores type-checks.
+ */
+
+/** A `market_price_history` point as the client receives it, the fields a case may leave out made optional. */
+interface WireMarketPricePoint {
+    date: string;
+    market_price?: unknown;
+    currency: string;
+    estimated?: boolean | null;
+}
+
+describe('marketPriceLine — the market price line is the asset’s market_price_history (Y-30)', () => {
+    // Red today: marketPriceLine is not a function.
+    it('draws one point per date, in date order, whatever order the series arrives in', () => {
+        const series: WireMarketPricePoint[] = [
+            {date: '2024-01-10', market_price: '104.25', currency: 'EUR', estimated: false},
+            {date: '2023-12-29', market_price: '101', currency: 'EUR', estimated: false},
+            {date: '2024-01-02', market_price: '103.5', currency: 'EUR', estimated: false},
+            {date: '2023-12-31', market_price: '102.125', currency: 'EUR', estimated: false},
+        ];
+        expect(marketPriceLine(series), 'Y-30: the line is the series in date order, one point per date, each price read as its number').toEqual([
+            {date: '2023-12-29', value: 101, estimated: false},
+            {date: '2023-12-31', value: 102.125, estimated: false},
+            {date: '2024-01-02', value: 103.5, estimated: false},
+            {date: '2024-01-10', value: 104.25, estimated: false},
+        ]);
+    });
+
+    // Red today: marketPriceLine is not a function.
+    it('marks a point estimated only when the series says true: false, null and an absent flag are a real quote', () => {
+        const series: WireMarketPricePoint[] = [
+            {date: '2024-03-01', market_price: '101', currency: 'EUR', estimated: true},
+            {date: '2024-03-02', market_price: '102', currency: 'EUR', estimated: false},
+            {date: '2024-03-03', market_price: '103', currency: 'EUR', estimated: null},
+            {date: '2024-03-04', market_price: '104', currency: 'EUR'},
+        ];
+        expect(marketPriceLine(series), 'Y-30: estimated is true for true only; false, null and an absent flag read false').toEqual([
+            {date: '2024-03-01', value: 101, estimated: true},
+            {date: '2024-03-02', value: 102, estimated: false},
+            {date: '2024-03-03', value: 103, estimated: false},
+            {date: '2024-03-04', value: 104, estimated: false},
+        ]);
+    });
+
+    // Red today: marketPriceLine is not a function.
+    it('keeps a day whose price is absent or not a finite number, valued null: a gap in the line, not a dropped day', () => {
+        const series: WireMarketPricePoint[] = [
+            {date: '2024-03-01', market_price: '101', currency: 'EUR', estimated: false},
+            {date: '2024-03-02', market_price: 'n/a', currency: 'EUR', estimated: false},
+            {date: '2024-03-03', currency: 'EUR', estimated: false},
+            {date: '2024-03-04', market_price: null, currency: 'EUR', estimated: false},
+            // safeDecimal's own guard: the backend's SafeDecimal serialises an overflowed Decimal as "Infinity", which is no price.
+            {date: '2024-03-05', market_price: 'Infinity', currency: 'EUR', estimated: false},
+            // A price of zero is a price: a value of the line, not a gap.
+            {date: '2024-03-06', market_price: '0', currency: 'EUR', estimated: false},
+        ];
+        expect(marketPriceLine(series), 'Y-30: a day without a readable price keeps its date, valued null; zero stays a value').toEqual([
+            {date: '2024-03-01', value: 101, estimated: false},
+            {date: '2024-03-02', value: null, estimated: false},
+            {date: '2024-03-03', value: null, estimated: false},
+            {date: '2024-03-04', value: null, estimated: false},
+            {date: '2024-03-05', value: null, estimated: false},
+            {date: '2024-03-06', value: 0, estimated: false},
+        ]);
+    });
+
+    // Red today: marketPriceLine is not a function.
+    it('keeps the first point of a repeated date', () => {
+        const series: WireMarketPricePoint[] = [
+            {date: '2024-03-02', market_price: '102', currency: 'EUR', estimated: false},
+            {date: '2024-03-01', market_price: '101', currency: 'EUR', estimated: false},
+            {date: '2024-03-02', market_price: '109', currency: 'EUR', estimated: true},
+        ];
+        expect(marketPriceLine(series), 'Y-30: 2024-03-02 is drawn once, with its first point (102, a real quote), not the later one (109, estimated)').toEqual([
+            {date: '2024-03-01', value: 101, estimated: false},
+            {date: '2024-03-02', value: 102, estimated: false},
+        ]);
+        const unreadableFirst: WireMarketPricePoint[] = [
+            {date: '2024-03-01', market_price: 'n/a', currency: 'EUR', estimated: true},
+            {date: '2024-03-01', market_price: '101', currency: 'EUR', estimated: false},
+        ];
+        expect(marketPriceLine(unreadableFirst), 'Y-30: the first point is kept even without a readable price: the per-lot union’s preference for a later value is gone').toEqual([{date: '2024-03-01', value: null, estimated: true}]);
+    });
+
+    // Red today: marketPriceLine is not a function.
+    it('draws no point from an empty series', () => {
+        expect(marketPriceLine([]), 'Y-30: an empty market_price_history is an empty line').toEqual([]);
+    });
+});
+
+describe('LotWacPriceChart market price line — the glue on the source (Y-30)', () => {
+    /**
+     * LotWacPriceChart.svelte as it is on disk, comments removed: a comment that names a call or a prop is not one. A
+     * `//` inside a string — the markers' `path://` symbols — cuts the rest of its line as well, which no pin below reads.
+     */
+    function componentCode(): string {
+        return readFileSync(new URL('./LotWacPriceChart.svelte', import.meta.url), 'utf8')
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .replace(/\/\/[^\n]*/g, '');
+    }
+
+    /** `import {…, name, …} from './lotWacPriceChartHelpers'`, whatever the other names and their order. */
+    function importFromHelpers(name: string): RegExp {
+        return new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*'\\./lotWacPriceChartHelpers'`);
+    }
+
+    /** The component's `import {…} from './lotWacPriceChartHelpers'` statements: what a failing import pin prints, not the whole file. */
+    function helperImports(code: string): string {
+        return (code.match(/import\s*\{[^}]*\}\s*from\s*'\.\/lotWacPriceChartHelpers'/g) ?? []).join('\n');
+    }
+
+    /** The props the component takes: its pattern from the last `let {` before `$props()` up to the call. Throws when there is none. */
+    function propsPattern(code: string): string {
+        const call = code.indexOf('$props()');
+        const open = call < 0 ? undefined : [...code.slice(0, call).matchAll(/\blet\s*\{/g)].at(-1)?.index;
+        if (open === undefined) throw new Error('LotWacPriceChart.svelte: no let {…} = $props() was found');
+        return code.slice(open, call);
+    }
+
+    /** The per-lot series' prop, by its name: `marketPriceHistory` is another name. */
+    const PRICE_HISTORY_PROP = /\bpriceHistory\b/;
+
+    // Green before and after the fix: the positive controls. Without them the pins below could pass on an empty or a
+    // wrong slice, or with a pattern that matches nothing.
+    it('sees a helper import, and slices the props the component takes', () => {
+        const code = componentCode();
+        expect(helperImports(code), 'the import pin sees a name the component imports from ./lotWacPriceChartHelpers today').toMatch(importFromHelpers('applyLotEvent'));
+        const props = propsPattern(code);
+        for (const name of ['brokerWacHistory', 'cumulativeWacHistory', 'lotEvents', 'onSelectionChange']) {
+            expect(props, `the slice is the props’ pattern: it takes ${name}`).toMatch(new RegExp(`\\b${name}\\b`));
+        }
+        expect('priceHistory = [],', 'the prop pin sees the per-lot prop').toMatch(PRICE_HISTORY_PROP);
+        expect('marketPriceHistory = [],', 'the prop pin spares the market series’ own prop').not.toMatch(PRICE_HISTORY_PROP);
+    });
+
+    // Red today: the component imports no marketPriceLine.
+    it('imports marketPriceLine from ./lotWacPriceChartHelpers', () => {
+        expect(helperImports(componentCode()), 'Y-30: LotWacPriceChart.svelte does not import marketPriceLine from ./lotWacPriceChartHelpers: its price line is still the union by date of the lots’ price_history').toMatch(importFromHelpers('marketPriceLine'));
+    });
+
+    // Red today: its $props() takes `priceHistory = []`.
+    it('takes no per-lot priceHistory prop: the union of the lots’ price_history is gone', () => {
+        expect(propsPattern(componentCode()), 'Y-30: LotWacPriceChart.svelte still takes the per-lot priceHistory, which a FAILED analysis empties: the price line goes with the lots').not.toMatch(PRICE_HISTORY_PROP);
+    });
+});
+
+/*
+ * J-48 (workstream J) — a TRANSFER leg crossing the analysis scope is a transfer marker, replayed as the adjustment it is.
+ *
+ * The contract. The backend reads a TRANSFER leg whose partner sits at a broker outside the lots' scope as an
+ * ADJUSTMENT_IN (entering, at its own cost basis) or an ADJUSTMENT_OUT (leaving, at the market value of its day) row
+ * (J-10), so the WAC chart puts it in the adjustment series, labelled as an adjustment. J-48 gives each lot timeline event
+ * an optional `scope_boundary`, which lotChartShared's `scopeBoundaryOf` reads as 'IN' | 'OUT' | null, and the chart
+ * shows a boundary row as a transfer — its marker series and its label only:
+ * - `eventCategory(kind, scopeBoundary?)` answers 'transfer' for an IN or OUT boundary, ADJUSTMENT_IN and ADJUSTMENT_OUT
+ *   alike, and maps the kind as before without one: 'adjustment' for an adjustment, null for a departure, which draws
+ *   no marker;
+ * - the replay keeps reading `kind`: `applyLotEvent` moves a boundary row's quantity and unit price as the adjustment it
+ *   is. A cure that replayed it as a transfer would carry the running state across unchanged, which the controls below
+ *   tell apart.
+ *
+ * Red, before the cure: the two boundary cases of `eventCategory`, on their assertion — today the second argument is
+ * ignored, so a boundary row stays in the adjustment series. The cases named «control» hold today and after the cure.
+ * An event carrying the new field reaches `applyLotEvent` as a variable, not as a literal: `LotEventInput` need not
+ * declare a field the replay does not read.
+ */
+describe('J-48 — scope boundary', () => {
+    /** The two directions a leg crosses the scope, each with the adjustment kind the backend reads it as (J-10). */
+    const CROSSINGS = [
+        {kind: 'ADJUSTMENT_IN', boundary: 'IN'},
+        {kind: 'ADJUSTMENT_OUT', boundary: 'OUT'},
+    ] as const;
+
+    // RED until J-48's cure: the second argument is ignored today, so the row stays in the adjustment series.
+    it.each(CROSSINGS)('eventCategory: $kind across an $boundary boundary is in the transfer series', ({kind, boundary}) => {
+        expect(eventCategory(kind, boundary), 'J-48: a leg crossing the scope is a transfer marker (today: adjustment)').toBe('transfer');
+    });
+
+    // Control, green before and after the cure: the no-boundary case beside each red.
+    it.each(CROSSINGS)('control: eventCategory — $kind without a boundary, absent, null or undefined, stays an adjustment', ({kind}) => {
+        expect(eventCategory(kind), 'absent').toBe('adjustment');
+        expect(eventCategory(kind, null), 'null').toBe('adjustment');
+        expect(eventCategory(kind, undefined), 'undefined').toBe('adjustment');
+    });
+
+    // Control, green before and after the cure: a null boundary moves no other kind — a departure still draws no marker.
+    it('control: eventCategory — every other kind keeps its series under a null boundary, a departure none', () => {
+        const kinds: LotEventKind[] = ['BUY', 'SELL', 'SPLIT', 'TRANSFER_ARRIVE', 'TRANSFER_DEPART'];
+        expect(kinds.map((kind) => eventCategory(kind, null))).toEqual(['buy', 'sell', 'split', 'transfer', null]);
+    });
+
+    describe('applyLotEvent replays a boundary row as the adjustment it is', () => {
+        const ev = (kind: LotEventKind, extra: Partial<LotEventInput> = {}): LotEventInput => ({kind, ...extra});
+        /** `event` carrying J-48's field as sent: the scalar, or the array shape of the generated client. */
+        const withBoundary = (event: LotEventInput, scopeBoundary: unknown): LotEventInput & {scope_boundary: unknown} => ({...event, scope_boundary: scopeBoundary});
+
+        // Control, green before and after the cure. Why: replayed as a transfer, 10 @ 2 would cross unchanged.
+        it('control: an ADJUSTMENT_IN blends its units in the same with or without an IN boundary — 10 @ 2 plus 10 @ 4 is 20 @ 3', () => {
+            const before = {quantity: 10, unitPrice: 2};
+            const entering = ev('ADJUSTMENT_IN', {quantity: '10', unit_price: '4'});
+            expect(applyLotEvent(before, entering), 'barrier: without a boundary, the quantity-weighted blend').toEqual({quantity: 20, unitPrice: 3});
+            expect(applyLotEvent(before, withBoundary(entering, 'IN')), 'IN').toEqual({quantity: 20, unitPrice: 3});
+            expect(applyLotEvent(before, withBoundary(entering, ['IN'])), '[IN]').toEqual({quantity: 20, unitPrice: 3});
+        });
+
+        // Control, green before and after the cure. Why: replayed as a transfer, the 10 units would all stay.
+        it('control: an ADJUSTMENT_OUT hands its units over the same with or without an OUT boundary — 10 less 4 is 6, the unit price kept', () => {
+            const before = {quantity: 10, unitPrice: 2};
+            // A leg leaving the scope at the market value of its day (J-10): its close price is not the lot's unit price.
+            const leaving = ev('ADJUSTMENT_OUT', {quantity: '4', close_unit_price: '5'});
+            expect(applyLotEvent(before, leaving), 'barrier: without a boundary, the units leave and the unit price stays').toEqual({quantity: 6, unitPrice: 2});
+            expect(applyLotEvent(before, withBoundary(leaving, 'OUT')), 'OUT').toEqual({quantity: 6, unitPrice: 2});
+            expect(applyLotEvent(before, withBoundary(leaving, ['OUT'])), '[OUT]').toEqual({quantity: 6, unitPrice: 2});
+        });
     });
 });

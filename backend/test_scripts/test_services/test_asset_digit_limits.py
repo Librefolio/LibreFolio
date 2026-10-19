@@ -14,8 +14,8 @@ The contract (developer's decisions of 16/10):
 * A price column keeps 12 decimals and 15 significant digits (``RealDecimal(24, 12)``). A MANUAL upsert
   where any open/high/low/close exceeds either limit is refused BEFORE anything is written, for every
   asset of the call: ``ValueError`` (HTTP 400 from the router), naming the asset id, the maximum (12
-  decimal places, 15 significant digits) and the offending date(s). The ``-1`` sentinel of
-  open/high/low/volume is no digit issue. A provider upsert (``source_plugin_key`` a provider code) is
+  decimal places, 15 significant digits) and the offending date(s). The ``"clear"`` marker of
+  open/high/low/volume (N92; the ``-1`` sentinel before it) is no digit issue. A provider upsert (``source_plugin_key`` a provider code) is
   never refused: its prices are truncated to 12 decimals then 15 significant digits (``ROUND_DOWN``)
   and stored. A manual close of 0.0000034573 reads back 0.0000034573.
 * A manual event whose ``value.amount`` exceeds 6 decimal places or 15 significant digits is refused
@@ -317,20 +317,29 @@ async def test_guard_a_manual_close_at_the_limits_is_accepted(owned, typed, stor
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("field", ["open", "high", "low", "volume"])
-async def test_guard_the_minus_one_sentinel_is_no_digit_issue(owned, field):
-    """GUARD (green before and after): -1 clears a field (F.4); it is never refused.
+async def test_the_clear_marker_is_no_digit_issue(owned, field):
+    """N92 (i) with «clear»: the text ``"clear"`` empties a field (it replaces the ``-1`` sentinel); the digit check of
+    C-97 skips it, so it is never refused, and the field is stored NULL.
 
-    One field at a time: -1 on both low and high is turned down by the OHLC integrity guard (a close
-    outside [-1, -1]), which is another matter.
+    The point goes as ``POST /assets/prices`` parses it: the JSON body validated into ``FAUpsert``.
+    RED until N92: ``FAUpsert``'s points are ``FAPricePoint``, whose parser reads ``"clear"`` as a number
+    (``Decimal("clear")`` raises ``InvalidOperation``: the route answers 500). Until then the ``-1`` sentinel was this
+    case, a GUARD; ``-1`` is now a negative number, refused by the write model (``test_price_write_point.py``).
+    Contract: not refused; the day stored with ``field`` NULL. One field at a time, as the -1 case was.
     """
+    body = {"asset_id": owned.asset_id, "prices": [{"date": _day(0).isoformat(), "close": "1.5", field: "clear"}]}
     try:
-        await _manual_upsert([FAUpsert(asset_id=owned.asset_id, prices=[_point(0, "1.5", **{field: "-1"})])])
+        data = [FAUpsert.model_validate(body)]
+    except Exception as exc:  # noqa: BLE001 — any exception here is the defect under test
+        pytest.fail(f"N92: POST /assets/prices does not read a point clearing its {field} with 'clear': {exc!r}")
+    try:
+        await _manual_upsert(data)
     except ValueError as refusal:
-        pytest.fail(f"a manual point clearing its {field} with the -1 sentinel was refused: {refusal}")
+        pytest.fail(f"a manual point clearing its {field} with 'clear' was refused: {refusal}")
 
     row = (await _stored(owned)).get((owned.asset_id, _day(0)))
-    assert row is not None, f"a manual point clearing its {field} with the -1 sentinel was not stored"
-    assert getattr(row, field) is None, f"the -1 sentinel left {field} = {getattr(row, field)}"
+    assert row is not None, f"a manual point clearing its {field} with 'clear' was not stored"
+    assert getattr(row, field) is None, f"'clear' left {field} = {getattr(row, field)}"
 
 
 @pytest.mark.asyncio

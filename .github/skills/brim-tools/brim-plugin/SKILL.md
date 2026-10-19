@@ -55,6 +55,16 @@ converter.
    `FAKE_ASSET_ID_BASE` (`2**31 - 1`, in `backend/app/schemas/brim.py`) and count down, one
    per ISIN/ticker — plus the extracted asset info, so the core can drive the
    asset-matching UI. They are never negative and never persisted.
+9. **Only safe rows.** Import only rows whose date the broker will not change any more:
+   movements already settled, executed and booked. A provisional row — its value or
+   settlement date after the server's today (`server_today()`, `backend/app/utils/datetime_utils.py`,
+   never the browser's date), or a status that says pending or reserved — is left out
+   **whole**, with every transaction it would have produced (its fee, its premium), and
+   arrives with the next import. Say so with one `severity="info"` note per reason (a
+   `code`, `context.count`, the rows as evidence), never a warning: nothing is wrong, the
+   rows are simply not final yet. When the report holds no export date and no status,
+   compare the row's own date with `server_today()` (Fineco); when it covers a known
+   period, its end (Danske Bank's cash file).
 
 ## 🛠️ Rough shape of the work
 

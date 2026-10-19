@@ -1,6 +1,6 @@
 ---
 name: design-system
-description: "Use this skill whenever you create or change any frontend UI (a component, a page, a dialog, a form, a badge, a chart), choose a colour, or touch the light or dark theme. It is the LibreFolio design system: the two themes «Stone and Sage» (light) and «Slate and Sage» (dark), every colour role and when to use it (both themes' values in palette.md), the shared colour folder frontend/src/lib/theme/, and the rules (roles only, no dark:, WCAG contrast, focus, tooltips, gain and loss, charts, how to get a new role). To convert legacy palette classes or touch the colour ratchet baseline, use theme-roles."
+description: "Use this skill whenever you create or change any frontend UI (a component, a page, a dialog, a form, a badge, a chart), choose a colour, or touch the light or dark theme. It is the LibreFolio design system: the two themes «Stone and Sage» (light) and «Slate and Sage» (dark), every colour role and when to use it (both themes' values in palette.md), the shared colour folder frontend/src/lib/theme/, and the rules (roles only, no dark:, WCAG contrast, focus, tooltips, gain and loss, categories and asset type badges, toasts and banners and how serious a problem is, charts, how to get a new role). To convert legacy palette classes or touch the colour ratchet baseline, use theme-roles."
 ---
 
 # LibreFolio design system: two themes, one palette, the rules
@@ -35,6 +35,11 @@ themes, and every later change of the designer, with no `dark:` at all.
   ([`designer-feedback/2026-10-15-round2-palette/`](../../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/README.md)),
   approved whole by the developer (D-T17), with his later corrections (D-T18, D-T23–D-T26). The English names are the
   ones of the `CHANGELOG.md`; `tokens.css` keeps the Italian ones in its comments.
+- **Round 3, 17/10/2026**
+  ([`designer-feedback/2026-10-17-round3-grafici/decisioni.md`](../../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/designer-feedback/2026-10-17-round3-grafici/decisioni.md)),
+  approved by the developer with the designer: the colours of the categories (the charts, and the asset types'
+  badges on the roles `--lf-cat-*`), the toasts as tints, the chips inside a banner, how serious a problem is; and
+  her confirmation of the state values of round 2.
 - **How a theme is applied:** the `dark` class on `<html>`, written by the anti-FOUC script of `src/app.html` and by
   `applyTheme()` in `src/lib/stores/app/themeStore.ts`. A subtree can force a theme with `.light` or `.dark`, and the
   roles recompute inside it. Read and watch the theme only through `themeMode.ts`.
@@ -55,9 +60,9 @@ themes, and every later change of the designer, with no `dark:` at all.
 
 | File | What it holds | A component uses it when… | Owner | To add an entry |
 |---|---|---|---|---|
-| `tokens.css` | The 102 roles of the two themes (a light, a derived and a dark block) and the `@theme inline` table that turns 98 of them into utilities (`bg-lf-card`…) | it draws any colour: as a utility, or `var(--lf-…)` in a `<style>` | T | Only T: «Asking for a new role» below |
+| `tokens.css` | The 138 roles of the two themes (a light, a derived and a dark block) and the `@theme inline` table that turns 134 of them into utilities (`bg-lf-card`…) | it draws any colour: as a utility, or `var(--lf-…)` in a `<style>` | T | Only T: «Asking for a new role» below |
 | `components/media.css`, `table.css` | The last component tokens `--lf-cmp-<component>-<role>` (with `-dark` twins) that workstream R moved out of the `<style>` blocks at pixel parity, all categorical and waiting for the categorical roles: the image icon of `FileUploader` (`media.css`, 2 tokens, one colour per file type, AF-11) and the portfolio and benchmark row tints of `RiskReturnLevel` (`table.css`, 4, the designer's point 2.5). The dialogs, the files, the rest of the media and the tables, `CompactCashCell` included, read the roles | it is `FileUploader` or `RiskReturnLevel`; it loads its file with a side-effect import (`import '$lib/theme/components/table.css'`) | T | **Never a new token**: a new colour is a role. Migrating such a component replaces its `var(--lf-cmp-…)` with roles, deletes the tokens nobody reads any more, and deletes the file once it holds none (`src/themeComponentTokens.gate.test.ts`: each token defined once, imported where read, read by someone; every area file defines tokens) |
-| `toneClasses.ts` | Whole class strings on the roles: signed figures (`SIGN_TEXT`, `SIGN_BAR`, `SIGN_BADGE`), diverging measures (`POLARITY_TONES`), states (`STATUS_TONES`: sync, PAC, toasts, import report and file sets, risk chips, data quality, live updates). The kinds told apart by hue alone (`KIND_TONES`, `STATUS_TONES.fileSet.combined`) are categorical, still palette classes | it colours a sign, a polarity, a state or a kind: it takes the entry by name; the threshold (`>= 0`, `> 0`) stays with the caller | T | A new named entry, a whole literal string of role utilities (never assembled), in the table of its meaning. An entry keeps its own name even when its classes equal another's |
+| `toneClasses.ts` | Whole class strings on the roles: signed figures (`SIGN_TEXT`, `SIGN_BAR`, `SIGN_BADGE`), diverging measures (`POLARITY_TONES`), states (`STATUS_TONES`: sync, PAC, toasts, the chips and buttons inside a banner (`bannerChip`), import report and file sets, risk chips, data quality, live updates; `DATA_QUALITY_TONE`, the state a data-quality severity is drawn in). The kinds told apart by hue alone (`KIND_TONES`, `STATUS_TONES.fileSet.combined`) are categorical, still palette classes | it colours a sign, a polarity, a state or a kind: it takes the entry by name; the threshold (`>= 0`, `> 0`) stays with the caller | T | A new named entry, a whole literal string of role utilities (never assembled), in the table of its meaning. An entry keeps its own name even when its classes equal another's |
 | `chartCategories.ts` | The fixed colour of every asset type and sector, of the cash and of «unclassified», in both themes (GR1–GR3); the key sequences (GR5); `categoryColor`, `sequenceColor`, `lookupKey`, `isUnclassifiedCountry` | it draws a category: a chart, its legend, its tooltip | DV | A new key (a new asset type or sector) takes the designer's pair, one literal per line (C2), in her table order. Until then it reads as unclassified |
 | `chartShades.ts` | The colour arithmetic of the category charts: `mixOklab`, `familyShade` (subtypes, GR4; rounds past a sequence, GR5), `shadePoles`, `scaleColor` | it draws a subtype, a sequence past its end, a value on a continuous scale | DV | A new mixing rule here, with its test. Never mix colours in a component |
 | `chartPalettes.ts` | Two lists read as they are: `SIGNAL_DEFAULT_PALETTE` (a new signal's line; still one list for both themes, a default per theme is S9, waiting for Y4, Y8 and FE5c) and `GEO_CHOROPLETH_SCALE` (the world maps, GR5.1); and `growthBrokerColor` (the broker lines of the Growth chart), which reads `categoryColor` of the first eight asset types at each draw (TD-1b), so it follows the Designer Lab | it is one of those charts | DV | Through DV. A palette that colours categories goes through `chartCategories.ts` instead |
@@ -83,8 +88,9 @@ What to reach for, family by family. **Every role, with its value in both themes
 | Borders | `border-lf-subtle`, `border-lf-raised`, `border-lf-input`, `hover:border-lf-input-hover` | dividers; floating surfaces (N3); fields at rest, 3:1; fields under the pointer (D-T18) |
 | Brand and action | `bg-lf-brand` with `text-lf-on-brand`; `bg-lf-action`, `hover:bg-lf-action-hover`, `text-lf-on-action` | the login card header; the primary button |
 | Focus, links, selection | `focus-visible:outline-lf-focus`, `focus:ring-lf-focus`, `focus:border-lf-focus`; `text-lf-link`; `bg-lf-selected`; `bg-lf-checked` with `text-lf-on-checked`; `ring-lf-tour-glow` | keyboard focus (rule 8); links and accents; a selected row, item or range; a selected control (D-T16); the guided tour's glow (Q9) |
-| States, X = `success`, `warning`, `danger`, `info` | `text-lf-X`; `bg-lf-X-soft`, `border-lf-X-line`, `text-lf-X-on-soft`; `bg-lf-X` with `text-lf-on-status`, hovered `hover:bg-lf-X-hover`; `bg-lf-danger-solid`, `hover:bg-lf-danger-hover`, `text-lf-on-danger-solid` | a state as text or icon; an alert, banner, badge or row; a solid fill (toasts) and a solid button hovered (warning Q3; success and info provisional); a solid destructive button (Q3) |
+| States, X = `success`, `warning`, `danger`, `info` | `text-lf-X`; `bg-lf-X-soft`, `border-lf-X-line`, `text-lf-X-on-soft`; `bg-lf-X` with `text-lf-on-status`, hovered `hover:bg-lf-X-hover`; `bg-lf-danger-solid`, `hover:bg-lf-danger-hover`, `text-lf-on-danger-solid` | a state as text or icon, and the edge of a chip or button inside a banner (rule 12); an alert, banner, toast, badge or row; a solid fill (a solid badge) and a solid button hovered (warning Q3; success and info provisional); a solid destructive button (Q3) |
 | Gain, loss, donation | `text-lf-gain`, `text-lf-loss`; `bg-lf-gain-soft` with `text-lf-gain-on-soft`, `bg-lf-loss-soft` with `text-lf-loss-on-soft` (`SIGN_BADGE`); `text-lf-donate`, `hover:text-lf-donate-hover` | signed figures, never states (rule 7); a sign on a tint, a badge or a chip; the donation link |
+| Categories, X = `stock`, `etf`, `bond`, `crypto`, `fund`, `hold`, `crowdfund`, `commodity`, `real-estate`, `index`, `other`, `liquidity` | `bg-lf-cat-X-soft` with `text-lf-cat-X-on-soft`; `bg-lf-cat-X-on-soft`; `bg-lf-cat-X` | an asset type's badge, through `assetTypeBadgeClass()` (rule 11); a subtype's content dot, through `assetTypeBadgeDotClass()`; the type's colour as a fill or a mark (round 3) |
 | The tooltip | `bg-lf-inverse` with `text-lf-on-inverse`; `text-lf-warning-on-inverse`, `text-lf-danger-on-inverse`, `text-lf-info-on-inverse`, `text-lf-muted-on-inverse` | the inverted surface; coloured text inside it (Q10, rule 6) |
 | Backdrops and shadows | `bg-lf-overlay` with `text-lf-on-overlay`; `shadow-lf-shadow`; `shadow-lf-shadow-card` | modal and tour backdrops (Q13), and text or icons on them (provisional); floating surfaces (Q8, rule 9); the cards of a page |
 | The shell | `bg-lf-header`; `bg-lf-bar`, `text-lf-bar-text`, `text-lf-bar-muted`, `border-lf-bar-line`, `hover:bg-lf-bar-hover`, `bg-lf-bar-active`, `text-lf-on-bar-active`, `border-lf-bar-indicator`, `bg-lf-bar-logout`, `hover:bg-lf-bar-logout-hover`, `focus-visible:outline-lf-bar-focus`, `text-lf-bar-success`, `text-lf-bar-warning`, `text-lf-bar-danger` | the neutral header (D-T23); the green sidebar, one family in both themes (D-T17) |
@@ -186,6 +192,14 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
 | `focus` | `app`, `header`, `card`, `panel`, `field` | 3 |
 | `checked` | `card`, `panel`, `field` | 3 |
 | `switch-knob-on` | `checked` | 3 |
+| `X-on-soft` | `card`: the text of a chip or a button inside a banner (rule 12) | 4.5 |
+| `X-on-soft` | its own `X-line`: the dismiss ✕ of a toast or a banner, hovered | 3 |
+| `link` | the tints `X-soft`: a link inside a banner | 4.5 |
+| `focus` | the tints `X-soft`, and the lines `X-line` under a hovered dismiss | 3 |
+| `warning`, `info` | `danger-soft`; and `info` on `warning-soft`: the icon and the chip edge of a row inside a banner of a worse state | 3 |
+| `cat-X-on-soft` | its tint `cat-X-soft`: an asset type's badge | 4.5 |
+| `cat-X` | `card`: every category, 3:1 at least (round 3) | 3 |
+| `cat-stock-on-soft`, `cat-bond-on-soft`, `cat-commodity-on-soft`, `cat-real-estate-on-soft`, `cat-crypto-on-soft`, `cat-liquidity-on-soft` | `cat-etf-soft`; and `cat-real-estate-on-soft` on `cat-crowdfund-soft`: the content dot of a subtype | 3 |
 | `bar-text` | the sidebar, its hover, the active item, the logout button and its hover | 4.5 |
 | `bar-text-muted`, `bar-warning` | the sidebar and its hover | 4.5 |
 | `bar-active-text` | the active item, the sidebar, its hover | 4.5 |
@@ -193,8 +207,9 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
 | `bar-focus` | the sidebar, its hover, the active item, the logout button | 3 |
 | `bar-success`, `bar-danger` | the sidebar and its hover | 3 |
 
-- **A pair not in the list is not promised:** a state on another state's tint, any text on `neutral`, a text on a
-  translucent colour. If your design needs one, ask for the pair to be measured and added.
+- **A pair not in the list is not promised:** a state on another state's tint (but a row's icon in a banner of a worse
+  state, above), any text on `neutral`, a text on a translucent colour. If your design needs one, ask for the pair to
+  be measured and added.
 - **On a selected row, option or chip** (`bg-lf-selected`), the text is `text-lf-primary`, `text-lf-secondary` or
   `text-lf-link`, and `link` never on a `selected` that lies on a `panel` (4.09:1 in dark). **The muted text, the
   statuses and the signs fail there** (3.84–4.48:1 on most surfaces; a lighter tint would not cure it): a muted caption
@@ -207,6 +222,11 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
   3.99:1.
 - **A translucent background** is measured composited over the opaque surfaces it lies on (the `over` field of a pair,
   as the backdrop is).
+- **A translucent tint under a fixed cell** (a sticky column) lets what scrolls beneath show through, and is painted
+  twice where the cell repaints its row's background: put the tint over an opaque surface. A `DataTable` row paints the
+  card and, over it, its state's tint in one image layer, `--dt-row-tint` (registered in its `<style>`), and its fixed
+  cells inherit both layers. A list that tints its rows through `getRowClass` sets `--dt-row-tint` on the row, never the
+  row's background (`AssetTable`, the inactive asset).
 - **What no pair can hold:** the switch turned off is recognised by the edge of its knob, and a translucent colour that
   is no role (`bg-lf-bar-danger/20`) has no role to compose. Both are checked by hand.
 
@@ -258,11 +278,40 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
 
 ### 11. Categories outside the charts
 
-- Asset types and sectors in a badge, a chip or an icon take their colour from the shared helpers: the badges of
-  `src/lib/utils/assetTypes.ts` and `KIND_TONES` of `toneClasses.ts`. They are categorical, still palette classes until the
-  categorical roles come: reuse them, never copy their classes.
-- Violet, indigo, teal, cyan, pink, fuchsia and lime are categories, never states. The AI violet is not a category: it
-  has the `ai` roles (Q11).
+- **An asset type has roles** (round 3, §1.9): `--lf-cat-<key>` for each of the eleven types and the cash, the key in
+  lower case with `_` → `-`, with its badge tint `-soft` and its badge text `-on-soft` ([`palette.md`](palette.md),
+  «Categories»). A badge takes them from `assetTypeBadgeClass()` of `src/lib/utils/assetTypes.ts`, never written by
+  hand: a subtype in its **family's** colour (every `ETF_*` the ETF's blue, `CROWDFUND_REAL_ESTATE` the
+  crowdfunding's), and a **dot** in the colour of what it contains, like its icon's pastille:
+  `assetTypeBadgeDotClass()`, `bg-lf-cat-<content>-on-soft`, 4.30:1 at least on the family's tint (`ETF_MONETARY`'s
+  dot is the cash). The charts draw the same values: a type colour lives twice, in `chartCategories.ts` (DV) and in
+  `tokens.css`, until the Designer Lab moves to the roles (DV-11); change both together, the parity test of
+  `chartCategories.test.ts` holds them equal («Charts»).
+- **Sectors, countries and the other kinds** have no roles yet: a chart takes `categoryColor`; the kinds a badge tells
+  apart by hue alone (`KIND_TONES`, `STATUS_TONES.fileSet.combined`) are still palette classes until their categorical
+  roles come: reuse them, never copy their classes.
+- **No green, teal, olive, lime or greenish cyan in a category** (round 3, §1.1): green is the brand's, a success's
+  and a gain's, and the cash is slate blue. Violet, indigo, pink and fuchsia are categories, never states; the AI
+  violet is not a category: it has the `ai` roles (Q11).
+
+### 12. Notices: toasts, banners, their chips, and how serious a problem is (round 3)
+
+- **Four states, one meaning each** (the developer, 17/10): **red** (`danger`) for a real error, one that stops a
+  calculation or makes it wrong; **amber** (`warning`) for missing or incomplete data, which once supplied lets the work
+  go on; **blue** (`info`) for information and notes; **green** (`success`) for a success. How serious a problem is gets
+  decided condition by condition where it is raised, never by the component that draws it: the data-quality banners
+  draw the severity the backend sends, through `DATA_QUALITY_TONE` (`error` → `danger`), a grouped banner in the tone of
+  its worst issue and each row in its own.
+- **A toast is a tint, like a banner:** `STATUS_TONES.toast` — the `X-soft` fill, the `X-line` edge, the text in
+  `X-on-soft` and the icon in `X`; its dismiss button and its countdown in `X-on-soft`, the dismiss hovered on `X-line`.
+- **A chip or a button inside a banner** stands on the card (proposal a): `STATUS_TONES.bannerChip.X` — `bg-lf-card`,
+  an edge in `X` (T3-b: her `X-line` measured 1.1–1.6:1, under the 3:1 of a control's border), the text in
+  `X-on-soft`, and its `hover`, `bg-lf-X-soft`, for a control only (a pill that is no control takes none). The PAC's
+  neutral secondary buttons stay neutral: `bg-lf-card border-lf-raised text-lf-primary`.
+- **No opacity on a notice's text or icons:** a quieter line is smaller, never translucent; a dismiss button is in
+  `X-on-soft` at rest, never at `opacity-60`, with the focus ring of rule 8. A link inside a banner is `text-lf-link`,
+  underlined.
+- **A notice with no box** (the BRIM notices, on the card) is measured on the card, never on a tint it does not draw.
 
 ## Charts
 
@@ -277,17 +326,31 @@ draw. Owner: DV.
     toward white at 15, 30 and 45 %; dark theme: toward the card at 18, 32 and 45 %. From the fourth subtype (the ETF
     family has six) the same steps go toward the opposite pole: `#1C2420` in light, white in dark (DV decision 2). Past
     the sixth the cycle starts again.
-- **No semantic red or green among the categories (GR2).** The brand sage colours the cash alone (`Liquidity`, GR3):
-  `#2D6A54` in light and `#429E79` in dark. «Unclassified» is a fog grey.
+- **No green among the categories (round 3, §1.1).** No green, teal, olive, lime or greenish cyan in a type, a sector,
+  a country or the map: green and red belong to gain and loss, the brand green to the primary actions. The cash
+  (`Liquidity`) is a slate blue, `#3F628C` in light and `#639BC0` in dark; «unclassified» a blue-grey. The list is
+  the designer's final one (17/10/2026): the pairs she kept between ΔE00 5 and 8 are named exceptions of the
+  distinguishability test (`chartCategories.test.ts`), told apart by the legend and the tooltip.
 - **Categories without a key (GR5):**
-  - the owners of the semi-donut: `sequenceColor()` over `CATEGORY_SEQUENCE`, the first eight asset types, with the
-    poles of `shadePoles()`;
-  - the countries of the geography history: `sequenceColor()` over `KEYLESS_SEQUENCE`, the fourteen sectors;
-  - past the end of these sequences, the same colours one shade further, never a silent repeat;
-  - **the exception, the broker lines of the Growth chart:** `growthBrokerColor()` takes `categoryColor()` of the
-    first eight asset types by `index % 8`, so the ninth broker repeats the first (DV-8, to fix after W6);
-  - the world maps: `GEO_CHOROPLETH_SCALE` (`chartPalettes.ts`);
-  - the correlation matrix: `danger` ↔ `panel` ↔ `info`.
+  - the owners of the semi-donut: by their key (the user id), never by the order of the data. Sorted by key, they take
+    `sequenceColor()` over `CATEGORY_SEQUENCE`, the first eight asset types, with the poles of `shadePoles()` (§1.5);
+  - the broker lines of the Growth chart: `growthBrokerColor()`, the same eight by the broker's index;
+  - the countries of the geography history: `sequenceColor()` over `COUNTRY_SEQUENCE`, fourteen references to types
+    and sectors (§1.4), so a country follows the colour of the category it shares it with;
+  - a sequence names categories (`CategoryRef`), never colours: the tables are the only colours of the file (C2);
+  - past the end of a sequence, the same colours one shade further, never a silent repeat.
+- **Scales, values of their own (round 3, §1.6):**
+  - the world maps: `GEO_CHOROPLETH_SCALE` (`chartPalettes.ts`), six blues, the same on the Dashboard, the asset page
+    and the PAC; the countries with no data: `GEO_MAP_COLORS.land` (`chartTheme.ts`);
+  - the correlation matrix: `CORRELATION_SCALE`, red ↔ grey-blue ↔ cobalt, no longer on roles; the value in a cell is
+    pure black or pure white, whichever reads best (`CORRELATION_CELL_TEXT` through `readableOn()`).
+- **The PAC's bars, «ideal vs actual»:** the ideal in its own neutral grey, `PAC_EXPOSURE_COLORS.ideal` of
+  `chartTheme.ts`; the actual weight in its row's category colour, a subtype in a shade of its family (§1.7).
+- **The type colours outside the canvas** (§1.9, decision A): the HTML that draws a type reads T's roles
+  `--lf-cat-<type>` (`bg-lf-cat-etf`; `-soft` and `-on-soft` for a badge), as the book-value and cash bars of the
+  Dashboard's net-worth card do. Until the Designer Lab moves to the roles (DV-11) a type colour lives twice, in
+  `chartCategories.ts` and in tokens.css: change both together; the parity test of `chartCategories.test.ts` holds them
+  equal.
 - **Roles in a chart:** `chartRoles(dark, scope)` of `roleColors.ts` reads `--lf-*` on the chart's own element at each
   draw: `color(role)`, and `readableText(background)` for a label over a fill.
 - **Neutrals on roles (B4):** axes, grids and rules, labels, tooltip boxes, pointers, and the gaps and rings in the
@@ -303,8 +366,8 @@ draw. Owner: DV.
 - **Redraw** when the theme changes (`onThemeClassChange`) and when the Designer Lab edits a colour
   (`onChartColorsChange`, contract C4). A chart that otherwise updates its data only must rebuild its options at that
   signal, or its colours do not change (TD-1b: `GrowthChart` calls `renderChart(true)`).
-- **Never a hex in a chart component, and never a category colour changed locally:** the designer's list is under
-  review (open question 1).
+- **Never a hex in a chart component, and never a category colour changed locally:** a change of the designer's
+  list goes back to her, and lands in `chartCategories.ts`.
 - **A colour the user picked stays his** (signals, DV decisions 6 and 7): only the proposed colours change, and a saved
   signal migrates only while it is still on the old default. This is S9, still to do.
 
@@ -339,6 +402,8 @@ The sources:
 - **the designer's round 2:**
   [`designer-feedback/2026-10-15-round2-palette/README.md`](../../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/README.md),
   with its analysis `analisi.md`;
+- **the designer's round 3:**
+  [`designer-feedback/2026-10-17-round3-grafici/decisioni.md`](../../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/designer-feedback/2026-10-17-round3-grafici/decisioni.md);
 - **the programme:**
   [`plan-phase00ColorSystemThemeLab.prompt.md`](../../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/plan-phase00ColorSystemThemeLab.prompt.md);
 - **DV:** [`DV-chartColors/plan-phase00ChartColors.prompt.md`](../../../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md).
@@ -377,31 +442,18 @@ The sources:
 | Q12 | The icons of the «About» tab: no rainbow, a `bg-lf-panel` badge, the icon in the focus green | round 2 |
 | Q13 | The backdrop: `#0d1110` at 60 % in both themes | round 2 |
 | GR1–GR5 | Charts: one colour per key; no semantic red or green; the cash in sage; the shades of a subtype; the other palettes follow | round 2, DV |
+| R3 §1.1 | No green, teal, olive, lime or greenish cyan in a category; the cash slate blue (replaces the sage of GR3) | round 3 |
+| R3 §1.9 | The asset types' badges on the roles `--lf-cat-*`: the family's colour (A1-a), a dot in the content's colour (column F), the dot in the content's `-on-soft` (≥ 3:1; the coordinator, 17/10); BOND's light badge text `#4f669a`, a D-T6 correction of her `#50679b` (4.49:1 on the exact tint), accepted by the coordinator (17/10) | round 3 |
+| R3 §2 | Toasts are tints; the chips and buttons inside a banner stand on the card (proposal a); the state values of round 2 confirmed | round 3 |
+| T3-b | The edge of a banner chip in the state colour `X`, over 3:1 (her `X-line` measured 1.1–1.6:1) | round 3, developer |
+| R3 §1.3 | How serious a problem is: red for real errors, amber for missing data, blue for notes, green for successes, decided condition by condition (17/10: the portfolio's missing price and the four codes that fail the lots' replay are errors, the risk lab's missing price a warning) | round 3, developer |
 
-## Open questions for the designer (round 3): not decided
+## Open questions for the designer: not decided
 
 Until she answers, follow what is written here and do not decide them in a component.
 
-1. **The chart colours.** Package `grafici-giro3-2026-10-15.zip` (in `LibreFolio_visual_review/package/`, outside the
-   repository), points 2.1–2.9. Under review:
-   - a definitive list of the category colours, and the pairs too close to tell apart (under ΔE00 10, listed by the
-     distinguishability test of `chartCategories.test.ts`);
-   - the category greens near the gain green: ΔE00 11.4 between the dark `#5ed69a` and `#2dd4bf`;
-   - the shades of a full family, down to ΔE00 3.2–6.0;
-   - the centre of the correlation matrix, the panel, at 1.1:1 on the card;
-   - 2.2: the cash (`Liquidity`) at ΔE00 7.8 from the success green in light, and equal to `--lf-focus` in dark;
-   - 2.8: whether the rule of the greens concerns the categories only;
-   - 2.9: «unclassified» at 2.6:1 on the card, under the 3:1 of WCAG 1.4.11;
-   - the exception of TD-1: the dark «Other» at ΔE00 9.0 from `--lf-text-secondary` (`exposureBarColours.test.ts`).
-
-   Until then: `chartCategories.ts` as it is.
-2. **Toasts and banners.** Package `toast-e-banner-2026-10-15.zip`: the toasts solid or soft, the 11 families of
-   banners.
-   - Today a toast is solid (`bg-lf-X text-lf-on-status`) and a banner sits on the tints (`-soft`, `-line`,
-     `-on-soft`). In dark the banners are louder than the old ones, which had their text at 60 %.
-   - No role covers the hover of a tint: the migration took `hover:bg-lf-X-line`.
-
-   Until then: `STATUS_TONES` and `src/lib/components/ui/feedback/InfoBanner.svelte` as they are.
+1. **The chart colours: answered by round 3** (17/10, §1 of `decisioni.md`): see «Charts» and rule 11.
+2. **Toasts and banners: answered by round 3** (17/10, §2): rule 12.
 3. **`panel` equals `hover`.** `--lf-surface-hover` is `--lf-surface-panel` in both themes, so `hover:bg-lf-hover`
    shows nothing on a panel. Until then, on a panel, hover with `hover:bg-lf-neutral`: a secondary button is
    `bg-lf-panel hover:bg-lf-neutral`.
@@ -434,12 +486,13 @@ Until she answers, follow what is written here and do not decide them in a compo
    Until then: a new empty state takes the app's accent; the FX one stays as it is (`routes/(app)/fx/+page.svelte`).
 
 **Values waiting for her confirmation** (backlog TC-8):
-- the seven minimal contrast corrections of her round 2 (D-T6), each with her value in a comment of `tokens.css`: in
-  light `--lf-warning`, `--lf-danger-soft`, `--lf-info-soft`, `--lf-bar-text-muted`; in dark
-  `--lf-warning-on-inverse`, `--lf-danger-solid`, `--lf-danger-hover`;
+- the minimal contrast corrections of her round 2 (D-T6), each with her value in a comment of `tokens.css`: in
+  light `--lf-bar-text-muted`, in dark `--lf-warning-on-inverse`, `--lf-danger-solid`, `--lf-danger-hover` (round 3
+  confirmed the light `--lf-warning`, `--lf-danger-soft` and `--lf-info-soft`);
 - the roles marked «provisional»: `--lf-action-hover` in light, `--lf-on-ai`, `--lf-terminal-comment`,
   `--lf-shadow-card` in dark, and the three of question 5;
-- the developer's dark red and green (D-T25, D-T26), extended to the states on the green sidebar;
+- the extension of the developer's dark red and green (D-T25, D-T26, which round 3 confirmed) to the states on the
+  green sidebar;
 - gain and loss kept apart from success and error; the switch turned off, recognised in light only by the edge of its
   knob.
 

@@ -5,27 +5,120 @@ I TODO completati sono in `TODO_Completati.md`.
 
 ---
 
-## 🔌 Arricchimento asset da fonti esterne — ESMA FIRDS, OpenFIGI, JustETF (F16)
+## 🧬 Profilo dei dati dell'asset — composizione, costi, obbligazioni, esposizione e nuove fonti
 
-**Data aggiunta**: 1 Settembre 2026
-**Status**: 📋 FUTURO — da riprendere a consolidamento finito
-**Origine**: feedback Giuseppe + Alfy 07/08/2026; skill di riferimento: `asset-plugin`
+**Data aggiunta**: 18 Ottobre 2026 · **Status**: 📋 FUTURO — da progettare · **Priorità**: 🔼 Medio-alta
+**Origine**: fusione di F16 (feedback Giuseppe + Alfy, 07/08/2026), F-MC-3 (feedback utente 08/09/2026), le voci
+C-86, C-87 e C-88 del backlog (utente C, chat del 04/09), due note sciolte (extraETF, aziende) e le richieste GitHub
+#50 e #51 di @Xgialippo (17/10/2026). Skill di riferimento: `asset-plugin`.
 
-### Contesto
+### Perché un punto solo
 
-Giuseppe scarica cataloghi da ESMA (FIRDS) e Yahoo Finance (quotazioni attuali e storiche) e usa OpenFIGI per arricchire gli ISIN. Twelve Data sarebbe ideale ma è a pagamento. Domanda aperta: esistono API JustETF?
+Più utenti chiedono informazioni diverse sugli stessi asset: il TER, la composizione degli ETF per azienda, i dati
+delle obbligazioni, la valuta base e l'esposizione valutaria. Aggiungerle una colonna alla volta non scala: serve
+un'architettura unica, pensata bene prima di scrivere codice.
 
-### Idea architetturale (Alfy)
+### Direzione (da progettare)
 
-- Funzione di **arricchimento dati asset esterna al provider prezzo**, come **libreria interna**:
-  i plugin provider la usano per arricchire il proprio output — più gestibile di un plugin standalone.
-- ESMA FIRDS: `https://registers.esma.europa.eu/publication/searchRegister?core=esma_registers_firds_files`
-  — publication date ultima settimana, type "full file" → restituisce i cataloghi.
-- OpenFIGI: concettualmente simile agli altri provider → integrazione più semplice.
+- **Un profilo per asset**, fatto di due cose:
+  - **fatti tipizzati**, ciascuno con fonte, data di riferimento e data di lettura: TER, emittente, dimensione del
+    fondo, replica, copertura valutaria, valuta del fondo, domicilio, indice replicato, data di lancio, frequenza di
+    distribuzione; per le obbligazioni cedola, scadenza, rendimento a scadenza (YTM) e duration (ex C-87: cambiano
+    nel tempo e vanno salvati con la loro data; da decidere se leggerli da un provider o calcolarli in
+    `backend/app/services/financial_math/`);
+  - **distribuzioni**: paesi, settori, valute, aziende, classi di attivo. Il modello esiste già per paesi e settori
+    (`FAGeographicArea`, `FASectorArea`): va esteso, con la data e una quota «Sconosciuta».
+- **Ogni plugin dichiara** quali fatti e distribuzioni sa fornire. Una **libreria interna di arricchimento** (l'idea
+  di F16: usata dai plugin dei prezzi, invece di un plugin a parte) li unifica e ne conserva la provenienza.
+- **Le aggregazioni sul portafoglio le calcola il backend**: TER medio pesato sul valore (#51), esposizione per
+  azienda (#50), esposizione valutaria vera.
+- **Identità delle aziende** (per l'esposizione per azienda): «Apple» e «Apple SRL» devono risultare la stessa
+  azienda → identificatori univoci (ISIN per le quotate), normalizzazione dei nomi, regole di confronto e intervento
+  manuale per i casi ambigui.
+- **Valuta base ed esposizione valutaria** (ex F-MC-3):
+  - valuta di quotazione, valuta base dello strumento ed esposizione economica sottostante non sono la stessa cosa.
+    Un ETF sul Giappone non implica valuta base JPY né esposizione JPY pura: posizioni, classe di quote e coperture
+    valutarie cambiano il risultato;
+  - una colonna per la valuta base SOLO con semantica e fonte chiare; per l'esposizione effettiva serve una
+    distribuzione valutaria look-through, con data, copertura e quota «Sconosciuta», non un codice dedotto dalla
+    geografia;
+  - grafico in Dashboard con metodo e denominatore dichiarati, cassa e posizioni trattate in modo coerente, dati
+    incompleti visibili, nessuna falsa precisione. Prima un disegno ASCII e la decisione del developer, poi una
+    revisione su esempi sintetici multi-valuta e coperti;
+  - **la variazione non realizzata** (developer, 12/10/2026, voce 23): oggi il tooltip dei KPI della Dashboard
+    (`period_unrealized_breakdown`, `KpiSection.svelte`) separa, valuta per valuta, l'effetto dell'asset da quello del
+    cambio, ma ragiona solo sulla valuta di quotazione. Con la valuta base dovrà usare anche lei: con il cambio dalla
+    valuta di quotazione a quella base, se la coppia è configurata, si vedrà quanta parte del movimento viene dal
+    cambio e quanta dall'asset.
+- **UI**: nella pagina dell'asset i fatti e le distribuzioni con fonte e data; nella Dashboard il TER del portafoglio
+  e le esposizioni, con il metodo dichiarato.
+
+### Prime idee d'uso dei dati in comune
+
+- **TER del portafoglio** (GitHub #51, @Xgialippo, 17/10/2026): il TER di ogni ETF in tabella, e il **TER medio del
+  portafoglio pesato sul valore delle posizioni**. È il primo esempio di come usare i dati del profilo: un fatto
+  per asset, aggregato sul portafoglio dal backend. Risposta all'utente il 18/10: arriva dopo aver ragionato bene e
+  creato l'ambiente centralizzato delle informazioni degli asset.
+- **Lo stesso principio, da applicare ad altre voci una volta identificate**: un fatto per asset, pesato sul valore
+  delle posizioni (o raggruppato), con la quota dei dati mancanti dichiarata. Candidati da valutare quando si progetta:
+  - per le obbligazioni, il rendimento a scadenza e la duration medi del portafoglio;
+  - le esposizioni per emittente del fondo, per tipo di replica, per domicilio, per copertura valutaria, per politica
+    di distribuzione;
+  - le distribuzioni (paesi, settori, valute, aziende) già aggregate sul portafoglio, invece che asset per asset.
+- **Gate**: fonte e aggiornamento dei metadati, normalizzazione, dati mancanti visibili, FX; colonne o tabelle nuove
+  solo con migrazioni Alembic incrementali.
+
+### Dati estraibili oggi (verificati il 18/10/2026)
+
+- **justETF** (`justetf_scraping.get_etf_overview`, tipo `EtfOverview`): `isin`, `name`, `description`, `index`,
+  `investment_focus`, `fund_size_eur`, `ter`, `replication`, `legal_structure`, `strategy_risk`, `sustainability`,
+  `fund_currency`, `currency_hedged`, `volatility_1y`, `inception_date`, `distribution_policy`,
+  `distribution_frequency`, `fund_domicile`, `fund_provider`, `top_holdings`, `holdings_date`, `countries`,
+  `sectors`. Il plugin oggi usa solo `description`, `ter` (come testo nella descrizione), `distribution_policy`,
+  `countries` e `sectors`.
+- **Yahoo** (`yfinance` 1.7.0, `Ticker(...).funds_data`): `top_holdings` (prime 10 con peso), `sector_weightings`,
+  `asset_classes`, `bond_holdings`, `bond_ratings`, `fund_operations` (con il TER, «Annual Report Expense Ratio»),
+  `fund_overview` (emittente, categoria, tipo legale), `description`. Non dà la ripartizione per paese. Provato su
+  VOO, SWDA.MI, VWCE.DE, CSPX.L, IWDA.AS, EUNL.DE: prime 10 e settori per tutti, TER per 5 su 6 (manca VWCE.DE).
+  La parte che LibreFolio già supporta va subito nel plugin: vedi
+  `LibreFolio_developer_journal/Release_2/Phase_1/PROSSIMI_LAVORI.md`, #50.
+- **Borsa Italiana**: da verificare quali dati del profilo espone oltre al prezzo.
+- **Cataloghi e identificativi** (idea F16): ESMA FIRDS
+  (`https://registers.esma.europa.eu/publication/searchRegister?core=esma_registers_firds_files`, file «full»
+  dell'ultima settimana) e OpenFIGI per arricchire gli ISIN. Twelve Data sarebbe ideale ma è a pagamento.
+
+### Possibili prossime fonti
+
+- **extraETF**: anche la distribuzione valutaria, che si sposa con la valuta base del fondo.
+- **Investing.com** e **TradingView**: nessuna API ufficiale, e i termini vietano la lettura automatica anche agli
+  abbonati. Un plugin a scraping è possibile ma fragile. **Bassa priorità**, salvo che portino titoli, o meglio classi
+  di titoli, che Yahoo, justETF e Borsa Italiana non coprono.
+- **Fornitori a pagamento con la chiave dell'utente**: EODHD Fundamentals, Financial Modeling Prep, Finnworlds;
+  Morningstar o LSEG a livello aziendale. Danno TER e posizioni dei fondi per ISIN, con un contratto che lo permette.
+  Le impostazioni dei plugin con segreti per utente o per istanza ci sono già (1.3, migrazione 007).
+- **Interactive Brokers** (ex C-86): prezzo corrente e storico letti con le API e la chiave dell'utente; serve un
+  account per le prove. Dettagli:
+  `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/feedback-early-user-C-20261014.md`, voce 4.
+- **Un pacchetto di dati di qualità in abbonamento** (ex C-88): prezzi storici e composizioni dei fondi a pagamento,
+  per chi li vuole, anche come sostegno al progetto. Da valutare licenze, costi e convivenza con il self-hosted.
+  Stessa mappatura, voce 14.
+
+### Licenze e uso commerciale
+
+- justETF (AGB §3.1: niente «programmi per l'interrogazione automatica dei prezzi»), Borsa Italiana/Euronext e Yahoo
+  limitano l'uso automatico dei loro dati.
+- In self-hosted ogni istanza interroga per il suo utente, a basso volume e senza ridistribuire: rischio basso, tollerato
+  nei fatti.
+- In un **servizio ospitato a pagamento** diventa uso commerciale: servono dati con licenza (il fornitore a pagamento
+  F06) o la chiave dell'utente.
 
 ### Collegamenti
 
-- Piano in pausa correlato: `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md` (identità asset, identificativi).
+- Piano in pausa: `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md`
+  (identità asset, identificativi).
+- `LibreFolio_developer_journal/Release_2/Phase_1/PROSSIMI_LAVORI.md` (#50, #51).
+- Backlog `BACKLOG_POST_1.2.md`: C-86, C-87, C-88, spostate qui.
+- Qui sotto, «💱 Settlement multicurrency ed esposizione»: F-MC-1 e F-MC-2 restano lì.
 
 ---
 
@@ -1291,45 +1384,7 @@ e simulazione assistita. Nessuna generazione FX automatica autorizzata dai bug E
 
 ### F-MC-3 — Valuta base dell'asset ed esposizione valutaria economica
 
-**Richiesta:** conservare un'informazione di valuta nativa/originale distinta dalla
-valuta della quota del feed/provider e aggiungere una vista a torta della composizione
-valutaria del portafoglio.
-
-**Distinzioni da progettare:** valuta di quotazione, valuta base/denominazione dello
-strumento ed esposizione economica sottostante non sono la stessa cosa. Un ETF sul
-Giappone non implica automaticamente valuta base JPY né esposizione JPY pura; holdings,
-share class e coperture valutarie possono cambiare il risultato.
-
-**Target dati:** valutare una colonna per valuta base/originale SOLO con semantica e
-fonte chiare. Per l'esposizione effettiva può servire una distribuzione valutaria
-look-through, con data, copertura/hedging e quota Unknown, non un unico codice dedotto
-dalla geografia.
-
-**Target UI:** grafico Dashboard con metodo e denominatore dichiarati, cash e
-posizioni trattati coerentemente, dati incompleti visibili e nessun peso ricavato da
-una falsa precisione. Calcoli backend; prima ASCII e decisione del dev, poi review
-operativa su esempi sintetici multi-valuta e hedged.
-
-**Gate:** fonte e refresh dei metadati, aggregazione/normalizzazione, disponibilità,
-FX e criteri di esposizione. Eventuali colonne/tabelle nuove tramite migrazione Alembic
-incrementale generica. Nessuna modifica Asset o grafico di esposizione in questo hotfix.
-
-**Da non dimenticare: la variazione non realizzata** (developer, 12/10/2026, verifiche
-sul server, voce 23).
-- Oggi il tooltip della variazione non realizzata nei KPI della Dashboard
-  (`period_unrealized_breakdown`, `KpiSection.svelte`) separa, valuta per valuta,
-  l'effetto dell'asset da quello del cambio, ma ragiona solo sulla valuta di quotazione.
-- Quando l'asset avrà la sua valuta originale, la scomposizione dovrà usarla anche lei.
-  Con un cambio al contrario, dalla valuta di quotazione a quella originale, se la
-  coppia è configurata, si vedrà quanta parte del movimento del prezzo viene dal cambio
-  e quanta dall'asset.
-- Il come è da progettare insieme a questa voce.
-
-## Espandere i provider aggiungendo extraetf.com e mettendo anche la distribuzione valutaria, potrebbe sposarsi con l'idea della valuta originaria del fondo, trasformandola di fatto in una distribuzione anche lei.
-Possibilità di integrare queste informazioni nella UI e nei calcoli backend, mantenendo la tracciabilità delle fonti e la coerenza con le regole di esposizione valutaria già definite.
-
-## Come per la valuta di esposizione, studiare come fare per aggiungere anche la distribuzione delle aziende, ma capendo come garantire di non avere Apple e apple SRL che sembrano diverse, ma in realtà sono la stessa.
-Possibile approccio: normalizzazione dei nomi, utilizzo di identificatori univoci (es. ISIN per le aziende quotate), e gestione dei casi ambigui tramite regole di matching o intervento manuale.
+Spostata il 18/10/2026 nella voce «🧬 Profilo dei dati dell'asset», in cima al file.
 
 ## Stimatori robusti di covarianza per la matrice di correlazione (Riskfolio)
 **Priorità:** 🔽 bassa — dopo che la pagina correlazioni avrà una direzione chiara.
@@ -1871,6 +1926,19 @@ evento compatibile in un intervallo di date configurabile (7 giorni per default)
 - Riusare il backend già pronto della sezione «🔗 Suggerimento eventi collegabili nella bulk modal
   (da P2-6)».
 
+### Ricollegamento automatico dopo il sync (19/10/2026, decisione N68, punto 4) — 🔍 da analizzare
+Nella 1.3 arrivano i primi tre punti di N68:
+- il cambio di valuta di un asset non è più bloccato dagli split;
+- gli split sopravvivono al cambio di valuta;
+- un bottone **«Ricollega eventi»** in Transazioni elenca le transazioni senza evento, con l'evento candidato.
+
+Il quarto resta qui, **da analizzare in un momento futuro**: dopo un sync, ricollegare **da soli** i casi certi (stesso
+asset, tipo e data, un solo candidato), con un riepilogo per l'utente. La regola deve stare nel backend, non in dati
+tenuti dal frontend, che si perderebbero a una ricarica o con un sync notturno.
+
+Prima di farlo va verificato che serva davvero (developer, 19/10: «prima facciamolo funzionare, magari scopriamo che
+non serve e i primi 3 sono sufficienti»). Si lega al task notturno qui sopra: potrebbero diventare la stessa cosa.
+
 ## 🔥 Strumenti — calcolatore FIRE e riuso del motore matematico
 
 **Data aggiunta**: 30 Settembre 2026 (appunto del 22/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
@@ -1895,25 +1963,6 @@ non dare risultati» esiste, ma oggi lo usa solo Crédit Agricole.
   posizione si è estinta, e in quel caso alzare il flag.
 - **CSV generico** (per esempio Recrowd importato in blocco): tenere traccia della quantità per
   capire quando la posizione si annulla.
-
-## ⚙️ Impostazioni per plugin — campi dichiarati dal plugin, UI costruita da sola
-
-**Data aggiunta**: 30 Settembre 2026 (appunto del 24/09) · **Status**: ⏳ IN ATTESA — da studiare · **Priorità**: Media
-
-### Contesto
-Alcuni plugin chiedono parametri, per esempio una chiave di accesso. Oggi non c'è un posto per
-configurarli.
-
-### Azione Futura
-- La classe base di **ogni** tipo di plugin (asset, FX, BRIM, Tool) espone uno o più metodi con i
-  campi di impostazione di cui il plugin ha bisogno.
-- La pagina Impostazioni ha una zona per ciascun plugin, costruita da sola a partire dalla lista dei
-  parametri. Da decidere se l'impostazione è globale o per utente.
-- Primo esempio: justETF e Borsa Italiana filtrano per una nazione e una valuta predefinite, e
-  mostrano tutto solo se non trovano niente.
-- Nel pannello del provider in «Aggiungi asset», un pulsante **Configura** che apre la stessa
-  modale, o porta a quelle impostazioni.
-- Collegamenti: la sezione «🔌 Arricchimento asset da fonti esterne» (JustETF).
 
 ## 📚 Documentazione dei segnali — riordino
 

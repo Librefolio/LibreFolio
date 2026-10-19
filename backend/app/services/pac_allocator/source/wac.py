@@ -9,13 +9,13 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, FxRate
-from backend.app.db.precision import usable_fx_rate_clause
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceIssue,
     PortfolioPlannerSourceWacFxEvidence,
     PortfolioPlannerWacContext,
 )
+from backend.app.services.financial_math.fx_rates import oriented_rate
 from backend.app.services.pac_allocator.source.keys import WAC_PROVENANCE_ID, asset_key, broker_key, field_issue, holding_key, normalized_fx_pair, validated_currency, wac_key
 from backend.app.utils.sql_chunks import chunks
 
@@ -48,8 +48,6 @@ async def _load_wac_fx_rows(
             await session.execute(
                 select(FxRate).where(
                     or_(*[and_(FxRate.base == base, FxRate.quote == quote, FxRate.date == rate_date) for base, quote, rate_date in chunk]),
-                    # X-R45: a rate an older version stored as inf or past the limits is a missing rate, never a value
-                    usable_fx_rate_clause(),
                 )
             )
         ).scalars()
@@ -154,7 +152,7 @@ async def build_planner_wac_contexts(  # noqa: C901 — sequential WAC/evidence 
                 saved_row = saved_fx_rows.get((base, quote, fx_info.fx_rate_date))
                 saved_directed_rate: Decimal | None = None
                 if saved_row is not None and saved_row.rate > 0:
-                    saved_directed_rate = Decimal("1") / saved_row.rate if inverted else saved_row.rate
+                    saved_directed_rate = oriented_rate(saved_row.rate, source_currency, target_currency)
                 if saved_row is None or saved_directed_rate is None or not _rates_match(saved_directed_rate, rate):
                     evidence_incomplete = True
                     evidence = PortfolioPlannerSourceWacFxEvidence(

@@ -66,8 +66,9 @@ backend/app/services/financial_math/
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
 ├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
-├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series, fixed-period changes of a price or rate (1D … 5Y, both orientations) and its change over a whole range, recovery from a drawdown
+├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series (DAYS_PER_YEAR, its validator, calendar days ↔ observations both ways), fixed-period changes of a price or rate (1D … 5Y, both orientations) and its change over a whole range, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
+├── fx_rates.py              the orientation of a stored FX rate: a pair read from source to destination, either way (oriented_rate, any number type)
 ├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form, at a cost independent of the span (compound_growth, memoized): the primitives the Scheduled Investment provider builds its accrual on
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
@@ -94,7 +95,7 @@ backend/app/services/financial_math/
     ├── prices.py            from the asset's AssetPriceSeries: a lot's reference price at its opening, the last day valued at cost
     ├── conversions.py       FxRateResolver, a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
-    ├── histories.py         value, return, price and performance histories
+    ├── histories.py         value, return, price, market price and performance histories
     ├── summary.py           a lot's figures: the cost of its open quantity, value and P&L by direction, the lot summary
     ├── scope_boundary.py    transfer legs whose partner sits outside the scope, read at its edge: in at their cost, out at market
     └── average_cost_lines.py  per-broker and cumulative WAC history points
@@ -108,7 +109,11 @@ accumulators); `portfolio/models.py` holds `ValuationSource`, `EngineEndState` a
 every point of the line (developer decision D-MF5): no rate when the value is zero or less, or when the net invested
 capital up to that day — the first snapshot's value plus the flows after it (decision N54) — is zero or less; the
 series' last point is the card. `calculate_mwrr()` and `calculate_mwrr_series()` remain the bare solves, without that
-rule, and every point of the series is the single solve ending on its snapshot (one starting guess).
+rule, and every point of the series is the single solve ending on its snapshot (one starting guess). A series gives
+each point the rate of that single solve bit for bit, and is faster on long histories (P1, N74): when the cold Newton
+step from the starting guess fails, it skips the grid scan only where the scan's answer is known — the previous point's
+rate, by Newton, points at the one true root (one sign change in the flows, Descartes' rule), and the answer is the
+scan's own Brent call on that grid interval (`_mwrr_solve`, `_bracketed_xirr_at`); everywhere else the scan runs.
 
 `float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
 signal statistics read. `market_series.py`, which prepares those series, takes both from here and keeps no return
@@ -202,6 +207,14 @@ arrival and the cost the sender moved: the Performance table's transfer split (`
 Callers derive their views from the result with `DerivedViewsBuilder` (`derived_views.py`) —
 history, per-broker P&L, candles, acquisition funding, performance inputs, allocation — and the
 data-quality report with `build_data_quality_report()` (`data_quality.py`).
+
+The daily states always start at t=0, so one cached result serves every window; the views take the window and build
+only its days (lot P2). `build_history()`, `build_broker_pnl_history()` and `build_pnl_candles()` cover
+`[date_from, date_to]`, `build_acquisition_funding()` `(date_from, date_to]` (a flow series: a BUY dated `date_from`
+belongs to the period before), both found by bisection on the states' dates. `build_performance_inputs(date_from)`
+returns only what `rebase_to_period()` keeps: the snapshots from the period's opening state on and the flows after it,
+so the rebased period is the same as from the whole history. On a history of tens of thousands of days the views of a
+one-year report no longer pay for the days before it (the engine's daily states still do); the numbers are identical.
 
 #### 🧵 Off the Event Loop {: #off-the-event-loop }
 

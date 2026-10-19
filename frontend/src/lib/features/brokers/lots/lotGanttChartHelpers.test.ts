@@ -764,3 +764,87 @@ describe('applySharedZoomWindow', () => {
         expect(applySharedZoomWindow([], 20, 80, 0, 100)).toEqual([]);
     });
 });
+
+// ---------------------------------------------------------------------------
+// J-48 — a TRANSFER leg crossing the analysis scope is drawn as a transfer
+// ---------------------------------------------------------------------------
+//
+// The backend reads a TRANSFER leg whose partner sits at a broker outside the lots' scope as an ADJUSTMENT_IN (entering)
+// or an ADJUSTMENT_OUT (leaving) row (J-10), so the Gantt draws it as an adjustment: «+» or «×», labelled by the
+// ADJUSTMENT_IN / ADJUSTMENT_OUT key. J-48 gives each lot timeline event an optional `scope_boundary`, which
+// lotChartShared's `scopeBoundaryOf` reads as 'IN' | 'OUT' | null, and the Gantt draws a boundary row as a transfer — its
+// marker and its label only:
+// - `eventMarkerKind(kind, scopeBoundary?)` answers TRANSFER for an IN or OUT boundary, ADJUSTMENT_IN and ADJUSTMENT_OUT
+//   alike, and maps the kind as before without one (absent, null);
+// - `eventMarkerLabelKey(kind, labelKind?)`, new, is the i18n key of a marker's label, the lookup the component's
+//   `eventMarkerLabel` does today: `brokers.lots.chartMarkers.eventType.<labelKind>` when a label kind is given
+//   (lotChartShared's `eventLabelKind`: TRANSFER_IN, TRANSFER_OUT, or the event's own kind), otherwise the marker kind's
+//   own key, TRANSFER reading TRANSFER_DEPART's. Keys are asserted, never their translations.
+// Red, before the cure: the boundary cases of `eventMarkerKind` fail on their assertion — today the second argument is
+// ignored, so a boundary row keeps its adjustment marker; every case of `eventMarkerLabelKey` fails on its precondition,
+// the export being missing (it is read off the module namespace, as O-16's helpers were). The cases named «control» hold
+// today and after the cure.
+
+describe('J-48 — scope boundary', () => {
+    /** The two directions a leg crosses the scope, each with the adjustment kind the backend reads it as (J-10). */
+    const CROSSINGS = [
+        {kind: 'ADJUSTMENT_IN', boundary: 'IN'},
+        {kind: 'ADJUSTMENT_OUT', boundary: 'OUT'},
+    ] as const;
+
+    describe('eventMarkerKind — a boundary row is a transfer marker', () => {
+        // RED until J-48's cure: the second argument is ignored today, so the row keeps its adjustment marker (+ or ×).
+        it.each(CROSSINGS)('$kind across an $boundary boundary is a TRANSFER marker, drawn ◆', ({kind, boundary}) => {
+            expect(eventMarkerKind(kind, boundary), `J-48: a leg crossing the scope is a transfer (today: ${kind})`).toBe('TRANSFER');
+            expect(eventMarkerSymbol(eventMarkerKind(kind, boundary)), 'J-48: drawn as a transfer, not as an adjustment').toBe('◆');
+        });
+
+        // Control, green before and after the cure: the no-boundary case beside each red.
+        it.each(CROSSINGS)('control: $kind without a boundary — absent, null or undefined — keeps its own marker', ({kind}) => {
+            expect(eventMarkerKind(kind), 'absent').toBe(kind);
+            expect(eventMarkerKind(kind, null), 'null').toBe(kind);
+            expect(eventMarkerKind(kind, undefined), 'undefined').toBe(kind);
+        });
+
+        // Control, green before and after the cure: a null boundary moves no other kind.
+        it('control: every other kind keeps its marker under a null boundary', () => {
+            const kinds = ['BUY', 'SELL', 'SPLIT', 'TRANSFER_DEPART', 'TRANSFER_ARRIVE'];
+            expect(kinds.map((kind) => eventMarkerKind(kind, null))).toEqual(['BUY', 'SELL', 'SPLIT', 'TRANSFER', 'TRANSFER']);
+        });
+    });
+
+    describe('eventMarkerLabelKey — the i18n key of a marker’s label', () => {
+        const EVENT_TYPE = 'brokers.lots.chartMarkers.eventType';
+
+        /** The helper, after the precondition that it exists. */
+        function labelKeyOf(kind: EventMarkerKind, labelKind?: string | null): string {
+            expect(typeof ganttHelpers.eventMarkerLabelKey, 'lotGanttChartHelpers exports eventMarkerLabelKey').toBe('function');
+            return ganttHelpers.eventMarkerLabelKey(kind, labelKind);
+        }
+
+        // RED until J-48's cure: lotGanttChartHelpers exports no eventMarkerLabelKey (its precondition fails).
+        it.each(['TRANSFER_IN', 'TRANSFER_OUT'])('labels a boundary row’s TRANSFER marker by its label kind, %s', (labelKind) => {
+            expect(labelKeyOf('TRANSFER', labelKind)).toBe(`${EVENT_TYPE}.${labelKind}`);
+        });
+
+        // RED until J-48's cure: the export is missing. A label kind wins over the marker kind's own key: TRANSFER alone
+        // reads TRANSFER_DEPART's key, so an arrival inside the scope tells the two readings apart.
+        it('reads any label kind it is given: a TRANSFER marker with TRANSFER_ARRIVE reads TRANSFER_ARRIVE’s key', () => {
+            expect(labelKeyOf('TRANSFER', 'TRANSFER_ARRIVE')).toBe(`${EVENT_TYPE}.TRANSFER_ARRIVE`);
+        });
+
+        // RED until J-48's cure: the export is missing. The no-label-kind case beside the reds above: the lookup
+        // eventMarkerLabel does in the component today.
+        it.each([
+            {kind: 'BUY', key: 'BUY'},
+            {kind: 'SELL', key: 'SELL'},
+            {kind: 'TRANSFER', key: 'TRANSFER_DEPART'},
+            {kind: 'ADJUSTMENT_IN', key: 'ADJUSTMENT_IN'},
+            {kind: 'ADJUSTMENT_OUT', key: 'ADJUSTMENT_OUT'},
+            {kind: 'SPLIT', key: 'SPLIT'},
+        ] as ReadonlyArray<{kind: EventMarkerKind; key: string}>)('without a label kind, $kind reads the $key key', ({kind, key}) => {
+            expect(labelKeyOf(kind), 'absent').toBe(`${EVENT_TYPE}.${key}`);
+            expect(labelKeyOf(kind, null), 'null').toBe(`${EVENT_TYPE}.${key}`);
+        });
+    });
+});

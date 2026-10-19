@@ -12,9 +12,10 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy import select as sql_select
 
 from backend.app.db.models import FxRate
-from backend.app.db.precision import storable_fx_rate, usable_fx_rate_clause
+from backend.app.db.precision import storable_fx_rate, usable_fx_rate_bounds
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import Currency
+from backend.app.services.financial_math.fx_rates import oriented_rate
 from backend.app.services.fx.base import RateNotFoundError
 from backend.app.utils.sql_chunks import OR_TERMS_PER_QUERY
 
@@ -70,12 +71,8 @@ def compute_chain_rate(
         rate = leg_rates.get(key)
         if not _usable_rate(rate):
             return None
-        if fc < tc:
-            # Direct order: multiply by rate
-            composite *= rate
-        else:
-            # Inverse order: multiply by 1/rate
-            composite *= Decimal("1") / rate
+        # The stored rate read from fc to tc: as it is in alphabetical order, inverted otherwise
+        composite *= oriented_rate(rate, fc, tc)
     return composite
 
 
@@ -189,7 +186,8 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
     if pairs_needed:
         # Only the rates a conversion may use, in the anchor too: a legacy unusable rate is skipped like a date without
         # a row (X-R38)
-        usable = usable_fx_rate_clause()
+        smallest_rate, first_refused_rate = usable_fx_rate_bounds()
+        usable = and_(FxRate.rate >= smallest_rate, FxRate.rate < first_refused_rate)
 
         conditions = []
         for (base, quote), info in pairs_needed.items():

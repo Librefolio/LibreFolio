@@ -175,8 +175,18 @@ class TestAdditionalSchemaValidators:
             FXRouteStep.model_validate({"from": "EUR", "to": "EUR", "provider": "ECB"})
 
     def test_price_close_must_be_positive(self):
-        with pytest.raises(ValueError, match="close price must be positive"):
-            FAPricePoint(date=date(2025, 1, 1), currency="EUR", close=Decimal("0"))
+        """N92: a close above 0 is the write model's check (``FAPriceWritePoint``, what ``POST /assets/prices`` parses);
+        ``FAPricePoint``, the provider's and the answer's model, checks no sign (``test_price_write_point.py``).
+
+        RED until N92: ``schemas.prices`` has no ``FAPriceWritePoint`` (``FAPricePoint`` refuses the close of 0)."""
+        from backend.app.schemas import prices as prices_schemas  # noqa: PLC0415
+
+        write_point = getattr(prices_schemas, "FAPriceWritePoint", None)
+        assert write_point is not None, "N92: backend.app.schemas.prices has no FAPriceWritePoint, the write model of a manual price"
+        with pytest.raises(ValueError) as refused:
+            write_point(date=date(2025, 1, 1), currency="EUR", close=Decimal("0"))
+        assert any(tuple(error["loc"][:1]) == ("close",) for error in refused.value.errors()), refused.value
+        assert FAPricePoint(date=date(2025, 1, 1), currency="EUR", close=Decimal("0")).close == Decimal("0")
 
     def test_price_query_target_currency_normalized(self):
         from backend.app.schemas.common import DateRangeModel  # noqa: PLC0415

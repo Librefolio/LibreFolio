@@ -70,8 +70,11 @@
 
 - **Commit dell'analisi:** `6d0b1266c`, con `frontend/src` identico a `27228466c`.
 - **Snapshot della gallery** (fuori dal repo, nella cartella di lavoro del toolkit):
-  - `baseline-r1` (2.816 PNG) e `baseline-r2` del 14/10;
-  - rumore misurato in [`G-galleryDeterminism/evidence/stability-2026-10-14.md`](G-galleryDeterminism/evidence/stability-2026-10-14.md).
+  - `baseline-r1` (2.816 PNG) e `baseline-r2` del 14/10, **cancellati il 19/10** per liberare disco; il rumore di allora
+    resta misurato in [`G-galleryDeterminism/evidence/stability-2026-10-14.md`](G-galleryDeterminism/evidence/stability-2026-10-14.md);
+  - **il riferimento attuale** è il trio del 18/10, `g-r3-prima-ba8e06763-full`, `g-r3-dopo-cd686f445-full` e
+    `g-r3-dopo2-cd686f445-full`, con maschere e stabilità da `diffs/g-r3-dopo-cd686f445__vs__g-r3-dopo2-cd686f445`
+    (vedi `scripts/visual_review/README.md`, «Known gallery behaviour»).
 - **Pacchetto inviato alla designer il 14/10:** `LibreFolio_review_colori_v1.2.zip`, solo italiano, con 177 schermate
   in chiaro e scuro, desktop e mobile.
 - **Giro 1 della designer:** ricevuto il 14/10 sera, in
@@ -81,6 +84,10 @@
   [`designer-feedback/2026-10-15-round2-palette/`](designer-feedback/2026-10-15-round2-palette/README.md). Alimenta
   T-8, DV e le ondate. Il pacchetto completo inviato, con le miniature della gallery, sta fuori dal repo in
   `LibreFolio_visual_review/package/round2-palette-2026-10-15/`.
+- **Giro 3 della designer:** ricevuto il 17/10 sera (grafici; toast e banner), applicato nella notte, in
+  [`designer-feedback/2026-10-17-round3-grafici/`](designer-feedback/2026-10-17-round3-grafici/README.md), con le
+  scelte in `decisioni.md`. Il pacchetto con le domande del 19/10 (39–42), inviato quel giorno dal developer, sta in
+  `LibreFolio_visual_review/package/LibreFolio_review_colori_giro3_2026-10-19.zip`.
 
 ## Chiusura del programma
 

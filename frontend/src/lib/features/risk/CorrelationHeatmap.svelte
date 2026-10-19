@@ -39,6 +39,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {CHART_FONT_FAMILY, CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
@@ -74,9 +75,11 @@
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {CORRELATION_CELL_TEXT, CORRELATION_SCALE} from '$lib/theme/chartPalettes';
     import {chartNeutrals} from '$lib/theme/chartTheme';
     import {scaleColor} from '$lib/theme/chartShades';
-    import {chartRoles} from '$lib/theme/roleColors';
+    import {readableOn} from '$lib/theme/contrast';
+    import {themed} from '$lib/theme/themePair';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     type Ordering = 'similarity' | 'name' | 'type' | 'sector' | 'region';
@@ -120,7 +123,7 @@
     let wrapper: HTMLDivElement | undefined = $state(undefined);
     let wrapperWidth = $state(0);
     let dark = $state(false);
-    /** Bumped when the chart colours change without a theme switch (a Designer Lab edit, contract C4): the roles are read again. */
+    /** Bumped when the chart colours change without a theme switch (a Designer Lab edit, contract C4): the neutrals are read again. */
     let colorsVersion = $state(0);
     let chart: echarts.ECharts | null = null;
     const resizeWatcher = createResizeWatcher((entry) => {
@@ -193,23 +196,15 @@
     );
     let overflowing = $derived(wrapperWidth > 0 && layout.width > wrapperWidth);
     /**
-     * The roles as the matrix sees them, from its own element through the sRGB bridge: read again at each theme switch
-     * and each chart-colour change (C4), once for each.
+     * The neutrals of the matrix and of its tooltip (B4), as the matrix sees them, from its own element through the
+     * sRGB bridge: read again at each theme switch and each chart-colour change (C4), once for each.
      */
-    let roles = $derived.by(() => {
-        void colorsVersion;
-        return chartRoles(dark, container);
-    });
-    /** The neutrals of the matrix and of its tooltip (B4), read with the same triggers as `roles`. */
     let neutrals = $derived.by(() => {
         void colorsVersion;
         return chartNeutrals(dark, container);
     });
-    /**
-     * From −1 to +1: the danger role, the secondary surface, the info role (GR5.3 of the designer's round 2). The
-     * neutral is the panel, so a zero reads as "nothing" in both themes.
-     */
-    let scale = $derived([roles.color('--lf-danger'), roles.color('--lf-surface-panel'), roles.color('--lf-info')]);
+    /** From −1 through 0 to +1: the designer's own three values (`CORRELATION_SCALE`, round 3, §1.6). */
+    let scale = $derived([...themed(CORRELATION_SCALE, dark)]);
     /** The legend spans the cells, not the card; it gets a floor so a two-asset matrix still has a readable scale. */
     let legendWidth = $derived(Math.max(280, layout.width - layout.grid.left - layout.grid.right));
     /** `pairKey` of the pair shown in the matrix and in the ranking: one selection for both views. */
@@ -300,9 +295,9 @@
         return `${text.slice(0, low).trimEnd()}…`;
     }
 
-    /** The text that reads best on the cell's own colour, the scale's colour at its value: legible across the whole scale. */
+    /** Pure black or pure white, whichever reads best on the cell's own colour, the scale's at its value (§1.6). */
     function valueColor(value: number | null): string {
-        return roles.readableText(scaleColor(scale, value ?? 0, -1, 1));
+        return readableOn(scaleColor(scale, value ?? 0, -1, 1), CORRELATION_CELL_TEXT);
     }
 
     /**
@@ -348,6 +343,8 @@
         void layout;
         void dark;
         void scale;
+        // The neutrals are read again at a chart-colour change (a Designer Lab edit, C4): it redraws the matrix too.
+        void neutrals;
         // The coefficients are written in the interface locale: a language switch redraws them (M-18).
         void uiLocale();
         if (container) void tick().then(render);
@@ -456,7 +453,7 @@
             return;
         }
         if (!chart) {
-            chart = echarts.init(container, CHART_INIT_THEME);
+            chart = echarts.init(container, CHART_INIT_THEME, chartInitOptions(container));
             attachChartReady(chart, container, 'correlation-heatmap');
             scheduleFirstRenderStabilityFix(chart, container);
             // The other direction of the link: a cell clicked in the matrix selects its ranking entry, if it has one.

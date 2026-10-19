@@ -40,11 +40,12 @@
  *
  * Sector and geography are otherwise untouched by D375: one series per raw category, ranked by weight,
  * and today's tooltip. Their colours follow GR1 and GR5: a sector wears its own,
- * `categoryColor('sector', key)`; a country has none, so it takes the sector sequence by its rank
- * among the classified countries (`sequenceColor` over `KEYLESS_SEQUENCE`), one GR4 shade further at
- * each round past the fourteenth, while the unclassified one (`Unknown`, `Other`) keeps the Unknown
- * grey and takes no rank. A chart-colour change (contract C4, `notifyChartColorsChange`) redraws the
- * whole option, reading the roles again.
+ * `categoryColor('sector', key)`; a country has none, so it takes the country sequence by its rank
+ * among the classified countries (`sequenceColor` over `COUNTRY_SEQUENCE`, §1.4 of the designer's round
+ * 3: fourteen references to types and sectors), one GR4 shade further at each round past the fourteenth,
+ * while the unclassified one (`Unknown`, `Other`) keeps the Unknown colour and takes no rank. A
+ * chart-colour change (contract C4, `notifyChartColorsChange`) redraws the whole option, reading the
+ * roles again.
  *
  * ## How the expectations are built
  *
@@ -190,7 +191,7 @@ import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {debug} from '$lib/debug';
-import {categoryColor, KEYLESS_SEQUENCE, sequenceColor} from '$lib/theme/chartCategories';
+import {categoryColor, COUNTRY_SEQUENCE, sequenceColor} from '$lib/theme/chartCategories';
 import {familyShade, shadePoles} from '$lib/theme/chartShades';
 import {chartRoles, setRoleReader} from '$lib/theme/roleColors';
 import {notifyChartColorsChange} from '$lib/theme/themeMode';
@@ -565,13 +566,13 @@ const polesFor = (dark: boolean) => shadePoles(dark, chartRoles(dark).color('--l
 
 /**
  * The colours of countries drawn in the order `keys` gives, by GR5: the n-th classified country takes the
- * sector sequence at rank n — one GR4 shade further at each round of fourteen — and the unclassified
- * (`Unknown`, `Other`) the Unknown grey, without taking a rank. Spelled out here, not read from the chart.
+ * country sequence (§1.4) at rank n — one GR4 shade further at each round of fourteen — and the unclassified
+ * (`Unknown`, `Other`) the Unknown colour, without taking a rank. Spelled out here, not read from the chart.
  */
 function countryColours(keys: readonly string[], dark = false): string[] {
     const poles = polesFor(dark);
     let rank = 0;
-    return keys.map((key) => (key === 'Unknown' || key === 'Other' ? categoryColor('sector', 'Unknown', dark) : sequenceColor('sector', KEYLESS_SEQUENCE, rank++, dark, poles)));
+    return keys.map((key) => (key === 'Unknown' || key === 'Other' ? categoryColor('sector', 'Unknown', dark) : sequenceColor(COUNTRY_SEQUENCE, rank++, dark, poles)));
 }
 
 /**
@@ -1338,7 +1339,7 @@ describe('AllocationHistoryChart — both themes: every series in its colour for
 });
 
 // =============================================================================
-// GR5 — the countries take the sector sequence by rank, the unclassified their grey
+// GR5 — the countries take the country sequence by rank (§1.4), the unclassified their own colour
 // =============================================================================
 
 /**
@@ -1368,24 +1369,27 @@ const GEO_WEIGHTS: readonly Weight[] = [
     ['Other', 0.5],
 ];
 
-describe('AllocationHistoryChart — geography: the countries take the sector sequence by rank (GR5), the unclassified keep their grey', () => {
-    it.each(THEMES)('$theme theme: Unknown and Other in the Unknown grey, taking no rank; the n-th classified country in the n-th colour of the sequence; rank 14 the first-round shade of the first colour', async ({theme, dark}) => {
+describe('AllocationHistoryChart — geography: the countries take the country sequence by rank (GR5, §1.4), the unclassified keep their own colour', () => {
+    it.each(THEMES)('$theme theme: Unknown and Other in the Unknown colour, taking no rank; the n-th classified country in the n-th colour of the sequence; rank 14 the first-round shade of the first colour', async ({theme, dark}) => {
         // Premises: one round of the sequence is fourteen colours, and the fixture ranks as described.
-        expect(KEYLESS_SEQUENCE).toHaveLength(14);
+        expect(COUNTRY_SEQUENCE).toHaveLength(14);
         expect(rankedKeys(GEO_WEIGHTS).filter((key) => key !== 'Unknown' && key !== 'Other')).toEqual(RANKED_COUNTRIES);
 
         document.documentElement.classList.toggle('dark', dark);
         await mountChart(oneDay(GEO_WEIGHTS), 'geo', theme);
         const colourOf = new Map(drawnSeries().map(({id, itemStyle}) => [id, itemStyle?.color]));
         const grey = categoryColor('sector', 'Unknown', dark);
-        const sequence = (rank: number) => categoryColor('sector', KEYLESS_SEQUENCE[rank % KEYLESS_SEQUENCE.length], dark);
+        const sequence = (rank: number) => {
+            const ref = COUNTRY_SEQUENCE[rank % COUNTRY_SEQUENCE.length];
+            return categoryColor(ref.kind, ref.key, dark);
+        };
 
-        // The unclassified wear their own grey, wherever they rank.
+        // The unclassified wear their own colour, wherever they rank.
         expect({Unknown: colourOf.get('Unknown'), Other: colourOf.get('Other')}).toEqual({Unknown: grey, Other: grey});
-        // DEU comes right after Unknown in the stack and takes rank 2, not 3: the grey consumed no rank.
+        // DEU comes right after Unknown in the stack and takes rank 2, not 3: the unclassified consumed no rank.
         expect(colourOf.get('DEU'), 'DEU, the first country after Unknown').toBe(sequence(2));
         // Round 0: the fourteen colours of the sequence, in its order.
-        expect(RANKED_COUNTRIES.slice(0, 14).map((key) => colourOf.get(key))).toEqual(KEYLESS_SEQUENCE.map((_key, rank) => sequence(rank)));
+        expect(RANKED_COUNTRIES.slice(0, 14).map((key) => colourOf.get(key))).toEqual(COUNTRY_SEQUENCE.map((_ref, rank) => sequence(rank)));
         // Round 1: the first GR4 shade of the first colour — never the first colour again — then of the second.
         const poles = polesFor(dark);
         expect({IND: colourOf.get('IND'), KOR: colourOf.get('KOR')}).toEqual({IND: familyShade(sequence(0), 1, poles), KOR: familyShade(sequence(1), 1, poles)});
@@ -1435,7 +1439,7 @@ describe('AllocationHistoryChart — redrawn in full when its colours change (C4
 
         await mountChart(oneDay(GEO_WEIGHTS), 'geo', 'dark');
         // IND is rank 14: the first-round shade of the first colour, which the dark theme takes toward the card.
-        const first = categoryColor('sector', KEYLESS_SEQUENCE[0], true);
+        const first = categoryColor(COUNTRY_SEQUENCE[0].kind, COUNTRY_SEQUENCE[0].key, true);
         const shadeOn = (onCard: string) => familyShade(first, 1, shadePoles(true, onCard));
         const drawnIND = () => drawnSeries().find(({id}) => id === 'IND')?.itemStyle?.color;
         // Control: the two cards shade the first colour differently.

@@ -5368,7 +5368,7 @@
     }
   },
   "user/transactions/import/index.en.md": {
-    "md5": "52c28c5c760749d481573df4335f996d",
+    "md5": "ec5aabbd804f8fcdaa48ba8418f821a9",
     "langs_done": [
       "es",
       "fr",
@@ -5388,7 +5388,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 184.8,
-        "stamped_at": "2026-10-17T06:08:50.588319+00:00",
+        "stamped_at": "2026-10-19T14:07:03.104022+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5401,7 +5401,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 142.0,
-        "stamped_at": "2026-10-17T06:08:50.588319+00:00",
+        "stamped_at": "2026-10-19T14:07:03.104022+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5414,7 +5414,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 126.6,
-        "stamped_at": "2026-10-17T06:08:50.588319+00:00",
+        "stamped_at": "2026-10-19T14:07:03.104022+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6394,7 +6394,7 @@
     "analysis_model": "deepseek-ai/DeepSeek-V4.1-Flash"
   },
   "user/dashboard/kpi-cards.en.md": {
-    "md5": "86ef964ccd3014f9886d130d60948313",
+    "md5": "dfe82bdb2525f9824f93de64cb57db2e",
     "langs_done": [
       "es",
       "fr",
@@ -6414,7 +6414,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 252.4,
-        "stamped_at": "2026-10-17T13:59:45.832951+00:00",
+        "stamped_at": "2026-10-17T21:25:01.289760+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6427,7 +6427,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 333.3,
-        "stamped_at": "2026-10-17T13:59:45.832951+00:00",
+        "stamped_at": "2026-10-17T21:25:01.289760+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6442,7 +6442,7 @@
         "elapsed_s": 219.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=70, translated=77 (Δ+7)\n  L67: src=0 trn=1\n    EN: During the period you bought 10 units for €400, when they were worth 500 USD. At the end of the period they are worth 55\n    TR: Durante el periodo compraste 10 unidades por €400, cuando valían 500 USD. Al final del periodo valen 550 USD, y 1 USD = \n  L90: src=1 trn=2\n    EN: - **TWRR** — how your asset choices performed, whatever the timing of your deposits → [TWRR](../../financial-theory/tech\n    TR: - **TWRR** — cómo rindieron tus elecciones de activos, independientemente del timing de tus **depósitos** → [TWRR](../..\n  L95: src=3 trn=5\n    EN: - **Favorable timing** (green): you tended to deposit before prices rose. **Unfavorable timing** (red): you tended to de\n    TR: - **Timing favorable** (verde): tendiste a **depositar** antes de que subieran los precios. **Timing desfavorable** (roj\n  L98: src=1 trn=2\n    EN: - **`—` means no value**: a return LibreFolio cannot compute for the period shows `—` instead of a number. The timing ef\n    TR: - **`—` significa sin valor**: una rentabilidad que LibreFolio no puede calcular para el periodo muestra `—` en lugar de\n  L122: src=1 trn=2\n    EN: - **Net Worth** — the big number: securities at market value, plus cash, plus anything in transit between your brokers →\n    TR: - **Patrimonio neto** — el número grande: valores a precio de mercado, más efectivo, más cualquier importe **en tránsito\n  L127: src=1 trn=2\n    EN: - **Deposited Capital (Period)** — deposits minus withdrawals in the period, green to the right and red to the left; hov\n    TR: - **Capital depositado (Periodo)** — **depósitos** menos retiros en el periodo, verde a la derecha y rojo a la izquierda\n\nSOURCE_OUTLINE (for reference):\n  # 💰 KPI Cards\n    ## 📉 Card 1 — Period P&L {: #card-1-period-pl }\n      ### 💱 Unrealized change by currency {: #unrealized-change-by-currency }\n    ## 📈 Card 2 — Returns {: #card-2-returns }\n    ## 💰 Card 3 — Net Worth {: #card-3-net-worth }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-17T13:59:45.832951+00:00",
+        "stamped_at": "2026-10-17T21:25:01.289760+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6546,7 +6546,7 @@
     }
   },
   "user/transactions/import/how-to.en.md": {
-    "md5": "5b3d315c551fa1ed8dea76cc68b1268d",
+    "md5": "382ece1a13b41ed81eff3dc522395bf7",
     "langs_done": [
       "es",
       "fr",
@@ -6566,7 +6566,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 167.7,
-        "stamped_at": "2026-10-17T06:08:45.031967+00:00",
+        "stamped_at": "2026-10-19T14:07:10.758855+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6581,7 +6581,7 @@
         "elapsed_s": 173.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=114, translated=115 (Δ+1)\n  L3: src=1 trn=2\n    EN: The **Import Wizard** turns the reports you download from your broker into transactions. You check\n    TR: L'**Assistant d'importation** transforme les rapports que vous téléchargez depuis votre courtier en transactions. Vous v\n  L4: src=1 trn=0\n    EN: what it read and settle its doubts; nothing is saved until you press **Save All**.\n    TR: \n  L9: src=0 trn=1\n    EN: \n    TR: 1. Exportez un rapport de transactions depuis votre courtier : sa page dans les **[Courtiers pris en charge](index.md)**\n  L10: src=1 trn=2\n    EN: 1. Export a transaction report from your broker: its page in **[Supported Brokers](index.md)** says\n    TR: 2. Sur la page **[Transactions](../index.md)**, cliquez sur **Importer** (:material-file-upload:).\n  L12: src=2 trn=1\n    EN: 2. On the **[Transactions](../index.md)** page, click **Import** (:material-file-upload:).\n    TR: 4. Cliquez sur **Importer N transactions** : les lignes s'ouvrent dans l'espace de travail groupé, pas encore enregistré\n  L13: src=0 trn=1\n    EN: 3. Drop the report into the wizard, assign it to its broker and follow the steps below.\n    TR: 5. Jetez-y un dernier coup d'œil et cliquez sur **Tout enregistrer**.\n  L14: src=1 trn=0\n    EN: 4. Click **Import N transactions**: the rows open in the bulk workspace, not saved yet.\n    TR: \n  L15: src=1 trn=0\n    EN: 5. Give them a last look and click **Save All**.\n    TR: <div class=\"lf-screenshot-carousel\" data-carousel=\"carousel-import-wizard\" data-carousel-interval=\"6000\" data-show-title\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 🧙 How to Import Transactions\n    ## 🚀 Step-by-Step Guide\n    ## 🧙 The Import Wizard Steps\n      ### 📤 Step 1: Upload\n        #### 🧭 A file in the wrong broker {: #wrong-broker }\n      ### 🗂️ Step 2: Select Files\n      ### 🧠 Step 3: Parse\n      ### 🧩 Steps that appear only when needed {: #only-when-needed }\n      ### 📦 Step 4: Review {: #review }\n        #### 🗂️ Match each security\n        #### 🚦 Read the status badges\n        #### ⛔ Rows before the broker's opening date {: #opening-date }\n        #### 📥 Import the rows\n      ### 💾 Save in the bulk workspace\n    ## 🧭 Guided First Import {: #guided-first-import }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-17T06:08:45.031967+00:00",
+        "stamped_at": "2026-10-19T14:07:10.758855+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6594,7 +6594,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 161.9,
-        "stamped_at": "2026-10-17T06:08:45.031967+00:00",
+        "stamped_at": "2026-10-19T14:07:10.758855+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -9940,11 +9940,11 @@
     }
   },
   "user/assets/correlation.en.md": {
-    "md5": "9dadf6fd0a845e2d7661f5a2065c5be8",
+    "md5": "cdb9f9e8f6acbe2cce91a0de675f186a",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-10-10T00:07:37.473397+00:00",
     "analysis": "[{\"name\": \"Assets page\", \"keywords\": [\"LibreFolio Assets page\", \"financial portfolio UI\", \"asset list translation\"]}, {\"name\": \"Correlation tab\", \"keywords\": [\"LibreFolio Correlation tab\", \"risk lab UI\", \"correlation matrix translation\"]}, {\"name\": \"selection of assets\", \"keywords\": [\"asset selection\", \"portfolio subset\", \"financial UI translation\"]}, {\"name\": \"broker's holdings\", \"keywords\": [\"broker holdings\", \"portfolio positions\", \"financial translation\"]}, {\"name\": \"weights\", \"keywords\": [\"portfolio weights\", \"allocation\", \"financial translation\"]}, {\"name\": \"percentages and ratios, never money\", \"keywords\": [\"percentages ratios money\", \"portfolio metrics translation\"]}, {\"name\": \"Dashboard's Risk tab\", \"keywords\": [\"LibreFolio Dashboard Risk tab\", \"portfolio risk UI translation\"]}, {\"name\": \"Building the Selection\", \"keywords\": [\"building selection UI section\", \"asset picker translation\"]}, {\"name\": \"Eligibility check\", \"keywords\": [\"eligibility check data quality\", \"asset analysis translation\"]}, {\"name\": \"Select all, Deselect all, Invert and My assets\", \"keywords\": [\"select all deselect all invert my assets\", \"UI bulk actions translation\"]}, {\"name\": \"counter\", \"keywords\": [\"UI counter\", \"selected assets count\", \"translation\"]}, {\"name\": \"dashed chip\", \"keywords\": [\"dashed chip UI status\", \"asset chip translation\"]}, {\"name\": \"amber chip\", \"keywords\": [\"amber chip warning UI\", \"status color translation\"]}, {\"name\": \"Hover or tap\", \"keywords\": [\"hover tap UI interaction\", \"tooltip translation\"]}, {\"name\": \"amber strip\", \"keywords\": [\"amber strip warning banner\", \"UI translation\"]}, {\"name\": \"Use the period in which all have prices\", \"keywords\": [\"common period all prices\", \"date alignment financial translation\"]}, {\"name\": \"Correlation coefficient (ρ)\", \"keywords\": [\"correlation coefficient rho\", \"financial correlation metric translation\"]}, {\"name\": \"Order by similarity\", \"keywords\": [\"order by similarity correlation matrix\", \"clustering UI translation\"]}, {\"name\": \"same bet\", \"keywords\": [\"same bet finance idiom\", \"duplicate exposure translation\"]}, {\"name\": \"cushion the others\", \"keywords\": [\"cushion portfolio idiom\", \"diversification translation\"]}, {\"name\": \"exposure\", \"keywords\": [\"financial exposure\", \"portfolio risk translation\"]}, {\"name\": \"The most alike\", \"keywords\": [\"most alike pairs\", \"correlation UI label translation\"]}, {\"name\": \"The ones that offset\", \"keywords\": [\"offsetting pairs\", \"correlation UI label translation\"]}, {\"name\": \"A dash is not a zero\", \"keywords\": [\"dash not zero\", \"missing data financial translation\"]}, {\"name\": \"How Much Did Each of These Hurt?\", \"keywords\": [\"how much did each hurt\", \"drawdown section title translation\"]}, {\"name\": \"scale of harm\", \"keywords\": [\"scale of harm\", \"drawdown loss metaphor translation\"]}, {\"name\": \"Bad day\", \"keywords\": [\"bad day CVaR\", \"financial metric label translation\"]}, {\"name\": \"Bad month\", \"keywords\": [\"bad month CVaR\", \"financial metric label translation\"]}, {\"name\": \"Worst fall\", \"keywords\": [\"worst fall drawdown\", \"financial metric label translation\"]}, {\"name\": \"Below peak now\", \"keywords\": [\"below peak current drawdown\", \"financial metric label translation\"]}, {\"name\": \"Rise to peak\", \"keywords\": [\"rise to peak recovery gain\", \"financial metric translation\"]}, {\"name\": \"Conditional Value at Risk\", \"keywords\": [\"Conditional Value at Risk CVaR\", \"financial risk metric translation\"]}, {\"name\": \"CVaR at 95%\", \"keywords\": [\"CVaR 95%\", \"expected shortfall\", \"financial acronym translation\"]}, {\"name\": \"Max Drawdown\", \"keywords\": [\"max drawdown\", \"financial risk metric translation\"]}, {\"name\": \"Current Drawdown\", \"keywords\": [\"current drawdown\", \"financial risk metric translation\"]}, {\"name\": \"What It Takes to Get Back\", \"keywords\": [\"what it takes to get back\", \"drawdown recovery translation\"]}, {\"name\": \"Each column is its own horizon\", \"keywords\": [\"each column own horizon\", \"financial table interpretation translation\"]}, {\"name\": \"Not a ranking\", \"keywords\": [\"not a ranking UI table\", \"sortable table translation\"]}, {\"name\": \"What Did Each of These Pay for Its Risk?\", \"keywords\": [\"pay for risk\", \"risk return section title translation\"]}, {\"name\": \"risk against reward\", \"keywords\": [\"risk against reward\", \"risk return tradeoff translation\"]}, {\"name\": \"how much each asset swung\", \"keywords\": [\"asset swung volatility\", \"financial idiom translation\"]}, {\"name\": \"Volatility\", \"keywords\": [\"volatility financial metric\", \"translation\"]}, {\"name\": \"Ann. return\", \"keywords\": [\"annualized return\", \"average annual return\", \"financial abbreviation translation\"]}, {\"name\": \"Sortino\", \"keywords\": [\"Sortino ratio\", \"downside risk metric\", \"translation\"]}, {\"name\": \"Sharpe\", \"keywords\": [\"Sharpe ratio\", \"risk-adjusted return\", \"translation\"]}, {\"name\": \"Beta\", \"keywords\": [\"beta financial metric\", \"benchmark sensitivity\", \"translation\"]}, {\"name\": \"Beta &amp; Active Return\", \"keywords\": [\"beta active return\", \"benchmark relative return\", \"translation\"]}, {\"name\": \"Risk/return line\", \"keywords\": [\"risk return line\", \"benchmark chart\", \"translation\"]}, {\"name\": \"Compared with\", \"keywords\": [\"compared with benchmark UI\", \"translation\"]}, {\"name\": \"benchmark\", \"keywords\": [\"benchmark financial\", \"S&amp;P 500\", \"translation\"]}, {\"name\": \"tinted row\", \"keywords\": [\"tinted row UI table\", \"benchmark row translation\"]}, {\"name\": \"period line\", \"keywords\": [\"period line chart\", \"date range UI translation\"]}, {\"name\": \"better paid for its risk\", \"keywords\": [\"better paid for risk\", \"risk-adjusted return idiom translation\"]}, {\"name\": \"average annual return is not the return you lived through\", \"keywords\": [\"average annual return lived through\", \"volatility warning translation\"]}, {\"name\": \"coupons and dividends\", \"keywords\": [\"coupons dividends\", \"bond payments\", \"financial translation\"]}, {\"name\": \"One benchmark for every risk page\", \"keywords\": [\"one benchmark risk pages\", \"UI consistency translation\"]}, {\"name\": \"benchmark is not compared with itself\", \"keywords\": [\"benchmark not compared itself\", \"financial translation\"]}, {\"name\": \"read-only\", \"keywords\": [\"read-only UI\", \"disabled list translation\"]}, {\"name\": \"What If…?\", \"keywords\": [\"what if section title\", \"historical replay translation\"]}, {\"name\": \"come through a real past episode\", \"keywords\": [\"come through past episode\", \"historical replay idiom translation\"]}, {\"name\": \"built-in crisis\", \"keywords\": [\"built-in crisis preset\", \"historical scenario translation\"]}, {\"name\": \"Historical replay\", \"keywords\": [\"historical replay\", \"financial scenario analysis translation\"]}, {\"name\": \"Preset\", \"keywords\": [\"preset UI\", \"scenario selection translation\"]}, {\"name\": \"Global Financial Crisis\", \"keywords\": [\"Global Financial Crisis\", \"historical market event translation\"]}, {\"name\": \"Run replay\", \"keywords\": [\"run replay button\", \"UI action translation\"]}, {\"name\": \"worst first\", \"keywords\": [\"worst first sorting\", \"UI translation\"]}, {\"name\": \"There is no total: a selection has no weights to add up\", \"keywords\": [\"no total selection no weights\", \"financial UI translation\"]}, {\"name\": \"Notices and Missing Data\", \"keywords\": [\"notices missing data\", \"data quality section title translation\"]}, {\"name\": \"data-quality banner\", \"keywords\": [\"data quality banner\", \"UI warning translation\"]}, {\"name\": \"Some results are partial\", \"keywords\": [\"partial results\", \"data quality notice translation\"]}, {\"name\": \"Measurements affected\", \"keywords\": [\"measurements affected badge\", \"UI translation\"]}, {\"name\": \"Unavailable for the selected data\", \"keywords\": [\"unavailable selected data\", \"UI banner translation\"]}, {\"name\": \"Sync prices\", \"keywords\": [\"sync prices action\", \"market data provider translation\"]}, {\"name\": \"Sync rates\", \"keywords\": [\"sync rates action\", \"exchange rates translation\"]}, {\"name\": \"partial results\", \"keywords\": [\"partial results data quality\", \"financial translation\"]}, {\"name\": \"Good to Know\", \"keywords\": [\"good to know section\", \"documentation heading translation\"]}, {\"name\": \"Default Currency\", \"keywords\": [\"default currency preferences\", \"portfolio settings translation\"]}, {\"name\": \"Preferences\", \"keywords\": [\"preferences settings UI\", \"translation\"]}, {\"name\": \"instance's default\", \"keywords\": [\"instance default software\", \"self-hosted settings translation\"]}, {\"name\": \"exchange-rate moves included\", \"keywords\": [\"exchange rate moves\", \"currency return translation\"]}, {\"name\": \"Another page, another figure\", \"keywords\": [\"another page another figure\", \"financial comparison idiom translation\"]}, {\"name\": \"S&amp;P 500\", \"keywords\": [\"S&amp;P 500 benchmark index\", \"proper name translation\"]}]",
@@ -9959,7 +9959,9 @@
         "critique": "<translation_critique>\n<improvements>\n\n**GLOSSARY DEVIATIONS (mandatory fixes)**\n\n1. **\"historical replay\" must be translated as \"replay storico\", not \"riproduzione storica\".** The glossary explicitly maps `historical replay → replay storico`. The translation uses \"riproduzione storica\" in the section heading tool list and drops the \"replay\" terminology entirely in the What-if section. Fix all instances, e.g.:\n   - `- **Riproduzione storica** — il rendimento reale ... → [Riproduzione storica](...)` → `- **Replay storico** — il rendimento reale ... → [Replay storico](...)`\n   - `È offerta solo la riproduzione storica: uno shock ipotetico...` → `È offerto solo il replay storico: uno shock ipotetico...`\n   - `premi **Esegui riproduzione**` → `premi **Esegui replay**`\n   - `un pulsante riproduce il periodo più breve` → `un pulsante esegue il replay del periodo più breve`\n   - `un episodio passato, riprodotto` → `un episodio passato, in replay` (in the summary bullet list)\n   - `riprodotto con rendimenti reali` → `in replay con rendimenti reali`\n   - Also fix the alt-text: `dopo Esegui riproduzione` → `dopo Esegui replay`; `il pulsante che riproduce il periodo più breve` → `il pulsante che esegue il replay del periodo più breve`.\n\n2. **Link labels for risk-metric pages must be translated per the glossary.** They are currently inconsistent: some are translated (\"[Volatilità]\", \"[Correlazione]\", \"[Qualità dei dati]\") while others are left in English. Fix:\n   - `[Conditional Value at Risk]` → `[VaR condizionale]` (2 occurrences)\n   - `[Max Drawdown]` → `[Drawdown massimo]`\n   - `[Current Drawdown]` → `[Drawdown attuale]`\n   - `[Sortino Ratio]` → `[Indice di Sortino]`\n   - `[Sharpe Ratio]` → `[Indice di Sharpe]`\n   - `[Beta & Active Return]` → `[Beta e rendimento attivo]`\n   - `[Benchmark Selection]` → `[Selezione del benchmark]` (2 occurrences, for consistency with the section's own title \"Scegliere il benchmark\")\n   - `[Historical Replay]` → `[Replay storico]`\n\n3. **\"data-quality banner\" must follow the glossary mapping `banner di qualità dei dati`.** The translation uses \"banner **della** qualità dei dati\"; correct to \"banner di qualità dei dati\".\n\n4. **\"Observed Annualization\" misconception.** The English is an adjective+noun (\"Annualization observed\"); the current rendering \"Osservazione dell'annualizzazione\" changes the meaning to \"Observation of annualization\". Use `[Annualizzazione osservata](...)`.\n\n**ACCURACY / FLUENCY IMPROVEMENTS**\n\n5. **Awkward passive / impersonal forms.** Several renderings are ungrammatical or stiff in Italian:\n   - `Un cerchio sopra la linea tratteggiata è stato pagato meglio per il suo rischio rispetto al benchmark.` — a \"circle\" cannot \"be paid\" in Italian passive. Better: `Un cerchio sopra la linea tratteggiata ha dato una ricompensa migliore per il suo rischio rispetto al benchmark.`\n   - `La cifra non è potuta essere misurata per quell'asset in questo periodo;` → `Non è stato possibile misurare la cifra per quell'asset in questo periodo;`\n   - `la coppia non è potuta essere misurata` → `non è stato possibile misurare la coppia`\n\n6. **Unit letter in the \"Worst fall\" description.** English uses *lasted N d* for days. The translation silently switches to *durata N g*. Unless the UI actually displays the Italian \"g\" (verify), keep the English literal \"d\" so the description matches the on-screen abbreviation: `*durata N d* conta i giorni fino a quando...`\n\n7. **\"finding\" wording.** `An empty list is a finding.` is rendered `Una lista vuota è un risultato.` This is acceptable, but note that \"risultato\" is already used elsewhere in the section for \"results\", so the reader may lose the nuance (a diagnostic \"finding\"). Consider `Una lista vuota è già di per sé un risultato.` — this preserves the source's emphasis without adding content.\n\n8. **\"The line under the table\".** `The line under the table gives the exact period...` is rendered `La riga sotto la tabella indica...`. \"Riga\" in a table context strongly suggests \"row\". To avoid confusion with table rows, prefer `La riga di testo sotto la tabella indica il periodo esatto...`\n\n9. **\"Compare the assets down a column, never add the columns up.\"** `confronta gli asset lungo una colonna, non sommare mai le colonne` is fine, but \"mai sommare le colonne\" could be misread as \"never add columns together\" rather than \"do not aggregate the columns\". A clearer phrasing: `confronta gli asset lungo una colonna, non sommare mai i valori tra colonne.`\n\n**STRUCTURAL / CONSISTENCY**\n\n10. **All anchors, HTML blocks, admonition, and links are preserved correctly** — no structural issues found. Anchor IDs, `data-name`, `data-category`, `class`, `style`, and the `!!! warning` admonition are intact.\n\n11. **Emoji and heading levels are preserved** — no issues found.\n\n12. **\"Preset\" is left in English** in *Scegli un Preset*, which the glossary does not cover; this is acceptable as a UI label, but confirm the actual UI uses \"Preset\" (if the UI says \"Preimpostazione\", align with the UI string).\n\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 143.6
+        "elapsed_s": 143.6,
+        "stamped_at": "2026-10-17T21:25:03.748017+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:07:37.473333+00:00",
@@ -9970,7 +9972,9 @@
         "critique": "<translation_critique>\n<improvements>\n\n**1. Mandatory glossary deviations (must fix):**\n\n- **holding → position**: \"a broker's holdings\" is translated as \"les avoirs d'un courtier\". Per glossary, *holding* must be translated as **position**. Correct: \"les **positions** d'un courtier\".\n\n- **conditional value at risk → VaR conditionnelle**: The link text for `[Conditional Value at Risk]` is rendered as \"**Valeur à risque conditionnelle**\" (twice). Glossary mandates **VaR conditionnelle**. Correct: `[VaR conditionnelle](...)`.\n\n- **current drawdown → repli actuel**: \"**Current Drawdown**\" is rendered as \"**Perte actuelle**\". Glossary mandates **repli actuel**. Correct: `[Repli actuel](...)`.\n\n- **drawdown → repli**: In the phrase \"tandis que les colonnes de perte sont remplies\" (= *the drawdown columns are filled*), \"colonnes de perte\" should be \"**colonnes de repli**\" per glossary.\n\n- **historical replay → rejeu historique**: \"**Historical Replay**\" is rendered as \"**Relecture historique**\" (in the \"Tools shown\" list), and the button \"**Run replay**\" as \"**Exécuter la relecture**\". Glossary mandates **rejeu historique** / **rejeu**. Correct: \"**Rejeu historique**\" and \"**Exécuter le rejeu**\". Also in the \"What If…?\" body: \"Seule la relecture historique est proposée\" → \"Seul le **rejeu historique** est proposé\".\n\n**2. Internal inconsistency (same concept, two renderings):**\n\n- \"replay\" is rendered as \"relecture\" (label + button) but as \"rejouée\" / \"rejoue\" elsewhere (e.g., \"un bouton rejoue la période plus courte\"). Unifying everything to **rejeu / rejouer** also resolves the glossary issue above. The alt-text still says \"après Exécuter la relecture\" — also update.\n\n**3. Grammatical error in alt text:**\n\n- \"…, quasi identiques, et **Celles qui se compensent est vide**\" — the plural subject requires a plural verb, and the label should be quoted or have a noun. Correct option: \"…, quasi identiques, et « **Celles qui se compensent** » **est vide**\" (treating the label as a quoted name), or \"…, et les listes **Celles qui se compensent sont vides**\". As written, \"Celles qui se compensent est vide\" is ungrammatical.\n\n**4. Naming inconsistency between heading and body:**\n\n- The bullet uses **Remontée vers le sommet** for \"Rise to peak\", but the body text uses **Remontée jusqu'au sommet** (same term). Pick one form. Given the tool list is the label definition, prefer \"Remontée vers le sommet\".\n\n**5. Minor precision issue:**\n\n- \"Il provient aussi uniquement des prix\" for *\"It also comes from prices alone\"* reads awkwardly and slightly contradicts itself (\"aussi\" + \"uniquement\"). Prefer: \"Il provient par ailleurs des **seuls prix** — les coupons et dividendes ne sont pas encore inclus.\"\n\n**6. Recommended but not mandatory (style / wording):**\n\n- \"Une puce en pointillés\" for *a dashed chip* is acceptable, but \"**puce en tirets**\" is more standard for \"dashed\" in chart legends. Low priority.\n- \"Carte de sélection\" for the *selection card* is fine; the glossary's *card → carte* is respected.\n- \"Troisième ligne du paragraphe introductif : *assets you only watch* rendered as « que vous surveillez seulement » is fine, but « seulement surveillés » flows more naturally in French. Optional.\n\n**7. Verify consistency of \"Dashboard\" capitalization:**\n\n- The translation alternates between \"Tableau de bord\" and \"du Tableau de bord\". Under French typography, \"Tableau de bord\" as a proper UI name is acceptable, but ensure it is used uniformly (it currently is).\n\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 191.5
+        "elapsed_s": 191.5,
+        "stamped_at": "2026-10-17T21:25:03.748017+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:07:37.473399+00:00",
@@ -9983,7 +9987,9 @@
         "structural_issues": 0,
         "elapsed_s": 211.3,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=92, translated=90 (Δ-2)\n  L118: src=3 trn=1\n    EN: - **Its row opens the table**, with a dash under **Beta** and **Correlation**: the benchmark is not compared with itself\n    TR: - **Su fila abre la tabla**, con un guion en las columnas Beta y Correlación: el índice de referencia no se compara cons\n\nSOURCE_OUTLINE (for reference):\n  # 🧪 Correlation Tab\n    ## 🧺 Building the Selection {: #building-the-selection }\n    ## 🕸️ Correlation {: #correlation }\n    ## 📉 How Much Did Each of These Hurt? {: #how-much-did-each-hurt }\n    ## ⚖️ What Did Each of These Pay for Its Risk? {: #what-did-each-pay }\n      ### 🎯 Choosing the Benchmark {: #choosing-the-benchmark }\n    ## ⏮️ What If…? {: #what-if }\n    ## 🚩 Notices and Missing Data {: #each-section-speaks-for-itself }\n    ## 🔎 Good to Know {: #reading-the-numbers }\n    ## 🔗 Related {: #related }",
-        "final_structural_issues": 1
+        "final_structural_issues": 1,
+        "stamped_at": "2026-10-17T21:25:03.748017+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },

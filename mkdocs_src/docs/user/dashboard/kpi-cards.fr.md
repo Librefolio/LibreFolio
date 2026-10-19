@@ -92,7 +92,7 @@ Il y a une ligne 📈 pour chaque devise, euro inclus, et une ligne 💱 pour ch
 
 **Comment la lire**
 
-- **Timing favorable** (vert) : vous aviez tendance à déposer avant que les prix montent. **Timing défavorable** (rouge) : vous aviez tendance à déposer au sommet. Proche de zéro, il indique **Timing neutre**, et plus la couleur est forte, plus l'effet est important.
+- **Timing favorable** (vert) : vous aviez tendance à déposer avant que les prix montent. **Timing défavorable** (rouge) : vous aviez tendance à déposer au sommet. Proche de zéro, il indique **Timing neutre**, ni vert ni rouge.
 - **Le TWRR juge la stratégie, le MWRR votre résultat personnel** — comme pour un gestionnaire de fonds et un investisseur.
 - **Les quatre lignes couvrent toute la période** ; le petit pourcentage ne couvre qu'aujourd'hui.
 - **`—` signifie aucune valeur** : un rendement que LibreFolio ne peut pas calculer pour la période affiche `—` au lieu d'un nombre. L'effet timing nécessite à la fois le TWRR et le MWRR : quand l'un manque, il affiche un `—` gris, sans libellé de timing.

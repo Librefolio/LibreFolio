@@ -44,9 +44,13 @@
  *
  * Y-8 (two describes). A zoom gesture re-aims the arrows of an overlay once it settles, not on every
  * tick — on PriceChartFull and on its candles — and, once the chart has been rebuilt in other colours, the arrows'
- * write-back brings none of the old ones back (a colour guard). Y-25 (the last two describes): a chart without arrow
+ * write-back brings none of the old ones back (a colour guard). Y-25 (the two describes after them): a chart without arrow
  * markers reads nothing for them when a zoom settles, and a resize re-aims the arrows once it settles, not on each
  * callback. Their docblocks say how.
+ *
+ * Y-N65 (the last describe, on the line and on the candles): in measure mode the chart owns its cursor through zrender —
+ * crosshair, or not-allowed over the measure's start, which the measuring ruler refuses as a second point — and its
+ * container says which (`data-measure-hover`). Its docblock says how.
  *
  * How it is tested: the real component, with ECharts replaced by a recorder (the `GrowthChart.test.ts`
  * pattern: jsdom has no canvas, and pixels are not the subject). A tooltip is the formatter the component handed
@@ -88,10 +92,31 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest
  * (`plot.width`), and y 400 − value; so an arrow marker's rotation depends on the window and on the plot's width, and is
  * computed and written back as on a screen. `resize` counts its calls (`resizeCount`): the first-render stability pass
  * resizes.
+ *
+ * For Y-N65 (the last describe) `getZr()` answers one zr stand-in per chart, the same object on every call, as ECharts
+ * answers its own: it keeps the handlers the chart gives `on` and `emit` calls them, as zrender does on a pointer event
+ * (`handlerCount` says how many listen), and records every `setCursorStyle` call in order (`cursorStyles`). `pointerIndex`
+ * lands the pointer on a data index: `containPixel` then says it is inside the grid and `convertFromPixel` answers the
+ * grid point `[index, 0]`. Null — the default — lands it nowhere: `false` and `null`, what every other case has always
+ * seen; no other case emits a zr event or sets a pointer.
  */
 const {chartInstances, echartsModule, plot} = vi.hoisted(() => {
     type Handler = (params?: unknown) => void;
     type ChartOption = Record<string, unknown>;
+
+    /** One chart's zrender (Y-N65): the pointer handlers the chart registers, and the cursor it sets. */
+    interface FakeZr {
+        /** `on(event, handler)`: the handler is the last argument; kept under the event's name, as zrender keeps it. */
+        on: (event: string, ...rest: unknown[]) => FakeZr;
+        off: (event: string, handler?: unknown) => FakeZr;
+        /** Calls every handler registered for `event` with `params`, as zrender does on a pointer event. */
+        emit: (event: string, params?: unknown) => void;
+        /** How many handlers are registered for `event`: the precondition that an emitted event reaches the chart. */
+        handlerCount: (event: string) => number;
+        /** Every `setCursorStyle(style)` call, in order. */
+        cursorStyles: string[];
+        setCursorStyle: (style: string) => void;
+    }
 
     interface FakeChart {
         setOptionCalls: Array<{option: ChartOption}>;
@@ -105,7 +130,8 @@ const {chartInstances, echartsModule, plot} = vi.hoisted(() => {
         getWidth: () => number;
         getHeight: () => number;
         getDom: () => unknown;
-        getZr: () => {on: () => void; off: () => void};
+        /** The chart's zrender: one per chart, the same on every call (Y-N65). */
+        getZr: () => FakeZr;
         /** `on(event, handler)` or `on(event, query, handler)`: the handler is the last argument. */
         on: (event: string, ...rest: unknown[]) => void;
         off: (event: string, handler?: unknown) => void;
@@ -123,8 +149,13 @@ const {chartInstances, echartsModule, plot} = vi.hoisted(() => {
         /** A user's zoom to `window` (Y-25): the held window moves, then `dataZoom` is emitted in 47-1's batch shape. Not a dispatch of the chart's own. */
         userZoom: (window: {start: number; end: number}) => void;
         resize: () => void;
+        /**
+         * The data index the pointer lands on (Y-N65): `containPixel` answers whether there is one, `convertFromPixel` the
+         * grid point `[index, 0]`. Null by default: the pointer lands nowhere, `false` and `null`.
+         */
+        pointerIndex: number | null;
         containPixel: () => boolean;
-        convertFromPixel: () => null;
+        convertFromPixel: () => number[] | null;
         /** A `[category, value]` point in px, through the window on screen (`gridPixel` on the held first x-axis and `dataZoom[0]`) (Y-25). */
         convertToPixel: (finder: unknown, value: unknown) => number[] | null;
         isDisposed: () => boolean;
@@ -190,6 +221,29 @@ const {chartInstances, echartsModule, plot} = vi.hoisted(() => {
         let held: ChartOption = {};
         let disposed = false;
         const handlers = new Map<string, Handler[]>();
+        const zrHandlers = new Map<string, Handler[]>();
+
+        /** The chart's zrender (Y-N65): created with the chart, answered by every `getZr()`. */
+        const zr: FakeZr = {
+            on(event, ...rest) {
+                const handler = rest[rest.length - 1];
+                if (typeof handler === 'function') zrHandlers.set(event, [...(zrHandlers.get(event) ?? []), handler as Handler]);
+                return zr;
+            },
+            off(event, handler) {
+                zrHandlers.set(event, handler === undefined ? [] : (zrHandlers.get(event) ?? []).filter((entry) => entry !== handler));
+                return zr;
+            },
+            emit(event, params) {
+                // A copy: a handler that unregisters itself must not make its neighbour skip.
+                for (const handler of [...(zrHandlers.get(event) ?? [])]) handler(params);
+            },
+            handlerCount: (event) => zrHandlers.get(event)?.length ?? 0,
+            cursorStyles: [],
+            setCursorStyle(style) {
+                zr.cursorStyles.push(style);
+            },
+        };
 
         /**
          * The window ECharts' dataZoom model takes on a zoom (`setRawRange`): the held `dataZoom[0]`'s `start` and `end`,
@@ -235,7 +289,7 @@ const {chartInstances, echartsModule, plot} = vi.hoisted(() => {
             getWidth: () => plot.width,
             getHeight: () => PLOT_HEIGHT,
             getDom: () => dom,
-            getZr: () => ({on: () => {}, off: () => {}}),
+            getZr: () => zr,
             on(event, ...rest) {
                 const handler = rest[rest.length - 1];
                 if (typeof handler !== 'function') return;
@@ -266,8 +320,9 @@ const {chartInstances, echartsModule, plot} = vi.hoisted(() => {
             resize() {
                 chart.resizeCount += 1;
             },
-            containPixel: () => false,
-            convertFromPixel: () => null,
+            pointerIndex: null,
+            containPixel: () => chart.pointerIndex !== null,
+            convertFromPixel: () => (chart.pointerIndex === null ? null : [chart.pointerIndex, 0]),
             convertToPixel(_finder, value) {
                 const axis = Array.isArray(held.xAxis) ? held.xAxis[0] : undefined;
                 const categories: unknown[] = isPlain(axis) && Array.isArray(axis.data) ? axis.data : [];
@@ -294,7 +349,7 @@ const {chartInstances, echartsModule, plot} = vi.hoisted(() => {
 
 vi.mock('echarts', () => echartsModule);
 
-import type {ComponentProps} from 'svelte';
+import {flushSync, type ComponentProps} from 'svelte';
 import {get} from 'svelte/store';
 import {addMessages, waitLocale} from 'svelte-i18n';
 import {cleanup, render, setupI18n, waitFor} from '$test/component';
@@ -1521,5 +1576,214 @@ describe('PriceChartFull and its candles — a resize re-aims the arrows once it
 
         expect.soft(aimOf(seriesPayloadsSince(chart, afterBurst)), 'Y-25: once the resize settled, the arrows were not re-aimed exactly once — one series write-back, carrying both arrows, aimed').toEqual([TREND_ENDS.map((day) => ({day, aimed: true}))]);
         expect(chart.getOptionCount, 'Y-25: one resize — its five callbacks and its settle — read getOption() more than once: the arrows need one read, once it settles').toBeLessThanOrEqual(1);
+    });
+});
+
+// =========================================================================
+// Y-N65 — in measure mode the chart owns its cursor through zr: crosshair, and not-allowed over the measure's start
+// =========================================================================
+
+/** The two ways PriceChartFull draws a price under measure: its line, and its candles (`CandlestickChart`). */
+const MEASURE_VIEWS = [
+    {view: 'line', chartType: 'line'},
+    {view: 'candles', chartType: 'candlestick'},
+] as const;
+type MeasureChartType = (typeof MEASURE_VIEWS)[number]['chartType'];
+
+/** One chart's zrender stand-in (the recorder's). */
+type FakeZr = ReturnType<FakeChart['getZr']>;
+
+/** Where the pointer lands: DATA's Monday 4 March, index 5 — the day a refusing `onMeasureHover` refuses. */
+const HOVER_INDEX = 5;
+const HOVER_DAY = DATA[HOVER_INDEX].date;
+
+/**
+ * An `onMeasureHover` that refuses the day `refused` — answers `true` there, as MeasurePanel's `updatePendingEnd` answers on
+ * the pending start (MeasurePanel.test.ts, Y-N65) — and accepts any other day, `false`. `null` refuses none.
+ */
+function refusing(refused: string | null) {
+    return vi.fn((date: string) => date === refused);
+}
+
+/** Animation frames the case runs itself. */
+interface HeldFrames {
+    /** One frame: every callback queued before it, in order — one queued while it runs waits for the next — then Svelte's pending updates. */
+    frame: () => void;
+}
+
+/**
+ * Holds the animation frames (`vi.stubGlobal`; `vi.unstubAllGlobals()` puts jsdom's back): `requestAnimationFrame` queues,
+ * `cancelAnimationFrame` drops, and nothing runs until the case calls `frame()`. jsdom runs its frames on a 16 ms interval
+ * of its own; held, «at once, before any frame» is a fact of the case rather than a race against that interval.
+ */
+function holdFrames(): HeldFrames {
+    const queued = new Map<number, FrameRequestCallback>();
+    let last = 0;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+        last += 1;
+        queued.set(last, callback);
+        return last;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (handle: number) => {
+        queued.delete(handle);
+    });
+    return {
+        frame() {
+            for (const handle of [...queued.keys()]) {
+                const callback = queued.get(handle);
+                if (!callback) continue; // cancelled by a callback that ran before it in this frame
+                queued.delete(handle);
+                callback(performance.now());
+            }
+            flushSync();
+        },
+    };
+}
+
+/**
+ * The chart drawing `chartType`'s view: the one initialised on that view's container — the candles' (`candlestick-chart`)
+ * or the line's (no testid) — and still in the document. Picked by its element, not by its rank among the charts made.
+ */
+function chartOfView(chartType: MeasureChartType): FakeChart | undefined {
+    const testId = chartType === 'candlestick' ? 'candlestick-chart' : null;
+    return chartInstances.findLast((chart) => {
+        const dom = chart.getDom() as HTMLElement;
+        return dom.isConnected && dom.getAttribute('data-testid') === testId;
+    });
+}
+
+/** The x-axis days of `chart`'s last full draw — its last `setOption` carrying the axis tooltip — or undefined before one. */
+function drawnDaysOf(chart: FakeChart | undefined): string[] | undefined {
+    const draw = chart?.setOptionCalls.findLast((call) => typeof (call.option.tooltip as {formatter?: unknown} | undefined)?.formatter === 'function')?.option;
+    const xAxis = draw?.xAxis;
+    return ((Array.isArray(xAxis) ? xAxis[0] : xAxis) as {data?: string[]} | undefined)?.data;
+}
+
+/**
+ * PriceChartFull over DATA in `chartType`'s view, in measure mode unless `props` says otherwise, drawn daily and past its
+ * stability pass; then the frames held and the pointer landed on HOVER_DAY. Checks what the cases stand on: the view's
+ * chart drew, on its own container, and listens to zr `mousemove`.
+ */
+async function measuring(chartType: MeasureChartType, props: Partial<ComponentProps<typeof PriceChartFull>>) {
+    mountPriceChart({initialChartType: chartType, measureMode: true, ...props});
+    await waitFor(() => expect(drawnDaysOf(chartOfView(chartType)), `barrier: the ${chartType} view’s chart drew daily over DATA, on its own container`).toEqual(DATA.map((point) => point.date)), {timeout: 5_000});
+    const chart = chartOfView(chartType)!;
+    const zr = chart.getZr();
+    expect(zr.handlerCount('mousemove'), 'precondition: the chart listens to zr mousemove').toBeGreaterThan(0);
+    await stabilityPassOver(chart);
+    const frames = holdFrames();
+    chart.pointerIndex = HOVER_INDEX;
+    return {chart, zr, frames, container: chart.getDom() as HTMLElement};
+}
+
+/** A pointer move over the plot, as zrender hands it to its `mousemove` listeners — right after resetting its own cursor. */
+function move(zr: FakeZr): void {
+    zr.emit('mousemove', {offsetX: 400, offsetY: 200});
+}
+
+/**
+ * Y-N65 (decision of the developer, 19/10; the cursor, N65-7 «b») — in measure mode the chart owns its cursor through
+ * zrender: PriceChartFull's line, and its candles (`CandlestickChart`, rendered with `initialChartType: 'candlestick'`).
+ *
+ * What it protects. The measuring ruler refuses its start point as the second point (MeasurePanel.test.ts, Y-N65:
+ * `updatePendingEnd` answers `true` there), and the user must see the refusal before clicking — the "you can't go there"
+ * cursor a future day has in the pickers. zrender owns the cursor of its own element: on each move it resets it
+ * (`Handler.prototype.mousemove`: `proxy.setCursor(… 'default')`, then the `mousemove` listeners), so a class on the
+ * container cannot hold it, and only a call made inside the listener wins.
+ *
+ * The contract, after the cure: on every zr `mousemove` in measure mode the chart calls, synchronously — before the rAF
+ * throttle — `zr.setCursorStyle('crosshair')`, or `zr.setCursorStyle('not-allowed')` when the last hover was refused; once
+ * the hover resolves (its rAF), it applies the cursor of the new answer — `'not-allowed'` when `onMeasureHover` returned
+ * `true`, `'crosshair'` otherwise — and its container publishes it, `data-measure-hover="blocked"` or `"free"`. Outside
+ * measure mode the chart never calls `setCursorStyle`: zrender keeps its own cursor.
+ *
+ * Red today: neither chart calls `setCursorStyle`, and neither container publishes `data-measure-hover`. Both containers
+ * carry `cursor-crosshair` in measure mode, but zrender writes its own inline `cursor: default` on its element from the
+ * first move: the user sees no crosshair, and no refusal over the start point.
+ *
+ * How it is tested: the recorder's zr stand-in keeps the handlers the chart registers and records `setCursorStyle`
+ * (`cursorStyles`); `pointerIndex` lands the pointer on DATA's 2024-03-04 (HOVER_DAY) or on the day after, and
+ * `onMeasureHover` refuses HOVER_DAY where a case says so (`refusing`). The hover resolves in an animation frame, so the
+ * frames are held (`holdFrames`) and run by `frame()` alone — only after the draw and its stability pass, which run on
+ * jsdom's own frames. The container is the element the chart was initialised on (`getDom()`). Calls are counted from the
+ * move a case makes: one the chart might make on entering measure mode is out of the count by construction.
+ */
+describe.each(MEASURE_VIEWS)('PriceChartFull, $view view — in measure mode the chart owns its cursor through zr (Y-N65)', ({chartType}) => {
+    afterEach(() => {
+        // Global state the cases share: the held animation frames.
+        vi.unstubAllGlobals();
+    });
+
+    it('a move over a day onMeasureHover accepts: crosshair at once and once the hover resolves, and the container says free', async () => {
+        // Today: the hover resolves, and the chart sets no cursor — no setCursorStyle call, no data-measure-hover.
+        const onMeasureHover = refusing(null);
+        const {zr, frames, container} = await measuring(chartType, {onMeasureHover});
+
+        const before = zr.cursorStyles.length;
+        move(zr);
+        const atOnce = zr.cursorStyles.slice(before);
+        frames.frame();
+
+        expect(onMeasureHover, 'barrier: the hover reached the chart’s callback, on the day under the pointer').toHaveBeenCalledWith(HOVER_DAY, expect.any(Number));
+        // In force: the last cursor set. The refused case and the turn-back case below pin that the resolved hover sets it itself.
+        expect({atOnce, inForce: zr.cursorStyles.at(-1), hover: container.getAttribute('data-measure-hover')}, 'measure mode leaves the cursor to zrender: its default, no crosshair').toEqual({atOnce: ['crosshair'], inForce: 'crosshair', hover: 'free'});
+    });
+
+    it('a move over the day onMeasureHover refuses — the measure’s start: once the hover resolves, not-allowed, and the container says blocked', async () => {
+        // Today: onMeasureHover answers true and the chart does nothing with it — no setCursorStyle call, no data-measure-hover.
+        const onMeasureHover = refusing(HOVER_DAY);
+        const {zr, frames, container} = await measuring(chartType, {onMeasureHover});
+
+        move(zr);
+        frames.frame();
+
+        expect(onMeasureHover, 'barrier: the hover reached the chart’s callback, which refused the day under the pointer').toHaveLastReturnedWith(true);
+        expect({cursor: zr.cursorStyles.at(-1), hover: container.getAttribute('data-measure-hover')}, 'the refused start point looks like any other point').toEqual({cursor: 'not-allowed', hover: 'blocked'});
+    });
+
+    it('while the last hover was refused, the next move re-applies not-allowed at once — before any frame runs', async () => {
+        // Today: no call, then or ever — zrender's reset to its default stands on every move.
+        const onMeasureHover = refusing(HOVER_DAY);
+        const {zr, frames} = await measuring(chartType, {onMeasureHover});
+        move(zr);
+        frames.frame();
+        expect(onMeasureHover, 'barrier: the last hover was refused').toHaveLastReturnedWith(true);
+
+        const before = zr.cursorStyles.length;
+        move(zr); // its frame is held: whatever the chart calls now, it calls inside the listener, right after zrender's reset
+
+        expect(zr.cursorStyles.slice(before), 'zrender’s reset to its default stands until the next frame').toEqual(['not-allowed']);
+    });
+
+    it('moving on to a day onMeasureHover accepts turns it back: crosshair once resolved, the container says free, and the next move starts from crosshair', async () => {
+        // Today: no setCursorStyle call at all, and no data-measure-hover.
+        const onMeasureHover = refusing(HOVER_DAY);
+        const {chart, zr, frames, container} = await measuring(chartType, {onMeasureHover});
+        move(zr);
+        frames.frame(); // over the start: refused
+
+        chart.pointerIndex = HOVER_INDEX + 1; // Tuesday 5 March: accepted
+        move(zr);
+        frames.frame();
+        expect(onMeasureHover, 'barrier: the hover reached the day after the start').toHaveBeenLastCalledWith(DATA[HOVER_INDEX + 1].date, expect.any(Number));
+        const resolved = zr.cursorStyles.at(-1);
+        const hover = container.getAttribute('data-measure-hover');
+
+        const before = zr.cursorStyles.length;
+        move(zr);
+
+        expect({resolved, hover, nextAtOnce: zr.cursorStyles.slice(before)}, 'off the start point the cursor stays refused, or was never set').toEqual({resolved: 'crosshair', hover: 'free', nextAtOnce: ['crosshair']});
+    });
+
+    it('GUARD: outside measure mode a move calls no setCursorStyle — zrender keeps its own cursor', async () => {
+        // Green today and after: the chart sets a cursor in measure mode only — even over the day a hover would refuse.
+        const onMeasureHover = refusing(HOVER_DAY);
+        const {zr, frames} = await measuring(chartType, {measureMode: false, onMeasureHover});
+
+        const before = zr.cursorStyles.length;
+        move(zr);
+        frames.frame();
+
+        expect({cursor: zr.cursorStyles.slice(before), hovers: onMeasureHover.mock.calls.length}).toEqual({cursor: [], hovers: 0});
     });
 });

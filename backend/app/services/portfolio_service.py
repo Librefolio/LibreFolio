@@ -113,7 +113,7 @@ from backend.app.services.financial_math.returns import (
     timing_effect,
 )
 from backend.app.services.financial_math.splits import split_linked_ids
-from backend.app.services.financial_math.valuation import compute_holding_value, normalize_quote_base_quantity
+from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.financial_math.weights import percent_of
 from backend.app.services.financial_math.yield_on_cost import (
     YieldOnCostPositionInput,
@@ -122,7 +122,6 @@ from backend.app.services.financial_math.yield_on_cost import (
 )
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
-from backend.app.utils.currency_units import minor_unit_factor
 from backend.app.utils.datetime_utils import latest_range_end
 from backend.app.utils.runtime.cache import get_ttl_cache
 
@@ -423,18 +422,12 @@ _QUANTITY_DUST_THRESHOLD = QUANTITY_DUST_THRESHOLD
 
 @dataclass(frozen=True)
 class HeldAssetQuoteFacts:
-    """An asset held at the end of a report's period, with what the data-quality report's asset quote checks read: its
-    currency, quote base and provider assignment (Z-32's minor unit; E-19b's NON_ISO_CURRENCY reads the same facts)."""
+    """An asset held at the end of a report's period, with what the data-quality report's asset quote check reads: its
+    stored currency (E-19b's NON_ISO_CURRENCY)."""
 
     asset_id: int
     name: str
     currency: str
-    #: ``quote_base_quantity`` normalized: NULL or not positive counts as 1, as every valuation reads it
-    quote_base_quantity: int
-    #: None for an asset without a provider
-    provider_code: str | None
-    #: The provider's own quote currency at the last history fetch (``AssetProviderAssignment.reported_currency``)
-    reported_currency: str | None
 
 
 class PortfolioService:
@@ -555,38 +548,13 @@ class PortfolioService:
         return [(asset_id, assets[asset_id].display_name if asset_id in assets else f"Asset {asset_id}") for asset_id in asset_ids]
 
     async def _held_asset_quote_facts(self, engine_result: Any) -> list[HeldAssetQuoteFacts]:
-        """The assets held at the end of the period (a position above the dust threshold), each with its currency,
-        quote base and provider assignment, read in one query: what the data-quality report's asset quote checks need
-        (Z-32; E-19b's NON_ISO_CURRENCY uses the same facts)."""
-        from backend.app.db.models import AssetProviderAssignment  # noqa: PLC0415 — the lazy model import of get_summary
-
+        """The assets held at the end of the period (a position above the dust threshold), each with its stored
+        currency, read in one query: what the data-quality report's asset quote check needs (E-19b's NON_ISO_CURRENCY)."""
         asset_ids = sorted({ps.asset_id for ps in engine_result.position_states_end if ps.quantity > _QUANTITY_DUST_THRESHOLD})
         if not asset_ids:
             return []
-        stmt = select(Asset, AssetProviderAssignment).outerjoin(AssetProviderAssignment, AssetProviderAssignment.asset_id == Asset.id).where(Asset.id.in_(asset_ids)).order_by(Asset.id)
-        rows = (await self.db.execute(stmt)).all()
-        return [
-            HeldAssetQuoteFacts(
-                asset_id=asset.id,
-                name=asset.display_name,
-                currency=asset.currency,
-                quote_base_quantity=normalize_quote_base_quantity(asset.quote_base_quantity),
-                provider_code=assignment.provider_code if assignment is not None else None,
-                reported_currency=assignment.reported_currency if assignment is not None else None,
-            )
-            for asset, assignment in rows
-        ]
-
-    @staticmethod
-    def _quote_in_minor_unit_assets(facts: Sequence[HeldAssetQuoteFacts]) -> list[tuple[int, str]]:
-        """(asset_id, name) of the held assets whose provider quotes them in a minor unit (Yahoo's ``GBp``) while their
-        quote base is not its factor (Z-32): the prices are the minor unit read as the major one."""
-        listed: list[tuple[int, str]] = []
-        for fact in facts:
-            factor = minor_unit_factor(fact.reported_currency)
-            if factor is not None and fact.quote_base_quantity != factor:
-                listed.append((fact.asset_id, fact.name))
-        return listed
+        assets = (await self.db.execute(select(Asset).where(Asset.id.in_(asset_ids)).order_by(Asset.id))).scalars().all()
+        return [HeldAssetQuoteFacts(asset_id=asset.id, name=asset.display_name, currency=asset.currency) for asset in assets]
 
     @staticmethod
     def _non_iso_currency_assets(facts: Sequence[HeldAssetQuoteFacts]) -> list[tuple[int, str, str]]:
@@ -929,7 +897,7 @@ class PortfolioService:
             object.__setattr__(h, "nav_weight_percent", nav_weight.quantize(Decimal("0.01")) if nav_weight is not None else None)
 
         # ── 5. Performance from engine (correct daily NAV) ──
-        nav_snapshots, cash_flows_perf = views.build_performance_inputs()
+        nav_snapshots, cash_flows_perf = views.build_performance_inputs(date_from)
 
         # Period re-basing: when date_from is set, compute metrics for that period only
         period = rebase_to_period(nav_snapshots, cash_flows_perf, date_from)
@@ -1118,7 +1086,6 @@ class PortfolioService:
             transaction_implied_assets_dto=transaction_implied_assets if transaction_implied_assets else None,
             missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
             invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
-            quote_in_minor_unit_assets=self._quote_in_minor_unit_assets(held_quote_facts) or None,
             non_iso_currency_assets=self._non_iso_currency_assets(held_quote_facts) or None,
             report_currency=base_currency,
             rows_before_floor=getattr(engine_result, "rows_before_floor", None),
@@ -1238,10 +1205,10 @@ class PortfolioService:
         views = DerivedViewsBuilder(result.daily_states, base_currency)
 
         # ── Build history dicts ──
-        history_dicts = views.build_history()
+        history_dicts = views.build_history(date_from, date_to)
 
         # ── Performance metrics ──
-        nav_snapshots, cash_flows = views.build_performance_inputs()
+        nav_snapshots, cash_flows = views.build_performance_inputs(date_from)
 
         # Period re-basing for ROI metrics
         period = rebase_to_period(nav_snapshots, cash_flows, date_from)
@@ -1359,7 +1326,11 @@ class PortfolioService:
             return []
 
         views = DerivedViewsBuilder(result.daily_states, base_currency)
-        by_broker = views.build_broker_pnl_history()
+        by_broker = views.build_broker_pnl_history(date_from, date_to)
+        if not by_broker:
+            # A window holding no state: the whole-history build still listed every broker, with no point. Otherwise
+            # the window lists them all, in the same order: every state carries every broker of the scope (DailyStateBuilder)
+            by_broker = {broker_id: [] for state in result.daily_states for broker_id in state.broker_contributions}
 
         broker_pnl_history: list[BrokerPnlHistory] = []
         for broker_id, points in by_broker.items():
@@ -1409,7 +1380,7 @@ class PortfolioService:
             return PnlCandleSeries(points=[])
 
         views = DerivedViewsBuilder(result.daily_states, base_currency)
-        raw_points = views.build_pnl_candles()
+        raw_points = views.build_pnl_candles(date_from, date_to)
         sliced_points = [PnlCandlePoint(date=p["date"], open=p["open"], high=p["high"], low=p["low"], close=p["close"]) for p in raw_points if (date_from is None or p["date"] >= date_from) and (date_to is None or p["date"] <= date_to)]
         return PnlCandleSeries(points=sliced_points)
 
@@ -1578,7 +1549,7 @@ class PortfolioService:
             return AcquisitionFundingSeries(points=[])
 
         views = DerivedViewsBuilder(result.daily_states, base_currency)
-        raw_points = views.build_acquisition_funding()
+        raw_points = views.build_acquisition_funding(date_from, date_to)
         # Canonical (date_from, date_to] boundary — exclusive start, inclusive end.
         # NOTE the deliberate difference from get_pnl_candles/get_broker_pnl_history,
         # whose engine-backed slicing this method otherwise mirrors: those two are
@@ -2218,7 +2189,6 @@ class PortfolioService:
                 missing_fx_pairs_dto=_engine_missing_fx_pairs(engine_result, date_from, effective_date_to) or None,
                 missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
                 invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
-                quote_in_minor_unit_assets=self._quote_in_minor_unit_assets(held_quote_facts) or None,
                 non_iso_currency_assets=self._non_iso_currency_assets(held_quote_facts) or None,
                 report_currency=base_currency,
                 rows_before_floor=getattr(engine_result, "rows_before_floor", None),

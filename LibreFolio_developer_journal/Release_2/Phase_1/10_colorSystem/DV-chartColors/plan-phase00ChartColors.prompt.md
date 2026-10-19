@@ -2022,6 +2022,428 @@ parte, dopo lo slot di B4: solo `roleColors.ts` e i suoi test; nessun grafico ca
   >   `roleColors.ts` serve «if a chart or a drawn colour reads it» (era «if a chart reads it»); il punto è riavvolto a
   >   120 colonne.
 
+### Giro 3 — La palette finale dei grafici ⏳ (17/10/2026 sera)
+
+Il developer, 22:05: «leggilo e applicalo, modifica i temi colori esistenti, e se ne servono altri, creali»; la designer
+ha scelto con lui le correzioni. Valgono D-T27/D-T28. Base `38b7e6313` (fast-forward del coordinatore), corsia 6156 e
+`/tmp/librefolio-r2-dv`. La specifica, da una sola fonte:
+`designer-feedback/2026-10-17-round3-grafici/decisioni.md` (accanto `palette-finale.json`, i due originali, il foglio
+delle scelte). Il campo di DV è il §1; i file liberi secondo la 1.3 (ferma, STOP del developer alle 21:45), salvo
+Z-29b su `LineChart.svelte`, che resta fuori.
+
+- [x] ✅ (17/10/2026) G3-0, analisi (22:42–23:15, sola lettura; misure in `files/dv_r3_measure.py` e nei log
+  `dv_r3_measure.log` e `dv_r3_badges.log` della sessione).
+  > **I valori, verificati coi conti** (`palette-finale.json`, ΔE00 e contrasto come i gate):
+  > - tutte le categorie ≥ 3:1 sulla card, nessuna nella banda verde (OKLCH 115–225, croma > 0,03), nessuna a meno di
+  >   ΔE00 10 dal verde di successo;
+  > - nessuna coppia sotto 5 nella stessa tavolozza; le coppie fra 5 e 8 sono quelle del §1.8, più **ETF/Liquidità 5,9
+  >   in chiaro** fra i tipi, gli stessi colori di Tecnologia/Liquidità (il §1.8 la dà per implicita). ETF/Obbligazione
+  >   in scuro mi viene 7,3 (il documento dice 7,4): arrotondamento;
+  > - barre KPI, ETF contro Liquidità, ΔE00 5,9/10,2, tutte e due ≥ 3:1 sulla traccia;
+  > - correlazione: il migliore fra nero e bianco ≥ 4,59:1 su tutta la scala, interpolata in sRGB come zrender.
+  > - **⚠️ L'ideale del PAC contro «Non classificato»:** in scuro `#858E9B` contro `#83939D`, ΔE00 **4,1**; in chiaro
+  >   7,6. L'8,6 del §1.8 è il tipo più vicino (Altro), non il secchio: nel PAC la riga «Non classificato» disegna il
+  >   reale quasi uguale all'ideale. Domanda al coordinatore.
+  > - **⚠️ Badge (§1.9, per T):** i fondi della designer sono esattamente `color-mix(in srgb, tipo 14%, card)` (ΔE00
+  >   0,0; Fondo scuro 0,5, calcolato sul viola di prima). In `oklab`, la convenzione dei derivati (D-T5), Obbligazione
+  >   e Altro in chiaro scendono a 4,46:1: va scritto `in srgb`.
+  > - Da sapere: «senza dati» della mappa in chiaro a ΔE00 4,9 dal primo passo (più scuro, «neutro» per scelta); il
+  >   centro della correlazione sulla card a 2,94/2,76:1, visibile (ΔE00 27,6/25,4) ma sotto 3:1.
+  > **Già com'è oggi:** il reale del PAC nel colore della riga, coi sottotipi sfumati (TD-1); i KPI con segno su
+  > `SIGN_TEXT`; oltre il 14° paese le sfumature (GR5); i primi otto tipi nell'ordine del §1.5 (`CATEGORY_SEQUENCE`); un
+  > solo «Non classificato» per tutte le tavolozze; una riga per valore (C2).
+  > **Lotti proposti:**
+  > - R3-1, le tabelle di `chartCategories.ts`: tipi, settori, Liquidità in blu ardesia (non più il salvia di GR3),
+  >   «Non classificato»; la sequenza dei paesi come elenco di riferimenti a tipi e settori (`{kind, key}`), perché il
+  >   §1.4 vuole che ne segua le scelte; `sequenceColor` prende riferimenti. Il Lab (C1–C3) non legge le sequenze.
+  > - R3-2, le scale: `GEO_CHOROPLETH_SCALE` e «senza dati» (`GEO_MAP_COLORS.land`); la correlazione su una scala sua
+  >   (`CORRELATION_SCALE`) invece di danger/panel/info, col testo di cella `readableOn(cella, ['#000000',
+  >   '#FFFFFF'])`. Nessun ruolo diventa morto: danger, info e panel li leggono altri.
+  > - R3-3, PAC e KPI: l'ideale come coppia di valori, non più `--lf-text-secondary`; l'effetto tempi su
+  >   `SIGN_TEXT.kpi` senza l'alfa variabile (sotto ±0,05 il testo neutro, come l'etichetta); `timingEffectColor`
+  >   sparisce.
+  > - R3-4, la semi-ciambella per chiave: la chiave di un proprietario è il suo `user_id`, il colore il tipo del suo
+  >   rango fra i proprietari ordinati per `user_id`. Serve una riga in `features/brokers/BrokerSharingPanel.svelte`,
+  >   fuori dai miei file: domanda.
+  > - R3-5, le due barre della card del patrimonio (ETF e Liquidità): dipendono dal §1.9, perché sono HTML.
+  > - Test con `test-author`: `chartCategories`, `CorrelationHeatmap`, `SemiDonutChart`, `AllocationHistoryChart`,
+  >   `KpiSection`, `exposureBarColours` (eccezioni: Altro 8,6 e «Non classificato» 7,6 in chiaro, 4,1 in scuro).
+  > - Fuori, salvo via del coordinatore: gli indicatori del §1.5 (S9; i colori salvati dagli utenti non cambiano).
+  > **§1.9, la fonte unica, proposta (A) in due passi:**
+  > - (A) ruoli `--lf-cat-*` in `tokens.css`: casa `tokens.css`; i grafici col ponte e gli stand-in del gate di parità;
+  >   badge e barre utilità normali, contrasti nel gate C3 di T. Il layer `category` del Lab diventa una vista dei ruoli
+  >   (un rifacimento per L). Prima i valori in `chartCategories.ts` e i ruoli di T coi valori uguali, bloccati da un
+  >   test di parità; poi, con L, `chartCategories.ts` legge i ruoli.
+  > - (B) i valori restano in `chartCategories.ts` e un modulo scrive a runtime le variabili in un `<style>`, di nuovo a
+  >   ogni C4: una casa, Lab invariato; ma variabili fuori da `tokens.css`, classi arbitrarie, contrasti fuori dal gate
+  >   di T, un installatore nel layout condiviso.
+  > - (C) CSS generato in build da `chartCategories.ts`: una casa, niente runtime, ma le modifiche dal vivo del Lab non
+  >   arrivano ai badge.
+  > **Run:** leggere sotto 50 (Prettier, compilatore, ratchet, `front check`, circa 50 Vitest); slot al via del
+  > coordinatore (`core-unit`, `component-unit`, E2E `dashboard`, `risk`, `risk-lab`, `asset-detail`, broker `detail`,
+  > `broker-sharing`, `pac-allocator-real`, `allocation-negative-cash`); galleria di G.
+- [x] ✅ (17/10/2026, 23:03) **Via del coordinatore a R3-1…R3-4**, sul via del developer delle 22:05.
+  > **Decisioni:**
+  > - **§1.9 = (A), in due passi.** Stanotte DV scrive i valori in `chartCategories.ts`; T crea i ruoli dei **tipi**
+  >   (11 più la Liquidità) coi valori uguali, più `-soft` e `-on-soft` in `color-mix(in srgb, … 14%, card)`. Il test
+  >   di parità di DV blocca le due copie. Il Lab passa ai ruoli in un lotto successivo (L è archiviato).
+  > - **R3-5**, le due barre della card del patrimonio, dopo i ruoli di T: `--lf-cat-etf` e `--lf-cat-liquidity`.
+  > - **L'ideale del PAC contro «Non classificato», 4,1 in scuro:** si applicano i valori del documento e il punto
+  >   resta **aperto** nel test; il coordinatore lo porta alla designer con delle opzioni e manda il valore scelto.
+  > - **`BrokerSharingPanel.svelte`:** una riga per R3-4, dichiarata fuori area (su 16 worktree il file non ha
+  >   modifiche né commit).
+  > - **ETF/Liquidità 5,9 in chiaro** fra le eccezioni nominate.
+  > - **Fuori:** gli indicatori (S9: il giro 3 non parla dei segnali, i colori salvati non si toccano); Z-29b su
+  >   `LineChart.svelte`.
+  > - **Run:** leggere sotto 50; lo slot di circa 60 minuti al via del coordinatore, coordinato con la run di T.
+  > **Domande aperte (23:20):** i nomi dei ruoli di T per la parità (`--lf-cat-real-estate`?); chi aggiorna le righe
+  > «Charts» dello skill `design-system` che il giro 3 rende false.
+- [x] ✅ (17/10/2026, 23:35) **Risposte del coordinatore.**
+  > - Nomi confermati per DV e T: `--lf-cat-stock`, `-etf`, `-bond`, `-crypto`, `-fund`, `-hold`, `-crowdfund`,
+  >   `-commodity`, `-real-estate`, `-index`, `-other`, `-liquidity`, più i derivati `-soft` e `-on-soft`; passaggio
+  >   di consegne alla `PENDING_READERS`, girato a T.
+  > - Lo skill: la sezione «Charts» è di DV, aggiornata in questo lotto e dichiarata; la tabella dei moduli e
+  >   `palette.md` le fa T in R3-c, dopo l'ingresso di DV.
+  > - **L'ideale del PAC, scelto dalla designer:** chiaro `#8C929E` (P1-a′), scuro `#868594` (P2-c). Misurato
+  >   (`files/dv_r3_ideal.py`): in chiaro 3,01:1, sotto 10 solo «Non classificato» 8,0 e Altro 8,7, la sfumatura ETF
+  >   più vicina a 14,0; in scuro 4,82:1, tutto ≥ 10 (minimo «Non classificato» 10,1, sfumatura ETF 14,4). Riferito al
+  >   coordinatore: nessun conflitto, nessuna sfumatura sotto 8.
+- [x] ✅ (17/10/2026) G3-1…G3-4, il codice (Prettier pulito; test con `test-author` in G3-5).
+  > **Note implementazione:**
+  > - **R3-1, `chartCategories.ts`:** tipi, settori, Liquidità (blu ardesia) e «Non classificato» del §1.2–1.3, una
+  >   riga per valore (C2), commenti di tinta aggiornati, nessun esadecimale fuori dalle tabelle. Nuovo
+  >   `CategoryRef {kind, key}`; `CATEGORY_SEQUENCE` diventa 8 riferimenti di tipo; `KEYLESS_SEQUENCE` sostituito da
+  >   `COUNTRY_SEQUENCE`, i 14 riferimenti del §1.4 (a parità di colore il tipo: 1 ETF, 10 FUND, 11 HOLD, 14 OTHER);
+  >   `sequenceColor(sequence, rank, dark, poles)`. Chiamanti: `growthBrokerColor`, `AllocationHistoryChart`,
+  >   `SemiDonutChart`.
+  > - **R3-2:** `GEO_CHOROPLETH_SCALE` sui sei blu, `GEO_MAP_COLORS.land` sul «senza dati» (ΔE00 4,9/6,1 dal primo
+  >   passo); `CORRELATION_SCALE` e `CORRELATION_CELL_TEXT` in `chartPalettes.ts`; `CorrelationHeatmap` senza
+  >   `chartRoles`, testo di cella `readableOn(cella, nero/bianco)`: minimo 4,59:1 (`files/dv_r3_scales.py`).
+  >   Danger, info, panel e text-secondary restano letti (`drawnColors`, `chartTheme`): nessun ruolo morto.
+  > - **R3-3:** `PAC_EXPOSURE_COLORS.ideal` in `chartTheme.ts`, `idealColour(dark)`; effetto tempi sulle classi di
+  >   segno (`SIGN_TEXT.headline` il valore, `SIGN_TEXT.kpi` l'etichetta; neutro: testo primario e muted), con
+  >   `data-direction` (`favorable`/`unfavorable`/`neutral`); `timingEffectColor` rimossa.
+  > - **R3-4:** `OwnerSlice.key`; il colore per rango fra i proprietari ordinati per chiave (numeri per valore), non
+  >   per ordine dei dati; `BrokerSharingPanel` passa `key: o.user_id` (fuori area, approvato).
+  > **⚠️ Fuori pista:**
+  > - `CorrelationPairsList.svelte`: solo il commento della polarità («gli estremi della scala» non sono più info e
+  >   danger), fuori area, da dichiarare.
+  > - Docs: due frasi diventano false (`user/dashboard/kpi-cards`: «più forte il colore, più grande l'effetto»;
+  >   `user/assets/correlation`: «pallido» per lo zero). Correzione puntuale nelle 4 lingue e stamp, da dichiarare.
+  > - Per T in R3-c: le righe della tabella dello skill per `chartColorScales.ts` (nomina `timingEffectColor`),
+  >   `chartPalettes.ts` (manca `CORRELATION_SCALE`) e `chartTheme.ts` (manca `PAC_EXPOSURE_COLORS`).
+  > - Per il coordinatore: `decisioni.md` §1.7 e `palette-finale.json` hanno ancora l'ideale di prima
+  >   (`#8B929E`/`#858E9B`).
+  > - Misure: con i due secchi in entrambe le tabelle e «Non classificato» accanto ai paesi, le coppie sotto 8 sono
+  >   esattamente quelle del §1.8 più ETF/Liquidità 5,9 (`files/dv_r3_pairs.py`); al limite OTHER/«Non classificato»
+  >   in chiaro, 8,004.
+- [x] ✅ (17/10/2026) G3-6, skill e docs (dichiarati).
+  > - **Skill `design-system`, sezione «Charts»** (di DV): niente verdi nelle categorie e Liquidità in blu ardesia; la
+  >   semi-ciambella per chiave; le linee dei broker (la riga «il nono broker ripete il primo» era già falsa dopo DV-8);
+  >   i paesi su `COUNTRY_SEQUENCE`; le scale con valori propri (mappa, «senza dati», correlazione e testo di cella);
+  >   l'ideale del PAC; la riga «la lista è in revisione (domanda aperta 1)» chiusa. Non toccate: la tabella dei moduli
+  >   e la sezione delle domande aperte (T, R3-c).
+  > - **Docs, 4 lingue:** `user/dashboard/kpi-cards` («né verde né rosso» invece di «più forte il colore, più grande
+  >   l'effetto») e `user/assets/correlation` («grigio» invece di «pallido»). Le due pagine erano pulite a HEAD (MD5
+  >   registrato = HEAD), quindi `dev.py mkdocs translate-stamp` su entrambe: `.translate-hashes.json` cambia solo nelle
+  >   loro due voci.
+  > - `node scripts/theme/theme-roles.mjs`: «Colour gates: clean».
+- [x] ✅ (17/10/2026) G3-5, i test (`test-author`, agente `93d14ac3`; 12 file di test, nessun file nuovo, nessun
+  codice di produzione).
+  > **Note implementazione:**
+  > - `chartCategories.test.ts`: i valori del giro 3; gli export (`COUNTRY_SEQUENCE` al posto di `KEYLESS_SEQUENCE`);
+  >   le sequenze a riferimenti, coi paesi del §1.4 nei due temi; «la regola dei verdi» del §1.1 (nessuna tinta OKLCH
+  >   115–225 con croma > 0,03, ΔE00 ≥ 10 da `--lf-success`, ≥ 3:1 sulla card, letti da `tokens.css`); la
+  >   distinguibilità con pavimento 5 senza eccezioni e soglia 8 con le 15 coppie nominate; il blocco di parità coi
+  >   ruoli `--lf-cat-*` di T, flag `CATEGORY_ROLES_IN_TOKENS = false`, col controllo positivo su token sintetici.
+  > - `exposureBarColours`/`ExposureBars`: l'ideale come valore; la regola dei 10 su tipi, settori, secchi e su tutte
+  >   le sfumature dei sottotipi (le sei ETF e quella di Crowdfund), eccezioni solo in chiaro: «Non classificato» 8,05
+  >   e Altro 8,70; in scuro nessuna (minimo «Non classificato» 10,07).
+  > - `CorrelationHeatmap`: la scala del tema e il testo di cella nero o bianco, ≥ 4,5:1 su 401 passi; un test C4.
+  > - `SemiDonutChart`, `BrokerSharingPanel`, `chartFont.load`: la chiave; `AllocationHistoryChart`, `GrowthChart`:
+  >   i riferimenti; `KpiSection`: `data-direction` dell'effetto tempi, nessuno stile in linea.
+  > - `src/__tests__/colorDistance.ts`: `oklabOfXyz` e `oklchOf`, provati sulle tabelle pubblicate (Ottosson, CSS
+  >   Color 4).
+  > - Misure col righello del repo (`files/dv_r3_tests_measure.log`): le tre coppie al limite valgono 8,0039, quindi
+  >   non sono eccezioni; STOCK/FUND e Paesi 2/10 5,91.
+  > **⚠️ Fuori pista:**
+  > - **Il nuovo test C4 ha trovato un difetto mio:** tolti i ruoli dalla scala della correlazione, l'effetto di
+  >   ridisegno non leggeva più `colorsVersion`, quindi una modifica del Lab non ridisegnava la matrice. Corretto con
+  >   `void neutrals;` nell'effetto.
+  > - **Una svista nella mia risposta al coordinatore delle 23:35:** non ha sottotipi solo l'ETF, anche Crowdfund
+  >   (`CROWDFUND_REAL_ESTATE`). La sua sfumatura dista dall'ideale 21,5 in chiaro e 14,8 in scuro
+  >   (`files/dv_r3_ideal_crowdfund.log`): nessun effetto, da correggere nell'handoff.
+- [x] ✅ (18/10/2026, 00:14) G3-7, prove leggere sulla base `38b7e6313` col lotto (`files/dv_r3_light.sh`, log in
+  `files/r3-light/`; carico sempre sotto 12).
+  > - Prettier pulito sui file cambiati; compilatore Svelte su 8 file, 0 errori e 0 avvisi; ratchet dei colori pulito.
+  > - `front check`: **0 errori e 0 avvisi**, dopo `dev.py api sync`.
+  > - **31 file Vitest, 1451 test, tutti verdi:** i gate `themeRoles` (80) e `themeTokens` (21), i moduli di
+  >   `lib/theme`, i grafici, il PAC, la correlazione, la semi-ciambella, `BrokerSharingPanel`, `GrowthChart`,
+  >   `KpiSection` e i sei test del Lab che leggono il file delle categorie.
+  > **⚠️ Fuori pista:** il primo `front check` aveva 37 errori in 18 file, nessuno del lotto (backup, legal, cambi,
+  > lotti…): proprietà che il client generato non aveva ancora (`secrets_rekeyed`, `legal`, `whats_new`…), perché il
+  > client, ignorato da git, era fermo a una base vecchia. `api sync` (schema esportato nel processo, nessun server,
+  > nessun file tracciato cambiato), poi tutta la serie di nuovo sullo stesso stato: verde. Riepilogo del primo giro in
+  > `files/r3-light/summary-1-stale-client.txt`.
+- [x] ✅ (18/10/2026, 00:20) **T R3-b è entrato prima di DV** (`7845fc3d3`): i ruoli `--lf-cat-<tipo>`, `-soft` e
+  `-on-soft`, le utility `bg-lf-cat-etf` e `bg-lf-cat-liquidity`. Il flag di parità lo gira DV, dopo il merge del target.
+  > - Parità pre-verificata in sola lettura sul commit (`files/dv_r3_parity_precheck.mjs`, `.log`): i 12 ruoli nei due
+  >   temi coincidono coi valori di `chartCategories.ts`, 24 controlli su 24.
+  > - Sovrapposizione col target: solo `BACKLOG_POST_1.2.md` (TC-19 di T attorno alla riga 2835, le righe di DV dalla
+  >   2949): disgiunte, ma un merge non si fa su un file modificato e non committato.
+  > - Il target ha già corretto l'ideale del PAC in `decisioni.md` e `palette-finale.json` (`ba8e06763`): la nota per
+  >   il coordinatore di G3-1…G3-4 è chiusa.
+- [x] ✅ (18/10/2026, 00:23) G3-8, sul ramo unito: il flag di parità e R3-5.
+  > **Base:** il coordinatore ha committato il checkpoint in `323ea518e` (genitore `38b7e6313`, i 37 file) e fatto la
+  > base merge `3dba7f894` (genitori `323ea518e` + `7845fc3d3`), pulita; `BACKLOG_POST_1.2.md` si è unito da sé.
+  > **Note implementazione:**
+  > - **Flag di parità:** `CATEGORY_ROLES_IN_TOKENS = true` in `chartCategories.test.ts`, con la data e il commit di T
+  >   nel commento, e l'avviso che un colore di tipo vive in due posti fino a DV-11. Il blocco gira nel ramo `true`:
+  >   3 test su 3 (`files/r3-light-merged/parity-verbose.log`).
+  > - **R3-5:** `KpiSection.svelte`, la barra del valore contabile su `bg-lf-cat-etf` e quella della liquidità su
+  >   `bg-lf-cat-liquidity`, le utility di T. `theme-roles.mjs --update`: il baseline perde solo la riga di
+  >   `KpiSection` (m1 594 → 590). Nessun test né pagina di docs nominava quei colori.
+  > - **Skill «Charts»:** una riga sui colori dei tipi fuori dal canvas (i ruoli `--lf-cat-*` di T, le due barre) e
+  >   sulle due copie da cambiare insieme. La regola 11 dice ancora «palette classes until the categorical roles come»:
+  >   è di T (R3-c).
+  > - **Backlog:** DV-7, le barre dei KPI fatte; DV-11, il primo passo chiuso.
+  > **Prove** sul ramo unito (`files/r3-light-merged/`, carico sotto 5): `api sync` senza file tracciati cambiati;
+  > Prettier, compilatore e ratchet puliti; `front check` 0 e 0; **32 file Vitest, 1500 test, tutti verdi**
+  > (i 31 di prima più `assetTypeTables.test.ts` di T, 49).
+- [x] ✅ (18/10/2026, 00:50) G3-9, lo slot di circa 55 minuti nella 6156, al via del coordinatore.
+  > **Via alle 00:23** sul commit `08512c952` (genitore `3dba7f894`: il flag e R3-5), carico a 4, la 1.3 ferma.
+  > Script `files/r3-slot/dv_r3_slot.sh 01:20` (nessun passo nuovo dopo le 01:20), log in `files/r3-slot/`: `api sync`,
+  > `core-unit`, `component-unit`, poi gli E2E con `--workers 1`: `dashboard`, `asset-detail`, `risk-lab`, `risk`,
+  > broker `detail`, `front-user broker-sharing`, `pac-allocator-real`, `allocation-negative-cash`,
+  > `front-designer-lab live`.
+  > **Esito** (00:24:24–00:44:46, carico 4–15; tutti i progetti E2E sono `[desktop]`):
+  > - `api sync` verde, nessun file tracciato cambiato (il solo modificato è questo piano);
+  > - `core-unit`: 217 file, 9280 test; `component-unit`: 187 file, 4978 test; tutti verdi;
+  > - E2E **220 su 222**: `dashboard` 26/27, `asset-detail` 39, `risk-lab` 44, `risk` 38, broker `detail` 40,
+  >   `broker-sharing` 17, `pac-allocator-real` 1, `allocation-negative-cash` 4, `front-designer-lab live` 11/12.
+  > **I due rossi, col protocollo di `test-triage`** (rilanciati da soli alle 00:48, log `12_` e `13_`):
+  > - **`dashboard`, «Positions panel publishes its loading state through data-busy»: assunzione.** Da solo passa
+  >   (2,9 s). Il test trattiene la *prima* POST `/portfolio/report` dopo la rotta, ma `login()` (nel `beforeEach`)
+  >   atterra su `/dashboard` e aspetta solo che l'app arrivi: una richiesta della pagina d'atterraggio partita dopo la
+  >   rotta (lazy, o un ritentativo di Y-24) è «la prima», il `goto` la abbandona, il report della pagina nuova passa e
+  >   il pannello (`summaryLoading = reportLoading && !summary`) non è mai occupato. Stesso ordine dei test di B4, dove
+  >   passava: la finestra la apre il flusso del report del target, non il giro 3, che non tocca né il pannello né il
+  >   caricamento. Rimedio nel test: `page.goto('about:blank')` prima della rotta, oppure trattenere la richiesta della
+  >   pagina sotto prova e non la prima che passa.
+  > - **`front-designer-lab live`, «export JSON, reset all, import back»: assunzione, deterministica** (rossa anche da
+  >   sola). Il sottotitolo delle transazioni (`546204732`, 16/10, `text-lf-muted`) e l'intestazione di `DataTable`
+  >   (`77bfa6a39`, 16/10, `th { color: var(--lf-text-muted) }`) leggono lo stesso ruolo: la modifica della variabile
+  >   (rosa, su `<html>`) vince su quella del letterale della sua definizione (blu), e l'intestazione è rosa. Lo spec è
+  >   fermo al 16/10 alle 02:29, prima dei due commit; la modifica dei grafici (verde) non c'entra. Rimedio nel test:
+  >   due elementi con fonti di colore diverse, e la precondizione scritta.
+  > - Porta 6156 libera alla fine; HEAD invariato. Nel backlog DV-12 e DV-13.
+
+### DPR — I grafici nitidi dopo un cambio di schermo ✅ (19/10/2026; i due file di Y-N65 in DV-14)
+
+Il developer, dall'anteprima 6160: correlazione, dettaglio dell'asset, broker, PAC, «tutto ECharts» ha testi e numeri
+sfocati dopo aver spostato su uno schermo Retina il browser aperto su uno schermo a meno DPI. Lavoro tecnico, non di
+colore. Base `cc3c3af15` (fast-forward del coordinatore, pulita; dentro H-57: una sola migrazione `005`, quindi la
+corsia 6156 + `/tmp/librefolio-r2-dv`, cancellata per liberare disco, va ripopolata con `--force --clean`). File liberi
+secondo la 1.3, tranne `PriceChartFull` e `CandlestickChart` (Y-N65, circa un giorno); `LineChart` libero.
+
+- [x] ✅ (19/10/2026, 15:26–15:45) DPR-0, analisi (sola lettura; carico 72, nessuna run).
+  > **La causa, verificata in `node_modules` (echarts 6.0.0, zrender 6.0.0):**
+  > - `zrender/lib/config.js` calcola la densità una volta, al caricamento: `Math.max(window.devicePixelRatio || …,
+  >   1)`;
+  > - `CanvasPainter` la fissa all'init (`this.dpr = opts.devicePixelRatio || devicePixelRatio`), ogni `Layer` la
+  >   copia, e `Layer.resize` dimensiona il canvas con `this.dpr`;
+  > - `CanvasPainter.resize` ridimensiona gli strati solo se cambia la misura; `ECharts.resize(opts)` non accetta una
+  >   densità. Nessuna API pubblica la cambia dopo l'init.
+  > - Quindi una scheda caricata su uno schermo 1× disegna a 1× ogni grafico, anche quelli aperti dopo, fino al
+  >   ricaricamento. Vale anche per lo zoom del browser (Ctrl +/−), che cambia `devicePixelRatio`.
+  > **I siti:** i 22 risultati di `echarts.init` sono 18 chiamate vere in 17 file (`LotGanttChart` ne ha due: grafico e
+  > asse) più 4 commenti (`GrowthChart.svelte:323`, `echartsTooltipHelpers.ts:269`, `echartsDataZoomTouchPan.ts:31`,
+  > `chartFont.ts:29`).
+  > - `echartsTooltipHelpers` e `echartsDataZoomTouchPan` non chiamano `init`: il primo fa `resize()` su un'istanza
+  >   che riceve, il secondo ascolta i puntatori sull'elemento del grafico.
+  > - Fuori: la sonda 1×1 del Lab (`dev/designer-lab/engine/charts.ts:253`, `ec.init(host, null, …)`), mai disegnata;
+  >   il gate K-13 la esclude già.
+  > - Tre siti non passano opzioni (`ExposureTreemap`, `CorrelationHeatmap`, `ScatterChart`): canvas per default.
+  > **Già presente:** il gate K-13 `components/charts/chartFlagFont.test.ts` (`chart-safety-unit`) scandisce ogni
+  > `echarts.init(` di produzione (solo i blocchi `<script>`, rispettando parentesi e letterali), vuole
+  > `CHART_INIT_THEME` come secondo argomento, nessun accesso a `init` per altre vie, e almeno 18 chiamate in 17 file.
+  > `src/__tests__/component.ts` stubba `matchMedia` in jsdom (tutto «no match», `addEventListener` no-op); i test dei
+  > componenti sostituiscono ECharts con un registratore, e nessuno verifica gli argomenti di `init`.
+  > **Disegno proposto:**
+  > - Un modulo nuovo, `lib/components/charts/chartPixelRatio.ts`, accanto a `chartFont.ts`:
+  >   - `chartPixelRatio()`: `Math.max(window.devicePixelRatio || 1, 1)`, la regola di zrender, letta ogni volta;
+  >   - `chartInitOptions(element, extra?)`: `{renderer: 'canvas', …extra, devicePixelRatio: chartPixelRatio()}`, e
+  >     registra l'elemento per l'ascolto, che arma al primo uso. Ogni sito diventa
+  >     `echarts.init(el, CHART_INIT_THEME, chartInitOptions(el))`: una riga, nella forma che il gate K-13 legge.
+  >   - All'avvio il risultato è identico a oggi (zrender leggeva lo stesso valore): nessuno scatto della galleria
+  >     dovrebbe cambiare.
+  > - **L'ascolto:** una sola `matchMedia('(resolution: <dpr>dppx)')` per l'app, riarmata a ogni `change` col valore
+  >   nuovo, togliendo la precedente. A ogni cambio, per ogni elemento registrato, `echarts.getInstanceByDom(el)` (API
+  >   pubblica): un'istanza viva si aggiorna; un elemento staccato dal documento esce dall'elenco. Senza `matchMedia`
+  >   non fa niente.
+  > - **Aggiornare sul posto, non ricreare** (`setChartPixelRatio(chart, ratio)`): `painter.dpr`; per ogni strato
+  >   `layer.dpr`, `layer.ctx.dpr` e `layer.resize(w, h)` alla misura corrente; poi `painter.refresh(true)`. È il ramo
+  >   che `CanvasPainter.resize` esegue quando la misura cambia; il pennello legge `ctx.dpr` a ogni disegno
+  >   (`canvas/graphic.js:364–369`), quindi testi, linee e ombre tornano nitidi.
+  >   - **Perché non ricreare:** dispose e init perdono la finestra di dataZoom, la selezione della legenda, lo zoom di
+  >     mappe e treemap, la coppia selezionata della correlazione, il tooltip aperto; rigiocano l'animazione d'ingresso;
+  >     e chiedono a ognuno dei 17 componenti di riagganciare i suoi gestori (`chart.on`, `getZr().on` in candele,
+  >     prezzi e lotti, il touch pan, `attachChartReady`). Sul posto tutto lo stato resta, senza lavoro per componente.
+  >   - **Il prezzo:** cinque punti interni di zrender 6 (`painter.dpr`, `getLayers()`, `layer.dpr`, `layer.ctx.dpr`,
+  >     `layer.resize`, più `painter.refresh(true)`). Mitigazioni: si riconoscono prima di toccarli, e se non tornano il
+  >     grafico resta com'è oggi, con un avviso di debug (mai peggio di oggi); un test col vero zrender morde al primo
+  >     aggiornamento che li cambia; la versione è fissata dal lockfile.
+  >   - Dettaglio accettato: i percorsi già costruiti tengono la tolleranza di semplificazione della densità vecchia
+  >     (`PathProxy`, sotto un pixel CSS) fino al prossimo ridisegno dei dati.
+  > **Test, con `test-author`:**
+  > - `chartPixelRatio.test.ts`, nuovo, in `chart-safety-unit`: la regola della densità; `chartInitOptions` con la
+  >   densità del momento della creazione (lo stub passa da 1 a 2: il secondo grafico nasce a 2); l'ascolto con un
+  >   `matchMedia` finto (arma `1dppx`, al cambio toglie il vecchio e arma `2dppx`, aggiorna i grafici vivi, un secondo
+  >   cambio riarma ancora, salta i disposti, toglie gli staccati, senza `matchMedia` non lancia);
+  >   `setChartPixelRatio` sul **vero zrender** in jsdom col contesto 2D finto (ogni canvas a 2×, misura CSS invariata,
+  >   `ctx.dpr` 2, la forma ridisegnata con `setTransform(2, 0, 0, 2, …)`; idempotente; un painter non canvas resta
+  >   intatto).
+  > - Il gate K-13: un controllo in più col suo scanner, cioè il terzo argomento di ogni chiamata è
+  >   `chartInitOptions(<primo argomento>…)`; i due file di Y-N65 in una deroga nominata, che diventa rossa quando resta
+  >   ferma.
+  > - Un test di componente (`CorrelationHeatmap` o `SemiDonutChart`, col registratore): `init` riceve la densità
+  >   corrente.
+  > - Un E2E nuovo (Chromium, CDP `Emulation.setDeviceMetricsOverride`): il rapporto fra larghezza del canvas e
+  >   larghezza CSS passa da 1 a 2 per ogni grafico della pagina, con la finestra di zoom o la selezione intatte; un
+  >   grafico aperto dopo nasce a 2. Rischio: se Chromium headless non emette il `change` della risoluzione sotto
+  >   l'override, l'E2E copre la nascita e il resto lo coprono i test unitari.
+  > **File:** il modulo nuovo e il suo test; i 17 componenti, una riga e un import ciascuno (`PriceChartFull` e
+  > `CandlestickChart` per ultimi, o la riga data alla 1.3 per il merge). Condivisi, da dichiarare: il gate K-13
+  > (`chartFlagFont.test.ts`), `scripts/test_runner/_frontend_portfolio.py` (registrazione), lo spec E2E nuovo e la sua
+  > registrazione.
+  > **Run:** leggere sotto 50 (Prettier, compilatore sui 17 file, `front check`, Vitest: il nuovo, `chartFlagFont`,
+  > `chartFont.load` e i test dei 17 componenti); slot di circa 50–60 minuti nella 6156: prima `test db populate --force
+  > --clean` sulla corsia ricreata, poi `core-unit`, `component-unit`, `chart-safety-unit` e gli E2E (il nuovo,
+  > `dashboard`, `asset-detail`, `risk-lab`, `risk`, broker `detail`, `broker-sharing`, `pac-allocator-real`,
+  > `allocation-negative-cash`).
+  > **Domande aperte:** l'aggiornamento sul posto (interni di zrender) invece della ricreazione; il controllo nel gate
+  > K-13 invece di un gate nuovo; Y-N65, deroga o attesa; una riga nella pagina sviluppatori dei grafici, ora o a fine
+  > programma.
+- [x] ✅ (19/10/2026, 15:41) **OK del coordinatore all'implementazione**, con le risposte:
+  > 1. **Aggiornamento sul posto: sì**, alle condizioni scritte: interni riconosciuti prima di toccarli; se non tornano,
+  >    nessuna eccezione, il grafico resta com'è con l'avviso di debug; il test sul vero zrender morde al primo
+  >    aggiornamento che li cambia.
+  > 2. **Il controllo nel gate K-13**, dichiarato; la 1.3 è avvisata (`chart-safety-unit`).
+  > 3. **Y-N65: deroga nel gate.** `PriceChartFull` e `CandlestickChart` restano fuori finché la 1.3 non li dà liberi;
+  >    poi un lotto piccolo di DV: le due righe e la deroga tolta. Nessuna riga passata alla 1.3.
+  > 4. **Docs ora:** la pagina sviluppatori dei grafici; lo stamp di Aphra se ha traduzioni.
+  > **Run:** leggere sotto 50; lo slot è nostro senza via, appena il checkpoint è pronto, col carico sotto 50 (la 1.3
+  > ha confermato la deroga). T ha portato nel target le colonne fisse (`1fa64ceae`, solo `<style>` di `DataTable` e
+  > `AssetTable`): base merge del coordinatore prima del checkpoint.
+- [x] ✅ (19/10/2026) DPR-1, il codice e la pagina.
+  > **Note implementazione:**
+  > - **`lib/components/charts/chartPixelRatio.ts`, nuovo:** `chartPixelRatio()` (`max(devicePixelRatio, 1)`);
+  >   `chartInitOptions(element, extra?)` (canvas, `extra`, densità del momento; segue l'elemento e arma l'ascolto al
+  >   primo uso); l'ascolto, una `matchMedia` con `resolution` e la grafia WebKit per Safari prima del 16, riarmata a
+  >   ogni `change`, che porta alla densità nuova i grafici vivi (`getInstanceByDom`) e lascia andare gli elementi
+  >   staccati o senza grafico; `setChartPixelRatio(chart, ratio)`, che riconosce gli interni, non lancia mai, salta
+  >   un grafico disposto, uno SVG o uno già alla densità.
+  > - **15 componenti, 16 chiamate:** `echarts.init(el, CHART_INIT_THEME, chartInitOptions(el))` e un import. Fuori
+  >   `PriceChartFull` e `CandlestickChart` (deroga Y-N65).
+  > - **Docs:** `developer/frontend/components/charts.md` (solo inglese, nessuna traduzione e nessuna voce nella cache
+  >   di Aphra, quindi niente stamp): l'esempio di `init`, la sottosezione «Pixel density», la tabella delle guardie
+  >   (il terzo argomento nel gate K-13, il test nuovo).
+  > **Prove leggere** (carico 21): Prettier pulito sui 16 file; compilatore Svelte sui 15 componenti, 0 errori e 0
+  > avvisi; ratchet dei colori pulito.
+- [x] ✅ (19/10/2026, 16:45) DPR-2, i test (`test-author`, agente `56115849`; nessun codice di produzione, nessuna
+  operazione Git).
+  > **Note implementazione:**
+  > - `components/charts/chartPixelRatio.test.ts`, **nuovo, 49 test**, su ECharts e zrender 6 veri in jsdom col
+  >   contesto 2D finto che registra: la densità, `chartInitOptions`, l'ascolto (riarmo, un solo ascolto vivo, senza
+  >   `matchMedia` o con uno stub incompleto non lancia), i grafici seguiti portati alla densità nuova (stessa
+  >   istanza, stessi canvas; staccati, disposti e non seguiti lasciati stare), l'aggiornamento sul vero zrender (i
+  >   membri usati nominati, strato del passaggio del mouse compreso, idempotente, avanti e indietro), il
+  >   riconoscimento (SVG, membri mancanti con l'avviso, `refresh` che lancia).
+  > - `chartFlagFont.test.ts`, il gate K-13, **+4 test**: il terzo argomento è `chartInitOptions(<il primo argomento
+  >   della chiamata>…)`; la deroga `PIXEL_RATIO_PENDING` (`PriceChartFull`, `CandlestickChart`) diventa rossa se il
+  >   file sparisce, non ha chiamate o passa già `chartInitOptions`; due controlli sintetici prima.
+  > - `SemiDonutChart.test.ts`: il finto `init` registra tema e opzioni; un `describe` nuovo, densità 2 e 1,5.
+  > - `e2e/portfolio/chart-pixel-ratio.spec.ts`, **nuovo, 2 test**, Chromium desktop: la densità cambiata via CDP
+  >   (`Emulation.setDeviceMetricsOverride`); i grafici della Dashboard (crescita e torta) passano 1× → 2× → 1× con
+  >   le stesse istanze e gli stessi canvas; la torta di un'altra dimensione aperta dopo nasce a 2×. Una sonda propria
+  >   distingue il caso «Chromium non emette il `change`» (colpa del banco) da «i grafici restano a 1×» (prodotto).
+  >   `data-chart-renders` registrato, non asserito: un `ResizeObserver` può chiamare `resize()` dopo il cambio.
+  > - `scripts/test_runner/_frontend_portfolio.py`: il file nuovo in `chart-safety-unit`; l'azione nuova
+  >   `front-portfolio chart-pixel-ratio`. Il gate `check-orphans` è soddisfatto.
+  > - **Che mordono:** 13 mutanti del modulo costruiti in memoria, ciascuno preso dal suo test; il test di componente
+  >   rosso con le opzioni di prima; i controlli sintetici del gate.
+  > - Vitest di test-author: `chartPixelRatio` 49, `chartFlagFont` 20, `chartFont.load` 16, `SemiDonutChart` 14,
+  >   `CorrelationHeatmap` 10, `AllocationPieChart` 23, `GrowthChart` 166, `AllocationHistoryChart` 38,
+  >   `ExposureBars` 12: tutti verdi.
+  > - La pagina dei grafici, tabella delle guardie: la deroga nel gate e un paragrafo per il test di componente e
+  >   l'E2E, come suggerito.
+- [ ] DPR-3, `front check` e i Vitest toccati; poi lo slot (`files/dpr-slot/dv_dpr_slot.sh`, con
+  `DPR_E2E_ACTION=chart-pixel-ratio`): `test db populate --force --clean` sulla corsia ricreata, `api sync`,
+  `core-unit`, `component-unit`, `chart-safety-unit`, l'E2E nuovo, `dashboard`, `asset-detail`, `risk-lab`, `risk`,
+  broker `detail` (copre i tre grafici dei lotti), `broker-sharing`, `pac-allocator-real`, `allocation-negative-cash`.
+  > **Prove leggere** (16:39–16:54, `files/dv_dpr_light.sh`, log in `files/dpr-light/`, carico 29–43 nei passi,
+  > punte a 115 in attesa): `api sync` senza file tracciati cambiati; Prettier pulito anche sui tre file nuovi;
+  > compilatore sui 15 componenti, 0 errori e 0 avvisi; ratchet pulito; `front check` **0 errori e 0 avvisi**; **21
+  > file Vitest, 989 test, tutti verdi**: i 9 di test-author, poi `CorrelationHeatmap.tooltipEscape`,
+  > `AllocationPieChart.tooltipEscape`, `LineChart`, `ScatterChart`, `ExposureTreemap`, `PerformanceChart`,
+  > `AssetSetRiskReturnSection`, `L3RiskAdjusted`, `chartCoreHelpers`, i gate `htmlInterpolation` e
+  > `themeModeReads`, `scanColors` del Lab.
+  > - Nel backlog **DV-14**: `PriceChartFull` e `CandlestickChart` dopo Y-N65.
+  > **Checkpoint e base:** il coordinatore ha committato il checkpoint in `741a2d5c3` (genitore `cc3c3af15`, i 24 file)
+  > e fatto la base merge `be7033b1c` (genitori `741a2d5c3` e il target `ccc2a4141`, con T: colonne fisse e T2),
+  > pulita. **Slot partito alle 16:59** su `be7033b1c`, carico 49,7, taglio 17:55, `DPR_E2E_ACTION=chart-pixel-ratio`,
+  > log in `files/dpr-slot/`. Disco: 21 GiB liberi.
+  > **La sonda dell'E2E nuovo (17:08–17:16, carico fino a 157):** «nasce a 2×» verde (3,2 s); «seguono» rosso sulla
+  > sonda del test: sotto `Emulation.setDeviceMetricsOverride` `window.devicePixelRatio` arriva a 2, ma la query
+  > `(resolution: 1dppx)` della sonda non riceve nessun `change` in 10 s. È il banco, non il prodotto: la pagina non può
+  > sentire il cambio, e la sonda lo distingue apposta.
+  > **⚠️ Fuori pista:** a test-author la revisione del solo test 1: prima un aggiornamento del rendering a ogni lettura
+  > della sonda (gli eventi `change` delle media query partono in «update the rendering»); se Chromium non emette
+  > ancora niente, un ponte esplicito: `addInitScript` registra le `MediaQueryList` di risoluzione dell'app e il test
+  > le notifica dopo il cambio reale di densità, con un'annotazione che dice chi ha emesso l'evento. Tutto il resto
+  > resta reale: il cambio via CDP, i grafici, zrender, il gestore del modulo e il riarmo.
+- [x] ✅ (19/10/2026, 17:42) DPR-3, lo slot su `be7033b1c` (16:59–17:41, carico 18–157, log in `files/dpr-slot/`).
+  > - `test db populate --force --clean`: corsia ricreata (tabelle pulite, broker e utenti creati); `api sync` senza
+  >   file tracciati cambiati.
+  > - Vitest: `core-unit` 220 file e 9383 test; `component-unit` 191 file e 5010 test; `chart-safety-unit` 9 file e
+  >   144 test (col gate K-13 esteso e `chartPixelRatio.test.ts`); tutti verdi.
+  > - E2E, tutti nel progetto `[desktop]`: `dashboard` 27, `asset-detail` 43, `risk-lab` 44, `risk` 38, broker
+  >   `detail` 40 (i tre grafici dei lotti), `broker-sharing` 17, `pac-allocator-real` 1, `allocation-negative-cash` 4;
+  >   tutti verdi.
+  > - `chart-pixel-ratio`: alla prima esecuzione 1 su 2, rosso sulla sonda del banco; **rivisto e rilanciato da solo
+  >   (17:41–17:42, log `11_rerun-pixel-ratio.log`): 2 su 2.** La sonda, anche con due frame di rendering a ogni
+  >   lettura, non riceve il `change` né all'andata né al ritorno; l'annotazione dice «dispatched by the test», e da
+  >   lì i grafici seguono: 1× → 2× → 1×, stesse istanze, stessi canvas, e `data-chart-renders` invariato (2 → 2,
+  >   4 → 4): niente ridisegnato dalle opzioni.
+  > - Porta 6156 libera alla fine; HEAD `be7033b1c`. Da committare: lo spec rivisto, una clausola della `desc` del
+  >   runner e il piano.
+- [x] ✅ (19/10/2026, 17:47) **DPR entrato:** `56666d2ce` (il commit `80636e16e`, base merge `be870c783` con
+  `98bee0d2b`, che contiene Y-N65 `5cb47395f`). Sul ramo unito: ratchet pulito, gate dei colori 119/119,
+  `chart-safety-unit` 144/144 con K-13 sulle versioni di Y dei due file, `api sync` senza cambi, `front check` 0 e 0.
+  Il worktree è sulla punta, pulito. Via a DV-14.
+- [x] ✅ (19/10/2026, 18:02) DPR-4 (DV-14), `PriceChartFull` e `CandlestickChart` su `chartInitOptions`.
+  > **Note implementazione:**
+  > - Le due chiamate (`PriceChartFull.svelte:540`, `CandlestickChart.svelte:304`) come le altre 16, con l'import.
+  >   Le righe di Y-N65 restano com'erano: il tipo e il commento di `onMeasureHover`, `measureHover` col suo `$effect`,
+  >   il `mousemove` di zr con `setCursorStyle`, `data-measure-hover`.
+  > - Il gate K-13 (`test-author`): `PIXEL_RATIO_PENDING` vuoto. **Decisione:** il meccanismo resta, per un grafico che
+  >   non possa migrare subito; il controllo di staleness resta coerente (vuoto passa sul codice, i controlli
+  >   sintetici mordono ancora).
+  > - La pagina sviluppatori (tabella delle guardie): nessuna deroga, il record resta vuoto per un caso futuro.
+  > - Backlog: DV-14 chiusa, in attesa del commit.
+  > - Nessuna migrazione dal mio ultimo slot (`be7033b1c..56666d2ce` non tocca `backend/alembic` né `backend/app/db`):
+  >   la corsia non si ripopola.
+  > - test-author: in `chartFlagFont.test.ts` il record vuoto, la sua doc e l'intestazione (Part B, «why it was
+  >   red»); gli altri quattro test dei due grafici non cambiano (i registratori di ECharts ignorano le opzioni, e lo
+  >   stub di `matchMedia` non emette mai il `change`).
+  > **Prove:**
+  > - leggere (carico 18–28): Prettier e compilatore puliti sui due componenti; Vitest di test-author: `chartFlagFont`
+  >   20, `chartPixelRatio` 49, `PriceChartFull` 58, `PriceChartFull.tooltipEscape` 17,
+  >   `CandlestickChart.tooltipEscape` 7, `candlestickChartHelpers` 44, `priceChartHelpers` 163; i 9 file di
+  >   `chart-safety-unit` in un colpo, 144 test; `front check` 0 errori e 0 avvisi; tutti verdi;
+  > - slot (17:52–18:02, `files/dv14-slot/`): E2E `asset-detail` 43 su 43, `fx-detail` 28 su 28, progetto
+  >   `[desktop]`; porta 6156 libera, HEAD `56666d2ce`.
+
 ## Definizione di fatto
 
 - **Un colore fisso per chiave:** ogni chiave ha un colore per tema, uguale in torta e storico, in dashboard, broker
