@@ -16,7 +16,7 @@
     import type {z} from 'zod';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import {closureValueLabelKey, compareHistoryEvents, eventMarkerKind, getBroker as sharedGetBroker, groupCustodySlices, historyKey, unwrapScalar, type EventMarkerKind} from './lotCustodyModalHelpers';
-    import {isUnknownOrNonZero} from './lotChartShared';
+    import {eventLabelKind, isUnknownOrNonZero} from './lotChartShared';
     import {formatLotQuantity} from './unifiedLotsTableHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
@@ -132,7 +132,8 @@
         return translated === key ? direction : translated;
     }
 
-    function eventKindLabel(kind: LotTimelineEventSchema['kind']): string {
+    /** The label of an event's kind; a transfer leg read at the scope's edge gets its transfer label (J-48). */
+    function eventKindLabel(kind: LotTimelineEventSchema['kind'] | 'TRANSFER_IN' | 'TRANSFER_OUT'): string {
         const key = `brokers.lots.modal.event.${kind}`;
         const translated = $_(key);
         return translated === key ? kind.replaceAll('_', ' ') : translated;
@@ -166,7 +167,8 @@
             return ratio != null ? `${eventKindLabel(event.kind)} ×${formatExactDecimal(ratio, {minFrac: 0, maxFrac: 8})}` : eventKindLabel(event.kind);
         }
         const brokerName = getBrokerName(event.broker_id ?? lot?.opening_broker_id);
-        return brokerName ? `${eventKindLabel(event.kind)} ${brokerName}` : eventKindLabel(event.kind);
+        const label = eventKindLabel(eventLabelKind(event));
+        return brokerName ? `${label} ${brokerName}` : label;
     }
 
     function eventDetailItems(event: LotTimelineEventSchema): EventDetailItem[] {
@@ -533,7 +535,7 @@
                                             {eventDescription(event)}
                                         </div>
                                         <div class="mt-1 text-xs uppercase tracking-wide text-lf-muted">
-                                            {eventKindLabel(event.kind)}
+                                            {eventKindLabel(eventLabelKind(event))}
                                         </div>
                                         {#if detailItems.length > 0}
                                             <div class="mt-2 flex flex-wrap gap-2" data-testid={`lot-custody-modal-history-details-${index}`}>

@@ -70,7 +70,7 @@ async def upsert_prices_bulk(
     """Bulk upsert prices manually (PRIMARY bulk endpoint).
 
     Every refusal of the whole request comes before anything is written. A price over its column's limits refuses it
-    with 400; a date outside ``stored_date_bounds()`` (1900-01-01 to tomorrow) with 422 ``date_out_of_range`` (X-R65,
+    with 400; a date after ``latest_stored_date()`` (tomorrow) with 422 ``date_out_of_range`` (X-R65,
     N83); a price in a currency other than its asset's, on any asset of the request, with 422
     ``price_currency_mismatch``, naming every asset at fault (X-R71). An asset that does not exist is answered in its
     own result, and the others are written.
@@ -89,7 +89,7 @@ async def upsert_prices_bulk(
             success_count=success_count,
         )
     except DateOutOfRangeError as e:
-        raise HTTPException(status_code=422, detail=date_out_of_range_detail(e.items, e.count, e.earliest, e.latest)) from e
+        raise HTTPException(status_code=422, detail=date_out_of_range_detail(e.items, e.count, e.latest)) from e
     except PriceCurrencyMismatchError as e:
         raise HTTPException(status_code=422, detail=price_currency_mismatch_detail(e.items, e.count)) from e
     except ValueError as e:

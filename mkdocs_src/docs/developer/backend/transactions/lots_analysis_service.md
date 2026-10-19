@@ -157,6 +157,13 @@ broker-scope Dashboard does:
 - **Every reader.** The engine, the histories, the conversions and the average-cost lines all read the returned list.
   `FifoInputTransaction.from_transaction()` hands a copy back as it is, so the flag survives
   `build_engine_transactions()`.
+- **Labels.** The rows of a read leg keep the adjustment `kind`, which every figure reads, and carry
+  `LotTimelineEventSchema.scope_boundary` for their label (J-48): `IN` on the arriving leg's opening row
+  (`ADJUSTMENT_IN`), `OUT` on every closure row of the departing leg (`ADJUSTMENT_OUT`), `None` on every other row.
+  `_build_lot_event_rows()` passes `boundary.legs` to `_build_opening_and_split_rows()` and `_build_closure_rows()`,
+  and `_boundary_direction()` looks each row's `transaction_id` up there. A label only: the partner broker is never
+  named. The lot views show such a row as a transfer (see
+  [Lots Analysis](../../frontend/components/features/lots-analysis.md#scope-edge-transfers)).
 - **Performance.** `build_performance_history()` moves a read leg's market value of the day across the scope —
   money in for a leg that arrives, out for one that leaves — through `PerformanceSourceContext.boundary_legs`, exactly
   as it counts a transfer whose two legs the re-run over the accessible brokers holds. The two paths give the same
@@ -172,7 +179,7 @@ broker-scope Dashboard does:
   average cost and its market value as capital, and an outgoing leg's market value as the capital that left (lot 41,
   D2 and D5): lots and Dashboard agree broker by broker.
 
-The timeline shows a read leg as an `ADJUSTMENT_IN` / `ADJUSTMENT_OUT` row.
+The timeline shows a read leg as an `ADJUSTMENT_IN` / `ADJUSTMENT_OUT` row, with `scope_boundary` set.
 
 ### ⏳ Transfers In Transit at the End {: #in-transit-at-date-to }
 

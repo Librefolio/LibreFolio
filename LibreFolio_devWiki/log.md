@@ -3878,6 +3878,13 @@ Replacing the closes from a fresh history (D′) was dropped: they are adjusted 
 Filed: [[problems/yahoo-bars-dated-one-day-early-east-of-utc]].
 Graph: not updated; graphify is not available in this worktree.
 
+## [2026-10-17] file | A multi-line docstring with backticks breaks the generated client (J-19)
+J-19 gave `ToolItemMetrics` a two-paragraph docstring that named a field between backticks. The client generator writes
+a multi-line OpenAPI description as a JS template literal without escaping its backticks, so `generated.ts` broke,
+with 2 `front check` errors and dozens of core-unit suites unable to load. A single-line docstring goes in quotes and is safe.
+Filed: [[problems/multiline-docstring-backticks-break-generated-client]].
+Graph: not updated; graphify is not available in this worktree.
+
 ## [2026-10-17] file | The lots chart keeps its price line, and the reports an `api` run removes (Y-30)
 Y-30 added a lot-free market price series, `MARKET_PRICE_HISTORY` / `market_price_history`, which a FAILED replay keeps
 (`_AVERAGE_COST_ANALYSES` became `_REPLAY_FREE_ANALYSES`); the panel draws its price line from it in every analysis
