@@ -6385,3 +6385,112 @@ cambia, e il pianificatore dei lotti tiene insieme la scheda e i suoi bersagli c
   istruzione per intervallo e passo;
 - il budget con gli estremi; PQS-Q14 (rifiutata prima di leggere i secchi) resta;
 - API: OpenAPI con `key`, `resolution`, `sample_like`, `sample_bounds`; una richiesta con scheda e bersaglio.
+
+### Z-29a (v3) e Z-29r — lavoro (19/10 dalle 15:17, base `14247474e`)
+
+> **Via** (coordinatore, 19/10 ~15:16): «Base aggiornata … Il contratto rivisto (`key` + `sample_like`) va bene. Prima
+> di lanciare qualsiasi cosa, ripopola la corsia 6186 con `--force --clean`. Poi via a Z-29a: rossi dalle bozze, cura,
+> checkpoint. Z-29r può andare in parallelo, come da piano.» Base: piano `2cd88b686`, merge di `dev_release2`
+> `47af95978` (fusione delle migrazioni, con Z-33r e Z-32cr), HEAD `14247474e`; N83 di X ha toccato `price_query.py`,
+> la rotta e `test_assets_prices.py` (solo commenti e dettagli d'errore sulle righe di Z-29a).
+
+**Passi di Z-29a.**
+1. ✅ 19/10 15:19 — Corsia ripopolata: `db populate --force --clean` (rc 0, porta libera).
+2. ✅ 19/10 16:09 — Rossi v3 (test-author; bozze in `files/z29a-reds-v3/`, con `REDS.md` e dieci inferenze oltre la
+   consegna, ciascuna fissata com'è scritta) portati nel repo: `test_price_query_sampling.py` (45 funzioni, 154 casi,
+   PURE: un SQLite privato sotto `tmp_path`), il blocco Z-29a in coda a `test_assets_prices.py` (PQS-API-01…05),
+   `compactDensityCases.json` (la tabella dei casi comune col grafico), la riga `services price-query-sampling` in
+   `_backend_services.py`. Visti: 16:01 `services price-query-sampling` 153 rossi per le ragioni dette (campi che il
+   modello rifiuta, modulo assente), 1 verde per costruzione (PQS-T01, la tabella contro la regola del grafico); 16:09
+   `api assets-price` 8 rossi (i nuovi), 23 verdi (gli esistenti).
+   > **⚠️ Fuori pista**: nel portare la riga del runner, il taglio della bozza prendeva il `def` sbagliato (la docstring
+   > dello spezzone nomina `_populate_registry_excerpt`): tagliato dall'indice giusto, riga ricontrollata.
+   > **⚠️ Fuori pista**: l'inferenza 4 di test-author (il seguace di una scheda giornaliera è giornaliero dal giorno F'
+   > più tardo, non da tutta la sua storia) mancava nella bozza v3: aggiunta (`_plan_samples` restituisce anche
+   > `daily_starts`, e l'intervallo di quella voce parte da F'). Conseguenza del contratto, da confermare al checkpoint.
+3. ✅ 19/10 ~15:40 — Codice v3 in bozza: `files/z29-draft-v3/apply_z29a_v3.py` (le sostituzioni esatte di v2, più il
+   controllo dei riferimenti, `resolution` e `sample_like` per voce, `sample_bounds`, la lettura unica) con
+   `price_sampling.py` v3 e `query_helpers.py.txt`. Provato su una copia di `backend/` alla base nuova: ruff e black
+   puliti; `smoke_z29a_v3.py` verde (OLD mensile 322 punti senza F, YOUNG settimanale 346; `resolution` settimanale su
+   tre mesi, giornaliero identico; `sample_like` col bersaglio più tardo e con quello più vecchio ancorato al giorno F
+   della scheda; nessuna istruzione dei secchi per un asset letto intero, due istruzioni per tre asset su due passi;
+   i quattro errori di riferimento; la regola di un campo solo); inverso esatto. Applicato 16:10.
+   Poi (16:25) due sostituzioni in più, per il client generato (passo 4): `_description_without_backticks` e
+   `model_config = ConfigDict(json_schema_extra=…)` in `FAPricePoint`. Di nuovo su una copia: ruff, black e smoke verdi;
+   nello schema niente apici inversi, la docstring li tiene, `extra` resta `forbid`; inverso esatto. Applicato:
+   impronta dei 4 file uguale a quella della copia (`files/z29-draft-v3/z29a_v3_applied.md5`).
+   Poi (16:28) la docstring della rotta, che diventa la descrizione OpenAPI: diceva «a few rows per bucket» (è una riga
+   per secchio) e lasciava intendere `sample_bounds` sempre (solo settimanale o mensile). Stessa sostituzione nello
+   script e nel repo; di nuovo dai blob di HEAD con lo script: i 4 file uguali byte per byte, inverso uguale a HEAD;
+   ruff e black puliti.
+4. ✅ 19/10 16:55 — Verdi leggeri. 16:10 `services price-query-sampling` 154/154; i vicini, 16:11–16:12: `range-ceiling` 74,
+   `asset-signals` 30, `period-changes` 60, `series-preparation` 22. 16:11 `api assets-price` fermo prima di pytest: il
+   server di prova ricostruisce il frontend e il suo `api sync` fallisce; a parte (16:12) lo stesso errore, «Tool
+   codegen: invalid generated TypeScript: ',' expected»; `front check` (16:14) 36 errori, tutti in `generated.ts`.
+   > **⚠️ Fuori pista** (generatore del client): openapi-zod-client 1.18, con `--with-description`, scrive un campo
+   > obbligatorio che è un `$ref` diretto come `Modello.describe(…)` con la descrizione del **modello riferito** (non
+   > quella del campo) in un letterale tra apici inversi. Da Z-29 `FAPriceSampleBounds.first` e `.last` sono i soli
+   > `$ref` obbligatori (su 225) verso una descrizione su più righe con apici inversi, quella di `FAPricePoint`
+   > («`close: Decimal`…»): il letterale si chiude a metà. Cura nel mio file, non negli script comuni: lo schema di
+   > `FAPricePoint` mette apici semplici al posto di quelli inversi (`json_schema_extra`), la docstring resta com'è.
+   > N92 di X riscrive quella docstring tenendo gli apici inversi: la cura li copre, e i blocchi di N92 non toccano le
+   > righe aggiunte (righe invariate in mezzo). Resta fragile per un modello futuro: riga Z-37 nel backlog.
+   > **⚠️ Fuori pista** (di procedura, mio): il ritorno a HEAD prima della nuova prova si è fermato a metà (lo script
+   > inverte solo coppie applicate, le due nuove non lo erano): finito con le stesse verifiche esatte, i tre file di
+   > nuovo uguali a HEAD. L'impronta della copia prendeva per due file la versione di HEAD (`$C/$F` metteva il prefisso
+   > solo al primo percorso): rifatta, uguale nei 4 file.
+   Dopo la cura (in corsia, uno alla volta, carico sotto 50): 16:27 `api sync` rc 0; `generated.ts` si legge (0 errori
+   di sintassi; in `FAPriceSampleBounds` la descrizione di `FAPricePoint_Output` ha apici semplici); 16:28 `front check`
+   0 errori, 0 avvisi; 16:35 `api assets-price` 31/31 (PQS-API-01…05 compresi), porta libera. Tutti i chiamanti di
+   `get_prices_bulk` (rotta, AI Export ×3, rischio) costruiscono `FAPriceQueryItem`: le letture dirette dei campi nuovi
+   reggono; nei test, gli altri lo sostituiscono per intero.
+   Vicini letti con lo stesso metodo (16:38–16:45): `services asset-source` 61, `asset-source-guards` 55,
+   `current-prices-bulk` 29, `api signal-request-validation` 2; porta libera.
+   > **⚠️ Fuori pista** (dalla revisione dei testi di docs-writer): `resolve_sample_references` confrontava gli
+   > intervalli com'erano mandati, quindi `{D, end assente}` e `{D, D}`, lo stesso giorno per `DateRangeModel`, davano
+   > `range_mismatch`, mentre `_plan_samples` li raggruppa già con `end or start`. Rosso (test-author):
+   > `test_pqs_m08_an_absent_end_is_the_start`, 16:53 2 rossi per `range_mismatch`, il controllo verde per costruzione.
+   > Cura: `_span(item)` in `price_sampling.py` (stessa sostituzione nella bozza e nel repo), il confronto resta prima
+   > del taglio del tetto; dai blob di HEAD con lo script i 4 file uguali byte per byte. 16:55
+   > `services price-query-sampling` 157/157. Rivede l'inferenza 8 di test-author (`REDS.md`).
+5. ✅ 19/10 16:58 — Doc (docs-writer, solo inglese, nessuna build da parte sua):
+   `developer/backend/assets/architecture.md`, nuova sezione «🗜️ Sampled Price Series» (`#price-query-sampling`: i
+   quattro campi, il rifiuto con segnali, annotazioni o eventi, il primo giorno F, il passo, i secchi, `resolution` e
+   `sample_bounds`, `sample_like` con la tabella dei quattro 422, le letture, la tabella dei casi e i test); una riga
+   nell'elenco delle richieste di una voce e una frase nel punto «Item-days» di `#bulk-request-limits` (i punti più
+   due, prima delle righe dei secchi); nel paragrafo dei lotti, «(backlog Z-29, post-1.3)» diventa «la lista degli
+   asset non chiede la serie ridotta (backlog Z-29)». `architecture/patterns/signal_plugin_guide.md`: un paragrafo su
+   `aggregation_profile` e la sua casa unica, `services/signals/aggregation.py`. Verificati da me sul codice, riga per
+   riga; dopo la cura di PQS-M08, la riga `range_mismatch` dice che un `end` assente è lo `start`.
+   Nello slot (passo 6): `mkdocs build` stretto 0 avvisi, `check-links` 97 validi.
+6. ✅ 19/10 17:15 — Slot pesante (coordinatore, 17:00–17:35, corsia 6186, carico sotto 50), uno alla volta:
+   17:10 `services ai-export` 1093/1093 (9′49″); 17:11 `services risk-all` sui 3 file che chiamano `get_prices_bulk`
+   61 (857 esclusi); 17:12 `mkdocs build` stretto, 0 avvisi; `mkdocs check-links` 97 validi; porta libera.
+   Previsione dell'integrazione con `dev_release2` (`ccc2a4141`, base comune `47af95978`), in sola lettura con
+   `git merge-file` su copie: 4 file in comune (backlog, `schemas/prices.py` con N92 `09721f87f`, `architecture.md`,
+   `_backend_services.py`), nessun conflitto testuale; nel `prices.py` unito la docstring di N92 (con apici inversi) è
+   seguita dal mio `model_config`. OpenAPI di un albero temporaneo (il backend di `dev_release2` + i miei file): nessuno
+   dei 225 `$ref` obbligatori va verso una descrizione con apici inversi; `FAPricePoint` è un componente solo (niente
+   `-Output`, PQS-API-03 accetta i due nomi). Checkpoint FROZEN inviato. Revisori (coordinatore, 17:00): MF per la
+   semantica, X per il contratto.
+
+**Passi di Z-29r** (in parallelo; revisore J).
+1. ✅ 19/10 15:51 — Rossi (test-author): `test_signal_aggregation.py`, 26 funzioni, 171 casi; la riga del runner
+   (`services signal-aggregation`, PURE) messa da me in `_backend_services.py`. Visti (15:51): 154 rossi per la
+   ragione detta (il modulo non esiste), 17 verdi per costruzione (SAG-T01…T03: la tabella contro la trascrizione del
+   TypeScript). La tabella legge anche `fixtures/signals/aggregation_profiles.v1.json`, già comune con il Vitest.
+2. ✅ 19/10 ~15:52 — Codice (`files/z29r-draft/apply_z29r.py`, provato su una copia: ruff e black puliti, inverso
+   esatto): `services/signals/aggregation.py` nuovo (`Selector`, `SCALAR_PROFILE_SELECTORS`,
+   `BAND_ENVELOPE_SELECTORS`, `select_point` con ordinamento stabile per data e il più vecchio a pari valore,
+   `scalar_representative`, `band_envelope`); `ai_export/temporal/aggregators.py` passa dal modulo (le statistiche per
+   secchio con `aggregation.select_point`, le due mappe lette a ogni chiamata, `_SCALAR_AGGREGATION_PROFILES` = le
+   chiavi della mappa).
+   > **⚠️ Fuori pista**: ruff (UP047) chiede i parametri di tipo di PEP 695, come già fa AI Export.
+   > **⚠️ Fuori pista** (16:28): la docstring del modulo dava già la query dei prezzi fra chi passa dal modulo (Z-29s),
+   > che non c'è ancora: tolta, la rimette Z-29s. Stessa sostituzione nella bozza e nel repo, file uguali; ruff e black
+   > puliti.
+3. ✅ 19/10 15:53 — Verdi: `services signal-aggregation` 171, `services ai-export-pure` 323, `services ai-export`
+   filtrato su `test_ai_export_temporal` 182 (911 esclusi). `services ai-export` intero nello slot di Z-29a.
+   Fuori portata, per J: `ai_export/temporal/uniform.py` (`uniform_observed_buckets`) ha una sua copia di primo,
+   minimo, massimo e ultimo con la stessa regola del pari valore (riga Z-38 nel backlog).
+4. ✅ 19/10 17:15 — Checkpoint insieme a Z-29a (revisore J). Nello slot `services ai-export` intero, 1093/1093.

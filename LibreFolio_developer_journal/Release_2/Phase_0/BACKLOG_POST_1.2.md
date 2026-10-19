@@ -7858,6 +7858,24 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro».
   - Stato (19/10): con la riduzione di Z-33 (nessuna riparazione) il rapporto perde il suo oggetto; chiuderla o tenerla
     è una domanda nell'analisi «Z-33 ridotta».
+- **Z-37 · Client generato: un apice inverso nella descrizione di un modello riferito da un campo obbligatorio rompe
+  `generated.ts`** — minimo, strumenti; proprietario degli script di generazione da assegnare; Z, 19/10 (Z-29a).
+  - openapi-zod-client 1.18, con `--with-description`, scrive un campo obbligatorio che è un `$ref` diretto con la
+    descrizione del modello riferito in un letterale tra apici inversi: un apice inverso nella docstring lo chiude, e
+    `api sync` si ferma («Tool codegen: invalid generated TypeScript»), con lui il server di prova.
+  - Oggi curato solo in `FAPricePoint` (Z-29a: `json_schema_extra` mette apici semplici nello schema); gli altri `$ref`
+    obbligatori (225) non portano a descrizioni con apici inversi.
+  - Proposta: una pulizia generale nella generazione (`frontend/scripts`) o un cancello che nomini il modello al
+    `api sync`; dopo, la cura di `FAPricePoint` si può togliere.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-29a (v3) e Z-29r — lavoro»,
+  passo 4 di Z-29a.
+- **Z-38 · `uniform.py` di AI Export tiene una sua copia della regola per secchio** — minimo, codice; proprietario J
+  (revisore di Z-29r); Z, 19/10 (Z-29r).
+  - `ai_export/temporal/uniform.py` (`uniform_observed_buckets`) sceglie primo, minimo, massimo e ultimo con la stessa
+    regola del pari valore che Z-29r ha messo in una casa sola, `services/signals/aggregation.py`.
+  - Proposta: farla passare da `aggregation.select_point`, a uscite invariate (i test di AI Export lo dicono).
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-29a (v3) e Z-29r — lavoro»,
+  passo 3 di Z-29r.
 
 ## B · Backup e Docker (fase 01)
 
