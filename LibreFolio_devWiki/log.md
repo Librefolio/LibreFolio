@@ -3895,6 +3895,14 @@ Filed: revision of [[decisions/fifo-v4-gross-net-status-model]], [[entities/lots
 [[problems/direct-playwright-run-in-a-test-lane]].
 Graph: not updated; graphify is not available in this worktree.
 
+## [2026-10-19] update | Yahoo bars dated one day early: the repair removed (Z-33r)
+Workstream Z, Z-33r (developer decision 19/10: «fai solo la correzione…»). The plugin's date fix stays; the one-time
+repair of stored rows goes: migration 011 with the `exchange_timezone` column and its `'legacy-utc'` mark, the D″ check
+in the refresh, the re-date helpers, the timezone the plugin declared. `exchange_zone()` became the plugin's private
+`_exchange_zone()`. A DB already at 011 is fixed by hand (plan 06, «Z-33r»). Page rewritten in short.
+Filed: revision of [[problems/yahoo-bars-dated-one-day-early-east-of-utc]].
+Graph: not updated; graphify is not available in this worktree.
+
 ## [2026-10-19] file | The lots computed on their change days (L1a): self-parity and RealDecimal
 L1a computes the lots' daily series only on the days an input changes and re-dates them over the window,
 byte-identical (0 differences on four DB copies, the real data included). Two lessons: a battery that compares the
