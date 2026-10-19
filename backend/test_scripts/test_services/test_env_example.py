@@ -65,6 +65,7 @@ UNDOCUMENTED_ON_PURPOSE: dict[str, str] = {
     "FLY_APP_NAME": "set by Fly.io on every machine, read for the idle suspension (config/sleep_wake.py); not an option",
     "FLY_MACHINE_ID": "set by Fly.io on every machine, read for the idle suspension (config/sleep_wake.py); not an option",
     "LIBREFOLIO_DISABLE_DONATION_POPUP": "workstream A keeps the hidden switch out of .env.example and the docs",
+    "LIBREFOLIO_DISABLE_WHATS_NEW": "workstream A keeps the hidden switch of the «What's new» modal (C-54) out of .env.example and the admin docs, as the donation popup's (D-A7)",
     "LIBREFOLIO_TEST_LANE_ID": "internal token the test runner sets for the server it owns",
 }
 

@@ -27,7 +27,7 @@ Until you save, new and changed prices show on the chart as a purple line. A pri
 - **Close** is required and must be a positive number; **Open**, **High**, **Low** and **Volume** are optional, and the eraser in a cell clears its value.
 - Prices are in the asset's currency, shown beside the tabs (*Prices in USD*).
 - **Stale rows** are days without a price of their own, filled with the last known one. When there are some, a ⚠️ count and a switch appear: turn it on to hide them.
-- **A price the server refuses is named.** If it refuses some of your prices, such as a close above the row's **High** or below its **Low**, it saves the others. A warning then names up to five refused dates, each with its reason, and counts the rest; it stays for 20 seconds, so you can note them and enter them again. If it refuses the whole save, for example because a date is before 1900-01-01 or after tomorrow, nothing is saved: the message says why, and the editor stays open with your changes.
+- **A price the server refuses is named.** If it refuses some of your prices, such as a close above the row's **High** or below its **Low**, it saves the others. A warning then names up to five refused dates, each with its reason, and counts the rest; it stays for 20 seconds, so you can note them and enter them again. If it refuses the whole save, for example because a date is after tomorrow, nothing is saved: the message says why, and the editor stays open with your changes.
 
 ---
 
