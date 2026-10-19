@@ -191,6 +191,20 @@ mandatory for every new plugin:
 - **One source row may emit several transactions.** Keep economic legs explicit: securities-only buys can be `DEPOSIT + BUY`, sells can be `SELL + WITHDRAWAL`, maturities can be `SELL at par + INTEREST`, and snapshots can be `DEPOSIT + ADJUSTMENT` seeds.
 - **Fake asset IDs.** Emit high positive fake asset IDs (keyed by ISIN/ticker) plus
   `BRIMExtractedAssetInfo` so the core can drive the asset-matching UI.
+- **Only safe rows.** Import only rows whose date the broker will not change any more:
+  movements already settled, executed and booked. A provisional row — its value or
+  settlement date after the server's today (`server_today()` in
+  `backend/app/utils/datetime_utils.py`, never the browser's date), or a status that says
+  pending or reserved — is left out **whole**, with every transaction it would have
+  produced (its fee, its premium), and arrives with the next import. Say so with one
+  `severity="info"` notice per reason (a `code`, `context.count`, the rows as
+  [evidence](#brim-evidence)), never a warning: nothing is wrong, the rows are simply not
+  final yet. When the report holds no export date and no status, compare the row's own
+  date with `server_today()`: Fineco, notice `fineco_not_yet_settled`
+  ([Fineco notes](../../backend/brim/architecture.md#plugin-fineco)). When it covers a
+  known period, compare with the period's end: Danske Bank, notice
+  `excluded_not_yet_settled`, for the custody trades valued after the cash statement's last
+  day ([Finnish notices](../../backend/brim/danske_bank.md#finnish-notices)).
 
 ### 🔢 Decimal places {: #decimal-places }
 
@@ -631,7 +645,8 @@ transaction breaks these rules, so flip source signs as needed:
     in the language of the export it parses. For a single-nation broker whose report is
     published in only one language — e.g. Crédit Agricole, Directa and Intesa Sanpaolo
     (Italian), Danske Bank (Finnish) — emit the warnings in that language so they match the report the user is
-    reading. Fineco is still an exception: it reads only the Italian export, but writes its warnings in English.
+    reading. Fineco is still an exception: it reads only the Italian export, but writes its plain warnings in English;
+    only its two notices, `fineco_not_yet_settled` and `fineco_incomplete_rows`, are in Italian.
     When a broker ships differently localized export layouts (a UK vs. IT Fineco
     file, a non-Italian Crédit Agricole entity), detect the format and emit each variant's
     warnings in its own language. Code, comments and docstrings stay in English.
@@ -875,7 +890,9 @@ warnings.append(
 
 - `severity="info"` — *the plugin did something correct and non-obvious*: explain it. An
   unknown transaction code booked by sign, a succession row turned into a cashless
-  `ADJUSTMENT`. Blue, still surfaced in the confirmation modal.
+  `ADJUSTMENT`, rows left for the next import because they have not settled yet (the rule
+  *Only safe rows*, under [Import philosophy](#import-philosophy-currency-rules)). Blue,
+  still surfaced in the confirmation modal.
 - `severity="warning"` — *the plugin had to fall back or guess*: look at it.
 - A bare `str` still works (coerced to `severity="warning"`, `code="legacy"`), but new code
   should never use it: the `code` is what lets the frontend and the tests address the notice.
@@ -953,8 +970,8 @@ one, and its total is bundled for exactly the same reason.
 ### 🗝️ `context` keys the frontend understands
 
 `context` is a free `Dict[str, Any]`, but a handful of keys are a **contract** with the
-correction step. All of them are currently produced by `broker_credit_agricole/plugin.py`, which is
-the reference implementation:
+wizard. Those of a `BRIMFieldTodo` drive the correction step, and all of them are currently
+produced by `broker_credit_agricole/plugin.py`, which is the reference implementation:
 
 | Key | Type | Effect in the wizard |
 |-----|------|----------------------|
@@ -965,6 +982,12 @@ the reference implementation:
 | `nominale_row` | `int` | Source line of the row the nominal was read from; renders as a link into the file preview. |
 | `cash`, `currency` | `str` | The row total, used when the transaction itself cannot supply it (unresolved rows). |
 | `row` | `int` | Source line number — always include it. |
+
+A `BRIMNotice` has one key of its own, read by the notice list (`BrimNoticeList.svelte`):
+
+| Key | Type | Effect in the wizard |
+|-----|------|----------------------|
+| `report_issue` | `bool` | Only the boolean `True` counts. The wizard then shows, under the notice's message, the link *open an issue on GitHub* (`importWizard.fixStep.reportIssueLink`, the same words as the correction step's link) to `https://github.com/Librefolio/LibreFolio/issues/new`, opened in a new tab (`data-testid="brim-notice-report-issue"`). It is meant for a plugin in beta that suspects its own reading: Fineco's `fineco_incomplete_rows` asks the user to check the rows and, if the file is right, to open an issue. |
 
 Everything else in `context` is free: it is passed through untouched and is useful for tests
 and for i18n interpolation.
@@ -1122,7 +1145,7 @@ return info !== null && txDate !== '' && txDate < info.openedAt;
 
 Rows before the broker opening date are deselected and non-importable; rows on the opening day remain importable. The wizard offers **Edit broker date** and re-checks after broker data refresh.
 
-Do not filter a date range either: the import confirms through the transaction batch, which checks every row's date (`check_dates()`, night decision N74): from 1900-01-01 to today (UTC) one year on. A row outside it gets `dateOutOfRange` on `date` and the batch is not saved (see [Transaction dates](../../backend/transactions/service.md#transaction-dates)). Emit the date the report states, even one a few days ahead, such as a settlement date.
+Do not re-check the batch's date range either: the import confirms through the transaction batch, which checks every row's date (`check_dates()`, decision N74): from 1900-01-01 to tomorrow by the server's calendar (`latest_range_end()`). A row outside it gets `dateOutOfRange` on `date` and the batch is not saved (see [Transaction dates](../../backend/transactions/service.md#transaction-dates)). For the rows it keeps, a plugin emits the date the report states. A row dated after the server's today (`server_today()`) is provisional: leave it out, with an info notice, under the rule *Only safe rows* ([Import philosophy](#import-philosophy-currency-rules)), rather than emit it. The batch would refuse anything after tomorrow with `dateOutOfRange` anyway.
 
 ## 🔀 One plugin, several export formats
 

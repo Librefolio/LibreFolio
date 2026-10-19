@@ -27,6 +27,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 setup_test_database()
 
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetType, Broker, Transaction, TransactionType
@@ -35,7 +36,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
-from backend.test_scripts.test_services._tx_test_helpers import create_bulk
+from backend.test_scripts.test_services._tx_test_helpers import create_bulk, spy_on_execute_batch
 
 # ============================================================================
 # PYTEST FIXTURES
@@ -574,26 +575,39 @@ class TestAdditionalEdgeCases:
             pass
 
     @pytest.mark.asyncio
-    async def test_future_date_transaction(self, session, test_broker):
-        """Test that future date transactions are allowed."""
-        service = TransactionService(session)
+    async def test_future_date_deposit_is_refused_after_tomorrow(self, session, test_broker, monkeypatch):
+        """Red today (lot N74): the DEPOSIT dated a month ahead commits — the last day a transaction may carry is still UTC
+        today + 1 year. N74 retires the premise of the test this replaces («future dates are allowed: scheduled
+        transactions»): the last day is the server's tomorrow.
 
-        future_date = date.today() + timedelta(days=30)
-
+        Contract, kept small (the whole of it is ``test_transaction_decimal_places.py``'s ``TestTheDateIsCheckedAtWrite``):
+        the same DEPOSIT, through the same ``create_bulk``, has no success; the batch's one issue is ``dateOutOfRange`` on
+        ``field="date"`` of create 0, ``params.max`` the server's tomorrow — its date read before and after the batch, so
+        that a midnight in between cannot fail the test; nothing is written. Nothing is committed either: the session
+        fixture's rollback takes whatever the batch flushed (today, the DEPOSIT).
+        """
+        broker_id = test_broker.id
+        calls = spy_on_execute_batch(monkeypatch)  # hands the batch on, and keeps its response: create_bulk drops the codes
+        today_before = date.today()
         items = [
             TXCreateItem(
-                broker_id=test_broker.id,
+                broker_id=broker_id,
                 type=TransactionType.DEPOSIT,
-                date=future_date,
+                date=today_before + timedelta(days=30),
                 cash=Currency(code="EUR", amount=Decimal("100")),
             )
         ]
 
-        result = await create_bulk(service, items)
-        await session.commit()
+        result = await create_bulk(TransactionService(session), items)
 
-        # Future dates should be allowed (scheduled transactions)
-        assert result.success_count == 1
+        tomorrows = {(day + timedelta(days=1)).isoformat() for day in (today_before, date.today())}
+        assert result.success_count == 0, "N74: a DEPOSIT dated a month ahead is past tomorrow, the last day a transaction may carry: it must be refused"
+        assert len(calls) == 1 and calls[0].response is not None, f"premise: create_bulk runs the batch once, got {len(calls)} call(s)"
+        issues = calls[0].response.issues
+        assert [(issue.operation, issue.index, issue.code, issue.field) for issue in issues] == [("create", 0, "dateOutOfRange", "date")], [(issue.code, issue.field, issue.params) for issue in issues]
+        assert (issues[0].params or {}).get("max") in tomorrows, f"N74: params.max is the server's tomorrow ({sorted(tomorrows)}), got {issues[0].params}"
+        written = (await session.execute(select(Transaction.id).where(Transaction.broker_id == broker_id))).scalars().all()
+        assert written == [], f"N74: the refused DEPOSIT must not be written, the broker holds rows {written}"
 
     @pytest.mark.asyncio
     async def test_very_old_date_transaction(self, session, test_broker):
