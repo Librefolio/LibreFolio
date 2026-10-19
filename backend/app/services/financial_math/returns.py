@@ -15,6 +15,7 @@ Cash flow sign convention (standard finance):
 
 from __future__ import annotations
 
+import bisect
 import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -634,23 +635,40 @@ def _solve_xirr(flows: Sequence[tuple[float, float]], x0: float) -> float | None
     """A verified root of the NPV of ``(years, amount)`` flows, or None when there is none.
 
     Newton's method with the analytic slope starts from ``x0``, and its answer is kept only when the NPV
-    really vanishes there. Otherwise every interval of the grid where the NPV changes sign is solved by
-    bracketing (Brent), and the root nearest ``x0`` is returned. A rate that does not solve the equation
-    is never returned: the bare secant method used before could stop, after an overflow, on one of its
+    really vanishes there (:func:`_newton_xirr`). Otherwise every interval of the grid where the NPV changes sign is
+    solved by bracketing (Brent), and the root nearest ``x0`` is returned (:func:`_bracketed_xirr`). A rate that does not
+    solve the equation is never returned: the bare secant method used before could stop, after an overflow, on one of its
     own starting points and give it back as the rate.
     """
+    scale = _xirr_scale(flows)
+    rate = _newton_xirr(flows, x0, scale)
+    return rate if rate is not None else _bracketed_xirr(flows, x0, scale)
+
+
+def _xirr_scale(flows: Sequence[tuple[float, float]]) -> float:
+    """The size of the flows a verified root's NPV is measured against (:func:`_is_xirr_root`)."""
+    return sum(abs(amount) for _, amount in flows) or 1.0
+
+
+def _newton_xirr(flows: Sequence[tuple[float, float]], x0: float, scale: float) -> float | None:
+    """The first step of :func:`_solve_xirr`: Newton's method from ``x0``, its answer kept only when it is a root."""
     # Imported here: the module's other functions are plain arithmetic, and a schema importing one of them (MF-D3) does
     # not load scipy for it.
-    from scipy.optimize import brentq  # noqa: PLC0415
     from scipy.optimize import newton as scipy_newton  # noqa: PLC0415
 
-    scale = sum(abs(amount) for _, amount in flows) or 1.0
     try:
         rate = float(scipy_newton(lambda r: _xirr_npv(flows, r), x0, fprime=lambda r: _xirr_npv_slope(flows, r), tol=1e-12, maxiter=100))
         if _is_xirr_root(flows, rate, scale):
             return rate
     except (OverflowError, ZeroDivisionError, RuntimeError, ValueError):
         pass
+    return None
+
+
+def _bracketed_xirr(flows: Sequence[tuple[float, float]], x0: float, scale: float) -> float | None:
+    """The second step of :func:`_solve_xirr`: the verified root nearest ``x0`` among the grid's sign changes (Brent)."""
+    from scipy.optimize import brentq  # noqa: PLC0415
+
     roots: list[float] = []
     previous_rate: float | None = None
     previous_npv: float | None = None
@@ -676,6 +694,48 @@ def _solve_xirr(flows: Sequence[tuple[float, float]], x0: float) -> float | None
     return min(verified, key=lambda root: abs(root - x0)) if verified else None
 
 
+def _bracketed_xirr_at(flows: Sequence[tuple[float, float]], rate: float, scale: float) -> float | None:
+    """The root :func:`_bracketed_xirr` finds in the one grid interval holding ``rate``, by the scan's own steps and tests.
+
+    The two grid points around ``rate``, both evaluable and finite: one whose NPV is exactly 0.0 is the root, as the scan
+    keeps it; otherwise NPVs whose product is negative, the same Brent call and the same verification. None wherever the
+    scan would not find a verified root there: the caller then runs the whole scan.
+    """
+    from scipy.optimize import brentq  # noqa: PLC0415
+
+    index = bisect.bisect_left(_XIRR_GRID, 1.0 + rate)
+    if index <= 0 or index >= len(_XIRR_GRID):
+        return None
+    low, high = _XIRR_GRID[index - 1] - 1.0, _XIRR_GRID[index] - 1.0
+    try:
+        low_npv, high_npv = _xirr_npv(flows, low), _xirr_npv(flows, high)
+    except (OverflowError, ZeroDivisionError):
+        return None
+    if not (math.isfinite(low_npv) and math.isfinite(high_npv)):
+        return None
+    # The scan keeps a grid point whose NPV is exactly 0.0 as a root (a rate of exactly 0, a constant value)
+    if high_npv == 0.0 or low_npv == 0.0:
+        exact = high if high_npv == 0.0 else low
+        return exact if _is_xirr_root(flows, exact, scale) else None
+    if not low_npv * high_npv < 0.0:
+        return None
+    try:
+        root = brentq(lambda r: _xirr_npv(flows, r), low, high, xtol=1e-14, maxiter=200)
+    except (OverflowError, ZeroDivisionError, RuntimeError, ValueError):
+        return None
+    return root if _is_xirr_root(flows, root, scale) else None
+
+
+def _changes_sign_at(flows: Sequence[tuple[float, float]], rate: float) -> bool:
+    """Whether the NPV changes sign across ``rate`` (a true root, not a point where a flat NPV merely comes near zero)."""
+    step = 1e-9 * max(1.0, abs(rate))
+    try:
+        below, above = _xirr_npv(flows, rate - step), _xirr_npv(flows, rate + step)
+    except (OverflowError, ZeroDivisionError):
+        return False
+    return math.isfinite(below) and math.isfinite(above) and below * above < 0.0
+
+
 def _rate_decimal(rate: float) -> Decimal:
     """A solved rate at 6 decimals; a zero is written without a sign.
 
@@ -689,6 +749,19 @@ def _rate_decimal(rate: float) -> Decimal:
 # The one starting guess of the MWRR solve, for the single rate and for every point of a series: the root nearest it
 # is the one returned, so the same flows always give the same rate (a series point equals the single solve ending there).
 _MWRR_GUESS = 0.1
+# The rates the bracketing search of :func:`_solve_xirr` covers: a root outside them a cold solve finds only by Newton.
+_XIRR_GRID_RATES = (_XIRR_GRID[0] - 1.0, _XIRR_GRID[-1] - 1.0)
+
+
+def _flow_sign_changes(year_flows: Sequence[tuple[float, float]]) -> int:
+    """How many times the sign of the ``(years, amount)`` flows changes in time order, zero amounts aside.
+
+    Descartes' rule of signs, which holds for real exponents too: the NPV, a sum of ``amount × v^years`` with
+    ``v = 1 / (1 + r)``, has at most that many roots with ``1 + r > 0``, and as many less an even number. One change:
+    exactly one root.
+    """
+    signs = [amount > 0 for _years, amount in sorted(year_flows) if amount != 0]
+    return sum(1 for previous, current in zip(signs, signs[1:], strict=False) if previous != current)
 
 
 def _flows_by_date(cash_flows: Iterable[CashFlowInput]) -> dict[date, Decimal]:
@@ -707,18 +780,44 @@ def _mwrr_point(flows_by_date: Mapping[date, Decimal], initial_nav: Decimal, fin
       t=...: the flows strictly between start and end, summed per date (deposit < 0, withdrawal > 0)
       t=T:   +final_nav plus the flows of the end date (the investor "sells" the portfolio at the end)
     """
+    return _mwrr_solve(flows_by_date, initial_nav, final_nav, start_date, end_date, None)[0]
+
+
+def _mwrr_solve(flows_by_date: Mapping[date, Decimal], initial_nav: Decimal, final_nav: Decimal, start_date: date, end_date: date, warm_start: float | None) -> tuple[MWRRPoint, float | None]:
+    """:func:`_mwrr_point` and the rate it solved (None without one), from ``warm_start`` where that gives the same rate.
+
+    P1 (N74, «formule veloci»): the cold solve (:func:`_solve_xirr` from :data:`_MWRR_GUESS`) first tries Newton, and
+    when that fails it scans the whole grid — on a portfolio a century long, about 550 NPV evaluations a point. A series
+    keeps the cold solve's answer exactly and skips only the scan's search: Newton from the previous point's rate says
+    where the one true root is (the flows change sign exactly once, :func:`_flow_sign_changes`; the opening value is not
+    0.0 as a float, so the NPV never vanishes merely by underflow on the grid; the root lies on the grid,
+    :data:`_XIRR_GRID_RATES`, and the NPV changes sign across it, :func:`_changes_sign_at`), and the answer is the one the
+    scan gives in that grid interval, by its own Brent call and tests (:func:`_bracketed_xirr_at`). Wherever that
+    interval does not give it, the whole scan runs, as today; a solve that cannot take the shortcut at all (the card, a
+    series' first point) is :func:`_solve_xirr` itself.
+    """
     total_days = (end_date - start_date).days
     if total_days <= 0:
-        return MWRRPoint(date=end_date, mwrr=None)
+        return MWRRPoint(date=end_date, mwrr=None), None
     year_flows = [(0.0, -float(initial_nav)), (total_days / 365.0, float(final_nav + flows_by_date.get(end_date, Decimal("0"))))]
     year_flows += [((flow_date - start_date).days / 365.0, float(amount)) for flow_date, amount in flows_by_date.items() if 0 < (flow_date - start_date).days < total_days]
-    rate = _solve_xirr(year_flows, _MWRR_GUESS)
+    if warm_start is None or year_flows[0][1] == 0.0 or _flow_sign_changes(year_flows) != 1:
+        rate = _solve_xirr(year_flows, _MWRR_GUESS)
+    else:
+        scale = _xirr_scale(year_flows)
+        rate = _newton_xirr(year_flows, _MWRR_GUESS, scale)
+        if rate is None:
+            candidate = _newton_xirr(year_flows, warm_start, scale)
+            if candidate is not None and _XIRR_GRID_RATES[0] <= candidate <= _XIRR_GRID_RATES[1] and _changes_sign_at(year_flows, candidate):
+                rate = _bracketed_xirr_at(year_flows, candidate, scale)
+            if rate is None:
+                rate = _bracketed_xirr(year_flows, _MWRR_GUESS, scale)
     if rate is None:
-        return MWRRPoint(date=end_date, mwrr=None)
+        return MWRRPoint(date=end_date, mwrr=None), None
     try:
-        return MWRRPoint(date=end_date, mwrr=_rate_decimal(rate))
+        return MWRRPoint(date=end_date, mwrr=_rate_decimal(rate)), rate
     except InvalidOperation:
-        return MWRRPoint(date=end_date, mwrr=None)
+        return MWRRPoint(date=end_date, mwrr=None), None
 
 
 def calculate_mwrr(
@@ -742,8 +841,9 @@ def calculate_mwrr(
 def calculate_mwrr_series(nav_snapshots: list[NAVSnapshot], cash_flows: list[CashFlowInput]) -> list[MWRRPoint]:
     """Cumulative MWRR at every snapshot after the first, from the first snapshot (its date and NAV).
 
-    Every point is the single solve ending on its snapshot, with the same starting guess: point ``i`` equals
-    :func:`calculate_mwrr` on the same flows from the first snapshot to snapshot ``i``.
+    Every point is the single solve ending on its snapshot: point ``i`` equals :func:`calculate_mwrr` on the same flows
+    from the first snapshot to snapshot ``i``. A point starts from the previous point's rate only where that cannot change
+    the answer (:func:`_mwrr_solve`, P1).
 
     Note: CPU-bound — callers should wrap in asyncio.to_thread() for long series.
     """
@@ -752,7 +852,13 @@ def calculate_mwrr_series(nav_snapshots: list[NAVSnapshot], cash_flows: list[Cas
     sorted_navs = sorted(nav_snapshots, key=lambda snapshot: snapshot.date)
     flows_by_date = _flows_by_date(cash_flows)
     start = sorted_navs[0]
-    return [_mwrr_point(flows_by_date, start.nav, snapshot.nav, start.date, snapshot.date) for snapshot in sorted_navs[1:]]
+    points: list[MWRRPoint] = []
+    previous_rate: float | None = None
+    for snapshot in sorted_navs[1:]:
+        point, rate = _mwrr_solve(flows_by_date, start.nav, snapshot.nav, start.date, snapshot.date, previous_rate)
+        points.append(point)
+        previous_rate = rate if rate is not None else previous_rate
+    return points
 
 
 def period_mwrr(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequence[CashFlowInput], end_date: date, end_nav: Decimal) -> MWRRPoint:
@@ -779,7 +885,8 @@ def period_mwrr_series(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequenc
     """The Dashboard's MWRR line: at every snapshot after the first, :func:`period_mwrr` of the period ending there.
 
     A point is None where the card of that period would be: a value ≤ 0, or no net invested capital up to that day
-    (see :func:`period_mwrr`). The last point is the card of the whole period.
+    (see :func:`period_mwrr`). The last point is the card of the whole period. A point starts from the previous point's
+    rate only where that cannot change the answer (:func:`_mwrr_solve`, P1).
     """
     snapshots = sorted(nav_snapshots, key=lambda snapshot: snapshot.date)
     if len(snapshots) < 2 or not cash_flows:
@@ -788,6 +895,7 @@ def period_mwrr_series(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequenc
     dated_flows = sorted(flows_by_date.items())
     start = snapshots[0]
     points: list[MWRRPoint] = []
+    previous_rate: float | None = None
     net_invested = start.nav
     next_flow = 0
     while next_flow < len(dated_flows) and dated_flows[next_flow][0] <= start.date:
@@ -799,5 +907,7 @@ def period_mwrr_series(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequenc
         if snapshot.nav <= 0 or net_invested <= 0:
             points.append(MWRRPoint(date=snapshot.date, mwrr=None))
         else:
-            points.append(_mwrr_point(flows_by_date, start.nav, snapshot.nav, start.date, snapshot.date))
+            point, rate = _mwrr_solve(flows_by_date, start.nav, snapshot.nav, start.date, snapshot.date, previous_rate)
+            points.append(point)
+            previous_rate = rate if rate is not None else previous_rate
     return points
