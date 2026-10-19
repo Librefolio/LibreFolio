@@ -4287,6 +4287,9 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     e `test_dev_designer_lab_banner.py` (1, `[test-server]`).
   - Cura: i sostituti accettano `lane_settings=None`, come la funzione vera (test-author). I 3 file non sono di H:
     serve il via del coordinatore.
+  - Il via è arrivato il 19/10 e allarga il lotto: anche `LIBREFOLIO_DISABLE_WHATS_NEW` in `UNDOCUMENTED_ON_PURPOSE`
+    (D-A7) e `worker_exit_code` nelle attese di `test_tools_schemas.py` (J-19). EMF-009 è di E. **Fatto il 19/10**:
+    8 rossi → verdi, checkpoint inviato; il ✅ col commit va alla prossima riconciliazione.
 
   Dettagli: piano H, §14, lotto «H-57», nota delle 14:20.
 
