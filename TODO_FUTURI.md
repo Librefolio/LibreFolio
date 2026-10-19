@@ -81,7 +81,7 @@ un'architettura unica, pensata bene prima di scrivere codice.
   `fund_overview` (emittente, categoria, tipo legale), `description`. Non dà la ripartizione per paese. Provato su
   VOO, SWDA.MI, VWCE.DE, CSPX.L, IWDA.AS, EUNL.DE: prime 10 e settori per tutti, TER per 5 su 6 (manca VWCE.DE).
   La parte che LibreFolio già supporta va subito nel plugin: vedi
-  `LibreFolio_developer_journal/Release_2/Phase_1/RICHIESTE_UTENTI.md`, #50.
+  `LibreFolio_developer_journal/Release_2/Phase_1/PROSSIMI_LAVORI.md`, #50.
 - **Borsa Italiana**: da verificare quali dati del profilo espone oltre al prezzo.
 - **Cataloghi e identificativi** (idea F16): ESMA FIRDS
   (`https://registers.esma.europa.eu/publication/searchRegister?core=esma_registers_firds_files`, file «full»
@@ -116,7 +116,7 @@ un'architettura unica, pensata bene prima di scrivere codice.
 
 - Piano in pausa: `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md`
   (identità asset, identificativi).
-- `LibreFolio_developer_journal/Release_2/Phase_1/RICHIESTE_UTENTI.md` (#50, #51).
+- `LibreFolio_developer_journal/Release_2/Phase_1/PROSSIMI_LAVORI.md` (#50, #51).
 - Backlog `BACKLOG_POST_1.2.md`: C-86, C-87, C-88, spostate qui.
 - Qui sotto, «💱 Settlement multicurrency ed esposizione»: F-MC-1 e F-MC-2 restano lì.
 

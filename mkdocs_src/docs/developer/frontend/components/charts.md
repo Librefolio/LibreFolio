@@ -328,6 +328,51 @@ currency (see [Price Query](../../backend/assets/architecture.md#data-flow-price
 `loadComparisonAssetsData()` (same file) drops them and flags the card with `_conversionFailed`, so
 a comparison line never mixes currencies.
 
+#### Measure mode {: #measure-mode }
+
+The asset detail and FX pair pages measure on their chart through `MeasurePanel`
+(`lib/components/charts/MeasurePanel.svelte`). The asset page mounts one panel per primary mode and
+talks to the one on screen (`activeMeasurePanel()`). 📏 calls the panel's `startMeasureMode()` or
+`stopMeasureMode()`; the panel reports its mode through `onmeasuremodechange`, and the page hands it
+to the chart as `measureMode`, with the chart's two measure callbacks wired to the panel:
+
+- `onMeasureClick(date, value)` calls `addPoint(date, value)`. The first click leaves the start
+  pending. A second click on the start's day is ignored: no measure, measure mode stays on, the start
+  stays pending. A click on another day adds the measure, its dates sorted, and stops measure mode.
+- `onMeasureHover(date, value)` returns `updatePendingEnd(date, value)` straight through:
+  `(date, value) => activeMeasurePanel()?.updatePendingEnd(date, value)` in
+  `routes/(app)/assets/[id]/+page.svelte`, `(date, value) => measurePanel?.updatePendingEnd(date, value)`
+  in `routes/(app)/fx/[pair]/+page.svelte`. `updatePendingEnd` draws the dashed live preview
+  (`__pending__`) from the start to `date` and returns a `boolean`: `true` on the pending start's
+  day, where it also removes the preview if one is drawn; `false` elsewhere, with measure mode off, or
+  with no start pending.
+
+No measure spans a single day (lot Y-N65, as in the
+[date pickers](core-ui/datePickers.md#no-single-day-range)). The expanded card's `DateRangePicker`
+cannot publish a range of one day, so `updateMeasureDates` no longer refuses one on its own: that
+silent refusal was bug N65, where the card's picker showed the same day in «From» and «To» while the
+measure kept its old dates. The panel's **+** (`addMeasureFromChartData()`) measures from the first
+measurable point to the last, and does nothing when both fall on the same day.
+
+**The cursor.** zrender writes its own cursor inline on its element at every pointer move, before
+its listeners run (`Handler.mousemove`, zrender 6), so the `cursor-crosshair` class that the chart
+container carries in measure mode was hardly ever seen. `PriceChartFull` (line view) and
+`CandlestickChart` (candles) therefore set their cursor through zrender:
+
+- On every zr `mousemove` while `measureMode` is on (and an `onMeasureHover` is given), synchronously
+  and before the `requestAnimationFrame` throttle, the chart calls `zr.setCursorStyle('crosshair')`,
+  or `'not-allowed'` while the last resolved hover was refused.
+- In the frame it resolves the point under the pointer, calls `onMeasureHover`, and applies the
+  cursor of the new answer. `onMeasureHover` is typed `(date, value) => boolean | void`; `true` means
+  refused. The container publishes the answer as `data-measure-hover`: `"blocked"` over a refused day
+  (the measure's start), `"free"` anywhere else, including off every point. Out of measure mode the
+  attribute is absent, and a hover still queued when measure mode ends publishes nothing.
+- Outside measure mode the chart never calls `setCursorStyle`: zrender keeps its own cursor.
+
+These rules are pinned in the Y-N65 describes of `MeasurePanel.test.ts` and `PriceChartFull.test.ts`.
+The latter runs each case on the line view and on the candle view, with an ECharts stand-in whose zr
+records every `setCursorStyle` call.
+
 ## Chart Settings and Axis Scales
 
 The FX and Asset charts (list cards, detail pages, and the **Chart Settings** modal's preview)
