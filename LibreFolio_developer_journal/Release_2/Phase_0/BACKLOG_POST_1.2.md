@@ -5781,6 +5781,18 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     ha, e il grafico torna ai valori di prima.
   - Cura: togliere il ramo, come X-R68.
 
+- **X-R84 · Un chunk che non si carica dopo il login dà «500 Internal Error» e SvelteKit non riprova** — basso, **fuori
+  dal perimetro di X** (shell del frontend), da girare a chi la possiede; X, 19/10 (triage di un rosso E2E di N92).
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «N92 (i) con "clear"
+  — rossi, cura, verdi», parte «E2E».
+  - Osservato in `fx-data-editor.spec.ts`: dopo il login, la navigazione a `/dashboard` ha chiesto 47 dei 63 chunk.
+  - SvelteKit ha controllato `version.json` due volte, l'ha trovato uguale e ha mostrato la pagina d'errore, dove
+    l'utente resta finché non ricarica.
+  - Nessun errore del backend; rifatta da sola, la spec passa. Il guasto è del trasporto, ma la reazione dell'app è un
+    errore 500, non un nuovo tentativo.
+  - Strade possibili, da decidere: ricaricare una volta su un import dinamico fallito, oppure una pagina d'errore che
+    lo dice e offre di riprovare.
+
 ## W · Import e transazioni (fase 01)
 
 Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md).
