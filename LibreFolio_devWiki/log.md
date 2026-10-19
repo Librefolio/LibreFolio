@@ -3894,3 +3894,12 @@ import history empty: that run's `--force` populate, without `--with-reports`, h
 Filed: revision of [[decisions/fifo-v4-gross-net-status-model]], [[entities/lots-analysis-service]]; section added to
 [[problems/direct-playwright-run-in-a-test-lane]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-19] file | The lots computed on their change days (L1a): self-parity and RealDecimal
+L1a computes the lots' daily series only on the days an input changes and re-dates them over the window,
+byte-identical (0 differences on four DB copies, the real data included). Two lessons: a battery that compares the
+code with itself cannot see a bug in a step both runs share, and equal closes read back alike through `RealDecimal`
+(only a trade mark differs in form).
+Filed: [[concepts/self-parity-needs-the-shared-step-pinned]], [[problems/equal-closes-read-back-alike-through-realdecimal]];
+revision of [[entities/lots-analysis-service]].
+Graph: not updated; graphify is not available in this worktree.
