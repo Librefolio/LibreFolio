@@ -3902,3 +3902,8 @@ in the refresh, the re-date helpers, the timezone the plugin declared. `exchange
 `_exchange_zone()`. A DB already at 011 is fixed by hand (plan 06, «Z-33r»). Page rewritten in short.
 Filed: revision of [[problems/yahoo-bars-dated-one-day-early-east-of-utc]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-19] file | Svelte 5: a `$derived` over a non-reactive module cache stays stale across close and reopen (A-CL1)
+Workstream A, A-CL1 (the developer's nightly, Settings › About). `ChangelogModal`'s `ready` read the translations through `peek()` on a plain `Map`: a window closed while its translation loaded dropped the answer and, once reopened, kept its stale `undefined` (the sidebar's was another instance, computed after the fill). Cure `5ccb495e5`: the cache is a `SvelteMap`; one window, the Sidebar's, opened from both versions.
+Filed: [[problems/svelte5-derived-stale-over-non-reactive-cache]].
+Graph: not updated; graphify is not available in this worktree.
