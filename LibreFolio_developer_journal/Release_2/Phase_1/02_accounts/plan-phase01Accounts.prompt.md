@@ -7883,3 +7883,115 @@ Ognuno con i rossi prima e uno slot. Uno slot API (`users-admin`) per N69-4 e N6
     nel mio ramo sembravano tolte da dev).
 - **Checkpoint** mandato al coordinatore (12:50): tre commit proposti, nessuna riga del CHANGELOG (solo test e doc per
   sviluppatori). FROZEN.
+
+## A-CL1 — Il changelog resta «in caricamento» aperto da Impostazioni → Informazioni: analisi (19/10, 14:40–15:40, sola lettura; base `f3805aa09`)
+- **Richiesta** (coordinatore, 14:36): difetto visto dal developer sulla nightly `v1.2.1-2591-g5e1a7c3af`. Il clic sulla
+  versione sotto il logo apre il changelog, che resta «in caricamento»; dalla versione nella sidebar si apre subito.
+  Servono la causa, un rosso Vitest o E2E, la cura proposta e il costo. Niente codice prima del via.
+- **Stesso codice**: `5e1a7c3af` è «Merge pull request #53 from Librefolio/dev_release2» (17/10, 20:47Z). Letti via
+  `gh api …/contents?ref=` (nessun `git fetch`), sono identici byte per byte al mio albero:
+  - `ChangelogModal.svelte`, `changelog.ts`, `AboutTab.svelte`, `Sidebar.svelte`;
+  - `WhatsNewModal.svelte`, `ModalBase.svelte`, `package.json`.
+
+### Causa
+1. **Lo stato «pronto» legge una cache che non è reattiva.**
+   - `ChangelogModal.svelte:43`: `ready = $derived(localizedChangelog.peek(uiLanguage) ?? (loaded?.language ===
+     uiLanguage ? loaded.chapters : undefined))`.
+   - `peek()` legge `merged`, una `Map` semplice (`changelog.ts:402`), quindi non è una dipendenza.
+   - `ready` si ricalcola solo quando cambiano `uiLanguage` o `loaded`.
+2. **Il risultato viene scartato alla chiusura.** Se la modale si chiude mentre la traduzione carica, il teardown
+   dell'effetto di caricamento (`:47–59`) mette `live = false`: il risultato non arriva mai in `loaded`, ma la cache
+   `merged` si riempie lo stesso.
+3. **Alla riapertura resta bloccata.**
+   - `ready` tiene il suo `undefined` in cache: le sue dipendenze non sono cambiate, e un `$derived` di Svelte 5 resta in
+     cache anche attraverso la chiusura e la riapertura del blocco `{#if open}`.
+   - L'effetto trova `peek()` pieno ed esce subito, quindi `loaded` non viene mai assegnato.
+   - Risultato: «Caricamento…» per sempre, fino a un cambio di lingua o a un ricaricamento.
+4. **Perché la sidebar si apre subito**: è un'altra istanza. Il suo `ready` si calcola per la prima volta all'apertura,
+   quando la cache è già piena (l'ha riempita il caricamento dell'Informazioni).
+5. **Le ipotesi del coordinatore**:
+   - *promessa rifiutata o mai risolta*: **no**.
+     - `load()` non rifiuta mai (`.catch(() => englishOnly)`).
+     - Un chunk appeso bloccherebbe anche la sidebar, che condivide la stessa promessa `pending`.
+   - *l'effetto che si riesegue e scarta il risultato*: **sì**, ma a rieseguirlo è la chiusura (`open` falso), non una
+     riesecuzione spontanea.
+     - La prima apertura, col chunk che arriva a modale aperta, funziona (R0 e M3 verdi).
+     - Anche la galleria e `changelog-locale.spec.ts` aprono la modale della sidebar in italiano a ogni giro.
+   - *`WhatsNewModal` o la sidebar che precaricano*: **non la causano**. Una cache riempita da altri *prima* della prima
+     apertura rende l'apertura immediata, non bloccata.
+6. **Il gesto da confermare col developer**:
+   - la modale si è chiusa mentre la traduzione caricava;
+   - modi possibili: Esc, un clic fuori, o — il più probabile — un secondo clic sulla versione: lo sfondo della modale la
+     copre già, e un clic sullo sfondo chiude;
+   - poi è stata riaperta dopo l'arrivo del chunk.
+   - Non è un difetto solo dell'Informazioni: la stessa sequenza blocca anche la modale della sidebar, se è la prima della
+     sessione a caricare la traduzione.
+   - Nell'Informazioni è più probabile: la scheda si apre con 7 chiamate API e le icone dei provider in volo, e il chunk
+     (~140–150 KB) fa la coda con loro.
+
+### Rossi (scratch, nella cartella di sessione `work/acl1/`)
+- **Procedura**: i file venivano copiati nell'albero solo per la corsa, poi tolti (`git status` pulito dopo ogni corsa);
+  Vitest con il carico a 1 minuto 28–39.
+- **`AboutTab.changelog.acl1.test.ts`**: l'AboutTab vera, la modale vera, e un fake che copia riga per riga
+  `createLocalizedChangelog` (cache `Map`, `pending` condiviso).
+  - R0, prima apertura, chunk che arriva a modale aperta: ✅.
+  - **R1, chiusa mentre carica, chunk che arriva a modale chiusa, riaperta: ✗.** Dopo 1 s c'è ancora
+    `changelog-loading`, con `merged.has('it')` vero.
+  - R2, una seconda istanza (come la sidebar): si apre subito ✅.
+  - R3, chiusa e riaperta mentre carica ancora: ✅.
+- **`ChangelogModal.acl1.test.ts`**: la modale da sola, 3 varianti × 3 scenari, nessun avviso di Svelte.
+  - Gli scenari:
+    - M1: la sequenza R1;
+    - M2: un chunk fallito mostra l'inglese, poi un altro consumatore carica l'italiano, e la modale si riapre;
+    - M3: il controllo.
+  - Esiti:
+
+    | Variante | M1 | M2 | M3 |
+    |---|---|---|---|
+    | oggi | ✗ | ✗ | ✅ |
+    | C4 | ✅ | ✗ | ✅ |
+    | C1 | ✅ | ✅ | ✅ |
+- **Un test sul modulo vero non è possibile in Vitest**:
+  - jsdom rifiuta l'import `?raw` di `CHANGELOG.md` anche con `vi.mock` («Denied ID …/CHANGELOG.md?raw»);
+  - in ambiente node, `svelte/reactivity` è la build server, non reattiva.
+  - Quindi la reattività del modulo vero si vede solo in un E2E.
+
+### Cura proposta (scelta tecnica: nessun cambiamento visibile oltre al difetto risolto)
+- **C1, consigliata: la cache diventa reattiva.**
+  - In `changelog.ts`, `merged` diventa una `SvelteMap` (`svelte/reactivity`): +2 righe.
+  - Ogni `$derived` o `$effect` che chiama `peek()` segue la cache, e `ready` si ricalcola quando un caricamento
+    qualsiasi la riempie.
+  - I componenti non cambiano: `loaded` resta per il ripiego inglese di un fallimento.
+  - Copre anche M2 (oggi resta in inglese fino al ricaricamento) e `WhatsNewModal`, che ha lo stesso schema.
+- **C4, alternativa minima: togliere la guardia `live`.**
+  - In `ChangelogModal.svelte`, −4 righe: il risultato arriva sempre in `loaded`.
+  - `loaded` porta la sua lingua, quindi `ready` ignora già una risposta tardiva per un'altra lingua.
+  - Lascia aperto M2.
+- **Non proposta: C2** (copiare `peek()` in `loaded` nel ramo d'uscita dell'effetto). È una scrittura di stato in un
+  effetto, e alla riapertura mostrerebbe un fotogramma di «Caricamento…».
+
+### Costo, test, rischi
+- **C1**:
+  - codice: 2 righe;
+  - Vitest: M1 + M2 nella sezione CL di `ChangelogModal.test.ts`, rossi oggi col fake fedele. Nello stesso commit la
+    cache del fake (`cached`) diventa una `SvelteMap`, perché rispecchia il modulo. Il fake di `WhatsNewModal.test.ts`
+    si allinea pure (facoltativo, senza test nuovi);
+  - E2E: un test in `e2e/layout/changelog-locale.spec.ts`, dall'Informazioni in italiano:
+    - il chunk della traduzione viene trattenuto con `page.route`; i nomi dei chunk sono hash, quindi si riconosce dal
+      corpo, che contiene una riga di `CHANGELOG.it.md`;
+    - poi apri, chiudi, rilascia, riapri, e i capitoli devono esserci;
+    - rosso oggi, verde dopo: serve uno slot E2E (2 corse, ~5 min);
+  - totale ~1–1,5 h con il `test-author`, più una riga 🐛 del CHANGELOG.
+- **C4**: codice −4 righe; Vitest M1 (il fake resta com'è: rosso oggi, verde dopo); E2E facoltativo; ~30–45 min.
+- **Conflitti**:
+  - nessun ramo locale (32) e nemmeno `dev_release2` (`7fa7d4f93`) ha commit oltre il mio HEAD su questi file:
+    - `ChangelogModal.svelte` e `ChangelogModal.test.ts`;
+    - `features/changelog/` e `AboutTab.svelte`;
+    - `changelog-locale.spec.ts`.
+  - Altri autori di questi file: CL e M-23 (`changelog.ts`); H e il programma colori (`ChangelogModal.svelte`).
+- **Colori**: nessuna classe cambia, quindi nessun effetto sui cancelli.
+- **Domanda al developer** (una conferma, non una decisione): la modale si era chiusa e riaperta (Esc, clic fuori,
+  secondo clic sulla versione) prima di restare «in caricamento»?
+  - Se anche un solo clic, senza chiusura, la blocca, c'è una seconda via che non ho riprodotto.
+  - In quel caso il passo successivo è l'E2E sopra, senza la trattenuta, sulla build della nightly.
+- Stato: **FROZEN** in attesa del via; nessun file del prodotto toccato.
