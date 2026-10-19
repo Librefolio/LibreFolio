@@ -172,6 +172,18 @@ def front_portfolio_dashboard(verbose: bool = False, ui: bool = False, headed: b
     return _run_playwright("portfolio/dashboard.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_chart_pixel_ratio(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the chart pixel-density E2E (DV) on the desktop project, the runner default: the Dashboard's charts follow a change of the screen's density in place, and a chart opened after it is born at the new one."""
+    print_section("Frontend Portfolio Chart Pixel Density Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/chart-pixel-ratio.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_privacy_masking(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the privacy-masking E2E tests on desktop and mobile — the header toggle exists on both."""
     print_section("Frontend Portfolio Privacy Masking Tests")
@@ -286,7 +298,7 @@ def front_portfolio_allocation_unit(verbose: bool = False, ui: bool = False, hea
 
 
 def front_portfolio_chart_safety_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run chart tooltip escaping and chart flag-font unit tests, and the gate on the frontend's declared financial-math exceptions (Vitest)."""
+    """Run chart tooltip escaping, chart flag-font and chart pixel-density unit tests, and the gate on the frontend's declared financial-math exceptions (Vitest)."""
     print(f"\n{Colors.BLUE}Running: Chart safety Vitest unit tests{Colors.NC}")
     result = subprocess.run(
         [
@@ -300,6 +312,7 @@ def front_portfolio_chart_safety_unit(verbose: bool = False, ui: bool = False, h
             "src/lib/utils/core/escapeHtml.single.test.ts",
             "src/lib/components/charts/chartFlagFont.test.ts",
             "src/lib/components/charts/chartFont.load.test.ts",
+            "src/lib/components/charts/chartPixelRatio.test.ts",
             "src/financialMathExceptions.gate.test.ts",
         ],
         cwd="frontend",
@@ -550,6 +563,15 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(cat, "allocation-negative-cash", front_portfolio_allocation_negative_cash, name="Negative Cash Allocation", desc="Decision 49 on an intercepted report: the type and sector tabs state the overdraft under the pie, signed and in the display currency, masked under privacy with the sign kept; the pie draws no arc for the cash; without the interception no note", tests="portfolio/allocation-negative-cash.spec.ts")
     add_test(cat, "dashboard", front_portfolio_dashboard, name="Dashboard Chart Tests", desc="PositionsPanel 2x2 view matrix (treemap + perf chart), toggle persistence, AllocationPanel now/history, loading state", tests="portfolio/dashboard.spec.ts")
+    add_test(
+        cat,
+        "chart-pixel-ratio",
+        front_portfolio_chart_pixel_ratio,
+        name="Chart Pixel Density Tests",
+        desc="DV, desktop Chromium: the screen's density changed at runtime through the test's own CDP session (Emulation.setDeviceMetricsOverride, the same viewport and screen, deviceScaleFactor 2), no reload. The Dashboard's charts created through chartInitOptions (the growth chart, the allocation pie, the allocation history when drawn) go from 1x to 2x and back to 1x in place — every canvas's backing store over its CSS box, the same instance ids, the same canvas nodes — once a probe of the test's own has heard the resolution media query fire (if Chromium does not fire it, the test fails naming the harness); the allocation pie of another dimension, opened after the change, is born at 2x. PriceChartFull and CandlestickChart, exempt from chartInitOptions until their batch, are not on the Dashboard. Read-only",
+        prereq="Login working; TEST_USER's seeded Dashboard draws its growth chart and its allocation pie (populate_mock_data.py)",
+        tests="portfolio/chart-pixel-ratio.spec.ts",
+    )
     add_test(cat, "default-currency", front_portfolio_default_currency, name="Default Currency Tests", desc="Dashboard, broker list and detail, the assets risk panel and the FX AI Export start in the user's Default Currency, the instance's only as a fallback; a remembered dashboard pick still wins", tests="portfolio/default-currency.spec.ts")
     add_test(
         cat,
@@ -574,8 +596,8 @@ def populate_registry(registry: dict) -> None:
         front_portfolio_chart_safety_unit,
         test_names=False,
         name="Chart Safety Unit Tests",
-        desc="Chart tooltips and chart text (Y9). K-15: every value a tooltip formatter takes from data or currency metadata is escaped — the allocation pie's caption and parent label, the candlestick header's currency and flag, the price chart rows' currencies and flags. C-34: the correlation heatmap writes asset names through the one shared escapeHtml, and the source tree holds no other HTML escaper (inlineMath's KaTeX variant aside). K-13: every echarts.init passes CHART_INIT_THEME, whose global font puts 'LF Flags' first, and real ECharts draws its text with that font, also after a notMerge setOption; the flag face is requested before the first paint, and a chart that painted before it arrived paints again once it is in. Y12a: the declared financial-math exceptions of the frontend: the four interactive measures (MeasureSignal, CompoundSignal, LinearSignal, SineSignal) carry @financial-math-exception in their leading JSDoc block, no other source does, and a power whose exponent holds 365 appears only in them",
-        tests="src/lib/components/charts/AllocationPieChart.tooltipEscape.test.ts, src/lib/components/charts/CandlestickChart.tooltipEscape.test.ts, src/lib/components/charts/PriceChartFull.tooltipEscape.test.ts, src/lib/features/risk/CorrelationHeatmap.tooltipEscape.test.ts, src/lib/utils/core/escapeHtml.single.test.ts, src/lib/components/charts/chartFlagFont.test.ts, src/lib/components/charts/chartFont.load.test.ts, src/financialMathExceptions.gate.test.ts",
+        desc="Chart tooltips and chart text (Y9). K-15: every value a tooltip formatter takes from data or currency metadata is escaped — the allocation pie's caption and parent label, the candlestick header's currency and flag, the price chart rows' currencies and flags. C-34: the correlation heatmap writes asset names through the one shared escapeHtml, and the source tree holds no other HTML escaper (inlineMath's KaTeX variant aside). K-13: every echarts.init passes CHART_INIT_THEME, whose global font puts 'LF Flags' first, and real ECharts draws its text with that font, also after a notMerge setOption; the flag face is requested before the first paint, and a chart that painted before it arrived paints again once it is in. DV: every echarts.init passes chartInitOptions(<its element>) as third argument (PriceChartFull and CandlestickChart exempt until their batch, an exemption that cannot go stale); a chart is born at the screen's density of that moment, one matchMedia resolution query on the raw density, re-armed at each change, brings every live chart created through it to the new density in place, and the update in place runs on the real zrender, so an upgrade that moves its canvas painter's members fails by name. Y12a: the declared financial-math exceptions of the frontend: the four interactive measures (MeasureSignal, CompoundSignal, LinearSignal, SineSignal) carry @financial-math-exception in their leading JSDoc block, no other source does, and a power whose exponent holds 365 appears only in them",
+        tests="src/lib/components/charts/AllocationPieChart.tooltipEscape.test.ts, src/lib/components/charts/CandlestickChart.tooltipEscape.test.ts, src/lib/components/charts/PriceChartFull.tooltipEscape.test.ts, src/lib/features/risk/CorrelationHeatmap.tooltipEscape.test.ts, src/lib/utils/core/escapeHtml.single.test.ts, src/lib/components/charts/chartFlagFont.test.ts, src/lib/components/charts/chartFont.load.test.ts, src/lib/components/charts/chartPixelRatio.test.ts, src/financialMathExceptions.gate.test.ts",
     )
     add_test(cat, "risk", front_portfolio_risk, name="Risk Analysis Tests", desc="Portfolio-level risk on Dashboard and Broker Detail", tests="portfolio/risk-analysis.spec.ts")
     add_test(

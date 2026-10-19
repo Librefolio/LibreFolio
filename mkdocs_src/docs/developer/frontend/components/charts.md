@@ -523,10 +523,11 @@ fell back to the system, which prints two letters where it has no flag glyphs (W
   nothing else, so every other character falls through to that default and keeps its font.
 - `CHART_INIT_THEME`: `{textStyle: {fontFamily: CHART_FONT_FAMILY}}`.
 
-Every chart is created with that theme:
+Every chart is created with that theme, and with the options of
+[`chartInitOptions`](#chart-pixel-density):
 
 ```typescript
-chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
+chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, chartInitOptions(chartContainer));
 ```
 
 A theme's `textStyle` is ECharts' global font: the canvas text and the tooltip's inline `font` use
@@ -555,6 +556,25 @@ count. Two steps cover this:
    the chart (`resize()`) once the request of `chartFontReady()` settles. Every chart calls it
    except `LotGanttChart`.
 
+### Pixel density {: #chart-pixel-density }
+
+A chart's canvases hold its CSS size times a pixel density. zrender reads the screen's density once,
+when its module loads, and fixes it for a chart at `init`: a tab opened on a 1× screen drew every
+chart at 1×, the ones opened later too, and blurred them once the window moved to a Retina screen
+or the browser zoomed in. `lib/components/charts/chartPixelRatio.ts` handles both moments:
+
+- **At creation:** `chartInitOptions(element)` gives `echarts.init` the canvas renderer and the
+  screen's density at that moment (`devicePixelRatio`, never under 1, zrender's own rule).
+- **When the density changes:** one `matchMedia` resolution query for the whole app, armed by the
+  first chart and re-armed at each change. Every chart created through `chartInitOptions` and
+  still alive is brought to the new density in place (`setChartPixelRatio`): its zoom, legend,
+  selection and handlers stay, and nothing is drawn again from its options.
+
+In place means the members of zrender 6's canvas painter that its own `resize()` uses
+(`painter.dpr`, `getLayers()`, each layer's `dpr`, `ctx.dpr` and `resize()`, then
+`refresh(true)`). They are checked before anything is touched: when one is not there, the chart
+keeps its density, with a warning in debug builds.
+
 ### Tooltip HTML {: #chart-tooltip-escaping }
 
 ECharts sets what a tooltip formatter returns as `innerHTML`. Every value a formatter takes from
@@ -576,10 +596,17 @@ notation). The rule for every hand-built HTML string, and its other gates, is in
 
 | Test | Checks |
 |---|---|
-| `lib/components/charts/chartFlagFont.test.ts` | With the real ECharts, rendered server-side to SVG: a chart created with `CHART_INIT_THEME` draws its legend, axis and pie labels with `'LF Flags'` first, also after `setOption(option, true)`. A static scan of the production sources: every `echarts.init(` passes exactly `CHART_INIT_THEME` as its second argument, and no module reaches ECharts' `init` under another name. The scan skips `lib/dev/designer-lab/`, whose engine creates a 1×1 probe that never paints. |
+| `lib/components/charts/chartFlagFont.test.ts` | With the real ECharts, rendered server-side to SVG: a chart created with `CHART_INIT_THEME` draws its legend, axis and pie labels with `'LF Flags'` first, also after `setOption(option, true)`. A static scan of the production sources: every `echarts.init(` passes exactly `CHART_INIT_THEME` as its second argument and `chartInitOptions(<its element>)` as its third, except in `PriceChartFull` and `CandlestickChart`, listed in `PIXEL_RATIO_PENDING` until their batch (a listed file that passes it, has no call or is gone fails the gate); and no module reaches ECharts' `init` under another name. The scan skips `lib/dev/designer-lab/`, whose engine creates a 1×1 probe that never paints. |
 | `lib/components/charts/chartFont.load.test.ts` | The face is requested before the first paint, and a chart that painted before it arrived paints again once it is in. |
+| `lib/components/charts/chartPixelRatio.test.ts` | A chart is created at the density of that moment; a change of density re-arms the query and brings every live chart to it; the update in place runs on the real zrender, so an upgrade that moves its painter's members fails here. What it does not recognise, an SVG chart or a disposed one, it leaves alone, never throwing. |
 | `*.tooltipEscape.test.ts`: `AllocationPieChart`, `CandlestickChart` and `PriceChartFull` beside the charts, `CorrelationHeatmap` in `lib/features/risk/` | Fed a value that carries markup, the tooltip injects no element and shows the value as text; the heatmap's also requires the shared `escapeHtml`'s output, quotes included. |
 | `lib/utils/core/escapeHtml.single.test.ts` | No production source holds an HTML escaper (`&` mapped to `&amp;`) outside `escapeHtml.ts` and the exempt `inlineMath.ts`; an exempt file that no longer holds one fails too, so an exemption cannot go stale. |
+
+Beside them, `SemiDonutChart.test.ts` checks that a chart's `init` receives the canvas renderer and
+the screen's density, and `./dev.py test front-portfolio chart-pixel-ratio`
+(`e2e/portfolio/chart-pixel-ratio.spec.ts`) changes the density of a live Dashboard through
+Chromium's device metrics: its charts follow in place, the same instances and canvases, and a chart
+opened after the change is born at the new density.
 
 ## Pie Charts (AllocationPieChart)
 
