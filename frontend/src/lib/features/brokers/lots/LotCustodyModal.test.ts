@@ -29,13 +29,19 @@
  * this runtime: the locale and the currency suffix are whatever the modal gets, never a frozen string. The missing
  * value is `formatPrice`'s own `—`, a literal: a placeholder has no locale. Nothing here reads translated text.
  *
- * C-97c-2 (the last block): the modal's quantities and prices per unit lose no digit. That block mounts lots with a
+ * C-97c-2 (the next block): the modal's quantities and prices per unit lose no digit. That block mounts lots with a
  * history, because its subject is shown there; the opening value above does not depend on it.
+ *
+ * J-48 (the last block): a TRANSFER leg crossing the analysis scope reads as a transfer in the History. Its subject is a
+ * label, so it compares the row with the catalogue's own labels, read through the i18n the harness boots; its notes are
+ * beside it.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {get} from 'svelte/store';
 import type {z} from 'zod';
 import {cleanup, render, screen, setupI18n, within} from '$test/component';
 import {schemas} from '$lib/api';
+import {_} from '$lib/i18n';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
@@ -345,5 +351,225 @@ describe('LotCustodyModal — quantities and prices per unit lose no digit (C-97
 
         expect.soft(opening, 'the opening price').toMatch(numberToken('123.45'));
         expect.soft(closing, 'the closing price').toMatch(numberToken('123.45'));
+    });
+});
+
+// ---------------------------------------------------------------------------
+// J-48 — a TRANSFER leg crossing the analysis scope reads as a transfer in the History
+// ---------------------------------------------------------------------------
+
+/**
+ * The contract. The backend reads a TRANSFER leg whose partner sits at a broker outside the lots' scope as an adjustment
+ * (J-10, `financial_math/lots/scope_boundary.py`): the receiving leg as an ADJUSTMENT_IN that opens a lot at its own cost
+ * basis, the sending leg as an ADJUSTMENT_OUT that hands the lot's units over at the market value of its day. The figures
+ * are right, but the History labelled such a row by its kind, as an adjustment. J-48 sends the row's `scope_boundary`
+ * ('IN' | 'OUT'; null on every other row), and the History labels a boundary row by lotChartShared's `eventLabelKind`:
+ * `brokers.lots.modal.event.TRANSFER_IN` / `…TRANSFER_OUT`. Labels only: the row's details and its quantity keep
+ * reading `kind`.
+ *
+ * Fixtures, parsed by the generated client's schemas as the app receives them; the parse is checked to keep
+ * `scope_boundary` as sent, so a red cannot belong to the client. Each lot is closed — no custody slice, so no BrokerBadge
+ * — with two rows carrying the fields the backend fills for them (`_build_opening_and_split_rows`, `_build_closure_rows`):
+ * 10 units at Broker Alfa, opened on 3 February at 20 EUR, closed on 15 September at 25 EUR.
+ * - A lot that came into the scope by a transfer: the receiving leg opens it, read as an ADJUSTMENT_IN; a SELL closes it.
+ * - A lot that left the scope by a transfer: a BUY opens it; the sending leg closes it, read as an ADJUSTMENT_OUT.
+ * The rows come by date, so the opening is row 0 and the closure row 1. The controls mount the same lots, the row under
+ * test without a boundary — null, as the backend sends a plain row, or absent — and read the adjustment label where the
+ * reds read the transfer one: each row is read where its event is.
+ *
+ * Reading. The row by its test id inside the History's, inside the modal's; then its lines, the text each element of the
+ * row holds of its own: its day, its description («label broker»), its kind label, its details, its quantity. The kind
+ * label is the one line that is an event label alone. The expected labels are the catalogue's own, through the i18n the
+ * harness boots — never a frozen string — after a barrier that the catalogue resolves each key and that neither label
+ * holds the other, so a line can match one of them only.
+ *
+ * Red until J-48's cure: the two cases with a boundary. Before it, the History labels the row by its kind, in its kind
+ * label and in its description. The cases named «control» hold before the cure and after it.
+ */
+describe('J-48 — a leg crossing the scope reads as a transfer in the History', () => {
+    const BROKER = {id: 61, name: 'Broker Alfa'} satisfies BrokerLike;
+    /** The row that closes either lot: a sale, or the sending leg of a transfer read at the scope's edge. */
+    const CLOSING_ID = 7_540;
+
+    /** A row's `scope_boundary`: IN or OUT across the scope's edge, null on a plain row, or absent. */
+    interface BoundaryField {
+        scope_boundary?: 'IN' | 'OUT' | null;
+    }
+
+    /** A plain row, as the backend sends one since J-48. */
+    const PLAIN: BoundaryField = {scope_boundary: null};
+
+    /** «No boundary» as a row may carry it: null, as the backend sends a plain row; absent, as a response from before J-48. */
+    const NO_BOUNDARY: ReadonlyArray<{name: string; field: BoundaryField}> = [
+        {name: 'null', field: {scope_boundary: null}},
+        {name: 'absent', field: {}},
+    ];
+
+    /** A row of the lot's History, as the generated client parses it. */
+    function historyRow(event: Record<string, unknown> & BoundaryField): LotTimelineEvent {
+        const row = schemas.LotTimelineEventSchema.parse({lot_id: LOT_ID, ...event});
+        // Control: a client that stripped the field would make the red its own, not the modal's.
+        expect(row.scope_boundary ?? null, 'control: the generated client keeps scope_boundary as sent').toBe(event.scope_boundary ?? null);
+        return row;
+    }
+
+    /** The row that opens the lot on 3 February, 10 units at Broker Alfa at 20 EUR: a BUY, or the receiving leg of a transfer read as an ADJUSTMENT_IN. */
+    function openingRow(kind: 'BUY' | 'ADJUSTMENT_IN', boundary: BoundaryField): LotTimelineEvent {
+        return historyRow({date: '2025-02-03', kind, transaction_id: LOT_ID, related_transaction_id: null, broker_id: BROKER.id, quantity: '10', unit_price: '20', opening_value: '200', ...boundary});
+    }
+
+    /** The row that closes the lot on 15 September, its 10 units at 25 EUR: a SELL, or the sending leg of a transfer read as an ADJUSTMENT_OUT. */
+    function closingRow(kind: 'SELL' | 'ADJUSTMENT_OUT', boundary: BoundaryField): LotTimelineEvent {
+        return historyRow({
+            date: '2025-09-15',
+            kind,
+            transaction_id: CLOSING_ID,
+            related_transaction_id: null,
+            broker_id: BROKER.id,
+            fragment_id: `lot:${LOT_ID}/origin:${BROKER.id}`,
+            quantity: '10',
+            unit_price: '25',
+            open_unit_price: '20',
+            close_unit_price: '25',
+            proceeds: '250',
+            realized_pnl: '50',
+            ...boundary,
+        });
+    }
+
+    /** A lot whose History holds a row that may cross the scope's edge. */
+    interface Crossing {
+        /** The row under test: its index in the History and its kind. */
+        index: number;
+        kind: 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT';
+        /** The label kind J-48 gives the row across the boundary. */
+        transfer: 'TRANSFER_IN' | 'TRANSFER_OUT';
+        /** The lot's History, the row under test carrying `boundary`. */
+        history: (boundary: BoundaryField) => LotTimelineEvent[];
+    }
+
+    /** A lot that came into the scope by a transfer: the receiving leg opens it (row 0); a SELL closes it. */
+    const ENTERED: Crossing = {index: 0, kind: 'ADJUSTMENT_IN', transfer: 'TRANSFER_IN', history: (boundary) => [openingRow('ADJUSTMENT_IN', boundary), closingRow('SELL', PLAIN)]};
+    /** A lot that left the scope by a transfer: a BUY opens it; the sending leg closes it (row 1). */
+    const LEFT: Crossing = {index: 1, kind: 'ADJUSTMENT_OUT', transfer: 'TRANSFER_OUT', history: (boundary) => [openingRow('BUY', PLAIN), closingRow('ADJUSTMENT_OUT', boundary)]};
+
+    /** Mount the modal on the closed LONG lot whose History is `rows`: 10 units at Broker Alfa, opened at 20 EUR, closed at 25. */
+    function mountClosedLot(rows: LotTimelineEvent[]): void {
+        const lot = schemas.LotSummarySchema.parse({
+            lot_id: LOT_ID,
+            opening_transaction_id: LOT_ID,
+            asset_id: 9_031,
+            direction: 'LONG',
+            opening_broker_id: BROKER.id,
+            opening_date: '2025-02-03',
+            closing_date: '2025-09-15',
+            opening_unit_price: '20',
+            original_quantity: '10',
+            original_cost: '200',
+            open_quantity: '0',
+            realized_quantity: '10',
+            realized_pnl: '50',
+            cumulative_proceeds: '250',
+            states: ['LONG', 'CLOSED'],
+            current_custody: [],
+        });
+        render(LotCustodyModal, {open: true, lot, history: rows, brokers: [BROKER], currency: CURRENCY, onClose: vi.fn()});
+    }
+
+    /** The lines `element` shows: the text each element of it holds of its own, whitespace runs collapsed, empty ones left out. */
+    function linesOf(element: HTMLElement): string[] {
+        return [element, ...Array.from(element.querySelectorAll('*'))]
+            .map((node) =>
+                Array.from(node.childNodes, (child) => (child.nodeType === Node.TEXT_NODE ? (child.textContent ?? '') : ''))
+                    .join('')
+                    .replace(/\s+/g, ' ')
+                    .trim(),
+            )
+            .filter((line) => line !== '');
+    }
+
+    /** History row `index`, by its test id inside the History's, inside the modal's. */
+    function historyRowElement(index: number): HTMLElement {
+        const historySection = within(screen.getByTestId('lot-custody-modal')).getByTestId('lot-custody-modal-history');
+        return within(historySection).getByTestId(`lot-custody-modal-history-row-${index}`);
+    }
+
+    /** The catalogue's text for `key`, through the i18n the harness boots, after the barrier that the key resolves. */
+    function catalogueLabel(key: string): string {
+        const label = get(_)(key);
+        expect(label, `barrier: the catalogue resolves ${key}`).not.toBe(key);
+        return label;
+    }
+
+    /** The two labels a row of `crossing` can take, the catalogue's own; neither may hold the other, as lines are searched for each. */
+    function labelsOf(crossing: Crossing): {transfer: string; adjustment: string} {
+        const transfer = catalogueLabel(`brokers.lots.modal.event.${crossing.transfer}`);
+        const adjustment = catalogueLabel(`brokers.lots.modal.event.${crossing.kind}`);
+        expect(transfer, `barrier: the ${crossing.transfer} label does not hold the ${crossing.kind} one`).not.toContain(adjustment);
+        expect(adjustment, `barrier: the ${crossing.kind} label does not hold the ${crossing.transfer} one`).not.toContain(transfer);
+        return {transfer, adjustment};
+    }
+
+    /** A History row labelled `expected`: its kind label reads `expected`, and no line names `other` — its description neither. */
+    function expectLabelled(lines: string[], expected: string, other: string, why: string): void {
+        expect(lines, `${why}: its kind label`).toContain(expected);
+        expect(
+            lines.filter((line) => line.includes(other)),
+            `${why}: no line names «${other}», its description neither`,
+        ).toEqual([]);
+    }
+
+    // RED until J-48's cure: before it, the History labels the row by its kind — the ADJUSTMENT_IN label, in its kind label
+    // and in its description.
+    it('a lot that came into the scope by a transfer: its ADJUSTMENT_IN opening row, scope_boundary IN, reads TRANSFER_IN, not ADJUSTMENT_IN', () => {
+        const {transfer, adjustment} = labelsOf(ENTERED);
+
+        mountClosedLot(ENTERED.history({scope_boundary: 'IN'}));
+
+        expectLabelled(linesOf(historyRowElement(ENTERED.index)), transfer, adjustment, 'J-48: the leg entering the scope reads as a transfer');
+    });
+
+    // RED until J-48's cure: before it, the History labels the row by its kind — the ADJUSTMENT_OUT label, in its kind label
+    // and in its description.
+    it('a closed lot that left the scope by a transfer: its ADJUSTMENT_OUT closure row, scope_boundary OUT, reads TRANSFER_OUT, not ADJUSTMENT_OUT', () => {
+        const {transfer, adjustment} = labelsOf(LEFT);
+
+        mountClosedLot(LEFT.history({scope_boundary: 'OUT'}));
+
+        expectLabelled(linesOf(historyRowElement(LEFT.index)), transfer, adjustment, 'J-48: the leg leaving the scope reads as a transfer');
+    });
+
+    // Control, green before and after the cure: the same row without a boundary is the adjustment it is.
+    it.each(NO_BOUNDARY)('control: the same ADJUSTMENT_IN opening row, its boundary $name, reads ADJUSTMENT_IN', ({field}) => {
+        const {transfer, adjustment} = labelsOf(ENTERED);
+
+        mountClosedLot(ENTERED.history(field));
+
+        expectLabelled(linesOf(historyRowElement(ENTERED.index)), adjustment, transfer, 'an adjustment of the scope keeps its label');
+    });
+
+    // Control, green before and after the cure: the same row without a boundary is the adjustment it is.
+    it.each(NO_BOUNDARY)('control: the same ADJUSTMENT_OUT closure row, its boundary $name, reads ADJUSTMENT_OUT', ({field}) => {
+        const {transfer, adjustment} = labelsOf(LEFT);
+
+        mountClosedLot(LEFT.history(field));
+
+        expectLabelled(linesOf(historyRowElement(LEFT.index)), adjustment, transfer, 'an adjustment of the scope keeps its label');
+    });
+
+    // Control, green before and after the cure: labels only. The details of the leg leaving the scope follow its kind, so
+    // its value is still handed over (J-10); a cure that read the label kind there would draw no details at all.
+    it('control: the ADJUSTMENT_OUT closure row, scope_boundary OUT, keeps the details of its kind — a closing price and a value handed over, not proceeds', () => {
+        const closePrice = catalogueLabel('brokers.lots.modal.historyDetail.closePrice');
+        const handedOver = catalogueLabel('brokers.lots.modal.historyDetail.handedOver');
+        const proceeds = catalogueLabel('brokers.lots.modal.historyDetail.proceeds');
+        expect(handedOver, 'barrier: the catalogue tells the value handed over from proceeds').not.toBe(proceeds);
+
+        mountClosedLot(LEFT.history({scope_boundary: 'OUT'}));
+        const details = linesOf(within(historyRowElement(LEFT.index)).getByTestId(`lot-custody-modal-history-details-${LEFT.index}`));
+
+        expect(details, 'a closure shows its closing price').toContain(closePrice);
+        expect(details, 'the units are handed over: the value of an ADJUSTMENT_OUT').toContain(handedOver);
+        expect(details, 'nothing was sold: no proceeds').not.toContain(proceeds);
     });
 });

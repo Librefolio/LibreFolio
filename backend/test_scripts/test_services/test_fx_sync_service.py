@@ -7,8 +7,8 @@ Focus: pair-sync orchestration branches in services/fx/sync.py
 - sync_pairs_bulk._compute_multi_step
 - X-R38: a rate no column can keep, in sync_pairs_bulk and ensure_rates_multi_source (see its block at the end)
 - X-R50 (E's review R13-SEC5 on X-R38): a rate whose double is 1E+14, in sync_pairs_bulk (in the X-R38 block)
-- X-R65 (N83): no provider rate stored before 1900-01-01, whatever the start ("min" included), in
-  _is_date_within_sync_range and sync_pairs_bulk (its block at the end)
+- X-R65 (N83, revised 19/10): no floor at 1900-01-01 -- a provider rate inside the requested range is stored whatever its
+  date, "min" included -- in _is_date_within_sync_range and sync_pairs_bulk (its block at the end)
 """
 
 import asyncio
@@ -715,27 +715,32 @@ async def test_xr38_ensure_rates_multi_source_overwrites_a_legacy_rate_no_column
 
 
 # ============================================================================
-# X-R65 (N83): the provider sync stores no rate dated before 1900-01-01
+# X-R65 (N83, revised 19/10): the provider sync stores a rate dated before 1900-01-01 like any other
 # ============================================================================
 #
-# Measured before the cure: sync_pairs_bulk keeps a provider's observation when _is_date_within_sync_range says it lies in
-# the requested range, and with the start "min" that range has no floor: an observation dated 1899-12-31, or 0001-01-01,
-# is stored, and a backward fill or a replay then walks from it (J's SEC8-1b: about 740 000 days from year one). An
-# explicit start before 1900 lets it through the same way.
+# X-R65 (coordinator decisions 17/10) put a floor in _is_date_within_sync_range: an observation dated before
+# EARLIEST_RANGE_START (1900-01-01) was out of the requested range whatever the start, "min" included, and sync_pairs_bulk
+# dropped it -- J's SEC8-1b: a rate on 0001-01-01 made a backward fill or a replay walk about 740 000 days. N83's revision
+# (developer, 19/10: «se voglio leggere e salvare più indietro devo poterlo fare») takes the 1900 floor off every write of
+# prices and rates, the FX sync included; the walks stay bounded where they read (N75's 100 years, R13-SEC8's replay
+# floors), and those read cuts do not change.
 #
-# Contract (X-R65, coordinator decisions 17/10): _is_date_within_sync_range(target, start, end) is False for every target
-# before EARLIEST_RANGE_START (1900-01-01), whatever the start, "min" included; 1900-01-01 itself is in; the end bounds
-# the range as before. ensure_rates_multi_source has no production caller: out of scope.
+# Contract (N83, revised): _is_date_within_sync_range(target, start, end) is the requested range and nothing else: with
+# "min", every day up to the end, 0001-01-01 and 1899-12-31 included; with an explicit start, every day from it to the
+# end, whatever its century; a day after the end, or before an explicit start, stays out. sync_pairs_bulk stores the
+# provider's rates of those days as delivered. ensure_rates_multi_source has no production caller: out of scope.
 #
 # The pair is this block's own (no seed and no other test uses SOS): MOCKFX quotes EUR → SOS, stored EUR/SOS as it comes.
 # Its rates in the window and its route are wiped before and after each test; the provider is a MockFXProvider whose
 # fetch answers the block's days whatever the range asked, behind a fetch cache of the test's own.
+#
+# Red before N83's revision (HEAD f5135c9a1): both tests of the block, for the reason each docstring gives.
 
-XR65_FLOOR = date(1900, 1, 1)  # EARLIEST_RANGE_START: the contract's floor, written here and not read from the code
+XR65_OLD_FLOOR = date(1900, 1, 1)  # EARLIEST_RANGE_START: the floor X-R65 gave the sync and N83's revision took away
 XR65_PAIR = ("EUR", "SOS")
 XR65_END = date(1900, 1, 2)
-#: What MOCKFX delivers for SOS, by day: two days before the floor (year one among them), the floor, the day after it.
-XR65_DELIVERED = {date(1, 1, 1): "2.5", date(1899, 12, 31): "2.75", XR65_FLOOR: "3", XR65_END: "3.25"}
+#: What MOCKFX delivers for SOS, by day: two days before the old floor (year one among them), the old floor, the day after it.
+XR65_DELIVERED = {date(1, 1, 1): "2.5", date(1899, 12, 31): "2.75", XR65_OLD_FLOOR: "3", XR65_END: "3.25"}
 
 
 async def _xr65_wipe() -> None:
@@ -772,20 +777,23 @@ def _xr65_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(fx_service, "_fx_fetch_cache", cache)
 
 
-def test_xr65_sync_range_has_a_floor_at_1900_whatever_the_start():
-    """Red today: with the start "min" every day up to the end is in range, 1899-12-31 and 0001-01-01 included; with an
-    explicit start before 1900, every day from it.
+def test_xr65_sync_range_has_no_floor_at_1900():
+    """N83 (revised 19/10): the sync range is the requested one, whatever the century.
 
-    Contract (X-R65): a day before 1900-01-01 is out of range whatever the start; 1900-01-01 is in, with "min" as with an
-    earlier start; a day after the end stays out.
+    Red before N83's revision: a day before 1900-01-01 is out of range whatever the start -- 1899-12-31 and 0001-01-01
+    with "min", 1899-12-31 from 1899-12-01, every day of 0001-01-01 … 9999-12-31 before the floor, 1850-06-01 on its own.
+    Contract: with "min", every day up to the end is in, year one included; with an explicit start, every day from it to
+    the end; 1900-01-01 is a day like any other; a day after the end, or before an explicit start, stays out.
     """
     cases = [
-        (date(1899, 12, 31), "min", date(1900, 1, 3), False),
-        (date(1, 1, 1), "min", date(2025, 1, 1), False),
-        (date(1899, 12, 31), date(1899, 12, 1), date(1900, 1, 3), False),
-        (date.min, date.min, date.max, False),
-        (XR65_FLOOR, "min", date(1900, 1, 3), True),
-        (XR65_FLOOR, date(1899, 12, 1), date(1900, 1, 3), True),
+        (date(1899, 12, 31), "min", date(1900, 1, 3), True),
+        (date(1, 1, 1), "min", date(2025, 1, 1), True),
+        (date(1899, 12, 31), date(1899, 12, 1), date(1900, 1, 3), True),
+        (date.min, date.min, date.max, True),
+        (date(1850, 6, 1), date(1850, 6, 1), date(1850, 6, 1), True),
+        (XR65_OLD_FLOOR, "min", date(1900, 1, 3), True),
+        (XR65_OLD_FLOOR, date(1899, 12, 1), date(1900, 1, 3), True),
+        (date(1899, 11, 30), date(1899, 12, 1), date(1900, 1, 3), False),
         (date(1900, 1, 4), "min", date(1900, 1, 3), False),
     ]
     wrong = []
@@ -798,13 +806,20 @@ def test_xr65_sync_range_has_a_floor_at_1900_whatever_the_start():
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("xr65_pair")
-@pytest.mark.parametrize("start", [pytest.param("min", id="start-min"), pytest.param(date(1899, 12, 31), id="start-1899-12-31")])
-async def test_xr65_sync_stores_no_rate_before_1900(monkeypatch, start):
-    """Red today: MOCKFX delivers EUR → SOS on 0001-01-01, 1899-12-31, 1900-01-01 and 1900-01-02; synced up to 1900-01-02,
-    the four days are stored from "min", and the three from 1899-12-31 on from that start.
+@pytest.mark.parametrize(
+    ("start", "expected_days"),
+    [
+        pytest.param("min", tuple(XR65_DELIVERED), id="start-min"),
+        pytest.param(date(1899, 12, 31), (date(1899, 12, 31), XR65_OLD_FLOOR, XR65_END), id="start-1899-12-31"),
+    ],
+)
+async def test_xr65_sync_stores_a_providers_rates_before_1900(monkeypatch, start, expected_days):
+    """N83 (revised 19/10): MOCKFX delivers EUR → SOS on 0001-01-01, 1899-12-31, 1900-01-01 and 1900-01-02; synced up to
+    1900-01-02, the pair stores every delivered day of the requested range, as delivered.
 
-    Contract (X-R65): whatever the start, the pair stores 1900-01-01 and 1900-01-02 alone, as delivered, and its result
-    is ``ok``.
+    Red before N83's revision: whatever the start, the pair stores 1900-01-01 and 1900-01-02 alone.
+    Contract: from "min" the four days are stored; from 1899-12-31 the three from that day on -- 0001-01-01 lies before
+    the start --; the pair's result is ``ok``.
     """
     base, quote = XR65_PAIR
     _xr65_provider(monkeypatch)
@@ -817,5 +832,6 @@ async def test_xr65_sync_stores_no_rate_before_1900(monkeypatch, start):
     async with AsyncSession(get_async_engine()) as session:
         rows = (await session.execute(select(FxRate.date, FxRate.rate).where(FxRate.base == base, FxRate.quote == quote, FxRate.date <= XR65_END))).all()
     stored = {row.date: row.rate for row in rows}
-    assert stored == {XR65_FLOOR: Decimal("3"), XR65_END: Decimal("3.25")}, f"synced from {start!r} up to {XR65_END}, EUR/SOS stored {stored}"
+    expected = {day: Decimal(XR65_DELIVERED[day]) for day in expected_days}
+    assert stored == expected, f"synced from {start!r} up to {XR65_END}, EUR/SOS stored {stored}: expected {expected}"
     assert result.status == "ok", result

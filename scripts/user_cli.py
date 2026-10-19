@@ -192,7 +192,8 @@ async def cmd_set_email(username: str, address: str):
 
     The address must be free regardless of case. A change ends the account's sessions and its address is not verified
     any more; the same address in another case only changes how it is written. It also separates two accounts that
-    share an address apart from case, which stops migration 009: it works on the database as it is.
+    share an address apart from case, which stops the 1.3 migration (``005_release_1_3_0_schema``) before its unique
+    index: it works on the database as it is.
     """
     try:
         email = TypeAdapter(EmailStr).validate_python(address)
