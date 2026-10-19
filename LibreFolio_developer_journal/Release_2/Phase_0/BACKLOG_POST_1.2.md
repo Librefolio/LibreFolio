@@ -3048,7 +3048,10 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   `warning` o `info`, via `DATA_QUALITY_TONE`), ogni riga il suo, e i chip stanno sulla card col bordo nel colore dello
   stato (proposta a, T3-b). Va scritta anche la regola del developer per i banner (rosso per gli errori veri, ambra per
   i dati mancanti, blu per le note, verde per i successi) e il `MISSING_PRICE` del rischio diventato un avviso. Per la
-  passata della documentazione a fine programma (docs-writer). Dettagli: piano di T, «Giro 3 della designer».
+  passata della documentazione a fine programma (docs-writer). Dettagli: piano di T, «Giro 3 della designer». **Dal
+  19/10 (T2) anche la disposizione:** nel modo raggruppato il pulsante che ripara tutta la categoria sta in testa, col
+  messaggio e le voci sotto (le coppie, o i nomi degli asset di STALE_PRICE, al più 3 e «+N»); aggiungere o aprire una
+  coppia è un chip per coppia, come gli asset; il modo piatto è invariato (piano di T, «T2»).
 - ✅ **TC-20 · Il caso «export JSON, reset all, import back» del Lab dava per diverse due sorgenti di colore diventate
   una** — basso, test; T, 18/10, verifica per l'ingresso di DV; **chiusa il 18/10 nel checkpoint di R3-c** (commit
   `6b218d4a4`, entrato in `cd686f445`): per il passo L2 il caso usa la radice della pagina delle transazioni
@@ -3072,6 +3075,13 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   due strati; chi tinge le righe con `getRowClass` imposta `--dt-row-tint`, mai lo sfondo della riga (`AssetTable`).
   Per la passata della documentazione a fine programma (docs-writer). Dettagli: piano di T, «Le colonne fisse
   trasparenti».
+- **TC-23 · Nei pannelli del rischio i chip «Aggiungi coppia FX» portano tutti a `/fx`** — minimo; T, 19/10, T2 (il
+  pulsante sopra ciò che ripara). Il banner raggruppato dà ora un chip per coppia ad `add_fx_pair` e `navigate_fx`, e
+  ogni chip passa la sua coppia come `target`. La dashboard apre l'aggiunta su quella coppia; nei pannelli del rischio
+  (`RiskPanelHeader`, `RiskAnalysisPanel`, `labQualityAction` di `features/risk/syncTargets.ts`, usato da
+  `AssetSetRiskPanel`) `add_fx_pair` porta a `/fx` qualunque sia il `target`, come faceva il pulsante unico. Per il
+  proprietario del rischio (la 1.3): aprire l'aggiunta sulla coppia del chip, se serve; `syncTargets.test.ts` fissa
+  oggi il comportamento attuale. Dettagli: piano di T, «T2».
 
 ---
 
