@@ -2,6 +2,7 @@
     import {tick} from 'svelte';
     import * as echarts from 'echarts';
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {z} from 'zod';
     import {schemas} from '$lib/api';
@@ -1292,7 +1293,7 @@
         }
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, chartInitOptions(chartContainer));
             attachChartReady(chartInstance, chartContainer, 'lot-gantt');
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
@@ -1309,7 +1310,7 @@
             chartInstance.on('rendered', refreshOverlayRects);
         }
         if (axisContainer && !axisInstance) {
-            axisInstance = echarts.init(axisContainer, CHART_INIT_THEME, {renderer: 'canvas'});
+            axisInstance = echarts.init(axisContainer, CHART_INIT_THEME, chartInitOptions(axisContainer));
             axisOptionSet = false;
             axisDataZoomTouchPanHandle = attachDataZoomTouchPan(axisInstance, axisContainer);
             axisDataZoomSyncHandle = attachDataZoomSync(axisInstance, (start, end) => onZoomChange?.(start, end));
