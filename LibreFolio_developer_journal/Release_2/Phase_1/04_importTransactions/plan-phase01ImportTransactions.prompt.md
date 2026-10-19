@@ -6759,3 +6759,148 @@ schermo, non decidono un doppione: restano.
    - Non girato: nessun E2E. Proposto facoltativo: `front-transaction tx-import-duplicate-precedence` (6 test, i gruppi tra file sul
      percorso dei dati veri).
 6. ✅ **Backlog**: W-B81 ✅.
+
+> **W-B81 entrata** (17/10 20:4x): dev `5890d512c` (`f5536f856` + `e8b29cc0e`), CHANGELOG `05b6b834e` (la riga di W-B51 estesa). E2E di
+> conferma dopo l'ingresso, sul tip, chiesto dal coordinatore: `front-transaction tx-import-duplicate-precedence`
+> (`files/scripts/wb81_post_e2e.sh`, dietro il cancello di carico).
+> ✅ 17/10 20:50, carico 20–49: `api sync`, `db populate`, **`tx-import-duplicate-precedence` 6/6** (37,6 s) sul tip `05b6b834e`; porta 6184
+> libera dopo. Log `files/logs/wb81/post_*.log`.
+
+### Revisione dopo l'ingresso — Z-33, `redate_provider_events` (2026-10-17) ✅ OK
+
+`backend/app/services/assets/event_store.py:101` (commit `60170aae5`, dev `51b5c8db1`), chiamata da `_settle_exchange_timezone`
+(`refresh.py:513-574`). Verificato:
+- l'evento si sposta solo se la storia fresca ha il suo tipo su S+1 e non su S (`event_target`); il resto della refresh non scrive
+  nulla senza la storia piena o il fuso (`Nothing written…`), quindi nessuna riga nuova esiste prima del controllo;
+- dal più recente al più vecchio: uno spostamento in avanti di un giorno non incontra mai l'evento successivo ancora da spostare
+  (la chiave vecchia esce da `by_key` prima che entri la nuova);
+- il tipo confrontato con `str(...).strip().upper()` su `AssetEventType` (`StrEnum`: il valore), come `fresh_events` (`refresh.py:263`);
+- l'unica FK verso `asset_events` è `transactions.asset_event_id` (RESTRICT, `models.py:964`): la fusione ripunta le transazioni
+  prima del `delete`; nessun vincolo d'unicità sugli eventi (`models.py:1037`), quindi un evento manuale sullo stesso giorno convive;
+- lo SPLIT porta con sé solo le sue ADJUSTMENT del giorno vecchio, con un `UPDATE` che salta il controllo dei saldi: il cammino
+  controlla la fine di ogni giorno (`transactions/balances.py:96-130`), e spostare in avanti le righe dello split le allinea alle
+  date del broker; il saldo di S scende sotto zero solo se gli scambi di S fossero in unità dopo lo split, cosa che un report non
+  scrive. Il costo medio mette prima le aggiunte e poi le riduzioni dello stesso giorno (`financial_math/average_cost.py:24`),
+  come per uno split datato giusto da sempre (New York);
+- prove: 8 test di eventi e transazioni (`test_asset_source_refresh.py:1537-1740`): spostamento solo con la storia, SPLIT con la sua
+  ADJUSTMENT, ADJUSTMENT già sul giorno giusto intatta, il dividendo che non sposta la sua transazione, nessun'altra transazione,
+  la fusione col gemello, nessun doppione accanto allo spostato.
+Esito: **OK**, nessun reperto.
+
+### K3 — analisi in sola lettura (2026-10-17, base `05b6b834e`)
+
+Via del coordinatore (17/10 20:4x): «Start K3 now: analysis first. Read B-47/B-48 first». W-B65 di B è in dev (`cde76dc54`):
+`TransactionBulkModal.svelte` è libero.
+
+**Stato reale, voce per voce**
+
+1. **🔗 Eventi collegabili nel Bulk** (`TODO_FUTURI.md:56`, da P2-6). Backend pronto: `POST /transactions/events/suggest`
+   (`api/v1/transactions.py:246`, `services/transactions/event_suggestions.py`), **12** test API (`test_events_suggest.py`; il TODO dice 8
+   e un percorso vecchio). Nessun chiamante nel frontend. Lacune trovate:
+   - **due fonti per una mappa**: `suggest_events_bulk` scrive a mano DIVIDEND→DIVIDEND, INTEREST→INTEREST, ADJUSTMENT→PRICE_ADJUSTMENT/SPLIT;
+     `EVENT_TYPE_METADATA` (`schemas/transactions/type_metadata.py:479`) dà anche MATURITY_SETTLEMENT→INTEREST: il suggerimento non propone
+     mai una scadenza a un INTEREST;
+   - `tolerance_days ≤ 7` (`schemas/transactions/event_suggest.py:32`), contro lo slider del Bulk 0–14 (`TxBulkToolbar.svelte:71`) e il
+     picker 1–30 (`AssetEventPicker.svelte:40`);
+   - lista senza tetto, una SELECT per richiesta; a pari distanza l'ordine del DB; il candidato non porta `notes` (il picker le mostra);
+   - `AssetEventPicker` (`features/transactions/events/`, 498 righe) legge `query_events_bulk` (`POST /assets/events/query`): **ogni tipo**
+     nella finestra, quindi dalla UI un DIVIDEND si collega a uno SPLIT; la finestra calcolata nel browser (`new Date` + `toISOString`,
+     `:105-112`) perde un giorno a un bordo quando attraversa un cambio d'ora;
+   - **la regola 9 non guarda il tipo dell'evento**: `schemas/transactions/transactions.py:141` (tipo compatibile e asset),
+     `_validate_asset_event_link` (`services/transactions/validation.py:25`: esiste e stesso asset). I calcoli leggono il legame per tipo
+     dell'evento (`financial_math/splits.py:40` `load_split_links`: ogni transazione legata a uno SPLIT, «each caller decides»); dal lato
+     dell'evento P-10 (decisione 27) già rifiuta il cambio di tipo di uno SPLIT collegato.
+2. **B-47** confermata: `CompactCashCell.handleBlur` (`features/transactions/form/CompactCashCell.svelte:100-103`) emette sempre la forma
+   mostrata (`0.01` per `0.010000`), `setCash` (`TransactionFormModal.svelte:1238`) la prende, `serializeOps` confronta il testo → «scartare?».
+   Nello stesso giro: l'`$effect` di sincronia confronta con `Number` (`:74-86`); `txCreateItemToPendingOp` legge la cassa con `Number`
+   (`TransactionBulkModal.svelte:2228-2234`; la quantità due righe sopra è già esatta); `isDraftReadyForValidation` legge `amount === '0'`
+   (`transactionTypeStore.ts:273`: `0.00` è «pronto»); il ramo FX di `isFormComplete` `Number(...) !== 0` (`TransactionFormModal.svelte:733-736`).
+3. **B-48** confermata: `ExactQuantityInput` (`components/ui/input/ExactQuantityInput.svelte:108`) conta intere (15) e decimali (10) a parte;
+   il backend tiene 15 cifre significative in tutto (`db/precision.py:41`, `REAL_SIGNIFICANT_DIGITS`). Commento vecchio
+   `e2e/transactions/tx-bulk-promote-cost-basis.spec.ts:117`. La cella della cassa non ha nessun tetto di cifre (stessa classe).
+4. **K-2** confermata: percorso lento, il form o il wizard si aprono subito (`TransactionBulkModal.svelte:471-482`) e, a caricamento finito,
+   `if (!formOpen) scheduleAutoOpen(...)` (`:500-502`) riapre quello che l'utente ha chiuso.
+5. **K-3** confermata: `resetAll` (`:898-910`) senza `|| d.inaccessible` (c'è in `resetRow`, `:890`).
+6. **K-4** confermata, **più grave del titolo**: `ensureCurrenciesLoaded($currentLanguage)` (`:487`) è letto in modo sincrono nell'`$effect`
+   d'apertura; un cambio di lingua lo rilancia, e l'effetto ricostruisce `ops` dall'intento (`:441-449`) e azzera divisioni, promozioni e
+   problemi: **le modifiche non salvate si perdono**. Cura: `untrack`.
+7. **V-37b**: punto di partenza confermato, ⚡ `disabled={!isFormComplete}` (`TransactionFormModal.svelte:1583`); gli errori propri portano
+   già al primo campo (`focusFirstLocalError` `:1109`, `validateNow` `:1122`). Stima di V: 1,5–2 giorni; 2–4 chiavi (mie), `form.en.md`,
+   galleria, `tx-fx-completeness:262/:363/:389`. Il controllo delle cifre significative di B-48 entra nel passo del formato.
+8. C-65a con X: fuori da K3 (dopo, come deciso).
+
+**Sotto-lotti proposti** (un checkpoint ciascuno): **K3a** (K-4, B-47, K-2, K-3, B-48: sicurezza dei dati prima, ~mezza giornata);
+**K3b** (🔗: un motore, banner del Bulk, picker sul motore, regola 9b, ~1,5–2 giorni); **K3c** (V-37b, ~1,5–2 giorni, se c'è tempo).
+
+**Decisioni chieste**: D-K3-1 una mappa sola da `EVENT_TYPE_METADATA` (il suggerimento propone anche MATURITY_SETTLEMENT a INTEREST);
+D-K3-2 regola 9b alla scrittura (un legame a un evento di tipo non compatibile → 400 con codice e parametri, tradotto; le righe vecchie
+restano finché il legame non cambia); D-K3-3 il picker sul motore (solo tipi compatibili, finestra lato server fino a 30 giorni);
+D-K3-4 il banner del Bulk (una riga per transazione col candidato più vicino e «Collega», scelta se più di uno, «Collega tutti» solo per
+le righe con un candidato solo); D-K3-5 `tolerance_days ≤ 30`, tetto della lista, spareggio (distanza, data, id), `notes` nel candidato;
+D-K3-6 il tetto delle 15 cifre significative anche sulla cassa; D-K3-7 V-37b nella 1.3 o dopo.
+
+**Decisioni del coordinatore** (17/10 20:45, tutte approvate): D-K3-1 una mappa da `EVENT_TYPE_METADATA`; D-K3-2 regola 9b alla
+scrittura (400 con codice, tradotto; le righe vecchie restano finché il legame non cambia); D-K3-3 il picker sul motore, finestra lato
+server fino a 30 giorni; D-K3-4 il banner come proposto; D-K3-5 `tolerance_days ≤ 30`, tetto della lista, spareggio (distanza, data, id),
+`notes` nel candidato, `api sync` ok; D-K3-6 le 15 cifre significative anche sulla cassa, prop additiva `maxSignificantDigits` su
+`ExactQuantityInput` ok; **D-K3-7 V-37b nella 1.3, dopo K3b** (il developer, 13/10: «se è facile lo farei subito, altrimenti dopo la 1.2»).
+Scrittura ok sui file di K3a e K3b (nessuno aperto altrove); markup nuovo solo ruoli; le classi di palette di `AssetEventPicker` restano.
+Un checkpoint per sotto-lotto; K3a: prima i rossi, prima la sicurezza dei dati.
+
+**Regole colore per K3** (coordinatore colori, 17/10 21:48; nessun lavoro di colore in sospeso sugli 8 file):
+- le **categorie restano** (aspettano la designer): in `TransactionBulkModal` il viola/indaco della coppia (9 punti), in `TxBulkBanners` e
+  `TxFormPairSection` la coppia e il chip del cambio (2 + 4), in `AssetEventPicker` la mappa dei tipi d'evento (righe 84–86, 12 punti);
+- il banner di K3b **riusa `InfoBanner`** (già importato in `TxBulkBanners`) con il suo tono, come gli altri banner lì: nessuna tinta fatta
+  a mano;
+- in `AssetEventPicker` un tipo d'evento nel markup nuovo prende il colore dalla mappa esistente: nessuna classe di palette nuova;
+- `theme-roles --check` pulito a ogni checkpoint.
+
+### K3a — sicurezza dei dati del Bulk e del Form (2026-10-17, ⏸️ parcheggiato il 19/10)
+
+**Contratto della cura** (i rossi lo fissano prima):
+- **K-4**: `TransactionBulkModal.svelte:487`, la lingua letta con `untrack`: un cambio di lingua col Bulk aperto non rilancia l'effetto
+  d'apertura, le righe e le modifiche restano. (Oggi `currentLanguage` cambia da `LanguageSelector`, Preferenze e `login`, `auth.ts:129`:
+  percorso latente, il rosso imposta lo store.)
+- **B-47**: `CompactCashCell` al blur emette solo se l'importo o la valuta cambiano per valore (`exactDecimalEqual` col valore ricevuto);
+  la sincronia dall'alto confronta per valore esatto, non con `Number`. Un focus e un blur senza modifiche non cambiano la riga: niente
+  «scartare?». `txCreateItemToPendingOp`: la cassa letta come testo esatto (segno tolto come per la quantità), con un aiuto puro in
+  `txPayloadHelpers.ts`. `isDraftReadyForValidation`: una cassa zero in qualunque forma (`0.00`) non è pronta (`exactDecimalSign`).
+  Il ramo FX di `isFormComplete` resta: l'input filtra i caratteri e `Number` è esatto sullo zero, nessun difetto osservabile.
+- **K-2**: l'apertura automatica del percorso lento avviene una volta: chiuso dall'utente prima della fine del caricamento, il form o il
+  wizard non si riapre.
+- **K-3**: `resetAll` salta il segnaposto `inaccessible`, come `resetRow`.
+- **B-48 + D-K3-6**: `decimalDigitCounts` (`utils/core/parseDecimalInput.ts`) conta anche le cifre significative, come il backend
+  (`db/precision.py:168` `_digit_counts`: zeri iniziali e finali esclusi, lo zero ne ha 1); `ExactQuantityInput` prop additiva
+  `maxSignificantDigits` (rosso: `aria-invalid`, `digitsValid` e `valid` falsi); `CompactCashCell` prop additiva `maxSignificantDigits`
+  (`aria-invalid` e il bordo `--lf-danger` nel suo `<style>`); il form passa 15 alla quantità e a ogni cassa (singola, coppia, FX), il
+  valore fuori tetto è un errore proprio del form (V-37: Apply bloccato, ⚡ porta al campo, nessuna richiesta) e sotto il campo compare
+  `transactions.errors.significantDigitsExceeded` (`{max: 15}`, già nelle 4 lingue: nessuna chiave nuova). Il commento di
+  `e2e/transactions/tx-bulk-promote-cost-basis.spec.ts:117` aggiornato.
+
+**Passi**: 1. rossi (test-author); 2. cura; 3. verdi leggeri; 4. E2E nello slot; 5. doc; 6. backlog (K-2…K-4 in `38_postReleaseBacklog`;
+B-47 e B-48 sono nella sezione di B: chiusura chiesta al coordinatore); 7. simulazione e checkpoint.
+
+1. ⏳ **Rossi** (test-author `k3a-reds`, 17/10): primo giro **26 rossi Vitest + 1 E2E**. `bulk/TransactionBulkModal.test.ts` nuovo
+   (montaggio del Bulk con Form e wizard finti, registrato in `component-unit`): K-4, K-2 (creazione e import), K-3; `CompactCashCell` (B-47 ×3,
+   B-48), `TransactionFormModal` (B-47, B-48 ×3), `ExactQuantityInput`, `parseDecimalInput` (10), `transactionTypeStore` (zero ×3). E2E
+   `tx-bulk-operations.spec.ts` «B-47: a focus and a blur on the cash of a saved DEPOSIT…» (la chiusura chiede di scartare).
+   > **⚠️ Fuori pista** (dal test-author): (a) il tetto delle 15 cifre rende **PC5** (`tx-bulk-promote-cost-basis.spec.ts`, regressione di
+   > C-46: la barra di selezione confrontava doppi) impossibile da digitare: sotto 15 cifre significative due decimali diversi sono due doppi
+   > diversi (DBL_DIG). Decisione mia: il soggetto di C-46 passa al Vitest del Bulk con le righe iniettate come da un import (guardia, verde);
+   > l'E2E PC5 diventa l'E2E di B-48 (il form rifiuta le 18 cifre). (b) Cinque casi del Form («exact quantity contract») e uno di
+   > `tx-fx-completeness` digitano 18 cifre: stesso soggetto con valori nel dominio (≤ 15 significative; sotto 1e-6 dove il punto è «mai
+   > `Number`», perché `String(Number(x))` scrive l'esponente). (c) **K-3b, trovata ora**: dopo un reset, se la metà leggibile è quella che
+   > riceve, la coppia sparisce dalla griglia: il passo 1 di `collapsePairedOps` legge la cassa ignota del segnaposto come 0 e nasconde la
+   > metà leggibile. Cura nello stesso lotto: il segnaposto è sempre il partner nascosto della metà leggibile, come nella prima costruzione.
+
+> **⏸️ Parcheggiato il 19/10** (fermo del developer del 17/10 21:47; alla ripartenza K3 è fra gli ampliamenti che il developer sta leggendo,
+> N91). Il secondo giro del test-author era finito ma **mai girato**: K-3b (la metà ricevente, col reset di riga e con «Reset all»), PC5 diviso
+> (la guardia di C-46 nel Vitest del Bulk; l'E2E PC5 diventa quello di B-48), i sei casi portati nel dominio (5 del Form, uno di
+> `tx-fx-completeness`). La cura non è mai stata applicata.
+> - **Dove**: cartella di sessione di W (`e71e0e34-…`), `files/parked/`: `k3a-reds-20261019.patch` (10 file: i 9 tracciati e
+>   `bulk/TransactionBulkModal.test.ts` nuovo; 1 858 righe), `k3a_cure.py` (la cura, dry run pulito su 8 file), `k3a_light.sh`, gli hash
+>   (`k3a-parked-sha256.txt`) e lo stato (`k3a-parked-state.txt`). La patch ricostruisce byte per byte i file del 17/10 su `05b6b834e`
+>   (provata su una copia di HEAD, `shasum -c`).
+> - Worktree riportato a HEAD per quei file e il non tracciato tolto; `git apply --check` della patch sul worktree pulito: OK.
+> - **Con la regola del 19/10 sono domande, non decisioni**: le scelte fatte da me in questa sezione (PC5 diviso, i valori nel dominio,
+>   K-3b nello stesso lotto) tornano al coordinatore con le opzioni alla ripresa; D-K3-1…7 aspettano la lettura del developer (N91).
