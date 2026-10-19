@@ -7116,7 +7116,7 @@ Quindi oggi un prezzo negativo non entra da nessuna strada dell'applicazione. St
 | (C) `null` vuol dire «cancella», l'assenza «lascia» (`model_fields_set`) | nessun campo nuovo; l'editor omette già i campi vuoti | oggi `null` vuol dire «lascia» (`schemas/prices.py:103`): per i client che lo mandano è un cambio silenzioso, che cancella dati |
 | (D) Un valore che non può essere un numero, per esempio `"clear"` nel campo | nessuna ambiguità; per l'editor è come la gomma di oggi | il tipo del campo in OpenAPI diventa «numero o `"clear"`», e i client generati cambiano |
 
-### X-R16 ripresa, con X-R83 — via del developer (19/10, 11:50)
+### X-R16 ripresa, con X-R83 — via del developer (19/10, mattina)
 
 Il developer approva X-R16 («allora ok, sono d'accordo»). Il coordinatore: solo X-R16, con i rossi parcheggiati, poi la
 cura; X-R83 nello stesso lotto, rosso prima; X-R48b resta sospesa (dipende da N68). Slot E2E da chiedere, dopo le 14:00.
@@ -7143,7 +7143,7 @@ Base `aabd3dd12` (il giornale della fase 2 committato), albero pulito.
 - **Rossi nuovi affidati** (test-author):
   - Vitest `fxDetailConvertQuery.test.ts`;
   - E2E X-R83 in coda a `asset-detail.spec.ts`.
-- **⚠️ Fuori pista, X-R83 smentita** (12:05, prima di scrivere il suo rosso).
+- **⚠️ Fuori pista, X-R83 smentita** (19/10, prima di scrivere il suo rosso).
   - Il Sync della barra passa dalla modale del sync della pagina: `handlePageSyncComplete` → `handleRefresh()`, che
     invalida la cache e ricarica forzando.
   - Il ramo `canMergeOnly` sta in `runSyncAsset`, che solo il Sync di una card di confronto chiama, e il proprio asset
@@ -7151,7 +7151,7 @@ Base `aabd3dd12` (il giornale della fase 2 committato), albero pulito.
   - Tolta dal lotto la parte E2E del test-author; tolto il gancio `data-chart-last-close`, la pagina è tornata uguale al
     HEAD.
   - X-R83 riscritta nel backlog: togliere il ramo dopo la 1.3, come X-R68.
-- **Cura preparata** (12:20, provata a secco su `/tmp`, Prettier pulito): `xr16_fx_code.py`, che sostituisce la parte
+- **Cura preparata** (provata a secco su `/tmp`, Prettier pulito): `xr16_fx_code.py`, che sostituisce la parte
   `xr16` di `xr16_48b_code.py`.
   - Il modulo nuovo `components/fx/fxDetailConvertQuery.ts`.
   - Nella pagina di una coppia: `axiosInstance` e `convertBulkWithSignalIsolation()` al posto della chiamata Zodios,
@@ -7171,11 +7171,11 @@ Base `aabd3dd12` (il giornale della fase 2 committato), albero pulito.
   - la pagina utente lo dice.
 - **Il −1**: il coordinatore propone al developer la via standard (campo assente = non toccare, `null` = cancella,
   numero = scrivi; nel DB NULL). Si aspetta il suo sì: non si parte.
-  - Mandati al coordinatore due vincoli (11:50).
+  - Mandati al coordinatore due vincoli (19/10, prima delle 12).
   - I fornitori scrivono con lo stesso modello e la stessa funzione (`refresh.py:751`), e passano `None` esplicito per un
     campo mancante. Quindi «`null` = cancella» deve valere solo per la richiesta dell'API manuale.
   - Per i client esterni che mandano `null` diventa una cancellazione: serve una riga ⚠️ Breaking.
-- **Rosso Vitest del parser dei cambi** (test-author, 12:10; rilanciato da me, carico 10):
+- **Rosso Vitest del parser dei cambi** (test-author; rilanciato da me, carico 10):
   `components/fx/fxDetailConvertQuery.test.ts`, 46 casi. Fallisce all'import: «Cannot find module
   './fxDetailConvertQuery'» (`/tmp/libreFolio_xr16_vitest_red.log`).
   - Coperti: la risposta valida, l'isolamento (sei forme non valide, più gruppi), le forme vuote, e i lanci. Lancia una
@@ -7184,3 +7184,159 @@ Base `aabd3dd12` (il giornale della fase 2 committato), albero pulito.
   - Guardia: lo schema generato rifiuta per intero la risposta con un segnale non valido.
   - Il test-author ha provato i casi contro una copia in linea del parser (46/46), poi l'ha tolta.
   - Prettier pulito. Registrato in `core-unit`, accanto al gemello degli asset (`_frontend_utility.py`).
+
+### N83 e N92 (i) — analisi preliminare, in sola lettura (19/10, in attesa dello slot di X-R16)
+
+**N83, togliere il pavimento del 1900 dalle scritture di prezzi e cambi.**
+- **Dove sta oggi** (X-R65, Z, `30e19b9d9`): `stored_date_bounds()` (`utils/date_range_limits.py:74-77`) dà 1900-01-01 e
+  domani. La usano tre scritture:
+  - la scrittura manuale dei prezzi (`price_store.py:264`, 422 `date_out_of_range`);
+  - quella dei cambi (`api/v1/fx/currencies.py:135`);
+  - il filtro dei punti dei fornitori (`refresh.py:737`), che li salta senza contarli.
+  - In più, il Sync dei cambi non va prima del 1900 (`fx/sync.py:38`).
+- **Perché c'era**: un prezzo al 0001-01-01 faceva camminare un riempimento all'indietro o un replay del rischio per circa
+  740.000 giorni (SEC8-1b di J).
+- **Quella porta resta chiusa anche senza il pavimento in scrittura**: ogni cammino giorno per giorno ha il suo.
+  - Il motore (`engine.py:303`, `:685`), `daily_state.py:917`, `native_cash.py:504-509` e l'analisi dei lotti
+    (`lots_analysis_service.py:143`, `:254`) partono al più presto dal 1900 (R13-SEC8).
+  - Il caricamento della storia intera della query dei prezzi parte dal 1900, e una riga più vecchia ne è al più il seme
+    (`price_query.py:344-353`, Z-30).
+  - Ogni cammino è anche tagliato a 100 anni dalla fine (`range_span_floor`).
+- **Cosa vedrebbe l'utente** con un prezzo scritto a mano prima del 1900:
+  - il prezzo si salva e il grafico lo mostra con un intervallo esplicito;
+  - «Tutto» no, perché il cammino si ferma a 100 anni dalla fine;
+  - il motore del portafoglio non lo usa (parte dal 1900), come oggi una transazione prima del 1900, che il controllo
+    di qualità già segnala (MF-SEC8-2a).
+- **Domanda, per coerenza**: la decisione nomina le scritture a mano. Il pavimento va tolto anche dai punti dei fornitori
+  e dal Sync dei cambi?
+  - Così `stored_date_bounds()` resta una sola regola per ogni data salvata: solo il domani.
+  - *Consiglio: sì per i punti dei fornitori; il Sync dei cambi può tenere il suo pavimento, perché chiede ai fornitori
+    solo date reali.*
+- **Superfici**:
+  - `date_range_limits.py`, le docstring delle due route, `price_store.py`, `refresh.py`, `fx/sync.py`;
+  - i test di X-R65: `test_asset_source_upsert_guards.py`, `test_assets_prices.py`, `test_fx_api.py`,
+    `test_fx_sync_service.py`, `test_range_ceiling.py`. I casi «prima del 1900 rifiutata» diventano rossi «accettata»;
+  - le pagine `developer/backend/assets/architecture.md`, `fx/architecture.md`, `fx/configuration.md`;
+  - la riga del CHANGELOG di X-R65.
+  - X-R72 (le date degli eventi senza pavimento) si chiude: va nella stessa direzione.
+  - Da verificare: un limite di data nell'editor dei dati del frontend.
+
+**N92 (i), i prezzi negativi non si accettano.**
+1. **Un giorno negativo di un fornitore si salta con un avviso.**
+   - Oggi l'eccezione nasce dentro il plugin, alla costruzione di `FAPricePoint`. Cinque plugin la costruiscono da sé:
+     justETF, Borsa Italiana, Scheduled Investment, Yahoo, mockprov.
+   - Strada proposta: un costruttore condiviso nella base dei plugin degli asset, che salta il punto non valido con un
+     WARNING nel log (asset, data, motivo) e lo conta. Così nessun plugin copia la regola.
+   - Da decidere col coordinatore se il conteggio arriva anche nel risultato del Sync, come i rifiuti di X-R46.
+   - Il modello condiviso non si allenta: rifiuta ancora, per la scrittura manuale.
+2. **Il prezzo corrente ≤ 0 si rifiuta come la storia**: un validatore su `FACurrentValue.value` (`schemas/prices.py:259`).
+   - Un fornitore che lo manda non ha prezzo corrente, e lo dice con lo stesso avviso.
+   - Da verificare cosa mostrano la lista e la pagina dell'asset quando il prezzo corrente manca.
+3. **La pagina utente** dei prezzi (editor e import) dice che chiusura e OHLC devono essere positivi (lo 0 solo per OHLC e
+   volume), e che il −1 cancella. Il −1 cambierà se il developer sceglie la via standard.
+- **Nota sul giornale**: le ore scritte il 19/10 fra le 11:15 e le 11:55 (12:05, 12:10, 12:20, 12:30, 11:50) erano stime
+  sbagliate, alcune più tarde dell'orologio. Le ho sostituite con la sola data.
+
+### Togliere il filtro di X-R45 — analisi breve (19/10, in coda dopo X-R16)
+
+Decisione del developer, testuale: «non devi filtrare … sono sicuro al 99.9% che non è ancora mai successo, e se è
+successo, gli utenti possono … modificare … a mano, evitiamo di fare bonifiche non necessarie che possono anzi rompere il
+sistema».
+- Si fa con un commit nuovo, senza riscrivere la storia.
+- Resta il rifiuto in scrittura (X-R38). D-W63-1, la bonifica all'avvio: no.
+
+- **Il commit**: `629304ab3` (17/10, 13 file, +974 −13), entrato in dev `b690c0785`; giornale `21164d0a7`.
+  - La condizione `usable_fx_rate_clause()` in `db/precision.py`.
+  - Due lettori già filtrati **prima** di X-R45, con una copia in linea dei limiti: `convert_bulk` (X-R38, `80f5c65ff`) e
+    `_first_rate_days_inside` dei period changes (X-R59 di MF, `a8de6b584`). X-R45 li ha solo riscritti con la
+    condizione, senza cambiare il comportamento.
+  - Tre lettori nuovi filtrati: PAC `fx_quotes` (anche nella sottoquery dell'ultima data), PAC `wac`, scheduler
+    `_last_fx_dates`.
+  - La guardia strutturale `test_usable_fx_rate_gate.py` (510 righe, `utils gate-usable-fx-rate`, con
+    `RAW_FX_RATE_READERS`) e `test_scheduler_last_fx_dates.py` (166 righe).
+  - La sezione `xr45` di `test_bulk_reads_chunked.py` (+216), le registrazioni nel runner, un paragrafo in
+    `developer/backend/fx/architecture.md`, una riga 🐛 nel CHANGELOG.
+- **Il rovescio applica pulito** sull'albero di oggi (`git apply --check -R` sul diff del commit), anche se il CHANGELOG
+  e i due file del runner sono stati toccati dopo. La riga di X-R16 nel CHANGELOG andrà subito dopo quella di X-R45:
+  quella riga si toglie a mano.
+- **Domanda**: il rovescio intero rimette le due copie in linea, cioè i filtri di `convert_bulk` (X-R38) e dei period
+  changes (X-R59), com'erano prima del 17/10 sera. «Non filtrare» vale anche per loro?
+  - *Consiglio: no.* Sono precedenti a X-R45 e proteggono dal guasto, non dai numeri: un tasso 0 salvato darebbe una
+    divisione per zero in una conversione inversa, e un `inf` un errore nella risposta JSON.
+  - Toglierli rischierebbe proprio di «rompere il sistema».
+- **Effetto del rovescio** (com'era prima del 17/10):
+  - nel PAC l'ultima riga vince anche se inutilizzabile: uno 0 diventa `allocation.saved_fx_invalid`, un `inf` passa
+    come valore, e il WAC del PAC lo usa;
+  - lo scheduler conta come coperto un giorno salvato 0 o `inf`.
+- **Revisioni che lo citano**:
+  - MF, siti del PAC: OK. La sua voce 1 è X-R82, che col rovescio decade, perché il ramo `rate > 0` torna raggiungibile;
+    la voce 2 non aveva difetti;
+  - Z, riga dello scheduler.
+- **Resta di X-R38**:
+  - il rifiuto in scrittura (`storable_fx_rate`): il 422 della scrittura manuale, i rifiuti `rate_not_storable` di X-R46,
+    il Sync che salta, i parser di X-R50;
+  - se passa il consiglio, i due filtri di lettura precedenti.
+- **Lavoro**:
+  - il rovescio del diff nel worktree, senza comandi git che scrivono, più la riga del CHANGELOG a mano;
+  - nel backlog: X-R45 «annullata il 19/10», X-R82 decaduta, tolta la riga facoltativa del conteggio all'avvio;
+  - prove: `fx-core`, `period-changes`, `api fx-unit`, `portfolio-allocation-source`, `scheduler-jobs`,
+    `bulk-reads-chunked`, `check-orphans`, `mkdocs build` e `check-links`.
+  - Piccolo. Commit proposto: `revert(fx): usable-rate filter in direct readers (X-R45)`.
+
+### N92, la forma del «cancella» — analisi breve (19/10, nel lotto di N92 (i))
+
+Decisione del developer, dal coordinatore:
+- apertura, massimo, minimo e volume accettano `null`, un numero oppure `"clear"`;
+- `null` e campo assente restano «non toccare» per tutti;
+- il −1 sparisce;
+- nello schema, `numero | null | "clear"`; ogni altra stringa è rifiutata, e `"clear"` non va mai letto come Decimal.
+
+- **`FAPricePoint` oggi serve quattro usi**:
+  - la scrittura (`FAUpsert.prices`, `schemas/prices.py:178`);
+  - la storia dei fornitori (`FAHistoricalData.prices`, `:279`);
+  - la risposta della query (`:353`);
+  - i `changed_points` del Sync (`schemas/refresh.py:137`).
+  - Il modello di scrittura (`FAUpsertItem`) un tempo era a parte, ed è stato fuso qui (`schemas/__init__.py:356`).
+- **Proposta: un modello solo per la scrittura** (per esempio `FAPriceWritePoint`), con
+  `Union[Literal["clear"], SafeDecimal, None]` letto da sinistra a destra (`union_mode="left_to_right"`, oppure un
+  validatore `mode="before"` che riconosce `"clear"` prima della conversione).
+  - `FAPricePoint` resta numerico, e vale ≥ 0 senza più sentinella.
+  - Risposte, fornitori e `changed_points` non cambiano tipo, e il client generato non vede `"clear"` dove si legge un
+    prezzo.
+- **`price_store._merge_field`**: `"clear"` → NULL, `None` → lascia, numero → scrivi.
+  - Il −1 diventa un negativo come gli altri, quindi rifiutato (422): serve una riga ⚠️ Breaking per i client che lo
+    mandano.
+  - Il controllo OHLC di X-R46 (anche il caso del −1 di X-R46b) legge `"clear"` dove leggeva −1.
+- **Frontend**:
+  - l'editor manda `"clear"` dalla gomma (`AssetDataEditorSection.svelte` ~298–308);
+  - il segno interno della cella (il −1 di `ErasableNumberCell`) diventa un valore non numerico, così un `-1` letto da un
+    CSV resta un numero negativo, e il salvataggio lo rifiuta invece di cancellare.
+- **Prove**:
+  - lo schema: l'unione, le altre stringhe rifiutate, `"clear"` mai Decimal;
+  - l'upsert: clear, null, numero; il −1 rifiutato; i test di X-R46b sul −1;
+  - l'editor (Vitest) e la sua E2E.
+  - Medio.
+
+### X-R16 ✅ — slot E2E e verdi (19/10, 12:08–12:30)
+
+Slot del coordinatore dalle 12:08 alle 13:00, corsia 6183, una corsa alla volta, carico a 1 minuto sotto 50 (20–24).
+La cartella della corsia, cancellata nella pulizia di `/tmp`, l'ha ricreata la prima corsa: build del frontend e
+popolamento del DB.
+- **Rossi**, prima della cura:
+  - `front-asset asset-detail "X-R16"`: **2 falliti, 2 passati**. «Tutto» non risolve l'inizio; il passaggio ai rendimenti
+    chiede di nuovo i prezzi (`include_price: true`).
+  - `front-fx fx-detail "X-R16"`: **2 falliti, 2 passati**. «Tutto» non risolve l'inizio; il grafico perde i tassi
+    (`data-chart-last-rate` vuoto).
+  - Le guardie, senza segnali o con segnali validi, passano.
+- **Cura** (`xr16_fx_code.py`), applicata senza corse attive:
+  - il modulo nuovo `components/fx/fxDetailConvertQuery.ts`;
+  - nella pagina di una coppia, `convertBulkWithSignalIsolation()` e il `try/catch`;
+  - nella pagina dell'asset, il `try/catch`;
+  - una frase in `developer/frontend/components/charts.md`, una riga 🐛 nel CHANGELOG.
+- **Verdi**:
+  - Vitest **153** (`fxDetailConvertQuery` 46, `assetDetailPriceQuery`, `chartPageSignals`);
+  - E2E: i due filtri **4/4** e **4/4**; le spec intere `fx-detail` **28 passati** e `asset-detail` **43 passati**.
+  - Fuori dallo slot: `api sync`, poi `front check` **0 errori, 0 avvisi**; `theme-roles --check` pulito;
+    `check-orphans` OK (564 test unitari del frontend registrati); `mkdocs build` stretta pulita; `check-links` 97.
+  - Porta 6183 libera alle 12:23.
+- Log in `files/checks/logs/` della sessione: `xr16-red-*`, `xr16-green-*`, `xr16-full-*`, `xr16_*`.
