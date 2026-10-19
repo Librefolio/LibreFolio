@@ -7,6 +7,7 @@ from backend.test_scripts.test_db_config import initialize_test_database, setup_
 setup_test_database()
 
 import asyncio
+import re
 import time
 import uuid
 from contextlib import contextmanager
@@ -20,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.testing import capture_logs
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, PriceHistory, ProviderInputType, Transaction, TransactionType
-from backend.app.db.session import get_async_engine
+from backend.app.db.session import get_async_engine, get_sync_engine
 from backend.app.schemas.assets.events import FAAssetEventPoint
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPricePoint
@@ -29,6 +30,7 @@ from backend.app.schemas.refresh import FARefreshItem, FARefreshResult, SyncDate
 from backend.app.services.asset_source_providers.mockprov.plugin import MockProvider
 from backend.app.services.assets import core, refresh
 from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError
+from backend.app.services.assets.event_store import EventStoreOperations
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.price_store import PriceStoreOperations
 from backend.app.services.assets.registry import AssetProviderRegistry
@@ -1530,6 +1532,318 @@ async def test_z33_rows_older_than_the_full_history_stay_and_their_count_is_logg
     assert leaked == [], f"no log line may give their values: {leaked}"
 
 
+# -- §3, MF: a target before its row's day is refused ------------------------------------------------------------------
+#
+# ``PriceStoreOperations.redate_provider_rows`` handles the rows latest first, which keeps a moving row off one not yet
+# handled only while every target lies after its row — as the check's own ``target_of`` does, S → S + 1. Reviewer MF
+# (LOW): a generic ``target_of`` giving an earlier day can meet a row of the asset not yet handled, and the moving row
+# is then dropped, its close lost. As approved: every target is computed before anything moves; one before its row's
+# day raises a ValueError naming the asset, the row's day and the target (days only, never a price), and nothing is
+# written — no row moved or deleted, every date, close and ``fetched_at`` as it was. None or the row's own day: the
+# row stays; a later day: the row moves as before.
+#
+# The helper is called directly (``_z33_redate``), no refresh, no provider call, on ``yfinance`` rows fetched at
+# ``_Z33_OLD_STAMP`` of an asset of the test's own (``z33_lane``, which deletes them; its mockprov assignment plays no
+# part). The three refusals are red on HEAD f21ce12d1 for the refusal itself (``_z33_contract`` passes there); the
+# forward case is green there and must stay so.
+
+_Z33_REDATED = "yfinance"  # the source_plugin_key of the rows these tests write and re-date
+
+
+async def _z33_redate(asset_id: int, targets: dict[str, str | None]) -> tuple[int, int] | ValueError:
+    """``PriceStoreOperations.redate_provider_rows`` on the asset's ``yfinance`` rows, in a session of its own, its
+    ``target_of`` read from ``targets`` (``{stored day: target day}``; None, or a day not given: the row stays): the
+    (moved, dropped) it returned, or the ValueError it raised. Committed either way: the helper flushes after each row
+    and never commits, and only a commit lets the fresh read that follows see what it did — a move or a drop made
+    before a refusal included, which a rollback would hide."""
+
+    def target_of(day: date) -> date | None:
+        target = targets.get(day.isoformat())
+        return None if target is None else date.fromisoformat(target)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        outcome: tuple[int, int] | ValueError
+        try:
+            outcome = await PriceStoreOperations.redate_provider_rows(session, asset_id, _Z33_REDATED, target_of)
+        except ValueError as refused:
+            outcome = refused
+        await session.commit()
+    return outcome
+
+
+def _z33_refused(outcome: tuple[int, int] | ValueError, asset_id: int, *, stored: str, target: str, subject: str = "row", returned: str = "(moved, dropped)") -> None:
+    """``outcome`` is the refusal of the target ``target`` given to the ``subject`` (a price row, or an event) on
+    ``stored``: a ValueError naming the asset and the two days in ISO form, the wording free. The id is looked for among
+    the message's numbers once the two days are taken out, so a day's digits cannot stand in for it. ``returned`` names
+    the pair a re-date gives back when it does not refuse."""
+    assert isinstance(outcome, ValueError), f"a target before its {subject}'s day must be refused with a ValueError, before anything moves: the re-date returned {returned} {outcome!r}"
+    message = str(outcome)
+    numbers = re.findall(r"\d+", message.replace(stored, " ").replace(target, " "))
+    named = {"the asset": str(asset_id) in numbers, f"the {subject}'s day": stored in message, "its target": target in message}
+    assert all(named.values()), f"the refusal must name asset {asset_id}, the {subject}'s day {stored} and its target {target}: {named}, in {message!r}"
+
+
+@pytest.mark.asyncio
+async def test_z33_redate_refuses_a_backward_target_and_moves_nothing(z33_lane):
+    """Z-33 (MF): a target before its row's day is refused, though nothing stands on it. Rows on Monday 03-03 and Monday
+    03-10; the 03-03 row given Sunday 03-02, a free day, the 03-10 row None. The call raises a ValueError naming the
+    asset, 03-03 and 03-02, and nothing is written: both rows on their day, close and ``fetched_at`` as they were.
+
+    Red on HEAD f21ce12d1: the 03-03 row moves to 03-02, (1, 0) returned, no error.
+    """
+    asset_id, _ = await z33_lane.asset(zone=None)
+    await z33_lane.prices(asset_id, {"2025-03-03": 103, "2025-03-10": 110}, source=_Z33_REDATED)
+    before = await _z33_prices(asset_id)
+
+    outcome = await _z33_redate(asset_id, {"2025-03-03": "2025-03-02", "2025-03-10": None})
+
+    _z33_refused(outcome, asset_id, stored="2025-03-03", target="2025-03-02")
+    assert await _z33_prices(asset_id) == before, "a refused re-date must write nothing: each row on its day, close and fetched_at as they were"
+
+
+@pytest.mark.asyncio
+async def test_z33_redate_refuses_before_moving_a_forward_row(z33_lane):
+    """Z-33 (MF): every target is checked before any row moves. Rows on Monday 03-03 and Monday 03-10; the 03-10 row
+    given Tuesday 03-11 (later, free), the 03-03 row Sunday 03-02 (earlier). Latest first, the 03-10 row is reached
+    before the 03-03 row: the call raises all the same, naming the asset, 03-03 and 03-02, and the 03-10 row is still on
+    03-10, its ``fetched_at`` as it was — ``_z33_redate`` commits after the refusal, so a move made before it would
+    show.
+
+    Red on HEAD f21ce12d1: both rows move, (2, 0) returned, no error.
+    """
+    asset_id, _ = await z33_lane.asset(zone=None)
+    await z33_lane.prices(asset_id, {"2025-03-03": 103, "2025-03-10": 110}, source=_Z33_REDATED)
+    before = await _z33_prices(asset_id)
+
+    outcome = await _z33_redate(asset_id, {"2025-03-03": "2025-03-02", "2025-03-10": "2025-03-11"})
+
+    _z33_refused(outcome, asset_id, stored="2025-03-03", target="2025-03-02")
+    after = await _z33_prices(asset_id)
+    assert after.get("2025-03-10") == before["2025-03-10"], f"the 03-10 row must not move before the refusal: still on 03-10, fetched_at as it was: {after}"
+    assert after == before, "a refused re-date must write nothing: each row on its day, close and fetched_at as they were"
+
+
+@pytest.mark.asyncio
+async def test_z33_redate_backward_target_onto_an_unprocessed_row_drops_nothing(z33_lane):
+    """Z-33 (MF's case): rows on Monday 03-03 and Tuesday 03-04; the 03-04 row given 03-03 — an earlier day, where the
+    other row stands, not yet reached —, the 03-03 row None. Latest first, the 03-04 row finds 03-03 taken and is
+    deleted, its close lost. Refused instead, naming the asset, 03-04 and 03-03: both rows stay, close and
+    ``fetched_at`` as they were.
+
+    Red on HEAD f21ce12d1: the 03-04 row is deleted, (0, 1) returned, no error.
+    """
+    asset_id, _ = await z33_lane.asset(zone=None)
+    await z33_lane.prices(asset_id, {"2025-03-03": 103, "2025-03-04": 104}, source=_Z33_REDATED)
+    before = await _z33_prices(asset_id)
+
+    outcome = await _z33_redate(asset_id, {"2025-03-03": None, "2025-03-04": "2025-03-03"})
+
+    _z33_refused(outcome, asset_id, stored="2025-03-04", target="2025-03-03")
+    assert await _z33_prices(asset_id) == before, "no close may be dropped: a refused re-date writes nothing, both rows on their day, close and fetched_at as they were"
+
+
+@pytest.mark.asyncio
+async def test_z33_redate_moves_forward_targets_as_before(z33_lane):
+    """Z-33 (MF, the guard's other side): a later day moves its row as before; None and the row's own day leave it. Rows
+    on Mondays 03-03, 03-10, 03-17 and 03-24; the first two given the next day, the third None, the fourth its own day.
+    (2, 0) returned: the first two on Tuesdays 03-04 and 03-11, their closes kept, a fresh ``fetched_at`` each, nothing
+    left on 03-03 or 03-10; the last two not written, close and ``fetched_at`` as they were.
+
+    Green on HEAD f21ce12d1, and must stay green: the guard refuses only a target before its row's day.
+    """
+    asset_id, _ = await z33_lane.asset(zone=None)
+    await z33_lane.prices(asset_id, {"2025-03-03": 103, "2025-03-10": 110, "2025-03-17": 117, "2025-03-24": 124}, source=_Z33_REDATED)
+    before = await _z33_prices(asset_id)
+
+    outcome = await _z33_redate(asset_id, {"2025-03-03": "2025-03-04", "2025-03-10": "2025-03-11", "2025-03-17": None, "2025-03-24": "2025-03-24"})
+
+    assert outcome == (2, 0), f"two rows moved, none dropped, nothing refused: (moved, dropped) {outcome!r}"
+    prices = await _z33_prices(asset_id)
+    assert {day: (close, source) for day, (close, source, _fetched_at) in prices.items()} == {
+        "2025-03-04": (103, _Z33_REDATED),
+        "2025-03-11": (110, _Z33_REDATED),
+        "2025-03-17": (117, _Z33_REDATED),
+        "2025-03-24": (124, _Z33_REDATED),
+    }, "a row given a later day moves there, its close kept; a row given None or its own day stays"
+    stale = {day: prices[day][2].isoformat() for day in ("2025-03-04", "2025-03-11") if not prices[day][2] > _Z33_OLD_STAMP}
+    assert stale == {}, f"a moved row must get a fresh fetched_at, later than {_Z33_OLD_STAMP.isoformat()}: {stale}"
+    stayed = ("2025-03-17", "2025-03-24")
+    assert {day: prices[day] for day in stayed} == {day: before[day] for day in stayed}, "a row given None or its own day must not be written: close and fetched_at as they were"
+
+
+# -- §4, MF: a target before its event's day is refused too ------------------------------------------------------------
+#
+# ``EventStoreOperations.redate_provider_events`` handles the assignment's events latest first as well, with the same
+# blind spot: a target before its event's day can meet an event of the assignment and type not yet handled — an older
+# twin —, and the moving event is merged into it by mistake: its transactions re-pointed there, then it is deleted; a
+# SPLIT first carries its ADJUSTMENTs on its day back to that earlier day. As approved (Z-33 follow-up 2): every event's
+# target is computed before anything changes; one before its event's day raises a ValueError naming the asset, the
+# event's day and the target (days only, never a value), and nothing is written — no event moved, merged or deleted,
+# no transaction re-pointed or re-dated, every ``updated_at`` as it was. None or the event's own day: the event stays;
+# a later day: it moves, or merges into its twin there, as before.
+#
+# The helper is called directly (``_z33_redate_events``), no refresh, no provider call, on events of the mockprov
+# assignment of an asset of the test's own, stamped ``_Z33_OLD_STAMP`` (``z33_lane``, which deletes them, and the
+# transactions of its brokers). The four refusals are red on HEAD e20055213 for the refusal itself; the forward case is
+# green there and must stay so.
+
+
+async def _z33_event_rows(asset_id: int) -> dict[int, tuple[str, str, int | None, datetime]]:
+    """``{event id: (day, type, provider_assignment_id, updated_at)}`` of the asset's events: ``_z33_events`` with the
+    ``updated_at`` a move stamps, so "nothing written" covers it too. A deleted event is a missing id."""
+    async with AsyncSession(get_async_engine()) as session:
+        rows = (await session.execute(select(AssetEvent.id, AssetEvent.date, AssetEvent.type, AssetEvent.provider_assignment_id, AssetEvent.updated_at).where(AssetEvent.asset_id == asset_id))).all()
+    return {event_id: (day.isoformat(), str(kind), assignment_id, updated_at) for event_id, day, kind, assignment_id, updated_at in rows}
+
+
+async def _z33_redate_events(asset_id: int, assignment_id: int, targets: dict[str, str | None]) -> tuple[int, int] | ValueError:
+    """``EventStoreOperations.redate_provider_events`` on the events of the assignment ``assignment_id``, in a session
+    of its own, its ``target_of`` read from ``targets`` (``{event day: target day}``, whatever the type; None, or a day
+    not given: the event stays): the (moved, merged) it returned, or the ValueError it raised. Committed either way, as
+    ``_z33_redate``: the helper never commits — its transaction UPDATEs go out as it reaches them, its event moves and
+    deletions at its flush —, and only a commit lets the fresh read that follows see what it did, a move, a merge or a
+    re-pointed or re-dated transaction made before a refusal included, which a rollback would hide."""
+
+    def target_of(day: date, _kind: str) -> date | None:
+        target = targets.get(day.isoformat())
+        return None if target is None else date.fromisoformat(target)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        outcome: tuple[int, int] | ValueError
+        try:
+            outcome = await EventStoreOperations.redate_provider_events(session, asset_id, assignment_id, target_of)
+        except ValueError as refused:
+            outcome = refused
+        await session.commit()
+    return outcome
+
+
+def _z33_event_refused(outcome: tuple[int, int] | ValueError, asset_id: int, *, stored: str, target: str) -> None:
+    """``_z33_refused`` for an event: ``outcome`` is the refusal of the target ``target`` given to the event on
+    ``stored``, a ValueError naming the asset and the two days in ISO form, the wording free."""
+    _z33_refused(outcome, asset_id, stored=stored, target=target, subject="event", returned="(moved, merged)")
+
+
+@pytest.mark.asyncio
+async def test_z33_event_redate_refuses_a_backward_target_and_changes_nothing(z33_lane):
+    """Z-33 (MF, the events): a target before its event's day is refused, though nothing stands on it. DIVIDENDs of the
+    assignment on Monday 03-03 and Monday 03-10; the 03-03 one given Sunday 03-02, a free day, the 03-10 one None. The
+    call raises a ValueError naming the asset, 03-03 and 03-02, and nothing is written: both DIVIDENDs on their day,
+    ``updated_at`` as it was.
+
+    Red on HEAD e20055213: the 03-03 DIVIDEND moves to 03-02, (1, 0) returned, no error.
+    """
+    asset_id, assignment_id = await z33_lane.asset(zone=None)
+    await z33_lane.event(asset_id, "2025-03-03", AssetEventType.DIVIDEND, "0.5", assignment_id=assignment_id)
+    await z33_lane.event(asset_id, "2025-03-10", AssetEventType.DIVIDEND, "0.5", assignment_id=assignment_id)
+    before = await _z33_event_rows(asset_id)
+
+    outcome = await _z33_redate_events(asset_id, assignment_id, {"2025-03-03": "2025-03-02", "2025-03-10": None})
+
+    _z33_event_refused(outcome, asset_id, stored="2025-03-03", target="2025-03-02")
+    assert await _z33_event_rows(asset_id) == before, "a refused re-date must write nothing: each event on its day, updated_at as it was"
+
+
+@pytest.mark.asyncio
+async def test_z33_event_redate_refuses_before_moving_a_forward_event(z33_lane):
+    """Z-33 (MF, the events): every target is checked before any event moves. DIVIDENDs of the assignment on Monday
+    03-03 and Monday 03-10; the 03-10 one given Tuesday 03-11 (later, free), the 03-03 one Sunday 03-02 (earlier).
+    Latest first, the 03-10 DIVIDEND is reached before the 03-03 one: the call raises all the same, naming the asset,
+    03-03 and 03-02, and the 03-10 DIVIDEND is still on 03-10, its ``updated_at`` as it was — ``_z33_redate_events``
+    commits after the refusal, so a move made before it would show.
+
+    Red on HEAD e20055213: both DIVIDENDs move, (2, 0) returned, no error.
+    """
+    asset_id, assignment_id = await z33_lane.asset(zone=None)
+    await z33_lane.event(asset_id, "2025-03-03", AssetEventType.DIVIDEND, "0.5", assignment_id=assignment_id)
+    latest = await z33_lane.event(asset_id, "2025-03-10", AssetEventType.DIVIDEND, "0.5", assignment_id=assignment_id)
+    before = await _z33_event_rows(asset_id)
+
+    outcome = await _z33_redate_events(asset_id, assignment_id, {"2025-03-03": "2025-03-02", "2025-03-10": "2025-03-11"})
+
+    _z33_event_refused(outcome, asset_id, stored="2025-03-03", target="2025-03-02")
+    after = await _z33_event_rows(asset_id)
+    assert after.get(latest) == before[latest], f"the 03-10 DIVIDEND must not move before the refusal: still on 03-10, updated_at as it was: {after}"
+    assert after == before, "a refused re-date must write nothing: each event on its day, updated_at as it was"
+
+
+@pytest.mark.asyncio
+async def test_z33_event_redate_backward_target_onto_an_unprocessed_twin_merges_nothing(z33_lane):
+    """Z-33 (MF's case, the events): DIVIDENDs of the assignment on Monday 03-03 and Tuesday 03-04, the broker's
+    DIVIDEND paid on Thursday 03-06 linked to the 03-04 one; the 03-04 DIVIDEND given 03-03 — an earlier day, where its
+    twin stands, not yet reached —, the 03-03 one None. Latest first, the 03-04 DIVIDEND meets its twin on 03-03 and is
+    merged into it: its transaction re-pointed there, then it is deleted. Refused instead, naming the asset, 03-04 and
+    03-03: both DIVIDENDs stay, ``updated_at`` as it was, and the transaction is still linked to the 03-04 one, on its
+    own day, its ``updated_at`` as it was.
+
+    Red on HEAD e20055213: the 03-04 DIVIDEND is merged into the 03-03 one — its transaction re-pointed, the event
+    deleted —, (0, 1) returned, no error.
+    """
+    asset_id, assignment_id = await z33_lane.asset(zone=None)
+    await z33_lane.event(asset_id, "2025-03-03", AssetEventType.DIVIDEND, "0.5", assignment_id=assignment_id)
+    later = await z33_lane.event(asset_id, "2025-03-04", AssetEventType.DIVIDEND, "0.5", assignment_id=assignment_id)
+    cash = await z33_lane.transaction(await z33_lane.broker(), asset_id, TransactionType.DIVIDEND, "2025-03-06", amount="5", currency="EUR", event_id=later)
+    events_before, cash_before = await _z33_event_rows(asset_id), await _z33_transactions([cash])
+
+    outcome = await _z33_redate_events(asset_id, assignment_id, {"2025-03-03": None, "2025-03-04": "2025-03-03"})
+
+    _z33_event_refused(outcome, asset_id, stored="2025-03-04", target="2025-03-03")
+    assert await _z33_event_rows(asset_id) == events_before, "nothing may be merged: a refused re-date writes nothing, both DIVIDENDs on their day, updated_at as it was"
+    assert await _z33_transactions([cash]) == cash_before, "the transaction must stay linked to the 03-04 DIVIDEND, on its own day, updated_at as it was"
+
+
+@pytest.mark.asyncio
+async def test_z33_event_redate_refuses_a_backward_split_and_its_adjustment_keeps_its_day(z33_lane):
+    """Z-33 (MF, the events): a SPLIT takes along the ADJUSTMENTs linked to it on its day, before it moves itself — back
+    in time too. The assignment's SPLIT on Tuesday 03-04, the ADJUSTMENT linked to it on 03-04; the SPLIT given Monday
+    03-03, a free day. Refused, naming the asset, 03-04 and 03-03: the ADJUSTMENT still on 03-04, still linked, its
+    ``updated_at`` as it was, and the SPLIT on 03-04, its ``updated_at`` as it was.
+
+    Red on HEAD e20055213: the ADJUSTMENT is moved back to 03-03 (a fresh ``updated_at``), then the SPLIT, (1, 0)
+    returned, no error.
+    """
+    asset_id, assignment_id = await z33_lane.asset(zone=None)
+    split = await z33_lane.event(asset_id, "2025-03-04", AssetEventType.SPLIT, "2", assignment_id=assignment_id)
+    adjustment = await z33_lane.transaction(await z33_lane.broker(), asset_id, TransactionType.ADJUSTMENT, "2025-03-04", quantity="10", event_id=split)
+    events_before, adjustment_before = await _z33_event_rows(asset_id), await _z33_transactions([adjustment])
+
+    outcome = await _z33_redate_events(asset_id, assignment_id, {"2025-03-04": "2025-03-03"})
+
+    _z33_event_refused(outcome, asset_id, stored="2025-03-04", target="2025-03-03")
+    assert await _z33_transactions([adjustment]) == adjustment_before, "the ADJUSTMENT must not move back: on 03-04, linked to the SPLIT, updated_at as it was"
+    assert await _z33_event_rows(asset_id) == events_before, "the SPLIT must stay on 03-04, updated_at as it was"
+
+
+@pytest.mark.asyncio
+async def test_z33_event_redate_moves_forward_targets_as_before(z33_lane):
+    """Z-33 (MF, the events, the guard's other side): a later day moves its event as before; None and the event's own
+    day leave it. DIVIDENDs of the assignment on Mondays 03-03, 03-10, 03-17 and 03-24; the first two given the next
+    day, the third None, the fourth its own day. (2, 0) returned: the first two on Tuesdays 03-04 and 03-11, in place
+    (their ids kept), a fresh ``updated_at`` each; the last two not written, ``updated_at`` as it was.
+
+    Green on HEAD e20055213, and must stay green: the guard refuses only a target before its event's day.
+    """
+    asset_id, assignment_id = await z33_lane.asset(zone=None)
+    ids = {day: await z33_lane.event(asset_id, day, AssetEventType.DIVIDEND, "0.5", assignment_id=assignment_id) for day in ("2025-03-03", "2025-03-10", "2025-03-17", "2025-03-24")}
+    before = await _z33_event_rows(asset_id)
+
+    outcome = await _z33_redate_events(asset_id, assignment_id, {"2025-03-03": "2025-03-04", "2025-03-10": "2025-03-11", "2025-03-17": None, "2025-03-24": "2025-03-24"})
+
+    assert outcome == (2, 0), f"two events moved, none merged, nothing refused: (moved, merged) {outcome!r}"
+    events = await _z33_event_rows(asset_id)
+    assert {event_id: row[:3] for event_id, row in events.items()} == {
+        ids["2025-03-03"]: ("2025-03-04", "DIVIDEND", assignment_id),
+        ids["2025-03-10"]: ("2025-03-11", "DIVIDEND", assignment_id),
+        ids["2025-03-17"]: ("2025-03-17", "DIVIDEND", assignment_id),
+        ids["2025-03-24"]: ("2025-03-24", "DIVIDEND", assignment_id),
+    }, "an event given a later day moves there, in place; one given None or its own day stays"
+    moved = (ids["2025-03-03"], ids["2025-03-10"])
+    stale = {event_id: events[event_id][3].isoformat() for event_id in moved if not events[event_id][3] > _Z33_OLD_STAMP}
+    assert stale == {}, f"a moved event must get a fresh updated_at, later than {_Z33_OLD_STAMP.isoformat()}: {stale}"
+    stayed = (ids["2025-03-17"], ids["2025-03-24"])
+    assert {event_id: events[event_id] for event_id in stayed} == {event_id: before[event_id] for event_id in stayed}, "an event given None or its own day must not be written: updated_at as it was"
+
+
 # -- §4: the events ----------------------------------------------------------------------------------------------------
 
 
@@ -2037,6 +2351,161 @@ async def test_z33_the_timezone_comes_from_the_history_else_from_the_current_val
     _z33_went_through(result, provider, history_starts=[today - timedelta(days=2)])
     assert len(provider.current_calls) == 1, f"barrier: the current value was asked: {provider.current_calls}"
     assert await _z33_zone(asset_id) == held
+
+
+# -- §10, H's review: two refreshes of one asset -----------------------------------------------------------------------
+#
+# Nothing serializes two refreshes of one asset — the manual sync (``api/v1/assets/prices.py``, ``sync_prices_bulk``)
+# and the scheduler's (``services/platform/scheduler/jobs.py``) —, and each reads the mark when it is prepared, before
+# its fetch: one that settles and commits while the other is still fetching leaves the other a stale
+# ``prep.legacy_check``. Reviewer H (MEDIUM, Z-33 follow-up 3): the other then runs the check again on rows already on
+# their day, and the price rule has no «already right» guard — for Milan every row S with a session on S + 1 and
+# S ≤ D_f − 2 moves forward one day again, its value shifting; a Thursday moved onto Friday meets Friday's row and is
+# dropped. Events are safe: their target needs the fresh history to have the event on S + 1 and none on S.
+#
+# As approved: the settle step runs the check only when the row it reads afresh still holds the mark; then, D_f
+# computed (``_server_date``) and before anything moves, it claims the mark with a conditional UPDATE
+# (``… WHERE id = … AND exchange_timezone = 'legacy-utc'``). When that matches no row, another refresh settled in
+# between: it rolls back and moves nothing, and the refresh writes what it fetched as any refresh does — not FAILED. A
+# fresh row holding a timezone is left as before.
+#
+# The refreshes here run in their phases, as ``bulk_refresh_prices`` runs them: prepared from the state stored at the
+# time (``_z33_prepared``), fetched and persisted later (``_z33_run_prepared``), so another refresh's commit comes in
+# between — a whole refresh, or the commit of its settle step alone, made at the moment the settle step of the refresh
+# under test computes D_f (``_z33_another_refresh_settles_first``). Both tests are red on HEAD e20055213. That a single
+# refresh still settles as before is pinned by the §3 and §4 tests above
+# (``test_z33_a_legacy_series_moves_to_its_exchange_days_latest_first`` first), and the refresh after it by
+# ``test_z33_a_second_refresh_fetches_no_full_history_and_moves_nothing``.
+
+
+async def _z33_prepared(asset_id: int, *, start: date = _Z33_START, end: date = _Z33_END) -> refresh._PreparedRefreshItem:
+    """The refresh of the asset from ``start`` to ``end`` as ``bulk_refresh_prices`` prepares it from the state stored
+    now (``_prepare_refresh_items``): its prep, for ``_z33_run_prepared`` to fetch and persist later."""
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        prepared, immediate = await refresh._prepare_refresh_items([FARefreshItem(asset_id=asset_id, date_range=SyncDateRangeModel(start=start, end=end))], session, time.monotonic_ns())
+    assert (immediate, list(prepared)) == ([], [asset_id]), f"setup: the refresh of asset {asset_id} must be prepared, not answered at once: {immediate}"
+    return prepared[asset_id]
+
+
+async def _z33_run_prepared(asset_id: int, prep: refresh._PreparedRefreshItem, provider: _Z33Provider, *, today: date = _Z33_TODAY) -> FARefreshResult:
+    """The rest of a refresh prepared earlier, as ``bulk_refresh_prices`` runs it: the fetch (``_fetch_refresh_item``),
+    then the persist (``_persist_refresh_item``, the fetch's error handed on), ``provider`` answering, ``today`` frozen."""
+    with provider.answering(), _z33_today(today):
+        data, error, _refusal = await refresh._fetch_refresh_item(asset_id, prep, asyncio.Semaphore(1), 60)
+        return await refresh._persist_refresh_item(asset_id, prep, data, error, get_async_engine())
+
+
+def _z33_another_refresh_settles_first(monkeypatch, assignment_id: int, zone: str) -> list[int | str]:
+    """``refresh._server_date`` wrapped: the first time it is called — in the settle step of the refresh under test,
+    after it read the assignment, before it claims the mark or moves anything — another refresh's settle step commits
+    first: the assignment's ``exchange_timezone`` set to ``zone``, which clears the mark, its rows left where they are
+    (what the other moves is its own; the point is that this one moves none). Then the real ``_server_date`` answers.
+    Returned: one entry per such commit, the rows its UPDATE matched (1: it landed), or the error it met — reported by
+    the test's barrier, never raised into the refresh under test.
+
+    The commit goes through a connection of the sync engine (``get_sync_engine``, the same database): the wrapper runs
+    inside a sync function, on the event loop, where no async session can be awaited. The refresh under test holds no
+    lock there — pysqlite opens its transaction at its first write, which comes after —, so the commit waits on nothing
+    of this process. A claim made before ``_server_date`` would hold the write lock: the commit would wait for it until
+    the busy timeout, then fail, and the barrier would say so."""
+    column = _z33_contract()
+    real_server_date = refresh._server_date
+    commits: list[int | str] = []
+
+    def server_date_after_another_settled(moment: datetime | None) -> date | None:
+        if not commits:
+            try:
+                with get_sync_engine().begin() as connection:
+                    commits.append(connection.execute(update(AssetProviderAssignment).where(AssetProviderAssignment.id == assignment_id).values({column: zone})).rowcount)
+            except Exception as error:  # reported by the test's barrier, not raised into the refresh under test
+                commits.append(repr(error))
+        return real_server_date(moment)
+
+    monkeypatch.setattr(refresh, "_server_date", server_date_after_another_settled)
+    return commits
+
+
+def _z33_moved(before: dict[str, tuple], after: dict[str, tuple]) -> dict[str, tuple]:
+    """``{day: (close before, close after)}`` of the days whose row changed — moved, dropped, or rewritten (the same
+    close then: another ``fetched_at``) —, None where there is no row: for a failure message."""
+    return {day: (before[day][0] if day in before else None, after[day][0] if day in after else None) for day in sorted(before.keys() | after.keys()) if before.get(day) != after.get(day)}
+
+
+@pytest.mark.asyncio
+async def test_z33_a_second_refresh_with_a_stale_mark_moves_nothing(z33_lane, monkeypatch):
+    """Z-33 (H's review, MEDIUM): a marked Milan line — closes stored by the old rule on Sunday 06-01 to Thursday 06-05,
+    the assignment's DIVIDEND on Wednesday 06-11, the last fetch on Monday 06-16 —, two refreshes prepared from that
+    state, both ``legacy_check`` set and their last fetch 06-16. The first, fetched and persisted, settles: the closes
+    move to Monday 06-02 to Friday 06-06, the DIVIDEND to Thursday 06-12 (the fresh history dates it there), the mark
+    gives way to ``Europe/Rome``. The second then fetches and persists with its stale prep: the row it reads holds the
+    timezone, so it moves and drops nothing — every row outside the asked range on its day, its close and ``fetched_at``
+    as the first left them; the DIVIDEND on 06-12, its ``updated_at`` as well —, the timezone stays, and it writes what
+    it fetched as any refresh does: OK.
+
+    Red on HEAD e20055213: the second persist runs the check again on rows already on their day. Latest first: Friday's
+    close, 105, stays (Saturday is no session); Thursday's, 104, moves onto Friday, meets 105 there and is dropped;
+    Monday's to Wednesday's, 101 to 103, move to Tuesday to Thursday. The DIVIDEND stays: the fresh history has it on
+    06-12, the day it now holds.
+    """
+    _z33_open_gate(monkeypatch)
+    asset_id, assignment_id = await z33_lane.asset(zone=_Z33_SENTINEL)
+    await z33_lane.prices(asset_id, {"2025-06-01": 101, "2025-06-02": 102, "2025-06-03": 103, "2025-06-04": 104, "2025-06-05": 105})
+    dividend = await z33_lane.event(asset_id, "2025-06-11", AssetEventType.DIVIDEND, "0.5", assignment_id=assignment_id)
+    provider = _Z33Provider(zone=_Z33_ROME, events=(_z33_point("2025-06-12", "DIVIDEND"),))
+    first_prep, second_prep = await _z33_prepared(asset_id), await _z33_prepared(asset_id)
+    preps = [(prep.legacy_check, prep.last_fetch_at) for prep in (first_prep, second_prep)]
+    assert preps == [(True, _Z33_LAST_FETCH)] * 2, f"barrier: both refreshes prepared while the mark is there, their last fetch Monday 06-16: {preps}"
+
+    _z33_went_through(await _z33_run_prepared(asset_id, first_prep, provider), provider, history_starts=["min"])
+    settled, settled_events = await _z33_prices(asset_id), await _z33_event_rows(asset_id)
+    observed = ({day: row[0] for day, row in _z33_without(settled, _Z33_FRESH).items()}, settled_events[dividend][0], await _z33_zone(asset_id))
+    expected = ({"2025-06-02": 101, "2025-06-03": 102, "2025-06-04": 103, "2025-06-05": 104, "2025-06-06": 105}, "2025-06-12", _Z33_ROME)
+    assert observed == expected, f"barrier: the first refresh settled — the closes and the DIVIDEND on their exchange days, the mark cleared: {observed}"
+
+    second = await _z33_run_prepared(asset_id, second_prep, provider)
+
+    moved = _z33_moved(_z33_without(settled, _Z33_FRESH), _z33_without(await _z33_prices(asset_id), _Z33_FRESH))
+    assert moved == {}, f"a refresh prepared before another settled must move and drop nothing: every row outside the asked range on its day, close and fetched_at as the first refresh left them; {{day: (close before, close after)}} {moved}"
+    assert await _z33_event_rows(asset_id) == settled_events, "no event may move: the DIVIDEND on 06-12, updated_at as the first refresh left it"
+    assert await _z33_zone(asset_id) == _Z33_ROME, "the timezone must stay"
+    _z33_went_through(second, provider, history_starts=["min", "min"])  # not FAILED: it writes what it fetched
+
+
+@pytest.mark.asyncio
+async def test_z33_a_refresh_that_read_the_mark_before_another_settled_moves_nothing(z33_lane, monkeypatch):
+    """Z-33 (H's review, MEDIUM, the overlap the claim closes): the same marked Milan line, one refresh prepared while the
+    mark is there, its full history fetched; its settle step reads the assignment: still marked. Between that read and
+    anything it moves, another refresh's settle step commits from a connection of its own: ``Europe/Rome`` stored, the
+    mark cleared, the rows left where they are (``_z33_another_refresh_settles_first``, at the settle step's
+    ``_server_date``). The refresh under test must then move and drop nothing — the closes on 06-01 to 06-05 and the
+    DIVIDEND on 06-11 as they were just before its persist, ``fetched_at`` and ``updated_at`` included —; the timezone
+    is ``Europe/Rome``, and it writes what it fetched as any refresh does: OK, the fresh closes of the asked range
+    stored.
+
+    Red on HEAD e20055213: the settle step trusts the prep and re-dates — the closes to Monday 06-02 to Friday 06-06,
+    the DIVIDEND to Thursday 06-12. Still red with the fresh read alone: the row it read held the mark; only a claim
+    made at the write sees the other's commit.
+    """
+    _z33_open_gate(monkeypatch)
+    asset_id, assignment_id = await z33_lane.asset(zone=_Z33_SENTINEL)
+    await z33_lane.prices(asset_id, {"2025-06-01": 101, "2025-06-02": 102, "2025-06-03": 103, "2025-06-04": 104, "2025-06-05": 105})
+    await z33_lane.event(asset_id, "2025-06-11", AssetEventType.DIVIDEND, "0.5", assignment_id=assignment_id)
+    provider = _Z33Provider(zone=_Z33_ROME, events=(_z33_point("2025-06-12", "DIVIDEND"),))
+    prep = await _z33_prepared(asset_id)
+    assert (prep.legacy_check, prep.last_fetch_at) == (True, _Z33_LAST_FETCH), f"barrier: the refresh is prepared while the mark is there, its last fetch Monday 06-16: {prep}"
+    before, events_before = await _z33_prices(asset_id), await _z33_event_rows(asset_id)
+    commits = _z33_another_refresh_settles_first(monkeypatch, assignment_id, _Z33_ROME)
+
+    result = await _z33_run_prepared(asset_id, prep, provider)
+
+    assert commits == [1], f"barrier: the other refresh's settle must commit once, inside the settle step of this one, at its _server_date: {commits}"
+    prices = await _z33_prices(asset_id)
+    moved = _z33_moved(_z33_without(before, _Z33_FRESH), _z33_without(prices, _Z33_FRESH))
+    assert moved == {}, f"a refresh that read the mark before another settled must move and drop nothing: every row outside the asked range on its day, close and fetched_at as they were; {{day: (close before, close after)}} {moved}"
+    assert await _z33_event_rows(asset_id) == events_before, "no event may move: the DIVIDEND on 06-11, updated_at as it was"
+    assert await _z33_zone(asset_id) == _Z33_ROME, "the timezone the other refresh stored must stay"
+    _z33_went_through(result, provider, history_starts=["min"])  # not FAILED: it writes what it fetched
+    assert {day: prices[day][0] for day in _Z33_FRESH if day in prices} == _Z33_FRESH, "it writes what it fetched as any refresh does: the fresh closes of the asked range"
 
 
 if __name__ == "__main__":

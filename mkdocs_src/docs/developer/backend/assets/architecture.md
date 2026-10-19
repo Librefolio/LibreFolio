@@ -376,9 +376,15 @@ its provider is `LEGACY_UTC_PROVIDER`. FETCH then makes one history call, step 0
 history cache, which it neither reads nor fills. That answer is the check's calendar (session
 dates; date and type of events) and the source of the range the refresh asked for, cut as step 1
 would cut it: only that range is written, and step 1 does not run. Before anything is written,
-`_settle_exchange_timezone()` moves the stored dates, never the values, and stores the timezone,
-which clears the mark for good, in one transaction:
+`_settle_exchange_timezone()` reads the assignment again and, if it still holds the mark, moves
+the stored dates, never the values, and stores the timezone, which clears the mark for good, in
+one transaction:
 
+- **The claim**: a conditional UPDATE (`… AND exchange_timezone = 'legacy-utc'`) stores the zone
+  before anything moves, since the manual sync and the scheduler can refresh one asset at once: a
+  refresh prepared before another settled would re-date rows already on their day. A refresh whose
+  UPDATE finds the mark gone (pysqlite opens the transaction there: behind another refresh's write
+  lock it waits for that commit, `busy_timeout`) moves nothing and writes its data as usual.
 - **The rule**, `local_date_of_legacy_utc_date(S, zone)`: a stored date S belongs to S + 1 when
   the zone's UTC offset at local midnight of S + 1 is positive (Milan and Tokyo always, London in
   summer time), to S otherwise (New York, UTC).
@@ -421,14 +427,23 @@ Known limits:
 - **Downgrade**: a database taken below 011 after the check, then upgraded again, is marked
   again, and its next refresh would move prices already on their day: do not downgrade past 011
   once the server has synced.
+- **No timezone database**: a server with none (Windows outside Docker without the PyPI `tzdata`
+  package, a minimal container; the [Docker image](../../architecture/overview.md#docker-image)
+  installs one) cannot resolve the exchange's zone: a marked Yahoo asset writes nothing until it
+  can, and `exchange_zone()` logs a warning, *Exchange timezone unknown to this server's timezone
+  database: …*, once per process for each Area/Location name (`Europe/Rome`). Adding `tzdata` is
+  Z-36 (a developer decision).
 - **Z-35** (after 1.3, a separate and older finding): `ticker.history()` runs without
   `auto_adjust`, so the stored closes are dividend- and split-adjusted as of each fetch. The
   check changes no value.
 
-Tests: the `test_z33_*` of `test_yahoo_finance_errors.py` (dates, timezones, the rule over a
-year), of `test_asset_source_refresh.py` (the check; one that raises:
-`test_z33_a_failing_check_fails_its_asset_alone`) and of `test_assets_provider.py` (the column
-across saves); `test_migration_011_exchange_timezone.py` (`./dev.py test db migration-011`).
+Tests: the `test_z33_*` of `test_yahoo_finance_errors.py` (dates, timezones and the warning for
+an unknown one, the rule over a year), of `test_asset_source_refresh.py` (the check; one that
+raises: `test_z33_a_failing_check_fails_its_asset_alone`; the re-read and the claim:
+`test_z33_a_second_refresh_with_a_stale_mark_moves_nothing` and
+`test_z33_a_refresh_that_read_the_mark_before_another_settled_moves_nothing`) and of
+`test_assets_provider.py` (the column across saves); `test_migration_011_exchange_timezone.py`
+(`./dev.py test db migration-011`).
 
 ---
 

@@ -272,7 +272,7 @@ The fix **`event_types`** repairs, once, the asset events stored with a type Lib
 
 From version 1.3, LibreFolio saves a currency only as an ISO 4217 alphabetic code, such as `EUR` or `USD`. Earlier versions also accepted the name of a currency or its numeric code, and saved it as written: `Euro`, `978`. Such a value still reads, but an edit that saves its row again is refused until its code is corrected, and its amounts never meet those of the ISO code: `978` and `EUR` make two balances. A restored backup can bring such values back.
 
-At every start, the log warns when the database holds some, and LibreFolio does not change them by itself:
+Shortly after every start, the log warns when the database holds some, and LibreFolio does not change them by itself:
 
 ```text
 Stored currency codes that are not ISO 4217 codes: an edit of their rows is refused until they are corrected (./dev.py db currencies lists them)
@@ -472,7 +472,7 @@ A [secure archive](#backup-secure) asks its password first, as `inspect` does, a
 
     Then the [post-migration fixes](#post-migration-fixes) run on the copy, as at every start.
 
-4. **Checked before and after.** Before the upgrade, the copy passes SQLite's integrity check and holds exactly the rows the manifest counted. After it, the copy passes the integrity check again, at this LibreFolio's revision. A migration may change data, so rows that changed are a warning, not a refusal, and so are broken references (foreign keys), kept as they are.
+4. **Checked before and after.** Before the upgrade, the copy passes SQLite's integrity check, holds exactly the rows the manifest counted, and holds no text that is not UTF-8: LibreFolio never writes such text, and the server could not read its rows after a restore. After it, the copy passes the integrity check again, at this LibreFolio's revision. A migration may change data, so rows that changed are a warning, not a refusal, and so are broken references (foreign keys), kept as they are.
 5. **Administrators.** The report names the active administrators of the backup. Without any, the restore is blocked: nobody could manage the instance after it.
 6. **Saved secrets.** The instance keeps its own [instance key](configuration.md#instance-key). When the archive carries the key that encrypted its saved plugin secrets, such as the API key of a data source, or when you give that key with `--instance-key-file` ([The Instance Key of Another Installation](#backup-restore-instance-key)), they are re-encrypted on the copy with this instance's key; the others are counted, to enter again after the restore. A copy without secrets does not even read this instance's key.
 
@@ -521,7 +521,7 @@ It ends with `✅ The archive can be restored. Dry run: the instance was left as
     | `unpacked_too_large` | Unpacked, the archive would be larger than this installation accepts for a restore, from the sizes its manifest declares: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`, or, while it is not set in the `managed` profile, 8 times the upload limit. Nothing is unpacked |
     | `no_space` | Not enough free space for the copy |
     | `stage_failed` | The copy could not be written: the error printed just above gives the cause |
-    | `database_damaged` | The backup's database fails SQLite's integrity check, before or after the upgrade, or SQLite cannot read its schema |
+    | `database_damaged` | The backup's database fails SQLite's integrity check, before or after the upgrade, SQLite cannot read its schema, or it holds text that is not UTF-8 (another program wrote to it, or it was changed) |
     | `database_foreign_objects` | The backup's database holds a trigger, a view or a virtual table, which LibreFolio never creates: it was not made by LibreFolio, or was changed. Use another backup |
     | `manifest_mismatch` | The backup's database is not the one its manifest describes |
     | `revision_missing` | The backup's database records no migration revision |

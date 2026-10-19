@@ -125,6 +125,21 @@ Lot A-51 (the setup completed while the Users tab acts; cure approved by the coo
     ``DELETE /users/{user_id}`` reads «waiting» again under the same lock before point 17's direct deletion: in that
     window, 409 ``DEMOTE_FIRST``, nothing deleted.
 
+Lot A-54 + A-55 + A-56 (decide under the write lock; reviewer E, through the coordinator, 17/10) adds:
+
+19. ``PATCH /users/{user_id}``, ``DELETE /users/{user_id}``, ``POST /users/invites`` and the three routes that act on an
+    account — ``POST /users/{user_id}/password-reset-link``, ``/sessions/revoke`` and ``/onboarding/reset`` — decide on
+    what the database holds under SQLite's write lock, not on the reads before it: between those reads and the first
+    write nothing holds the rows (pysqlite defers BEGIN to the first write), and another administrator may act there. An
+    account deleted in that window: the ``PATCH`` — whatever it asks —, the ``DELETE`` — the pending administrator's as a
+    plain account's — and the three routes answer ``_user_or_404``'s 404 word for word, ``{"detail": "User not
+    found"}``, and change nothing — no reset link issued, no onboarding row created or changed (A-54). A plain account
+    promoted in that window is an administrator's deletion: 409 ``DEMOTE_FIRST``, nothing deleted (A-55). The last place
+    taken in that window — another account reactivated, an invitation created —: the reactivation and the invitation are
+    point 5's and point 2's 409 ``USER_LIMIT_REACHED``, their counts the database's (``used`` the limit), nothing
+    written, the instance at its limit and not one over it (A-56). With nobody acting in the window, each request answers
+    as before.
+
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/login`` gives ``ACCOUNT_DISABLED`` and
 ``test_registration_api.py`` reads; the administrator's ``USER_LIMIT_REACHED`` carries ``limit``, ``used`` and
 ``billing_url`` in the same ``detail``.
@@ -205,11 +220,40 @@ A51-005 — in the window the plain ``{is_active: false}`` answers 200 with the 
 before the setup, while the database holds it active: a stale answer, nothing deactivated — and A51-006 — in the window
 the ``DELETE`` deletes the administrator just set up, 204. A51-004 is their guard, green today (no such field) and after
 (the validation): ``cancel_setup`` without ``is_active: false`` is refused whole. They run in-process, as A-43's; the
-deletion on ``private_head``, as UADM-076. The window is played without threads (``_setup_lands_after_the_first_read``):
-the route's first ``registration_service.is_pending_admin`` reads the account still waiting, then the setup completes
-on another connection — ``complete_admin_setup``, what ``POST /auth/setup`` runs, committed — before the route goes on;
-every later reading, the service's included, reads afresh. The cancellation and the deletion of an administrator still
-waiting keep their guards, unchanged: UADM-062 and UADM-074 (``{is_active: false}``), UADM-076 (``DELETE``).
+deletion on ``private_head``, as UADM-076. The window is played without threads. For the ``PATCH`` (A51-002, A51-005),
+``_setup_lands_after_the_first_read``: the route's first ``registration_service.is_pending_admin`` reads the account
+still waiting, then the setup completes on another connection — ``complete_admin_setup``, what ``POST /auth/setup``
+runs, committed — before the route goes on; every later reading, the service's included, reads afresh. For the
+``DELETE`` (A51-006), which since A-55 reads «waiting» under the lock only, the window of the UADM-LOCK cases
+(``_window``): the route has loaded the account still waiting, and the setup — ``POST /auth/setup``, served on the
+instance's own engine — lands right before the route's first write. The cancellation and the deletion of an
+administrator still waiting keep their guards, unchanged: UADM-062 and UADM-074 (``{is_active: false}``), UADM-076
+(``DELETE``).
+
+Red until A-54/A-55/A-56 (labels ``# red until A-54``, ``# red until A-55``, ``# red until A-56``; point 19):
+UADM-LOCK-01 — a ``PATCH`` on an account deleted in its window: today ``update_user_status`` takes the lock, then
+``session.refresh`` raises ``InvalidRequestError`` on the row gone, a 500 whose exception reaches the call in-process —,
+UADM-LOCK-02 — a ``DELETE`` of an account deleted in its window: that exception for the pending administrator, 204 for a
+plain account although its own ``DELETE`` matched no row —, UADM-LOCK-03 — a ``DELETE`` of a plain account promoted in
+its window: 204, the administrator just promoted deleted with its broker —, UADM-LOCK-04 and UADM-LOCK-05 — a
+reactivation and an invitation whose last place is taken in their window: 200 and 201, the instance one over its limit —,
+and UADM-LOCK-10 to UADM-LOCK-12 — a reset link, a sessions revoke and an onboarding reset of an account deleted in their
+window (A-54, added by the coordinator, 17/10 20:41): today ``IntegrityError`` (the link's INSERT, on the foreign key)
+and ``NoResultFound`` (``end_sessions``' UPDATE … RETURNING), 500s whose exceptions reach the call, and 204 for the
+onboarding reset of an account that no longer exists. UADM-LOCK-06 to UADM-LOCK-09 and UADM-LOCK-13 to UADM-LOCK-15 are
+their guards, green today and after: the same requests on the same scenes, served the same way, nobody acting in the
+window — or what the rival does done before the request. «Nothing changed» reads every row of users and account_tokens,
+every account's settings and onboarding rows, every account, broker, grant and transaction (``_lock_state``). They run
+in-process on the migrated schema (``private_head``, as A51-006: a deletion relies on its cascades), with fresh login
+limiters. The window is A-42's (``_rival_before_the_first_write``, ``test_admin_bootstrap.py``), played without threads
+and without assuming which reads the route makes: the request under test is served on an engine of its own on the
+private file (``_route_of``), and the rival — another administrator's request (peer's), served on the instance's own
+engine as another worker serves it, committed by its route — runs right before that engine's first write statement
+(``_window``). The listener is armed for that request alone, so neither the setup nor the rival can be «the first
+write»; each race's barrier says where the rival landed — right before the request's first write (the statement, in the
+verdict), after the request had read the account it decides on (for an invitation, after its authentication read the
+caller) — and that the rival's own request was served. A cure reads again under the lock: its first write,
+``begin_writes``, comes before its decisions, so the rival lands before the lock and the decisions see it.
 """
 
 import ast
@@ -220,13 +264,13 @@ import re
 import sqlite3
 import textwrap
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from secrets import token_urlsafe
-from typing import Any, Optional
+from typing import Any, Optional, Union
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -234,9 +278,10 @@ import pytest
 import pytest_asyncio
 import structlog
 from fastapi import FastAPI
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, event, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
+from sqlalchemy.util import await_only
 from structlog.testing import capture_logs
 
 from backend.app import logging_config
@@ -246,11 +291,11 @@ from backend.app.api.v1 import users as users_api
 from backend.app.config import API_V1_PREFIX, get_settings
 from backend.app.config.accounts import AdminBootstrapConfig
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
-from backend.app.db.models import AccountToken, AccountTokenPurpose, Broker, BrokerUserAccess, GlobalSetting, OnboardingFlow, Transaction, TransactionType, User, UserOnboardingProgress, UserRole
+from backend.app.db.models import AccountToken, AccountTokenPurpose, Broker, BrokerUserAccess, GlobalSetting, OnboardingFlow, Transaction, TransactionType, User, UserOnboardingProgress, UserOnboardingStepProgress, UserRole, UserSettings
 from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.schemas.brokers import BRDeleteItem
 from backend.app.schemas.users import AdminUserRead
-from backend.app.services.accounts import auth_service, registration_service, user_service
+from backend.app.services.accounts import auth_service, login_throttle, registration_service, user_service
 from backend.app.services.accounts.bootstrap_admin_service import BootstrapAction, complete_admin_setup, issue_setup_link, run_admin_bootstrap
 from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
 from backend.app.services.accounts.settings_service import initialize_global_settings
@@ -258,6 +303,7 @@ from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken
 from backend.app.services.brim import brim_provider
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.test_db.test_autoincrement_schema import _alembic_upgrade_head
 from backend.test_scripts.test_db_config import verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
@@ -3262,7 +3308,9 @@ def _setup_lands_after_the_first_read(monkeypatch: pytest.MonkeyPatch, private: 
     loaded inactive and «waiting» true, while the database holds the administrator active. The service's reading is a
     later call: ``user_service._is_pending_admin`` imports the function when it runs. The rival writes on its own
     connection while the request holds no lock: the cure keeps the route's first reading before the lock, and reads
-    «waiting» again under it (the coordinator's contract, 17/10).
+    «waiting» again under it (the coordinator's contract, 17/10). The PATCH's window (A51-002, A51-005): since A-55 the
+    DELETE reads «waiting» under the lock only, where a setup landing would wait for the request's own lock, and A51-006
+    plays its window with ``_window``.
     """
     real = registration_service.is_pending_admin
     answers: list[bool] = []
@@ -3417,27 +3465,785 @@ class TestTheSetupCompletedWhileTheUsersTabActs:
 
     # red until A-51
     @pytest.mark.asyncio
-    async def test_a_deletion_in_the_setups_window_asks_to_demote_first(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A51-006 — NEW, red until A-51 (today 204: the route read «waiting» before the deletion's writes, so it deletes the administrator just set up, never asked to demote it first): root deletes the pending administrator, DELETE /users/{it}, and the setup completes in the request's window (A51-002's). The route reads «waiting» again under the lock: → 409 DEMOTE_FIRST, and nothing deleted — every row of users and account_tokens as the setup left them: the account there, active, an administrator. On the migrated schema, as UADM-076: a deletion relies on its cascades.
+    async def test_a_deletion_in_the_setups_window_asks_to_demote_first(self, private_head: _Private) -> None:
+        """A51-006 — NEW, red until A-51 (today 204: the route read «waiting» before the deletion's writes, so it deletes the administrator just set up, never asked to demote it first): root deletes the pending administrator, DELETE /users/{it}, and the setup completes in the request's window — after the route loaded the account, still waiting, and right before its first write: POST /auth/setup through the account's link, served on the instance's own engine as another worker serves it (``_setup_completes``, in the window of the UADM-LOCK cases, ``_window``). Decided under the lock, on the account as it then is: → 409 DEMOTE_FIRST, and nothing deleted — every row of users, account_tokens and the accounts' settings and onboarding, every account, broker, grant and transaction as the setup left them: the account there, active, an administrator. On the migrated schema, as UADM-076: a deletion relies on its cascades.
 
-        Barrier: the route's first reading answered True, and the setup landed once, in the window.
+        Since A-55 the route reads «waiting» under the lock only: A51-002's window (``_setup_lands_after_the_first_read``, the setup landing inside the route's first ``is_pending_admin``) would land it while the request holds its own write lock, the setup's write waiting for the request that waits for it — «database is locked». The window this case means — the route holding an account it loaded still waiting, while nothing holds the row — ends at the route's first write: the setup lands there.
+
+        Barrier (``_landing_violations``): the setup landed once, right before the request's first write, after the request read the account; the account still waited when the setup began — so when the route read it, nothing writing in between —; POST /auth/setup answered 200.
         """
         print_section("A51-006: the deletion, the setup completed in the request's window")
         pending = await _bootstrap_pending_admin(private_head)
         _, cookie = await _admin(private_head)
         user_id = pending.account.user_id
-        landed: Landed = []
-        answers = _setup_lands_after_the_first_read(monkeypatch, private_head, pending.token, landed)
+        waited: list[bool] = []
 
-        response = await _call(private_head, "DELETE", f"/users/{user_id}", cookie=cookie)
+        outcome, window = await _in_the_window(private_head, _setup_completes(private_head, pending.token, user_id, waited), "DELETE", f"/users/{user_id}", cookie=cookie)
 
-        after = await _private_snapshot(private_head)
-        changes = _snapshot_changes(landed[0], after) if landed else "the setup never landed"
-        row = _account_row(after, user_id)
-        violations: list[str] = []
-        _expect(violations, _refusal(response) == (409, "DEMOTE_FIRST"), f"red until A-51: the setup completed between the route's reading and the deletion's first write, so the administrator just set up must be demoted first, 409 DEMOTE_FIRST: got {response.status_code} {response.text}")
-        _expect(violations, changes == {}, f"a refused deletion must delete nothing: every row of users and account_tokens as the setup left them — rows that changed: {changes}")
+        after = await _lock_state(private_head)
+        changes = _since_the_rival(window, after)
+        row = _account_row(after[0], user_id)
+        violations = _landing_violations(window, user_id, 200)
+        _expect(violations, waited == [True], f"barrier: the account must still wait for its setup when the setup begins — so when the route read it —: the filter selected it {waited}")
+        _expect(violations, _coded(outcome) == (409, "DEMOTE_FIRST"), f"red until A-51: the setup completed between the route's read and the deletion's first write; decided under the lock, the administrator just set up must be demoted first, 409 DEMOTE_FIRST: got {_shown(outcome)}")
+        _expect(violations, changes == {}, f"a refused deletion must delete nothing: the database as the setup left it — what changed: {changes}")
         _expect(violations, row is not None and (row["is_active"], row["is_superuser"]) == (True, True), f"the account must be there, active, an administrator: {row}")
-        _expect(violations, answers[:1] == [True] and len(landed) == 1, f"barrier: the route must read the account waiting, then the setup land once — the window of A-51: is_pending_admin answered {answers}, the setup landed {len(landed)} time(s)")
         assert not violations, f"A deletion in the setup's window must ask to demote first, and delete nothing:{_verdict(violations)}"
-        print_success("409 DEMOTE_FIRST; nothing deleted")
+        print_success(f"409 DEMOTE_FIRST; nothing deleted; the setup landed before «{_first_write(window)}»")
+
+
+# ============================================================================
+# IN-PROCESS, ON THE MIGRATED SCHEMA: DECIDED UNDER THE WRITE LOCK (lot A-54 + A-55 + A-56)
+# ============================================================================
+
+
+#: The first word of the statements that open a write in SQLite: the rival commits right before the first of them. A-42's
+#: ``WRITE_STATEMENTS`` (``test_admin_bootstrap.py``), copied: that module is written in parallel, and a red of its own at
+#: import would take this one down with it.
+WRITE_STATEMENTS = frozenset({"INSERT", "UPDATE", "DELETE", "REPLACE", "BEGIN", "SAVEPOINT"})
+#: ``_user_or_404``'s answer, word for word: the answer to a request on an account deleted in its window (A-54).
+USER_NOT_FOUND = (404, {"detail": "User not found"})
+#: The limit of A-56's scenes: root and peer, active administrators, take two places; one is left.
+LOCK_LIMIT = 3
+#: The status each rival's own request is served with — its barrier —: the target deleted or promoted by peer, sleeper
+#: reactivated by peer, peer's invitation created.
+RIVAL_STATUSES = {"deletion": 204, "promotion": 200, "reactivation": 200, "invitation": 201}
+#: (is_active, is_superuser) of the target of each kind of ``_lock_scene``; ``pending`` is the bootstrap's administrator, waiting for its setup.
+TARGET_FLAGS = {"active": (True, False), "inactive": (False, False), "admin": (True, True), "pending": (False, True)}
+#: A-54's PATCHes (UADM-LOCK-01, guarded by UADM-LOCK-06): the target's kind, the body, and the target's (is_active,
+#: is_superuser) once the PATCH is served with nobody acting in its window.
+PATCH_CASES: dict[str, tuple[str, dict[str, Any], tuple[bool, bool]]] = {
+    "deactivate-an-active-account": ("active", {"is_active": False}, (False, False)),
+    "promote-an-active-account": ("active", {"is_superuser": True}, (True, True)),
+    "reactivate-an-inactive-account": ("inactive", {"is_active": True}, (True, False)),
+    "cancel-the-setup-of-the-pending-administrator": ("pending", CANCEL_SETUP, (False, True)),
+}
+PATCHES = [pytest.param(case, id=case) for case in PATCH_CASES]
+#: A-54's deletions (UADM-LOCK-02): the pending administrator — the path that reads «waiting» again under the lock (A-51)
+#: — and a plain account — the path that reads nothing again.
+DELETED_IN_THE_WINDOW = [pytest.param("pending", id="the-pending-administrator"), pytest.param("active", id="a-plain-account")]
+#: A-55's targets (UADM-LOCK-03): a plain account, active or not; promoted, an administrator, active or not, to be demoted first (point 11).
+PROMOTED_IN_THE_WINDOW = [pytest.param("active", id="an-active-account"), pytest.param("inactive", id="an-inactive-account")]
+#: A-56's rivals (UADM-LOCK-04, UADM-LOCK-05): what takes the last place in the window — sleeper reactivated, an invitation created.
+LAST_PLACE_TAKERS = [pytest.param("reactivation", id="another-account-reactivated"), pytest.param("invitation", id="an-invitation-created")]
+#: A-56's guards (UADM-LOCK-08, UADM-LOCK-09): who took the last place before the request — nobody, or a rival of
+#: LAST_PLACE_TAKERS, its request served first.
+TAKEN_BEFORE = [
+    pytest.param(None, id="a-place-left"),
+    pytest.param("reactivation", id="the-last-place-taken-before-by-a-reactivation"),
+    pytest.param("invitation", id="the-last-place-taken-before-by-an-invitation"),
+]
+#: The deletions with nobody acting in the window (UADM-LOCK-07): the target's kind, whether it is the only OWNER of a
+#: broker with a DEPOSIT, and (status, ``detail.error_code``). The administrator owning a broker is the state
+#: UADM-LOCK-03's promotion leads to, there before the request.
+DELETIONS_WITHOUT_A_RIVAL = [
+    pytest.param("pending", False, (204, None), id="the-pending-administrator"),
+    pytest.param("active", False, (204, None), id="a-plain-account"),
+    pytest.param("active", True, (204, None), id="an-active-account-owning-a-broker"),
+    pytest.param("inactive", True, (204, None), id="an-inactive-account-owning-a-broker"),
+    pytest.param("admin", True, (409, "DEMOTE_FIRST"), id="an-administrator-owning-a-broker"),
+]
+#: The onboarding resets of A-54 (UADM-LOCK-12, guarded by UADM-LOCK-15): every flow — the request without a body —, or
+#: one flow, ``import_guide``, with its steps.
+ONBOARDING_RESETS = [pytest.param(None, id="every-flow-without-a-body"), pytest.param(OnboardingFlow.IMPORT_GUIDE.value, id="one-flow-import-guide")]
+#: An account's own rows besides users and account_tokens — its settings, its onboarding flows and steps, which go with
+#: it by the schema's cascade —: «nothing changed» reads them too (``_lock_state``).
+ACCOUNT_TABLES = (UserSettings.__table__, UserOnboardingProgress.__table__, UserOnboardingStepProgress.__table__)
+#: The tables of an account's onboarding: what an onboarding reset writes.
+ONBOARDING_TABLES = frozenset({UserOnboardingProgress.__tablename__, UserOnboardingStepProgress.__tablename__})
+
+#: The private database as «nothing changed» compares it: every row of users and account_tokens (``_private_snapshot``)
+#: and of ACCOUNT_TABLES, by table; every account, broker, grant and transaction (``_private_holdings``).
+_State = tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class _RivalOutcome:
+    """What a rival left once its request was served: that request's outcome (``_shown``), and the database right after."""
+
+    answer: tuple[Any, Any]
+    state: _State
+
+
+@dataclass
+class _Window:
+    """The request under test as its own engine ran it: every statement, in order, as (SQL, parameters); ``landed_before``, the index of the write the rival ran right before — None when it never ran —; ``rival``, what the rival left."""
+
+    statements: list[tuple[str, Any]] = field(default_factory=list)
+    landed_before: Optional[int] = None
+    rival: list[_RivalOutcome] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class _LockScene:
+    """A private instance for a race of A-54/A-55/A-56: root — the caller — and peer — the other administrator, whose requests are the rivals —, active administrators signed in; the target, of a kind of TARGET_FLAGS; sleeper, an inactive plain account that holds no place; the target's broker, when the case gives it one."""
+
+    root: _Account
+    cookie: str
+    peer: _Account
+    peer_cookie: str
+    target: _Account
+    sleeper: _Account
+    broker_id: Optional[int]
+
+
+@pytest.fixture
+def fresh_login_limiters(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The sign-in's two limiters replaced by fresh ones of the shipped size (as ``test_username_rules_api.py``): no sign-in of another in-process test counts against these."""
+    for name in ("LOGIN_BY_IDENTIFIER", "LOGIN_BY_ADDRESS"):
+        shipped = getattr(login_throttle, name)
+        monkeypatch.setattr(login_throttle, name, SlidingWindowLimiter(shipped.limit, shipped.window_seconds))
+
+
+async def _lock_scene(private: _Private, kind: str, *, broker: bool = False) -> _LockScene:
+    """The scene, written before the request: the pending administrator by the bootstrap — first, on the instance still empty —, every other account as a row, the target's broker with its OWNER grant and a DEPOSIT. It ends on its promise: the target as TARGET_FLAGS says, waiting for its setup when ``pending`` and only then; sleeper inactive."""
+    target = (await _bootstrap_pending_admin(private)).account if kind == "pending" else None
+    root, cookie = await _admin(private)
+    peer, peer_cookie = await _admin(private, "peer")
+    if target is None:
+        target = await _add_user(private, "target", admin=kind == "admin", active=kind != "inactive")
+    sleeper = await _add_user(private, "sleeper", active=False)
+    broker_id = await _private_broker(private, "Target's broker", [(target.user_id, UserRole.OWNER)], deposits=1) if broker else None
+    flags = (await _private_user(private, target.user_id))[:2]
+    waiting = target.user_id in await _pending_admin_ids(private)
+    assert (flags, waiting) == (TARGET_FLAGS[kind], kind == "pending"), f"Setup: the {kind} target must be (is_active, is_superuser) {TARGET_FLAGS[kind]}, waiting for its setup {kind == 'pending'}: {flags}, waiting {waiting}"
+    assert not (await _private_user(private, sleeper.user_id))[0], "Setup: sleeper must be inactive"
+    return _LockScene(root=root, cookie=cookie, peer=peer, peer_cookie=peer_cookie, target=target, sleeper=sleeper, broker_id=broker_id)
+
+
+@contextlib.asynccontextmanager
+async def _route_of(private: _Private) -> AsyncIterator[_Private]:
+    """The instance as another worker serves it: the same routers on the same private file, through an engine of its own, which only the request under test uses. Disposed at the end."""
+    engine = create_async_engine(private.engine.url, poolclass=NullPool)
+    try:
+        yield _Private(engine=engine, app=_private_app(engine))
+    finally:
+        await engine.dispose()
+
+
+def _is_write(statement: str) -> bool:
+    """Whether ``statement`` opens a write in SQLite: its first word is one of WRITE_STATEMENTS."""
+    words = statement.split(None, 1)
+    return bool(words) and words[0].upper() in WRITE_STATEMENTS
+
+
+@contextlib.contextmanager
+def _window(route: _Private, rival: Optional[Callable[[], Awaitable[_RivalOutcome]]]) -> Iterator[_Window]:
+    """Every statement of ``route``'s engine recorded, and ``rival`` run right before the first write among them; no rival for a guard.
+
+    A-42's ``_rival_before_the_first_write`` (``test_admin_bootstrap.py``), recording the statements besides: a
+    ``before_cursor_execute`` listener on the engine of the request under test alone, armed for that request alone — the
+    setup and the rival run on the instance's own engine, so neither can be «the first write». When the first INSERT,
+    UPDATE, DELETE, REPLACE, BEGIN or SAVEPOINT is about to run, it awaits the rival from the request's own greenlet
+    (``await_only``, as SQLAlchemy's asyncio layer awaits), then lets the statement go. pysqlite defers BEGIN to the
+    first write, and in WAL a reader holds nothing once its statement is done: the request holds no lock yet, so the
+    rival writes and commits on its own connection, and the transaction the request's write opens sees that commit. No
+    thread and no sleep: one interleaving, every time.
+    """
+    window = _Window()
+
+    def before_cursor_execute(_connection: Any, _cursor: Any, statement: str, parameters: Any, _context: Any, _executemany: bool) -> None:
+        window.statements.append((statement, parameters))
+        if rival is None or window.landed_before is not None or not _is_write(statement):
+            return
+        window.landed_before = len(window.statements) - 1
+        window.rival.append(await_only(rival()))
+
+    event.listen(route.engine.sync_engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        yield window
+    finally:
+        event.remove(route.engine.sync_engine, "before_cursor_execute", before_cursor_execute)
+
+
+async def _attempt(private: _Private, method: str, path: str, *, cookie: str, json: Any = None) -> Union[httpx.Response, Exception]:
+    """``_call``, or the exception it raised: in-process, an exception the route lets escape reaches the call, where a server would answer 500."""
+    try:
+        return await _call(private, method, path, cookie=cookie, json=json)
+    except Exception as exc:  # today's red of A-54 is that exception: the verdict shows it instead of stopping at it
+        return exc
+
+
+def _shown(outcome: Union[httpx.Response, Exception]) -> tuple[Any, Any]:
+    """An outcome as a verdict shows it: (status, the JSON body — or the text) for an answer; (the exception's type, its message) when the route raised."""
+    if isinstance(outcome, httpx.Response):
+        return _answer(outcome)
+    return type(outcome).__name__, str(outcome)
+
+
+def _coded(outcome: Union[httpx.Response, Exception]) -> tuple[Any, Optional[str]]:
+    """(status, ``detail.error_code``) of an answer (``_refusal``); (the exception's type, None) when the route raised."""
+    return _refusal(outcome) if isinstance(outcome, httpx.Response) else (type(outcome).__name__, None)
+
+
+def _limit_answer(outcome: Union[httpx.Response, Exception]) -> tuple[Any, dict[str, Any]]:
+    """(status, the code, ``limit`` and ``used`` of ``detail``): what an administrator's USER_LIMIT_REACHED says of the places; (the exception's type, {}) when the route raised."""
+    if not isinstance(outcome, httpx.Response):
+        return type(outcome).__name__, {}
+    detail = _detail(outcome)
+    return outcome.status_code, {key: detail.get(key) for key in ("error_code", "limit", "used")}
+
+
+async def _in_the_window(private: _Private, rival: Optional[Callable[[], Awaitable[_RivalOutcome]]], method: str, path: str, *, cookie: str, json: Any = None) -> tuple[Union[httpx.Response, Exception], _Window]:
+    """The request under test, served on an engine of its own (``_route_of``), ``rival`` landing right before that engine's first write (``_window``) — None for a guard: nobody acts meanwhile. Its outcome (``_attempt``) and its window."""
+    async with _route_of(private) as route:
+        with _window(route, rival) as window:
+            outcome = await _attempt(route, method, path, cookie=cookie, json=json)
+    return outcome, window
+
+
+async def _lock_state(private: _Private) -> _State:
+    """The private database now, as ``_State`` reads it."""
+    snapshot = await _private_snapshot(private)
+    async with AsyncSession(private.engine) as session:
+        for table in ACCOUNT_TABLES:
+            snapshot[table.name] = [dict(row) for row in (await session.execute(select(table).order_by(table.c.id))).mappings().all()]
+    return snapshot, await _private_holdings(private)
+
+
+def _state_changes(before: _State, after: _State) -> dict[str, Any]:
+    """What differs between two states: the rows of users and account_tokens (``_snapshot_changes``), and the holdings when they differ; empty when nothing changed."""
+    changes: dict[str, Any] = dict(_snapshot_changes(before[0], after[0]))
+    if before[1] != after[1]:
+        changes["holdings"] = {"before": before[1], "after": after[1]}
+    return changes
+
+
+def _since_the_rival(window: _Window, after: _State) -> Any:
+    """What changed since the rival's request was served (``_state_changes``); a sentence when the rival never ran."""
+    return _state_changes(window.rival[0].state, after) if window.rival else "the rival never ran"
+
+
+def _peer_request(private: _Private, cookie: str, method: str, path: str, json: Any = None) -> Callable[[], Awaitable[_RivalOutcome]]:
+    """A rival: the other administrator's request (``cookie``) served on the instance's own engine — another connection than the request under test's, as another worker serves it — and committed by its route; what it answered, and the database right after."""
+
+    async def rival() -> _RivalOutcome:
+        answer = _shown(await _attempt(private, method, path, cookie=cookie, json=json))
+        return _RivalOutcome(answer=answer, state=await _lock_state(private))
+
+    return rival
+
+
+def _rival(private: _Private, scene: _LockScene, action: str) -> Callable[[], Awaitable[_RivalOutcome]]:
+    """Peer's ``action`` (RIVAL_STATUSES): the target deleted, the target promoted, sleeper reactivated, an invitation created."""
+    requests: dict[str, tuple[str, str, Optional[dict[str, Any]]]] = {
+        "deletion": ("DELETE", f"/users/{scene.target.user_id}", None),
+        "promotion": ("PATCH", f"/users/{scene.target.user_id}", {"is_superuser": True}),
+        "reactivation": ("PATCH", f"/users/{scene.sleeper.user_id}", {"is_active": True}),
+        "invitation": ("POST", "/users/invites", {"grants_admin": False}),
+    }
+    method, path, body = requests[action]
+    return _peer_request(private, scene.peer_cookie, method, path, body)
+
+
+def _setup_completes(private: _Private, token: str, user_id: int, waited: list[bool]) -> Callable[[], Awaitable[_RivalOutcome]]:
+    """The rival of A51-006: whether account ``user_id`` still waits for its setup, appended to ``waited`` — what the request read, as nothing writes between its reads and this rival —; then that setup completed through ``token`` — POST /auth/setup with SETUP_PASSWORD (``_setup_with``), whoever holds the link — served on the instance's own engine as another worker serves it, committed by its route; what it answered, and the database right after."""
+
+    async def rival() -> _RivalOutcome:
+        waited.append(user_id in await _pending_admin_ids(private))
+        answer = _shown(await _setup_with(private, token))
+        return _RivalOutcome(answer=answer, state=await _lock_state(private))
+
+    return rival
+
+
+async def _usage(private: _Private) -> tuple[int, Optional[int]]:
+    """``registration_service.user_usage`` of the private instance, read fresh: (places used, the limit)."""
+    async with AsyncSession(private.engine) as session:
+        usage = await registration_service.user_usage(session)
+    return usage.used, usage.max_users
+
+
+async def _live_invitations(private: _Private) -> list[Optional[int]]:
+    """Who created each live invitation of the private instance (``list_pending_invites``), oldest first."""
+    async with AsyncSession(private.engine) as session:
+        return [invite.created_by_user_id for invite in await registration_service.list_pending_invites(session)]
+
+
+def _short(statement: str) -> str:
+    """A statement on one line, cut at 120 characters: what a verdict shows of it."""
+    flat = " ".join(statement.split())
+    return flat if len(flat) <= 120 else f"{flat[:117]}..."
+
+
+def _first_write(window: _Window) -> str:
+    """The request's first write statement (``_short``), «none» when it wrote nothing: where its window ends."""
+    return next((_short(sql) for sql, _ in window.statements if _is_write(sql)), "none")
+
+
+def _reads_account(statement: str, parameters: Any, user_id: int) -> bool:
+    """Whether ``statement`` reads the users row of ``user_id`` by its id: ``SELECT … FROM users WHERE users.id = ?``, that id its first parameter."""
+    flat = " ".join(statement.split()).upper()
+    first = parameters[0] if isinstance(parameters, (tuple, list)) and parameters else None
+    return flat.startswith("SELECT ") and " FROM USERS WHERE USERS.ID = ?" in flat and first == user_id
+
+
+def _landing_violations(window: _Window, account_id: int, rival_status: int) -> list[str]:
+    """The barrier of a race: the rival ran once, right before the request's first write — the statement it preceded —, after the request had read the account ``account_id``, and its own request was served with ``rival_status``. A red is then about the window, not about the setup."""
+    if window.landed_before is None:
+        return [f"barrier: the request never wrote, so the rival never ran in its window — the request's statements: {[_short(sql) for sql, _ in window.statements]}"]
+    preceded = _short(window.statements[window.landed_before][0])
+    if not window.rival:
+        return [f"barrier: the rival raised right before «{preceded}»: the request's outcome carries its exception"]
+    before = window.statements[: window.landed_before]
+    read_first = any(_reads_account(sql, parameters, account_id) for sql, parameters in before)
+    violations: list[str] = []
+    _expect(violations, read_first, f"barrier: the rival ran right before «{preceded}», but the request had not read account {account_id} yet — not the window between its reads and its first write: {[_short(sql) for sql, _ in before]}")
+    _expect(violations, window.rival[0].answer[0] == rival_status, f"barrier: the rival's own request must be served, {rival_status}: {window.rival[0].answer}")
+    return violations
+
+
+def _served_violations(window: _Window, account_id: int) -> list[str]:
+    """The barrier of a guard: the request was served on its own engine and read the account ``account_id`` there — the race's request, nobody acting in its window."""
+    if any(_reads_account(sql, parameters, account_id) for sql, parameters in window.statements):
+        return []
+    return [f"barrier: the request must read account {account_id} on its own engine: {[_short(sql) for sql, _ in window.statements]}"]
+
+
+def _deletion_violations(before: _State, after: _State, user_id: int, broker_id: Optional[int]) -> list[str]:
+    """What is wrong with a deletion served: the account's row and its tokens must be gone, its broker too when it had one, and every other account as it was."""
+    others = [row for row in before[0]["users"] if row["id"] != user_id]
+    brokers = [broker for broker, _name in after[1]["brokers"]]
+    violations: list[str] = []
+    _expect(violations, after[0]["users"] == others, f"the account must be gone, every other row of users as it was: ids before {[row['id'] for row in before[0]['users']]}, after {[row['id'] for row in after[0]['users']]}")
+    _expect(violations, all(row["user_id"] != user_id for row in after[0]["account_tokens"]), f"its tokens must be gone: {after[0]['account_tokens']}")
+    _expect(violations, broker_id is None or broker_id not in brokers, f"its broker {broker_id} must be gone with it: {after[1]['brokers']}")
+    return violations
+
+
+async def _onboarding_of(private: _Private, cookie: str) -> dict[str, tuple[str, dict[str, str]]]:
+    """The account's own onboarding, read from GET /settings/onboarding with its session: ``_live_onboarding``, in-process."""
+    response = await _call(private, "GET", "/settings/onboarding", cookie=cookie)
+    assert response.status_code == 200, f"GET /settings/onboarding: {response.status_code} {response.text}"
+    return _onboarding_reading(response.json())
+
+
+async def _onboarded(private: _Private, account: _Account) -> tuple[str, dict[str, tuple[str, dict[str, str]]]]:
+    """``account`` signed in, its onboarding moved as UADM-013's — intro_tour and import_guide (its steps with it) completed, fx_guide skipped, the first step of transaction_bulk_guide skipped — as the account itself does from the app: its session, and its onboarding as it then reads it. It ends on its promise: the moves read as made."""
+    cookie = await _sign_in(private, account)
+    bulk_step = STEP_FLOWS[OnboardingFlow.TRANSACTION_BULK_GUIDE.value][0]
+    moves = [(OnboardingFlow.INTRO_TOUR, "complete", None), (OnboardingFlow.FX_GUIDE, "skip", None), (OnboardingFlow.IMPORT_GUIDE, "complete", None), (OnboardingFlow.TRANSACTION_BULK_GUIDE, "skip", bulk_step)]
+    for flow, action, step in moves:
+        path = f"/settings/onboarding/{flow.value}/{action}" if step is None else f"/settings/onboarding/{flow.value}/steps/{step}/{action}"
+        response = await _call(private, "POST", path, cookie=cookie, json={"expected_version": ONBOARDING_FLOW_VERSIONS[flow]})
+        assert response.status_code == 200, f"Setup: POST {path} as {account.username}: {response.status_code} {response.text}"
+    reading = await _onboarding_of(private, cookie)
+    moved = (reading[OnboardingFlow.INTRO_TOUR.value][0], reading[OnboardingFlow.FX_GUIDE.value][0], set(reading[OnboardingFlow.IMPORT_GUIDE.value][1].values()), reading[OnboardingFlow.TRANSACTION_BULK_GUIDE.value][1].get(bulk_step))
+    assert moved == ("completed", "skipped", {"completed"}, "skipped"), f"Setup: {account.username}'s onboarding must read as moved: {reading}"
+    return cookie, reading
+
+
+async def _reset_link_of(private: _Private, token: Optional[str]) -> tuple[Optional[TokenStatus], Optional[int]]:
+    """How ``token`` inspects as a password-reset link, and whose account it resets; (None, None) without a token."""
+    if not token:
+        return None, None
+    async with AsyncSession(private.engine) as session:
+        inspection = await inspect_token(session, token, PASSWORD_RESET)
+    return inspection.status, inspection.record.user_id if inspection.record is not None else None
+
+
+@pytest.mark.usefixtures("fresh_login_limiters")
+class TestDecidedUnderTheWriteLock:
+    """Lot A-54 + A-55 + A-56 (reviewer E, through the coordinator, 17/10): ``PATCH /users/{id}``, ``DELETE /users/{id}``, ``POST /users/invites`` and the three routes that act on an account — its reset link, its sessions, its onboarding — decide on what the database holds under SQLite's write lock, not on the reads before it, where another administrator may act — the account deleted, the account promoted, the last place taken. In-process only, on the migrated schema (``private_head``): a pending administrator never enters the lane's database, and a deletion relies on the production schema's cascades. Each race (``_window``) has its guard: the same request on the same scene, served the same way, nobody acting in its window."""
+
+    # red until A-54
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("case", PATCHES)
+    async def test_a_patch_on_an_account_deleted_in_its_window_answers_404(self, private_head: _Private, case: str) -> None:
+        """UADM-LOCK-01 — NEW, red until A-54 (today ``update_user_status`` takes the lock, then ``session.refresh`` raises ``InvalidRequestError`` on the row gone: a 500, the exception reaching the call in-process): root's PATCH /users/{target} — deactivating an active account, promoting it, reactivating an inactive one, cancelling the pending administrator's setup — while peer, another administrator, deletes the target in the request's window, after the route read it and before its first write. Decided under the lock, on the account as it then is — none —: 404 with ``_user_or_404``'s answer word for word, ``{"detail": "User not found"}``, and nothing changed since peer's deletion: every row of users and account_tokens, every account, broker, grant and transaction as it left them.
+
+        Barrier (``_landing_violations``): the rival ran once, right before the request's first write, after the request read the target; peer's DELETE was served, 204.
+        """
+        kind, body, _flags = PATCH_CASES[case]
+        print_section(f"UADM-LOCK-01: PATCH {body} on the {kind} target, deleted by peer in the request's window")
+        scene = await _lock_scene(private_head, kind)
+        target = scene.target.user_id
+
+        outcome, window = await _in_the_window(private_head, _rival(private_head, scene, "deletion"), "PATCH", f"/users/{target}", cookie=scene.cookie, json=body)
+
+        changes = _since_the_rival(window, await _lock_state(private_head))
+        violations = _landing_violations(window, target, RIVAL_STATUSES["deletion"])
+        _expect(violations, _shown(outcome) == USER_NOT_FOUND, f"red until A-54: the target was deleted between the route's reads and its first write; decided under the lock, the PATCH must answer {USER_NOT_FOUND}: got {_shown(outcome)}")
+        _expect(violations, changes == {}, f"nothing may change since peer's deletion — what changed: {changes}")
+        assert not violations, f"A PATCH on an account deleted in its window must answer 404 and change nothing:{_verdict(violations)}"
+        print_success(f"404 User not found, nothing changed; the deletion landed before «{_first_write(window)}»")
+
+    # red until A-54
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("kind", DELETED_IN_THE_WINDOW)
+    async def test_a_deletion_of_an_account_deleted_in_its_window_answers_404(self, private_head: _Private, kind: str) -> None:
+        """UADM-LOCK-02 — NEW, red until A-54 (today, for the pending administrator, the route takes the lock and ``session.refresh`` raises ``InvalidRequestError``: a 500, the exception reaching the call; for a plain account, which the route reads nowhere again, 204 — although its own DELETE matched no row and deleted nothing): root's DELETE /users/{target} — the pending administrator, or a plain account — while peer deletes the target in the request's window. On both paths → 404 ``{"detail": "User not found"}``, and nothing else deleted: every row of users and account_tokens, every account, broker, grant and transaction as peer's deletion left them.
+
+        Barrier: the rival ran once, right before the request's first write, after the request read the target; peer's DELETE was served, 204.
+        """
+        print_section(f"UADM-LOCK-02: DELETE of the {kind} target, deleted by peer in the request's window")
+        scene = await _lock_scene(private_head, kind)
+        target = scene.target.user_id
+
+        outcome, window = await _in_the_window(private_head, _rival(private_head, scene, "deletion"), "DELETE", f"/users/{target}", cookie=scene.cookie)
+
+        changes = _since_the_rival(window, await _lock_state(private_head))
+        violations = _landing_violations(window, target, RIVAL_STATUSES["deletion"])
+        _expect(violations, _shown(outcome) == USER_NOT_FOUND, f"red until A-54: the target was deleted between the route's reads and its first write; decided under the lock, the DELETE must answer {USER_NOT_FOUND}: got {_shown(outcome)}")
+        _expect(violations, changes == {}, f"nothing else may be deleted, nothing changed since peer's deletion — what changed: {changes}")
+        assert not violations, f"A DELETE of an account deleted in its window must answer 404 and delete nothing else:{_verdict(violations)}"
+        print_success(f"404 User not found, nothing else deleted; the deletion landed before «{_first_write(window)}»")
+
+    # red until A-55
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("kind", PROMOTED_IN_THE_WINDOW)
+    async def test_a_deletion_of_an_account_promoted_in_its_window_asks_to_demote_first(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, kind: str) -> None:
+        """UADM-LOCK-03 — NEW, red until A-55 (today 204: the route decided «not an administrator» on its reads and reads again only the pending administrator under the lock, so it deletes the administrator just promoted, its broker with it): the target, a plain account — active or not — and the only OWNER of a broker with a DEPOSIT; root's DELETE /users/{target} while peer promotes it — PATCH {is_superuser: true} — in the request's window. Decided under the lock, an administrator's deletion: → 409 with ``detail.error_code`` DEMOTE_FIRST (the message is the existing one, not pinned), and nothing deleted — every row of users and account_tokens, every account, broker, grant and transaction as the promotion left them: the target there, an administrator, its broker and its DEPOSIT there —; no report file touched.
+
+        Barrier: the rival ran once, right before the request's first write, after the request read the target; peer's PATCH was served, 200.
+        """
+        print_section(f"UADM-LOCK-03: DELETE of the {kind} target, promoted by peer in the request's window")
+        scene = await _lock_scene(private_head, kind, broker=True)
+        calls = _spy_on_report_cleanup(monkeypatch)
+        target = scene.target.user_id
+
+        outcome, window = await _in_the_window(private_head, _rival(private_head, scene, "promotion"), "DELETE", f"/users/{target}", cookie=scene.cookie)
+
+        after = await _lock_state(private_head)
+        changes = _since_the_rival(window, after)
+        row = _account_row(after[0], target)
+        violations = _landing_violations(window, target, RIVAL_STATUSES["promotion"])
+        _expect(violations, _coded(outcome) == (409, "DEMOTE_FIRST"), f"red until A-55: the target was promoted between the route's reads and its first write; decided under the lock, its deletion is an administrator's, 409 DEMOTE_FIRST: got {_shown(outcome)}")
+        _expect(violations, changes == {}, f"nothing may be deleted, nothing changed since the promotion — what changed: {changes}")
+        _expect(violations, row is not None and (row["is_active"], row["is_superuser"]) == (TARGET_FLAGS[kind][0], True), f"the target must be there, an administrator, active {TARGET_FLAGS[kind][0]}: {row}")
+        _expect(violations, calls == [], f"no report file may be touched: cleanups {calls}")
+        assert not violations, f"A DELETE of an account promoted in its window must ask to demote it first, and delete nothing:{_verdict(violations)}"
+        print_success(f"409 DEMOTE_FIRST, nothing deleted; the promotion landed before «{_first_write(window)}»")
+
+    # red until A-56
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("taker", LAST_PLACE_TAKERS)
+    async def test_a_reactivation_whose_last_place_is_taken_in_its_window_is_refused(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, taker: str) -> None:
+        """UADM-LOCK-04 — NEW, red until A-56 (today 200: the route counts the places before its first write and nothing counts them again under the lock — the instance ends one over its limit, 4 places for 3): LIBREFOLIO_MAX_USERS=3 and one place left — root and peer active, the target and sleeper inactive plain accounts holding none —; root's PATCH {is_active: true} of the target while peer takes the last place in the request's window, reactivating sleeper or creating an invitation. Counted under the lock: → 409 USER_LIMIT_REACHED, its counts the database's — limit 3, used 3 (point 5, as UADM-022) —; the target still inactive and nothing changed since peer's request; ``user_usage()`` used 3, the limit — not one over it.
+
+        Barrier: the rival ran once, right before the request's first write, after the request read the target; peer's request was served (200 or 201).
+        """
+        print_section(f"UADM-LOCK-04: a reactivation with one place left, the place taken in its window ({taker})")
+        scene = await _lock_scene(private_head, "inactive")
+        target = scene.target.user_id
+        monkeypatch.setenv(MAX_USERS_VARIABLE, str(LOCK_LIMIT))
+        assert await _usage(private_head) == (LOCK_LIMIT - 1, LOCK_LIMIT), "Setup: one place left — root and peer active, the target and sleeper holding none"
+
+        outcome, window = await _in_the_window(private_head, _rival(private_head, scene, taker), "PATCH", f"/users/{target}", cookie=scene.cookie, json={"is_active": True})
+
+        after = await _lock_state(private_head)
+        changes = _since_the_rival(window, after)
+        row = _account_row(after[0], target)
+        usage = await _usage(private_head)
+        refused = (409, {"error_code": "USER_LIMIT_REACHED", "limit": LOCK_LIMIT, "used": LOCK_LIMIT})
+        violations = _landing_violations(window, target, RIVAL_STATUSES[taker])
+        _expect(violations, _limit_answer(outcome) == refused, f"red until A-56: the last place was taken between the route's count and its first write; counted under the lock, the reactivation must be refused {refused}: got {_shown(outcome)}")
+        _expect(violations, row is not None and not row["is_active"], f"the target must still be inactive: {row}")
+        _expect(violations, changes == {}, f"nothing may change since peer's request — what changed: {changes}")
+        _expect(violations, usage == (LOCK_LIMIT, LOCK_LIMIT), f"the instance must end at its limit, not over it: user_usage() (used, limit) {usage}")
+        assert not violations, f"A reactivation whose last place is taken in its window must be refused, the instance at its limit:{_verdict(violations)}"
+        print_success(f"409 USER_LIMIT_REACHED, used {usage[0]} of {usage[1]}; the {taker} landed before «{_first_write(window)}»")
+
+    # red until A-56
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("taker", LAST_PLACE_TAKERS)
+    async def test_an_invitation_whose_last_place_is_taken_in_its_window_is_refused(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, taker: str) -> None:
+        """UADM-LOCK-05 — NEW, red until A-56 (today 201: ``create_invite`` counts the places, then ``issue_token`` INSERTs, and nothing holds the count in between — root's invitation beside the place peer took, one over the limit): LIBREFOLIO_MAX_USERS=3 and one place left; root's POST /users/invites while peer takes the last place in the request's window — its own invitation, or reactivating sleeper. Counted under the lock: → 409 USER_LIMIT_REACHED, limit 3 and used 3 (point 2, as UADM-024); no invitation of root's — the live invitations exactly the rival's: peer's one, or none —; nothing changed since peer's request; ``user_usage()`` used 3.
+
+        Barrier: the rival ran once, right before the request's first write, after the request's authentication read root; peer's request was served (201 or 200).
+        """
+        print_section(f"UADM-LOCK-05: an invitation with one place left, the place taken in its window ({taker})")
+        scene = await _lock_scene(private_head, "inactive")
+        monkeypatch.setenv(MAX_USERS_VARIABLE, str(LOCK_LIMIT))
+        assert await _usage(private_head) == (LOCK_LIMIT - 1, LOCK_LIMIT), "Setup: one place left — root and peer active, the target and sleeper holding none"
+        assert await _live_invitations(private_head) == [], "Setup: no live invitation"
+
+        outcome, window = await _in_the_window(private_head, _rival(private_head, scene, taker), "POST", "/users/invites", cookie=scene.cookie, json={"grants_admin": False})
+
+        changes = _since_the_rival(window, await _lock_state(private_head))
+        live = await _live_invitations(private_head)
+        rivals = [scene.peer.user_id] if taker == "invitation" else []
+        usage = await _usage(private_head)
+        refused = (409, {"error_code": "USER_LIMIT_REACHED", "limit": LOCK_LIMIT, "used": LOCK_LIMIT})
+        violations = _landing_violations(window, scene.root.user_id, RIVAL_STATUSES[taker])
+        _expect(violations, _limit_answer(outcome) == refused, f"red until A-56: the last place was taken between the invitation's count and its first write; counted under the lock, the invitation must be refused {refused}: got {_shown(outcome)}")
+        _expect(violations, live == rivals, f"the live invitations must be exactly the rival's — by creator, {rivals}: {live}")
+        _expect(violations, changes == {}, f"nothing may change since peer's request — what changed: {changes}")
+        _expect(violations, usage == (LOCK_LIMIT, LOCK_LIMIT), f"the instance must end at its limit, not over it: user_usage() (used, limit) {usage}")
+        assert not violations, f"An invitation whose last place is taken in its window must be refused, the instance at its limit:{_verdict(violations)}"
+        print_success(f"409 USER_LIMIT_REACHED, used {usage[0]} of {usage[1]}; the {taker} landed before «{_first_write(window)}»")
+
+    # guard
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("case", PATCHES)
+    async def test_a_patch_with_nobody_in_its_window_is_served_as_before(self, private_head: _Private, case: str) -> None:
+        """UADM-LOCK-06 — GUARD of UADM-LOCK-01, green today and after: its PATCH on its scene, served the same way — an engine of its own, the window recorded —, nobody acting in the window: 200 with the target's row, exactly its nine fields, as the change leaves it — deactivated, promoted, reactivated; the cancellation leaves the pending administrator inactive, an administrator, still waiting (pending_setup true) —, and the database holds the same.
+
+        Barrier: the request read the target on its own engine.
+        """
+        kind, body, flags = PATCH_CASES[case]
+        print_section(f"UADM-LOCK-06: PATCH {body} on the {kind} target, nobody in the window")
+        scene = await _lock_scene(private_head, kind)
+        target = scene.target.user_id
+
+        outcome, window = await _in_the_window(private_head, None, "PATCH", f"/users/{target}", cookie=scene.cookie, json=body)
+
+        status, answer = _shown(outcome)
+        held = ((await _private_user(private_head, target))[:2], target in await _pending_admin_ids(private_head))
+        violations = _served_violations(window, target)
+        _expect(violations, status == 200, f"PATCH {body} with nobody in its window: expected 200, got {status} {answer}")
+        violations += [f"the PATCH's answer: {violation}" for violation in _user_item_violations(answer, scene.target, active=flags[0], superuser=flags[1], pending_setup=kind == "pending")]
+        _expect(violations, held == (flags, kind == "pending"), f"the database must hold the target as the change leaves it — (is_active, is_superuser) {flags}, waiting {kind == 'pending'}: {held}")
+        assert not violations, f"A PATCH with nobody in its window must be served as before:{_verdict(violations)}"
+        print_success(f"200, (is_active, is_superuser) {flags}; first write «{_first_write(window)}»")
+
+    # guard
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("kind", "broker", "expected"), DELETIONS_WITHOUT_A_RIVAL)
+    async def test_a_deletion_with_nobody_in_its_window_is_served_as_before(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, kind: str, broker: bool, expected: tuple[int, Optional[str]]) -> None:
+        """UADM-LOCK-07 — GUARD of UADM-LOCK-02 and UADM-LOCK-03, green today and after: their DELETE on their scenes, served the same way, nobody acting in the window — and an administrator owning a broker, the state UADM-LOCK-03's promotion leads to, there before the request. The pending administrator, or a plain account — active or not, the only OWNER of a broker with a DEPOSIT or of none — → 204: the account and its tokens gone, its broker with it and that broker's report files cleaned once, every other account as it was. An administrator → 409 DEMOTE_FIRST, nothing changed, no report file touched.
+
+        Barrier: the request read the target on its own engine.
+        """
+        print_section(f"UADM-LOCK-07: DELETE of the {kind} target{' owning a broker' if broker else ''}, nobody in the window")
+        scene = await _lock_scene(private_head, kind, broker=broker)
+        calls = _spy_on_report_cleanup(monkeypatch)
+        target = scene.target.user_id
+        before = await _lock_state(private_head)
+
+        outcome, window = await _in_the_window(private_head, None, "DELETE", f"/users/{target}", cookie=scene.cookie)
+
+        after = await _lock_state(private_head)
+        violations = _served_violations(window, target)
+        _expect(violations, _coded(outcome) == expected, f"DELETE of the {kind} target with nobody in its window: expected {expected}, got {_shown(outcome)}")
+        if expected[0] == 204:
+            violations += _deletion_violations(before, after, target, scene.broker_id)
+            _expect(violations, calls == ([[scene.broker_id]] if broker else []), f"the report files of its broker, and only them, must be cleaned once: cleanups {calls}")
+        else:
+            _expect(violations, _state_changes(before, after) == {}, f"a refused deletion must change nothing — what changed: {_state_changes(before, after)}")
+            _expect(violations, calls == [], f"a refused deletion must touch no report file: cleanups {calls}")
+        assert not violations, f"A DELETE with nobody in its window must be served as before:{_verdict(violations)}"
+        print_success(f"{expected}; first write «{_first_write(window)}»")
+
+    # guard
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("taker", TAKEN_BEFORE)
+    async def test_a_reactivation_with_nobody_in_its_window_counts_the_places_as_before(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, taker: Optional[str]) -> None:
+        """UADM-LOCK-08 — GUARD of UADM-LOCK-04, green today and after: LIBREFOLIO_MAX_USERS=3, root and peer active; the last place left free, or taken BEFORE the request by UADM-LOCK-04's rivals — peer's request served first —; then its PATCH {is_active: true} of the target, served the same way, nobody acting in the window. A place left → 200, the target active; none → 409 USER_LIMIT_REACHED (limit 3, used 3), nothing changed, the target inactive. Either way ``user_usage()`` ends at used 3.
+
+        Barrier: the request read the target on its own engine.
+        """
+        print_section(f"UADM-LOCK-08: a reactivation, nobody in its window — the last place {f'taken before ({taker})' if taker else 'left'}")
+        scene = await _lock_scene(private_head, "inactive")
+        target = scene.target.user_id
+        monkeypatch.setenv(MAX_USERS_VARIABLE, str(LOCK_LIMIT))
+        if taker is not None:
+            taken = await _rival(private_head, scene, taker)()
+            assert taken.answer[0] == RIVAL_STATUSES[taker], f"Setup: peer's {taker} must be served first, {RIVAL_STATUSES[taker]}: {taken.answer}"
+        before = await _lock_state(private_head)
+
+        outcome, window = await _in_the_window(private_head, None, "PATCH", f"/users/{target}", cookie=scene.cookie, json={"is_active": True})
+
+        after = await _lock_state(private_head)
+        row = _account_row(after[0], target)
+        usage = await _usage(private_head)
+        violations = _served_violations(window, target)
+        if taker is None:
+            _expect(violations, _coded(outcome) == (200, None), f"with a place left the reactivation goes through: expected 200, got {_shown(outcome)}")
+            _expect(violations, row is not None and row["is_active"], f"the target must be active: {row}")
+        else:
+            refused = (409, {"error_code": "USER_LIMIT_REACHED", "limit": LOCK_LIMIT, "used": LOCK_LIMIT})
+            _expect(violations, _limit_answer(outcome) == refused, f"with no place left the reactivation is refused {refused}: got {_shown(outcome)}")
+            _expect(violations, _state_changes(before, after) == {}, f"a refused reactivation must change nothing — what changed: {_state_changes(before, after)}")
+        _expect(violations, usage == (LOCK_LIMIT, LOCK_LIMIT), f"the instance must end at its limit: user_usage() (used, limit) {usage}")
+        assert not violations, f"A reactivation with nobody in its window must count the places as before:{_verdict(violations)}"
+        print_success(f"{_coded(outcome)}, used {usage[0]} of {usage[1]}; first write «{_first_write(window)}»")
+
+    # guard
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("taker", TAKEN_BEFORE)
+    async def test_an_invitation_with_nobody_in_its_window_counts_the_places_as_before(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, taker: Optional[str]) -> None:
+        """UADM-LOCK-09 — GUARD of UADM-LOCK-05, green today and after: LIBREFOLIO_MAX_USERS=3, root and peer active; the last place left free, or taken BEFORE the request by UADM-LOCK-05's rivals — peer's request served first —; then its POST /users/invites, served the same way, nobody acting in the window. A place left → 201, root's invitation the one live; none → 409 USER_LIMIT_REACHED (limit 3, used 3), nothing changed — the live invitations peer's one, or none. Either way ``user_usage()`` ends at used 3.
+
+        Barrier: the request read root, its caller, on its own engine.
+        """
+        print_section(f"UADM-LOCK-09: an invitation, nobody in its window — the last place {f'taken before ({taker})' if taker else 'left'}")
+        scene = await _lock_scene(private_head, "inactive")
+        monkeypatch.setenv(MAX_USERS_VARIABLE, str(LOCK_LIMIT))
+        if taker is not None:
+            taken = await _rival(private_head, scene, taker)()
+            assert taken.answer[0] == RIVAL_STATUSES[taker], f"Setup: peer's {taker} must be served first, {RIVAL_STATUSES[taker]}: {taken.answer}"
+        before = await _lock_state(private_head)
+
+        outcome, window = await _in_the_window(private_head, None, "POST", "/users/invites", cookie=scene.cookie, json={"grants_admin": False})
+
+        after = await _lock_state(private_head)
+        live = await _live_invitations(private_head)
+        usage = await _usage(private_head)
+        violations = _served_violations(window, scene.root.user_id)
+        if taker is None:
+            _expect(violations, (_coded(outcome), live) == ((201, None), [scene.root.user_id]), f"with a place left the invitation is issued: expected 201 and root's invitation the one live, got {_coded(outcome)}, live invitations by creator {live}")
+        else:
+            refused = (409, {"error_code": "USER_LIMIT_REACHED", "limit": LOCK_LIMIT, "used": LOCK_LIMIT})
+            rivals = [scene.peer.user_id] if taker == "invitation" else []
+            _expect(violations, _limit_answer(outcome) == refused, f"with no place left the invitation is refused {refused}: got {_shown(outcome)}")
+            _expect(violations, (_state_changes(before, after), live) == ({}, rivals), f"a refused invitation must change nothing, the live invitations the rival's {rivals}: what changed {_state_changes(before, after)}; live by creator {live}")
+        _expect(violations, usage == (LOCK_LIMIT, LOCK_LIMIT), f"the instance must end at its limit: user_usage() (used, limit) {usage}")
+        assert not violations, f"An invitation with nobody in its window must count the places as before:{_verdict(violations)}"
+        print_success(f"{_coded(outcome)}, used {usage[0]} of {usage[1]}; first write «{_first_write(window)}»")
+
+    # red until A-54
+    @pytest.mark.asyncio
+    async def test_a_reset_link_for_an_account_deleted_in_its_window_answers_404(self, private_head: _Private) -> None:
+        """UADM-LOCK-10 — NEW, red until A-54 (today the route's first write — ``create_password_reset`` revoking the account's earlier reset links — comes after the deletion and matches nothing, then ``issue_token``'s INSERT fails on the foreign key: ``IntegrityError``, a 500, the exception reaching the call in-process): root's POST /users/{target}/password-reset-link while peer deletes the target in the request's window, after the route read it and before its first write. Read again under the lock — none —: 404 with ``_user_or_404``'s answer word for word, ``{"detail": "User not found"}``; no reset link issued — no password_reset row in account_tokens, and no row of the target —; and nothing else changed since peer's deletion: every row of users and account_tokens, every account's settings and onboarding, every account, broker, grant and transaction as it left them.
+
+        Barrier (``_landing_violations``): the rival ran once, right before the request's first write, after the request read the target; peer's DELETE was served, 204.
+        """
+        print_section("UADM-LOCK-10: a reset link for the target, deleted by peer in the request's window")
+        scene = await _lock_scene(private_head, "active")
+        target = scene.target.user_id
+
+        outcome, window = await _in_the_window(private_head, _rival(private_head, scene, "deletion"), "POST", f"/users/{target}/password-reset-link", cookie=scene.cookie)
+
+        after = await _lock_state(private_head)
+        changes = _since_the_rival(window, after)
+        links = [row for row in after[0]["account_tokens"] if row["purpose"] == PASSWORD_RESET.value or row["user_id"] == target]
+        violations = _landing_violations(window, target, RIVAL_STATUSES["deletion"])
+        _expect(violations, _shown(outcome) == USER_NOT_FOUND, f"red until A-54: the target was deleted between the route's read and its first write; read again under the lock, the reset link must answer {USER_NOT_FOUND}: got {_shown(outcome)}")
+        _expect(violations, links == [], f"no reset link may be issued — no password_reset token, no token of the target: {links}")
+        _expect(violations, changes == {}, f"nothing may change since peer's deletion — what changed: {changes}")
+        assert not violations, f"A reset link for an account deleted in its window must answer 404 and issue nothing:{_verdict(violations)}"
+        print_success(f"404 User not found, no link issued; the deletion landed before «{_first_write(window)}»")
+
+    # red until A-54
+    @pytest.mark.asyncio
+    async def test_a_sessions_revoke_of_an_account_deleted_in_its_window_answers_404(self, private_head: _Private) -> None:
+        """UADM-LOCK-11 — NEW, red until A-54 (today the route's first write — ``end_sessions``' UPDATE … RETURNING of the session version — comes after the deletion and matches no row: ``scalar_one`` raises ``NoResultFound``, a 500, the exception reaching the call in-process): the target signed in; root's POST /users/{target}/sessions/revoke while peer deletes the target in the request's window. Read again under the lock — none —: 404 ``{"detail": "User not found"}``, and nothing changed since peer's deletion.
+
+        Barrier: the rival ran once, right before the request's first write, after the request read the target; peer's DELETE was served, 204.
+        """
+        print_section("UADM-LOCK-11: a sessions revoke of the target, deleted by peer in the request's window")
+        scene = await _lock_scene(private_head, "active")
+        await _sign_in(private_head, scene.target)
+        target = scene.target.user_id
+
+        outcome, window = await _in_the_window(private_head, _rival(private_head, scene, "deletion"), "POST", f"/users/{target}/sessions/revoke", cookie=scene.cookie)
+
+        changes = _since_the_rival(window, await _lock_state(private_head))
+        violations = _landing_violations(window, target, RIVAL_STATUSES["deletion"])
+        _expect(violations, _shown(outcome) == USER_NOT_FOUND, f"red until A-54: the target was deleted between the route's read and its first write; read again under the lock, the sessions revoke must answer {USER_NOT_FOUND}: got {_shown(outcome)}")
+        _expect(violations, changes == {}, f"nothing may change since peer's deletion — what changed: {changes}")
+        assert not violations, f"A sessions revoke of an account deleted in its window must answer 404 and change nothing:{_verdict(violations)}"
+        print_success(f"404 User not found, nothing changed; the deletion landed before «{_first_write(window)}»")
+
+    # red until A-54
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("flow", ONBOARDING_RESETS)
+    async def test_an_onboarding_reset_of_an_account_deleted_in_its_window_answers_404(self, private_head: _Private, flow: Optional[str]) -> None:
+        """UADM-LOCK-12 — NEW, red until A-54 (today 204: the route's first write — ``reset_onboarding_progress``'s UPDATE — comes after the deletion, whose cascade took the account's onboarding rows; the UPDATEs match nothing, and the route answers 204 for an account that no longer exists): the target signed in, its onboarding moved (``_onboarded``: flows completed and skipped, a step skipped); root's POST /users/{target}/onboarding/reset — without a body (every flow), or ``{flow: import_guide}`` — while peer deletes the target in the request's window. Read again under the lock — none —: 404 ``{"detail": "User not found"}``; no onboarding row created or changed for that id — no row of user_onboarding_progress or user_onboarding_step_progress of the target —; and nothing changed since peer's deletion.
+
+        Barrier: the rival ran once, right before the request's first write, after the request read the target; peer's DELETE was served, 204.
+        """
+        print_section(f"UADM-LOCK-12: an onboarding reset ({flow or 'every flow'}) of the target, deleted by peer in the request's window")
+        scene = await _lock_scene(private_head, "active")
+        await _onboarded(private_head, scene.target)
+        target = scene.target.user_id
+
+        outcome, window = await _in_the_window(private_head, _rival(private_head, scene, "deletion"), "POST", f"/users/{target}/onboarding/reset", cookie=scene.cookie, json=None if flow is None else {"flow": flow})
+
+        after = await _lock_state(private_head)
+        changes = _since_the_rival(window, after)
+        rows = {table: [row for row in after[0][table] if row["user_id"] == target] for table in sorted(ONBOARDING_TABLES)}
+        violations = _landing_violations(window, target, RIVAL_STATUSES["deletion"])
+        _expect(violations, _shown(outcome) == USER_NOT_FOUND, f"red until A-54: the target was deleted between the route's read and its first write; read again under the lock, the onboarding reset must answer {USER_NOT_FOUND}: got {_shown(outcome)}")
+        _expect(violations, rows == dict.fromkeys(sorted(ONBOARDING_TABLES), []), f"no onboarding row of the target may be created or changed: {rows}")
+        _expect(violations, changes == {}, f"nothing may change since peer's deletion — what changed: {changes}")
+        assert not violations, f"An onboarding reset of an account deleted in its window must answer 404 and write nothing:{_verdict(violations)}"
+        print_success(f"404 User not found, no onboarding row; the deletion landed before «{_first_write(window)}»")
+
+    # guard
+    @pytest.mark.asyncio
+    async def test_a_reset_link_with_nobody_in_its_window_is_issued_as_before(self, private_head: _Private) -> None:
+        """UADM-LOCK-13 — GUARD of UADM-LOCK-10, green today and after: its POST /users/{target}/password-reset-link on its scene, served the same way, nobody acting in the window: 201 with the link — ``{token, path, url, expires_at}`` as UADM-010 reads it (``_reset_link_violations``) —, its token a live reset link of the target (inspected valid); and the one change, a new row of account_tokens: the stored hash of that token, a password_reset of the target issued by root, neither consumed nor revoked.
+
+        Barrier: the request read the target on its own engine.
+        """
+        print_section("UADM-LOCK-13: a reset link for the target, nobody in the window")
+        scene = await _lock_scene(private_head, "active")
+        target = scene.target.user_id
+        before = await _lock_state(private_head)
+
+        outcome, window = await _in_the_window(private_head, None, "POST", f"/users/{target}/password-reset-link", cookie=scene.cookie)
+
+        changes = _state_changes(before, await _lock_state(private_head))
+        status, link = _shown(outcome)
+        token = link.get("token") if isinstance(link, dict) else None
+        inspected = await _reset_link_of(private_head, token)
+        new_rows = changes.get("account_tokens", {}).get("after", [])
+        issued = [(row["purpose"], row["user_id"], row["created_by_user_id"], row["token_hash"], row["consumed_at"], row["revoked_at"]) for row in new_rows]
+        expected = [(PASSWORD_RESET.value, target, scene.root.user_id, hash_token(token or ""), None, None)]
+        violations = _served_violations(window, target)
+        _expect(violations, status == 201, f"a reset link with nobody in its window: expected 201, got {status} {link}")
+        violations += _reset_link_violations(link) if status == 201 else []
+        _expect(violations, inspected == (TokenStatus.VALID, target), f"its token must be a live reset link of the target: inspected (status, user_id) {inspected}")
+        _expect(violations, set(changes) == {"account_tokens"} and changes["account_tokens"]["before"] == [] and issued == expected, f"the one change must be the new link's row {expected}: what changed {changes}")
+        assert not violations, f"A reset link with nobody in its window must be issued as before:{_verdict(violations)}"
+        print_success(f"201, a live link of the target; first write «{_first_write(window)}»")
+
+    # guard
+    @pytest.mark.asyncio
+    async def test_a_sessions_revoke_with_nobody_in_its_window_ends_the_sessions_as_before(self, private_head: _Private) -> None:
+        """UADM-LOCK-14 — GUARD of UADM-LOCK-11, green today and after: its POST /users/{target}/sessions/revoke on its scene — the target signed in —, served the same way, nobody acting in the window: 204 with no body; the target's session refused — GET /auth/me → 401 «Session expired or invalid» —; and the one change, the target's session version one higher, every other column and row as it was.
+
+        Barrier: the request read the target on its own engine.
+        """
+        print_section("UADM-LOCK-14: a sessions revoke of the target, nobody in the window")
+        scene = await _lock_scene(private_head, "active")
+        target_cookie = await _sign_in(private_head, scene.target)
+        target = scene.target.user_id
+        before = await _lock_state(private_head)
+        # The state the revoke must leave: the one before, the target's session version one higher — in its row, and in
+        # the holdings, which carry every account's version
+        rows, holdings = before
+        users = [{**row, "session_version": row["session_version"] + 1} if row["id"] == target else row for row in rows["users"]]
+        accounts = sorted((name, active, admin, version + 1 if name == scene.target.username else version) for name, active, admin, version in holdings["accounts"])
+        expected = ({**rows, "users": users}, {**holdings, "accounts": accounts})
+        assert _state_changes(before, expected) != {}, "Setup: the expected state must raise the target's session version"
+
+        outcome, window = await _in_the_window(private_head, None, "POST", f"/users/{target}/sessions/revoke", cookie=scene.cookie)
+
+        unexpected = _state_changes(expected, await _lock_state(private_head))
+        me = _answer(await _call(private_head, "GET", "/auth/me", cookie=target_cookie))
+        violations = _served_violations(window, target)
+        _expect(violations, _shown(outcome) == (204, ""), f"a sessions revoke with nobody in its window: expected 204 with no body, got {_shown(outcome)}")
+        _expect(violations, me == SESSION_EXPIRED, f"the target's session must be refused with {SESSION_EXPIRED}: {me}")
+        _expect(violations, unexpected == {}, f"the one change must be the target's session version, one higher — what differs from that (expected, then found): {unexpected}")
+        assert not violations, f"A sessions revoke with nobody in its window must end the sessions as before:{_verdict(violations)}"
+        print_success(f"204, the target's session ended; first write «{_first_write(window)}»")
+
+    # guard
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("flow", ONBOARDING_RESETS)
+    async def test_an_onboarding_reset_with_nobody_in_its_window_resets_as_before(self, private_head: _Private, flow: Optional[str]) -> None:
+        """UADM-LOCK-15 — GUARD of UADM-LOCK-12, green today and after: its POST /users/{target}/onboarding/reset on its scene — the target signed in, its onboarding moved —, served the same way, nobody acting in the window: 204 with no body; the target reads every flow and every step pending (without a body, as UADM-013), or import_guide and its steps pending and every other flow as it was (``{flow: import_guide}``, as UADM-014); and nothing changed but the target's onboarding rows.
+
+        Barrier: the request read the target on its own engine.
+        """
+        print_section(f"UADM-LOCK-15: an onboarding reset ({flow or 'every flow'}) of the target, nobody in the window")
+        scene = await _lock_scene(private_head, "active")
+        target_cookie, onboarding = await _onboarded(private_head, scene.target)
+        target = scene.target.user_id
+        before = await _lock_state(private_head)
+
+        outcome, window = await _in_the_window(private_head, None, "POST", f"/users/{target}/onboarding/reset", cookie=scene.cookie, json=None if flow is None else {"flow": flow})
+
+        changes = _state_changes(before, await _lock_state(private_head))
+        reading = await _onboarding_of(private_head, target_cookie)
+        expected = {name.value: _pending(name.value) for name in ONBOARDING_FLOW_VERSIONS} if flow is None else {**onboarding, flow: _pending(flow)}
+        strays = {table: change for table, change in changes.items() if table not in ONBOARDING_TABLES or any(row["user_id"] != target for row in change["before"] + change["after"])}
+        violations = _served_violations(window, target)
+        _expect(violations, _shown(outcome) == (204, ""), f"an onboarding reset with nobody in its window: expected 204 with no body, got {_shown(outcome)}")
+        _expect(violations, reading == expected, f"the target must read {'every flow and step' if flow is None else f'only {flow}'} back to pending: before {onboarding}, after {reading}")
+        _expect(violations, strays == {}, f"nothing may change but the target's onboarding rows — what else changed: {strays}")
+        assert not violations, f"An onboarding reset with nobody in its window must reset as before:{_verdict(violations)}"
+        print_success(f"204, {'every flow' if flow is None else flow} pending; first write «{_first_write(window)}»")

@@ -55,11 +55,38 @@ Lot E-19b1.3 (B's review of E-19b1) adds two rules, RED until it (``# red until 
 
 The preconditions of these tests (a BLOB, a text that is not UTF-8) are read by SQL, never through the audit.
 
-Pure: no server, no network, no shared database; only files of ``tmp_path`` (and subprocess runs of the module).
+Lot H-review of E-19a (H's two LOWs on E-19a) adds two rules, RED until it (``# red until H-review of E-19a``):
+
+- The audit's connection trusts no schema: ``_read_only`` runs ``PRAGMA trusted_schema=OFF`` before anything else, then
+  ``PRAGMA query_only = ON``, as workstream B opens every connection to a database it does not trust: the SQL a schema
+  keeps (a CHECK, a DEFAULT, a generated column, an index's expression) may then call only the functions SQLite marks
+  innocuous, and ``./dev.py db currencies --db-file`` reads any file. Read on the connection ``_read_only`` returns
+  (SCA-060), and traced from the moment each connection is made, where the module looks ``sqlite3`` up
+  (``_RecordingSqlite``, after ``RecordingConnect`` of ``test_backup_staging.py``): the first statement of
+  ``_read_only``'s connection (SCA-061) and of every connection the startup's check and the command open (SCA-062). The
+  GUARD SCA-063 (green today) runs both through that recorder on a WAL database: the same findings, reads only, and no
+  ``-wal`` nor ``-shm`` left beside the file (a ``mode=ro`` reader, its negative control, leaves them).
+- The startup step ``stored-currencies`` starts the audit in the background and goes on at once: a task running
+  ``asyncio.to_thread(log_stored_currency_audit)``, kept in ``app_lifespan._background_tasks`` (``_keep_in_background``).
+  Measured, the scans took 0.61 s at a million price rows and 1.57 s at three million, over the 0.5 s a step may hold
+  the start. The step runs alone, through ``lifecycle.run_startup_steps`` as the lifespan runs it. With
+  ``app_lifespan.log_stored_currency_audit`` replaced by a stand-in that holds its worker thread until released
+  (``_HeldAudit``): the step returns while the stand-in is held (SCA-071); the audit's task is kept while it runs and
+  leaves the set once done, the stand-in run once, in a worker thread (SCA-072). With the real audit on a configured
+  database of ``tmp_path``, the task taken from ``_background_tasks`` ends with the one warning (SCA-073). And the step
+  moves, as the coordinator decided on 17/10 with B's contract (j) and N57 in mind (nothing runs in the background
+  before ``restore-commit``): once, right after ``plugin-secrets-check`` and right before ``provider-prewarm``, beside
+  the other background starts, so after both repairs and after ``restore-commit`` (SCA-070, RED until the move: today
+  it stands right after ``lone-transfer-legs``). No wait is a pause: each is bounded (``PROMPT_SECONDS``) and ends when
+  what it waits for happens; every thread a test holds is released, and every task it starts awaited, before it ends.
+
+Pure: no server, no network, no shared database; only files of ``tmp_path`` (and subprocess runs of the module, and one
+startup step run alone).
 """
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import hashlib
 import importlib
@@ -70,10 +97,12 @@ import shutil
 import sqlite3
 import subprocess
 import sys
-from collections.abc import Iterable, Mapping, Sequence
+import threading
+from collections.abc import Awaitable, Iterable, Mapping, Sequence
 from pathlib import Path
 from types import ModuleType
 from typing import Any, NoReturn, Optional
+from urllib.parse import unquote, urlsplit
 
 import pytest
 from sqlalchemy import create_engine
@@ -916,3 +945,448 @@ def test_builder_stores_the_values_as_written(tmp_path):
     assert ("not json" in steps, json.loads(steps[2])[0]["to"]) == (True, "978")
     assert params[1:4] == ["{}", None, "not json"]
     assert default == ("EURO",)
+
+
+# =============================================================================
+# 7. H's review of E-19a: the audit's connection trusts no schema
+# =============================================================================
+
+#: The lot of H's two LOWs on E-19a, and why its reds fail.
+REVIEW_LOT = "H-review of E-19a"
+TRUST_RED = "_read_only does not turn trusted_schema off first yet"
+BACKGROUND_RED = "the stored-currencies step still awaits the audit"
+MOVE_RED = "the stored-currencies step still stands right after lone-transfer-legs"
+
+#: ``PRAGMA trusted_schema=OFF`` however it is written: any case and spacing, ``OFF`` as ``0``, ``false`` or ``no`` (as
+#: ``test_backup_staging.py`` reads it).
+TRUSTED_SCHEMA_OFF = re.compile(r"\s*pragma\s+trusted_schema\s*(?:=\s*(?:off|0|false|no)|\(\s*(?:off|0|false|no)\s*\))\s*;?\s*", re.IGNORECASE)
+#: ``PRAGMA query_only = ON`` however it is written: ``ON`` as ``1``, ``true`` or ``yes``.
+QUERY_ONLY_ON = re.compile(r"\s*pragma\s+query_only\s*(?:=\s*(?:on|1|true|yes)|\(\s*(?:on|1|true|yes)\s*\))\s*;?\s*", re.IGNORECASE)
+
+
+@dataclasses.dataclass
+class _Opened:
+    """A connection the audit module opened: what it was asked to open, and every statement SQLite ran on it, in order,
+    from its very first."""
+
+    target: str
+    statements: list[str] = dataclasses.field(default_factory=list)
+
+    @property
+    def path(self) -> Path:
+        """The file it opened: a path, or a ``file:`` URI, its query left out and its escapes undone."""
+        if self.target.startswith("file:"):
+            return Path(unquote(urlsplit(self.target).path)).resolve()
+        return Path(self.target).resolve()
+
+
+def _traced(base: type[sqlite3.Connection], statements: list[str]) -> type[sqlite3.Connection]:
+    """A connection class that puts every statement SQLite runs on it into ``statements``: the trace is set as the
+    connection is made, before whoever opened it can run anything (``traced_connection`` of ``test_backup_staging.py``)."""
+
+    class Traced(base):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self.set_trace_callback(statements.append)
+
+    return Traced
+
+
+class _RecordingSqlite:
+    """``sqlite3`` as the audit module looks it up: ``connect`` records each connection it opens, traced, in ``opened``;
+    every other name (``Error``, ``OperationalError``…) is the module's own."""
+
+    def __init__(self, opened: list[_Opened]) -> None:
+        self._opened = opened
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(sqlite3, name)
+
+    def connect(self, database: Any, *args: Any, **kwargs: Any) -> sqlite3.Connection:
+        record = _Opened(target=str(database))
+        self._opened.append(record)
+        kwargs["factory"] = _traced(kwargs.get("factory", sqlite3.Connection), record.statements)
+        return sqlite3.connect(database, *args, **kwargs)
+
+
+def _recorded_connections(monkeypatch: pytest.MonkeyPatch) -> list[_Opened]:
+    """Every connection the audit module opens from now to the end of the test, in order: ``_RecordingSqlite`` stands
+    for its ``sqlite3``."""
+    opened: list[_Opened] = []
+    monkeypatch.setattr(_audit_module(), "sqlite3", _RecordingSqlite(opened))
+    return opened
+
+
+def _is_read(statement: str) -> bool:
+    return statement.lstrip().upper().startswith("SELECT")
+
+
+def _turns_trust_off_first(record: _Opened) -> bool:
+    """Whether ``PRAGMA trusted_schema=OFF`` is the first statement SQLite ran on the connection."""
+    return bool(record.statements) and TRUSTED_SCHEMA_OFF.fullmatch(record.statements[0]) is not None
+
+
+def _query_only_then_reads(record: _Opened) -> bool:
+    """Whether ``PRAGMA query_only`` turned on before the first SELECT ran on the connection, and one ran: so the trace saw
+    the connection's own statements, from its opening to its reads."""
+    switched = [index for index, statement in enumerate(record.statements) if QUERY_ONLY_ON.fullmatch(statement)]
+    reads = [index for index, statement in enumerate(record.statements) if _is_read(statement)]
+    return bool(switched and reads) and switched[0] < reads[0]
+
+
+def _neither_read_nor_pragma(records: Sequence[_Opened]) -> list[str]:
+    """The statements of ``records`` that are neither a SELECT nor a PRAGMA: what a read-only audit never runs."""
+    return [statement for record in records for statement in record.statements if not (_is_read(statement) or statement.lstrip().upper().startswith("PRAGMA"))]
+
+
+def _first_statements(records: Sequence[_Opened]) -> list[list[str]]:
+    """The first two statements of each connection: what a failure shows."""
+    return [record.statements[:2] for record in records]
+
+
+def _beside(path: Path) -> list[str]:
+    """The names in the folder of ``path`` other than its own: a ``-wal``, a ``-shm``, a ``-journal``…"""
+    return sorted(item.name for item in path.parent.iterdir() if item.name != path.name)
+
+
+def _wal_database(tmp_path: Path) -> Path:
+    """The main database in WAL mode, as LibreFolio keeps its own. Verified, not assumed: ``journal_mode`` reads ``wal``,
+    and, its connections closed, nothing lies beside the file."""
+    path = _build(tmp_path / "wal" / "app.db", MAIN_TABLES)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("PRAGMA journal_mode=WAL").fetchone()
+    finally:
+        connection.close()
+    mode = _stored(path, "PRAGMA journal_mode")
+    assert mode == [("wal",)], f"precondition: the database is in WAL mode: {mode}"
+    assert _beside(path) == [], f"precondition: its connections closed, nothing lies beside the database: {_beside(path)}"
+    return path
+
+
+def _left_by_a_mode_ro_reader(path: Path, folder: Path) -> list[str]:
+    """What a ``mode=ro`` reader leaves beside a copy of the database at ``path``, made in ``folder``: the negative
+    control of a check that nothing is left beside a WAL database."""
+    folder.mkdir()
+    copy = folder / path.name
+    shutil.copyfile(path, copy)
+    connection = sqlite3.connect(f"{copy.as_uri()}?mode=ro", uri=True)
+    try:
+        connection.execute("SELECT count(*) FROM transactions").fetchone()
+    finally:
+        connection.close()
+    return _beside(copy)
+
+
+def test_read_only_connection_trusts_no_schema(tmp_path):  # red until H-review of E-19a: _read_only does not turn trusted_schema off first yet
+    """SCA-060 — RED until H-review of E-19a: on the connection ``_read_only(path)`` returns, ``PRAGMA trusted_schema``
+    reads 0 and ``PRAGMA query_only`` reads 1; closed, the file is as it was. Today ``trusted_schema`` is SQLite's
+    default, 1: the SQL the database's schema keeps may call any function."""
+    path = _build(tmp_path / "app.db", CLI_TABLES)
+    before = _fingerprint(path)
+    connection = _audit("_read_only")(path)
+    try:
+        trusted = connection.execute("PRAGMA trusted_schema").fetchone()[0]
+        query_only = connection.execute("PRAGMA query_only").fetchone()[0]
+    finally:
+        connection.close()
+    assert _fingerprint(path) == before, "_read_only changed the database file or its folder"
+    assert query_only == 1, f"the connection _read_only returns refuses every write: PRAGMA query_only reads {query_only}"
+    if trusted != 0:
+        _red(f"{TRUST_RED}: PRAGMA trusted_schema reads {trusted} on the connection _read_only returns", lot=REVIEW_LOT)
+
+
+def test_read_only_turns_trusted_schema_off_before_anything_else(tmp_path, monkeypatch):  # red until H-review of E-19a: _read_only does not turn trusted_schema off first yet
+    """SCA-061 — RED until H-review of E-19a: the first statement SQLite runs on the connection ``_read_only`` opens is
+    ``PRAGMA trusted_schema=OFF`` (any case and spacing), before ``query_only`` and before anything reads, as workstream
+    B opens every connection to a database it does not trust. Traced as the connection is made (``_RecordingSqlite``).
+    Barriers: ``_read_only`` opens one connection, on the database, and the trace saw its ``query_only`` turn on, then a
+    read made afterwards: else its first statement would prove nothing. Today the first is ``PRAGMA query_only = ON``."""
+    path = _build(tmp_path / "app.db", CLI_TABLES)
+    read_only = _audit("_read_only")
+    opened = _recorded_connections(monkeypatch)
+    connection = read_only(path)
+    try:
+        connection.execute("SELECT count(*) FROM transactions").fetchone()
+    finally:
+        connection.close()
+    assert [record.path for record in opened] == [path.resolve()], f"precondition: _read_only opens one connection, on {path}, through stored_currencies.sqlite3.connect: {[record.target for record in opened]}"
+    record = opened[0]
+    assert _query_only_then_reads(record), f"barrier: the trace saw _read_only's query_only, then the read made afterwards: {record.statements}"
+    if not _turns_trust_off_first(record):
+        _red(f"{TRUST_RED}: its first statement is {record.statements[:1]}", lot=REVIEW_LOT)
+
+
+@pytest.mark.parametrize("entry", ["log_stored_currency_audit", "main"])
+def test_each_entry_point_reads_only_through_connections_that_turn_trusted_schema_off_first(tmp_path, monkeypatch, capsys, entry):  # red until H-review of E-19a: _read_only does not turn trusted_schema off first yet
+    """SCA-062 — RED until H-review of E-19a: the startup's check, ``log_stored_currency_audit(path)``, and the command,
+    ``main(["--db-file", path])``, read the database only through connections whose first statement is ``PRAGMA
+    trusted_schema=OFF``: every connection each opens, recorded as in SCA-061. Read first, so that a red can only be about
+    that statement: through the recorder each still does what SCA-033 and SCA-040 expect of ``CLI_TABLES`` (its findings
+    and one warning; exit 1), the file is as it was, and each opened at least one connection, all on the database given,
+    where the trace saw ``query_only`` turn on before the reads."""
+    path = _build(tmp_path / "app.db", CLI_TABLES)
+    before = _fingerprint(path)
+    opened = _recorded_connections(monkeypatch)
+    if entry == "main":
+        with capture_logs():
+            code = _audit("main")(["--db-file", str(path)])
+        out, _ = capsys.readouterr()
+        assert code == 1, f"findings: exit 1 expected, got {code!r}; printed {out!r}"
+    else:
+        result, logs = _audit_and_capture(path)
+        _assert_logged_findings(result, logs, CLI_FINDINGS)
+    assert _fingerprint(path) == before, f"{entry} changed the database file or its folder"
+    assert opened, f"precondition: {entry} opens its connections through stored_currencies.sqlite3.connect, yet none was recorded: the trace would prove nothing"
+    assert {record.path for record in opened} == {path.resolve()}, f"{entry} reads the database given, and it alone: {[record.target for record in opened]}"
+    assert all(_query_only_then_reads(record) for record in opened), f"barrier: the trace saw each connection's query_only, then its reads: {[record.statements for record in opened]}"
+    trusting = [record for record in opened if not _turns_trust_off_first(record)]
+    if trusting:
+        _red(f"{TRUST_RED}: {len(trusting)} of the {len(opened)} connection(s) {entry} opened did not: {_first_statements(trusting)}", lot=REVIEW_LOT)
+
+
+def test_through_the_recorder_a_wal_database_gives_the_same_findings_and_keeps_nothing_beside_it(tmp_path, monkeypatch, capsys):
+    """SCA-063 — GUARD (green today, and after the lot): the recorder of SCA-061 and SCA-062 changes nothing of what the
+    audit does, and the audit leaves nothing beside a WAL database, LibreFolio's mode. On ``_wal_database``, through the
+    recorder: ``log_stored_currency_audit(path)`` gives SCA-030's findings and its one warning; ``main`` exits 1; each
+    opened at least one connection, all on the database, where the trace saw ``query_only`` turn on before the reads and
+    nothing but PRAGMAs and SELECTs; after each, no ``-wal`` nor ``-shm`` beside the file, which is as it was. The
+    negative control first: a ``mode=ro`` reader of a copy leaves them, so their absence proves something."""
+    path = _wal_database(tmp_path)
+    left = _left_by_a_mode_ro_reader(path, tmp_path / "mode-ro")
+    assert {f"{path.name}-wal", f"{path.name}-shm"} <= set(left), f"negative control: a mode=ro reader of a copy of the WAL database leaves its -wal and -shm, so their absence beside the database proves something; it left {left}"
+    before = _fingerprint(path)
+    opened = _recorded_connections(monkeypatch)
+    result, logs = _audit_and_capture(path)
+    _assert_logged_findings(result, logs, MAIN_FINDINGS)
+    by_the_check = len(opened)
+    assert (_beside(path), _fingerprint(path)) == ([], before), f"the startup's check left {_beside(path)} beside the database, or changed it"
+    with capture_logs():
+        code = _audit("main")(["--db-file", str(path)])
+    out, _ = capsys.readouterr()
+    assert code == 1, f"findings: exit 1 expected, got {code!r}; printed {out[-2000:]!r}"
+    assert (_beside(path), _fingerprint(path)) == ([], before), f"the command left {_beside(path)} beside the database, or changed it"
+    assert 0 < by_the_check < len(opened), f"each opens its connections through stored_currencies.sqlite3.connect: {by_the_check} by the startup's check, {len(opened) - by_the_check} by the command"
+    assert {record.path for record in opened} == {path.resolve()}, f"every connection is on the database given: {[record.target for record in opened]}"
+    assert all(_query_only_then_reads(record) for record in opened), f"the trace saw each connection's query_only, then its reads: {[record.statements for record in opened]}"
+    assert not _neither_read_nor_pragma(opened), f"the audit only reads: {_neither_read_nor_pragma(opened)}"
+
+
+# =============================================================================
+# 8. H's review of E-19a: the startup's audit in the background
+# =============================================================================
+
+#: The startup step of E-19a and its place (the coordinator's decision on H's review, 17/10): right after
+#: ``plugin-secrets-check`` and right before ``provider-prewarm``, beside the other background starts; so after the second
+#: repair, ``lone-transfer-legs``, and after ``restore-commit``, before which nothing runs in the background (B's contract
+#: (j), N57).
+AUDIT_STEP = "stored-currencies"
+STEP_BEFORE, STEP_AFTER = "plugin-secrets-check", "provider-prewarm"
+REPAIR_STEP, COMMIT_STEP = "lone-transfer-legs", "restore-commit"
+#: Far more than a step that only starts a task takes to return, or a stand-in to start in its thread: a bound, never a
+#: pause — every wait under it ends as soon as what it waits for happens.
+PROMPT_SECONDS = 5.0
+#: The longest the stand-in holds its worker thread when nobody releases it: never a thread held for good.
+HOLD_SECONDS = 30.0
+
+
+def _lifespan() -> tuple[ModuleType, ModuleType]:
+    """``app_lifespan`` and ``lifecycle``, imported when a test runs: the app's whole startup, kept out of this file's
+    collection."""
+    return importlib.import_module("backend.app.services.platform.app_lifespan"), importlib.import_module("backend.app.services.platform.lifecycle")
+
+
+def _audit_step(app_lifespan: ModuleType) -> Any:
+    """The one startup step ``stored-currencies``."""
+    steps = [step for step in app_lifespan.STARTUP_STEPS if step.name == AUDIT_STEP]
+    assert len(steps) == 1, f"one startup step {AUDIT_STEP!r} expected: {[step.name for step in app_lifespan.STARTUP_STEPS]}"
+    return steps[0]
+
+
+async def _in_time(awaitable: Awaitable[Any]) -> bool:
+    """Whether ``awaitable`` ends within ``PROMPT_SECONDS``; it is cancelled when it does not."""
+    try:
+        await asyncio.wait_for(awaitable, PROMPT_SECONDS)
+    except TimeoutError:
+        return False
+    return True
+
+
+class _HeldAudit:
+    """Stands in for ``log_stored_currency_audit``; every call's thread is recorded, and no finding returned. In a worker
+    thread it says so on the event loop, then holds until released, ``HOLD_SECONDS`` at most; on the event loop's thread it
+    returns at once and counts it: holding there would hold the test with it."""
+
+    def __init__(self) -> None:
+        self.loop = asyncio.get_running_loop()
+        self.loop_thread = threading.get_ident()
+        self.started = asyncio.Event()
+        self.release, self.finished = threading.Event(), threading.Event()
+        self.threads: list[int] = []
+        self.on_the_loop = 0
+
+    def __call__(self, *args: Any, **kwargs: Any) -> list[Any]:
+        self.threads.append(threading.get_ident())
+        if threading.get_ident() == self.loop_thread:
+            self.on_the_loop += 1
+            self.started.set()
+        else:
+            self.loop.call_soon_threadsafe(self.started.set)
+            self.release.wait(HOLD_SECONDS)
+        self.finished.set()
+        return []
+
+
+def _hold_the_audit(monkeypatch: pytest.MonkeyPatch, app_lifespan: ModuleType, tmp_path: Path) -> _HeldAudit:
+    """A ``_HeldAudit`` in place of ``app_lifespan.log_stored_currency_audit``, where a step reaches it when it runs. Were
+    the real audit reached all the same, it could only meet a missing file of ``tmp_path``: never a real database."""
+    held = _HeldAudit()
+    monkeypatch.setattr(app_lifespan, "log_stored_currency_audit", held)
+    monkeypatch.setattr(post_migration, "configured_sqlite_path", lambda: tmp_path / "absent" / "app.db")
+    return held
+
+
+class _KeptTasks(set):
+    """``app_lifespan._background_tasks`` as a test sees it: a set like the module's, which also remembers each task added
+    to it, in order, so that a task already done, and so discarded, is still found: no race with a quick audit."""
+
+    def __init__(self, tasks: Iterable[asyncio.Task[Any]]) -> None:
+        super().__init__(tasks)
+        self.added: list[asyncio.Task[Any]] = []
+
+    def add(self, task: asyncio.Task[Any]) -> None:
+        self.added.append(task)
+        super().add(task)
+
+
+class _StartedTasks:
+    """What a test starts on the event loop: the tasks ``app_lifespan._background_tasks`` keeps (``_KeptTasks`` in its
+    place) and every other one. ``settle`` awaits them all, ``PROMPT_SECONDS`` at most, then cancels what is left: no task
+    is left to the next test."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, app_lifespan: ModuleType) -> None:
+        self.kept = _KeptTasks(app_lifespan._background_tasks)
+        monkeypatch.setattr(app_lifespan, "_background_tasks", self.kept)
+        self._before = asyncio.all_tasks()
+
+    async def settle(self) -> None:
+        pending = {task for task in (asyncio.all_tasks() - self._before) | set(self.kept.added) if not task.done()}
+        if not pending:
+            return
+        _, late = await asyncio.wait(pending, timeout=PROMPT_SECONDS)
+        for task in late:
+            task.cancel()
+        if late:
+            await asyncio.wait(late, timeout=PROMPT_SECONDS)
+
+
+def _neighbours(names: Sequence[str], position: int) -> tuple[Optional[str], Optional[str]]:
+    """The names of the steps right before and right after ``position``; None past either end."""
+    return (names[position - 1] if position > 0 else None, names[position + 1] if position + 1 < len(names) else None)
+
+
+def test_the_startup_step_stands_right_after_the_plugin_secrets_check_and_right_before_the_provider_prewarm():  # red until H-review of E-19a: the stored-currencies step still stands right after lone-transfer-legs
+    """SCA-070 — RED until H-review of E-19a: ``stored-currencies`` stands once in ``STARTUP_STEPS``, right after
+    ``plugin-secrets-check`` and right before ``provider-prewarm``, beside the other background starts (the
+    coordinator's decision on H's review); and, each checked on its own, after ``lone-transfer-legs`` (it reads what both
+    repairs leave) and after ``restore-commit`` (B's contract (j), N57: nothing runs in the background before the restore
+    is committed). The red is today's place alone, right after ``lone-transfer-legs``: any other wrong place fails on its
+    own. No other test pins this step: ``test_app_lifecycle.py`` keeps ``plugin-secrets-check`` between
+    ``global-settings`` and ``scheduler``, and ``test_backup_apply.py`` (j) ``restore-commit`` before
+    ``provider-prewarm``, both in relative order, which a step between them keeps."""
+    app_lifespan, _ = _lifespan()
+    names = [step.name for step in app_lifespan.STARTUP_STEPS]
+    assert names.count(AUDIT_STEP) == 1, f"one startup step {AUDIT_STEP!r} expected: {names}"
+    position = names.index(AUDIT_STEP)
+    assert REPAIR_STEP in names[:position], f"{AUDIT_STEP!r} must run after {REPAIR_STEP!r}: it reads what both repairs leave: {names}"
+    before, after = _neighbours(names, position)
+    if before == REPAIR_STEP:
+        _red(f"{MOVE_RED}, before {after!r}: its place is right after {STEP_BEFORE!r} and right before {STEP_AFTER!r}, after {COMMIT_STEP!r}: {names}", lot=REVIEW_LOT)
+    assert (before, after) == (STEP_BEFORE, STEP_AFTER), f"{AUDIT_STEP!r} must run right after {STEP_BEFORE!r} and right before {STEP_AFTER!r}, beside the other background starts; it stands between {before!r} and {after!r}: {names}"
+    assert COMMIT_STEP in names[:position], f"{AUDIT_STEP!r} must run after {COMMIT_STEP!r}: nothing runs in the background before the restore is committed (B's contract (j), N57): {names}"
+
+
+@pytest.mark.asyncio
+async def test_the_startup_step_returns_while_the_audit_is_still_held(tmp_path, monkeypatch):  # red until H-review of E-19a: the stored-currencies step still awaits the audit
+    """SCA-071 — RED until H-review of E-19a: the step ``stored-currencies``, run alone by ``lifecycle.run_startup_steps``
+    as the lifespan runs it, returns while the audit it started is still held: the start never waits for the scans. The
+    audit is ``_HeldAudit``, which holds its worker thread until released; the step gets ``PROMPT_SECONDS``, a bound:
+    started in the background, the audit lets it return at once. Barriers: the stand-in did start, in a worker thread.
+    Today the step awaits the thread, still running when the bound ends."""
+    app_lifespan, lifecycle = _lifespan()
+    step = _audit_step(app_lifespan)
+    held = _hold_the_audit(monkeypatch, app_lifespan, tmp_path)
+    tasks = _StartedTasks(monkeypatch, app_lifespan)
+    try:
+        startup = asyncio.create_task(lifecycle.run_startup_steps((step,)))
+        await asyncio.wait({startup}, timeout=PROMPT_SECONDS)
+        assert await _in_time(held.started.wait()), f"barrier: the step never started the audit within {PROMPT_SECONDS}s: does it reach app_lifespan.log_stored_currency_audit as it is when it runs?"
+        assert held.on_the_loop == 0, "the step ran the audit on the event loop's thread: the start, and every request after it, waits for it"
+        if not startup.done():
+            _red(f"{BACKGROUND_RED}: it had not returned {PROMPT_SECONDS}s after it began, the audit it started held all along", lot=REVIEW_LOT)
+        assert startup.exception() is None, f"the step raised: {startup.exception()!r}"
+        assert not held.finished.is_set(), "the step returned once the audit had ended: it waited for it"
+    finally:
+        held.release.set()
+        await tasks.settle()
+
+
+@pytest.mark.asyncio
+async def test_the_audit_is_a_task_kept_while_it_runs_in_a_worker_thread(tmp_path, monkeypatch):  # red until H-review of E-19a: the stored-currencies step still awaits the audit
+    """SCA-072 — RED until H-review of E-19a: the audit the step starts runs as a task that
+    ``app_lifespan._background_tasks`` keeps while it runs (``_keep_in_background``: a task nobody holds may vanish before
+    its end) and that leaves the set once done, neither cancelled nor raising; released, the stand-in has run exactly
+    once, in a worker thread, never on the event loop's. Read once the stand-in has started, held: whether the step
+    awaits it or not, the answer is there at once. Today the step awaits the thread itself, and keeps no task."""
+    app_lifespan, lifecycle = _lifespan()
+    step = _audit_step(app_lifespan)
+    held = _hold_the_audit(monkeypatch, app_lifespan, tmp_path)
+    tasks = _StartedTasks(monkeypatch, app_lifespan)
+    try:
+        startup = asyncio.create_task(lifecycle.run_startup_steps((step,)))
+        assert await _in_time(held.started.wait()), f"barrier: the step never started the audit within {PROMPT_SECONDS}s: does it reach app_lifespan.log_stored_currency_audit as it is when it runs?"
+        if not tasks.kept.added:
+            _red(f"{BACKGROUND_RED}: the audit runs, held, and app_lifespan._background_tasks keeps no task of it", lot=REVIEW_LOT)
+        assert len(tasks.kept.added) == 1, f"the step keeps one task, the audit's, not {tasks.kept.added}"
+        task = tasks.kept.added[0]
+        assert task in app_lifespan._background_tasks and not task.done(), "while the audit runs, held, its task is kept, not done"
+        held.release.set()
+        done, _ = await asyncio.wait({task, startup}, timeout=PROMPT_SECONDS)
+        assert {task, startup} <= done, f"released, the audit's task and the step end within {PROMPT_SECONDS}s"
+        assert not task.cancelled() and task.exception() is None, f"the audit's task ends neither cancelled nor raising: {task!r}"
+        assert task not in app_lifespan._background_tasks, "done, the audit's task is still kept in app_lifespan._background_tasks"
+    finally:
+        held.release.set()
+        await tasks.settle()
+    assert (len(held.threads), held.on_the_loop) == (1, 0), f"the audit ran once, in a worker thread, never on the event loop's ({held.loop_thread}): {held.threads}"
+
+
+@pytest.mark.asyncio
+async def test_the_audit_started_by_the_step_warns_of_the_configured_database(tmp_path, monkeypatch):  # red until H-review of E-19a: the stored-currencies step still awaits the audit
+    """SCA-073 — RED until H-review of E-19a: the real audit still runs from the step. ``configured_sqlite_path()`` is a
+    database of ``tmp_path`` holding ``CLI_TABLES`` (as in SCA-033); awaiting the step, then the task it left in
+    ``app_lifespan._background_tasks`` (taken from there: never a pause), gives that task the findings of SCA-033 as its
+    result and the log their one warning, naming ``ISO 4217``; the file is as it was. Today the step runs the audit to
+    its end before it returns, and keeps no task."""
+    module = _audit_module()
+    app_lifespan, lifecycle = _lifespan()
+    step = _audit_step(app_lifespan)
+    path = _build(tmp_path / "configured" / "app.db", CLI_TABLES)
+    before = _fingerprint(path)
+    monkeypatch.setattr(post_migration, "configured_sqlite_path", lambda: path)
+    monkeypatch.setattr(module, "configured_sqlite_path", lambda: path, raising=False)
+    tasks = _StartedTasks(monkeypatch, app_lifespan)
+    try:
+        with capture_logs() as logs:
+            assert await _in_time(lifecycle.run_startup_steps((step,))), f"the step did not return within {PROMPT_SECONDS}s"
+            if not tasks.kept.added:
+                _red(f"{BACKGROUND_RED}: it ran the audit to its end before returning ({len(_at_least_warning(logs))} warning(s) logged) and app_lifespan._background_tasks keeps no task of it", lot=REVIEW_LOT)
+            assert len(tasks.kept.added) == 1, f"the step keeps one task, the audit's, not {tasks.kept.added}"
+            task = tasks.kept.added[0]
+            done, _ = await asyncio.wait({task}, timeout=PROMPT_SECONDS)
+            assert task in done, f"the audit's task did not end within {PROMPT_SECONDS}s"
+    finally:
+        await tasks.settle()
+    assert not task.cancelled() and task.exception() is None, f"the audit's task ends neither cancelled nor raising: {task!r}"
+    _assert_logged_findings(task.result(), logs, CLI_FINDINGS)
+    assert _fingerprint(path) == before, "the audit changed the database file or its folder"

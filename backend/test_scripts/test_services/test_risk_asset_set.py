@@ -1576,7 +1576,8 @@ def test_asset_set_outputs_round_trip_through_the_discriminated_union():
 # - stale prices (`stale_prices` ∪ `carried_forward_price_asset_ids`): STALE_PRICE, warning,
 #   `dataQuality.stalePrice`, `sync_asset_prices` on the first id, group `stale_price`;
 # - no price (`unusable_assets` for a missing price ∪ `missing_price_assets`): MISSING_PRICE,
-#   error, `risk.quality.missingPrice`, `navigate_asset` on the first id, group `missing_price`;
+#   warning (the analysis runs on the other assets: a partial result, 17/10),
+#   `risk.quality.missingPrice`, `navigate_asset` on the first id, group `missing_price`;
 # - FX pairs, the sorted slugs of `unresolved_fx_pairs` ∪ `missing_fx_pairs` ∪
 #   `carried_forward_fx_pairs`, split by route as `PortfolioService._get_configured_fx_pair_sets`
 #   reads it: none → MISSING_FX_MARKET (`risk.quality.missingFx`, `add_fx_pair`, no target,
@@ -1772,7 +1773,7 @@ def assert_stale_price_issue(result: RiskAnalyticResult, names: dict[int, str], 
 
 def assert_missing_price_issue(result: RiskAnalyticResult, names: dict[int, str], asset_ids: set[int]) -> None:
     issue = issue_of(result, "missing_price")
-    assert_asset_issue(issue, names, asset_ids, code=IssueCode.MISSING_PRICE, severity=IssueSeverity.ERROR, message_i18n_key="risk.quality.missingPrice", cta_action="navigate_asset")
+    assert_asset_issue(issue, names, asset_ids, code=IssueCode.MISSING_PRICE, severity=IssueSeverity.WARNING, message_i18n_key="risk.quality.missingPrice", cta_action="navigate_asset")
 
 
 def assert_fx_issue(result: RiskAnalyticResult, names: dict[int, str], *splits: FxSplit) -> None:
@@ -1814,7 +1815,7 @@ async def test_a_stale_asset_gives_exactly_one_stale_price_issue(lab_assets):
 
 @pytest.mark.asyncio
 async def test_assets_without_a_price_in_the_window_give_one_missing_price_issue(lab_assets):
-    """Never priced or priced only later, both are one MISSING_PRICE error that opens the first.
+    """Never priced or priced only later, both are one MISSING_PRICE warning that opens the first.
 
     The notice tells the two apart — `no_price_source` for the asset nothing has ever priced —
     but the report records both as a missing price, and so does the issue.

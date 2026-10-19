@@ -1,18 +1,21 @@
 // @vitest-environment jsdom
 /**
- * ExposureBars.test.ts — the colours the PAC planner's exposure bars hand ECharts, read off the real component (TD-1).
+ * ExposureBars.test.ts — the colours the PAC planner's exposure bars hand ECharts, read off the real component (TD-1;
+ * the designer's round 3, §1.7).
  *
  * ## The subject
  *
  * For each category of one dimension — Asset type or sector — the bars set the ideal weight beside the actual one: the
  * target and the weight after the plan (R9.8). TD-1 gives the two weights different jobs:
  *
- * - the ideal weight is one neutral role, the secondary text (`--lf-text-secondary`), on the whole first series;
+ * - the ideal weight is the designer's neutral grey, on the whole first series: a value of its own
+ *   (`PAC_EXPOSURE_COLORS.ideal`, round 3), no longer the secondary text role it wore until then — a page whose
+ *   secondary text is another colour leaves it alone;
  * - the actual weight wears its row's category colour, the dashboard's (GR1 of the designer's round 2), bar by bar: a
  *   sector by its key; an Asset type by its family, a subtype a GR4 shade of it by its rank of ideal weight among its
  *   family's subtypes — never the family's own colour, even with no generic member beside it — on the shade poles of the
  *   card the chart is drawn on; the uncategorised remainder in the «Unknown» colour;
- * - the legend swatch of the ideal is its role; the actual weight has no one colour, so its swatch is an outline in the
+ * - the legend swatch of the ideal is its grey; the actual weight has no one colour, so its swatch is an outline in the
  *   grid's text colour, on the card;
  * - the tooltip of a row puts a dot in each of the row's two colours.
  *
@@ -23,11 +26,14 @@
  * ## How the expectations are built
  *
  * The roles are invented and injected with `setRoleReader`: answered for the bars' own element only, per theme, and reset
- * after every test, so a role read anywhere else — `<html>`, a stand-in, a literal — is not one of them. Category colours
- * come from the theme's own functions (`categoryColor`, `familyShade`, `shadePoles` on the injected card), never from
+ * after every test, so a role read anywhere else — `<html>`, a stand-in, a literal — is not one of them. The card is the
+ * one the bars read, for the shades and the actual's swatch; the secondary text is answered too, as a negative control:
+ * the ideal must not take it. Category colours come from the theme's own functions (`categoryColor`, `familyShade`,
+ * `shadePoles` on the injected card), and the ideal from the theme's own table (`PAC_EXPOSURE_COLORS`), never from
  * copied hex values, which the theme's tests pin. The family and the rank of every Asset-type row are spelled out in the
  * fixture, then checked against K's `assetTypeFamily` and against the rule. `exposureBarColours.ts`, which computes them
- * for the chart and which TA-1 tests, is not called here: the chart would be checked against its own helper.
+ * for the chart and which TA-1 tests (its `idealColour(dark)` included), is not called here: the chart would be checked
+ * against its own helper.
  *
  * ## What is replaced, and why
  *
@@ -107,8 +113,10 @@ import {render, setupI18n, waitFor} from '$test/component';
 import {buildGridColors} from '$lib/components/charts/echartsTooltipHelpers';
 import {categoryColor} from '$lib/theme/chartCategories';
 import {familyShade, shadePoles} from '$lib/theme/chartShades';
+import {PAC_EXPOSURE_COLORS} from '$lib/theme/chartTheme';
 import {chartRoles, setRoleReader} from '$lib/theme/roleColors';
 import {notifyChartColorsChange} from '$lib/theme/themeMode';
+import {themed} from '$lib/theme/themePair';
 import type {PacExactNumber, PacNumberAvailability} from '../types';
 import {UNCATEGORISED_CATEGORY_ID, type WeightRow} from './model';
 
@@ -193,7 +201,10 @@ function weightRows(fixture: Fixture): WeightRow[] {
     return fixture.rows.map((spec, index) => ({id: spec.id, label: `Row ${index + 1} (${spec.id})`, target: weight(spec.target), final: spec.final}));
 }
 
-/** Invented roles: the secondary text, which the ideal weight wears, and the card, the shades' near pole in the dark theme. */
+/**
+ * Invented roles: the card, the shades' near pole in the dark theme and the ground of the actual's swatch; and the
+ * secondary text, which the ideal weight wore before round 3 — answered so that a chart still reading it is seen.
+ */
 interface InventedRoles {
     secondaryText: string;
     card: string;
@@ -214,6 +225,9 @@ const EDITED_ROLES: RoleSet = {
 
 /** The theme <html> shows now: the one the bars draw. */
 const themeNow = (): Theme => (document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+
+/** The ideal weight's colour in a theme: the designer's grey, read from the theme's own table — a value, no role. */
+const idealOf = (theme: Theme): string => themed(PAC_EXPOSURE_COLORS.ideal, theme === 'dark');
 
 /** Answers the roles `current()` holds for the theme on screen, for the bars' own element, and nothing anywhere else. */
 function injectRoles(current: () => RoleSet): void {
@@ -363,7 +377,7 @@ async function mountBars(rows: readonly WeightRow[], dimension: Fixture['dimensi
     return view;
 }
 
-/** The latest build's series: the ideal one in the secondary text, each actual bar in its row's colour. */
+/** The latest build's series: the ideal one in the designer's grey, each actual bar in its row's colour. */
 function expectSeries(fixture: Fixture, rows: readonly WeightRow[], theme: Theme, roles: InventedRoles): void {
     const drawn = lastOption();
     const actual = expectedActual(fixture, theme === 'dark', roles.card);
@@ -374,14 +388,14 @@ function expectSeries(fixture: Fixture, rows: readonly WeightRow[], theme: Theme
         'one bar per row on each of the two series',
     ).toEqual([rows.length, rows.length]);
 
-    expect(drawn.series[0].itemStyle?.color, 'the ideal series').toBe(roles.secondaryText);
+    expect(drawn.series[0].itemStyle?.color, 'the ideal series').toBe(idealOf(theme));
     expect(
         drawn.series[1].data.map((item, index) => `${rows[index].id} ${(item as {itemStyle?: {color?: string}} | null)?.itemStyle?.color}`),
         'the actual bars, row by row',
     ).toEqual(rows.map((row, index) => `${row.id} ${actual[index]}`));
 }
 
-/** The latest build's legend — the ideal's swatch in its role, the actual's an outline on the card — and every row's tooltip dots. */
+/** The latest build's legend — the ideal's swatch in its grey, the actual's an outline on the card — and every row's tooltip dots. */
 function expectLegendAndDots(fixture: Fixture, rows: readonly WeightRow[], theme: Theme, roles: InventedRoles): void {
     const drawn = lastOption();
     const actual = expectedActual(fixture, theme === 'dark', roles.card);
@@ -390,13 +404,13 @@ function expectLegendAndDots(fixture: Fixture, rows: readonly WeightRow[], theme
     expect(idealSeries.name, 'the two series share a name').not.toBe(actualSeries.name);
 
     expect(drawn.legend.data, 'the legend').toEqual([
-        {name: idealSeries.name, itemStyle: {color: roles.secondaryText}},
+        {name: idealSeries.name, itemStyle: {color: idealOf(theme)}},
         {name: actualSeries.name, itemStyle: {color: roles.card, borderColor: buildGridColors(theme === 'dark').textColor, borderWidth: 1}},
     ]);
     expect(
         rows.map((row, index) => `${row.id} ${dotsOf(tooltipOf(drawn, index)).join(' ')}`),
         'the two dots of each row’s tooltip: the ideal, then the actual weight',
-    ).toEqual(rows.map((row, index) => `${row.id} ${roles.secondaryText} ${actual[index]}`));
+    ).toEqual(rows.map((row, index) => `${row.id} ${idealOf(theme)} ${actual[index]}`));
 }
 
 /** Everything one build must hold: the series, the legend and the tooltips. */
@@ -434,23 +448,25 @@ function expectNoOldGreens(rows: readonly WeightRow[], ideal: string): void {
 }
 
 // =============================================================================
-// TD-1 — the ideal in its neutral role, the actual weight in its category's colour
+// TD-1 — the ideal in the designer's grey, the actual weight in its category's colour
 // =============================================================================
 
 const CASES = FIXTURES.flatMap((fixture) => THEMES.map((theme) => ({fixture, title: fixture.title, theme})));
 
-describe('ExposureBars — the ideal in its neutral role, each actual bar in its row’s category colour (TD-1)', () => {
-    it.each(CASES)('$title, $theme theme: the ideal series in the secondary text, each actual bar in its row’s colour — the roles of the bars’ own element', async ({fixture, theme}) => {
+describe('ExposureBars — the ideal in the designer’s grey, each actual bar in its row’s category colour (TD-1, §1.7)', () => {
+    it.each(CASES)('$title, $theme theme: the ideal series in its grey, each actual bar in its row’s colour — the card of the bars’ own element', async ({fixture, theme}) => {
         checkFixture(fixture);
         const dark = theme === 'dark';
         const roles = ROLES[theme];
         injectRoles(() => ROLES);
         document.documentElement.classList.toggle('dark', dark);
-        // Controls: the invented roles are not the stand-ins, so a role read anywhere but the bars' element fails below;
-        // in the dark theme, where the card is the shades' near pole, the invented card moves them; and no subtype is
+        // Controls: the invented card is not the stand-in, so a card read anywhere but the bars' element fails below;
+        // the invented secondary text is not the ideal, so a chart still drawing the ideal in that role fails below; in
+        // the dark theme, where the card is the shades' near pole, the invented card moves them; and no subtype is
         // expected in its family's own colour.
-        expect(roles.secondaryText, 'control: the invented secondary text is the stand-in').not.toBe(chartRoles(dark).color('--lf-text-secondary'));
         expect(roles.card, 'control: the invented card is the stand-in').not.toBe(chartRoles(dark).color('--lf-surface-card'));
+        expect(roles.secondaryText.toUpperCase(), 'control: the invented secondary text is the ideal').not.toBe(idealOf(theme).toUpperCase());
+        expect(chartRoles(dark).color('--lf-text-secondary').toUpperCase(), 'control: the stand-in of the secondary text is the ideal').not.toBe(idealOf(theme).toUpperCase());
         const expected = expectedActual(fixture, dark, roles.card);
         if (fixture.dimension === 'asset_type') {
             if (dark) expect(expected, 'control: the card does not move the shades').not.toEqual(expectedActual(fixture, true, chartRoles(true).color('--lf-surface-card')));
@@ -465,7 +481,7 @@ describe('ExposureBars — the ideal in its neutral role, each actual bar in its
 
         expectSeries(fixture, rows, theme, roles);
         expect(chartInstances[0].setOptionCalls.filter(({option}) => 'color' in option).length, 'an option handing ECharts a palette to paint a bar by its index').toBe(0);
-        expectNoOldGreens(rows, roles.secondaryText);
+        expectNoOldGreens(rows, idealOf(theme));
     });
 
     it.each(CASES)('$title, $theme theme: the legend’s two swatches, and in each row’s tooltip a dot in each of the row’s two colours', async ({fixture, theme}) => {
@@ -475,13 +491,13 @@ describe('ExposureBars — the ideal in its neutral role, each actual bar in its
         injectRoles(() => ROLES);
         document.documentElement.classList.toggle('dark', dark);
         // Control: the ideal is no row's colour, so the two dots of a row drawn the wrong way round fail below.
-        expect(expectedActual(fixture, dark, roles.card), 'control: a row expected in the ideal colour').not.toContain(roles.secondaryText);
+        expect(expectedActual(fixture, dark, roles.card), 'control: a row expected in the ideal colour').not.toContain(idealOf(theme));
 
         const rows = weightRows(fixture);
         await mountBars(rows, fixture.dimension);
 
         expectLegendAndDots(fixture, rows, theme, roles);
-        expectNoOldGreens(rows, roles.secondaryText);
+        expectNoOldGreens(rows, idealOf(theme));
     });
 });
 
@@ -494,12 +510,13 @@ describe('ExposureBars — built again, whole, at a theme switch and at a chart-
         checkFixture(fixture);
         injectRoles(() => ROLES);
         const rows = weightRows(fixture);
-        // Control: the themes differ on every actual bar, as on the invented roles, so bars deaf to a switch fail below.
+        // Control: the themes differ on every actual bar and on the ideal, so bars deaf to a switch fail below.
         const [light, dark] = THEMES.map((theme) => expectedActual(fixture, theme === 'dark', ROLES[theme].card));
         expect(
             rows.filter((_row, index) => light[index] === dark[index]).map((row) => row.id),
             'control: rows in one colour in both themes',
         ).toEqual([]);
+        expect(idealOf('light'), 'control: one ideal in both themes').not.toBe(idealOf('dark'));
 
         await mountBars(rows, fixture.dimension);
         const [chart] = chartInstances;
@@ -512,10 +529,10 @@ describe('ExposureBars — built again, whole, at a theme switch and at a chart-
             expectWholeOptionsSince(chart, before, `the switch to ${theme}`);
         }
         expect(chartInstances, 'a theme switch made a new chart').toHaveLength(1);
-        expectNoOldGreens(rows, ROLES.light.secondaryText);
+        expectNoOldGreens(rows, idealOf('light'));
     });
 
-    it.each(FIXTURES)('$title: notifyChartColorsChange() builds the whole option again with the roles read again — and nothing is drawn again before it', async (fixture) => {
+    it.each(FIXTURES)('$title: notifyChartColorsChange() builds the whole option again with the roles read again — the ideal stays its grey — and nothing is drawn again before it', async (fixture) => {
         checkFixture(fixture);
         let current: RoleSet = ROLES;
         injectRoles(() => current);
@@ -525,6 +542,10 @@ describe('ExposureBars — built again, whole, at a theme switch and at a chart-
         await mountBars(rows, fixture.dimension);
         const [chart] = chartInstances;
         expectDrawn(fixture, rows, 'dark', ROLES.dark);
+        // Controls: the edited card moves the actual's swatch in every fixture, and the subtypes' shades where there are
+        // some; the edited secondary text would move the ideal, were it still the role.
+        expect(EDITED_ROLES.dark.card, 'control: the edit leaves the card').not.toBe(ROLES.dark.card);
+        expect(EDITED_ROLES.dark.secondaryText, 'control: the edit leaves the secondary text').not.toBe(ROLES.dark.secondaryText);
         if (fixture.dimension === 'asset_type') expect(expectedActual(fixture, true, EDITED_ROLES.dark.card), 'control: the edited card does not move the shades').not.toEqual(expectedActual(fixture, true, ROLES.dark.card));
 
         current = EDITED_ROLES;
@@ -539,6 +560,6 @@ describe('ExposureBars — built again, whole, at a theme switch and at a chart-
         await waitFor(() => expectDrawn(fixture, rows, 'dark', EDITED_ROLES.dark));
         expectWholeOptionsSince(chart, before, 'the notification');
         expect(chartInstances, 'the notification made a new chart').toHaveLength(1);
-        expectNoOldGreens(rows, EDITED_ROLES.dark.secondaryText);
+        expectNoOldGreens(rows, idealOf('dark'));
     });
 });

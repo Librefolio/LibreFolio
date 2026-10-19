@@ -22,7 +22,7 @@ Usage:
 from decimal import ROUND_DOWN, ROUND_HALF_EVEN, Context, Decimal
 from typing import Optional, Tuple, Type
 
-from sqlalchemy import Numeric
+from sqlalchemy import ColumnElement, Numeric, and_
 from sqlalchemy.types import TypeDecorator
 from sqlmodel import SQLModel
 
@@ -298,3 +298,15 @@ def usable_fx_rate_bounds() -> Tuple[Decimal, Decimal]:
     """
     _precision, scale = get_model_column_precision(FxRate, "rate")
     return Decimal(1).scaleb(-scale), Decimal(1).scaleb(max_integer_digits(FxRate, "rate"))
+
+
+def usable_fx_rate_clause() -> ColumnElement[bool]:
+    """The SQL condition of a usable ``fx_rates`` row: ``usable_fx_rate_bounds()`` on ``FxRate.rate`` (X-R45).
+
+    Every read that computes with a stored rate filters on it, so a rate an older version could store (0 from a manual
+    ``1E-11``, ``inf`` from ``1E+400``, ``1e19``) is a missing rate there, never a value. The reads that must see every
+    row do not: the sync's overwrite and change count, the writes and deletes, the backup export, the engine's cache
+    fingerprint; ``test_fx_rate_readers`` keeps that list.
+    """
+    smallest, first_refused = usable_fx_rate_bounds()
+    return and_(FxRate.rate >= smallest, FxRate.rate < first_refused)

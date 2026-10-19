@@ -19,7 +19,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import FxRate
-from backend.app.db.precision import usable_fx_rate_bounds
+from backend.app.db.precision import usable_fx_rate_clause
 from backend.app.schemas.common import Currency
 from backend.app.schemas.fx import FXPeriodChange, FXPeriodChangesRequest, FXPeriodChangesResult, FXRangeChange
 from backend.app.services.financial_math.returns import fixed_period_changes, fixed_period_dates, range_change
@@ -36,7 +36,6 @@ async def _first_rate_days_inside(session: AsyncSession, pairs: set[tuple[str, s
 
     In chunks of ``FX_PAIRS_PER_QUERY`` pairs (R13-SEC9-2), as ``convert_bulk``: SQLite refuses an OR of about a thousand.
     """
-    smallest_rate, first_refused_rate = usable_fx_rate_bounds()
     ordered = sorted(pairs)
     first_days: dict[tuple[str, str], date] = {}
     for start in range(0, len(ordered), FX_PAIRS_PER_QUERY):
@@ -46,8 +45,7 @@ async def _first_rate_days_inside(session: AsyncSession, pairs: set[tuple[str, s
                 or_(*(and_(FxRate.base == base, FxRate.quote == quote) for base, quote in ordered[start : start + FX_PAIRS_PER_QUERY])),
                 FxRate.date > after,
                 FxRate.date <= until,
-                FxRate.rate >= smallest_rate,
-                FxRate.rate < first_refused_rate,
+                usable_fx_rate_clause(),
             )
             .group_by(FxRate.base, FxRate.quote)
         )

@@ -53,9 +53,9 @@
     }
 
     /**
-     * The heatmap's own polarity — the info role for a positive pair (+1), the danger role
-     * for an offsetting one (−1), the two ends of its scale — so the list and the matrix cannot
-     * contradict each other. This docstring used to promise exactly that while the
+     * The heatmap's own polarity — blue for a positive pair (+1), red for an offsetting one
+     * (−1), the hues of the two ends of its scale, here through the info and danger roles — so
+     * the list and the matrix cannot contradict each other. This docstring used to promise exactly that while the
      * list did the opposite (red for redundancy), so the same pair was red here and
      * dark blue in the matrix. The polarity is the heatmap's, not a verdict: flipping
      * it is one line in `CorrelationHeatmap`'s scale, and it has to move both

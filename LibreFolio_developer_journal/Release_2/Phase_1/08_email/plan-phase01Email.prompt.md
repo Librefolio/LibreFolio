@@ -6688,6 +6688,214 @@ non sposti il registro.
 >   Frontend: banner e selettore, i18n nelle 4 lingue. Test: services, api, Vitest.
 > - **La correzione** (A o C) e quella degli asset: un lotto medio.
 
+#### E-19b2.3 — Il codice ✅ (2026-10-17, 20:4x–21:0x; HEAD `2ab9a6859`)
+> I rossi nel commit `0e787dfb4`; il coordinatore ha portato dev `0897502a9` nel ramo: HEAD `2ab9a6859`
+> (`test_portfolio_api.py` fuso da solo). La regola delle coppie col trattino approvata.
+>
+> **Il codice**:
+> - `schemas/portfolio.py`: `IssueCode.NON_ISO_CURRENCY` dopo `QUOTE_IN_MINOR_UNIT`;
+> - `data_quality.py`:
+>   - i kwarg `non_iso_currency_assets` e `report_currency` dopo quello di Z, con la loro docstring;
+>   - la raccolta dei valori prima dei blocchi: i lati delle coppie (`_missing_pair_sides`: il suffisso
+>     `/<valuta del rapporto>`, poi `rpartition`, e nessun lato per una coppia senza `/`), gli asset tenuti (filtrati di
+>     nuovo con `is_canonical_iso_currency`, per prudenza), la valuta del rapporto;
+>   - `MISSING_FX_*` lavorano sulle sole coppie di codici ISO (`fixable_fx_pairs`); `missing_fx_pairs` del DTO resta
+>     la lista grezza;
+>   - una voce per valore dopo il blocco di Z, da `_non_iso_currency_issue`: un costruttore per ramo con la chiave
+>     letterale (lo vuole la scansione delle frasi), il resto in `**common`; un'unità minore (`minor_unit_factor`)
+>     senza codice né candidati;
+> - `portfolio_service.py`: la staticmethod `_non_iso_currency_assets` accanto a quella di Z; nelle due chiamate
+>   `non_iso_currency_assets=…` e `report_currency=base_currency`;
+> - i18n con `dev.py i18n add`, cartella `dataQuality`, 5 chiavi × 4 lingue, nello stile delle voci vicine (una riga con
+>   il trattino lungo). Le chiavi della valuta del rapporto nominano il campo vero della scheda, «Default Currency» /
+>   «Valuta Predefinita» / «Devise par défaut» / «Divisa predeterminada», in Settings › Preferences. Le generali dicono
+>   che le conversioni «possono mancare»: un vecchio tasso salvato con lo stesso codice non ISO convertirebbe ancora;
+> - `api sync` (DQN-04);
+> - docs: `developer/frontend/data-quality-banner.md` (la riga della tabella, la regola, le coppie mancanti, la
+>   riproduzione, i test) e `user/dashboard/index.en.md` (un paragrafo dopo quello dei pence, col rimando a
+>   `db currencies`).
+>
+> **Prove** (corsia 6188, carico sotto 50):
+> - il file puro **109 su 109**; Vitest DQN **8 su 8**;
+> - api `portfolio` **55** (i 2 nuovi compresi); services `roi-fifo-utils` **1 485** (tutto `test_financial/`, i lotti e
+>   il servizio del portafoglio compresi);
+> - statici (`files/tools/e19b2_static.sh s1`): ruff e black puliti (4 file), `i18n check`, Vitest 7 file **239**
+>   (banner, banner dei lotti e helper, ICU delle 4 lingue, porte HTML e colori), svelte-check 0 errori, `mkdocs build`
+>   stretto con 0 avvisi, `check-links` 97, `git diff --check` pulito; porta libera.
+>
+> **In mezzo, la revisione di C-54** (sola lettura, dev `630c478cd`): OK con due note, mandate al coordinatore
+> (`mark_seen` può tornare indietro dopo un downgrade; una pre-release conta come la sua release).
+
+#### E-19b2.2 — I rossi ✅ (2026-10-17, 20:1x–20:5x; `test-author` `d495e334`, HEAD `e84778677`)
+> Le LOW di H sono entrate (commit `e84778677`, dev `0897502a9`). Il coordinatore aggiorna la mia base solo dopo il
+> commit di questi rossi: dev ha toccato `test_portfolio_api.py`.
+>
+> **I rossi**:
+> - `test_data_quality_report.py`: **35 nuovi (34 rossi, 1 guardia), i 74 di prima verdi**.
+>   - `TestNonIsoCurrencyIssue` (19): il membro dell'enum; `978/EUR` con la forma intera della voce e nessun
+>     `MISSING_FX_*`; i tre gruppi FX misti; `eur/EUR` e `EUR-EUR`; le chiavi per tipo di valore (978, EURO, Bolívar,
+>     BTC, `GBp` anche con spazi); l'ordine; un valore sia in una coppia sia su un asset; i soli asset; la valuta del
+>     rapporto (978, Bolívar, `GBp`, un nome lungo, l'asset nella valuta del rapporto); i valori con `/`; il valore
+>     lungo tagliato e la chiave intera; la forma dei lotti; `missing_fx_pairs` grezzo; l'ordine completo delle voci;
+>     la guardia.
+>   - `TestNonIsoCurrencyAssets` (2): `_non_iso_currency_assets`. `TestNonIsoCurrencySentences` (1): le cinque chiavi
+>     scritte come letterali, così le copre il controllo delle frasi.
+> - `test_portfolio_api.py`: **2 nuovi**, solo raccolti (55): un asset e la cassa in `978` con il rapporto in EUR;
+>   la valuta base salvata `978`. Entrambi su tutte e tre le sezioni `data_quality`.
+> - `DataQualityBanner.nonIso.test.ts` (nuovo): **8 rossi**. DQN-01 ×5 (le chiavi nei cataloghi), DQN-02/03 (due voci
+>   disegnate, nessuna CTA), DQN-04 (il client generato accetta il codice: serve `api sync`).
+> - Il `test-author` ha provato un'implementazione minima in una copia in `/tmp`: 35 e 8 su 35 e 8.
+> - Registro: il file puro sta in services `roi-fifo-utils` (`test_financial/` intero), l'API in api `portfolio`; il
+>   Vitest nuovo l'ho registrato in `component-unit`, accanto a `Tooltip.test.ts`.
+> - Verifica mia: puro 34 rossi, tutti nelle classi NonIso, e 75 verdi; API 55 raccolti; Vitest 8 rossi.
+>
+> **I dubbi del `test-author` e le mie decisioni**:
+> 1. **Le coppie con il trattino.** Sei test esistenti passano coppie `"EUR-USD"` (`_make_missing_fx`); con un
+>    `rpartition("/")` letterale diventerebbero lati `""` e `"EUR-USD"`, voci spurie. Nessun produttore scrive quella
+>    forma. **Regola aggiunta al contratto: una coppia senza `/` non si spezza, i suoi lati contano come canonici**,
+>    come oggi. I sei test restano com'erano, nessuna riparazione nei file d'altri.
+> 2. **Le chiavi letterali**: `test_the_scan_reaches_the_builder_s_keys` vuole un `message_i18n_key` letterale in ogni
+>    `DataQualityIssue(...)`. Quindi un costruttore per ramo, con `**common` per il resto.
+> 3. Fissati come scritti: una valuta del rapporto Bolívar va su `nonIsoReportCurrencyUnknown`; `" GBp "` con gli
+>    spazi conta come unità minore (`minor_unit_factor` toglie gli spazi); `XXX` è canonico.
+> 4. `PortfolioReportQuery.target_currency` è una stringa libera: un rapporto chiesto in `978` è accettato oggi. Fuori
+>    da b2; nota.
+> - `test_portfolio_api.py` non passa `black --check` già a HEAD (7 hunk fra 1348 e 1834), nessuno nella sezione
+>   nuova: lasciato com'è.
+
+#### E-19b2.1 — Analisi del rapporto di qualità (2026-10-17, 20:0x–20:2x; sola lettura, HEAD `2fbbf4c4c`)
+> E-19b1 è entrato (dev `1742aaaaa`, CHANGELOG `2fbbf4c4c`); Z-32 (c) è nella base.
+>
+> **Lo stato vero**:
+> - **Le coppie mancanti** nascono tutte come `FROM/TO` coi codici salvati: `daily_state.py:941` e `:1139`,
+>   `_convert_to_base` (`portfolio_service.py:490`), la cassa nativa, il WAC, `yield_on_cost`, i lotti. Il motore non
+>   normalizza i codici: un `eur` salvato dà `eur/EUR`, che `normalize_fx_pair_slug` mostra come `EUR-EUR` sotto
+>   `MISSING_FX_MARKET`, una coppia senza senso; un `978` dà `978-EUR`, e il bottone `add_fx_pair` porta a un 422.
+> - **Il rapporto** si costruisce in due punti di `portfolio_service.py`, il riepilogo (`:1053`) e la storia (`:2152`),
+>   ciascuno con `held_quote_facts` e `base_currency` a portata. C'è un terzo chiamante, `lots_analysis_service.py:780`
+>   (il `gap_report` dei lotti), senza kwarg: le sue voci si aggiungono a quelle dei lotti.
+> - **Il banner** (`DataQualityBanner.svelte`):
+>   - traduce `$_(message_i18n_key, {values: message_params})` come testo (niente `{@html}`): un valore salvato nei
+>     parametri è sicuro;
+>   - le chiavi dell'`{#each}` sono `issue.code + group_key`: più voci dello stesso codice vogliono `group_key`
+>     diversi, altrimenti Svelte 5 lancia sulla chiave doppia;
+>   - gli asset si vedono solo come bottoni di `navigate_asset`; senza CTA restano nel DTO e non si mostrano.
+> - Il banner dei lotti raggruppa per codice (`lotDataQualityHelpers.ts:104`); AI Export non mappa i codici. Z-32 (c)
+>   non ha toccato il frontend.
+> - Ciò che fissa i codici: `test_data_quality_report.py`, `test_portfolio_api.py`, i18n `dataQuality` ×4,
+>   `developer/frontend/data-quality-banner.md` (tabella, regola, riproduzione, inventario dei test),
+>   `user/dashboard/index.en.md`.
+>
+> **La proposta (E-19b2)**:
+> 1. `IssueCode.NON_ISO_CURRENCY` subito dopo `QUOTE_IN_MINOR_UNIT`; il blocco dopo quello di Z, prima di
+>    `TRANSACTIONS_BEFORE_FLOOR`.
+> 2. **Una voce per valore salvato**, `WARNING`, nessuna CTA finché D1/D2 non decidono (navigare all'asset porta al
+>    cambio di valuta, cioè al wipe), `group_key=f"non_iso_currency:{value}"`. `message_params`: `value`
+>    (`shown_currency_text`, 16 caratteri), più `suggestion` o `candidates`; `affected_asset_ids/names` gli asset tenuti
+>    in quel valore; `count` il loro numero.
+> 3. **Da dove vengono i valori**, uniti e ordinati:
+>    - i lati delle coppie mancanti, dentro `build_data_quality_report`, così vale anche per il rapporto dei lotti;
+>    - gli asset tenuti, dal lettore di Z: la staticmethod `_non_iso_currency_assets(facts)` accanto a
+>      `_quote_in_minor_unit_assets`, kwarg `non_iso_currency_assets` dopo quello di Z, in entrambe le chiamate;
+>    - la valuta del rapporto, kwarg `report_currency` (la `base_currency` locale), con le sue chiavi.
+> 4. **`MISSING_FX_*` saltano le coppie con un lato non canonico** (`is_canonical_iso_currency`). Il lato `TO` si
+>    riconosce come suffisso `/` + valuta del rapporto quando c'è, altrimenti `rpartition("/")`: un valore costruito
+>    con una `/` non si spezza a metà. Il campo grezzo `missing_fx_pairs` del DTO resta com'è (altri lettori).
+> 5. **Le chiavi i18n** (`dataQuality`, 4 lingue): tre generali, `nonIsoCurrencySuggestion` (`{value}`,
+>    `{suggestion}`), `nonIsoCurrencyCandidates` (`{value}`, `{candidates}`), `nonIsoCurrencyUnknown` (`{value}`); due
+>    per la valuta del rapporto, `nonIsoReportCurrency` (`{value}`, `{suggestion}`), `nonIsoReportCurrencyUnknown`
+>    (`{value}`), che dicono di scegliere la valuta base in Impostazioni › Preferenze.
+> 6. Fuori: le liste grezze `missing_fx_pairs` del riepilogo del broker e delle serie (reddito, costi, depositi), che
+>    non sono voci del banner.
+>
+> **Superfici**: `schemas/portfolio.py`, `data_quality.py`, `portfolio_service.py`, i18n `dataQuality`,
+> `data-quality-banner.md` e `user/dashboard/index.en.md` (condivisi con Z), `api sync`; i test in
+> `test_data_quality_report.py` e `test_portfolio_api.py`. Nessuna migrazione.
+>
+> **Le risposte del coordinatore** (20:0x): sì ai punti 2, 3 e 4. Una voce `WARNING` per valore, nessuna CTA finché lo
+> sviluppatore non risponde su D1/D2; il rapporto dei lotti compreso; `MISSING_FX_*` saltano le coppie con un lato non
+> canonico, `missing_fx_pairs` grezzo resta. Via di scrittura sui file condivisi con Z (nessuno aperto altrove).
+> `portfolio_service.py` è aperto da MF (MF-A10, hunk ~675/1660/1717), lontano dalle mie chiamate. Ordine: le LOW di H,
+> poi b2, i rossi prima.
+>
+> **Un dettaglio aggiunto al contratto: le unità minori.** `suggested_iso_currency("GBp")` dà `GBP` (lo fissano CSG e
+> CCA: per la scrittura, `GBp` si salva `GBP`). Nel testo del banner suggerirebbe di rietichettare dei pence come
+> sterline, cioè un valore 100 volte più alto. Quindi un valore che `minor_unit_factor()` di Z riconosce (`GBp`) non
+> riceve suggerimento: va sulla chiave «sconosciuto». Lo stesso vale per il suggerimento del selettore di b1 (l'endpoint
+> `suggest` dà `GBP` per `GBp`): un `GBp` salvato è improbabile, perché anche la vecchia regola lo portava a `GBP`, ma
+> va in E-20 insieme agli altri resti dell'audit.
+
+#### E-19a.4 — Le due LOW di H ✅ (2026-10-17, 19:5x–20:4x; HEAD `2fbbf4c4c`)
+> Il via del coordinatore, nel mio ordine; la soglia «oltre 0,5 s a 1M righe di prezzi → passo in background».
+> 1. **`trusted_schema=OFF` per primo in `stored_currencies._read_only()`**, prima di `query_only`, come B su ogni
+>    connessione a una copia.
+> 2. **I tempi dell'audit d'avvio** (`files/e19a_timing/timing_audit.py`: dati sintetici con lo schema vero, WAL,
+>    pagine calde):
+>
+>    | Database | Mediana | Massimo |
+>    |---|---|---|
+>    | 1M prezzi, 1M tassi, 200k transazioni (263 MB) | **0,609 s** | 0,696 s (5 giri, carico 15) |
+>    | 3M prezzi, 1M tassi, 500k transazioni (534 MB) | **1,566 s** | 1,614 s (3 giri, carico 12) |
+>
+>    - Le query pesanti: `price_history.currency` (`SCAN` più B-tree temporaneo, nessun indice comincia da
+>      `currency`) e `fx_rates.quote` (`quote` è la seconda colonna dell'indice).
+>    - **Oltre la soglia, quindi in background**: il passo resta dopo `lone-transfer-legs` e fa solo
+>      `_keep_in_background(asyncio.create_task(asyncio.to_thread(log_stored_currency_audit)))`, come il prewarm.
+>      Un indice su `price_history.currency` sarebbe una migrazione per un audit: non proposto.
+>    - Numeri mandati al coordinatore per H.
+>
+> **⚠️ Fuori pista**: il primo giro di misura l'ho lanciato con `pipenv run` dalla cartella della sessione, e pipenv ha
+> scritto lì un `Pipfile` vuoto. Ha usato il venv condiviso per nome: nessuna installazione, nessun venv nuovo, il
+> `.project` del venv intatto (4/9). Tolto il file; da allora lancio solo dal worktree.
+>
+> **Rossi al `test-author`** (`adfb7f1f`): 7 rossi e 2 guardie in `test_stored_currency_audit.py`, nessun test altrove
+> da riparare.
+> - SCA-060: la connessione di `_read_only` legge `trusted_schema` 0 e `query_only` 1 (oggi `trusted_schema` 1:
+>   SQLite 3.54 lo tiene acceso);
+> - SCA-061: la prima istruzione è `PRAGMA trusted_schema=OFF`, registrata sostituendo `stored_currencies.sqlite3`;
+> - SCA-062 ×2: lo stesso per `log_stored_currency_audit` e per `main`;
+> - SCA-063 (guardia): su un WAL nessun `-wal`/`-shm` lasciato, e un lettore `mode=ro` di controllo li lascia;
+> - SCA-070 (guardia): la posizione del passo;
+> - SCA-071: il passo torna entro 5 s mentre un falso audit è fermo su un `Event`; SCA-072: il task sta in
+>   `_background_tasks` finché gira, in un thread; SCA-073: l'audit vero parte dal passo e avvisa.
+> - Il `test-author` ha provato le cure in memoria: 38 su 38.
+>
+> **Il codice**:
+> - `stored_currencies._read_only`: `PRAGMA trusted_schema=OFF` prima di `query_only`;
+> - `app_lifespan._start_stored_currency_audit()`: `_keep_in_background(asyncio.create_task(asyncio.to_thread(...)))`,
+>   come il prewarm; il passo lo chiama e non attende;
+> - prova: services `stored-currencies` **38 verdi**; ruff e black puliti.
+>
+> **La posizione** (dubbio 1 del `test-author`, deciso dal coordinatore alle 20:2x):
+> - il contratto (j) di B (`test_backup_apply.py`, ~3071) dice che `restore-commit` viene «prima di qualunque cosa
+>   in background», e N57 «prima di ogni passo che riferisce sui dati o li serve». L'audit riferisce sui dati: già
+>   inline (E-19a) scriveva nel log su dati ripristinati che un passo successivo poteva ancora annullare;
+> - **`stored-currencies` va subito dopo `plugin-secrets-check`**, l'altro controllo che solo scrive nel log, subito
+>   prima di `provider-prewarm`: dopo le due riparazioni, dopo `restore-commit`, accanto agli altri avvii in
+>   background. La docstring di B resta com'è;
+> - `overview.md`: il passo diventa il 19, i 15–19 diventano 14–18; SCA-070 aggiornato dal `test-author`, rosso prima
+>   dello spostamento; poi le 12 suite dell'ordine.
+>
+> **Note per H, senza azione**: nessun passo di spegnimento attende `_background_tasks` (come per i prewarm). Uno stop
+> entro ~1,6 s dall'avvio (a 3M righe) aspetta il thread dell'audit alla chiusura del loop. Solo lettura, quindi
+> tagliarlo è innocuo.
+>
+> **Lo spostamento fatto**: SCA-070 nuovo dal `test-author` (vicini esatti `plugin-secrets-check` e `provider-prewarm`,
+> dopo `lone-transfer-legs` e dopo `restore-commit`), rosso prima, verde dopo. Il `test-author` ha valutato le
+> condizioni di ordine degli altri file su entrambi gli ordini: nessuna cambia esito, e il contratto (j) di B diventa
+> vero. `backup-roundtrip` non fa più girare l'audit nelle sue fette di passi (nessuno lo controllava).
+>
+> **Prove** (corsia 6188, carico sotto 50; due attese del cancello a 61–64):
+> - le 12 suite dell'ordine (`hlow2`): services `stored-currencies` **38**, `lone-transfer-legs` 20, `admin-bootstrap`
+>   218, `app-lifecycle` 53, `plugin-secrets-check` 11, `shutdown-process` 7, `sleep-wake-suspend` 141,
+>   `backup-leftovers` 44, `backup-apply` 255, `backup-staging` 181; db `post-migration` 45; e2e `backup-roundtrip` 3;
+> - `test_market_calendar.py` diretto (sta nell'unità del rischio, pesante intera): 37;
+> - ruff e black puliti (3 file); `mkdocs build` stretto con 0 avvisi, `check-links` 97; `git diff --check` pulito;
+>   porta libera.
+>
+> **Per il checkpoint**: dev (`efef5c876`) ha cambiato `test_portfolio_api.py` (una riga, A) mentre il `test-author` di
+> b2 lo sta modificando nel mio tree: niente merge di dev finché i rossi di b2 non sono nel ramo.
+
 #### E-19b1.3 — `staging.py` sopra B-43 ✅ (2026-10-17, 18:4x–19:5x; HEAD `3464da946`)
 > Il coordinatore ha fatto il commit della parte 1 (`6e539da02`) e il merge di dev `5726486bc`: HEAD `3464da946`, con
 > B-43, Z-32 (c), CP-10d e il resto.

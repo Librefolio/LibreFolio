@@ -66,6 +66,24 @@ cd frontend && LF_SETUP_DONE=1 nice -n 10 pipenv run npm run test:e2e -- <spec> 
 None: both caught before any test or populate ran. About 15 minutes, and one incident written up in the coordinator's
 report.
 
+## A third trap: the sample reports an `api` run removes (17/10 evening, Y-30)
+
+- **Symptom.** In a granted slot, `front-broker detail` went 39/40: `import files modal can open file preview` found no
+  `row-actions-` row in the import history within 8 s. Nothing in the lot under test touched that modal; the same
+  spec had passed 40/40 two hours earlier in the same lane, and passed 40/40 again on a re-run five minutes later.
+- **Root cause.** Between the two runs, a backend `api` action had run in the lane. The API runner populates with
+  `populate_mock_data --force` **without** `--with-reports`, and a `--force` populate empties `broker_reports/` under
+  the lane's data dir. The E2E slot script then set `LF_SETUP_DONE=1`, so `global-setup.ts` skipped its own
+  `--with-reports` populate, and `front-broker detail` does not repopulate either. Every mock broker had an empty
+  import history, so the test that previews the first sample file had nothing to click. The next action of the
+  same script, `front-portfolio dashboard-cache`, repopulated with reports (`_ensure_db_populated`), which is why the
+  re-run was green. Read in the lane: `broker_reports/` last modified at the `api` run, the `uploaded/broker_*` files
+  rewritten at the dashboard-cache start.
+- **Verdict (test-triage):** environment, not product and not the test.
+- **Prevention.** An E2E script that sets `LF_SETUP_DONE=1` must not trust the lane after any backend run that
+  populates (`api …`): check that `<data dir>/broker_reports/uploaded/` holds files, and drop `LF_SETUP_DONE` when it
+  does not, so `global-setup.ts` takes its full `--with-reports` path — or run the E2E slot before the `api` runs.
+
 ## Source files
 
 | Role | Path |
@@ -74,4 +92,5 @@ report.
 | The port and data-dir fallbacks, the `webServer` command | `frontend/playwright.config.ts` |
 | The runner that sets `LF_SETUP_DONE` for its own Playwright runs | `scripts/test_runner/_frontend_common.py` |
 | The runner's per-category options: no `--grep` | `scripts/test_runner/_cli.py` |
+| `populate --force` empties `broker_reports` (the third trap) | `backend/test_scripts/test_db/populate_mock_data.py` (`reset_broker_reports`) |
 | History (Y-22) | `LibreFolio_developer_journal/Release_2/Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md` |

@@ -205,6 +205,10 @@
     "reference": {
       "zero": "Cero"
     },
+    "gapsJoined": {
+      "label": "huecos unidos",
+      "warning": "Demasiados huecos para dibujar: la línea los une."
+    },
     "regions": {
       "oversoldDescription": "Extremo inferior por debajo del umbral configurado.",
       "neutralDescription": "Rango central entre los umbrales configurados.",

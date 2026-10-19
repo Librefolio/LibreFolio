@@ -100,9 +100,8 @@ Today the profile changes eleven things:
 - **The report-only Content-Security-Policy** blocks nothing. On the pages of the web app (not the
   documentation, not the API), it tells the browser where a page may load its content from; the
   browser lists what falls outside in its developer console and sends no report anywhere: LibreFolio
-  has no address to collect them. Today the console shows at least the web app's own inline scripts:
-  the one that applies the theme before the page appears, and the start script SvelteKit writes into
-  the page. These reports are expected: listing what an enforced policy would block is what this
+  has no address to collect them. The web app's own inline scripts are allowed by their hashes and
+  report nothing: what the console lists is what an enforced policy would block, which is what this
   report-only phase is for.
 
 ### 🔑 A Session Key of 32 Characters or More {: #managed-jwt-secret }

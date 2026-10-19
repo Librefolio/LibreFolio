@@ -16,7 +16,7 @@ These Playwright tests cover fundamental UI components that are used across the 
 | **Files** | File upload, file list, drag & drop, file deletion |
 | **Select Components** | `SearchSelect`, `SimpleSelect`, currency pickers |
 | **Image Crop** | `ImageEditModal`, crop presets, zoom, rotation, format export |
-| **CSP collector** | The collector of Content-Security-Policy violations that every spec carries: its helpers and its baseline, synthetic documents under a report-only policy of their own, the sign-in page under the managed profile's (`csp-collector`) |
+| **CSP collector** | The collector of Content-Security-Policy violations that every spec carries: its helpers and its baseline, synthetic documents under a report-only policy of their own, the sign-in page and the offline page under the managed profile's, with the hashes of the build's inline scripts (`csp-collector`) |
 | **Cloud smoke** | Thirteen specs of the suite on a managed lane, desktop only, and on any lane only when named: the managed profile's frame protection and report-only policy for real, the collector failing on any violation its baseline does not know (`cloud-smoke`) |
 
 ### 👥 Users Tab (`admin-users`) {: #admin-users }
@@ -77,19 +77,23 @@ users on their default. The tab's rules without a browser are in the Vitest file
 
 `layout/csp-collector.spec.ts` tests the [CSP collector](e2e.md#csp-collector) that every spec
 carries, with service workers blocked so that every document goes through the spec's own routes.
-It runs on any lane: on a self-hosted one the spec adds the managed profile's report-only policy to
-the sign-in page itself; on a managed one it lets the lane's own header through and checks that it
-equals its copy of `CSP_REPORT_ONLY_POLICY`.
+It runs on any lane. The spec computes the managed profile's report-only policy itself, with its
+own HTML reader and Node's `crypto`: its copy of `CSP_REPORT_ONLY_POLICY`, with the hashes of the
+inline scripts of `/`, `/200.html` and `/offline.html` as the lane serves them. On a self-hosted
+lane it adds that policy to the app's pages; on a managed one it lets the lane's own header through
+and requires it to equal its own, to the letter, on every page of the build.
 
 | Test | What it checks |
 |------|----------------|
-| The pure logic | `cspCollectorEnabled`, `inlineScriptLines`, `isKnown` and `loadBaseline` of `e2e/fixtures/csp.ts`, on synthetic input, without a page: an inline script known by its span; an address known by its path, whole, whatever its origin and query, and a blocked URI that is no absolute URL (`inline`, `eval`) never known by a path; every entry of the baseline well formed (exactly one of `blockedURI` and `blockedPath`, a reason, an owner), every `id` its own |
-| The first cloud smoke's findings | The real baseline knows them as the managed lane recorded them, cheetah-grid's global probe and three address checks of a link, each by the entry recorded for it and by no other |
+| The pure logic | `cspCollectorEnabled`, `isKnown` and `loadBaseline` of `e2e/fixtures/csp.ts`, on synthetic input, without a page: an entry known by its directive and blocked URI on any line (no line span any more); an address known by its path, whole, whatever its origin and query, and a blocked URI that is no absolute URL (`inline`, `eval`) never known by a path; an entry with a `sample` knowing only that exact sample, an entry without one ignoring it; every entry of the baseline well formed (exactly one of `blockedURI` and `blockedPath`, a `sample` only when not empty, a reason, an owner, no other key), every `id` its own |
+| The first cloud smoke's findings | The real baseline knows them as the managed lane recorded them, cheetah-grid's global probe by its exact sample and three address checks of a link by their path, each by the entry recorded for it and by no other; an `eval` of other code, and the probe without a sample, stay unknown |
+| The spec's own reading | On synthetic input, what it checks the backend with: the text of every inline script, of any type (none in a comment, a `<title>` or a `<style>`), its `sha256` source (against CSP Level 2's published example, CR LF and a lone CR hashed as LF), every inline event-handler attribute, and the policy built from the hashes, each once, sorted, after `'report-sample'` |
 | A synthetic document | Served by the spec under its own report-only `script-src 'self'`: its inline script recorded once, field for field as the page saw it, and run all the same; unknown, and the test passes (`cspFailOnUnknown: false`) |
 | Two documents in a row | A navigation: the violations of both recorded, the binding and the listener back with each document |
 | An unknown violation | With `cspFailOnUnknown` at its default, the test fails at teardown: an expected failure (`test.fail()`), which Playwright reports passed only if it did fail |
-| The sign-in page | `/` under the managed profile's report-only policy reports exactly its two inline scripts, one violation each, both known to the baseline, and every entry naming an inline script of `index.html` matches one of them |
-| The kill switch | Runs only in a run started with `E2E_CSP_COLLECTOR=0`, where the synthetic and sign-in tests skip: no binding in the page, nothing recorded, nothing failed |
+| The sign-in page | `/` under that policy reports no violation at all, as the page and the collector both saw it. Then a control, a script of the lane's origin that probes the global object as cheetah-grid does, is reported with that probe's exact sample and known by `cheetah-grid-global-probe` alone: the silence was measured. Under JS coverage, istanbul's own probes are left out |
+| The offline page | `/offline.html` under the same policy loads with no violation, its script allowed by its hash; no page of the build has an inline event-handler attribute; its retry button loads it again, with no violation either |
+| The kill switch | Runs only in a run started with `E2E_CSP_COLLECTOR=0`, where the tests on synthetic documents and on the app's pages skip: no binding in the page, nothing recorded, nothing failed |
 
 Prerequisites: populated DB and test users. Run it alone with
 `./dev.py test front-utility csp-collector`, and its kill-switch test with

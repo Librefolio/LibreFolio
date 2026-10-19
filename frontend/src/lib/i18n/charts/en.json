@@ -205,6 +205,10 @@
     "reference": {
       "zero": "Zero"
     },
+    "gapsJoined": {
+      "label": "gaps joined",
+      "warning": "Too many gaps to draw: the line joins them."
+    },
     "regions": {
       "oversoldDescription": "Lower extreme below the configured threshold.",
       "neutralDescription": "Central range between the configured thresholds.",

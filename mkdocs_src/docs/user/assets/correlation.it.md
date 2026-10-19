@@ -49,7 +49,7 @@ Questa sezione risponde a *quali di questi si muovono insieme?* — per individu
 
 **Come leggerla**
 
-- **Un quadrato per coppia**: blu quando i due asset si muovono insieme, rosso quando si muovono in direzioni opposte, pallido quando si muovono in modo indipendente. Passa il mouse o toccalo per il valore a parole.
+- **Un quadrato per coppia**: blu quando i due asset si muovono insieme, rosso quando si muovono in direzioni opposte, grigio quando si muovono in modo indipendente. Passa il mouse o toccalo per il valore a parole.
 - **Parti dalle due liste**: **I più simili** nomina le coppie che sono quasi la stessa esposizione, **Quelli che si compensano** le coppie che si attutiscono a vicenda. Una lista vuota è già di per sé un risultato. Clicca una coppia per trovarla nella matrice.
 - **Un trattino non è uno zero**: non è stato possibile misurare la coppia — storico troppo breve, o un prezzo che non si è mai mosso.
 - **I pulsanti di ordinamento** riorganizzano la matrice; non cambiano mai un valore.

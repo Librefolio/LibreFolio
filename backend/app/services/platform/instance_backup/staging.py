@@ -18,8 +18,9 @@ The steps, each refusing with a stable ``code`` (``StagingError``):
    head: restored as it is. Older: ``alembic upgrade head`` on the copy, in a process of its own. The post-migration
    fixes then run on the copy in either case, as at every start.
 4. **Checked before and after.** Before the upgrade, the copy passes its integrity check and holds exactly the rows its
-   manifest counted. After, it passes its integrity check again, at the head; its rows and foreign keys are compared
-   with those before: a migration may change data, so a difference is a warning, not a refusal.
+   manifest counted, and every text it holds is UTF-8 (B-49: the server's reads would fail on one that is not). After,
+   it passes its integrity check again, at the head; its rows and foreign keys are compared with those before: a
+   migration may change data, so a difference is a warning, not a refusal.
 5. **Administrators** (decision 40): after a restore, one signs in with an account of the backup, with its password
    of then; the report names the copy's active administrators. With none, the restore is blocked.
 6. **Plugin secrets** (decision 39): the instance keeps its own key. The copy's secrets are re-encrypted with it from
@@ -79,7 +80,7 @@ from backend.app.services.platform.instance_backup.paths import (
     stage_dir,
     stages_dir,
 )
-from backend.app.services.platform.instance_backup.snapshot import DatabaseDescription, describe_database
+from backend.app.services.platform.instance_backup.snapshot import DatabaseDescription, _identifier, describe_database
 from backend.app.services.platform.instance_backup.totals import TotalsComparison, TotalsDifference, TotalsStatus, compare_totals, ledger_totals_of
 from backend.app.services.platform.instance_key import INSTANCE_KEY_MIN_LENGTH, InstanceKeyError, derive_key_from
 from backend.app.services.platform.stored_currencies import find_stored_currency_findings
@@ -324,6 +325,7 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
         _refuse_foreign_objects(database)
         before = describe_database(database)
         _check_against_manifest(before, manifest)
+        _refuse_undecodable_text(database)
         action, migrations, head = _revision_plan(manifest.alembic_revision)
         if action == "upgrade":
             progress("upgrading", 0, len(migrations))
@@ -680,6 +682,77 @@ def _stand_in(*_arguments: object) -> None:
     """What a stand-in of the server's functions answers, were it ever called: nothing. Only the schema could call it,
     and with ``trusted_schema`` off SQLite refuses that before any call."""
     return None
+
+
+#: The rows of a table one query of the text scan reads (B-49): their text values, concatenated by SQLite, come back as
+#: one string per column. 200 000 rows of the largest tables of a 488 MB database are about 10 MB of text.
+_TEXT_SCAN_ROWS = 200_000
+#: The names of a table's rowid. A column may take any of them, and that name is then the column's.
+_ROWID_NAMES = ("rowid", "_rowid_", "oid")
+_LOWEST_ROWID = -(2**63)
+_HIGHEST_ROWID = 2**63 - 1
+
+
+def _strict_text(value: bytes) -> str:
+    """A text value as the server's driver reads it, or ``UnicodeDecodeError`` (B-49)."""
+    return value.decode("utf-8")
+
+
+def _refuse_undecodable_text(database: Path) -> None:
+    """Refuse a database holding text that is not UTF-8 (lot B-49). The server's driver raises on such a value and the
+    whole read fails, not the row: after a restore every list holding it would fail, and no page could correct what it
+    cannot read. LibreFolio writes UTF-8 only.
+
+    Every table but SQLite's own, unknown ones too; every column, generated ones included (``table_xinfo``), its values
+    by storage class (``typeof = 'text'``: dates and timestamps are text in DATE and DATETIME columns). Run before the upgrade, so no migration meets such a text
+    first. Read only, ``trusted_schema`` off first (B-37), each text through a strict ``text_factory``. The log has the
+    number of tables, never a text, a name or a path: they are the archive's."""
+    with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+        conn.execute("PRAGMA trusted_schema=OFF")
+        tables = conn.execute("SELECT name, wr FROM pragma_table_list WHERE schema = 'main' AND type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'").fetchall()
+        conn.text_factory = _strict_text
+        undecodable = sum(1 for name, without_rowid in tables if _holds_undecodable_text(conn, name, bool(without_rowid)))
+    if undecodable:
+        logger.warning("A backup's database holds text that is not UTF-8", tables=undecodable)
+        raise StagingError("database_damaged", "The backup's database holds text that is not UTF-8: it cannot be restored")
+
+
+def _holds_undecodable_text(conn: sqlite3.Connection, table: str, without_rowid: bool) -> bool:
+    """Whether a text value of ``table`` is not UTF-8. Read by keyset windows of its rowid, ``_TEXT_SCAN_ROWS`` rows a
+    query, each column's text values joined by SQLite with a comma and decoded once: negative or sparse rowids cost
+    nothing, and the comma, a byte of its own, never completes a character split over two values. A table without a
+    rowid, or whose columns take all its names, is read row by row instead, in constant memory, and so is the rest of a
+    table whose window SQLite cannot join (texts past its length limit, ``DataError``)."""
+    try:
+        names = [name for (name,) in conn.execute("SELECT name FROM pragma_table_xinfo(?)", (table,))]
+        texts = ", ".join(f"CASE WHEN typeof({_identifier(name)}) = 'text' THEN {_identifier(name)} END" for name in names)
+        if not names:
+            return False
+        rowid = None if without_rowid else next((candidate for candidate in _ROWID_NAMES if candidate not in {name.lower() for name in names}), None)
+        if rowid is None:
+            _read_every_row(conn.execute(f"SELECT {texts} FROM {_identifier(table)}"))
+            return False
+        window = ", ".join(f"CASE WHEN typeof({_identifier(name)}) = 'text' THEN {_identifier(name)} END AS t{index}" for index, name in enumerate(names))
+        joined = ", ".join(f"group_concat(t{index}, ',')" for index in range(len(names)))
+        query = f"SELECT count(*), max(k), {joined} FROM (SELECT {rowid} AS k, {window} FROM {_identifier(table)} WHERE {rowid} >= ? ORDER BY {rowid} LIMIT ?)"
+        low = _LOWEST_ROWID
+        while True:
+            try:
+                rows, top, *_joined = conn.execute(query, (low, _TEXT_SCAN_ROWS)).fetchone()
+            except sqlite3.DataError:
+                _read_every_row(conn.execute(f"SELECT {texts} FROM {_identifier(table)} WHERE {rowid} >= ? ORDER BY {rowid}", (low,)))
+                return False
+            if rows < _TEXT_SCAN_ROWS or top >= _HIGHEST_ROWID:
+                return False
+            low = top + 1
+    except UnicodeDecodeError:
+        return True
+
+
+def _read_every_row(cursor: sqlite3.Cursor) -> None:
+    """Fetch every row of ``cursor``, a few at a time: its text values pass through the connection's ``text_factory``."""
+    while cursor.fetchmany(1000):
+        pass
 
 
 def _plugin_secrets(database: Path, archive_key: str | None) -> tuple[int, SecretCounts]:
