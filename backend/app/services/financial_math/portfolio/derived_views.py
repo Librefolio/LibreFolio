@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 from collections import defaultdict
 from collections.abc import Mapping
 from datetime import date as date_type
@@ -71,9 +72,18 @@ class DerivedViewsBuilder:
     ) -> None:
         self.daily_states = daily_states
         self.target_currency = target_currency
+        # The states' dates, in the engine's order (ascending, one state a day): a window is found by bisection
+        self._dates = [state.date for state in daily_states]
 
-    def build_history(self) -> list[dict]:
-        """Build PortfolioHistoryPoint-compatible dicts from daily states.
+    def _window(self, date_from: date_type | None, date_to: date_type | None, *, exclusive_start: bool = False) -> list[DailyPortfolioState]:
+        """The states of ``[date_from, date_to]`` (``(date_from, date_to]`` with ``exclusive_start``), an open bound
+        reaching the end of the history: a view built for a window builds only its days (P2, N74)."""
+        start = 0 if date_from is None else (bisect.bisect_right if exclusive_start else bisect.bisect_left)(self._dates, date_from)
+        end = len(self._dates) if date_to is None else bisect.bisect_right(self._dates, date_to)
+        return self.daily_states[start:end]
+
+    def build_history(self, date_from: date_type | None = None, date_to: date_type | None = None) -> list[dict]:
+        """Build PortfolioHistoryPoint-compatible dicts from the daily states of ``[date_from, date_to]``.
 
         Returns dicts (not PortfolioHistoryPoint) to avoid circular import.
         The API adapter converts these to PortfolioHistoryPoint.
@@ -99,10 +109,10 @@ class DerivedViewsBuilder:
                 "total_pnl": CurrencySchema(code=self.target_currency, amount=s.total_pnl),
                 "unrealized_gain_loss": CurrencySchema(code=self.target_currency, amount=s.unrealized_gain_loss) if s.unrealized_gain_loss else None,
             }
-            for s in self.daily_states
+            for s in self._window(date_from, date_to)
         ]
 
-    def build_broker_pnl_history(self) -> dict[int, list[dict]]:
+    def build_broker_pnl_history(self, date_from: date_type | None = None, date_to: date_type | None = None) -> dict[int, list[dict]]:
         """Per-broker additive P&L history: broker_id -> [{date, total_pnl}, ...].
 
         Derived from DailyPortfolioState.broker_contributions (see G1a/§4.2), which
@@ -112,12 +122,12 @@ class DerivedViewsBuilder:
         build_history()'s adapter-conversion pattern.
         """
         by_broker: dict[int, list[dict]] = defaultdict(list)
-        for s in self.daily_states:
+        for s in self._window(date_from, date_to):
             for bid, contribution in s.broker_contributions.items():
                 by_broker[bid].append({"date": s.date, "total_pnl": CurrencySchema(code=self.target_currency, amount=contribution.pnl_contribution)})
         return dict(by_broker)
 
-    def build_pnl_candles(self) -> list[dict]:
+    def build_pnl_candles(self, date_from: date_type | None = None, date_to: date_type | None = None) -> list[dict]:
         """Synthetic total-P&L candle series (G1b): [{date, open, high, low, close}, ...].
 
         Days whose candle is unavailable (DailyPortfolioState.pnl_candle is None — a held
@@ -128,7 +138,7 @@ class DerivedViewsBuilder:
         adapter-conversion pattern (avoids a circular import on the API schema).
         """
         points: list[dict] = []
-        for s in self.daily_states:
+        for s in self._window(date_from, date_to):
             if s.pnl_candle is None:
                 continue
             points.append(
@@ -142,7 +152,7 @@ class DerivedViewsBuilder:
             )
         return points
 
-    def build_acquisition_funding(self) -> list[dict]:
+    def build_acquisition_funding(self, date_from: date_type | None = None, date_to: date_type | None = None) -> list[dict]:
         """New-vs-reinvested BUY funding split (batch 2): [{date, from_new_capital,
         from_reinvested}, ...].
 
@@ -154,7 +164,8 @@ class DerivedViewsBuilder:
         build_history()'s adapter-conversion pattern.
         """
         points: list[dict] = []
-        for s in self.daily_states:
+        # A flow series: a BUY dated date_from belongs to the previous period, (date_from, date_to]
+        for s in self._window(date_from, date_to, exclusive_start=True):
             if s.acquisition_funding is None:
                 continue
             points.append(
@@ -168,10 +179,15 @@ class DerivedViewsBuilder:
 
     def build_performance_inputs(
         self,
+        date_from: date_type | None = None,
     ) -> tuple[list, list]:
         """Extract NAV snapshots and the invested-capital flow series for ROI/TWRR/MWRR.
 
         Returns (nav_snapshots, cash_flows) compatible with the ``returns`` functions.
+
+        With ``date_from`` (P2, N74), only what ``returns.rebase_to_period`` keeps of them for that period: the snapshots
+        from the period's opening state on (the last one dated on or before ``date_from``, else the first) and the flows
+        dated after it, so the rebase gives the same period without building the history before it.
 
         The capital flow is derived from the day-over-day change in
         ``cumulative_external_cash_flow`` (the *capital baseline*), NOT from the
@@ -188,10 +204,17 @@ class DerivedViewsBuilder:
         The baseline uses portfolio perspective (contribution = positive), so we
         negate the delta when passing to performance functions.
         """
-        nav_snapshots = [NAVSnapshot(date=s.date, nav=s.nav_value) for s in self.daily_states]
-        cash_flows: list[CashFlowInput] = []
+        states = self.daily_states
         prev_baseline = Decimal("0")
-        for s in self.daily_states:
+        if date_from is not None and states:
+            opening = max(bisect.bisect_right(self._dates, date_from) - 1, 0)
+            prev_baseline = states[opening].cumulative_external_cash_flow
+            nav_snapshots = [NAVSnapshot(date=states[opening].date, nav=states[opening].nav_value)] + [NAVSnapshot(date=s.date, nav=s.nav_value) for s in states[opening + 1 :]]
+            states = states[opening + 1 :]
+        else:
+            nav_snapshots = [NAVSnapshot(date=s.date, nav=s.nav_value) for s in states]
+        cash_flows: list[CashFlowInput] = []
+        for s in states:
             delta = s.cumulative_external_cash_flow - prev_baseline
             prev_baseline = s.cumulative_external_cash_flow
             if delta != 0:
