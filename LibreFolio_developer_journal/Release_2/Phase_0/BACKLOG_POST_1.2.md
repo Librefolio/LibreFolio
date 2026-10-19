@@ -7390,6 +7390,13 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   `quote_base_quantity`: verifica».
   - Stato (19/10): (c) ✅ `aa9e07544`, entrato in `46ea09b02`, CHANGELOG `22b9b90ce`; (a) e (b) restano per dopo la 1.3.
     La migrazione 010 di (c) è in discussione: piano 06, sezione «Z-33 ridotta».
+  - **(c) tolta il 19/10** (Z-32cr; D8 del developer, testuale: «nessuna colonna nel db, sono certo»): via la colonna
+    dal modello, la scrittura nel refresh, `QUOTE_IN_MINOR_UNIT`, la chiave i18n, la doc e i test; la migrazione 010 e
+    il suo test li sostituisce H con la 005 unica. Restano `utils/currency_units.py` (lo legge `NON_ISO_CURRENCY` di
+    E-19b2) e la valuta grezza della storia (`GBp`). Dettagli: piano 06, sezione «Z-32cr».
+  - **(d) la base suggerita dal plugin** alla creazione (D8, testuale: «pre-popoliamo il campo della quantità base a
+    100, potremmo farlo anche se il plugin ce lo suggerisce»): analisi breve consegnata il 19/10, in attesa del via e
+    delle risposte Q-Q1…Q4. Dettagli: piano 06, sezione «Z-32 (d)».
 - ✅ **Z-33 · I prezzi Yahoo delle borse a est di UTC salvati un giorno prima** — **alto**, dati; Z, 17/10 (trovato da
   test-author scrivendo la guardia di Z-32, confermato da Z e dal coordinatore). Proprietario Z; X rivede il plugin.
   Nella 1.3, subito dopo il checkpoint di Z-32 (c).
