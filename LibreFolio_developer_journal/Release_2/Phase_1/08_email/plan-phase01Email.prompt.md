@@ -8522,3 +8522,51 @@ non sposti il registro.
    >   contratti dei tool), `.testLog`, `site/`, i dati della corsia e la cartella della sessione.
    > - Nel backlog, sezione E: **E-23** (la serie stantia), aperta e senza decisione.
    > - Il CHANGELOG non è toccato: nel messaggio c'è la riga 🐛 proposta.
+   >
+   > **Entrato** (coordinatore, 17:1x): `48b44ee64` `fix(ai-export): no 503 for held assets without prices` e il giornale
+   > `6623aba7b`. Le due frasi ed E-23 vanno allo sviluppatore; la revisione la fa J, quando finisce J-57.
+
+### N62 — La guida Gmail (2026-10-19, 17:0x–17:2x; base `6623aba7b`)
+> **La richiesta** (coordinatore, 17:07), approvata dallo sviluppatore: «fai la guida in inglese per gmail poi la testo e
+> la rifiniamo». Un esempio Gmail esplicito nella guida email, solo in inglese:
+> - il server `smtp.gmail.com`, porta 587 `starttls`;
+> - l'utente uguale all'indirizzo;
+> - una password per le app di Google, che richiede la verifica in due passaggi;
+> - il mittente uguale all'indirizzo;
+> - il limite giornaliero di Gmail.
+>
+> Con `docs-writer`, un commit a parte; lo sviluppatore la segue e la prova.
+>
+> **⚠️ Fuori pista**: la richiesta è arrivata mentre E-AI503 era fermo al checkpoint, non ancora committato. N62 tocca
+> solo la pagina della guida, quindi i commit restano separabili per percorso. Il giornale di N62 l'ho scritto dopo il
+> commit di E-AI503, per non mescolare le due cose nel piano 08.
+- **I fatti**, verificati oggi sulle pagine d'aiuto di Google:
+  - [176600](https://support.google.com/a/answer/176600): `smtp.gmail.com`, 465 con SSL o 587 con TLS, indirizzo
+    completo e una password per le app; 2.000 messaggi al giorno per Workspace;
+  - [185833](https://support.google.com/accounts/answer/185833): codice di 16 caratteri, solo con la verifica in due
+    passaggi, da `myaccount.google.com/apppasswords`, revocato quando cambia la password dell'account;
+  - [22839](https://support.google.com/mail/answer/22839): un account personale manda al massimo 500 email al giorno;
+    oltre, si riprova dopo 1–24 ore;
+  - [22370](https://support.google.com/mail/answer/22370): si spedisce solo come il proprio indirizzo, o come uno
+    aggiunto e confermato in «Send mail as».
+- **La pagina**: `mkdocs_src/docs/admin/email.en.md`, che esiste solo in inglese. Nella sezione «💡 Examples», una nuova
+  scheda `=== "Gmail"` dopo «Mail provider», +54 righe (`docs-writer` `n62-gmail-guide`). In cinque passi:
+  1. accendere la verifica in due passaggi;
+  2. creare la password per le app;
+  3. scrivere le variabili, con la password **senza spazi**: LibreFolio la usa com'è scritta;
+  4. riavviare con `docker compose up -d`;
+  5. mandare l'email di prova.
+
+  Poi «To keep it working»: i limiti di Google; `LIBREFOLIO_SMTP_MAX_PER_HOUR=20` (480 al giorno) per stare sotto i 500;
+  la revoca quando cambia la password.
+- **Le prove**:
+  - `dev.py mkdocs build` rigoroso: rc 0, 86 s;
+  - `dev.py mkdocs check-links`: 97 link validi;
+  - nell'HTML costruito (`mkdocs_src/site/admin/email/index.html`, ignorato) il passo 3 contiene il blocco `env` e i suoi
+    quattro punti dentro la voce della lista numerata.
+- **Da guardare durante la prova dello sviluppatore** (non scritto nella pagina):
+  1. Se Gmail rifiuta per il limite giornaliero già al mittente, LibreFolio mostrerebbe `SENDER_REFUSED`, il cui
+     consiglio parla d'indirizzi: possibile rifinitura dopo la prova. Non è verificato.
+  2. Un'email di prova mandata allo stesso indirizzo Gmail potrebbe comparire solo in «Inviati». Non è verificato.
+  3. Rifiniture possibili: Google mostra la password per le app una volta sola; un link a dove si accende la verifica in
+     due passaggi.
