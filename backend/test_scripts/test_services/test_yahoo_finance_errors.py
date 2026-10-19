@@ -831,32 +831,35 @@ async def test_metadata_refused_raises_instead_of_answering_none(monkeypatch):
     assert ticker.info_reads == 1
 
 
-# ── Z-32 (c): the quote currency as Yahoo reports it — contract guards, green before and after ──
+# ── Yahoo minor-unit guards: the quote currency as Yahoo reports it — contract guards, green before and after Z-32cr ──
 #
 # Yahoo quotes a London line in pence, with the currency «GBp». The price points fold it to «GBP» (Currency.validate_code)
-# and keep the numbers; the history result keeps the code as reported, and the refresh stores it on the assignment for
-# the data-quality warning (Z-32 (c) §4). Two guards on what that warning reads, both green today: a validator on
-# FAHistoricalData.currency, or pence converted in the plugin, would each make the warning wrong without a red anywhere
-# else.
+# and keep the numbers; the history result keeps the code as reported. Nothing stores that code (the assignment has no
+# column for it) and no data-quality warning reads it: the raw code in the result is the one place the minor unit
+# survives, and the pence reach the prices as quoted, for a quote base of 100 set by hand to divide them back. Two guards
+# on that contract: a validator on FAHistoricalData.currency would erase the minor unit, and pence converted in the
+# plugin would make a quote base of 100 wrong — each without a red anywhere else.
 
 
 def test_historical_data_keeps_the_reported_currency_as_it_is():
-    """Z-32 (c) guard: ``FAHistoricalData.currency`` has no validator — ``GBp`` stays ``GBp``.
+    """Yahoo minor-unit guard: ``FAHistoricalData.currency`` has no validator — ``GBp`` stays ``GBp``.
 
     The price points' ``currency`` folds ``GBp`` to ``GBP``; this field must not: it is the one place the minor unit
-    survives, the code the refresh keeps on the assignment and the warning reads.
+    survives. Nothing keeps it beyond the result — no column on the assignment — and no warning reads it.
     """
     assert FAHistoricalData(prices=[], currency="GBp").currency == "GBp"
 
 
 @pytest.mark.asyncio
 async def test_history_of_a_london_line_reports_pence_while_its_points_carry_pounds(monkeypatch):
-    """Z-32 (c) guard: a ticker whose ``info["currency"]`` is ``GBp``, its history as yfinance returns it — an index at
-    midnight Europe/London (January: no summer time), the ``Dividends`` and ``Stock Splits`` columns beside OHLCV — gives
-    a result whose ``currency`` is ``GBp`` and whose price points carry ``GBP`` with the numbers in pence as quoted.
+    """Yahoo minor-unit guard: a ticker whose ``info["currency"]`` is ``GBp``, its history as yfinance returns it — an
+    index at midnight Europe/London (January: no summer time), the ``Dividends`` and ``Stock Splits`` columns beside
+    OHLCV — gives a result whose ``currency`` is ``GBp`` and whose price points carry ``GBP`` with the numbers in pence
+    as quoted.
 
-    The numbers matter as much as the codes: the warning says «quoted in pence, set the quote base to 100»; that holds
-    only while the plugin stores the pence as they come.
+    The numbers matter as much as the codes: with no column on the assignment and no warning, the raw ``GBp`` is the one
+    place the minor unit survives, and a quote base of 100 set by hand divides the prices back only while the plugin
+    stores the pence as they come.
     """
     days = ["2026-01-05", "2026-01-06"]
     hist = pd.DataFrame(
