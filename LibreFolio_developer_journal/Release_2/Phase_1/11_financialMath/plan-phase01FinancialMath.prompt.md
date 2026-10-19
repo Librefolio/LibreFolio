@@ -3840,3 +3840,64 @@ Le convenzioni possibili:
   doc? Consiglio: **sì**, è la definizione corrente.
 - **D3** — Nei giorni senza prezzo (valutati al costo), un corto aperto vale la sua quota d'incasso con il segno meno
   (come un lungo vale il suo costo)? Consiglio: **sì**.
+
+#### P1 — la linea del MWRR più veloce, esatta (19/10, via del coordinatore 12:19; base `ff9930b26`)
+- Decisioni del developer sul piano: **D1 un punto al giorno** («è imperativo non sbagliare i calcoli, veloci sì, ma
+  precisi»); **D2 i pavimenti alla fine, uno per lotto**; **tutto il piano nella 1.3**. Via per **P1**: rossi prima,
+  parità al bit con il calcolo di oggi (casi esistenti, caso 1900, casi con più cambi di segno), mutazioni, slot a
+  richiesta. Poi P2, P3 (con la funzione a gradini di X, coordinata dal coordinatore), P4, lotti separati.
+- ✅ **Codice, prima stesura**: `_flow_sign_changes` (Cartesio), `_XIRR_GRID_RATES`, `_mwrr_solve(..., warm_start)`,
+  le due serie con la radice precedente come partenza quando i segni cambiano una volta sola.
+- **⚠️ Fuori pista — la prima stesura non era esatta**: la prova di parità sulle copie del DB (`files/n74/p1_parity.py`,
+  la serie nuova contro una copia di HEAD, al bit) ha trovato **377 punti diversi** sulla copia con un BUY al 1900,
+  finestra «tutto» (HEAD 0,639518, nuova 379,189396). Causa: `_is_xirr_root` «verifica» anche punti dove il VAN è solo
+  piatto e vicino a zero (tassi altissimi su 125 anni); il Newton caldo ci è scivolato sopra. Cartesio parla delle radici
+  vere, non di quelle numeriche.
+- ✅ **Codice, seconda stesura (esatta per costruzione)**: `_solve_xirr` diviso nei suoi due passi senza cambiarne il
+  comportamento — `_newton_xirr` (Newton da x0, verificato) e `_bracketed_xirr` (la griglia con Brent, la radice più
+  vicina a x0), più `_xirr_scale`. `_mwrr_solve`: (1) sempre prima il Newton freddo da 0,1, cioè il primo passo di oggi —
+  se riesce, è la risposta; (2) solo se fallisce, il Newton dal tasso del punto prima, accettato solo con un solo cambio
+  di segno, un valore d'apertura diverso da zero (altrimenti il VAN si annulla per underflow e la griglia raccoglie
+  zeri esatti), la radice dentro la griglia, e un vero cambio di segno del VAN attorno a essa (`_changes_sign_at`): allora
+  la scansione troverebbe proprio quella radice; (3) altrimenti la scansione di oggi. Il calcolo della card
+  (`calculate_mwrr`) resta freddo.
+- ✅ **Prova di parità al bit** (sola lettura, copie del DB della corsia, 4 copie × 3 finestre): **0 differenze** su
+  tutte, compresa quella del BUY al 1900; anche `calculate_mwrr_series` 0 differenze. Tempi della serie, «tutto», caso
+  1900 EUR: HEAD 31,1 s → **4,3 s** (circa 7×; la prima stesura, non esatta, dava 0,38 s: il Newton freddo provato a ogni
+  punto è il prezzo dell'esattezza); DB senza errori 0,71 → 0,02 s.
+- In corso: test-author `p1-tests` (rossi strutturali e di costo, parità con la copia di HEAD sui casi dei test
+  esistenti, casi lunghi, più cambi di segno, la falsa radice, mutanti).
+- **⚠️ Fuori pista — due altri buchi di parità trovati dal test-author** (prima di scrivere i test, nel suo banco con la
+  copia di HEAD; nessun test esistente cambiato): (1) 5 test esistenti sostituiscono `returns._solve_xirr` con un finto,
+  e la seconda stesura non lo chiamava più → decisione mia: **B** (prodotto, comportamento uguale: ogni risoluzione che
+  non può prendere la scorciatoia — la card, il primo punto, apertura 0, segni ≠ 1 — passa da `_solve_xirr`) + **A** (nei
+  3 test di serie ancora rossi il finto si sposta su `_newton_xirr`, asserzioni parola per parola, una riga di
+  commento); (2) **VAN mal condizionati** (termini enormi che si annullano): il Newton caldo trova una radice vera che la
+  scansione di HEAD rifiuta (`None`), 212 serie su 3 000 costruite, più un bordo di overflow → **PFIX**: il candidato
+  caldo serve solo a trovare il suo intervallo della griglia, e la risposta è la chiamata Brent di HEAD su
+  quell'intervallo con i test della scansione (`_bracketed_xirr_at`); altrimenti la scansione intera; il controllo
+  dell'apertura sul float (`1E-400` è ≠ 0 come Decimal, 0,0 come float). (3) Prova sul DB: il caso 1900 EUR ha la radice
+  **esattamente 0** (valore costante), sul punto della griglia 10⁰ − 1, con VAN esattamente 0,0: la scansione la tiene
+  come «zero esatto», il mio intervallo no → nessun guadagno → aggiunta la regola dello zero esatto della scansione.
+- ✅ **Prova di parità al bit dopo PFIX e lo zero esatto** (4 copie × 3 finestre): **0 differenze** ovunque. Tempi
+  della serie, «tutto»: caso 1900 EUR 20,1 → **3,6 s**; DB senza errori 0,81 → 0,02 s; casi 1900 USD/BUY 1,1 → 0,6 s.
+- ✅ **Test P1** (test-author `p1-tests`): `test_financial_math/test_mwrr_warm_start.py` nuovo, 109 test (40 rossi su HEAD per
+  assenza, 69 verdi per costruzione): unità (`_flow_sign_changes`, `_changes_sign_at`, `_bracketed_xirr_at` — la radice
+  della scansione al bit, lo zero esatto, i cinque None); strutturali (le chiamate del contratto per ogni punto, la
+  partenza calda uguale al tasso precedente al bit, ogni tasso tenuto uguale a `_solve_xirr(flussi, 0,1)` al bit); costo
+  (≤ 40 valutazioni del VAN per punto: HEAD 549,7 / 298,2 / 569,6, ora 22,6 / 22,4 / 13,1); parità con HEAD (i casi dei
+  test esistenti, le 10 storie del file con DB rifatte come input puri, lunga storia 3 % e 6 %, dieci anni, valore
+  costante, più radici, radice fuori griglia, 1900, bordo di overflow, mal condizionati, underflow, VAN che si annulla);
+  una dimostrazione per ogni guardia; le due debolezze di HEAD **conservate** e fissate (prodotto che va in underflow nel
+  test del segno; `_is_xirr_root` su VAN mal condizionati), con un commento: lotto a parte possibile. 16 mutanti presi
+  tutti. Test esistenti ritoccati (A, solo il bersaglio del finto): `test_period_mwrr.py::TestOneFlowBuilder::
+  test_one_flow_per_date_summed_in_decimal`, `test_utilities/test_roi_utils.py::
+  test_calculate_mwrr_series_includes_intermediate_cash_flows` e `…_starts_every_point_from_the_default_guess`.
+- ✅ **Corsia** (13:18; prodotto tolto `returns.py`, sha `32b770d3…` uguale dopo): `financial-math
+  test_mwrr_warm_start` rosso **40** / 69; `utils roi-utils` rosso **2** / 7 (i due test ritoccati usano `_newton_xirr`).
+  Verdi: `financial-math` **1836**, `utils roi-utils` 9, `roi-fifo-utils` **1494** (con `test_portfolio_mwrr_card_and_line`
+  sul DB), `portfolio-engine` 41. ruff, black, diff-check; doc sviluppatore (`financial_math.md`, il paragrafo del MWRR:
+  la serie al bit, più veloce sulle storie lunghe); `mkdocs build` stretto e `check-links` verdi. Porta libera. Slot
+  `api portfolio` da chiedere.
+- ✅ **Slot** (13:22, HEAD `ff9930b26`): `api portfolio` **55** passati; porta 6190 libera. Il coordinatore porta al developer
+  le due debolezze di HEAD come domanda per un lotto a parte. **CHECKPOINT READY** inviato, FROZEN.

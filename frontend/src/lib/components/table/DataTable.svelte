@@ -1362,10 +1362,21 @@
         color: var(--lf-on-checked);
     }
 
-    /* Body */
+    /* Body. A row paints the card and, over it, the tint of its state, `--dt-row-tint`, as one image layer: whatever
+       its tint, the row is opaque, so a fixed cell (`background: inherit`) shows what the other cells of its row show
+       and hides what scrolls under it. A translucent tint is the selection's: it is composited by the browser, over the
+       card, from the role itself. A list that tints its own rows sets `--dt-row-tint`, never the row's background
+       (AssetTable). Registered, so that a change of state fades and the highlight pulses. */
+    @property --dt-row-tint {
+        syntax: '<color>';
+        inherits: true;
+        initial-value: transparent;
+    }
+
     tbody tr {
-        background: var(--lf-surface-card);
-        transition: background 0.15s;
+        --dt-row-tint: transparent;
+        background: linear-gradient(var(--dt-row-tint), var(--dt-row-tint)) var(--lf-surface-card);
+        transition: --dt-row-tint 0.15s;
     }
 
     tfoot tr {
@@ -1380,11 +1391,11 @@
     }
 
     tbody tr:hover {
-        background: var(--lf-surface-hover);
+        --dt-row-tint: var(--lf-surface-hover);
     }
 
     tbody :global(tr.selected) {
-        background: var(--lf-selected);
+        --dt-row-tint: var(--lf-selected);
     }
 
     tbody :global(tr.clickable) {
@@ -1392,47 +1403,47 @@
     }
 
     tbody :global(tr.clickable):hover {
-        background: color-mix(in oklab, var(--lf-selected) 50%, transparent);
+        --dt-row-tint: color-mix(in oklab, var(--lf-selected) 50%, transparent);
     }
 
     tbody :global(tr.clickable.selected) {
-        background: var(--lf-selected);
-    }
-
-    @keyframes pulse-highlight {
-        0%,
-        100% {
-            background: var(--highlight-base) !important;
-        }
-        50% {
-            background: var(--highlight-peak) !important;
-        }
-    }
-
-    /* Highlighted row (navigateToRowId): the selection tint, pulsing on a deeper one; highest priority */
-    tbody :global(tr.highlighted) {
-        --highlight-base: var(--lf-selected);
-        --highlight-peak: color-mix(in oklab, var(--lf-checked) 20%, transparent);
-        background: var(--lf-selected) !important;
-        animation: pulse-highlight 0.6s ease-in-out 3;
-    }
-
-    tbody :global(tr.highlighted):hover {
-        background: var(--lf-selected) !important;
-    }
-
-    :global(tr.highlighted) td {
-        border-bottom-color: color-mix(in oklab, var(--lf-checked) 20%, transparent);
+        --dt-row-tint: var(--lf-selected);
     }
 
     /* Row whose lot-analysis panel is currently open (F9): the steady selection tint, no pulse (persistent
        state, not a navigation flash) */
     tbody :global(tr.row-analyzed) {
-        background: var(--lf-selected);
+        --dt-row-tint: var(--lf-selected);
     }
 
     tbody :global(tr.row-analyzed):hover {
-        background: color-mix(in oklab, var(--lf-checked) 20%, transparent);
+        --dt-row-tint: color-mix(in oklab, var(--lf-checked) 20%, transparent);
+    }
+
+    @keyframes pulse-highlight {
+        0%,
+        100% {
+            --dt-row-tint: var(--lf-selected);
+        }
+        50% {
+            --dt-row-tint: color-mix(in oklab, var(--lf-checked) 20%, transparent);
+        }
+    }
+
+    /* Highlighted row (navigateToRowId): the selection tint, pulsing three times on a deeper one. It wins over every
+       other state, the pointer included, by coming last at the same specificity: an `!important` beats an animation,
+       and stopped this pulse from its introduction (12/07/2026) to 19/10/2026. */
+    tbody :global(tr.highlighted),
+    tbody :global(tr.highlighted):hover {
+        --dt-row-tint: var(--lf-selected);
+    }
+
+    tbody :global(tr.highlighted) {
+        animation: pulse-highlight 0.6s ease-in-out 3;
+    }
+
+    :global(tr.highlighted) td {
+        border-bottom-color: color-mix(in oklab, var(--lf-checked) 20%, transparent);
     }
 
     /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15): inside a selected,
@@ -1480,6 +1491,7 @@
         z-index: 10;
     }
 
+    /* The row's two layers, card and tint, so the cell is opaque and the same colour as its row (see «Body»). */
     .td-fixed {
         position: sticky;
         z-index: 5;

@@ -10,6 +10,7 @@ Verifies:
 - Decimal columns: RealDecimal everywhere a decimal is read back exactly — amounts and event values (18, 6) (W-B60),
   quantities (22, 10), prices and the per-unit cost basis (24, 12) (C-97)
 - Daily-point policy constraints
+- No redundant index: none repeats the key columns of another index of its table, nor a left prefix of them
 
 Usage:
     pytest backend/test_scripts/test_db/db_schema_validate.py -v
@@ -17,6 +18,7 @@ Usage:
 """
 
 import sys
+from typing import NamedTuple
 
 import pytest
 
@@ -78,6 +80,8 @@ def test_tables_exist():
         print(f"   (plus {len(extra)} extra table(s) - see info above)")
 
 
+# SQLAlchemy's SQLite get_unique_constraints() skips ux_users_email_lower, an expression-based index, with this warning: the limit test_indexes' docstring describes.
+@pytest.mark.filterwarnings("ignore:Skipped unsupported reflection of expression-based index:sqlalchemy.exc.SAWarning")
 def test_unique_constraints():
     """
     Verify unique constraints exist.
@@ -401,6 +405,168 @@ def test_transactions_has_asset_event_fk_restrict():
 
 
 # ============================================================================
+# REDUNDANT INDEXES (lot H-57)
+# ============================================================================
+#
+# An index on (a) beside one on (a, b), or a second index on the same keys, is
+# written on every insert and update and serves no lookup the other does not.
+# 001_initial made such indexes, most of them repeating the index a UNIQUE
+# constraint already makes; 005_release_1_3_0_schema drops them. Read on the
+# lane's own database, built by the migration chain, as every test above.
+
+#: The key of an index that is an expression (``lower(email)``): SQLite's catalogue does not say which expression.
+_EXPRESSION_KEY = "<expression>"
+#: Who made an index, as ``PRAGMA index_list`` says it (``origin``): an index statement (``c``), or a constraint, whose
+#: automatic index is named ``sqlite_autoindex_<table>_<n>``.
+_INDEX_ORIGINS = {"c": "", "u": ", the index of a UNIQUE constraint", "pk": ", the index of the PRIMARY KEY"}
+#: The index on an expression the guard leaves alone, beside the UNIQUE constraint on ``users.email``.
+_EMAIL_LOWER_INDEX = "ux_users_email_lower"
+#: The two rules by which an index is redundant beside another of its table.
+_IDENTICAL_KEYS = "identical key columns"
+_LEFT_PREFIX = "key columns a left prefix of the other's"
+#: Redundant pairs kept on purpose: (table, the redundant index, the index that covers it) → why, on one line. Empty:
+#: no redundancy is deliberate today. A pair on identical key columns matches in either order.
+_REDUNDANT_INDEXES_ALLOWED: dict[tuple[str, str, str], str] = {}
+
+
+class _CatalogueIndex(NamedTuple):
+    """An index as SQLite's catalogue gives it.
+
+    ``keys``: its key columns, in order, without the rowid SQLite appends to every entry; ``_EXPRESSION_KEY`` for an
+    expression; a collation other than BINARY written after its column, since such an index serves other lookups. The
+    sort order is left out, as SQLite leaves it out when it compares two UNIQUE constraints.
+    """
+
+    name: str
+    keys: tuple[str, ...]
+    unique: bool
+    partial: bool
+    origin: str
+
+    @property
+    def compared(self) -> bool:
+        """Whether the guard compares it with the other indexes of its table: not a partial index, which covers only
+        the rows of its WHERE; not an index with an expression key, which is no column index and which the catalogue
+        cannot tell from another index on another expression."""
+        return not self.partial and _EXPRESSION_KEY not in self.keys
+
+    def describe(self) -> str:
+        return f"{self.name}{' UNIQUE' if self.unique else ''} on ({', '.join(self.keys)}){_INDEX_ORIGINS.get(self.origin, '')}"
+
+
+def _catalogue_keys(conn, index_name: str) -> tuple[str, ...]:
+    """The key columns of ``index_name``, from ``PRAGMA index_xinfo``. ``key = 0`` marks the columns SQLite appends to
+    every entry (the rowid, or the primary key of a WITHOUT ROWID table): no keys. ``cid`` -2 is an expression, -1 the
+    rowid."""
+    keys: list[str] = []
+    rows = conn.execute(text("SELECT cid, name, coll, key FROM pragma_index_xinfo(:index_name) ORDER BY seqno"), {"index_name": index_name}).fetchall()
+    for cid, column, collation, key in rows:
+        if not key:
+            continue
+        if cid == -2:
+            keys.append(_EXPRESSION_KEY)
+            continue
+        named = column or "rowid"
+        keys.append(named if (collation or "BINARY").upper() == "BINARY" else f"{named} COLLATE {collation}")
+    return tuple(keys)
+
+
+def _index_catalogue(conn) -> dict[str, list[_CatalogueIndex]]:
+    """Every index of every table, by table, from SQLite's own catalogue. ``PRAGMA index_list`` gives the automatic
+    indexes of the UNIQUE and PRIMARY KEY constraints too, which the SQLAlchemy inspector leaves out, as it leaves out
+    the indexes on an expression (see ``test_indexes``)."""
+    catalogue: dict[str, list[_CatalogueIndex]] = {}
+    for table_name in conn.execute(text("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")).scalars().all():
+        listed = conn.execute(text('SELECT name, "unique", origin, partial FROM pragma_index_list(:table_name) ORDER BY name'), {"table_name": table_name}).fetchall()
+        catalogue[table_name] = [_CatalogueIndex(name, _catalogue_keys(conn, name), bool(unique), bool(partial), origin) for name, unique, origin, partial in listed]
+    return catalogue
+
+
+def _redundancy(index: _CatalogueIndex, other: _CatalogueIndex) -> str | None:
+    """The rule by which ``index`` is redundant beside ``other``, another index of its table, or ``None``."""
+    if not (index.compared and other.compared) or other.keys[: len(index.keys)] != index.keys:
+        return None
+    if len(index.keys) == len(other.keys):
+        return _IDENTICAL_KEYS
+    # A UNIQUE index on a left prefix of a longer one enforces a constraint the longer one does not: no redundancy.
+    return None if index.unique else _LEFT_PREFIX
+
+
+def _keep_order(index: _CatalogueIndex) -> tuple[int, str]:
+    """Of two indexes on identical key columns, the one to keep sorts first: a constraint's automatic index, which goes
+    only with its constraint, then a UNIQUE index, then a plain one; by name last."""
+    return (0 if index.origin in ("u", "pk") else 1 if index.unique else 2, index.name)
+
+
+def _redundant_pairs(catalogue: dict[str, list[_CatalogueIndex]]) -> list[tuple[str, _CatalogueIndex, _CatalogueIndex, str]]:
+    """(table, the redundant index, the index that covers it, the rule), for every such pair of every table. Two
+    indexes on identical key columns make one pair, whose redundant index is the one to drop (``_keep_order``)."""
+    pairs = []
+    for table_name, indexes in catalogue.items():
+        for index in indexes:
+            for other in indexes:
+                rule = None if other.name == index.name else _redundancy(index, other)
+                if rule == _IDENTICAL_KEYS and _keep_order(index) < _keep_order(other):
+                    continue  # the same pair, met the other way round
+                if rule is not None:
+                    pairs.append((table_name, index, other, rule))
+    return pairs
+
+
+def _allow_list_keys(table_name: str, index: _CatalogueIndex, other: _CatalogueIndex, rule: str) -> set[tuple[str, str, str]]:
+    """The entries of ``_REDUNDANT_INDEXES_ALLOWED`` that allow this pair: either order for identical key columns."""
+    keys = {(table_name, index.name, other.name)}
+    if rule == _IDENTICAL_KEYS:
+        keys.add((table_name, other.name, index.name))
+    return keys
+
+
+def test_no_redundant_indexes():
+    """
+    No index repeats the key columns of another index of its table, nor a left prefix of them (lot H-57).
+
+    Every index of every table is read from SQLite's catalogue (``PRAGMA index_list`` and ``PRAGMA index_xinfo``),
+    the automatic indexes of the UNIQUE and PRIMARY KEY constraints included: those are what an explicit index most
+    often repeats. An index fails when its key columns are identical to another index's, or a left prefix of them:
+    that other index serves every lookup it serves. The message names both indexes and the rule.
+
+    Not redundancy, never a failure:
+    - a UNIQUE index on a left prefix of a longer index: it enforces a constraint the longer one does not;
+    - a partial index: it covers only the rows of its WHERE;
+    - an index with an expression key, such as ux_users_email_lower on lower(email) beside the UNIQUE constraint on
+      email: it is no column index, and the catalogue does not say which expression it holds, so it is compared with
+      no other index (two indexes on the same expression would go unseen).
+
+    A redundancy kept on purpose goes in ``_REDUNDANT_INDEXES_ALLOWED``, with its reason on one line; an entry that no
+    longer matches a pair of the database fails as well, so that the list stays true.
+    """
+    with get_sync_engine().connect() as conn:
+        catalogue = _index_catalogue(conn)
+
+    indexes = [index for listed in catalogue.values() for index in listed]
+    users = {index.name: index for index in catalogue.get("users", [])}
+    # Barrier: the catalogue holds what the guard is about, or finding no redundancy would prove nothing.
+    assert any(index.origin in ("u", "pk") for index in indexes), f"precondition: the automatic indexes of the UNIQUE and PRIMARY KEY constraints are read: {sorted(index.name for index in indexes)}"
+    assert _EMAIL_LOWER_INDEX in users and users[_EMAIL_LOWER_INDEX].keys == (_EXPRESSION_KEY,), f"precondition: {_EMAIL_LOWER_INDEX} is read, its key lower(email) an expression: {users.get(_EMAIL_LOWER_INDEX)}"
+    assert any(index.origin == "u" and index.keys == ("email",) for index in users.values()), f"precondition: the UNIQUE constraint on users.email is read as an index on (email), beside {_EMAIL_LOWER_INDEX}: {[index.describe() for index in users.values()]}"
+    assert all(reason.strip() and "\n" not in reason for reason in _REDUNDANT_INDEXES_ALLOWED.values()), "every entry of _REDUNDANT_INDEXES_ALLOWED says why, on one line"
+
+    pairs = _redundant_pairs(catalogue)
+    offending = [pair for pair in pairs if _allow_list_keys(*pair).isdisjoint(_REDUNDANT_INDEXES_ALLOWED)]
+    stale = set(_REDUNDANT_INDEXES_ALLOWED) - {key for pair in pairs for key in _allow_list_keys(*pair)}
+    left_out = sorted(index.name for index in indexes if not index.compared)
+    print(f"  {len(indexes)} index(es) on {len(catalogue)} table(s); left out, partial or on an expression: {', '.join(left_out) or 'none'}")
+    lines = [f"{table_name}: {index.describe()} is redundant beside {other.describe()} — {rule}" for table_name, index, other, rule in offending]
+    for line in lines:
+        print(f"    ⚠️  {line}")
+
+    assert not offending, f"{len(offending)} redundant index pair(s): drop the first index of each with a migration and from its model, or allow the pair in _REDUNDANT_INDEXES_ALLOWED with its reason:\n  " + "\n  ".join(lines)
+    assert not stale, f"_REDUNDANT_INDEXES_ALLOWED allows pairs the database no longer has: remove them: {sorted(stale)}"
+
+    print(f"✅ No redundant index among {len(indexes)}")
+
+
+# ============================================================================
 # ONBOARDING MIGRATION TESTS (Workstream J foundation, 004_release_1_2_0_schema)
 # ============================================================================
 #
@@ -550,12 +716,12 @@ def test_migration_chain_has_exactly_one_head_and_004_keeps_its_parent(tmp_path)
 
     Which revision is the head is deliberately not pinned. This test used to
     assert that the head *was* 004, so it turned red the moment the next
-    migration landed (005_accounts_invites in 1.3, then 006 and 007): red for a
-    change that is correct, which teaches nothing. What the next migration
-    cannot legitimately change is pinned instead: one head, and 004 — a
-    released revision, stamped in users' `alembic_version` — still in the
-    chain on its released parent. With one head, every revision is one of its
-    ancestors, so 004 stays on the upgrade path of every install.
+    migration landed (005_release_1_3_0_schema in 1.3): red for a change that
+    is correct, which teaches nothing. What the next migration cannot
+    legitimately change is pinned instead: one head, and 004 — a released
+    revision, stamped in users' `alembic_version` — still in the chain on its
+    released parent. With one head, every revision is one of its ancestors, so
+    004 stays on the upgrade path of every install.
     """
     from alembic.script import ScriptDirectory  # noqa: PLC0415 — test-only migration inspection
 

@@ -34,8 +34,8 @@ in ``schemas/email.py``. The contract pinned here:
      ``user_settings.language`` when it names one of the four (a regional form: ``it-IT`` is ``it``), else the
      instance's ``default_language`` (an own ``de`` counts as unset) —, naming the administrator and the instance: the
      host the request was sent to, as written (``request.url.netloc``, port included);
-   - a settings row the read model ``UserSettingsRead`` refuses (a theme outside light/dark/auto) still gives its
-     language: 200, not 422;
+   - a settings row whose theme this version does not know (outside light/dark/auto), which the schema
+     ``UserSettingsRead`` refuses, still gives its language: 200, not 422;
    - off or unusable: 409 ``{error_code: EMAIL_UNAVAILABLE, problem}`` (``EMAIL_NOT_CONFIGURED`` or the problem of the
      configuration); no connection, nothing spent;
    - the hourly budget spent: 429 ``{error_code: EMAIL_RATE_LIMITED, retry_after}``, a whole number of seconds ≥ 1, the
@@ -161,7 +161,7 @@ from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.settings import SETTINGS_REGISTRY, UserSettingsRead
 from backend.app.schemas.system import InstanceConfigResponse
 from backend.app.services.accounts import auth_service, token_service
-from backend.app.services.accounts.settings_service import get_user_settings, initialize_global_settings
+from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus
 from backend.app.services.email import delivery, flows, smtp
 from backend.app.services.email.messages import EmailRecipientError, build_invite, build_password_reset, build_test_message
@@ -523,14 +523,6 @@ async def _settings_row(engine: AsyncEngine, user_id: int) -> tuple[str, str] | 
     async with AsyncSession(engine) as session:
         row = (await session.execute(select(UserSettings.language, UserSettings.theme).where(UserSettings.user_id == user_id))).one_or_none()
     return None if row is None else tuple(row)
-
-
-async def _refused_by_the_read_model(engine: AsyncEngine, user_id: int) -> str:
-    """The precondition, verified: ``get_user_settings``, the read model the rest of the app reads the row through, refuses the account's row; what it said."""
-    async with AsyncSession(engine) as session:
-        with pytest.raises(ValidationError) as refused:
-            await get_user_settings(user_id, session)
-    return str(refused.value)
 
 
 def _read_model_refusal() -> ValidationError:
@@ -1045,14 +1037,14 @@ async def test_the_instance_is_the_host_the_request_was_sent_to(private: _Privat
 
 
 @pytest.mark.asyncio
-async def test_a_settings_row_the_read_model_refuses_still_gives_the_test_email_its_language(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter) -> None:
-    """EMA-017 — contract 3: the instance says ``es``; once the administrator has signed in, their ``user_settings`` row says ``it`` with a theme outside light/dark/auto (``sepia``, written as a row). ``POST /email/test``: 200 ``{language: "it"}`` — not 422 —, one message, its subject and text the Italian test email; one unit spent; the row left as it was.
+async def test_a_theme_this_version_does_not_know_still_gives_the_test_email_its_language(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter) -> None:
+    """EMA-017 — contract 3: the instance says ``es``; once the administrator has signed in, their ``user_settings`` row says ``it`` with a theme this version does not know (``sepia``, written as a row). ``POST /email/test``: 200 ``{language: "it"}`` — not 422 —, one message, its subject and text the Italian test email; one unit spent; the row left as it was.
 
-    Barrier first: ``get_user_settings``, the read model the rest of the app reads the row through, refuses that row
-    with a ``ValidationError`` naming the theme. The row is written after the sign-in because ``POST /auth/login`` reads
-    the row through that same read model.
+    Barrier first: the schema ``UserSettingsRead`` refuses that theme with a ``ValidationError`` naming it.
     """
-    print_section("EMA-017: a settings row the read model refuses")
+    print_section("EMA-017: a theme this version does not know")
+    refusal = str(_read_model_refusal())
+    assert "theme" in refusal, f"barrier: the schema must refuse the theme: {refusal}"
     await _set_default_language(private.engine, "es")
     expected = build_test_message(language="it", username=ADMIN, instance=INSTANCE_LABEL)
 
@@ -1061,17 +1053,15 @@ async def test_a_settings_row_the_read_model_refuses_still_gives_the_test_email_
         async with _browser(private) as client:
             await _sign_in(client, private.admin)
             await _set_account_language(private.engine, private.admin.id, "it", theme=STALE_THEME)
-            refusal = await _refused_by_the_read_model(private.engine, private.admin.id)
             response = await client.post(SEND_TEST)
 
-    assert "theme" in refusal, f"barrier: the read model must refuse the row for its theme: {refusal}"
-    assert response.status_code == 200, f"a settings row the read model refuses must not stop the test email: {response.status_code} {response.text}"
+    assert response.status_code == 200, f"a theme this version does not know must not stop the test email: {response.status_code} {response.text}"
     assert response.json()["language"] == "it", response.text
     assert [received.message["Subject"] for received in fake.messages] == [expected.subject]
     assert _lines(fake.messages[0].message.get_body(preferencelist=("plain",)).get_content()) == _lines(expected.text)
     assert budget.count() == 1
     assert await _settings_row(private.engine, private.admin.id) == ("it", STALE_THEME), "the test email must leave the row as it was"
-    print_success("200 in Italian from a row the read model refuses; the row untouched")
+    print_success("200 in Italian from a row with a theme this version does not know; the row untouched")
 
 
 @pytest.mark.asyncio
