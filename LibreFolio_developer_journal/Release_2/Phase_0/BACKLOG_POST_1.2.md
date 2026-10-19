@@ -7455,7 +7455,7 @@ sulla base `23f6578f3`.
 - **B-7 · Debito di traduzione di `cli_tools.{it,fr,es}.md`** — piccolo, doc; B, 15/10 (B6a). Mancano la sezione
   «💾 Back Up the Instance» (5 sottosezioni), una frase dell'introduzione e il punto Docker del suggerimento. La pagina
   inglese non è timbrata: la traduzione passa dalla pipeline Aphra, su richiesta del developer.
-- **B-8 · Un backup avviato dalla UI la cui risposta si perde resta invisibile alla scheda** — minimo; B, 15/10 (B5a,
+- ✅ **B-8 · Un backup avviato dalla UI la cui risposta si perde resta invisibile alla scheda** — minimo; B, 15/10 (B5a,
   segnalato da test-author). Se la risposta di `POST /backup/instance` si perde (rete, timeout), il job gira sul server
   ma la scheda non conosce il suo id. Nessuna rotta elenca il job in corso, e il rifiuto `backup_busy` non lo porta.
   - Effetto: «busy» finché quel job finisce; il suo archivio scade dopo un'ora senza essere offerto; lo spazio su disco
@@ -7467,6 +7467,12 @@ sulla base `23f6578f3`.
   ⏸️ **Parcheggiata il 19/10**: rossi e doc scritti il 17/10 sera, mai eseguiti, poi il fermo del developer; ora in
   una patch della sessione di B (`files/parked/b15-b8-reds-docs-on-739bf08e0.patch`). Riprende col via del
   coordinatore, dopo la lettura del developer. Dettagli: piano 07, «B-15 + B-8».
+  ✅ **Fatta il 19/10** (via del developer alle 11:42, le scelte 1-3 del README del parcheggio):
+  - il 409 `backup_busy` porta `job_id` e `origin` del backup in corso;
+  - la scheda segue un backup `ui` ritrovato così, e ne ricorda l'id prima della prima lettura;
+  - con un archivio in offerta, la scheda lo tiene.
+  Una domanda per il developer è aperta: il 409 della scheda nomina anche i backup del pannello e della CLI.
+  Dettagli: piano 07, «B-15 + B-8 — la ripresa».
 - ✅ **B-9 · Il token del pannello non è fra i controlli della configurazione** — piccolo; B, 15/10 (B8).
   - Oggi un `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` inutilizzabile (corto, non ASCII visibile, `_FILE` illeggibile) si vede
     solo alla prima richiesta del pannello: 503 `backup_panel_unavailable` e una riga d'errore nel log.
@@ -7535,7 +7541,7 @@ sulla base `23f6578f3`.
   (senza props) sotto l'avviso, in una sezione sua, con un `ToastContainer`. Si chiude quando entra il lotto di H; poi B
   aggiorna le due frasi della doc («no backup button yet» in `backup_restore.en.md`, «the block page has no button for
   it yet» in `hosting_providers.en.md`).
-- **B-15 · Un 413 di un proxy davanti a LibreFolio, sul caricamento di un archivio, dà un messaggio generico** — minimo;
+- ✅ **B-15 · Un 413 di un proxy davanti a LibreFolio, sul caricamento di un archivio, dà un messaggio generico** — minimo;
   B, 16/10 (docs-writer, B5b). Un proxy (nginx `client_max_body_size`, Fly, un CDN) che rifiuta il corpo con un 413
   senza il `code` di LibreFolio fa dire alla scheda «The server answered with an error: the server's log has the
   cause.», ma il log di LibreFolio non ne sa niente. Proposta: un 413 senza codice → un codice suo della scheda
@@ -7545,6 +7551,8 @@ sulla base `23f6578f3`.
   ⏸️ **Parcheggiata il 19/10**: rossi e doc scritti il 17/10 sera, mai eseguiti, poi il fermo del developer; ora in
   una patch della sessione di B (`files/parked/b15-b8-reds-docs-on-739bf08e0.patch`). Riprende col via del
   coordinatore, dopo la lettura del developer. Dettagli: piano 07, «B-15 + B-8».
+  ✅ **Fatta il 19/10**: un 413 senza codice di LibreFolio, al caricamento di un archivio, è `proxy_too_large`, con la
+  frase del contratto in 4 lingue. Dettagli: piano 07, «B-15 + B-8 — la ripresa».
 - ✅ **B-16 · Un server che dopo «Restore and restart» non si ferma lascia l'overlay in attesa senza fine** — piccolo; B,
   16/10 (docs-writer, B5b). Se la richiesta di riavvio è accettata ma il server non scende (segnale perso, un processo
   che non esce), la sonda lo vede sempre su, lo stato resta `pending`, e la pagina continua a dire «LibreFolio is
@@ -8017,6 +8025,20 @@ sulla base `23f6578f3`.
   Dettagli: piano 07, «B-49».
   **In dev**: `709dfb1e4` (17/10 21:29), il codice in `0eef55599`; il paragrafo di `security.md` e la descrizione
   del runner con `739bf08e0` (`08d58c6d3`).
+- **B-50 · Uno `state.json` di un job leggibile come JSON ma malformato fa rispondere 500** — minimo, robustezza;
+  B, 19/10 (TA-B8-STATE, durante B-8). Precedente a B-8.
+  - Uno stato che è JSON ma non un oggetto (`[]`, `null`, `5`) fa alzare `AttributeError` a `BackupJob.from_json`.
+    `remove_expired_jobs` non lo prende, e gira a ogni partenza (`_prepare`): ogni nuovo backup, dalla scheda, dal
+    pannello o dalla CLI, finisce in un 500.
+  - Uno stato senza campi (`{}`) o con tipi sbagliati alza `KeyError` o `TypeError`. `get_job` li lascia passare,
+    quindi la lettura di quel job (`GET /backup/instance/jobs/{id}`) è un 500.
+  - All'avvio non succede nulla di grave: `sweep_backup_leftovers` registra l'errore e continua.
+  - Ci si arriva solo manomettendo `backups/.jobs/<id>/state.json` (l'app lo scrive in modo atomico), o con un disco
+    rovinato.
+  - Cura possibile: `from_json` trasforma ogni stato malformato in `ValueError`; poi si sceglie cosa risponde
+    `get_job` (job non trovato, o fallito).
+  - B-8 ha già allineato `_running_job` agli altri lettori (`TypeError` e `KeyError`): un 409 non diventa un 500.
+  Dettagli: piano 07, «B-15 + B-8 — la ripresa».
 
 ## E · Email (fase 01)
 

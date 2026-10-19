@@ -6767,7 +6767,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   - la `desc` di `backup-staging` nel runner nomina B-49 (o); ruff e black puliti, il runner si carica;
 >   - doc: build stretta, `check-links`, `utils gate-docs-links` 63; `git diff --check` pulito. CHECKPOINT READY 21:37.
 
-### B-15 + B-8 — rossi scritti, poi il fermo e il parcheggio (2026-10-17, 21:27 → 2026-10-19, 11:10) — ⏸️ parcheggiati
+### B-15 + B-8 — rossi scritti, poi il fermo e il parcheggio (2026-10-17, 21:27 → 2026-10-19, 11:10) — ⏸️ parcheggiati; ripresi il 19/10 alle 11:42 (sezione «la ripresa»)
 
 > **Contratto** (21:27, nei file della sessione, `b15-b8-contract.md`), poi il via del coordinatore dopo l'ingresso
 > del seguito di B-49 in dev `739bf08e0` (21:40): «GO for B-15 + B-8, reds first, per your contract».
@@ -6814,3 +6814,124 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   tabella del §7. `git diff --check` pulito.
 > - **Stato**: 🧊 FROZEN. Aspettano il developer: D1–D10 (B7), le 5 domande di B-15/B-8, la scelta di B-33.
 >   B9 e la parte 2 di BZ vengono dopo B7.
+
+### B-15 + B-8 — la ripresa: rossi, cura, verdi (2026-10-19, 11:42-12:40) — ✅ 🧊 FROZEN (checkpoint delle 12:40)
+
+> **Via del coordinatore** (11:42): «VIA per **B-15 e B-8**: il developer ha detto «ok procedi»». Le quattro scelte
+> del README del parcheggio, approvate:
+>
+> 1. la scheda **tiene l'archivio in offerta** (com'è oggi);
+> 2. un backup seguito già finito alla prima lettura: **sì**, se ne annuncia la fine;
+> 3. **sì**, la scheda ricorda l'id prima della prima lettura;
+> 4. il testo di B-15 così com'è, in 4 lingue.
+>
+> Codice e controlli leggeri subito, con carico sotto 50; le suite pesanti e gli E2E dopo le 14:00, nello slot del
+> coordinatore. La domanda 5 del README era solo informativa (l'E2E `createBackup`).
+>
+> - ✅ **Patch riapplicata** (11:43): HEAD `ca9dbe9e5` (la contabilità committata), pulito. Fra `739bf08e0` e HEAD
+>   cambiano 121 file, nessuno dei percorsi del lotto (backup, i18n, E2E delle impostazioni, le tre doc):
+>   `git apply --check` pulito, poi `git apply` (10 file, +856/−13, sha256 `a7999e36631fa781…` come al parcheggio).
+>   Le due patch di prodotto (`apply_b8_be.py`, `apply_b15_b8_fe.py`) passano `--check` sulla base nuova.
+> - ✅ **Rossi** (11:47-11:48, carico 10-12, uno alla volta):
+>   - `services backup-jobs`: **19 falliti**, 69 passati. Ragioni giuste: il lock non contiene l'id del job
+>     (`''`), e `BackupBusyError has no running`;
+>   - Vitest `backupApi.test.ts`, `restoreFlow.test.ts`, `restoreI18n.test.ts`: **53 falliti**, 562 passati. 48 in
+>     `backupApi` (non esistono `uploadFailureCode()` né `backupBusyJob()`), 4 in `restoreFlow` (`unexpected` al
+>     posto di `proxy_too_large`), 1 in `restoreI18n` (manca la voce di `ERROR_KEYS`);
+>   - i rossi API (`api backup-instance-errors`, `api backup-panel`) vogliono il server della corsia, quindi la build
+>     di debug: nello slot, con la cura backend tolta per un momento (`git apply -R` delle mie modifiche).
+> - **Scelta 3 senza un test**: la cura del 17/10 metteva `#watched` ma non chiamava `#remember()` prima della prima
+>   lettura. Se quella lettura fallisce, «Check again» non compare (nessun `followedJobId`), oppure rilegge un id
+>   seguito prima. Cura corretta nella patch (`#remember(running.jobId)` prima di `#read`). Rossi chiesti a
+>   test-author (TA-B8-Q3, solo `backupJob.test.ts`): l'id ricordato già durante `loading`; una prima lettura senza
+>   risposta lascia `canRecheck`, e «Check again» legge quel job; un job sparito si dimentica. Più i testi delle
+>   scelte 1 e 2, ora decisioni del developer.
+> - ✅ **Cura backend** (11:49): `apply_b8_be.py`, 7 operazioni in `jobs.py` e `job_views.py`.
+>   `services backup-jobs` **88 passati**; ruff e black puliti sui 5 file backend.
+> - **⚠️ Fuori pista — un 409 che diventerebbe un 500**: `_running_job` prende `(BackupJobNotFoundError, OSError,
+>   ValueError)`. Uno stato JSON valido ma malformato (`{}` → `KeyError`; `created_at` numerico → `TypeError`) esce
+>   da `_prepare`, e la partenza rifiutata diventa un errore 500. Il modulo, altrove, legge gli stati con
+>   `(BackupJobNotFoundError, ValueError, TypeError, KeyError)`. Rosso chiesto a test-author (TA-B8-STATE, due righe
+>   in `test_backup_jobs.py`), poi l'`except` allineato.
+> - ✅ **Guida, scelta 1**: in «Good to know» di `backup_restore.en.md`, dopo la frase di B-8, «A card that already
+>   offers an archive keeps offering it, and only says that another backup runs.»
+> - ✅ **Domanda 5, l'E2E** (lettura): con B-8 il clic di `createBackup` potrebbe seguire un backup `ui` lasciato in
+>   corso da un altro test. Il test però confronta il job annunciato con quelli avviati dal clic (`owned.jobs`, presi
+>   solo dal `job_id` in cima alla risposta del `POST`, mai dal `detail` di un 409): fallirebbe con un messaggio chiaro,
+>   come oggi fallisce con `backup_busy`. Con `mode: 'serial'` e la pulizia dell'`afterEach` non resta nessun backup
+>   fra un test e l'altro. Nessuna modifica.
+> - ✅ **La chiave di B-15** (11:51): `dev.py i18n add backup.restore.errors.proxy_too_large`, nella sorgente
+>   `backup/`. Il testo inglese è quello del contratto; IT, FR ed ES usano il registro delle frasi sorelle (tu, vous,
+>   tú) e le loro parole («caricamenti», «téléversements», «subidas»). `i18n check` stretto pulito: 5099 chiavi; il
+>   diff delle sorgenti è +8/−4.
+> - ✅ **Doc** (11:52-11:53, carico 20-28): `mkdocs build` stretta exit 0 (3085 URL risolti), `check-links` pulito,
+>   `utils gate-docs-links` 63. Nessun timbro di traduzione: il debito delle tre pagine è vero.
+> - ✅ **Rossi della scelta 3** (TA-B8-Q3, solo `backupJob.test.ts`): un gruppo nuovo con 9 righe (3 + 4 + 2).
+>   - L'id del job nominato è nello storage già durante `loading`, al posto di un id seguito prima. Mentre la prima
+>     lettura è fuori, la scheda non mostra job, errore o fallimento.
+>   - Una prima lettura senza risposta (`network`) o senza codice (`unexpected`) lascia `canRecheck`, e «Check again»
+>     legge quel job, mai l'altro.
+>   - Un job sparito alla prima lettura si dimentica, per la regola di ogni lettura.
+>   - I testi delle scelte 1 e 2 dicono ora «deciso dal developer il 19/10».
+>   - Le 4 domande di test-author sono risolte da regole che ci sono già: la prima lettura fallita si annuncia
+>     (`onFailed` copre ogni richiesta fatta dalla scheda; tace solo `resume()`); non si ritenta (una lettura in
+>     `loading` fallisce subito, come in `recheck()`: è il caso della scelta 3); l'id sostituito si perde, come per
+>     un avvio riuscito da `failed` («come se l'avesse avviato»), e già con la cura del 17/10; durante la prima
+>     lettura nessun errore a schermo (fissato).
+> - ✅ **Rosso di `backupJob.test.ts`** (12:00): **16 falliti**, 149 passati: le 9 righe nuove e 7 del 17/10, tutte
+>   per la stessa ragione («the job the refusal names must be read»: `[]`). Le 13 guardie sono verdi.
+> - ✅ **Rossi dello stato malformato** (TA-B8-STATE, solo `test_backup_jobs.py`): `state-without-fields` (`{}`) e
+>   `state-of-wrong-types` (`created_at` numerico) fra le situazioni «non più in corso». L'aiuto `refusals` ora
+>   registra un'eccezione diversa da `BackupBusyError` invece di fermarsi. Rosso (12:00): **2 falliti**, 88
+>   passati, con `KeyError`/`TypeError` invece del rifiuto.
+> - ✅ **Cura** (12:00-12:01): l'`except` di `_running_job` prende anche `TypeError` e `KeyError`, come gli altri
+>   lettori del modulo (nella patch e nel worktree). Poi `apply_b15_b8_fe.py`: 6 operazioni in 4 file.
+> - ✅ **Verdi leggeri** (12:01-12:05, carico 17-25):
+>   - Vitest di tutta la feature `backup`: 9 file, **971 passati**;
+>   - `services backup-jobs` **90**, `services backup-leftovers` 44, `services backup-secure` 77,
+>     `utils backup-cli` 102, `utils gate-i18n-catalog` 176;
+>   - ruff e black puliti sui 5 file backend; prettier pulito sui 12 file frontend (8 `.ts`, 4 `.json`);
+>   - `api sync` exit 0: la descrizione del 409 nell'OpenAPI; `front check` 0 errori e 0 avvisi.
+> - **⚠️ Fuori pista — B-50**, difetto precedente a B-8 trovato da TA-B8-STATE: uno `state.json` che è JSON ma non un
+>   oggetto fa alzare `AttributeError` a `remove_expired_jobs` a ogni partenza (500); `get_job` lascia passare
+>   `KeyError`/`TypeError` (il GET di quel job è un 500). Ci si arriva solo manomettendo il file o con un disco
+>   rovinato. Fuori dal lotto: riga B-50 nel backlog.
+> - **Domanda per il developer** (non decido io): per il contratto del 17/10, fissato dal test API (d), il 409 della
+>   scheda nomina il job in corso **di qualunque origine** (`ui`, `panel`, `cli`, `pre-restore`). Il frontend segue
+>   solo `ui`, ma un admin che legge la risposta impara l'id di un backup del pannello. Finché gira non lo può
+>   cancellare; finito, può scaricarlo o cancellarlo con le rotte della scheda. Prima di B-8 quell'id non era mai
+>   visibile all'admin. L'alternativa è nominare solo i job della stessa origine di chi chiede (scheda → `ui`): la UI
+>   è identica, e costa una riga, i parametri del test (d) e una frase di `security.md`. Resta com'è finché il
+>   developer non sceglie.
+> - **Slot** (dopo le 14:00, chiesto al coordinatore): `b15b8_slot.sh red`, poi `green`.
+>   - `red`: la cura backend tolta per la durata (`b8-backend-cure.patch`, 123 righe, rimessa da un `trap`), poi
+>     `api backup-instance-errors` e `api backup-panel`. Il primo avvio costruisce una volta il frontend di debug.
+>   - `green`: quelle due, `api backup`, `api backup-secure`, `api instance-block`, `e2e backup-roundtrip`,
+>     `front-utility backup`.
+> - **Coordinatore** (12:08): porta la domanda sul 409 al developer, con il suo consiglio di nominare solo la stessa
+>   origine; intanto resta com'è. Lo slot viene dopo quello di X (12:08 – 13:00 circa), al suo «slot tuo».
+> - **Variante pronta, non applicata**: `b15-b8-wip/apply_b8_same_origin.py` (`--check` OK, 3 operazioni):
+>   - la condizione di `start_job` diventa `running.origin == origin`, con il suo commento;
+>   - la descrizione OpenAPI del 409;
+>   - il paragrafo di `security.md`.
+>
+>   Se il developer la sceglie, prima i rossi: test-author cambia il caso (d) di `test_backup_instance_errors.py`
+>   (`ui` nominato; `panel`, `cli` e `pre-restore` col solo `{code, message}`), poi la variante.
+> - ✅ **Slot** (coordinatore, «slot tuo» 12:23, fino alle 13:15; ogni corsa col carico a 1 minuto sotto 50):
+>   - `red` (12:22-12:26): cura backend tolta (`backend cure: removed`). `api backup-instance-errors` **5 falliti**, 11
+>     passati: il 409 senza `job_id`/`origin` per `ui`, `panel`, `cli` e `pre-restore`, e l'OpenAPI senza la frase.
+>     `api backup-panel` **1 fallito** (PANEL-023), 65 passati. Il primo avvio ha costruito il frontend di debug
+>     (svelte-check 0/0). Poi la cura è stata rimessa: sha256 della patch e del diff uguali (`9c38907c…`).
+>   - `green` (12:26-12:32):
+>     - `api backup-instance-errors` 16, `api backup-panel` 66, `api backup` 23;
+>     - `api backup-secure` 24, `api instance-block` 62;
+>     - `e2e backup-roundtrip` 3, `front-utility backup` **14** (1,4 min), senza instabili né saltati.
+>   - Porta 6187 libera. Nella cartella dati restano solo lo scheletro di `.restore` (i lock, cartelle vuote) e
+>     `backups/.jobs/.lock`, che contiene l'id dell'ultimo job: l'E2E l'ha cancellato, quindi non nomina niente.
+> - ✅ **Backlog**: B-8 e B-15 ✅ (fatte il 19/10); B-50 nuova.
+> - **CHANGELOG**: nessuna riga proposta. Backup e ripristino sono nuovi nella 1.3, come per B-49.
+> - ✅ **Checkpoint** (12:40), 🧊 FROZEN.
+>   - Commit proposti:
+>     - `fix(backup): B-8 busy job id, B-15 proxy 413`: codice, test, i18n e doc, 20 file;
+>     - `docs(journal): B-15 + B-8 done, B-50 filed`: questo piano e il backlog.
+>   - Aperte: la domanda sul 409 di qualunque origine (variante pronta, non applicata) e B-50.
