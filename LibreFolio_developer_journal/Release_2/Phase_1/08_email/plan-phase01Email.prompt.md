@@ -7928,3 +7928,46 @@ non sposti il registro.
 >      diventa la frase generica tradotta?
 >   2. il nome del plugin tradotto anche per `parse_failed`, come fissano i rossi, e non solo per `cannot_parse`?
 >   3. `e2e/files.spec.ts` (~:730) finge un `detail` testuale e ne legge l'inglese: resta verde con la lettura 1.
+
+### Z-32cr — La revisione prima dell'ingresso (2026-10-19, 12:5x–13:2x; sola lettura, `4eccb5d43`)
+> Commit di Z `4eccb5d43` (padre `065c9df77`) sul ramo `e-alfy-z-sospensione-e-risveglio` (punta `f64a71ddc`), letto
+> dagli oggetti git: toglie l'avviso dei pence (D8: nessuna colonna nel DB) e assottiglia `HeldAssetQuoteFacts`. La
+> domanda del coordinatore: `NON_ISO_CURRENCY` e il resto di E-19b2 funzionano come prima? **OK, nessun rilievo.**
+> - **Il codice di E-19b2, invariato nel comportamento**:
+>   - `HeldAssetQuoteFacts` resta con `asset_id`, `name`, `currency`: i tre campi che `_non_iso_currency_assets` legge;
+>   - `_held_asset_quote_facts` (`portfolio_service.py:550`) tiene la soglia della polvere, gli id ordinati e senza
+>     doppioni e `order_by(Asset.id)`, da cui l'ordine di `affected_asset_ids`. Ora è una sola `select(Asset)`; prima
+>     era una `outerjoin` sull'assegnazione, che è unica per asset (`uq_asset_provider_asset_id`): non toglieva né
+>     duplicava righe, quindi stesso insieme e stesso ordine;
+>   - le due chiamate (`:1081`/`:1089` e `:2183`/`:2188`) passano ancora `non_iso_currency_assets=… or None` e
+>     `report_currency=base_currency`;
+>   - `data_quality.py`: tolti solo il parametro `quote_in_minor_unit_assets`, il suo paragrafo di docstring e il suo
+>     blocco. Il blocco NON_ISO, `_missing_pair_sides` (i `MISSING_FX_*` che saltano le coppie non ISO) e
+>     `_non_iso_currency_issue` sono intatti; `minor_unit_factor` resta importato, quindi a `GBp` non si suggerisce mai
+>     `GBP`, e `currency_units.py` resta per questo;
+>   - `IssueCode`: tolto `QUOTE_IN_MINOR_UNIT`, così `NON_ISO_CURRENCY` segue `INVALID_SPLIT_RATIO`, come le sue issue
+>     nel report;
+>   - non toccati: E-19a (`stored_currencies.py`, `app_lifespan.py`), E-19b1 (`staging.py`, `schemas/common.py`, il
+>     selettore), le 5 chiavi `dataQuality.nonIso*` di E-19b2, identiche nei 4 cataloghi; Z toglie solo
+>     `dataQuality.quoteInMinorUnit`.
+> - **I test, adattati senza indebolire NON_ISO**:
+>   - nel file puro sparisce solo `TestQuoteInMinorUnitIssue` (6 test, uno parametrizzato su 2: 8 casi). Si rinominano
+>     solo i due test della posizione (dopo `INVALID_SPLIT_RATIO`); `_held()` passa a tre campi. La barriera degli input
+>     canonici tiene ancora un'issue da conservare (`invalid_split_assets` al posto dei pence) e confronta ancora il
+>     dump intero. I casi `GBp` (valuta del report, valuta di un asset) restano;
+>   - `TestNonIsoCurrencyDataQuality` (API) è identica, salvo un riferimento di docstring;
+>   - DQN-04: il codice di controllo passa a `MISSING_PRICE`, che il client generato conosce ancora: stesso senso.
+> - **La prova** (`files/tools/z32cr_pure.sh`, nella cartella della sessione): `git archive` dell'albero, il python del
+>   venv condiviso chiamato direttamente, modalità test sulla data-dir della corsia, che non ha DB; niente pipenv, niente
+>   server, niente git che scrive. Gli import vengono dall'albero esportato; il worktree resta pulito.
+>   - `test_data_quality_report.py`: **101 passati** su `4eccb5d43`, **109** sul padre `065c9df77`. La differenza sono
+>     gli 8 casi della classe tolta.
+> - **Non eseguiti**:
+>   - le API: `TestNonIsoCurrencyDataQuality` vuole un server, e la classe è invariata;
+>   - il Vitest DQN: vuole il client rigenerato da `api sync` sull'OpenAPI di Z, e cambia un solo codice di controllo.
+> - **Altro, controllato**:
+>   - il CHANGELOG perde solo la riga dei pence; quella di E-19b2 resta;
+>   - il test Yahoo `test_historical_data_keeps_the_reported_currency_as_it_is` l'ha riscritto Z stesso (nessuna colonna,
+>     nessun avviso lo legge): coerente, non un resto;
+>   - nessun resto dei pence nelle traduzioni del CHANGELOG né nei documenti; i documenti di E-19b2
+>     (`data-quality-banner.md`, la pagina del cruscotto) sono aggiornati con coerenza.
