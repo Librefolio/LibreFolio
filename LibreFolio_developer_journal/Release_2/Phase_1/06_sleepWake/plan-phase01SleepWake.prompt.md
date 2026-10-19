@@ -6073,3 +6073,115 @@ Vitest), `AssetModal.svelte` (tre punti) e `AssetModalDetails.svelte` (l'avviso)
 guida dei plugin, `provider_yahoo_finance.md`, `user/assets/create-edit.en.md` e `providers/yahoo-finance.en.md`.
 
 **Costo.** Circa mezza giornata con i test, più la revisione di X. Rossi prima (test-author), poi il codice.
+
+### Z-29: Q-Z29-1 deciso, Q-Z29-2 secondo il developer — analisi (19/10 ~14:40, sola lettura, `f64a71ddc`)
+
+> **Q-Z29-1** (developer, testuale): «si mi torna il campo a parte che comunica le informazioni estremali, di inizio e
+> fine, campo opzionale da mettere solo se serve, ad ora quindi quando l'aggregazione è presente». La serie disegnata
+> resta identica a oggi, senza il punto in più a sinistra.
+>
+> **Q-Z29-2** (developer, testuale): «se a essere cambiato è solo 1, si rifà la bulk solo di quella, con anche il
+> segnale, campionato come sarebbe campionato nel frontend, mi pare che il sistema di plugin ha già una funzione che
+> spiega al frontend come agglomerare, quindi si tratta di riusarla paro paro nel backend. e se a essere modificato è
+> l'impostazione di tutti, stessa logica ma con ricalcolo di tutti». Il coordinatore chiede: (1) i segnali ridotti dal
+> backend con `aggregation_profile`, uguali al grafico di oggi? (2) il confronto fra asset; (3) i segnali solo del
+> browser; (4) gli eventi; (5) costo, rischi, chi tocca cosa.
+
+**Q-Z29-1: il campo degli estremi.**
+- Forma: `FAPriceQueryResult.sample_bounds: Optional[FAPriceSampleBounds] = None`, con `first: FAPricePoint` (il
+  primo punto del riempimento, il giorno F: base della percentuale e della risoluzione di «All») e `last:
+  FAPricePoint` (il punto della fine tagliata, X-R55). Ognuno ha la sua `date`, OHLC, valuta e
+  `backward_fill_info`, convertito come gli altri punti con `target_currency`. Presente solo con `resolution`
+  settimanale o mensile; senza riempimento (nessun punto) la voce resta `"daily"` senza estremi.
+- `prices` = l'ultimo punto di ogni secchio, l'ultimo tagliato alla fine: esattamente quello che il grafico compatto
+  disegna oggi (`aggregateLineSeries`), senza F. Se F chiude il suo secchio (una domenica, un fine mese) è anche il
+  primo punto di `prices`. `last` coincide sempre con l'ultimo punto di `prices` (l'ultimo secchio finisce alla fine):
+  un test lo pinna.
+- Backend: le date campionate restano quelle di `sample_dates` (F compreso) finché passa la conversione, poi F esce da
+  `prices` ed entra in `sample_bounds.first`. Il budget conta i punti emessi, estremi compresi.
+- Frontend: la scheda disegna `prices`; i calcoli prendono la base da `first`, cioè la percentuale
+  (`normalizeToPercentage` con la base di F), i segnali (calcolati su `[first, …prices]`: il grafico legge le serie
+  sovrapposte per data, `LineChart.svelte:504`, quindi il punto in F non si disegna), «All» (`first.date`) e
+  l'avviso del dialogo di sync (la riga salvata dietro `first`).
+- Cache e `max_points` ricalcolato: la voce in cache tiene `prices`, `resolution` e `sample_bounds`; per una larghezza
+  nuova il passo si rifà nel browser dal giorno F (`first.date`, o il primo punto di una voce giornaliera) con la
+  stessa regola (`compactDensityCases.json`): stesso passo → nessuna richiesta; passo diverso → una richiesta. Niente
+  più «primo giorno» da conservare a parte. Un mensile oltre `max_points` (scheda stretta, storia lunga) il grafico lo
+  riduce ancora a mensile senza perdere niente, perché F non è più nella serie.
+- Costo: circa 0,25 giorni backend, 0,5 frontend. Rossi: l'estremo solo sulle voci ridotte, `first` = il punto della
+  risposta giornaliera in F, `last` = quello alla fine = l'ultimo di `prices`, F in `prices` solo quando chiude il
+  secchio.
+
+**Q-Z29-2 (1): i segnali ridotti dal backend.**
+- Sì. Il backend calcola già i segnali sul riempimento giornaliero; ogni uscita di plugin dichiara il suo profilo
+  (`SignalOutputSpec.aggregation_profile`, obbligatorio: `signals/base.py:320`); e la scelta per secchio esiste già in
+  Python, in AI Export (`ai_export/temporal/aggregators.py`): primo, ultimo, minimo e massimo col più vecchio a pari
+  valore; per le bande inferiore = minimo, centrale = ultima, superiore = massimo. Sono le stesse regole del grafico
+  (`selectSignalRepresentative`, `bandRepresentative`, `timeSeriesAggregation.ts:341-366`). Solo selezioni: nessun
+  conto, quindi il valore scelto è lo stesso numero.
+- Come oggi nel grafico: per ogni secchio del prezzo, il rappresentante dei punti del segnale in quel secchio di
+  calendario, messo alla data del punto del prezzo (fine del secchio). La percentuale si applica dopo, con base F: per
+  una base positiva l'ordine non cambia, e la scelta neppure.
+- Uguale a oggi: linee, aree e barre senza buchi, e bande (solo i punti con le tre componenti, come
+  `renderBandSeries`). Due resti: (a) un buco nella serie (valori nulli a metà): oggi il grafico riduce ogni tratto da
+  sé, quindi il secchio a cavallo ha due punti alla stessa x; ridotto dal backend, uno. (b) le regioni di valore con un
+  loro stile (la linea divisa in segmenti prima della riduzione): stesso effetto, solo dove la linea attraversa una
+  regione. Differenza visibile solo in quel secchio; la tabella di casi la fissa.
+- «Paro paro»: il profilo è del plugin, e si usa così com'è. La scelta per secchio non va scritta una terza volta:
+  (a) **consiglio** di spostare le funzioni di scelta di AI Export (generiche, «Portfolio-agnostic») in una sede neutra
+  usata da AI Export e dalla query dei prezzi: tocca file di AI Export, con le loro sonde; (b) chiamarle dove sono,
+  costruendo un `BucketPlan` di settimane ISO e mesi (si può, ma chiede una `BucketingPolicy` che non serve). I secchi
+  restano quelli di `price_sampling.bucket_of`, cioè la specifica `timeSeriesAggregation.ts`.
+- Contratto: `max_points` con `signals` accettato (oggi 422); il segnale si calcola sul giornaliero e poi si riduce,
+  quindi la voce costruisce il riempimento giornaliero e conta i suoi giorni nel budget, come oggi. Il risparmio di
+  memoria del server resta sulle schede senza segnali; quelle con segnali costano al server quanto oggi, ma la
+  risposta e il browser sono piccoli.
+
+**Q-Z29-2 (2): il confronto fra asset** (`AssetComparisonSignal`: allinea per data esatta, e in percentuale prende come
+base il **suo** primo valore allineato).
+- Gli stessi secchi non bastano. Il passo si sceglie sul riempimento di ogni asset: un bersaglio con una storia più
+  lunga o più corta può avere un altro passo, e le date non coincidono più. E in percentuale la base è il valore del
+  bersaglio al primo giorno della scheda: con un F diverso cambia la base, e tutta la linea.
+- Rimedio: una voce «campionata come la scheda X» (`sample_like_asset_id`): il backend sceglie F e il passo della
+  scheda (le stesse due righe lette) e campiona il bersaglio su quelle date, con il suo `sample_bounds.first` (in F
+  della scheda, o nel primo giorno del bersaglio se comincia dopo). Una voce per coppia scheda–bersaglio, poche
+  centinaia di punti. Il confronto si calcola su `[first, …prices]` del bersaglio allineato: uguale a oggi.
+- L'anteprima rada del dialogo sparisce solo se il dialogo chiede la serie allineata quando si sceglie il bersaglio:
+  oggi in modalità scheda usa la serie della scheda bersaglio (`assetsDataMap`). Dopo il salvataggio, la scheda è
+  giusta comunque.
+- `FxPairSignal`: il negozio dei cambi è giornaliero, con ogni giorno di calendario, quindi è già allineato alle date
+  campionate. La lista dei cambi resta fuori.
+
+**Q-Z29-2 (3): i segnali solo del browser** (lineare, composto, seno: tutti `last_with_range`).
+- Calcolati su `[first, …prices]`, danno alla data di ogni secchio lo stesso valore che il grafico disegna oggi, cioè il
+  valore all'ultimo giorno del secchio. Lineare e seno sono identici; il composto lo è fino all'ultima cifra binaria
+  (moltiplica per la potenza dei giorni del salto invece che giorno per giorno).
+
+**Q-Z29-2 (4): gli eventi.**
+- La lista non chiede mai `include_events`, e il renderer non disegna le annotazioni. I segnali che usano gli eventi li
+  leggono nel backend sul giornaliero. Il 422 resta per `include_events` e `annotation_requests` con `max_points`,
+  perché nessuno li chiede; esce solo quello dei `signals`.
+
+**Q-Z29-2 (5): la ricarica per scheda, costo, rischi, chi tocca cosa.**
+- Oggi il salvataggio di una scheda con segnali del backend cambiati rilancia `fetchPriceSeries()` per tutte le schede
+  con segnali (`assets/+page.svelte:1167-1176`). Diventa: una voce per quella scheda (più i suoi bersagli allineati);
+  il globale, tutte. L'impronta della ricarica comprende anche i bersagli dei confronti.
+- Nel dialogo, modalità scheda: i segnali del backend mostrano i risultati salvati (l'anteprima dal vivo c'è solo nel
+  globale, `ChartSettingsModal.svelte:244`). La stessa richiesta di una voce può servire anche lì, per il confronto
+  e, se si vuole, per i segnali non salvati.
+- Il badge «📈N» del pannello dei segnali conta le date: su una scheda ridotta mostra i punti ridotti.
+- Varianti, oltre Q-Z29-1 (+0,75 giorni) e i 2,5 giorni approvati:
+  - **(A) tutta la proposta**: segnali ridotti dal backend, bersagli allineati, ricarica per scheda, dialogo dal vivo
+    per il confronto. Circa +4 giorni: backend segnali 1, tabella di casi comune 0,5, sede neutra della scelta 0,5,
+    allineamento 1, ricarica per scheda 0,5, dialogo 0,5.
+  - **(B) segnali ridotti e ricarica per scheda; confronti e bersagli giornalieri** (come approvato il 19/10). Circa
+    +2,5 giorni; il confronto nel dialogo resta rado fino al salvataggio, o +0,5 per chiedere il bersaglio
+    giornaliero.
+  - **(C) come approvato, più la sola ricarica per scheda**: circa +0,5 giorni.
+- Rischi: i due resti di (1); le schede con segnali costano al server come oggi (lotti di Z-27); il contratto cresce
+  (`resolution`, `sample_bounds`, `sample_like_asset_id`, segnali con `max_points`); due copie della scelta per secchio
+  (browser e backend), tenute insieme da una tabella di casi comune come `compactDensityCases.json`; il dialogo è
+  condiviso con altre pagine.
+- Chi tocca cosa: io, il backend della query e la sua doc, con MF che rivede la semantica dei campioni; X la lista e
+  `AssetCard` (revisione); Y il dialogo e il renderer dei segnali (il renderer non cambia: disegna i punti che riceve);
+  il proprietario di AI Export, se la scelta per secchio cambia sede.
