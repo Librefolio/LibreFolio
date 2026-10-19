@@ -7171,3 +7171,76 @@ in `credit_agricole-export.xlsx`).
 una data digitata a oggi del browser: già dentro il limite nuovo.
 
 Stima: backend circa un'ora più i test; Fineco circa mezza giornata se (a); doc circa un'ora.
+
+#### C-bis. Q-N74-1 — le righe Fineco con la data valuta futura sono già complete? (2026-10-19, sola lettura)
+
+Il developer, testuale: «ho bisogno che mi confermi che le righe "future" contengono già tutto, so per esperienza che altri broker,
+ad esempio Intesa, per le righe future non ancora contabilizzate alcuni campi li lascia vuoti, con questa logica scarto le righe
+future, perché negli export futuri cambieranno».
+
+**I dati che abbiamo non bastano per rispondere.** Non esiste nel repository una riga Fineco con la data valuta futura rispetto al
+suo export, né due export dello stesso periodo.
+- I 4 report d'esempio (`brim_providers/sample_reports/fineco-export.csv`, `fineco_variant_a.csv`, `fineco_btp_market.csv`,
+  `fineco_btp_placement.csv`) sono sintetici: aggiunti col plugin (`98c78f981`, 25/07/2026; `7778f7ba5`, 12/08/2026), con intestatari
+  e dossier inventati e nessuna data di export nel file. Le righe sono del 2023–2024, e alcune date un export vero non le avrebbe: un
+  rimborso di domenica 13/10/2024 con la valuta lo stesso giorno, un altro di domenica 01/09/2024 regolato martedì 03/09.
+- L'unico fixture Fineco scritto nei test (`test_brim_providers.py:2529`) è un rimborso sopra la pari, senza date future.
+- I `broker_reports` di una corsia popolata sono copie degli stessi esempi (`upload_broker_reports`,
+  `test_db/populate_mock_data.py:3536-3563`), e Fineco non è nemmeno nella mappa: popolare non aggiunge nulla. (La mia corsia non
+  esiste più: `/tmp` è stato svuotato; non l'ho ripopolata.)
+
+**1 · I campi delle righe.** Negli esempi ogni riga di compravendita ha tutto pieno: quantità, divisa, prezzo, controvalore,
+commissione. I campi vuoti dipendono solo dal tipo di riga: `Cambio` sulle righe in euro, le tre colonne delle commissioni dei fondi
+sulle righe che non sono fondi, quantità e prezzo su dividendi e cedole. La valuta è a +2 giorni dall'operazione (+4 per un
+venerdì), lo stesso giorno per gli aumenti di capitale. Ma sono righe vecchie e inventate: dicono come il plugin legge un export
+completo, non come Fineco scrive una riga non ancora regolata.
+
+**Che cosa farebbe oggi il plugin con una riga provvisoria a campi vuoti** (letto nel codice): la importerebbe in silenzio.
+- quantità o controvalore vuoti diventano 0 (`broker_fineco/plugin.py:310-311`, `_parse_fineco_number(...) or Decimal("0")`);
+- una divisa vuota diventa EUR (`:308`);
+- una data valuta vuota ricade sulla data dell'operazione (`:285`).
+
+Una compravendita con quantità o controvalore vuoti entra quindi come un acquisto di 0 quote o a 0 euro, senza avviso. È il rischio
+che il developer descrive, e vale qualunque sia la scelta sulle date. → **W-B83** (archiviata).
+
+**2 · Lo stesso movimento in un export successivo.** Non verificabile: nessuna coppia di export dello stesso periodo. Le due BTP
+hanno lo stesso dossier ma mesi diversi (maggio–giugno e settembre 2023), senza movimenti in comune. Se un campo cambiasse, il
+controllo dei doppioni (`detect_tx_duplicates`) confronta giorno, tipo, asset, quantità (la regola di W-B51) e l'importo entro 0,01:
+una riga reimportata con la data valuta spostata, o un controvalore corretto, non sarebbe riconosciuta, ed entrerebbe una seconda
+volta.
+
+**3 · Ordini non eseguiti o non contabilizzati.** Il formato non ha una colonna di stato: le colonne lette sono 0–14, e `can_parse`
+chiede Operazione, Data valuta, Isin e Controvalore. Il plugin riconosce cinque descrizioni («Compravendita titoli», «Dividendo»,
+«Stacco Cedole», «Rimborso», «Aumento capitale») e salta ogni altra con un avviso (`:299-303`). Il report è «Movimenti Dossier
+Titoli», i movimenti del dossier: dal nome, movimenti registrati e non ordini, ma né il codice né gli esempi lo provano. La pagina
+utente dice «Beta — tested with sample files», e che Fineco dà un Excel che l'utente salva in CSV.
+
+**4 · Gli altri plugin**
+
+| Plugin | La data della riga | Le righe non definitive |
+|---|---|---|
+| Danske Bank | la valuta (`Arvopäivä`), poi l'operazione (`broker_danske_bank/plugin.py:274-275`) | le operazioni regolate dopo la fine del file di cassa restano fuori con un avviso, «arriveranno al prossimo import» (`not_yet_settled`, `:903`, testo `:1246`); quelle non eseguite o non contabilizzate escluse con un avviso (`status`, `:488`, `:525`) |
+| Disnat | l'operazione; il regolamento solo se manca (`broker_disnat/plugin.py:194`) | — |
+| CSV generico | la prima colonna di data nell'ordine del file dell'utente, fra `date`, `data`, `settlement_date`, `value_date`, `trade_date`… (`_detect_columns`, `broker_generic_csv/plugin.py:488-511`) | — |
+| Scalable | l'operazione | le righe non `executed`/`settled` non entrano, con un avviso (`_scalable.py:339-344`) |
+| Bitvavo | l'operazione | le righe non «Completed» saltate con un avviso (`broker_bitvavo/plugin.py:174-175`) |
+| Investimental | l'ultimo aggiornamento dell'ordine | gli ordini cancellati o rifiutati saltati, con un riepilogo (`:242-254`, `:334`) |
+| Crédit Agricole, Directa, DEGIRO, Saxo, InvestEngine | l'operazione; il report ha anche la valuta, che il plugin non usa per la data | — |
+| gli altri | l'operazione o un timestamp, senza colonna di stato (ricerca per parole, non ogni riga letta) | — |
+
+Solo Danske Bank data con la valuta per prima scelta, come Fineco, e mette già da parte le operazioni non ancora regolate:
+l'opzione (a) di Q-N74-1 è il suo comportamento.
+
+**Che cosa servirebbe per rispondere a 1–3.** Due export veri del developer dello stesso dossier:
+1. uno con un'operazione degli ultimi uno o due giorni lavorativi, la cui data valuta sia ancora futura al momento dell'export;
+2. uno dello stesso periodo qualche giorno dopo, a regolamento avvenuto;
+3. meglio ancora, con un ordine aperto non eseguito (un limite lontano dal prezzo).
+
+Si confronta la stessa riga campo per campo nei due file, e si guarda se l'ordine aperto compare. I file restano fuori dal
+repository (dati privati, skill `real-data-copy`); nel piano vanno solo gli esiti, senza valori. In alternativa basta che il
+developer guardi in Fineco un'operazione di ieri: c'è già nei «Movimenti Dossier Titoli», con quantità, prezzo e controvalore pieni?
+
+**Per la decisione.** L'opzione (a), tenere da parte le righe con la valuta oltre il «domani del server», non dipende dalle risposte
+a 1–3: è la scelta prudente, ed è quella di Danske Bank. Da sola però non copre una riga provvisoria la cui valuta è già passata
+quando si importa un file vecchio di qualche giorno: nel file la riga resta com'era all'export, e Fineco non scrive la data
+dell'export. Per quel caso serve W-B83: una compravendita con quantità o controvalore vuoti non entra a 0.
