@@ -8062,6 +8062,7 @@ sulla base `23f6578f3`.
     `project-historian`.
 
   Dettagli: [piano 07](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md), §2, punto 1.
+  **In dev**: `629d63306` (15/10 19:06), con B1 (`e35388306`).
 - **B-2 · Un commento di `DataEditor.test.ts` cita `backend/app/api/v1/backup.py`** — minimo; B, 15/10 (B0).
   `frontend/src/lib/components/ui/data-editor/DataEditor.test.ts:802`: l'export degli eventi ora sta in
   `backend/app/api/v1/backup/exports.py`. Il file è di T (`ui/data-editor`): non lo tocco. Dettagli: piano 07, §13, B0
@@ -8069,12 +8070,16 @@ sulla base `23f6578f3`.
 - ✅ **B-3 · La docstring di `backup_asset_prices` cita `backup_service.PRICE_COLUMNS`, ed è nell'OpenAPI** — minimo, doc;
   B, 15/10 (B0). **Chiusa il 15/10 con B1**, che cambia comunque l'API. `backend/app/api/v1/backup/exports.py:71`: il modulo ora è `series_export.py`. Un lotto di riordino
   lascia lo schema identico, quindi la correggo in B1, che cambia comunque l'API. Dettagli: piano 07, §13, B0 passo 2.
-- **B-4 · I comandi dell'immagine elencati senza `backup`** — minimo, doc; B, 15/10 (B6a, segnalato da docs-writer).
+  **In dev**: `629d63306` (15/10 19:06), con B1 (`e35388306`).
+- ✅ **B-4 · I comandi dell'immagine elencati senza `backup`** — minimo, doc; B, 15/10 (B6a, segnalato da docs-writer).
   `docker_advanced.en.md#docker-exec` («In the image, `user`, `db` and `info` work»), il commento in testa a
   `docker-compose.yml` e `admin/index.en.md:21` («user management, database upgrades») non dicono che anche
   `dev.py backup` funziona nell'immagine. I file Docker sono di H fino al CP7a. **Passata ad H dal coordinatore** (15/10,
   14:37). Dettagli: piano 07, §13, B6a.
-- **B-5 · `filesystem.en.md` «💾 Backup» non conosce `dev.py backup`** — piccolo, doc; B, 15/10 (B6a). Il file è di H
+  ✅ **Fatta il 16/10 da H** nel lotto «b-doc-notes» (`d7eb9c5f3`, in dev con `0ecc5ed27`, 16/10 12:44):
+  `docker_advanced.en.md` («In the image, `user`, `db`, `info` and `backup` work»), il commento di
+  `docker-compose.yml` e la riga di `admin/index.en.md`. Chiusa da B il 19/10, alla contabilità.
+- ✅ **B-5 · `filesystem.en.md` «💾 Backup» non conosce `dev.py backup`** — piccolo, doc; B, 15/10 (B6a). Il file è di H
   (CP3). Mancano:
   - un rimando a `cli_tools.md#backup`, l'unico modo di fare un backup coerente a server acceso senza `sqlite3`;
   - la nota che la copia della cartella dati prende anche `backups/`, con gli archivi;
@@ -8083,6 +8088,8 @@ sulla base `23f6578f3`.
     slug diversi, quindi la pagina della CLI ora punta a `filesystem.md#backup`.
 
   Testo proposto da docs-writer nel piano 07, §13, B6a. **Passata ad H dal coordinatore** (15/10, 14:37).
+  ✅ **Fatta il 16/10 da H** nel lotto «b-doc-notes» (`d7eb9c5f3`, in dev con `0ecc5ed27`, 16/10 12:44): i quattro
+  punti, l'ancora `{: #what-to-back-up }` nelle quattro lingue compresa. Chiusa da B il 19/10, alla contabilità.
 - **B-6 · Il polling della scheda Backup ha il suo ciclo** — minimo; B, 15/10 (B5a). `BackupJobController` legge il
   job con un suo `setTimeout`, perché nella base non c'è ancora l'aiuto comune di Z (F26, «un solo aiuto di polling per
   tutti i cicli»). Quando entra, il controller lo usa. Il ciclo è breve e solo durante un backup avviato dall'admin.
@@ -8090,7 +8097,7 @@ sulla base `23f6578f3`.
 - **B-7 · Debito di traduzione di `cli_tools.{it,fr,es}.md`** — piccolo, doc; B, 15/10 (B6a). Mancano la sezione
   «💾 Back Up the Instance» (5 sottosezioni), una frase dell'introduzione e il punto Docker del suggerimento. La pagina
   inglese non è timbrata: la traduzione passa dalla pipeline Aphra, su richiesta del developer.
-- **B-8 · Un backup avviato dalla UI la cui risposta si perde resta invisibile alla scheda** — minimo; B, 15/10 (B5a,
+- ✅ **B-8 · Un backup avviato dalla UI la cui risposta si perde resta invisibile alla scheda** — minimo; B, 15/10 (B5a,
   segnalato da test-author). Se la risposta di `POST /backup/instance` si perde (rete, timeout), il job gira sul server
   ma la scheda non conosce il suo id. Nessuna rotta elenca il job in corso, e il rifiuto `backup_busy` non lo porta.
   - Effetto: «busy» finché quel job finisce; il suo archivio scade dopo un'ora senza essere offerto; lo spazio su disco
@@ -8099,6 +8106,21 @@ sulla base `23f6578f3`.
     un'attenzione: un job della CLI si sposta fuori da `.jobs/` alla fine.
 
   Dettagli: piano 07, §13, B5a, terza tornata.
+  ⏸️ **Parcheggiata il 19/10**: rossi e doc scritti il 17/10 sera, mai eseguiti, poi il fermo del developer; ora in
+  una patch della sessione di B (`files/parked/b15-b8-reds-docs-on-739bf08e0.patch`). Riprende col via del
+  coordinatore, dopo la lettura del developer. Dettagli: piano 07, «B-15 + B-8».
+  ✅ **Fatta il 19/10** (via del developer alle 11:42, le scelte 1-3 del README del parcheggio):
+  - il 409 `backup_busy` porta `job_id` e `origin` del backup in corso;
+  - la scheda segue un backup `ui` ritrovato così, e ne ricorda l'id prima della prima lettura;
+  - con un archivio in offerta, la scheda lo tiene.
+  La domanda sul 409, che nomina anche i backup del pannello e della CLI, è chiusa dal developer (19/10, pomeriggio):
+  - la risposta resta com'è;
+  - a schermo la scheda dice solo «occupato», e segue il proprio backup `ui` come prima;
+  - id, origine e stato vanno in console, con un `console.warn` per rifiuto. Fatto lo stesso giorno.
+  Difetto trovato dalla revisione automatica prima dell'ingresso (19/10) e curato lo stesso giorno: una richiesta
+  sicura poteva seguire il backup in chiaro di un altro. Ora una richiesta sicura non segue mai da un 409; una in
+  chiaro non presenta un job adottato che finisce cifrato (decisione del coordinatore).
+  Dettagli: piano 07, «B-15 + B-8 — la ripresa» e «B-8, difetto della revisione automatica».
 - ✅ **B-9 · Il token del pannello non è fra i controlli della configurazione** — piccolo; B, 15/10 (B8).
   - Oggi un `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` inutilizzabile (corto, non ASCII visibile, `_FILE` illeggibile) si vede
     solo alla prima richiesta del pannello: 503 `backup_panel_unavailable` e una riga d'errore nel log.
@@ -8117,6 +8139,7 @@ sulla base `23f6578f3`.
   `ok` (`.off`), non `info`: un avvio predefinito non scrive nulla di nuovo. Le chiavi `backup.checks.*` sono nei 4
   cataloghi, per la scheda «Sicurezza» (A8b). Test: `services backup-checks` (57), più nel file di H le 2 voci di
   `CHECK_IDS` e un blocco «Workstream B» in `_configure`. Dettagli: piano 07, «B-9».
+  **In dev**: `997dc7ecf` (17/10 07:37), merge di `0f3f72961`.
 - **B-10 · Un pulsante del pannello che chiede all'istanza il link di reset dell'admin** — piccolo; B, 15/10 (decisione
   40, assegnata a B dal coordinatore). Recupero dell'admin dopo un ripristino o una password persa: oggi passa da
   «password dimenticata» via email (E), o dall'assistenza con `dev.py user reset-link`.
@@ -8153,6 +8176,7 @@ sulla base `23f6578f3`.
   CP-15 è entrato (`financial_math/ledger_totals.py`: `compute_control_totals(session)`, `ControlTotals.to_json()`):
   il manifest li porta (§3.2 del piano 07), la prova li ricalcola sulla copia e li confronta con un avviso, l'e2e
   `backup-roundtrip` li confronta al posto dei report (il suo `TODO(CP-15)`). Dettagli: piano 07, §3.2 e §13.
+  **In dev**: `0cd910a7e` (16/10 21:35), con B3 (`c374313c0`).
 - ✅ **B-14 · La pagina di blocco non ha il pulsante del backup** — piccolo; B, 16/10 (docs-writer, B6a-bis). **Fatto il
   16/10**: la scheda nella pagina di blocco è entrata col lotto di H (H-12/21, base `0c79932a7`), che ha corretto anche la
   sua frase di `hosting_providers.en.md`; B ha corretto le due della guida (`backup_restore.en.md`: «Make a Backup» e
@@ -8165,13 +8189,18 @@ sulla base `23f6578f3`.
   (senza props) sotto l'avviso, in una sezione sua, con un `ToastContainer`. Si chiude quando entra il lotto di H; poi B
   aggiorna le due frasi della doc («no backup button yet» in `backup_restore.en.md`, «the block page has no button for
   it yet» in `hosting_providers.en.md`).
-- **B-15 · Un 413 di un proxy davanti a LibreFolio, sul caricamento di un archivio, dà un messaggio generico** — minimo;
+- ✅ **B-15 · Un 413 di un proxy davanti a LibreFolio, sul caricamento di un archivio, dà un messaggio generico** — minimo;
   B, 16/10 (docs-writer, B5b). Un proxy (nginx `client_max_body_size`, Fly, un CDN) che rifiuta il corpo con un 413
   senza il `code` di LibreFolio fa dire alla scheda «The server answered with an error: the server's log has the
   cause.», ma il log di LibreFolio non ne sa niente. Proposta: un 413 senza codice → un codice suo della scheda
   (`proxy_too_large`, «A proxy in front of LibreFolio refused an archive this large: ask whoever runs it, or restore
   from the command line»), con la chiave nelle quattro lingue e un caso in `restoreFlow.test.ts`. La guida
   (`backup_restore.en.md`, «What Settings › Backup Says») descrive già il caso. Dettagli: piano 07, §13, «B5b».
+  ⏸️ **Parcheggiata il 19/10**: rossi e doc scritti il 17/10 sera, mai eseguiti, poi il fermo del developer; ora in
+  una patch della sessione di B (`files/parked/b15-b8-reds-docs-on-739bf08e0.patch`). Riprende col via del
+  coordinatore, dopo la lettura del developer. Dettagli: piano 07, «B-15 + B-8».
+  ✅ **Fatta il 19/10**: un 413 senza codice di LibreFolio, al caricamento di un archivio, è `proxy_too_large`, con la
+  frase del contratto in 4 lingue. Dettagli: piano 07, «B-15 + B-8 — la ripresa».
 - ✅ **B-16 · Un server che dopo «Restore and restart» non si ferma lascia l'overlay in attesa senza fine** — piccolo; B,
   16/10 (docs-writer, B5b). Se la richiesta di riavvio è accettata ma il server non scende (segnale perso, un processo
   che non esce), la sonda lo vede sempre su, lo stato resta `pending`, e la pagina continua a dire «LibreFolio is
@@ -8187,6 +8216,7 @@ sulla base `23f6578f3`.
   sonde continuano finché non lo si preme, e un arresto tardivo procede come prima. Il controller ha il flag
   `notStopping`, che si azzera dove si azzera `slow` e col server visto giù. Ruoli e pulsante sono quelli che
   esistevano già. La guida aggiorna la riga dei problemi.
+  **In dev**: `3896cb6b3` (17/10 06:31), merge di `916225c53`.
 - ✅ **B-17 · «Cancel the restore» della scheda non toglie la copia di un ripristino confermato dalla CLI** — minimo; B,
   16/10 (docs-writer, B5b). **Fatto il 16/10 in B5c** (checkpoint delle 18:22): `DELETE /backup/restore/pending` chiama
   `cancel_restore(drop_copy=True)` come la CLI, e la copia si toglie dentro il lock del ripristino; la scheda non chiama
@@ -8199,6 +8229,7 @@ sulla base `23f6578f3`.
   `security.md`), e la scheda smette di chiamare `dropCheck` (i suoi casi tornano «nessuna cancellazione della
   copia»). Da fare insieme al biglietto dell'esito (B5c, se scelto): toccano la stessa API. Dettagli: piano 07, §13,
   «B5b».
+  **In dev**: `0cd910a7e` (16/10 21:35), con B5c.
 - ✅ **B-18 · `restore --instance-key-file`: ricifrare i segreti di un archivio in chiaro con la copia della chiave
   vecchia** — piccolo; B, 16/10 (analisi di B4, d'accordo il coordinatore: backlog). Un archivio in chiaro non porta la
   chiave d'istanza, e i segreti dei plugin restano «impostati ma illeggibili». Chi ha conservato la chiave vecchia (la
@@ -8218,6 +8249,7 @@ sulla base `23f6578f3`.
   Dettagli: piano 07, «B-18».
   - 17/10, 11:52: il cancello G era rosso, perché `instance_key_invalid` mancava in `RestoreErrorCode`. Ora è
     dichiarato, e `api backup-restore` dà 146 passati. Dettagli: piano 07, «B-18, riparazione».
+  **In dev**: `5c4d7456a` (17/10 11:00), `7b1911fd6` con B-20; la riparazione del cancello G con `279c1bc1c` (11:52).
 - ✅ **B-19 · `backup decrypt` lanciato da root scrive uno zip di root** — minimo; B, 17/10 (docs-writer, B4). Gli altri
   comandi di `dev.py backup` lavorano come il proprietario della cartella dei dati (`_drop_root_privileges`); `decrypt`
   non legge la cartella dei dati, quindi con `docker compose exec` lo zip appartiene a root. La guida lo dice. Proposta:
@@ -8228,6 +8260,7 @@ sulla base `23f6578f3`.
   proprietario come gli altri comandi, prima di toccare l'archivio, `-o` o di fare domande; legge prima
   `--password-file` (un segreto di root funziona, come per `create`, `inspect`, `restore`). Senza essere root non legge
   l'impostazione della cartella dei dati. Un archivio illeggibile dà `archive_unreadable`, non più `not_an_envelope`.
+  **In dev**: `e96158e9b` (17/10 09:24), merge di `20198ffc7`.
 - ✅ **B-20 · knip segnala `RESTORE_TICKET_HEADER` come export inutilizzato** — minimo; B, 17/10 (controlli statici di
   B4). L'export è di B5c (`frontend/src/lib/features/backup/backupApi.ts`). Il suo test lo legge con un cast sul modulo,
   scritto quando era ancora rosso, e knip non lo conta come uso. Correzione: il test lo importa per nome. Non è un
@@ -8236,6 +8269,7 @@ sulla base `23f6578f3`.
 
   ✅ **Fatto il 17/10** (checkpoint delle 10:54). Il test importa `RESTORE_TICKET_HEADER` per nome. Vitest 198 su 198;
   knip: «Unused exports» da 20 a 19, e l'unica riga sparita è questa. Dettagli: piano 07, «B-20».
+  **In dev**: `5c4d7456a` (17/10 11:00), `7b13e4d43`, con B-18.
 - ✅ **B-21 · Le due rotte del ripristino non prendono `ProfileDefaultError`** — minimo; H tramite il coordinatore, 17/10
   (H-27, dev `bfdc1f72c`). `profile_default()` ora solleva `ProfileDefaultError`, un `TypeError`, quando la tabella dei
   profili dà un valore del tipo sbagliato. `backup_max_upload_mb()` la chiama, e le sue due sole chiamate, in
@@ -8251,6 +8285,7 @@ sulla base `23f6578f3`.
   ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): le due rotte prendono anche
   `ProfileDefaultError`: l'upload risponde 503 `backup_upload_unavailable`, lo stato 200 con `upload_limit_mb: null`.
   8 casi in `test_backup_restore.py`, rossi e poi verdi nello slot delle 04:44.
+  **In dev**: `c7dd3934a` (17/10 04:50), con B4b.
 - ✅ **B-22 · `totals.py` ripete la regola degli importi «testo decimale semplice» di J** — minimo; J tramite il
   coordinatore, 17/10 (J-27). J-27 è già nella base di B: `7336722ad`, entrato con `e221a0544`.
   `ledger_totals._as_amount` (la casa) rifiuta ogni testo che non sia decimale semplice prima di `Decimal()`, con la
@@ -8264,6 +8299,7 @@ sulla base `23f6578f3`.
   ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): via `_plain` e `_PLAIN_AMOUNT` da
   `totals.py`: decide `ControlTotals.from_json` di J. Il test capovolto è
   `test_what_is_not_plain_text_in_lines_of_objects_is_refused_by_j_and_absent`.
+  **In dev**: `c7dd3934a` (17/10 04:50), con B4b.
 - ✅ **B-23 · Dopo un crash restano file in chiaro, e nessuno li toglie all'avvio** — piccolo; E (R13-SEC4, piano 08 in
   dev `110125350`), 17/10, più il punto (c) di B. Oggi la pulizia gira solo quando parte un nuovo controllo
   (`restore_jobs.prune` in `start_check`) o un nuovo backup (`remove_expired_jobs` in `_prepare`):
@@ -8282,6 +8318,7 @@ sulla base `23f6578f3`.
   ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): il passo `backup-leftovers` (N66) e il
   modulo `instance_backup/leftovers.py`. La revisione delle 03:58 aggiunge `archive.zip.part`, i link su due livelli e
   `checks_interrupted`; `get_job()` toglie anche i file di lavoro. 44 casi in `test_backup_leftovers.py`.
+  **In dev**: `c7dd3934a` (17/10 04:50), con B4b.
 - ✅ **B-24 · Il messaggio di `backup decrypt` non dice che lo zip apre anche le chiavi salvate** — minimo; E (R13-SEC4),
   17/10. Oggi dice: «It holds every user's data in clear». Uno zip decifrato di un backup che portava la chiave
   d'istanza contiene anche quella chiave, che apre ogni chiave dei fornitori salvata. Da aggiungere al messaggio e alla
@@ -8289,6 +8326,7 @@ sulla base `23f6578f3`.
 
   ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): dopo `decrypt` c'è la riga 🔑 quando il
   manifesto annuncia la chiave.
+  **In dev**: `c7dd3934a` (17/10 04:50), con B4b.
 - ✅ **B-25 · `--password-stdin` su un terminale mostra la password; i campi della creazione hanno `autocomplete="off"`** —
   minimo; E (R13-SEC4), 17/10. `--password-stdin` legge con `sys.stdin.readline()` (`scripts/backup_cli.py:100`) anche
   quando lo standard input è un terminale, e lì la password si vede mentre la si scrive: con `isatty()` va letta con
@@ -8298,6 +8336,7 @@ sulla base `23f6578f3`.
 
   ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): `--password-stdin` a un terminale prende
   la strada di `getpass` (due volte per `create`), e i due campi del backup sicuro sono `new-password`.
+  **In dev**: `c7dd3934a` (17/10 04:50), con B4b.
 - ✅ **B-26 · Un file della chiave oltre 4096 byte si esporta, poi ogni ripristino lo rifiuta** — minimo; E (R13-SEC4),
   17/10. La creazione legge `secrets/instance.key` con `read_secret_file` (fino a 64 KiB); la lettura dall'archivio si
   ferma a `INSTANCE_KEY_MAX_BYTES` (4096, `archive.py`). Va rifiutato già all'esportazione: chiave non inclusa e avviso
@@ -8305,6 +8344,7 @@ sulla base `23f6578f3`.
 
   ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): `exportable_instance_key()` e
   `generated_key_unusable()` usano il limite di 4096 byte in UTF-8 (`INSTANCE_KEY_MAX_BYTES`).
+  **In dev**: `c7dd3934a` (17/10 04:50), con B4b.
 - ✅ **B-27 · Dopo un ripristino riuscito la scheda Backup non dice nulla** — piccolo; G (G-20) tramite il coordinatore,
   17/10, decisione notturna N67 (la rivede il developer). Dopo un ripristino `committed` la pagina va al login senza
   dire niente (FBKP-107), e al rientro la scheda tace: `restore-last-result` c'è solo per `rolled_back`
@@ -8334,6 +8374,7 @@ sulla base `23f6578f3`.
   `database_foreign_objects` prima di ogni altro accesso; uno schema che SQLite non legge dà `database_damaged`. In
   più `trusted_schema=OFF` sulle cinque connessioni di B alla copia. L'`alembic upgrade` girava già in un processo a
   sé, col suo tempo massimo.
+  **In dev**: `01f36e79d` (17/10 05:48).
 - ✅ **B-29 · Un totale della copia che J non rilegge fa fallire tutto il controllo** — basso (robustezza, solo admin); E
   (revisione R13-SEC2) tramite il coordinatore, 17/10. In `compare_totals` (`instance_backup/totals.py`)
   `ControlTotals.from_json(current)` sta fuori dal `try`. Se i dati della copia danno un importo che il lettore di J
@@ -8347,6 +8388,7 @@ sulla base `23f6578f3`.
   esatta 1e70). Nota di TA-B sulla gravità: il crollo richiedeva un manifesto riscritto (i totali registrati che J
   legge accanto a una copia che J non rilegge), perché un backup vero registra la stessa riga, e allora vince
   `absent`.
+  **In dev**: `006773c99` (17/10 06:08).
 - ✅ **B-30 · Un disco pieno negli avvii brevi del backup e del ripristino risponde col codice sbagliato, o senza codice**
   — piccolo; TA-B, 17/10 (B-9, rilettura delle etichette di `test_backup_restore.py`), allargato dall'analisi del 17/10.
   Annotato per la cartella degli upload. `jobs._out_of_space` copre le fasi lunghe, non gli avvii brevi:
@@ -8363,6 +8405,7 @@ sulla base `23f6578f3`.
   (il codice del controllo) all'avvio del controllo; lì ogni altro `OSError` dà 500 `stage_failed` con una riga nel log,
   mai più il 500 senza codice. `jobs.out_of_space` è pubblica. Corretta anche la doppia `close` di `UploadWriter.finish()`
   (trovata da TA-B). Test: 21 rossi API e 18 nei servizi, poi tutti verdi; 4 guardie Vitest.
+  **In dev**: `af9b7f482` (17/10 08:01), merge di `116df6800`.
 - ✅ **B-31 · Conferma, annullamento e riavvio di un ripristino: un guasto del disco senza codice o senza messaggio** —
   basso; B, 17/10 (analisi di B-30). `POST /restore/stage/{id}/confirm` e `DELETE /restore/pending` lasciano uscire un
   `OSError` come 500 senza codice; `restore_restart_failed` (il biglietto del riavvio non scritto) ha un codice ma
@@ -8376,6 +8419,7 @@ sulla base `23f6578f3`.
   ripristino, che resta in attesa; una copia che non si toglie dopo → 204 e un WARNING (anche da CLI). Riavvio: il suo
   500 ora ha il messaggio e un test. Tre messaggi × 4 lingue in `ERROR_KEYS`. Test: 17 rossi API, 2 nei servizi, 6
   Vitest, poi tutti verdi.
+  **In dev**: `997c358f5` (17/10 08:46), merge di `e14221a04`.
 - ✅ **B-32 · Dopo un annullamento rifiutato: la scheda, la CLI e uno stato illeggibile** — basso; B, 17/10 (B-31: TA-F,
   TA-B, il docs-writer).
   - In `restoreFlow.cancelPending()` la riga `state = 'pending'` è morta (`#fail` mette subito `failed`): un
@@ -8398,6 +8442,7 @@ sulla base `23f6578f3`.
     - ❌ con uscita 1 in `pending`, `pending --cancel` e `restore`.
     Un link o un contenuto non valido restano «none»; l'avvio, l'esito e la pulizia leggono come prima.
   - Commenti «Settings › Administration › Backup». Dettagli: piano 07, «B-32».
+  **In dev**: `7af21a5c1` (17/10 10:28), merge di `ca1343d6d`.
 - **B-33 · Uno stato illeggibile all'avvio e nella pulizia** — basso; B, 17/10 (B-32, residuo dichiarato; il
   coordinatore lo ha messo nella lista del developer).
   - Un avvio che non riesce a leggere lo stato del ripristino registra l'errore e va avanti coi dati come sono, anche se
@@ -8429,6 +8474,7 @@ sulla base `23f6578f3`.
   - Il `chmod 600`: dopo B-38 la chiave non passa più da `backups/`; va sul file `old-instance.key` dell'host
     (`backup_restore` l.320).
   Dettagli: piano 07, «B-34».
+  **In dev**: `202849800` (17/10 14:10), merge di `731337a5a`.
 - ✅ **B-35 · Il limite di caricamento non limita quanto un archivio scompatta** — 🟡 MEDIO nel profilo ospitato, basso
   nel self-hosted; B, 17/10 (BZ parte 1, F3).
   - `staging.space_needed` e `_check_space` (`staging.py:462-470`) confrontano le dimensioni dichiarate dal manifest
@@ -8447,6 +8493,8 @@ sulla base `23f6578f3`.
   - Il controllo dello staging viene prima dello spazio (`unpacked_too_large`). L'avvio della verifica risponde 503
     `backup_restore_unavailable`, e la CLI segue la stessa regola.
   - Controllo della configurazione `backup.restore_limit`. Dettagli: piano 07, «B-35».
+  **In dev**: `9fafc79b5` (17/10 12:42), merge di `d7efb5805`; le correzioni dopo la revisione di H con
+  `c7f414827` (13:15).
 - ✅ **B-36 · Nomi di tabella non quotati nei conteggi delle correzioni post-migrazione** — ⚪ basso; BZ parte 1, F1.
   - `post_migration._row_counts` (`backend/app/db/post_migration/__init__.py:70-72`) costruisce
     `f'SELECT count(*) FROM "{name}"'` senza raddoppiare `"`. B-28 lascia passare tabelle con qualsiasi nome.
@@ -8456,6 +8504,7 @@ sulla base `23f6578f3`.
   - Cura: quotare come `snapshot._quoted` (oggi `snapshot._identifier`, dopo la nota di H). Test: una tabella `x"y`
     con una correzione pendente.
   - **Il modulo non è di B**: passa dal coordinatore.
+  ✅ **Fatto il 17/10** con B-37 (checkpoint delle 13:33). **In dev**: `d1976bca8` (17/10 13:33), merge di `05d1dc76a`.
 - ✅ **B-37 · `trusted_schema` resta acceso su due connessioni alla copia** — ⚪ basso, difesa in profondità; BZ parte 1, F2.
   - Le connessioni sono quella delle correzioni post-migrazione (`PM:211`) e il motore di Alembic su `-x sqlalchemy.url`.
     Sono le uniche alla copia senza `PRAGMA trusted_schema=OFF`.
@@ -8468,6 +8517,7 @@ sulla base `23f6578f3`.
   - `_row_counts` quota i nomi raddoppiando `"`.
   - `run_post_migration_fixes` spegne `trusted_schema` per primo; `env.py` lo fa con un listener `connect`, per ogni URL.
   Dettagli: piano 07, «B-36 + B-37».
+  **In dev**: `d1976bca8` (17/10 13:33), merge di `05d1dc76a`, con B-36.
 - ✅ **B-38 · La CLI da root legge i file della password e della chiave attraverso link e FIFO** — ⚪ basso, rafforzamento;
   BZ parte 1, F4.
   - `read_secret_file` apre con `path.open("rb")`.
@@ -8484,6 +8534,7 @@ sulla base `23f6578f3`.
   - Da root, nessun componente del percorso è un link dentro la cartella dei dati; fuori si seguono (Kubernetes).
   - La guida usa `/root` del container.
   - La corsa fra le due aperture è nella riga H-47 di H. Dettagli: piano 07, «B-38».
+  **In dev**: `c2a09b960` (17/10 13:57), merge di `1ed071c2f`.
 - ✅ **B-39 · Formule nei CSV esportati** — ⚪ basso; BZ parte 1, F5.
   - Ogni utente può scrivere le `notes` degli eventi di un asset (`POST /assets/events`), e ogni utente può esportarle
     in CSV (`GET /backup/asset/{id}/events`, `series_export.stream_rows_as_csv`).
@@ -8494,11 +8545,13 @@ sulla base `23f6578f3`.
   ✅ **Fatto il 17/10** (B-39). All'export, un testo come una formula (`'*[=+\-@\t\r]` all'inizio, mai un numero
   puro) riceve un `'` in più; l'import degli eventi toglie esattamente quell'apostrofo dalle `notes`, quindi il ritorno
   è esatto. Dettagli: piano 07, «B-39».
+  **In dev**: `25d00f192` (17/10 13:08), merge di `c8fc32bfa`.
 - ✅ **B-40 · La tabella «What It Lists» della scheda Sicurezza non ha i due controlli di B-9** — minimo; H con H-46, 17/10.
   `admin/settings.en.md` («What It Lists») non elenca `backup.panel_token` e `backup.upload_limit`, e la pagina dice che
   i risultati seguono l'ordine della tabella. Le due righe vanno nel prossimo lotto, nel loro posto dell'ordine.
   ✅ **Fatto il 17/10** in B-35 (checkpoint delle 12:36): le tre righe di B (`backup.panel_token`,
   `backup.upload_limit`, `backup.restore_limit`) fra il «Log level» della piattaforma e il primo controllo di A.
+  **In dev**: `9fafc79b5` (17/10 12:42), con B-35.
 - ✅ **B-41 · `/restore/outcome` registra un errore a ogni chiamata quando lo stato è illeggibile** — basso; E, R13-SEC9,
   17/10.
   - Con uno stato del ripristino illeggibile, la rotta anonima `GET /backup/restore/outcome` legge lo stato prima del
@@ -8513,6 +8566,7 @@ sulla base `23f6578f3`.
     riavvio non scaduto. Chi non ha quel biglietto non fa più leggere lo stato, né registrare l'errore.
   - Il titolare del biglietto resta com'era (guardia b5).
   Dettagli: piano 07, «B-41 + B-42».
+  **In dev**: `d46113236` (17/10 14:54), il codice in `299c19e2b`.
 - ✅ **B-42 · Un file del biglietto dell'esito rotto registra un errore a ogni chiamata anonima** — basso; B, 17/10
   (trovato in B-41).
   - Ogni biglietto ben formato (43 caratteri URL-safe, senza sessione) arriva a `outcome._read_record`. Un file del
@@ -8524,6 +8578,7 @@ sulla base `23f6578f3`.
   ✅ **Fatto il 17/10** (checkpoint delle 14:56).
   - `outcome._report`: un errore la prima volta per cartella dati e processo, poi `debug` finché dura lo stesso errore.
   - `_forget` lo dimentica quando il file viene scritto, tolto, trovato mancante o letto.
+  **In dev**: `d46113236` (17/10 14:54), con B-41.
 - ✅ **B-43 · Una funzione che il lettore non ha, nello schema dell'archivio, ferma la verifica con un errore grezzo** —
   basso; H, 17/10 (H-51, revisione; misurato da B su SQLite 3.54.0).
   - B-28 rifiuta trigger, viste e tabelle virtuali per tipo, ma non legge le espressioni. Un'espressione di un indice o
@@ -8548,6 +8603,7 @@ sulla base `23f6578f3`.
     `sqlite_errorname`).
   - Lo schema si legge con i segnaposto di `regexp` e `floor`.
   - Il resto in B-45 (CHECK e DEFAULT) e B-46 (stderr dell'upgrade).
+  **In dev**: `fc4d5eab4` (17/10 16:41), il codice in `7c8eb56c1`.
 - ✅ **B-44 · I testi su `trusted_schema` dell'upgrade dopo H-51** — minimo, testo; H, 17/10 (H-51).
   - La docstring di `_schema_untrusted` in `env.py` dice «before anything else». Il listener di classe di
     `db/session.py`, che i suoi import caricano, gira però prima, e il dialetto registra `regexp` e `floor` dopo di lui.
@@ -8558,6 +8614,7 @@ sulla base `23f6578f3`.
 
   ✅ **Fatto il 17/10** (checkpoint delle 16:45): la docstring di `_schema_untrusted` e il punto di `security.md`
   dicono l'ordine vero (listener di classe, dialetto, `_schema_untrusted`).
+  **In dev**: `fc4d5eab4` (17/10 16:41), il testo in `a7afc2af6`.
 - **B-45 · Un `CHECK` o un `DEFAULT` dell'archivio che chiama `regexp` o `floor` passa la verifica, poi rompe le
   scritture su quella tabella** — basso, dopo la 1.3; B, 17/10 (parte 2 della scoperta di DW-B43; H e il developer
   decidono).
@@ -8611,9 +8668,45 @@ sulla base `23f6578f3`.
     sui backup grandi.
   - ✅ **Decisione e cura** (17/10): rifiutare (il coordinatore d'accordo). Il passo `_refuse_undecodable_text()` di
     `staging.py` legge ogni testo della copia, prima dell'upgrade, e rifiuta con `database_damaged`; il log ha il solo
-    numero di tabelle. RNW-109 di E riscritto da B (ora si aspetta il rifiuto). Il paragrafo di `security.md` va nel
-    passaggio H-52 di H.
+    numero di tabelle. RNW-109 di E riscritto da B (ora si aspetta il rifiuto). Il paragrafo di `security.md` l'ho
+    aggiunto io dopo l'ingresso di H-52.
   Dettagli: piano 07, «B-49».
+  **In dev**: `709dfb1e4` (17/10 21:29), il codice in `0eef55599`; il paragrafo di `security.md` e la descrizione
+  del runner con `739bf08e0` (`08d58c6d3`).
+- **B-50 · Uno `state.json` di un job leggibile come JSON ma malformato fa rispondere 500** — minimo, robustezza;
+  B, 19/10 (TA-B8-STATE, durante B-8). Precedente a B-8.
+  - Uno stato che è JSON ma non un oggetto (`[]`, `null`, `5`) fa alzare `AttributeError` a `BackupJob.from_json`.
+    `remove_expired_jobs` non lo prende, e gira a ogni partenza (`_prepare`): ogni nuovo backup, dalla scheda, dal
+    pannello o dalla CLI, finisce in un 500.
+  - Uno stato senza campi (`{}`) o con tipi sbagliati alza `KeyError` o `TypeError`. `get_job` li lascia passare,
+    quindi la lettura di quel job (`GET /backup/instance/jobs/{id}`) è un 500.
+  - All'avvio non succede nulla di grave: `sweep_backup_leftovers` registra l'errore e continua.
+  - Ci si arriva solo manomettendo `backups/.jobs/<id>/state.json` (l'app lo scrive in modo atomico), o con un disco
+    rovinato.
+  - Cura possibile: `from_json` trasforma ogni stato malformato in `ValueError`; poi si sceglie cosa risponde
+    `get_job` (job non trovato, o fallito).
+  - B-8 ha già allineato `_running_job` agli altri lettori (`TypeError` e `KeyError`): un 409 non diventa un 500.
+  Dettagli: piano 07, «B-15 + B-8 — la ripresa».
+- **B-51 · La colonna «⚠️» dei risultati di una lettura conta anche le note** — minimo, chiarezza; B, 19/10 (revisione
+  di N74; area di W). Precedente a N74.
+  - Nella tabella del passo di analisi, la colonna «⚠️» (tooltip «Parser warnings (skipped rows, ambiguous data)»)
+    conta tutte le note di un file, anche quelle `info`.
+  - Un file Fineco con solo righe non ancora regolate mostra «⚠️ 1», anche se N74 le dice in una nota blu.
+  - Nel dettaglio della lettura la sezione s'intitola «Warnings», con le note dentro, ognuna nel suo colore.
+  - Cura possibile: contare solo `severity !== 'info'`, oppure due conteggi.
+  Dettagli: piano 07, «N74 di W — revisione», R1.
+- **B-52 · La regola «solo righe sicure» e i plugin con una colonna di regolamento** — da decidere (W o il
+  developer); B, 19/10 (revisione di N74; area di W).
+  - La regola 9 della skill `brim-plugin` e della guida dice che una riga «con la data valuta o di regolamento dopo
+    oggi» è provvisoria e resta fuori.
+  - Directa, Saxo, InvestEngine, Degiro e Disnat hanno una colonna di regolamento, ma datano per operazione e
+    importano tutto: il batch le accetta, ma alla lettera della regola le loro righe recenti sarebbero provvisorie.
+  - Il generic CSV accetta `settlement_date` o `value_date` come colonna della data: una data oltre domani ora fa
+    rifiutare il salvataggio (`dateOutOfRange`); prima di N74 passava fino a un anno.
+  - Da chiarire: la regola riguarda solo chi data per valuta (Fineco) o per periodo (Danske), o quei plugin chiedono
+    un seguito.
+  Dettagli: piano 07, «N74 di W — revisione», F2.
+
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
