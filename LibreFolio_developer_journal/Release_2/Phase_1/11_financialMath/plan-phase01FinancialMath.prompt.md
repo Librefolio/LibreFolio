@@ -3901,3 +3901,62 @@ Le convenzioni possibili:
   `api portfolio` da chiedere.
 - ✅ **Slot** (13:22, HEAD `ff9930b26`): `api portfolio` **55** passati; porta 6190 libera. Il coordinatore porta al developer
   le due debolezze di HEAD come domanda per un lotto a parte. **CHECKPOINT READY** inviato, FROZEN.
+
+#### P2 — storia e viste costruite solo per la finestra (19/10, via del coordinatore; base `bbbc085d2`)
+- Regole come P1: parità al bit con il calcolo di oggi su copie del DB e su più finestre (caso 1900 compreso), rossi
+  prima, mutazioni, slot a richiesta. Revisione di P1 chiesta a J dal coordinatore.
+- ✅ **Codice** (`financial_math/portfolio/derived_views.py`, `portfolio_service.py`): `DerivedViewsBuilder._window`
+  (bisezione sulle date degli stati, uno al giorno, in ordine) e le viste con la finestra: `build_history`,
+  `build_broker_pnl_history`, `build_pnl_candles` su `[da, a]`; `build_acquisition_funding` su `(da, a]` (una serie di
+  flussi: un BUY del giorno d'inizio è del periodo prima, come il taglio di oggi in `get_acquisition_funding`);
+  `build_performance_inputs(date_from)` restituisce solo ciò che `rebase_to_period` tiene — gli stati dall'apertura (l'ultimo
+  ≤ `date_from`, altrimenti il primo) e i flussi dopo l'apertura, con la base di capitale dell'apertura come punto di
+  partenza del delta — così il periodo ribasato è lo stesso. I cinque chiamanti in `portfolio_service.py` (`get_summary`,
+  `get_history` ×2, `get_broker_pnl_history`, `get_pnl_candles`, `get_acquisition_funding`) passano la finestra; i loro
+  tagli restano (ora non tolgono più nulla). Non toccati: `build_allocation_history` (filtrava già per `date_from`) e il
+  rapporto sulla qualità dei dati (scandisce ogni giorno; restringerlo cambierebbe ciò che elenca).
+- ✅ **Prova di parità al bit** (sola lettura, `files/n74/p2_parity.py`): `get_report` con tutte le sezioni, il servizio di
+  HEAD (`git show HEAD:…/portfolio_service.py`, che chiama le viste senza finestra — le viste nuove senza finestra fanno
+  esattamente ciò che facevano) contro quello nuovo, JSON confrontato campo per campo. **4 copie × 16 finestre, 0
+  differenze**: tutto, 1A, 1M, a metà, prima del primo stato, un giorno, fine nel passato, inizio su un deposito, inizio
+  esattamente su un BUY (10 punti di finanziamento) e il giorno prima (11), da deposito a deposito, da BUY a BUY, un giorno
+  su un BUY, tutta prima della storia, fine sul primo stato, il primo giorno. Ogni sezione popolata dove i dati ci sono
+  (storia, P&L per broker, candele, finanziamento, depositi, TWRR/MWRR/ROI della card).
+- Tempi, caso 1900 (46 312 giorni): finestre 1A/1M/a metà/un giorno **6–10 s → 1,1–2,9 s**; «tutto» invariato (stesso
+  lavoro). DB senza errori: invariato (0,1–1 s). **⚠️ Fuori pista**: nella prima misura «tutto» sembrava 4 s più lento;
+  invertendo l'ordine si vede che è più lenta sempre la seconda esecuzione del processo (il JSON della prima resta in
+  memoria), non il codice.
+- **⚠️ Fuori pista — un buco di parità trovato dal test-author** (test-author `p2-tests`, sul suo banco con le copie di
+  HEAD): `get_broker_pnl_history` con una finestra **senza alcuno stato** (inizio dopo l'ultimo stato, o inizio > fine)
+  dava `[]`, HEAD ogni broker con la serie vuota. Dall'API non si raggiunge (`get_report` porta `date_from` al più a
+  `date_to`, e gli stati finiscono lì; è l'unico chiamante), per questo il confronto 4 × 16 non l'ha visto. Cura nel
+  servizio, non nella vista: se la finestra non ha punti, ogni broker della storia con la serie vuota, nell'ordine di
+  HEAD. Con una finestra non vuota l'elenco è già lo stesso: ogni stato del motore porta tutti i broker dell'ambito
+  nello stesso ordine (un solo punto di costruzione su `all_broker_ids`, i giorni quieti copiano il dizionario).
+  Confronto rifatto dopo la cura: base 16 finestre + BUY al 1900 6 finestre, **0 differenze**.
+- **Coda dopo P2** (coordinatore, 13:46, due sì del developer): (1) **MF-P1b**, le due debolezze del MWRR già presenti
+  (prodotto dei segni in underflow, `_is_xirr_root` che scarta radici vere), lotto a parte con i valori che cambiano
+  dichiarati prima; (2) **MF-E2** approvata con la convenzione dell'esposizione lorda e le D1–D3: prima il piano breve
+  (`lots/histories.py` è aperto da J con L1a; ordine e merge dal coordinatore), poi il via; (3) P3 quando c'è la
+  funzione «a gradini» di X; (4) P4. Backlog: righe MF-FV e MF-P1b, E2 aggiornata.
+- ✅ **Test P2** (test-author `p2-tests`): `test_financial_math/test_windowed_views.py` nuovo, **278 test**, puri (nessun DB,
+  sotto `services financial-math`; nessuna riga nuova nel runner). (1) Parità: 19 finestre con nome × 4 viste, tutte le
+  289 coppie di estremi, il bordo `(da, a]` del finanziamento, una storia di 46 312 giorni dal 1900; confronto su ordine
+  delle chiavi, codici, importi come `Decimal` e come `str`. (2) Dati di performance: per ogni `d` da 3 giorni prima a 3
+  dopo la storia, `rebase_to_period` sui dati con la finestra = sui dati interi, e le serie TWRR, ROI semplice e MWRR
+  uguali; al più gli snapshot della finestra + 1. (3) Costo: ogni stato registra i campi letti; ogni vista e ognuno dei
+  6 punti di chiamata del servizio legge solo i giorni della sua finestra. (4) Collegamento: ognuno dei 6 punti passa
+  la finestra; l'uscita JSON del servizio uguale con e senza finestra (42 casi). (5) Il P&L per broker su una finestra
+  vuota uguale a HEAD (12) e l'**invariante del motore**, prima non fissato da nessun test: ogni stato di un vero
+  `DailyStateBuilder` porta tutti i broker dell'ambito nello stesso ordine (6). Rossi su HEAD **214** (202 per assenza
+  dei parametri, 6 di costo — un vero rosso di costo per ogni vista —, 6 di collegamento). Mutanti tutti presi (estremi
+  della bisezione, `exclusive_start`, apertura −1 e `max(…, 0)`, base di capitale, snapshot d'apertura, `date_to`
+  ignorato, scansione lineare e «costruisci tutto poi taglia», i 6 punti di chiamata, il ripiego del P&L per broker in
+  6 varianti, l'invariante del motore in 4); `states[opening:]` per i flussi è un mutante **equivalente** (il delta
+  dell'apertura è 0), confermato. Nessun test esistente toccato.
+- ✅ **Corsia** (14:12; prodotto tolto `derived_views.py` + `portfolio_service.py`, sha `a20ea021…` uguale dopo):
+  `financial-math test_windowed_views` rosso **214** / 64. Verdi: `financial-math` **2114** (1836 + 278), `utils roi-utils`
+  9, `roi-fifo-utils` **1494**, `portfolio-engine` 41. ruff, black, diff-check; doc sviluppatore (`financial_math.md`, un
+  paragrafo sulle viste con la finestra); `mkdocs build` stretto e `check-links` verdi. Slot `api portfolio` da chiedere.
+- ✅ **Slot** (14:16, HEAD `bbbc085d2`): `api portfolio` **55** passati; porta 6190 libera. **CHECKPOINT READY** inviato,
+  FROZEN. Revisione di J chiesta dal coordinatore, come per P1. Poi la coda: P1b, E2 (piano breve), P3, P4.
