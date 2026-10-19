@@ -5442,7 +5442,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     scritti. Il controllo va prima della prima scrittura, come X-R65 fa ora per le date.
   - Il disegno di B: il caricamento manuale controlla la valuta di ogni asset prima della prima scrittura, 422
     `price_currency_mismatch` con `items`; B tocca una riga di descrizione in `schemas/prices.py`.
-- **X-R72 · Le date degli eventi degli asset senza pavimento al 1900** — basso, prima da verificare; X, 17/10 (Z, nota di
+- ✅ **X-R72 · Le date degli eventi degli asset senza pavimento al 1900** (chiusa il 19/10: superata da N83, che toglie il
+  pavimento anche alle scritture di prezzi e cambi; gli eventi vanno già in quella direzione) — basso, prima da verificare; X, 17/10 (Z, nota di
   X-R65).
   - I periodi di un piano Scheduled Investment sono già limitati a 1900-2200 (`SCHEDULE_MIN_DATE`). La data aperta è
     probabilmente quella degli `asset_events` del piano, e degli eventi degli asset in generale (manuali o dei
@@ -5465,7 +5466,9 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     i 400/404/409 scritti apposta restano. Prima un rosso parametrizzato su ogni rotta, come
     `test_sec9_3_a_failure_answers_500_without_echoing_it`.
   - Registrata prima, per errore, come «H-51» nella sezione di H: l'ID era già di H (`trusted_schema`).
-- ✅ **X-R65 · Il pavimento delle date sulle scritture manuali di prezzi e cambi** — decisione notturna N83; **fatta da Z** (`30e19b9d9`, entrata in dev `c726b9d89`, rivista da X il 17/10: OK); X, 17/10
+- ✅ **X-R65 · Il pavimento delle date sulle scritture manuali di prezzi e cambi** (rivista il 19/10 dalla revisione di N83:
+  il pavimento del 1900 è tolto da tutte le scritture di prezzi e cambi, anche dei fornitori; resta «non oltre domani»; X,
+  in attesa del commit del coordinatore) — decisione notturna N83; **fatta da Z** (`30e19b9d9`, entrata in dev `c726b9d89`, rivista da X il 17/10: OK); X, 17/10
   (il coordinatore; numerata X-R65 per lo scontro con X-R64).
   - Le letture si fermano al 1900-01-01 (`EARLIEST_RANGE_START`), le scritture manuali di prezzi e di tassi di cambio
     no: un prezzo prima del 1900 si può salvare, e «Tutto» risolve allora l'inizio dell'intervallo prima del 1900
