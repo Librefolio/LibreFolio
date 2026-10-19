@@ -8730,3 +8730,42 @@ poi, in V1 e V3, `assignments|reported_currency|VARCHAR(8)` (in V2 e V4 nessuna 
 >   - (3) `worker_exit_code` nelle attese di `test_tools_schemas.py` (J-19).
 >   - EMF-009 va a E. Il brief del test-author è in `files/h59/test_author_prompt.md`.
 > - Fixture `schema_1_3_retired_chain_v4.json`: 50 oggetti, uguali all'istantanea, nessuna riga di dati.
+
+### Lotto «H-59: tre rossi della base trovati da `all-backend` di H-57» (19/10, 14:30) — passi
+
+> Via del coordinatore (19/10, 14:26), da `964be55a0`. H-57 è committato: `330e75f83`
+> (`refactor(db): fold 1.3 migrations, drop 13 indexes`) e `964be55a0` (il giornale). È un commit a parte, e il treno
+> porta H-57 e H-59 insieme, così il cancello dopo l'ingresso parte dal verde.
+> - (1) Le funzioni che nei test fanno le veci di `configure_test_runtime` accettano `lane_settings=None`, come la
+>   firma vera. La causa è H-43 (`cd04b17b0`), mia. Sono 2 file: `test_dev_server_interrupt.py` (di Z, fermo) e
+>   `test_dev_designer_lab_banner.py`; `test_probe_rate_limit.py` usa la funzione del secondo.
+> - (2) `LIBREFOLIO_DISABLE_WHATS_NEW` in `UNDOCUMENTED_ON_PURPOSE` di `test_env_example.py`: scelta (a), D-A7, A la
+>   tiene nascosta. `.env.example` non cambia; il coordinatore aveva scritto (b), poi ha corretto.
+> - (3) `worker_exit_code` nelle attese di `test_tools_schemas.py`: J-19 (`a8299354f`, entrato con `635b50537`), voluto.
+> - EMF-009 (`test_email_flows.py`, `test_email_api.py`) va a E.
+> - Il coordinatore porta al developer la domanda sul `VACUUM` dopo l'upgrade, e scrive lui la riga del CHANGELOG di
+>   H-57 all'ingresso. La procedura V4 l'ha provata sulla copia di riferimento dei dati del developer (revisione 011):
+>   impronta `eeba1a55…`, `redundant indexes|0`, integrità ok, righe invariate, `alembic current` =
+>   `005_release_1_3_0_schema (head)`. Il server 6040 è fermo dalle 13:49.
+
+**Passi**:
+1. ✅ Rossi su `964be55a0` (`files/runs/h59/red-*.log`): `services config-env-example` 1 fallito su 38,
+   `services probe-rate-limit` 1 su 52, `utils dev-server-interrupt` 3 su 27, `utils dev-designer-lab-banner` 1 su 37,
+   `schemas tools` 2 su 271. Sono gli 8 di `all-backend` (i 2 di EMF-009 vanno a E).
+2. ✅ Cura (test-author, brief `files/h59/test_author_prompt.md`): 4 file di test, nessun file dell'app.
+   - Le due funzioni finte prendono la firma vera di `configure_test_runtime`:
+     `(port=None, data_dir=None, lane_settings=None)`.
+   - `UNDOCUMENTED_ON_PURPOSE` ha `LIBREFOLIO_DISABLE_WHATS_NEW`, con la ragione D-A7 e C-54. Il test parametrico
+     della lista guadagna un caso, ed è verde.
+   - `worker_exit_code: None` nelle due attese. Non va in `_METRIC_PHASES`: quella lista parametrizza il test che
+     rifiuta `-1` per ogni durata, mentre un codice d'uscita negativo è il segnale che ha fermato il worker.
+   > **Note implementazione**: la funzione finta è condivisa fra `configure_test_runtime` e
+   > `configure_server_runtime` (il ciclo `for name in (...)`), quindi per il secondo nome accetta una parola chiave in
+   > più, `lane_settings`. Ho tenuto la cura minima: la via di produzione rifiuta `--lane-setting` prima di qualsiasi
+   > chiamata (`dev.py:203-206`), e se un giorno passasse `lane_settings` alla funzione vera, un avvio reale
+   > fallirebbe subito. Due funzioni finte, una per firma, costerebbero 4 righe per file: le ho proposte, non le ho
+   > messe.
+3. ✅ Verdi (`files/runs/h59/green-*.log`): `services config-env-example` 39 (38 + il caso nuovo),
+   `services probe-rate-limit` 52, `utils dev-server-interrupt` 27, `utils dev-designer-lab-banner` 37,
+   `schemas tools` 271. Ruff e black puliti sui 4 file, `git diff --check` pulito, porta 6181 libera.
+4. ✅ Checkpoint inviato (19/10, 14:40).
