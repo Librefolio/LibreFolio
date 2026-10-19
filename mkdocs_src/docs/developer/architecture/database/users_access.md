@@ -134,7 +134,8 @@ Migration `005_accounts_invites` added three columns:
   release `X.Y.Z` (`whats_new_service.release_of()`; lot C-54, «What's new since your last version»). Written by
   `user_service.create_user()` with the running release, so a new account has nothing to catch up on, and by
   `POST /api/v1/auth/whats-new/seen` when the user closes the «What's new» window: the server writes its own running
-  release, never a value from the client. `NULL` is an account from before the feature, or one created while the
+  release, never a value from the client, and never a lower one than the column holds. `NULL` is an account from
+  before the feature, or one created while the
   running version named no release (`unknown`, or a checkout with no tag): it sees the running release's chapter once
   ([What's new](../../frontend/onboarding.md#whats-new)).
 

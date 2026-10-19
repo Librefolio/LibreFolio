@@ -28,6 +28,17 @@
  * Red, before the cure: no block draws a `lot-data-quality-message`, and the income block writes its first pool only —
  * the first test fails on the June pool's amount, the third on the lot block's missing message. The second and the
  * fourth are controls: green before the cure, and they must stay green after it.
+ *
+ * Round 3 of the designer (the last block; lot R3-a of workstream T, 17/10): each severity in its own state, through
+ * `DATA_QUALITY_TONE` — an error in danger, a warning in warning, an info in info; until then an error shared the
+ * warning tint. The banner publishes `data-tone`, the tone of its worst group (`groupedSeverity`), and each block its
+ * `data-severity` and the `data-tone` of that severity. The block reads those attributes, never a colour class (design
+ * system, rule 10), and writes the expected tones out (`TONE_OF`) instead of reading them back from the table. The
+ * error is `FIFO_SOURCE_QUANTITY_MISSING` as the engine sends it, `fails_analysis` included: in the panel a FAILED
+ * analysis hands it to `LotAnalysisFailedNotice` (J-12), but here the banner is mounted alone and draws what it is
+ * given. The engine sends no info today; the banner draws one all the same, so the info borrows
+ * `TRANSFER_SHARE_MISMATCH`, an info of the portfolio report: the banner reads a severity, never a code. Red before
+ * R3-a: the banner published no `data-tone`, its blocks no `data-severity` and no `data-tone`.
  */
 import {afterEach, beforeAll, describe, expect, it} from 'vitest';
 import {get} from 'svelte/store';
@@ -74,9 +85,9 @@ const LOT_ISSUE: DataQualityIssue = {domain: 'PORTFOLIO', code: FALLBACK, severi
 /** The banner's issues in the engine's order: the lot issue during the replay, then the pools by day. */
 const ISSUES: DataQualityIssue[] = [LOT_ISSUE, ...POOLS.map(orphanIncome)];
 
-/** Mount the banner on ISSUES, with the visible lot; it mounts folded. */
-function mount(): {banner: HTMLElement; toggle: HTMLElement} {
-    render(LotDataQualityBanner, {issues: ISSUES, lotDates: LOT_DATES});
+/** Mount the banner on `issues`, ISSUES unless given, with the visible lot; it mounts folded. */
+function mount(issues: DataQualityIssue[] = ISSUES): {banner: HTMLElement; toggle: HTMLElement} {
+    render(LotDataQualityBanner, {issues, lotDates: LOT_DATES});
     const banner = screen.getByTestId('lot-data-quality-banner');
     return {banner, toggle: within(banner).getByTestId('lot-data-quality-toggle')};
 }
@@ -186,5 +197,52 @@ describe('LotDataQualityBanner — every orphan pool with its own amount and its
 
         await unfold(toggle);
         expect(shown(toggle), 'unfolded, every line drawn').toBe(twoCategories);
+    });
+});
+
+// =====================================================================================================================
+// Round 3 of the designer (17/10, lot R3-a): the banner in the tone of its worst group, each group in its own
+
+/** The state the designer gives each severity (round 3): written out, never read back from `DATA_QUALITY_TONE`. */
+const TONE_OF: Record<DataQualityIssue['severity'], string> = {error: 'danger', warning: 'warning', info: 'info'};
+
+/** A sale 4 units beyond what the broker held on 2 May, as the engine sends it: an error with no lot, failing the replay (J-12). */
+const SHORTFALL: DataQualityIssue = {
+    domain: 'PORTFOLIO',
+    code: 'FIFO_SOURCE_QUANTITY_MISSING',
+    severity: 'error',
+    message_i18n_key: 'dataQuality.fifoSourceQuantityMissing',
+    message_params: {transaction_id: 7201, lot_id: null, broker_id: BROKER_ID, related_transaction_id: null, missing_quantity: '4', transaction_date: '2024-05-02', fails_analysis: true},
+};
+
+/** An info: the engine sends none today, so it borrows TRANSFER_SHARE_MISMATCH, an info of the portfolio report. */
+const SHARE_NOTE: DataQualityIssue = {domain: 'PORTFOLIO', code: 'TRANSFER_SHARE_MISMATCH', severity: 'info', message_i18n_key: 'dataQuality.transferShareMismatch', message_params: {count: 1}};
+
+/** The tone of the whole banner for each mix of groups. The error comes last, so the tone cannot come from the first issue. */
+const TONE_CASES: Array<{name: string; issues: DataQualityIssue[]; tone: string}> = [
+    {name: 'an error, a warning and an info', issues: [LOT_ISSUE, SHARE_NOTE, SHORTFALL], tone: 'danger'},
+    {name: 'warnings only, the J-53 issues', issues: ISSUES, tone: 'warning'},
+    {name: 'an info only', issues: [SHARE_NOTE], tone: 'info'},
+];
+
+describe('LotDataQualityBanner — the banner in the tone of its worst group, each group in its own (round 3)', () => {
+    it.each(TONE_CASES)('$name: the banner is $tone, and each group carries its own severity and the tone of it', async ({issues, tone}) => {
+        const {banner, toggle} = mount(issues);
+        expect(banner, 'folded: the tone of the worst group').toHaveAttribute('data-tone', tone);
+
+        await unfold(toggle);
+        expect(banner, 'unfolded: still the tone of the worst group').toHaveAttribute('data-tone', tone);
+
+        // One block per code, each read on its own: the issues of a code share its severity.
+        const severities = new Map<string, DataQualityIssue['severity']>(issues.map((issue) => [issue.code, issue.severity]));
+        const blocks = within(banner)
+            .queryAllByTestId(/^lot-data-quality-issue-/)
+            .map((block) => block.getAttribute('data-testid'));
+        expect(blocks.sort(), 'one block per code, none left out of the reading below').toEqual([...severities.keys()].map((code) => `lot-data-quality-issue-${code}`).sort());
+        for (const [code, severity] of severities) {
+            const block = blockOf(banner, code);
+            expect(block, `${code}: its own severity`).toHaveAttribute('data-severity', severity);
+            expect(block, `${code}: the tone of its severity, ${TONE_OF[severity]}`).toHaveAttribute('data-tone', TONE_OF[severity]);
+        }
     });
 });

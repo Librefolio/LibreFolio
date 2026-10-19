@@ -55,6 +55,19 @@ technical failure part-way — after a shared broker was already left inside the
 deletion failed: nothing was deleted» with the account's ``user_id``. Red until the handler stops
 reading ``current_user`` after ``delete_user``'s rollback, which expires it: ``MissingGreenlet``
 escapes instead of the 500.
+
+The lot «decide under the write lock» (A-52, A-54; contract approved by the coordinator, 17/10) pins
+the decisions of ``DELETE /auth/users/me`` under SQLite's write lock, on a private instance. pysqlite
+defers BEGIN to the first write, so nothing holds the rows the handler read until it writes: another
+request may commit in between. The window is A-42/A-51's (``_rival_before_the_first_write`` of
+``test_admin_bootstrap.py``): the rival commits on another connection right before the handler's
+first write. ACCDEL-LOCK-01 (red until A-52): the last two active administrators delete themselves at
+once — the second to decide is refused, 400 ``LAST_ADMIN``, nothing of its own deleted; today both go
+and no administrator is left. ACCDEL-LOCK-02, a guard: the same window with nothing landing in it, the
+administrator goes. ACCDEL-LOCK-03 (red until A-54): the account deleted by another request inside the
+window answers 404 «User not found», the body ``GET``/``DELETE /users/{id}`` answer for a missing
+account, and deletes nothing else; today the handler deletes rows that are no longer there and answers
+200 «Account deleted successfully».
 """
 
 import asyncio
@@ -77,6 +90,7 @@ from sqlalchemy.pool import NullPool
 from structlog.testing import capture_logs
 
 from backend.app.api.v1 import auth as auth_api
+from backend.app.api.v1 import users as users_api
 from backend.app.config import is_test_mode
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
@@ -98,6 +112,7 @@ from backend.test_scripts.test_api.test_broker_access_api import (
 )
 from backend.test_scripts.test_db_config import get_test_db_path, verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_services.test_admin_bootstrap import _issuer_engine, _rival_before_the_first_write
 from backend.test_scripts.test_utils import print_section, print_success
 
 DEPOSIT_DATE = "2026-01-05"
@@ -886,6 +901,264 @@ class TestLastActiveAdministrator:
         assert after == expected_others, f"The regular user must be gone and nobody else touched: {after}"
 
         print_success("✓ The regular user's account is deleted: the guard concerns administrators only")
+
+
+# ============================================================================
+# DECIDED UNDER THE WRITE LOCK (lot «decide under the write lock»: A-52, A-54), ON A PRIVATE INSTANCE
+# ============================================================================
+# pysqlite defers BEGIN to the first write: between the handler's reads — the account get_current_user loaded, the count
+# of the other active administrators — and its first write, nothing holds the rows they read, and another request may
+# commit there. The window is A-42/A-51's (test_admin_bootstrap.py): the handler runs on an engine of its own — a second
+# engine on the instance's file, the only one ``_rival_before_the_first_write`` listens to, and only for that call —, and
+# the rival, another request, commits on the instance's engine, another connection, right before the handler's first
+# write. Today that write is the deletion's first step; after the cure it is ``begin_writes``, the write lock taken before
+# any decision, and the decisions see the rival. The barrier: the rival landed once, right before a write of the handler
+# (the statement is reported), its answer and the rows it left as expected.
+#
+# The account that deletes itself co-owns a broker with ``partner``, an ordinary account: its deletion only leaves that
+# broker. A broker of its own would be deleted, and deleting a broker needs the ON DELETE CASCADE of the migrated schema,
+# which create_all's lacks (ACCDEL-008): the deletion would fail for that, not for the race.
+
+#: What a rival left once it committed: what it answered — or what escaped it —, and every row of the instance right after it.
+Landing = tuple[object, dict[str, list[tuple[object, ...]]]]
+#: The body of the 404 that GET and DELETE /users/{id} answer for an account that does not exist (``_user_or_404``).
+USER_NOT_FOUND = "User not found"
+#: How the account vanishes inside its own deletion's window (A-54): whether it is an administrator — the other branch of
+#: the handler's guard —, and who deletes it meanwhile: an administrator through DELETE /users/{id}, or the account itself
+#: from another tab, through DELETE /auth/users/me.
+BY_AN_ADMINISTRATOR = "an administrator"
+BY_ITS_OTHER_TAB = "its other tab"
+VANISHED = [
+    pytest.param(False, BY_AN_ADMINISTRATOR, id="an-ordinary-account-deleted-by-an-administrator"),
+    pytest.param(True, BY_ITS_OTHER_TAB, id="an-administrator-deleted-from-its-other-tab"),
+]
+
+
+@dataclass(frozen=True)
+class _Count:
+    """One count of the other active administrators (``user_service.count_active_superusers``): whom it left out, what it answered, whether the rival had landed by then."""
+
+    excluding_user_id: Optional[int]
+    result: int
+    after_the_rival: bool
+
+
+def _spy_on_the_admin_count(monkeypatch: pytest.MonkeyPatch, landed: list[Landing]) -> list[_Count]:
+    """Every count of the other active administrators, in order, through the real function: a spy, not a stand-in — no state is simulated.
+
+    Evidence of what the handler decided on, and when. A cure may count another way: the spy then sees nothing of it,
+    and nothing here requires it to.
+    """
+    real = user_service.count_active_superusers
+    counts: list[_Count] = []
+
+    async def count_active_superusers(session: AsyncSession, *, excluding_user_id: Optional[int] = None) -> int:
+        result = await real(session, excluding_user_id=excluding_user_id)
+        counts.append(_Count(excluding_user_id=excluding_user_id, result=result, after_the_rival=bool(landed)))
+        return result
+
+    monkeypatch.setattr(user_service, "count_active_superusers", count_active_superusers)
+    return counts
+
+
+async def _delete_as_administrator(engine: AsyncEngine, admin_id: int, user_id: int) -> Union[Response, HTTPException]:
+    """Call the DELETE /users/{user_id} handler as the administrator ``admin_id``, wired as FastAPI wires it: require_admin's account loaded in the request's session. The outcome returned, never raised."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        admin = await user_service.get_user_by_id(session, admin_id)
+        assert admin is not None and admin.is_active and admin.is_superuser, f"Precondition: user {admin_id} must be an active administrator, as require_admin requires"
+        try:
+            return await users_api.delete_account(user_id=user_id, admin=admin, session=session)
+        except HTTPException as refusal:
+            return refusal
+
+
+async def _nothing_requested() -> None:
+    """No request at all: the window opens and nothing lands in it."""
+
+
+def _meanwhile(engine: AsyncEngine, request: Callable[[], Awaitable[object]], landed: list[Landing]) -> Callable[[], Awaitable[None]]:
+    """The rival: ``request`` — another request, on ``engine``'s connections —, then (what it answered, every row right after it) appended to ``landed``.
+
+    What escapes the request is recorded, not raised: raised inside the window, it would reach the handler under test as
+    that handler's own failure.
+    """
+
+    async def rival() -> None:
+        try:
+            answer: object = await request()
+        except Exception as escaped:  # recorded for the barrier: see above
+            answer = escaped
+        landed.append((answer, await _private_rows(engine)))
+
+    return rival
+
+
+async def _own_deletion_through_the_window(engine: AsyncEngine, user_id: int, rival: Callable[[], Awaitable[None]]) -> tuple[Union[dict[str, str], HTTPException, None], Optional[Exception], list[str]]:
+    """``user_id`` deletes its own account on an engine of its own, ``rival`` committing on ``engine`` right before the handler's first write: (what the handler answered, what escaped it instead, the statement the rival ran before).
+
+    The listener is armed on that engine alone and only for this call: the setup, the rival and the reads afterwards
+    go through ``engine``, which nothing listens to.
+    """
+    async with _issuer_engine(engine) as own:
+        with _rival_before_the_first_write(own, rival) as fired:
+            outcome, escaped = await _attempt_own_deletion(own, user_id)
+    return outcome, escaped, list(fired)
+
+
+async def _accounts_beside_a_shared_broker(engine: AsyncEngine, *accounts: _Account, sharer: str) -> tuple[dict[str, int], int, dict[str, list[tuple[object, ...]]]]:
+    """``accounts`` and ``partner``, an ordinary account, then a broker ``sharer`` co-owns with partner, with a DEPOSIT: ({username: id}, the broker's id, every row of the instance).
+
+    Barrier: those accounts, both OWNER grants, the one DEPOSIT, and nothing else.
+    """
+    ids = await _create_accounts(engine, *accounts, _Account("partner", superuser=False))
+    shared, deposit = await _co_owned_broker(engine, (ids[sharer], ids["partner"]))
+    rows = await _private_rows(engine)
+    expected_accounts = sorted((ids[account.username], account.username, account.active, account.superuser) for account in (*accounts, _Account("partner", superuser=False)))
+    assert rows["accounts"] == expected_accounts, f"Precondition: the accounts {expected_accounts}, got {rows['accounts']}"
+    assert rows["grants"] == sorted([(shared, ids[sharer], "OWNER"), (shared, ids["partner"], "OWNER")]), f"Precondition: {sharer} and partner both OWNER of the shared broker: {rows['grants']}"
+    assert rows["transactions"] == [(deposit, shared)], f"Precondition: one DEPOSIT on the shared broker: {rows['transactions']}"
+    return ids, shared, rows
+
+
+def _without(rows: dict[str, list[tuple[object, ...]]], user_id: int) -> dict[str, list[tuple[object, ...]]]:
+    """``rows`` without the account ``user_id`` and its access rows: what deleting that account alone leaves — its broker is shared, so it stays."""
+    return {
+        **rows,
+        "accounts": [row for row in rows["accounts"] if row[0] != user_id],
+        "grants": [row for row in rows["grants"] if row[1] != user_id],
+    }
+
+
+def _answered(outcome: object, escaped: Optional[Exception]) -> str:
+    """What a handler did, in words, for a failure message."""
+    if escaped is not None:
+        return f"raised {type(escaped).__name__}: {escaped}"
+    if isinstance(outcome, HTTPException):
+        return f"answered {outcome.status_code} {outcome.detail!r}"
+    if isinstance(outcome, Response):
+        return f"answered {outcome.status_code}"
+    return f"answered {outcome!r}"
+
+
+class TestDecidedUnderTheWriteLock:
+    """DELETE /auth/users/me decides under SQLite's write lock (lot «decide under the write lock»: A-52, A-54), on a private instance."""
+
+    @pytest.mark.asyncio
+    async def test_the_last_two_administrators_deleting_themselves_at_once_leave_one(self, private_instance: _PrivateInstance, monkeypatch: pytest.MonkeyPatch):
+        """ACCDEL-LOCK-01 — NEW, red until A-52 (today both go, and the instance is left without an administrator).
+
+        admin_a and admin_b are the instance's only administrators, both active; admin_a co-owns a broker with partner,
+        an ordinary account, with a DEPOSIT. admin_a deletes its own account while admin_b's own deletion — DELETE
+        /auth/users/me, another request — commits inside the window: after admin_a's handler read what it decides on,
+        before its first write. admin_b goes, rightly: when it decided, admin_a was another active administrator. So
+        admin_a, by then the last one, must be refused as ACCDEL-002/003 refuse it — 400, error_code LAST_ADMIN, exactly
+        SOLE_ADMIN_DELETE_DETAIL — and nothing of its own deleted: the instance exactly as admin_b's deletion left it —
+        admin_a active and an administrator, its access to the broker, the broker, the DEPOSIT, partner.
+
+        Today the handler counts the other active administrators before its first write — admin_b, one —, and nothing
+        reads them again: admin_b's deletion lands right before admin_a leaves the broker (``DELETE FROM
+        broker_user_access``, the deletion's first write), admin_a is deleted too, its access to the broker with it, and
+        no administrator is left — partner alone. After the cure the first write is the write lock, taken before the
+        guard counts: the count sees admin_b gone.
+
+        Barrier: admin_b's deletion lands once, right before a write of admin_a's handler (the statement is reported),
+        answering «Account deleted successfully» and leaving everything else as it was, admin_a an active administrator;
+        every count of admin_a's handler saw admin_b before it landed and nobody after; and when admin_a goes anyway, its
+        handler had counted admin_b before it landed — the red is the race, not a guard skipped.
+        """
+        print_section("ACCDEL-LOCK-01: the last two active administrators delete themselves at once: the second is refused")
+        engine = private_instance.engine
+        ids, _, before = await _accounts_beside_a_shared_broker(engine, _Account("admin_a", superuser=True), _Account("admin_b", superuser=True), sharer="admin_a")
+        a, b = ids["admin_a"], ids["admin_b"]
+        landed: list[Landing] = []
+        counts = _spy_on_the_admin_count(monkeypatch, landed)
+
+        outcome, escaped, fired = await _own_deletion_through_the_window(engine, a, _meanwhile(engine, lambda: _delete_own_account(engine, b), landed))
+        after = await _private_rows(engine)
+
+        assert fired and len(landed) == 1, f"barrier: admin_b's deletion must land once, right before a write of admin_a's handler: it ran before {fired}, landed {len(landed)} time(s); admin_a's handler {_answered(outcome, escaped)}"
+        b_answer, b_left = landed[0]
+        assert (b_answer, b_left) == (ACCOUNT_DELETED, _without(before, b)), f"barrier: admin_b's own deletion must commit while admin_a is an active administrator, and touch nothing else: it answered {b_answer!r} and left {b_left}"
+        a_counts = [count for count in counts if count.excluding_user_id == a]
+        assert all(count.result == (0 if count.after_the_rival else 1) for count in a_counts), f"barrier: admin_a's handler must count admin_b before its deletion landed, and nobody after: {a_counts}"
+        read_before = [count.result for count in a_counts if not count.after_the_rival]
+        if outcome == ACCOUNT_DELETED:
+            assert read_before, f"barrier: admin_a went without its handler counting the other active administrators before admin_b's deletion landed — a guard skipped, not the race of A-52: {counts}"
+        accounts_left = [row[1:] for row in after["accounts"]]
+        refused = isinstance(outcome, HTTPException) and outcome.status_code == 400 and isinstance(outcome.detail, dict) and outcome.detail.get("error_code") == "LAST_ADMIN"
+        race = f"admin_b's own deletion committed after admin_a's handler had counted the other active administrators {read_before} and before its first write «{fired[0]}»"
+        assert refused, f"red until A-52: {race}: admin_a, by then the last active administrator, must be refused with 400 LAST_ADMIN; the handler {_answered(outcome, escaped)}, and the accounts left are (username, active, administrator) {accounts_left}"
+        assert outcome.detail == SOLE_ADMIN_DELETE_DETAIL, f"The refusal's detail must be exactly {SOLE_ADMIN_DELETE_DETAIL}, got {outcome.detail!r}"
+        assert after == b_left, f"The refusal must delete nothing of admin_a's: the rows as admin_b's deletion left them {b_left}, after {after}"
+
+        print_success("✓ admin_b went first; admin_a, the last active administrator, refused with 400 LAST_ADMIN, nothing of its own deleted")
+
+    @pytest.mark.asyncio
+    async def test_with_nothing_landing_in_the_window_the_administrator_goes(self, private_instance: _PrivateInstance):
+        """ACCDEL-LOCK-02 — GUARD, green today and after: the control of ACCDEL-LOCK-01, admin_b not deleting itself.
+
+        The same instance and the same window — admin_a's deletion on an engine of its own, the listener armed right
+        before its first write — with nothing landing in it. admin_b stays an active administrator, so admin_a may go:
+        «Account deleted successfully», admin_a and its access row gone, everything else in place — admin_b, partner,
+        the broker with partner its OWNER, the DEPOSIT. The window alone refuses nothing.
+        """
+        print_section("ACCDEL-LOCK-02: nothing lands in the window: the administrator whose fellow stays goes")
+        engine = private_instance.engine
+        ids, _, before = await _accounts_beside_a_shared_broker(engine, _Account("admin_a", superuser=True), _Account("admin_b", superuser=True), sharer="admin_a")
+        landed: list[Landing] = []
+
+        outcome, escaped, fired = await _own_deletion_through_the_window(engine, ids["admin_a"], _meanwhile(engine, _nothing_requested, landed))
+        after = await _private_rows(engine)
+
+        assert fired and landed == [(None, before)], f"barrier: the window must open — right before a write of admin_a's handler: {fired} — with nothing landing in it: {landed}"
+        assert outcome == ACCOUNT_DELETED and escaped is None, f"admin_b stays an active administrator, so admin_a must be allowed to go; the handler {_answered(outcome, escaped)}"
+        assert after == _without(before, ids["admin_a"]), f"admin_a and its access must be gone, everything else in place: expected {_without(before, ids['admin_a'])}, got {after}"
+
+        print_success("✓ Nothing landed: admin_a went, admin_b and everything else stayed")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("leaver_is_admin", "deleter"), VANISHED)
+    async def test_an_account_deleted_inside_its_own_deletions_window_answers_404(self, private_instance: _PrivateInstance, leaver_is_admin: bool, deleter: str):
+        """ACCDEL-LOCK-03 — NEW, red until A-54 (today «Account deleted successfully», for an account another request deleted).
+
+        leaver co-owns a broker with partner, an ordinary account; root is an active administrator. leaver deletes its
+        own account while another request deletes it inside the window — after the handler read it, before its first
+        write —: leaver an ordinary account deleted by root through DELETE /users/{id}, or leaver an administrator beside
+        root, deleted by its own deletion from another tab. The handler answers 404 with detail «User not found» — the
+        body GET and DELETE /users/{id} answer for an account that does not exist — and deletes nothing else: the
+        instance exactly as the rival left it — root, partner, the broker with partner its OWNER, the DEPOSIT.
+
+        Today the handler goes on with the account it read: the rival lands right before leaver leaves the broker
+        (``DELETE FROM broker_user_access``, the deletion's first write); the handler then deletes leaver's access row
+        and leaver's own row, both already gone — no row matches, SQLAlchemy only warns —, changes nothing else and
+        answers 200 «Account deleted successfully». After the cure the first write is the write lock, and the account,
+        read again under it, is not there.
+
+        Barrier: the rival lands once, right before a write of leaver's handler (the statement is reported), its deletion
+        done — 204 from DELETE /users/{id}, «Account deleted successfully» from the other tab —, leaving every row but
+        leaver's and its access row.
+        """
+        print_section(f"ACCDEL-LOCK-03: the account deleted inside its own deletion's window, by {deleter}")
+        engine = private_instance.engine
+        ids, _, before = await _accounts_beside_a_shared_broker(engine, _Account("root", superuser=True), _Account("leaver", superuser=leaver_is_admin), sharer="leaver")
+        root, leaver = ids["root"], ids["leaver"]
+        if deleter == BY_ITS_OTHER_TAB:
+            request, done = (lambda: _delete_own_account(engine, leaver)), _answered(ACCOUNT_DELETED, None)
+        else:
+            request, done = (lambda: _delete_as_administrator(engine, root, leaver)), _answered(Response(status_code=204), None)
+        landed: list[Landing] = []
+
+        outcome, escaped, fired = await _own_deletion_through_the_window(engine, leaver, _meanwhile(engine, request, landed))
+        after = await _private_rows(engine)
+
+        assert fired and len(landed) == 1, f"barrier: leaver's deletion by {deleter} must land once, right before a write of leaver's own handler: it ran before {fired}, landed {len(landed)} time(s); the handler {_answered(outcome, escaped)}"
+        rival_answer, rival_left = landed[0]
+        assert (_answered(rival_answer, None), rival_left) == (done, _without(before, leaver)), f"barrier: the deletion by {deleter} must commit, taking leaver and its access row and nothing else: it {_answered(rival_answer, None)} and left {rival_left}"
+        assert after == rival_left, f"The handler must delete nothing else: the rows as the deletion by {deleter} left them {rival_left}, after {after}; the handler {_answered(outcome, escaped)}"
+        not_found = isinstance(outcome, HTTPException) and outcome.status_code == 404 and outcome.detail == USER_NOT_FOUND
+        assert not_found, f"red until A-54: leaver was deleted by {deleter} after its own handler read it and before that handler's first write «{fired[0]}»: the handler must answer 404 {USER_NOT_FOUND!r}, the answer for an account that does not exist; it {_answered(outcome, escaped)}"
+
+        print_success(f"✓ Deleted by {deleter} meanwhile: 404 «User not found», nothing else deleted")
 
 
 # ============================================================================

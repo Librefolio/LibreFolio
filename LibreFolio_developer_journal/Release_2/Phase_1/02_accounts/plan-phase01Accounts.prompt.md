@@ -7263,3 +7263,141 @@ componenti delle impostazioni), `admin/cli_tools.en.md` (A-40, solo EN: le tradu
   `legal-and-managed.spec.ts` leggono il profilo della corsia; in 1.3, prima della fase 2 di H-43; dopo il lotto in corso)
   e **A-58** (la metà UX di H-53, dopo la 1.3: cosa vede l'admin quando `connect-src 'self'` blocca la verifica
   dell'indirizzo).
+
+## Lotto «decidere sotto il lock»: A-52 + A-53 + A-54 + A-55 + A-56 (17/10, 20:00–; base `fe42c9a2f`)
+- **Entrato** il lotto A-11/A-16/A-40/A-26: dev `250031cd1`, CHANGELOG 🐛 ×2 `d1b2b67f6`; il journal (`72858ed23`) a
+  `fe42c9a2f`. Worktree avanzato a `fe42c9a2f`, pulito. Controlli combinati del coordinatore verdi.
+- **Coordinatore: GO**, «as you scoped it»; rossi prima, in-process, con la finestra di A-51; uno slot API
+  (`users-admin`, `account-deletion`, `registration`). **Il 404 resta la stringa nuda** di `_user_or_404` (una forma
+  sola, nessun rimescolamento di altre suite a fine rilascio). Poi A-57.
+
+### Contratto (20:05, sola lettura)
+- **Un aiuto solo**, `user_service.refreshed_under_lock(session, user) -> bool`: `begin_writes(session, User)`, poi un
+  SELECT dell'id; se la riga non c'è più → rollback, `False`; altrimenti `session.refresh(user)`, `True`. Oggi la
+  `refresh` di una riga cancellata nella finestra solleva `InvalidRequestError` → 500.
+- **A-54** (la riga sparita): `update_user_status` lo usa e risponde il nuovo esito `"NOT_FOUND"` → il PATCH alza il 404
+  di `_user_or_404` (stessa stringa, da un aiuto `_user_not_found()`); `set_user_active` e `set_user_admin` (CLI) → `(False,
+  "User '<username>' not found")`, il messaggio del loro primo controllo.
+- **A-55** (DELETE di un altro account): dopo `SELF_DELETION` e la protezione, **sempre** l'aiuto (404 se sparita), poi
+  `is_superuser` e `is_pending_admin` letti sotto il lock → 409 `DEMOTE_FIRST` per un admin che non aspetta. Un ramo solo
+  al posto dei due di A-51.
+- **A-52** (DELETE di sé): l'aiuto su `current_user` (404 se sparito), poi `is_superuser` e `count_active_superusers` sotto
+  il lock → 400 `LAST_ADMIN` con rollback.
+- **A-56** (il limite): nel PATCH, la riattivazione prende il lock (`begin_writes`) **prima** di contare `user_usage` e di
+  leggere `holds_place`; rifiuto → rollback → 409 `USER_LIMIT_REACHED`; poi `update_user_status` (il lock è già preso:
+  `begin_writes` non cambia nulla, la `refresh` è sotto lo stesso lock). In `create_invite`, con `enforce_limit`,
+  `begin_writes(session, AccountToken)` prima del conteggio. La registrazione e la verifica dell'email (E) sono già sicure:
+  ricontano dopo la loro scrittura.
+- **A-53**: `developer/api/curl-testing.md` (~95–99), l'esempio delle preferenze → `PUT /api/v1/settings/user` con i suoi
+  campi veri (`docs-writer`).
+- **Rossi** (`test-author`, in-process, la finestra «prima della prima scrittura» di `_rival_before_the_first_write`,
+  `test_admin_bootstrap.py`): un rivale su un'altra connessione fa il commit dopo le letture del codice e prima della sua
+  prima scrittura; oggi decide su letture vecchie, dopo la cura la prima scrittura è il lock e le decisioni vedono il
+  rivale. Casi: PATCH su un account cancellato nella finestra (oggi 500), DELETE ramo in attesa e ramo normale (oggi 500 e
+  204), DELETE di un account promosso nella finestra (oggi 204), riattivazione e invito a limite − 1 con un rivale che
+  prende l'ultimo posto (oggi oltre il limite), due ultimi admin che si eliminano insieme (oggi nessun admin), CLI
+  `set_user_active`/`set_user_admin` su un account cancellato nella finestra (oggi eccezione). Guardie: senza rivale tutto
+  come prima.
+- **Doc** (`docs-writer`): `developer/architecture/access_control.md` (le decisioni sotto il lock, la tabella delle rotte),
+  A-53. **CHANGELOG** 🐛 proposto: una riga sulle azioni contemporanee di due admin.
+
+### LOCK.1 — Rossi (20:05–20:45, due `test-author` in parallelo, file distinti)
+- **Self-deletion e CLI** (agente `4303839a`; ripetuti da me 20:40): `test_account_deletion_api.py` classe
+  `TestDecidedUnderTheWriteLock` — ACCDEL-LOCK-01 (gli ultimi due admin: oggi A cancellato dopo aver contato B, nessun
+  admin), ACCDEL-LOCK-03 ×2 (l'account cancellato nella finestra da un admin o dalla sua seconda scheda: oggi «Account
+  deleted successfully» con DELETE che toccano 0 righe) **3 rossi**, ACCDEL-LOCK-02 guardia verde;
+  `test_admin_bootstrap.py` LOCK-CLI-01 ×4 (deactivate, activate, promote, demote su un account cancellato nella finestra:
+  oggi `InvalidRequestError`) **4 rossi**, LOCK-CLI-02 ×4 guardie verdi. Le due pagine di test ora importano
+  `_issuer_engine` e `_rival_before_the_first_write` da `test_admin_bootstrap.py`.
+- **Users admin API** (agente `1d3c43d1`): `test_users_admin_api.py` classe `TestDecidedUnderTheWriteLock`, UADM-LOCK-01
+  ×4 (PATCH, anche l'annullamento del setup), -02 ×2 (DELETE: in attesa e normale), -03 ×2 (promosso nella finestra:
+  oggi 204, account e broker cancellati), -04 ×2 e -05 ×2 (limite: oggi 200/201 e uso (4, 3)) **12 rossi**; -06…-09
+  **15 guardie verdi**. Il resto del file invariato (i 34 errori delle classi di corsia sono quelli di sempre senza server).
+- **⚠️ Fuori pista (dentro A-54)**: l'agente trova lo stesso difetto in tre altre rotte su un account cancellato nella
+  finestra: `POST /users/{id}/password-reset-link` (`IntegrityError`, 500), `…/sessions/revoke` (`NoResultFound`, 500),
+  `…/onboarding/reset` (204 su un account che non c'è). Stessa cura (l'aiuto, poi il 404), due righe per rotta: prese nel
+  lotto come parte di A-54 (UADM-LOCK-10…12 chiesti all'agente), da dire al coordinatore.
+- Codice pronto, non applicato: `work/lock/apply_lock.py` (dry-run pulito): l'aiuto `refreshed_under_lock`, i tre usi nel
+  servizio, `_user_not_found()`, il PATCH (il conteggio sotto il lock e `NOT_FOUND`), la DELETE (un ramo solo sotto il
+  lock), le tre rotte, la DELETE di sé, `create_invite`. I tre servizi chiamati dalle tre rotte non aprono transazioni
+  proprie (`reset_onboarding_progress` fa solo il commit finale).
+- **Users admin, seconda passata** (lo stesso agente): UADM-LOCK-10 (link di reset: oggi `IntegrityError` sulla FK), -11
+  (revoca delle sessioni: oggi `NoResultFound`), -12 ×2 (reset dell'onboarding, senza corpo e con un `flow`: oggi 204)
+  **4 rossi**; guardie -13, -14, -15 ×2 verdi. Ripetuti da me (20:52): la classe **16 rossi**, ognuno sull'asserzione del
+  contratto, **19 guardie verdi**. L'istantanea del «nulla è cambiato» ora include anche `user_settings` e le due tabelle
+  dell'onboarding (più severa anche per LOCK-01…09, esiti invariati).
+
+### LOCK.2 — Codice applicato e verdi locali ✅ (20:52–20:56)
+- **Codice** (`work/lock/apply_lock.py`): `user_service.refreshed_under_lock()` (il lock, un SELECT dell'id, rollback e
+  `False` se la riga non c'è più, altrimenti la `refresh`); `update_user_status` → esito `"NOT_FOUND"`; `set_user_active`
+  e `set_user_admin` → `(False, "User '<username>' not found")`; `users.py`: `_user_not_found()` (il 404 di
+  `_user_or_404`), il PATCH (il conteggio della riattivazione dopo `begin_writes`, `NOT_FOUND` → 404), la DELETE (un ramo
+  solo sotto il lock: 404, poi `DEMOTE_FIRST` per un admin che non aspetta), le tre rotte (link di reset, revoca delle
+  sessioni, reset dell'onboarding) con l'aiuto prima di scrivere; `auth.py` la DELETE di sé sotto il lock (404, poi il 400
+  `LAST_ADMIN` con rollback); `registration_service.create_invite` con `begin_writes(session, AccountToken)` prima del
+  conteggio.
+- **⚠️ Fuori pista**: `ruff` C901 su `update_user_status` (11 > 10, il ramo del 404). La regola del progetto
+  (`pyproject.toml`) ammette il `noqa` solo per i compattatori piatti: estratta la parte di `is_active` in
+  `_apply_active_flag()` (stesse chiamate, stesso ordine, stesso `changed`; `work/lock/apply_lock_c901.py`). `ruff` e
+  `black` puliti sui 4 file.
+- **Verdi** (in-process): `TestDecidedUnderTheWriteLock` di `test_users_admin_api.py` **35/35**; di
+  `test_account_deletion_api.py` con ACCDEL-002/003 **6/6**; `test_admin_bootstrap.py` intero **226/226** (A51-007/008 e
+  LOCK-CLI compresi). Corsia, senza server: `services user-profile` 52, `registration` 151, `email-verification-hooks` 32,
+  `session-version` 56.
+
+### LOCK.3 — Coordinatore e doc (20:56–21:15)
+- **Coordinatore (20:56)**: GO per lo slot API dopo il `docs-writer`, dietro il cancello; l'estensione di A-54 alle tre
+  rotte e l'estrazione di `_apply_active_flag` approvate; la riga del CHANGELOG approvata. Più: «E's C-54 note 1
+  (`mark_seen` monotonic) … fold it into this lot if it fits before the slot». La nota non è nei file che posso leggere:
+  il contenuto è nel nome e nel codice — `mark_seen` scrive la release in esecuzione ogni volta che è diversa, quindi la
+  abbassa dopo un ritorno indietro o da un worker più vecchio durante un aggiornamento graduale, e decide sull'account
+  caricato senza lock. Ci sta prima dello slot (servizio e prove in-process): rossi chiesti a un `test-author`
+  (`ae87396f`), cura pronta (`work/lock/apply_c54_mono.py`: `refreshed_under_lock`, poi `release_of` e `_key` come in
+  `pending_for`; tenuto → rollback, risposta la release salvata).
+- **⚠️ Fuori pista**: un `git fetch` partito per sbaglio in un comando di sola lettura si è bloccato: fermato (non serviva,
+  `dev_release2` è un ramo locale). Nessun effetto.
+- **Doc** (`docs-writer` `3a36f6e7`): `developer/architecture/access_control.md` (il paragrafo «Decided under the write
+  lock», `#decided-under-the-lock`, la sola regola; la tabella delle rotte; la tabella del limite; «Superusers»; il rifiuto
+  4 di «Deleting an Account», falso dopo A-55), `developer/architecture/security.md` («A setup completed meanwhile»:
+  il punto della DELETE era falso), `developer/api/curl-testing.md` (A-53: `GET`/`PUT /api/v1/settings/user`). Build
+  strict e `check-links` (97) puliti; pagine solo EN, nessun debito di traduzione.
+
+### LOCK.4 — C-54, la nota 1 di E: `mark_seen` monotòno ✅ (21:00–21:21)
+- **Rossi** (`test-author` `ae87396f`; ripetuti da me 21:18): `test_whats_new_service.py` WN-MONO-01 ×3 (una release
+  salvata più nuova: oggi scritta e risposta la più vecchia; anche 1.10.0 contro 1.9.2), -04 ×2 (un worker più nuovo
+  scrive 1.4.0 nella finestra: oggi sovrascritto), -06 (l'account cancellato nella finestra: oggi `StaleDataError`)
+  **6 rossi**; guardie -02 ×7, -03, -05 verdi. `test_whats_new_api.py` WNAPI-MONO-01 (204 e la riga intatta) e -03 (dopo
+  il prossimo aggiornamento il capitolo già visto non torna) **2 rossi**, -02 guardia. L'aiuto `_mark_seen` dei test ora
+  legge l'oggetto senza ricaricarlo (una cura che fa rollback lo lascia scaduto).
+- **Cura** (`work/lock/apply_c54_mono.py`): `mark_seen` prende il lock e rilegge con `user_service.refreshed_under_lock`
+  (import nella funzione: `user_service` importa questo modulo); una release salvata uguale o più nuova resta (rollback,
+  risposta quella salvata); un valore che non nomina una release vale «niente visto», come in `pending_for`; l'account
+  sparito → None. Doc: due frasi (`developer/frontend/onboarding.md`, `developer/architecture/database/users_access.md`).
+- **Verdi**: `test_whats_new_service.py` intero **70/70**, `test_whats_new_api.py` intero **11/11** (in-process);
+  `services whats-new` di corsia 70/70; `ruff`/`black` puliti; build strict e `check-links` (97) puliti.
+- Lo slot aggiunge `api whats-new` (in-process, pochi secondi) alle tre unità approvate.
+
+### LOCK.5 — Slot API (GO 20:56) e un rosso da riparare (21:20–21:30)
+- `work/slot_lock/slot.sh fe42c9a2f api`: `api account-deletion` **13/13**, `api registration` **102/102**; `api
+  users-admin` **166/167**: rosso A51-006 (`TestTheSetupCompletedWhileTheUsersTabActs::
+  test_a_deletion_in_the_setups_window_asks_to_demote_first`). Lo script si è fermato dopo `registration`: `api
+  whats-new` non è partito (da ripetere). Impronta dell'albero invariata, porta libera.
+- **Triage** (skill `test-triage`): `sqlite3.OperationalError: database is locked` dentro il rivale
+  (`_setup_completed_meanwhile`, l'UPDATE che consuma il link di setup). Il gancio `_setup_lands_after_the_first_read` fa
+  atterrare il rivale dopo la PRIMA chiamata di `is_pending_admin` della rotta: con A-55 la DELETE la fa una volta sola,
+  **sotto** il lock, e il rivale non può scrivere. **Verdetto: assunzione** — il test fissava l'ordine delle chiamate di
+  prima; il comportamento che guarda (un setup completato nella finestra → `DEMOTE_FIRST`) è ancora il contratto, e
+  UADM-LOCK-03 lo prova per la promozione. Riparazione chiesta al `test-author` `1d3c43d1`: il rivale prima della prima
+  scrittura della rotta, come gli UADM-LOCK.
+- **Riparazione** (`test-author` `1d3c43d1`): A51-006 ora fa atterrare il setup (`POST /auth/setup` di un altro worker)
+  subito prima della prima scrittura della rotta, dopo la sua lettura dell'account ancora in attesa; stesso ID e stesso
+  contratto (409 `DEMOTE_FIRST`, nulla cancellato); il gancio `_setup_lands_after_the_first_read` resta per A51-002/005
+  (il PATCH legge ancora `is_pending_admin` prima del lock). In-process 44/44; prova contro una rotta vecchia (fuori dal
+  repo): rosso `(204, '')`, il difetto.
+
+### LOCK.6 — Slot API ripetuto sull'albero finale ✅ (21:31–21:34)
+- `api users-admin` **167/167**, `api account-deletion` **13/13**, `api registration` **102/102**, `api whats-new`
+  **11/11**. Impronta dell'albero invariata (`ab3428512adb3b0d`), porta 6182 libera. `ruff`/`black` puliti su tutti i file
+  toccati.
+- **Lotto «decidere sotto il lock» + C-54 monotòno: definizione di fatto ✅.** Non eseguiti: E2E (nessuno toccato),
+  `all-backend`.

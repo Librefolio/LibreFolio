@@ -807,6 +807,7 @@ class LotAnalysisType(StrEnum):
     VALUE_HISTORY = "VALUE_HISTORY"
     RETURN_HISTORY = "RETURN_HISTORY"
     PRICE_HISTORY = "PRICE_HISTORY"
+    MARKET_PRICE_HISTORY = "MARKET_PRICE_HISTORY"
     BROKER_WAC_HISTORY = "BROKER_WAC_HISTORY"
     CUMULATIVE_WAC_HISTORY = "CUMULATIVE_WAC_HISTORY"
     PERFORMANCE_HISTORY = "PERFORMANCE_HISTORY"
@@ -997,6 +998,20 @@ class LotPriceHistoryPoint(StrictModel):
         return Currency.validate_code(v)
 
 
+class MarketPriceHistoryPoint(StrictModel):
+    """The asset's market price on one day, whatever lots are open (Y-30): a LotPriceHistoryPoint without lot_id."""
+
+    date: date_type
+    market_price: SafeDecimal
+    currency: str = Field(..., description="Currency of market_price: the response target_currency.")
+    estimated: bool = Field(default=False, description="True when market_price is estimated from the last-known trade (no real market quote on/before this date), False for an actual price-history quote, exact or carried forward.")
+
+    @field_validator("currency")
+    @classmethod
+    def validate_currency(cls, v: str) -> str:
+        return Currency.validate_code(v)
+
+
 class BrokerWACHistoryPoint(StrictModel):
     """Broker-scoped WAC time-series point for selected asset."""
 
@@ -1134,6 +1149,10 @@ class LotsAnalysisResponse(StrictModel):
     value_history: Optional[List[LotValueHistoryPoint]] = Field(None, description="Flat per-lot VALUE_HISTORY points.")
     return_history: Optional[List[LotReturnHistoryPoint]] = Field(None, description="Flat per-lot RETURN_HISTORY points.")
     price_history: Optional[List[LotPriceHistoryPoint]] = Field(None, description="Flat per-lot PRICE_HISTORY points.")
+    market_price_history: Optional[List[MarketPriceHistoryPoint]] = Field(
+        None,
+        description="MARKET_PRICE_HISTORY payload — the asset's market price on each day of the window that has a mark convertible to target_currency, independent of the lots and of selected_lot_ids; kept with FAILED.",
+    )
     broker_wac_history: Optional[List[BrokerWACHistoryPoint]] = Field(None, description="BROKER_WAC_HISTORY payload.")
     cumulative_wac_history: Optional[List[CumulativeWACHistoryPoint]] = Field(None, description="CUMULATIVE_WAC_HISTORY payload.")
     performance_history: Optional[List[PerformanceHistoryPoint]] = Field(
