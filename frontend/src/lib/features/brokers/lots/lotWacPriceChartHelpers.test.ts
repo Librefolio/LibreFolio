@@ -10,9 +10,11 @@
  * Two blocks then pin V11 (workstream Y, lot Y12b): the opening value a BUY
  * marker shows is the backend's `opening_value`, read by `eventOpeningValue`,
  * and LotWacPriceChart.svelte's source is read to pin the tooltip's glue, which
- * a node test cannot render. The last two pin Y-30 the same way: the market
+ * a node test cannot render. The next two pin Y-30 the same way: the market
  * price line is the asset's own `market_price_history`, read by
  * `marketPriceLine`, and the source is read to pin that the component reads it.
+ * The last pins J-48: a TRANSFER leg crossing the analysis scope is drawn in the
+ * transfer series, and replayed as the adjustment it is.
  */
 
 import {readFileSync} from 'node:fs';
@@ -817,5 +819,76 @@ describe('LotWacPriceChart market price line — the glue on the source (Y-30)',
     // Red today: its $props() takes `priceHistory = []`.
     it('takes no per-lot priceHistory prop: the union of the lots’ price_history is gone', () => {
         expect(propsPattern(componentCode()), 'Y-30: LotWacPriceChart.svelte still takes the per-lot priceHistory, which a FAILED analysis empties: the price line goes with the lots').not.toMatch(PRICE_HISTORY_PROP);
+    });
+});
+
+/*
+ * J-48 (workstream J) — a TRANSFER leg crossing the analysis scope is a transfer marker, replayed as the adjustment it is.
+ *
+ * The contract. The backend reads a TRANSFER leg whose partner sits at a broker outside the lots' scope as an
+ * ADJUSTMENT_IN (entering, at its own cost basis) or an ADJUSTMENT_OUT (leaving, at the market value of its day) row
+ * (J-10), so the WAC chart puts it in the adjustment series, labelled as an adjustment. J-48 gives each lot timeline event
+ * an optional `scope_boundary`, which lotChartShared's `scopeBoundaryOf` reads as 'IN' | 'OUT' | null, and the chart
+ * shows a boundary row as a transfer — its marker series and its label only:
+ * - `eventCategory(kind, scopeBoundary?)` answers 'transfer' for an IN or OUT boundary, ADJUSTMENT_IN and ADJUSTMENT_OUT
+ *   alike, and maps the kind as before without one: 'adjustment' for an adjustment, null for a departure, which draws
+ *   no marker;
+ * - the replay keeps reading `kind`: `applyLotEvent` moves a boundary row's quantity and unit price as the adjustment it
+ *   is. A cure that replayed it as a transfer would carry the running state across unchanged, which the controls below
+ *   tell apart.
+ *
+ * Red, before the cure: the two boundary cases of `eventCategory`, on their assertion — today the second argument is
+ * ignored, so a boundary row stays in the adjustment series. The cases named «control» hold today and after the cure.
+ * An event carrying the new field reaches `applyLotEvent` as a variable, not as a literal: `LotEventInput` need not
+ * declare a field the replay does not read.
+ */
+describe('J-48 — scope boundary', () => {
+    /** The two directions a leg crosses the scope, each with the adjustment kind the backend reads it as (J-10). */
+    const CROSSINGS = [
+        {kind: 'ADJUSTMENT_IN', boundary: 'IN'},
+        {kind: 'ADJUSTMENT_OUT', boundary: 'OUT'},
+    ] as const;
+
+    // RED until J-48's cure: the second argument is ignored today, so the row stays in the adjustment series.
+    it.each(CROSSINGS)('eventCategory: $kind across an $boundary boundary is in the transfer series', ({kind, boundary}) => {
+        expect(eventCategory(kind, boundary), 'J-48: a leg crossing the scope is a transfer marker (today: adjustment)').toBe('transfer');
+    });
+
+    // Control, green before and after the cure: the no-boundary case beside each red.
+    it.each(CROSSINGS)('control: eventCategory — $kind without a boundary, absent, null or undefined, stays an adjustment', ({kind}) => {
+        expect(eventCategory(kind), 'absent').toBe('adjustment');
+        expect(eventCategory(kind, null), 'null').toBe('adjustment');
+        expect(eventCategory(kind, undefined), 'undefined').toBe('adjustment');
+    });
+
+    // Control, green before and after the cure: a null boundary moves no other kind — a departure still draws no marker.
+    it('control: eventCategory — every other kind keeps its series under a null boundary, a departure none', () => {
+        const kinds: LotEventKind[] = ['BUY', 'SELL', 'SPLIT', 'TRANSFER_ARRIVE', 'TRANSFER_DEPART'];
+        expect(kinds.map((kind) => eventCategory(kind, null))).toEqual(['buy', 'sell', 'split', 'transfer', null]);
+    });
+
+    describe('applyLotEvent replays a boundary row as the adjustment it is', () => {
+        const ev = (kind: LotEventKind, extra: Partial<LotEventInput> = {}): LotEventInput => ({kind, ...extra});
+        /** `event` carrying J-48's field as sent: the scalar, or the array shape of the generated client. */
+        const withBoundary = (event: LotEventInput, scopeBoundary: unknown): LotEventInput & {scope_boundary: unknown} => ({...event, scope_boundary: scopeBoundary});
+
+        // Control, green before and after the cure. Why: replayed as a transfer, 10 @ 2 would cross unchanged.
+        it('control: an ADJUSTMENT_IN blends its units in the same with or without an IN boundary — 10 @ 2 plus 10 @ 4 is 20 @ 3', () => {
+            const before = {quantity: 10, unitPrice: 2};
+            const entering = ev('ADJUSTMENT_IN', {quantity: '10', unit_price: '4'});
+            expect(applyLotEvent(before, entering), 'barrier: without a boundary, the quantity-weighted blend').toEqual({quantity: 20, unitPrice: 3});
+            expect(applyLotEvent(before, withBoundary(entering, 'IN')), 'IN').toEqual({quantity: 20, unitPrice: 3});
+            expect(applyLotEvent(before, withBoundary(entering, ['IN'])), '[IN]').toEqual({quantity: 20, unitPrice: 3});
+        });
+
+        // Control, green before and after the cure. Why: replayed as a transfer, the 10 units would all stay.
+        it('control: an ADJUSTMENT_OUT hands its units over the same with or without an OUT boundary — 10 less 4 is 6, the unit price kept', () => {
+            const before = {quantity: 10, unitPrice: 2};
+            // A leg leaving the scope at the market value of its day (J-10): its close price is not the lot's unit price.
+            const leaving = ev('ADJUSTMENT_OUT', {quantity: '4', close_unit_price: '5'});
+            expect(applyLotEvent(before, leaving), 'barrier: without a boundary, the units leave and the unit price stays').toEqual({quantity: 6, unitPrice: 2});
+            expect(applyLotEvent(before, withBoundary(leaving, 'OUT')), 'OUT').toEqual({quantity: 6, unitPrice: 2});
+            expect(applyLotEvent(before, withBoundary(leaving, ['OUT'])), '[OUT]').toEqual({quantity: 6, unitPrice: 2});
+        });
     });
 });
