@@ -29,22 +29,35 @@
  * but no family. A detector control proves the reading sees a family that is not 'LF Flags'. Without a canvas zrender
  * estimates text widths; no width is asserted. The HTML tooltip (jsdom, `showTip`) is not covered here.
  *
- * ## Part B — every chart passes the theme (static scan)
+ * ## Part B — every chart passes the theme and the density options (static scan)
  *
  * Every `echarts.init(` of the production sources passes exactly the identifier `CHART_INIT_THEME` as its second
  * argument. The scan reads every `.ts` and `.svelte` under `src/` — a superset of `src/lib`, where every chart lives
  * today — without `*.test.ts`, `*.spec.ts`, `.d.ts`, `__tests__/`, `__mocks__/` and the generated API clients; and
  * without `designer-lab/` (`src/lib/dev/designer-lab/`): its engine creates a 1×1 detached probe
  * (`engine/charts.ts:253`, `ec.init(host, null, …)`) only to reach the prototype every instance shares, and never paints
- * it. Comments are blanked before matching, offsets kept so the reported lines are the file's: three doc comments name
+ * it. Comments are blanked before matching, offsets kept so the reported lines are the file's: doc comments name
  * `echarts.init()` without calling it (`echartsDataZoomTouchPan.ts:31`, `echartsTooltipHelpers.ts:273`,
- * `GrowthChart.svelte:323`). In a `.svelte` file only the `<script>` blocks are read; the blanking skips strings,
- * templates and regex literals; the arguments are split by a scanner that respects brackets and literals, since a call
- * may span lines. A guard checks that no production module reaches ECharts' `init` under another name, which this scan
- * could not see. Sanity, path-agnostic: at least 18 calls in at least 17 files (today: 18 in 17 — 15 component files,
- * `LotGanttChart.svelte` with two, and the two PAC files `ExposureBars` and `ExposureMaps`).
+ * `GrowthChart.svelte:323`, and `chartPixelRatio.ts`, which documents the rule below). In a `.svelte` file only the
+ * `<script>` blocks are read; the blanking skips strings, templates and regex literals; the arguments are split by a
+ * scanner that respects brackets and literals, since a call may span lines. A guard checks that no production module
+ * reaches ECharts' `init` under another name, which this scan could not see. Sanity, path-agnostic: at least 18 calls in
+ * at least 17 files (today: 18 in 17 — 15 component files, `LotGanttChart.svelte` with two, and the two PAC files
+ * `ExposureBars` and `ExposureMaps`).
  *
- * ## Why it was red before K-13
+ * The same scan holds DV's rule (`chartPixelRatio.ts`): every call passes `chartInitOptions(<its element>…)` as its
+ * third argument — exactly that call, its first argument the call's own first argument (the same expression), more
+ * arguments after it allowed — so that a chart is born at the screen's density of that moment and followed when it
+ * changes. A literal `{renderer: 'canvas'}`, no third argument, another element, a spread or a call with something after
+ * it would create a chart at the density zrender read when the page loaded, never followed. The files of
+ * `PIXEL_RATIO_PENDING` are exempt, each with its reason: `PriceChartFull.svelte` and `CandlestickChart.svelte`, owned by
+ * workstream Y-N65 for now and migrated by DV in a later batch. The list only shrinks and cannot go stale (the idea of
+ * `PENDING_READERS` in `src/lib/theme/roleColors.test.ts` and of the allowlist of
+ * `src/lib/utils/core/escapeHtml.single.test.ts`): a listed file that is no longer a production source the scan reads,
+ * that has no call any more, or whose every call passes `chartInitOptions` fails the gate, asking for its line to go.
+ * Synthetic controls come first: the rule tells those shapes apart, and the staleness check reports what it must.
+ *
+ * ## Why it was red before K-13 and DV
  *
  * - Part A: neither `CHART_FONT_FAMILY` nor `CHART_INIT_THEME` existed. They are reached through a namespace import, so a
  *   missing one is `undefined`, not an import error: the chart created with `CHART_INIT_THEME` drew in ECharts' default
@@ -53,6 +66,9 @@
  * - Part B: all 18 calls passed `undefined` or nothing as second argument — e.g. `src/lib/components/charts/LineChart.svelte:384`
  *   (`echarts.init(chartContainer, undefined, {renderer: 'canvas'})`), `src/lib/features/risk/CorrelationHeatmap.svelte:458`
  *   (`echarts.init(container)`).
+ * - Part B, DV's rule: the 16 calls outside `PIXEL_RATIO_PENDING` passed `{renderer: 'canvas'}` or nothing as third
+ *   argument — e.g. `LineChart.svelte` (`echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'})`),
+ *   `CorrelationHeatmap.svelte` (`echarts.init(container, CHART_INIT_THEME)`) — and `chartInitOptions` did not exist.
  *
  * Registered in chart-safety-unit (scripts/test_runner/_frontend_portfolio.py).
  */
@@ -529,6 +545,67 @@ function initCallsIn(file: string, source: string): InitCall[] {
 const isOffender = (call: InitCall): boolean => call.args[1] !== THEME_ARGUMENT;
 const describeCall = (call: InitCall): string => `${call.file}:${call.line}  echarts.init(${call.args.join(', ')}) — second argument: ${call.args[1] ?? '(none)'}`;
 
+/** DV: the third argument of every call, `chartInitOptions(<its element>…)` from `$lib/components/charts/chartPixelRatio`. */
+const PIXEL_RATIO_CALLEE = 'chartInitOptions';
+
+/**
+ * The files whose calls do not pass `chartInitOptions` yet, each with its reason. The list only shrinks: once a listed
+ * file passes it everywhere, the staleness check asks for its line to go — and for the exemption to leave the
+ * developer page (`mkdocs_src/docs/developer/frontend/components/charts.md`).
+ */
+const PIXEL_RATIO_PENDING: Readonly<Record<string, string>> = {
+    'src/lib/components/charts/PriceChartFull.svelte': 'Y-N65 (1.3) owns it; DV migrates it after Y-N65 lands',
+    'src/lib/components/charts/CandlestickChart.svelte': 'Y-N65 (1.3) owns it; DV migrates it after Y-N65 lands',
+};
+
+/**
+ * `callee(a, b, …)` as its callee and its arguments, whitespace collapsed; `null` when `expression` is not exactly one
+ * call — a spread around it, an operator or a member after it. Literals and comments are told apart as in a source.
+ */
+function asCall(expression: string): {callee: string; args: string[]} | null {
+    const kinds = classify(expression);
+    const open = expression.indexOf('(');
+    if (open <= 0 || kinds[open] !== CODE) return null;
+    let depth = 0;
+    for (let i = open; i < expression.length; i++) {
+        if (kinds[i] !== CODE) continue;
+        const c = expression[i];
+        if (c === '(' || c === '[' || c === '{') {
+            depth++;
+        } else if (c === ')' || c === ']' || c === '}') {
+            depth--;
+            if (depth > 0) continue;
+            if (c !== ')' || expression.slice(i + 1).trim() !== '') return null;
+            const args = callArguments(expression, kinds, open);
+            return args && {callee: collapse(expression.slice(0, open)), args};
+        }
+    }
+    return null;
+}
+
+/** Whether a call passes, as its third argument, exactly `chartInitOptions(<its own first argument>…)`. */
+function passesPixelRatio(call: InitCall): boolean {
+    const third = call.args[2] === undefined ? null : asCall(call.args[2]);
+    return third !== null && third.callee === PIXEL_RATIO_CALLEE && third.args.length > 0 && third.args[0] === call.args[0];
+}
+
+const describePixelRatio = (call: InitCall): string => `${call.file}:${call.line}  echarts.init(${call.args.join(', ')}) — third argument: ${call.args[2] ?? '(none)'}`;
+
+/**
+ * The lines of `pending` that no longer hold, each saying why: a file that is not among the production sources the scan
+ * reads (`files`) any more, one without a call, one whose every call passes `chartInitOptions`. A file half migrated
+ * still holds its line. Pure, so the controls run it on synthetic calls.
+ */
+function stalePixelRatioExemptions(pending: Readonly<Record<string, string>>, calls: InitCall[], files: readonly string[]): string[] {
+    return Object.keys(pending).flatMap((file) => {
+        if (!files.includes(file)) return [`${file}: not a production source the scan reads any more (moved, renamed or deleted)`];
+        const own = calls.filter((call) => call.file === file);
+        if (own.length === 0) return [`${file}: no echarts.init call any more`];
+        if (own.every(passesPixelRatio)) return [`${file}: every call passes chartInitOptions now`];
+        return [];
+    });
+}
+
 /** An import or export of ECharts in a form that could bring `init` in under another name. */
 interface HiddenInit {
     file: string;
@@ -648,6 +725,35 @@ const SYNTHETIC_IMPORTS = [
 
 const callLines = (calls: InitCall[]): string[] => calls.map((call) => `${call.line}: ${call.args.join(' | ')}`);
 
+/**
+ * DV's rule on a component: three calls that pass `chartInitOptions` on their own element (one with a locale, one over
+ * lines with a comment inside and Prettier's trailing commas), then one call per shape that does not.
+ */
+const SYNTHETIC_PIXEL_RATIO = [
+    '<script lang="ts">',
+    "    import * as echarts from 'echarts';",
+    "    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';",
+    "    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';",
+    '    const a = echarts.init(el, CHART_INIT_THEME, chartInitOptions(el));',
+    "    const b = echarts.init(el, CHART_INIT_THEME, chartInitOptions(el, {locale: 'it,IT'}));",
+    '    const c = echarts.init(',
+    '        container,',
+    '        CHART_INIT_THEME,',
+    '        chartInitOptions(',
+    '            /* its element */ container,',
+    '        ),',
+    '    );',
+    "    const d = echarts.init(el, CHART_INIT_THEME, {renderer: 'canvas'});",
+    '    const e = echarts.init(el, CHART_INIT_THEME);',
+    '    const f = echarts.init(host, CHART_INIT_THEME, chartInitOptions(el));',
+    '    const g = echarts.init(el, CHART_INIT_THEME, {...chartInitOptions(el), width: 2});',
+    '    const h = echarts.init(el, CHART_INIT_THEME, chartInitOptions(el) ?? {});',
+    '    const i = echarts.init(el, CHART_INIT_THEME, chartInitOptions());',
+    '    const j = echarts.init(el, CHART_INIT_THEME, myChartInitOptions(el));',
+    '    const k = echarts.init(el, CHART_INIT_THEME, chartInitOptions(host, el));',
+    '</script>',
+].join('\n');
+
 // =============================================================================
 // K-13 — Part A: the mechanism
 // =============================================================================
@@ -726,7 +832,7 @@ describe('K-13 — Part A: a theme object gives every ECharts text the LF Flags 
 // K-13 — Part B: every chart passes the theme
 // =============================================================================
 
-describe('K-13 — Part B: every chart is created with echarts.init(<el>, CHART_INIT_THEME, …) (static scan)', {timeout: 60_000}, () => {
+describe('K-13 and DV — Part B: every chart is created with echarts.init(<el>, CHART_INIT_THEME, chartInitOptions(<el>)) (static scan)', {timeout: 60_000}, () => {
     it('control — the scanner on a component: comments, markup and styles hold no call, a call may span lines, a comment inside one is blank', () => {
         const calls = initCallsIn('src/synthetic/Chart.svelte', SYNTHETIC_CHART);
 
@@ -764,6 +870,7 @@ describe('K-13 — Part B: every chart is created with echarts.init(<el>, CHART_
             'LotGanttChart.svelte': count('LotGanttChart.svelte'),
             'echartsTooltipHelpers.ts (a doc comment only)': count('echartsTooltipHelpers.ts'),
             'echartsDataZoomTouchPan.ts (a doc comment only)': count('echartsDataZoomTouchPan.ts'),
+            'chartPixelRatio.ts (a doc comment only)': count('chartPixelRatio.ts'),
         }).toEqual({
             'LineChart.svelte has a call': true,
             'CorrelationHeatmap.svelte has a call': true,
@@ -771,6 +878,7 @@ describe('K-13 — Part B: every chart is created with echarts.init(<el>, CHART_
             'LotGanttChart.svelte': 2,
             'echartsTooltipHelpers.ts (a doc comment only)': 0,
             'echartsDataZoomTouchPan.ts (a doc comment only)': 0,
+            'chartPixelRatio.ts (a doc comment only)': 0,
         });
     });
 
@@ -796,5 +904,47 @@ describe('K-13 — Part B: every chart is created with echarts.init(<el>, CHART_
         const offenders = calls.filter(isOffender).map(describeCall);
 
         expect(offenders, `${offenders.length} of ${calls.length} echarts.init calls do not pass CHART_INIT_THEME (from $lib/components/charts/chartFont) as their second argument (paths relative to frontend/)`).toEqual([]);
+    });
+
+    it('control — DV’s rule on a component: chartInitOptions on the call’s own element passes (extra arguments, lines, a comment inside); a literal, no third argument, another element, a spread, an operator after it, no element, another function do not', () => {
+        const calls = initCallsIn('src/synthetic/Density.svelte', SYNTHETIC_PIXEL_RATIO);
+
+        expect(callLines(calls).slice(0, 3), 'barrier: the three passing calls are read whole').toEqual(['5: el | CHART_INIT_THEME | chartInitOptions(el)', "6: el | CHART_INIT_THEME | chartInitOptions(el, {locale: 'it,IT'})", '7: container | CHART_INIT_THEME | chartInitOptions( container, )']);
+        expect(calls.filter(passesPixelRatio).map((call) => call.line)).toEqual([5, 6, 7]);
+        expect(calls.filter((call) => !passesPixelRatio(call)).map((call) => call.line)).toEqual([14, 15, 16, 17, 18, 19, 20, 21]);
+    });
+
+    it('control — the staleness check: a pending file that passes chartInitOptions now, has no call, or is gone is reported; one still pending, or half migrated, is not', () => {
+        const component = (...lines: string[]): string => ['<script lang="ts">', ...lines.map((line) => `    ${line}`), '</script>'].join('\n');
+        const sources: Record<string, string> = {
+            'src/synthetic/Pending.svelte': component("const a = echarts.init(el, CHART_INIT_THEME, {renderer: 'canvas'});"),
+            'src/synthetic/Half.svelte': component('const a = echarts.init(el, CHART_INIT_THEME, chartInitOptions(el));', 'const b = echarts.init(host, CHART_INIT_THEME);'),
+            'src/synthetic/Migrated.svelte': component('const a = echarts.init(el, CHART_INIT_THEME, chartInitOptions(el));'),
+            'src/synthetic/NoChart.ts': 'export const nothing = 0;',
+        };
+        const calls = Object.entries(sources).flatMap(([file, source]) => initCallsIn(file, source));
+        const pending = Object.fromEntries([...Object.keys(sources), 'src/synthetic/Gone.svelte'].map((file) => [file, 'a reason']));
+
+        expect(stalePixelRatioExemptions(pending, calls, Object.keys(sources))).toEqual([
+            'src/synthetic/Migrated.svelte: every call passes chartInitOptions now',
+            'src/synthetic/NoChart.ts: no echarts.init call any more',
+            'src/synthetic/Gone.svelte: not a production source the scan reads any more (moved, renamed or deleted)',
+        ]);
+    });
+
+    it('DV — every echarts.init call passes chartInitOptions(<its element>) as its third argument, but those of the files in PIXEL_RATIO_PENDING', () => {
+        const {calls} = scanCharts();
+        const offenders = calls.filter((call) => !Object.hasOwn(PIXEL_RATIO_PENDING, call.file) && !passesPixelRatio(call)).map(describePixelRatio);
+
+        expect(
+            offenders,
+            `${offenders.length} of ${calls.length} echarts.init calls do not pass chartInitOptions(<their element>) (from $lib/components/charts/chartPixelRatio) as their third argument: their chart is born at the density zrender read when the page loaded, and never follows a change (paths relative to frontend/)`,
+        ).toEqual([]);
+    });
+
+    it('DV — PIXEL_RATIO_PENDING cannot go stale: each listed file is a production source whose calls do not all pass chartInitOptions yet', () => {
+        const {files, calls} = scanCharts();
+
+        expect(stalePixelRatioExemptions(PIXEL_RATIO_PENDING, calls, files), 'remove these lines from PIXEL_RATIO_PENDING (chartFlagFont.test.ts), and their exemption from the developer page charts.md').toEqual([]);
     });
 });
