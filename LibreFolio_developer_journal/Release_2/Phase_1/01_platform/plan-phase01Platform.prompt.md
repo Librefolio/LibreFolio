@@ -8399,3 +8399,126 @@ Con V2 e V4, Z toglie il codice di Z-32 (c): la scrittura di `reported_currency`
 4. Gli archivi a una revisione ritirata: accettarli (**consiglio**) o rifiutarli.
 5. La prova su una copia di lavoro dei dati veri del developer, prima di riavviare la produzione (**consiglio sì**):
    serve la copia, dal coordinatore.
+
+#### Decisione del developer sulla fusione: niente codice una tantum (19/10, 12:20)
+
+> Testuale: «non voglio sporcare il codice con cose una tantum».
+> - Niente conversione automatica all'avvio, niente `./dev.py db reconcile-retired`, niente eccezione nel ripristino.
+> - Un archivio a una revisione ritirata resta rifiutato com'è oggi (`revision_unknown`).
+> - Al loro posto, una procedura manuale con le righe SQL esatte.
+> - Le corsie di test si ricreano.
+> - Restano aperte presso il developer la 010 e i 13 indici, quindi la procedura copre le quattro varianti.
+
+- **Superati**: il punto 3 dell'analisi qui sopra (la conversione nel codice) e le domande 3 e 4.
+- **Restano validi**: la 005 unica (punto 1), l'equivalenza come test (punto 2), le varianti (punto 4) e gli effetti
+  (punto 5), tranne i test e l'azione della conversione. Il ripristino di B non cambia; cambia solo la revisione
+  «vecchia» fissata in `test_backup_staging.py`, che diventa la 004.
+- Costo: circa 1–1,5 giorni di H.
+
+#### Procedura manuale: un DB alla 011 o alla 010 portato alla 005 unica (provata il 19/10)
+
+**Quando.** Una volta sola, al passaggio dal codice con 005–011 a quello con la 005 unica, a server fermo, prima di
+riavviarlo. Senza, il codice nuovo non parte («Can't locate revision identified by …»), ma non tocca nulla.
+
+| Dove | Il DB | Ogni comando comincia con |
+|---|---|---|
+| Il Mac (produzione del developer; dal checkout principale, porta 6040 libera) | `backend/data/prod/sqlite/app.db` | `sqlite3` |
+| La nightly Docker (compose, servizio `librefolio`, dati in `./LibreFolio-data`) | `/app/backend/data/prod-docker/sqlite/app.db` | `docker compose run --rm -T librefolio sqlite3` (`-T`: senza terminale, le righe escono senza `\r`) |
+
+Qui sotto `<db>` sta per il percorso della colonna «Il DB».
+
+1. **Fermare il server.** Sul Mac `./dev.py server` (lo ferma il coordinatore); con Docker
+   `docker compose stop librefolio`.
+2. **Aggiornare il codice.** Sul Mac il checkout; con Docker `docker compose pull`. Non riavviare ancora.
+3. **Copia di sicurezza** (comprende anche ciò che è ancora nel WAL):
+   - Mac: `sqlite3 backend/data/prod/sqlite/app.db ".backup 'backend/data/prod/sqlite/app.db.before-1.3-squash'"`
+   - Docker: `docker compose run --rm -T librefolio sqlite3 /app/backend/data/prod-docker/sqlite/app.db ".backup '/app/backend/data/prod-docker/sqlite/app.db.before-1.3-squash'"`
+4. **La revisione:** `sqlite3 <db> "SELECT version_num FROM alembic_version;"`. Deve rispondere
+   `011_provider_exchange_timezone` oppure `010_provider_reported_currency`, e decide il blocco del passo 5. Per un
+   altro valore vedi le note.
+5. **Il blocco** della variante decisa e della revisione, una riga sola: `sqlite3 -bail <db> "<blocco>"`.
+   - Le prime istruzioni rifiutano un DB a un'altra revisione (`CHECK constraint failed: at_011 = 1`).
+   - Con `-bail` un errore annulla la transazione: non cambia nulla.
+6. **La verifica:** `sqlite3 <db> "<verifica>"` (sotto), da confrontare con le righe attese della variante.
+7. **Riavviare.** Sul Mac `./dev.py server`; con Docker `docker compose up -d`. Nel log c'è «schema up to date»: non
+   c'è nessuna migrazione da applicare.
+8. **I backup fatti prima** sono a una revisione ritirata: il ripristino li rifiuta, per decisione del developer. Farne uno
+   nuovo dopo il riavvio.
+
+**I blocchi** (V1: 010 dentro, indici invariati; V2: 010 fuori; V3: 010 dentro e i 13 indici tolti; V4: 010 fuori e
+indici tolti):
+
+- V1 da 011:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_011 INTEGER CHECK (at_011 = 1)); INSERT INTO squash_guard SELECT version_num = '011_provider_exchange_timezone' FROM alembic_version; ALTER TABLE asset_provider_assignments DROP COLUMN exchange_timezone; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V1 da 010:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_010 INTEGER CHECK (at_010 = 1)); INSERT INTO squash_guard SELECT version_num = '010_provider_reported_currency' FROM alembic_version; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V2 da 011:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_011 INTEGER CHECK (at_011 = 1)); INSERT INTO squash_guard SELECT version_num = '011_provider_exchange_timezone' FROM alembic_version; ALTER TABLE asset_provider_assignments DROP COLUMN exchange_timezone; ALTER TABLE asset_provider_assignments DROP COLUMN reported_currency; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V2 da 010:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_010 INTEGER CHECK (at_010 = 1)); INSERT INTO squash_guard SELECT version_num = '010_provider_reported_currency' FROM alembic_version; ALTER TABLE asset_provider_assignments DROP COLUMN reported_currency; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V3 da 011:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_011 INTEGER CHECK (at_011 = 1)); INSERT INTO squash_guard SELECT version_num = '011_provider_exchange_timezone' FROM alembic_version; ALTER TABLE asset_provider_assignments DROP COLUMN exchange_timezone; DROP INDEX idx_price_history_asset_date; DROP INDEX idx_asset_provider_asset_id; DROP INDEX uq_assets_display_name; DROP INDEX ix_brokers_name; DROP INDEX ix_users_username; DROP INDEX ix_users_email; DROP INDEX ix_transactions_broker_id; DROP INDEX ix_transactions_asset_id; DROP INDEX ix_transactions_date; DROP INDEX ix_broker_user_access_user_id; DROP INDEX idx_route_base_quote; DROP INDEX ix_fx_conversion_routes_base; DROP INDEX ix_fx_conversion_routes_quote; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V3 da 010:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_010 INTEGER CHECK (at_010 = 1)); INSERT INTO squash_guard SELECT version_num = '010_provider_reported_currency' FROM alembic_version; DROP INDEX idx_price_history_asset_date; DROP INDEX idx_asset_provider_asset_id; DROP INDEX uq_assets_display_name; DROP INDEX ix_brokers_name; DROP INDEX ix_users_username; DROP INDEX ix_users_email; DROP INDEX ix_transactions_broker_id; DROP INDEX ix_transactions_asset_id; DROP INDEX ix_transactions_date; DROP INDEX ix_broker_user_access_user_id; DROP INDEX idx_route_base_quote; DROP INDEX ix_fx_conversion_routes_base; DROP INDEX ix_fx_conversion_routes_quote; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V4 da 011:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_011 INTEGER CHECK (at_011 = 1)); INSERT INTO squash_guard SELECT version_num = '011_provider_exchange_timezone' FROM alembic_version; ALTER TABLE asset_provider_assignments DROP COLUMN exchange_timezone; ALTER TABLE asset_provider_assignments DROP COLUMN reported_currency; DROP INDEX idx_price_history_asset_date; DROP INDEX idx_asset_provider_asset_id; DROP INDEX uq_assets_display_name; DROP INDEX ix_brokers_name; DROP INDEX ix_users_username; DROP INDEX ix_users_email; DROP INDEX ix_transactions_broker_id; DROP INDEX ix_transactions_asset_id; DROP INDEX ix_transactions_date; DROP INDEX ix_broker_user_access_user_id; DROP INDEX idx_route_base_quote; DROP INDEX ix_fx_conversion_routes_base; DROP INDEX ix_fx_conversion_routes_quote; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+- V4 da 010:
+  ```sql
+  BEGIN; CREATE TEMP TABLE squash_guard (at_010 INTEGER CHECK (at_010 = 1)); INSERT INTO squash_guard SELECT version_num = '010_provider_reported_currency' FROM alembic_version; ALTER TABLE asset_provider_assignments DROP COLUMN reported_currency; DROP INDEX idx_price_history_asset_date; DROP INDEX idx_asset_provider_asset_id; DROP INDEX uq_assets_display_name; DROP INDEX ix_brokers_name; DROP INDEX ix_users_username; DROP INDEX ix_users_email; DROP INDEX ix_transactions_broker_id; DROP INDEX ix_transactions_asset_id; DROP INDEX ix_transactions_date; DROP INDEX ix_broker_user_access_user_id; DROP INDEX idx_route_base_quote; DROP INDEX ix_fx_conversion_routes_base; DROP INDEX ix_fx_conversion_routes_quote; UPDATE alembic_version SET version_num = '005_release_1_3_0_schema'; COMMIT;
+  ```
+
+**La verifica** (la stessa per tutte):
+
+```sql
+SELECT 'version', version_num FROM alembic_version; SELECT 'objects 1.3', lower(hex(sha3_query('SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name IN (''account_tokens'', ''ix_account_tokens_purpose_expires_at'', ''ix_account_tokens_user_id'', ''plugin_system_settings'', ''plugin_user_settings'', ''ux_users_email_lower'') ORDER BY name', 256))); SELECT 'users', name, type, [notnull], dflt_value FROM pragma_table_info('users') WHERE name IN ('session_version', 'email_verified_at', 'last_seen_version') ORDER BY cid; SELECT 'assignments', name, type FROM pragma_table_info('asset_provider_assignments') WHERE name IN ('reported_currency', 'exchange_timezone'); SELECT 'redundant indexes', count(*) FROM sqlite_master WHERE type = 'index' AND name IN ('idx_price_history_asset_date', 'idx_asset_provider_asset_id', 'uq_assets_display_name', 'ix_brokers_name', 'ix_users_username', 'ix_users_email', 'ix_transactions_broker_id', 'ix_transactions_asset_id', 'ix_transactions_date', 'ix_broker_user_access_user_id', 'idx_route_base_quote', 'ix_fx_conversion_routes_base', 'ix_fx_conversion_routes_quote'); SELECT 'integrity', integrity_check FROM pragma_integrity_check; SELECT 'foreign keys', count(*) FROM pragma_foreign_key_check;
+```
+
+Righe attese: le stesse di un DB nuovo della variante. Sono comuni:
+
+```text
+version|005_release_1_3_0_schema
+objects 1.3|eeba1a55c8be8f71236eb734e05c036716c9d67d71b13cf5943a38546960112c
+users|session_version|INTEGER|1|0
+users|email_verified_at|DATETIME|0|NULL
+users|last_seen_version|VARCHAR(40)|0|NULL
+```
+
+poi, in V1 e V3, `assignments|reported_currency|VARCHAR(8)` (in V2 e V4 nessuna riga `assignments`); poi
+`redundant indexes|13` in V1 e V2, `redundant indexes|0` in V3 e V4; e alla fine `integrity|ok` e `foreign keys|0`.
+
+**Note**:
+- `objects 1.3` è l'impronta SHA3 di tipo, nome e SQL degli oggetti della 1.3: `account_tokens`, i suoi due indici, le
+  due tabelle dei plugin e `ux_users_email_lower`.
+  - Se solo l'impronta è diversa, il testo DDL di uno di quegli oggetti è scritto in un altro modo, per esempio da
+    un'altra versione di SQLAlchemy.
+  - Allora si confronta il testo: la stessa `SELECT` senza `sha3_query`, sul DB e su un DB nuovo.
+- Un DB a una revisione fra 005 e 009: prima si avvia una volta il codice di prima della fusione, che lo porta alla
+  011; poi lo si ferma e si usa il blocco «da 011». Oppure lo si ricrea.
+- Se Z-33r entra da solo prima della fusione: la guida di Z porta il DB dalla 011 alla 010, e qui si usa il blocco
+  «da 010».
+- Le corsie di test: `db populate --force --clean` col codice nuovo. Senza, i loro server di test non partono.
+- **Provata** su copie del DB popolato della corsia (alla 011, e riportato alla 010 con Alembic), con il `sqlite3` del
+  Mac (3.51):
+  - tutte le 8 combinazioni danno una verifica identica a quella di un DB nuovo della variante;
+  - le righe restano le stesse (11 account, 76 transazioni, 2744 prezzi, 14 assegnazioni);
+  - dopo, `alembic upgrade head` non ha nulla da fare;
+  - il blocco di un'altra revisione è rifiutato senza cambiare nulla.
+  - Script: `files/squash/procedure/` nella cartella della sessione.
+- **Non provati**:
+  - l'involucro Docker: la SQL è la stessa; `sqlite3` nell'immagine deve essere almeno 3.35 per `DROP COLUMN`;
+  - i dati veri del developer. **Consiglio**: prima su una copia di lavoro del suo DB (skill `real-data-copy`), per
+    vedere davvero la sua impronta.
