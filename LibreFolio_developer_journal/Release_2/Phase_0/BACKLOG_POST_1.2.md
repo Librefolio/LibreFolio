@@ -3298,8 +3298,10 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Rimedio nel test (`test-author`; il Lab, L, è archiviato): due elementi con fonti diverse, con la precondizione
     scritta.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), passo G3-9.
-- **DV-14 · `PriceChartFull` e `CandlestickChart` nascono ancora alla densità del caricamento** — minimo; DV, 19/10
-  (DPR, grafici sfocati dopo un cambio di schermo).
+- ✅ **DV-14 · `PriceChartFull` e `CandlestickChart` nascono ancora alla densità del caricamento** — minimo; DV, 19/10
+  (DPR, grafici sfocati dopo un cambio di schermo). **Chiusa il 19/10** sulla punta `56666d2ce` (Y-N65 entrato in
+  `5cb47395f`), in attesa del commit del coordinatore: le due chiamate su `chartInitOptions`, la deroga
+  `PIXEL_RATIO_PENDING` vuota (il meccanismo resta per un grafico che non possa migrare subito).
   - I due file sono di Y-N65 (1.3) per circa un giorno: restano fuori dal lotto DPR, nella deroga `PIXEL_RATIO_PENDING`
     del gate K-13 (`frontend/src/lib/components/charts/chartFlagFont.test.ts`). Finché ci restano, i loro grafici
     (dettaglio dell'asset e dei cambi) nascono alla densità di quando la scheda si è aperta e non seguono un cambio.
