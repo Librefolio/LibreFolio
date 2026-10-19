@@ -3961,7 +3961,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
   Dettagli: piano H, §14, lotto «H-42».
   Chiusa il 17/10 (riconciliazione del 17/10): `7903bbe72`, `84c71a0c7`, `fb8661dd2`, entrati in dev `3b0af4094`.
-- **H-43 · Una corsia di test con il profilo managed, per gli E2E del cloud** — basso, runner; H (analisi di H-42),
+- ✅ **H-43 · Una corsia di test con il profilo managed, per gli E2E del cloud** — basso, runner; H (analisi di H-42),
   17/10.
   - `configure_test_runtime` toglie a ogni corsia ogni `LIBREFOLIO_*` dello sviluppatore, e un run ha un solo backend
     condiviso: oggi nessun E2E può girare con il profilo managed, o con la protezione dai frame accesa, e un header
@@ -3989,6 +3989,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     avesse bisogno vorrebbe lo stesso filtro in `_consolidate_backend.py` e nel passo parallelo.
 
   Dettagli: piano H, §14, lotto «H-42», analisi punto 4.
+  Chiusa il 17/10 (riconciliazione del 19/10): `cd04b17b0`, `11d0bce48`, entrati in dev `d3212e9f2`; `3b01fff93`, in dev
+  `a6adb0066`. La fase 2 (una volta, nel cancello della release candidate) resta al coordinatore.
 - **H-44 · Il ripiego dell'anteprima PDF probabilmente scarica il file invece di mostrarlo** — basso, file; trovato nel
   lotto H-42 (dal docs-writer), via coordinatore, 17/10. Il proprietario lo assegna il coordinatore al prossimo treno.
   - Quando il visore EmbedPDF fallisce, `FilePreviewModal.svelte` mostra il PDF in un `<iframe>` su
@@ -4078,6 +4080,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     - l'opzione spenta, che si comporta come oggi.
 
   Dettagli: questa riga; la guardia di B in B-38.
+  ✅ **Il disegno è entrato** il 17/10 (riconciliazione del 19/10): `cd0e21548`, in dev `13b6cfde1`. Il codice
+  (`regular_only`, `no_links_under`) resta aperto, dopo la 1.3.
 - **H-48 · `env_url` toglie la barra finale anche ai link di una pagina** — basso; H (review di A9), via coordinatore,
   17/10. Da fare con H-47 (stesso file, `config/__init__.py`), altrimenti dopo la 1.3.
   - `env_url` toglie una barra finale perché a `LIBREFOLIO_PUBLIC_URL` si attacca un percorso. Gli altri suoi
@@ -4133,7 +4137,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     OK, o lo fa X.
 
   Dettagli: questa riga.
-- **H-51 · Il motore del server vivo tiene `trusted_schema` acceso, con il `regexp` e il `floor` Python di SQLAlchemy**
+- ✅ **H-51 · Il motore del server vivo tiene `trusted_schema` acceso, con il `regexp` e il `floor` Python di SQLAlchemy**
   — basso, sicurezza; H (review di B-36/B-37), deciso dal coordinatore il 17/10. Da fare dopo W-B75, nella 1.3.
   - SQLAlchemy 2.0.52 (dialetto pysqlite, ereditato da aiosqlite) registra `regexp` e `floor` in Python su ogni
     connessione. `trusted_schema` vale 1 di default.
@@ -4162,7 +4166,9 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - La frase di B-18 in `security.md` è riscritta, insieme alla doc dei motori.
   - Test: `db session-pragmas` (15).
   Dettagli: piano H, §14, «Review di B-36/B-37» e il lotto H-51.
-- **H-52 · Gli script inline di `index.html` nella CSP per hash (D4 di H-43)** — basso, sicurezza; H, deciso dal
+  Chiusa il 17/10 (riconciliazione del 19/10): `bb2ba3e26`, `df34b9f4b`, `2def8f7db`, entrati in dev `70ab2fcc6`
+  (CHANGELOG `6aa42af1a`).
+- ✅ **H-52 · Gli script inline di `index.html` nella CSP per hash (D4 di H-43)** — basso, sicurezza; H, deciso dal
   coordinatore il 17/10 (D4): un lotto H dopo la fase 1 di H-43, nella 1.3 se c'è tempo.
   - Oggi `CSP_REPORT_ONLY_POLICY` (`security_headers.py`) ha `script-src 'self' 'wasm-unsafe-eval'`. I due script
     inline dell'`index.html` costruito (l'anti-FOUC di `app.html`, 1459 caratteri, e il bootstrap di SvelteKit, 373)
@@ -4190,6 +4196,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     csp-collector` 12 + 1 skipped su entrambe le corsie; cloud smoke nello slot.
 
   Dettagli: piano H, §14, lotto «H-43, fase 1», decisioni D4 e passo 4 (F1); lotto «H-52».
+  Chiusa il 17/10 (riconciliazione del 19/10): `aaea0824b`, `cfb59de97`, `70da097fb`, entrati in dev `ca7ba117c`
+  (CHANGELOG `1ec74c8e5`).
 - **H-53 · La sonda dell'indirizzo di un link, con una `connect-src` applicata (F3 di H-43, metà sicurezza)** — basso,
   sicurezza; trovato dal primo cloud smoke, deciso dal coordinatore il 17/10. La metà dell'esperienza è di A.
   - Il controllo dell'indirizzo di un link (Impostazioni › Utenti) prende `<indirizzo scritto dall'admin>/api/v1/auth/
@@ -4201,7 +4209,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura, quando la CSP si applica: l'origine pubblica configurata in `connect-src`, oppure la sonda dal server.
 
   Dettagli: piano H, §14, lotto «H-43, fase 1», passo 4 (F3).
-- **H-54 · Il controllo della build vecchia non vede un file tolto da `frontend/src/` o da `frontend/static/`** —
+- ✅ **H-54 · Il controllo della build vecchia non vede un file tolto da `frontend/src/` o da `frontend/static/`** —
   minimo, strumenti; trovato da test-author nel lotto H-52, 17/10.
   - `check_frontend_needs_build()` confronta le date dei file che esistono. Le date delle cartelle non contano (un
     `.DS_Store` le muoverebbe), quindi un file cancellato dopo la build resta nella build, che sembra fresca. Solo gli
@@ -4218,6 +4226,43 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     ricostruzione, una volta sola.
   - Provato dal vivo: dopo la build, l'impronta registrata e quella attuale sono uguali e non si ricostruisce più.
   - Test: `utils runtime-isolation` 454 (+67).
+  Chiusa il 17/10 (riconciliazione del 19/10): `14a723dc6`, `cb037b0e0`, entrati in dev `d6c252ec4`.
+- **H-55 · La CSP applicata: `LIBREFOLIO_CSP_ENFORCE`** — medio-basso, sicurezza; H, dopo H-52, con le decisioni
+  E1–E6 del coordinatore del 17/10. **Sospesa il 19/10**: è tra gli ampliamenti della 1.3 che il developer sta
+  leggendo, con l'interruttore e il suo default.
+  - Oggi la CSP del profilo managed solo segnala (H-52). Con l'interruttore acceso, le pagine della web app avrebbero
+    in più una policy applicata: quella report-only con gli hash, senza `frame-ancestors`, perché i frame restano a
+    `LIBREFOLIO_FRAME_PROTECTION`. È spento ovunque per default. La proposta per il managed: acceso dopo un cloud
+    smoke verde con la policy applicata.
+  - Le decisioni del coordinatore:
+    - F1 (cheetah-grid) resta un'eccezione documentata; la trasformazione in Vite viene dopo la 1.3;
+    - l'origine di `LIBREFOLIO_PUBLIC_URL` va in `connect-src` (con A per AUSR-E-07, dopo A-57);
+    - gli hash si leggono solo all'avvio;
+    - nessun endpoint di segnalazione;
+    - `api.github.com` resta ammesso finché il controllo degli aggiornamenti è acceso.
+  - Fatti l'analisi e i rossi, mai eseguiti. I rossi sono parcheggiati come patch nella cartella della sessione H
+    (`files/parked/h55-csp-enforce-reds-on-d6c252ec4.patch`), e il worktree è tornato al commit.
+  - Alla ripresa, prima della cura:
+    - il rifiuto di `--coverage` sulla corsia che applica (scelta 4) poggia su una premessa sbagliata: istanbul legge
+      `globalThis` e non fa `new Function`. Va riproposto;
+    - un `LIBREFOLIO_PUBLIC_URL` non valido va gestito. Proposta: scriverlo nel log e non aggiungere nessuna origine.
+
+  Dettagli: piano H, §14, lotto «H-55», note «Sospeso» e «Fuori pista».
+- **H-56 · Allo spegnimento nessun passo aspetta o ferma i compiti in background dell'avvio** — basso; E (nota su
+  E-19a), via coordinatore, 17/10. Dopo la 1.3, insieme allo spegnimento di Z.
+  - `app_lifespan.py` tiene in `_background_tasks` questi compiti, e nessun passo dello spegnimento li cancella o li
+    aspetta:
+    - il prewarm dei provider;
+    - quello delle festività di mercato;
+    - l'audit delle valute salvate (E-19a, in un thread);
+    - il prewarm del pool BRIM, se acceso (in un thread).
+  - Alla chiusura del ciclo di eventi Python 3.13 cancella i compiti rimasti, poi aspetta i thread dell'executor di
+    default fino a 300 s (`shutdown_default_executor`). Uno stop subito dopo l'avvio aspetta quindi i thread ancora al
+    lavoro. L'audit legge e basta (circa 1,6 s a 3 milioni di prezzi), quindi interromperlo non fa danni.
+  - Cura possibile: un passo dello spegnimento che cancella i compiti, aspetta al massimo qualche secondo e scrive nel
+    log i nomi di quelli ancora vivi. Da accordare con Z, che possiede lo spegnimento (C-49).
+
+  Dettagli: questa riga.
 
 ## A · Account e accessi (fase 01)
 
