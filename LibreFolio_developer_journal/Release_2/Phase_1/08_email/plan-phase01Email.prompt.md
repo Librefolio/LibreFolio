@@ -7784,3 +7784,144 @@ non sposti il registro.
 > - Il caso che conta è un link finito nelle mani sbagliate, usato proprio mentre l'admin lo annulla. L'admin vedrebbe
 >   «inattivo» fino al ricaricamento; chi ha il link non può scegliere quel millisecondo.
 > - La cura, se la si vuole: rileggere l'account dopo la prima scrittura (un `refresh` sotto il lock) e decidere da lì.
+
+### A-51 — La revisione dopo l'ingresso (2026-10-17, 18:4x–19:0x; sola lettura, dev `180be0ff1`)
+> Codice di A `a2dbe7b7e`…`86b2f2f47`, letto dagli oggetti git mentre ero congelato. **OK**, tre note informative.
+> - **Verificato**: `begin_writes` emette `BEGIN` col suo `UPDATE … WHERE false`, le letture prima erano in autocommit,
+>   quindi `refresh` più le guardie leggono sotto il lock; ogni rifiuto fa `rollback` prima di tornare; nel CLI ogni
+>   guardia è sotto il lock; il validatore di `cancel_setup` dà 422 senza `is_active` falso; `__getnewargs__`
+>   restituisce `(code, message)` (UNAME-032).
+> - **Note**:
+>   1. una cancellazione concorrente dello stesso account dà 500, non 404: `session.refresh(user)` alza
+>      `InvalidRequestError` (prima era `StaleDataError`, anch'esso 500);
+>   2. la cancellazione rilegge sotto il lock solo nel ramo «in attesa»: un account promosso da un altro admin nella
+>      finestra si cancella senza `DEMOTE_FIRST` (mai l'ultimo admin, perché chi chiede lo è);
+>   3. preesistente: il controllo del limite (`usage.full`) di una riattivazione sta prima del lock.
+
+### C-54 — La revisione dopo l'ingresso (2026-10-17, 20:4x–20:5x; sola lettura, dev `630c478cd`)
+> Codice di A `9e9dff30c`…`737268864`. **OK**, due note informative (mandate al coordinatore, girate ad A).
+> - **Verificato**: `get_git_version()` è sotto `lru_cache`, quindi nessun `git` per richiesta; `last_seen_version` viene
+>   dalla migrazione 005 e C-54 è il solo a scriverlo; ogni account passa da `create_user`; `_auth_user()` è l'unico
+>   costruttore di `AuthUserResponse`; la POST scrive la release del server, idempotente; `whats-new/seen` fuori da
+>   `ALLOWED_WHEN_BLOCKED` è innocuo, perché la pagina del blocco non monta `DeferredAppPopups`.
+> - **Note**: `mark_seen` può riportare indietro il segno dopo un downgrade (cura: scrivere solo se più nuovo); una
+>   pre-release conta come la sua release.
+
+### C-70b — I rifiuti del parse e dell'anteprima tradotti (K2b di W)
+#### C-70b.0 — Analisi (2026-10-17, 21:0x–21:2x; sola lettura, HEAD `9e6faacf4`)
+> **La richiesta** (coordinatore, 21:0x): il 400 del parse è ancora in inglese nel wizard, e l'anteprima illeggibile non
+> ha un codice. Errori a codice con parametri, nello stile di `BRIMRefusal`, tradotti in `importWizard.parseRefusal.*`
+> come in K2a di W (`0eac8e1b6`). W rivede. Nessuno dei file è aperto altrove.
+>
+> **Lo stato vero**:
+> - **K2a** ha dato un codice ai rifiuti dei plugin (`cannot_parse_detail` → `BRIMRefusal{code, message, context}`), ma
+>   solo per il controllo dei plugin (`GET …/plugin-check`), che il wizard traduce con `resolveParseRefusalMessage`
+>   (`features/transactions/import/defaultPluginCheck.ts:86`).
+> - **Il parse** (`POST /brokers/import/files/{id}/parse`, `brokers.py:910`), tre 400 in inglese:
+>   - la guardia di `brim_provider.parse_file`: `ValueError(_refusal_message(...))`, cioè «Plugin 'X' cannot parse file
+>     'Y': <reason>», dove il motivo viene da `cannot_parse_reason`, testo;
+>   - `ValueError("Plugin not found: <code>")`;
+>   - `BRIMParseError` → `"Parse error: <message>"`: circa 60 punti in più di 30 plugin, frasi inglesi.
+>   - Il 422 `set_required` ha già un codice (`{code, message, missing_roles}`).
+>   - Il wizard: `result.errorMessage = extractErrorMessage(e)` (`ImportWizardModal.svelte:4041`), mostrato come testo.
+> - **L'anteprima**: le due rotte (`GET /brokers/import/files/{id}/preview`, `brokers.py:737`, e
+>   `GET /uploads/{id}/preview`, `uploads.py:291`) prendono ogni `ValueError` di `build_preview_response`
+>   (`services/files/file_preview.py`) come un 400 col testo. Gli errori:
+>   - `UnreadablePreviewError` (un `ValueError`): «This file cannot be read as an Excel workbook…»;
+>   - `UnsupportedPreviewError`: «Preview is not supported for '<file>'» o «Table preview…», e la libreria Excel che
+>     manca sul server;
+>   - `ValueError("Sheet '<x>' not found")`.
+>   - Il frontend: `getFilePreviewError(error, 'Preview failed')` (`utils/files/filePreview.ts:58`), con un ripiego
+>     inglese scritto nel codice; lo chiamano il wizard e `BrokerImportFilesModal`. Nessuna chiave i18n esistente.
+> - `extractErrorMessage` legge già `detail.message` da un `detail` oggetto, quindi un 400 a oggetto lascia ogni altro
+>   lettore com'è (la frase inglese).
+> - **Il passaggio fra processi**: il parse gira nel pool di processi (`parse_file_offloaded`), quindi l'eccezione torna
+>   serializzata. `BaseException.__reduce__` rimette il `__dict__` dopo `cls(*args)`: una sottoclasse di `ValueError`
+>   con attributi passa, se il costruttore accetta i propri `args`. Un rosso lo fissa sul pool vero.
+> - Fuori: il motivo che `move_to_failed` salva per un file fallito (`error_message`) non si mostra da nessuna parte; la
+>   rotta `/uploads/file/{id}` (testo e immagini) non è l'anteprima.
+>
+> **La proposta (K2b)**:
+> 1. **Il 400 del parse diventa un oggetto `{code, message, context}`**, come `BRIMRefusal` e `set_required`:
+>    - la guardia: un `BRIMParseRefusedError(ValueError)` col nome del plugin, il nome del file e il `BRIMRefusal` di
+>      `cannot_parse_detail` (o niente); codice `cannot_parse`, `context` `{plugin_name, file_name}` più `refusal`
+>      annidato. Il testo inglese resta il `message` (le corrispondenze `match="cannot parse file"` restano verdi);
+>    - `plugin_not_found` con `{plugin_code}`;
+>    - `BRIMParseError` → `parse_failed` con `{plugin_name, file_name}`, e la frase del plugin nel `message`: tradurre le
+>      frasi dei 30 plugin è un lotto suo;
+>    - lo spostamento in `failed` e i codici HTTP restano.
+> 2. **I 400 dell'anteprima** con lo stesso oggetto, da un solo aiuto usato dalle due rotte: `preview_unreadable`,
+>    `preview_unsupported` (`{file_name}`), `preview_engine_missing`, `preview_sheet_not_found` (`{sheet}`); gli errori
+>    di `file_preview.py` portano `code` e `context`, e le classi restano.
+> 3. **Il frontend**:
+>    - un risolutore puro, accanto a `resolveParseRefusalMessage`: `importWizard.parseRefusal.cannot_parse`
+>      («{plugin_name} cannot read {file_name}: {reason}», col motivo tradotto da K2a), `plugin_not_found`,
+>      `parse_failed`; senza codice, o senza traduzione, `extractErrorMessage`;
+>    - `getFilePreviewError` riceve il traduttore: `files.preview.error.<code>` e un ripiego tradotto al posto di
+>      «Preview failed».
+> 4. i18n 4 lingue (circa 9 chiavi), i documenti (`brim_plugin_guide.md`, `import-wizard.md`, la pagina dell'anteprima).
+>
+> **I rossi** (al `test-author`):
+> - service: la guardia alza il nuovo errore con codice, nomi e rifiuto (Generic CSV senza colonna, un plugin senza
+>   `cannot_parse_detail`); il viaggio in `pickle` e attraverso il pool vero; i codici e il `context` degli errori
+>   dell'anteprima;
+> - API: i 400 del parse (`cannot_parse` col rifiuto annidato, `plugin_not_found`, `parse_failed`) e delle due
+>   anteprime (`preview_unreadable`, `preview_unsupported`, `preview_sheet_not_found`);
+> - le riparazioni dei test che leggono il `detail` come testo: `test_brim_api.py:569`, `:2081`, `:2451`,
+>   `test_uploads_api.py:919`;
+> - Vitest: i due risolutori e le chiavi nei 4 cataloghi.
+>
+> **Da decidere**: la forma `{code, message, context}` (BRIM) o `{error_code, message}` (account): propongo la prima;
+> lo spazio delle chiavi dell'anteprima (`files.preview.error.*`, perché `filePreview.ts` è comune); `parse_failed`
+> lascia la frase del plugin in inglese, in una cornice tradotta.
+>
+> **Dimensione**: piccola-media. Backend circa 80 righe, frontend circa 60, 9 chiavi ×4, test dal `test-author`, docs.
+> W rivede.
+
+#### C-70b.1 — Le risposte, e i rossi al `test-author` (2026-10-17, 21:0x; HEAD `9e6faacf4`)
+> **Via del coordinatore**, W rivede:
+> - (a) la forma di BRIM, `{code, message, context}`;
+> - (b) le chiavi dell'anteprima in `files.preview.error.*`;
+> - (c) `parse_failed` tiene la frase inglese del plugin dentro una cornice tradotta, per la 1.3. La codifica dei circa
+>   60 `BRIMParseError` va nel backlog dopo la 1.3: messa nella mia sezione, **E-21** (la sezione di W non è mia).
+> - Rossi prima, compreso il viaggio in `pickle` sul pool vero; le 4 riparazioni approvate. `brokers.py`, `uploads.py`,
+>   `filePreview.ts` e il wizard non sono aperti altrove. Una riga 🐛 del CHANGELOG al checkpoint.
+>
+> **Il contratto al `test-author`** (`d923b69e`):
+> - `BRIMParseRefusedError(ValueError)` (`plugin_code`, `plugin_name`, `file_name`, `refusal`: il `BRIMRefusal` di
+>   `cannot_parse_detail`, o niente) e `BRIMPluginNotFoundError(ValueError)` (`plugin_code`); i messaggi inglesi di oggi;
+> - la rotta del parse: `cannot_parse` (`context`: i tre nomi e `refusal`), `plugin_not_found`, `parse_failed`
+>   (`BRIMParseError` e ogni altro `ValueError`: `context` coi nomi e `reason`); `move_to_failed` com'è;
+> - l'anteprima: `code` e `context` sugli errori di `file_preview.py` (classi tenute, sottoclassi nuove per il motore
+>   mancante e il foglio assente), `preview_error_detail(error)`, le due rotte con un solo `except ValueError`;
+> - il frontend: `parseErrors.ts` (`resolveParseErrorMessage`, accanto al risolutore di K2a), `getFilePreviewError(error,
+>   t)`, 8 chiavi (3 `importWizard.parseRefusal.*`, 5 `files.preview.error.*`).
+
+#### C-70b.2 — Parcheggiato ⏸ (2026-10-19, 11:1x; HEAD `9e6faacf4`)
+> Lo stop dello sviluppatore (17/10, 21:2x) è arrivato a metà lotto. Alla ripartenza del 19/10 il coordinatore: C-70b
+> aspetta la lettura dei lotti piccoli da parte dello sviluppatore, e si implementa solo dopo il suo via. Il lavoro è
+> parcheggiato fuori dal repo; il worktree è tornato a HEAD (`git restore` dei 7 file modificati, `rm` dei 3 nuovi).
+> - **La patch**, nella cartella della sessione: `files/parked/c70b-k2b-20261019.patch` (SHA-256 `984bbe66…`), 10 file:
+>   - i 7 modificati: `brokers.py`, `uploads.py`, `brim_provider.py`, `file_preview.py`, `test_brim_api.py`,
+>     `test_uploads_api.py`, `test_file_preview.py`;
+>   - i 3 nuovi: `test_brim_parse_refusal_codes.py`, `parseErrors.test.ts`, `filePreview.test.ts`;
+>   - accanto, la copia di ognuno (`c70b-files/`), `SHA256SUMS` e un README con la ripresa.
+> - **La verifica** (`files/tools/c70b_park.sh`): applicata ai 7 file di HEAD esportati fuori da ogni repository, la
+>   patch ricostruisce i 10 file byte per byte (10 su 10); dopo il ripristino `git apply --check` passa, HEAD e indice
+>   invariati, `git status` mostra solo il giornale.
+> - **Lo stato allo stop**:
+>   - fatto, il backend: `BRIMParseRefusedError` e `BRIMPluginNotFoundError` con `_refusal_detail`
+>     (`brim_provider.py`); il 400 a codice del parse (`_failed_parse_http_error` in `brokers.py`: `cannot_parse`,
+>     `plugin_not_found`, `parse_failed`); la gerarchia `PreviewError` con `code`, `context` e `preview_error_detail`
+>     (`file_preview.py`); le due rotte dell'anteprima. Ruff e black puliti;
+>   - i rossi del `test-author` (`d923b69e`): i puri verdi (codici del rifiuto 20 su 20, il viaggio nel pool vero
+>     compreso; `test_file_preview.py` 49 su 49); le API solo raccolte (168); i Vitest ancora rossi
+>     (`parseErrors.test.ts` 32, `filePreview.test.ts` 19 più 4 guardie);
+>   - da fare: il frontend (`parseErrors.ts`, `getFilePreviewError(error, t)` con i suoi **tre** chiamanti, anche
+>     `routes/(app)/files/+page.svelte` ~:722), le 8 chiavi ×4, la registrazione dei 3 file nuovi nel runner, i
+>     documenti, la riga 🐛 del CHANGELOG.
+> - **Domande per la ripresa** (dubbi del `test-author`, non decisi da me):
+>   1. un `detail` testuale (il 404, il 500) in `getFilePreviewError` si mostra com'è, come fissano due guardie, o
+>      diventa la frase generica tradotta?
+>   2. il nome del plugin tradotto anche per `parse_failed`, come fissano i rossi, e non solo per `cannot_parse`?
+>   3. `e2e/files.spec.ts` (~:730) finge un `detail` testuale e ne legge l'inglese: resta verde con la lettura 1.
