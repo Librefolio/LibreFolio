@@ -184,7 +184,7 @@ class FAPriceRejection(StrictModel):
     date: date_type = Field(..., description="The date left out")
     reason: Literal["ohlc_inconsistent", "date_out_of_range", "value_not_storable"] = Field(
         ...,
-        description="ohlc_inconsistent: the close lies outside [low, high]; date_out_of_range: a provider's date outside 1900-01-01 to tomorrow; value_not_storable: a provider's value no price column can keep",
+        description="ohlc_inconsistent: the close lies outside [low, high]; date_out_of_range: a provider's date after tomorrow; value_not_storable: a provider's value no price column can keep",
     )
 
 

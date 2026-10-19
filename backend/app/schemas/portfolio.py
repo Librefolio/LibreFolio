@@ -949,6 +949,10 @@ class LotTimelineEventSchema(StrictModel):
         None,
         description="For the event that opens a lot (BUY, ADJUSTMENT_IN): the lot's original cost in target_currency, converted at the opening date — the lot summary's original_cost, in the currency of unit_price. None on every other kind and when the conversion is missing.",
     )
+    scope_boundary: Optional[Literal["IN", "OUT"]] = Field(
+        None,
+        description="For a row of a TRANSFER leg whose partner sits at a broker outside the scope, read as an adjustment: IN when its units came into the scope, OUT when they left it. A label only, the economics follow kind; the partner broker is never named. None on every other row.",
+    )
 
 
 class LotValueHistoryPoint(StrictModel):

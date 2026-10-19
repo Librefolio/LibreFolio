@@ -15,8 +15,8 @@
  *   words are translated, so a test reads the event, the toast variant and the
  *   editor's error state (`asset-editor-error`), never a message
  * - What a refused price save says (X-R46): the server's facts — the day refused,
- *   the bounds, the currencies — never Axios's sentence; a save taken in part counts
- *   what the server kept, and is told as a warning
+ *   the last storable day, the currencies — never Axios's sentence; a save taken in
+ *   part counts what the server kept, and is told as a warning
  *
  * Prerequisites:
  * - Test server running (./dev.py server --test)
@@ -629,8 +629,6 @@ test.describe('Asset Data Editor', () => {
         const PRICES_PATH = `${API_BASE}/assets/prices`;
         /** Axios's own sentence for any answer outside 2xx: English, and none of the server's facts in it. */
         const AXIOS_GENERIC = 'Request failed with status code';
-        /** The first day a price may carry (`stored_date_bounds()`); the last, in the answers below, is tomorrow. */
-        const MIN_DATE = '1900-01-01';
 
         /** The prices of each asset, as the editor sends them. */
         type SentPrices = Array<{asset_id: number; prices: Array<{date: string}>}>;
@@ -715,19 +713,26 @@ test.describe('Asset Data Editor', () => {
             await expect.soft(told, `${what} says what the server said, not Axios's sentence`).not.toContainText(AXIOS_GENERIC, {timeout: 2_000});
         }
 
-        test("a price dated after the last storable day is told refused with that day and the bounds, not with Axios's sentence", async ({page}) => {
+        test("a price dated after the last storable day is told refused with that day and the last storable day, not with Axios's sentence", async ({page}) => {
             // Pins: a 422 `date_out_of_range` is told, by the error state and by the error toast,
-            // with the day refused and the bounds the server gave, in ISO; the save is published as
-            // a failure alone, and the editor stays open on the price, ready to be corrected.
-            // Red on HEAD: the error state and the toast read «… Request failed with status code 422».
+            // with the day refused and the last storable day the server gave (`params.max`), in
+            // ISO; the save is published as a failure alone, and the editor stays open on the
+            // price, ready to be corrected.
+            // Red on HEAD (X-R46): the error state and the toast read «… Request failed with status code 422».
+            // Red until N83's revision (19/10) reaches `writeRefusal.ts`: it reads no
+            // `date_out_of_range` detail without `params.min`, so the error state and the toast
+            // fall back to the server's message, which names the last storable day and not the day
+            // refused.
             const refused = daysAgoIso(-30);
             const max = daysAgoIso(-1);
             const {assetId, panel} = await editorWithImported(page, 'E2E price out of range', [[refused, 'USD;12;;;;']]);
-            // The server's answer to a day after tomorrow (X-R65): the whole save refused. Its
-            // message says the bounds, never the day — that is in `items`.
+            // The server's answer to a day after tomorrow (X-R65): the whole save refused. A stored
+            // price has no first day since N83's revision, so `params` holds the last storable day
+            // alone, tomorrow, and the day refused lies after it. The message says that last day,
+            // never the day refused — that is in `items`.
             const saves = await answerSaves(page, () => ({
                 status: 422,
-                json: {detail: {code: 'date_out_of_range', message: `Dates must lie between ${MIN_DATE} and ${max}: 1 does not`, params: {min: MIN_DATE, max}, items: [{asset_id: assetId, dates: [refused]}], count: 1}},
+                json: {detail: {code: 'date_out_of_range', message: `Dates must lie on or before ${max}: 1 does not`, params: {max}, items: [{asset_id: assetId, dates: [refused]}], count: 1}},
             }));
 
             const {status, since} = await save(page, panel);
@@ -736,8 +741,8 @@ test.describe('Asset Data Editor', () => {
 
             // The barrier: the failure is published in the step that sets the error state and raises the toast.
             await waitForEvent(page, 'assets.data.saveFailed', {since, timeout: 5_000});
-            await expectTold(panel.getByTestId('asset-editor-error'), 'the error state', [refused, MIN_DATE, max]);
-            await expectTold(page.getByTestId('toast-error'), 'the error toast', [refused, MIN_DATE]);
+            await expectTold(panel.getByTestId('asset-editor-error'), 'the error state', [refused, max]);
+            await expectTold(page.getByTestId('toast-error'), 'the error toast', [refused, max]);
             expect(await eventNamesSince(page, since), 'a refused save is not also published as saved').not.toContain('assets.data.saved');
             // Nothing is lost: the editor stays open on the imported price, ready to save again.
             await expect(panel).toBeVisible();

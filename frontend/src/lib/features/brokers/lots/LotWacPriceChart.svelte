@@ -26,7 +26,7 @@
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal, safeNumber, safeScalar, safeString} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
-    import {formatAxisNumber as sharedFormatAxisNumber, normalizeZero, resolveBrokerName} from './lotChartShared';
+    import {eventLabelKind, formatAxisNumber as sharedFormatAxisNumber, normalizeZero, resolveBrokerName, scopeBoundaryOf} from './lotChartShared';
     import {formatLotQuantity} from './unifiedLotsTableHelpers';
     import {
         applyLotEvent,
@@ -499,7 +499,8 @@
         return computePaddedValueBounds(values, maxBubbleRadius, plotHeight);
     }
 
-    function eventKindLabel(kind: LotTimelineEventSchema['kind']): string {
+    /** The label of an event's kind; a transfer leg read at the scope's edge gets its transfer label (J-48). */
+    function eventKindLabel(kind: LotTimelineEventSchema['kind'] | 'TRANSFER_IN' | 'TRANSFER_OUT'): string {
         return labels.eventType[kind];
     }
 
@@ -630,6 +631,8 @@
         const eventTypeTransferDepart = $_('brokers.lots.chartMarkers.eventType.TRANSFER_DEPART');
         const eventTypeTransferArrive = $_('brokers.lots.chartMarkers.eventType.TRANSFER_ARRIVE');
         const eventTypeSplit = $_('brokers.lots.chartMarkers.eventType.SPLIT');
+        const eventTypeTransferIn = $_('brokers.lots.chartMarkers.eventType.TRANSFER_IN');
+        const eventTypeTransferOut = $_('brokers.lots.chartMarkers.eventType.TRANSFER_OUT');
         const pmc = $_('dashboard.pmc');
         const openingValue = translateOr($_, 'brokers.lots.chartMarkers.openingValue', 'Opening value');
         const quantitySold = translateOr($_, 'brokers.lots.chartMarkers.quantitySold', 'Quantity sold');
@@ -719,6 +722,8 @@
                 TRANSFER_DEPART: !eventTypeTransferDepart || eventTypeTransferDepart === 'brokers.lots.chartMarkers.eventType.TRANSFER_DEPART' ? 'Transfer' : eventTypeTransferDepart,
                 TRANSFER_ARRIVE: !eventTypeTransferArrive || eventTypeTransferArrive === 'brokers.lots.chartMarkers.eventType.TRANSFER_ARRIVE' ? 'Transfer' : eventTypeTransferArrive,
                 SPLIT: !eventTypeSplit || eventTypeSplit === 'brokers.lots.chartMarkers.eventType.SPLIT' ? 'Split' : eventTypeSplit,
+                TRANSFER_IN: !eventTypeTransferIn || eventTypeTransferIn === 'brokers.lots.chartMarkers.eventType.TRANSFER_IN' ? 'Transfer In' : eventTypeTransferIn,
+                TRANSFER_OUT: !eventTypeTransferOut || eventTypeTransferOut === 'brokers.lots.chartMarkers.eventType.TRANSFER_OUT' ? 'Transfer Out' : eventTypeTransferOut,
             },
         };
     });
@@ -774,7 +779,7 @@
         const transferArriveEvents = lotEvents.filter((event) => event.kind === 'TRANSFER_ARRIVE');
         const rawMarkerPoints: EventMarkerDatum[] = [];
         for (const event of lotEvents) {
-            const category = eventCategory(event.kind);
+            const category = eventCategory(event.kind, scopeBoundaryOf(event));
             if (category == null) continue;
 
             const marketPricePoint = resolveMarketPriceAtOrBefore(event.date, marketPriceLookupPoints);
@@ -1383,7 +1388,7 @@
             const ratio = splitRatioText(event);
             return ratio == null ? eventKindLabel(event.kind) : `${eventKindLabel(event.kind)} ${ratio}`;
         }
-        return eventKindLabel(event.kind);
+        return eventKindLabel(eventLabelKind(event));
     }
 
     function buildMarkerTooltip(datum: EventMarkerDatum | null): string {
@@ -1424,7 +1429,8 @@
             rows.push(markerTooltipRow(labels.quantity, eventQuantityText(event) ?? '—'));
             rows.push(markerTooltipRow(labels.transitInterval, transferIntervalText(datum)));
         } else if (event.kind === 'ADJUSTMENT_IN' || event.kind === 'ADJUSTMENT_OUT') {
-            rows.push(markerTooltipRow(labels.adjustmentType, eventKindLabel(event.kind)));
+            // A transfer leg read at the scope's edge is no adjustment: its header already names it (J-48).
+            if (scopeBoundaryOf(event) == null) rows.push(markerTooltipRow(labels.adjustmentType, eventKindLabel(event.kind)));
             rows.push(markerTooltipRow(labels.eventDate, formatDate(event.date)));
             rows.push(markerTooltipRow(labels.quantity, eventQuantityText(event) ?? '—'));
             rows.push(markerTooltipRow(labels.quantityEffect, quantityEffectText(event, snapshot)));
