@@ -8,6 +8,11 @@ Uses structlog for structured logging with:
 - Human-readable formatting for development
 
 Log rotation: Weekly with 52 weeks (1 year) retention, gzip compression.
+
+Errors (lot H-60): ``logger.exception()`` writes its traceback once, inside the JSON line, at level ``ERROR``
+(``LibreFolioBoundLogger``); a warning or a higher line written with an exception, or while one is handled, marks it
+as reported (``utils/runtime/errors.py``), so the platform's safety net — the 5xx handler, the unhandled 500 — does
+not write it a second time, and uvicorn's own «Exception in ASGI application» for it is dropped.
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -33,7 +38,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import unquote_plus
 
 import structlog
@@ -41,6 +46,7 @@ import structlog.stdlib
 from structlog.types import EventDict
 
 from backend.app.config import get_data_dir
+from backend.app.utils.runtime.errors import is_reported, mark_reported
 from backend.app.utils.runtime.secret_masking import SecretMaskingFilter, mask_event_dict
 
 # TRACE level constant — importable by other modules
@@ -62,13 +68,49 @@ if not hasattr(logging.Logger, "trace"):
 
     logging.Logger.trace = _trace  # type: ignore[attr-defined]
 
+#: The methods of a logger that report a failure: a warning or higher.
+_REPORTING_LEVELS = {"warning": logging.WARNING, "warn": logging.WARNING, "error": logging.ERROR, "exception": logging.ERROR, "critical": logging.CRITICAL, "fatal": logging.CRITICAL}
+
+
+def _reported_exception(exc_info: Any) -> BaseException | None:
+    """The exception a log call is about: the one given as ``exc_info`` (an exception or a tuple), else the one being handled."""
+    if isinstance(exc_info, BaseException):
+        return exc_info
+    if isinstance(exc_info, tuple) and len(exc_info) == 3 and isinstance(exc_info[1], BaseException):
+        return exc_info[1]
+    return sys.exc_info()[1]
+
+
+class LibreFolioBoundLogger(structlog.stdlib.BoundLogger):
+    """structlog's stdlib logger, with one traceback per exception and the «reported» mark (lot H-60).
+
+    - ``exception()`` logs at error with ``exc_info``: the processors render the traceback into the JSON line, and the
+      stdlib ``error`` adds none (``Logger.exception`` would add it a second time, in plain text, at level EXCEPTION).
+    - A warning or a higher call, when its logger is enabled for that level, marks as reported the exception it is
+      about (``exc_info``, else the one being handled). In the wrapper, not in a processor: ``capture_logs()`` replaces
+      the processors, and the code under test must behave as in production.
+    """
+
+    def exception(self, event: str | None = None, *args: Any, **kw: Any) -> Any:
+        kw.setdefault("exc_info", True)
+        return self._proxy_to_logger("error", event, *args, **kw)
+
+    def _proxy_to_logger(self, method_name: str, event: str | None = None, *event_args: Any, **event_kw: Any) -> Any:
+        level = _REPORTING_LEVELS.get(method_name)
+        if level is not None and self._logger.isEnabledFor(level):
+            error = _reported_exception(event_kw.get("exc_info"))
+            if error is not None:
+                mark_reported(error)
+        return super()._proxy_to_logger(method_name, event, *event_args, **event_kw)
+
+
 # Minimal structlog bootstrap: use stdlib LoggerFactory so custom levels (TRACE)
 # work immediately. Full configure_logging() overrides this later with processors,
 # handlers, and formatting. Without this, structlog defaults to PrintLogger which
 # lacks a 'trace' method.
 if not structlog.is_configured():
     structlog.configure(
-        wrapper_class=structlog.stdlib.BoundLogger,
+        wrapper_class=LibreFolioBoundLogger,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=False,  # allow reconfiguration by configure_logging()
     )
@@ -87,6 +129,8 @@ def add_log_level(logger: Any, method_name: str, event_dict: EventDict) -> Event
     """
     if method_name == "warn":
         method_name = "warning"
+    elif method_name == "exception":
+        method_name = "error"
     event_dict["level"] = method_name.upper()
     return event_dict
 
@@ -166,7 +210,17 @@ class _QueryCredentialFilter(logging.Filter):
         return True
 
 
+class _ReportedExceptionFilter(logging.Filter):
+    """Drop a record of an exception the app already logged (lot H-60): uvicorn's «Exception in ASGI application» for the
+    500 that ``security_headers.py`` answered and logged as JSON, with the request id. Every other record passes."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        info = record.exc_info
+        return not (isinstance(info, tuple) and len(info) == 3 and isinstance(info[1], BaseException) and is_reported(info[1]))
+
+
 _QUERY_CREDENTIAL_FILTER = _QueryCredentialFilter()
+_REPORTED_EXCEPTION_FILTER = _ReportedExceptionFilter()
 _SECRET_MASKING_FILTER = SecretMaskingFilter()
 
 
@@ -221,6 +275,8 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     # string are masked. The same filter object, so a second call never adds it twice.
     for uvicorn_logger in ("uvicorn.access", "uvicorn.error"):
         logging.getLogger(uvicorn_logger).addFilter(_QUERY_CREDENTIAL_FILTER)
+    # uvicorn's own line for an exception the app already logged (H-60): the same filter object, once.
+    logging.getLogger("uvicorn.error").addFilter(_REPORTED_EXCEPTION_FILTER)
 
     # Configure handlers
     handlers = []
@@ -276,11 +332,17 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     # Configure structlog
     structlog.configure(
         processors=processors,
-        wrapper_class=structlog.stdlib.BoundLogger,
+        wrapper_class=LibreFolioBoundLogger,
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
+
+
+def client_log_level(log_level: str) -> Literal["error", "debug"]:
+    """How much the web app writes to the browser console about failed API calls (``/system/instance``, H-60, D4):
+    ``debug`` when ``log_level`` is DEBUG or TRACE, in any case, ``error`` otherwise. Two states, never the level."""
+    return "debug" if str(log_level).strip().upper() in ("DEBUG", "TRACE") else "error"
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:

@@ -40,7 +40,8 @@ vi.mock('$app/environment', () => mocks.environment);
 vi.mock('$app/navigation', () => ({goto: mocks.goto}));
 vi.mock('$lib/debug', () => ({debug: {log: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn()}, isDebugEnabled: () => false}));
 vi.mock('$lib/stores/portfolio/portfolioMutation', () => ({notifyPortfolioMutation: mocks.notifyPortfolioMutation}));
-vi.mock('./generated', () => ({createApiClient: vi.fn(() => ({}))}));
+// The client stub takes plugins: the module installs its 'zod-validation' plugin with `use` when it loads (H-60).
+vi.mock('./generated', () => ({createApiClient: vi.fn(() => ({use: vi.fn()}))}));
 
 import {axiosInstance} from './zodios-client';
 import {instanceBlock} from '$lib/features/instance/instanceBlock.svelte';

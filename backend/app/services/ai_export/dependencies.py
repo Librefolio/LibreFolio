@@ -81,14 +81,18 @@ from typing import TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.logging_config import get_logger
 from backend.app.schemas.signals import SignalTemporalClass
 from backend.app.services.ai_export.components.envelope import SectionEnvelope, build_envelope
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, ResourceKey
 from backend.app.services.ai_export.temporal.plan import BucketPlan
 from backend.app.services.ai_export.temporal.policy import BucketDetailLevel, BucketingPolicy
+from backend.app.utils.runtime.errors import reason_code_of, root_cause, shown_error
 
 T = TypeVar("T")
+
+logger = get_logger(__name__)
 
 # =============================================================================
 # DetailLevel <-> BucketDetailLevel mapping (workstream D2, point 2)
@@ -476,6 +480,19 @@ class BuildContext:
             envelope = build_envelope(spec, raw)
             return _ComponentOutcome(envelope=envelope, error=None)
         except Exception as exc:  # noqa: BLE001 - intentional isolation boundary, re-raised explicitly for required callers via resolve()
+            # Logged once, here (H-60): a failed component used to reach the client as a bare 503 and the log as nothing.
+            if isinstance(exc, RequiredComponentBuildError):
+                # A component it needs failed first, and that one's line carries the traceback.
+                logger.warning("AI Export component not built: a dependency failed", component_id=component_id, dependency_id=exc.component_id)
+            else:
+                reason_code = reason_code_of(exc)
+                logger.warning(
+                    "AI Export component failed to build",
+                    component_id=component_id,
+                    error_type=type(root_cause(exc)).__name__,
+                    **({"reason_code": reason_code} if reason_code is not None else {}),
+                    exc_info=shown_error(exc),
+                )
             return _ComponentOutcome(envelope=None, error=exc)
 
     # =========================================================================
