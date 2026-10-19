@@ -86,7 +86,12 @@ A red line saying «figures may be incomplete» did not stop a non-expert user f
   button to `/transactions?highlight=<id>`. The way in is `transaction_id` only: `related_transaction_id` may name a
   partner leg the user cannot see. The `fails_analysis` flag decides what goes to the notice, so the frontend keeps no
   copy of the code list; the banner keeps the rest.
-- **Left out**: a lot-free market-price series, so a FAILED chart could keep its price line (backlog Y-30, for J).
+- **Left out, then added the same evening (Y-30, 2026-10-17, decision N89 «always»)**: a lot-free market-price
+  series, `MARKET_PRICE_HISTORY` / `market_price_history` — one point a day of the window with a convertible mark,
+  whatever lots are open. It joins the analyses a FAILED replay still answers (`_AVERAGE_COST_ANALYSES` became
+  `_REPLAY_FREE_ANALYSES`), with its missing rates kept in `data_quality`. The panel draws the price line, the axis
+  dates and the bubbles from it in every analysis, and no longer requests the per-lot `PRICE_HISTORY` (still in the
+  API): a FAILED chart keeps its price line, and the line no longer breaks off on days without an open lot.
 
 **What it costs.** A FAILED asset shows no lot until its transactions are fixed. The two halves must reach the target
 branch together: a panel without the backend half finds no flagged issue, so its notice lists nothing and the
@@ -111,6 +116,7 @@ blocking issues fall back to the banner.
 | Engine | `backend/app/services/financial_math/fifo/engine.py` |
 | Frontend table | `frontend/src/lib/features/brokers/lots/UnifiedLotsTable.svelte` |
 | Frontend panel (FAILED: explain and hide, since 2026-10-17) | `frontend/src/lib/features/brokers/lots/LotsAnalysisPanel.svelte` |
+| Lot-free market price line (Y-30) | `backend/app/services/financial_math/lots/histories.py` (`build_market_price_history`), `frontend/src/lib/features/brokers/lots/lotWacPriceChartHelpers.ts` (`marketPriceLine`), `backend/test_scripts/test_services/test_financial/test_lots_market_price_history.py` |
 | Failure notice and its helpers | `frontend/src/lib/features/brokers/lots/LotAnalysisFailedNotice.svelte`, `frontend/src/lib/features/brokers/lots/lotDataQualityHelpers.ts` |
 | Blocking codes | `backend/app/services/financial_math/fifo/models.py` (`_QUANTITATIVE_FAILURE_CODES`) |
 | N81 / J-12 record | `LibreFolio_developer_journal/Release_2/Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md` §«J-12, la metà del pannello» |

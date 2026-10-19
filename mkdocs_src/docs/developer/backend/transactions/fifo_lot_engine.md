@@ -428,7 +428,7 @@ The engine returns realized P&L plus economic accumulators; `lot_summary_figures
 
 !!! note "Estimated valuation lives outside FIFO"
 
-    The engine has no `ESTIMATED_AT_COST` branch and does not emit `CURRENT_PRICE_ASSUMED_AT_COST`. On a day with no observation on or before it — no quote, no `BUY` or `SELL` — the lots analysis values the open slice of a LONG lot at cost, with no market P&L (see [Estimated-at-Cost Fallback](lots_analysis_service.md#estimated-at-cost-fallback)); a trade-origin mark is a price, flagged `estimated=True` on the price-history line.
+    The engine has no `ESTIMATED_AT_COST` branch and does not emit `CURRENT_PRICE_ASSUMED_AT_COST`. On a day with no observation on or before it — no quote, no `BUY` or `SELL` — the lots analysis values the open slice of a LONG lot at cost, with no market P&L (see [Estimated-at-Cost Fallback](lots_analysis_service.md#estimated-at-cost-fallback)); a trade-origin mark is a price, flagged `estimated=True` on the price series (`price_history`, `market_price_history`).
 
 !!! info "Issues degrade result instead of aborting run"
 

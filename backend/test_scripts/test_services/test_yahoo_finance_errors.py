@@ -12,18 +12,23 @@ test: a refusal leaves at once as ``AssetRateLimitedError``, after one request,
 and search and metadata no longer turn it into ``[]`` / ``None``. The Z-33
 cases (N86) build their frames as yfinance 1.7.0 stamps them — midnight in the
 exchange's timezone — and pin the exchange-day dating, the declared timezone
-and the pure rule that re-dates what the old UTC rule stored.
+and the pure rule that re-dates what the old UTC rule stored, and the warning a
+host without a timezone database gives, once per zone.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
 from decimal import Decimal
 from types import SimpleNamespace
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pandas as pd
 import pytest
+import structlog
+from structlog.testing import capture_logs
 from yfinance.exceptions import YFRateLimitError
 
 from backend.app.db import IdentifierType
@@ -33,6 +38,7 @@ from backend.app.schemas.provider import FAVolumeKind
 from backend.app.services.asset_source_providers.yahoo_finance import plugin as yfp
 from backend.app.services.asset_source_providers.yahoo_finance.plugin import YahooFinanceProvider
 from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError
+from backend.app.utils import exchange_dates
 
 # A type Yahoo does not accept (only TICKER and ISIN are valid).
 INVALID_TYPE = IdentifierType.CUSIP
@@ -128,10 +134,11 @@ def _utc_index(days: list[str]):
     return pd.to_datetime(days).tz_localize("UTC")
 
 
-def _exchange_midnights(days: list[str], tz: str | None) -> pd.DatetimeIndex:
+def _exchange_midnights(days: list[str], tz: str | tzinfo | None) -> pd.DatetimeIndex:
     """``days`` stamped as yfinance 1.7.0 stamps a daily series (``scrapers/history.py``): midnight in the exchange's
     timezone, its DST edges resolved as yfinance resolves them (``ambiguous=True``: the first of two midnights;
-    ``nonexistent="shift_forward"``: the first instant after a midnight the clocks skip). ``tz`` None: a tz-naive index."""
+    ``nonexistent="shift_forward"``: the first instant after a midnight the clocks skip). ``tz`` None: a tz-naive index;
+    a ``tzinfo`` (a bare fixed offset) is localized as given, so the index's zone names no IANA zone."""
     index = pd.to_datetime(days)
     if tz is not None:
         index = index.tz_localize(tz, ambiguous=True, nonexistent="shift_forward")
@@ -883,9 +890,9 @@ async def test_history_of_a_london_line_reports_pence_while_its_points_carry_pou
 # timezone (``_exchange_midnights``). The plugin read that midnight in UTC (``tz_convert("UTC").date()``): the day before
 # for every exchange east of UTC — Milan all year, London in summer time, Tokyo —, right for New York and a 24/7 UTC line.
 # N86 §1: each index value is dated on its own wall calendar (a tz-naive one by ``.date()``); the history declares the
-# exchange's timezone as an IANA name (``FAHistoricalData.exchange_timezone``: the index's, else
-# ``info["exchangeTimezoneName"]``, else None); the current value dates ``regularMarketTime`` in that timezone (UTC when
-# unknown) and declares it too (``FACurrentValue.exchange_timezone``, None when unknown).
+# exchange's timezone as an IANA name (``FAHistoricalData.exchange_timezone``: the index's zone when ``zoneinfo`` knows
+# it, else ``info["exchangeTimezoneName"]`` when known, else None); the current value dates ``regularMarketTime`` in that
+# timezone (UTC when unknown) and declares it too (``FACurrentValue.exchange_timezone``, None when unknown).
 #
 # N86 §2: what the old rule stored is re-dated by one pure function,
 # ``backend.app.utils.exchange_dates.local_date_of_legacy_utc_date(stored: date, tz: ZoneInfo) -> date``: a date S stored by
@@ -913,7 +920,7 @@ def _z33_rule():
     return local_date_of_legacy_utc_date
 
 
-def _z33_ticker(days: list[str], tz: str | None, info: dict) -> _FakeTicker:
+def _z33_ticker(days: list[str], tz: str | tzinfo | None, info: dict) -> _FakeTicker:
     """A ticker answering as yfinance 1.7.0 does for ``days`` on an exchange of ``tz``: the daily frame (OHLCV, then
     ``Dividends`` and ``Stock Splits``), a 0.5 dividend on the first day and a 2:1 split on the last, all stamped alike."""
     closes = [100.0 + 10 * position for position in range(len(days))]
@@ -935,7 +942,7 @@ def _z33_ticker(days: list[str], tz: str | None, info: dict) -> _FakeTicker:
     return _FakeTicker(history=hist, info=info, dividends=dividends, splits=splits)
 
 
-async def _z33_history(monkeypatch, days: list[str], tz: str | None, info: dict) -> FAHistoricalData:
+async def _z33_history(monkeypatch, days: list[str], tz: str | tzinfo | None, info: dict) -> FAHistoricalData:
     """The plugin's history of ``days`` (a week of margin each side, so a day read early or late is still in range)."""
     _install_yf(monkeypatch, ticker=_z33_ticker(days, tz, info))
     start, end = date.fromisoformat(days[0]) - timedelta(days=7), date.fromisoformat(days[-1]) + timedelta(days=7)
@@ -979,6 +986,10 @@ async def test_z33_history_dates_each_bar_and_event_on_its_exchange_day(monkeypa
     assert sorted((event.date, str(event.type)) for event in result.events) == [(exchange_days[0], "DIVIDEND"), (exchange_days[-1], "SPLIT")], "the dividend and the split must be dated as the bars they were stamped with"
 
 
+#: Rome's July offset as a bare fixed offset, no zone named: the index's zone then reads ``UTC+02:00``, no IANA zone
+_Z33_UNNAMED_ZONE = timezone(timedelta(hours=2))
+
+
 @pytest.mark.parametrize(
     ("tz", "info_tz", "declared"),
     [
@@ -987,15 +998,22 @@ async def test_z33_history_dates_each_bar_and_event_on_its_exchange_day(monkeypa
         pytest.param("Europe/London", "Europe/Rome", "Europe/London", id="the-index-wins-over-info"),
         pytest.param(None, "America/New_York", "America/New_York", id="naive-index-info-zone"),
         pytest.param(None, None, None, id="naive-index-no-zone"),
+        # An index stamped in a bare offset names no zone: Yahoo's name is declared, and nothing when there is none
+        pytest.param(_Z33_UNNAMED_ZONE, "Europe/Rome", "Europe/Rome", id="an-unnamed-index-zone-falls-back-to-info"),
+        pytest.param(_Z33_UNNAMED_ZONE, None, None, id="an-unnamed-index-zone-alone-is-not-declared"),
     ],
 )
 @pytest.mark.asyncio
 async def test_z33_history_declares_the_exchange_timezone(monkeypatch, tz, info_tz, declared):
     """Z-33 (N86 §1): the history declares the exchange's timezone as an IANA name — the index's own, else
     ``info["exchangeTimezoneName"]`` —, and None when neither says: an unknown zone is never declared as UTC, which would
-    leave a legacy assignment's rows where they are.
+    leave a legacy assignment's rows where they are. An index zone that names no IANA zone — a bare fixed offset, whose
+    text is ``UTC+02:00`` — says nothing either (X's review nit, Z-33 follow-up 2): it must not hide Yahoo's
+    ``exchangeTimezoneName``, which is declared; with none, nothing is.
 
-    Red until Z-33: ``FAHistoricalData`` has no ``exchange_timezone``.
+    Red until Z-33: ``FAHistoricalData`` has no ``exchange_timezone``. Red on HEAD e20055213 for
+    ``an-unnamed-index-zone-falls-back-to-info``: the index zone's text replaces Yahoo's name outright, and, naming no
+    known zone, declares None. ``an-unnamed-index-zone-alone-is-not-declared`` is green before and after.
     """
     _z33_declaring(FAHistoricalData)
     info = {"currency": "EUR"} | ({"exchangeTimezoneName": info_tz} if info_tz else {})
@@ -1106,6 +1124,96 @@ def test_z33_legacy_rule_inverts_the_old_dating_for_a_whole_year(zone):
 
     wrong = {stored.isoformat(): (rule(stored, tz).isoformat(), day.isoformat()) for stored, day in held.items() if rule(stored, tz) != day}
     assert wrong == {}, f"{zone}: stored date → (the rule's day, the day the row holds), where they differ: {dict(list(wrong.items())[:6])} ({len(wrong)} in all)"
+
+
+# ── Z-33 follow-up 3 (H's review, LOW): a host without a timezone database says so ──
+#
+# Without a timezone database (no system zoneinfo, no ``tzdata`` package) ``ZoneInfo`` raises ``ZoneInfoNotFoundError``
+# for every name: ``exchange_zone`` gives None for all of them, and an assignment holding the mark writes nothing at each
+# refresh, forever, without a word. As approved: ``exchange_zone(name)`` logs a warning naming the zone (``timezone=``),
+# once per name and process, when ``ZoneInfo`` raises ``ZoneInfoNotFoundError`` for an Area/Location name (one with a
+# "/", ``Europe/Rome``), and still gives None; nothing is logged for a fixed offset or another name without a "/"
+# (``UTC+02:00``), the mark, an empty name, or a known zone. The names already logged are ``_UNKNOWN_ZONES_LOGGED``, a set
+# of ``exchange_dates`` each test empties (``raising=False``: it does not exist before the fix). The missing database is
+# ``exchange_dates.ZoneInfo`` patched to raise; the log is read with ``capture_logs``, behind a barrier. The level and the
+# ``timezone`` the event carries are pinned, never its wording.
+
+_Z33_ZONE_LOG_CANARY = "Z-33 test: canary through a logger of exchange_dates' name"
+
+
+def _z33_no_zone_logged_yet(monkeypatch) -> None:
+    """No zone name logged yet in this process: ``exchange_dates._UNKNOWN_ZONES_LOGGED`` an empty set for the test."""
+    monkeypatch.setattr(exchange_dates, "_UNKNOWN_ZONES_LOGGED", set(), raising=False)
+
+
+def _z33_no_zone_database(monkeypatch) -> None:
+    """A host without a timezone database: ``ZoneInfo``, as ``exchange_dates`` calls it, raises ``ZoneInfoNotFoundError``
+    for every name, as it does when neither the system nor the ``tzdata`` package has one."""
+
+    def no_zone(key: str) -> ZoneInfo:
+        raise ZoneInfoNotFoundError(f"No time zone found with key {key}")
+
+    monkeypatch.setattr(exchange_dates, "ZoneInfo", no_zone)
+
+
+@contextmanager
+def _z33_zone_log() -> Iterator[list[dict]]:
+    """What is logged inside the block, behind a barrier: a warning sent through a logger of ``exchange_dates``' own name
+    reaches the capture first — else a warning missing from it would prove nothing."""
+    with capture_logs() as logs:
+        structlog.get_logger(exchange_dates.__name__).warning(_Z33_ZONE_LOG_CANARY)
+        assert [entry.get("event") for entry in logs] == [_Z33_ZONE_LOG_CANARY], f"barrier: a logger of {exchange_dates.__name__}'s name does not reach capture_logs: {logs}"
+        yield logs
+
+
+def _z33_zone_warnings(logs: list[dict]) -> list[tuple[object, object]]:
+    """``(level, timezone)`` of each warning or worse captured, in order, the barrier's canary aside."""
+    return [(entry.get("log_level"), entry.get("timezone")) for entry in logs if entry.get("log_level") in ("warning", "error", "critical") and entry.get("event") != _Z33_ZONE_LOG_CANARY]
+
+
+def test_z33_an_unknown_area_zone_is_logged_once(monkeypatch):
+    """Z-33 (H's review, LOW): without a timezone database, ``exchange_zone("Europe/Rome")`` gives None and one warning
+    naming the zone (``timezone="Europe/Rome"``); the same name again, None and no other warning; then
+    ``exchange_zone("Asia/Tokyo")``, None and one more warning, naming Tokyo — once per name, not once in all. A
+    warning: neither silence nor an error; its wording free.
+
+    Red on HEAD e20055213: ``exchange_zone`` logs nothing.
+    """
+    _z33_no_zone_logged_yet(monkeypatch)
+    _z33_no_zone_database(monkeypatch)
+
+    with _z33_zone_log() as logs:
+        rome = exchange_dates.exchange_zone("Europe/Rome")
+        first = _z33_zone_warnings(logs)
+        again = exchange_dates.exchange_zone("Europe/Rome")
+        second = _z33_zone_warnings(logs)
+        tokyo = exchange_dates.exchange_zone("Asia/Tokyo")
+        third = _z33_zone_warnings(logs)
+
+    assert (rome, again, tokyo) == (None, None, None), f"without a timezone database no zone is given, as before: {(rome, again, tokyo)}"
+    assert first == [("warning", "Europe/Rome")], f"an Area/Location name ZoneInfo cannot find must be logged as one warning naming it: (level, timezone) {first}"
+    assert second == first, f"the same name must not be logged again in the process: (level, timezone) {second}"
+    assert third == [("warning", "Europe/Rome"), ("warning", "Asia/Tokyo")], f"another name must be logged too, once: (level, timezone) {third}"
+
+
+def test_z33_an_unknown_name_without_area_or_the_mark_is_not_logged(monkeypatch):
+    """Z-33 (H's review, LOW, the other side): the warning is for an Area/Location name alone. A known zone gives its
+    ``ZoneInfo`` and no warning; then, without a timezone database, a fixed offset (``UTC+02:00``, the text of an index
+    stamped in one), the mark, an empty name and None give None and no warning either.
+
+    Green on HEAD e20055213, and must stay green.
+    """
+    _z33_no_zone_logged_yet(monkeypatch)
+    names = ("UTC+02:00", "legacy-utc", "", None)
+
+    with _z33_zone_log() as logs:
+        known = exchange_dates.exchange_zone("Europe/Rome")
+        _z33_no_zone_database(monkeypatch)
+        unknown = {name: exchange_dates.exchange_zone(name) for name in names}
+
+    assert isinstance(known, ZoneInfo) and known.key == "Europe/Rome", f"a known zone gives its ZoneInfo: {known!r}"
+    assert unknown == dict.fromkeys(names), f"no zone for these names: {unknown}"
+    assert _z33_zone_warnings(logs) == [], f"nothing may be logged for a known zone, a name without a '/', the mark or an empty name: (level, timezone) {_z33_zone_warnings(logs)}"
 
 
 if __name__ == "__main__":
