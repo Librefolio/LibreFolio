@@ -8,7 +8,6 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import FxRate
-from backend.app.db.precision import usable_fx_rate_clause
 from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceFxQuote,
     PortfolioPlannerSourceIssue,
@@ -33,9 +32,7 @@ async def _load_latest_planner_fx_rows(
             FxRate.quote.label("quote"),
             func.max(FxRate.date).label("latest_date"),
         )
-        # X-R45: the latest *usable* row per pair, so a rate an older version stored as 0 or inf never wins over an
-        # earlier real one
-        .where(pair_filter, FxRate.date <= as_of, usable_fx_rate_clause())
+        .where(pair_filter, FxRate.date <= as_of)
         .group_by(FxRate.base, FxRate.quote)
         .subquery()
     )
