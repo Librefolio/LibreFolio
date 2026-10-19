@@ -13,7 +13,7 @@ The **Transactions** page lists the transactions of all the brokers you can acce
 ## 🔎 Find and open a transaction
 
 - **Sort** — click a column header.
-- **Filter** — open the filter of a column (date, type, asset, broker, tags, description…). Your filters are kept in the page address, so a bookmark reopens the same view.
+- **Filter** — open the filter of a column (date, type, asset, broker, tags, description…). In the date filter, type a date in **From** only to see the transactions from that day on, or in **To** only for those up to that day; the two ends of a range must be different days. Your filters are kept in the page address, so a bookmark reopens the same view.
 - **Open** — double-click a row to see it read-only; the pencil switches to editing.
 
 Without filters or sorting, the two rows of a linked pair (a transfer or a currency exchange) stay next to each other, and the link icon jumps to the partner row.
