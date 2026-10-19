@@ -246,3 +246,81 @@ describe('CalendarMonth', () => {
         expect(screen.queryByTestId('calendar-go-today')).toBeNull();
     });
 });
+
+/**
+ * Y-N65 (decision of the developer, 19/10): no range of a single day. In a range picker the first click leaves a day
+ * pending (`highlights.pending`); a second click on that same day closed a range of one day. The contract, after the
+ * cure: the pending day is a `disabled` button — the "you can't go there" a future day already has — and a click on it
+ * never reaches `onDayClick`; what it publishes (`data-state`, the handle of its colour) does not change, precedence as
+ * today; no other day changes. `SingleDatePicker` never sets `pending`, so its grid is untouched.
+ *
+ * The click is a dispatched one (`fireEvent.click`), as in the `disabledDates` case above: jsdom blocks
+ * `HTMLElement.click()` on a disabled control, not a dispatched event, so "never reaches `onDayClick`" is read as that
+ * case reads it — the handler refuses the pending day as well, not only the attribute.
+ */
+describe('CalendarMonth — the pending day cannot be chosen again (Y-N65)', () => {
+    /** A pending day in the middle of March 2024, away from any range end. */
+    const PENDING = '2024-03-12';
+
+    /** Every day cell of the grid, out-of-month ones included. */
+    function allDays(): HTMLButtonElement[] {
+        return [...document.querySelectorAll<HTMLButtonElement>('[data-testid="calendar-day"]')];
+    }
+
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    it('disables the pending day and reports no click on it, while every other day stays usable', async () => {
+        // Today: the pending day is an ordinary enabled button — `disabled` is `future || disabledDates` only — and a
+        // click on it reaches onDayClick('2024-03-12'): in DateRangePicker, the second half of a range of one day.
+        const onDayClick = vi.fn();
+        render(CalendarMonth, baseProps({onDayClick, highlights: {pending: PENDING}}));
+
+        const pending = day(PENDING);
+        expect(pending, 'the pending day is still a usable button: a second click on it closes a range of one day').toBeDisabled();
+        await fireEvent.click(pending);
+        expect(onDayClick, 'a click on the pending day reached the parent').not.toHaveBeenCalled();
+
+        // No other day changes: March 2024 is all past, so every other cell — out-of-month ones included — is enabled,
+        // and a neighbour is still reported. Without this, "nothing is clickable" would satisfy the two assertions above.
+        expect(
+            allDays()
+                .filter((cell) => cell.dataset.iso !== PENDING && cell.disabled)
+                .map((cell) => cell.dataset.iso),
+            'another day was disabled along with the pending one',
+        ).toEqual([]);
+        await fireEvent.click(day('2024-03-13'));
+        expect(onDayClick).toHaveBeenCalledExactlyOnceWith('2024-03-13');
+    });
+
+    it.each([
+        {without: 'no highlight at all', highlights: {}},
+        {without: 'a committed range', highlights: {rangeStart: '2024-03-10', rangeEnd: '2024-03-14'}},
+        {without: 'SingleDatePicker’s selected day', highlights: {selected: PENDING}},
+    ])('GUARD: without a pending day no past day is disabled — $without', ({highlights}) => {
+        // Green today and after: the cure disables the pending day only. A selected day (SingleDatePicker) and the ends of
+        // a committed range stay usable — re-choosing them is how a single date or a range is changed.
+        render(CalendarMonth, baseProps({highlights}));
+
+        expect(day(PENDING), 'premise: the grid is drawn, and the day a pending one would sit on is usable').toBeEnabled();
+        expect(
+            allDays()
+                .filter((cell) => cell.disabled)
+                .map((cell) => cell.dataset.iso),
+        ).toEqual([]);
+    });
+
+    it('GUARD: the pending day publishes the state it publishes today — `pending` on its own, `in-range` inside a committed range', () => {
+        // Green today and after: disabling the pending day changes neither its colour nor its `data-state`, and the
+        // precedence stays range-start > range-end > in-range > pending.
+        const {unmount} = render(CalendarMonth, baseProps({highlights: {pending: PENDING}}));
+        expect(day(PENDING)).toHaveAttribute('data-state', 'pending');
+        unmount();
+
+        render(CalendarMonth, baseProps({highlights: {rangeStart: '2024-03-10', rangeEnd: '2024-03-14', pending: PENDING}}));
+        expect(day(PENDING)).toHaveAttribute('data-state', 'in-range');
+        expect(day('2024-03-10')).toHaveAttribute('data-state', 'range-start');
+        expect(day('2024-03-14')).toHaveAttribute('data-state', 'range-end');
+    });
+});
