@@ -7195,13 +7195,15 @@ sulle righe che non sono fondi, quantità e prezzo su dividendi e cedole. La val
 venerdì), lo stesso giorno per gli aumenti di capitale. Ma sono righe vecchie e inventate: dicono come il plugin legge un export
 completo, non come Fineco scrive una riga non ancora regolata.
 
-**Che cosa farebbe oggi il plugin con una riga provvisoria a campi vuoti** (letto nel codice): la importerebbe in silenzio.
+**Che cosa farebbe oggi il plugin con una riga provvisoria a campi vuoti** (letto nel codice):
 - quantità o controvalore vuoti diventano 0 (`broker_fineco/plugin.py:310-311`, `_parse_fineco_number(...) or Decimal("0")`);
 - una divisa vuota diventa EUR (`:308`);
 - una data valuta vuota ricade sulla data dell'operazione (`:285`).
 
-Una compravendita con quantità o controvalore vuoti entra quindi come un acquisto di 0 quote o a 0 euro, senza avviso. È il rischio
-che il developer descrive, e vale qualunque sia la scelta sulle date. → **W-B83** (archiviata).
+Una compravendita col controvalore vuoto entra quindi a 0 €, senza avviso: è il rischio che il developer descrive, e vale qualunque
+sia la scelta sulle date. → **W-B83** (archiviata).
+> **⚠️ Corretto il 19/10**, nell'analisi del lotto qui sotto: una quantità vuota **non** entra a 0. La regola 10 rifiuta la riga già
+> in lettura (`qtyPositive`, `qtyNegative`) e il wizard la mostra come riga in errore. Solo il controvalore vuoto entra in silenzio.
 
 **2 · Lo stesso movimento in un export successivo.** Non verificabile: nessuna coppia di export dello stesso periodo. Le due BTP
 hanno lo stesso dossier ma mesi diversi (maggio–giugno e settembre 2023), senza movimenti in comune. Se un campo cambiasse, il
@@ -7244,3 +7246,106 @@ developer guardi in Fineco un'operazione di ieri: c'è già nei «Movimenti Doss
 a 1–3: è la scelta prudente, ed è quella di Danske Bank. Da sola però non copre una riga provvisoria la cui valuta è già passata
 quando si importa un file vecchio di qualche giorno: nel file la riga resta com'era all'export, e Fineco non scrive la data
 dell'export. Per quel caso serve W-B83: una compravendita con quantità o controvalore vuoti non entra a 0.
+
+### N74 · Fineco opzione (a), W-B83 e le righe sicure — analisi (2026-10-19, sola lettura, base `b82208bed`)
+
+Il developer su Q-N74-1, testuale: «si si, fai come dice l'opzione a, ma non fare un avviso, solo una nota, o forse nulla, e
+piuttosto scriviamo questo principio nella skill che spiega come fare i plugin, si devono importare solo le date sicure».
+
+Il lotto del coordinatore:
+1. Fineco, opzione (a): le righe con la valuta oltre domani restano fuori, senza avviso; una nota breve se esiste un canale
+   informativo, altrimenti niente;
+2. W-B83 nello stesso spirito;
+3. il principio nella skill `brim-plugin` e, se ha le regole obbligatorie, nella guida dei plugin (docs-writer);
+4. Danske: solo una segnalazione.
+
+**Il canale della nota esiste.** È `BRIMNotice(severity="info")` (`schemas/brim.py:516`, «info = explanatory (blue)»).
+- Il wizard mostra le note in blu, sotto «Note informative», separate da «Da verificare» in ambra (`ImportWizardModal.svelte:2432-2447`,
+  `BrimNoticeList.svelte`).
+- Scalable lo usa già per lo stesso caso: `scalable_not_executed`, «… were not executed … and were not imported. An order executed
+  later comes with the next export» (`_scalable.py:103-107`).
+- **Da sapere**: ogni nota, anche info, apre una finestra di conferma blu quando si lascia l'analisi: «Note dall'importazione —
+  L'importazione ha lasciato N note … Leggila prima di continuare» (`ImportWizardModal.svelte:3116-3118`, `:4741-4743`).
+
+→ Uso la **nota**: un codice, il conteggio e le righe d'origine come evidenza, il testo tradotto per codice
+(`importWizard.brimNotice.<code>`). Se il developer non vuole la finestra, si passa a «niente» togliendo la nota.
+
+**La correzione di W-B83.**
+- Una **quantità vuota** non entra a 0: la regola 10 rifiuta già la riga in lettura (`qtyPositive`, `qtyNegative`,
+  `schemas/transactions/transactions.py:158-161`). Il wizard la mostra come riga in errore.
+- Un **controvalore vuoto** entra invece in silenzio a 0 €: la regola 7 chiede solo che la cassa ci sia, e la 11 salta il segno sullo
+  zero (`:132-133`, `:169-173`). Succede per un BUY, per un rimborso (SELL a 0 €, cioè la perdita di tutto il costo), e anche per un
+  dividendo o una cedola.
+
+**La cura proposta**, un solo file di prodotto (`broker_fineco/plugin.py`):
+1. **la data.** Se la data della riga (la valuta, o l'operazione se la valuta manca) viene dopo `latest_range_end()`
+   (`utils/datetime_utils.py:108-120`), la riga resta fuori intera: niente transazione, niente FEE della variante B, niente
+   INTEREST del rimborso sopra la pari. `latest_range_end()` è il domani del server, lo stesso dei prezzi e dei cambi (N83);
+2. **i campi.** Una compravendita (BUY o SELL, il rimborso compreso) senza quantità o senza controvalore resta fuori intera, allo stesso
+   modo;
+3. **le note.** Una nota sola per motivo, `severity="info"`:
+   - `fineco_not_yet_settled`: «N righe non ancora regolate (valuta dopo domani): non importate, arrivano col prossimo export»;
+   - `fineco_incomplete_rows`: «N compravendite senza quantità o controvalore: non importate, arrivano col prossimo export».
+
+   Ognuna porta `context.count` e le righe d'origine come evidenza, come Scalable. Il testo del plugin è nella lingua dell'export,
+   l'italiano. Le chiavi `importWizard.brimNotice.fineco_*` vanno nelle 4 lingue, in `frontend/src/lib/i18n/importWizard/*.json`, via
+   `dev.py i18n add`: un file condiviso;
+4. **la versione.** `plugin_version` da 1.1.0 a 1.2.0: i file già analizzati diventano vecchi e si rianalizzano
+   (`brim/brim_provider.py:908-911`), così la regola vale anche per i report caricati prima;
+5. **la docstring** del modulo: le date e le note.
+
+I report d'esempio non cambiano esito: le righe sono del 2023–2024, tutte complete.
+
+**I rossi previsti** (test-author, in `backend/test_scripts/test_external/test_brim_providers.py`, accanto a
+`test_fineco_bond_redeemed_above_par_splits_interest`). I CSV in `tmp_path`; il domani del plugin fissato con `monkeypatch`, per
+non dipendere dall'orologio.
+
+| Caso | Oggi | Dopo |
+|---|---|---|
+| valuta dopo domani | entra | fuori, nota `fineco_not_yet_settled` con `count` e la riga come evidenza |
+| valuta domani, valuta oggi | entra | entra (guardia) |
+| valuta vuota, operazione dopo domani | entra | fuori |
+| un dividendo dopo domani | entra | fuori |
+| una riga della variante B dopo domani | entra con la sua FEE | fuori, nessuna FEE |
+| un rimborso sopra la pari dopo domani | SELL più INTEREST | fuori |
+| un BUY senza controvalore | BUY a 0 € | fuori, nota `fineco_incomplete_rows` |
+| un SELL senza quantità | errore `qtyNegative` | fuori, nessun errore, la nota |
+| in ogni caso | — | nessuna nota `warning` nuova |
+| i 4 report d'esempio | — | lo stesso esito (guardia) |
+
+**I test da girare**, corsia 6184, leggeri, uno alla volta col carico sotto 50, nessuno slot pesante:
+- `external brim-providers`, filtrato su Fineco, poi intero se il carico lo permette;
+- `utils gate-plugin-i18n-ownership` e `dev.py i18n check`;
+- ruff e black sul plugin;
+- per la doc, `mkdocs build` stretto e `check-links` sull'albero simulato;
+- nessun E2E: non c'è codice nuovo del frontend, e la lista delle note è già coperta.
+
+**Doc**
+- docs-writer, solo EN:
+  - `user/transactions/import/fineco.en.md`, «Good to know»: le date e le righe lasciate fuori;
+  - `developer/backend/brim/architecture.md#plugin-fineco`;
+  - `developer/architecture/patterns/brim_plugin_guide.md`: un punto nuovo fra le regole obbligatorie («Import philosophy»,
+    `:159-193`), e la riscrittura del paragrafo a `:1125`, che oggi dice il contrario: «Emit the date the report states, even one a
+    few days ahead, such as a settlement date».
+- io: la skill `brim-plugin`, con la regola obbligatoria 9, «solo righe sicure».
+- CHANGELOG 🔄: la riga la propongo io.
+
+**Danske (punto 4, solo una segnalazione).** `excluded_not_yet_settled` ed `excluded_status` (righe non eseguite o non contabilizzate)
+escono come `severity="warning"` (`broker_danske_bank/plugin.py:1499-1501`). Sono in ambra, sotto «Da verificare», e fanno della
+finestra di conferma «Avvisi rilevati … Alcune transazioni potrebbero essere state saltate».
+- Per coerenza con Fineco e con Scalable (`scalable_not_executed`, che è una nota), queste due andrebbero abbassate a nota.
+- Gli altri motivi di esclusione di Danske restano avvisi: righe senza controparte, ambigue, fuori dalla copertura della cassa, di
+  tipo sconosciuto, invalide.
+
+**Domande**
+- **Q-N74-2 · Il perimetro di W-B83.** Il coordinatore dice «compravendita»: propongo BUY e SELL, il rimborso compreso perché è una
+  SELL.
+  - (a) solo questi;
+  - (b) anche i dividendi e le cedole senza controvalore, e l'aumento di capitale senza quantità *(consiglio: è lo stesso
+    principio; oggi un dividendo vuoto entra a 0 €, e un aumento di capitale vuoto è un errore di validazione)*.
+- **Q-N74-3 · La soglia.** Come deciso, resta fuori solo una riga con la valuta dopo domani: una con la valuta di domani, non ancora
+  regolata, entra. Se il developer vuole solo righe regolate, la soglia diventa «dopo oggi». *(Consiglio: dopo domani. È lo stesso
+  limite del batch, dei prezzi e dei cambi; la riga ha già i suoi numeri dall'esecuzione, e W-B83 ferma quelle incomplete.)*
+- **Q-N74-4 · Il limite del batch** (N74 vero e proprio, analisi C) nello stesso lotto? *(Consiglio: sì. È lo stesso domani,
+  `stored_date_bounds()`; il paragrafo della guida cambia comunque; i test sono quelli elencati in C.)*
+- Resta com'è: con la valuta vuota si usa la data dell'operazione, come dice la pagina utente.
