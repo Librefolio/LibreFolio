@@ -5,6 +5,11 @@
   - grouped: aggregated view for dashboard (single container, sorted by severity)
   - flat: one banner per issue for asset/forex detail pages
 
+  Grouped mode puts a category's action where it says what it fixes (the developer, 19/10/2026: «if you click here,
+  this is what you fix»): a button that fixes the whole category comes first, the message and the items it fixes hang
+  under it; an action on one item at a time (an asset to open, a pair to add or open) is one chip per item, under the
+  message. Flat mode keeps one banner per issue, its button at the end of the line.
+
   CTA actions are emitted via `onaction` — the parent decides whether to open a modal,
   navigate, or trigger a sync. The component does not call goto() directly.
 
@@ -78,6 +83,29 @@
         return ids.map((id, i) => ({id, name: names[i] ?? `#${id}`}));
     }
 
+    /** The actions that work on one pair at a time: the add dialog opens on one pair, the link goes to one pair. */
+    const PER_PAIR_ACTIONS: ReadonlySet<string> = new Set(['add_fx_pair', 'navigate_fx']);
+
+    /**
+     * How a category's action meets what it fixes (grouped mode). `all`: one button fixes the whole category, so it
+     * comes first and the message and items hang under it. `each-asset` and `each-pair`: the action works on one item at
+     * a time, so each item is its own chip, under the message. `none`: no action, the message alone.
+     */
+    type FixShape = 'all' | 'each-asset' | 'each-pair' | 'none';
+
+    function fixShape(issue: DataQualityIssue): FixShape {
+        if (!issue.cta_action) return 'none';
+        if (issue.cta_action === 'navigate_asset' && (issue.affected_asset_ids?.length ?? 0) > 0) return 'each-asset';
+        if (PER_PAIR_ACTIONS.has(issue.cta_action) && (issue.affected_fx_pairs?.length ?? 0) > 0) return 'each-pair';
+        return 'all';
+    }
+
+    /** The assets a one-button fix works on, as plain text: at most three names, then «+N». */
+    function assetNamesLine(names: string[]): string {
+        const shown = names.slice(0, 3).join(', ');
+        return names.length > 3 ? `${shown} +${names.length - 3}` : shown;
+    }
+
     /** The colours of a severity: its state's tint, icon and divider, and its chips and buttons (designer, round 3). */
     function getSeverityStyles(severity: IssueSeverity) {
         const tone = DATA_QUALITY_TONE[severity] ?? 'info';
@@ -141,45 +169,49 @@
     }
 </script>
 
-{#snippet issueRow(issue: DataQualityIssue)}
+{#snippet fxPairLabel(pair: string, arrowSize: number)}
+    {@const fx = formatFxPair(pair)}
+    <span class="inline-flex items-center gap-0.5"><span class="emoji-flag">{fx.baseFlag}</span>{fx.baseCode}<ArrowLeftRight size={arrowSize} /><span class="emoji-flag">{fx.quoteFlag}</span>{fx.quoteCode}</span>
+{/snippet}
+
+{#snippet fxPairList(pairs: string[])}
+    <span class="inline-flex items-center gap-1 flex-wrap text-[11px]">
+        {#each pairs.slice(0, 3) as pair}
+            {@render fxPairLabel(pair, 9)}
+        {/each}
+        {#if pairs.length > 3}
+            <span>+{pairs.length - 3}</span>
+        {/if}
+    </span>
+{/snippet}
+
+{#snippet issueMessage(issue: DataQualityIssue, inlinePairs: boolean)}
     {@const Icon = getIcon(issue.severity)}
     {@const rowStyles = getSeverityStyles(issue.severity)}
-    {@const CtaIcon = getCtaIcon(issue.cta_action)}
-    {@const targets = issue.cta_action === 'navigate_asset' ? assetTargets(issue) : []}
-    <div class="flex flex-col gap-1 text-xs" data-testid="data-quality-issue-{issue.code}" data-severity={issue.severity} data-tone={rowStyles.tone}>
-        <!-- Message + FX context -->
-        <div class="flex items-center gap-2 flex-wrap min-w-0">
-            <Icon size={13} class="shrink-0 {rowStyles.icon}" />
-            <span>{$_(issue.message_i18n_key, {values: issue.message_params ?? {}})}</span>
-            {#if (issue.affected_fx_pairs?.length ?? 0) > 0}
-                <span class="inline-flex items-center gap-1 text-[11px]">
-                    {#each (issue.affected_fx_pairs ?? []).slice(0, 3) as pair}
-                        {@const fx = formatFxPair(pair)}
-                        <span class="inline-flex items-center gap-0.5">
-                            <span class="emoji-flag">{fx.baseFlag}</span>{fx.baseCode}<ArrowLeftRight size={9} /><span class="emoji-flag">{fx.quoteFlag}</span>{fx.quoteCode}
-                        </span>
-                    {/each}
-                    {#if (issue.affected_fx_pairs?.length ?? 0) > 3}
-                        <span>+{(issue.affected_fx_pairs?.length ?? 0) - 3}</span>
-                    {/if}
-                </span>
-            {/if}
-        </div>
+    <div class="flex items-center gap-2 flex-wrap min-w-0" data-testid="data-quality-message-{issue.code}">
+        <Icon size={13} class="shrink-0 {rowStyles.icon}" />
+        <span>{$_(issue.message_i18n_key, {values: issue.message_params ?? {}})}</span>
+        {#if inlinePairs && (issue.affected_fx_pairs?.length ?? 0) > 0}
+            {@render fxPairList(issue.affected_fx_pairs ?? [])}
+        {/if}
+    </div>
+{/snippet}
 
-        <!-- Actions: navigate_asset → one "go to asset" link per affected asset;
-             any other action (sync / add / navigate_fx) → a single aggregate CTA. -->
-        {#if targets.length > 0}
-            <div class="flex flex-wrap gap-1.5 mt-0.5" data-testid="data-quality-nav-assets-{issue.code}">
-                {#each targets as tgt}
-                    <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded {rowStyles.chip} transition-colors font-medium text-[11px] min-w-0 max-w-[16rem]" onclick={() => onaction?.('navigate_asset', String(tgt.id), issue)} title={tgt.name} data-testid="data-quality-nav-asset-{tgt.id}">
-                        <ArrowUpRight size={11} class="shrink-0" />
-                        <span class="truncate">{tgt.name}</span>
-                    </button>
-                {/each}
-            </div>
-        {:else if issue.cta_action}
-            <div class="mt-0.5">
+{#snippet issueRow(issue: DataQualityIssue, divided: boolean, dividerClass: string)}
+    {@const rowStyles = getSeverityStyles(issue.severity)}
+    {@const shape = fixShape(issue)}
+    {@const action = issue.cta_action ?? ''}
+    {@const CtaIcon = getCtaIcon(issue.cta_action)}
+    {@const pairs = issue.affected_fx_pairs ?? []}
+    {@const names = issue.affected_asset_names ?? []}
+    <!-- A divider above every category but a section's first: a button heading its category never reads as the tail
+         of the list above it. -->
+    <div class="flex flex-col gap-1 text-xs {divided ? `pt-2.5 border-t ${dividerClass}` : ''}" data-testid="data-quality-issue-{issue.code}" data-severity={issue.severity} data-tone={rowStyles.tone}>
+        {#if shape === 'all'}
+            <!-- One button fixes the whole category: it comes first, and what it fixes hangs under it. -->
+            <div>
                 <button
+                    type="button"
                     class="inline-flex items-center gap-1 px-2 py-0.5 rounded {rowStyles.chip} transition-colors font-medium text-[11px] shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
                     onclick={() => handleCta(issue)}
                     disabled={busyCode === issue.code}
@@ -193,6 +225,46 @@
                     {getCtaLabel(issue.cta_action)}
                 </button>
             </div>
+            <div class="flex flex-col gap-1 ml-1 pl-2.5 border-l-2 {rowStyles.divider}" data-testid="data-quality-fixes-{issue.code}">
+                {@render issueMessage(issue, false)}
+                {#if pairs.length > 0}
+                    <div class="pl-5" data-testid="data-quality-fixes-items-{issue.code}">
+                        {@render fxPairList(pairs)}
+                    </div>
+                {:else if names.length > 0}
+                    <div class="pl-5 text-[11px]" data-testid="data-quality-fixes-items-{issue.code}">{assetNamesLine(names)}</div>
+                {/if}
+            </div>
+        {:else}
+            {@render issueMessage(issue, shape === 'none')}
+            {#if shape === 'each-asset'}
+                <!-- One «go to asset» chip per affected asset: the chip is the item and its fix. -->
+                <div class="flex flex-wrap gap-1.5 mt-0.5" data-testid="data-quality-nav-assets-{issue.code}">
+                    {#each assetTargets(issue) as tgt}
+                        <button
+                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded {rowStyles.chip} transition-colors font-medium text-[11px] min-w-0 max-w-[16rem]"
+                            onclick={() => onaction?.('navigate_asset', String(tgt.id), issue)}
+                            title={tgt.name}
+                            data-testid="data-quality-nav-asset-{tgt.id}"
+                        >
+                            <ArrowUpRight size={11} class="shrink-0" />
+                            <span class="truncate">{tgt.name}</span>
+                        </button>
+                    {/each}
+                </div>
+            {:else if shape === 'each-pair'}
+                <!-- One chip per pair, the action on that pair: adding or opening works on one pair at a time. -->
+                <div class="flex flex-wrap gap-1.5 mt-0.5" data-testid="data-quality-fx-pairs-{issue.code}">
+                    {#each pairs as pair (pair)}
+                        {@const fx = formatFxPair(pair)}
+                        {@const label = `${getCtaLabel(issue.cta_action)}: ${fx.baseCode}/${fx.quoteCode}`}
+                        <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded {rowStyles.chip} transition-colors font-medium text-[11px] min-w-0" onclick={() => onaction?.(action, pair, issue)} title={label} aria-label={label} data-testid="data-quality-fx-pair-{pair}">
+                            <CtaIcon size={11} class="shrink-0" />
+                            {@render fxPairLabel(pair, 9)}
+                        </button>
+                    {/each}
+                </div>
+            {/if}
         {/if}
     </div>
 {/snippet}
@@ -226,16 +298,16 @@
             {#if actionableIssues.length > 0}
                 <!-- Indented under the header: these are the ones the header counts. -->
                 <div class="flex flex-col gap-2.5 px-4 pb-4 ml-6" data-testid="data-quality-actionable">
-                    {#each actionableIssues as issue (issue.code + (issue.group_key ?? ''))}
-                        {@render issueRow(issue)}
+                    {#each actionableIssues as issue, index (issue.code + (issue.group_key ?? ''))}
+                        {@render issueRow(issue, index > 0, styles.divider)}
                     {/each}
                 </div>
             {/if}
             {#if infoIssues.length > 0}
                 <!-- Notes: not counted in the header, so not indented under it either. -->
                 <div class="flex flex-col gap-2.5 px-4 pb-4 {actionableIssues.length > 0 ? `pt-3 border-t ${styles.divider}` : ''}" data-testid="data-quality-info">
-                    {#each infoIssues as issue (issue.code + (issue.group_key ?? ''))}
-                        {@render issueRow(issue)}
+                    {#each infoIssues as issue, index (issue.code + (issue.group_key ?? ''))}
+                        {@render issueRow(issue, index > 0, styles.divider)}
                     {/each}
                 </div>
             {/if}
