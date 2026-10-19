@@ -11,9 +11,10 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     (0600), which ``read_report`` gives back equal to the report returned. The report says what the manifest says; it
     names the active administrators of the copy, sorted; it expires 24 hours after the check. ``remove_stage`` removes
     the copy; a stage that is a link, or a file, is unlinked and never followed.
-(c) An older backup, at ``005_accounts_invites`` (pinned by name: the revision just before ``006_registration_mode``,
-    whose data conversion is checked), upgraded for real once for the module: ``action == "upgrade"``, ``migrations``
-    the revisions after the backup's up to the head, oldest first, each with the first line of its description, as the
+(c) An older backup, at ``004_release_1_2_0_schema`` (pinned by name: the released revision just before
+    ``005_release_1_3_0_schema``, whose data conversion is checked), upgraded for real once for the module:
+    ``action == "upgrade"``, ``migrations`` the revisions after the backup's up to the head, oldest first (today one,
+    ``005_release_1_3_0_schema``, release 1.3's only migration), each with the first line of its description, as the
     migration files themselves say (read here with ``ast``, not through Alembic); the copy is at the head and its data
     converted; tables before (the manifest's counts) and after (the copy's, those the upgrade created included).
     ``_revision_plan`` gives, for every revision of the history, the migrations after it.
@@ -289,10 +290,10 @@ def position(revision: str) -> int:
 
 
 #: The migration whose data conversion the real upgrade of an older backup is checked by (``enable_registration``
-#: becomes ``registration_mode``), and the revision just before it, which every older backup of this module is at. Both
-#: pinned by name: a new migration moves the head, never them.
-CONVERSION = "006_registration_mode"
-OLDER = "005_accounts_invites"
+#: becomes ``registration_mode``), release 1.3's one migration, and the revision just before it, the released 1.2 schema,
+#: which every older backup of this module is at. Both pinned by name: a new migration moves the head, never them.
+CONVERSION = "005_release_1_3_0_schema"
+OLDER = "004_release_1_2_0_schema"
 if position(CONVERSION) != position(OLDER) + 1:
     raise AssertionError(f"{OLDER} must be the revision just before {CONVERSION}")
 #: What the upgrade of an older backup applies: every migration after ``OLDER`` up to the head, oldest first.
@@ -1682,15 +1683,15 @@ def test_an_upgrade_that_fails_ends_late_or_cannot_start_is_refused(instance, ol
 
 #: The migration every older backup of this module still has to run that creates a table, and that table. It creates the
 #: tables it does not find among the tables: an index holding that name is not one, and refuses its ``CREATE TABLE``.
-PENDING_MIGRATION = "007_plugin_settings"
+PENDING_MIGRATION = "005_release_1_3_0_schema"
 PENDING_TABLE = "plugin_system_settings"
 
 
 def test_an_upgrade_that_fails_in_alembic_is_refused_and_leaves_nothing(instance, databases, tmp_path):
-    """(e) For real: an older backup whose database holds an index under the name of the table ``007_plugin_settings``
-    creates. That migration sees no such table, and its ``op.create_table`` fails («there is already an index named»)
-    in alembic's own process, on the copy; the check says ``upgrade_failed`` and removes the copy. Tables and indexes
-    only, as LibreFolio makes them: lot B-28 lets the archive through to its upgrade."""
+    """(e) For real: an older backup whose database holds an index under the name of a table ``005_release_1_3_0_schema``
+    creates (``PENDING_TABLE``). That migration sees no such table, and its ``op.create_table`` fails («there is already
+    an index named») in alembic's own process, on the copy; the check says ``upgrade_failed`` and removes the copy.
+    Tables and indexes only, as LibreFolio makes them: lot B-28 lets the archive through to its upgrade."""
     assert PENDING_MIGRATION in [migration.revision for migration in AFTER_OLDER], f"precondition: {PENDING_MIGRATION} is still to run on a backup at {OLDER}"
     data = make_data_dir(tmp_path / "data", databases.older)
     execute(data / DATABASE_ENTRY, f"CREATE INDEX {PENDING_TABLE} ON users (username)")
@@ -3141,7 +3142,7 @@ def test_a_function_the_server_registers_in_an_index_or_a_generated_column_is_re
     print_success(f"{call.name}: database_damaged before describe_database, nothing left")
 
 
-#: (Part 1) This LibreFolio's own index on an expression (revision ``009_email_unique_ignoring_case``).
+#: (Part 1) This LibreFolio's own index on an expression (revision ``005_release_1_3_0_schema``).
 OWN_LOWER_INDEX = "ux_users_email_lower"
 
 

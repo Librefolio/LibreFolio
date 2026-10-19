@@ -24,7 +24,7 @@ Tant que vous n'enregistrez pas, les cours nouveaux et modifiés apparaissent su
 
 ## 💰 Onglet Cours
 
-- La **Clôture** est obligatoire et doit être un nombre positif ; **Ouverture**, **Plus haut**, **Plus bas** et **Volume** sont facultatifs, et la gomme dans une cellule efface sa valeur.
+- La **Clôture** est obligatoire et doit être supérieure à 0 ; **Ouverture**, **Plus haut**, **Plus bas** et **Volume** sont facultatifs, 0 ou plus, et la gomme dans une cellule efface sa valeur. LibreFolio ne garde aucun prix négatif : une ligne qui en a un, que seul un fichier importé peut apporter, n'est pas enregistrée et compte parmi les lignes ignorées.
 - Les cours sont dans la devise de l'actif, indiquée à côté des onglets (*Cours en USD*).
 - Les **lignes obsolètes** sont des jours sans cours propre, comblés avec le dernier cours connu. Lorsqu'il y en a, un compteur ⚠️ et un interrupteur apparaissent : activez-le pour les masquer.
 

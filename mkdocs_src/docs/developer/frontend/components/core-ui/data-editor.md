@@ -40,8 +40,14 @@ An **inline tabular editor** for structured data (add, edit, delete rows).
   counter hides them (`dataEditor.staleTooltip`)
 - `readonly` rows (with a `readonlyReason` tooltip) can be deleted but not edited
 - Optional numeric columns flagged `erasable` render `ErasableNumberCell`: its eraser (or `Delete`
-  in an empty input) sets the sentinel `-1` without a confirmation, since the row's **Undo** covers
-  a slip; the backend price upsert turns `-1` into `NULL`
+  in an empty input) sets `CLEARED_CELL` (`'clear'`, exported by `DataEditorTypes.ts`; N92) without
+  a confirmation, since the row's **Undo** covers a slip, and the cell shows it as cleared,
+  *Not set* in red italics. The asset wrapper sends `'clear'`, which the backend price upsert
+  writes as `NULL` ([the F.4 merge](../../../backend/assets/architecture.md#price-write-merge)). A
+  number is always a number, `-1` included, shown in the field (a typed negative is clamped to
+  the column's `min`, 0 for prices), and an erased cell sorts and filters as an empty one. Only
+  the eraser sets `'clear'`: the CSV parser refuses a text. Before N92, the eraser set the sentinel
+  `-1`
 - **Import CSV** merges each parsed line into the row with the same date and the same values for
   the `importMatchKeys` columns (prop, default `[]`: the date alone, as for prices and FX rates; the
   asset events editor passes `['type']`). Among several matches an editable row wins over a
@@ -62,7 +68,7 @@ An **inline tabular editor** for structured data (add, edit, delete rows).
 | Tables and columns | one table: `rate` | **Prices**: `close` (required), `open`, `high`, `low`, `volume` (erasable). **Events**: `type` (one of the five event types) and `amount` (required), `notes` |
 | Written through | `POST /api/v1/fx/currencies/rate`; a pair shown inverted (its base after its quote in alphabetical order) stores `1 / rate` under the alphabetical pair | `POST /api/v1/assets/prices`; for events, **one** `POST /api/v1/assets/events` per save, with one item `{asset_id, delete_ids, events}`: a saved event with its `id` (edited in place, type included), a new one without |
 | Deleted through | `DELETE /api/v1/fx/currencies/rate` | `DELETE /api/v1/assets/prices`; events in that same POST: the ids of the saved rows marked deleted, as `delete_ids`, which the server deletes first. No `DELETE` is sent during a save, and an event row never saved is not sent at all |
-| Rows not sent | A rate that is not a number above 0, counted as *skipped (invalid)*. When every row is invalid and none is deleted, the save stops with *Rate must be strictly greater than zero (0 is not allowed).* | A price whose close is not a number above 0, counted as *skipped (invalid)*; an event without a type or a numeric amount |
+| Rows not sent | A rate that is not a number above 0, counted as *skipped (invalid)*. When every row is invalid and none is deleted, the save stops with *Rate must be strictly greater than zero (0 is not allowed).* | A price whose close is not a number above 0, or whose open, high, low or volume is a negative number (N92; only an imported CSV can bring one), counted as *skipped (invalid)* (`pricesSkipped`); an event without a type or a numeric amount |
 
 Both wrappers:
 

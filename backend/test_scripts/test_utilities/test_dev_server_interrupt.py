@@ -837,7 +837,7 @@ def stand_in_for_the_server_start(monkeypatch, tmp_path: Path) -> None:
     carries no Designer Lab; ``dev.PROJECT_ROOT`` is ``tmp_path``.
     """
 
-    def configure_runtime(port=None, data_dir=None):
+    def configure_runtime(port=None, data_dir=None, lane_settings=None):
         return port, tmp_path / "data"
 
     monkeypatch.setattr(dev, "PROJECT_ROOT", tmp_path)
