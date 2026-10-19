@@ -7730,3 +7730,55 @@ Domanda: dentro W-B85, o una voce a parte?
   1.3, almeno l'avviso con `report_issue`, perché toccano i numeri.
 - **OK di scrittura** su `frontend/src/lib/i18n/importWizard/*.json` per `importWizard.reportSet.reason.reservation` e, se D-W85-3 è
   l'aiuto unico, `importWizard.brimNotice.rows_not_recognized` e `rows_unreadable`.
+
+### W-B85 · Danske Bank, «noto in silenzio, ignoto con avviso»: cura (2026-10-19, base `9857be3d2`)
+
+**Il via del coordinatore (16:23)**, per i punti 1 e 2 già decisi:
+- la cura Danske: «Varaus» → `reservation`, in silenzio con il log; `excluded_status` → avviso con `report_issue`; versione 1.0.2;
+- la regola 10 nella skill, e la guida tramite il docs-writer.
+
+Vincoli:
+- OK di scrittura solo per `importWizard.reportSet.reason.reservation`.
+- In attesa del developer (D-W85-1…4): dei motivi Danske si tocca solo `status`; le righe non regolate di Fineco e Danske restano a
+  nota blu (14:05); nessun altro plugin.
+
+**Avanzamento**
+- ✅ 1. Rossi (test-author `wb85-reds`, solo `test_brim_danske_bank.py`), confermati da me alle 16:43: 9 rossi e 337 verdi.
+  - Le due versioni.
+  - Le classi `varaus_label` e `varaus_pending`: una «Varaus» con `Tila` «Odottaa», per provare il controllo prima di `Tila`.
+  - Il motivo `reservation` nel riepilogo del set.
+  - Nessuna nota mostra una prenotazione; il conto e l'evidenza di `excluded_status`; il suo `report_issue`.
+  - Un solo evento di log per motivo, con il suo conteggio.
+  - Guardie: le prenotazioni fuori dalla catena dei saldi; gli altri motivi senza `report_issue` e con la gravità di oggi; le note
+    dei campioni immutate.
+- ✅ 2a. La cura è pronta e non applicata: `files/scripts/wb85_cure.py`, prova a vuoto pulita; la chiave in
+  `files/scripts/wb85_i18n.sh` (EN «reserved, not booked», IT «prenotate, non contabilizzate», FR «réservées, non comptabilisées», ES
+  «reservadas, no contabilizadas», nello stile delle altre etichette dei motivi).
+  > **Note implementazione**:
+  > - `_chain()` (la catena dei saldi di cassa) escludeva solo `status` e `invalid`: una `reservation` sarebbe entrata come movimento
+  >   contabilizzato. Ora le tre classi sono una costante, `_UNBOOKED_CLASSES`: il comportamento di oggi resta.
+  > - `_SILENT_EXCLUSIONS = {"reservation"}` e `_REPORTED_EXCLUSIONS = {"status"}`: le altre ragioni aspettano D-W85-1.
+- ✅ 4a. La regola 10 della skill `brim-plugin`, «Known rows quietly, unknown rows loudly».
+  > **⚠️ Fuori pista**: la regola 9 diceva che anche «uno stato che dice in attesa o prenotato» va con una nota info. Col principio
+  > nuovo si contraddiceva con «Varaus» in silenzio. Ora la 9 copre le righe provvisorie per data, e manda le righe segnate da uno
+  > stato (prenotata, annullata, in attesa) alla 10.
+- ✅ 2b. La cura applicata (16:45): `files/scripts/wb85_cure.py --apply` e `files/scripts/wb85_i18n.sh`.
+- ✅ 3. I verdi (16:48-17:00, carico 35-50, `files/scripts/wb85_light.sh greens`, log `files/logs/wb85/greens_*.log`), tutti exit 0:
+  - `external brim-danske-bank` 346, `external brim-providers` 750, `services brim-report-sets` 274, `services brim-parse-race`
+    45, `api brim` 118;
+  - i cancelli: `gate-plugin-i18n-ownership` 64, `gate-i18n-catalog`, `gate-i18n-usage` 195, `i18n check` (5106 chiavi);
+  - ruff, black, Prettier.
+  Porta 6184 libera.
+- ✅ 4b. La doc (docs-writer `wb85-docs`, solo inglese, nulla timbrato):
+  - la guida dei plugin: la regola nuova, «Only safe rows» ristretta, `report_issue` con i due usi, il motivo `reservation` fra gli
+    esiti;
+  - `danske_bank.md`: la versione 1.0.2, le righe di cassa, i motivi, le note, il log, `_UNBOOKED_CLASSES`;
+  - la pagina utente `danske-bank.en.md`: «Every row is accounted for», col caso delle prenotazioni e dello stato sconosciuto.
+  Prove: `mkdocs build` strict e `check-links` verdi. `translate-validate`, per `danske-bank`: solo avvisi, il debito delle voci
+  nuove (5 codici inline, 23 voci contro 20), per Aphra.
+  > **Note implementazione**: il commento in testa a `BrimNoticeList.svelte` parlava di `report_issue` solo per il beta di Fineco:
+  > ora nomina i due usi (segnalato dal docs-writer).
+  > **Nota**: un ordine rifiutato o annullato di Danske («Hylätty», «Peruttu») prende l'avviso con il link, finché il plugin non
+  > impara quella parola. È voluto: nessun export vero ha mai mostrato quegli stati.
+- ✅ 5. Simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `ccc2a4141`): pulita. La base di fusione è il mio HEAD
+  `9857be3d2`, e dev non tocca nessuno dei 12 file.
