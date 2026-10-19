@@ -5730,3 +5730,89 @@ Le opzioni:
   Se la 010 esce, anche `api portfolio`, il resoconto della qualità dei dati, `api sync`, `front check` e il controllo
   i18n. Poi `mkdocs build` stretto e `check-links`.
 - Stima: mezza giornata la sola 011, circa un giorno con la 010.
+
+### Z-33r — la riduzione, solo la 011: lavoro (19/10 ~11:25, base `97fe88996`)
+
+> **Via** (coordinatore, 19/10 ~11:24): «VIA per "Z-33 ridotta", solo la parte 011. La 010 resta com'è finché il
+> developer non decide (D8).» D1 = (A), testuale del developer: «al più mi dai il comando manuale da lanciare per
+> ripararlo. Se a essere colpito è stato il db di prod qui sul mac, 0 problemi, lo rifaccio da capo o lo puoi riparare
+> tu». D2–D7 come consigliati. Fatti del coordinatore: il DB di produzione del developer sul Mac è alla 011 (11
+> assegnazioni `justetf` e `borsa_italiana`, nessuna `yfinance`: `exchange_timezone` NULL ovunque). Comandi manuali per
+> (a) la nightly Docker e (b) `backend/data/prod/sqlite/app.db`, prima e dopo l'aggiornamento, provati solo su una copia
+> di un DB di test della mia corsia. Slot pesante fino alle 14:00, corsia 6186, carico a 1 minuto sotto 50.
+
+**Contratto.**
+- Resta: `_normalize_yahoo_date` (data dell'indice), il valore corrente datato nel fuso di `exchangeTimezoneName`.
+- D2: escono `FAHistoricalData.exchange_timezone`, `FACurrentValue.exchange_timezone`,
+  `_YahooHistoryAcquisition.exchange_timezone` e la precedenza indice/metadati.
+- D3: `exchange_zone()` va nel plugin (aiuto privato); `utils/exchange_dates.py` sparisce.
+- D4: l'avviso del fuso sconosciuto resta nel plugin, una volta per nome e processo, riscritto: il valore corrente è
+  datato in UTC.
+- Escono: in `refresh.py` il passo 0, il controllo, la presa e la cattura del fuso; `redate_provider_rows`,
+  `redate_provider_events`; `AssetProviderAssignment.exchange_timezone`; la migrazione 011 e l'azione `migration-011`.
+- D5: il CHANGELOG riscritto (testo al coordinatore); la nota utente di Z-33 tolta (l'EN torna com'era).
+- D6: la pagina devWiki riscritta in breve. D7: Z-34 chiusa come superata.
+
+**Passi.**
+1. ✅ 19/10 11:28–11:46 — Test (test-author): `test_asset_source_refresh.py` torna identico a `60170aae5^` (via i 37
+   `test_z33_*`, 2 512 → 931 righe); `test_assets_provider.py` senza i 2 test della colonna; il file della 011
+   cancellato; `_backend_db.py` identico a `60170aae5^` (via `migration-011`); in `test_yahoo_finance_errors.py` restano
+   i test delle date, escono la dichiarazione del fuso e la regola, i due test dell'avviso passano a
+   `plugin._exchange_zone`. Rossi visti: 2/2 («red until Z-33r: the Yahoo plugin has no _exchange_zone»).
+   `check-orphans` pulito.
+2. ✅ 19/10 11:27–11:52 — Comandi manuali, provati solo su copie del DB di test della corsia (popolato alla 011, 14
+   assegnazioni, due con `exchange_timezone` scritto apposta): guida in `files/z33r-guide/GUIDA-011.md` (sotto).
+   - Prima (codice con la 011): `alembic … -x sqlalchemy.url=sqlite:///<copia A> downgrade -1`, lo stesso comando che
+     costruisce `dev.py db downgrade <file>` (`dev.py` rifiutava: sulla 6040 gira il server del developer): 011 → 010,
+     colonna via, `reported_currency` al suo posto, conteggi uguali, `integrity_check` ok, chiavi esterne pulite.
+   - Dopo (SQL con `sqlite3` di macOS 3.51, in una transazione, copia B): stessi risultati.
+   - Col codice nuovo: la copia C (alla 011, non riparata) fallisce `upgrade head` con «Can't locate revision
+     identified by '011_provider_exchange_timezone'» (rc 255: il server non partirebbe); A e B sono alla testa
+     (`010_provider_reported_currency (head)`), `upgrade head` senza nulla da fare; una sola testa.
+   - Non provato: l'involucro Docker (`docker compose run …`); la SQL è la stessa.
+3. ✅ 19/10 ~11:47 — Codice (`files/z33r-draft/apply_z33r.py`, provato su copia con `smoke_z33r.py`, inverso esatto):
+   i cinque file della riparazione presi invertendo i diff di `60170aae5`, `79265b1a0` e `b5da2277d` (differiscono dalla
+   versione prima di Z-33 solo per C-97c-4 e `88d0fb840`, arrivati dopo); il plugin a mano (D2–D4); cancellati
+   `utils/exchange_dates.py` e la 011. Ruff e black puliti; nessun riferimento rimasto.
+4. ✅ 19/10 11:30–11:50 — Doc (docs-writer, otto pagine): `architecture.md#exchange-timezone` ridotta («Dates on the
+   Exchange's Own Day»: la regola, le righe vecchie restano, il rimedio, Z-36); via `events.md#yahoo-redate` e
+   `#exchange-timezone-limits`; le pagine del DB e `scheduler.md` tornate come prima di Z-33; `asset_plugin_guide.md` e
+   `provider_yahoo_finance.md` senza il fuso dichiarato; la pagina utente tornata identica a prima di Z-33 (nessuno
+   stamp). Pagina devWiki riscritta in breve (riga dell'indice, voce del log). Backlog: Z-33r su Z-33, Z-34 ✅ superata,
+   Z-36 minimo.
+   > **⚠️ Fuori pista**: docs-writer corregge due mie frasi dell'analisi. (1) La riga vecchia rimasta sta sul giorno
+   > senza borsa (domenica o festivo), non sulla vigilia. (2) Togliere la nota non toglie il debito di traduzione della
+   > pagina utente: IT, FR ed ES erano già indietro di due punti (`693b9ac3c` e Z-32 (c)), la nota di Z-33 non era mai
+   > stata tradotta.
+5. ✅ 19/10 11:49–11:58 — Corse nello slot (`files/z33r_runs.sh`, una alla volta, carico sotto 50), dopo
+   `db populate --force` (la corsia era alla 011): `services provider-errors` 212, `services asset-source-refresh` 26,
+   `services asset-source` 61, `services asset-event-store` 71, `services asset-source-guards` 52,
+   `services current-price-storable` 27, `services range-ceiling` 72, `db migration-010` 13, `db validate` 17,
+   `services backup-staging` 202, `services backup-apply` 255, `api assets-provider` 30, `api assets-price` 22,
+   `api backup-restore-apply` 215. `mkdocs build` stretto rc 0, 0 avvisi; `check-links` 97 validi. Porta libera.
+6. ✅ 19/10 ~12:00 — Checkpoint FROZEN al coordinatore; CHANGELOG proposto (D5).
+
+**Guida: togliere la 011 da un DB che l'ha già** (la 010 resta: si arriva a `010_provider_reported_currency`).
+Server sempre fermo, prima una copia del DB (`app.db` e, se ci sono, `app.db-wal` e `app.db-shm`). Senza riparazione un
+DB alla 011 non fa partire il codice nuovo («Can't locate revision identified by '011_provider_exchange_timezone'»).
+
+(a) La nightly Docker (compose, servizio `librefolio`, dati in `./LibreFolio-data`; nel container il DB è
+`/app/backend/data/prod-docker/sqlite/app.db`):
+- prima di aggiornare l'immagine: `docker compose stop librefolio`, poi
+  `docker compose run --rm librefolio alembic -c backend/alembic.ini downgrade -1`;
+- dopo averla aggiornata: `docker compose stop librefolio`, poi
+  `docker compose run --rm librefolio sqlite3 /app/backend/data/prod-docker/sqlite/app.db "BEGIN; ALTER TABLE
+  asset_provider_assignments DROP COLUMN exchange_timezone; UPDATE alembic_version SET version_num =
+  '010_provider_reported_currency'; COMMIT;"` (la SQL su una riga sola);
+- verifica: `docker compose run --rm librefolio sqlite3 /app/backend/data/prod-docker/sqlite/app.db "SELECT version_num
+  FROM alembic_version; SELECT count(*) FROM pragma_table_info('asset_provider_assignments') WHERE name =
+  'exchange_timezone'; PRAGMA integrity_check;"` → `010_provider_reported_currency`, `0`, `ok`; poi
+  `docker compose up -d`.
+
+(b) Il DB di produzione sul Mac (`backend/data/prod/sqlite/app.db`, dal checkout principale, porta 6040 libera):
+- prima di aggiornare il codice: `./dev.py db downgrade backend/data/prod/sqlite/app.db` (una migrazione indietro);
+- dopo averlo aggiornato: `sqlite3 backend/data/prod/sqlite/app.db` con la stessa SQL di (a);
+- verifica: le stesse tre query di (a) con `sqlite3`, poi `./dev.py db upgrade backend/data/prod/sqlite/app.db`, che col
+  codice nuovo non ha nulla da applicare.
+
+Le corsie di test: `db populate --force` col codice nuovo (cancella il DB, con WAL e SHM, e lo ricrea alla testa).

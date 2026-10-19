@@ -452,22 +452,9 @@ During sync, the Yahoo Finance provider generates:
 
 Both are written by the standard `_upsert_asset_events()` pipeline, scoped by `provider_assignment_id`.
 
-Their dates are the exchange's own day, as the prices' (`_normalize_yahoo_date()`). Up to 1.2.1
-they were stored a day early for an exchange east of UTC, and a refresh alone would only add the
-right-dated event beside the shifted one: the upsert keeps a stored event the provider no longer
-returns. So the first refresh of each `yfinance` assignment marked by migration 011 re-dates its
-events once, before it writes anything
-([The Exchange's Timezone](architecture.md#exchange-timezone)).
-`EventStoreOperations.redate_provider_events()` moves an event of the assignment from S to S + 1
-when the rule says so and Yahoo's full history has an event of its type on S + 1 and none on S,
-latest first. An event that lands on one of the same assignment and type is merged into it: its
-transactions are re-pointed there (`transactions.asset_event_id` is `ON DELETE RESTRICT`), then
-it is deleted. A `SPLIT` carries along the `ADJUSTMENT` rows linked to it and dated on S: Yield
-on Cost rejects a split link whose adjustment is not on the split's date
-(`financial_math/yield_on_cost.py`). No other transaction ever moves: a `DIVIDEND` booked on a
-moved dividend keeps its date and its link. Moved events, and moved or re-pointed transactions,
-get a new `updated_at`. Manual events and the events of other assignments never move.
-{: #yahoo-redate }
+Their dates are the exchange's own day, as the prices' (`_normalize_yahoo_date()`). An event an
+older version stored a day early stays, so a sync that fetches it again stores a second one on its
+day ([Dates on the Exchange's Own Day](architecture.md#exchange-timezone)).
 
 ### 🔍 JustETF: Dividends from Chart Data
 

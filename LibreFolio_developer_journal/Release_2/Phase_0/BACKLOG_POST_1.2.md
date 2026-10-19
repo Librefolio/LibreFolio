@@ -7409,7 +7409,11 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     `b5da2277d` (dev `d01a13b10`); devWiki `f74229303`. **19/10: riduzione decisa dal developer** (solo la correzione
     del plugin, niente riparazione né colonne): analisi «Z-33 ridotta» nel piano 06; finché non entra, la riparazione
     resta nel codice.
-- **Z-36 · `tzdata` da PyPI: un server senza database dei fusi non risolve il fuso della borsa** — basso, ambiente,
+  - Z-33r (19/10, via del coordinatore): tolte la riparazione (passo 0 e controllo D″ nel refresh, aiuti di
+    ridatazione), la colonna `exchange_timezone`, il segno e la migrazione 011; resta la correzione del plugin. Guida
+    per i DB già alla 011: piano 06, sezione «Z-33r».
+- **Z-36 · `tzdata` da PyPI: un server senza database dei fusi non risolve il fuso della borsa** — minimo (era basso
+  fino a Z-33r), ambiente,
   **domanda per lo sviluppatore**; Z, 17/10 (dalla revisione di H a Z-33, archiviato su richiesta del coordinatore).
   - Su un host senza database dei fusi (Windows fuori da Docker, un container minimo) o con un nome che tzdata non ha,
     `exchange_zone()` dà None: un'assegnazione Yahoo ancora segnata dalla migrazione 011 non scrive nulla a ogni giro.
@@ -7420,7 +7424,8 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     `Pipfile.lock`, risolto su macOS, non lo porta: su Windows c'è o no a seconda di come si è installato.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro», passo 12.
   - Stato (19/10): con la riduzione di Z-33 resta solo la data del valore corrente (in UTC senza fusi); vedi l'analisi
-    «Z-33 ridotta» e la P-4 del coordinatore (`tzdata` nell'immagine).
+    «Z-33 ridotta» e la P-4 del coordinatore (`tzdata` nell'immagine). Con Z-33r l'avviso sta nel plugin
+    (`_exchange_zone`) e dice che il valore corrente è datato in UTC.
 - **Z-35 · Le chiusure Yahoo salvate con la rettifica del giorno in cui sono state lette** — medio, dati, **dopo la
   1.3**, decisione dello sviluppatore; proprietari X e MF; Z, 17/10 (trovato nell'analisi di Z-33, archiviato dal
   coordinatore).
@@ -7430,8 +7435,9 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   - Le metriche di rendimento possono contare due volte i dividendi: già nei prezzi rettificati e negli eventi.
   - Da decidere: `auto_adjust=False` (prezzi di borsa veri, split a parte) e la riscrittura della storia.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro».
-- **Z-34 · Il rapporto (C) delle righe Yahoo rimaste spostate** — basso, dati, **dopo la 1.3**; Z, 17/10 (decisione
-  N86, D4).
+- ✅ **Z-34 · Il rapporto (C) delle righe Yahoo rimaste spostate** — basso, dati, **dopo la 1.3**; Z, 17/10 (decisione
+  N86, D4). **Chiusa il 19/10 come superata** (D7, via del coordinatore): con Z-33r non c'è più riparazione, tutte le
+  righe salvate prima restano spostate per decisione del developer, e un rapporto non ha più oggetto.
   - La ridatazione di Z-33 avviene al primo giro di ogni assegnazione yfinance segnata dalla migrazione 011. Restano
     spostate le righe degli asset la cui assegnazione yfinance è stata tolta prima dell'aggiornamento, o prima del
     suo primo giro dopo; e quelle di un cambio di identificativo fra fusi di segno diverso prima di quel giro.

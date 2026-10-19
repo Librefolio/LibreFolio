@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -18,7 +17,6 @@ from backend.app.db.models import (
     AssetEvent,
     BrokerUserAccess,
     Transaction,
-    TransactionType,
     User,
 )
 from backend.app.db.precision import decimal_limit_issue, get_model_column_precision, max_integer_digits, storable_value
@@ -96,55 +94,6 @@ class EventStoreOperations:
         """
         storable = EventStoreOperations._storable_events(asset_id, events)
         return len(await EventStoreOperations._write_asset_events(session, asset_id, storable, provider_assignment_id, default_currency, commit=commit))
-
-    @staticmethod
-    async def redate_provider_events(session: AsyncSession, asset_id: int, provider_assignment_id: int, target_of: Callable[[date, str], Optional[date]]) -> tuple[int, int]:
-        """Move the assignment's events to the date ``target_of(date, type)`` gives them (None: the event stays), latest
-        first (Z-33). The type is passed as its upper-case text.
-
-        An event that meets, on its new date, an event of the same source and type is merged into it: its transactions
-        are re-pointed there (``asset_event_id`` is ON DELETE RESTRICT), then it is deleted. A SPLIT carries along the
-        ADJUSTMENT rows linked to it on its old date, its own rows: Yield on Cost accepts a split's rows only on its date,
-        and the portfolio engine restates prices from it. No other transaction ever moves. Events of other sources never
-        move. Moved events and moved or re-pointed transactions get a new ``updated_at``. Flushed, not committed.
-        Returns (moved, merged).
-
-        Targets go forward only: latest first is safe only then. An earlier target could meet an event of the assignment
-        not yet processed, and the moving one would be merged into it by mistake: it raises ``ValueError`` before
-        anything changes."""
-        events = (await session.execute(select(AssetEvent).where(AssetEvent.asset_id == asset_id, AssetEvent.provider_assignment_id == provider_assignment_id).order_by(AssetEvent.date.desc(), AssetEvent.id))).scalars().all()
-        targets: list[tuple[AssetEvent, str, Optional[date]]] = []
-        for event in events:
-            kind = str(event.type).strip().upper()
-            targets.append((event, kind, target_of(event.date, kind)))
-        backward = next(((event, target) for event, _kind, target in targets if target is not None and target < event.date), None)
-        if backward is not None:
-            raise ValueError(f"redate_provider_events moves events forward only: asset {asset_id}, {backward[0].date.isoformat()} -> {backward[1].isoformat()}")
-        by_key: dict[tuple[date, str], AssetEvent] = {}
-        for event in sorted(events, key=lambda row: row.id):
-            by_key.setdefault((event.date, str(event.type).strip().upper()), event)
-        moved = merged = 0
-        now = utcnow()
-        for event, kind, target in targets:
-            old_date = event.date
-            if target is None or target == old_date:
-                continue
-            if by_key.get((old_date, kind)) is event:
-                del by_key[(old_date, kind)]
-            if is_split_event_type(event.type):
-                await session.execute(update(Transaction).where(Transaction.asset_event_id == event.id, Transaction.type == TransactionType.ADJUSTMENT, Transaction.date == old_date).values(date=target, updated_at=now))
-            survivor = by_key.get((target, kind))
-            if survivor is not None:
-                await session.execute(update(Transaction).where(Transaction.asset_event_id == event.id).values(asset_event_id=survivor.id, updated_at=now))
-                await session.delete(event)
-                merged += 1
-            else:
-                event.date = target
-                event.updated_at = now
-                by_key[(target, kind)] = event
-                moved += 1
-        await session.flush()
-        return moved, merged
 
     @staticmethod
     def _storable_events(asset_id: int, events: list[dict | FAAssetEventPoint]) -> list[FAAssetEventPoint]:
