@@ -116,6 +116,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/assets/scheduleSerialization.test.ts",
             "src/lib/components/assets/assetBrowse.test.ts",
             "src/lib/components/assets/detail/assetDetailPriceQuery.test.ts",
+            "src/lib/components/fx/fxDetailConvertQuery.test.ts",
             "src/lib/components/assets/detail/assetDetailChartPoints.test.ts",
             "src/lib/components/assets/detail/assetDetailFxPair.test.ts",
             "src/lib/components/assets/detail/assetDetailFxRequirements.test.ts",
