@@ -6903,7 +6903,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     `date_to` (`replay_until`): le unità restano in viaggio, come nella Dashboard. Nessun arrivo nella cronologia.
     Dettagli: piano 05, sezione «J-47».
     Commit `f40c598ba` → dev `647efcc28`.
-- **J-48 · Le gambe di un trasferimento lette al confine del perimetro si vedono come «rettifiche» nei lotti** —
+- ✅ **J-48 · Le gambe di un trasferimento lette al confine del perimetro si vedono come «rettifiche» nei lotti** —
   basso, chiarezza; J, 17/10, da J-10 (N76). Nella modale della custodia, nel Gantt e nel grafico WAC una gamba che
   attraversa il perimetro compare come «Adjustment In/Out». La sistemazione: etichette esplicite di trasferimento,
   cioè un campo del backend sulle righe della cronologia, le 3 viste e l'i18n. In J-10 solo l'etichetta neutra della
@@ -6916,6 +6916,14 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     nella cartella di sessione di J, `files/parked/`: `j48-backend-scope-boundary.patch` (schema e servizio, mai
     applicata) e `j48-test-probe.patch` (solo la sonda del test-author, nessun test di J-48). `git apply --check` OK
     su `635b50537`. Dettagli: piano 05, §10 «J-19 entrata; MF-A12, J-1 di MF, analisi di J-48».
+  - ✅ **19/10, fatta da J** (via del coordinatore delle 11:42, col developer: «se lo riesci a risolvere ok»).
+    - Il backend dà `LotTimelineEventSchema.scope_boundary` (`IN`/`OUT`) sulle righe di una gamba letta al confine.
+    - Le tre viste la mostrano come trasferimento: «TRANSFER+»/«TRANSFER-» nello Storico, il ◆ su Lot Life, «Transfer
+      In»/«Out» sui segni del costo medio. Solo etichette: ogni cifra legge `kind`, e il broker compagno non compare.
+    - Rossi prima: 5 backend, 30 Vitest, 2 della modale.
+    - Verdi: `roi-fifo-utils` 1512, `api portfolio` 56, `core-unit` 9331, E2E `front-broker detail` 40.
+    - Dettagli: piano 05, §10 «J-48 — le etichette esplicite di trasferimento». I commit li scrive il coordinatore
+      all'ingresso.
 - ✅ **SEC8-1b (da R13-SEC8 di E) · Il rigioco storico del rischio cammina un intervallo senza limiti** — alto,
   sicurezza (disponibilità); assegnata a J dal coordinatore (17/10 08:22), dopo J-10 e J-47. `replay_range` di
   `/risk/query` non ha limiti (`DateRangeModel` controlla solo `end >= start`) e arriva al caricamento dei prezzi e
@@ -7124,6 +7132,19 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     sempre una linea o un'area dove manca il valore: manca la frase sul tetto dei 30 tratti.
   - **CHANGELOG, riga 308**: «more than 30 gaps» → «30 gaps or more». La linea si unisce oltre 30 tratti
     (`runs.length > MAX_LINE_RUNS`), cioè da 30 vuoti in su.
+- **J-62 · R11: i gemelli pandas di volatilità e Sharpe mobili, senza parità e con due copie del validatore** — basso,
+  numeri (regola 10); J, 19/10 (revisione della voce 1 di J-1 di MF, `068d5dd51`). Coordinatore, 19/10: in R11, nella
+  sezione J.
+  - `signals/risk_adapters.py` calcola volatilità e Sharpe mobili con pandas, gemelli di `risk/metrics.py`
+    (`annualized_volatility`, `annualized_sharpe`). Nessun test fissa la loro parità: è R11 del piano 43 (resto di
+    CP-10, a J).
+  - Le stesse due funzioni ripetono la regola del fattore d'annualizzazione (`:191-193`, `:222-224`: finito e
+    positivo, altrimenti `ValueError`). Dopo `068d5dd51` quella regola ha una casa sola,
+    `financial_math.returns.positive_annualization_factor`, e le due copie la devono leggere.
+  - Da fare: il test di parità (test-author), poi le due copie sostituite dalla funzione della casa. Nessun valore
+    cambia. Dopo J-48.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §10 «Revisione della
+    voce 1 di J-1 di MF».
 
 ## Z · Sospensione e risveglio (fase 01)
 
