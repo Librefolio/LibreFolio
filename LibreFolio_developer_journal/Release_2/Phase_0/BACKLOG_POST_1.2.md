@@ -6608,6 +6608,26 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   è una prenotazione, e un convertitore open source la scarta. Proposta (b): `Varaus` scartata in silenzio, con una riga nel log;
   ogni altro stato resta avviso, perché è ignoto. Le alternative sono (a) tutto come oggi e (c) tutto in silenzio. In attesa della
   scelta. Dettagli: piano 04, «N74 — il merge di `dev_release2` e le risposte del developer», «D2».
+  19/10, decisione del developer: un principio per tutti i plugin BRIM, testuale: «quello che sappiamo va ignorato, venga
+  scartato, presente al più nei log, quello che non sappiamo se sia corretto scartarlo, lo scartiamo, ma facciamo comparire un
+  avviso in cui si evidenzia il fatto all'utente e gli si dice di aprire la issue per far gestire il caso, con link a github». Per
+  Danske: «Varaus» in silenzio con il log; ogni altro stato non contabilizzato con un avviso e `report_issue`; versione 1.0.2. Il
+  lotto è in analisi. Dettagli: piano 04, «W-B85 · «Noto in silenzio, ignoto con avviso»: analisi».
+- **W-B86 · Gli altri plugin BRIM col principio «noto in silenzio, ignoto con avviso»** — medio, chiarezza (cloud); W, 19/10
+  (inventario di W-B85). Oggi 25 plugin saltano le righe ignote o illeggibili con un avviso a stringa per riga, che diventa
+  `generic` e non può portare il link «apri una issue». DEGIRO, Scalable e Crédit Agricole hanno già note a codice: basta
+  aggiungere `report_issue`. Alcune righe note e sicure avvisano invece di tacere. Proposta: un aiuto unico in `_brim_io.py`, con due
+  codici condivisi (`rows_not_recognized`, `rows_unreadable`), evidenza e `report_issue`, e un test di contratto su tutti i plugin.
+  Circa 1,5 giorni. La decisione (1.3 o dopo) spetta al coordinatore. Dettagli: piano 04, «W-B85 · «Noto in silenzio, ignoto con
+  avviso»: analisi», punto 3.
+- **W-B87 · Plugin che saltano in silenzio righe con un effetto economico** — alto, numeri; W, 19/10 (inventario di W-B85).
+  - Revolut: lo stock split, `SKIP_TYPES` (`broker_revolut/plugin.py:90-93`).
+  - Trading 212: stock split, distribuzione di azioni e conversione di valuta (`broker_trading212/plugin.py:87-92`).
+  - eToro: le commissioni overnight, i loro rimborsi e la tassa SDRT (`broker_etoro/plugin.py:75-79`).
+  - Con un avviso per riga: Trade Republic (le gambe Kosten/Belasting), Swissquote (le gambe forex), IBKR (FX senza ISIN).
+  Quantità dopo uno split, costi e tasse escono sbagliati senza che l'utente lo sappia. Proposta: per la 1.3 almeno l'avviso con
+  `report_issue`; l'import vero, per plugin, dopo. Dettagli: piano 04, «W-B85 · «Noto in silenzio, ignoto con avviso»: analisi»,
+  punto 4.
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di

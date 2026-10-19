@@ -7579,3 +7579,154 @@ Le opzioni per il developer:
 
 In (b) e in (c): un rosso prima della cura; `plugin_version` 1.0.2; il motivo `reservation` tradotto nelle quattro lingue in
 `importWizard.reportSet.reason`, perché il dettaglio del set lo mostra.
+
+### W-B85 · «Noto in silenzio, ignoto con avviso»: analisi (2026-10-19, sola lettura, base `0dd60928d`)
+
+Il developer, testuale, sul principio per tutti i plugin BRIM: «quello che sappiamo va ignorato, venga scartato, presente al più nei
+log, quello che non sappiamo se sia corretto scartarlo, lo scartiamo, ma facciamo comparire un avviso in cui si evidenzia il fatto
+all'utente e gli si dice di aprire la issue per far gestire il caso, con link a github (sia self hosted che hostato) e mettiamo
+questo principio anche nella skill che fa scrivere i plugin per il futuro, così gli utenti stessi diventano canarini per i broker che
+cambiano gli export nel tempo».
+
+#### 1. Danske Bank
+
+Oggi:
+- `_classify_custody()` e `_classify_cash()` mettono sotto `status` ogni riga non contabilizzata, la «Varaus» compresa.
+- La classe diventa il motivo dell'esclusione (`_Outcome("excluded", zone, row.klass)`, `_excluded()`), e `_notices()` emette un
+  `excluded_<motivo>` per ogni motivo, avviso salvo `not_yet_settled`.
+- Il riepilogo del set (`_summary()`, `reasons`) conta ogni motivo, e il dettaglio del set lo mostra con
+  `importWizard.reportSet.reason.<motivo>`.
+- I messaggi sono in finlandese, senza chiavi i18n: il wizard mostra il testo del plugin; soltanto il link sarebbe nella lingua
+  dell'interfaccia.
+
+La cura chiesta:
+- `_classify_cash()`: l'etichetta «Varaus» dà la classe `reservation`, prima del controllo di `Tila`.
+- `_notices()` salta i motivi silenziosi (`reservation`) e scrive nel log `logger.info("Danske Bank: rows left out",
+  reason="reservation", count=n)`. La riga resta nel conto del set, col motivo `reservation`; serve la sua etichetta nelle 4 lingue
+  (`importWizard.reportSet.reason.reservation`, OK di scrittura da chiedere).
+- `excluded_status` resta avviso, con `context.report_issue: True`. Il messaggio finlandese aggiunge l'invito, per esempio «… niitä ei
+  tuoda. Jos ne ovat oikeita tapahtumia, kerro meille, niin tapaus voidaan käsitellä:», seguito dal link.
+- `plugin_version` 1.0.2, `_EXCLUDED_ORDER` con `reservation`.
+- Test (test-author, rossi prima):
+  - la riga «Varaus» non dà nessuna nota, ha l'esito `excluded` col motivo `reservation`, e c'è la riga di log;
+  - `excluded_status` porta `report_issue`;
+  - le due versioni fissate nei test passano a 1.0.2;
+  - lo scenario `classes` (`test_brim_danske_bank.py:963`) passa da `("excluded", "status")` a `("excluded", "reservation")`.
+- Doc: `danske_bank.md` (la tabella dei motivi a `:201` e quella delle note); la guida e la skill (punto 2).
+
+Gli altri motivi di Danske letti col principio (da decidere: **D-W85-1**):
+
+| Motivo | Oggi | Col principio | Proposta |
+|---|---|---|---|
+| `status`, ma non «Varaus» | avviso | ignoto | avviso + `report_issue` (chiesto) |
+| `unknown_type` | avviso | ignoto | avviso + `report_issue` |
+| `invalid` | avviso | illeggibile, quindi ignoto | avviso + `report_issue` |
+| `ambiguous`, `no_counterpart` | avviso | non sappiamo se lo scarto è giusto (abbinamento) | avviso + `report_issue` |
+| `outside_cash_coverage` | avviso | noto, ma l'utente deve agire (caricare l'estratto conto che copre quei giorni) | avviso, senza link |
+| `superseded` | avviso | noto e sicuro: un file più nuovo copre gli stessi giorni | silenzio + log |
+| `not_yet_settled`, `deferred_rows` | nota blu (N74) | noto e provvisorio | resta la nota blu decisa alle 14:05 (**D-W85-2**) |
+
+Su **D-W85-2**: il principio, letto alla lettera, metterebbe in silenzio anche le righe non ancora regolate di Fineco e Danske. Consiglio
+di tenere la nota decisa alle 14:05: la riga manca dal portafoglio fino al prossimo export, e senza la nota un utente non esperto
+penserebbe che l'import l'abbia persa. Una prenotazione invece non fa mancare niente: arriverà la riga contabilizzata.
+
+#### 2. Il principio nella skill e nella guida
+
+La regola 10 della skill `brim-plugin`, accanto alla 9 (bozza):
+> **10. Known rows quietly, unknown rows loudly.** Leave a row out only for a reason.
+> - **Known and safe to drop** (a blank, header or total row; a reservation; a row the broker marks as cancelled; a duplicate of
+>   another row): drop it silently, with at most a backend log line (`logger.info`, a count per reason).
+> - **Unknown or unreadable** (a type, status or description the plugin does not recognise; a date, amount or required field it
+>   cannot read): drop it, and say so in one `severity="warning"` notice per reason, with the rows as evidence and
+>   `context.report_issue = True`. The wizard then shows «open an issue on GitHub», on every instance: users become the canaries of
+>   a broker whose export changes.
+> - **Never drop silently** a row that may carry an economic effect (a split, a fee, a tax, a currency conversion) unless the plugin
+>   knows it is safe.
+
+La stessa regola va nella guida dei plugin («Import philosophy»), tramite il docs-writer.
+
+#### 3. Gli altri plugin: inventario
+
+Tre esplorazioni in sola lettura, una per gruppo di plugin; i log sono nei messaggi degli agenti. Classi:
+- **K**: noto e sicuro;
+- **U**: ignoto;
+- **E**: illeggibile;
+- **I**: nessuna riga persa;
+- **C**: la configurazione dell'utente (CSV generico).
+
+| Plugin | Oggi | K oggi con avviso → silenzio | U | E | Lavoro | Peso |
+|---|---|---|---|---|---|---|
+| DEGIRO | note codificate, aggregate, un solo costruttore (`:497`) | — | 4 codici | 2 codici | `report_issue` in un punto | S |
+| Scalable (+ deposit, `_scalable.py`) | note codificate, aggregate | lo 0 di cassa dentro `scalable_not_imported` | `scalable_not_imported`; gli stati sconosciuti dentro `scalable_not_executed` | `scalable_unreadable_rows` | `report_issue` su 2 codici; separare gli stati noti (pending, cancelled, expired, rejected: silenzio) dagli ignoti; separare lo 0 | M (codici fissati nei test) |
+| Crédit Agricole | note codificate, per riga | — | `ca_securities_unknown_causale` | `ca_account_invalid_amount` | `report_issue` su 2 codici | S–M |
+| Fineco | stringhe | — | 1 (operazione ignota) | 3 | convertire | M |
+| Avanza, BUX, Disnat | stringhe, per riga | 2 (tipo vuoto, quantità scartata) | 1 | 3 | convertire, silenziare | S ciascuno |
+| Bitvavo | stringhe | 3 (importi a 0) | 1 + lo stato ≠ Completed (misto) | 6 | convertire, separare lo stato | M |
+| Coinbase | stringhe | 1 | 1 | 1 | convertire | S |
+| CoinTracking | stringhe + contatori | — | 2 | 6 | convertire (i contatori ci sono già) | S–M |
+| Crypto.com | stringhe | 1 (giri interni) | 1 | 6 | convertire, silenziare | S–M |
+| Delta | stringhe + contatori | 1 (TRANSFER) | 1 | 4 | convertire, silenziare | S–M |
+| Directa | stringhe | — | 1 | 3 | convertire | S |
+| eToro, Finpension, XTB, Relai | stringhe | — | 1 | 2–3 | convertire | S–M |
+| Freetrade | stringhe | — | 2 | 2 | convertire | M |
+| IBKR | stringhe | — | 2 (direzione ignota; FX senza ISIN) | 1 | convertire | S–M |
+| Intesa | stringhe | le righe bancarie note | 2, più lo snapshot silenzioso | 2 | convertire, separare le causali bancarie | M–L |
+| InvestEngine, Parqet, Rabobank | stringhe | righe vuote dentro un altro ramo | 1 | 3 | convertire | M |
+| Investimental | stringhe + riepiloghi | 4 (ordini annullati o non eseguiti) | — | 3 | silenziare, convertire | M |
+| Revolut | stringhe | — | 2 | 5 | convertire | M |
+| Saxo | stringhe | — | 3 | 4 | convertire | M |
+| Schwab | stringhe | 1 (evento societario a 0) | 1 | 2 | convertire, silenziare | S–M |
+| Swissquote | stringhe | — | 2 (gambe forex; operazione ignota) | 6 | convertire | M |
+| Trade Republic | stringhe | — | 2 (tipo ignoto; gambe Kosten/Belasting perse) | 3 | convertire | S–M |
+| Trading 212 | stringhe | — | 1 | 2 | convertire | S–M |
+| CSV generico | stringhe | — | — | — (C) | nessuno: è la mappatura dell'utente | — |
+
+Le stringhe oggi diventano un avviso `generic` per ogni riga, senza codice: non possono portare `report_issue`. Le scritte delle
+stringhe non sono fissate da nessun test, salvo quelle di Crédit Agricole (`test_brim_providers.py:1585`, `:1862`) e i codici di
+DEGIRO e Scalable.
+
+**Proposta di fattorizzazione** (**D-W85-3**): un aiuto unico in `_brim_io.py`, per esempio `RowSkips`. Raccoglie le righe ignote e
+quelle illeggibili, ciascuna con un dettaglio (il tipo sconosciuto, il campo illeggibile), e restituisce al più due avvisi a codice
+condiviso:
+- `rows_not_recognized` (U);
+- `rows_unreadable` (E).
+
+Ognuno ha le righe come evidenza, una colonna «dettaglio» e `report_issue: True`. Le loro chiavi i18n si scrivono una volta sola, 4
+lingue × 2, in `importWizard.brimNotice`. Ogni plugin cambia solo i suoi `warnings.append(...); continue` in `skips.unknown(...)` o
+`skips.unreadable(...)`. Basta un test di contratto parametrizzato su tutti i plugin: una riga di tipo inventato e una di data
+illeggibile danno i due codici con `report_issue`.
+- Costo stimato: l'aiuto, le chiavi e il test di contratto circa mezza giornata; i ~25 plugin a stringhe circa un giorno.
+- Rispetto ai codici per plugin: una regola sola, un messaggio uguale per tutti, nessuna traduzione per plugin.
+
+#### 4. Un rischio sui numeri, trovato dall'inventario (**D-W85-4**)
+
+Alcuni plugin saltano righe che hanno un effetto economico. Il principio dice che non sono «note e sicure»:
+- **Revolut**: lo **stock split** saltato in silenzio (`SKIP_TYPES`, `broker_revolut/plugin.py:90-93`, `:358-359`), e le quantità dopo
+  lo split risultano sbagliate.
+- **Trading 212**: **stock split**, distribuzione di azioni e **conversione di valuta** saltati in silenzio
+  (`broker_trading212/plugin.py:87-92`, `:211-212`).
+- **eToro**: le **commissioni overnight** (e i loro rimborsi) e la tassa **SDRT** saltate in silenzio
+  (`broker_etoro/plugin.py:75-79`, `:235-236`): costi e tasse mancano.
+- **Trade Republic**: le gambe di commissione e tassa (Kosten/Belasting) perse, con un avviso per riga (`:205-207`).
+- **Swissquote**: le gambe forex perse, con un avviso per riga (`:200-202`): la conversione di valuta sparisce.
+- **IBKR**: le operazioni FX senza ISIN perse, con un avviso per riga (`:186-187`).
+
+Proposta:
+- i primi tre passano almeno all'avviso con `report_issue`;
+- importare davvero split, commissioni e conversioni è un lavoro a parte, per plugin.
+
+Domanda: dentro W-B85, o una voce a parte?
+
+#### 5. Decisioni chieste
+
+- **D-W85-1**: gli altri motivi di Danske, tabella del punto 1. Consiglio: come in tabella.
+- **D-W85-2**: le note blu delle righe non ancora regolate restano (decisione N74). Consiglio: sì.
+- **D-W85-3**: per gli altri plugin, l'aiuto unico con due codici condivisi, oppure i codici per plugin. Consiglio: l'aiuto unico.
+  Quando:
+  - **1.3**, per DEGIRO, Scalable e Crédit Agricole (aggiungere `report_issue` costa poco), più l'aiuto e i plugin a stringhe se c'è
+    tempo (~1,5 giorni);
+  - oppure dopo la 1.3.
+- **D-W85-4**: i salti silenziosi con effetto economico, nel lotto o in una voce a parte. Consiglio: una voce a parte (W-B87) per la
+  1.3, almeno l'avviso con `report_issue`, perché toccano i numeri.
+- **OK di scrittura** su `frontend/src/lib/i18n/importWizard/*.json` per `importWizard.reportSet.reason.reservation` e, se D-W85-3 è
+  l'aiuto unico, `importWizard.brimNotice.rows_not_recognized` e `rows_unreadable`.
