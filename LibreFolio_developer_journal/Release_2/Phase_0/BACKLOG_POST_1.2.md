@@ -6590,6 +6590,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   pubblico. Proposta: i due link del wizard seguono `supportChannel()`. Sull'istanza gestita senza canale, il testo della nota non
   finisce più con «:». Domanda al developer, via il coordinatore. Dettagli: piano 04, «N74 · Fineco opzione (a), W-B83 e le
   righe sicure», «Checkpoint».
+  ✅ 19/10, chiusa con la decisione del developer (D1), testuale: «essendo una cosa generica che tocca sia le istanze self-hosted
+  che quelle hostate, facciamo aprire il link sempre su github». I due link restano come sono, nessun codice. Dettagli: piano 04,
+  «N74 — il merge di `dev_release2` e le risposte del developer».
 - **W-B85 · Danske Bank: `excluded_status` mescola le righe annullate e quelle in attesa** — minimo, chiarezza; W, 19/10 (lotto
   N74). `_classify_custody()` e `_classify_cash()` (`broker_danske_bank/plugin.py`) mettono sotto `status` ogni riga non contabilizzata:
   un ordine di custodia con un `Tila` diverso da «Toteutettu», una riga di cassa con un `Tila` diverso da «Toteutunut», o una
@@ -6598,6 +6601,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   confronta soltanto con lo stato «contabilizzato». Proposta, se il developer la vuole: due ragioni, `pending` (nota) e `status`
   (avviso), col vocabolario degli stati di Danske preso da un export vero. Domanda al developer, via il coordinatore. Dettagli: piano
   04, «N74 · Fineco opzione (a), W-B83 e le righe sicure», «Checkpoint».
+  19/10, la risposta del developer (D2), testuale: «per danske abbiamo gli export veri, se siamo in grado di scartarli con certezza
+  non serve neanche il banner, possiamo scartarle in silenzio, metterlo al massimo nel log del backend». L'analisi, in sola lettura:
+  gli export veri della issue #26 hanno `Tila` costante, «Toteutunut» nella cassa e «Toteutettu» nella custodia. L'autore non ha mai
+  visto un annullato e non conosce gli altri valori. I campioni del repo sono sintetici. Il significato di `Varaus` invece è certo:
+  è una prenotazione, e un convertitore open source la scarta. Proposta (b): `Varaus` scartata in silenzio, con una riga nel log;
+  ogni altro stato resta avviso, perché è ignoto. Le alternative sono (a) tutto come oggi e (c) tutto in silenzio. In attesa della
+  scelta. Dettagli: piano 04, «N74 — il merge di `dev_release2` e le risposte del developer», «D2».
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
