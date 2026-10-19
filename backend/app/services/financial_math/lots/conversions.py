@@ -163,7 +163,8 @@ def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collect
             if closure.lot_id in selected_ids:
                 need_closure_rates(fx_resolver, closure, lots_by_id[closure.lot_id])
 
-    if needs_market_series(analyses):
+    # The market price line (Y-30) reads the same marks every day, though it values no lot: it needs their rates too.
+    if needs_market_series(analyses) or LotAnalysisType.MARKET_PRICE_HISTORY in analyses:
         current = computed_from
         # The unified resolver marks each day from asset-system prices AND observed trades
         # (BUY/SELL; never an ADJUSTMENT), each in its native currency; both the valuation and

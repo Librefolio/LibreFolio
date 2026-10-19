@@ -43,6 +43,7 @@
         LOT_BUBBLE_ZERO_EPS,
         lotBubbleRadius,
         lotBubbleSignColor as lotBubbleSignColorShared,
+        marketPriceLine,
         nullifyZeroWac,
         orderDateBounds,
         padDateBoundsForBubbles,
@@ -60,7 +61,7 @@
 
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
-    type LotPriceHistoryPoint = z.infer<typeof schemas.LotPriceHistoryPoint>;
+    type MarketPriceHistoryPoint = z.infer<typeof schemas.MarketPriceHistoryPoint>;
     type LotTimelineEventSchema = z.infer<typeof schemas.LotTimelineEventSchema>;
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type DisplayMode = 'absolute' | 'percentage';
@@ -99,7 +100,9 @@
     type ComponentProps = {
         brokerWacHistory: BrokerWACHistoryPoint[];
         cumulativeWacHistory: CumulativeWACHistoryPoint[];
-        priceHistory: LotPriceHistoryPoint[];
+        /** The asset's market price each day of the analysis, whatever lots are open (Y-30): the price line, the
+         * axis dates and the bubbles' opening price. It stays with a FAILED analysis, as the average-cost lines do. */
+        marketPriceHistory: MarketPriceHistoryPoint[];
         lotEvents: LotTimelineEventSchema[];
         /** Lots to overlay as per-lot performance bubbles (plan v3 round-2). Only LONG lots are drawn. */
         lots?: LotSummarySchema[];
@@ -112,7 +115,7 @@
         currency: string;
         /** Asset quote_base_quantity (e.g. 100 for bonds priced per 100 nominal). Used to rescale the
          * per-single-unit WAC / opening_unit_price (cost ÷ raw quantity) UP to the per-quote market
-         * scale that price_history.close uses, so cost lines/bubbles align with the market line.
+         * scale that market_price_history.market_price uses, so cost lines/bubbles align with the market line.
          * Defaults to 1 (no-op for stocks). */
         quoteBaseQuantity?: number;
         xAxisRange?: {min: string; max: string} | null;
@@ -207,7 +210,7 @@
     let {
         brokerWacHistory = [],
         cumulativeWacHistory = [],
-        priceHistory = [],
+        marketPriceHistory = [],
         lotEvents = [],
         lots = [],
         selectedLotIds = [],
@@ -284,7 +287,7 @@
     let shouldPickInitialResolution = true;
     let resolutionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
     let dataZoomResolutionCleanup: (() => void) | null = null;
-    let lastResolutionInputRefs: [BrokerWACHistoryPoint[], CumulativeWACHistoryPoint[], LotPriceHistoryPoint[]] | null = null;
+    let lastResolutionInputRefs: [BrokerWACHistoryPoint[], CumulativeWACHistoryPoint[], MarketPriceHistoryPoint[]] | null = null;
 
     /** Local name for this chart's numeric unwrap. Delegates to the shared
      *  `safeDecimal`: the body used to be copied five times, and two of those
@@ -307,11 +310,14 @@
      *  so it is called with no locale argument. */
     const formatAxisNumber = (value: number): string => sharedFormatAxisNumber(value);
 
+    /** The market price line (Y-30): the backend's lot-independent series, one point a date, in date order. */
+    const marketLine = $derived(marketPriceLine(marketPriceHistory));
+
     const lineSeriesDates = $derived.by(() => {
         const dateSet = new Set<string>();
         for (const point of brokerWacHistory) dateSet.add(point.date);
         for (const point of cumulativeWacHistory) dateSet.add(point.date);
-        for (const point of priceHistory) dateSet.add(point.date);
+        for (const point of marketLine) dateSet.add(point.date);
         return Array.from(dateSet).sort(sortDates);
     });
 
@@ -320,7 +326,7 @@
     const qbqScale = $derived(resolveQbqScale(quoteBaseQuantity));
 
     /** Rescale a per-single-unit price up to the per-quote_base_quantity market scale that
-     * price_history.close uses (see {@link scaleUnitPriceShared}); binds the reactive qbqScale. */
+     * market_price_history.market_price uses (see {@link scaleUnitPriceShared}); binds the reactive qbqScale. */
     function scaleUnitPrice(value: number | null): number | null {
         return scaleUnitPriceShared(value, qbqScale);
     }
@@ -353,7 +359,7 @@
     }
 
     function resetResolutionIfInputsChanged() {
-        const refs: [BrokerWACHistoryPoint[], CumulativeWACHistoryPoint[], LotPriceHistoryPoint[]] = [brokerWacHistory, cumulativeWacHistory, priceHistory];
+        const refs: [BrokerWACHistoryPoint[], CumulativeWACHistoryPoint[], MarketPriceHistoryPoint[]] = [brokerWacHistory, cumulativeWacHistory, marketPriceHistory];
         if (lastResolutionInputRefs && refs.every((ref, index) => ref === lastResolutionInputRefs?.[index])) return;
 
         lastResolutionInputRefs = refs;
@@ -749,29 +755,8 @@
                   )
                 : null;
 
-        const marketPriceByDate = new Map<string, number | null>();
-        const estimatedByDate = new Map<string, boolean>();
-        for (const point of priceHistory) {
-            const value = parseNumber(point.market_price);
-            const isEstimated = point.estimated === true;
-            if (!marketPriceByDate.has(point.date)) {
-                marketPriceByDate.set(point.date, value);
-                estimatedByDate.set(point.date, isEstimated);
-                continue;
-            }
-            if (marketPriceByDate.get(point.date) == null && value != null) {
-                marketPriceByDate.set(point.date, value);
-                estimatedByDate.set(point.date, isEstimated);
-            }
-            // A real quote on the same date downgrades the flag: the segment is not an estimate.
-            if (!isEstimated) estimatedByDate.set(point.date, false);
-        }
-
-        const marketPricePoints = toPercentSeries(
-            Array.from(marketPriceByDate.entries())
-                .map(([date, value]) => ({date, value}))
-                .sort((a, b) => sortDates(a.date, b.date)),
-        );
+        const marketPricePoints = toPercentSeries(marketLine.map(({date, value}) => ({date, value})));
+        const estimatedByDate = new Map<string, boolean>(marketLine.map((point) => [point.date, point.estimated]));
 
         const marketPriceLookupPoints: MarketPriceLookupPoint[] = marketPricePoints.flatMap((point) =>
             point.absolute == null
@@ -844,7 +829,7 @@
 
         const markerSeries: EventMarkerSeries[] = Array.from(markerSeriesMap.entries()).map(([category, points]) => ({category, points}));
 
-        const allDates = [...brokerWacHistory.map((point) => point.date), ...cumulativeWacHistory.map((point) => point.date), ...priceHistory.map((point) => point.date), ...rawMarkerPoints.map((point) => point.date)].sort(sortDates);
+        const allDates = [...brokerWacHistory.map((point) => point.date), ...cumulativeWacHistory.map((point) => point.date), ...marketLine.map((point) => point.date), ...rawMarkerPoints.map((point) => point.date)].sort(sortDates);
 
         return {
             realSeries,
@@ -856,7 +841,7 @@
             maxDate: allDates.at(-1) ?? null,
             hasAbsoluteData: realSeries.some((series) => series.hasAbsoluteData) || (combinedSeries?.hasAbsoluteData ?? false) || marketPricePoints.some((point) => point.absolute != null) || rawMarkerPoints.some((point) => point.absolute != null),
             hasPercentData: realSeries.some((series) => series.hasPercentData) || (combinedSeries?.hasPercentData ?? false) || marketPricePoints.some((point) => point.percent != null) || rawMarkerPoints.some((point) => point.percent != null),
-            totalPointCount: brokerWacHistory.length + cumulativeWacHistory.length + priceHistory.length + rawMarkerPoints.length,
+            totalPointCount: brokerWacHistory.length + cumulativeWacHistory.length + marketLine.length + rawMarkerPoints.length,
         };
     });
 
@@ -864,6 +849,8 @@
     let hasLotBubblePercentData = $derived(lots.some((lot) => lot.direction === 'LONG' && parseNumber(lot.total_return) != null));
     let hasPercentData = $derived(groupedChartData.hasPercentData || hasLotBubblePercentData);
     let showChart = $derived((groupedChartData.totalPointCount > 0 || (displayMode === 'percentage' && hasLotBubblePercentData)) && (displayMode === 'absolute' ? hasAbsoluteData : hasPercentData));
+    /** Published as `data-price-line`: the chart draws its market price line — the condition its series is pushed on. */
+    let priceLineDrawn = $derived(showChart && groupedChartData.marketPricePoints.some((point) => (displayMode === 'absolute' ? point.absolute : point.percent) != null));
     let emptyMessage = $derived.by(() => {
         if (groupedChartData.totalPointCount === 0 && !(displayMode === 'percentage' && hasLotBubblePercentData)) return labels.noData;
         if (displayMode === 'absolute' && !hasAbsoluteData) return labels.noData;
@@ -1002,21 +989,8 @@
 
     const lotSelectionSet = $derived.by(() => new Set(selectedLotIds));
 
-    /** Sorted, deduped, non-null market prices for at-or-before lookups (bubble opening price). */
-    const priceLookupPoints = $derived.by<MarketPriceLookupPoint[]>(() => {
-        const byDate = new Map<string, number | null>();
-        for (const point of priceHistory) {
-            const value = parseNumber(point.market_price);
-            if (!byDate.has(point.date)) {
-                byDate.set(point.date, value);
-                continue;
-            }
-            if (byDate.get(point.date) == null && value != null) byDate.set(point.date, value);
-        }
-        return Array.from(byDate.entries())
-            .flatMap(([date, value]) => (value == null ? [] : [{date, absolute: value, percent: null}]))
-            .sort((left, right) => sortDates(left.date, right.date));
-    });
+    /** Sorted, non-null market prices for at-or-before lookups (bubble opening price). */
+    const priceLookupPoints = $derived.by<MarketPriceLookupPoint[]>(() => marketLine.flatMap((point) => (point.value == null ? [] : [{date: point.date, absolute: point.value, percent: null}])));
 
     const lotBubblePoints = $derived.by<LotBubblePoint[]>(() => {
         const longLots = lots.filter((lot) => lot.direction === 'LONG');
@@ -1799,7 +1773,7 @@
     });
 </script>
 
-<div bind:this={wrapperEl} class="rounded-lg border border-lf-subtle/80 bg-lf-panel/80 text-lf-primary p-4" data-testid="lot-wac-price-chart" data-state={showChart ? 'drawn' : 'empty'}>
+<div bind:this={wrapperEl} class="rounded-lg border border-lf-subtle/80 bg-lf-panel/80 text-lf-primary p-4" data-testid="lot-wac-price-chart" data-state={showChart ? 'drawn' : 'empty'} data-price-line={priceLineDrawn ? 'drawn' : 'absent'}>
     <div class="mb-3 flex items-center justify-between gap-3">
         <h3 class="text-sm font-semibold text-lf-secondary">{labels.wac} / {labels.marketPrice}</h3>
 

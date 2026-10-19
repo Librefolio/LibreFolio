@@ -1,0 +1,269 @@
+Ciao! Ho letto il file allegato e ho individuato il punto fondamentale: il sito deve mantenere il verde come colore riconoscibile delle azioni primarie e degli indicatori di guadagno, ma il verde non deve dominare i grafici, le mappe o gli sfondi dell'applicazione.
+
+Ti propongo quindi una palette definitiva pensata per un progetto finanziario elegante e sobrio, con colori distinguibili, coerenti fra tema chiaro e scuro e non fluorescenti. Mantengo il verde di successo separato dai colori categoriali e scelgo tonalità blu, indaco, viola, petrolio non verdastro, terracotta, ambra e grigi freddi.
+
+La proposta risponde a tutti i punti del documento, compresi i colori per i 12 tipi, i 16 settori, le sequenze geografiche, la semi-ciambella, la correlazione e il PAC. I valori qui sotto sono una proposta progettuale nuova, non valori già approvati o verificati dallo sviluppatore.
+
+## 1. Regola definitiva sui verdi
+
+La regola che consiglio di adottare è questa:
+
+- Azioni primarie: mantengono il verde brand esistente, senza trasformare il verde in un colore di sfondo generale.
+- Guadagni e perdite: mantengono verde e rosso semantici, inclusi KPI ed effetto temporale.
+- Categorie e settori: nessun verde, verde acqua, oliva, lime o ciano tendente al verde. Usiamo una palette categorica indipendente.
+- Liquidità: niente verde dedicato. La distinguiamo con un blu ardesia.
+- Mappe geografiche: abbandoniamo la scala verde in favore di una scala blu-viola.
+- PAC: l'esposizione reale usa il colore della categoria; l'ideale resta grigio neutro.
+- Tema scuro: colori più luminosi rispetto al tema chiaro, ma non neon. Evitiamo anche il ciano troppo acceso.
+
+I colori di riferimento del progetto restano quelli riportati nel file: card chiara `#FAFBFA`, card scura `#151B19`, verde di successo chiaro `#18794E` e scuro `#5ED69A`. Non li riutilizziamo per rappresentare categorie.
+
+## 2. Tipi di asset
+
+Palette basata su viola, blu, ardesia, ambra, malva e terracotta. Ogni categoria mantiene la stessa identità cromatica nei due temi.
+
+| Chiave        | Chiaro    | Scuro     |
+| ------------- | --------- | --------- |
+| `STOCK`       | `#7041C6` | `#B69AF0` |
+| `ETF`         | `#2459B8` | `#82ACF8` |
+| `BOND`        | `#536A9E` | `#9BAED8` |
+| `CRYPTO`      | `#B87916` | `#E8BD69` |
+| `FUND`        | `#5147B8` | `#A7A0F5` |
+| `HOLD`        | `#657184` | `#A6B0C0` |
+| `CROWDFUND`   | `#8B547D` | `#D5A0C7` |
+| `COMMODITY`   | `#B85E45` | `#E99A82` |
+| `REAL_ESTATE` | `#96602C` | `#D6A36C` |
+| `INDEX`       | `#A33D79` | `#E58BB9` |
+| `OTHER`       | `#727B87` | `#A9B0BB` |
+| `Liquidity`   | `#3F628C` | `#83A9D8` |
+
+Nota di design: la Liquidità usa un blu ardesia, non il verde salvia precedente. Così non si confonde né con il successo né con il crowdfunding. Il bond usa un blu desaturato anziché ciano.
+
+## 3. Settori
+
+Qui manteniamo la stessa filosofia, con colori abbastanza differenziati da leggere grafici a torta, legende, serie e confronti. La Liquidità e il valore non classificato hanno chiavi dedicate.
+
+| Chiave                   | Chiaro    | Scuro     |
+| ------------------------ | --------- | --------- |
+| `Industrials`            | `#586579` | `#A3B0C2` |
+| `Technology`             | `#2459B8` | `#82ACF8` |
+| `Financials`             | `#6748A8` | `#B9A0EB` |
+| `Consumer Discretionary` | `#8B4F9D` | `#D2A0E0` |
+| `Health Care`            | `#2878A8` | `#7CC0E8` |
+| `Real Estate`            | `#A45D2A` | `#DDA16F` |
+| `Basic Materials`        | `#A84C36` | `#E18E7B` |
+| `Energy`                 | `#B27A16` | `#E7BD69` |
+| `Consumer Staples`       | `#8B647A` | `#C6A2B6` |
+| `Telecommunication`      | `#5147B8` | `#A7A0F5` |
+| `Utilities`              | `#526F9A` | `#9CB8E3` |
+| `Corporate Bonds`        | `#993D79` | `#E58BB9` |
+| `Government Bonds`       | `#263F78` | `#8FA9E2` |
+| `Other`                  | `#727B87` | `#A9B0BB` |
+| `Liquidity`              | `#3F628C` | `#83A9D8` |
+| `Unknown`                | `#737D89` | `#9CA7B5` |
+
+La scelta di `Consumer Staples` è volutamente malva-ardesia: nessun verde oliva o lime. `Utilities` è blu, mentre `Financials` è viola. In questo modo si eliminano le associazioni visive problematiche evidenziate dal documento.
+
+## 4. Sequenza paesi nello storico geografico
+
+Per lo storico geografico servono almeno 14 colori che non abbiano un'identità verde. Propongo una sequenza dedicata, diversa dalla sequenza dei tipi di asset, così i paesi restano distinguibili anche quando vengono mostrati insieme a grafici di altre categorie.
+
+L'ordine va mantenuto identico nei due temi: il colore numero 1 di un paese resta il colore numero 1 anche passando dal tema chiaro allo scuro.
+
+| Posizione | Chiaro    | Scuro     |
+| --------- | --------- | --------- |
+| 1         | `#2459B8` | `#82ACF8` |
+| 2         | `#7041C6` | `#B69AF0` |
+| 3         | `#A84C36` | `#E18E7B` |
+| 4         | `#B27A16` | `#E7BD69` |
+| 5         | `#2878A8` | `#7CC0E8` |
+| 6         | `#993D79` | `#E58BB9` |
+| 7         | `#526F9A` | `#9CB8E3` |
+| 8         | `#8B4F9D` | `#D2A0E0` |
+| 9         | `#A45D2A` | `#DDA16F` |
+| 10        | `#5147B8` | `#A7A0F5` |
+| 11        | `#657184` | `#A6B0C0` |
+| 12        | `#8B647A` | `#C6A2B6` |
+| 13        | `#263F78` | `#8FA9E2` |
+| 14        | `#727B87` | `#A9B0BB` |
+
+La sequenza usa famiglie cromatiche fredde e calde alternate, evitando di concentrare colori simili uno accanto all'altro. Se in futuro serviranno più di 14 paesi, suggerisco di estenderla con altre tinte desaturate e di usare anche etichette o tooltip, non soltanto il colore.
+
+## 5. Semi-ciambella delle quote e indicatori
+
+Propongo una sequenza dedicata di otto colori, coerente con la palette dei tipi di asset. L'ordine resta quello dei primi otto tipi, ma viene aggiornato per eliminare i vecchi verdi acqua e ciano.
+
+| Posizione | Chiave      | Chiaro    | Scuro     |
+| --------- | ----------- | --------- | --------- |
+| 1         | `STOCK`     | `#7041C6` | `#B69AF0` |
+| 2         | `ETF`       | `#2459B8` | `#82ACF8` |
+| 3         | `BOND`      | `#536A9E` | `#9BAED8` |
+| 4         | `CRYPTO`    | `#B87916` | `#E8BD69` |
+| 5         | `FUND`      | `#5147B8` | `#A7A0F5` |
+| 6         | `HOLD`      | `#657184` | `#A6B0C0` |
+| 7         | `CROWDFUND` | `#8B547D` | `#D5A0C7` |
+| 8         | `COMMODITY` | `#B85E45` | `#E99A82` |
+
+La regola importante è che semi-ciambella, indicatori e legenda devono condividere la stessa mappatura. Non assegnare i colori in base all'ordine casuale dei dati ricevuti: devono dipendere dalla chiave della categoria.
+
+## 6. Scala della mappa geografica
+
+Abbandonerei la scala verde salvia e bosco. Una scala blu-viola mantiene un aspetto professionale e si integra bene con un'applicazione finanziaria. I sei passi devono indicare una progressione quantitativa, da un valore basso a uno alto.
+
+### Tema chiaro
+
+1 · Molto basso
+
+\#E9EFF8
+
+2 · Basso
+
+\#C8D7EF
+
+3 · Medio-basso
+
+\#A1BCE4
+
+4 · Medio-alto
+
+\#7798D0
+
+5 · Alto
+
+\#4E72B3
+
+6 · Molto alto
+
+\#2B477F
+
+### Tema scuro
+
+1 · Molto basso
+
+\#202A3A
+
+2 · Basso
+
+\#293B57
+
+3 · Medio-basso
+
+\#36527B
+
+4 · Medio-alto
+
+\#456BA2
+
+5 · Alto
+
+\#5D85C2
+
+6 · Molto alto
+
+\#82A8E2
+
+- Senza dati, chiaro: `#D5D9E0`
+- Senza dati, scuro: `#343B46`
+
+Il colore senza dati deve essere neutro e non appartenere alla scala dei valori. In questo modo non verrà scambiato per un paese con un valore basso.
+
+La stessa scala va riutilizzata nella dashboard, nella scheda dell'asset e nel PAC, come già previsto dal documento. La progressione è qualitativa: lo sviluppatore dovrà verificarne la separazione percettiva e il contrasto sui riempimenti reali della mappa.
+
+## 7. Matrice di correlazione
+
+Per la correlazione sceglierei una scala divergente classica: rosso per le correlazioni negative, grigio-blu per il centro e blu per le positive. Eviterei il verde anche sul lato positivo, per non confondere la correlazione con il guadagno finanziario.
+
+### Tema chiaro
+
+Negativa
+
+`#C43D4D`
+
+Centro · zero
+
+`#8795A8`
+
+Positiva
+
+`#2459B8`
+
+### Tema scuro
+
+Negativa
+
+`#FF8995`
+
+Centro · zero
+
+`#526174`
+
+Positiva
+
+`#82ACF8`
+
+Testo nelle celle
+
+- Chiaro: `#17202B`
+- Scuro: `#F4F6FA`
+
+Per il valore zero, consiglio una tinta centrale costante e riconoscibile, senza usare direttamente il colore della card. La scala deve essere interpolata in modo graduale attorno allo zero, così che valori come `-0,05`, `0` e `+0,05` risultino distinti senza creare salti cromatici bruschi.
+
+La palette è una proposta iniziale: il contrasto esatto va verificato sui riempimenti delle celle e sui testi effettivamente renderizzati, soprattutto per i valori prossimi allo zero.
+
+## 8. PAC — Esposizioni ideale vs reale
+
+Confermo la scelta di usare una coppia concettualmente stabile:
+
+| Elemento           | Chiaro                 | Scuro                  |
+| ------------------ | ---------------------- | ---------------------- |
+| Esposizione ideale | `#9CA3AF`              | `#858E9B`              |
+| Esposizione reale  | Colore della categoria | Colore della categoria |
+
+La barra dell'esposizione reale deve usare il colore assegnato alla categoria della riga, condiviso con la dashboard e con gli altri grafici. L'esposizione ideale usa invece un grigio neutro, che non compete con i colori categoriali.
+
+Questo approccio è preferibile a una coppia fissa verde/grigio: consente di confrontare immediatamente il reale con l'ideale, senza reintrodurre il verde fluo nel tema scuro.
+
+## 9. Altro: regole di coerenza e accessibilità
+
+Queste sono le regole che suggerisco di aggiungere alla specifica definitiva.
+
+- Azioni primarie: il verde brand resta esclusivo delle azioni e degli stati pertinenti; niente grandi superfici verdi come sfondo.
+- KPI con segno: guadagni verdi e perdite rosse. La regola che esclude il verde riguarda le categorie, non la semantica finanziaria.
+- Effetto temporale: deve usare gli stessi token semantici dei KPI, non una funzione che genera una tonalità di verde diversa.
+- Non classificato: grigio neutro più marcato, `#737D89` in chiaro e `#9CA7B5` in scuro. Eviterei il precedente grigio troppo tenue.
+- Contrasto: verificare almeno 3:1 per gli elementi grafici rispetto alla superficie circostante e almeno 4,5:1 per il testo normale, quando applicabile.
+- Colori delle categorie: assegnazione stabile tramite chiave, mai in base alla posizione casuale della voce nei dati.
+- Grafici con molte categorie: affiancare sempre legenda, tooltip o etichette. Il colore da solo non deve essere l'unico mezzo per identificare una categoria.
+- Tema chiaro/scuro: le due varianti devono mantenere la stessa identità cromatica, con luminosità adattata al tema.
+
+## Riepilogo definitivo da passare allo sviluppatore
+
+# Specifica colori grafici — proposta definitiva
+
+**Regola sui verdi:** verde brand esclusivo delle azioni primarie e degli stati semantici pertinenti. Guadagni e perdite mantengono verde e rosso. Nessun verde, verde acqua, oliva, lime o ciano tendente al verde nelle categorie, nei settori, nella sequenza dei paesi e nella scala della mappa. Liquidità inclusa.
+
+**Tipi:** adottare la tabella chiavi/chiaro/scuro della sezione 2. Liquidità usa blu ardesia.
+
+**Settori:** adottare la tabella chiavi/chiaro/scuro della sezione 3, comprese le chiavi `Liquidity` e `Unknown`.
+
+**Sequenza paesi:** usare i 14 colori dedicati della sezione 4, nello stesso ordine per entrambi i temi.
+
+**Sequenza semi-ciambella e indicatori:** usare gli otto colori della sezione 5, associati stabilmente alle chiavi dei tipi di asset.
+
+**Scala mappa, chiaro:** `#E9EFF8`, `#C8D7EF`, `#A1BCE4`, `#7798D0`, `#4E72B3`, `#2B477F`.
+
+**Scala mappa, scuro:** `#202A3A`, `#293B57`, `#36527B`, `#456BA2`, `#5D85C2`, `#82A8E2`.
+
+**Mappa senza dati:** chiaro `#D5D9E0`; scuro `#343B46`.
+
+**Correlazione, chiaro:** neg `#C43D4D`; centro `#8795A8`; pos `#2459B8`.
+
+**Correlazione, scuro:** neg `#FF8995`; centro `#526174`; pos `#82ACF8`.
+
+**Testo celle correlazione:** chiaro `#17202B`; scuro `#F4F6FA`.
+
+**PAC:** ideale grigio neutro, chiaro `#9CA3AF`, scuro `#858E9B`. Reale nel colore della categoria della riga, condiviso con la dashboard.
+
+**Altro:** `Unknown` chiaro `#737D89`, scuro `#9CA7B5`. KPI e guadagni/perdite mantengono i colori semantici. Eliminare le assegnazioni cromatiche indipendenti e riutilizzare token condivisi tra dashboard, scheda asset, mappe, storico geografico e PAC. Verificare contrasto, distinguibilità tra categorie e accessibilità nei due temi prima dell'approvazione finale.
+
+La mia raccomandazione finale: partirei da questa proposta come nuova base cromatica. È più coerente con un prodotto finanziario sobrio e professionale, evita che il verde diventi il colore dominante e conserva una gerarchia chiara tra azioni, dati, guadagni e perdite. Prima di considerarla approvata, farei comunque verificare allo sviluppatore i rapporti di contrasto e la distinzione tra colori vicini nei grafici reali.

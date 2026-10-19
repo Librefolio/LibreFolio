@@ -107,17 +107,26 @@ class EventStoreOperations:
         ADJUSTMENT rows linked to it on its old date, its own rows: Yield on Cost accepts a split's rows only on its date,
         and the portfolio engine restates prices from it. No other transaction ever moves. Events of other sources never
         move. Moved events and moved or re-pointed transactions get a new ``updated_at``. Flushed, not committed.
-        Returns (moved, merged)."""
+        Returns (moved, merged).
+
+        Targets go forward only: latest first is safe only then. An earlier target could meet an event of the assignment
+        not yet processed, and the moving one would be merged into it by mistake: it raises ``ValueError`` before
+        anything changes."""
         events = (await session.execute(select(AssetEvent).where(AssetEvent.asset_id == asset_id, AssetEvent.provider_assignment_id == provider_assignment_id).order_by(AssetEvent.date.desc(), AssetEvent.id))).scalars().all()
+        targets: list[tuple[AssetEvent, str, Optional[date]]] = []
+        for event in events:
+            kind = str(event.type).strip().upper()
+            targets.append((event, kind, target_of(event.date, kind)))
+        backward = next(((event, target) for event, _kind, target in targets if target is not None and target < event.date), None)
+        if backward is not None:
+            raise ValueError(f"redate_provider_events moves events forward only: asset {asset_id}, {backward[0].date.isoformat()} -> {backward[1].isoformat()}")
         by_key: dict[tuple[date, str], AssetEvent] = {}
         for event in sorted(events, key=lambda row: row.id):
             by_key.setdefault((event.date, str(event.type).strip().upper()), event)
         moved = merged = 0
         now = utcnow()
-        for event in events:
-            kind = str(event.type).strip().upper()
+        for event, kind, target in targets:
             old_date = event.date
-            target = target_of(old_date, kind)
             if target is None or target == old_date:
                 continue
             if by_key.get((old_date, kind)) is event:

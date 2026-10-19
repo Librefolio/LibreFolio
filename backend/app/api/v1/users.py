@@ -110,10 +110,15 @@ def _protected(user: User) -> Optional[HTTPException]:
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "ACCOUNT_PROTECTED", "message": "This account cannot be deleted, deactivated or demoted", "reason": reason})
 
 
+def _user_not_found() -> HTTPException:
+    """404 for an account that does not exist, or no longer does (A-54): one body, ``_user_or_404``'s."""
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+
 async def _user_or_404(session: AsyncSession, user_id: int) -> User:
     user = await user_service.get_user_by_id(session, user_id)
     if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise _user_not_found()
     return user
 
 
@@ -196,7 +201,9 @@ async def update_account(user_id: int, request: AdminUserUpdateRequest, admin: A
     cancels its setup link (A-43): the link stops working and the account keeps waiting; a protected one refuses that
     too. With ``cancel_setup`` the request is that cancellation and nothing else: an account that no longer waits — its
     setup done since the caller looked — answers 409 ``SETUP_COMPLETED``, nothing changed (A-51). The service decides
-    under SQLite's write lock, from the account as it is then. Deactivating or demoting ends every session of the account.
+    under SQLite's write lock, from the account as it is then: one deleted since the route read it answers 404 (A-54); the
+    place a reactivation needs is counted under the same lock (A-56). Deactivating or demoting ends every session of the
+    account.
     """
     user = await _user_or_404(session, user_id)
     pending = await registration_service.is_pending_admin(session, user)
@@ -213,11 +220,17 @@ async def update_account(user_id: int, request: AdminUserUpdateRequest, admin: A
     if request.is_active is True and not user.is_active:
         if pending:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_PENDING_SETUP_DETAIL)
+        # Counted under SQLite's write lock (A-56): of two reactivations that saw the last free place, the second sees the
+        # first; update_user_status then decides under the same lock
+        await begin_writes(session, User)
         usage = await registration_service.user_usage(session)
         # An account waiting for its email verification already holds its place while its link is live (workstream E).
         if usage.full and not await email_verification.holds_place(session, user):
+            await session.rollback()
             raise _limit_reached(usage)
     outcome = await user_service.update_user_status(session, user, is_active=request.is_active, is_superuser=request.is_superuser, cancel_setup=request.cancel_setup)
+    if outcome == "NOT_FOUND":
+        raise _user_not_found()
     if outcome == "LAST_ADMIN":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "LAST_ADMIN", "message": "The last active administrator can be neither deactivated nor demoted"})
     if outcome == "SETUP_COMPLETED":
@@ -246,26 +259,22 @@ async def delete_account(user_id: int, admin: Annotated[User, Depends(require_ad
     account (409 ``ACCOUNT_PROTECTED``, before any other answer: demoting it would be refused too) and for an
     administrator (409 ``DEMOTE_FIRST``: demote it first, so the last one never goes from here) — but the initial
     administrator waiting for its setup, which cannot be demoted and never was an active one: deleting it is the hard
-    cancellation of its setup (A-43); whether it still waits is read again under SQLite's write lock, so one that has just
-    completed its setup answers ``DEMOTE_FIRST`` (A-51). All or nothing; cannot be undone.
+    cancellation of its setup (A-43). Whether the account is an administrator, and whether it still waits, are read under
+    SQLite's write lock: one set up (A-51) or promoted (A-55) since the route read it answers ``DEMOTE_FIRST``, one deleted
+    meanwhile 404 (A-54). All or nothing; cannot be undone.
     """
     user = await _user_or_404(session, user_id)
     if user.id == admin.id:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "SELF_DELETION", "message": "Delete your own account from your profile"})
     if refusal := _protected(user):
         raise refusal
-    demote_first = {"error_code": "DEMOTE_FIRST", "message": "An administrator must be demoted before it can be deleted"}
-    pending = await registration_service.is_pending_admin(session, user)
-    if user.is_superuser and not pending:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=demote_first)
-    if pending:
-        # Read again under SQLite's write lock (A-51): a setup completed since the read above has made it an active
-        # administrator, which goes only after its demotion
-        await begin_writes(session, User)
-        await session.refresh(user)
-        if not await registration_service.is_pending_admin(session, user):
-            await session.rollback()
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=demote_first)
+    # Decided under SQLite's write lock, from the account as it is then: one set up (A-51) or promoted (A-55) since the
+    # read above is an active administrator, which goes only after its demotion; one deleted meanwhile is not found (A-54)
+    if not await user_service.refreshed_under_lock(session, user):
+        raise _user_not_found()
+    if user.is_superuser and not await registration_service.is_pending_admin(session, user):
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "DEMOTE_FIRST", "message": "An administrator must be demoted before it can be deleted"})
     # A failed deletion rolls the session back and expires every object in it, the caller's included: read them first
     username, admin_id = user.username, admin.id
     try:
@@ -279,8 +288,13 @@ async def delete_account(user_id: int, admin: Annotated[User, Depends(require_ad
 
 @router.post("/{user_id}/password-reset-link", response_model=LinkTokenResponse, status_code=status.HTTP_201_CREATED, summary="Create a password-reset link (admin)")
 async def create_password_reset_link(user_id: int, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> LinkTokenResponse:
-    """A single-use link to set a new password, shown once; the links issued before for that account stop working."""
+    """A single-use link to set a new password, shown once; the links issued before for that account stop working.
+
+    An account deleted since the route read it answers 404 (A-54).
+    """
     user = await _user_or_404(session, user_id)
+    if not await user_service.refreshed_under_lock(session, user):
+        raise _user_not_found()
     issued = await user_service.create_password_reset(session, user, created_by_user_id=admin.id)
     await session.commit()
     path = token_service.token_path(AccountTokenPurpose.PASSWORD_RESET, issued.token)
@@ -289,8 +303,12 @@ async def create_password_reset_link(user_id: int, admin: Annotated[User, Depend
 
 @router.post("/{user_id}/sessions/revoke", status_code=status.HTTP_204_NO_CONTENT, summary="Sign an account out everywhere (admin)")
 async def revoke_account_sessions(user_id: int, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> Response:
-    """End every session of the account: each device is signed out at its next request."""
+    """End every session of the account: each device is signed out at its next request. An account deleted since the
+    route read it answers 404 (A-54).
+    """
     user = await _user_or_404(session, user_id)
+    if not await user_service.refreshed_under_lock(session, user):
+        raise _user_not_found()
     await user_service.end_sessions(session, user)
     await session.commit()
     logger.info("Sessions ended by an administrator", user_id=user.id, admin_id=admin.id)
@@ -304,8 +322,12 @@ async def reset_account_onboarding(
     request: Optional[OnboardingResetRequest] = None,
     session: AsyncSession = Depends(get_session_generator),
 ) -> Response:
-    """Put the onboarding flows of the account — all of them, or ``flow`` — back to pending, steps included."""
+    """Put the onboarding flows of the account — all of them, or ``flow`` — back to pending, steps included. An account
+    deleted since the route read it answers 404 (A-54).
+    """
     user = await _user_or_404(session, user_id)
+    if not await user_service.refreshed_under_lock(session, user):
+        raise _user_not_found()
     flow = request.flow if request is not None else None
     await reset_onboarding_progress(session, user.id, flow)
     logger.info("Onboarding reset by an administrator", user_id=user.id, admin_id=admin.id, flow=flow.value if flow else None)
