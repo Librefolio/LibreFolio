@@ -6822,3 +6822,89 @@ Codice preparato e provato a secco (`xr45_code.py`, 6 file, black e ruff puliti)
 - **CHANGELOG** 🐛: i tassi inusabili non arrivano più al PAC, e lo scheduler riprende quei giorni.
 - **Da notare** (test-author): `test_scheduler_jobs.py::test_last_fx_dates_stays_valid_against_live_schema` calcola
   la data attesa su tutte le righe. Resta giusto finché la corsia non ha tassi inusabili nelle coppie campionate.
+
+### X-R16 + X-R48b — un segnale non valido non salta i prezzi; la modale del cambio di valuta avvisa prima (21:20–)
+
+Base `b690c0785` (X-R45 entrata in dev, worktree pulito). Via del coordinatore: rossi prima.
+
+**Analisi X-R16** (sul HEAD):
+- **Pagina dell'asset**, `loadChartData` (`assets/[id]/+page.svelte` ~1299–1490): a ~1442
+  `parseBackendSignalResults(...)` lancia su un solo segnale non valido. Salta così la scrittura nella cache dei prezzi
+  (`store.merge`/`markFetched`, subito dopo) e `resolveMaxStartFromChartData()` (~1469). Il `catch` mette
+  `signalRequestFailed` e, con `propagateError`, rilancia.
+- **Pagina della coppia** (`fx/[pair]/+page.svelte` ~836–880): lo stesso schema. La cache si scrive prima della
+  lettura dei segnali; ma il ramo `withSignals` del `catch` non chiama `resolveMaxStartFromChartData()`, quindi «Tutto»
+  non si risolve. Si legge solo con un segnale del backend configurato. Va nel lotto.
+- **Lato segnali, da tenere identico**: su un lancio oggi non si applica nulla (`SignalResultState.beginRequest()` non
+  azzera, restano i risultati di prima, vuoti al primo caricamento) e il banner `chartSettings.signalResultsUnavailable`
+  lo dice (`signalRequestFailed = requestPlan.requests.length > 0`).
+- **Cura**: un `try/catch` solo attorno alla lettura dei segnali, sulle due pagine. Su errore: `console.error`,
+  `signalRequestFailed` come nel `catch` di oggi, nessuna applicazione; poi i prezzi proseguono (cache e «Tutto»).
+- **Effetto voluto da dire**: `handleRefresh(true)` (dopo il sync di una coppia creata dalla pagina) e il ricaricamento
+  dopo il sync di creazione della coppia non rilanciano più per un segnale non valido. È un problema dei segnali,
+  detto dal suo banner, non un caricamento fallito.
+
+**Analisi X-R48b**:
+- La modale non legge il riepilogo: si apre dal token del rifiuto della PATCH (`AssetModal.svelte` ~1366,
+  `parseCurrencyChangeBlocker`). L'unico lettore del riepilogo (`GET …/market-data/summary`, dry run) è
+  `countGeneratedSeries`.
+- **Cura**: un conteggio solo, gli SPLIT su cui la cancellazione di X-R48 rifiuterebbe, cioè quelli con rettifiche in
+  entrata senza costo, tramite `financial_math.splits.costless_incoming_split_adjustments`, senza copiarne il
+  predicato. Viaggia in tre posti:
+  - nel riepilogo, come `blocking_splits`. Il riepilogo non ha `response_model`, quindi niente cambia in OpenAPI;
+  - nel token della PATCH, come `|blocking_splits=N` in coda;
+  - nella modale, che avvisa (`currency-change-blocking-splits`) e disattiva Conferma. È lo stesso schema di X-R18:
+    la conferma si apre già bloccata, e il backend decide comunque.
+- **P0-5**: `test_p05_currency_change_guard_queries_stay_constant` fissa 4 SELECT senza dati di mercato. Il conteggio
+  gira quindi solo per gli asset che cambiano valuta e hanno eventi, in blocco (al più +2 SELECT costanti in k).
+- **Chiave nuova** `assetDetail.currencyChange.blockingSplits`, 4 lingue. Quella di X-R48 è al passato e nomina la
+  data di uno split.
+- I test esistenti leggono il token per chiave, quindi un campo in più non li rompe. I `toEqual` di
+  `currencyBlocker.test.ts` invece prendono `blockingSplits: 0`, perché il contratto cambia apposta.
+
+**Rossi affidati**:
+- backend: `test_market_data_wipe_split_guard.py` (`services market-data-wipe-split-guard`) e il P0-5 in
+  `test_asset_source.py`;
+- frontend Vitest: `currencyBlocker.test.ts`, `AssetCurrencyChangeModal.test.ts`;
+- E2E X-R16: `asset-detail.spec.ts`, `fx-detail.spec.ts` (finestra da chiedere).
+
+**Codice preparato** (21:35, provato a secco su `/tmp`):
+- `xr16_48b_code.py`, 13 file, in due parti:
+  - `xr48b`: backend, modale, documentazione, riga X-R48 del CHANGELOG;
+  - `xr16`: le due pagine, riga nuova del CHANGELOG.
+  Così X-R48b si applica dopo i suoi rossi, senza toccare le pagine che i rossi E2E di X-R16 vogliono intatte. Le due
+  parti in sequenza danno lo stesso albero dell'esecuzione intera.
+- Backend: `split_guard.blocking_split_counts(session, asset_ids)`, in blocco, con 0, 1 o 2 statement. La chiamano il
+  riepilogo (solo nel dry run, solo con eventi) e la PATCH (dopo i tre aggregati, solo gli asset con eventi).
+- black e ruff puliti. Prettier spezza solo la riga del pulsante Conferma della modale (lo lancio dopo).
+- i18n: `xr48b_i18n.py`, una chiave (`assetDetail.currencyChange.blockingSplits`).
+- **Rossi Vitest X-R48b** (test-author, 21:45; rilanciati da me, carico 8):
+  `currencyBlocker.test.ts` + `AssetCurrencyChangeModal.test.ts`: **13 failed**, 30 passed
+  (`/tmp/libreFolio_xr48b_vitest_red.log`).
+  - Parser, 10: i 3 `toEqual` esistenti aggiornati a `blockingSplits: 0` (cambio di contratto voluto, commentato), più
+    7 nuovi: in coda, in mezzo, primo dopo il prefisso, mancante, vuoto, `abc`, `-1`.
+  - Modale, 3: l'avviso `currency-change-blocking-splits`, Conferma disattivata (clic nativo), e un clic `fireEvent`
+    che non deve partire.
+  - Guardie verdi: export e Annulla con split bloccanti; nessun avviso e catena intera con 0 o con il campo assente.
+  - **Nota del test-author**: in jsdom `fireEvent.click` su un bottone disattivato arriva comunque al gestore di
+    Svelte 5 (devWiki `domains/email.md`, «jsdom is not a browser»). Il ritorno anticipato in `handleConfirm`
+    (`blockingSplits > 0`) è quindi necessario, ed è già nel codice preparato.
+- **Rossi backend X-R48b** (test-author, 17/10 21:50, scritti e non lanciati):
+  - `test_market_data_wipe_split_guard.py`: 4 test nuovi; 6 casi esistenti, che confrontano il riepilogo per intero,
+    prendono la chiave nuova;
+  - `test_asset_source.py`: il test 24 aggiornato, più una guardia P0-5 (le SELECT costanti in k), verde prima e dopo.
+  - Attesi 11 rossi.
+- **Rossi E2E X-R16** (test-author, 17/10 21:55, scritti e non lanciati): 4 RED e 4 GUARD in coda a
+  `asset-detail.spec.ts` e `fx-detail.spec.ts`, titoli `X-R16 RED …` / `X-R16 GUARD …`, solo mock.
+  - **⚠️ Fuori pista**: sulla pagina dei cambi la cura preparata non basta. Il client Zodios valida tutta la risposta
+    (`validate: 'response'`), quindi un solo segnale non valido fa rifiutare l'intera conversione prima di
+    `store.merge`, e si perdono anche i tassi. Serve l'isolamento dei segnali che la pagina dell'asset ha già
+    (`queryAssetPricesBulkWithSignalIsolation`). Un RED in più lo fissa: «i tassi restano sul grafico».
+- **⏸️ Sospeso** (STOP del developer il 17/10 alle 21:47; ripartenza il 19/10):
+  - X-R48b può cambiare con la nuova direzione di N68: niente blocco alla cancellazione, gli split sopravvivono al
+    cambio di valuta, una riconciliazione degli eventi;
+  - X-R16 si lega all'analisi di N64, la cache della pagina dell'asset.
+  - I 6 file di test sono messi da parte come patch nella cartella della mia sessione
+    (`files/parked/xr16-xr48b-reds-b690c0785.patch`, base `b690c0785`) e riportati al commit; `git apply --check`
+    passa sull'albero pulito. Il codice preparato resta lì (`files/checks/xr16_48b_code.py`, `xr48b_i18n.py`).
+  - Nessun codice applicato.
