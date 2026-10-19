@@ -8000,3 +8000,41 @@ strade del frontend che chiedono `fx_quotes` scartano `source.issues`.
   - `check-orphans`: 571 test frontend raggiungibili, 4 in più.
 - **Non girato**: l'E2E `pac-allocator-real.spec.ts`. La cura aggiunge DOM solo quando c'è un'issue, e i dati di prova
   non hanno tassi saltati.
+
+**N61-form — la domanda del cloud, cura e verdi** ✅ 19/10 (base `9c8bafeca`):
+- **La domanda del coordinatore del cloud** (17:36): `LIBREFOLIO_SUPPORT_URL` può già avere una query, per esempio
+  `https://librefolio.eu/segnala?i=<riferimento opaco dell'istanza>`?
+  - Backend, `env_url`: la query è accettata. Rifiuta solo uno schema non http(s), l'host mancante, nome utente o
+    password, gli spazi. Toglie una barra finale dall'intero valore: un riferimento che finisce con `/` la perderebbe.
+  - Frontend, `supportChannel`: `new URL()` → `href`; query e frammento restano.
+  - `pageWithReport`: i parametri della pagina restano byte per byte e in ordine; un `title` o un `body` già presenti si
+    tolgono; i due nuovi si aggiungono con `&`, codificati con `encodeURIComponent`; il frammento resta in fondo.
+    Provato in Node: `?i=Ab3-x_9.z~q` identico; `?i=Ab3&title=old&body=old` → un solo `title` e un solo `body`;
+    `?i=a%20b#modulo` resta `a%20b`.
+  - Perché non `URLSearchParams.set`: riscrive tutta la query (`i=a%20b` → `i=a+b`) e scrive gli spazi come `+`,
+    contro la forma approvata (`%20`).
+  - Il riferimento: caratteri sicuri (lettere, cifre, `-` `_` `.` `~`) o già codificati; non finisce con `/`; non si
+    chiama `title` o `body`; è **pubblico** (`GET /api/v1/system/instance`): un indizio per l'assistenza, mai una prova
+    d'identità.
+  - Il coordinatore conferma (19/10): `encodeURIComponent` e la query della pagina intatta. Il contratto finale l'ha
+    girato al coordinatore del cloud.
+- **Cura** ✅: `n61form_code.py` applicato, 3 file.
+  - `assetSearchReport.ts`: `pageWithReport` nel caso `page` di `reportHref`, e il commento d'intestazione.
+  - `AssetSearchAutocomplete.svelte`: il commento di `reportClicked`.
+  - `CHANGELOG.md`: corretta la voce «Can't find it? Let us know» di Unreleased, nessuna riga nuova.
+  - Un `user:pass@` nell'URL sparirebbe con `origin`, ma `supportChannel` rifiuta già un indirizzo con nome utente o
+    password (`assetSearchReport.ts:85`): il caso non arriva mai a `pageWithReport`.
+- **Doc**: il docs-writer ha aggiunto a `#support-form` il punto «An instance reference», tre righe con le regole
+  sopra.
+- **Verdi**:
+  - Vitest sui due file: 149/149; sull'intera cartella `components/assets/`: 1 668/1 668 in 40 file;
+  - `front check` 0/0; cancelli dei colori puliti;
+  - `mkdocs build` stretto, uscita 0; `mkdocs check-links`: 97 link validi;
+  - l'esempio di `#support-form` rifatto in Node col modulo vero (`n61form_doc_example.mjs`): identico byte per byte, e
+    la decodifica ridà oggetto e corpo.
+- **Traduzioni**: nessun timbro.
+  - `hosting_providers` non ha traduzioni.
+  - `configuration` (375 errori) e `create-edit` (30) hanno debito già presente: l'hash della cache di Aphra è diverso
+    da quello di HEAD.
+  - Sono modifiche di contenuto, che le traduzioni devono ricevere.
+- **Non girato**: nessun E2E usa una pagina di supporto; l'`href` lo prova ASA-R9.
