@@ -6973,3 +6973,42 @@ prossimo checkpoint.
   - `api sync` (nessun file tracciato), `front check` 0/0, `front-utility core-unit` **9 244**;
   - `mkdocs build` stretto ✓, `check-links` ✓.
   - Porta 6185 libera.
+
+#### J-19 entrata; MF-A12, J-1 di MF, analisi di J-48 (17/10, dalle ~21:35; base `635b50537`)
+
+- ✅ **J-19 entrata**: dev `635b50537` (`a8299354f`, `e17e81190`).
+- ✅ **devWiki**: `problems/multiline-docstring-backticks-break-generated-client.md`, più la riga dell'indice e il log
+  (il fuori pista di J-19, suggerito dal coordinatore).
+- ✅ **Revisione MF-A12** (`29aa1a8a5`): OK.
+  - `change_ratio` dà lo stesso valore per un prezzo precedente positivo; la colonna del valore è identica a prima.
+  - N92 è corretta: un prezzo negativo segue il movimento.
+  - Nessun rapporto di variazione scritto a mano resta fuori dalla casa (grep).
+- ✅ **J-1 di MF, punto 1** (`calendar_days_to_observations` e la sua inversa a `risk/quant/resampling.py:235` →
+  `financial_math/returns.py`): OK, con condizioni:
+  - un 365 con nome solo;
+  - l'inversa come funzione della casa, senza rifiutare valori che oggi passano;
+  - un validatore solo;
+  - niente shim, 5 chiamanti più 2 test, grep a zero;
+  - nessun `algorithm_version` cambia, `risk-all` e `financial-math` con gli stessi conteggi;
+  - la mappa della casa aggiornata.
+- **Analisi di J-48** (sola lettura, inviata):
+  - le gambe del confine sono `ADJUSTMENT` per la FIFO, quindi le viste stampano «Adjustment In/Out»;
+  - `ScopeBoundaryReading.legs` sa già quali sono, ma nulla arriva all'uscita; l'AI Export non espone i tipi della
+    cronologia dei lotti.
+  - Proposta: un campo additivo `LotTimelineEventSchema.scope_boundary: "IN"|"OUT"|None`, non tipi nuovi, che
+    toccherebbero ~28 rami economici in 6 file del frontend. Mai il broker compagno (R13-SEC7).
+  - Backend in `lots_analysis_service.py` (`:965`, `:1111`).
+  - Frontend solo nelle etichette: `eventKindLabel` della modale, `eventMarkerKind` del Gantt (il ◆ «Transfer»), e
+    l'etichetta e la categoria del grafico WAC. Una coppia di chiavi i18n.
+  - Rossi: R1–R2 nel backend, R3–R5 Vitest, più i controlli. Circa 3 h.
+  - File da avere: `features/brokers/lots/` (Y e W gli ultimi a toccarli) e `i18n/brokers/*`. In attesa del via.
+- **Via di J-48, poi lo stop**: il via è arrivato (il campo additivo, solo etichette; codice dopo l'entrata di Y-30).
+  Poi lo **stop del developer** ha congelato tutto, prima di qualunque file di prodotto.
+- ⏸️ **J-48 sospeso** (ripartenza del 19/10: è fra gli ampliamenti che il developer sta leggendo). Il lavoro a metà è
+  parcheggiato nella cartella di sessione di J, `files/parked/`, e il worktree è tornato pulito:
+  - `j48-backend-scope-boundary.patch`: lo schema e il servizio, mai applicata;
+  - `j48-backend-scope-boundary.patch_script.py`: lo script da cui viene;
+  - `j48-test-probe.patch`: solo la sonda del test-author, che fallisce apposta. Nessun test di J-48 era ancora
+    scritto.
+  - Prova: `git apply --check` delle due patch su `635b50537` è OK.
+  - Il file di test è tornato allo stato del commit.

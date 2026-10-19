@@ -3877,3 +3877,10 @@ check in the refresh that moves old rows only where the full history, read as a 
 Replacing the closes from a fresh history (D′) was dropped: they are adjusted as of each fetch (Z-35). Fix `60170aae5`.
 Filed: [[problems/yahoo-bars-dated-one-day-early-east-of-utc]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | A multi-line docstring with backticks breaks the generated client (J-19)
+J-19 gave `ToolItemMetrics` a two-paragraph docstring that named a field between backticks. The client generator writes
+a multi-line OpenAPI description as a JS template literal without escaping its backticks, so `generated.ts` broke,
+with 2 `front check` errors and dozens of core-unit suites unable to load. A single-line docstring goes in quotes and is safe.
+Filed: [[problems/multiline-docstring-backticks-break-generated-client]].
+Graph: not updated; graphify is not available in this worktree.
