@@ -7764,3 +7764,48 @@ Verifica degli altri lettori senza filtro: nessun altro crash da infinito.
   unificazione dello 0.
 - Fino ad allora, un `inf` salvato come ultima riga di una coppia dà un 500 sul PAC, com'era prima di X-R45. Il developer
   è sicuro al 99,9% che righe così non esistono.
+
+**Rovescio di X-R45 committato** (19/10): `c720e25cb`, giornale `9f095796a`. Base aggiornata: merge di `dev_release2`
+(`1fa64ceae`) → `6c108929f`. Le migrazioni ora sono fuse in `005_release_1_3_0_schema.py`.
+- Corsia 6183 ripopolata con `db populate --force --clean`: 7 124 record, controlli della popolazione verdi.
+- Verifica leggera sul merge: `bulk-reads-chunked` 54, `scheduler-last-fx-dates` 9, `fx-conversion` 44.
+
+### Le due note di Z su N92 — lotto (19/10, base `6c108929f`)
+
+Revisione di Z su N92: OK, con due note minori, da fare in un commit a parte.
+1. `refresh.py`, `FAUpsert.model_construct`: il commento dava una ragione che non regge.
+   - Misurato (script `z_note1_bench.py` nella sessione): un punto con 1E+60, 1E-13 e 1E+30 passa la validazione come
+     `FAPriceWritePoint`, quindi Z ha ragione.
+   - `FAUpsert(...)` valida 45 000 punti in 231 ms sul ciclo degli eventi; `model_construct` in 0 ms.
+   - Decisione interna: tengo `model_construct`, con la ragione vera nel commento e nella doc. I punti sono già costruiti e
+     filtrati, e la validazione di scrittura non aggiunge controlli.
+2. `_price_not_above_zero` scartava il giorno anche per il solo volume negativo, ma diceva «price not above 0».
+   - Diventa `_sign_issue`: nomina ogni campo in difetto come `nome=valore`, come W-B58.
+   - La nota diventa «N points discarded: a close not above 0 or a negative open, high, low or volume (2026-01-02
+     (volume=-10), …)»; l'avviso usa la stessa regola, con il campo `days`.
+   - Provato a secco su `/tmp`: `close=-5`, `close=0`, `open=-1`, `volume=-10`, `high=-0.5, low=-2`; gli zeri danno
+     None, come anche un valore infinito.
+- Script: `z_notes_code.py` (`refresh.py` e il paragrafo `#discarded-provider-days`); black e ruff puliti.
+- Rossi: il test-author di N92 aggiunge in `test_current_price_storable.py` le asserzioni su `campo=valore`.
+- **Rossi** ✅ 19/10: `services current-price-storable` 8 rossi e 40 verdi. Sono i sette casi di
+  `…_discarded_named_and_logged`, compreso `high-and-low-negative` aggiunto dal test-author, più `…_every_day_…`.
+- **Cura** ✅ 19/10, `z_notes_code.py`: `refresh.py` e `architecture.md`; black e ruff puliti; nessun riferimento
+  rimasto a `_price_not_above_zero`.
+- **Verdi**:
+  - `asset-source-refresh` 18, `range-ceiling` 74, `asset-source-guards` 55, `api prices-sync-delta` 5;
+  - `mkdocs build` strict con 0 avvisi, `check-links` 97;
+  - `current-price-storable` 47 verdi e 1 rosso.
+
+> **⚠️ Fuori pista — il caso `high-and-low-negative`** (close 1.5, high −0.5, low −2).
+> - La nota dice `(low=-2)` e non `(high=-0.5, low=-2)`, e il prodotto ha ragione.
+> - Ogni `get_history_value` passa da `_wrap_history_ohlc_guard` (`assets/base.py`, `_repair_ohlc_point`). Con
+>   entrambi i limiti presenti, la guardia li allarga per contenere apertura e chiusura, quindi `high` diventa 1.5 prima
+>   che la refresh veda il punto. Il giorno si scarta lo stesso, per `low=-2`.
+> - Il test-author sostituisce il caso con `open-and-volume-negative` (`open=-1, volume=-10`), che la guardia non tocca,
+>   e un commento ne spiega il perché.
+> - Nota a parte: `asset-source-refresh` è passato da 69 a 18 test per i rovesci Z-33r e Z-32cr della base (−1 800
+>   righe nel file), non per questo lotto.
+- **Verdi finali** ✅ 19/10: `current-price-storable` 48/48, con il caso `open-and-volume-negative`.
+  - Quel caso non l'ho girato prima della cura: lo considero rosso per ragionamento, perché la nota vecchia nominava solo
+    la data.
+  - `git diff --check` pulito; porta 6183 libera.
