@@ -64,11 +64,15 @@ The contract (the developer's decisions, 16/10; D5 and D6 the coordinator's, 16/
    totals (``compute_control_totals``: what a backup records and a restore checks) give its broker's EUR line as
    -123456789012.345. What reads well today keeps its form: -100 EUR reads -100.000000.
 9. R13-SEC7-3 (E's R13-SEC7, 17/10; night decision N74): the date of a transaction is checked at write,
-   ``1900-01-01 <= date <= today + 1 year`` (today from ``today_date()``, UTC; one year on, 29 February falling back to
-   28 February). A new batch stage next to ``check_decimal_limits`` covers the creates (``TXCreateItem.date``), the
+   ``1900-01-01 <= date <= tomorrow`` — lot N74 (Fineco, safe rows; decision N74 as re-decided, 19/10) moves the last day
+   from today + 1 year (UTC) to the server's tomorrow: ``transaction_date_bounds()`` takes no argument and returns
+   ``EARLIEST_RANGE_START`` .. ``latest_range_end()`` (both ``utils/datetime_utils``): 1900-01-01 .. the server's local
+   date + 1 day, the one day of slack for a user whose today is already the server's tomorrow (a price or a rate written
+   by hand has the same last day, N83). A new batch
+   stage next to ``check_decimal_limits`` covers the creates (``TXCreateItem.date``), the
    updates (``TXUpdateItem.date``, when given) and the promotes (``resolved_fields["date"]``, an ISO string): out of
-   range, the row gets ``dateOutOfRange`` on ``field="date"``, ``params={"min": "1900-01-01", "max": <ISO of today + 1
-   year>}``, and the batch stops right after the access check, as for the integer digits: not committed, nothing
+   range, the row gets ``dateOutOfRange`` on ``field="date"``, ``params={"min": "1900-01-01", "max": <ISO of the server's
+   tomorrow>}``, and the batch stops right after the access check, as for the integer digits: not committed, nothing
    written, no exception (a row of 0001-01-01 made the replay walk every day since year one; one of 9999-12-31 made it
    overflow). ``TXValidationCode.DATE_OUT_OF_RANGE = "dateOutOfRange"``, listed by ``GET /transactions/types``. And the
    bound R13-SEC7-3 puts on every ``Currency`` amount at the boundary (``adjusted()`` within [-100, 100]) reaches the
@@ -139,11 +143,13 @@ Reds — fail today, pass once the contract holds:
 - ``TestACashAmountReadsBackExactly`` (rule 8, W-B60): today the BUY's cash amount reads back -123456789012.345001, and
   the control totals give -123456789012.345001: the double's noise;
 - ``TestTheCodesAreListed``: ``TXValidationCode.INTEGER_DIGITS_EXCEEDED``, and ``validation_codes`` lists it.
-- ``TestTheDateIsCheckedAtWrite`` (rule 9, R13-SEC7-3): a create dated 1899-12-31, 0001-01-01, today + 1 year + 1 day
+- ``TestTheDateIsCheckedAtWrite`` (rule 9, R13-SEC7-3): a create dated 1899-12-31, 0001-01-01, the day after tomorrow
   or 9999-12-31 (on ``/validate`` and ``/commit``), an update moving a stored row to 1899-12-31, a promote resolving the
   date 1899-12-31 — each refused on its own row with exactly ``dateOutOfRange`` and its ``{"min", "max"}``, the batch
   stopped before applying anything (no result), nothing written, no exception (today they commit, or the replay refuses
-  them for another reason: a codeless «Balance validation error» on 9999-12-31, a short position on 1899-12-31);
+  them for another reason: a codeless «Balance validation error» on 9999-12-31, a short position on 1899-12-31). Lot N74
+  re-reds them all: today's refusals carry ``max`` = UTC today + 1 year, not the server's tomorrow, and the day after
+  tomorrow commits; ``test_n74_a_create_dated_the_day_after_tomorrow_is_refused_up_to_tomorrow`` says it alone;
 - ``TestTheDateFloorIsTheReplayFloor`` (rule 9, MF-SEC8-2): N74's 1900-01-01 is ``EARLIEST_RANGE_START`` of
   ``utils/datetime_utils``, the replay floor, imported — ``transaction_batch_stages`` keeps no ``TRANSACTION_DATE_MIN``
   of its own (today it does, a copy);
@@ -188,8 +194,8 @@ Guards — green today, and the cure must keep them green:
   receiving leg holds it exactly;
 - ``TestACashAmountReadsBackExactly`` (rule 8): cash amounts of -100 and -1234.5 EUR read back -100.000000 and
   -1234.500000, column by column and through the service, as ``Numeric(18, 6)`` reads them today.
-- ``TestTheDateIsCheckedAtWrite`` (rule 9): a create dated 1900-01-01, today + 1 year, or an ordinary day commits and
-  keeps its date; an update moving a stored row to 1900-01-01 commits.
+- ``TestTheDateIsCheckedAtWrite`` (rule 9): a create dated 1900-01-01, tomorrow (the server's), or an ordinary day
+  commits and keeps its date; an update moving a stored row to 1900-01-01 commits.
 - ``TestAPromotedCostBasisCurrencyRefuses`` (rule 9): a resolved cost basis of 1E+100 EUR, inside the bound, keeps W-B58's
   ``integerDigitsExceeded`` ``{"max": 12}`` on ``cost_basis_override``, nothing else, on ``/validate`` and ``/commit``.
 - ``TestTheResolvedFieldsAreTyped`` (rule 10): accepted on both endpoints, and committed on the second pair by
@@ -250,7 +256,7 @@ from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_
 from backend.app.services.transactions import transaction_batch_stages
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils import datetime_utils
-from backend.app.utils.datetime_utils import today_date, utcnow
+from backend.app.utils.datetime_utils import utcnow
 
 EUR = "EUR"
 USD = "USD"
@@ -2062,33 +2068,37 @@ DATE_OUT_OF_RANGE = "dateOutOfRange"
 DATE_MIN = date(1900, 1, 1)
 
 # The dates a row may not carry: the day before 1900-01-01, the first day of the calendar (today's replay then walks every
-# day since year one), the day after today + 1 year (resolved when the test runs), the last day of the calendar (today's
-# replay overflows, adding a day to it).
+# day since year one), the day after tomorrow (the server's, resolved when the test runs: lot N74's last day is tomorrow),
+# the last day of the calendar (today's replay overflows, adding a day to it).
 DATES_OUT_OF_RANGE = [
     pytest.param("1899-12-31", id="1899-12-31"),
     pytest.param("0001-01-01", id="0001-01-01"),
-    pytest.param("max+1", id="today-plus-one-year-plus-one-day"),
+    pytest.param("max+1", id="day-after-tomorrow"),
     pytest.param("9999-12-31", id="9999-12-31"),
 ]
-# The dates a create keeps: both ends of the range (the latest resolved when the test runs), and an ordinary day.
+# The dates a create keeps: both ends of the range (the latest, the server's tomorrow, resolved when the test runs), and an
+# ordinary day.
 DATES_WITHIN_RANGE = [
     pytest.param("1900-01-01", id="1900-01-01-the-first-day"),
-    pytest.param("max", id="today-plus-one-year-the-last-day"),
+    pytest.param("max", id="tomorrow-the-last-day"),
     pytest.param(DAY.isoformat(), id="an-ordinary-day"),
 ]
 
 
-def _a_year_after(day: date) -> date:
-    """``day`` one year later; 29 February falls back to 28 February (N74)."""
-    try:
-        return day.replace(year=day.year + 1)
-    except ValueError:
-        return day.replace(year=day.year + 1, day=28)
+def _server_today() -> date:
+    """The server's local date, read here on its own — ``date.today()`` — never through ``latest_range_end()``, the helper
+    the bound under test is built on (lot N74)."""
+    return date.today()
+
+
+def _tomorrow(day: date) -> date:
+    """The last day a transaction may carry while the server's date is ``day`` (lot N74): the day after it."""
+    return day + timedelta(days=1)
 
 
 def _resolve_day(day: str) -> str:
-    """The ISO date a parameter names: ``max`` is today + 1 year, ``max+1`` the day after, any other an ISO date."""
-    latest = _a_year_after(today_date())
+    """The ISO date a parameter names: ``max`` is the server's tomorrow, ``max+1`` the day after, any other an ISO date."""
+    latest = _tomorrow(_server_today())
     return {"max": latest.isoformat(), "max+1": (latest + timedelta(days=1)).isoformat()}.get(day, day)
 
 
@@ -2107,10 +2117,11 @@ async def _run_dated(world: World, story: str, **batch) -> TXBatchResponse:
 
 def _assert_refused_on_its_date(response: TXBatchResponse, today_before: date, row: tuple, story: str, *, with_ref_id: bool = True) -> None:
     """The batch answers exactly one issue, ``dateOutOfRange`` on ``field="date"`` of ``row`` (operation, index, ref_id),
-    ``params`` ``{"min": "1900-01-01", "max": <today + 1 year>}`` — today read before or after the batch, so that a UTC
-    midnight falling during it cannot fail the test — then nothing: not committed, no result (the batch stopped right after
-    the access check). ``with_ref_id=False`` leaves the ref_id out (a promote's: which row it names is not the subject)."""
-    maxima = sorted({_a_year_after(today_before).isoformat(), _a_year_after(today_date()).isoformat()})
+    ``params`` ``{"min": "1900-01-01", "max": <the server's tomorrow>}`` — the server's date read before (``today_before``)
+    or after the batch, so that a midnight falling during it cannot fail the test — then nothing: not committed, no result
+    (the batch stopped right after the access check). ``with_ref_id=False`` leaves the ref_id out (a promote's: which row
+    it names is not the subject)."""
+    maxima = sorted({_tomorrow(today_before).isoformat(), _tomorrow(_server_today()).isoformat()})
     operation, index, ref_id = row
     accepted = [(operation, index, ref_id if with_ref_id else None, DATE_OUT_OF_RANGE, "date", {"min": DATE_MIN.isoformat(), "max": latest}) for latest in maxima]
     issues = [(issue.operation, issue.index, issue.ref_id if with_ref_id else None, issue.code, issue.field, issue.params) for issue in response.issues]
@@ -2126,25 +2137,29 @@ async def _dates(world: World, ids) -> dict[int, tuple]:
 
 
 class TestTheDateIsCheckedAtWrite:
-    """Rule 9 (R13-SEC7-3, N74): a row's date lies within ``1900-01-01 .. today + 1 year`` (``today_date()``, UTC).
+    """Rule 9 (R13-SEC7-3, N74): a row's date lies within ``1900-01-01 .. tomorrow`` — the server's tomorrow
+    (``latest_range_end()``: its local date + 1 day) since lot N74, which replaced today + 1 year (UTC).
 
-    Today nothing checks it: a create, an update or a promote out of range commits — unless the balance replay refuses
-    it for another reason, a short position or, on 9999-12-31, a codeless «Balance validation error» (it overflows adding
-    a day). The subject row sits alone on ``main`` (the row before it on ``other``), so today's replay of 0001-01-01 is
-    one day long.
+    Before R13-SEC7-3 nothing checked it: a create, an update or a promote out of range committed — unless the balance
+    replay refused it for another reason, a short position or, on 9999-12-31, a codeless «Balance validation error» (it
+    overflows adding a day). The subject row sits alone on ``main`` (the row before it on ``other``), so that replay of
+    0001-01-01 is one day long. Today (before lot N74's cure) the refusals carry ``max`` = UTC today + 1 year, and the day
+    after tomorrow commits: every refusal below is red on its ``max``, the day after tomorrow on its commit.
     """
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("endpoint", ENDPOINTS)
     @pytest.mark.parametrize("day", DATES_OUT_OF_RANGE)
     async def test_a_create_dated_out_of_range_is_refused_on_its_row(self, world, day, endpoint):
-        """Red today: the DEPOSIT commits (on 9999-12-31 the replay refuses it without a code).
+        """Red today (lot N74): the DEPOSIT dated the day after tomorrow commits; the other dates are refused with
+        ``max`` = UTC today + 1 year, not the server's tomorrow.
 
         Contract: a valid DEPOSIT on ``other``, then the subject on ``main`` dated ``day``: exactly ``dateOutOfRange`` on
-        create 1, ``field="date"``, ``{"min", "max"}``; not committed, no result, nothing written, no exception.
+        create 1, ``field="date"``, ``{"min", "max"}`` (``max`` the server's tomorrow); not committed, no result, nothing
+        written, no exception.
         """
         barrier_id = await _insert(world, broker_id=world.other_id, asset_id=None, type=TransactionType.DEPOSIT, date=SEED_DAY, quantity=Decimal("0"), amount=Decimal("100"), currency=EUR)
-        today_before = today_date()
+        today_before = _server_today()
         sent = _resolve_day(day)
 
         response = await _run_dated(world, f"a DEPOSIT dated {sent}", creates=[_dated_deposit(world, world.other_id, DAY.isoformat()), _dated_deposit(world, world.main_id, sent)], endpoint=endpoint)
@@ -2155,8 +2170,27 @@ class TestTheDateIsCheckedAtWrite:
         assert written == [], f"R13-SEC7-3: /{endpoint} refused the batch, yet the database holds its rows {written}"
 
     @pytest.mark.asyncio
+    async def test_n74_a_create_dated_the_day_after_tomorrow_is_refused_up_to_tomorrow(self, world):
+        """Red today: the DEPOSIT dated the day after tomorrow commits — the last day is still UTC today + 1 year.
+
+        Contract (lot N74): ``transaction_date_bounds()`` takes no argument and returns ``EARLIEST_RANGE_START`` ..
+        ``latest_range_end()``, whose last day is the server's tomorrow, so a create dated the day after it gets exactly
+        ``dateOutOfRange`` on ``field="date"`` of its row, with ``params.max`` the server's tomorrow; not committed, no
+        result, nothing written.
+        """
+        today_before = _server_today()
+        sent = (_tomorrow(today_before) + timedelta(days=1)).isoformat()
+        story = f"N74: a DEPOSIT dated the day after tomorrow ({sent})"
+
+        response = await _run_dated(world, story, creates=[_dated_deposit(world, world.main_id, sent)])
+
+        _assert_refused_on_its_date(response, today_before, ("create", 0, None), story)
+        written = await _batch_rows(world)
+        assert written == [], f"{story}: the batch was refused, yet the database holds its rows {written}"
+
+    @pytest.mark.asyncio
     async def test_an_update_moving_a_row_out_of_range_is_refused_on_its_row(self, world):
-        """Red today: the update commits.
+        """Red today (lot N74): the update is refused, but with ``max`` = UTC today + 1 year, not the server's tomorrow.
 
         Contract: behind a valid notes edit (update 0), the update of a stored DEPOSIT to 1899-12-31 (update 1) gets
         exactly ``dateOutOfRange`` on its row, ``ref_id`` its id; not committed, no result; both rows read back as stored.
@@ -2164,7 +2198,7 @@ class TestTheDateIsCheckedAtWrite:
         neighbour_id = await _insert(world, broker_id=world.other_id, asset_id=None, type=TransactionType.DEPOSIT, date=SEED_DAY, quantity=Decimal("0"), amount=Decimal("100"), currency=EUR)
         subject_id = await _insert(world, broker_id=world.main_id, asset_id=None, type=TransactionType.DEPOSIT, date=SEED_DAY, quantity=Decimal("0"), amount=Decimal("100"), currency=EUR)
         before = await _dates(world, [neighbour_id, subject_id])
-        today_before = today_date()
+        today_before = _server_today()
 
         response = await _run_dated(world, f"the update of DEPOSIT id={subject_id} to 1899-12-31", updates=[{"id": neighbour_id, "description": f"{world.marker} neighbour edited"}, {"id": subject_id, "date": "1899-12-31"}])
 
@@ -2174,8 +2208,9 @@ class TestTheDateIsCheckedAtWrite:
 
     @pytest.mark.asyncio
     async def test_a_promote_resolving_a_date_out_of_range_is_refused_on_its_index(self, world):
-        """Red today: the promote applies 1899-12-31 to both legs, and the replay refuses the batch for the giving leg's
-        short position (``balanceAssetNegative``), not for its date.
+        """Red today (lot N74): the promote is refused, but with ``max`` = UTC today + 1 year, not the server's tomorrow.
+        (Before R13-SEC7-3 the promote applied 1899-12-31 to both legs, and the replay refused the batch for the giving
+        leg's short position, ``balanceAssetNegative``, not for its date.)
 
         Contract: behind a valid promote (index 0), the promote resolving the date 1899-12-31 (index 1) gets exactly
         ``dateOutOfRange`` on its index; not committed, no result; all four rows as they were stored, dates included.
@@ -2185,7 +2220,7 @@ class TestTheDateIsCheckedAtWrite:
         second = await _promotable_pair(world)
         ids = [*first, *second]
         before = (await _pair_state(world, ids), await _dates(world, ids))
-        today_before = today_date()
+        today_before = _server_today()
         promotes = [{"id_a": first[0], "id_b": first[1]}, {"id_a": second[0], "id_b": second[1], "resolved_fields": {"date": "1899-12-31"}}]
 
         response = await _run_dated(world, "a promote resolving the date 1899-12-31", promotes=promotes)
@@ -2197,13 +2232,13 @@ class TestTheDateIsCheckedAtWrite:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("day", DATES_WITHIN_RANGE)
     async def test_guard_a_create_dated_within_the_range_commits_and_keeps_its_date(self, world, day):
-        """Guard: green today and after. A DEPOSIT dated 1900-01-01, today + 1 year or an ordinary day commits, and reads
-        back its date."""
+        """Guard: green today and after. A DEPOSIT dated 1900-01-01, the server's tomorrow (lot N74's last day; today still
+        inside UTC today + 1 year) or an ordinary day commits, and reads back its date."""
         sent = _resolve_day(day)
 
         response = await _run_dated(world, f"a DEPOSIT dated {sent}", creates=[_dated_deposit(world, world.main_id, sent)])
 
-        assert response.committed is True and response.issues == [], f"R13-SEC7-3: a DEPOSIT dated {sent} is within 1900-01-01 .. today + 1 year, so it must commit; it was refused: {_render(response.issues)}"
+        assert response.committed is True and response.issues == [], f"R13-SEC7-3: a DEPOSIT dated {sent} is within 1900-01-01 .. tomorrow, so it must commit; it was refused: {_render(response.issues)}"
         created_id = _created_ids(response)[0]
         stored = (await _dates(world, [created_id]))[created_id][0]
         assert stored.isoformat() == sent, f"R13-SEC7-3: the DEPOSIT id={created_id} was sent dated {sent}; it reads back {stored}"
@@ -2229,7 +2264,9 @@ class TestTheDateFloorIsTheReplayFloor:
         ``EARLIEST_RANGE_START``.
 
         Contract: no ``TRANSACTION_DATE_MIN``; ``transaction_batch_stages.EARLIEST_RANGE_START`` is
-        ``datetime_utils.EARLIEST_RANGE_START`` (the object, imported); ``transaction_date_bounds`` starts there.
+        ``datetime_utils.EARLIEST_RANGE_START`` (the object, imported); ``transaction_date_bounds()`` starts there (lot
+        N74: it takes no argument and returns ``EARLIEST_RANGE_START`` .. ``latest_range_end()``; only its first day is
+        read here).
         """
         floor = datetime_utils.EARLIEST_RANGE_START
         violations: list[str] = []
@@ -2240,9 +2277,9 @@ class TestTheDateFloorIsTheReplayFloor:
             violations.append("transaction_batch_stages has no EARLIEST_RANGE_START")
         elif imported is not floor:
             violations.append(f"transaction_batch_stages.EARLIEST_RANGE_START ({imported}) is not the object datetime_utils.EARLIEST_RANGE_START")
-        first = transaction_batch_stages.transaction_date_bounds(date(2026, 10, 17))[0]
+        first = transaction_batch_stages.transaction_date_bounds()[0]
         if first != floor:
-            violations.append(f"transaction_date_bounds(2026-10-17) starts on {first}, not on {floor}")
+            violations.append(f"transaction_date_bounds() starts on {first}, not on {floor}")
 
         assert violations == [], f"N74's floor is the replay floor, EARLIEST_RANGE_START (MF-SEC8-2), never a copy: {'; '.join(violations)}"
 

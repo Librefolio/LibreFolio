@@ -203,7 +203,9 @@
       "scalable_internal_transfers": "{count, plural, one {# transfer} other {# transfers}} between the broker account and the overnight account: import the other account's file into its own broker, then merge each pair into a Cash Transfer in the bulk editor.",
       "scalable_dividends_net": "{count, plural, one {# dividend was imported as credited} other {# dividends were imported as credited}}, net of the tax withheld: the file does not give the tax.",
       "scalable_tax_refund": "{count, plural, one {# tax refund was imported as a deposit} other {# tax refunds were imported as deposits}}: in LibreFolio a tax always takes money out.",
-      "scalable_cash_by_sign": "{count, plural, one {# cash row has a type LibreFolio does not know, or an unexpected sign: it was recorded as a deposit or a withdrawal} other {# cash rows have a type LibreFolio does not know, or an unexpected sign: they were recorded as deposits or withdrawals}}, by the sign of the amount."
+      "scalable_cash_by_sign": "{count, plural, one {# cash row has a type LibreFolio does not know, or an unexpected sign: it was recorded as a deposit or a withdrawal} other {# cash rows have a type LibreFolio does not know, or an unexpected sign: they were recorded as deposits or withdrawals}}, by the sign of the amount.",
+      "fineco_not_yet_settled": "{count, plural, one {# row is not settled yet (its value date is after today) and was not imported: it arrives with the next export.} other {# rows are not settled yet (their value date is after today) and were not imported: they arrive with the next export.}}",
+      "fineco_incomplete_rows": "The Fineco importer is in beta, so this import may be wrong: {count, plural, one {# row lacks} other {# rows lack}} a required number (quantity or amount). Check the rows below; if the file is right, it is likely an importer bug, and you can help us fix it:"
     },
     "evidenceRowsTitle": "Source rows",
     "evidenceRowCount": "{n} rows",
@@ -524,7 +526,9 @@
       "scalable_internal_transfers": "These rows move money between your two Scalable accounts (lf_subtype CASH_TRANSFER_IN or CASH_TRANSFER_OUT): each one has its twin in the other account's file.",
       "scalable_dividends_net": "The tax column is empty on these rows: the amount is what reached the account.",
       "scalable_tax_refund": "A positive amount in the tax column is money given back.",
-      "scalable_cash_by_sign": "The sign of the amount column decided between deposit and withdrawal."
+      "scalable_cash_by_sign": "The sign of the amount column decided between deposit and withdrawal.",
+      "fineco_not_yet_settled": "The value date of these rows is after today: they have not settled yet.",
+      "fineco_incomplete_rows": "The last column names the field without a number; the row is imported as it is."
     }
   }
 }

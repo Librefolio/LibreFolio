@@ -247,10 +247,10 @@ fill, and never cuts a point-derived warm-up that starts earlier
   date(s) outside 1900-01-01 to …*, the first five dates), which the sync adds to the asset's
   errors.
 
-The [FX rate writes](../fx/architecture.md#stored-rate-dates) keep to the same bounds, and
-transactions have had the same floor since N74, with an end a year ahead
-([Transaction dates](../transactions/service.md#transaction-dates), where the code is
-`dateOutOfRange`). Price and rate rows already stored before 1900 are left as they are (Z-30).
+The [FX rate writes](../fx/architecture.md#stored-rate-dates) keep to the same bounds, and so
+do transactions (N74: [Transaction dates](../transactions/service.md#transaction-dates), where
+the code is `dateOutOfRange`). Price and rate rows already stored before 1900 are left as they
+are (Z-30).
 The web app's data editors tell these 422s in the interface language, naming the dates refused
 and the bounds (`writeRefusalMessage()` in `frontend/src/lib/api/writeRefusal.ts`, X-R46);
 before, they showed Axios's *Request failed with status code 422*.
