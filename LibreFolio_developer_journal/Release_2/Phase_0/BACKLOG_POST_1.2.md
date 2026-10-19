@@ -7927,7 +7927,10 @@ sulla base `23f6578f3`.
   - il 409 `backup_busy` porta `job_id` e `origin` del backup in corso;
   - la scheda segue un backup `ui` ritrovato così, e ne ricorda l'id prima della prima lettura;
   - con un archivio in offerta, la scheda lo tiene.
-  Una domanda per il developer è aperta: il 409 della scheda nomina anche i backup del pannello e della CLI.
+  La domanda sul 409, che nomina anche i backup del pannello e della CLI, è chiusa dal developer (19/10, pomeriggio):
+  - la risposta resta com'è;
+  - a schermo la scheda dice solo «occupato», e segue il proprio backup `ui` come prima;
+  - id, origine e stato vanno in console, con un `console.warn` per rifiuto. Fatto lo stesso giorno.
   Dettagli: piano 07, «B-15 + B-8 — la ripresa».
 - ✅ **B-9 · Il token del pannello non è fra i controlli della configurazione** — piccolo; B, 15/10 (B8).
   - Oggi un `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` inutilizzabile (corto, non ASCII visibile, `_FILE` illeggibile) si vede
