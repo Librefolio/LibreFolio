@@ -621,8 +621,8 @@ sequenceDiagram
   for two minutes (`_asset_current_cache`, `backend/app/services/assets/core.py`, shared with
   the price sync), and a cached one is served the same way.
 - **A refused quote**, one no price column can keep (not finite, more than 12 digits before the
-  decimal point, or non-zero but 0 once truncated to 12 decimal places, such as `1E-13`), is
-  neither served, cached nor written: the asset falls back to the database exactly as after a
+  decimal point, or non-zero but 0 once truncated to 12 decimal places, such as `1E-13`) or, since
+  N92, one not above 0, is neither served, cached nor written: the asset falls back to the database exactly as after a
   provider failure, with no `error_code`, and the next poll asks the provider again. The backend
   logs it once per asset, provider and value:
   [Current Quotes and Today's OHLC](../../../backend/assets/architecture.md#current-quotes-and-todays-ohlc).

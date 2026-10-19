@@ -29,6 +29,7 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ErasableNumberCell from './ErasableNumberCell.svelte';
+    import {CLEARED_CELL} from './DataEditorTypes';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {formatPrice} from '$lib/utils/core/formatFixed';
 
@@ -217,10 +218,10 @@
                                     html: `<span class="text-xs font-mono text-lf-secondary">${display}</span>`,
                                 };
                             }
-                            // F.5 — erasable columns use the ErasableNumberCell with sentinel -1 semantics.
+                            // F.5 — erasable columns use the ErasableNumberCell; a cleared field holds CLEARED_CELL (N92).
                             if (col.erasable) {
                                 const raw = r.values[col.key];
-                                const numVal = raw === undefined || raw === null ? null : Number(raw);
+                                const numVal = raw === undefined || raw === null ? null : raw === CLEARED_CELL ? CLEARED_CELL : Number(raw);
                                 return {
                                     type: 'custom',
                                     component: ErasableNumberCell,
@@ -229,7 +230,7 @@
                                         step: col.step ?? 0.0001,
                                         min: col.min,
                                         placeholder: col.placeholder ?? '',
-                                        onchange: (newValue: number | null) => handleCellEditByRowId(r.rowId, col.key, newValue),
+                                        onchange: (newValue: number | typeof CLEARED_CELL | null) => handleCellEditByRowId(r.rowId, col.key, newValue),
                                     },
                                 };
                             }
@@ -243,7 +244,8 @@
                                 onchange: (newValue) => handleCellEditByRowId(r.rowId, col.key, newValue),
                             };
                         },
-                        getValue: (r) => Number(r.values[col.key] ?? 0),
+                        // N92: an erased cell (CLEARED_CELL) sorts and filters as an empty one, as it is once saved
+                        getValue: (r) => (r.values[col.key] === CLEARED_CELL ? 0 : Number(r.values[col.key] ?? 0)),
                         sortable: true,
                         filterable: true,
                         width: 140,

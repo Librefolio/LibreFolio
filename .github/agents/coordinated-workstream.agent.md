@@ -226,7 +226,13 @@ Typical shared surfaces:
 - i18n catalogues;
 - MkDocs navigation;
 - layout/sidebar/About;
-- master feedback plans.
+- master feedback plans;
+- the release's single Alembic migration.
+
+**One release, one Alembic migration** (developer decision, 19/10/2026). A schema change goes into
+the release's single migration file (for example `005_release_1_3_0_schema.py`): edit that file, as
+its assigned writer, and never create a new revision. If you are not the assigned writer, ask the
+coordinator before touching the schema.
 
 ## Tests and specialist ownership
 

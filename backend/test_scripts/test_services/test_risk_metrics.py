@@ -7,6 +7,7 @@ from datetime import date, timedelta
 
 import pytest
 
+from backend.app.services.financial_math.returns import calendar_days_to_observations
 from backend.app.services.risk import metrics as risk_metrics_module
 from backend.app.services.risk.metrics import (
     annualized_expected_return,
@@ -483,8 +484,7 @@ def test_drawdown_episodes_requires_at_least_one_return():
 
 # One conversion from calendar days to the observations a series holds, shared by the VaR horizons,
 # the simulation's drift and block guard and the resampler's steps, blocks and regimes (developer's
-# decision of 30/09/2026). Read from the module when the test runs, so that until it exists each pin
-# fails on its own instead of breaking the collection of the whole risk suite.
+# decision of 30/09/2026). Its home is financial_math/returns.py since J-1, beside its inverse.
 
 
 @pytest.mark.parametrize(
@@ -499,7 +499,7 @@ def test_drawdown_episodes_requires_at_least_one_return():
     ],
 )
 def test_calendar_days_convert_to_the_observations_a_series_holds(calendar_days, per_year, observations):
-    converted = risk_metrics_module.calendar_days_to_observations(calendar_days, per_year)
+    converted = calendar_days_to_observations(calendar_days, per_year)
 
     assert converted == observations
     assert isinstance(converted, int)
