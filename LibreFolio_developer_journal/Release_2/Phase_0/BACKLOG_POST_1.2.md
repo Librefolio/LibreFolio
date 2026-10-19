@@ -4128,7 +4128,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
   Dettagli: piano H, §14, lotto «H-42».
   Chiusa il 17/10 (riconciliazione del 17/10): `7903bbe72`, `84c71a0c7`, `fb8661dd2`, entrati in dev `3b0af4094`.
-- **H-43 · Una corsia di test con il profilo managed, per gli E2E del cloud** — basso, runner; H (analisi di H-42),
+- ✅ **H-43 · Una corsia di test con il profilo managed, per gli E2E del cloud** — basso, runner; H (analisi di H-42),
   17/10.
   - `configure_test_runtime` toglie a ogni corsia ogni `LIBREFOLIO_*` dello sviluppatore, e un run ha un solo backend
     condiviso: oggi nessun E2E può girare con il profilo managed, o con la protezione dai frame accesa, e un header
@@ -4156,6 +4156,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     avesse bisogno vorrebbe lo stesso filtro in `_consolidate_backend.py` e nel passo parallelo.
 
   Dettagli: piano H, §14, lotto «H-42», analisi punto 4.
+  Chiusa il 17/10 (riconciliazione del 19/10): `cd04b17b0`, `11d0bce48`, entrati in dev `d3212e9f2`; `3b01fff93`, in dev
+  `a6adb0066`. La fase 2 (una volta, nel cancello della release candidate) resta al coordinatore.
 - **H-44 · Il ripiego dell'anteprima PDF probabilmente scarica il file invece di mostrarlo** — basso, file; trovato nel
   lotto H-42 (dal docs-writer), via coordinatore, 17/10. Il proprietario lo assegna il coordinatore al prossimo treno.
   - Quando il visore EmbedPDF fallisce, `FilePreviewModal.svelte` mostra il PDF in un `<iframe>` su
@@ -4245,6 +4247,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     - l'opzione spenta, che si comporta come oggi.
 
   Dettagli: questa riga; la guardia di B in B-38.
+  ✅ **Il disegno è entrato** il 17/10 (riconciliazione del 19/10): `cd0e21548`, in dev `13b6cfde1`. Il codice
+  (`regular_only`, `no_links_under`) resta aperto, dopo la 1.3.
 - **H-48 · `env_url` toglie la barra finale anche ai link di una pagina** — basso; H (review di A9), via coordinatore,
   17/10. Da fare con H-47 (stesso file, `config/__init__.py`), altrimenti dopo la 1.3.
   - `env_url` toglie una barra finale perché a `LIBREFOLIO_PUBLIC_URL` si attacca un percorso. Gli altri suoi
@@ -4300,7 +4304,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     OK, o lo fa X.
 
   Dettagli: questa riga.
-- **H-51 · Il motore del server vivo tiene `trusted_schema` acceso, con il `regexp` e il `floor` Python di SQLAlchemy**
+- ✅ **H-51 · Il motore del server vivo tiene `trusted_schema` acceso, con il `regexp` e il `floor` Python di SQLAlchemy**
   — basso, sicurezza; H (review di B-36/B-37), deciso dal coordinatore il 17/10. Da fare dopo W-B75, nella 1.3.
   - SQLAlchemy 2.0.52 (dialetto pysqlite, ereditato da aiosqlite) registra `regexp` e `floor` in Python su ogni
     connessione. `trusted_schema` vale 1 di default.
@@ -4329,7 +4333,9 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - La frase di B-18 in `security.md` è riscritta, insieme alla doc dei motori.
   - Test: `db session-pragmas` (15).
   Dettagli: piano H, §14, «Review di B-36/B-37» e il lotto H-51.
-- **H-52 · Gli script inline di `index.html` nella CSP per hash (D4 di H-43)** — basso, sicurezza; H, deciso dal
+  Chiusa il 17/10 (riconciliazione del 19/10): `bb2ba3e26`, `df34b9f4b`, `2def8f7db`, entrati in dev `70ab2fcc6`
+  (CHANGELOG `6aa42af1a`).
+- ✅ **H-52 · Gli script inline di `index.html` nella CSP per hash (D4 di H-43)** — basso, sicurezza; H, deciso dal
   coordinatore il 17/10 (D4): un lotto H dopo la fase 1 di H-43, nella 1.3 se c'è tempo.
   - Oggi `CSP_REPORT_ONLY_POLICY` (`security_headers.py`) ha `script-src 'self' 'wasm-unsafe-eval'`. I due script
     inline dell'`index.html` costruito (l'anti-FOUC di `app.html`, 1459 caratteri, e il bootstrap di SvelteKit, 373)
@@ -4357,6 +4363,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     csp-collector` 12 + 1 skipped su entrambe le corsie; cloud smoke nello slot.
 
   Dettagli: piano H, §14, lotto «H-43, fase 1», decisioni D4 e passo 4 (F1); lotto «H-52».
+  Chiusa il 17/10 (riconciliazione del 19/10): `aaea0824b`, `cfb59de97`, `70da097fb`, entrati in dev `ca7ba117c`
+  (CHANGELOG `1ec74c8e5`).
 - **H-53 · La sonda dell'indirizzo di un link, con una `connect-src` applicata (F3 di H-43, metà sicurezza)** — basso,
   sicurezza; trovato dal primo cloud smoke, deciso dal coordinatore il 17/10. La metà dell'esperienza è di A.
   - Il controllo dell'indirizzo di un link (Impostazioni › Utenti) prende `<indirizzo scritto dall'admin>/api/v1/auth/
@@ -4368,7 +4376,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura, quando la CSP si applica: l'origine pubblica configurata in `connect-src`, oppure la sonda dal server.
 
   Dettagli: piano H, §14, lotto «H-43, fase 1», passo 4 (F3).
-- **H-54 · Il controllo della build vecchia non vede un file tolto da `frontend/src/` o da `frontend/static/`** —
+- ✅ **H-54 · Il controllo della build vecchia non vede un file tolto da `frontend/src/` o da `frontend/static/`** —
   minimo, strumenti; trovato da test-author nel lotto H-52, 17/10.
   - `check_frontend_needs_build()` confronta le date dei file che esistono. Le date delle cartelle non contano (un
     `.DS_Store` le muoverebbe), quindi un file cancellato dopo la build resta nella build, che sembra fresca. Solo gli
@@ -4385,6 +4393,72 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     ricostruzione, una volta sola.
   - Provato dal vivo: dopo la build, l'impronta registrata e quella attuale sono uguali e non si ricostruisce più.
   - Test: `utils runtime-isolation` 454 (+67).
+  Chiusa il 17/10 (riconciliazione del 19/10): `14a723dc6`, `cb037b0e0`, entrati in dev `d6c252ec4`.
+- **H-55 · La CSP applicata: `LIBREFOLIO_CSP_ENFORCE`** — medio-basso, sicurezza; H, dopo H-52, con le decisioni
+  E1–E6 del coordinatore del 17/10. **Sospesa il 19/10**: è tra gli ampliamenti della 1.3 che il developer sta
+  leggendo, con l'interruttore e il suo default.
+  - Oggi la CSP del profilo managed solo segnala (H-52). Con l'interruttore acceso, le pagine della web app avrebbero
+    in più una policy applicata: quella report-only con gli hash, senza `frame-ancestors`, perché i frame restano a
+    `LIBREFOLIO_FRAME_PROTECTION`. È spento ovunque per default. La proposta per il managed: acceso dopo un cloud
+    smoke verde con la policy applicata.
+  - Le decisioni del coordinatore:
+    - F1 (cheetah-grid) resta un'eccezione documentata; la trasformazione in Vite viene dopo la 1.3;
+    - l'origine di `LIBREFOLIO_PUBLIC_URL` va in `connect-src` (con A per AUSR-E-07, dopo A-57);
+    - gli hash si leggono solo all'avvio;
+    - nessun endpoint di segnalazione;
+    - `api.github.com` resta ammesso finché il controllo degli aggiornamenti è acceso.
+  - Fatti l'analisi e i rossi, mai eseguiti. I rossi sono parcheggiati come patch nella cartella della sessione H
+    (`files/parked/h55-csp-enforce-reds-on-d6c252ec4.patch`), e il worktree è tornato al commit.
+  - Alla ripresa, prima della cura:
+    - il rifiuto di `--coverage` sulla corsia che applica (scelta 4) poggia su una premessa sbagliata: istanbul legge
+      `globalThis` e non fa `new Function`. Va riproposto;
+    - un `LIBREFOLIO_PUBLIC_URL` non valido va gestito. Proposta: scriverlo nel log e non aggiungere nessuna origine.
+
+  Dettagli: piano H, §14, lotto «H-55», note «Sospeso» e «Fuori pista».
+- **H-56 · Allo spegnimento nessun passo aspetta o ferma i compiti in background dell'avvio** — basso; E (nota su
+  E-19a), via coordinatore, 17/10. Dopo la 1.3, insieme allo spegnimento di Z.
+  - `app_lifespan.py` tiene in `_background_tasks` questi compiti, e nessun passo dello spegnimento li cancella o li
+    aspetta:
+    - il prewarm dei provider;
+    - quello delle festività di mercato;
+    - l'audit delle valute salvate (E-19a, in un thread);
+    - il prewarm del pool BRIM, se acceso (in un thread).
+  - Alla chiusura del ciclo di eventi Python 3.13 cancella i compiti rimasti, poi aspetta i thread dell'executor di
+    default fino a 300 s (`shutdown_default_executor`). Uno stop subito dopo l'avvio aspetta quindi i thread ancora al
+    lavoro. L'audit legge e basta (circa 1,6 s a 3 milioni di prezzi), quindi interromperlo non fa danni.
+  Dettagli: questa riga.
+- **H-57 · Le migrazioni della 1.3 in una sola, `005_release_1_3_0_schema`, e 13 indici inutili tolti** — medio,
+  schema; il developer, via coordinatore, 19/10 (variante V4: la 010 fuori, gli indici tolti nella 005). Fatto il
+  19/10. `all-backend`: 28 771 passati; i 10 falliti sono rossi della base, non di H-57 (H-59 e altri, riprodotti su
+  `HEAD` pulito). In attesa del treno con Z-33r e Z-32cr (produzione del developer ferma prima).
+  - Una sola revisione al posto di 005–010, uguale allo schema che lasciava la catena (istantanea congelata, test);
+    i 13 indici via con `DROP INDEX IF EXISTS`, modelli allineati, guardia `test_no_redundant_indexes` in
+    `db validate`; la regola nelle istruzioni del DB, nello skill `devpy-server` e in `patterns/alembic.md`.
+  - Un DB a una revisione ritirata (011 o 010) si porta avanti a mano, con la procedura V4 del piano H (provata
+    sulla 005 definitiva). Il server non parte su quelle revisioni e il ripristino le rifiuta, per scelta.
+
+  Dettagli: piano H, §14, lotto «H-57».
+- **H-58 · Due lacune vecchie della doc del DB, viste in H-57** — basso, doc; docs-writer di H-57, 19/10.
+  - `patterns/alembic.md`, «SQLite and Alembic Limitations»: presenta il batch mode senza l'avvertenza su
+    `PRAGMA foreign_keys=ON` (ricostruire una tabella fa scattare gli `ON DELETE` delle tabelle figlie), che la
+    docstring della 005 spiega; l'esempio del `CHECK` usa `op.batch_alter_table`.
+  - `database/assets_pricing.md:63`: «(`identifier_isin`, `identifier_ticker`, …) are indexed», ma solo quelle due
+    colonne hanno un indice.
+
+  Dettagli: questa riga.
+- **H-59 · I sostituti di `configure_test_runtime` nei test non accettano `lane_settings` (rossi della base da H-43)**
+  — medio, test rossi in `dev_release2`; trovato da `all-backend` di H-57, 19/10. Proposta mandata al coordinatore.
+  - H-43 (`cd04b17b0`) fa passare sempre `lane_settings=` da `cmd_server` a `configure_test_runtime`. Le funzioni che
+    nei test ne fanno le veci accettano solo `port` e `data_dir`, quindi `TypeError` in 5 test:
+    `test_probe_rate_limit.py::test_lane_server_starts_with_the_probe_limit_off`, `test_dev_server_interrupt.py` (3)
+    e `test_dev_designer_lab_banner.py` (1, `[test-server]`).
+  - Cura: i sostituti accettano `lane_settings=None`, come la funzione vera (test-author). I 3 file non sono di H:
+    serve il via del coordinatore.
+  - Il via è arrivato il 19/10 e allarga il lotto: anche `LIBREFOLIO_DISABLE_WHATS_NEW` in `UNDOCUMENTED_ON_PURPOSE`
+    (D-A7) e `worker_exit_code` nelle attese di `test_tools_schemas.py` (J-19). EMF-009 è di E. **Fatto il 19/10**:
+    8 rossi → verdi, checkpoint inviato; il ✅ col commit va alla prossima riconciliazione.
+
+  Dettagli: piano H, §14, lotto «H-57», nota delle 14:20.
 
 ## A · Account e accessi (fase 01)
 
@@ -5792,6 +5866,18 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Se tornasse vivo, avrebbe il difetto: fonde il delta solo in `chartData`, poi la ricarica legge la cache, che non lo
     ha, e il grafico torna ai valori di prima.
   - Cura: togliere il ramo, come X-R68.
+
+- **X-R84 · Un chunk che non si carica dopo il login dà «500 Internal Error» e SvelteKit non riprova** — basso, **fuori
+  dal perimetro di X** (shell del frontend), da girare a chi la possiede; X, 19/10 (triage di un rosso E2E di N92).
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «N92 (i) con "clear"
+  — rossi, cura, verdi», parte «E2E».
+  - Osservato in `fx-data-editor.spec.ts`: dopo il login, la navigazione a `/dashboard` ha chiesto 47 dei 63 chunk.
+  - SvelteKit ha controllato `version.json` due volte, l'ha trovato uguale e ha mostrato la pagina d'errore, dove
+    l'utente resta finché non ricarica.
+  - Nessun errore del backend; rifatta da sola, la spec passa. Il guasto è del trasporto, ma la reazione dell'app è un
+    errore 500, non un nuovo tentativo.
+  - Strade possibili, da decidere: ricaricare una volta su un import dinamico fallito, oppure una pagina d'errore che
+    lo dice e offre di riprovare.
 
 ## W · Import e transazioni (fase 01)
 
@@ -7439,6 +7525,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   verdi con. Era: con la data UTC, la sera a ovest di Greenwich un periodo che finisce oggi sembrava passato (niente
   prezzo dal vivo), e subito dopo mezzanotte a est un periodo finito ieri sembrava vivo e interrogava il fornitore.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto A».
+  - Prova (19/10): `a43502298` (lotto A), entrato in `0f55265a1`; CHANGELOG `ac9671fd3`.
 - **Z-4 · Risvegli orari per singolo titolo** — medio; Z, 14/10, dalla decisione D-19 del business plan. Serve un campo
   per asset; nella 1.3 c'è solo l'intraday globale, spento di default (D8). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «4. Decisioni».
@@ -7448,10 +7535,12 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   (`_history_sync_start` in `scheduler/jobs.py`); senza dati salvati resta l'orizzonte. Era: la finestra era sempre e
   solo l'orizzonte («Lookback horizon», 14 giorni di default), e chi restava indietro di più teneva il buco. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-5».
+  - Prova (19/10): `b36542f81`, entrato in `ebe9eb346`; CHANGELOG `7344dda47`.
 - ✅ **Z-6 · Il docstring dello scheduler dice che l'elezione del leader gira in un thread** — chiusa da Z3 il 15/10:
   `run_due_jobs` chiama `am_i_leader()`, `load_state` e `save_state` con `asyncio.to_thread`, e la docstring nuova lo
   dice. Era: `services/platform/scheduler/scheduler.py:108` chiamava `am_i_leader()` (psutil) sul loop. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z3 — scheduler».
+  - Prova (19/10): `a4da204b4` (con Z3).
 - **Z-7 · Calendario dei risvegli: prossima esecuzione per job, `next_wake_at` e jitter** — medio; developer, 15/10
   (decisione 33: «il next_wakeup per ora non serve [...] è una cosa per il futuro quando servirà»). Quando il pannello
   del cloud terrà un calendario: la prossima esecuzione di ogni job (con l'ora legale), `next_wake_at` nella risposta di
@@ -7464,6 +7553,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   controlla più il fornitore. Era: un asset manuale chiedeva `POST /assets/prices/current` ogni 30 s, e ogni risposta
   (solo il prezzo salvato) contava come scrittura del portafoglio.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto A».
+  - Prova (19/10): `a43502298` (lotto A), entrato in `0f55265a1`; CHANGELOG `ac9671fd3`.
 - ✅ **Z-9 · Doc delle pause dei fornitori** — basso; Z, 15/10 (Z7a). **Chiusa il 16/10 col lotto Z-9** (sola doc,
   dopo Z7c-1): la sezione `#provider-pauses` di `admin/sleep_wake.en.md` (durata, chi aspetta e cosa si vede, memoria
   e sospensione, log) e le due righe in `admin/configuration.en.md`; la parte di sviluppo l'aveva già scritta X
@@ -7474,6 +7564,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 
   Le variabili esistono da Z7a ma non hanno effetto finché X non aggancia il confine (X1–X4): la doc va scritta con
   l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-9».
+  - Prova (19/10): `467fbac05`, entrato in `dd4a97e01` (treno 105).
 - ✅ **Z-10 · Ctrl+C su `./dev.py server` uccide il server dopo 0,25 s** — basso; docs-writer di Z, 15/10 (Z6b).
   **Chiusa il 17/10 col lotto Z-10** (il commit è del coordinatore; via da scrittore su `cli_base.py`, `dev.py:448` e
   tre test di H e L). `dev.py server` lancia il server con `run_server_live` (`scripts/cli_base.py`):
@@ -7485,6 +7576,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   Era: con `subprocess.run` il server moriva di SIGKILL 0,25 s dopo il Ctrl+C, a metà del suo spegnimento (provato
   il 17/10 con un finto server: uscita a 0,29 s, server ucciso), e un SIGTERM a `dev.py` lasciava il server orfano.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-10».
+  - Prova (19/10): `1bd8dc332`, entrato in `a38d6bdfe`; CHANGELOG `75a1107a7`.
 - ✅ **Z-11 · Lock dei job tra processi (flock) per più worker** — basso; coordinatore, 15/10 (D-Z3-3). **Chiusa il
   17/10 col lotto Z-11** (il commit è del coordinatore; decisione notturna N71, da rivedere col developer).
   - Dove c'è `fcntl`, ogni giro prende `<data_dir>/.scheduler.lock` (`scheduler/run_lock.py`) prima di leggere lo
@@ -7495,12 +7587,14 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   `not_leader`, e la spinta del ritorno aspettava il giro del leader, entro 60 s. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra processi:
   analisi».
+  - Prova (19/10): `2db7edd68`, entrato in `c5e3c199d`; CHANGELOG `47405701f`.
 - ✅ **Z-12 · `admin/filesystem`: il commento di `scheduler_state.json`** — minimo, doc; docs-writer di Z, 16/10
   (Z7c-2). **Chiusa il 16/10 col lotto Z-12** (il commit è del coordinatore): nelle quattro lingue, a mano e senza
   stamp, il commento dice l'ultima esecuzione e il nuovo tentativo previsto («Scheduled syncs: last run, pending
   retry»); in `filesystem.es.md` ora è in spagnolo. Era: diceva solo «Last run of the scheduled syncs», mentre da Z7b il
   file tiene anche i rimandati, il nuovo tentativo e l'attesa dopo i fallimenti. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z7c-2», passo 4, e «Z-12».
+  - Prova (19/10): `f561aec07`, entrato in `ebe9eb346`.
 - ✅ **Z-13 · Dopo un recupero dei prezzi la pagina aperta non si ricarica da sola** — basso; docs-writer di Z, 16/10
   (Z5). **Chiusa il 16/10 col lotto Z-13** (commit `9d19c2093`; Z-13b, per il vincolo di Y11, nel checkpoint
   successivo): a fine recupero il frontend manda `{kind: 'prices'}` sul bus del portafoglio, e il Dashboard e la pagina
@@ -7510,6 +7604,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   alza solo un contatore non reattivo): la pagina già sullo schermo mostrava le cifre nuove al prossimo caricamento o
   con «Aggiorna». Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z5 —
   codice» e «Z-13».
+  - Prova (19/10): entrato in `12cd3c2e0` con Z5; Z-13b `f83ab0c5b`, entrato in `26dda1a26`.
 - ✅ **Z-14 · Le pagine di un asset e di un cambio non vedono un recupero dei prezzi** — basso; docs-writer di Z, 16/10
   (Z-13). **Chiusa il 17/10 col lotto Z-14** (il commit è del coordinatore): `TimeSeriesStore.markStale()` tiene i
   punti e fa chiedere di nuovo la lettura successiva, anche dove ci sono dati (le risposte riempiono all'indietro i
@@ -7518,6 +7613,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   un cambio d'intervallo, chiede di nuovo, una volta. Una pagina già aperta resta com'è: Z-14b. Era: un intervallo
   già caricato nella sessione tornava dalla cache finché non si premeva «Aggiorna» su quella pagina. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-14 — analisi».
+  - Prova (19/10): `1f4986c70`, entrato in `2765773f5`; CHANGELOG `6e02e56ec`.
 - **Z-14b · Una pagina dei prezzi o dei cambi aperta durante un recupero non si ricarica da sola** — basso, UX;
   Z, 17/10 (Z-14). Con Z-14 i negozi dei prezzi e dei cambi diventano stale su `{kind: 'prices'}` e la lettura
   successiva chiede di nuovo; ma una pagina già aperta (lista e dettaglio degli asset, lista e dettaglio dei cambi)
@@ -7528,6 +7624,8 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   negozio tiene. Decisione di UX del developer, fra le domande del mattino del coordinatore; il dettaglio asset è
   ora di Y. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-14 — analisi», punto B.
+  - Stato (19/10): piano pronto (piano 06, «Z-14b + Z-15 — piano per il mattino»), non partito: aspetta il sì del
+    developer.
 - **Z-15 · Dopo un recupero dei prezzi i pannelli di rischio e dei lotti restano indietro** — basso; coordinatore e Y,
   16/10 (Z-13b, vincolo Y11). La ricarica in background di Z-13 chiede di nuovo solo il report della pagina: non tocca
   `refreshVersion` né `requestPortfolioRefresh()`, che sono l'«Aggiorna» dell'utente e con Y11 farebbero girare
@@ -7535,6 +7633,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   finché non si ricaricano. Da decidere con Y dopo Y11: per esempio i pannelli si ricaricano da soli su
   `{kind: 'prices'}`, fuori da `pageBusy`. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-13», passo 6.
+  - Stato (19/10): con Z-14b, piano pronto e non partito: aspetta il sì del developer.
 - ✅ **Z-16 · `admin/filesystem`: l'albero tradotto è indietro** — minimo, traduzione; Z, 16/10 (Z-12). **Chiusa il
   17/10 a mano** (il commit è del coordinatore; via del 17/10 ~05:32, senza stamp): gli alberi IT, FR ed ES hanno le
   tre righe (`backups/`, `secrets/`, `instance.key`), con la colonna dei commenti allineata all'inglese, e i nove
@@ -7542,6 +7641,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   di Aphra è del 10/10): il prossimo giro lo chiude. Era: in `filesystem.es.md` nove commenti in inglese, e i tre
   alberi senza le tre righe aggiunte in inglese. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-16».
+  - Prova (19/10): `3d9b30433`, entrato in `737972ef5`.
 - ✅ **Z-17 · `developer/backend/scheduler.md`: «The backend does not validate these values»** — minimo, doc;
   docs-writer di Z, 16/10 (Z-5). **Chiusa il 16/10 col mini-lotto Z-17** (il commit è del coordinatore): la frase dice
   ora che `PATCH /api/v1/settings/global/bulk` controlla ogni valore con `validate_global_setting_value()` contro
@@ -7549,6 +7649,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   valori salvati prima del controllo o scritti a mano. Era: diceva che il backend non valida e che i limiti li fa
   rispettare solo il dialogo, falso da `84d9e3360` (9/10). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-17».
+  - Prova (19/10): `e6f152622`, entrato in `4f0a5d323`.
 - ✅ **Z-18 · Il Dashboard si dichiara «occupato» durante la ricarica dopo un recupero dei prezzi** — basso,
   accessibilità; Y tramite il coordinatore, 16/10 (Z-13, P3 di Y11). **Chiusa il 16/10 col lotto B** (il commit è del
   coordinatore): dopo un recupero il Dashboard ricarica con `loadAll(false, false, {background: true})`, che non accende
@@ -7558,6 +7659,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   i due casi «reload in background» di `page-busy.spec.ts` attendono ora la radice a `false`. Era: la radice passava
   a `aria-busy="true"` e un lettore di schermo annunciava «occupato» per un semplice aggiornamento dei prezzi.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto B».
+  - Prova (19/10): `1b46178bd` (lotto B), entrato in `30483ec38`; CHANGELOG `4e233fe5b`.
 - ✅ **Z-19 · N58: due funzioni di produzione che servono solo ai test** — basso; coordinatore (da H-22), 16/10.
   **Chiusa il 16/10 col lotto A** (il commit è del coordinatore): tolte `reset_provider_cooldowns()`,
   `reset_shutdown_budget_state()` e `Cooldowns.clear()`; i test mettono un `Cooldowns` nuovo al posto di
@@ -7565,6 +7667,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   SDB-032 tolto). `Cooldowns.reset(key)` resta, eccezione di N58 scritta nel docstring: nessun metodo pubblico dà a
   PCD-011 lo stesso stato pulito. `lint --dead-code` non segnala più le due funzioni.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto A», decisione N-ZA-6.
+  - Prova (19/10): `a43502298` (lotto A), entrato in `0f55265a1`.
 - ✅ **Z-20 · Disaccoppiare `zodios-client` dai moduli con le rune** — basso; coordinatore, 16/10 (riga J-26, assegnata
   a Z). **Chiusa il 17/10 col lotto Z-20** (il commit è del coordinatore; H e J hanno scelto): il client delle API e
   l'ingresso della sonda non importano più moduli con le rune. `instanceBlock` è diviso in `instanceBlockState.ts`
@@ -7575,12 +7678,14 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   tiene vero, da `$lib/api` e dall'ingresso della sonda. Era: dal 16/10 11:18 (Z5) il ponte moriva con
   `rune_outside_svelte`, e J l'aveva riparato compilando le rune (`985b10cbd`). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-20 — analisi».
+  - Prova (19/10): `3235837ad`, entrato in `3f654c4da`.
 - ✅ **Z-21 · N58: altre quattro funzioni di Z usate solo dai test** — basso; Z, 16/10 (lotto A, `lint --dead-code`).
   **Chiusa il 17/10 col lotto Z-21** (il commit è del coordinatore): tolte `cooldown_snapshot()`, la proprietà
   `ShutdownWatchdog.armed_at`, `current_shutdown_watchdog()` e `Activity.is_busy()`, con le due menzioni del runner. I
   test leggono l'istanza in uso, il `deadline`, `shutdown_budget._watchdog` e `busy_reasons()`; nessun caso tolto.
   `lint --dead-code` non le segnala più. Nata come Z-20, rinominata il 16/10 (il numero era già di J-26). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-21».
+  - Prova (19/10): `e05b231ff`, entrato in `ffd58ffbd`.
 - ✅ **Z-22 · `instanceBlock.svelte.ts`: un ascoltatore in più a ogni aggiornamento a caldo** — basso, solo sviluppo;
   H, 17/10 (revisione di Z-20). **Chiusa il 17/10 col lotto Z-22** (il commit è del coordinatore): ogni copia della
   faccia ferma la precedente passandosi la funzione per `import.meta.hot.data`; la build toglie il blocco. La riga
@@ -7589,6 +7694,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   passaggio sempre 1). Era: la faccia si iscriveva a `instanceBlockState` all'import, e a ogni aggiornamento a caldo
   del file la copia vecchia restava iscritta. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-22».
+  - Prova (19/10): `d49263b0e`, entrato in `22d46da6e`.
 - **Z-23 · Un aiuto comune per i lock su file (`flock`)** — basso, dopo la 1.3; Z, 17/10 (Z-11, N-Z11-4). Il modello
   «`LOCK_EX|LOCK_NB`, `O_NOFOLLOW`, `0o600`, ripiego per processo senza `fcntl`» è ora in cinque posti:
   `instance_backup/jobs.py` (`_RunLock`), `instance_backup/apply.py`, `db/post_migration`, `brim_provider.py` e
@@ -7617,6 +7723,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     (`#bulk-request-limits`).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-25 — un tetto alle
   richieste di massa di prezzi e cambi: analisi».
+  - Prova (19/10): `4b711e803`, entrato in `d0bc7a547`; CHANGELOG `282c583b5`.
 - ✅ **Z-26 · L'attesa del lock fra processi dello scheduler non ha un tempo massimo** — basso; E (R13-SEC8), via
   coordinatore, 17/10. **Chiusa il 17/10 col lotto Z-26** (il commit è del coordinatore; decisione notturna N79, da
   rivedere col developer).
@@ -7628,6 +7735,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   fermava i giri degli altri, e `wake-sync` rispondeva 409 a chi arrivava dopo. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-26 — l'attesa del lock fra
   processi senza tempo massimo: analisi».
+  - Prova (19/10): `e9999a11a`, entrato in `8c362c1f3`; CHANGELOG `8850fe814`.
 - ✅ **Z-27 · Il web app manda una pagina intera in una richiesta di massa (per Y e X)** — basso, dopo Z-25; Z, 17/10
   (Z-25, N77; via coordinatore).
   - La lista asset (`fetchAllPriceData` in `routes/(app)/assets/+page.svelte`) manda una voce per asset in un solo
@@ -7647,6 +7755,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-25 — un tetto alle
   richieste di massa di prezzi e cambi: analisi», «Z-27 — il web app e i tetti delle richieste di massa: analisi» e
   «Z-27 — le richieste di massa divise in lotti: lavoro».
+  - Prova (19/10): `8d236fa11`, entrato in `726d90d72`; CHANGELOG `f1786a883`.
 - **Z-29 · Una scheda della lista asset carica lo storico giornaliero intero** — **alto** (coordinatore, 17/10, da
   R13-SEC9-2 di E: «it's the real cure, post-1.3»), progetto, dopo la 1.3; Z, 17/10 (dall'analisi di Z-27).
   - Su «All» la lista chiede per ogni asset tutti i giorni dal 2000 (~9 800 punti): 300 asset sono ~2,9 milioni di
@@ -7659,6 +7768,9 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     backend, Z-29b lista (X). In attesa della decisione.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-27 — il web app e i tetti
   delle richieste di massa: analisi» e «Z-29 — una scheda della lista asset e lo storico intero: analisi».
+  - Stato (19/10): analisi fatta e (A) approvata (N90, 17/10); Z-29a sospesa il 19/10 con gli ampliamenti che il
+    developer sta leggendo. I rossi scritti sono parcheggiati come patch nella cartella di sessione di Z
+    (`files/parked/`).
 - ✅ **Z-28 · Due file di lock aperti con `open()`, che segue un symlink** — basso, sicurezza; Z, 17/10
   (dall'analisi di Z-23; via coordinatore, che l'ha assegnata). **Chiusa il 17/10 col lotto Z-28** (il commit è del
   coordinatore).
@@ -7669,6 +7781,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     Revisori: W (BRIM) e H (post-migrazione).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-28 — due file di lock
   aperti con `open()`».
+  - Prova (19/10): `3a3d5ab1c`, entrato in `2b9786ae5`; CHANGELOG `11a6f4ea1`.
 - ✅ **Z-30 · Le righe di prezzi e cambi già salvate prima del 1900** — basso; coordinatore, 17/10 (X-R65, decisione
   D3). **Chiusa il 17/10 col lotto Z-30** (decisione: strada (a); il commit è del coordinatore; revisore MF).
   - Da X-R65 (N83) le scritture le rifiutano, ma una riga già nel database resta: il riempimento dei prezzi parte dal
@@ -7680,6 +7793,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     ~740 000. I riscaldamenti finiti restano com'erano. I cambi non camminano dalla prima riga: fuori.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «X-R65 (N83) — date assurde
   nelle scritture manuali di prezzi e cambi: analisi» e «Z-30 — le righe salvate prima del 1900: lavoro».
+  - Prova (19/10): `501375cdc`, entrato in `fb514073b`; CHANGELOG `93065bc7c`; seguito `06ec7d443` in `80cef0e43`.
 - **Z-31 · La query dei prezzi non limita l'inizio visibile** — basso, residuo di Z-30, **dopo la 1.3**
   (coordinatore, 17/10); Z, 17/10 (nota di test-author).
   - `get_prices_bulk` taglia solo la fine (`latest_range_end()`). Un intervallo chiesto a mano prima del 1900 su un
@@ -7703,6 +7817,15 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     di qualità dei dati. Parere: (c) nella 1.3 se serve, (b) dopo.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «GBp — i dividendi Yahoo e
   `quote_base_quantity`: verifica».
+  - Stato (19/10): (c) ✅ `aa9e07544`, entrato in `46ea09b02`, CHANGELOG `22b9b90ce`; (a) e (b) restano per dopo la 1.3.
+    La migrazione 010 di (c) è in discussione: piano 06, sezione «Z-33 ridotta».
+  - **(c) tolta il 19/10** (Z-32cr; D8 del developer, testuale: «nessuna colonna nel db, sono certo»): via la colonna
+    dal modello, la scrittura nel refresh, `QUOTE_IN_MINOR_UNIT`, la chiave i18n, la doc e i test; la migrazione 010 e
+    il suo test li sostituisce H con la 005 unica. Restano `utils/currency_units.py` (lo legge `NON_ISO_CURRENCY` di
+    E-19b2) e la valuta grezza della storia (`GBp`). Dettagli: piano 06, sezione «Z-32cr».
+  - **(d) la base suggerita dal plugin** alla creazione (D8, testuale: «pre-popoliamo il campo della quantità base a
+    100, potremmo farlo anche se il plugin ce lo suggerisce»): analisi breve consegnata il 19/10, in attesa del via e
+    delle risposte Q-Q1…Q4. Dettagli: piano 06, sezione «Z-32 (d)».
 - ✅ **Z-33 · I prezzi Yahoo delle borse a est di UTC salvati un giorno prima** — **alto**, dati; Z, 17/10 (trovato da
   test-author scrivendo la guardia di Z-32, confermato da Z e dal coordinatore). Proprietario Z; X rivede il plugin.
   Nella 1.3, subito dopo il checkpoint di Z-32 (c).
@@ -7718,7 +7841,15 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     corrente. **Chiusa il 17/10 col lotto Z-33** (il commit è del coordinatore; revisori X, H, MF, W).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-33 — … analisi» e
   «Z-33 — … lavoro».
-- **Z-36 · `tzdata` da PyPI: un server senza database dei fusi non risolve il fuso della borsa** — basso, ambiente,
+  - Prova (19/10): `60170aae5`, entrato in `51b5c8db1`; CHANGELOG `b8bcc8cd2`; seguiti `79265b1a0` (dev `e20055213`) e
+    `b5da2277d` (dev `d01a13b10`); devWiki `f74229303`. **19/10: riduzione decisa dal developer** (solo la correzione
+    del plugin, niente riparazione né colonne): analisi «Z-33 ridotta» nel piano 06; finché non entra, la riparazione
+    resta nel codice.
+  - Z-33r (19/10, via del coordinatore): tolte la riparazione (passo 0 e controllo D″ nel refresh, aiuti di
+    ridatazione), la colonna `exchange_timezone`, il segno e la migrazione 011; resta la correzione del plugin. Guida
+    per i DB già alla 011: piano 06, sezione «Z-33r».
+- **Z-36 · `tzdata` da PyPI: un server senza database dei fusi non risolve il fuso della borsa** — minimo (era basso
+  fino a Z-33r), ambiente,
   **domanda per lo sviluppatore**; Z, 17/10 (dalla revisione di H a Z-33, archiviato su richiesta del coordinatore).
   - Su un host senza database dei fusi (Windows fuori da Docker, un container minimo) o con un nome che tzdata non ha,
     `exchange_zone()` dà None: un'assegnazione Yahoo ancora segnata dalla migrazione 011 non scrive nulla a ogni giro.
@@ -7728,6 +7859,9 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     decisione dello sviluppatore. Nota (docs-writer, 17/10): pandas 3.0.5 dichiara `tzdata` per `win32`, ma il
     `Pipfile.lock`, risolto su macOS, non lo porta: su Windows c'è o no a seconda di come si è installato.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro», passo 12.
+  - Stato (19/10): con la riduzione di Z-33 resta solo la data del valore corrente (in UTC senza fusi); vedi l'analisi
+    «Z-33 ridotta» e la P-4 del coordinatore (`tzdata` nell'immagine). Con Z-33r l'avviso sta nel plugin
+    (`_exchange_zone`) e dice che il valore corrente è datato in UTC.
 - **Z-35 · Le chiusure Yahoo salvate con la rettifica del giorno in cui sono state lette** — medio, dati, **dopo la
   1.3**, decisione dello sviluppatore; proprietari X e MF; Z, 17/10 (trovato nell'analisi di Z-33, archiviato dal
   coordinatore).
@@ -7737,14 +7871,17 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   - Le metriche di rendimento possono contare due volte i dividendi: già nei prezzi rettificati e negli eventi.
   - Da decidere: `auto_adjust=False` (prezzi di borsa veri, split a parte) e la riscrittura della storia.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro».
-- **Z-34 · Il rapporto (C) delle righe Yahoo rimaste spostate** — basso, dati, **dopo la 1.3**; Z, 17/10 (decisione
-  N86, D4).
+- ✅ **Z-34 · Il rapporto (C) delle righe Yahoo rimaste spostate** — basso, dati, **dopo la 1.3**; Z, 17/10 (decisione
+  N86, D4). **Chiusa il 19/10 come superata** (D7, via del coordinatore): con Z-33r non c'è più riparazione, tutte le
+  righe salvate prima restano spostate per decisione del developer, e un rapporto non ha più oggetto.
   - La ridatazione di Z-33 avviene al primo giro di ogni assegnazione yfinance segnata dalla migrazione 011. Restano
     spostate le righe degli asset la cui assegnazione yfinance è stata tolta prima dell'aggiornamento, o prima del
     suo primo giro dopo; e quelle di un cambio di identificativo fra fusi di segno diverso prima di quel giro.
   - Proposta: un comando che le elenca (asset, righe `yfinance` senza assegnazione o col segno ancora presente,
     domeniche senza sabati come indizio) e, con la rete, le ridata con la stessa regola.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro».
+  - Stato (19/10): con la riduzione di Z-33 (nessuna riparazione) il rapporto perde il suo oggetto; chiuderla o tenerla
+    è una domanda nell'analisi «Z-33 ridotta».
 
 ## B · Backup e Docker (fase 01)
 
@@ -8348,7 +8485,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   Dettagli: piano 08, «E2.4».
   - 16/10, E: chiusa, con il via del coordinatore e di A (il file è di A). Le quattro righe ora usano
     `status.HTTP_422_UNPROCESSABLE_CONTENT`, con lo stesso codice 422 e senza avviso. In `backend/` non resta nessun
-    `HTTP_422_UNPROCESSABLE_ENTITY`. Dettagli: piano 08, «E6.12».
+    `HTTP_422_UNPROCESSABLE_ENTITY`. Dettagli: piano 08, «E6.12». In `dev_release2` col merge `07700355f`.
 - ✅ **E-5 · `api sync` non sfugge i backtick delle descrizioni su più righe** — piccolo; E, 15/10 (E2b).
   `openapi-zod-client` scrive una descrizione di più righe come template literal JavaScript senza sfuggire i
   backtick: una docstring di schema su più righe con ``` ``codice`` ``` rompe `generated.ts` al caricamento
@@ -8391,12 +8528,14 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
       risposta.
     - **Parte 2**, dopo A8b: i percorsi «Settings › Administration › Email». Sono 8 valori i18n più circa 15 righe;
       A8b aveva già allineato il resto.
-    - Commit: la parte 1 fino a `443eda316`, la parte 2 al checkpoint. Dettagli: piano 08, da «E-8.2» a «E-8.4».
+    - Commit: la parte 1 fino a `443eda316`, la parte 2 fino a `73decbb99`; tutte e due in `dev_release2` col merge
+      `2aab994b8` (CHANGELOG `231566116`). Dettagli: piano 08, da «E-8.2» a «E-8.4».
   - 17/10, E: dopo l'ingresso, il gate G del coordinatore (dev `91f4de9cb`) ha trovato due rossi Vitest di E.
     - ETX-14 si aspettava ancora solo `{to}` in «sent».
     - Il mock di `$lib/i18n` di `linkShareRegistration.test.ts` non dava `DEFAULT_LOCALE` allo store della lingua, che
       il barile delle select carica.
-    - Curati nei soli test (E-8.5); tutta la cartella `features/email` è verde. Dettagli: piano 08, «E-8.5».
+    - Curati nei soli test (E-8.5); tutta la cartella `features/email` è verde. Dettagli: piano 08, «E-8.5». In
+      `dev_release2` col merge `b49a2a716`.
 - ✅ **E-9 · I limiti per casella non vedono gli alias (`+tag`, i punti di Gmail)** — piccolo; E, 16/10 (revisione di
   sicurezza finale, nota sotto la soglia). `strip().casefold()` fa di `victim+1@…` e `victim+2@…` caselle diverse:
   con la registrazione aperta si può puntare il budget orario dell'istanza su una casella sola, e ogni email porta lo
@@ -8473,7 +8612,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - Il caso migliore per l'attaccante costa ora circa 10 000 richieste per tentativo, e nessuno spruzzo libera una
       chiave più pesante.
     - I docs «310 contro 100 000» sono corretti.
-    - Commit al checkpoint di E-14.
+    - In `dev_release2` col merge `70dccc16f` (CHANGELOG `c2b4ec20e`).
 - ✅ **E-15 · Nei run combinati il limite dei login si accende da solo, e i test di E vanno rossi** — piccolo; E, 17/10
   (triage dell'`all-backend` di W, coordinatore).
   - `conftest.py` mette `LIBREFOLIO_LOGIN_LIMIT=off` una volta sola, all'avvio.
@@ -8491,14 +8630,15 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - `security.md` è allineato.
     - Prova: il modulo più un modulo che configura la corsia, prima 21 rossi, ora 179 verdi. Tutti i 13 moduli di E in
       un processo: 1 453 verdi.
-    - Commit al checkpoint di E-15.
+    - In `dev_release2` col merge `da02ed816`.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-15».
 - ✅ **E-16 · Le due frasi di E sulla «password dimenticata» non dicono la richiesta della configurazione fallita** —
   minimo (doc, solo inglese); E, 17/10 (seguito della revisione di A9 e di FPM-08 di A, `d04ffde90`).
   - `admin/email.en.md` e `developer/backend/email.md` descrivono self-hosted e managed, non il caso in cui
     `GET /system/instance` fallisce: lì la scheda mostra solo «Ask your administrator…», in tutti e due i profili.
   - Una frase per pagina. Nessuna decisione.
-  - 17/10, E: fatta (via del coordinatore, 12:22). Build stretta e `check-links` puliti. Commit al checkpoint di E-16.
+  - 17/10, E: fatta (via del coordinatore, 12:22). Build stretta e `check-links` puliti. In `dev_release2` col merge
+    `ac3c03177`.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-16».
 - ✅ **E-17 · Due errori di `tsc -p frontend/tsconfig.e2e.json`** — piccolo (test e configurazione); coordinatore, 17/10.
   - `onboarding-tour.spec.ts:863`: la lista dei passi è tipizzata dalle opzioni di `expectGuideStep`. Dietro c'era
@@ -8506,7 +8646,8 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - `tsconfig.e2e.json`: la mappa `$lib`.
   - Nessun cambio a runtime, `tsc` senza i due errori, Prettier pulito.
   - Restano 3 TS2769 di C-66 (`c18517e31`): l'allargamento di E-2 contro `isStoredPoint`, di un ramo attivo.
-  - Commit al checkpoint di E-17. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-17».
+  - In `dev_release2` col merge `fc979d0b4`. Dettagli:
+    [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-17».
 - ✅ **E-18 · Codici di valuta stretti sulle scritture (MF-SEC9b)** — piccolo; coordinatore, 17/10 (analisi di E, 13:2x).
   - `Currency.validate_code` accetta nomi e numeri (`EURO`, `978`, `US DOLLAR`) e li salva così, senza
     canonicalizzarli; nelle transazioni senza limite di lunghezza.
@@ -8521,7 +8662,8 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - Prova: 17 selettori, 3 674 verdi, 0 rossi; build stretta e `check-links` puliti.
     - Restano fuori, aperti: l'avviso di qualità dei dati; il gap-fix del BRIM che costruisce `TXCreateItem` senza
       prendere l'errore (oggi irraggiungibile).
-    - Commit al checkpoint di E-18.
+    - Commit `ed8b3c28e` (codice), `601b3714b` (docs), `c6a996275` (journal); in `dev_release2` col merge
+      `73366626e` (CHANGELOG `e743fc6a3`).
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «MF-SEC9b» ed «E-18».
 - **E-19 · L'avviso dei codici di valuta non ISO salvati** — medio-piccolo (avviso), medio (correzione); coordinatore,
   17/10 (seguito di E-18).
@@ -8546,7 +8688,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - `stored_currencies.py`: 14 posti, l'avviso d'avvio e `dev.py db currencies`.
     - La guardia del gap-fix (W rivede) e il passo d'avvio (H rivede).
     - 14 suite, 3 800 verdi; OpenAPI identico; build stretta e `check-links` puliti.
-    - Commit al checkpoint di E-19a.
+    - In `dev_release2` col merge `c7c6f94f0` (CHANGELOG `e98934eed`); il fix-forward col merge `09fe3f470`.
   - Resta **E-19b**: `IssueCode.NON_ISO_CURRENCY` al posto di `MISSING_FX_*`, il banner senza bottone, il selettore
     col valore salvato, l'avviso del ripristino (via di B), i18n nelle 4 lingue, `api sync`.
   - 17/10, E: **E-19b1** (il selettore, l'endpoint `suggest`, l'avviso `non_iso_currencies` del ripristino): parte 1 nel
@@ -8556,6 +8698,12 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     lettura, l'audit d'avvio in background dopo `plugin-secrets-check`). **E-19b2 fatto** (rossi `0e787dfb4`, codice al
     checkpoint): una voce `NON_ISO_CURRENCY` per valore salvato, senza CTA fino a D1/D2, e `MISSING_FX_*` senza le
     coppie con un lato non ISO. Resta di E-19 solo la correzione (D1/D2, dallo sviluppatore) ed E-20.
+  - ✅ 19/10, contabilità: l'avviso è entrato tutto in `dev_release2`.
+    - E-19a: merge `c7c6f94f0` (CHANGELOG `e98934eed`), col fix-forward `09fe3f470`.
+    - E-19b1: merge `1742aaaaa` (CHANGELOG `2fbbf4c4c`).
+    - Le due LOW di H su E-19a: merge `0897502a9`.
+    - E-19b2: merge `b878f043c` (CHANGELOG `9e6faacf4`).
+    - La voce resta aperta per la correzione, D1/D2, che sono dello sviluppatore.
   - Per D1, se si sceglie C: la rietichettatura automatica deve escludere anche `GBp`, non solo GBX/ZAC/ILA.
   - ✅ Il pezzo di J: la guardia di `Intl` in `riskAnalysisHelpers.ts:168`, entrata in dev `b13ed7944` (CHANGELOG
     `826f99f17`).
@@ -8584,6 +8732,24 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     quattro posti) e poi, con ogni probabilità, fa fallire le letture del server di quelle righe (pysqlite alza al
     `fetch`, come prova la barriera di SCA-036; non misurato sul server). Segnalato al coordinatore.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19b1.3».
+- **E-21 · Le frasi `BRIMParseError` dei plugin arrivano in inglese, dentro la cornice tradotta** — medio, chiarezza;
+  coordinatore, 17/10 (decisione (c) di C-70b). Da C-70b il 400 del parse è `parse_failed`, con una cornice tradotta
+  («Il plugin X non ha potuto leggere Y: …»), ma il motivo resta la frase inglese del plugin: circa 60 `raise
+  BRIMParseError(...)` in più di 30 plugin (`backend/app/services/brim_providers/*/plugin.py`). La cura, nello stile di
+  K2a: un codice e un contesto per ogni causa che l'utente può correggere (`BRIMParseError(message, details={"code": …,
+  "context": …})`, o un campo dedicato), tradotti in `importWizard.parseRefusal.<code>` dove lo dice la regola R1, e il
+  risolutore di C-70b che li preferisce alla frase. Dopo la 1.3; W rivede. Dettagli: piano 08, «C-70b».
+- **E-22 · A ogni risveglio un'istanza gestita rifà la scansione delle valute salvate** — piccolo, prestazioni; H,
+  17/10 (revisione del seguito di E-19a, riferita dal coordinatore). Un'idea per dopo la 1.3: aperta, nessuna
+  decisione.
+  - Il passo d'avvio `stored-currencies` rifà l'audit di `stored_currencies.py` a ogni avvio, quindi a ogni risveglio
+    di un'istanza gestita che si sospende. Da E-19a.4 gira in background, ma resta un picco di CPU e I/O accanto alle
+    prime richieste: 0,6 s a un milione di righe di prezzi, 1,6 s a tre milioni (misure sintetiche di E-19a.4).
+  - Dalla 1.3 le scritture rifiutano i codici non ISO: solo un aggiornamento o un ripristino possono riportarne, a
+    parte una modifica a mano del database.
+  - L'idea di H: un piccolo segno nella cartella dei dati, legato alla versione dell'app e alla testa di alembic e
+    cancellato dal commit di un ripristino, con cui i risvegli normali saltano la scansione.
+  - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19a.4».
 
 ## Y · Cruscotto e grafici (fase 01)
 
