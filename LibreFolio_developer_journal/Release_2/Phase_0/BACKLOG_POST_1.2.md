@@ -8495,6 +8495,25 @@ sulla base `23f6578f3`.
     `get_job` (job non trovato, o fallito).
   - B-8 ha già allineato `_running_job` agli altri lettori (`TypeError` e `KeyError`): un 409 non diventa un 500.
   Dettagli: piano 07, «B-15 + B-8 — la ripresa».
+- **B-51 · La colonna «⚠️» dei risultati di una lettura conta anche le note** — minimo, chiarezza; B, 19/10 (revisione
+  di N74; area di W). Precedente a N74.
+  - Nella tabella del passo di analisi, la colonna «⚠️» (tooltip «Parser warnings (skipped rows, ambiguous data)»)
+    conta tutte le note di un file, anche quelle `info`.
+  - Un file Fineco con solo righe non ancora regolate mostra «⚠️ 1», anche se N74 le dice in una nota blu.
+  - Nel dettaglio della lettura la sezione s'intitola «Warnings», con le note dentro, ognuna nel suo colore.
+  - Cura possibile: contare solo `severity !== 'info'`, oppure due conteggi.
+  Dettagli: piano 07, «N74 di W — revisione», R1.
+- **B-52 · La regola «solo righe sicure» e i plugin con una colonna di regolamento** — da decidere (W o il
+  developer); B, 19/10 (revisione di N74; area di W).
+  - La regola 9 della skill `brim-plugin` e della guida dice che una riga «con la data valuta o di regolamento dopo
+    oggi» è provvisoria e resta fuori.
+  - Directa, Saxo, InvestEngine, Degiro e Disnat hanno una colonna di regolamento, ma datano per operazione e
+    importano tutto: il batch le accetta, ma alla lettera della regola le loro righe recenti sarebbero provvisorie.
+  - Il generic CSV accetta `settlement_date` o `value_date` come colonna della data: una data oltre domani ora fa
+    rifiutare il salvataggio (`dateOutOfRange`); prima di N74 passava fino a un anno.
+  - Da chiarire: la regola riguarda solo chi data per valuta (Fineco) o per periodo (Danske), o quei plugin chiedono
+    un seguito.
+  Dettagli: piano 07, «N74 di W — revisione», F2.
 
 ## E · Email (fase 01)
 
