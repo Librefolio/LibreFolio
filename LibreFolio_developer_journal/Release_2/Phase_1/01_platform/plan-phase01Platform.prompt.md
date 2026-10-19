@@ -7775,3 +7775,90 @@ della build (`dev.py:712`) e registrata dopo una build riuscita (`record_tool_co
    anche `src/` e `static/`; senza marcatore, solo le date) e `dev_workflow.en.md` (passo 3). `i18n.md` era già giusta.
    `mkdocs build` stretto 0 avvisi, `check-links` 97 validi, `git diff --check` pulito.
 5. ✅ (21:41) Checkpoint inviato (sotto).
+
+### Lotto «H-55: la CSP applicata, `LIBREFOLIO_CSP_ENFORCE`» (2026-10-17, 21:55) — analisi
+
+> Via del coordinatore (21:50, dopo l'entrata di H-54, dev `d6c252ec4`): «GO for the CSP-enforcement lot (E1–E6 as
+> decided): analysis to reds». Il nit di B-43 (le frasi «such as `regexp`» in `security.md`) va nel giro di
+> `security.md` di questo lotto, sopra il paragrafo B-49 appena entrato.
+
+**Stato vero** (HEAD `d6c252ec4`):
+- `LIBREFOLIO_CSP_REPORT_ONLY` e `LIBREFOLIO_FRAME_PROTECTION`: campi bool in `config/__init__.py`, default spenti, accesi
+  in `PROFILE_DEFAULTS` managed; righe commentate in `.env.example` (r. 61–64); controlli
+  `platform.frame_protection` e `platform.csp_report_only` in `config_audit.py` (chiavi i18n `instance.checks.*`,
+  sottosistema `instance`, di H).
+- `SecurityHeadersMiddleware`: a protezione accesa i documenti HTML ricevono `PAGE_POLICY` (applicata, H-42); con la
+  report-only accesa le pagine della web app ricevono `report_only_policy(hashes)` (H-52), costruita una volta.
+- Il controllo degli aggiornamenti: solo nel browser, solo con `selfHostedConfirmed()`, verso `api.github.com`; la sonda
+  dell'immagine passa dal backend (stessa origine). `LIBREFOLIO_PUBLIC_URL`: `config/accounts.py::public_url()` (A).
+- Riferimenti alla variabile: doc `settings.md`, `overview.md`, `security.md`, `test-walkthrough/{e2e,index,front-utility}.md`,
+  admin `hosting_providers.en.md`, `settings.en.md`, `configuration.en.md` (le pagine admin con traduzioni: debito
+  vero, nessun timbro); test `test_runtime_isolation.py`, `test_managed_headers.py`, `test_config_audit.py`.
+
+**Disegno** (E1–E6 come deciso; i dettagli sono miei, nel perimetro):
+- **E1**: `LIBREFOLIO_CSP_ENFORCE: bool = False`, **nessuna voce in `PROFILE_DEFAULTS`** (spento ovunque, decide il
+  developer). Acceso, le pagine HTML della web app ricevono un secondo header `Content-Security-Policy`: la policy della
+  web app con gli hash, **senza `frame-ancestors`**. I frame li decide sempre `LIBREFOLIO_FRAME_PROTECTION`, che resta
+  com'è (`PAGE_POLICY` e `X-Frame-Options`), così applicare la CSP non accende di nascosto la protezione dai frame.
+  - Il browser applica entrambe le policy (l'intersezione).
+  - Niente header report-only quando si applica.
+  - Restano invariati il 304, l'header di una rotta che lo mette da sé, `/mkdocs` e `/api/`.
+- **E3 + E6**: `connect-src` aggiunge le sorgenti calcolate alla costruzione del middleware, nella report-only (che resta
+  l'anteprima fedele) e in quella applicata:
+  - l'origine di `LIBREFOLIO_PUBLIC_URL`, se c'è;
+  - `https://api.github.com` nel profilo self-hosted, dove il controllo degli aggiornamenti può girare.
+  - `report_only_policy(hashes, connect_sources=())`, con l'argomento nuovo facoltativo (H-52 resta valida), più
+    `enforced_policy(...)`.
+- **E2 (b)**: F1 resta una voce documentata della baseline (con la policy applicata cheetah-grid ripiega su `window`).
+- **E4**: gli hash solo all'avvio; nella doc, «dopo una build nuova, riavvia».
+- **E5**: nessun endpoint.
+- **Audit**: un controllo `platform.csp_enforce`, ok acceso («applicata») e ok spento («solo segnalazione o nessuna:
+  il default»). Due chiavi i18n in quattro lingue (sottosistema `instance`), la riga nel `.env.example` sotto la
+  report-only.
+- **Corsia**: `TEST_LANE_SETTABLE` += `LIBREFOLIO_CSP_ENFORCE`. `front-utility cloud-smoke` rifiuta `--coverage`
+  quando la corsia applica la CSP: il preambolo di istanbul (`new Function`) si romperebbe.
+- **E2E**: la spec del raccoglitore, su una corsia con la policy applicata, confronta l'header `Content-Security-Policy`
+  della corsia (quello con `script-src`) con la sua copia più gli hash, senza `frame-ancestors`. AUSR-E-07 (A, dopo
+  A-57) cambierà le sue attese. Uno slot per un cloud smoke managed con la policy applicata, senza copertura: finché A
+  non adatta AUSR-E-07, quel test è il solo rosso atteso.
+- **Doc**: `security.md` (una sezione sulla policy applicata, più il nit di B-43), `hosting_providers.en.md`,
+  `configuration.en.md` e `settings.en.md` (admin, debito di traduzione), `settings.md`, `e2e.md`, `front-utility.md`,
+  `index.md` (impostazioni di corsia).
+
+**Passi**: 1. rossi (test-author: backend headers, config e audit, corsia; E2E del raccoglitore); 2. cura (script a
+secco); 3. verdi leggeri; 4. doc; 5. slot (cloud smoke con la policy applicata); 6. checkpoint.
+
+> **Stato al 17/10, 22:00**: il passo 1 (i rossi) era scritto e non ancora eseguito quando il developer ha fermato
+> tutte le sessioni. Il coordinatore ha avuto subito la richiesta del controllo audit `cspReportOnly.enforced` (scelta
+> 3) e l'ok sulle quattro scelte (17/10, 22:00).
+
+> **⏸️ Sospeso il 19/10, 11:10** (ripartenza del coordinatore): H-55 è tra gli ampliamenti che il developer sta
+> leggendo, interruttore della CSP compreso. Niente cura, niente verdi e niente slot fino al suo via.
+> - I rossi, mai eseguiti, sono parcheggiati come patch nella cartella della sessione (`files/parked/`, file
+>   `h55-csp-enforce-reds-on-d6c252ec4.patch`, sha256 `d912356d…fc88`), con una copia intera dei quattro file:
+>   `test_config_audit.py` (+273), `test_managed_headers.py` (+542), `test_runtime_isolation.py` (+138) e
+>   `csp-collector.spec.ts` (+695/−185).
+> - Verifiche: `git apply --check --cached` prima, `git apply --check` dopo il ripristino; il risultato della patch su
+>   HEAD è uguale byte per byte alle copie. Il worktree è tornato al commit, tranne questo piano.
+
+> **⚠️ Fuori pista** (da rivedere alla ripresa, prima di ogni cura):
+> 1. **Il rifiuto di `--coverage` poggia su una premessa sbagliata.** `vite-plugin-istanbul` crea l'instrumenter con
+>    `coverageGlobalScopeFunc: false` e `coverageGlobalScope: "globalThis"`: il preambolo legge `globalThis` e non fa
+>    `new Function`. Una build con la copertura dovrebbe quindi partire anche con la policy applicata, da misurare.
+>    Ne dipendono:
+>    - i casi del rifiuto in `test_runtime_isolation.py`;
+>    - i due `skip` sotto copertura della spec E2E (test 7 e 8);
+>    - la scelta 4, approvata dal coordinatore su quella premessa, che va riproposta.
+> 2. **Un `LIBREFOLIO_PUBLIC_URL` non valido**: `public_url()` solleva `ValueError`, e il middleware si costruisce alla
+>    prima richiesta. Proposta: registrarlo nel log e non aggiungere l'origine, come fanno gli altri lettori. Oggi
+>    nessun test lo copre.
+> 3. **Scelte dei test-author da confermare alla ripresa**:
+>    - gli hash della build letti una volta sola anche con le due policy accese;
+>    - accanto a un header report-only messo dalla rotta, la policy applicata si aggiunge lo stesso;
+>    - l'ordine degli header: `PAGE_POLICY` prima, la policy applicata dopo.
+> 4. **Segnalati dal test-author E2E**:
+>    - `page.waitForFunction` (test 9) sotto la policy applicata potrebbe segnalare un `eval`: in quel caso, rimedio
+>      con `expect.poll`;
+>    - la rotta di `page-policy.spec.ts` sostituisce tutto l'header e così toglie la policy applicata: su una corsia
+>      che applica, quella spec non la prova;
+>    - la descrizione di `csp-collector` in `_frontend_utility.py` è da aggiornare.
