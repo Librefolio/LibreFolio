@@ -140,6 +140,14 @@ def api_ai_export(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "AI Export API tests", verbose=verbose)
 
 
+def api_ai_export_unpriced_asset(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the AI Export snapshot tests of a held asset with no price series (E-AI503), in-process on a private database."""
+    print_section("AI Export API Tests: held asset without a price series")
+    print_info("Testing POST /ai-export/snapshot when a held asset of any type has no stored price, or prices in mixed currencies")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_ai_export_unpriced_asset.py", test_names)
+    return run_command(cmd, "AI Export unpriced asset API tests", verbose=verbose)
+
+
 def api_tools(verbose: bool = False, test_names: list = None) -> bool:
     """Run Tool platform API tests."""
     print_section("Tools API Tests")
@@ -1041,6 +1049,17 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "signal-request-validation", api_signal_request_validation, name="Signal Request Validation", desc="Asset/FX signal request validation contracts")
     add_test(api, "signal-preview", api_signal_preview, name="Signal Preview", desc="Backend indicator compute on synthetic points (global chart preview)")
     add_test(api, "ai-export", api_ai_export, name="AI Export API", desc="Catalog, snapshots, authorization, and typed problems")
+    add_test(
+        api,
+        "ai-export-unpriced-asset",
+        api_ai_export_unpriced_asset,
+        name="AI Export Unpriced Asset API",
+        desc="E-AI503: POST /ai-export/snapshot with a held asset of any type and no stored price is 200, not 503: the asset is listed without a price series, with its reason",
+        # PURE: the real AI Export router runs in-process on a private SQLite file under tmp_path, with the real snapshot
+        # service, portfolio report and price query; the portfolio caches are emptied around each test: the lane's backend
+        # is never called.
+        isolation="pure",
+    )
     add_test(api, "tools", api_tools, name="Tools API", desc="Catalog, bulk compute, diagnostics, and authorization")
     add_test(api, "pac-planner-tool", api_pac_planner_tool, name="PAC Planner Tool API", desc="pac_allocator plan through the live compute endpoint")
     add_test(api, "risk", api_risk, name="Risk Analysis API", desc="Catalog, bulk query, isolation, and populated-DB analytics, and per-period asset eligibility")

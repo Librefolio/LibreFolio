@@ -58,6 +58,7 @@ from backend.app.services.ai_export.components.technical_shared import (
     load_fx_technical_bundle,
     observations_to_rate_points,
     price_result_to_close_points,
+    price_series_gap,
     signal_results_to_discrete_events,
 )
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
@@ -90,11 +91,11 @@ async def _build_asset_ohlc_returns(context: BuildContext, dependencies: Mapping
     context.register_price_sampling()
     buckets = build_price_buckets(points, context.bucket_plan, key="close")
     latest_close, latest_date = latest_point_value(points, key="close")
-    currency = coherent_price_currency(result)
 
     return AssetOhlcReturnsPayload(
         asset_id=scope.asset_id,
-        currency=currency,
+        currency=coherent_price_currency(result),
+        reason_code=price_series_gap(result),
         buckets=buckets,
         latest_close=latest_close,
         latest_date=latest_date,
@@ -103,7 +104,7 @@ async def _build_asset_ohlc_returns(context: BuildContext, dependencies: Mapping
 
 ASSET_OHLC_RETURNS_SPEC = ComponentSpec(
     component_id="asset.ohlc_returns",
-    version=1,
+    version=2,
     domains=frozenset({Domain.ASSET}),
     output_model=AssetOhlcReturnsPayload,
     builder=_build_asset_ohlc_returns,
