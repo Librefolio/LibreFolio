@@ -263,8 +263,10 @@ developer alle 13:26 (testa della sezione J del backlog).
 | J-57 (N88) + J-21 bis | ✅ 17/10 | `b7e2bb3bd`, `def1d5259` → `539371064` |
 | J-19 (strumentazione) | ✅ 17/10; la causa resta aperta | `a8299354f` → `635b50537` |
 | J-41, J-42 | doppioni: W-B67 (`279b3d5bd`); X-R47 + MF-D4 | — |
-| J-48 | ⏸️ sospeso (19/10) | patch parcheggiate (§10, «J-19 entrata…») |
-| J-57 completa | analisi (19/10) | §10, «Ripartenza del 19/10» |
+| J-48 | ✅ 19/10 (sospeso la mattina, ripreso col via delle 11:42) | `ab4be3daa`, `bbfc0205b` → `ad6c952b4` |
+| J-57 completa | analisi e piano breve del lotto (19/10); i testi aspettano il developer | §10, «Ripartenza del 19/10» e «J-57 completa — piano breve del lotto» |
+| Revisioni di J-1 voce 1 e di P1 di MF (sola lettura) | ✅ 19/10, OK | `bbfc0205b`; `b675ada54` (solo giornale) |
+| L1a (L1 delle «formule veloci» di MF) | checkpoint pronto 19/10 | §10, «L1a — i lotti calcolati solo nei giorni in cui cambia qualcosa» |
 
 ### J-0 — il piano e la base
 
@@ -321,11 +323,11 @@ del §4 e nelle sezioni del §10.
   residui R6–R10 di T-U4.
 - **Aperti a J, in attesa del via** (l'ordine lo decide il coordinatore):
   - **CP-8**: `portfolio_service.py` e `lots_analysis_service.py` in `services/portfolio/`, più gli schemi del
-    portafoglio. Doveva seguire J-48, ora sospeso.
+    portafoglio. Dopo J-48 (entrato) e L1a, che toccano `lots_analysis_service.py`; MF-E2 tocca `lots/histories.py`.
   - **CP-9b/9c e gli schemi dei segnali**: `schemas/risk.py` e `schemas/signals.py` in pacchetti, ~45 importatori.
     Serve una finestra quieta (§10, «CP-9»).
   - **R11** (resto di CP-10): un test di parità fra le versioni pandas di volatilità e Sharpe mobili
-    (`signals/risk_adapters.py`) e `risk/metrics.py`.
+    (`signals/risk_adapters.py`) e `risk/metrics.py`; con J-62, le due copie del validatore del fattore.
   - **U1** (CP-11): X1, X3, X9 e il fattore di cambio di `market_series.py` (era `series_preparation.py:184`); X6–X8 e
     `fx.py:717` nei file di X dopo il suo PL4 (D-J17); una regola sola per i buchi di cambio (J-1).
   - **B15 lato PAC** (CP-11), dopo CP-8.
@@ -7504,3 +7506,297 @@ lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il deve
     Le asserzioni restano, e fissano ancora che ogni punto parte da 0,1;
   - il tasso precedente sopravvive ai punti `None`: è solo un seme;
   - la pagina `financial_math.md` descrive il codice com'è.
+
+#### L1a — i lotti calcolati solo nei giorni in cui cambia qualcosa (via del 19/10 ~13:40; base `b675ada54`)
+
+- **Via del coordinatore**:
+  - i lotti si calcolano solo nei giorni in cui cambia qualcosa, compresi quelli in cui cambia il cambio;
+  - l'uscita resta un punto al giorno nella finestra;
+  - parità al bit col calcolo di oggi, su copie di DB e più finestre, compreso il caso 1900;
+  - prima i rossi, poi le mutazioni; lo slot su richiesta.
+  - L1b viene dopo P3 di MF; R1 dopo Q1 di X.
+- **Oggi** (`lots_analysis_service.py:258`): `history_dates` è ogni giorno da `computed_from`. Ogni costruttore
+  calcola su tutti quei giorni, e poi `trim_dates` taglia alla finestra:
+  - valore, rendimento e prezzo: lotti × giorni, e ogni giorno somma i frammenti e cerca nei prefissi;
+  - il NAV della performance: giorni × lotti × frammenti;
+  - le linee del costo medio, il prezzo di mercato e i punti della performance: un oggetto al giorno, anche fuori
+    dalla finestra.
+  Con una transazione del 1900 sono ~46 000 giorni per lotto.
+- **Disegno**:
+  1. **I giorni di cambiamento C**, funzione pura nella casa (`financial_math/lots/change_days.py`):
+     - il primo e l'ultimo giorno;
+     - ogni giorno in cui il prezzo di mercato convertito, o il suo segno «stimato», differisce da quello del giorno
+       prima. Il confronto è sulla rappresentazione esatta (`as_tuple`), quindi prende anche i giorni in cui cambia
+       il cambio. Legge il dizionario per giorno che il servizio costruisce già: un confronto al giorno, niente
+       calcoli dei lotti. L1b lo sostituisce coi gradini di P3;
+     - `at_cost_until + 1`;
+     - le date degli eventi: transazioni del perimetro, gambe tardive e transazioni della performance; inizio e fine
+       di ogni frammento; chiusure; aperture; eventi di trasferimento (di tutti e due i motori, se la performance ne
+       ha un secondo); le chiavi dei prefissi di proventi, commissioni e tasse; le date da cui un pool è ignoto; i
+       passi delle linee del costo medio;
+     - **il giorno dopo ognuno di questi**: alcune serie cambiano il giorno dopo un ingresso, senza un ingresso loro.
+       Il TWRR comincia il giorno dopo la prima istantanea del NAV; la linea del prezzo di un lotto chiuso si ferma il
+       giorno dopo l'ultima chiusura.
+  2. **I costruttori non cambiano**: ricevono C invece di ogni giorno, perché sono già scritti su una lista di date.
+  3. **L'espansione** (`expand_to_days`, nella casa): ogni giorno della finestra prende le righe dell'ultimo giorno di
+     C non successivo, con la data cambiata (`model_copy`). Va chiave per chiave (lotto, broker) nell'ordine del
+     costruttore, così il JSON resta identico anche nell'ordine. Sostituisce `trim_dates`. Un giorno della finestra
+     prima del primo giorno di C non ha righe, come oggi.
+  4. `last_day_without_observation` per bisezione: `resolve(d).is_missing` è monotono (vero fino alla prima
+     osservazione, poi falso).
+- **Perché i numeri restano identici**:
+  - In un giorno fuori da C ogni ingresso di ogni costruttore ha lo stesso valore, con la stessa rappresentazione, che
+    aveva l'ultimo giorno di C: prezzo e cambio (il confronto è esatto), frammenti attivi, prefissi, «al costo».
+    Quindi l'aritmetica Decimal si ripete con le stesse cifre.
+  - Il TWRR, fuori da C, moltiplica per `Decimal('1')` esatto (`x/x` ha esponente 0), e il ROI per un flusso nullo:
+    né il valore né le cifre cambiano.
+  - `_lot_value_basis` e `lot_history_end_date` leggono `history_dates[-1]`: l'ultimo giorno è sempre in C.
+- **Prove**:
+  - **Rossi** (test-author):
+    - il costo: con una transazione del 1900 e una finestra di un mese, i costruttori calcolano su C, non su
+      ~46 000 giorni (si conta `_lot_snapshot_on_date`);
+    - le unità nuove: i giorni di cambiamento, l'espansione, la bisezione.
+  - **Parità** (verde su HEAD e dopo): il servizio com'è, contro lo stesso servizio con C forzato a ogni giorno, che
+    è il calcolo di oggi. Libri generati con una valuta estera e cambi giornalieri, giorni al costo, trasferimenti
+    in viaggio e al confine, split, chiusure, proventi, commissioni e tasse con pool ignoti, co-proprietà, flussi non
+    validi della performance, motore FAILED. Finestre: tutto, 1M, 1A, da prima della prima transazione, a metà, una
+    finestra vuota.
+  - **Mutazioni**, una alla volta, ognuna deve far fallire la parità:
+    - tolti i giorni del mercato, i cambi, `at_cost_until + 1`, il giorno dopo, le fine dei frammenti, i prefissi, i
+      pool ignoti, i passi del costo medio;
+    - l'espansione dal giorno sbagliato, senza nuova data, o in un altro ordine.
+  - **Sonda su copie di DB**: albero di HEAD (`git archive`) contro l'albero nuovo, JSON identico (tolto
+    `generated_at`), per ogni utente, asset, perimetro di broker e finestra. Copie:
+    - il DB della corsia dopo lo slot di J-48;
+    - un populate fresco;
+    - la sua variante con una transazione al 1900-01-02;
+    - una copia dei dati veri, se il coordinatore me ne dà una (`real-data-copy`).
+  - Nello slot: la sonda, `roi-fifo-utils`, `lots-analysis-pure`, `api portfolio`, i componenti dei lotti
+    dell'AI Export e l'E2E `front-broker detail`.
+- **File**: `financial_math/lots/change_days.py` (nuovo), `lots_analysis_service.py`, `financial_math/lots/prices.py`,
+  i test, la registrazione nel runner, la pagina dev `lots_analysis_service.md`. Nessuno schema, nessuna API.
+- **Conflitti**: `lots_analysis_service.py` (CP-8 lo sposta dopo); `financial_math/lots/` (chiedo se MF ci lavora).
+- **Esecuzione**:
+  - ✅ 19/10 — **Passo 0, preparazione** (nessun file del prodotto toccato).
+    > **Note implementazione**: tutto nella cartella di sessione (`files/j/l1a/`):
+    > - l'albero di HEAD (`git archive b675ada54 backend`);
+    > - la cura come script con prova a secco (`patch_cure.py --dry`: ogni ancora trovata una volta sola);
+    > - le 13 mutazioni (`mutate.py`), la sonda (`probe_lots.py`: per ogni richiesta lo sha256 del JSON senza
+    >   `generated_at`) e il confronto (`compare.py`);
+    > - le copie dei DB: quella della corsia (76 transazioni); un populate fresco (`test db populate --force --clean`,
+    >   col via del coordinatore); la sua variante con un BUY al 1900-01-02 (asset 1, broker 1, 1 unità, −1 USD).
+    >
+    > Coordinatore: i file dei lotti sono liberi, MF-E2 (`lots/histories.py`) parte dopo di me.
+    >
+    > **Misura sull'albero di HEAD**:
+    > - populate: 144 richieste, tutte OK, 2,5 s in tutto;
+    > - copia 1900, valuta dell'asset: 7 richieste, 1,4 s (finestra intera: 47 725 punti);
+    > - copia 1900 in USD, tutto il perimetro: finestra intera 3,6 s e 324 813 punti; **finestra di un mese 3,6 s per
+    >   768 punti**. È il costo che L1a toglie. La finestra intera resta di un punto al giorno, lì il guadagno è minore.
+    >
+    > **⚠️ Fuori pista**: con la cura `trim_dates` (`financial_math/lots/histories.py:719`) resta senza chiamanti
+    > (nessun altro uso nel codice né nei test): lo tolgo nella cura. Oltre alla pagina dev vanno aggiornati la riga
+    > `lots/` di `.github/instructions/financial-math.instructions.md` e l'albero del pacchetto in
+    > `developer/backend/financial_math.md`.
+  - ✅ 19/10 — **Passo 1, i rossi** (test-author; visti fallire sul codice di HEAD, corsia 6185, carico ~16).
+    > **Note implementazione**: due file nuovi, nessuna registrazione nel runner (`financial-math` e `roi-fifo-utils`
+    > girano le loro cartelle intere):
+    > - `test_financial_math/test_lot_change_days.py` (puro): `services financial-math test_lot_change_days` →
+    >   **43 rossi, 13 controlli verdi**, 2,1 s. 40 rossi dicono «change_days does not exist yet (L1a)»; i 3 della
+    >   bisezione falliscono sul conteggio di `resolve` (10 001, 19 994 e 20 000 chiamate su 20 000 giorni, il tetto è
+    >   34). I controlli: `last_day_without_observation` contro la camminata di riferimento, su serie casuali e sui
+    >   bordi.
+    > - `test_financial/test_lots_change_days_parity.py` (DB): `services roi-fifo-utils test_lots_change_days_parity` →
+    >   36 s. I 2 rossi del servizio falliscono sull'asserzione: il libro del 1900, letto sugli ultimi 30 giorni, fa
+    >   **221 200 chiamate** di `_lot_snapshot_on_date` + `_open_value_on_date` (88 480 + 132 720) contro un tetto di
+    >   400; `lot_change_days` non viene mai chiamato. La batteria di parità (13 libri × finestre × perimetri, 178 casi):
+    >   **177 verdi**.
+    >
+    > **⚠️ Fuori pista**: il caso `representation/whole/owner-all` fallisce su HEAD la sua precondizione, non la parità.
+    > Il libro scriveva chiusure uguali in forme diverse (115, 115.0, 115.00), ma `_load_prices` rilegge le chiusure dal
+    > DB e `RealDecimal` le riporta tutte a `115.000000` (almeno 6 decimali, `READ_MIN_SCALE`). Attraverso il DB due
+    > chiusure uguali non differiscono mai nella forma. Misurato invece (`files/j/l1a/mark_repr.py`): il segno di un
+    > acquisto, importo/quantità, vale `Decimal('110')`, ed è portato avanti finché una chiusura uguale dà
+    > `Decimal('110.000000')`. È la sola differenza di sola forma raggiungibile, in un giorno senza transazioni. Al
+    > test-author ho chiesto di rifare quel libro su questo; il contratto sulla forma resta inchiodato dal file puro.
+    > Rifatto (acquisto mer 3/4/2024 a 110, chiusura uguale lun 8/4): di nuovo su HEAD **2 rossi, 178 verdi**.
+  - ✅ 19/10 — **Passo 2, la cura** (`files/j/l1a/patch_cure.py`, prova a secco e poi applicata).
+    > **Note implementazione**:
+    > - nuovo `financial_math/lots/change_days.py`: `lot_change_days`, `analysis_event_dates`, `expand_to_days`;
+    > - `financial_math/lots/prices.py`: `last_day_without_observation` per bisezione;
+    > - `financial_math/lots/histories.py`: tolto `trim_dates`, rimasto senza chiamanti;
+    > - `lots_analysis_service.py`: i giorni di cambiamento calcolati una volta, i 7 costruttori su quei giorni,
+    >   `expand_to_days` al posto di `trim_dates`.
+    >
+    > ruff ha chiesto i parametri di tipo PEP 695 su `expand_to_days` (UP047): corretto, poi ruff e black puliti.
+    > Verdi:
+    > - `services financial-math test_lot_change_days`: **56/56**;
+    > - `services roi-fifo-utils test_lots_change_days_parity`: **180/180**, i 2 rossi compresi, 24 s contro 28 s;
+    > - `services lots-analysis-pure`: **198/198**, compreso R13-SEC8-2, un lotto aperto nel 1890 letto dal
+    >   pavimento del 1900.
+    >
+    > Regola 10: `native_cash.change_days` è la casa del «giorno in cui cambia un cambio» e confronta i cambi con `==`.
+    > L1a non lo copia: confronta i segni convertiti, prezzo per cambio del giorno, nella forma esatta, perché l'uscita
+    > deve restare identica al byte. È la regola del motore del portafoglio (decisione 28, «ricalcolare quando cambia
+    > un termine della formula», `financial_math.md#recomputed-days`) applicata ai lotti.
+  - ✅ 19/10 — **Passo 3, le mutazioni** (`files/j/l1a/mutate.py`, 14:35–14:48, carico 14–28; ogni file ripristinato
+    per digest, poi `git diff --stat` uguale a prima). Ogni mutazione gira contro il file puro (unit),
+    `lots-analysis-pure` (pure) e la batteria (parità); il numero è quello dei test falliti, «—» vuol dire che è
+    sopravvissuta.
+
+    | Mutazione | unit | pure | parità |
+    |---|---|---|---|
+    | niente giorni del mercato | 18 | 2 | 124 |
+    | valore invece della forma (`==`) | 12 | — | — |
+    | senza il segno «stimato» | 9 | — | — |
+    | senza `at_cost_until + 1` | 10 | — | 10 |
+    | senza il giorno dopo | 28 | — | 47 |
+    | senza le date degli eventi | 9 | — | 62 |
+    | senza il primo e l'ultimo giorno | 30 | 5 | — |
+    | espansione dal giorno dopo | 6 | 3 | 1 |
+    | espansione senza nuova data | 7 | 3 | 116 |
+    | chiavi in un altro ordine | 1 | — | — |
+    | finestra senza l'ultimo giorno | 6 | 4 | 2 |
+    | bisezione sfasata di uno | 15 | 6 | 2 |
+    | *informativa*: senza le date del secondo motore | n/a | — | — |
+    | *informativa*: senza le date del motore | — | — | — |
+    | *informativa*: senza le date delle righe | — | — | — |
+
+    > **Note implementazione**: le 12 regole sono intercettate tutte, ognuna da almeno un file; la batteria ne
+    > intercetta 8. Le altre 4:
+    > - **forma e segno «stimato»**: attraverso il servizio sono ridondanti. Un segno che cambia forma cambia anche la
+    >   voce stimata, e il segno da solo non cambia mai passando dal DB. Le inchioda il file puro.
+    > - **primo giorno**: serve quando la prima transazione è prima del pavimento del 1900, perché allora il primo
+    >   giorno non è una data di evento. Lo intercetta `lots-analysis-pure` (R13-SEC8-2, il lotto del 1890).
+    > - **ordine delle chiavi**: anche la corsa B della batteria passa da `expand_to_days`, quindi un errore
+    >   dell'espansione che colpisce A e B allo stesso modo non si vede. Lo vede la sonda contro l'albero vecchio, con
+    >   il vero `trim_dates`. Per chiudere il buco anche nella suite ho chiesto al test-author un test di proprietà:
+    >   con ogni giorno di cambiamento, `expand_to_days` coincide con il vecchio taglio.
+    >
+    > Le 3 informative sopravvivono, come previsto: le date degli eventi vengono da due sorgenti che si sovrappongono,
+    > le righe e ciò che il motore ne ricava (più prefissi, pool ignoti, passi del costo medio). Oggi ognuna basta da
+    > sola; le tengo tutte e due, così una data che una delle due ricavasse per conto suo non va persa.
+    >
+    > Seguito (test-author, solo il file puro): `test_expand_to_days_on_every_day_is_the_trim_it_replaced`, 10
+    > parametri × 48 casi. Con ogni giorno di cambiamento, `expand_to_days` restituisce proprio le righe del vecchio
+    > `trim_dates`, nello stesso ordine e gli stessi oggetti. Così la corsa B della batteria è davvero il calcolo di
+    > oggi. Finestre oltre l'ultimo giorno escluse di proposito: lì il contratto porta avanti l'ultima riga, e il
+    > servizio passa sempre `window_to=actual_to`.
+  - ✅ 19/10 — **Passo 4, le sonde** (nello slot pesante dalle 14:45; albero di HEAD `b675ada54` contro il worktree con
+    la cura, sulla stessa copia; ogni corsa partita con carico a 1 minuto sotto 50).
+
+    | Copia | Richieste | Punti giornalieri | Errori | Differenze | Secondi prima → dopo | Richiesta più lenta |
+    |---|---|---|---|---|---|---|
+    | populate fresco | 1 440 | 253 536 | 0 | **0** | 21,1 → 23,7 | 0,07 → 0,11 s |
+    | DB della corsia | 1 440 | 253 536 | 0 | **0** | 25,8 → 20,3 | 0,24 → 0,08 s |
+    | populate con un BUY al 1900-01-02 | 1 440 | 13 275 914 | 0 | **0** | 278,0 → 149,6 | 4,87 → 2,63 s |
+    | copia dei dati veri (Alembic 011) | 360 | 1 054 930 | 0 | **0** | 16,4 → 17,6 | 0,22 → 0,25 s |
+
+    > **Note implementazione**: richieste per ogni utente, asset, perimetro di broker (tutti e ciascuno), 6 finestre e
+    > 2 valute di arrivo (quella dell'asset e USD); il JSON confrontato per SHA-256, tolto `generated_at`. Sulla copia
+    > dei dati veri solo conteggi; gli output con gli identificativi restano nella cartella di sessione e si cancellano
+    > con la copia.
+    >
+    > Il guadagno sta sulle storie lunghe: col 1900 il tempo si dimezza. Su un libro di quattro anni è neutro, perché
+    > copiare una riga costa quanto costruirla. Il resto del tempo col 1900 è il lavoro che resta giornaliero: la
+    > conversione del segno di ogni giorno, i cambi chiesti giorno per giorno e la scansione dei giorni di cambiamento.
+    > È L1b, dopo P3 di MF.
+    >
+    > **⚠️ Fuori pista**: alle 14:50 il carico è salito a 53 (in parallelo girava il cancello del coordinatore) e la
+    > coppia del 1900 era partita a 50,2. L'ho fermata dopo pochi secondi, ho aggiunto allo script l'attesa del carico
+    > sotto 50 prima di ogni corsa e l'ho rifatta da capo.
+  - ✅ 19/10 — **Passo 5, la documentazione** (docs-writer per MkDocs, io per `.github`).
+    > **Note implementazione**:
+    > - `developer/backend/transactions/lots_analysis_service.md`:
+    >   - la tabella dei moduli: la riga `change_days.py`; tolto `trim_dates()`; la bisezione in `prices.py`;
+    >   - un passo nuovo della pipeline (9; i seguenti rinumerati, il rimando «step 10» diventato «step 11»);
+    >   - `display_from` e le linee WAC riempiti dall'espansione;
+    >   - la sottosezione nuova «Change Days» (`#change-days`): perché, quali giorni, l'espansione, perché le cifre
+    >     sono identiche, il legame con la decisione 28 e la differenza da `native_cash.change_days()`, i test.
+    > - `developer/backend/financial_math.md`: la riga `change_days.py` nell'albero del pacchetto.
+    > - `.github/instructions/financial-math.instructions.md`: `change_days` nella riga `lots/`.
+    >
+    > `dev.py mkdocs build` (strict): esce con 0 in 48 s, nessun avviso. `dev.py mkdocs check-links`: 97 validi,
+    > 0 rotti. Pagine solo in inglese: nessun debito di traduzione.
+    >
+    > **⚠️ Fuori pista**: il docs-writer ha fatto partire `check-links` con carico a 56,7, sopra il limite di 50. È un
+    > controllo statico breve ed è passato, quindi non l'ho rifatto. Ha anche letto `change_days.py` mentre una
+    > mutazione lo cambiava; ha documentato la versione ripristinata e l'ha ricontrollata (md5) prima del build.
+    > devWiki: due pagine nuove, il concetto `self-parity-needs-the-shared-step-pinned` e il problema
+    > `equal-closes-read-back-alike-through-realdecimal`, più la revisione di `entities/lots-analysis-service`, l'indice
+    > e il log. Grafo non aggiornato: graphify non c'è in questo worktree.
+  - ✅ 19/10 — **Passo 6, le suite** (slot pesante, 15:00–15:13, una alla volta, carico 15–30).
+    > **Note implementazione**:
+    >
+    > | Corsa | Esito | Durata |
+    > |---|---|---|
+    > | `services roi-fifo-utils` | **1692 passed** (1512 + i 180 nuovi) | 64 s |
+    > | `services financial-math` | **1610 passed** (i guardiani dello strato accettano il modulo nuovo; i 66 del file puro, test d'identità compreso) | 20 s |
+    > | `api portfolio` | **56 passed** | 209 s |
+    > | `services ai-export` | **1093 passed** | 237 s |
+    > | E2E `front-broker detail` | **40 passed** | 210 s |
+    >
+    > Già verde dopo la cura: `services lots-analysis-pure`, 198/198. Porte 6185 e 6195 libere a fine slot
+    > (`lsof -iTCP -sTCP:LISTEN` vuoto); «slot libero» mandato al coordinatore alle 15:13.
+    >
+    > **Una sonda in più, fuori slot (leggera)**: la batteria e le sonde chiedevano sempre tutte le analisi, quindi i
+    > segni erano sempre giornalieri. Senza serie giornaliere (solo linee WAC e riepilogo) i segni si caricano solo
+    > per l'ultimo giorno, e i giorni di cambiamento vengono dai passi delle linee. Confronto vecchio/nuovo con
+    > `--analyses BROKER_WAC_HISTORY,CUMULATIVE_WAC_HISTORY,LOT_SUMMARY`: populate 1 440 richieste, **0 differenze**;
+    > 1900 1 440 richieste, 3 299 272 punti, **0 differenze**.
+    >
+    > **⚠️ Fuori pista**: i totali di quella sonda (1900: 67 s prima, 80 s dopo) sembravano un peggioramento. Era
+    > rumore della macchina condivisa: accanto girava il cancello del coordinatore, e vecchio e nuovo erano partiti a
+    > minuti di distanza. La stessa richiesta misurata alternando vecchio, nuovo, vecchio, nuovo dà 0,30 s col nuovo
+    > contro 0,35–0,52 s col vecchio.
+    >
+    > **Dati veri**: copia `/tmp/librefolio-r2-j-realdata` usata solo dalla sonda, sola lettura, nessun server.
+    > `lsof +D` vuoto, `rm -rf`, `ls` → «No such file or directory» (19/10 ~15:15). Cancellati anche i due output con
+    > gli identificativi; nel giornale solo conteggi.
+  - ✅ 19/10 — **Passo 7, rifinitura**: due frasi nelle docstring di `change_days.py` (la regola della decisione 28 e
+    non `native_cash.change_days`; perché si leggono sia le righe sia il motore). Poi ruff e black puliti, il file
+    puro 66/66, `git diff --check` pulito. Pronto per il checkpoint.
+- **Risposte del developer su J-57** (riferite dal coordinatore, 19/10 ~13:50), **da fare dopo L1a**, con un piano breve
+  del lotto prima del via:
+  - **Q-J57-1**: (c) approvata. Il costo lo chiude solo un valore, anche Manuale e 0; il form apre in Manuale vuoto le
+    righe con quel todo.
+  - **Q-J57-3**: lo **0 è il default ovunque**, e la guida e il banner spiegano le due strade. Testuale: «mettere 0 se
+    è regalo puro, o il costo a cui il donante lo ha comprato, per renderlo più vero ai fini del calcolo del WAC e quindi
+    dell'utile contabile in caso di tassazione». Il testo nelle 4 lingue lo propongo io.
+  - **Q-J57-4**: sì, l'editor porta alla prima riga rifiutata.
+  - **J-60**: il coordinatore consiglia di rifiutare un costo negativo (lo 0 resta), coerente con N92. Entra nel lotto,
+    salvo un no del developer.
+
+#### J-57 completa — piano breve del lotto (19/10 ~14:00; da fare dopo L1a, col via del coordinatore)
+
+- **Testi** (4 lingue, `dev.py i18n update`, nessuna chiave nuova se non quella di J-60):
+  - `transactions.errors.autoCostEmptyPool` e `.autoCostUnknownPool`: la prima frase resta; la seconda propone
+    «Manuale», e per il regalo lo 0 (il default). Le due strade del regalo le spiegano l'avviso del costo vuoto e la
+    guida.
+  - `transactions.costBasisOverride.warningAdjustment` (l'avviso del costo manuale vuoto, «il banner»): «0 per le
+    quote nuove di uno split. Per un regalo, 0, oppure quanto le ha pagate il donante: così il costo medio, e l'utile
+    su cui potresti pagare le tasse, restano più vicini a quelli veri.» Rovescia la frase di C-48.
+  - La proposta nelle 4 lingue va al coordinatore prima del codice.
+- **Q-J57-1 (c)**:
+  - `bulkTodos.ts`: Auto non risponde più a un todo bloccante del costo;
+  - `TransactionBulkModal.svelte`: le righe create con quel todo partono in Manuale, a campo vuoto. Il form rispetta
+    già la modalità della riga.
+- **Q-J57-4**: dopo una validazione rifiutata, la griglia va alla prima riga rifiutata da un costo Auto
+  (`autoCostEmptyPool`/`UnknownPool`), la più vecchia per data.
+- **J-60**:
+  - un costo di carico negativo è rifiutato con un codice tradotto (`costBasisNegative`, 4 lingue): creazione,
+    modifica, promozione, e i campi risolti della promozione; lo 0 resta ammesso;
+  - nel batch, accanto al controllo delle cifre (`transaction_batch_stages.py`, `_check_limit`).
+- **Doc**:
+  - `user/transactions/form.en.md:40`: niente più «0 by design»; le due strade del regalo;
+  - `user/transactions/import/how-to.en.md`: il costo da inserire si chiude solo con un valore;
+  - la pagina dev `wac.md` per J-60.
+- **Prove**:
+  - rossi: un Vitest su `bulkTodos` (Auto non chiude più il todo); un E2E per la riga che apre in Manuale; un E2E per
+    il salto alla prima riga rifiutata; un backend per il costo negativo (API e batch; lo 0 resta accettato);
+  - controlli E1–E3 e B1 (analisi del 19/10);
+  - `data-code` sulle voci del banner del form, per provarle senza leggere il testo.
+- **Superfici d'altri**, da assegnare dal coordinatore: il frontend delle transazioni (`bulkTodos.ts`,
+  `TransactionBulkModal.svelte`, `TxBulkBanners.svelte`, `TxFormBanners.svelte`; W o B) e il batch
+  (`transaction_batch_stages.py`, W). Il CHANGELOG: una riga 🐛 o 🔄.
+- **Peso**: ~1 giornata, più uno slot E2E (`front-transaction`).
