@@ -259,7 +259,12 @@ the chart is converted, and each Asset comparison gets an item of its own — `i
 so every line uses one window and one currency. The page's `queryAssetPricesBulkWithSignalIsolation()`
 sends it, and `parseAssetPriceQueryWithSignalIsolation()`
 (`lib/components/assets/detail/assetDetailPriceQuery.ts`) validates each signal result on its own, so one
-malformed result does not discard the response.
+malformed result does not discard the response. The page then reads the signal results inside a `try` of
+their own (X-R16): a malformed one fails the signals only, with the panel's notice «Technical signals could
+not be updated», while the prices still reach the chart, the price cache and the **All** start. The FX
+detail page reads `POST /api/v1/fx/currencies/convert` the same way, through
+`parseFxConvertWithSignalIsolation()` (`lib/components/fx/fxDetailConvertQuery.ts`), so its rates survive a
+malformed signal result too.
 
 The same plugin is also in the signal catalog (see
 [Plugin Contract](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)): in
