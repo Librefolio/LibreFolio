@@ -26,7 +26,7 @@ from backend.app.schemas import (
     FAUpsert,
 )
 from backend.app.schemas.prices import FACurrentValue
-from backend.app.utils.date_range_limits import DateOutOfRangeError, stored_date_bounds
+from backend.app.utils.date_range_limits import DateOutOfRangeError, latest_stored_date
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.sql_chunks import chunks
 
@@ -72,8 +72,8 @@ def _reject_prices_over_the_limit(data: List[FAUpsert]) -> None:
             )
 
 
-def _reject_dates_out_of_range(data: List[FAUpsert], earliest: date, latest: date) -> None:
-    """Refuse a manual upsert holding a date outside ``stored_date_bounds()``, before anything is written (X-R65, N83).
+def _reject_dates_out_of_range(data: List[FAUpsert], latest: date) -> None:
+    """Refuse a manual upsert holding a date after ``latest_stored_date()``, before anything is written (X-R65, N83).
 
     One entry per asset with such dates, in the request's order, with at most 10 of them; ``count`` is every one. A
     provider's points are not refused: ``bulk_upsert_prices`` skips them, as it skips the unstorable ones.
@@ -84,12 +84,12 @@ def _reject_dates_out_of_range(data: List[FAUpsert], earliest: date, latest: dat
     items: list[dict] = []
     count = 0
     for item in data:
-        dates = [price.date.isoformat() for price in item.prices if not earliest <= price.date <= latest]
+        dates = [price.date.isoformat() for price in item.prices if price.date > latest]
         if dates:
             items.append({"asset_id": item.asset_id, "dates": dates[:10]})
             count += len(dates)
     if items:
-        raise DateOutOfRangeError(items=items, count=count, earliest=earliest, latest=latest)
+        raise DateOutOfRangeError(items=items, count=count, latest=latest)
 
 
 class PriceCurrencyMismatchError(Exception):
@@ -251,7 +251,7 @@ class PriceStoreOperations:
                 HTTP 400); under a provider's key, a point whose currency is not its asset's (I.2 — Supersedes E.3:
                 soft-skip with ``errors[]`` was dropped because, post-I.5/I.8, the DataEditor no longer sends a
                 per-point currency. See ``plan-phase07-transaction-Part3_1_Closure.md`` §E.3).
-            DateOutOfRangeError: a manual date outside ``stored_date_bounds()`` (X-R65, N83; HTTP 422).
+            DateOutOfRangeError: a manual date after ``latest_stored_date()`` (X-R65, N83; HTTP 422).
             PriceCurrencyMismatchError: a manual price in a currency other than its asset's, on any item of the call
                 (X-R71; HTTP 422 ``price_currency_mismatch``). The three refusals of a manual call come before anything
                 of it is written.
@@ -260,10 +260,10 @@ class PriceStoreOperations:
         """
         if not data:
             return {"inserted_count": 0, "updated_count": 0, "results": []}
-        earliest, latest = stored_date_bounds()
+        latest = latest_stored_date()
         if source_plugin_key == "MANUAL":
             _reject_prices_over_the_limit(data)
-            _reject_dates_out_of_range(data, earliest, latest)
+            _reject_dates_out_of_range(data, latest)
             await _reject_currency_mismatches(session, data)
 
         total_inserted = 0
@@ -335,14 +335,14 @@ class PriceStoreOperations:
             unstorable_dates: list[str] = []
             out_of_range_dates: list[str] = []
             if source_plugin_key != "MANUAL":
-                # X-R65 (N83): a provider's date outside stored_date_bounds() is skipped, never stored.
+                # X-R65 (N83): a provider's date after latest_stored_date() is skipped, never stored.
                 for date_key in list(valid_inputs):
-                    if not earliest <= date_key <= latest:
+                    if date_key > latest:
                         del valid_inputs[date_key]
                         out_of_range_dates.append(date_key.isoformat())
                         rejections.append((date_key, "date_out_of_range"))
                 if out_of_range_dates:
-                    logger.warning("Provider prices skipped: date out of range", asset_id=asset_id, source=source_plugin_key, dates=out_of_range_dates[:5], count=len(out_of_range_dates), earliest=earliest.isoformat(), latest=latest.isoformat())
+                    logger.warning("Provider prices skipped: date out of range", asset_id=asset_id, source=source_plugin_key, dates=out_of_range_dates[:5], count=len(out_of_range_dates), latest=latest.isoformat())
                 for date_key, price in list(valid_inputs.items()):
                     reason = _unstorable_provider_point(price)
                     if reason is not None:
@@ -470,7 +470,7 @@ class PriceStoreOperations:
             if rejected_dates:
                 msg += f"; rejected {len(rejected_dates)} date(s) with impossible OHLC (close outside [low, high]): " + ", ".join(rejected_dates[:5]) + (f" (+ {len(rejected_dates) - 5} more)" if len(rejected_dates) > 5 else "")
             if out_of_range_dates:
-                msg += f"; rejected {len(out_of_range_dates)} date(s) outside {earliest.isoformat()} to {latest.isoformat()}: " + ", ".join(out_of_range_dates[:5]) + (f" (+ {len(out_of_range_dates) - 5} more)" if len(out_of_range_dates) > 5 else "")
+                msg += f"; rejected {len(out_of_range_dates)} date(s) after {latest.isoformat()}: " + ", ".join(out_of_range_dates[:5]) + (f" (+ {len(out_of_range_dates) - 5} more)" if len(out_of_range_dates) > 5 else "")
             if unstorable_dates:
                 msg += f"; rejected {len(unstorable_dates)} date(s) with a value no price column can keep: " + ", ".join(unstorable_dates[:5]) + (f" (+ {len(unstorable_dates) - 5} more)" if len(unstorable_dates) > 5 else "")
 

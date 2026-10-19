@@ -408,7 +408,10 @@ new after an update» in [Changelog Modal](../../user/settings/about.md#changelo
   compares it with `current_release()`, the base release of `config.get_version()`: `release_of()`
   reads `v1.3.0-7-gabc1234` and `1.3.0-rc1` as `1.3.0`, `1.3` as `1.3.0`, and finds no release in
   `unknown`, `dev`, a bare hash or a base of `0.0.0`, which is how `get_git_version()` reports a
-  checkout with no tag (`v0.0.0-g<hash>`). Every answer that carries the user — `POST /auth/login`,
+  checkout with no tag (`v0.0.0-g<hash>`). A pre-release thus counts as its release: an account that
+  closed the window on `1.3.0-rc1` does not see the `1.3.0` chapter again at the final release, even
+  if that chapter grew in between — acceptable for the instances that run release candidates (E's
+  review of C-54). Every answer that carries the user — `POST /auth/login`,
   `GET /auth/me`, `POST /auth/register`, `PUT /auth/profile` and `POST /auth/setup` — puts the
   result in `user.whats_new` (`WhatsNewRead`, `{since, release}`), through `_auth_user()` in
   `backend/app/api/v1/auth.py`; `since` is null for a `NULL` column, an account from before the

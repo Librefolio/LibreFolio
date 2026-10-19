@@ -1439,7 +1439,16 @@
                     }
                 }
                 if (!wantsCalendarReturn) {
-                    applyBackendSignalResults(backendSignalConfigs, requestVersion, parseBackendSignalResults(rawSignalResults.filter((item) => !isCalendarReturnSignalResult(item, CALENDAR_RETURN_INSTANCE_ID))));
+                    // X-R16: an invalid signal result fails the signals only, as a failed request does: nothing applied, the
+                    // banner says so. The prices below still reach the cache and resolve «All».
+                    let backendSignalResults: BackendSignalResult[] | null = null;
+                    try {
+                        backendSignalResults = parseBackendSignalResults(rawSignalResults.filter((item) => !isCalendarReturnSignalResult(item, CALENDAR_RETURN_INSTANCE_ID)));
+                    } catch (signalError) {
+                        console.error('Invalid signal results:', signalError);
+                        signalRequestFailed = requestPlan.requests.length > 0;
+                    }
+                    if (backendSignalResults !== null) applyBackendSignalResults(backendSignalConfigs, requestVersion, backendSignalResults);
                 }
                 // Populate the price cache (derive currency from response if not known yet)
                 const cacheCurrency = effectiveCurrency || chartData[0]?.currency || '';

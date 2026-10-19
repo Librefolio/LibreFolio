@@ -1134,19 +1134,20 @@ async def test_query_more_than_1000_items_is_refused(test_server):
 
 
 # ============================================================
-# X-R65 (N83): a stored price is dated within [1900-01-01, the server's tomorrow]
+# X-R65 (N83, revised 19/10): a stored price is dated no later than the server's tomorrow
 # ============================================================
 #
-# J's SEC8-1b: one price dated 0001-01-01 makes a backward fill or a risk replay walk about 740 000 days per asset.
-# POST /assets/prices checks every date against date_range_limits.stored_date_bounds() -- 1900-01-01 and
-# latest_range_end(), both included -- before any statement: one date outside refuses the whole request with a 422 and
-# writes nothing, for any asset of it. The frozen ceiling, the bounds themselves, the cap of ten and a provider's points
-# are pinned at service level (services asset-source-guards; services range-ceiling, RC-W); here the route on the lane's
-# server, at its real ceiling, read before the request and after the answer as RC-API-01 reads it. 1899-12-31, not
-# 0001-01-01: on code without the check the price is stored, and a walk from year one is what this lot prevents, not
-# something to start on the shared backend.
-
-STORED_FLOOR = "1900-01-01"  # the contract's floor (EARLIEST_RANGE_START), written here and not read from the code
+# J's SEC8-1b: one price dated 0001-01-01 made a backward fill or a risk replay walk about 740 000 days per asset, and
+# X-R65 (17/10) bounded every stored price to [1900-01-01, latest_range_end()]. N83's revision (developer, 19/10: «se
+# voglio leggere e salvare più indietro devo poterlo fare») takes the 1900 floor away and keeps the ceiling alone: the
+# walks stay bounded where they read (N75's 100 years, R13-SEC8's replay floors, Z-30's full-history load). POST
+# /assets/prices checks every date against date_range_limits.latest_stored_date() -- latest_range_end(), included --
+# before any statement: one date after it refuses the whole request with a 422 and writes nothing, for any asset of it;
+# a date before 1900 is stored like any other. The frozen ceiling, the cap of ten and a provider's points are pinned at
+# service level (services asset-source-guards; services range-ceiling, RC-W); here the route on the lane's server, at its
+# real ceiling, read before the request and after the answer as RC-API-01 reads it. 1899-12-31 and 1850-06-01, not
+# 0001-01-01: year one is stored at service level, on that unit's own asset, and taken by the handler on no database
+# (RC-W10); on the lane's shared backend no test leaves a row from which a neighbour's walk could start.
 
 
 async def _create_bounds_asset(client: httpx.AsyncClient) -> int:
@@ -1159,23 +1160,35 @@ async def _create_bounds_asset(client: httpx.AsyncClient) -> int:
 
 async def _stored_price_days(client: httpx.AsyncClient, asset_id: int) -> list[str]:
     """Every day the asset has a price on, whatever its date: the backup export reads the table, no range and no fill."""
+    return list(await _stored_price_closes(client, asset_id))
+
+
+async def _stored_price_closes(client: httpx.AsyncClient, asset_id: int) -> dict[str, Decimal]:
+    """The asset's closes by ISO day, in date order, whatever their date: the backup export, as ``_stored_price_days``."""
     resp = await client.get(f"{API_BASE}/backup/asset/{asset_id}/prices", params={"format": "json"}, timeout=TIMEOUT)
     assert resp.status_code == 200, resp.text
-    return [row["date"] for row in resp.json()["rows"]]
+    return {row["date"]: Decimal(str(row["close"])) for row in resp.json()["rows"]}
+
+
+def _usd_prices(asset_id: int, closes: dict[date, str]) -> FAUpsert:
+    """The asset's prices: a close in USD on each day of ``closes``, in its order."""
+    return FAUpsert(asset_id=asset_id, prices=[FAPricePoint(date=day, close=Decimal(close), currency="USD") for day, close in closes.items()])
 
 
 @pytest.mark.asyncio
-async def test_upsert_outside_the_stored_bounds_is_refused_whole(test_server):
-    """RC-API-05 (X-R65, N83): POST /assets/prices with 1899-12-31 on one asset and a day past the ceiling on another,
-    each beside valid days, answers 422 ``{"code": "date_out_of_range", "message", "params": {"min": "1900-01-01",
-    "max": the ceiling}, "items": [{"asset_id": first, "dates": ["1899-12-31"]}, {"asset_id": second, "dates": [that
-    day]}], "count": 2}`` -- and neither asset has a price, not even on its valid days.
+async def test_upsert_after_the_ceiling_is_refused_whole(test_server):
+    """RC-API-05 (X-R65, N83 revised 19/10): POST /assets/prices with 1899-12-31 and 1850-06-01 on one asset and a day
+    past the ceiling on another, each beside valid days, answers 422 ``{"code": "date_out_of_range", "message",
+    "params": {"max": the ceiling}, "items": [{"asset_id": second, "dates": [that day]}], "count": 1}`` -- and neither
+    asset has a price, not even on its valid days, nor the first on its days before 1900: the request is refused whole.
 
     The ceiling is ``latest_range_end()``, read before the request and after the answer: ``max`` lies between them. The
     day past it is 30 days on, past whatever the ceiling becomes meanwhile.
-    Red before X-R65: 200, the five prices stored -- 1899-12-31 and the day past the ceiling with them.
+    Red before X-R65: 200, the six prices stored -- the day past the ceiling with them.
+    Red before N83's revision: ``params`` is ``{"min": "1900-01-01", "max"}``; the first asset is refused too, for its
+    two days before 1900, and ``count`` is 3.
     """
-    print_section("RC-API-05: price upsert outside the stored bounds refused")
+    print_section("RC-API-05: price upsert after the ceiling refused")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
@@ -1188,8 +1201,8 @@ async def test_upsert_outside_the_stored_bounds_is_refused_whole(test_server):
             ceiling_before = latest_range_end()
             past_ceiling = ceiling_before + timedelta(days=30)
             body = [
-                FAUpsert(asset_id=first, prices=[FAPricePoint(date=day, close=Decimal(close), currency="USD") for day, close in ((date(2020, 3, 2), "100"), (date(1899, 12, 31), "101"), (date(2020, 3, 3), "102"))]),
-                FAUpsert(asset_id=second, prices=[FAPricePoint(date=day, close=Decimal(close), currency="USD") for day, close in ((date(2020, 3, 2), "200"), (past_ceiling, "201"))]),
+                _usd_prices(first, {date(2020, 3, 2): "100", date(1899, 12, 31): "101", date(2020, 3, 3): "102", date(1850, 6, 1): "103"}),
+                _usd_prices(second, {date(2020, 3, 2): "200", past_ceiling: "201"}),
             ]
             resp = await client.post(f"{API_BASE}/assets/prices", json=[item.model_dump(mode="json") for item in body], timeout=TIMEOUT)
             ceiling_after = latest_range_end()
@@ -1198,13 +1211,39 @@ async def test_upsert_outside_the_stored_bounds_is_refused_whole(test_server):
             assert isinstance(detail, dict) and set(detail) == {"code", "message", "params", "items", "count"}, detail
             assert detail["code"] == "date_out_of_range", detail
             assert isinstance(detail["message"], str) and detail["message"].strip(), detail
-            assert set(detail["params"]) == {"min", "max"} and detail["params"]["min"] == STORED_FLOOR, detail
+            assert set(detail["params"]) == {"max"}, f"params {detail['params']}: a stored date has one bound, the ceiling"
             assert ceiling_before <= date.fromisoformat(detail["params"]["max"]) <= ceiling_after, f"max {detail['params']['max']} outside {ceiling_before} … {ceiling_after}"
-            assert detail["items"] == [{"asset_id": first, "dates": ["1899-12-31"]}, {"asset_id": second, "dates": [past_ceiling.isoformat()]}], detail
-            assert detail["count"] == 2, detail
+            assert detail["items"] == [{"asset_id": second, "dates": [past_ceiling.isoformat()]}], detail
+            assert detail["count"] == 1, detail
             assert await _stored_price_days(client, first) == []
             assert await _stored_price_days(client, second) == []
             print_success(f"  ✓ 422 {detail['code']}: {detail['count']} date(s), nothing stored")
         finally:
             if owned:
                 await client.delete(f"{API_BASE}/assets", params={"asset_ids": owned}, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+async def test_upsert_before_1900_is_stored(test_server):
+    """RC-API-07 (N83 revised 19/10): POST /assets/prices with 1850-06-01 and 1899-12-31 beside a valid day answers 200:
+    the asset's result counts 3 and lists no rejection, and the asset has a price on the three days, at their closes.
+
+    Red before N83's revision: 422 ``date_out_of_range``, ``params`` ``{"min": "1900-01-01", "max"}``, the two days
+    before 1900 refused and nothing stored.
+    """
+    print_section("RC-API-07: price upsert before 1900 stored")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        asset_id = await _create_bounds_asset(client)
+        try:
+            assert await _stored_price_days(client, asset_id) == [], "barrier: a new asset holds prices"
+            closes = {date(1850, 6, 1): "301", date(1899, 12, 31): "302", date(2020, 3, 2): "303"}
+            resp = await client.post(f"{API_BASE}/assets/prices", json=[_usd_prices(asset_id, closes).model_dump(mode="json")], timeout=TIMEOUT)
+            assert resp.status_code == 200, f"{resp.status_code}: {resp.text[:400]}"
+            result = next(item for item in FABulkUpsertResponse(**resp.json()).results if item.asset_id == asset_id)
+            assert (result.count, result.rejected) == (3, []), result
+            assert await _stored_price_closes(client, asset_id) == {day.isoformat(): Decimal(close) for day, close in closes.items()}
+            print_success(f"  ✓ 200: {result.count} prices stored, the first on {min(closes)}")
+        finally:
+            await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
