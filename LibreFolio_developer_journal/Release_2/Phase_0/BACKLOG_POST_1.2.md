@@ -370,16 +370,19 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
     l'AI Export, il PAC, i sync), e per ciascuna un segnale uniforme di attesa sul contenuto che cambierà: uno stato
     «in aggiornamento» sul grafico o sul pannello, e i dati vecchi attenuati invece che lasciati come se fossero
     attuali. Da progettare insieme, con un componente comune, e dopo la 1.2.
-- **C-86 · Un provider di prezzi con le API di Interactive Brokers** — basso; utente C (uno dei primi utenti), chat del
+- ↪ **C-86 · Un provider di prezzi con le API di Interactive Brokers** — basso; utente C (uno dei primi utenti), chat del
   04/09, ritrovata dal developer il 14/10. Prezzo corrente e storico letti con la chiave dell'utente. Dipende da un
-  posto dove salvare le chiavi dei plugin (`TODO_FUTURI.md`, «⚙️ Impostazioni per plugin») e da un account per le
+  posto dove salvare le chiavi dei plugin (consegnato nella 1.3: impostazioni dei plugin con segreti) e da un account per le
   prove. Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 4.
-- **C-87 · Rendimento a scadenza (YTM) e duration delle obbligazioni** — basso; utente C, chat del 04/09. Salvarli con
+  ↪ **Spostata il 18/10 in `TODO_FUTURI.md`, «🧬 Profilo dei dati dell'asset»** (developer), insieme a F16 e F-MC-3.
+- ↪ **C-87 · Rendimento a scadenza (YTM) e duration delle obbligazioni** — basso; utente C, chat del 04/09. Salvarli con
   la loro data, perché cambiano nel tempo, e mostrarli nella pagina dell'asset. Da decidere se leggerli da un provider
   o calcolarli in `backend/app/services/financial_math/`. Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 5.
-- **C-88 · Un pacchetto di dati di qualità in abbonamento** — minimo, un'idea da valutare per `TODO_FUTURI.md`; utente
+  ↪ **Spostata il 18/10 in `TODO_FUTURI.md`, «🧬 Profilo dei dati dell'asset»** (developer), insieme a F16 e F-MC-3.
+- ↪ **C-88 · Un pacchetto di dati di qualità in abbonamento** — minimo, un'idea da valutare per `TODO_FUTURI.md`; utente
   C, chat del 04/09. Prezzi storici e composizioni dei fondi a pagamento, per chi li vuole, anche come sostegno al
   progetto. Da valutare: licenze dei dati, costi, convivenza con l'installazione self-hosted. Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 14.
+  ↪ **Spostata il 18/10 in `TODO_FUTURI.md`, «🧬 Profilo dei dati dell'asset»** (developer), insieme a F16 e F-MC-3.
 - ✅ **C-89 · Spiegare le due date del cambio valuta** — minimo; utente C, chat del 04/09. Nel modulo, accanto alle date
   «Da» e «A» (`TransactionFormModal.svelte:1645`, `:1693`), un suggerimento: di solito coincidono, e si separano quando
   il broker accredita la nuova valuta in un altro giorno. La stessa frase nella guida (`user/transactions/form.*.md`).
