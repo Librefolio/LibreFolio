@@ -155,22 +155,54 @@ continuano ad aggiornare per data e tipo, ma non toccano un evento collegato sen
 
 ## 7. Lotti e checkpoint
 
+Rimessa in pari il 19/10 (riconciliazione della ripartenza, base `3d5678283`): lo stato di ogni lotto letto nei commit di
+`dev_release2`, con la prova. Le voci del backlog hanno i loro ✅ nella sezione W di `BACKLOG_POST_1.2.md`.
+
 | # | Lotto | Contenuto | Stato |
 |---|---|---|---|
 | W0 | Base e piano | questo piano; misure di base nella corsia | ✅ 14/10, `64e3d0a7d` |
 | W1 | CP1, rinomina | `services/transactions/`, `services/brokers/`, via l'hub; import, runner, script, doc, `.github`, devWiki | ✅ 15/10, `9a44bdcec` |
-| W2 | CP2, taglio | mixin per tema (C4); broker in CRUD, summary, accessi; stadi del batch per tema | ✅ 15/10, 🧊 al coordinatore |
-| I1 | CP3, integrità | V-23, C-65b, L5, C-79/C-3 | ✅ 15/10, 🧊 al coordinatore |
-| K1 | CP4, chiarezza | O-12, C-89, V-38, P-15 (W); I-10 S3 chiusa senza codice | ✅ 15/10, 🧊 al coordinatore |
-| W3 | CP5, router | `api/v1/brokers/` per risorsa | ⏳ dopo PL2 e il commit del coordinatore |
-| W4 | CP6–CP7, PL5 | `services/brim/`, rinomina poi taglio con guardia; `applyTo`, skill, guida (U-B8) | ⏳ dopo PL2, PL6 |
-| W5–W6 | CP8 | U-B3, U-B4 | ⏳ dopo W4 e il commit su `uploads.py` |
-| K2 | CP9 | C-70 (a, b), e (c) dopo il CP1 di H | ⏳ |
-| W7 | CP10 | schemi delle transazioni come pacchetto (C3) | ⏳ |
-| E1 | CP11 | eventi: I-09, I-12, V-22, I-10, I-11 | ⏳ dopo X e le decisioni |
-| FE8a | CP12–CP13 | tagli delle tre modali (annuncio §7), poi la cartella dopo il lotto A | ⏳ |
-| K3 | CP14… | V-37b, eventi collegabili nel Bulk, C-65a, K-2..K-4; se c'è spazio C-45, C-61, V-24, P-2, P-12 | ⏳ |
-| FE8b | finale | moduli usati fuori + `features/transactions/index.ts` (dopo il lotto D); P-14, U-B9 | ⏳ |
+| W2 | CP2, taglio | mixin per tema (C4); broker in CRUD, summary, accessi; stadi del batch per tema | ✅ 15/10, in dev prima di `d036d4896` |
+| I1 | CP3, integrità | V-23, C-65b, L5, C-79/C-3 | ✅ 15/10, dev `dc7e4e48e` |
+| K1 | CP4, chiarezza | O-12, C-89, V-38, P-15 (W); I-10 S3 chiusa senza codice | ✅ 15/10, `532a1fd9c`, registro `0229dbc6a` |
+| W3 | CP5, router | `api/v1/brokers/` per risorsa | ❌ **non fatto**: aspettava un commit del coordinatore su `brokers.py` che non è venuto, poi la coda dei difetti l'ha superato. `api/v1/brokers.py` è ancora un file solo |
+| W4 | CP6–CP7, PL5 | `services/brim/`, rinomina poi taglio con guardia; `applyTo`, skill, guida (U-B8) | 🟡 CP6 (la rinomina) ✅ 15/10, registro `0902524e5`; **CP7 (il taglio di `brim_provider.py` per tema) non fatto**: aspettava lo stesso commit di W3 |
+| W5–W6 | CP8 | U-B3, U-B4 | ❌ **non fatto**: `brim_providers/static/` e `brim_providers/sample_reports/` sono ancora alla radice della famiglia (verificato il 19/10); aspettava il commit su `uploads.py` |
+| K2 | CP9 | C-70 (a, b), e (c) dopo il CP1 di H | 🟡 K2a ✅ 15/10 (`0eac8e1b6`, registro `e7cf1ae80`); **K2b** (il 400 strutturato del parse e `preview_unreadable_workbook`) e **K2c** non fatti: aspettavano il commit su `brokers.py` e `uploads.py` |
+| W7 | CP10 | schemi delle transazioni come pacchetto (C3) | ✅ 15/10, registro `58be885a9` |
+| E1 | CP11 | eventi: I-09, I-12, V-22, I-10, I-11 | ✅ 15/10: E0 dev `d226bc69e`, E1a ed E1c dev `14d58cc61`, E1b dev `fecf88c1a` |
+| FE8a | CP12–CP13 | tagli delle tre modali (annuncio §7), poi la cartella dopo il lotto A | ✅ 15/10, dev `14d58cc61` |
+| K3 | CP14… | V-37b, eventi collegabili nel Bulk, C-65a, K-2..K-4; se c'è spazio C-45, C-61, V-24, P-2, P-12 | ⏸️ **parcheggiato il 19/10** (N91): K3a in patch nella cartella di sessione, K3b e K3c dopo la lettura del developer; C-65a con X dopo |
+| FE8b | finale | moduli usati fuori + `features/transactions/index.ts` (dopo il lotto D); P-14, U-B9 | ✅ 16/10 lo spostamento, dev `31335fe26` (`index.ts` superato da D-P4); **P-14 e U-B9**, lotti piccoli a parte, aperti |
+
+**Lotti aggiunti durante la 1.3** (dalla coda del coordinatore; prove dei singoli treni nel backlog):
+
+| Lotto | Contenuto | Stato |
+|---|---|---|
+| N1 + N1b | cassa della pagina broker (W-B5), TRANSFER orfano (V-3), correzioni post-migrazione (W-B6, W-B22, W-B23) | ✅ 15/10, dev `14d58cc61` |
+| N2 | il costo obbligatorio anche nell'API | ✅ 15/10, dev `f421e418a` |
+| F36 | i file dei broker solo a chi vede il broker (W-B3, W-B4) | ✅ 15/10, dev `434af2925` |
+| W-B20 | la cancellazione dei broker atomica per broker | ✅ 15/10, dev `23ff56b95` |
+| Doc A-14 | W-B10, W-B27 (le chiavi), W-B33, W-B35 | ✅ 16/10, dev `6fa3f8936` |
+| W-B31 + W-B36 | le regole 5–12 lette dai metadati dei tipi | ✅ 16/10, dev `4e69b5271` |
+| Treni piccoli del 16/10 | W-B12, W-B17, W-B29, W-B30, W-B32, W-B37, W-B38, W-B39, W-B41, W-B42, W-B44, W-B45, W-B53 | ✅ 16/10, treni 98–111 |
+| Decisione 47 | la gamba che cede convertita al costo | ✅ 16/10, dev `ea72346b7` |
+| C-97a | quantità a 10 e prezzi a 12 decimali; il costo Auto | ✅ 16/10, dev `c91bd41b2` |
+| C-97b | i decimali in input | ✅ 17/10, dev `b2462042d` |
+| C-97c-1…3 | prezzi e quantità, lotti, asset e grafici | ✅ 17/10, dev `f1bfa1e31`, `016fe7af9`, `e19f7c7e6` |
+| W-B58 + W-B59 | la revisione R13-SEC2 | ✅ 17/10, dev `4e9d1815f` |
+| W-B60 | importi e valori degli eventi letti esatti | ✅ 17/10, dev `484c71afb` |
+| W-B69 | il costo Auto su un pool illeggibile; la metà del batch | ✅ 17/10, dev `c61a2db4d`, `eee5dad17` |
+| R13-SEC7-3 | i limiti d'ingresso, il giro dei giorni, le date | ✅ 17/10, dev `e609082ab` |
+| W-B71 | le finestre di date ai bordi del calendario | ✅ 17/10, dev `1431e20df` |
+| W-B74 | i saldi su righe illeggibili | ✅ 17/10, dev `80cee9c2d` |
+| W-B72 | N78: un costo dove il tipo non lo prende | ✅ 17/10, dev `7bc66c7ca`, `5603a23a7` |
+| W-B67 | il costo Auto sulla riga giusta (N84) | ✅ 17/10, dev `ac92e6fae` |
+| W-B66 | gli esponenti incollati | ✅ 17/10, dev `e820279e1` |
+| W-B68 | i valori degli eventi del fornitore troncati alla colonna | ✅ 17/10, dev `06e9d2c20` |
+| W-B70 (+ W-B73, W-B77) | i parametri degli errori, il limite dell'unione | ✅ 17/10, dev `41335f1e1` |
+| W-B48 + W-B51 | i testid negli spec; i doppioni BRIM delle crypto | ✅ 17/10, dev `4bc6b2ab1` |
+| W-B81 | i doppioni del wizard con la regola di W-B51 | ✅ 17/10, dev `5890d512c` |
 
 ## 8. Definizione di fatto (ogni lotto di riordino)
 
@@ -6904,3 +6936,238 @@ B-47 e B-48 sono nella sezione di B: chiusura chiesta al coordinatore); 7. simul
 > - Worktree riportato a HEAD per quei file e il non tracciato tolto; `git apply --check` della patch sul worktree pulito: OK.
 > - **Con la regola del 19/10 sono domande, non decisioni**: le scelte fatte da me in questa sezione (PC5 diviso, i valori nel dominio,
 >   K-3b nello stesso lotto) tornano al coordinatore con le opzioni alla ripresa; D-K3-1…7 aspettano la lettura del developer (N91).
+
+### Revisione dopo l'ingresso — J-57, sul percorso dell'import (2026-10-19) ✅ OK, due domande
+
+Ripartenza del 19/10 (fase 2): base `3d5678283`. J-57 è `b7e2bb3bd` (dev `539371064`). Sola lettura, solo il percorso dell'import:
+plugin BRIM → wizard → Bulk → validate/commit. La decisione del developer (19/10): J-57 resta, «Auto» senza niente da mediare è
+rifiutato, lo 0 manuale (il regalo) è permesso nel form e nel wizard, e il messaggio suggerisce «Manuale e 0». J sta analizzando come
+completarlo nel wizard: questa revisione serve a J e al coordinatore.
+
+**Verificato, OK**
+- Il salvataggio di un import passa da `execute_batch`. Il pool conta le righe del batch già scritte (flush). Il ricevente di un TRANSFER
+  media il broker del partner fino alla data del partner, senza le due gambe (`auto_cost.py:266-279`), così un trasferimento intero
+  tiene il suo costo. Le righe Auto non ancora costate restano fuori (N84), e una rifiutata resta fuori dalle successive: la cascata è
+  voluta e fissata dal test R4 di J (`test_two_auto_adjustments_on_an_empty_broker_are_both_refused`).
+- Un pool di unità gratuite (Manuale 0) dà una media 0 valida (test C2 di J), e la riga costata così esce da `pending`: `Currency`
+  (`schemas/common.py:159`) non ha `__bool__`. Nessun rifiuto falso a valle.
+- Nessun numero sbagliato a video: l'anteprima Auto del form viene dalla risposta della validazione (`WacPreviewSection` ←
+  `wac_results`), e una riga rifiutata non ha risultato.
+- I due codici hanno la chiave nelle 4 lingue, con il suggerimento «0 se sono arrivate gratis» per `autoCostEmptyPool`.
+- Lo 0 manuale è raggiungibile nell'import: in Manuale `buildCreatePayload` manda `{amount: '0'}` (`txPayloadHelpers.ts:281`), il
+  backend lo accetta (`test_manual_zero_cost_on_a_broker_that_never_held_the_asset_commits`), e `remainingTodos` lo conta come risposta
+  a un todo del costo (`bulkTodos.ts:23-24`).
+
+**Dove J-57 tocca l'import.** I plugin non mandano mai Auto: solo Crédit Agricole e Intesa mettono `manual`, e solo quando il report dà
+il costo. Auto lo mette il frontend, in due punti:
+1. il form apre in Auto una riga senza modalità (`TransactionFormModal.svelte:398`, `:472`, `:475`), e `applyFormPayload` deriva Auto
+   per una riga con modalità `null` (`TransactionBulkModal.svelte:817-823`): aprire nel form una riga importata in entrata e premere
+   Applica la mette in Auto;
+2. un todo bloccante del costo si chiude con Auto (`bulkTodos.ts:22`): `gap_fix_cost` del gap-fix, `demerger` di Danske Bank,
+   `corporate_action` del CSV generico.
+
+Quelle righe sono posizioni che LibreFolio non ha. Con J-57 finiscono in `autoCostEmptyPool` alla validazione, dove prima diventavano
+un acquisto gratuito in silenzio: giusto. Però il todo sparisce come «risposto», e al suo posto arriva un errore di validazione.
+
+**Domande per J e il coordinatore**
+- **Q-J57-1 · Auto risponde ancora a un todo bloccante del costo?**
+  - (a) com'è oggi;
+  - (b) un todo bloccante del costo si chiude solo con un valore, Manuale e 0 compreso: il plugin sa già che non c'è niente da mediare
+    *(consiglio)*;
+  - (c) come (b), e in più il form apre quella riga in Manuale vuoto invece che in Auto.
+- **Q-J57-2 · Lo 0 di un plugin senza modalità.** Una riga importata con un costo 0 e senza modalità si apre nel form in Auto, e lo 0
+  diventa il segnaposto della valuta (`TransactionFormModal.svelte:400-402`): il costo del plugin si perde. Oggi non succede (nessun
+  plugin manda uno 0 senza modalità), ma è la stessa radice di W-B82 qui sotto, e la stessa cura la chiude.
+- **Nota sulla cascata, per il wizard.** In un import con un ADJUSTMENT in entrata su A e poi un TRANSFER A→B, tutti e due sono
+  rifiutati: il secondo con «nessuna unità detenuta», benché A le abbia (sono della prima riga, ancora senza costo). È la scelta di J
+  (R4). Conviene che il wizard porti l'utente alla prima riga rifiutata: sistemata quella, le altre passano alla validazione dopo.
+
+**Trovato fuori da J-57 (mio, latente): W-B82.** Un costo che il plugin o il gap-fix dà senza modalità si perde nel Bulk.
+`txCreateItemToPendingOp` lascia la modalità a `null`, e `buildCreatePayload` manda un costo solo in Auto o in Manuale
+(`txPayloadHelpers.ts:277-283`). Così la proposta del gap-fix con il costo per unità della banca (`brim_gap_fix.py:213`) arriverebbe
+senza costo, rifiutata con `costBasisRequired`. Latente: oggi nessun plugin riempie `unit_cost` (solo Danske Bank costruisce posizioni,
+e senza costo). Cura proposta, dopo il via: all'ingresso dell'import un costo senza modalità diventa Manuale, e il gap-fix scrive
+`cost_basis_mode="manual"` come Crédit Agricole e Intesa; un rosso Vitest e uno pytest.
+
+### Fase 2 della ripartenza — tre analisi in sola lettura (2026-10-19, base `3d5678283`)
+
+Regola del 19/10: nessuna decisione di prodotto da W. Ogni scelta che cambia ciò che l'utente vede, i numeri o i dati è una
+domanda al coordinatore, con le opzioni e il consiglio. Nessun codice: si implementa solo dopo il via. Le tre analisi leggono il
+codice di `3d5678283`; l'inventario (B) unisce quattro passate in sola lettura e le mie verifiche delle voci di W.
+
+#### A. N78-bis — il costo ammesso e obbligatorio, calcolato dal backend
+
+Il developer, testuale: «la regola deve venire esposta dal backend nell'endpoint che lo espone».
+
+**Oggi, il backend**
+- `GET /transactions/types` pubblica per tipo `cost_basis_mode` e, per le coppie, `cost_basis_pair` [chi cede, chi riceve], coi
+  valori `forbidden` / `optional` / `required_qty_pos` (`schemas/transactions/type_metadata.py:36-37`, `:127-136`). TRANSFER
+  `["forbidden", "required_qty_pos"]` (`:314`), ADJUSTMENT `required_qty_pos` (`:359`), ogni altro tipo `forbidden`.
+- Il validatore legge la tabella con tre funzioni: `_cost_basis_rule` (il lato viene dalla quantità: sopra zero riceve,
+  altrimenti cede; `:403-415`), `cost_basis_required` (`:418-426`) e `cost_basis_allowed` (`:429-436`).
+- Regola 12 (`schemas/transactions/transactions.py:177-185`): una modalità (`auto`, `auto-detail`, `manual`) solo dove
+  `cost_basis_allowed`.
+- Regola 12b (N78, W-B72, `:186-195`): un costo senza modalità solo dove `cost_basis_allowed`, **oppure su un ADJUSTMENT con
+  quantità sotto zero**: il costo di consegna della decisione 47, scritto da `_handover_cost` quando un TRANSFER si divide o si
+  cancella, e che un update può impostare.
+- Quindi un ADJUSTMENT in uscita accetta un valore ma nessuna modalità, e l'eccezione non è nella tabella pubblicata.
+
+**Oggi, il frontend.** La formula `cbRule !== 'forbidden' && !(cbRule === 'required_qty_pos' && quantità <= 0)` è ricopiata a
+mano, e il Form decide per nome di tipo:
+
+| Punto | Cosa fa | Sull'ADJUSTMENT in uscita |
+|---|---|---|
+| `txPayloadHelpers.ts:270-284` `buildCreatePayload` | manda Auto, o un valore Manuale, solo dove la formula ammette un costo | il costo di consegna digitato non parte |
+| `txPayloadHelpers.ts:296-337` `buildUpdateDiff` | confronta e manda il costo con la stessa formula | la modifica del costo di consegna non parte |
+| `txPayloadHelpers.ts:342-372` `diffDualItem` | idem per le coppie del Form | — |
+| `txPayloadHelpers.ts:456-457` `buildDualCreatePayloads` | porta Auto al ricevente | — |
+| `TransactionBulkModal.svelte:802-826` `applyFormPayload` | toglie modalità e costo dove la formula non lo ammette | il costo salvato sparisce dalla riga: la chiusura chiede di scartare, il salvataggio non lo manda |
+| `TransactionBulkModal.svelte:203-213` `fieldsFromTx` | Manuale dove il tipo ammette un costo | — |
+| `TransactionBulkModal.svelte:719-725`, passo 3 di `collapsePairedOps` | Auto al ricevente di una coppia nuova | — |
+| `TransactionFormModal.svelte:744` `showCostBasisField` | `TRANSFER` o `ADJUSTMENT`, per nome | la sezione appare anche dove il valore non partirà |
+| `TxFormSingleSection.svelte:294` | la sezione in linea dell'ADJUSTMENT | offre anche Auto, che la regola 12 rifiuta in uscita |
+
+**L'effetto** (letto nel codice, non visto a schermo): su un ADJUSTMENT in uscita il Form mostra il costo e lascia cambiarlo, ma
+il valore non parte mai. La modifica si perde in silenzio, e il costo di consegna è il costo a cui i lotti cedono le unità
+(decisione 47): un numero.
+
+**Proposta: il backend calcola, il frontend legge**
+1. **Backend**: una funzione sola in `type_metadata.py`, `cost_basis_answer(tx_type, direction)`, con `direction` fra `in`
+   (quantità sopra zero), `out` (sotto zero) e `zero`. Rende `{value, auto}`:
+   - `value`: `required` (un valore, o Auto dove `auto` è vero), `optional` o `forbidden`;
+   - `auto`: se si può scegliere Auto.
+   Le regole 12 e 12b e `cost_basis_required` la chiamano, così il validatore e la risposta pubblicata non possono più
+   divergere. Valori di oggi:
+
+   | Tipo | `in` | `out` | `zero` |
+   |---|---|---|---|
+   | ADJUSTMENT | `required`, Auto | `optional`, senza Auto (l'eccezione) | `forbidden` |
+   | TRANSFER | `required`, Auto | `forbidden` | `forbidden` |
+   | ogni altro tipo | `forbidden` | `forbidden` | `forbidden` |
+2. `GET /transactions/types` pubblica per tipo `cost_basis_rules: {in, out, zero}` già calcolati; `api sync`.
+3. **Frontend**: `getCostBasisAnswer(type, quantitySign)` al posto di `getCostBasisRule` e della formula. I nove punti leggono
+   `value` e `auto`; il Form mostra la sezione quando `value` non è `forbidden` per il segno della quantità, e offre Auto solo
+   quando `auto`.
+4. **Test**: un pytest «di contratto», per ogni tipo e direzione la risposta pubblicata coincide con ciò che le regole 12 e 12b
+   accettano e rifiutano (una regola nuova non può dimenticare l'endpoint); Vitest sui nove punti; un E2E del Form sul costo di
+   consegna.
+
+Stima: backend circa mezza giornata, frontend circa una, doc un quarto.
+
+**Domande**
+- **Q-N78-1 · Il costo di consegna nel Form.** Con la risposta pubblicata, un ADJUSTMENT in uscita mostra un costo scritto a mano,
+  senza Auto.
+  - (a) modificabile *(consiglio: il backend lo accetta già, e il developer chiede che il frontend «la legga e basta»)*;
+  - (b) solo in lettura: il valore scritto dal backend alla divisione;
+  - (c) nascosto.
+
+  E l'etichetta: «Costo di consegna», o la stessa «Costo per unità» dell'entrata?
+- **Q-N78-2 · I campi vecchi dell'endpoint.**
+  - (a) il campo nuovo accanto a `cost_basis_mode` e `cost_basis_pair`, che restano una release segnati deprecati *(consiglio:
+    l'endpoint è pubblico)*;
+  - (b) sostituirli subito.
+
+#### B. Inventario degli endpoint che espongono regole
+
+Il developer, testuale: «siccome abbiamo vari endpoint con le regole, verifica che anche loro siano aggiornati rispetto il sistema
+ad ora». Le voci di W le ho verificate io; quelle degli altri workstream le ho solo lette.
+
+| # | Endpoint o regola | Il frontend | Allineato oggi? | Deriva | Di chi | Cura proposta |
+|---|---|---|---|---|---|---|
+| 1 | `GET /transactions/types`: modi e segni di asset, cassa e quantità, `requires_link`, `event_compatible`, `pair_form_layout`, `promote_from`, `swap_group` | `transactionTypeStore.ts` (`getTypeRule`) | sì, per i campi letti | le coppie scritte a mano: la lista dei tipi di coppia (`TransactionBulkModal.svelte:1992`), il lato che cede per `type === 'TRANSFER'` (`:576`, `:954`, `:976`, `:1679`; `TransactionActionModal.svelte:76`), il controllo «opposto» (`:2572-2573`, `:2897-2898`, `:2922-2923`) invece di `promote_from.field_constraints`; le liste di tipi del wizard (`FixFlaggedStep.svelte:307-309`); pubblicati e mai letti: `split_into`, `pair_field_constraints`, `validation_codes` | W | W-B46 (le coppie dalla tabella); le liste del wizard dai segni pubblicati; i campi inutili letti o tolti |
+| 2 | `GET /transactions/types`: il costo (`cost_basis_mode`, `cost_basis_pair`) | la formula ricopiata in nove punti | **no** | l'eccezione dell'ADJUSTMENT in uscita | W | N78-bis (A) |
+| 3 | `GET /transactions/types`: `event_types[].compatible_tx_types` | mai letto | **no** | il validatore non guarda il tipo dell'evento (`services/transactions/validation.py:25-31`); i suggerimenti hanno una mappa loro senza MATURITY_SETTLEMENT→INTEREST (`event_suggestions.py:43-45`); il picker elenca ogni tipo (`AssetEventPicker.svelte:123`, `:233`) e ha le sue icone (`:83-92`) | W | K3b, già deciso (D-K3-1…3: una mappa da `EVENT_TYPE_METADATA`, regola 9b, il picker sul motore); le icone da `getEventTypeEmoji`, i colori della mappa restano |
+| 4 | Le guardie dello SPLIT con ADJUSTMENT collegate senza costo, al cambio di tipo e alla cancellazione (P-10/27, X-R48/49: `services/assets/event_store.py`, `_reject_split_retype_without_costs`, `:572`, `:643`; `services/assets/split_guard.py:22`) | — | non pubblicate | la UI le scopre al salvataggio | X e W | Q-INV-3 |
+| 5 | `GET /brokers/import/plugins`: `supported_extensions`, `report_roles[].extensions` | in parte: le estensioni scritte a mano in quattro punti (`ImportWizardModal.svelte:144`, `UploadStep.svelte:97`, `BrokerImportFilesModal.svelte:358`, `routes/(app)/files/+page.svelte:831`) | sì, per caso | coincide solo finché nessun plugin pubblica un'estensione nuova | W (i primi tre), H (la pagina File) | `accept` e il controllo dall'unione delle estensioni pubblicate |
+| 6 | L'upload BRIM (`api/v1/brokers.py:600-660`) | — | — | accetta qualsiasi estensione: un file che nessun plugin legge è salvato | W | Q-INV-1 |
+| 7 | La dimensione massima dell'upload (`max_upload_mb`, `brokers.py:631-643`) | il wizard e la modale dei report usano i 10 MB di default di `FileUploader.svelte:19`, la pagina File passa il setting (`files/+page.svelte:824`, `:831`) | **no** | con un limite cambiato dall'admin il wizard rifiuta a 10 MB, o lascia arrivare un 413 in inglese | W | passare il setting come la pagina File |
+| 8 | `GET /assets/provider`: `params_schema` (`FAProviderParamField`, `schemas/provider.py:120-135`) | form dinamico (`components/assets/ProviderAssignmentSection.svelte`, `params_schema` a `:61`) | **può divergere** | lo schema è scritto a mano nel plugin, separato dal modello Pydantic che valida, e non sa dire min e max; lo Scheduled Investment non pubblica i limiti di N73 (`schemas/assets/scheduled_investment.py:35-38`) | X | lo schema generato dal modello, con min e max; i limiti di N73 pubblicati |
+| 9 | `GET /fx/providers` | solo campi descrittivi | sì | — | — | — |
+| 10 | I cataloghi dei segnali (`/signals/preview`, i cataloghi di FX e asset) | `schemaMapper.ts:98-125` legge min, max, default ed enum | sì | i segnali solo del browser (seno, lineare, composto) hanno limiti loro, ma non vanno al backend | Y | — |
+| 11 | `GET /risk/catalog`: `parameters_schema` | il laboratorio non lo legge: 0,95, 1 e 30 scritti a mano (`riskAnalysisHelpers.ts:291`, `:328-351`) | sì, oggi | se un plugin cambia default o limiti, il frontend non segue | da assegnare | default e limiti dal catalogo |
+| 12 | `GET /tools/catalog` (PAC): il contratto generato | in parte: `maxlength="120"` (`BrokerEditor.svelte:149`, `ManualAccountDialog.svelte:44`, `LiquidityStep.svelte:163`, `:209`) non è nel contratto (quale campo: da verificare), `max="100"` a mano (`TargetInputCell.svelte:16`, `RoutingStep.svelte:261`, `FxStep.svelte:339`) | da verificare | — | PAC, da assegnare | i limiti dal contratto generato |
+| 13 | `GET /plugin-settings` | `PluginSettingsForm.svelte`, `pluginSettingsForm.ts` | sì | — | — | — |
+| 14 | `GET /system/instance`: `password_rules`, la registrazione | letti; `passwordRules.ts:16` è solo un ripiego | sì | lo username (3–50, `schemas/auth.py:30`, `:60`) non è pubblicato | **A** | segnalato ad A |
+| 15 | Limiti senza endpoint, copiati a mano: i tetti delle richieste in blocco e i 100 anni (`api/bulkBatches.ts:15-25` contro `utils/date_range_limits.py:20-30`), il pavimento 1900 (`utils/rangeChange.ts:16`), i 500 caratteri della descrizione (`promoteHelpers.ts:76`) | copie | sì, oggi | nessuna fonte unica | Z (bulkBatches), W (descrizione), da assegnare (rangeChange) | Q-INV-2 |
+| 16 | `MAX_BULK_WRITE_ITEMS` (10 000, `date_range_limits.py:36`) | nessuna copia | **no** | un CSV di prezzi o cambi oltre 10 000 righe riceve un 422 | X | dividere le scritture, o avvisare prima |
+| 17 | Le cifre decimali (nessun endpoint) | il Form: quantità 15 intere e 10 decimali (allineato), la cassa senza limiti (B-48, D-K3-6, in K3a parcheggiato); i default 12/12 di `ExactDecimalInput` e `ExactQuantityInput` sono la colonna dei prezzi | **no** per le cifre significative | nessun input applica le 15 cifre significative che il backend chiede a ogni colonna `RealDecimal` (`db/precision.py:128`): prezzi e cambi accettano 24 cifre | W (Form, K3a), X (editor di prezzi e cambi) | il `maxSignificantDigits` di K3a anche negli editor di X |
+| 18 | L'anno fra 1900 e 2200 di ogni calendario (`CalendarMonth.svelte:221-222`) | scritto a mano | sì, oggi | vale per ogni data, non solo per i piani | UI condivisa, da assegnare | i limiti come prop, dai limiti del backend |
+| 19 | Le date delle transazioni | `SingleDatePicker` porta a oggi del browser | sì | — | W | N74 (C) |
+
+**Correzioni alle passate di lettura** (verificate da me): `TxFormSingleSection.svelte:223-224` (15/10) è il secondo campo della
+quantità, non la cassa, che non ha limiti (riga 17); e i selettori di data delle transazioni hanno un massimo, oggi del browser
+(`SingleDatePicker`, `allowFuture` falso).
+
+**Domande**
+- **Q-INV-1 · L'upload BRIM di un file che nessun plugin legge.** (a) com'è: salvato, nessun plugin compatibile; (b) 415 con le
+  estensioni ammesse *(consiglio)*.
+- **Q-INV-2 · I limiti copiati a mano (riga 15).** (a) pubblicarli in `GET /system/instance`, come le regole delle password
+  *(consiglio)*; (b) un test per ognuno che confronta la copia col backend; (c) lasciarli.
+- **Q-INV-3 · Le guardie dello SPLIT (riga 4).** (a) pubblicarle, perché la UI le mostri prima del salvataggio; (b) restano al
+  salvataggio *(consiglio per la 1.3, se il rifiuto di oggi è già tradotto: da verificare con X)*.
+
+#### C. N74 — il limite in avanti della data di una transazione
+
+Decisione del developer (19/10): da «oggi + 1 anno» a «domani del server», codice `dateOutOfRange`; il client ha già il suo limite.
+
+**Oggi**
+- `transaction_batch_stages.py:167-179`: `TRANSACTION_DATE_YEARS_AHEAD = 1`, e `transaction_date_bounds()` prende oggi da
+  `today_date()`, in UTC. `check_dates()` (`:188-221`) legge le create, gli update che cambiano la data e la data di una
+  promozione.
+- Ogni ingresso passa da `execute_batch`: l'import BRIM (la conferma del Bulk) e il gap-fix compresi.
+- Il commento del codice spiega l'anno: «a year covers the time zones and the settlement dates a broker's report puts ahead». È
+  proprio il caso che N74 chiude.
+
+**Quale «oggi».** Ci sono due funzioni. `today_date()` è UTC (`utils/datetime_utils.py:87`). `latest_range_end()` è la data
+locale del server più un giorno (`:108-120`), ed è già il tetto dei prezzi e dei cambi scritti a mano (N83, `stored_date_bounds()`,
+`utils/date_range_limits.py:74`). Proposta: le transazioni usano lo stesso `stored_date_bounds()`, così un solo «domani del
+server» vale per transazioni, prezzi e cambi.
+
+**I plugin di import**
+
+| Plugin | La data della riga | Futura? |
+|---|---|---|
+| Fineco | «Data valuta» per prima, poi «Operazione» (`broker_fineco/plugin.py:284-285`) | **sì**: un acquisto di oggi ha valuta T+2, fino a quattro giorni di calendario sul fine settimana |
+| Disnat | la data dell'operazione; il regolamento solo se manca (`broker_disnat/plugin.py:194`) | di rado |
+| Danske Bank | le righe di custodia regolate dopo la fine del file di cassa sono scartate come `not_yet_settled` (`broker_danske_bank/plugin.py:898-906`) | no |
+| Scalable | le righe non eseguite sono saltate (`_scalable.py:339-342`) | no |
+| CSV generico | la colonna che sceglie l'utente (`broker_generic_csv/plugin.py:552`) | se l'utente sceglie una data valuta |
+| Intesa | «Data», la data contabile (`broker_intesa/plugin.py:194`) | no |
+| gli altri | la data dell'operazione o un timestamp | al più un giorno avanti per il fuso: coperto da «domani» |
+| gap-fix | `checkpoint.as_of`, la data di verità del report (`brim/brim_gap_fix.py:211`) | no |
+
+**I report di esempio**: nessuna data di riga dopo il 20/10/2026. I CSV non ne hanno; negli XLSX, letti con openpyxl, le sole
+date più avanti sono scadenze di BTP dentro le descrizioni («BTP OTHER 1/9/2030» in `credit_agricole-conti.xlsx`, «BTP 1/12/2026»
+in `credit_agricole-export.xlsx`).
+
+**Domanda**
+- **Q-N74-1 · Le righe Fineco con la data valuta oltre domani.**
+  - (a) il plugin le tiene da parte con un avviso («non ancora regolata: reimporta il report dopo il <data>»), come fa Danske Bank
+    *(consiglio)*;
+  - (b) arrivano al Bulk e la validazione le rifiuta con `dateOutOfRange`: l'utente le deve deselezionare a mano;
+  - (c) Fineco data le righe con «Operazione». Le date cambierebbero rispetto agli import già fatti, e il controllo dei doppioni
+    non riconoscerebbe più le righe salvate: sconsigliata.
+
+**Test da cambiare**
+- `backend/test_scripts/test_services/test_transaction_decimal_places.py`:
+  - gli aiuti `_a_year_after` e `_resolve_day` (~:2081-2092) e gli id `today-plus-one-year-plus-one-day` /
+    `today-plus-one-year-the-last-day` (~:2070-2077) diventano «domani» e «dopodomani»;
+  - `_assert_refused_on_its_date` (`:2113`, i `params` `{min, max}`);
+  - i test a `:2140`, `:2158`, `:2176` (rifiutati) e `:2199` (accettato fino al massimo);
+  - le docstring `:67-73` e `:2129`;
+  - `:2243`, il pavimento, non cambia.
+- `frontend/src/lib/features/transactions/resolveValidationMessage.decimals.test.ts:284` (`max: '2027-10-17'`) e i commenti `:47`
+  e `:280`: solo testo.
+- Restano: `test_brim_db.py:436` (data fissa, 2025-01-15 più un giorno), `test_brim_gap_fix.py:1555-1562` (l'anno 9999),
+  `test_asset_source_upsert_guards.py:956` (un commento).
+- Nuovi: un rosso per «dopodomani rifiutato» e uno per «domani accettato», con l'orologio del server a ridosso della mezzanotte
+  (un oggi iniettato); per Fineco, se Q-N74-1 è (a).
+
+**Doc e CHANGELOG**: `developer/backend/transactions/service.md:255-285` (il limite, il perché, l'esempio «2027-10-17»);
+`developer/architecture/patterns/brim_plugin_guide.md:1125` («today (UTC) one year on»); il commento di
+`TXValidationCode.DATE_OUT_OF_RANGE` (`schemas/transactions/batch.py:129`); una riga 🔄 nel CHANGELOG.
+
+**Il client**: `SingleDatePicker` (`components/ui/date/SingleDatePicker.svelte:67`, `:154`, `:284`) non offre date future e porta
+una data digitata a oggi del browser: già dentro il limite nuovo.
+
+Stima: backend circa un'ora più i test; Fineco circa mezza giornata se (a); doc circa un'ora.
