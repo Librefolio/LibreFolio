@@ -477,10 +477,11 @@ antenato della base il 19/10. I titoli ⏳ del §7 sono il registro del momento:
 | Y12b | U8 con i campi di J e MF: P19; R17, W8, P4; V11 e P5 | ✅ 16–17/10 | `23f71e739` (140), `1565b6bbb` (202), `d4ecfb692` (255) | «Y12b», «R17 · W8 · P4» |
 | Y4a | FE2a, i segnali in `lib/features/signals/` | ⏸ fermo | — | «Y4a · analisi aggiornata»: per il developer, «non nella 1.3, oppure una finestra notturna» (16/10 20:21) |
 | Y13 | FE9–FE11 | ⏸ parcheggiato | — | «Y13»: fino alla risposta del developer a Y13-1 (dopo il tag?) |
+| Y-N65 | N65: nessun intervallo di un giorno in tutti i selettori; il righello; il cursore del grafico (N65-7) | ⏳ checkpoint 19/10 | — | «19/10 · Y-N65», «Il lotto Y-N65» |
 
 Fuori dai lotti:
 - **Le voci Y-N** della mia sezione del backlog: ognuna ✅ porta il suo commit d'ingresso (rimesse in pari il 19/10). Aperte,
-  tutte in attesa del developer: Y-7 (dopo Y4a), Y-9, Y-10, Y-15, Y-18, Y-26, Y-32, Y-35.
+  tutte in attesa del developer: Y-7 (dopo Y4a), Y-9, Y-10, Y-15, Y-18, Y-26, Y-32, Y-35; più Y-36 e Y-37 (19/10, minime).
 - **Lavori per altri, fatti da Y**: la metà del pannello di J-12 (`46b5fbc0e`, treno 280), X-R59 lotti A e B (`f317e3a9f`,
   330), J-53 (`fb6d58d17`, 338), Y-30 (`ede7adf75`, 19/10, dopo il sì del developer a N89).
 
@@ -6891,3 +6892,222 @@ N65-5 (b) da 1 a 2 ore in più.
   sul punto d'inizio (**consiglio**, è il suo «anche meglio»), se X e Z-29 lasciano libere le due pagine di dettaglio.
 - **N65-6, gli intervalli di un giorno già salvati**: (a) restano come sono (**consiglio**); (b) normalizzati al
   caricamento.
+
+### Il lotto Y-N65 (via del coordinatore, 19/10 15:01)
+
+**Decisioni del developer**: tutti i consigli, cioè N65-2 (a), N65-3 (a), N65-4 (a), N65-5 (b), N65-6 (a). Giornale
+committato in `156c1411d`. Prima i rossi (`test-author`), **scritti senza lanciare nulla** finché il coordinatore non
+aggiorna la base (dopo il cancello della fusione delle migrazioni; al suo «fermati» mi fermo). Dopo l'aggiornamento la
+corsia 6189 si ripopola con `--force --clean`: la migrazione 011 non esiste più. Le note per T e DV («nessun colore
+nuovo») le manda il coordinatore. Le pagine `assets/[id]` e `fx/[pair]` oggi non le ha aperte nessuno; se Z-29 parte
+prima, l'ordine lo decide il coordinatore.
+
+**Il contratto che i rossi fissano.**
+1. **`CalendarMonth`**: il giorno uguale a `highlights.pending` è un bottone `disabled`, col cursore `not-allowed`. Il
+   colore e `data-state` non cambiano, e il clic non arriva a `onDayClick`. Nessun altro giorno cambia;
+   `SingleDatePicker` non imposta mai `pending`.
+2. **`DateRangePicker`**:
+   - il secondo clic sul giorno in attesa è ignorato: nulla pubblicato, calendario aperto, attesa tenuta; il passaggio
+     del mouse su quel giorno non mostra l'anteprima di un giorno solo;
+   - una data scritta uguale all'altro capo non si applica: resta sul campo e, armata, è `data-invalid="true"`, come una
+     data futura scritta. Appena l'altro capo cambia e i due giorni sono diversi, il testo in attesa si applica;
+   - le frecce: se il passo cade sull'altro capo, si va di un giorno in più nella stessa direzione, e lo scambio vale. Se
+     quel giorno è nel futuro non ammesso, il passo non fa nulla;
+   - una data scritta con l'altro capo vuoto o con una sentinella (`min`/`max`) lascia l'altro capo com'è: si pubblica
+     `(X, '')`, `(X, 'max')`, `('min', X)`. Lo scambio solo fra due date vere.
+3. **`MeasurePanel`**:
+   - `addPoint` ignora il secondo clic sul giorno d'inizio: nessuna misura, la modalità resta accesa, l'inizio resta;
+   - `updatePendingEnd` restituisce `true` sul giorno d'inizio (bloccato) e `false` altrove. Sul giorno d'inizio toglie
+     l'anteprima se c'era (un'emissione senza `__pending__`), altrimenti non emette nulla;
+   - `updateMeasureDates` perde `if (s === e) return`.
+4. **Il cursore sul grafico** (`PriceChartFull`, vista a linea, e `CandlestickChart`), con N65-7 (b):
+   - in modalità misura il grafico gestisce il suo cursore con zr. A ogni `mousemove` di zr, subito, prima della
+     limitazione al frame, chiama `zr.setCursorStyle('crosshair')`, oppure `'not-allowed'` se l'ultimo passaggio era sul
+     giorno bloccato. zrender rimette il cursore a `default` a ogni movimento, prima degli ascoltatori
+     (`zrender/lib/Handler.js:95`, `:99`, versione 6.0.0);
+   - `onMeasureHover` può restituire `true`. Dopo il frame il grafico applica il cursore del nuovo esito e pubblica
+     `data-measure-hover="blocked" | "free"` sul contenitore;
+   - fuori dalla modalità misura il grafico non chiama `setCursorStyle`;
+   - le pagine non cambiano: le loro funzioni freccia restituiscono già il valore di `updatePendingEnd`
+     (`assets/[id]/+page.svelte:2525`, `fx/[pair]/+page.svelte:1544`, numeri alla base `bb676c44c`).
+5. **Gli intervalli di un giorno già salvati** restano come sono: nessun codice.
+
+**N65-7, il mirino** (deciso dal developer alle 15:11, (b): «si se puoi, io non sapevo manco fosse stato fatto, non l'ho
+mai visto!»). In modalità misura il contenitore dei due grafici ha `cursor-crosshair` (`PriceChartFull.svelte:1152`,
+`CandlestickChart.svelte:643`), ma zrender mette `cursor: default` in linea sul suo elemento al primo movimento: il
+mirino non si vedeva quasi mai. Lo rende vero la stessa chiamata del punto 4, con il suo rosso.
+
+**Passi.**
+1. ✅ 19/10 — **Rossi scritti, non lanciati** (`test-author` `85d6ba6a`, in sottofondo; nessun processo avviato, come
+   chiesto dal coordinatore). Quattro file, +673 righe:
+   - `CalendarMonth.test.ts`: 1 rosso (il giorno in attesa `disabled`, il clic non arriva) e 2 guardie (senza `pending`
+     nessun giorno passato è disabilitato; `data-state` invariato);
+   - `DateRangePicker.test.ts`, describe «no range of a single day (Y-N65)»: 2a, 2b, 2c (2 righe), 2d (2), 2e (4 righe)
+     rossi. Guardie: il flusso «Da = vecchio A, poi un A nuovo», verde oggi per un'altra strada (la bozza di un giorno),
+     e due giorni vicini;
+   - `MeasurePanel.test.ts`: `PanelApi.updatePendingEnd` restituisce `boolean`; 3a, 3b (2), 3c rossi;
+   - `PriceChartFull.test.ts`: l'imitazione di ECharts ha uno zr per grafico, che tiene i gestori e registra
+     `setCursorStyle`, e `pointerIndex` (predefinito `null`, quindi i casi esistenti non cambiano). Un `describe.each`
+     sulla vista a linea e a candele: 4 rossi e 1 guardia per vista.
+   > **Note implementazione**: revisione mia in sola lettura. `git diff --check` pulito; nessuna asserzione su classi
+   > (l'unica `cursor-crosshair` è in un commento) né su testo tradotto, nessuna attesa a tempo.
+   > **⚠️ Fuori pista**: in jsdom, con la delega degli eventi di Svelte 5, un clic inviato a un bottone `disabled`
+   > raggiunge comunque `onclick`. La cura deve quindi tenere anche il controllo nel gestore, come già per
+   > `disabledDates`. E il tipo `onMeasureHover` dei due grafici va allargato da `=> void`.
+2. ✅ 19/10 — Dopo l'aggiornamento della base: ripopolare la corsia; i rossi lanciati e visti rossi, col carico sotto 50.
+   > **Note implementazione** (19/10, 15:43–15:50):
+   > - base `bb676c44c` (fusione di `156c1411d` e dev `cc3c3af15`), i 5 file non committati intatti;
+   > - la fusione tocca solo `assets/[id]` e `fx/[pair]` (X-R16, l'isolamento dei segnali); le funzioni freccia di
+   >   `onMeasureHover` sono invariate, solo spostate a `:2525` e `:1544`;
+   > - `dev.py test --test-port 6189 --data-dir /tmp/librefolio-r13-y db populate --force --clean`: riuscito in 12 s.
+   >
+   > **⚠️ Fuori pista** (15:44): **disco pieno**. Il volume Data è al 100%, con meno di 500 MiB liberi, in calo per le
+   > scritture delle altre sessioni.
+   > - `TAG=red bash files/scripts/yn65_vitest.sh` (un file alla volta, con `nice`, a carico 28–41): tutti e 4 i file
+   >   sono caduti con `ENOSPC` alla trasformazione dei moduli, «Tests no tests».
+   > - È un rosso d'infrastruttura, prima della raccolta: nessun test è girato, i rossi non sono ancora visti.
+   > - Nessun server avviato, porta libera. Il populate di prima resta valido.
+   > - Segnalato al coordinatore (`purpose: error`), con la mia parte liberabile (`mkdocs_src/site`, 578 MB). Fermo
+   >   finché non tornano almeno 5 GB e il suo via. Intanto la cura si prepara a secco, nella cartella della sessione.
+   >
+   > ✅ 19/10, 16:0x — **Rossi visti rossi.** Il coordinatore ha liberato il disco (~21 GiB; ha cancellato lui la mia
+   > `mkdocs_src/site`). Stesso script, carico 20–23:
+   > - `CalendarMonth` 1 rosso su 15, `DateRangePicker` 10 su 86, `MeasurePanel` 4 su 32, `PriceChartFull` 8 su 58:
+   >   23 rossi, esattamente quelli di Y-N65. Tutte le guardie e tutti i test esistenti sono verdi.
+   > - Ogni rosso cade sulla sua asserzione, con il messaggio atteso; nessun `TypeError` e nessun montaggio fallito. Per
+   >   esempio: `toBeDisabled()` sul giorno in attesa; `[['2024-02-10','2024-02-10']]` contro `[['min','2024-02-10']]`;
+   >   `{cursor: undefined, hover: null}` contro `'not-allowed'`.
+   > - Prettier `--check` sui 4 file di test: pulito. Log in `files/logs/yn65_red_*.log`.
+3. ✅ 19/10 — La cura: `CalendarMonth`, `DateRangePicker`, `MeasurePanel`, `PriceChartFull`, `CandlestickChart`.
+   > **Note implementazione** (16:0x–16:3x):
+   > - `CalendarMonth`: `pendingDay` entra in `disabled` e nel controllo del clic. Nel blocco dello stato di base,
+   >   `cursor-not-allowed` dopo i casi futuri. Colore e `data-state` invariati.
+   > - `DateRangePicker`:
+   >   - `handleDayClick` ignora il giorno in attesa;
+   >   - `handleDayHover` sostituisce le 4 funzioni in linea identiche e mette `hoveredDate` a `null` su quel giorno;
+   >   - `isAcceptableDate(which, iso)` = tetto più «non il giorno dell'altro capo», usato da `*Unparseable` e da
+   >     `commitTypedField`;
+   >   - `applyRangeDate`:
+   >     - legge l'altro capo grezzo (`fieldValue`), così vuoto, `min` e `max` restano;
+   >     - scambia solo due date vere (`concreteIso`);
+   >     - prende in coppia la data in attesa dell'altro campo (`waitingTypedDate`: armata, sotto il tetto, diversa).
+   >       Così lo scambio ordina le due date scritte dall'utente; applicarle una alla volta poteva perderne una;
+   >   - le frecce: se il passo cade sull'altro capo, `addDays(±1)` nella stessa direzione; se quel giorno è oltre il
+   >     tetto, nulla.
+   > - `MeasurePanel`:
+   >   - `updatePendingEnd(): boolean`; sul giorno d'inizio toglie l'anteprima se c'è e risponde `true`;
+   >   - `addPoint` ignora il secondo clic sul giorno d'inizio;
+   >   - via `if (s === e) return` da `updateMeasureDates`.
+   > - `PriceChartFull` (vista a linea) e `CandlestickChart`:
+   >   - `onMeasureHover` restituisce `boolean | void`;
+   >   - `measureHover` (`$state`) è `blocked`, `free` o `null`, e un `$effect` lo azzera fuori dalla modalità misura;
+   >   - a ogni `mousemove` di zr in modalità misura, prima della limitazione rAF, `setCursorStyle` sincrono;
+   >   - nel rAF, il cursore e `data-measure-hover` dall'esito (`free` anche quando il puntatore non cade su un punto);
+   >   - il rAF ricontrolla `measureMode`, così un passaggio rimasto in coda alla fine della misura non pubblica nulla;
+   >   - le pagine non cambiano.
+   > - Vitest (stesso script, carico 14–25): `CalendarMonth` 15/15, `DateRangePicker` 86/86, `MeasurePanel` 32/32,
+   >   `PriceChartFull` 58/58, `CandlestickChart.tooltipEscape` 7/7.
+4. ✅ 19/10 — Prove leggere: i Vitest toccati più `DataTableColumnFilter`, `L4Replay`, `CellDateRange`; `front check`,
+   Prettier, `theme-roles --check`.
+   > **Note implementazione** (16:3x–17:0x, carico 16–36):
+   > - Vitest dei vicini: `files/scripts/yn65_vitest_batch.sh`, un solo processo con i 37 file di test che nominano
+   >   `DateRangePicker`, `CalendarMonth`, `SingleDatePicker`, `MeasurePanel`, `CandlestickChart`, `PriceChartFull`,
+   >   `DataTableColumnFilter`, `CellDateRange` o `L4Replay`, gate per percorso compresi. Risultato: 36 file su 37 verdi,
+   >   1810 test verdi e 17 saltati.
+   > - Prettier `--check` sui 5 sorgenti: pulito. `theme-roles.mjs --check`: «Colour gates: clean». `git diff --check`:
+   >   pulito.
+   > - `npm run check`: 0 errori, 0 avvisi (dopo `api sync`, vedi sotto).
+   >
+   > **⚠️ Fuori pista**:
+   > - Nel lotto dei 37 file, il `beforeAll` di `PriceChartFull.tooltipEscape.test.ts` è scaduto a 60 s: i suoi import
+   >   dinamici (`generated.ts`) erano in coda dietro gli altri 36 file. Rilanciato da solo: 17/17 verdi, 46 s. Verdetto:
+   >   ambiente (contesa degli import), non prodotto.
+   > - Il primo `npm run check` ha dato 4 errori nei file di J-48 (`LotCustodyModal.test.ts`, `LotGanttChart.svelte`,
+   >   `LotWacPriceChart.svelte`): `scope_boundary` assente da `LotTimelineEventSchema`. Il client generato (ignorato,
+   >   non committato) era di prima dell'aggiornamento della base. `dev.py api sync` lo ha rigenerato, senza toccare
+   >   nessun file tracciato; poi 0/0.
+   >
+   > **Copertura E2E, letta in sola lettura**:
+   > - `fx-detail` (`:1773`, `:2029`, `:2526`) e `asset-detail` (`:2609`) scrivono «Da», poi «A», poi Invio: il caso
+   >   della coppia, coperto anche quando «Da» è il vecchio «A».
+   > - `risk-analysis` mette solo il fuoco sui campi e li legge; `asset-browse` usa solo i preset.
+   > - Nessuna E2E clicca due volte sullo stesso punto del grafico in modalità misura, e nessuna scrive una data nel
+   >   filtro di colonna (le E2E dei filtri usano gli enum): quei casi li coprono solo i Vitest.
+5. ✅ 19/10 — Slot E2E (circa 30 minuti): `front-asset asset-detail`, `front-fx detail`, `front-portfolio` sul replay L4,
+   `front-asset asset-browse`.
+   > **Note implementazione**: slot del coordinatore dalle 16:11, `DEADLINE` 16:55, corsia 6189, `--workers 2`.
+   >
+   > | Spec | Esito | Durata | Ora di fine |
+   > |---|---|---|---|
+   > | `front-fx fx-detail` | 28/28 | 2,7 min | 16:24 |
+   > | `front-asset asset-detail` | 43/43 | 4,1 min | 16:36 |
+   > | `front-portfolio risk` | 38/38 | 5,0 min | 16:42 |
+   > | `front-asset asset-browse` | 8/8 | 1,6 min | 16:46 |
+   >
+   > In tutto 117/117 verdi; alle 16:46:13 la porta era libera. Gli script sono `files/scripts/yn65_e2e.sh` e
+   > `yn65_e2e_rest.sh`, i log `files/logs/yn65_e2e_*.log`.
+   > - La prima spec ha rifatto la build di debug e anche quella del sito MkDocs, perché il coordinatore aveva
+   >   cancellato `mkdocs_src/site` per lo spazio: 16:12–16:19.
+   > - Global-setup ha ripopolato con i report, perché dopo `--clean` la corsia non ne aveva più.
+   >
+   > **⚠️ Fuori pista**:
+   > - **Il carico.** Alle 16:23 il carico a 1 minuto è salito a 201, per le altre sessioni. `yn65_e2e.sh` lasciava
+   >   partire le spec dopo la prima con il carico a 5 minuti sotto 60. Il coordinatore aveva chiesto sotto 50: alla
+   >   fine di `fx-detail` ho fermato lo script mentre aspettava, con la porta libera e nessun processo in corsia. Ho
+   >   ripreso le altre tre spec con `yn65_e2e_rest.sh`: sotto 50 per tutte, fino a 6 minuti d'attesa.
+   > - **Il sito MkDocs si rifà da solo.** `auto_build_mkdocs` (`dev.py`) rifà l'intero sito prima di ogni spec, se un
+   >   `.md` di `mkdocs_src/docs` è più nuovo di `site/index.html`. Per questo ho messo in pausa `docs-writer` durante lo
+   >   slot. Non aveva ancora salvato nulla.
+   >
+   > **Nota di `docs-writer`, verificata**: per il backend, `end: null` vale un giorno solo (`DateRangeModel`,
+   > `GET /api/v1/transactions`); per il frontend, dopo Y-N65, «da X in poi». Oggi le due letture non si incontrano: la
+   > pagina delle transazioni filtra nel browser. Registrata nel backlog come **Y-36**.
+6. ✅ 19/10 — Documentazione (`docs-writer`, solo inglese); riga 🔄 del CHANGELOG nel checkpoint; CHECKPOINT READY.
+   > **Note implementazione** (`docs-writer` `283bfe61`, 16:0x–16:5x, in pausa durante lo slot E2E). 8 pagine, nessuno
+   > stamp: il debito di traduzione è vero.
+   > - Sviluppatori, solo inglese:
+   >   - `core-ui/datePickers.md`: il punto di `CalendarMonth` sul giorno in attesa, la sezione nuova
+   >     `#no-single-day-range` (calendario, date scritte, frecce, capi aperti in tabella, intervalli già salvati) e i
+   >     rimandi di «Used by»;
+   >   - `charts.md`: la sezione nuova `#measure-mode` (il cablaggio del pannello, `addPoint`, `updatePendingEnd` con il
+   >     suo booleano, N65, il cursore con zrender, `data-measure-hover`);
+   >   - `core-ui/data-table.md`: la sezione nuova `#date-filter` (ogni capo può restare vuoto; il formato `from,to`
+   >     dell'URL; un filtro di un giorno nell'URL vale com'è).
+   > - Utente, `.en.md`:
+   >   - `assets/detail/measures` e `fx/detail/measures`: il mirino, il secondo clic sull'inizio, il divieto, due giorni
+   >     diversi;
+   >   - `transactions/index`: «Da» solo vale da quel giorno in poi, «A» solo fino a quel giorno;
+   >   - `fx/detail/chart` e `assets/detail/chart`: due giorni diversi. In `assets/detail/chart` anche «Custom with a
+   >     calendar» corretto, nella stessa frase, e la data della pagina.
+   >
+   > **Verifica mia, in sola lettura, sul codice**:
+   > - esistono `startMeasureMode`, `stopMeasureMode`, `addMeasureFromChartData` e `onmeasuremodechange`, e il 📏 delle
+   >   due pagine li chiama;
+   > - il filtro per data va bene con un capo solo lungo tutta la catena: `DataTableColumnFilter` passa
+   >   `from: dateFrom || undefined`; `matchesColumnFilter` e il pre-filtro di `TransactionsTable` saltano un capo
+   >   vuoto; `urlFilters.ts` scrive «from,to (either can be empty)»;
+   > - esistono `resolveDateSentinel` e `lib/stores/dateRangeStore.svelte.ts`.
+   >
+   > **Prove** (`files/scripts/yn65_docs_check.sh`, carico 41):
+   > - `dev.py mkdocs build` strict: 0 avvisi in 105 s. L'ancora `#calendarmonth`, senza id esplicito, si risolve;
+   > - `check-links`: 97 link validi su 97;
+   > - `translate-validate --file` sulle 5 pagine utente, con `-L`: 15 file su 15 a posto, nessun errore. Il debito è
+   >   solo di contenuto;
+   > - `git diff --check`: pulito.
+   >
+   > **Lasciato com'è, scritto nel backlog come Y-37**: tre inesattezze di prima in `datePickers.md`, fuori da Y-N65.
+   > - In `CalendarMonth` non esiste «Keyboard navigation within the grid»: c'è solo `numericArrows` sull'anno.
+   > - Non è vero «week starts on Monday for most locales»: la griglia parte sempre da lunedì.
+   > - Il riferimento `DateRangePicker.svelte:36,216-251` (8/10) è approssimato. Quelle righe non le sposta Y-N65.
+   >
+   > **CHECKPOINT READY** al coordinatore (19/10, verso le 17:10), poi FROZEN. 25 percorsi, 22 modificati e 3 nuovi:
+   > - le liste sono `files/yn65_stage_{code,tests,docs,journal}.txt`;
+   > - due commit proposti: `fix(web): refuse one-day date ranges (Y-N65)` (codice, test, MkDocs) e
+   >   `docs(journal): Y-N65 plan, Y-36, Y-37, devWiki`;
+   > - due righe del CHANGELOG nel messaggio, una 🔄 e una 🐛.
+   >
+   > Conflitti previsti con dev `ccc2a4141`, solo nei file condivisi del giornale:
+   > - `LibreFolio_devWiki/index.md`: A-CL1 ha aggiunto righe in cima alla tabella dei problemi e al registro, dove
+   >   vanno le mie. Si tengono tutte;
+   > - `LibreFolio_devWiki/log.md`: tutti e due aggiungono in fondo. Si tengono tutti e due;
+   > - il backlog: nessun pezzo dentro la mia sezione.
