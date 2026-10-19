@@ -7803,3 +7803,83 @@ Ognuno con i rossi prima e uno slot. Uno slot API (`users-admin`) per N69-4 e N6
 #### Trovato strada facendo (fuori da N69)
 - `Header.svelte:241`: il nome accessibile del pulsante del menu è in inglese scritto a mano («Toggle menu»), in ogni
   lingua. File della shell: da girare a chi la tiene.
+
+### A57.2 — VIA del developer (19/10, 11:42; base `d28d0841d`)
+- Coordinatore: giornale committato (`d28d0841d`); «VIA per A-57, solo i test: il developer ha detto «ok». Fai leggere a
+  LGM-E-01/03 il profilo della corsia, così H rimette la spec nella cloud smoke». Lo slot E2E per le prove dopo le 14:00,
+  da chiedere. N69 aspetta le risposte del developer a D1–D11.
+- Valgono le autorizzazioni del 17/10 (21:44): il permesso di scrivere la sola riga `prereq` di `legal-managed` in
+  `scripts/test_runner/_frontend_utility.py` (W ha lo stesso file aperto, K3, un'altra regione); la stessa cartella dati
+  per la corsia gestita. Il ritorno nella cloud smoke (`CLOUD_SMOKE_SPECS`, il commento, `front-utility.md:112`) resta di H.
+- Con A-57 entra la frase sulle pre-release in `developer/frontend/onboarding.md` (nota 2 di E su C-54), sospesa con lui.
+- Verificato: dalla prova 1 (base `98b0fc974`) la spec, `fixtures/instance-config.ts`, `fixtures/auth-helpers.ts`,
+  `ForgotPasswordCard.svelte`, `features/instance/profile.ts` e `features/legal/` non sono cambiati. Il solo commit nel
+  mezzo, `81a927681`, cambia una riga di `_frontend_utility.py` che non è la registrazione di `legal-managed`. I rossi
+  della prova 1 valgono ancora.
+- Passi: spec nuova (`test-author`, solo controlli leggeri: Prettier e tipi, nessuna corsa), riga `prereq`, frase rc,
+  poi lo slot (prove 2 e 3: self-hosted e gestita).
+- **Frase rc** (11:50): in `developer/frontend/onboarding.md`, dopo gli esempi di `release_of()`: «A pre-release thus
+  counts as its release: an account that closed the window on `1.3.0-rc1` does not see the `1.3.0` chapter again at the
+  final release, even if that chapter grew in between — acceptable for the instances that run release candidates (E's
+  review of C-54).» Verificata nel codice: `release_of('1.3.0-rc1')` → `1.3.0`, `mark_seen` salva la base, e
+  `pending_for` alla release finale non trova nulla di più nuovo. `mkdocs build` strict e `check-links` (97) puliti;
+  pagina solo EN.
+- **Spec** affidata a un `test-author` (`5fc0c272`): solo `frontend/e2e/layout/legal-and-managed.spec.ts`, solo Prettier
+  e tipi, nessuna corsa.
+
+### A57.3 — Spec e riga del registro pronte (19/10, 11:45–12:05)
+- **Spec** (`test-author` `5fc0c272`, solo `frontend/e2e/layout/legal-and-managed.spec.ts`):
+  - `readLaneAnswer(page)` legge la risposta della corsia prima di ogni pagina e di ogni stub
+    (`page.request.get('/api/v1/system/instance')`, che non passa da `page.route()`). Vuole 200, `profile`
+    `selfhosted` o `managed`, e `legal` con due link, una pagina o null; il profilo finisce nelle annotazioni
+    (`lane-profile`).
+  - LGM-E-01, ramo self-hosted: come prima.
+  - LGM-E-01, ramo gestito:
+    - la prova è `forgot-ask-admin` (dopo `goto-forgot`), con la stessa esecuzione marcata;
+    - si torna al login con `forgot-back-to-login`, poi la nota sotto la scheda;
+    - dietro la barra disegnata: nessun link alla donazione.
+  - LGM-E-03, ramo self-hosted: come prima, con i link legali della corsia.
+  - LGM-E-03, ramo gestito: uno stub dei soli `legal`, il profilo vero della corsia. La prova e le assenze sono quelle di
+    LGM-E-04, fattorizzate in aiuti comuni; LGM-E-04 stessa resta uguale.
+  - I link legali seguono la risposta della corsia: un link con esattamente quell'indirizzo, o nessuno.
+  - Titoli e intestazione per i due profili; gli ID restano.
+  - Prettier pulito; `tsc -p tsconfig.e2e.json --noEmit`: 0 errori.
+  - Dubbio dell'agente: con le due corsie di oggi (nessuna pagina legale) il ramo «la corsia ha una pagina» non gira mai.
+- **Riga `prereq`** di `legal-managed` (`scripts/test_runner/_frontend_utility.py`, la sola riga autorizzata): «a
+  self-hosted lane, or a managed one (--lane-setting LIBREFOLIO_PROFILE=managed): LGM-E-01 and LGM-E-03 read the lane's
+  own GET /system/instance and check the matching variant (A-57)». `ruff` e `black` puliti, come a HEAD.
+- **Da chiedere**: la riga `desc` della stessa voce descrive ancora la sola corsia self-hosted (la prova
+  `auth-donate-link`).
+- **Slot** (dopo le 14:00, chiesto al coordinatore): `work/slot_a57/slot.sh d28d0841d green`.
+  - Prova 2: `front-utility legal-managed` su corsia self-hosted, 5 attesi.
+  - Prova 3: la stessa con `--lane-setting LIBREFOLIO_PROFILE=managed`, 5 attesi.
+- **Coordinatore (12:03)**: sì anche alla riga `desc` della stessa voce (una riga sola). Slot E2E in coda **dopo X** (X
+  parte alle 14:00 per circa 45 minuti); il «via» lo scrive il coordinatore. Dopo lo slot verde: checkpoint, e il
+  coordinatore avvisa H.
+- **Riga `desc`** riscritta (12:08): i due profili (A-57), la lettura della corsia di LGM-E-01/03, le prove e le assenze di
+  ciascuna variante; il resto (LGM-E-02/04/05) com'era. `ruff` e `black` puliti, il file si analizza; nessun test del
+  runner vincola `desc` o `prereq`.
+
+### A57.4 — Slot E2E ✅ (19/10, 12:34–12:39)
+- Coordinatore (12:34): «Slot tuo, da adesso, fino alle 13:00, sulla corsia 6182 … ognuna solo con carico a 1 minuto
+  sotto 50». Lo script dello slot aspettava il carico a 5 minuti: portato a quello a 1 minuto prima di partire.
+- `work/slot_a57/slot.sh d28d0841d green`:
+  - prova 2, corsia self-hosted (`front-utility legal-managed`): **5 passed** (23,5 s; 12:35–12:38);
+  - prova 3, corsia gestita (`--lane-setting LIBREFOLIO_PROFILE=managed`, il runner stampa `Test lane settings:
+    LIBREFOLIO_PROFILE=managed`): **5 passed** (24,5 s; 12:38–12:39).
+- Il rapporto HTML della prova 3 (l'ultima; quello della prova 2 l'ha sovrascritto) porta le annotazioni `lane-profile:
+  managed` su LGM-E-01 e LGM-E-03: hanno girato le varianti gestite. La prova 2 è la corsia predefinita, senza
+  impostazioni di corsia.
+- Impronta dell'albero invariata (`da3542669b560ce7`), porta 6182 libera; «slot libero» al coordinatore alle 12:39.
+- Con la prova 1 del 17/10 (la spec vecchia su una corsia gestita: LGM-E-01/03 rossi) il ciclo rosso → verde è chiuso.
+- **A-57: definizione di fatto ✅** (solo test). Il ritorno della spec in `CLOUD_SMOKE_SPECS` (la lista, il commento,
+  `developer/test-walkthrough/front-utility.md:112`) è di H: il coordinatore lo avvisa dopo l'ingresso.
+- **Indice**: A-57 chiusa con ✅ nella sezione A (il sotto-punto «Sospesa» riscritto: sospesa, poi l'«ok» delle 11:42).
+- **Previsione dei conflitti** con dev `c81389cad`:
+  - i miei commit di giornale `52421559f` e `d28d0841d` non sono ancora in dev, quindi la base vera è `ede7adf75`;
+  - `git merge-file` con quella base è pulito: l'indice (9 commit di dev) e `_frontend_utility.py` (X-R16 alla riga
+    ~116, le mie righe alla 1024–1025);
+  - **⚠️ Fuori pista**: una prima simulazione con HEAD come base dava un conflitto falso sull'indice (le righe aggiunte solo
+    nel mio ramo sembravano tolte da dev).
+- **Checkpoint** mandato al coordinatore (12:50): tre commit proposti, nessuna riga del CHANGELOG (solo test e doc per
+  sviluppatori). FROZEN.
