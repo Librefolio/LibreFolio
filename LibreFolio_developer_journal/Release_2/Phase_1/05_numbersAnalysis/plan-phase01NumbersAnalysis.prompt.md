@@ -7453,3 +7453,54 @@ riverificate da me nei punti decisivi. Nessun codice.
 
 **Domande**: nessuna di prodotto per L1a e R1 (valori identici, uscita invariata). Con X, per R1: la forma della
 lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il developer la vuole (come D1).
+
+#### Revisione di P1 di MF (`af479abe7`, la linea del MWRR riavviata dal giorno prima; 19/10 ~13:25, sola lettura)
+
+- **J-48 committato** dal coordinatore: `ab4be3daa` (codice) e `bbfc0205b` (diario); il mio ramo è a `bbfc0205b`, pulito.
+- **Esito: OK.** I valori sono identici al bit per costruzione, e una sonda indipendente non trova differenze.
+- **I tre punti chiesti dal coordinatore**:
+  1. **Si parte sempre dal primo passo di oggi** ✓. Nel cammino caldo la prima chiamata è
+     `_newton_xirr(year_flows, _MWRR_GUESS, scale)`, con la stessa scala (`_xirr_scale`): è il primo passo di
+     `_solve_xirr`. Un punto che non può prendere la scorciatoia (la scheda, il primo punto, più cambi di segno o
+     nessuno, un valore d'apertura 0.0) chiama `_solve_xirr` stesso.
+  2. **Il giorno prima serve solo con una radice sola** ✓. Il cammino caldo parte solo con
+     `_flow_sign_changes(year_flows) == 1`: per Descartes, che vale anche con esponenti reali, il VAN ha allora una
+     radice sola con 1 + r > 0. In più servono:
+     - un valore d'apertura diverso da 0.0, così il VAN non si annulla per underflow sulla griglia;
+     - il candidato dentro la griglia;
+     - un cambio di segno vero attraverso il candidato (`_changes_sign_at`).
+     Il candidato di Newton serve solo a **trovare l'intervallo**: non è mai il risultato.
+  3. **Il Brent è quello di oggi, sullo stesso intervallo** ✓. `_bracketed_xirr_at` rifà i passi della scansione:
+     - estremi `griglia − 1.0`, come la scansione;
+     - due VAN finiti, sugli stessi flussi nello stesso ordine;
+     - uno zero esatto su un punto della griglia è la radice, come nella scansione;
+     - lo stesso test sul prodotto, che riproduce anche il suo underflow;
+     - la stessa `brentq(…, xtol=1e-14, maxiter=200)` e la stessa `_is_xirr_root`.
+     Se l'intervallo non dà una radice verificata, gira la scansione intera, come oggi.
+- **Perché basta un intervallo** (mio argomento, oltre Descartes): con un solo cambio di segno,
+  f(v)·v^(−t_k) è strettamente crescente in v = 1/(1 + r), dove t_k è il tempo del cambio. Quindi il segno di f cambia
+  una volta sola. Due punti vicini della griglia distano il 4,7 % in 1 + r, e lì |f| è molti ordini sopra l'errore
+  d'arrotondamento. Solo il punto della griglia più vicino alla radice può avere il segno calcolato sbagliato, o uno
+  zero esatto: allora la scorciatoia cede alla scansione, oppure dà lo stesso zero esatto.
+- **Sonda indipendente** (`files/j/p1review/probe.py`): `returns.py` di P1 e del suo genitore `ff9930b26` (risoluzione
+  fredda), caricati come moduli separati e confrontati con `str()` punto per punto, su `period_mwrr_series` e
+  `calculate_mwrr_series`.
+  - Famiglie:
+    - radici su un punto della griglia, o a 1e-17…1e-13 relativi da lì, con la stessa radice in ogni punto (1500
+      serie, 60–125 anni);
+    - derive da −95 % a +4 000 % l'anno, su 30–125 anni;
+    - versamenti lungo la strada (un cambio di segno);
+    - versamenti e prelievi misti (più cambi di segno);
+    - le due estremità della griglia (−100 % entro 1e-12; 10 000 volte l'anno).
+  - **0 differenze su 166 508 punti.**
+  - La scorciatoia è stata davvero presa: 51 924 volte ha dato la risposta, 22 096 volte ha ceduto alla scansione.
+    Sulle radici vicine alla griglia: 40 812 risposte e 22 040 cessioni, proprio dove un riavvio ingenuo darebbe un
+    numero diverso.
+  - Carico fra 12 e 23, 2 minuti.
+- **Note, nessuna blocca**:
+  - vicino a −100 % (1 + r sotto ~1e-9) il passo di `_changes_sign_at` scavalca −1, quindi gira la scansione: il
+    valore è giusto, manca solo l'accelerazione (sonda: 2 scorciatoie in 150 serie);
+  - i due test esistenti cambiano solo il bersaglio della patch (`_solve_xirr` → `_newton_xirr`, la prima chiamata).
+    Le asserzioni restano, e fissano ancora che ogni punto parte da 0,1;
+  - il tasso precedente sopravvive ai punti `None`: è solo un seme;
+  - la pagina `financial_math.md` descrive il codice com'è.
