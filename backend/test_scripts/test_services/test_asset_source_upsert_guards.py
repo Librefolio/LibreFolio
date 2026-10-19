@@ -1744,7 +1744,7 @@ def test_xr46_fa_price_rejection_holds_one_of_three_reasons_and_a_result_default
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# The erase sentinel -1 is no bound for the OHLC check (the docs-writer's finding, 17/10)
+# The erase marker is no bound for the OHLC check (the docs-writer's finding, 17/10; the marker is "clear" since N92)
 #
 # The defect, on HEAD 1c1456713 with X-R46's cure: the strict branch of the OHLC integrity policy (see its section above;
 # ``if price.low is not None and price.high is not None`` in ``bulk_upsert_prices``) reads the raw incoming ``price.low``
@@ -1758,9 +1758,17 @@ def test_xr46_fa_price_rejection_holds_one_of_three_reasons_and_a_result_default
 # left with one real bound is written as it is, even on the wrong side of the close (decided 17/10: today's one-bound
 # partial update; X-R78 will decide whether to refuse it instead).
 #
+# N92 (i) with «clear» (developer's decisions of 19/10): an erased field is the text ``"clear"``, no longer ``-1``, which
+# is now a negative number like any other, refused by the write model (``FAPriceWritePoint``, 422). The X-R46 check reads
+# ``"clear"`` where it read ``-1``, and the cases keep their meaning: an erased bound is no bound. They send their edit as
+# ``POST /assets/prices`` parses it: the JSON point the data editor sends, validated into ``FAUpsert`` (``_erase_upsert``).
+# RED until N92 (expected failure before the cure): ``FAUpsert``'s points are ``FAPricePoint``, whose parser reads
+# ``"clear"`` as a number (``Decimal("clear")`` raises ``InvalidOperation``, no ValidationError: the route answers 500),
+# and each erasing case fails naming it. The guard sends real numbers only: green before and after.
+#
 # Each case seeds ``ERASE_DAY`` on this unit's own asset (``clean_prices``) with open/high/low/close 12/14/10/12 through
 # a first manual upsert, checked as a barrier, then sends its manual edit of that day, open and volume omitted (F.4:
-# kept). The upsert and its ``rejected`` are read as X-R46's cases read them (``_xr46_upsert``, ``_xr46_rejected``).
+# kept). The upsert's ``rejected`` is read as X-R46's cases read it (``_xr46_rejected``).
 # ─────────────────────────────────────────────────────────────────────────────
 
 ERASE_OFFSET = 0
@@ -1775,9 +1783,24 @@ async def _stored_ohlc(asset_id: int, day: date) -> tuple | None:
     return None if row is None else tuple(row)
 
 
+async def _erase_upsert(asset_id: int, point: dict) -> dict:
+    """``POST /assets/prices`` minus HTTP, for one JSON ``point`` of ``ERASE_DAY`` (its fields as the data editor sends
+    them, ``"clear"`` for an erased one): the body validated into ``FAUpsert`` as the route validates it, then upserted
+    manually; the asset's own result. A body the model does not read fails the case naming the exception (N92: before the
+    cure ``"clear"`` raises ``InvalidOperation``, which the route answers with a 500)."""
+    body = {"asset_id": asset_id, "prices": [{"date": ERASE_DAY.isoformat(), **point}]}
+    try:
+        upsert = FAUpsert.model_validate(body)
+    except Exception as exc:  # noqa: BLE001 — any exception here is the defect under test
+        pytest.fail(f"N92: POST /assets/prices does not read the edit {point}: {exc!r}")
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        result = await AssetSourceManager.bulk_upsert_prices([upsert], session)
+    return next(entry for entry in result["results"] if entry["asset_id"] == asset_id)
+
+
 async def _erase_seeded(asset_id: int) -> None:
     """``ERASE_DAY`` stored as ``ERASE_SEED`` through a first manual upsert, checked: a barrier."""
-    seed = await _xr46_upsert(asset_id, [_point(ERASE_OFFSET, "12", low="10", high="14", open_="12")])
+    seed = await _erase_upsert(asset_id, {"close": "12", "low": "10", "high": "14", "open": "12"})
     stored = await _stored_ohlc(asset_id, ERASE_DAY)
     assert (seed["count"], stored) == (1, ERASE_SEED), f"barrier: the seed of {ERASE_DAY} should store open/high/low/close 12/14/10/12: {seed}; stored {stored}"
 
@@ -1791,16 +1814,17 @@ async def _erase_outcome(asset_id: int, row: dict) -> tuple:
 @pytest.mark.asyncio
 async def test_a_manual_edit_erasing_high_is_saved_not_rejected(clean_prices: int):
     """The day stored 12/14/10/12 (open/high/low/close); the editor erases High and sets Low to 11, the close staying 12:
-    close 12, low 11, high -1.
+    close 12, low 11, high "clear".
 
-    Red on HEAD 1c1456713 with X-R46's cure: the check reads high -1 as a bound, below low 11: the date is refused
-    (``count`` 0, ``rejected`` ``[{the day, "ohlc_inconsistent"}]``) and the row keeps 12/14/10/12.
+    History: red on HEAD 1c1456713 with X-R46's cure (the erase was ``-1``, read as a bound below low 11: refused as
+    ``ohlc_inconsistent``); green with X-R46b's.
+    RED until N92: the write model does not read ``"clear"`` (``InvalidOperation``: a 500).
     Contract: an erased bound is no bound: ``count`` 1, ``rejected`` ``[]``; the row open 12 (omitted: kept), high NULL,
     low 11, close 12 -- one merged bound left, nothing to widen.
     """
     await _erase_seeded(clean_prices)
 
-    row = await _xr46_upsert(clean_prices, [_point(ERASE_OFFSET, "12", low="11", high="-1")])
+    row = await _erase_upsert(clean_prices, {"close": "12", "low": "11", "high": "clear"})
 
     outcome = await _erase_outcome(clean_prices, row)
     assert outcome == (1, [], (Decimal("12"), None, Decimal("11"), Decimal("12"))), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
@@ -1809,15 +1833,15 @@ async def test_a_manual_edit_erasing_high_is_saved_not_rejected(clean_prices: in
 @pytest.mark.asyncio
 async def test_a_manual_edit_erasing_both_bounds_is_saved_not_rejected(clean_prices: int):
     """The day stored 12/14/10/12 (open/high/low/close); the editor erases High and Low, the close staying 12: close 12,
-    low -1, high -1.
+    low "clear", high "clear".
 
-    Red on HEAD 1c1456713 with X-R46's cure: the check reads [-1, -1] as the bounds, the close 12 outside them: the date
-    is refused (``count`` 0, ``rejected`` ``[{the day, "ohlc_inconsistent"}]``) and the row keeps 12/14/10/12.
+    History: red on HEAD 1c1456713 with X-R46's cure (the close 12 outside [-1, -1]); green with X-R46b's.
+    RED until N92: the write model does not read ``"clear"`` (``InvalidOperation``: a 500).
     Contract: ``count`` 1, ``rejected`` ``[]``; the row open 12 (omitted: kept), high NULL, low NULL, close 12.
     """
     await _erase_seeded(clean_prices)
 
-    row = await _xr46_upsert(clean_prices, [_point(ERASE_OFFSET, "12", low="-1", high="-1")])
+    row = await _erase_upsert(clean_prices, {"close": "12", "low": "clear", "high": "clear"})
 
     outcome = await _erase_outcome(clean_prices, row)
     assert outcome == (1, [], (Decimal("12"), None, None, Decimal("12"))), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
@@ -1826,12 +1850,12 @@ async def test_a_manual_edit_erasing_both_bounds_is_saved_not_rejected(clean_pri
 @pytest.mark.asyncio
 async def test_a_manual_edit_erasing_low_with_high_below_the_close_is_saved_as_is(clean_prices: int):
     """The mirror that tells the cures apart: the day stored 12/14/10/12 (open/high/low/close); the editor erases Low and
-    sets High to 11, below the close 12: close 12, low -1, high 11.
+    sets High to 11, below the close 12: close 12, low "clear", high 11.
 
-    Red on HEAD 1c1456713 with X-R46's cure, and under a cure that resolves the sentinel of High alone: the check reads
-    low -1 as a bound, the close 12 outside [-1, 11]: the date is refused (``count`` 0, ``rejected`` ``[{the day,
-    "ohlc_inconsistent"}]``) and the row keeps 12/14/10/12. The two erasing cases above pass under either cure; this one
-    only when the sentinel is resolved on both bounds.
+    History: red on HEAD 1c1456713 with X-R46's cure, and under a cure that resolved the marker of High alone (the close 12
+    outside [-1, 11]); green with X-R46b's. The two erasing cases above pass under either cure; this one only when the
+    marker is resolved on both bounds -- now ``"clear"``.
+    RED until N92: the write model does not read ``"clear"`` (``InvalidOperation``: a 500).
     Contract (decided 17/10): one real incoming bound is not checked; the edit is written as it is, as today's one-bound
     partial update is: ``count`` 1, ``rejected`` ``[]``; the row open 12 (omitted: kept), high 11, low NULL, close 12.
     This pins the current one-bound policy, not an endorsement of the row it leaves, a close above its only bound:
@@ -1840,7 +1864,7 @@ async def test_a_manual_edit_erasing_low_with_high_below_the_close_is_saved_as_i
     """
     await _erase_seeded(clean_prices)
 
-    row = await _xr46_upsert(clean_prices, [_point(ERASE_OFFSET, "12", low="-1", high="11")])
+    row = await _erase_upsert(clean_prices, {"close": "12", "low": "clear", "high": "11"})
 
     outcome = await _erase_outcome(clean_prices, row)
     assert outcome == (1, [], (Decimal("12"), Decimal("11"), None, Decimal("12"))), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
@@ -1848,15 +1872,15 @@ async def test_a_manual_edit_erasing_low_with_high_below_the_close_is_saved_as_i
 
 @pytest.mark.asyncio
 async def test_a_manual_edit_with_two_real_bounds_and_the_close_below_low_is_still_rejected(clean_prices: int):
-    """Guard, green before the cure and after: the strict check still runs when both incoming bounds are real. The day
-    stored 12/14/10/12 (open/high/low/close); the edit: close 12, low 13, high 14.
+    """GUARD, green before the cure and after (X-R46b's and N92's): the strict check still runs when both incoming bounds
+    are real. The day stored 12/14/10/12 (open/high/low/close); the edit: close 12, low 13, high 14.
 
     Contract (unchanged): the date refused, ``count`` 0, ``rejected`` ``[{the day, "ohlc_inconsistent"}]``; the row keeps
     12/14/10/12.
     """
     await _erase_seeded(clean_prices)
 
-    row = await _xr46_upsert(clean_prices, [_point(ERASE_OFFSET, "12", low="13", high="14")])
+    row = await _erase_upsert(clean_prices, {"close": "12", "low": "13", "high": "14"})
 
     outcome = await _erase_outcome(clean_prices, row)
     assert outcome == (0, [{"date": ERASE_DAY.isoformat(), "reason": "ohlc_inconsistent"}], ERASE_SEED), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"

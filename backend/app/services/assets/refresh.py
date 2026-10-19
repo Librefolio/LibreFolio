@@ -45,6 +45,22 @@ from backend.app.utils.datetime_utils import utcnow
 logger = structlog.get_logger(__name__)
 
 
+def _price_not_above_zero(point: dict) -> bool:
+    """A provider's point with a price LibreFolio does not keep (N92): a close of 0 or less, or a negative open, high, low
+    or volume. A value that is not a finite number is left to ``_unstorable_provider_point`` (W-B58)."""
+
+    def number(value: object) -> Decimal | None:
+        if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+            return None
+        as_decimal = value if isinstance(value, Decimal) else Decimal(str(value))
+        return as_decimal if as_decimal.is_finite() else None
+
+    close = number(point.get("close"))
+    if close is not None and close <= 0:
+        return True
+    return any((value := number(point.get(name))) is not None and value < 0 for name in ("open", "high", "low", "volume"))
+
+
 @dataclass(frozen=True)
 class _PreparedRefreshItem:
     assignment_id: int | None
@@ -503,15 +519,25 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
     errors: list[str] = []
     accepted_prices: list[dict] = []
     mismatch_buckets: dict[str, int] = {}
+    # N92: LibreFolio keeps no price of 0 or less. A provider's day with one is discarded here and named, instead of
+    # making the whole history fail: the plugin no longer refuses to build the point
+    not_positive_dates: list[str] = []
     for p in prices:
         p_currency = p.get("currency") or asset_currency
         if p_currency != asset_currency:
             mismatch_buckets[p_currency] = mismatch_buckets.get(p_currency, 0) + 1
             continue
+        if _price_not_above_zero(p):
+            not_positive_dates.append(str(p["date"]))
+            continue
         accepted_prices.append(p)
     if mismatch_buckets:
         detail = ", ".join(f"{cnt} {code}" for code, cnt in sorted(mismatch_buckets.items()))
         errors.append(f"{sum(mismatch_buckets.values())} points discarded: currency mismatch " f"(got {detail}, expected {asset_currency})")
+    if not_positive_dates:
+        shown = ", ".join(not_positive_dates[:5]) + (f" (+ {len(not_positive_dates) - 5} more)" if len(not_positive_dates) > 5 else "")
+        errors.append(f"{len(not_positive_dates)} points discarded: price not above 0 ({shown})")
+        logger.warning("Provider prices discarded: price not above 0", asset_id=asset_id, provider=provider_code, dates=not_positive_dates[:5], count=len(not_positive_dates))
     # A refused current value is reported like a date the upsert rejects: the result is partial, and says why (X-R51)
     errors.extend(remote_data.notes)
 
@@ -521,7 +547,7 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
     # validation, not 0"), instead of the meaningful "N points discarded: currency mismatch …"
     # message we just collected in ``errors``. Returning FAILED here with that message
     # mirrors the "No prices returned from provider" short-circuit above.
-    if not accepted_prices and mismatch_buckets:
+    if not accepted_prices and (mismatch_buckets or not_positive_dates):
         elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
         return FARefreshResult(
             asset_id=asset_id,
@@ -550,7 +576,9 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
         )
         for p in accepted_prices
     ]
-    upsert_obj = FAUpsert(asset_id=asset_id, prices=price_items)
+    # The provider's points go to the upsert as they are: ``FAPriceWritePoint``'s rules are a manual write's, and a
+    # value no column keeps must still reach ``_unstorable_provider_point`` (W-B58) and be named, not raise here (N92)
+    upsert_obj = FAUpsert.model_construct(asset_id=asset_id, prices=price_items)
 
     fetched_count = len(accepted_prices)
     inserted_count = 0
