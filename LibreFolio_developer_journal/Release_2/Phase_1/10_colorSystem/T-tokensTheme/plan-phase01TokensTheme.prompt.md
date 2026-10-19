@@ -624,7 +624,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 34 | Giro 3, R3-a: toast tenui, chip della (a) col bordo `X` (T3-b), qualità dei dati per gravità (e il `MISSING_PRICE` del rischio ad avviso, nel backend), opacità e link delle famiglie | ✅ commit `81a927681`; slot verde (23:31–23:51): gate 134, `component-unit` 4.959, E2E 299/299 |
 | 35 | Giro 3, R3-b: i ruoli `--lf-cat-*` dei 12 tipi, il risolutore `in srgb`, i badge col colore della famiglia e il pallino del contenuto | ✅ commit `fc0493eb9`, entrato in `7845fc3d3` (00:12): `component-unit` 4.959, `asset-list` 41/41, `asset-unit` 1.112 |
 | 36 | Giro 3, R3-c: lo skill `design-system` (regole 11 e 12, la tabella, le decisioni) e `palette.md` (i 36 ruoli dei tipi); TC-20, il caso del Lab su due sorgenti provate indipendenti | ✅ commit `6b218d4a4`, entrato in `cd686f445` (01:18): `front-designer-lab live` 12/12 desktop, gate del tema 158/158 |
-| 37 | Le colonne fisse di `DataTable` opache in ogni stato della riga (regressione di `77bfa6a39`): la riga dipinge la card e la tinta del suo stato (`--dt-row-tint`, registrata), l'evidenziazione pulsa davvero; la riga inattiva di `AssetTable` sulla stessa tinta; il test E2E | ⏳ CHECKPOINT READY (15:4x), FROZEN: prova del rosso 2/2 rossi su `HEAD`; `component-unit` 4.978, `asset-list` 43/43, `broker detail` 40/40 |
+| 37 | Le colonne fisse di `DataTable` opache in ogni stato della riga (regressione di `77bfa6a39`): la riga dipinge la card e la tinta del suo stato (`--dt-row-tint`, registrata), l'evidenziazione pulsa davvero; la riga inattiva di `AssetTable` sulla stessa tinta; il test E2E | ✅ commit `2559dc87e`, entrato in `1fa64ceae` (15:4x; base merge `dd9d66281` col target `cc3c3af15`): prova del rosso 2/2 rossi su `HEAD`; `component-unit` 4.978, `asset-list` 43/43, `broker detail` 40/40 |
+| 38 | T2: nel banner della qualità dei dati il pulsante che ripara sopra l'elenco di ciò che ripara (il developer, 19/10); un chip per coppia per aggiungere o aprire una coppia; i nomi degli asset di STALE_PRICE | ⏳ CHECKPOINT READY (16:5x), FROZEN: prova del rosso 10/20 rossi su `HEAD`; `component-unit` 5.001; E2E 108/108 su 6 azioni |
 
 ## Avanzamento
 
@@ -3622,3 +3623,99 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > che quindi lasciano vedere al 45 % ciò che scorre sotto: c'era già prima del lotto (`0b660632f` e prima), non è una
 > tinta di riga e non si cura con la riga opaca. Nell'indice come TC-21, per un lotto a parte (serve sbiadire il
 > contenuto senza lo sfondo).
+
+> ✅ **6 · Entrato** (coordinatore, 15:44): commit **`2559dc87e`**, con la base merge `dd9d66281` (il target `cc3c3af15`,
+> pulita), entrato in **`1fa64ceae`**; sull'albero unito i gate 119/119, `--check` pulito, `api sync` senza file
+> cambiati, `front check` 0 e 0. Il ramo portato in avanti dal coordinatore.
+
+### T2 — il pulsante che ripara sopra ciò che ripara — ✅ 19/10/2026
+
+> **Avvio** (coordinatore, 15:44; voluto dal developer): nel banner della qualità dei dati il pulsante che ripara va
+> **sopra** l'elenco dei problemi che ripara, come un «se clicchi qui, ecco cosa ripari»; l'esempio visto è il «Sync FX»
+> (`dashboard/data-quality-sync-rates`). File: `ui/feedback/DataQualityBanner.svelte` ed eventualmente
+> `features/brokers/lots/LotDataQualityBanner.svelte` (liberi per la 1.3). Il layout è deciso, i colori restano quelli
+> del giro 3. Prima un'analisi breve. Ramo sulla punta `1fa64ceae`; corsia da ripopolare con `--force --clean` (la 1.3
+> ha fuso le migrazioni).
+
+> ✅ **1 · La corsia ripopolata** (15:47–15:48): `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
+> test --test-port 6155 --data-dir /tmp/librefolio-r2-t db populate --force --clean` → rc 0 (il database rifatto dalle
+> migrazioni della punta, `files/T-r2/t2/populate.log`); porta 6155 libera.
+
+> ✅ **2 · L'analisi** (15:45–15:50, in sola lettura). **Oggi:** nel modo raggruppato (dashboard e i tre pannelli del
+> rischio) i pulsanti stanno riga per riga: ogni categoria (`code` + `group_key`) è il messaggio, con le coppie FX in
+> linea, e **sotto** la sua azione; nessun pulsante per gruppo né in fondo. Due specie di azione: **un pulsante unico**
+> (`sync_fx_pair` di MISSING_FX_RATES, `sync_asset_prices` di STALE_PRICE, `add_fx_pair` di MISSING_FX_MARKET,
+> `navigate_fx` di MISSING_FX_RATES manuale) e **un chip per asset** (`navigate_asset`: MISSING_PRICE,
+> TRANSACTION_IMPLIED, VALUED_AT_COST, MISSING_COST_BASIS, INVALID_SPLIT_RATIO), dove il chip è insieme la voce e il suo
+> rimedio. Ogni azione compare al più in una categoria per banner (portafoglio e rischio). Il modo piatto (dettaglio
+> asset e cambio) ha un banner per problema col pulsante a fine riga; `LotDataQualityBanner` non ha pulsanti che
+> riparano, solo i chip dei lotti. **Cosa ripara davvero ogni pulsante:** nella dashboard `sync_fx_pair` e
+> `sync_asset_prices` riparano tutto l'elenco (tutte le coppie, tutti gli asset); `add_fx_pair` apre l'aggiunta della
+> **prima** coppia, `navigate_fx` va alla **prima**; nei pannelli del rischio ogni sync apre la finestra di
+> sincronizzazione e `add_fx_pair` porta a `/fx`. **Test:** i tre file Vitest dei banner leggono testi e testid, non
+> l'ordine; nelle 8 spec E2E (84 riferimenti ai testid del banner) nessuna asserzione d'ordine o di posizione; cambiano
+> di proposito le scene `dashboard/data-quality-banner` e `dashboard/data-quality-sync-rates` della galleria.
+
+> ✅ **3 · Le risposte** (coordinatore, 15:51; le mie quattro raccomandazioni): il modo piatto invariato; per STALE_PRICE
+> i nomi degli asset in testo semplice, al più 3 e poi «+N»; **(b)**, un chip per coppia per `add_fx_pair` e
+> `navigate_fx`, col gestore della dashboard che usa `target` e non più `pairs[0]`
+> (`routes/(app)/dashboard/+page.svelte` libero: 0 commit e 0 modifiche nei 16 worktree, l'ultimo commit è di Y-24; da
+> dichiarare, il coordinatore avvisa la 1.3); `LotDataQualityBanner` invariato. Il test d'ordine nel DOM da test-author,
+> rosso sul codice di oggi. Lo slot è nostro, circa 25 minuti nella 6155 col carico sotto 50; la galleria la cattura G,
+> non io.
+
+> ✅ **4 · La cura** (15:52–15:58). **`DataQualityBanner.svelte`**, modo raggruppato: `fixShape()` dà a ogni categoria
+> una di quattro forme. **`all`** (`sync_fx_pair`, `sync_asset_prices`, ogni altra azione unica, e le azioni per voce
+> senza voci): il pulsante `data-quality-cta-{code}` in testa, poi il blocco `data-quality-fixes-{code}` rientrato con
+> un filo a sinistra nel `X-line` della riga, col messaggio (`data-quality-message-{code}`) e le voci
+> (`data-quality-fixes-items-{code}`: le coppie, al più 3 e «+N», o i nomi degli asset in testo, al più 3 e « +N»).
+> **`each-asset`** (`navigate_asset` con asset): il messaggio, poi i chip per asset, come prima. **`each-pair`**
+> (`add_fx_pair`, `navigate_fx` con coppie): il messaggio senza le coppie in linea, poi un pulsante per coppia
+> (`data-quality-fx-pairs-{code}` > `data-quality-fx-pair-{coppia}`, `aria-label` «etichetta: BASE/QUOTE»), che passa la
+> sua coppia come `target`. **`none`**: il messaggio, con le coppie in linea come prima. Fra una categoria e l'altra, in
+> ogni sezione, il divisore nel tono del banner (`styles.divider`). Colori del giro 3, spinner di `busyCode` e testid di
+> prima invariati. **`dashboard/+page.svelte`**: `add_fx_pair` apre l'aggiunta sulla coppia del chip (`target ?? ''`). I
+> pannelli del rischio non cambiano: il loro `add_fx_pair` porta a `/fx` per ogni coppia, come faceva il pulsante unico
+> (`syncTargets.ts`, della 1.3). Verifiche: `svelte-check` 0 errori e 0 avvisi (6.057 file), Prettier (ha solo ri-andato
+> a capo un pulsante esistente), il cricchetto dei colori pulito. Copie di `HEAD` e della cura in `files/T-r2/t2/bak/`
+> per la prova del rosso.
+
+> ✅ **5 · I test** (test-author, agente `dq-order-test`, 15:53–16:12; nessuna run sua oltre i controlli leggeri):
+> `DataQualityBanner.layout.test.ts` nuovo, 12 casi. DQL-01 (le due azioni uniche: il pulsante prima del messaggio, il
+> messaggio e le voci in `data-quality-fixes`, i nomi «A, B, C +1» senza il quarto, le coppie una volta sola), DQL-02
+> (le azioni per voce senza voci: il pulsante unico sopra il messaggio), DQL-03 (lo stato occupato: disabilitato solo il
+> suo, sempre sopra il messaggio), DQL-04 (un pulsante per coppia, nessuno per tutte; il k-esimo manda la sua coppia),
+> DQL-05 (i chip per asset dopo il messaggio: controllo), DQL-06 (sei categorie in un banner, ciascuna nella sua forma e
+> nel suo contenitore), DQL-07 (il modo piatto invariato: controllo). Il messaggio trovato per la sua frase, risolta con
+> lo stesso `get(_)` del componente: così sul codice di oggi il rosso dice «il pulsante viene dopo il messaggio», non
+> «testid non trovato». DQN-02 di `DataQualityBanner.nonIso.test.ts`: la barriera passa al chip della coppia
+> `data-quality-fx-pair-EUR-USD`; `expectNoActionForNonIso()` verifica che le righe NON_ISO non abbiano alcun pulsante.
+> La registrazione in `component-unit` (`scripts/test_runner/_frontend_utility.py`, una riga dopo il test dei toni: file
+> condiviso, dichiarato). Prettier pulito; Vitest sui due file 20/20 sulla cura.
+
+> ✅ **6 · La run** (via del coordinatore, 15:51; `files/T-r2/t2/run.sh`, `LIMIT_MIN=40`; 16:15–16:51): **la prova del
+> rosso**, i due file Vitest sul banner di `HEAD` (le copie in `files/T-r2/t2/bak/`): **10 rossi e 10 verdi su 20, come
+> voluto**: i dieci rossi dicono «the button comes before the message of what it fixes: expected false» (DQL-01, 02, 03,
+> 06), «one button per pair, none for all of them» (DQL-04: c'era solo `data-quality-cta-{code}`) e il chip della coppia
+> che non c'è (DQN-02); verdi i controlli (DQL-05, DQL-07, gli altri casi NON_ISO). La cura rimessa, checksum uguale;
+> sulla cura **20/20**. Poi `component-unit`, `front-portfolio banners`, `stale-price-banner`, `data-quality-legacy`,
+> `data-quality-real`, `risk-lab`, `risk`, e la verifica a occhio su un server della corsia, fermato alla fine. **Sulla
+> cura** (`PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6155 --data-dir
+> /tmp/librefolio-r2-t …`, carico 17–118, per lo più di altre sessioni): `component-unit` **5.001/5.001** (190 file, il
+> nuovo compreso); `front-portfolio banners` **20/20**, `stale-price-banner` **2/2**, `data-quality-legacy` **1/1**,
+> `data-quality-real` **3/3**, `risk-lab` **44/44**, `risk` **38/38**, tutti desktop (le azioni girano solo quello);
+> `svelte-check` 0 errori e 0 avvisi nella build.
+
+> ✅ **7 · La verifica a occhio** (16:51–16:53; `files/T-r2/t2/shots.sh` e `shot.mjs`, non immagini della galleria): un
+> server della corsia (`dev.py server --test --port 6155 --data-dir /tmp/librefolio-r2-t --no-scheduler`), la dashboard
+> col rapporto vero e i soli `data_quality.issues` sostituiti, il banner aperto, nei due temi. «Sync rates» da solo: il
+> pulsante in testa, sotto il blocco col filo a sinistra (il messaggio, poi le due coppie). Più azioni: MISSING_PRICE
+> (errore) col messaggio e i chip degli asset; il divisore; «Sync rates» col suo blocco; «Sync prices» col messaggio e i
+> nomi «Tesla Inc., Vanguard FTSE All-World, iShares Core MSCI EM +1»; MISSING_FX_MARKET col messaggio e un chip per
+> coppia. L'ordine nel DOM letto dallo script coincide. Server fermato, porta 6155 libera alle 16:52.
+
+> **⚠️ Fuori pista:** il primo tentativo della verifica a occhio, dentro `run.sh`, sondava `/api/v1/health`, che non
+> esiste (404: la salute sta in `/api/v1/system/health`); il server era su, lo script ha atteso 180 s e l'ha fermato
+> senza fotografie. Rifatta a parte con la sonda giusta (`shots.sh`).
+
+> ✅ **8 · Il checkpoint** (16:5x): `git diff --check` pulito, porta libera, CHECKPOINT READY al coordinatore; FROZEN.
