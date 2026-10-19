@@ -7451,3 +7451,196 @@ quelle devono usare». I tagli in lettura (N75, 100 anni) restano finché MF non
   - porta libera.
 - **Ultimi controlli**: black pulito; `mkdocs build` stretta pulita; `check-links` 97; `git diff --check` pulito.
 - **Backlog**: X-R72 ✅ (superata da N83); X-R65 annotata con la revisione.
+
+### N92 (i) con `"clear"` — via (19/10, 13:25): disegno
+
+Base `1b2304ff2` (N83 entrato in dev; con X-R16, J-1, J-48, A-57), albero pulito.
+
+**Backend**
+1. `schemas/prices.py`:
+   - nuovo `FAPriceWritePoint`, solo per la scrittura. Apertura, massimo, minimo e volume valgono
+     `Union[Literal["clear"], SafeDecimal, None]`, letti da sinistra a destra. Float e interi diventano
+     `Decimal(str(v))` prima; le stringhe le decide l'unione: `"clear"`, oppure un numero scritto come stringa, ogni
+     altra è 422.
+   - Regole: un numero ≥ 0 finito si scrive; `"clear"` svuota il campo (NULL); `null` o assente lascia il valore
+     salvato. La chiusura è > 0 e finita.
+   - `FAUpsert.prices` usa il modello nuovo.
+   - `FAPricePoint` perde i due controlli del segno (chiusura > 0; ≥ 0 o −1). Porta ciò che un fornitore consegna e ciò
+     che si salva o si risponde; il segno lo controllano il modello di scrittura (a mano) e la refresh (fornitori).
+2. `price_store.py`:
+   - `_merge_field`: `"clear"` → NULL;
+   - il controllo OHLC di X-R46 legge `"clear"` dove leggeva −1;
+   - `_price_limit_issue` salta `"clear"`; `_unstorable_provider_point` non conosce più il −1; via `_SENTINEL`;
+   - `storable_current_value` rifiuta un prezzo corrente ≤ 0, e `unstorable_quote_reason` lo dice. È la strada di X-R51:
+     mai servito, salvato o messo in cache; resta l'ultimo prezzo salvato; nella refresh diventa una nota.
+3. `refresh.py`, nella fase di accettazione dove già si scartano le valute diverse:
+   - un punto con chiusura ≤ 0, o apertura, massimo, minimo o volume negativi (valori finiti), si scarta, si conta e si
+     scrive nel log (WARNING);
+   - `errors` riceve «N points discarded: price not above 0 (date…)», quindi il risultato è parziale e dice perché;
+   - il corto circuito «tutto scartato» vale anche qui;
+   - i punti del fornitore vanno all'upsert con `FAUpsert.model_construct`: sono `FAPricePoint` già filtrati, e le regole
+     del modello di scrittura sono per le scritture a mano. `_unstorable_provider_point` (W-B58) li vede come oggi.
+
+**Frontend**
+4. `ErasableNumberCell.svelte`: il valore interno «cancellato» diventa `'clear'`, non più −1. Così un −1 letto da un CSV
+   resta un numero negativo. Commenti in `DataEditor.svelte` e `DataEditorTypes.ts`.
+5. `AssetDataEditorSection.svelte`: `optionalField` manda `'clear'`. Una riga con apertura, massimo, minimo o volume
+   negativi (possibile solo da un CSV) non è valida, come una chiusura ≤ 0: si salta e si conta.
+
+**Doc e CHANGELOG**
+6. Le pagine per lo sviluppatore (F.4, il modello di scrittura, lo scarto dei fornitori, il prezzo corrente) le scrive
+   un docs-writer. La pagina utente dell'editor la correggo io: i valori ≥ 0, la chiusura > 0, la gomma che svuota.
+7. CHANGELOG:
+   - ⚠️ Breaking: il −1 non svuota più, è rifiutato; si manda `"clear"`;
+   - 🐛: il giorno negativo di un fornitore si scarta e il Sync lo nomina, invece di far fallire la storia; il prezzo
+     corrente ≤ 0 è rifiutato.
+
+**Rispetto all'analisi** (19/10), due affinamenti, stesso effetto per l'utente:
+- lo scarto del giorno negativo sta nella fase di accettazione della refresh, come quello delle valute diverse, e non in
+  un costruttore condiviso dai cinque plugin. Nessun plugin cambia, e il risultato del Sync nomina i giorni scartati;
+- il prezzo corrente si rifiuta in `storable_current_value`, la strada di X-R51, e non con un validatore del modello.
+  Vale sia per la refresh sia per `/prices/current`.
+
+**Test che fissano il −1 oggi**: `test_api/test_ohlc_sentinel.py`, `test_services/test_asset_source_upsert_guards.py`
+(X-R46b) e `test_services/test_asset_digit_limits.py` (C-97). La gomma (`erasable-cell-eraser`) oggi non ha E2E.
+- **Prova sul comportamento di pydantic** (script nella sessione, poi cancellato):
+  - con l'unione `Literal["clear"] | SafeDecimal | None` letta da sinistra a destra, `"clear"` resta stringa e `"12.5"`
+    diventa un Decimal;
+  - `"d"`, `""`, `"Clear"`, `True`, NaN e infinito danno ValidationError, quindi 422; il `-1` passa il tipo, e lo
+    rifiuta il validatore dopo;
+  - un float diventa Decimal dal suo testo (`0.1` resta `0.1`);
+  - `from_attributes` fa leggere un `FAPricePoint` campo per campo: i 92 punti dei test che costruiscono `FAUpsert` con
+    `FAPricePoint` restano validi.
+- **Cura preparata** (`n92_code.py`, provata a secco su `/tmp`, black, ruff e Prettier puliti):
+  - schemi, `price_store`, `refresh`;
+  - `ErasableNumberCell`, `DataEditor`, `DataEditorTypes` (`CLEARED_CELL`), `AssetDataEditorSection`;
+  - la riga 27 della pagina utente nelle 4 lingue: le traduzioni hanno già altro debito, quindi niente stamp;
+  - CHANGELOG: una riga ⚠️ Breaking e una 🐛.
+
+### N92 (i) con "clear" — rossi, cura, verdi (19/10)
+
+**Rossi** ✅ 19/10. I test li ha scritti un test-author; li ho girati uno alla volta sulla corsia 6183, con carico fra 8
+e 25.
+
+| Azione | Esito prima della cura |
+|---|---|
+| `schemas price-write-point` (file nuovo) | 120 rossi, 4 guardie verdi |
+| `schemas computed-fields` | 1 rosso (`test_price_close_must_be_positive`, riscritto), 24 verdi |
+| `api ohlc-sentinel` (riscritto) | 7 rossi, 7 guardie |
+| `services asset-source-guards` | 3 rossi (la cancellazione con `"clear"`, X-R46b), 52 verdi |
+| `services asset-digit-limits` | 4 rossi (`"clear"` non è un problema di cifre), 95 verdi |
+| `services current-price-storable` | 19 rossi N92, 28 verdi (guardia dell'apertura e del volume a 0 compresa) |
+| Vitest `ErasableNumberCell.test.ts` e `AssetDataEditorSection.test.ts` (nuovi) | 7 rossi, 4 guardie |
+
+- Perché erano rossi: oggi `"clear"` o un altro testo danno 500 (`InvalidOperation`), e il −1 dà 200 e svuota.
+- Il giorno negativo di un fornitore fa fallire tutta la storia («No price data available from provider»); un'apertura
+  di −1 passa in silenzio.
+- Il prezzo corrente −5 viene servito, messo in cache e scritto; nella refresh fa sollevare `bulk_refresh_prices`. Uno
+  di 0.00 sparisce in silenzio.
+
+> **Note implementazione**:
+> - Registrati nel runner i tre file nuovi (`schemas price-write-point`, pure; i due Vitest in `front_component_unit`).
+> - Aggiornate le descrizioni di `ohlc-sentinel`, `asset-digit-limits` e `current-price-storable`, che parlavano
+>   ancora del −1 (script `n92_runner.py`).
+
+**Cura** ✅ 19/10, con lo script `n92_code.py` provato a secco su `/tmp`.
+
+> **⚠️ Fuori pista**:
+> 1. **`api sync` rotto.** Le descrizioni dei campi contenevano `"clear"` fra virgolette doppie, e il generatore
+>    incolla le descrizioni di una riga fra virgolette doppie senza escape (regola E-5, `test_openapi_client_text.py`).
+>    Risultato: TypeScript non valido. Ho messo `'clear'` fra apici.
+> 2. **`const` ignorato.** pydantic scrive il `Literal["clear"]` come `const`, che openapi-zod-client 1.18.3 ignora:
+>    il client generato aveva un `z.string()` qualsiasi. Ho aggiunto `json_schema_extra={"enum": [CLEAR]}` sul membro
+>    dell'unione, come fa già `schemas/signals.py`. Ora il client ha `z.literal('clear')`, e il tipo è
+>    `'clear' | number | string | null` (lo `string` è il Decimal in testo di `SafeDecimal`, come prima).
+>    - Provato prima in un processo a parte: la validazione resta identica (`"clear"` stringa, `"d"`, `""`, `"Clear"`
+>      e `True` rifiutati sul campo).
+> 3. **`DataEditor.getValue`.** Ordinamento e filtro avrebbero letto `'clear'` come NaN. Una cella cancellata ora si
+>    ordina e si filtra come una vuota, cioè come sarà dopo il salvataggio.
+> 4. **Descrizione `range-ceiling` di N83.** Parlava ancora di `stored_date_bounds (1900-01-01 … the ceiling)`, una
+>    funzione che N83 ha tolto. Corretta in `latest_stored_date` (il soffitto, nessun pavimento). Era un residuo del
+>    mio lotto N83.
+> - Verificato: l'import CSV rifiuta un testo in una colonna numerica (`csvImport.errors.invalidNumber`), quindi
+>   `'clear'` arriva solo dalla gomma.
+
+**Verdi** ✅ 19/10, sulla corsia 6183, una corsa alla volta, con carico fra 9 e 27.
+
+| Corsa | Esito |
+|---|---|
+| `schemas`: `price-write-point` / `computed-fields` / `openapi-client-text` | 124 / 25 / 78 |
+| `services`: `asset-source-guards` / `asset-digit-limits` / `current-price-storable` | 55 / 99 / 47 (rigirato dopo la correzione del testo del log: 47) |
+| `services`: `asset-source` / `bulk-writes-chunked` / `range-ceiling` / `asset-source-refresh` | 61 / 69 / 74 / 69 |
+| `api`: `ohlc-sentinel` / `assets-price` / `current-price-persistence` / `prices-currency-coherence` | 14 / 23 / 5 / 8 |
+| `api`: `asset-currency-change` / `asset-prices-export` / `prices-sync-delta` / `market-data-wipe` | 4 / 5 / 5 / 5 |
+| Vitest: `ErasableNumberCell`, `AssetDataEditorSection`, `DataEditor` | 124 |
+| `front check` | 0 errori, 0 avvisi |
+| Colori; `check-orphans` | puliti; 567 test frontend e 496 backend raggiungibili |
+| black e ruff sui file toccati | puliti |
+| `mkdocs build` strict; `check-links` | pulito; 97 link validi |
+
+- Fra le corse API ci sono i 10 file che costruiscono `FAUpsert` con `FAPricePoint`: `from_attributes` regge.
+- Nessun cambio i18n.
+
+> **⚠️ Fuori pista**:
+> 1. **Il primo `front check` ha dato 2 errori.**
+>    - `AssetDataEditorSection.test.ts:41` («Type instantiation is excessively deep»), nel file nuovo del test-author.
+>    - `FilesTable.svelte:170` (implicit any), che non è nostro.
+>    - Causa: `importOriginal<typeof import('$lib/api')>()` con lo spread di `zodiosApi` fa espandere a TypeScript
+>      tutto il client in una sola espressione. Il file nuovo viene controllato prima di `riskStore.test.ts`, che fa lo
+>      stesso, e paga tutto il budget. Il tipo fallito resta in cache come `any`, e quindi l'errore compare anche in
+>      `FilesTable`.
+>    - Il test-author ha tipizzato il mock in modo largo (`Record<string, unknown>`, `as object`); a runtime non cambia
+>      nulla, Vitest 3/3. Dopo, `front check` è 0/0, e spariscono tutti e due gli errori.
+> 2. **Un venv creato per sbaglio.** Il docs-writer ha lanciato `pipenv run python` senza `PIPENV_CUSTOM_VENV_NAME`, e
+>    pipenv ha creato un venv vuoto per questo worktree (`~/.local/share/virtualenvs/e-alfy-cuddly-engine-BAyCCI4x`,
+>    solo pip). Il docs-writer l'ha cancellato subito; ho verificato che non c'è più e che il venv condiviso
+>    `LibreFolio-SAUMUTtc` è intatto. Nessuna installazione, git invariato.
+> 3. **Parole rimaste dal −1 in `price_store.py`.** Tre commenti dicevano ancora «sentinel», e il log del rifiuto di un
+>    prezzo corrente diceva solo «no price column can keep it». Ora dice «not above 0 or no price column can keep it»,
+>    con la riga che lo cita nella doc (script `n92_wording.py`).
+
+**Doc** ✅ 19/10. Il docs-writer ha aggiornato cinque pagine per lo sviluppatore:
+- `backend/assets/architecture.md`, con due ancore nuove: `#price-write-merge` e `#discarded-provider-days`;
+- `frontend/components/core-ui/data-editor.md`;
+- `architecture/patterns/asset_plugin_guide.md`, una riga sul segno;
+- `frontend/components/features/live-ticker.md` e `api/overview.md`, «not above 0» fra i rifiuti di
+  `storable_current_value()`.
+
+Le ancore esistenti sono intatte. La pagina utente l'ho corretta io, una riga nelle 4 lingue, senza stamp per via del
+debito di traduzione già presente.
+
+**Resta**: la corsa E2E `front-asset asset-data-editor` e `front-fx fx-editor` (le due usano `DataEditor`), che chiedo
+al coordinatore come slot.
+
+**E2E** ✅ 19/10, nello slot del coordinatore (14:35–14:43, porta 6183), una spec alla volta.
+
+| Corsa | Esito |
+|---|---|
+| `front-asset asset-data-editor`, spec intera | 30/30 (1,5 min) |
+| `front-fx fx-editor`, spec intera, prima corsa | 6/7 |
+| `front-fx fx-editor`, rifatta da sola | 7/7 (17,4 s) |
+
+> **⚠️ Fuori pista — triage del rosso di `fx-editor`** (skill `test-triage`; prove salvate in
+> `files/checks/logs/n92_e2e_fx_triage/` della sessione):
+> - **Il sintomo.** Il test 3, «closing editor hides the panel», si ferma nel login del `beforeEach`. A `/dashboard`
+>   la pagina mostra quella d'errore di SvelteKit, «500 · Something Went Wrong · Internal Error», per tutti i 30 s.
+>   Il corpo del test non parte.
+> - **Le prove, dal log del backend.**
+>   - Login e impostazioni rispondono 200.
+>   - Dopo il login il browser chiede 47 chunk distinti, contro i 63 dei test 2 e 4, che hanno lo stesso insieme.
+>     Quelli del test 3 sono un sottoinsieme stretto: nessun chunk in più.
+>   - Poi `GET /_app/version.json` due volte: è il controllo che SvelteKit fa dopo una navigazione fallita.
+>   - Nessuna chiamata API della dashboard, nessun errore, nessun avviso di rete.
+>   - Il caricamento del grafo dei moduli si è quindi interrotto: un import dinamico è fallito sotto il livello HTTP,
+>     e la richiesta non arriva mai nel log di uvicorn.
+> - **Ipotesi escluse.**
+>   - Forma della risposta: non c'entra, è il login.
+>   - Orologio: il tempo è passato su una pagina d'errore già mostrata, non in un'attesa corta.
+>   - Stato condiviso: nella corsia girava solo questa spec.
+>   - Il service worker: intercetta solo le navigazioni del browser (`mode === 'navigate'`), non i moduli.
+>   - Un difetto di N92: la rotta della dashboard non carica codice di N92, e lo stesso bundle ha fatto 36 login
+>     riusciti (30 + 6); la corsa rifatta da sola è 7/7.
+> - **Verdetto: ambiente.** Un fetch di un modulo è fallito nel trasporto, su una macchina condivisa e carica (carico
+>   fra 10 e 20).
+> - **Osservazione per chi possiede la shell del frontend, non per questo lotto:** con un chunk che non si carica,
+>   l'utente vede «500 Internal Error» dopo il login, e SvelteKit non riprova. Va girata al coordinatore.
