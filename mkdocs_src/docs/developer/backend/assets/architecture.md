@@ -203,17 +203,21 @@ reads its points as `FAPriceWritePoint` (`FAUpsert.prices`), whose `open`, `high
 the change count and the upsert, PERSIST (`_persist_refresh_item()` in `refresh.py`) sets aside
 the points LibreFolio does not keep: a point in another currency than the asset's (#R3-2,
 *N points discarded: currency mismatch (got …, expected …)*), and, since N92, a day with a close
-of 0 or less or a negative open, high, low or volume (`_price_not_above_zero()`). A zero open or
+of 0 or less or a negative open, high, low or volume (`_sign_issue()`). A zero open or
 volume is a value, and is kept; a value that is not a finite number is left to
 `_unstorable_provider_point()` (W-B58, below). The discarded days are named in one error,
-*N points discarded: price not above 0 (…)*, with their ISO dates, the first five then
-*(+ N more)*, and a warning is logged, *Provider prices discarded: price not above 0*, with
-`asset_id`, `provider`, the first five `dates` and the `count`. `points_fetched` counts only the
+*N points discarded: a close not above 0 or a negative open, high, low or volume (…)*, each day
+with its ISO date and the fields at fault, `2026-01-02 (volume=-10)`, as W-B58 names a value no
+column keeps, the first five then *(+ N more)*; and a warning is logged, *Provider prices
+discarded: …* with the same rule, with `asset_id`, `provider`, the first five `days` and the
+`count`. `points_fetched` counts only the
 points kept. With other points left the item is `partial`, the first of its errors its
 `message`; when every point is discarded it is `failed`, with `points_fetched` 0 and nothing
 written, as after a currency mismatch (#R4-1). The points kept reach the upsert through
-`FAUpsert.model_construct()`, never read as write points, so that a value no column keeps still
-reaches `_unstorable_provider_point()` and is named instead of raising. Before N92, the plugin's
+`FAUpsert.model_construct()`, not validated again as write points: they are `FAPricePoint`
+already built and filtered, and `FAPriceWritePoint` checks no digits (a value no column keeps
+reaches `_unstorable_provider_point()` either way), so a full validation of a 45 000-point history
+would cost about 0.23 s on the event loop for nothing. Before N92, the plugin's
 own `FAPricePoint` refused such a day, so its whole history download failed (with no current
 value either, the item failed with *No price data available from provider*), and an open, high,
 low or volume of exactly `-1` was stored as an erased value.

@@ -5517,7 +5517,11 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Elencare le assegnazioni degli asset, le rotte dei cambi e le righe il cui codice di fornitore nessun registro
     serve: copre le righe che i doppi di test hanno già scritto nelle istanze rilasciate, e i plugin rimossi.
   - Nota informativa di E: `shutdown_all_providers` istanzia ancora i doppi; innocuo, nessuna azione.
-- ✅ **X-R45 · Cambi: chi legge `fx_rates` direttamente non salta i tassi vecchi inutilizzabili** (chiusa il 17/10, `629304ab3` + `21164d0a7`, entrata in dev `b690c0785`: la strada (b) del backlog, `usable_fx_rate_clause()` in ogni lettore che calcola, più una guardia strutturale; revisori MF per il PAC, Z per lo scheduler) — basso; X, 17/10 (da
+- ↩️ **X-R45 · Cambi: chi legge `fx_rates` direttamente non salta i tassi vecchi inutilizzabili** (**annullata il 19/10**
+  per decisione del developer; il rovescio è in attesa del commit. Dettagli nel piano 03, «Rovescio di X-R45».
+  - Tolti: la condizione nei tre lettori nuovi, la guardia strutturale, la doc, il runner e la riga del CHANGELOG.
+  - Restano, com'erano, i filtri di `convert_bulk` (X-R38) e dei period changes (X-R59).
+  - Prima: chiusa il 17/10, `629304ab3` + `21164d0a7`, entrata in dev `b690c0785`: la strada (b) del backlog, `usable_fx_rate_clause()` in ogni lettore che calcola, più una guardia strutturale; revisori MF per il PAC, Z per lo scheduler) — basso; X, 17/10 (da
   X-R38).
   - Con X-R38 nessuna scrittura salva più un tasso fuori dai limiti, e `convert_bulk` e `compute_chain_rate` saltano quelli
     vecchi (`inf`, 0, 20 cifre intere: una 1.2 poteva salvarli, per esempio un manuale `1E-11`, che si rilegge 0).
@@ -5883,6 +5887,9 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Costo: una chiave in 4 lingue e una E2E. La revisione: colori puliti, logica giusta.
 - **X-R82 · PAC, cambi salvati: un ramo e un codice che nessun dato raggiunge più** — minimo, **dopo la 1.3**, non tocca i
   numeri; X, 19/10 (MF, revisione di X-R45, voce 1, girata dal coordinatore il 17/10).
+  - **Il ramo e il codice: decaduti il 19/10** con il rovescio di X-R45. Lo 0 dell'ultima riga salvata torna
+    `allocation.saved_fx_invalid`; lo fissa `test_xr45_reverted_the_planner_fx_quote_is_built_from_the_latest_stored_row`.
+  - **Resta aperta** solo la docstring di `_validate_canonical_fx_pair` (voce «Accanto», sotto).
   - In `build_planner_fx_quotes` (`pac_allocator/source/fx_quotes.py` ~103–116), `rate if rate > 0 else None` e il
     problema `allocation.saved_fx_invalid` non si raggiungono più. L'unica fonte è `_load_latest_planner_fx_rows`, la
     condizione di X-R45 sta nella sottoquery della data e `(date, base, quote)` è unico (`uq_fx_rates_date_base_quote`):
