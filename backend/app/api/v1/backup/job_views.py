@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 
 NOT_FOUND = {"description": "No backup job has this id, or its archive is gone (code `backup_job_not_found`)"}
 START_RESPONSES = {
-    409: {"description": "Another backup is running (code `backup_busy`)"},
+    409: {"description": "Another backup is running (code `backup_busy`). The detail adds `job_id` and `origin` of the running backup when the caller can read it: the Backup tab always, the hosting panel for a backup of its own (B-8)"},
     500: {"description": "The backup could not start: the backups folder of the data directory is a link or a file (code `backup_folder_unusable`), or it cannot be written (code `backup_failed`)"},
     507: {"description": "Not enough free space to start the backup (code `backup_no_space`)"},
 }
@@ -62,8 +62,14 @@ def start_job(origin: BackupOrigin, password: str | None = None) -> InstanceBack
     """
     try:
         job = jobs.start_backup(origin=origin, password=password)
-    except jobs.BackupBusyError:
-        raise backup_error(status.HTTP_409_CONFLICT, "backup_busy", "Another backup is running") from None
+    except jobs.BackupBusyError as exc:
+        refusal = backup_error(status.HTTP_409_CONFLICT, "backup_busy", "Another backup is running")
+        running = exc.running
+        # B-8: the running backup, to a caller that can read it, so the Backup tab follows one whose start answer was lost:
+        # the tab reads every job, the hosting panel only its own.
+        if running is not None and (origin == "ui" or running.origin == origin):
+            refusal.detail = {**refusal.detail, "job_id": running.job_id, "origin": running.origin}
+        raise refusal from None
     except BackupPathError:
         logger.error("Instance backup could not start: the backups folder of the data directory is not a plain folder", origin=origin)
         raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "backup_folder_unusable", "The backups folder of the data directory is not a plain folder") from None
