@@ -126,11 +126,12 @@ def test_calculate_mwrr_series_includes_intermediate_cash_flows(monkeypatch):
     flow joins that snapshot's final value."""
     calls = []
 
-    def fake_solve_xirr(flows, x0):
+    def fake_newton_xirr(flows, x0, scale):
         calls.append((list(flows), x0))
         return 0.1 if len(calls) == 1 else 0.15
 
-    monkeypatch.setattr(roi_utils, "_solve_xirr", fake_solve_xirr)
+    # P1: a series point after the first may solve through the Newton step directly, not through _solve_xirr.
+    monkeypatch.setattr(roi_utils, "_newton_xirr", fake_newton_xirr)
 
     series = calculate_mwrr_series(
         [
@@ -154,11 +155,12 @@ def test_calculate_mwrr_series_starts_every_point_from_the_default_guess(monkeyp
     x0_values = []
     returned_rates = iter([3.0, 0.3, 0.2])
 
-    def fake_solve_xirr(flows, x0):
+    def fake_newton_xirr(flows, x0, scale):
         x0_values.append(x0)
         return next(returned_rates, 9.9)
 
-    monkeypatch.setattr(roi_utils, "_solve_xirr", fake_solve_xirr)
+    # P1: a series point after the first may solve through the Newton step directly, not through _solve_xirr.
+    monkeypatch.setattr(roi_utils, "_newton_xirr", fake_newton_xirr)
 
     series = calculate_mwrr_series(
         [

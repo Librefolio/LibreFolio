@@ -6,14 +6,13 @@ import asyncio
 import json
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any, List
-from zoneinfo import ZoneInfo
 
 import structlog
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from backend.app.db.models import (
@@ -42,7 +41,6 @@ from backend.app.services.assets.event_store import EventStoreOperations
 from backend.app.services.assets.price_store import PriceStoreOperations, _unstorable_provider_point, storable_current_value, unstorable_quote_reason
 from backend.app.utils.date_range_limits import latest_stored_date, range_span_floor
 from backend.app.utils.datetime_utils import utcnow
-from backend.app.utils.exchange_dates import LEGACY_UTC_DATES, LEGACY_UTC_PROVIDER, exchange_zone, local_date_of_legacy_utc_date
 
 logger = structlog.get_logger(__name__)
 
@@ -74,11 +72,6 @@ class _PreparedRefreshItem:
     identifier_type: str
     start: AssetHistoryStartDate
     end: date_type
-    #: Z-33: the assignment still holds the mark of migration 011 and its provider is the one whose rows an older version
-    #: dated by UTC: this refresh checks them once, against the provider's full history
-    legacy_check: bool = False
-    #: The assignment's last fetch before this refresh (UTC): the old code had fetched no bar after the day before it
-    last_fetch_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -88,14 +81,6 @@ class _FetchedRefreshData:
     events: list[dict]
     #: Reasons the result reports beside its prices: a refused current value (X-R51)
     notes: tuple[str, ...] = ()
-    #: The quote currency as the provider reported it with its history (Yahoo's ``GBp``), kept on the assignment (Z-32)
-    reported_currency: str | None = None
-    #: The exchange's IANA timezone the provider reported (its history's, else its current value's) (Z-33)
-    exchange_timezone: str | None = None
-    #: Z-33's one-time check only: the session dates of the provider's full history (None: no calendar fetched)
-    session_dates: frozenset[date_type] | None = None
-    #: Z-33's one-time check only: the (date, upper-case type) of the events of the provider's full history
-    fresh_events: frozenset[tuple[date_type, str]] = frozenset()
 
 
 async def _prepare_refresh_items(  # noqa: C901 — per-item validation maps each rejection to a typed result
@@ -217,8 +202,6 @@ async def _prepare_refresh_items(  # noqa: C901 — per-item validation maps eac
             identifier_type=assignment.identifier_type,
             start=resolved_start,
             end=request.date_range.end,
-            legacy_check=assignment.exchange_timezone == LEGACY_UTC_DATES and provider_code == LEGACY_UTC_PROVIDER,
-            last_fetch_at=assignment.last_fetch_at,
         )
 
     return prepared_items, immediate_results
@@ -253,10 +236,6 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
             async with semaphore:
                 prices_data = []
                 events_data = []
-                reported_currency: str | None = None  # the provider's own quote currency (Z-32)
-                exchange_timezone: str | None = None  # the exchange's timezone (Z-33)
-                session_dates: frozenset[date_type] | None = None  # Z-33: the one-time check's calendar
-                fresh_events: frozenset[tuple[date_type, str]] = frozenset()
                 today = date_type.today()
 
                 # Cache key for this provider+identifier combo.
@@ -269,30 +248,9 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                 # every reader, writer and drop of these caches (core.asset_cache_key).
                 cache_key = core.asset_cache_key(provider_code, identifier, prep.identifier_type, provider_params, core.settings_cache_part(prov))
 
-                # 0. Z-33: the one-time check of an assignment an older version dated by UTC reads the provider's full
-                # history once, up to today, past the cache: the calendar of sessions and events the check needs, and the
-                # data of the asked range, the only part written (the history call of step 1 is not made)
-                if prep.legacy_check and prov.supports_history:
-                    try:
-                        calendar = await core.call_provider(prov, lambda: prov.get_history_value(identifier, identifier_type, provider_params, "min", today), timeout=55.0, scope=cooldown_scope)
-                        if calendar is not None and calendar.prices:
-                            session_dates = frozenset(point.date for point in calendar.prices)
-                            fresh_events = frozenset((event.date, str(event.type).strip().upper()) for event in calendar.events)
-                            exchange_timezone = getattr(calendar, "exchange_timezone", None) or exchange_timezone
-                            reported_currency = getattr(calendar, "currency", None) or reported_currency
-                            if start == "min" or start < today:
-                                # The asked range, as step 1 would have fetched it: prices up to yesterday, events up to today
-                                history_end = min(end, today - timedelta(days=1)) if end >= today else end
-                                call_end = today if end >= today else end
-                                prices_data = [point.model_dump() for point in calendar.prices if (start == "min" or point.date >= start) and point.date <= history_end]
-                                events_data = [event.model_dump() for event in calendar.events if (start == "min" or event.date >= start) and event.date <= call_end]
-                    except Exception as calendar_e:
-                        refusal = _refusal_of(calendar_e, refusal)
-                        logger.warning(f"Full-history calendar fetch failed for asset {asset_id}: {calendar_e}")
-
                 # 1. Fetch historical data (with core cache)
                 history_requested = start == "min" or start < today
-                if prov.supports_history and history_requested and not prep.legacy_check:
+                if prov.supports_history and history_requested:
                     try:
                         # Prices stop at yesterday: today's close is not in yet, and today's value comes from
                         # get_current_value below. Events do not: a date announced for today (a dividend, a split) is a
@@ -311,8 +269,6 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                                 if cache_ok and cached_entry:
                                     cached_dates = cached_entry.get("dates", {})
                                     cached_events = cached_entry.get("events", [])
-                                    reported_currency = cached_entry.get("currency")
-                                    exchange_timezone = exchange_timezone or cached_entry.get("exchange_timezone")
                                     # Determine if we have a gap
                                     if cached_dates:
                                         # Check if requested range is fully covered
@@ -364,16 +320,9 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                                 if hist_data and hist_data.events:
                                     events_data = [e.model_dump() for e in hist_data.events]
                                     logger.debug(f"Fetched {len(events_data)} events for asset {asset_id}")
-                                # Z-32: the quote currency as the provider reported it (not normalized: Yahoo's GBp)
-                                if hist_data and getattr(hist_data, "currency", None):
-                                    reported_currency = hist_data.currency
-                                # Z-33: the exchange's timezone the history was dated in (read with getattr, as the currency:
-                                # a plugin may answer with any object carrying prices and events)
-                                if hist_data and getattr(hist_data, "exchange_timezone", None):
-                                    exchange_timezone = hist_data.exchange_timezone
 
-                                # Update cache with merged data (the reported currency and timezone too, for a later full hit)
-                                core._asset_history_cache.set(cache_key, {"dates": cached_dates, "events": events_data, "currency": reported_currency, "exchange_timezone": exchange_timezone})
+                                # Update cache with merged data
+                                core._asset_history_cache.set(cache_key, {"dates": cached_dates, "events": events_data})
 
                                 # Build prices_data from full cached_dates for requested range
                                 prices_data = list(cached_dates.values())
@@ -400,9 +349,6 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                                 # Refused: the result says why, as the upsert did when the value reached it (X-R51)
                                 refused_note = unstorable_quote_reason(fetched_current.value)
 
-                        # Z-33: the exchange's timezone from the current value when the history gave none
-                        if current_data is not None and exchange_timezone is None and getattr(current_data, "exchange_timezone", None):
-                            exchange_timezone = current_data.exchange_timezone
                         if current_data and current_data.value:
                             current_price = {
                                 "date": current_data.as_of_date or today,
@@ -425,10 +371,6 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                         source=provider_code,
                         events=events_data,
                         notes=(refused_note,) if refused_note else (),
-                        reported_currency=reported_currency,
-                        exchange_timezone=exchange_timezone,
-                        session_dates=session_dates,
-                        fresh_events=fresh_events,
                     ),
                     None,
                     refusal,
@@ -519,89 +461,6 @@ async def _count_actual_price_changes(
     return new_count, changed_count, changed_items
 
 
-def _server_date(moment: datetime | None) -> date_type | None:
-    """The server's local date of a stored UTC moment (SQLite gives it back naive), as ``date.today()`` reads dates."""
-    if moment is None:
-        return None
-    return (moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)).astimezone().date()
-
-
-async def _redate_legacy_rows(session: AsyncSession, asset_id: int, prep: _PreparedRefreshItem, remote_data: _FetchedRefreshData, zone: ZoneInfo, last_day: date_type | None, assignment_id: int) -> dict[str, int]:
-    """The one-time check's moves (Z-33), flushed in ``session`` and not committed: the provider's prices and the
-    assignment's events an older version dated by UTC, each to its exchange day as ``_settle_exchange_timezone``
-    describes. Returns the counts its log line carries."""
-    sessions = remote_data.session_dates
-
-    def price_target(stored: date_type) -> date_type | None:
-        target = local_date_of_legacy_utc_date(stored, zone)
-        if target == stored or target not in sessions or last_day is None or stored > last_day - timedelta(days=2):
-            return None
-        return target
-
-    def event_target(stored: date_type, kind: str) -> date_type | None:
-        target = local_date_of_legacy_utc_date(stored, zone)
-        if target == stored or (target, kind) not in remote_data.fresh_events or (stored, kind) in remote_data.fresh_events:
-            return None
-        return target
-
-    prices_moved, prices_dropped = await PriceStoreOperations.redate_provider_rows(session, asset_id, prep.provider_code, price_target)
-    events_moved, events_merged = await EventStoreOperations.redate_provider_events(session, asset_id, assignment_id, event_target)
-    first_session = min(sessions)
-    before_calendar = (await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset_id, PriceHistory.source_plugin_key == prep.provider_code, PriceHistory.date < first_session - timedelta(days=1)))).scalar_one()
-    return {"prices_moved": prices_moved, "prices_dropped": prices_dropped, "events_moved": events_moved, "events_merged": events_merged, "rows_before_calendar": before_calendar}
-
-
-async def _settle_exchange_timezone(engine: AsyncEngine, asset_id: int, prep: _PreparedRefreshItem, remote_data: _FetchedRefreshData) -> str | None:
-    """Z-33: the exchange timezone of the asset's assignment, settled before the refresh writes anything.
-
-    The one-time check (``prep.legacy_check``: the mark of migration 011 on the provider whose rows an older version
-    dated by UTC) moves those dates, never their values, in one transaction with the timezone it stores (which clears
-    the mark):
-
-    - a price of the provider moves from S to S+1 when the rule says so (``local_date_of_legacy_utc_date``), the
-      provider's full history has a session on S+1, and S is at most two days before the assignment's last fetch: the
-      old code had fetched no bar after the day before it, so a later row is a current value, already on its day;
-    - an event of the assignment moves when the rule says so and the full history has an event of its type on S+1 and
-      none on S (``EventStoreOperations.redate_provider_events``: merges, and a SPLIT's ADJUSTMENT rows on S).
-
-    The mark is read again here and claimed by a conditional UPDATE before anything moves: the manual sync and the
-    scheduler can refresh one asset at the same time, and only the refresh whose UPDATE still finds the mark moves rows.
-
-    Without a full history or a timezone the mark stays and the refresh writes nothing: the returned message says why.
-    Otherwise a reported timezone is stored (never over the mark of another provider's assignment). Returns the
-    message of a refresh that must write nothing, else None.
-    """
-    if prep.assignment_id is None:
-        return None
-    zone = exchange_zone(remote_data.exchange_timezone)
-    async with AsyncSession(engine, expire_on_commit=False) as session:
-        assignment = await session.get(AssetProviderAssignment, prep.assignment_id)
-        if assignment is None:
-            return None
-        # The mark as stored now, not as the preparation read it: another refresh of the asset may have settled since
-        if prep.legacy_check and assignment.exchange_timezone == LEGACY_UTC_DATES:
-            sessions = remote_data.session_dates
-            if zone is None or not sessions:
-                return "Nothing written: the stored dates await their one-time check, and the provider gave no full history or exchange timezone"
-            last_day = _server_date(prep.last_fetch_at)
-            # Claimed before anything moves. pysqlite opens the transaction at this write: when another refresh holds the
-            # write lock, this UPDATE waits for its commit (busy_timeout) and then finds the mark gone. The refresh that
-            # did not claim it moves nothing and writes its data as any refresh does
-            claim = update(AssetProviderAssignment).where(AssetProviderAssignment.id == assignment.id, AssetProviderAssignment.exchange_timezone == LEGACY_UTC_DATES).values(exchange_timezone=zone.key).execution_options(synchronize_session=False)
-            if (await session.execute(claim)).rowcount != 1:
-                await session.rollback()
-                return None
-            moves = await _redate_legacy_rows(session, asset_id, prep, remote_data, zone, last_day, assignment.id)
-            assignment.exchange_timezone = zone.key
-            await session.commit()
-            logger.info("Stored dates checked against the exchange calendar", asset_id=asset_id, provider=prep.provider_code, timezone=zone.key, **moves)
-            return None
-        if zone is not None and assignment.exchange_timezone not in (zone.key, LEGACY_UTC_DATES):
-            assignment.exchange_timezone = zone.key
-            await session.commit()
-    return None
-
-
 async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist steps, per-step error mapping
     asset_id: int,
     prep: _PreparedRefreshItem,
@@ -644,31 +503,6 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
             status=SyncStatus.FAILED,
             provider_used=provider_code,
             errors=["No prices returned from provider"],
-            elapsed_ms=elapsed_ms,
-        )
-
-    # Z-33: before anything is written, the exchange timezone; the one-time check of the dates an older version stored
-    # by UTC runs here, or, without a calendar, lets nothing be written. A check that raises fails this asset only: its
-    # session rolls back, the mark stays, the other assets of the call go on
-    try:
-        settle_error = await _settle_exchange_timezone(engine, asset_id, prep, remote_data)
-    except Exception as settle_e:
-        logger.warning("Exchange timezone check failed: nothing written", asset_id=asset_id, error=str(settle_e))
-        settle_error = f"Nothing written: the exchange timezone check failed ({settle_e!s})"
-    if settle_error is not None:
-        elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
-        return FARefreshResult(
-            asset_id=asset_id,
-            status=SyncStatus.FAILED,
-            provider_used=provider_code,
-            points_fetched=0,
-            points_changed=0,
-            inserted_count=0,
-            updated_count=0,
-            events_fetched=len(remote_data.events),
-            events_changed=0,
-            message=settle_error,
-            errors=[settle_error],
             elapsed_ms=elapsed_ms,
         )
 
@@ -815,11 +649,6 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
                 fresh_assignment = assign_res.scalar_one_or_none()
                 if fresh_assignment:
                     fresh_assignment.last_fetch_at = utcnow()
-                    # Z-32: the provider's own quote currency, as the column holds it (8 characters); a history that
-                    # reports none leaves the last one
-                    reported = (remote_data.reported_currency or "").strip()
-                    if reported and len(reported) <= 8:
-                        fresh_assignment.reported_currency = reported
                     persist_session.add(fresh_assignment)
                     await persist_session.commit()
             except Exception as e:

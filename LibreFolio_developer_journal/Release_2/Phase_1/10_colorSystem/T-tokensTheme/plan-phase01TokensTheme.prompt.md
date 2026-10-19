@@ -623,7 +623,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 33 | Il caso (c) di `theme-roles.spec.ts`: una sonda nel contenuto della pagina invece di `dashboard-cash-balances`, migrata da DV | ✅ commit `5cac2d244`, entrato in `c1578a8bf` (11:51): desktop 13/13, mobile 11/11 + 2 saltati per costruzione |
 | 34 | Giro 3, R3-a: toast tenui, chip della (a) col bordo `X` (T3-b), qualità dei dati per gravità (e il `MISSING_PRICE` del rischio ad avviso, nel backend), opacità e link delle famiglie | ✅ commit `81a927681`; slot verde (23:31–23:51): gate 134, `component-unit` 4.959, E2E 299/299 |
 | 35 | Giro 3, R3-b: i ruoli `--lf-cat-*` dei 12 tipi, il risolutore `in srgb`, i badge col colore della famiglia e il pallino del contenuto | ✅ commit `fc0493eb9`, entrato in `7845fc3d3` (00:12): `component-unit` 4.959, `asset-list` 41/41, `asset-unit` 1.112 |
-| 36 | Giro 3, R3-c: lo skill `design-system` (regole 11 e 12, la tabella, le decisioni) e `palette.md` (i 36 ruoli dei tipi); TC-20, il caso del Lab su due sorgenti provate indipendenti | ⏳ CHECKPOINT READY (01:17), FROZEN: `front-designer-lab live` 12/12 desktop; commit del coordinatore |
+| 36 | Giro 3, R3-c: lo skill `design-system` (regole 11 e 12, la tabella, le decisioni) e `palette.md` (i 36 ruoli dei tipi); TC-20, il caso del Lab su due sorgenti provate indipendenti | ✅ commit `6b218d4a4`, entrato in `cd686f445` (01:18): `front-designer-lab live` 12/12 desktop, gate del tema 158/158 |
+| 37 | Le colonne fisse di `DataTable` opache in ogni stato della riga (regressione di `77bfa6a39`): la riga dipinge la card e la tinta del suo stato (`--dt-row-tint`, registrata), l'evidenziazione pulsa davvero; la riga inattiva di `AssetTable` sulla stessa tinta; il test E2E | ⏳ CHECKPOINT READY (15:4x), FROZEN: prova del rosso 2/2 rossi su `HEAD`; `component-unit` 4.978, `asset-list` 43/43, `broker detail` 40/40 |
 
 ## Avanzamento
 
@@ -3227,7 +3228,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > ✅ **4 · L'handoff** (11:5x): CHECKPOINT READY con la spec, la frase della `desc` e il piano; committato dal
 > coordinatore come `5cac2d244` ed entrato con `c1578a8bf` (11:51).
 
-### Giro 3 della designer: toast, banner e badge dei tipi — 🔄 17/10/2026 sera
+### Giro 3 della designer: toast, banner e badge dei tipi — ✅ 17/10/2026 sera (chiuso per T il 18/10, 01:18)
 
 > **Avvio** (coordinatore, 22:42; worktree portato alla punta `38b7e6313`, pulito): il giro 3 approvato dal developer
 > alle 22:05, con la designer accanto, testuale: «leggilo e applicalo, modifica i temi colori esistenti, e se ne servono
@@ -3481,7 +3482,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > passano. Verdetto della triage: **un'assunzione del test** (due sorgenti diverse), non un difetto del prodotto; il
 > sesto slot non conteneva le spec del Lab, per questo non l'ha visto. Nessuna correzione, come chiesto.
 
-### R3-c e TC-20 — 🔄 18/10/2026 notte
+### R3-c e TC-20 — ✅ 18/10/2026 notte
 
 > **Avvio** (coordinatore, 00:56): DV è entrato, **`b238d5b6e`** (genitori `7845fc3d3` e `73fde8c00`; `--check` pulito,
 > m1 590), il ramo portato in avanti dal coordinatore. Via a due cose in un solo checkpoint: R3-c rigenerato dall'albero
@@ -3524,3 +3525,100 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `themeModeReads`; `vitest run` col binario del lock, 01:17, carico 8, `files/T-r2/dlab2/gates.log`). CHECKPOINT READY
 > al coordinatore con i file, la run e le dichiarazioni (la spec di L presa da T; il commento di `tokens.css` oltre lo
 > skill); poi FROZEN.
+
+> ✅ **4 · Entrato** (coordinatore, 01:18): commit **`6b218d4a4`** (genitore `b238d5b6e`, gli 8 file), entrato in
+> **`cd686f445`** (genitori `b238d5b6e` e `6b218d4a4`; albero = simulazione, `--check` pulito); il ramo portato in
+> avanti, pulito, porta 6155 libera. **Il giro 3 per T è chiuso.** Restano fuori, come deciso, `TxBulkBanners` e
+> `TransactionResultBanner` (K3b di W, alla ripresa della 1.3: il via lo dà il coordinatore). Nell'indice, TC-20 aspetta
+> il commit accanto al ✅: lo aggiungo al prossimo checkpoint, per non lasciare l'indice condiviso modificato fuori da un
+> checkpoint. Per stanotte nient'altro; G cattura la galleria prima/dopo dalle 02:00.
+
+### Le colonne fisse trasparenti: una regressione del lotto delle tabelle — ✅ 19/10/2026
+
+> **Avvio** (coordinatore, 14:27): il developer, oggi, sugli asset in vista tabella: col puntatore sulla riga la colonna
+> fissa delle azioni diventa trasparente, e sotto si vede scorrere il contenuto della riga invece del menu a tre punti.
+> Causa verificata dal coordinatore: `77bfa6a39` (il mio lotto delle tabelle) ha reso traslucidi gli stati delle righe
+> di `DataTable.svelte` (prima letterali opachi), e `.td-fixed` li eredita con `background: inherit`. Richiesta: le
+> celle fisse opache in ogni stato della riga, nei due temi, senza giunture con le celle normali della stessa riga; la
+> pulsazione e la regola di TC-15 che funzionano; i contrasti di oggi; il come a me (composizioni opache, o uno strato
+> per le sole celle fisse), attenzione alle tabelle che non stanno sulla card; un test che morda, con test-author, rosso
+> sul codice di oggi. Ramo portato in avanti alla punta **`84c1bcba1`**; corsia 6155 e `/tmp/librefolio-r2-t`
+> (cancellata per spazio: la ricrea il runner); lo slot dei colori, circa 15 minuti: `component-unit`, `front-asset
+> asset-list`, `front-broker detail`.
+
+> ✅ **1 · Misura** (14:30–14:47; `files/T-r2/fixedcol/`, pagine statiche in Chromium, pixel veri dagli screenshot
+> decodificati nella pagina): `probe3.mjs` riproduce le regole come le compila Svelte (`tbody.s tr:where(.s)…`), nei due
+> temi, con l'inchiostro nelle celle normali che scorre sotto le fisse. **Oggi**, per ogni stato traslucido (riga
+> cliccabile al passaggio, selezionata, analizzata e al passaggio, evidenziata, inattiva al passaggio): giuntura di 7–34
+> unità (la cella fissa dipinge la tinta due volte: lo sfondo della riga, che Chromium dipinge dietro ogni cella, più il
+> suo `inherit`; in chiaro, selezionata, 223,233,228 contro 200,218,209), inchiostro visibile sotto la cella fissa
+> (118–228) e alfa calcolato 15–128 su 255. **La pulsazione non è mai partita:** `tr.highlighted` ha `background: …
+> !important`, che batte un'animazione (e i `!important` dentro i keyframe si ignorano); introdotta così il 12/07
+> (`4cdd1d8fb`, il cui piano dice «ora pulsa 3 volte in 1.8s»). **Altre tinte di riga:** `AssetTable` (riga inattiva, al
+> passaggio `warning-line` al 50 %, `25cd00a04`) ha lo stesso difetto sulla stessa tabella; `UnifiedLotsTable` (di R)
+> tinge le celle, non la riga, con tinte opache in `srgb` sulla card, tranne l'evidenziata (`--lf-selected` su ogni
+> cella): con la riga opaca sotto smette di lasciar vedere, e il suo aspetto non cambia; `OtherPeriodEffectsTable` è
+> trasparente (non sta sulla card) ma non ha celle fisse; `DataEditor` e il bulk hanno la colonna di selezione fissa:
+> `row-stale` (traslucida, sulle celle) diventa opaca con la riga opaca sotto, `row-deleted` no (vedi Fuori pista).
+
+> ✅ **2 · La cura** (14:40–14:48). **`DataTable.svelte`**, sezione «Body»: ogni riga dipinge la card e, sopra, la tinta
+> del suo stato in un solo strato d'immagine, `background: linear-gradient(var(--dt-row-tint), var(--dt-row-tint))
+> var(--lf-surface-card)`; gli stati impostano solo `--dt-row-tint`, la proprietà privata della tabella, registrata con
+> `@property` (`<color>`, ereditata, `transparent`) perché la dissolvenza di 0,15 s resti e la pulsazione si animi;
+> `.td-fixed` tiene `background: inherit` e prende gli stessi due strati: opaca, del colore della riga. La tinta
+> traslucida la compone il browser dal ruolo stesso, così una modifica dal vivo di `--lf-selected` nel Designer Lab
+> raggiunge le righe (una composizione scritta, `color-mix(in srgb, var(--lf-focus) 12%, card)`, avrebbe ricopiato la
+> ricetta di `--lf-selected` e non l'avrebbe seguita). L'evidenziata viene per ultima, a pari specificità, senza
+> `!important`, e pulsa davvero (3 × 0,6 s; `prefers-reduced-motion` la spegne come prima). **`AssetTable.svelte`**: la
+> riga inattiva imposta `--dt-row-tint` (con `!important`, come prima lo sfondo) invece di `background-color`.
+> Verifiche: Svelte compila `@property` intatto e senza avvisi, gli stati con la specificità di prima (`:where()` sul
+> `tr`); `probe3`: con la cura giuntura ≤ 1, inchiostro ≤ 1, alfa 255 in tutti gli stati dei due temi; le celle normali
+> come oggi entro 2 unità (la rasterizzazione del gradiente); la pulsazione al suo culmine (300 ms) cambia il colore e
+> la cella fissa lo segue. Il percorso del Lab (`picker/describe.ts`) salta le regole che non raggruppano: `@property`
+> non lo tocca. Prettier pulito sui due file; `theme-roles.mjs --check` verde; i gate del tema 158/158.
+
+> ✅ **3 · Il test** (test-author, agente `fixed-col-test`, 14:49–15:23; nessuna run sua): in
+> `e2e/assets/asset-list.spec.ts` (`front-asset asset-list`, asset simulati) il `describe` «Assets list — the table’s
+> fixed columns stay opaque and the colour of their row, in every row state (19/10)», un test per tema (chiaro, scuro;
+> il tema scelto dall'interruttore della testata, `chooseTheme`). Undici stati, ciascuno sulle due celle fisse
+> (selezione e azioni), con la tabella scorsa a metà sotto di esse: la riga a riposo (il controllo positivo dei punti
+> letti) e al passaggio; selezionata (la casella spuntata) a riposo e al passaggio; inattiva (`asset-row-inactive`) a
+> riposo e al passaggio; `row-analyzed` e `highlighted` messe con `classList.add` come le mettono `getRowClass` e
+> `navigateToRowId`, con la verifica che restino sulla riga dopo le letture; l'evidenziata letta a metà di un battito
+> (l'animazione fermata e portata a metà iterazione), finita e al passaggio. Asserzioni (`expect.soft`, così un rosso
+> elenca ogni stato): alfa calcolato 1 (tela 1×1), il pixel della cella fissa uguale a quello di una cella normale della
+> stessa riga entro ±2 per canale (gli screenshot decodificati con `createImageBitmap`), il colore a metà battito
+> diverso da quello a pulsazione finita. Controlli che fermano: nessun movimento ridotto, `:hover` riletto, celle
+> `sticky` sopra contenuto scorso (desktop), il lettore d'alfa che vede traslucido `--lf-selected`, il lettore di pixel
+> che vede la tinta della selezione. Nessuna attesa a tempo: le dissolvenze si aspettano con `getAnimations()`. Prettier
+> e `tsc -p tsconfig.e2e.json` puliti.
+
+> ✅ **4 · La run** (via del coordinatore, 14:27; `files/T-r2/fixedcol/run.sh`, `GREP="fixed columns" LIMIT_MIN=35`;
+> 15:20–15:37, carico 44–62, corsia 6155 e `/tmp/librefolio-r2-t`, ricreata dal runner; il coordinatore avvisato che
+> sarebbe durata circa 30 minuti invece di 15): `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
+> test --test-port 6155 --data-dir /tmp/librefolio-r2-t …`. **La prova del rosso** (`front-asset asset-list "fixed
+> columns"`, 1 worker, sulle copie di `HEAD` dei due componenti, build rifatta): **2 rossi su 2, come voluto**, 38
+> asserzioni morbide fallite per tema (76): i nove stati traslucidi, sulle due celle, alfa (0,06, 0,12, 0,20, 0,5) e
+> giuntura (in chiaro, selezionata, 200,218,209 contro 223,233,228; al passaggio 225,234,231 contro 237,242,240), più la
+> pulsazione che non cambia colore; verdi i due stati già opachi (la riga a riposo, l'inattiva a riposo), nessun
+> controllo fermato. La cura rimessa, **checksum uguali** (`65b37e0ff430`, `625ad7edb98a`). **Sulla cura:**
+> `component-unit` **4.978/4.978** (187 file); `front-asset asset-list` **43/43** desktop (i 41 di prima e i 2 nuovi;
+> `svelte-check` 0 errori e 0 avvisi nella build); `front-broker detail` **40/40** desktop (la tabella dei lotti, che
+> tinge le celle: invariata). Le azioni girano solo il progetto desktop. Porta 6155 libera alle 15:37. Prettier pulito
+> sui tre file.
+
+> **⚠️ Fuori pista:** la riga di `run.sh` «HEAD versions in place: 0 of 2 differ from the fix» ha l'etichetta
+> rovesciata: conta i file diversi da `HEAD`, quindi «0» vuol dire che le copie di `HEAD` erano al loro posto, come
+> doveva.
+
+> **Per G (la galleria):** a riposo le righe tinte (selezionate, evidenziate, analizzate, al passaggio) cambiano di al
+> più 2 unità per canale: la tinta ora è uno strato d'immagine, quantizzato a 8 bit, invece di un colore di fondo
+> (`probe3`). L'unica scena con una riga evidenziata, `transactions/bulk-todo-banner`, congela le animazioni prima del
+> clic (`freezeAnimations`): la pulsazione resta sul primo fotogramma, che è il colore fermo; nessun rumore nuovo.
+
+> ✅ **5 · Il checkpoint** (15:4x): `git diff --check` pulito, porta libera, CHECKPOINT READY al coordinatore; FROZEN.
+
+> **⚠️ Fuori pista:** `row-deleted` (bulk e `DataEditor`) sbiadisce ogni cella con `opacity: 0.55`, le fisse comprese,
+> che quindi lasciano vedere al 45 % ciò che scorre sotto: c'era già prima del lotto (`0b660632f` e prima), non è una
+> tinta di riga e non si cura con la riga opaca. Nell'indice come TC-21, per un lotto a parte (serve sbiadire il
+> contenuto senza lo sfondo).

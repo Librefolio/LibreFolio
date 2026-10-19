@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import List, Optional
@@ -488,42 +487,6 @@ class PriceStoreOperations:
             )
         # update_count = 0 because SQLite doesn't distinguish
         return {"inserted_count": total_inserted, "updated_count": 0, "results": results}
-
-    @staticmethod
-    async def redate_provider_rows(session: AsyncSession, asset_id: int, source_plugin_key: str, target_of: Callable[[date], Optional[date]]) -> tuple[int, int]:
-        """Move the asset's prices written by ``source_plugin_key`` to the date ``target_of`` gives them (None: the row
-        stays), latest first, so no row lands on one not yet moved (Z-33). A row already on the target date, of any
-        source, stays and the moved one is dropped. The values never change; a moved row gets a new ``fetched_at``, as
-        every write does: the portfolio cache keys on COUNT + MAX(fetched_at). Flushed, not committed. Returns (moved,
-        dropped).
-
-        Targets go forward only: latest first is safe only then. An earlier target could meet a row of the provider not
-        yet processed, and the moving row would be dropped by mistake: it raises ``ValueError`` before anything moves."""
-        rows = (await session.execute(select(PriceHistory).where(PriceHistory.asset_id == asset_id, PriceHistory.source_plugin_key == source_plugin_key).order_by(PriceHistory.date.desc()))).scalars().all()
-        targets = [(row, target_of(row.date)) for row in rows]
-        backward = next(((row, target) for row, target in targets if target is not None and target < row.date), None)
-        if backward is not None:
-            raise ValueError(f"redate_provider_rows moves rows forward only: asset {asset_id}, {backward[0].date.isoformat()} -> {backward[1].isoformat()}")
-        occupied = set((await session.execute(select(PriceHistory.date).where(PriceHistory.asset_id == asset_id))).scalars().all())
-        moved = dropped = 0
-        now = utcnow()
-        for row, target in targets:
-            if target is None or target == row.date:
-                continue
-            occupied.discard(row.date)
-            if target in occupied:
-                await session.delete(row)
-                dropped += 1
-            else:
-                row.date = target
-                row.fetched_at = now
-                occupied.add(target)
-                moved += 1
-            # Row by row, never once at the end: one flush would emit the UPDATEs sorted by primary key, not in this
-            # order, and the DELETEs after them, so a row could land on a date another still holds (the unique key
-            # uq_price_history_asset_date).
-            await session.flush()
-        return moved, dropped
 
     @staticmethod
     async def bulk_delete_prices(data: List[FAAssetDelete], session: AsyncSession) -> FABulkDeleteResponse:

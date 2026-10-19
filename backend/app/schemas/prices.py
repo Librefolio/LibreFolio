@@ -287,7 +287,6 @@ class FACurrentValue(StrictModel):
     currency: str
     as_of_date: date_type
     source: Optional[str] = None
-    exchange_timezone: Optional[str] = Field(None, max_length=64, description="The exchange's IANA timezone, as `FAHistoricalData.exchange_timezone` (Z-33)")
 
     @field_validator("value", mode="before")
     @classmethod
@@ -307,18 +306,9 @@ class FAHistoricalData(StrictModel):
     events: List[FAAssetEventPoint] = Field(default_factory=list, description="Asset events in the date range")
     currency: Optional[str] = Field(
         None,
-        description=(
-            "The quote currency as the provider reports it, NOT normalized (Yahoo's `GBp` for a line quoted in pence; "
-            "the price points carry the ISO code, `GBP`). The refresh keeps it on the provider assignment "
-            "(`reported_currency`) for the data-quality report (Z-32): a validator here would hide the minor unit."
-        ),
+        description="The quote currency as the provider reports it, NOT normalized (Yahoo's `GBp` for a line quoted in pence; the price points carry the ISO code, `GBP`): a validator here would hide the minor unit.",
     )
     source: Optional[str] = None
-    exchange_timezone: Optional[str] = Field(
-        None,
-        max_length=64,
-        description="The exchange's IANA timezone, the one the provider dated its rows in (Yahoo: `Europe/Rome`). The refresh keeps it on the provider assignment, and checks once the rows an older version dated by UTC (Z-33).",
-    )
 
 
 # ============================================================================
