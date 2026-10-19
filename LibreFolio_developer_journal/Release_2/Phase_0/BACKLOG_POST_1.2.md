@@ -8252,7 +8252,7 @@ da Y il 15/10.
 - **Le voci di Y vivono nelle loro sezioni** (C-85, C-62 e C-38 nella C; B10, 47-1, 48-1 e 54-1 nella I; T-U8 e
   T-FE2…FE11 nella T; K-13, K-15, C-15, C-34, I-01, I-03 e O-16 nel backlog 38; i difetti 2 e 5 nel README della 13):
   le chiude il coordinatore a ogni treno. Stato all'analisi e lotto di ciascuna: piano di Y, §2.
-- ✅ **Y-1 · I-03 è curata solo a metà** — chiusa da Y8 il 15/10 (commit al checkpoint di Y8): un `$effect`, a ogni
+- ✅ **Y-1 · I-03 è curata solo a metà** — chiusa da Y8 il 15/10 (entrata in `dev_release2` con `160562b56`, treno 57): un `$effect`, a ogni
   caricamento finito, ripiega da `%` ad Abs quando la storia non ha dati in percentuale, e torna al `%` quando li
   ritrova, salvo una scelta esplicita nel frattempo. Rosso prima in `GrowthChart.test.ts` («% view without % data,
   after every load»); provata in Vitest, non ancora nel browser. Era: basso; Y, 15/10 (analisi). Il ripiego da % ad Abs
@@ -8260,7 +8260,8 @@ da Y il 15/10.
   o broker verso una storia senza dati in percentuale, il bottone restava premuto e disabilitato (`:2539-2546`).
   Dettagli: piano di Y, §2 e §7 «Y8 — passo 2».
 - ✅ **Y-2 · Nella cascata settimanale una linea di broker che finisce a metà settimana diventa un buco** — basso, da
-  verificare; `test-author` di Y, 15/10 (Y1). ✅ 17/10: `aggregateMetric` cerca il valore per `bucketEnd`, il secchio di
+  verificare; `test-author` di Y, 15/10 (Y1). ✅ 17/10 (entrata con `14072c03d`, treno 209; CHANGELOG `abf8391fb`): `aggregateMetric` cerca il valore per
+  `bucketEnd`, il secchio di
   calendario, invece che per `bucket.date`. Tre rossi in `chartCoreHelpers.test.ts` (settimanale, due settimane,
   mensile), poi verdi; E2E `dashboard` 27/27. Comportamento preesistente, spostato alla lettera in
   `dashboard/growthChartData.ts` (`aggregateMetric`): il valore di un secchio si cerca sull'ultimo giorno della settimana
@@ -8270,22 +8271,28 @@ da Y il 15/10.
   «Y1 — passo 4».
   - **Nessuna attesa** (16/10, coordinatore): DV-8 (`28f4bed75`, sul ramo di DV) tocca solo `lib/theme/chartPalettes.ts`, né
     `GrowthChart.svelte` né `growthChartSeries.ts`. Y-2 non è in calendario.
-- **Y-3 · Il gate della privacy non conosce `t(` come chiamata di traduzione** — minimo; `test-author` di Y, 15/10 (Y1).
+- ✅ **Y-3 · Il gate della privacy non conosce `t(` come chiamata di traduzione** — minimo; `test-author` di Y, 15/10 (Y1).
   `moneyRenderSites.test.ts` esclude dai token numerici solo `$_(`, `$t(` e `label(`: nel tooltip di GrowthChart, ora
   `growthChartTooltip.ts`, il traduttore si chiama `t`, e una chiave come `dashboard.totalPnl` conta come token
   numerico. Rende il gate più severo, non più cieco: oggi c'è un solo reperto, registrato. Da decidere se aggiungere
   `\bt\(` alla forma, misurando prima il rumore. Dettagli: come Y-2.
-- **Y-4 · I commenti di `SignalTreeSelect.test.ts` descrivono ancora la scelta a clic della galleria** — minimo; G
+  ✅ 17/10 (`034f0f13a`, entrata con `73443c6db`, treno 237): misurato prima, gli stessi 8 colpi con la forma vecchia e
+  con la nuova (rumore zero); ora `I18N_CALL = /\$_\(|\bt\(|label\(/`, con un caso sintetico attraverso `scanLine`;
+  7/7. Dettagli: piano di Y, «Y-3 e Y-4».
+- ✅ **Y-4 · I commenti di `SignalTreeSelect.test.ts` descrivono ancora la scelta a clic della galleria** — minimo; G
   (G-12), via il coordinatore, 15/10. Righe 16–17 e 306–310: `selectIndicatorFromTree` della galleria vi espande la
   famiglia con un clic e clicca l'opzione, mentre da G-9 (`1470bd693`) la galleria sceglie l'indicatore da tastiera. Va
   corretto solo il testo dei commenti, quando Y passa da quei file (FE2, lotto Y4). Dettagli: piano di Y, §2.
+  ✅ 17/10 (`1130d2eff`, entrata con `73443c6db`, treno 237), senza aspettare FE2: il docblock e il commento del caso a
+  clic descrivono la scelta da tastiera della galleria, e il titolo del caso non nomina più l'aiuto della galleria;
+  28/28. Dettagli: piano di Y, «Y-3 e Y-4».
 - ✅ **Y-5 · Il commento di `headerTooltip` in `table/types.ts:291` promette un'icona che non c'è** — minimo; `docs-writer`
   di Y, 15/10 (Y2). ✅ 16/10: ora il commento dice che il tooltip sta sull'etichetta dell'intestazione e che l'icona
-  compare solo con `headerTooltipUrl`; svelte-check 0/0. Nel checkpoint di Y-21. Diceva «(info icon)», ma `headerTooltip` da solo mette un tooltip sull'etichetta dell'intestazione:
+  compare solo con `headerTooltipUrl`; svelte-check 0/0. Entrata con `149157025` (treno 162), insieme a Y-21. Diceva «(info icon)», ma `headerTooltip` da solo mette un tooltip sull'etichetta dell'intestazione:
   l'icona compare solo con `headerTooltipUrl`. La pagina `core-ui/data-table.md` è già corretta (Y2). Va corretto solo
   il commento, quando Y o altri toccano `types.ts`. Dettagli: piano di Y, §7 «Y2 — passi 5–6».
 - ✅ **Y-6 · `AllocationPanel` passa ancora `emoji` alla torta, che dopo DV non lo legge più** — minimo; coordinatore (DV),
-  15/10. Chiuso il 16/10 da Y10 (`1bb8dc990`): campo e tipo tolti; la torta prende le emoji dallo store dei settori.
+  15/10. Chiuso il 16/10 da Y10 (`1bb8dc990`, entrata con `4447814ed`, treno 104): campo e tipo tolti; la torta prende le emoji dallo store dei settori.
   `dashboard/AllocationPanel.svelte:65` (`toAllocEntries`) mette `emoji` in ogni voce, e il tipo `AllocEntry`
   (`:23`) lo dichiara: dopo l'ingresso di DV la torta non lo legge più, quindi è un dato morto. Da togliere in Y10,
   dopo DV. Dettagli: piano di Y, §2.
@@ -8308,7 +8315,7 @@ da Y il 15/10.
   `PriceChartFull.test.ts`), con la prova del morso: una cache del primo `getOption()` porta le 4 guardie al rosso.
   Nello stesso lotto, Y-8b: `LineChart.renderChart()` ora ripristina lo zoom salvato prima di riallineare, come
   `CandlestickChart` (prima, dopo un ridisegno di un grafico zoomato, le frecce restavano orientate sull'asse intero fino
-  all'assestamento); un rosso in `LineChart.test.ts`. Commit al checkpoint.
+  all'assestamento); un rosso in `LineChart.test.ts`. Entrata con `823a2f6bc` (treno 225); CHANGELOG `039af67bb`.
   - Prima: `charts/lineChartHelpers.ts:594` chiamava `chart.getOption()`, che clona tutta l'opzione, e i tre gestori di
     `dataZoom` la chiamavano a ogni passo del gesto: `LineChart.svelte:399`, `CandlestickChart.svelte:290` e
     `PriceChartFull.svelte:612`, contro la nota di `PriceChartFull.svelte:604-609` («do NOT read
@@ -8327,7 +8334,7 @@ da Y il 15/10.
     `--lf-cmp-datatable-resize-handle-bg` c'è già.
   - Dettagli: piano di Y, §7 «Y7».
 - ✅ **Y-11 · Il corpus golden di `timeSeriesAggregation` è rosso dall'ingresso di Y8** — medio, test rosso sul target;
-  Y, 16/10 (trovato nelle prove di Y3). Chiuso il 16/10: corpus ricatturato dopo I-01 (checkpoint Y-11, `4c1f2fee6`).
+  Y, 16/10 (trovato nelle prove di Y3). Chiuso il 16/10: corpus ricatturato dopo I-01 (`4c1f2fee6`, entrata con `4447814ed`, treno 104).
   - I-01 (Y8, `a25d09a69`) ha cambiato di proposito `aggregateSumSeries`: i punti mancanti non entrano nella somma, e un
     secchio senza valori diventa un vuoto. Il corpus di `components/charts/__tests__/timeSeriesAggregationGolden.test.ts`
     registra invece il comportamento di prima (caso `all-missing-values|weekly`, e il digest).
@@ -8336,7 +8343,7 @@ da Y il 15/10.
     I-01.
   - Dettagli: piano di Y, §7 «Y3».
 - ✅ **Y-12 · In `brokers-detail.spec.ts` il controllo dei bottoni di presentazione non gira da luglio** — medio, test che
-  passa senza provare; `test-author` di Y, 16/10 (durante il triage della corsa E2E unica). ✅ 16/10, `6ac6ead12`
+  passa senza provare; `test-author` di Y, 16/10 (durante il triage della corsa E2E unica). ✅ 16/10, `6ac6ead12` (entrata con `0c79932a7`, treno 130)
   («test(e2e): rewrite lots comparison toggles test»): il test morto riscritto in due test sui controlli di oggi (P25),
   con `aria-pressed` e il contatore dei rendering. La ✅ qui mancava: aggiunta il 17/10. **Serve una decisione del
   developer sulla funzione**, che porta il coordinatore. **Decisa il 16/10 (P25): si riscrive** sui controlli di oggi;
@@ -8352,7 +8359,7 @@ da Y il 15/10.
 - ✅ **Y-13 · Due test dei lotti controllano la selezione con la classe `selected`** — minimo; `test-author` di Y, 16/10
   (riscrittura di Y-12). **→ T** (coordinatore, 16/10 14:20): lo chiude T, nel suo lotto dei token dei componenti, su
   `brokers-detail.spec.ts:392-419` con `toHaveAttribute('data-selected', …)`; Y non lo tocca. ✅ 17/10: chiuso da T in
-  `4a7ba1d7e`; il file usa `data-selected` (`:392-419`). Verificato da Y il 17/10.
+  `4a7ba1d7e` (entrata con `4d8ae68c4`); il file usa `data-selected` (`:392-419`). Verificato da Y il 17/10.
   - In `e2e/brokers/brokers-detail.spec.ts`, il clic su un segmento del Gantt e quello sulla cella della custodia
     fanno `toHaveClass(/selected/)` sulla riga.
   - La regola 10 della skill design-system vuole lo stato, non le classi: la riga pubblica già `data-selected`
@@ -8361,7 +8368,7 @@ da Y il 15/10.
 - ✅ **Y-14 · «Aggiorna» della lista dei broker non ricalcola le cifre delle schede** — minimo, già presente prima di Y11;
   `test-author` di Y, 16/10. ✅ 16/10: si sceglie «forzare» (coordinatore, 21:2x). `brokers-refresh` fa
   `requestPortfolioRefresh()` e chiede il report delle schede con `force`; rosso 9/10, verde 10/10 su
-  `front-broker list`. Nel checkpoint di Y-14.
+  `front-broker list`. Entrata con `47ed8ebc4` (treno 144).
   - `brokers-refresh` rilegge solo l'elenco (`GET /brokers?include_inaccessible=true`). Le cifre delle schede vengono
     dalla cache dei report finché questa è fresca.
   - Nella Dashboard e nella pagina del broker, invece, «Aggiorna» ricalcola tutto (documentazione utente, «Coming back
@@ -8377,7 +8384,7 @@ da Y il 15/10.
   - **Rimedio** (coordinatore, 16/10): Y propone la parola, «Refresh» o «Reload», nelle quattro lingue, insieme agli
     altri pulsanti «Aggiorna» delle pagine; la scelta spetta al developer.
 - ✅ **Y-16 · Una vista Candele salvata si carica, su una Dashboard nuova, solo grazie a una dipendenza involontaria** —
-  minimo, già presente prima di Y11; `test-author` di Y, 16/10. ✅ 17/10, opzione A (coordinatore): il comportamento è
+  minimo, già presente prima di Y11; `test-author` di Y, 16/10. ✅ 17/10, opzione A (coordinatore; entrata con `14072c03d`, treno 209): il comportamento è
   fissato in modo esplicito da un E2E (`page-busy.spec.ts:867`), con una prova di mutazione. Con un `untrack` attorno
   alla chiamata vanno rossi questo test e la precondizione di N55 (`:774`); sul codice vero, 17/17. Più due commenti
   (`GrowthChart.svelte`, `loadPnlCandles` della Dashboard). La correzione vera, cioè dipendenza esplicita e niente
@@ -8401,7 +8408,7 @@ da Y il 15/10.
   - Dettagli: piano di Y, «Passo 4b».
 - ✅ **Y-19 · La durata della caduta peggiore può venire da una fonte diversa da quella della profondità** — minimo, già
   presente prima di Y12b; `test-author` di Y, 16/10. ✅ 16/10: ora la durata segue la fonte della profondità, con una
-  riga in `levelHelpers.ts`. Il rosso era 1/513, il verde 513/513; nel checkpoint di Y-19.
+  riga in `levelHelpers.ts`. Il rosso era 1/513, il verde 513/513; entrata con `90b84ac9c` (treno 148).
   - In `buildHurtRows` (`levelHelpers.ts`) la durata è `maximum_drawdown_duration_days` del riepilogo, con ripiego sul
     KPI, mentre la profondità ha un ripiego suo.
   - Se il riepilogo c'è ma la sua profondità ha il segno sbagliato, si mostrano la profondità del KPI e la durata del
@@ -8409,7 +8416,7 @@ da Y il 15/10.
   - Y12b ha legato alla stessa fonte solo il recupero (`summaryDepth`). Dettagli: piano di Y, «Y12b».
 - ✅ **Y-20 · `risk-lab.md`: numeri di riga scaduti fuori dal paragrafo di L1** — minimo, documentazione per sviluppatori;
   `docs-writer` di Y, 16/10. ✅ 16/10: aggiornati 20 riferimenti, nelle sezioni Requests, L1 e host, più quattro
-  precisazioni di testo; `check-links` verde. Nel checkpoint di Y-20.
+  precisazioni di testo; `check-links` verde. Entrata con `b89985a8b` (treno 149).
   - Y12b ha aggiornato solo il paragrafo di L1. Restano scaduti i riferimenti delle righe 302–310 e 119 della pagina:
     - `l1Helpers.ts` e `ReturnHistogram.svelte`;
     - `lossMoney()` e `RiskMetricCard.svelte`;
@@ -8420,7 +8427,7 @@ da Y il 15/10.
   decisione del coordinatore delle 21:20). ✅ 17/10: D377 è verde nelle due corse, in 11,7 s e in 22,2 s, con le
   scadenze vere (`L4_OFFER_DEADLINE_MS`, 10 s) sui suoi quattro `poll`. Il budget di 90 s per tutto il blocco
   «functional integration» (opzione A del coordinatore) rende verdi D378 e il benchmark condiviso, rossi alle 23:25
-  per la stessa causa. Prova sulla revisione combinata `a49a86a7b`; commit `92e04271d`. Due rossi d'altro tipo, sotto
+  per la stessa causa. Prova sulla revisione combinata `a49a86a7b`; commit `92e04271d`, entrata con `149157025` (treno 162). Due rossi d'altro tipo, sotto
   carico 100+, vanno in Y-22.
   - In `risk-analysis.spec.ts:2812`, alla riga 2828, `expect.poll(offered)` usa il limite predefinito di 3 s.
   - Il 16/10 alle 21:17, con il carico fra 72 e 83, il predicato (`evaluateAll`) non è nemmeno tornato: subito dopo
@@ -8432,7 +8439,7 @@ da Y il 15/10.
   corsa di Y-21 sulla revisione combinata `a49a86a7b`, carico 94–115). Tutti e due i test erano verdi nelle tre corse
   precedenti. ✅ 17/10: `:3736` ha una scadenza più larga (20 s, con 3 s per tentativo), e da solo ×4 è verde.
   `:2871` ha la sua traccia: ×4 verde, il clic è subito eseguibile. Il verdetto è ambiente, non riprodotto; il test
-  resta com'è. Nel checkpoint successivo a Y-21.
+  resta com'è. Entrata con `d7f3a49c3` (treno 167).
   - `:3736`, la tabella di L3 («each holding's beta and correlation are their own…»). `hoverUntilHelpOpens` non apre
     l'aiuto del «—» entro `HELP_OPEN_DEADLINE_MS`, 10 s.
     - La fotografia mostra la tabella completa: è un'assunzione sull'orologio.
@@ -8452,10 +8459,11 @@ da Y il 15/10.
   - `layout.gate.test.ts` e `layout.authGate.test.ts` (di H) avevano 20 rossi su `front-utility
     onboarding-component-unit`, con la causa «No "onNavigate" export is defined on the "$app/navigation" mock».
   - Allora quell'azione non era fra le mie prove leggere.
-  - ✅ 17/10: `onNavigate: vi.fn()` nei due mock (`test-author`); 454/454. Nel checkpoint successivo a Y-21.
+  - ✅ 17/10: `onNavigate: vi.fn()` nei due mock (`test-author`); 454/454. Entrata con `d7f3a49c3` (treno 167).
 - ✅ **Y-24 · La richiesta delle candele (e del contributo) si riarma da sola dopo ogni errore, senza limite** — medio,
   per il developer, insieme a Y-18; Y, 17/10 (analisi di Y-16). Comportamento preesistente.
-  - ✅ 17/10, **la parte del giro** (proposta di Y, via del coordinatore alle 17:47): `createLazyReportRetry`
+  - ✅ 17/10, **la parte del giro** (proposta di Y, via del coordinatore alle 17:47; entrata con `ad5104c4f`, treno 364,
+    CHANGELOG `c1bdc380b`): `createLazyReportRetry`
     (`frontend/src/lib/stores/portfolio/lazyReportRetry.svelte.ts`) — dopo un errore, al più tre nuove richieste, 2, 4 e
     8 s dopo, poi nessuna finché cambia l'ambito (broker, periodo, valuta) o arriva un Refresh; nessuna UI nuova. Sulla
     Dashboard e sulla pagina del broker, per le candele e per il contributo; una risposta di un ambito già cambiato non si
@@ -8484,7 +8492,7 @@ da Y il 15/10.
   quello delle etichette, `PriceChartFull` lascia fare al suo rinvio da 200 ms), mai a ogni callback; (d)
   `noteArrowMarkers`, dopo ogni disegno completo, fa uscire `updateArrowRotations` prima di `getOption()` sui grafici senza
   frecce, cioè quasi tutti. 16 rossi prima (unità, componenti, pin), la prova del morso sul verso pericoloso di (d).
-  Commit al checkpoint.
+  Entrata con `73443c6db` (treno 237).
   - Il `ResizeObserver` di `LineChart`, `CandlestickChart` e `PriceChartFull` chiama `updateArrowRotations` a ogni
     callback, cioè a ogni frame mentre si trascina il bordo della finestra: una copia di `getOption()` e una riscrittura
     di tutte le serie ciascuna, oltre al `resize()`.
@@ -8514,7 +8522,7 @@ da Y il 15/10.
   `dataTableLogic.ts` con `withNewColumns` (aggiunge solo le colonne mai viste, al posto naturale) e `reorderKeepingAbsent`
   (il riordino rimette una colonna assente dopo quella che seguiva); `DataTable.svelte` tiene tutte le scelte di visibilità
   salvate e non pota più ordine, scelte e larghezze. 14 rossi prima (8 d'unità, 6 di componente con un `localStorage`
-  finto). Commit al checkpoint.
+  finto). Entrata con `542c0e8b5` (treno 248).
   - `DataTable.svelte` toglie dall'ordine salvato gli id delle colonne assenti e salva subito, e scarta le loro scelte di
     visibilità e le loro larghezze. Da X-R53 le colonne Δ 1W…5Y di Asset e FX mancano al primo disegno (i periodi arrivano
     dal backend), quindi posto, visibilità e larghezza scelti dall'utente si azzerano a ogni caricamento; prima succedeva
@@ -8532,8 +8540,8 @@ da Y il 15/10.
     festivo), o rivedere il tetto per il caso «sincronizza un periodo futuro». Dettagli: piano di Y, «Y-27», Fuori pista.
 - ✅ **Y-29 · Il gate delle eccezioni esenta un file dichiarato anche dall'annualizzazione** — minimo, guardia; Y, 17/10
   (`test-author`, P5). ✅ 17/10: ogni voce di `DECLARED_EXCEPTIONS` dice `annualizes`, vero solo per `MeasureSignal.ts` e
-  `CompoundSignal.ts`; la regola (C) ammette esponenti con 365 solo lì; rosso prima, e una guardia che morde. Commit al
-  checkpoint. `financialMathExceptions.gate.test.ts` dichiara un file intero: la regola (C) (nessun esponente con 365
+  `CompoundSignal.ts`; la regola (C) ammette esponenti con 365 solo lì; rosso prima, e una guardia che morde. Entrata con
+  `ce2452615` (treno 261). `financialMathExceptions.gate.test.ts` dichiara un file intero: la regola (C) (nessun esponente con 365
   fuori dai file dichiarati) non guarda più dentro i tre moduli dei lotti di D-MF6(b), che sommano, mediano e ribasano ma non
   annualizzano. Un'annualizzazione aggiunta un giorno lì passerebbe in silenzio. Rimedio possibile: un segnalino per voce
   («può annualizzare»), vero solo per `MeasureSignal.ts` e le curve di R19. Dettagli: piano di Y, «Y12b, il resto».
@@ -8542,7 +8550,8 @@ da Y il 15/10.
   compreso; J rivede il backend), via del coordinatore 20:3x: la serie del prezzo senza lotti `MARKET_PRICE_HISTORY` /
   `market_price_history` (`build_market_price_history`), tenuta con `FAILED` (`_REPLAY_FREE_ANALYSES`, con i suoi buchi di
   cambio); il pannello la usa **sempre** al posto dell'unione (decisione notturna N89, per il developer) e pubblica
-  `data-price-line`. Commit al checkpoint. Dettagli: piano di Y, «Y-30».
+  `data-price-line`. Committata in `6db475ac9` e `cc80f896f`, entrata con `ede7adf75` (19/10, dopo il sì del
+  developer a N89: la linea del prezzo continua anche dopo l'ultima vendita). Dettagli: piano di Y, «Y-30».
   - Con `FAILED` (J-12, N81 opzione A) `price_history` torna `null`, perché è per lotto (`LotPriceHistoryPoint.lot_id`,
     un punto per ogni giorno di vita di ogni lotto). Il grafico costruiva la linea del prezzo dall'unione per data di quei
     punti, quindi mostrava solo le linee del costo medio, e senza lotti aperti la linea si interrompeva.
@@ -8550,7 +8559,7 @@ da Y il 15/10.
   pubblicati** — basso, test; Y, 17/10 (test-author di J-12). ✅ 17/10, versione minima (coordinatore, 13:21 e 13:36):
   `resolveUiLocale` in `stores/app/uiLocaleRule.ts`, senza import, riesportato da `uiLocale.ts`; la spec lo importa invece
   di ricopiarlo (`uiLocale.test.ts` controlla che il modulo non importi nulla); `LotWacPriceChart` pubblica
-  `data-state="drawn" | "empty"` e J12-1 lo legge. Commit al checkpoint. **Resta, da girare a W** (la pagina delle
+  `data-state="drawn" | "empty"` e J12-1 lo legge. Entrata con `8aa8a821e` (treno 294). **Resta, da girare a W** (la pagina delle
   transazioni è sua): il segno durevole della riga di `?highlight=`.
   - `brokers-detail.spec.ts::dayAsThePanelWritesIt` ricopia `resolveUiLocale`, perché Playwright non può importare
     `uiLocale.ts`; anche `fixtures/dates.ts` ricopia `dateOnly`. Se M-18 cambia, J12-1 diventa rosso per un motivo che
@@ -8578,7 +8587,8 @@ da Y il 15/10.
   come Y-22: più tempo alla navigazione, oppure aspettare prima l'URL e poi la radice. Spec dell'area degli asset: a chi
   la tocca. Dettagli: piano di Y, «X-R59».
   - ✅ 17/10: dopo il clic, prima l'URL (tetto 30 s), poi la radice (10 s), nell'aiuto e nella copia in riga del test della
-    cache degli eventi; commento di `:332` senza totali (`test-author`). E2E `front-asset asset-detail` 39/39. Review di X.
+    cache degli eventi; commento di `:332` senza totali (`test-author`). E2E `front-asset asset-detail` 39/39. Entrata con `c5b347a46`
+    (treno 343); review di X: OK, con una nota chiusa in Y-34.
     Dettagli: piano di Y, «Y-33».
 - ✅ **Y-34 · `brokers-detail.spec.ts`: 5 s per il pannello dei lotti dopo «analizza i lotti», sotto carico** — minimo, stabilità
   dei test; gate I, via il coordinatore, 17/10. Review di X. ✅ 17/10: `expectLotsPanelOpen` (prima l'URL con `?asset=`, 30 s,
