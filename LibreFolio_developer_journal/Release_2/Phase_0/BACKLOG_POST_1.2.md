@@ -2806,7 +2806,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Nelle due catture identiche del dopo (`cd686f445`, 18/10), su mobile in spagnolo scuro, la modale è uguale ma la
     pagina dietro no: in una si vedono il nome utente ed «Eliminar Cuenta», nell'altra l'avatar e «Seguridad». È il
     15,4 % dei pixel, in una variante su 16.
-  - Nel rumore del 13/10 (`g-ref13`) lo scatto era «basso»; oggi è «instabile». Nei confronti dello stesso giorno le
+  - Nel rumore del 16/10 (`g-ref13`) lo scatto era «basso»; oggi è «instabile». Nei confronti dello stesso giorno le
     sue zone di rumore lo coprono, ma il riferimento resta meno pulito.
   - Da fare con `test-triage`, partendo dall'ipotesi del tempo: la pagina che scorre mentre la modale si apre, o
     l'avatar che si carica e la sposta. Poi fermare lo scorrimento prima di aprire la modale, come negli altri scatti a
@@ -2815,6 +2815,18 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «Galleria del giro 3».
+- **G-27 · `build_designer_round.py`: l'etichetta del «prima» e la coppia dello stesso giorno** — basso; G, 18/10,
+  dallo zip del giro 3. Il coordinatore l'ha approvata il 18/10 alle 04:05, per un lotto successivo.
+  - Lo strumento chiama v1.2 il «prima» (le tabelle «prima (v1.2)», la guida, l'indice) e scrive che i dati cambiano
+    col giorno della cattura. Era vero per il pacchetto del 16/10, non per la coppia dello stesso giorno del 18/10.
+  - Quella notte il testo l'ho corretto dopo il build, solo nelle pagine generate: 726 tabelle, 4 note, la guida e
+    l'indice. Il README di `scripts/visual_review/` lo dice al passo 3b.
+  - Proposta: un'opzione per l'etichetta del «prima» (per esempio `--before-label`) e il riconoscimento della coppia
+    dello stesso giorno dalle date delle due catture, che cambia la frase sui dati. In `scripts/visual_review/`, poi
+    una prova a secco sulla coppia del giro 3, che resta su disco.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Galleria del giro 3» e «README di `scripts/visual_review/` al riferimento del 18/10».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
