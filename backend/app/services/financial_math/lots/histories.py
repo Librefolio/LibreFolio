@@ -15,6 +15,7 @@ from backend.app.schemas.portfolio import (
     LotPriceHistoryPoint,
     LotReturnHistoryPoint,
     LotValueHistoryPoint,
+    MarketPriceHistoryPoint,
     PerformanceHistoryPoint,
 )
 from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
@@ -479,6 +480,28 @@ def build_price_history(
                 continue
             market_price, is_estimated = entry
             points.append(LotPriceHistoryPoint(lot_id=lot_id, date=current_date, market_price=market_price, currency=target_currency, estimated=is_estimated))
+    return points
+
+
+def build_market_price_history(
+    *,
+    estimated_market_prices: dict[date_type, tuple[Decimal, bool]],
+    history_dates: Sequence[date_type],
+    target_currency: str,
+) -> list[MarketPriceHistoryPoint]:
+    """The asset's market price on each history date that has a converted mark, whatever lots are open (Y-30).
+
+    The same marks as ``build_price_history``, once a day instead of once per lot alive that day: the chart's price line
+    keeps its days without a lot, and a FAILED replay, which withholds every lot, keeps the line. A date without a mark
+    (no observation on or before it, or no rate to the target currency) has no point.
+    """
+    points: list[MarketPriceHistoryPoint] = []
+    for current_date in history_dates:
+        entry = estimated_market_prices.get(current_date)
+        if entry is None:
+            continue
+        market_price, is_estimated = entry
+        points.append(MarketPriceHistoryPoint(date=current_date, market_price=market_price, currency=target_currency, estimated=is_estimated))
     return points
 
 
