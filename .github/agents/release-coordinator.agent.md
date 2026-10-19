@@ -280,7 +280,17 @@ Assign one owner for each shared surface:
 - MkDocs navigation;
 - root changelog;
 - master backlog/coordination records;
-- shared lazy package initializers.
+- shared lazy package initializers;
+- the release's single Alembic migration (below).
+
+**One release, one Alembic migration** (developer decision, 19/10/2026). During the development of a
+release there is exactly one migration file for all of its schema changes, named after the release
+(for example `005_release_1_3_0_schema.py`, as `004_release_1_2_0_schema.py` was for 1.2). A worker
+that changes the schema edits that file; it never creates a new revision. The file is a shared
+surface: one writer at a time, assigned by the coordinator. Once the release ships, the file is
+frozen and the next release opens its own. Why: in 1.3 the parallel workstreams created seven
+revisions (005–011), none released, which then had to be squashed by hand into one, with a manual
+procedure for the few databases already migrated.
 
 Children may prepare independent source/test files. The designated integrator applies
 shared registrations once. Never accept "ours" or "theirs" wholesale on a shared file;

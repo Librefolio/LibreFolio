@@ -131,7 +131,7 @@
       "unknown": "{value} is not an ISO currency code"
     },
     "writeRefusal": {
-      "dateOutOfRange": "{count, plural, one {# date lies} other {# dates lie}} outside {min} – {max}: {dates}. Nothing was saved.",
+      "dateOutOfRange": "{count, plural, one {# date is} other {# dates are}} after {max}: {dates}. Nothing was saved.",
       "currencyMismatch": "{count, plural, one {# price is} other {# prices are}} in {found}, not in the asset's currency {expected}: {dates}. Nothing was saved.",
       "notSaved": "{count, plural, one {# value was not saved} other {# values were not saved}}: {items}",
       "more": "and {n} more",
