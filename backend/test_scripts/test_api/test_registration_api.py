@@ -1084,7 +1084,7 @@ class TestReviewOfTheSettingAndTheUrls:
 
     @pytest.mark.asyncio
     async def test_a_new_install_seeds_registration_mode_invite_as_a_str_setting(self, private: _Private) -> None:
-        """SETTING-001: a new install — the defaults seeded as startup seeds them (``initialize_global_settings``) — holds the ``registration_mode`` row ``invite``, with ``value_type`` ``str``: new installs register by invitation (lot A6d, decision 36), and ``str`` is the documented type of every text setting ("str", "int", "bool", "json") and the one migration 006 writes on an upgraded install.
+        """SETTING-001: a new install — the defaults seeded as startup seeds them (``initialize_global_settings``) — holds the ``registration_mode`` row ``invite``, with ``value_type`` ``str``: new installs register by invitation (lot A6d, decision 36), and ``str`` is the documented type of every text setting ("str", "int", "bool", "json") and the one the 1.3 migration (``005_release_1_3_0_schema``, step 3) writes on an upgraded install.
 
         Read from the database: the seed is the subject here, and ``GET /settings/global/{key}`` wants a session since A6d.
         """

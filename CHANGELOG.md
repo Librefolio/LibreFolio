@@ -11,7 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
-- The Dashboard's data-quality banner now warns when Yahoo quotes a London asset you hold in pence (GBp) while LibreFolio values it as pounds: set its «Units per single price» to 100 (the dividends it shows stay in pence for now).
 - After an update, each user sees once what changed since their last version: the new changelog chapters, in their language where translated. New accounts never see it, and it never opens over a guide or another window. Same on self-hosted and managed instances.
 - `./dev.py db currencies` lists stored currency codes that are not ISO codes (names or numbers saved by earlier versions), and the server warns about them at every start.
 - **Currency fields show what a non-ISO stored code stands for.** A currency saved as `978` or `EURO` by an earlier version stays visible in the picker, next to the ISO code it stands for (`EUR`), so you can pick the right one. Restoring a backup also warns about such codes before you confirm.
@@ -168,7 +167,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
-- **Yahoo Finance prices, dividends and splits of exchanges east of UTC (e.g. Milan, London in summer, Tokyo) were stored one day early.** They are now dated on the exchange's own day, and the rows saved by earlier versions are moved to it once, at each asset's first sync after the update: that sync reads the full history and may take a little longer.
+- **Yahoo Finance prices, dividends and splits of exchanges east of UTC (e.g. Milan, London in summer, Tokyo) were stored one day early.** New ones are dated on the exchange's own day; rows saved by earlier versions stay as they are.
 - The asset page now names the data provider (for example "Yahoo Finance") instead of its internal code when the provider list arrives after the asset.
 - **The bulk editor names a broker you can only view, and flags the row it refuses.** Copying a transfer whose receiving broker is shared with you as a viewer showed that side as "—" and reported the refusal on the sending row as "Broker #N". The grid and the message now name the broker, and the refusal sits on the row that caused it; refused edits, deletions and splits are flagged on their own rows too.
 - **Deleting a broker also removes its leftover import folders and lock file**, which used to pile up in the broker reports storage.
