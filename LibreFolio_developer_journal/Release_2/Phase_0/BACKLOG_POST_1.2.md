@@ -6217,13 +6217,15 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   (`TransactionFormModal.svelte:400-402`). Latente: oggi nessun plugin riempie `unit_cost` (solo Danske Bank costruisce posizioni, senza
   costo). Cura proposta: all'ingresso dell'import un costo senza modalità diventa Manuale, e il gap-fix scrive `cost_basis_mode="manual"`;
   un rosso Vitest e uno pytest. Dopo il via del coordinatore. Dettagli: piano 04, «Revisione dopo l'ingresso — J-57».
-- **W-B83 · Fineco: una compravendita con quantità o controvalore vuoti entra a 0, senza avviso** — basso, dati (latente); W, 19/10
-  (verifica di Q-N74-1). `broker_fineco/plugin.py:310-311` legge una quantità o un controvalore vuoti come 0
-  (`_parse_fineco_number(...) or Decimal("0")`), una divisa vuota come EUR (`:308`) e una data valuta vuota come la data
-  dell'operazione (`:285`). Una riga provvisoria, se Fineco ne scrive (non verificato: nessun export vero), entrerebbe come un
-  acquisto o una vendita di 0 quote o a 0 euro. Cura proposta: una compravendita senza quantità o senza controvalore resta fuori con
-  un avviso tradotto, oppure arriva con un todo bloccante; un rosso pytest. Dopo il via, e meglio con un export vero. Dettagli:
-  piano 04, «C-bis. Q-N74-1».
+- **W-B83 · Fineco: una compravendita col controvalore vuoto entra a 0 €, senza avviso** — basso, dati (latente); W, 19/10
+  (verifica di Q-N74-1; corretta il 19/10 nell'analisi del lotto). `broker_fineco/plugin.py:310-311` legge una quantità o un
+  controvalore vuoti come 0, una divisa vuota come EUR (`:308`) e una data valuta vuota come la data dell'operazione (`:285`).
+  Una **quantità vuota** non entra: la regola 10 rifiuta la riga già in lettura (`qtyPositive`, `qtyNegative`) e il wizard la
+  mostra come riga in errore. Un **controvalore vuoto** entra invece in silenzio a 0 €: la regola 7 chiede solo che la cassa ci
+  sia, e la 11 salta il segno sullo zero (`schemas/transactions/transactions.py:132-133`, `:169-173`); così un BUY a 0 €, o un
+  rimborso (SELL) a 0 €, cioè la perdita di tutto il costo. Una riga provvisoria così, se Fineco ne scrive (non verificato: nessun
+  export vero), entrerebbe. Cura decisa (Q-N74-1, developer 19/10): la riga resta fuori, con una nota o niente, nessun avviso.
+  Dettagli: piano 04, «N74 · Fineco opzione (a), W-B83 e le righe sicure».
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
