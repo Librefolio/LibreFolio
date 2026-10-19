@@ -8111,3 +8111,167 @@ non sposti il registro.
 6. ✅ **Il checkpoint** al coordinatore (2026-10-19, 14:3x), poi FROZEN.
    > **Note implementazione**: nel checkpoint vanno i due file di test e questo piano. Niente di generato. Nessuna riga
    > nel backlog: E-EMF9 non lascia niente per dopo.
+
+### E-AI503 — Il 503 dell'AI Export con un asset tenuto senza prezzi: analisi (2026-10-19, 15:1x–15:4x; HEAD `47af95978`)
+> **La richiesta** (coordinatore, 15:17). Un difetto visto dallo sviluppatore sulla nightly:
+> - il percorso: AI Export → Esporta dati → «Storico asset del portafoglio» (`portfolio.asset_history`, compact, 3 mesi,
+>   broker [1,2]);
+> - la risposta: 503 `snapshot_source_failure`, `component_id` `portfolio.technical_prices`, senza `reason_code`.
+>
+> La causa l'ha riprodotta il coordinatore sui dati dello sviluppatore. Prima l'analisi, niente codice prima del via;
+> revisore J. Il log dell'eccezione inghiottita è di H (H-60): `dependencies.py` non si tocca.
+>
+> **Letti**: le istruzioni AI (`ai-development`, `frontend-ai-export`), lo skill `ai-export-probe-tuning`, la decisione
+> della devWiki `ai-export-technical-series-and-density-contract` (quella di `a576df149`) e
+> `ai-export-version-bump-once-per-release`, il codice, i test e le pagine `ai_export_*.md`.
+
+#### E-AI503.0 — Lo stato vero
+> - **I tre punti, confermati su HEAD.** Tutti scrivono `currency = coherent_price_currency(result)` in un campo
+>   obbligatorio `CurrencyCode`:
+>   - `_build_universe_technical_prices` (`portfolio_broker_technical.py:82`), che serve `portfolio.technical_prices` e
+>     `broker.technical_prices`;
+>   - `_build_asset_ohlc_returns` (`asset_fx_technical.py:93`), che serve `asset.ohlc_returns`.
+>
+>   `coherent_price_currency` (`technical_shared.py:790`) dà `None` per una serie vuota o a valute miste. Il
+>   `ValidationError` non ha `reason_code`, quindi diventa il 503 (`runtime_service.py:833`). L'utente legge «A required
+>   data source is unavailable. Try again later.», ma riprovare non serve mai.
+> - **Come ci si arriva.**
+>   - `eligible_positions` (`technical_shared.py:430`) ammette ogni posizione tenuta con un valore finale diverso da zero,
+>     e la valutazione dà un valore anche a un asset senza prezzi.
+>   - `get_prices_bulk`, senza righe di prezzo, risponde `FAPriceQueryResult(prices=[])`, non `None`
+>     (`price_query.py:174`, `_build_backward_filled_series`). Il builder salta solo `result is None`.
+> - **La storia.**
+>   - `a576df149` (30/07) tolse il ripiego su `scope.target_currency`: era sbagliato, perché dava a una serie nativa la
+>     valuta del report. Da allora `currency: str` rifiutava già `None`.
+>   - `3abcb6b15` (28/08) ha solo stretto il tipo a `CurrencyCode`: il messaggio è diventato «Currency code must be a
+>     string, got NoneType».
+> - **Le valute miste sono già «nessuna serie» ovunque tranne qui.**
+>   - `price_result_to_close_points` restituisce `()` se la valuta non è coerente, e così `_observed_asset_points`
+>     (copertura e contesto).
+>   - `get_prices_bulk`, con `target_currency=None`, non calcola segnali su una serie mista e lo scrive in
+>     `result.errors` (`price_query.py:824`).
+>   - Il contesto di mercato ripiega già su `value_unit="unavailable"`. `asset.drawdown_summary` ha già il suo
+>     `unavailable` con `no_native_price_observation`; `asset.market_snapshot` dà `observed=None`.
+> - **La copertura dice già la verità.** `portfolio.technical_coverage`, richiesto negli stessi dataset, elenca l'asset
+>   con 0 osservazioni e i segnali omessi (`missing_input_fields`).
+> - **Il contratto del payload prevede già lo scarto.** `covered_asset_count` di `PortfolioTechnicalPricesPayload` è
+>   «eligible assets with a returned price series in this payload (subset of eligible_asset_count)»; il builder conta
+>   già `covered = len(assets)`.
+> - **Un caso vicino, che non si rompe.** Un asset con prezzi solo prima del periodo (serie stantia: punti riempiti
+>   all'indietro con la valuta) resta in `assets`: ha valuta, bucket tutti vuoti, ed è contato coperto; la copertura
+>   invece lo dà non coperto. È un'asimmetria che c'è già, fuori da questo lotto.
+
+#### E-AI503.1 — La prova su HEAD, e la cura in memoria
+> `files/tools/ai503_probe_test.py` e `ai503_probe.sh`, nella cartella della sessione.
+> - **Come gira**: pura, con gli scenari dei test di integrazione (`_setup_portfolio_scenario`,
+>   `_setup_broker_scenario`), sessioni senza tabelle e `get_prices_bulk` finto per modo: vuoto, misto, stantio.
+> - **Cosa non tocca**: il DB della corsia (il file sta fuori da `backend/test_scripts`, quindi niente conftest), il
+>   server, pipenv e il repository. La cura vive solo nel monkeypatch.
+> - **Il risultato: 16 passati.**
+>   - **HEAD, portafoglio**, vuoto e misto: fallisce `portfolio.technical_prices`, radice `ValidationError`,
+>     `reason_code` None, cioè il 503. Il caso stantio costruisce: l'asset ha 0 osservazioni e `covered` vale 3 contro il
+>     2 della copertura.
+>   - **HEAD, broker**: fallisce `broker.technical_prices`.
+>   - **HEAD, asset**, vuoto e misto: fallisce `asset.ohlc_returns`. Copertura, eventi e contesto di posizione invece
+>     costruiscono: 0 osservazioni, `missing_input_fields: 20`, `value_unit=unavailable`.
+>   - **Ogni componente del dominio, uno per uno**, con un asset vuoto: su HEAD falliscono solo 2 su 21 (portafoglio) e
+>     2 su 20 (broker), cioè i prezzi e gli indicatori che ne dipendono. Con la cura, 0.
+>   - **Con la cura**, `portfolio.asset_history` e `broker.asset_history` costruiscono tutte e 6 le sezioni. Il
+>     portafoglio dà `eligible=3 covered=2`, oppure `covered=0` con tutti gli asset vuoti; il broker dà
+>     `eligible=1 covered=0`. La copertura concorda.
+>   - **Con la cura, lato asset** (valuta nulla, simulata): `ohlc_returns` ha valuta nulla, 0 osservazioni, 19 bucket
+>     vuoti e `latest` None; gli indicatori dipendenti costruiscono.
+>
+> **⚠️ Fuori pista**: il ripopolamento della corsia (`dev.py test --test-port 6188 --data-dir /tmp/librefolio-r13-e db
+> populate --force --clean`, rc 0, 8 s, chiesto dal coordinatore) è partito col carico a 1 minuto a 53,8, sopra il
+> limite di 50: non l'ho fatto aspettare. Ogni corsa dopo passa da `wait_load.sh`. L'istantanea del vecchio DB è in
+> `.testLog/00_archive/`, ignorata da git.
+>
+> **⚠️ Fuori pista**: alla prima corsa 4 casi della prova erano rossi per un difetto della prova stessa: il registro
+> dei test tecnici non ha `asset.technical_coverage`. Aggiunti i componenti di contesto dell'asset, la prova è verde.
+
+#### E-AI503.2 — La cura proposta
+> 1. **Portafoglio e broker** (`_build_universe_technical_prices`): se `coherent_price_currency(result)` è `None`
+>    (nessuna riga, oppure valute miste), l'asset non entra in `assets`. Resta contato in `eligible_asset_count` e non
+>    in `covered_asset_count`, come il campo già dice. Il payload non cambia forma; per ogni export che oggi riesce
+>    l'uscita resta identica.
+> 2. **La serie a valute miste** si tratta come una serie assente, senza normalizzare i codici prima del confronto:
+>    - normalizzare con `Currency.validate_code` fonderebbe `GBp` in `GBP` (verificato: `'GBp' -> 'GBP'`), cioè pence e
+>      sterline 100 volte lontani in una sola serie;
+>    - è la regola di `a576df149` («mai valute miste in una serie nativa») ed è già quella dei segnali, della copertura
+>      e del contesto.
+> 3. **Asset** (`asset.ohlc_returns`): un solo bersaglio, che non si può «saltare».
+>    - Proposta: `AssetOhlcReturnsPayload.currency: CurrencyCode | None`, nullo solo quando non c'è una serie coerente.
+>      In più un validatore: con la valuta nulla, nessun bucket popolato e nessun `latest_close`/`latest_date`.
+>    - Nel prompt la riga SERIES perde la colonna `currency`, e la riga già esistente `omitted_null_columns=currency` la
+>      nomina (T-B7). Nessun testo nuovo.
+>    - Alternative scartate: la valuta dichiarata dall'asset (sposta il senso del campo; la directory delle entità la
+>      mostra già), oppure un 422 (contraddice `always_applicable`). Il ramo `requires_price_history` →
+>      `insufficient_price_history` (`runtime_service.py:583`) non serve a nessuna analisi di oggi e resta com'è.
+> 4. **Le versioni**: `portfolio.technical_prices`, `broker.technical_prices` e `asset.ohlc_returns` sono a 1 in
+>    `v1.2.1` e su HEAD. Con la regola «il builder cambia → +1, una volta per release» vanno a 2, in tre posti:
+>    - lo spec;
+>    - il segnaposto in `components/catalog.py` (parità controllata all'import);
+>    - `COMPACT_COMPONENT_VERSIONS` in `snapshotDataRenderer.ts` (`{1, 2}`), altrimenti la sezione diventa
+>      `PAYLOAD YAML FALLBACK`.
+>
+>    L'intestazione stampa solo `COMPONENT <id>`, quindi i prompt di oggi restano identici byte per byte. Per i due
+>    prezzi, dove la forma non cambia, il bump è da confermare con J.
+> 5. **Fuori dalla cura**: `dependencies.py` (H-60), gli indicatori, gli eventi, il breadth e la copertura.
+>    `technical_indicators` continua a elencare l'asset con zero indicatori, non coperto, come oggi.
+
+#### E-AI503.3 — I rossi proposti (li scrive il `test-author`)
+> - **Componente** (puro, `test_ai_export_components_technical.py`, `services ai-export`), con una variante di
+>   `_patch_get_prices_bulk` che dà `prices=[]` o valute miste a un asset tenuto:
+>   - prezzi del portafoglio, un asset vuoto: assente da `assets`, `eligible=3`, `covered=2`;
+>   - lo stesso con le valute miste;
+>   - tutti gli asset vuoti: `assets=[]`, `covered=0`;
+>   - lo stesso per il broker;
+>   - gli indicatori, che dipendono dai prezzi, costruiscono;
+>   - `asset.ohlc_returns`, vuoto e misto: `currency` None, bucket vuoti, `latest` None;
+>   - barriera, verde oggi: il caso stantio resta com'è.
+> - **Payload** (puro, `test_ai_export_technical_payload_invariants.py`, `services ai-export-pure`):
+>   - `AssetOhlcReturnsPayload` accetta la valuta nulla con la serie vuota;
+>   - rifiuta la valuta nulla con un bucket popolato o un `latest_close`.
+> - **API** (nuovo `test_api/test_ai_export_unpriced_asset.py`, puro, da registrare come
+>   `api ai-export-unpriced-asset`): sul modello di J-50 (`test_ai_export_price_day_budget.py`), SQLite privato sotto
+>   `tmp_path`, router vero in-process, servizio vero, `get_prices_bulk` e `PortfolioService` veri.
+>   - **Il libro**: un utente, due broker; un ETF con chiusure su tutto il periodo e il warm-up sul broker 1; un
+>     CROWDFUND senza prezzi e senza provider, con 1 BUY, sul broker 2.
+>   - `POST /ai-export/snapshot`, `portfolio.asset_history`, compact, 3 mesi, broker [1,2]: 200 (oggi 503 su
+>     `portfolio.technical_prices`); `eligible=2`, `covered=1`.
+>   - Barriera, verde oggi: broker [1] dà 200, come ha visto lo sviluppatore.
+>   - `broker.asset_history` sul broker 2: 200.
+>   - `asset.market_history` sul CROWDFUND: 200, `ohlc_returns.currency` null, il drawdown `unavailable`.
+> - **Frontend** (Vitest, `snapshotDataRenderer.test.ts`):
+>   - la v2 dei tre componenti esce compatta, con lo stesso testo della v1;
+>   - un `ohlc_returns` v2 con la valuta nulla: niente colonna `currency`, c'è `omitted_null_columns=currency`.
+>
+>   `node_modules` manca nel worktree: serve `npm ci`, col via del coordinatore. Il test che già esiste sul ripiego YAML
+>   (`asset.ohlc_returns` v2, schema 2) resta verde, perché lo schema 2 ricade comunque; conviene portarne l'esempio a
+>   v3.
+
+#### E-AI503.4 — Decisioni, file, costo
+> - **Allo sviluppatore** (un contratto del payload): D1, la valuta nulla in `asset.ohlc_returns` per un asset senza una
+>   serie coerente. È la mia raccomandazione.
+> - **Al coordinatore**:
+>   - via al bump 1→2 dei tre componenti, sentito J;
+>   - via a `npm ci`;
+>   - i file sono aperti altrove (J)?
+>   - la registrazione nel runner (`_backend_api.py`, superficie condivisa).
+> - **Facoltative, da archiviare dopo la 1.3**, non decise:
+>   - un `reason_code` per l'asset non coperto (`no_price_observation` contro `mixed_price_currencies`): oggi l'IA vede
+>     quale asset manca, non perché;
+>   - l'asimmetria della serie stantia (per J).
+> - **I file**:
+>   - backend: `portfolio_broker_technical.py`, `asset_fx_technical.py`, `technical_payloads.py`,
+>     `components/catalog.py`;
+>   - frontend: `snapshotDataRenderer.ts`;
+>   - test: i 2 file puri, il nuovo file API, `snapshotDataRenderer.test.ts`, la registrazione nel runner;
+>   - documenti: `ai_export_composition.md` («Universe Coverage Counts»: `covered` di `technical_prices` conta le serie
+>     coerenti; la valuta nulla dell'asset);
+>   - CHANGELOG 🐛 al checkpoint.
+> - **Il costo**: piccolo-medio, circa 25 righe di codice e circa 450 di test; mezza giornata con le prove.
+> - **I selettori**: `services ai-export`, `services ai-export-pure`, `api ai-export`, `api ai-export-unpriced-asset`,
+>   e il Vitest del renderer. Facoltativa, per J: una sonda mirata sulla copia di riferimento (lo stesso export dello
+>   sviluppatore), con l'equivalenza UI/sonda.
