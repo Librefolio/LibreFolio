@@ -2,11 +2,16 @@
  * The legal notice of the instance (F09) and the managed profile's effects on the account side (F05): release 1.3,
  * workstream A, lot A9, through the real pages and the lane's real backend.
  *
- * `GET /api/v1/system/instance` (public) carries `legal: {terms_url, privacy_url}` — both null on the lane, which sets
- * neither LIBREFOLIO_TOS_URL nor LIBREFOLIO_PRIVACY_URL — beside `profile`, `selfhosted` on the lane. A test that needs
- * another instance answers its own page's read with the real response patched (`serveInstanceConfig`,
- * fixtures/instance-config.ts); the lane's own answer is observed through the same stub with an empty patch. `page.route()`
- * binds the browser context that installs it: no other test sees it, and nothing is written.
+ * `GET /api/v1/system/instance` (public) carries `legal: {terms_url, privacy_url}` — both null on a lane today: it drops
+ * LIBREFOLIO_TOS_URL and LIBREFOLIO_PRIVACY_URL, and may not set them (TEST_LANE_SETTABLE, scripts/cli_base.py) — beside
+ * `profile`: `selfhosted` on a lane by default, `managed` on one started with `--lane-setting LIBREFOLIO_PROFILE=managed`
+ * (H-43). The spec runs on both kinds of lane (A-57). The two tests of the lane's own answer, LGM-E-01 and LGM-E-03, read
+ * it first, with `page.request` — before any page load and any stub: a request `page.route()` never sees —, record its
+ * profile in the test's annotations (`lane-profile`: the variant that ran) and assert that variant, the legal links being
+ * the lane's own, read and never assumed; the page's own reads, observed through the stub, must carry the same answer. A
+ * test that needs another instance answers its own page's read with the real response patched (`serveInstanceConfig`,
+ * fixtures/instance-config.ts), on either kind of lane; the lane's own answer is observed through the same stub with an
+ * empty patch. `page.route()` binds the browser context that installs it: no other test sees it, and nothing is written.
  *
  * What the product shows:
  *   - the compact notice (`legal-links`) under the card of every sign-in page (`auth-legal-links`, AuthPageFrame) and in
@@ -23,55 +28,63 @@
  * An absence is asserted only behind two presences: the configuration the page read is the one asked for (the stub's
  * own record, read once its handler has finished), and the region is drawn (a sibling every profile shows). A donation
  * link is absent both before the answer and on a managed instance — and so is the changelog's update check once it
- * follows the donations' rule (the developer's decision, 17/10) —, so on the signed-in managed page the proof that the
- * managed answer is in force comes first, from the answer itself: the stub sets `legal` to two https pages of this
- * spec's own beside `profile: 'managed'`, and the sidebar's legal line linking the stubbed terms page is that answer
- * applied. The links come from it alone — the lane sets no legal page, and the defaults the app holds until the server
- * answers carry none —, and the store takes an answer whole, its `profile` in the same step. Every absence is then read
- * in the same app runtime — a client-side hop to Settings, checked by a mark on `window` set before the proof: a page
+ * follows the donations' rule (the developer's decision, 17/10) —, so on a managed page the proof that the managed answer
+ * is in force comes first, from something that answer alone draws. Signed out: the forgot card's `forgot-ask-admin`,
+ * drawn only once the server said managed (`managedConfirmed()`). Signed in, no element is drawn by a managed answer
+ * alone, so the proof comes from the answer itself: the stub sets `legal` to two https pages of this spec's own — beside
+ * `profile: 'managed'` stubbed (LGM-E-04), or beside the managed lane's own profile, passed through (LGM-E-03) —, and the
+ * sidebar's legal line linking the stubbed terms page is that answer applied. The links come from it alone — no lane
+ * links this spec's pages, on a reserved domain, and the defaults the app holds until the server answers carry none —,
+ * and the store takes an answer whole, its `profile` in the same step. Every absence is then read in the same app
+ * runtime — a client-side switch of card or hop to Settings, checked by a mark on `window` set before the proof: a page
  * load would bring the defaults back. Each donation absence is read twice, by test id and as no link to the donation
  * page (its host, from supportLinks.ts), so a renamed test id cannot pass for a hidden link.
  *
  * Covered (desktop):
- *   LGM-E-01  signed out, the lane's answer: `auth-legal-links` under the login card — after it in the frame and below it
- *             on screen —, holding `legal-links` and no legal link (the lane sets none); `auth-donate-link` once the
- *             configuration is in (self-hosted);
+ *   LGM-E-01  signed out, the lane's answer, either profile: `auth-legal-links` under the login card — after it in the
+ *             frame and below it on screen —, holding `legal-links` and the lane's own legal links (each to exactly the
+ *             lane's page, none where it links none). Self-hosted: proved by `auth-donate-link` once the configuration is
+ *             in. Managed: proved by the forgot card's `forgot-ask-admin`; then, back on the login card
+ *             (`forgot-back-to-login`, a client-side switch), the same notice, the sign-in bar drawn without
+ *             `auth-donate-link`, and no donation link anywhere on the page;
  *   LGM-E-02  signed out, `legal` stubbed with two https pages of this spec's own: both links in `auth-legal-links`, to
  *             exactly those pages, `target="_blank"`, `rel` with `noopener` and `noreferrer`; never clicked;
- *   LGM-E-03  signed in as e2e_test_user, the lane's answer: `header-donate-link`; `sidebar-legal-links` after
- *             `sidebar-version` in the footer, below it; Settings › About's `about-legal-card` holding a `legal-notice`. The
- *             contrast of LGM-E-04 on the same paths: the changelog's update check, the Help menu's coffee and About's
- *             coffee, all there when self-hosted;
- *   LGM-E-04  signed in, `profile` stubbed managed and `legal` set to the same two pages, before the page loads: the
- *             sidebar's legal line links exactly the stubbed terms page (the proof, first); then the changelog opened from
- *             `sidebar-version` has no update check; no donation link in the header, none in the open Help menu — whose
- *             GitHub issues item, found by its link, stays —, none in About's support card, whose sharing buttons stay
- *             (About's legal notice linking the same pages), none anywhere on the page;
- *   LGM-E-05  signed out, `profile` stubbed managed: the forgot card shows `forgot-ask-admin` — drawn only once the
- *             server said managed —, and neither `forgot-reset-commands` nor `forgot-email-unavailable`; no
+ *   LGM-E-03  signed in as e2e_test_user, the lane's answer, either profile: `sidebar-legal-links` after `sidebar-version`
+ *             in the footer, below it; Settings › About's `about-legal-card` holding a `legal-notice`. Self-hosted, the
+ *             answer observed untouched, proved by `header-donate-link`: the sidebar's line with the lane's own legal
+ *             links, and the contrast of LGM-E-04 on the same paths — the changelog's update check, the Help menu's
+ *             coffee and About's coffee, all there. Managed, only `legal` stubbed — the profile passes through as the
+ *             lane's own —, proved as LGM-E-04 is (the sidebar's line linking exactly the stubbed pages): LGM-E-04's
+ *             absences on the same paths, the sharing buttons there and About's notice linking the stubbed pages;
+ *   LGM-E-04  signed in, on any lane, `profile` stubbed managed and `legal` set to the same two pages, before the page
+ *             loads: the sidebar's legal line links exactly the stubbed terms page (the proof, first); then the changelog
+ *             opened from `sidebar-version` has no update check; no donation link in the header, none in the open Help
+ *             menu — whose GitHub issues item, found by its link, stays —, none in About's support card, whose sharing
+ *             buttons stay (About's legal notice linking the same pages), none anywhere on the page;
+ *   LGM-E-05  signed out, on any lane, `profile` stubbed managed: the forgot card shows `forgot-ask-admin` — drawn only
+ *             once the server said managed —, and neither `forgot-reset-commands` nor `forgot-email-unavailable`; no
  *             `auth-donate-link`, no donation link anywhere on the sign-in page.
  *
  * Read-only, parallel by default: GET requests and the sign-ins of e2e_test_user, a fixture user of the runner, whose
  * onboarding is read back (never changed) so that no guide competes for the clicks; no external link is clicked, no
- * setting is written, the language is never touched. Assertions read test ids, attributes and the stub's record, never
- * a translated text.
+ * setting is written — a managed lane is the runner's (`--lane-setting`), never a test's —, the language is never
+ * touched. Assertions read test ids, attributes and the stub's record, never a translated text.
  *
- * Registered in scripts/test_runner/_frontend_utility.py, action `legal-managed` of front-utility.
+ * Registered in scripts/test_runner/_frontend_utility.py, action `legal-managed` of front-utility; on a managed lane,
+ * `./dev.py test --lane-setting LIBREFOLIO_PROFILE=managed front-utility legal-managed`.
  */
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
-import {serveInstanceConfig, type InstanceConfigStub, type ServedInstanceConfig} from '../fixtures/instance-config';
+import {INSTANCE_CONFIG_PATH, serveInstanceConfig, type InstanceConfigStub, type ServedInstanceConfig} from '../fixtures/instance-config';
 import {readOnboardingProgress} from '../fixtures/onboarding-accounts';
 import {openSettingsTab} from '../fixtures/settings-tabs';
 import {TEST_USER} from '../fixtures/test-users';
 import {BUY_ME_A_COFFEE_URL, SOCIAL_SHARE_ORDER} from '../../src/lib/features/support/supportLinks';
 
-/** The lane's legal part: it sets neither LIBREFOLIO_TOS_URL nor LIBREFOLIO_PRIVACY_URL. */
-const LANE_LEGAL = {terms_url: null, privacy_url: null};
 /** Two pages of this spec's own, on a reserved domain, served by the stub alone and never opened. */
 const TERMS_URL = 'https://legal.example.org/librefolio-e2e/terms?lot=a9';
 const PRIVACY_URL = 'https://legal.example.org/librefolio-e2e/privacy?lot=a9';
-/** The legal part a test stubs: the lane sets no legal page, so a link to one of these comes from the stubbed answer alone. */
+/** The legal part a test stubs: no lane links these pages of this spec's own, so a link to one comes from the stubbed answer alone. */
 const SPEC_LEGAL = {terms_url: TERMS_URL, privacy_url: PRIVACY_URL};
 /** «Report a bug», the Help menu item every profile keeps: HelpMenu.svelte's `githubIssuesUrl`, found by its link. */
 const GITHUB_ISSUES_URL = 'https://github.com/Librefolio/LibreFolio/issues';
@@ -177,28 +190,198 @@ async function expectSameRuntime(page: Page, message: string): Promise<void> {
     expect(kept, message).toBe(true);
 }
 
+/** The two profiles of an instance (F05): the two variants of the tests of the lane's own answer, LGM-E-01 and LGM-E-03. */
+type Profile = 'selfhosted' | 'managed';
+/** The legal part of an answer (F09): each link a page, or null where the instance links none. */
+type Legal = {terms_url: string | null; privacy_url: string | null};
+/** The lane's own answer, the parts these tests follow: read first, by `readLaneAnswer()`. */
+type LaneAnswer = {profile: Profile; legal: Legal};
+
+const isProfile = (value: unknown): value is Profile => value === 'selfhosted' || value === 'managed';
+const isLink = (value: unknown): value is string | null => value === null || typeof value === 'string';
+
+function isLegal(value: unknown): value is Legal {
+    if (typeof value !== 'object' || value === null) return false;
+    const record = value as Record<string, unknown>;
+    return isLink(record.terms_url) && isLink(record.privacy_url);
+}
+
+/**
+ * The lane's own answer to `GET /api/v1/system/instance`, read first — before any page load and before any stub — with
+ * `page.request`: a public route, and a request that leaves from the test, never through `page.route()`, so the lane's
+ * real answer. A 200, a `profile` of the two this spec knows and a `legal` part of two links, each a page or null:
+ * anything else fails here, by name. The profile goes into the test's annotations (`lane-profile`), so the report says
+ * which variant ran.
+ */
+async function readLaneAnswer(page: Page): Promise<LaneAnswer> {
+    const response = await page.request.get(INSTANCE_CONFIG_PATH);
+    expect(response.status(), `precondition: the lane answers GET ${INSTANCE_CONFIG_PATH}, a public route`).toBe(200);
+    const {profile, legal} = (await response.json()) as {profile?: unknown; legal?: unknown};
+    if (!isProfile(profile)) throw new Error(`precondition: the lane's GET ${INSTANCE_CONFIG_PATH} says profile ${JSON.stringify(profile)}, and this spec knows two: 'selfhosted' (a lane by default) and 'managed' (--lane-setting LIBREFOLIO_PROFILE=managed, H-43)`);
+    if (!isLegal(legal)) throw new Error(`precondition: the lane's GET ${INSTANCE_CONFIG_PATH} carries legal ${JSON.stringify(legal)}, not {terms_url, privacy_url} each a page or null (the backend of lot A9)`);
+    test.info().annotations.push({type: 'lane-profile', description: profile});
+    return {profile, legal: {terms_url: legal.terms_url, privacy_url: legal.privacy_url}};
+}
+
+/**
+ * The legal links `notice` holds are the lane's own: for each of terms and privacy, one link to exactly the page the lane
+ * links, none where it links none. Read behind the caller's proof that the configuration is in.
+ */
+async function expectLaneLegalLinks(notice: Locator, legal: Legal): Promise<void> {
+    const links = [
+        ['legal-terms-link', legal.terms_url],
+        ['legal-privacy-link', legal.privacy_url],
+    ] as const;
+    for (const [testId, url] of links) {
+        const link = notice.getByTestId(testId);
+        if (url) {
+            await expect(link, `${testId}: the lane links that page`).toBeVisible();
+            await expect(link, `${testId} leads to exactly the page the lane links`).toHaveAttribute('href', url);
+        } else {
+            await expect(link, `no ${testId}: the lane links no such page`).toHaveCount(0);
+        }
+    }
+}
+
+/**
+ * The compact legal notice under the login card, the configuration proven in: `auth-legal-links` after `login-modal` in
+ * the frame and below it on screen, holding `legal-links` with the lane's own legal links.
+ */
+async function expectNoticeUnderLoginCard(page: Page, legal: Legal): Promise<void> {
+    const frame = page.getByTestId('login-page');
+    const card = frame.getByTestId('login-modal');
+    const line = frame.getByTestId('auth-legal-links');
+    await expect(line, 'the compact legal notice, on the sign-in page').toBeVisible();
+    const notice = line.getByTestId('legal-links');
+    await expect(notice, 'holding the compact notice').toBeVisible();
+    // Under the card: after it in the frame, and below it on screen.
+    await expect(frame.locator('[data-testid="login-modal"] ~ [data-testid="auth-legal-links"]'), 'after the login card, in the same frame').toBeVisible();
+    await expect.poll(() => gapBelow(card, line), {message: 'auth-legal-links starts below the bottom edge of the login card', timeout: UI_MS}).toBeGreaterThanOrEqual(0);
+    // The notice drawn, the configuration in: the lane's own legal links, and no other.
+    await expectLaneLegalLinks(notice, legal);
+}
+
+/**
+ * The sidebar's compact notice in its place: after `sidebar-version` in the footer — a later sibling in its block — and
+ * below it on screen, holding `legal-links`, which it returns.
+ */
+async function expectSidebarLegalLine(page: Page): Promise<Locator> {
+    const version = page.getByTestId('sidebar-version');
+    const line = page.locator('[data-testid="sidebar-version"] ~ [data-testid="sidebar-legal-links"]');
+    await expect(line, 'sidebar-legal-links, after sidebar-version in the footer').toBeVisible();
+    await expect.poll(() => gapBelow(version, line), {message: 'sidebar-legal-links starts below the bottom edge of sidebar-version', timeout: UI_MS}).toBeGreaterThanOrEqual(0);
+    const notice = line.getByTestId('legal-links');
+    await expect(notice, 'holding the compact notice').toBeVisible();
+    return notice;
+}
+
+/**
+ * The proof, signed in and before any absence, that a managed answer whose `legal` the stub set to SPEC_LEGAL is in
+ * force in this runtime: a link to those pages comes from the stubbed answer alone, and the store takes an answer whole,
+ * its `profile` in the same step, so the sidebar linking them is that answer applied. Then the stub's record: every read
+ * carried `profile: 'managed'` and those pages.
+ */
+async function expectManagedAnswerInForce(page: Page, instance: InstanceConfigStub, what: string): Promise<void> {
+    const sidebarLegal = page.getByTestId('sidebar-legal-links');
+    const sidebarTerms = sidebarLegal.getByTestId('legal-terms-link');
+    await expect(sidebarTerms, 'the proof: the sidebar’s legal line links the terms page only the stubbed answer carries').toHaveAttribute('href', TERMS_URL, {timeout: CONFIG_MS});
+    await expect(sidebarTerms).toBeVisible();
+    await expect(sidebarLegal.getByTestId('legal-privacy-link'), 'and the privacy page the same answer carries').toHaveAttribute('href', PRIVACY_URL);
+    await expectServed(instance, {profile: 'managed', legal: SPEC_LEGAL}, what);
+}
+
+/**
+ * What a managed instance hides from a signed-in user, read once `expectManagedAnswerInForce()` has passed, each absence
+ * behind a presence: the changelog opened from `sidebar-version`, its toolbar drawn, has no update check; the header,
+ * drawn, no donation link; the open Help menu, its GitHub issues item there, no coffee; Settings › About, reached
+ * client-side, its legal notice linking the stubbed pages, its support card's sharing buttons there and no coffee; no
+ * link to the donation page anywhere on the page.
+ */
+async function expectManagedAbsencesSignedIn(page: Page): Promise<void> {
+    // The changelog, its toolbar drawn: no update check.
+    const changelog = await openChangelog(page);
+    await expect(changelog.getByTestId('changelog-check-update'), 'managed: no update check in the changelog — the operator updates the instance').toHaveCount(0);
+    await closeChangelog(changelog);
+
+    // The header, drawn (its Help button, every profile): no donation link.
+    const header = page.getByTestId('app-header');
+    await expect(header.getByTestId('help-menu-button'), 'the header is drawn').toBeVisible();
+    await expect(header.getByTestId('header-donate-link'), 'managed: no donation link in the header').toHaveCount(0);
+    await expect(header.locator(DONATION_LINK), 'nor any link to the donation page in it').toHaveCount(0);
+
+    // The Help menu, open, its GitHub issues item there: no coffee.
+    const help = await openHelpMenu(header);
+    await expect(help.getByTestId('help-donate-link'), 'managed: no coffee in the Help menu').toHaveCount(0);
+    await expect(help.locator(DONATION_LINK), 'nor any link to the donation page in it').toHaveCount(0);
+    await closeHelpMenu(header);
+
+    // Settings › About, reached client-side: its legal notice links the stubbed pages — the same answer, on this
+    // page —; the sharing stays, the coffee goes.
+    const about = await openAbout(page);
+    const notice = about.getByTestId('about-legal-card').getByTestId('legal-notice');
+    await expect(notice, 'About’s legal notice, in every profile').toBeVisible();
+    await expect(notice.getByTestId('legal-terms-link'), 'linking the stubbed terms page: the same answer, on this page').toHaveAttribute('href', TERMS_URL);
+    await expect(notice.getByTestId('legal-privacy-link'), 'and the privacy page').toHaveAttribute('href', PRIVACY_URL);
+    const support = about.getByTestId('about-support-card');
+    await expect(support, 'About’s support card is drawn').toBeVisible();
+    expect(SOCIAL_SHARE_ORDER.length, 'positive control: supportLinks.ts lists the sharing platforms').toBeGreaterThan(0);
+    for (const platform of SOCIAL_SHARE_ORDER) await expect(support.getByTestId(`support-share-${platform}`), `managed: the sharing button for ${platform} stays`).toBeVisible();
+    await expect(support.getByTestId('support-coffee'), 'managed: no coffee in About’s support card').toHaveCount(0);
+    await expect(support.locator(DONATION_LINK), 'nor any link to the donation page in it').toHaveCount(0);
+    await expect(page.locator(DONATION_LINK), 'managed: no link to the donation page anywhere on the page').toHaveCount(0);
+}
+
+/**
+ * LGM-E-01 on a self-hosted lane, the login page drawn: the bar's donation link shows only once the server has said
+ * self-hosted, so the configuration is in — and the stub's record says it is the lane's own, as read first —; then the
+ * notice under the login card.
+ */
+async function signedOutOnSelfHostedLane(page: Page, instance: InstanceConfigStub, lane: LaneAnswer): Promise<void> {
+    const bar = page.getByTestId('login-page').getByTestId('auth-page-controls');
+    await expect(bar.getByTestId('auth-donate-link'), 'self-hosted on the lane: the donation link, once the server said so').toBeVisible({timeout: CONFIG_MS});
+    await expectServed(instance, {profile: lane.profile, legal: lane.legal}, 'the page read the lane’s own answer, as read first');
+    await expectNoticeUnderLoginCard(page, lane.legal);
+}
+
+/**
+ * LGM-E-01 on a managed lane, the login page drawn: no donation link to wait for, so the proof is what a managed answer
+ * alone draws — the forgot card's `forgot-ask-admin` (`managedConfirmed()`) —, in a runtime marked first; back on the
+ * login card, a client-side switch of card, the notice under it; then, behind the bar drawn, no donation link — all in
+ * that one runtime.
+ */
+async function signedOutOnManagedLane(page: Page, instance: InstanceConfigStub, lane: LaneAnswer): Promise<void> {
+    const frame = page.getByTestId('login-page');
+    // Marked before the proof: the proof, the notice and every absence below are read in one runtime, checked at the end.
+    await markRuntime(page);
+    await frame.getByTestId('goto-forgot').click();
+    const forgot = frame.getByTestId('forgot-modal');
+    await expect(forgot).toBeVisible({timeout: UI_MS});
+    await expect(forgot.getByTestId('forgot-ask-admin'), 'managed on the lane: the forgot card sends the user to the administrator, once the server said so').toBeVisible({timeout: CONFIG_MS});
+    await expectServed(instance, {profile: lane.profile, legal: lane.legal}, 'the page read the lane’s own answer, as read first');
+
+    // Back to the login card: the frame stays, only its card changes.
+    await forgot.getByTestId('forgot-back-to-login').click();
+    await expect(forgot, 'the forgot card gives way').toBeHidden({timeout: UI_MS});
+    await expect(frame.getByTestId('login-modal'), 'back on the login card').toBeVisible({timeout: UI_MS});
+    await expectNoticeUnderLoginCard(page, lane.legal);
+
+    // The bar, drawn (its Help button, every profile): no donation link, and none anywhere on the page.
+    const bar = frame.getByTestId('auth-page-controls');
+    await expect(bar.getByTestId('help-menu-button'), 'the sign-in bar is drawn').toBeVisible();
+    await expect(bar.getByTestId('auth-donate-link'), 'managed: no donation link in the sign-in bar').toHaveCount(0);
+    await expect(page.locator(DONATION_LINK), 'managed: no link to the donation page anywhere on the sign-in page').toHaveCount(0);
+    await expectSameRuntime(page, 'the proof, the notice and every absence above were read in one app runtime: no page load in between');
+}
+
 test.describe('Legal notice — signed out', () => {
-    test('LGM-E-01: the lane’s answer — the compact notice under the login card, without links; the donation link once the server said self-hosted', async ({page}) => {
+    test('LGM-E-01: the lane’s answer — the compact notice under the login card, with the lane’s own legal links; self-hosted: the donation link once the server said so; managed: the forgot card sends the user to the administrator once the server said so, and no donation link', async ({page}) => {
+        const lane = await readLaneAnswer(page);
         const instance = await serveInstanceConfig(page, {});
         try {
             await page.goto('/');
-            const frame = page.getByTestId('login-page');
-            await expect(frame).toBeVisible({timeout: FIRST_PAINT_MS});
-            // Presence first: the bar's donation link shows only once the server has said self-hosted, so the configuration
-            // is in — and it is the lane's own.
-            await expect(frame.getByTestId('auth-page-controls').getByTestId('auth-donate-link'), 'self-hosted on the lane: the donation link, once the server said so').toBeVisible({timeout: CONFIG_MS});
-            await expectServed(instance, {profile: 'selfhosted', legal: LANE_LEGAL}, 'precondition: the lane is self-hosted and sets no legal page (neither LIBREFOLIO_TOS_URL nor LIBREFOLIO_PRIVACY_URL)');
-
-            const card = frame.getByTestId('login-modal');
-            const line = frame.getByTestId('auth-legal-links');
-            await expect(line, 'the compact legal notice, on the sign-in page').toBeVisible();
-            await expect(line.getByTestId('legal-links'), 'holding the compact notice').toBeVisible();
-            // Under the card: after it in the frame, and below it on screen.
-            await expect(frame.locator('[data-testid="login-modal"] ~ [data-testid="auth-legal-links"]'), 'after the login card, in the same frame').toBeVisible();
-            await expect.poll(() => gapBelow(card, line), {message: 'auth-legal-links starts below the bottom edge of the login card', timeout: UI_MS}).toBeGreaterThanOrEqual(0);
-            // The notice drawn, the configuration in: no legal link, since the lane sets no legal page.
-            await expect(line.getByTestId('legal-terms-link')).toHaveCount(0);
-            await expect(line.getByTestId('legal-privacy-link')).toHaveCount(0);
+            await expect(page.getByTestId('login-page')).toBeVisible({timeout: FIRST_PAINT_MS});
+            if (lane.profile === 'selfhosted') await signedOutOnSelfHostedLane(page, instance, lane);
+            else await signedOutOnManagedLane(page, instance, lane);
         } finally {
             await instance.dispose();
         }
@@ -230,40 +413,64 @@ test.describe('Legal notice — signed out', () => {
     });
 });
 
-test.describe('Legal notice and donations — signed in, self-hosted', () => {
-    test('LGM-E-03: the lane’s answer — the header’s donation link, the compact notice after the sidebar’s version, the legal card in Settings › About; and what a managed instance hides, here', async ({page}) => {
-        const instance = await serveInstanceConfig(page, {});
+/**
+ * LGM-E-03 on a self-hosted lane, signed in, the answer observed untouched: the header's donation link proves the
+ * configuration in, the stub's record that it is the lane's own; then the sidebar's line with the lane's own legal links,
+ * the legal card in Settings › About, and the contrast of LGM-E-04 on the same paths — what a managed instance hides is
+ * here on a self-hosted one.
+ */
+async function signedInOnSelfHostedLane(page: Page, instance: InstanceConfigStub, lane: LaneAnswer): Promise<void> {
+    const header = page.getByTestId('app-header');
+    await expect(header.getByTestId('header-donate-link'), 'self-hosted on the lane: the donation link in the header').toBeVisible({timeout: CONFIG_MS});
+    await expectServed(instance, {profile: lane.profile, legal: lane.legal}, 'the page read the lane’s own answer, as read first');
+
+    // The sidebar's footer: the compact notice after the version, with the lane's own legal links.
+    const sidebarNotice = await expectSidebarLegalLine(page);
+    await expectLaneLegalLinks(sidebarNotice, lane.legal);
+
+    // The contrast of LGM-E-04, on the same paths: what a managed instance hides is here on a self-hosted one.
+    const changelog = await openChangelog(page);
+    await expect(changelog.getByTestId('changelog-check-update'), 'self-hosted: the changelog offers the update check').toBeVisible();
+    await closeChangelog(changelog);
+    const help = await openHelpMenu(header);
+    await expect(help.getByTestId('help-donate-link'), 'self-hosted: the Help menu offers a coffee').toBeVisible();
+    await closeHelpMenu(header);
+
+    const about = await openAbout(page);
+    const legalCard = about.getByTestId('about-legal-card');
+    await expect(legalCard, 'Settings › About shows the legal card').toBeVisible();
+    await expect(legalCard.getByTestId('legal-notice'), 'holding the full legal notice').toBeVisible();
+    const support = about.getByTestId('about-support-card');
+    await expect(support.getByTestId('support-coffee'), 'self-hosted: the coffee in About’s support card').toBeVisible();
+    expect(SOCIAL_SHARE_ORDER.length, 'positive control: supportLinks.ts lists the sharing platforms').toBeGreaterThan(0);
+    for (const platform of SOCIAL_SHARE_ORDER) await expect(support.getByTestId(`support-share-${platform}`), `the sharing button for ${platform}`).toBeVisible();
+}
+
+/**
+ * LGM-E-03 on a managed lane, signed in, only `legal` stubbed — the profile passes through as the lane's own: no element
+ * is drawn by a managed answer alone, so the proof is LGM-E-04's, in a runtime marked first; then the sidebar's line in
+ * its place, and LGM-E-04's absences on the same paths, all in that one runtime.
+ */
+async function signedInOnManagedLane(page: Page, instance: InstanceConfigStub): Promise<void> {
+    // Marked before the proof: the proof and every absence below are read in one runtime, checked at the end.
+    await markRuntime(page);
+    await expectManagedAnswerInForce(page, instance, 'the lane’s own managed answer, its legal part stubbed');
+    await expectSidebarLegalLine(page);
+    await expectManagedAbsencesSignedIn(page);
+    await expectSameRuntime(page, 'the proof and every absence above were read in one app runtime: no page load in between');
+    expect(instance.problems, 'the stub answered every read as asked').toEqual([]);
+}
+
+test.describe('Legal notice and donations — signed in, on the lane’s profile', () => {
+    test('LGM-E-03: the lane’s answer — the notice after the sidebar’s version, About’s legal card; self-hosted: the header’s donation link and what a managed instance hides, here; managed (legal pages stubbed, the proof): no update check, no donation link, the sharing stays', async ({page}) => {
+        const lane = await readLaneAnswer(page);
+        // Self-hosted: the lane's answer observed untouched. Managed: `legal` alone stubbed, before the page loads — the
+        // profile passes through as the lane's own —, for the proof of LGM-E-04.
+        const instance = await serveInstanceConfig(page, lane.profile === 'selfhosted' ? {} : {legal: SPEC_LEGAL});
         try {
             await signIn(page);
-            const header = page.getByTestId('app-header');
-            await expect(header.getByTestId('header-donate-link'), 'self-hosted on the lane: the donation link in the header').toBeVisible({timeout: CONFIG_MS});
-            await expectServed(instance, {profile: 'selfhosted', legal: LANE_LEGAL}, 'precondition: the lane is self-hosted and sets no legal page (neither LIBREFOLIO_TOS_URL nor LIBREFOLIO_PRIVACY_URL)');
-
-            // The sidebar's footer: the compact notice after the version — a later sibling in its block, and below it.
-            const version = page.getByTestId('sidebar-version');
-            const line = page.locator('[data-testid="sidebar-version"] ~ [data-testid="sidebar-legal-links"]');
-            await expect(line, 'sidebar-legal-links, after sidebar-version in the footer').toBeVisible();
-            await expect.poll(() => gapBelow(version, line), {message: 'sidebar-legal-links starts below the bottom edge of sidebar-version', timeout: UI_MS}).toBeGreaterThanOrEqual(0);
-            await expect(line.getByTestId('legal-links'), 'holding the compact notice').toBeVisible();
-            await expect(line.getByTestId('legal-terms-link'), 'no legal page on the lane').toHaveCount(0);
-            await expect(line.getByTestId('legal-privacy-link')).toHaveCount(0);
-
-            // The contrast of LGM-E-04, on the same paths: what a managed instance hides is here on a self-hosted one.
-            const changelog = await openChangelog(page);
-            await expect(changelog.getByTestId('changelog-check-update'), 'self-hosted: the changelog offers the update check').toBeVisible();
-            await closeChangelog(changelog);
-            const help = await openHelpMenu(header);
-            await expect(help.getByTestId('help-donate-link'), 'self-hosted: the Help menu offers a coffee').toBeVisible();
-            await closeHelpMenu(header);
-
-            const about = await openAbout(page);
-            const legalCard = about.getByTestId('about-legal-card');
-            await expect(legalCard, 'Settings › About shows the legal card').toBeVisible();
-            await expect(legalCard.getByTestId('legal-notice'), 'holding the full legal notice').toBeVisible();
-            const support = about.getByTestId('about-support-card');
-            await expect(support.getByTestId('support-coffee'), 'self-hosted: the coffee in About’s support card').toBeVisible();
-            expect(SOCIAL_SHARE_ORDER.length, 'positive control: supportLinks.ts lists the sharing platforms').toBeGreaterThan(0);
-            for (const platform of SOCIAL_SHARE_ORDER) await expect(support.getByTestId(`support-share-${platform}`), `the sharing button for ${platform}`).toBeVisible();
+            if (lane.profile === 'selfhosted') await signedInOnSelfHostedLane(page, instance, lane);
+            else await signedInOnManagedLane(page, instance);
         } finally {
             await instance.dispose();
         }
@@ -272,54 +479,14 @@ test.describe('Legal notice and donations — signed in, self-hosted', () => {
 
 test.describe('Managed profile — signed in', () => {
     test('LGM-E-04: profile managed, with legal pages — once the sidebar links the stubbed terms page: no update check in the changelog, no donation link in the header, the Help menu or About’s support card (its sharing stays), none anywhere', async ({page}) => {
+        // On any lane: `profile` stubbed managed, beside the two legal pages of the proof.
         const instance = await serveInstanceConfig(page, {profile: 'managed', legal: SPEC_LEGAL});
         try {
             await signIn(page);
             // Marked before the proof: the proof and every absence below are read in one runtime, checked at the end.
             await markRuntime(page);
-
-            // The proof, before any absence: a link to the stubbed terms page comes from the stubbed answer alone, and the
-            // store takes an answer whole, its `profile` in the same step. The sidebar linking that page is the managed
-            // answer in force in this runtime.
-            const sidebarLegal = page.getByTestId('sidebar-legal-links');
-            const sidebarTerms = sidebarLegal.getByTestId('legal-terms-link');
-            await expect(sidebarTerms, 'the proof: the sidebar’s legal line links the terms page only the stubbed answer carries').toHaveAttribute('href', TERMS_URL, {timeout: CONFIG_MS});
-            await expect(sidebarTerms).toBeVisible();
-            await expect(sidebarLegal.getByTestId('legal-privacy-link'), 'and the privacy page the same answer carries').toHaveAttribute('href', PRIVACY_URL);
-            await expectServed(instance, {profile: 'managed', legal: SPEC_LEGAL}, 'the stub served a managed instance with the two legal pages');
-
-            // The changelog, its toolbar drawn: no update check.
-            const changelog = await openChangelog(page);
-            await expect(changelog.getByTestId('changelog-check-update'), 'managed: no update check in the changelog — the operator updates the instance').toHaveCount(0);
-            await closeChangelog(changelog);
-
-            // The header, drawn (its Help button, every profile): no donation link.
-            const header = page.getByTestId('app-header');
-            await expect(header.getByTestId('help-menu-button'), 'the header is drawn').toBeVisible();
-            await expect(header.getByTestId('header-donate-link'), 'managed: no donation link in the header').toHaveCount(0);
-            await expect(header.locator(DONATION_LINK), 'nor any link to the donation page in it').toHaveCount(0);
-
-            // The Help menu, open, its GitHub issues item there: no coffee.
-            const help = await openHelpMenu(header);
-            await expect(help.getByTestId('help-donate-link'), 'managed: no coffee in the Help menu').toHaveCount(0);
-            await expect(help.locator(DONATION_LINK), 'nor any link to the donation page in it').toHaveCount(0);
-            await closeHelpMenu(header);
-
-            // Settings › About, reached client-side: its legal notice links the stubbed pages — the same answer, on this
-            // page —; the sharing stays, the coffee goes.
-            const about = await openAbout(page);
-            const notice = about.getByTestId('about-legal-card').getByTestId('legal-notice');
-            await expect(notice, 'About’s legal notice, in every profile').toBeVisible();
-            await expect(notice.getByTestId('legal-terms-link'), 'linking the stubbed terms page: the same answer, on this page').toHaveAttribute('href', TERMS_URL);
-            await expect(notice.getByTestId('legal-privacy-link'), 'and the privacy page').toHaveAttribute('href', PRIVACY_URL);
-            const support = about.getByTestId('about-support-card');
-            await expect(support, 'About’s support card is drawn').toBeVisible();
-            expect(SOCIAL_SHARE_ORDER.length, 'positive control: supportLinks.ts lists the sharing platforms').toBeGreaterThan(0);
-            for (const platform of SOCIAL_SHARE_ORDER) await expect(support.getByTestId(`support-share-${platform}`), `managed: the sharing button for ${platform} stays`).toBeVisible();
-            await expect(support.getByTestId('support-coffee'), 'managed: no coffee in About’s support card').toHaveCount(0);
-            await expect(support.locator(DONATION_LINK), 'nor any link to the donation page in it').toHaveCount(0);
-            await expect(page.locator(DONATION_LINK), 'managed: no link to the donation page anywhere on the page').toHaveCount(0);
-
+            await expectManagedAnswerInForce(page, instance, 'the stub served a managed instance with the two legal pages');
+            await expectManagedAbsencesSignedIn(page);
             await expectSameRuntime(page, 'the proof and every absence above were read in one app runtime: no page load in between');
             expect(instance.problems, 'the stub answered every read as asked').toEqual([]);
         } finally {

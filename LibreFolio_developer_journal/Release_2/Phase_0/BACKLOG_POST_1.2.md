@@ -4378,6 +4378,11 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
 Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
 
+Contabilità del 19/10 (base `6578f1d75`): ogni riga confrontata con il codice e con i commit. Chiuse ora A-2, A-5 (la
+parte di A), A-6, A-7 (i punti di A), A-8, A-9, A-12, A-15, A-21 (con A-21a; il resto è la nuova A-21b) e A-39 (in
+inglese). Restano aperte, e ancora vere nel codice, A-17, A-18, A-19, A-28, A-29, A-30, A-36, A-37, A-38 e A-48; A-1,
+A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro di documentazione; A-57 è sospesa.
+
 - **A-1 · Un utente loggato vede più di «nomi broker e nomi utenti»** — medio, decisione (privacy; multi-utente e
   cloud); A (14/10).
   - Le email degli admin con `GET /users/search?admins=true`.
@@ -4385,7 +4390,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Elenco, anteprima e download di tutti i file caricati: `GET /uploads` e `/uploads/file/{id}`; solo la cancellazione
     controlla il proprietario.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), sezione «A1.8».
-- **A-2 · `GET /settings/global` si legge senza login** — basso; A (14/10). Espone tutte le impostazioni globali:
+- ✅ **A-2 · `GET /settings/global` si legge senza login** — basso; chiusa il 16/10 con A6d (`683b4ff5b`, ingresso
+  `19dd8a96d`): le impostazioni globali si leggono solo con il login, 401 senza sessione (GSET-001…003); A (14/10).
+  Esponeva tutte le impostazioni globali:
   scheduler, durata della sessione, registrazione. Dettagli: idem, §2 «Da sapere».
 - ✅ **A-3 · `reset_password` calcola bcrypt sul loop degli eventi** — basso; A (14/10); chiusa il 15/10 con A4
   (`3ac4114d5`: `await asyncio.to_thread(hash_password, new_password)`), registrata il 17/10 (X-R66).
@@ -4399,16 +4406,24 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Dopo A2 (15/10), 4 righe di prosa citano ancora le cartelle frontend spostate: `features/F-104.md:26`,
     `features/F-002.md:35`, `problems/copy-buttons-without-http-fallback.md:31`, `:33`. Le ultime due sono una tabella
     del corpo, non «Source files».
+  - 19/10 a `6578f1d75`: ancora 14 righe con i vecchi percorsi dei servizi, in 13 pagine (`features/F-001`, `F-002`,
+    `F-003`, `F-005`, `F-006`, `F-065`, `F-092`, `F-105`, quattro pagine di `problems/`,
+    `decisions/automatic-popups-wait-for-guides`), e le 4 righe delle cartelle frontend qui sopra. Lavoro dello
+    storico, con la tabella vecchio → nuovo di A10.
   - Dettagli: idem, §2 «Deriva della devWiki», «A1.4» e «A2.3».
-- **A-5 · Formato preesistente in file toccati da A1** — minimo; A (14/10).
+- ✅ **A-5 · Formato preesistente in file toccati da A1** — minimo; chiusa per la parte di A il 15/10 con A3
+  (`user_cli.py`); A (14/10).
   - black riformatterebbe 4 file, già così alla base: `scripts/user_cli.py`, `scripts/coverage_analysis.py`,
     `test_portfolio_api.py`, `test_portfolio_wac.py`.
   - ruff segnala W293 a `user_cli.py:208` e PLC0415 a `:271`.
   - ✅ **`user_cli.py` chiuso il 15/10** con A3, che ne tocca i comandi (L12): black, W293 e PLC0415, più il C901
     portato dal comando nuovo (ora una tabella). Restano gli altri tre file, fuori dal dominio di A.
+  - 19/10 a `6578f1d75`: `test_portfolio_wac.py` ora passa black; `scripts/coverage_analysis.py` e
+    `test_portfolio_api.py` no. Fuori dal dominio di A: segnalati al coordinatore.
   - Dettagli: idem, «A1.6» e «A3.3».
-- **A-6 · Una fonte sola per le regole della password** (richiama T-B4 della sezione «T (colori)») — basso; A
-  (15/10).
+- ✅ **A-6 · Una fonte sola per le regole della password** (richiama T-B4 della sezione «T (colori)») — basso; chiusa
+  il 16/10 con A6c (`4bbc6fbf6`, ingresso `3b3f6a1f0`): le regole stanno in `services/accounts/password_policy.py`,
+  l'API e la CLI le applicano, il frontend le legge (`features/auth/passwordRules.ts`); A (15/10).
   - Quattro copie delle stesse cinque regole: `ui/input/PasswordStrength.svelte`, `settings/PasswordChangeModal.svelte`,
     `auth/RegisterCard.svelte` e `validate_password` di `scripts/user_cli.py`.
   - L'API chiede solo 8 caratteri (`schemas/auth.py:31`, `:38`). Da decidere se applicare le stesse regole anche lì.
@@ -4419,7 +4434,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     endpoint le espone al frontend; la CLI usa la stessa funzione; l'indicatore di robustezza resta; le password già
     salvate restano valide. **Si fa nel lotto A6c**, dopo A6b e prima di A8: dettagli nel piano, «Decisione 37».
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A1.9».
-- **A-7 · Doc per sviluppatori non allineate al codice, trovate in A3** — minimo; A (15/10, `docs-writer`).
+- ✅ **A-7 · Doc per sviluppatori non allineate al codice, trovate in A3** — minimo; chiusa per i punti di A (15/10,
+  con A4b e A6b; la frase «via CLI or API» di `users_and_brokers.md` non c'è più); A (15/10, `docs-writer`).
   - `architecture/access_control.md:116-123`:
     - dice che `set_user_admin()` non controlla l'ultimo admin, ma da `2fb8b8502` l'ultimo admin attivo non si
       declassa né si disattiva;
@@ -4441,8 +4457,12 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     di tutti: segnalata al coordinatore.
   - Trovata in A4b (15/10): `architecture/users_and_brokers.md`, «👤 User Roles», dice che un admin gestisce gli
     utenti «via CLI or API». L'API non esiste ancora: la porta A5. Si verifica allora.
+  - 19/10 a `6578f1d75`, non di A e ancora veri: la prop `icon` di `PasswordInput` manca in `core-ui/atoms.md` (T);
+    `patterns/alembic.md` usa ancora `op.batch_alter_table('transaction')` senza l'avvertenza su
+    `foreign_keys=ON`. Di nuovo al coordinatore.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A3.5», «A4.5» e «A4b.4».
-- **A-8 · Richiama TC-6** della sezione «T (colori)»: alla prima visita con il browser in `it-IT`, il selettore della
+- ✅ **A-8 · Richiama TC-6** della sezione «T (colori)» (chiusa il 15/10 con A5b, `2b0715532`): alla prima visita con
+  il browser in `it-IT`, il selettore della
   lingua mostra l'inglese — basso; programma colori (15/10).
   - Probabile causa: `lib/stores/app/language.ts`, `init()`.
   - Si corregge in un lotto di A che tocca la pagina d'accesso o le preferenze, con il rosso visto prima (E2E con il
@@ -4452,7 +4472,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `data-language`. Rosso visto prima: `language.test.ts` (6 rossi su 7, poi 7 ✅). L'E2E `it-IT`/`fr-FR` in
     `auth.spec.ts` gira dopo la finestra.
   - Dettagli: idem, «A3.0».
-- **A-9 · Il runner non toglie le variabili degli account dall'ambiente della corsia** — basso; A (15/10, trovata da
+- ✅ **A-9 · Il runner non toglie le variabili degli account dall'ambiente della corsia** — basso; chiusa da H con
+  C-96 (`901fa33f6`, 15/10; registrata dal coordinatore il 16/10); A (15/10, trovata da
   `test-author` in A5).
   - `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` e `LIBREFOLIO_BILLING_URL`: se la shell
     che lancia il runner ne imposta una, il server della corsia la legge, e cambiano la registrazione o i link per
@@ -4467,6 +4488,13 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
 - **A-10 · Debito di traduzione delle pagine toccate da A5** — basso; A, 15/10.
   - 17/10, lotto A-11/A-16/A-40: in EN cambiano ancora `admin/cli_tools` (i punti 📏 e 🏁 su `user activate`) e
     `admin/configuration` («When the Instance Is Full»: `user activate` senza avviso per chi tiene già il posto).
+  - 17/10, lotti A8a–C-54, nessun timbro: `admin/configuration` («Failed Sign-ins» `#login-limit`, i controlli
+    d'avvio, la frase dell'avviso dell'admin iniziale, la riga di `LIBREFOLIO_PROBE_RATE_LIMIT`),
+    `admin/connection_checks` (`#client-address`), `admin/cli_tools` (la regola 3–50), `admin/index`,
+    `user/getting-started` (la nota del login, `#verify-email`), `user/settings/profile`, `user/settings/about` (la
+    sezione nuova di «What's new», ancora `#changelog-modal`), `user/installation` (un punto),
+    `community/contribute`. Ancore da tenere uguali in ogni lingua: `#login-limit`, `#client-address`,
+    `#changelog-modal`.
   - Le pagine EN di A5a e A5b sono nel lotto; IT, FR ed ES sono indietro su 6 pagine: `admin/configuration`,
     `admin/cli_tools`, `admin/settings`, `admin/service_exposure`, `community/faq`, `user/getting-started`.
   - Vanno tradotte insieme: si linkano con ancore esplicite nuove (`#accounts`, `#user-limit`, `#registration`,
@@ -4506,7 +4534,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Una riga di `user_settings` con un `theme` diverso da `light`, `dark` e `auto` farebbe rispondere 500 a
     `/auth/login` e a `/settings/user`.
   - Prima della correzione serve un rosso. È piccola: va in un lotto dopo A5.
-- **A-12 · `e2e/settings.spec.ts`: selettori ancora fragili nei test non toccati da A5b** — minimo; A (15/10,
+- ✅ **A-12 · `e2e/settings.spec.ts`: selettori ancora fragili nei test non toccati da A5b** — minimo; chiusa il 15/10
+  con A6b (`1577663c1`, ingresso `09ca36b9d`); A (15/10,
   `test-author` della riparazione).
   - I test dei numeri usano `.first()` su `.setting-row input[type="number"]`, i `title` tradotti «Save» e
     «Undo» e un XPath su una classe CSS.
@@ -4542,7 +4571,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - **Assegnata a W** dal coordinatore (15/10, 16:56), con la doc di `leave_broker`.
   - **Chiusa** (16/10, 01:38) dal lotto di doc di W (`bf66d4fe7`), entrato col treno 72 (`6fa3f8936`).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6.5».
-- **A-15 · La docstring di `instance_block.py` non cita la sonda dell'indirizzo** — minimo; trovata dal
+- ✅ **A-15 · La docstring di `instance_block.py` non cita la sonda dell'indirizzo** — minimo; chiusa il 17/10 da H
+  (`ef3f29f52`: la docstring cita `GET /auth/address-probe`); trovata dal
   `docs-writer` di A6a (15/10). Il file è di H.
   - La docstring elenca come esempi le rotte pubbliche fuori da `ALLOWED_WHEN_BLOCKED`. Da A6a ce n'è un'altra,
     `GET /auth/address-probe`, che con l'istanza bloccata risponde 401 come le altre.
@@ -4589,7 +4619,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     «A6d.1».
 - ✅ **A-20 · `black` fallisce su `scripts/test_runner/_backend_services.py`** — minimo; chiusa in A6d (15/10); da E tramite il coordinatore
   (15/10). Il `print_info` di `services_account_deletion_preview` (A6a, `5928176cf`) ha 305 caratteri: si spezza in A6d.
-- **A-21 · Lo username accetta qualsiasi testo, e finisce nel saluto delle email** — basso; dal coordinatore (15/10,
+- ✅ **A-21 · Lo username accetta qualsiasi testo, e finisce nel saluto delle email** — basso; chiusa il 17/10 con
+  A-21a (`5da71d037`, ingresso `6e2b2c8b7`): niente `@` nei nomi nuovi, nessuna email uguale a un nome, la ricerca
+  per indirizzo prima; il resto è A-21b, qui sotto. Dal coordinatore (15/10,
   dalla revisione di sicurezza di E3).
   - Oggi `username` ha solo una lunghezza (3–50): passano anche frasi intere, link e testo che imita un messaggio
     del sistema, e le email di E lo mettono nel saluto.
@@ -4605,6 +4637,12 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `get_user_by_username_or_email` prende il primo dei due, senza ordine: il login e la «password dimenticata» per email
     possono finire sull'account sbagliato, nota di E). Per gli username già salvati con `@` o con varianti di maiuscole,
     prima un'analisi, nessun cambio silenzioso. Lotto dopo P18.
+- **A-21b · Username unici senza distinzione di maiuscole, e un insieme di caratteri** — basso, decisione del
+  developer; da A-21 (coordinatore, 17/10, 07:01). L'unicità a prescindere dalle maiuscole (come gli indirizzi,
+  P18), i caratteri ammessi nei nomi nuovi, e una migrazione nuova (la 010 ora è di Z-32 (c)). La ricerca non va resa
+  indifferente alle maiuscole prima dell'unicità (punto b di E: ricreerebbe il DoS fra «Bob» e «bob»). Facoltativo,
+  per H: il conteggio delle collisioni storiche nei controlli di Sicurezza. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
+  «A-21 — Analisi».
 - ✅ **A-22 · I login falliti scrivono nel log l'identificativo digitato, anche un indirizzo email** — basso; chiusa in A-22
   (16/10); dal `test-author` di A7c (16/10).
   - `api/v1/auth.py` ~160–167: «Login failed: user not found», «…wrong password», «…user inactive» con
@@ -4748,9 +4786,12 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   dentro entrambi: togliere la classe e il suo uso in `api/v1/plugin_settings.py`, adattare `test_no_echo_route.py`,
   aggiornare `developer/architecture/patterns/plugin_settings.md` (riga sulla classe). Il test di
   `test_plugin_settings_api.py` resta: passa dal server vero. Dettagli: [piano
-  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Decisioni del coordinatore».
-- **A-39 · `admin/configuration`: l'avviso del link scaduto e quello del cambio d'indirizzo** — minimo (doc, con
-  traduzioni); dal `docs-writer` di A7b-2, tramite il coordinatore (17/10). La pagina dice che ogni avvio senza un link
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Decisioni del coordinatore». 19/10 a
+  `6578f1d75`: la usa anche `api/v1/backup/instance.py` (B), quindi toglierla tocca anche B.
+- ✅ **A-39 · `admin/configuration`: l'avviso del link scaduto e quello del cambio d'indirizzo** — minimo (doc, con
+  traduzioni); chiusa in inglese il 17/10 con A-50 (`6700a04b4`: «expired» quando il link è scaduto, «withdrawn
+  (cancelled, or its address changed)» quando è stato annullato o l'indirizzo è cambiato); le traduzioni non hanno
+  ancora la sezione dell'admin iniziale (A-10). Dal `docs-writer` di A7b-2, tramite il coordinatore (17/10). La pagina dice che ogni avvio senza un link
   vivo scrive l'avviso di scadenza; dopo A-33 l'avvio che applica un indirizzo nuovo scrive invece «The initial
   administrator's address changed: the setup link handed over before no longer works; …», e quelli dopo l'avviso di
   scadenza. Una frase, e la stessa nelle tre traduzioni. Dettagli: [piano
@@ -4773,6 +4814,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - In parte già coperto: `test_validation_errors_api.py` vuole il segnale assente da **tutta** la risposta sulle otto
     rotte con credenziali, ma solo per le forme d'errore che esercita. Cura: una regola in `security.md#validation-errors`
     («un validatore non mette il valore nel messaggio») e, se serve, un test che la imponga per ogni campo segreto.
+  - 19/10: `security.md#validation-errors` ora descrive il limite («What it does not remove (backlog A-38)»); mancano
+    la regola e il test.
 - ✅ **A-42 · Una gara fra un setup e un nuovo link di setup** — basso; chiusa il 17/10 in A-42/A-43 (commit del
   coordinatore); dalla revisione di E di A7b-2 («R13-SEC4»). Cura: `issue_setup_link` e il riarmo revocano prima (un solo
   UPDATE, che prende il lock) e rileggono «in attesa» sotto il lock; `complete_admin_setup` rifiuta (`TOKEN_INVALID`)
@@ -4868,14 +4911,24 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   `update_user_status`, `create_invite` conta prima di ogni scrittura: due operazioni concorrenti a limite − 1 lo
   superano di uno. La registrazione è già sicura: riconta dopo la sua scrittura, sotto il lock. Cura: contare dopo
   `begin_writes`.
-- **A-57 · `legal-and-managed.spec.ts`: LGM-E-01 e LGM-E-03 devono leggere il profilo della corsia** — basso, solo test;
+- ✅ **A-57 · `legal-and-managed.spec.ts`: LGM-E-01 e LGM-E-03 devono leggere il profilo della corsia** — basso, solo test;
+  chiusa il 19/10 (commit del coordinatore): i due test leggono prima la risposta della corsia e verificano la sua
+  variante; verde su una corsia self-hosted e su una gestita (5/5 e 5/5). Il ritorno in `CLOUD_SMOKE_SPECS` è di H;
   in 1.3, prima della fase 2 di H-43 (il cancello RC di H); dal coordinatore (17/10, da H-43, dev `a6adb0066`, la corsia
   di prova gestita). I due casi danno per scontata la variante self-hosted: su una corsia gestita falliscono per
   costruzione. Cura: leggere `GET /api/v1/system/instance` della corsia e verificare la variante corrispondente; poi H
   rimette la spec in `CLOUD_SMOKE_SPECS`. Dopo il lotto in corso.
+  - Sospesa dal developer il 19/10 mattina, poi il suo «ok» (11:42). Analisi e prova 1 il 17/10 (su una corsia
+    gestita LGM-E-01/03 rossi, gli altri verdi); spec riscritta e verde il 19/10, insieme alla frase sulle pre-release
+    in `developer/frontend/onboarding.md` (nota 2 di E su C-54). Dettagli: [piano
+    02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-57» e «A57.1»–«A57.4».
 - **A-58 · Con `connect-src 'self'` imposto, la verifica dell'indirizzo di un link verso un'altra origine è bloccata** —
   basso, UX; dopo la 1.3, la metà UX di H-53; dal coordinatore (17/10). Il dialogo d'invito della scheda Utenti
   (`LinkShare` → `checkAddress()`) oggi dice «non verificabile»: decidere cosa vede l'admin. Decisione aperta.
+  - Dal coordinatore (17/10, 21:35): H prepara `LIBREFOLIO_CSP_ENFORCE` (spento di default; `connect-src` solo
+    `'self'` e l'origine di `LIBREFOLIO_PUBLIC_URL`). Quando H manda la politica esatta, A rivede anche le attese di
+    AUSR-E-07 (`e2e/settings/admin-users.spec.ts`), che prova apposta altre origini http, su una corsia che la
+    applica.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
