@@ -381,8 +381,8 @@ class User(SQLModel, table=True):
     __table_args__ = {"sqlite_autoincrement": True}  # ids leave the backend: never reuse one (plan 34)
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    username: str = Field(unique=True, index=True, nullable=False, min_length=3, max_length=50)
-    email: str = Field(unique=True, index=True, nullable=False)
+    username: str = Field(unique=True, nullable=False, min_length=3, max_length=50)
+    email: str = Field(unique=True, nullable=False)
     hashed_password: str = Field(nullable=False)
     is_active: bool = Field(default=True)
     is_superuser: bool = Field(default=False)
@@ -406,7 +406,7 @@ class User(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
-# Email addresses are unique regardless of case (P18, migration 009). SQLite's lower() folds A–Z only, so letters outside
+# Email addresses are unique regardless of case (P18, migration 005, step 6). SQLite's lower() folds A–Z only, so letters outside
 # ASCII compare as written; user_service.email_fold() is the same rule in Python.
 Index("ux_users_email_lower", func.lower(User.__table__.c.email), unique=True)  # type: ignore[attr-defined]
 
@@ -661,7 +661,7 @@ class Broker(SQLModel, table=True):
     __table_args__ = {"sqlite_autoincrement": True}  # ids leave the backend: never reuse one (plan 34)
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    name: str = Field(unique=True, index=True, nullable=False)
+    name: str = Field(unique=True, nullable=False)
     description: Optional[str] = Field(default=None, sa_column=Column(Text))
     portal_url: Optional[str] = Field(default=None)
     icon_url: Optional[str] = Field(default=None, description="Custom icon URL for the broker")
@@ -706,7 +706,7 @@ class BrokerUserAccess(SQLModel, table=True):
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
+    user_id: int = Field(foreign_key="users.id", nullable=False)
     broker_id: int = Field(foreign_key="brokers.id", nullable=False, index=True)
     role: UserRole = Field(default=UserRole.VIEWER)
     share_percentage: Decimal = Field(
@@ -873,15 +873,15 @@ class Transaction(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    broker_id: int = Field(foreign_key="brokers.id", nullable=False, index=True)
+    broker_id: int = Field(foreign_key="brokers.id", nullable=False)
     asset_id: Optional[int] = Field(
         default=None,
-        sa_column=Column(Integer, ForeignKey("assets.id"), nullable=True, index=True),
+        sa_column=Column(Integer, ForeignKey("assets.id"), nullable=True),
         description="Asset ID, NULL for pure cash transactions",
     )
 
     type: TransactionType = Field(nullable=False)
-    date: date_type = Field(nullable=False, index=True, description="Settlement date")
+    date: date_type = Field(nullable=False, description="Settlement date")
 
     # Signed values: + in, - out. Default 0, NOT NULL for SUM calculations
     quantity: Decimal = Field(
@@ -995,10 +995,7 @@ class PriceHistory(SQLModel, table=True):
     """
 
     __tablename__ = "price_history"
-    __table_args__ = (
-        UniqueConstraint("asset_id", "date", name="uq_price_history_asset_date"),
-        Index("idx_price_history_asset_date", "asset_id", "date"),
-    )
+    __table_args__ = (UniqueConstraint("asset_id", "date", name="uq_price_history_asset_date"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -1144,14 +1141,13 @@ class FxConversionRoute(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("base", "quote", "priority", name="uq_route_base_quote_priority"),
         CheckConstraint("base < quote", name="ck_route_base_less_than_quote"),
-        Index("idx_route_base_quote", "base", "quote"),
         {"sqlite_autoincrement": True},  # ids leave the backend: never reuse one (plan 34)
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    base: str = Field(nullable=False, min_length=3, max_length=3, index=True)
-    quote: str = Field(nullable=False, min_length=3, max_length=3, index=True)
+    base: str = Field(nullable=False, min_length=3, max_length=3)
+    quote: str = Field(nullable=False, min_length=3, max_length=3)
 
     priority: int = Field(default=1, ge=1, description="Priority level (1=primary, 2=fallback, etc.)")
 
@@ -1226,10 +1222,7 @@ class AssetProviderAssignment(SQLModel, table=True):
     """
 
     __tablename__ = "asset_provider_assignments"
-    __table_args__ = (
-        UniqueConstraint("asset_id", name="uq_asset_provider_asset_id"),
-        Index("idx_asset_provider_asset_id", "asset_id"),
-    )
+    __table_args__ = (UniqueConstraint("asset_id", name="uq_asset_provider_asset_id"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -1256,16 +1249,6 @@ class AssetProviderAssignment(SQLModel, table=True):
         description="JSON configuration for provider (validated by plugin)",
     )
     last_fetch_at: Optional[datetime] = Field(default=None, description="Last fetch attempt timestamp (NULL = never fetched)")
-    reported_currency: Optional[str] = Field(
-        default=None,
-        max_length=8,
-        description="Quote currency the provider reported at its last history fetch, as reported (Yahoo's GBp: pence); NULL until then (Z-32)",
-    )
-    exchange_timezone: Optional[str] = Field(
-        default=None,
-        max_length=64,
-        description="The exchange's IANA timezone the provider dates its rows in, learnt at a fetch; 'legacy-utc' marks an assignment whose rows an older version dated by UTC, checked once at its next fetch (Z-33)",
-    )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

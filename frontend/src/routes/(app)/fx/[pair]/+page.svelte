@@ -17,7 +17,8 @@
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
-    import {zodiosApi} from '$lib/api';
+    import {axiosInstance, zodiosApi} from '$lib/api';
+    import {parseFxConvertWithSignalIsolation, type FxConvertAnswer} from '$lib/components/fx/fxDetailConvertQuery';
     import {goBack} from '$lib/stores/app/navigationStore';
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
@@ -565,6 +566,14 @@
         return value.map((item) => backendSignalSchemas.result.parse(item));
     }
 
+    type FxConvertBulkBody = Parameters<typeof zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post>[0];
+
+    /** X-R16: the conversion read with signal isolation, as on the asset page, so an invalid signal result keeps the rates. */
+    async function convertBulkWithSignalIsolation(body: FxConvertBulkBody): Promise<FxConvertAnswer> {
+        const response = await axiosInstance.post<unknown>('/api/v1/fx/currencies/convert', body);
+        return parseFxConvertWithSignalIsolation(response.data);
+    }
+
     function applyBackendSignalResults(configs: SignalConfig[], requestVersion: number, results: BackendSignalResult[]) {
         const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
         const mapped = mapSignalInstanceResults(configs, plan, results);
@@ -836,7 +845,7 @@
         // Keep gap requests canonical; only signal requests follow the displayed orientation.
         const ranges = withSignals ? [{start, end}] : gaps;
         try {
-            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(
+            const response = await convertBulkWithSignalIsolation(
                 ranges.map((range) => ({
                     from_amount: {code: withSignals ? base : canonicalBase, amount: '1'},
                     to: withSignals ? quote : canonicalQuote,
@@ -853,7 +862,16 @@
             chartData = store.getRange(start, end).data;
 
             const signalGroup = withSignals ? response.signal_results?.find((group) => group.request_index === 0) : undefined;
-            applyBackendSignalResults(requestedSignalConfigs, requestVersion, parseBackendSignalResults(signalGroup?.signals));
+            // X-R16: an invalid signal result fails the signals only, as a failed request does: nothing applied, the banner
+            // says so. The rates are already in the cache (the answer is read with signal isolation), and «All» resolves below.
+            let signalResults: BackendSignalResult[] | null = null;
+            try {
+                signalResults = parseBackendSignalResults(signalGroup?.signals);
+            } catch (signalError) {
+                console.error('Invalid FX signal results:', signalError);
+                signalRequestFailed = withSignals;
+            }
+            if (signalResults !== null) applyBackendSignalResults(requestedSignalConfigs, requestVersion, signalResults);
             if (chartData.length === 0 && !error) {
                 error = '_i18n:fxDetail.noData';
             }

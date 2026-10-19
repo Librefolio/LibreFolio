@@ -240,8 +240,8 @@ This ensures resilience to individual provider outages and supports currency pai
   `INSERT … ON CONFLICT (date, base, quote) DO UPDATE`, which replaces `rate`, `source` and
   `fetched_at`. A synced date overwrites whatever was stored, including a rate entered by hand
   through `POST /api/v1/fx/currencies/rate` (`upsert_rates_bulk()`, the same upsert). Dates outside
-  the requested range are not written, nor is a date before 1900-01-01, whatever the start, `"min"`
-  included (`_is_date_within_sync_range()`, X-R65; see
+  the requested range are not written; a date before 1900-01-01 inside it is, whatever the start,
+  `"min"` included (`_is_date_within_sync_range()`, no floor since N83's revision; see
   [Normalization and Storage](architecture.md#stored-rate-dates)).
 - **What the column keeps.** `fx_rates.rate` is `Numeric(24, 10)`: 10 decimal places and 14 digits
   before the decimal point (`max_integer_digits()`, precision − scale). `storable_fx_rate()`
@@ -290,9 +290,10 @@ This ensures resilience to individual provider outages and supports currency pai
 - **The manual-rate endpoint.** `POST /api/v1/fx/currencies/rate` (`upsert_rates_endpoint()`,
   `backend/app/api/v1/fx/currencies.py`) handles its items one by one: a refused item is left out
   while the others are stored (200), and the answer names it (next bullet). Before
-  handling any of them, it checks every `date`: one outside `stored_date_bounds()` (1900-01-01 to
-  tomorrow) refuses the whole request with a 422 `date_out_of_range`, nothing written, not even
-  the valid items (X-R65, [Normalization and Storage](architecture.md#stored-rate-dates)). Its own
+  handling any of them, it checks every `date`: one after `latest_stored_date()` (tomorrow)
+  refuses the whole request with a 422 `date_out_of_range`, nothing written, not even the valid
+  items (X-R65, N83; [Normalization and Storage](architecture.md#stored-rate-dates)); an earlier
+  date, before 1900 included, passes. Its own
   inversion runs inside the item's `try` (`normalize_storable_rate()`), so an inverse that
   overflows is that item's error, never a 500, and one that underflows to 0 is refused naming the
   limits, like any rate the column cannot keep (X-R50; before, the item's error was *Rate must be

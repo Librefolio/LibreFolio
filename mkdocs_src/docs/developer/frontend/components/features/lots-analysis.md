@@ -196,6 +196,26 @@ also renders a **net breakdown** block: gross total P&L → `− fees` → `− 
 breakdown is shown today; the cost provenance (pool / rule / source transactions) is available in the DTO but
 not yet surfaced here.
 
+### Transfers across the scope's edge {: #scope-edge-transfers }
+
+A transfer leg whose partner sits at a broker outside the analysis scope arrives as an `ADJUSTMENT_IN` or
+`ADJUSTMENT_OUT` row with `scope_boundary` set to `IN` or `OUT`
+([Transfers Across the Scope's Edge](../../../backend/transactions/lots_analysis_service.md#scope-edge-transfers)).
+Two helpers of `lotChartShared.ts` read it (J-48): `scopeBoundaryOf(event)` returns `IN`, `OUT` or `null`, unwrapping
+the generated client's scalar-or-array shape, and `eventLabelKind(event)` returns `TRANSFER_IN` or `TRANSFER_OUT` for
+such a row, the event's own `kind` otherwise. The three views use them for the label and the marker category only:
+
+- `LotCustodyModal` labels the History row with `brokers.lots.modal.event.TRANSFER_IN` / `TRANSFER_OUT` («TRANSFER+» /
+  «TRANSFER-»), and `eventMarkerKind()` (`lotCustodyModalHelpers.ts`) gives it the `transfer` marker;
+- `LotGanttChart` draws it as a ◆ `TRANSFER` marker (`eventMarkerKind(kind, boundary)`, `lotGanttChartHelpers.ts`),
+  whose label `eventMarkerLabelKey()` takes from `brokers.lots.chartMarkers.eventType.TRANSFER_IN` / `TRANSFER_OUT`
+  («Transfer In» / «Transfer Out»);
+- `LotWacPriceChart` puts it in the transfer marker series (`eventCategory(kind, boundary)`,
+  `lotWacPriceChartHelpers.ts`); its tooltip header reads the transfer label, without the «Adjustment type» row.
+
+The economics stay on `kind`: `applyLotEvent()`, the modal's detail chips and every quantity and price branch read it
+as before. No view names the partner broker.
+
 ### Quantities and prices
 
 - **Quantities.** Every lot quantity on screen is written with `LOT_QUANTITY_FRACTION_DIGITS` (`lotChartShared.ts`),

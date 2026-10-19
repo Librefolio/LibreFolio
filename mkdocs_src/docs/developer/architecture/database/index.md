@@ -158,8 +158,8 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
   as the [balance queries](../../backend/transactions/service.md#balance-queries) do.
 - **Older databases.** `001_initial` declares `NUMERIC(22, 10)` and `NUMERIC(24, 12)`; a
   database created before keeps `NUMERIC(18, 6)`, on purpose: SQLite ignores the
-  declaration, so both read the same. The release 1.3 migration's docstring gives the
-  reasoning.
+  declaration, so both read the same. The release 1.3 migration's docstring
+  (`005_release_1_3_0_schema.py`, «Not a step») gives the reasoning.
 
 ## 🧬 Migrations {: #migrations }
 
@@ -176,17 +176,11 @@ The chain is linear:
 
 | File | Revision id | Revises | Change |
 |------|-------------|---------|--------|
-| `001_initial.py` | `001_initial` | — | Squashed baseline: the 12 original tables with their indexes and constraints |
+| `001_initial.py` | `001_initial` | — | Squashed baseline: the 12 original tables with their indexes and constraints. `005_release_1_3_0_schema` drops 13 of these indexes; the file stays as released |
 | `002_identifier_other_json_list.py` | `002_identifier_other_json_list` | `001_initial` | Data only: `assets.identifier_other` becomes a JSON list |
 | `003_scheduler_timezone.py` | `5b1333fa6b07` | `002_identifier_other_json_list` | Data only: the stored scheduler sync times move from UTC to `scheduler_timezone` wall-clock time |
 | `004_release_1_2_0_schema.py` | `004_release_1_2_0_schema` | `5b1333fa6b07` | `assets.is_benchmark` and the two onboarding progress tables |
-| `005_accounts_invites.py` | `005_accounts_invites` | `004_release_1_2_0_schema` | `users.session_version`, `users.email_verified_at` and `users.last_seen_version`, and the [`account_tokens`](users_access.md#account-token) table of single-use account links |
-| `006_registration_mode.py` | `006_registration_mode` | `005_accounts_invites` | Data only: the global setting `enable_registration` becomes [`registration_mode`](users_access.md#global-setting) — `open` when the old value read as true (`true`, `1`, `yes`, `on`, any case), `disabled` otherwise; the downgrade writes `true` for `open`, `false` for `invite` and `disabled` |
-| `007_plugin_settings.py` | `007_plugin_settings` | `006_registration_mode` | The [`plugin_system_settings`](users_access.md#plugin-system-setting) and [`plugin_user_settings`](users_access.md#plugin-user-setting) tables of the plugin settings, created empty; the downgrade drops them, with their values and secrets |
-| `008_registration_invite_default.py` | `008_registration_invite_default` | `007_plugin_settings` | Data only: where [`registration_mode`](users_access.md#global-setting) is missing and `users` holds at least one account, the row is written `open`, the earlier default, so an upgraded install keeps its registration while a new one seeds the new default, `invite`; an existing row is never touched, a database without accounts gets nothing, and the downgrade does nothing |
-| `009_email_unique_ignoring_case.py` | `009_email_unique_ignoring_case` | `008_registration_invite_default` | The unique index `ux_users_email_lower` on `lower(email)`: an [email address](users_access.md#user) belongs to one account whatever its A–Z case (letters outside ASCII compare as written). If two accounts already share an address apart from case, this revision stops before writing anything, naming them by id and username, never by address, with the remedy `./dev.py user set-email`; no account is changed or merged, the revisions before it stay applied (on SQLite Alembic commits each one on its own), and the next start resumes here. The downgrade drops the index |
-| `010_provider_reported_currency.py` | `010_provider_reported_currency` | `009_email_unique_ignoring_case` | [`asset_provider_assignments.reported_currency`](assets_pricing.md#asset-provider-assignment) (`VARCHAR(8)`, nullable), the quote currency a provider reports, as it reports it (Yahoo's `GBp`), NULL on every row: each asset's is learnt at its next history fetch. The downgrade drops it. Both use plain `ALTER TABLE` (`ADD COLUMN`; `DROP COLUMN`, SQLite 3.35+), never a batch: a batch rebuilds the table, and with `foreign_keys=ON` dropping the original would fire the `ON DELETE CASCADE` of `asset_events.provider_assignment_id` |
-| `011_provider_exchange_timezone.py` | `011_provider_exchange_timezone` | `010_provider_reported_currency` | [`asset_provider_assignments.exchange_timezone`](assets_pricing.md#asset-provider-assignment) (`VARCHAR(64)`, nullable), the IANA timezone of the exchange a provider dates an asset's rows in, learnt at a refresh. The upgrade writes the mark `'legacy-utc'` on every `yfinance` assignment still NULL: releases up to 1.2.1 dated Yahoo's rows by UTC, a day early for an exchange east of UTC, and the next refresh of each marked assignment re-dates them once ([The Exchange's Timezone](../../backend/assets/architecture.md#exchange-timezone)). Every other row stays NULL. The restore of an older backup upgrades its copy through this revision too, marks included. The downgrade drops the column, marks and timezones with it: a database taken below 011 after its rows were re-dated, then upgraded again, is marked again and its next refresh would move prices already on their day, so do not downgrade past 011 once the server has synced. Both use plain `ALTER TABLE`, for 010's reason: a batch would rebuild the table, and with `foreign_keys=ON` dropping the original would fire the `ON DELETE CASCADE` of `asset_events.provider_assignment_id`. Each step checks before it acts (the mark goes only on a NULL), so a run that stopped half way can run again |
+| `005_release_1_3_0_schema.py` | `005_release_1_3_0_schema` | `004_release_1_2_0_schema` | The whole of release 1.3, in seven steps that each check before they act, so a run that stopped half way can run again: (1) three [`users`](users_access.md#user) columns, `session_version`, `email_verified_at` and `last_seen_version`, with plain `ALTER TABLE ADD COLUMN`, never a batch; (2) the [`account_tokens`](users_access.md#account-token) table of single-use account links, with its two indexes; (3) data only: the global setting `enable_registration` becomes [`registration_mode`](users_access.md#global-setting), `open` when the old value read as true (`true`, `1`, `yes`, `on`, any case), `disabled` otherwise; (4) the [`plugin_system_settings`](users_access.md#plugin-system-setting) and [`plugin_user_settings`](users_access.md#plugin-user-setting) tables, created empty; (5) data only: where `registration_mode` is missing and `users` holds an account, `open` is written, the earlier default (decision 36); (6) the unique index `ux_users_email_lower` on `lower(email)`, so that an [email address](users_access.md#user) belongs to one account whatever its A–Z case, after a check that stops the upgrade when two accounts already share one; (7) 13 indexes of `001_initial` that no query needs, dropped with `DROP INDEX IF EXISTS` ([Indexes: Only the Ones a Query Uses](../patterns/alembic.md#indexes)). The downgrade goes back step by step: the 13 indexes again with their `001` definitions, and `enable_registration` again (`true` for `open`, `false` for `invite` and `disabled`); the tokens, the plugin settings and the values of the new columns are lost |
 
 !!! warning "The revision id is the contract, not the filename"
 
@@ -196,6 +190,23 @@ The chain is linear:
     changing it would orphan them. Chain a new migration from the head's revision id
     (`down_revision`), never from a filename, and keep the graph linear — two revisions with the same
     `down_revision` create two heads, and `alembic upgrade head` refuses to choose between them.
+
+!!! warning "Retired revision ids"
+
+    Release 1.3 ships one migration, as release 1.2 ships `004`
+    ([One Migration per Release](../patterns/alembic.md#one-migration-per-release)). The revisions written
+    during the 1.3 cycle were in no released tag, and are gone: `005_accounts_invites`,
+    `006_registration_mode`, `007_plugin_settings`, `008_registration_invite_default`,
+    `009_email_unique_ignoring_case`, `010_provider_reported_currency` and
+    `011_provider_exchange_timezone`. The first five are steps 1 to 6 of `005_release_1_3_0_schema`;
+    `010` is not kept (`asset_provider_assignments` has no `reported_currency` column), and `011` had
+    been removed before. A database stamped with one of these ids comes from an unreleased build, and
+    no code handles it: the server does not start on it (`alembic upgrade head` cannot locate the
+    revision, the `database` step logs *Failed to apply database migrations* and exits), and a backup
+    archive at one is refused as from a newer LibreFolio
+    ([Restoring a Backup](../security.md#backup-restore)). A developer brings such a database forward
+    by hand, with the `sqlite3` procedure of the developer journal (the plan of workstream H, section
+    «Procedura manuale»).
 
 ### 🩹 Post-migration fixes {: #post-migration-fixes }
 

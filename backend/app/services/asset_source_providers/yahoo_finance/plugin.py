@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
@@ -55,7 +56,6 @@ from backend.app.services.assets.base import AssetHistoryStartDate, AssetRateLim
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
-from backend.app.utils.exchange_dates import exchange_zone
 
 logger = get_logger(__name__)
 
@@ -142,8 +142,32 @@ class _YahooHistoryAcquisition:
     currency: str
     dividends: object | None
     splits: object | None
-    #: The exchange's IANA timezone, the one yfinance stamped the dates in (Z-33); None when unknown
-    exchange_timezone: str | None = None
+
+
+#: The unknown Area/Location names ``_exchange_zone`` already logged, once per name and process
+_UNKNOWN_ZONES_LOGGED: set[str] = set()
+
+
+def _exchange_zone(name: str | None) -> ZoneInfo | None:
+    """Yahoo's ``exchangeTimezoneName`` as a ``ZoneInfo``, or None when it is empty or names no known zone.
+
+    An Area/Location name (``Europe/Rome``) the server's timezone database does not know is logged once per name and
+    process: on a host without one (Windows without the ``tzdata`` package, a minimal container) the current value is
+    then dated in UTC, the day before for a session that crosses UTC midnight (backlog Z-36). A fixed offset or another
+    name without an area is not logged.
+    """
+    if not name or not name.strip():
+        return None
+    key = name.strip()
+    try:
+        return ZoneInfo(key)
+    except ZoneInfoNotFoundError:
+        if "/" in key and key not in _UNKNOWN_ZONES_LOGGED:
+            _UNKNOWN_ZONES_LOGGED.add(key)
+            logger.warning("Exchange timezone unknown to this server's timezone database: the current value is dated in UTC", timezone=key[:64])
+        return None
+    except ValueError:
+        return None
 
 
 def _normalize_yahoo_date(index_value) -> date:
@@ -186,21 +210,15 @@ def _acquire_history_data(
         )
 
     currency = "USD"
-    reported_timezone: str | None = None
     try:
         info = ticker.info
         if info:
             currency = info.get("currency", "USD") or "USD"
-            reported_timezone = info.get("exchangeTimezoneName") or None
     except Exception:
         logger.exception(
             "Failed to fetch yfinance currency metadata; falling back to USD",
             identifier=identifier,
         )
-    # Z-33: the exchange's timezone, the one the dates were stamped in: the index's own when it names a known zone (a
-    # fixed offset names none), else Yahoo's metadata
-    index_timezone = getattr(getattr(history, "index", None), "tz", None)
-    zone = (exchange_zone(str(index_timezone)) if index_timezone is not None else None) or exchange_zone(reported_timezone)
 
     try:
         dividends = ticker.dividends
@@ -219,7 +237,6 @@ def _acquire_history_data(
         currency=currency,
         dividends=dividends,
         splits=splits,
-        exchange_timezone=zone.key if zone is not None else None,
     )
 
 
@@ -501,7 +518,7 @@ class YahooFinanceProvider(AssetSourceProvider):
 
             # Date from regularMarketTime (Unix timestamp), in the exchange's timezone (Z-33: a session that crosses UTC
             # midnight, Sydney's or Auckland's, belongs to its local day; UTC when the timezone is unknown), or today
-            zone = exchange_zone(info.get("exchangeTimezoneName"))
+            zone = _exchange_zone(info.get("exchangeTimezoneName"))
             rmt = info.get("regularMarketTime")
             if rmt:
                 as_of_date = _dt.fromtimestamp(rmt, tz=zone or UTC).date()
@@ -513,7 +530,6 @@ class YahooFinanceProvider(AssetSourceProvider):
                 currency=currency,
                 as_of_date=as_of_date,
                 source=self.provider_name,
-                exchange_timezone=zone.key if zone is not None else None,
             )
             logger.debug(f"current_value for {identifier}: {price} {currency}")
             return result
@@ -616,7 +632,6 @@ class YahooFinanceProvider(AssetSourceProvider):
                 events=events,
                 currency=acquisition.currency,
                 source=self.provider_name,
-                exchange_timezone=acquisition.exchange_timezone,
             )
 
         except AssetSourceError:
