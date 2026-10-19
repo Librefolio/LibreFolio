@@ -158,6 +158,11 @@ export async function openTransactions(page: Page): Promise<void> {
     await expect(page.getByTestId('tx-table')).toBeVisible({timeout: 20_000});
 }
 
+/** The root of the transactions page: it sets the text colour its children inherit, through whichever utility or rule its code uses today, whatever the data. */
+export function transactionsPageRoot(page: Page): Locator {
+    return page.getByTestId('transactions-page');
+}
+
 /** The subtitle under the transactions page's title: a `<p>` coloured by a Tailwind text utility, whatever the data. */
 export function transactionsSubtitle(page: Page): Locator {
     return page.getByTestId('transactions-page-overview-guide-target').locator('p');

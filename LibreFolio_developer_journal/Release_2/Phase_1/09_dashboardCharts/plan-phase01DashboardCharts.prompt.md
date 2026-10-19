@@ -6336,4 +6336,120 @@ Voce di gate I, via del coordinatore; review di X. Base `ab74aafbf`.
 2. ✅ 17/10 — **E2E** (slot 20:02–20:08, `files/scripts/y34_e2e.sh`): `front-broker detail` **40/40**, `front-asset
    asset-detail` filtrato su «direction» **5/5** (i 4 flash e un test veloce). Porta 6189 libera. Il coordinatore approva i 60 s
    sul describe `Asset Detail Page` e il residuo di `dashboard-cache.spec.ts:295` nella riga di Y-34.
-3. ⏳ CHECKPOINT READY (solo test e giornale, nessuna riga del CHANGELOG); review di X.
+3. ✅ 17/10 — CHECKPOINT READY (solo test e giornale, nessuna riga del CHANGELOG). Entrata in dev `7dbd46aa6` (`69b2fe74e` +
+   `2abcb35d9`); X rivede a posteriori il parametro `assetId` di `expectLotsPanelOpen`.
+
+## Y-30 · Con `FAILED` il grafico prezzo/WAC ritrova la linea del prezzo (17/10)
+
+Voce del mio settore, nata «per J»: il coordinatore (20:11) la passa a Y, backend compreso, perché J è occupato e
+`lots_analysis_service.py` e gli schemi dei lotti non sono aperti altrove; J rivede la parte backend. Base `7dbd46aa6`.
+Analisi inviata alle 20:2x; via del coordinatore alle 20:3x.
+
+**Decisioni** (coordinatore, 20:3x).
+- **(a) sempre** (la mia raccomandazione): il pannello prende la linea del prezzo, le date dell'asse e le bolle dalla serie
+  nuova, e non chiede più `PRICE_HISTORY`. Una fonte sola; la linea continua anche dove non c'è un lotto aperto, come le
+  linee del costo medio. Il coordinatore la registra come decisione notturna **N89**, per il developer.
+- **(b) nomi**: `MARKET_PRICE_HISTORY` / `market_price_history`; `_AVERAGE_COST_ANALYSES` → `_REPLAY_FREE_ANALYSES`.
+- **Il test dei codici di J** (S7 di `test_lots_failed_analysis_withholding.py`) si estende al buco di cambio della serie
+  con `FAILED`; J rivede la parte backend.
+- **`data-price-line="drawn|absent"`** sul grafico: sì, letto nel passo 2 di J12-1.
+- **CHANGELOG**: la riga 🔄 di J-12 («keeps only the average-cost lines») la corregge il coordinatore all'ingresso; la mia
+  riga 🐛 va nel checkpoint. `api sync` va bene (additivo); `schemas/portfolio.py` cambia solo per aggiunta.
+
+**Il contratto backend.**
+- `LotAnalysisType.MARKET_PRICE_HISTORY`; `MarketPriceHistoryPoint` (`date`, `market_price`, `currency`, `estimated`), come
+  `LotPriceHistoryPoint` senza `lot_id`; `LotsAnalysisResponse.market_price_history`, `None` se non chiesta.
+- Un punto per ogni giorno dell'intervallo calcolato che ha un prezzo convertibile (`estimated_market_prices`: la
+  quotazione o l'ultimo scambio, portati avanti, convertiti al cambio del giorno), qualunque lotto sia aperto e qualunque
+  sia `selected_lot_ids`; tagliato a `[display_from, actual_to]` come le altre storie. Un giorno senza osservazione o
+  senza cambio non ha punto; il cambio mancante va in `missing_fx_pairs` e nel suo avviso (DEGRADED se il replay è
+  COMPLETE).
+- Con `FAILED` resta (sta in `_REPLAY_FREE_ANALYSES`), con i suoi buchi di cambio nel data quality.
+  `CURRENT_PRICE_ASSUMED_AT_COST` invece no: la serie non valuta nulla al costo, e l'avviso resta legato alle analisi che
+  valutano i lotti (`needs_market_series`, invariata). Le esigenze di cambio della serie si registrano in
+  `collect_fx_needs` anche quando la chiede da sola.
+- `PRICE_HISTORY` per lotto resta nell'API: dopo Y-30 nessun lettore nell'app.
+- AI Export: chiede solo `LOT_SUMMARY` (`asset_resources.py`, `payloads/portfolio_broker.py`): nessun cambio di
+  contratto, nessuna versione.
+
+**Il frontend.** `LotsAnalysisPanel` chiede `MARKET_PRICE_HISTORY` al posto di `PRICE_HISTORY` e la tiene anche con
+`FAILED` (fuori da `lotSection`); `LotWacPriceChart` legge `marketPriceHistory` per la linea, le date dell'asse, il
+riavvio della risoluzione, il conteggio dei punti e le bolle (prezzo all'apertura); l'unione per data dei punti per lotto
+diventa un aiuto puro di `lotWacPriceChartHelpers.ts`, una data un punto; il grafico pubblica
+`data-price-line="drawn|absent"`.
+
+**Passi.**
+1. ✅ 17/10 — **Reds backend** (`test-author` `y30-backend-reds`): 19 rossi, ciascuno per la ragione attesa (ValueError
+   «'MARKET_PRICE_HISTORY' is not a valid LotAnalysisType», AttributeError, 422), più 4 guardie verdi.
+   - File nuovo `test_financial/test_lots_market_price_history.py` (A1–A7 e una guardia sul per-lotto), il file di J
+     (B1 `test_s1_s2_failed_analysis_keeps_the_market_price_line`, B2 `test_s7_failed_analysis_keeps_the_fx_gap_of_the_market_price_line`,
+     una guardia senza la serie, THE RULE con un punto Y-30), `test_lots_analysis_pure.py` (C1 costruttore e schema, C2 il
+     pavimento del 1900; `_sec8_analysis` con due argomenti opzionali), `test_portfolio_api.py` (D1 dopo l'ultima vendita).
+   - Run (`files/scripts/y30_backend.sh`, TAG `y30_reds`): `roi-fifo-utils` 12 rossi + 27 verdi (i 18 di J verdi),
+     `lots-analysis-pure` 6 rossi (198 col file intero, i 4 SEC8 verdi), `api portfolio` 1 rosso.
+   > **Note implementazione**: niente riferimenti a livello di modulo ai nomi nuovi (la stringa nelle richieste); C1 legge
+   > `histories_module.build_market_price_history` invece di un import locale (ruff PLC0415).
+2. ✅ 17/10 — **Cura backend**: `LotAnalysisType.MARKET_PRICE_HISTORY`, `MarketPriceHistoryPoint`,
+   `LotsAnalysisResponse.market_price_history`; `build_market_price_history` in `financial_math/lots/histories.py`;
+   `_REPLAY_FREE_ANALYSES`; `daily_series` con la serie; `collect_fx_needs` registra i cambi anche per la serie da sola.
+   - Verdi (TAG `y30_green`): `roi-fifo-utils` filtrato sui lotti (`market_price test_lots_ test_date_range_bounds
+     test_orphan_transfer_after_broker_delete test_portfolio_cost_currency test_adjustment_out_with_cost_numbers`)
+     **213/213**; `lots-analysis-pure` **198/198**; `financial-math` **1474/1474** (confini del livello compresi); `api
+     portfolio TestLotsAnalysisEndpoint` **8/8**. Porta 6189 libera.
+   - `ruff check` pulito sugli 8 file; `black --check` pulito tranne `test_portfolio_api.py`, già fuori formato a HEAD
+     (dalla riga 1406, codice non nostro). `api sync` rc 0: il client generato (ignorato) ha il tipo nuovo; nessun file
+     tracciato cambiato.
+   > **Note implementazione**: `needs_market_series` resta com'è: decide anche `CURRENT_PRICE_ASSUMED_AT_COST`, che la
+   > serie non deve sollevare (A6, S7 di J con `ALL_ANALYSES` che ora la contiene).
+   > **Fuori pista**: da aggiornare in chiusura la devWiki (`entities/lots-analysis-service.md:93` cita
+   > `_AVERAGE_COST_ANALYSES`; `decisions/fifo-v4-gross-net-status-model.md:89` dà Y-30 «per J»).
+3. ✅ 17/10 — **Vitest rossi e cura del frontend.**
+   - Rossi (`test-author` `y30-frontend-reds`): `lotWacPriceChartHelpers.test.ts`, V1 `marketPriceLine` (5 casi) e V2 la
+     colla sul sorgente (l'import del helper, niente prop `priceHistory`), 7 rossi per la ragione attesa («is not a
+     function», la colla), 77 verdi; `lotsAnalysisStore.test.ts` `MAIN` con `MARKET_PRICE_HISTORY` (9/9); E1 in J12-1:
+     `data-price-line="drawn"` nel controllo e nel passo 2, titolo e commento del passo, un punto nelle «Expectations».
+   - Cura: `marketPriceLine` e `MarketPriceLinePoint` in `lotWacPriceChartHelpers.ts`; `LotWacPriceChart.svelte` con la
+     prop `marketPriceHistory` (linea, date dell'asse, riavvio della risoluzione, conteggio, bolle) e
+     `data-price-line={priceLineDrawn ? 'drawn' : 'absent'}` (la stessa condizione del `series.push` della linea);
+     `LotsAnalysisPanel.svelte` chiede `MARKET_PRICE_HISTORY` e la legge con `asArray`, fuori da `lotSection`.
+   - Controlli (`files/scripts/y30_light.sh`): helper **85/85**, store **9/9**, `financialMathExceptions.gate` 19/19,
+     `themeRoles.gate` 80/80, `svelte-check` 0/0, `tsc -p tsconfig.e2e.json` pulito, Prettier pulito, `theme-roles --check`
+     pulito, `git diff --check` pulito.
+   > **Note implementazione**: una data ripetuta tiene il suo primo punto (il backend ne manda uno al giorno); il «declassamento»
+   > dell'unione (una quotazione vera sulla stessa data toglie la stima) non serve più.
+   > **Fuori pista**: corretto anche il paragrafo del contratto J-12 in testa alle spec di J12 (`brokers-detail.spec.ts`
+   > ~:1883: «keeps its average-cost lines» → più la linea del prezzo), segnalato da `test-author`.
+4. ✅ 17/10 — **E2E** (slot del coordinatore, 21:11–21:22, `files/scripts/y30_e2e.sh`, `--workers 2`, corsia 6189).
+   - Prima dello slot, fusa la nota di X su Y-34: tolto da `expectLotsPanelOpen` il parametro `assetId`, mai passato dai 12
+     chiamanti (il ramo dell'espressione e la frase del commento con lui); `tsc` delle E2E e Prettier puliti.
+   - `front-broker detail` **39/40**: J12-1 verde col controllo e il passo 2 (`data-price-line="drawn"`); rosso
+     `:265 import files modal can open file preview` (nessuna riga `row-actions-` nello storico degli import in 8 s).
+     `stale-price-banner` **2/2**, `dashboard-cache` **6/6**.
+   - Triage (`test-triage`), verdetto **ambiente**: i miei run `api portfolio` (20:4x–20:51) popolano con
+     `populate_mock_data --force` senza `--with-reports`, che svuota `broker_reports/` (`reset_broker_reports`); lo script
+     E2E mette `LF_SETUP_DONE=1`, quindi `global-setup.ts` non ripopola, e `front-broker detail` non lo fa da sé: ogni
+     broker del mock aveva lo storico vuoto. Il run di `dashboard-cache` (`_ensure_db_populated`, con i report) li ha
+     rimessi alle 21:16:14. Prove: le date di `broker_reports/` e di `uploaded/broker_*`, i log dei run (`Populating`).
+   - Rerun di `front-broker detail` sul dato ricostruito (`files/scripts/y30_e2e_rerun.sh`): **40/40** (21:20–21:22).
+     Porta 6189 libera.
+   > **⚠️ Fuori pista**: la trappola va nella devWiki (`problems/direct-playwright-run-in-a-test-lane.md`, terza trappola) e
+   > nei miei script: `y30_e2e.sh` lascia cadere `LF_SETUP_DONE` quando `broker_reports/uploaded/` è vuota.
+5. ✅ 17/10 — **Documentazione** (`docs-writer` `y30-docs`, solo inglese, nessuno stamp):
+   `lots_analysis_service.md` (contratto, FAILED con `_REPLAY_FREE_ANALYSES`, cambi, costruttori),
+   `lots-analysis.md` (POST #1, FAILED, la prop e `marketPriceLine`, `data-price-line`), `positions.en.md` (un punto
+   «la linea del prezzo copre tutto il periodo», il messaggio rosso con la linea del prezzo), più `financial_math.md`,
+   `data-quality-banner.md`, `fifo_lot_engine.md` e il riferimento di `app-state.md` (`LotsAnalysisPanel.svelte:365-392`,
+   ricontrollato per contenuto dopo il mio ultimo commento). Build strict **0 warning**, check-links **97/97** (rilanciati
+   da me dopo l'ultima modifica). Debito di traduzione vero: due punti di `positions.en.md`.
+   > **Note implementazione**: corretto il commento di testa di `LotsAnalysisPanel.svelte` (con FAILED disegnava «solo
+   > le linee del costo medio»).
+   > **⚠️ Fuori pista**: il `docs-writer` trova un'eccezione alla regola S7 di J-12, verificata da me nel codice: con
+   > FAILED le conversioni di dividendi, commissioni e tasse girano prima del motore (`needs_income_alloc` legge le analisi
+   > chieste; `unconvertible_ids` chiama `fx_resolver.convert`), quindi un loro cambio mancante resta nel data quality.
+   > Nessun test lo copre. È di J: va al coordinatore; la pagina la documenta come comportamento attuale.
+   - DevWiki (`wiki-file`): `decisions/fifo-v4-gross-net-status-model.md` (il «Left out» diventa «aggiunta la sera
+     stessa»), `entities/lots-analysis-service.md` (`_REPLAY_FREE_ANALYSES`, l'eccezione), la terza trappola; `index.md`,
+     `log.md`; `check_source_paths.py` nessun path rotto nelle tre pagine. Grafo non aggiornato (graphify assente nel
+     worktree).
+6. ✅ 17/10 — **CHECKPOINT READY** al coordinatore (~21:5x): riga 🐛, nota per la 🔄 di J-12, J revisore del backend;
+   l'eccezione di S7 per J, la trappola della corsia, Y-35 (il `PRICE_HISTORY` senza lettori) nella mia sezione. FROZEN.

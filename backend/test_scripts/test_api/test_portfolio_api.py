@@ -1310,6 +1310,64 @@ class TestLotsAnalysisEndpoint:
             assert resp.status_code in (400, 404, 422)
         print_success(f"Nonexistent asset rejected with {resp.status_code}")
 
+    async def test_market_price_history_continues_after_the_last_sale(self, test_server):
+        """Y-30 (N89): MARKET_PRICE_HISTORY, the market price line independent of the lots, alone.
+
+        An EUR asset never quoted: BUY 10 for 1000 EUR on 10 Jan 2026, SELL all 10 for 1100 EUR on 15 Jan, read up to
+        20 Jan. 200, and ``market_price_history`` is a list with a point on every day from the BUY to ``date_to`` — after
+        the sale too, when no lot is open: the BUY's 100 on 10–14 Jan, the SELL's 110 on 15–20 Jan, each in EUR and
+        estimated (a trade's mark, no quote). Nothing else was asked for, so ``price_history`` and ``lots`` are null. EUR
+        only: the API cannot own the absence of a rate, so no FX here (the gaps are in the service tests).
+
+        Today: 422 — 'MARKET_PRICE_HISTORY' is not a valid LotAnalysisType.
+
+        The test's own user, broker and asset, deleted at the end (the broker with its transactions).
+        """
+        print_section("Lots Analysis: MARKET_PRICE_HISTORY after the last sale")
+        broker_id: int | None = None
+        asset_id: int | None = None
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                broker_id = await create_broker(client, f"Y30 Market Price {uuid.uuid4().hex}")
+                asset_id = await create_asset(client, currency="EUR")
+                await commit_batch(
+                    client,
+                    creates=[
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2026-01-15", "quantity": "-10", "cash": {"code": "EUR", "amount": "1100"}},
+                    ],
+                )
+
+                resp = await client.post(
+                    f"{API_BASE}/portfolio/lots/analysis",
+                    json={"asset_id": asset_id, "requested_analyses": ["MARKET_PRICE_HISTORY"], "target_currency": "EUR", "date_range": {"end": "2026-01-20"}},
+                    timeout=TIMEOUT,
+                )
+                assert resp.status_code == 200, resp.text
+                data = resp.json()
+
+                assert isinstance(data["market_price_history"], list), data
+                line = [(point["date"], Decimal(point["market_price"]), point["currency"], point["estimated"]) for point in data["market_price_history"]]
+                expected = [(f"2026-01-{day:02d}", Decimal("100"), "EUR", True) for day in range(10, 15)] + [(f"2026-01-{day:02d}", Decimal("110"), "EUR", True) for day in range(15, 21)]
+                assert line == expected
+                assert (data["price_history"], data["lots"]) == (None, None)
+            finally:
+                if broker_id is not None:
+                    cleanup_broker = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+                    assert cleanup_broker.status_code == 200, cleanup_broker.text
+                    broker_results = {item["id"]: item for item in cleanup_broker.json()["results"]}
+                    assert broker_results[broker_id]["success"] is True, cleanup_broker.text
+                if asset_id is not None:
+                    cleanup_asset = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+                    assert cleanup_asset.status_code == 200, cleanup_asset.text
+                    asset_results = {item["asset_id"]: item for item in cleanup_asset.json()["results"]}
+                    assert asset_results[asset_id]["success"] is True, cleanup_asset.text
+                await delete_current_test_user(client, user_id)
+        print_success("MARKET_PRICE_HISTORY: a point a day from the BUY to date_to, after the sale too")
+
 
 # ---------------------------------------------------------------------------
 # Focused ASGI compatibility tests for planner source and WAC authorization

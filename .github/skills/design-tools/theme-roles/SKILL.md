@@ -95,7 +95,7 @@ Convert by **meaning and step**, not by colour family: `gray` and `slate` go to 
 | `bg-libre-green/10` + `dark:bg-libre-green/20` | `bg-lf-selected` |
 | `focus:ring-libre-green`, `focus:border-libre-green` | `focus:ring-lf-focus`, `focus:border-lf-focus` |
 | `red`/`rose`, `amber`/`yellow`/`orange`, `emerald`/`green`, `blue`/`sky` used for a state | the state roles: text 500–700 → `text-lf-X`; bg 50–100 → `-soft`; border 200–400 → `-line`; text 800–900 on a tint → `-on-soft`; `bg-*-500/600 text-white` → `bg-lf-X text-lf-on-status` |
-| `violet`, `purple`, `indigo`, `pink`, `teal`, `cyan`, `fuchsia`, `lime` (categories: asset types, broker roles) | **leave them**: categorical roles come later. The AI violet is not a category: the `ai` roles (Q11) |
+| `violet`, `purple`, `indigo`, `pink`, `teal`, `cyan`, `fuchsia`, `lime` (categories: broker roles, file kinds, identifiers) | **leave them**: categorical roles come later. The AI violet is not a category: the `ai` roles (Q11); the asset types have their roles since round 3: their badges come from `assetTypeBadgeClass()` (design-system, rule 11) |
 
 ## Rules
 
