@@ -5062,7 +5062,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   Sei test di regressione in `test_asset_source_refresh.py`, tre dei quali rossi sul codice di prima. Non su `mockprov`
   ma su un fornitore finto in processo, che restituisce gli eventi solo dentro l'intervallo chiesto. Commit del
   coordinatore, lotto X-R12. Decisione notturna N17 sul costo di justETF. Dettagli: piano 03, sezione «X-R12».
-- **X-R13 · La pagina dell'asset calcola ancora `emoji` per il grafico dei settori** — minimo, frontend; dal programma
+- ✅ **X-R13 · La pagina dell'asset calcola ancora `emoji` per il grafico dei settori** (chiusa il 16/10 con il FE5c-1:
+  `9b58867eb`, entrata in dev `92a0d4daf`) — minimo, frontend; dal programma
   colori (DV-3, innocua), girata a X dal coordinatore il 15/10. Con DV il campo `emoji` di `AllocationEntry` sparisce,
   ma `routes/(app)/assets/[id]/+page.svelte:3496` (su `dev_release2`, il `map` dei dati di `AllocationPieChart` per i
   settori) lo calcola ancora: un dato morto, che `front check` non vede. Da togliere nel FE5c, col taglio della pagina.
@@ -5074,11 +5075,14 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   `comparisonAssetIds`, che il FE5c ha portato in `lib/charts/chartPageSignals.ts` (N18). E `toSlug` di
   `assetDetailFxRequirements.ts` è una copia di `createPairSlug` (`fxStoreRegistry.ts`), che però rende maiuscolo.
   Da adottare e unificare nel FE4 (CP7). Dettagli: piano 03, sezione «FE5c-2» e «FE5c-6».
-- ✅ **X-R15 · Due testi inglesi fissi nella pagina dell'asset** (chiusa il 17/10, in attesa del commit del coordinatore: «Provider» riusa `common.provider`, «Manual» è `assetDetail.manualChip`) — minimo, i18n; X, 16/10 (FE5c-3, FE5c-5). «Provider»
+- ✅ **X-R15 · Due testi inglesi fissi nella pagina dell'asset** (chiusa il 17/10, `e890e6772`, entrata in dev `16e837153`: «Provider» riusa `common.provider`, «Manual» è `assetDetail.manualChip`) — minimo, i18n; X, 16/10 (FE5c-3, FE5c-5). «Provider»
   (il titolo della fonte nel pannello dei metadati) e «✏️ Manual» (il chip dell'intestazione) non passano dal
   catalogo. Il FE5c li sposta così come sono, in `AssetDetailMetadataPanel` e in `AssetDetailHeader`: due chiavi in
   `assets` dopo il taglio, come O-8. Dettagli: piano 03, sezione «FE5c-3/4/5».
-- **X-R16 · Un segnale non valido salta la cache dei prezzi della pagina dell'asset** — basso, frontend; X, 16/10
+- ✅ **X-R16 · Un segnale non valido salta la cache dei prezzi della pagina dell'asset** (chiusa il 19/10, in attesa del
+  commit del coordinatore: un segnale non valido fa fallire solo i segnali, sulle due pagine; su quella di una coppia la
+  conversione si legge con l'isolamento dei segnali, e i tassi restano; si lega a N64; piano 03, «X-R16 ripresa») —
+  basso, frontend; X, 16/10
   (test-author del FE5c-2). In `loadChartData`, `parseBackendSignalResults` rifiuta tutta la risposta se un solo
   segnale non è valido. Questa parte è voluta: nessun segnale del backend viene mostrato, e `signalRequestFailed` lo
   dice.
@@ -5087,21 +5091,21 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - **Cura**: leggere i segnali dopo la cache e la risoluzione, o catturare l'errore solo attorno ai segnali. Con un
     test di componente o E2E che instrada un segnale non valido.
   - Fuori dal FE5c, che sposta il codice senza cambiarlo. Dettagli: piano 03, sezione «FE5c-2».
-- ✅ **X-R17 · La conferma di cancellazione di un asset non nomina i suoi eventi** (chiusa il 17/10, in attesa del commit del coordinatore: `confirmWarning` e `bulkConfirmMessage` nominano gli eventi, con il plurale e due refusi corretti) — basso, UX; dal test-author di
+- ✅ **X-R17 · La conferma di cancellazione di un asset non nomina i suoi eventi** (chiusa il 17/10, `e890e6772`, entrata in dev `16e837153`: `confirmWarning` e `bulkConfirmMessage` nominano gli eventi, con il plurale e due refusi corretti) — basso, UX; dal test-author di
   W-B42 (lettura), girata a X dal coordinatore il 16/10. La descrizione della conferma singola
   (`routes/(app)/assets/+page.svelte:1808`, `assets.delete.confirmWarning`) dice «Provider assignments and price history
   will be removed», ma anche gli eventi (dividendi, split) se ne vanno in cascata. Cura: una frase nella chiave in 4
   lingue, e lo stesso nella conferma multipla. Dopo il FE5c.
-- ✅ **X-R18 · Una transazione blocca la cancellazione solo dopo la conferma** (chiusa il 17/10, in attesa del commit del coordinatore: la conferma singola si apre già bloccata, con il link, quando il `tx_count` della riga è sopra 0) — basso, UX; stessa origine.
+- ✅ **X-R18 · Una transazione blocca la cancellazione solo dopo la conferma** (chiusa il 17/10, `e890e6772`, entrata in dev `16e837153`: la conferma singola si apre già bloccata, con il link, quando il `tx_count` della riga è sopra 0) — basso, UX; stessa origine.
   `confirmDeleteAsset` (`:925`) chiama il DELETE e solo allora riceve `HAS_TRANSACTIONS`, con il conteggio e il link
   alle transazioni; la multipla fa lo stesso (`:995`). L'utente conferma una cosa che non può succedere. Cura: usare il
   `tx_count` della riga della lista (`:554`) per aprire la conferma già bloccata, con il link. È solo un'indicazione,
   perché può contare solo le transazioni visibili all'utente, e il controllo del backend resta quello che decide. Dopo
   il FE5c.
-- ✅ **X-R19 · «N assets» in inglese fisso nella conferma multipla** (chiusa il 17/10, in attesa del commit del coordinatore: `assets.delete.itemsLabel`, un plurale) — minimo, i18n; stessa origine.
+- ✅ **X-R19 · «N assets» in inglese fisso nella conferma multipla** (chiusa il 17/10, `e890e6772`, entrata in dev `16e837153`: `assets.delete.itemsLabel`, un plurale) — minimo, i18n; stessa origine.
   `itemsLabel={\`${deletingAssets.length} assets\`}` (`:1826`). Cura: una chiave con il plurale in `assets.delete`, 4
   lingue. Dopo il FE5c.
-- ✅ **X-R20 · Il cestino della card e la conferma singola senza `data-testid`** (chiusa il 17/10, in attesa del commit del coordinatore: `asset-card-delete-btn`, `asset-delete-confirm`, `asset-bulk-delete-confirm`; le E2E li usano) — minimo, test; stessa origine.
+- ✅ **X-R20 · Il cestino della card e la conferma singola senza `data-testid`** (chiusa il 17/10, `e890e6772`, entrata in dev `16e837153`: `asset-card-delete-btn`, `asset-delete-confirm`, `asset-bulk-delete-confirm`; le E2E li usano) — minimo, test; stessa origine.
   Il bottone del cestino di `AssetCard.svelte:318` non ha `data-testid`, e la `ConfirmModal` singola (`:1805`) non
   passa `testId` (la multipla nemmeno). Cura: `asset-card-delete-btn` e `testId` sulle due conferme, poi le E2E che
   oggi passano dal testo o dalla posizione. Dopo il FE5c.
@@ -5182,8 +5186,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - **Cura, se mai servisse**: azzerare il riferimento solo quando cambia l'id dell'asset. Azzerarlo a ogni nuova
     esecuzione romperebbe il caso «keeps no trace of a dropped answer».
   - Dettagli: piano 03, «Correzioni dal vivo 1 e 2».
-- **X-R27 · Il cambio di valuta di un asset non invalida mai le sue cache** — ✅ risolto il 16/10 (lotto X-R27/28: un
-  rosso per ogni difetto, poi la chiave unica `core.asset_cache_key()`; SHA nel commit del coordinatore) — basso,
+- ✅ **X-R27 · Il cambio di valuta di un asset non invalida mai le sue cache** (risolta il 16/10, lotto X-R27/28: un
+  rosso per ogni difetto, poi la chiave unica `core.asset_cache_key()`; `8f3632d45`, entrata in dev `ccfabfd6d`) — basso,
   backend; colori (slot TR,
   corsia 6154, 16/10 13:43), girato a X dal coordinatore il 16/10.
   - **Il sintomo nel log**: `wipe_market_data: cache invalidation skipped — 'Asset' object has no attribute
@@ -5193,8 +5197,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     (`AssetProviderAssignment`). L'eccezione è presa e solo registrata: dopo un cambio di valuta le cache della storia
     e del prezzo corrente restano fino alla loro scadenza (15 min e 2 min).
   - **Cura**, con un rosso prima: leggere l'assegnazione e costruire la chiave da lì.
-- **X-R28 · La cache del prezzo corrente ha una chiave senza i parametri del fornitore** — ✅ risolto il 16/10 (stesso
-  lotto, con la riga 🐛 nel CHANGELOG; nessuna riparazione, per decisione del developer) — **medio** (rivisto il
+- ✅ **X-R28 · La cache del prezzo corrente ha una chiave senza i parametri del fornitore** (risolta il 16/10, stesso
+  lotto: `8f3632d45`, entrata in dev `ccfabfd6d`, con la riga 🐛 nel CHANGELOG; nessuna riparazione, per decisione del developer) — **medio** (rivisto il
   16/10 alle 17:35: tocca tutti gli investimenti programmati e scrive dati), backend; X, 16/10, trovato misurando
   X-R27.
   - **Il caso**: `services/assets/price_query.py:764` mette in `_asset_current_cache` la chiave `(codice,
@@ -5233,15 +5237,15 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - C-66 è stato fatto con l'opzione A: il conteggio viene dai dati che la pagina mostra.
   - La B è un endpoint che conta le righe salvate nell'intervallo e quante sono manuali (`source_plugin_key`), per
     asset e cambi. Così l'avviso può nominare i prezzi manuali.
-- **X-R30 · La sincronizzazione degli asset deve tenere i prezzi manuali?** — ✅ chiusa il 16/10 con la risposta del
-  developer: **vince il fornitore**, i prezzi manuali non si tengono. Basta l'avviso di C-66 (opzione A), che lo dice
+- ✅ **X-R30 · La sincronizzazione degli asset deve tenere i prezzi manuali?** — chiusa il 16/10 (giornale `24242bdd2`)
+  con la risposta del developer: **vince il fornitore**, i prezzi manuali non si tengono. Basta l'avviso di C-66 (opzione A), che lo dice
   («modifiche manuali comprese»). Domanda posta dal coordinatore il 16/10 (opzione C di C-66).
   - Oggi la sync scrive ogni data che il fornitore restituisce, e sovrascrive anche un prezzo `MANUAL`
     (`bulk_upsert_prices`). I cambi invece saltano le coppie solo `MANUAL`.
   - Il rischio vero di C-66 è questo.
   - **Cura proposta**: una sola funzione in `services/assets/core.py` che costruisce la chiave, usata nei quattro
     punti, con un rosso per ciascun difetto. È naturale farla nello stesso lotto di X-R27.
-- ✅ **X-R31 · Ricerca degli asset: il messaggio d'errore non è tradotto** (chiusa il 17/10, in attesa del commit del coordinatore: `assets.search.failed`) — basso; X, 16/10 (trovato dal test-author di
+- ✅ **X-R31 · Ricerca degli asset: il messaggio d'errore non è tradotto** (chiusa il 17/10, `e890e6772`, entrata in dev `16e837153`: `assets.search.failed`) — basso; X, 16/10 (trovato dal test-author di
   F21/P20, fuori perimetro).
   - Quando falliscono sia lo streaming sia il ripiego REST, la tendina mostra `e.message` così com'è, oppure
     `'Search failed'` in inglese (`AssetSearchAutocomplete.svelte`, ramo `catch` del REST).
@@ -5304,7 +5308,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - ~865: l'avviso si ripete a ogni interrogazione della stessa quotazione (lo scheduler ogni 10 minuti, più ogni pagina
     aperta). Cura: una volta per (asset, valore) per processo (`functools.cache`, come `_report_invalid`), oppure
     `info`.
-- ✅ **X-R41 · `POST /fx/currencies/convert` con importo 0 dà un 500** (chiusa il 17/10, in attesa del commit del coordinatore: un importo 0 si converte come una unità: risposta 0 al tasso del giorno) — basso; X, 17/10 (trovato dal test-author di
+- ✅ **X-R41 · `POST /fx/currencies/convert` con importo 0 dà un 500** (chiusa il 17/10, `e890e6772`, entrata in dev `16e837153`: un importo 0 si converte come una unità: risposta 0 al tasso del giorno) — basso; X, 17/10 (trovato dal test-author di
   X-R38, girato nel backlog dal coordinatore).
   - L'endpoint divide per l'importo di partenza: convertire 0 fra due valute solleva un'eccezione invece di rispondere 0.
 - **X-R42 · Due fixture dei test FX lasciano righe committate** — basso, test; X, 17/10 (dal test-author di X-R38).
@@ -5334,7 +5338,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Elencare le assegnazioni degli asset, le rotte dei cambi e le righe il cui codice di fornitore nessun registro
     serve: copre le righe che i doppi di test hanno già scritto nelle istanze rilasciate, e i plugin rimossi.
   - Nota informativa di E: `shutdown_all_providers` istanzia ancora i doppi; innocuo, nessuna azione.
-- ✅ **X-R45 · Cambi: chi legge `fx_rates` direttamente non salta i tassi vecchi inutilizzabili** (chiusa il 17/10, in attesa del commit del coordinatore: la strada (b) del backlog, `usable_fx_rate_clause()` in ogni lettore che calcola, più una guardia strutturale; revisori MF per il PAC, Z per lo scheduler) — basso; X, 17/10 (da
+- ✅ **X-R45 · Cambi: chi legge `fx_rates` direttamente non salta i tassi vecchi inutilizzabili** (chiusa il 17/10, `629304ab3` + `21164d0a7`, entrata in dev `b690c0785`: la strada (b) del backlog, `usable_fx_rate_clause()` in ogni lettore che calcola, più una guardia strutturale; revisori MF per il PAC, Z per lo scheduler) — basso; X, 17/10 (da
   X-R38).
   - Con X-R38 nessuna scrittura salva più un tasso fuori dai limiti, e `convert_bulk` e `compute_chain_rate` saltano quelli
     vecchi (`inf`, 0, 20 cifre intere: una 1.2 poteva salvarli, per esempio un manuale `1E-11`, che si rilegge 0).
@@ -5346,8 +5350,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     - (a) una migrazione di dati che toglie, o mette da parte, le righe con `rate < 1E-10` o `rate >= 1E+14`: richiede
       il via del developer, perché tocca dati dell'utente;
     - (b) lo stesso filtro, `usable_fx_rate_bounds()`, in ogni lettore: molti file di J e dell'AI Export.
-- ✅ **X-R46 · Editor dei cambi (e degli asset): i rifiuti del server non si vedono** (chiusa il 17/10, in attesa del commit
-  del coordinatore: le due scritture manuali nominano ogni data lasciata fuori in `rejected`, data e motivo; il 400 dei
+- ✅ **X-R46 · Editor dei cambi (e degli asset): i rifiuti del server non si vedono** (chiusa il 17/10, `88d0fb840`, entrata in dev `2c43ac451`: le due scritture manuali nominano ogni data lasciata fuori in `rejected`, data e motivo; il 400 dei
   cambi tutto rifiutato ha `detail` `{code: fx_rates_refused, message, rejected}`; `writeRefusal.ts` dà una frase tradotta
   per ogni rifiuto codificato e un avviso che nomina le date; Axios non arriva più all'utente. Dettagli nel piano 03,
   «X-R46») — basso-medio, **subito dopo X-R38**; X, 17/10
@@ -5444,12 +5447,13 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     rettifica +q collegata a uno SPLIT, senza costo, diventa `MISSING_COST_BASIS`.
   - **Deciso**: una guardia come quella di P-10, cioè un rifiuto 409 con i dettagli (evento, data, transazioni), tramite
     `financial_math.splits.costless_incoming_split_adjustments`, che arriva con CP-14a.
-- **X-R48b · La modale del cambio di valuta non avvisa prima della conferma** — basso, UX, non urgente; X, 17/10 (J,
+- ⏸️ **X-R48b · La modale del cambio di valuta non avvisa prima della conferma** (sospesa il 19/10 con i rossi scritti,
+  messi da parte in patch: N68 può cambiare la modale; piano 03, «X-R16 + X-R48b») — basso, UX, non urgente; X, 17/10 (J,
   revisione di X-R48, girata dal coordinatore).
   - Il riepilogo (dry run) non rifiuta mai, quindi il pannello di conferma non può avvisare: l'utente incontra il 409
     solo dopo aver confermato.
   - Cura facoltativa: il riepilogo porta il numero degli SPLIT che bloccano, e la modale avvisa prima della conferma.
-- ✅ **X-R49 · Lo stesso buco di X-R48 dal cambio dei parametri di un Scheduled Investment** (chiusa il 17/10, in attesa del commit del coordinatore: rifiuto 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` prima di ogni scrittura, frase tradotta nella modale dell'asset; dettagli nel piano 03, «X-R49») — basso; X, 17/10 (J, F2,
+- ✅ **X-R49 · Lo stesso buco di X-R48 dal cambio dei parametri di un Scheduled Investment** (chiusa il 17/10, `589f15607`, entrata in dev `e710cf552`: rifiuto 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` prima di ogni scrittura, frase tradotta nella modale dell'asset; dettagli nel piano 03, «X-R49») — basso; X, 17/10 (J, F2,
   girato dal coordinatore).
   - `provider_management.py:212-221`: vale solo se un utente ha scritto uno SPLIT fra gli eventi del piano.
   - Ordine deciso dal coordinatore dopo X-R40/W-B62: X-R47 → X-R48 → X-R44 → X-R49.
@@ -5521,20 +5525,21 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     (`EVENT_IN_USE`): la CTA `navigate_asset` del nuovo avviso `INVALID_SPLIT_RATIO` porta a un vicolo cieco.
   - Direzione: un refresh del provider riscrive o scarta quell'evento (con la regola dei collegamenti), oppure una via
     di recupero.
-- ✅ **X-R58 · Le liste di asset e cambi tacciono quando la richiesta bulk supera i limiti di Z-25** (chiusa il 17/10, in attesa del commit del coordinatore: un toast tradotto da `bulkRefusalMessage`; il caricatore FX continua a rilanciare, per scelta) — piccolo, **subito
+- ✅ **X-R58 · Le liste di asset e cambi tacciono quando la richiesta bulk supera i limiti di Z-25** (chiusa il 17/10, `2b48340b6`, entrata in dev `1bef78be1`: un toast tradotto da `bulkRefusalMessage`; il caricatore FX continua a rilanciare, per scelta) — piccolo, **subito
   dopo X-R53, quando Z-25 entra**; X, 17/10 (coordinatore, N77).
   - Z-25 aggiunge due 422 con codice a `POST /assets/prices/query` e `POST /fx/currencies/convert`:
     `bulk_too_many_items` (più di 1000 voci) e `bulk_too_many_days` (più di 5 milioni di giorni-voce, contati dopo la
     lettura). Oggi il `catch` di `fetchAllPriceData` (asset) e quello dei cambi tacciono: card senza prezzi.
   - Cura: un messaggio esplicito col limite, una chiave i18n in 4 lingue, su quei codici. Serve il contratto di Z (la
     forma del `detail` e i parametri del limite) quando Z-25 entra.
-- **X-R59 · La Δ sull'intervallo si calcola ancora nel browser** — basso, regola 10 (una casa sola per la matematica
+- ✅ **X-R59 · La Δ sull'intervallo si calcola ancora nel browser** (fatta il 17/10: il backend da MF, `a8de6b584`,
+  entrato in dev `482343eb3`; il frontend da Y, lotti A/B, `53fea97f7`, entrato in dev `f317e3a9f`) — basso, regola 10 (una casa sola per la matematica
   finanziaria); X, 17/10 (trovata dal docs-writer di X-R53). **Passata a MF** (coordinatore, 17/10 08:40).
   - Il cambio sull'intervallo scelto (le card delle due liste; le colonne Δ Abs e Δ % della tabella dei cambi) è
     `computeDerivedPriceState()` (`lib/utils/assetPriceDerived.ts`) e `FxTable.getDelta()` → `displayFxDelta()`
     (`lib/stores/fxStoreRegistry.ts`, anche nella card e nella pagina della coppia): ultimo / primo − 1, in float.
   - X-R53 ha portato nel backend solo le colonne dei periodi fissi (1D…5Y).
-- ✅ **X-R60 · Le colonne Δ: tre note della revisione di Y su X-R53** (chiusa il 17/10, in attesa del commit del coordinatore: un registro delle richieste in `periodChanges.ts`, 24 casi di unità e 8 E2E) — piccolo, **dopo X-R48**; X, 17/10 (Y, girata dal
+- ✅ **X-R60 · Le colonne Δ: tre note della revisione di Y su X-R53** (chiusa il 17/10, `6d74ab3a1`, entrata in dev `cb05410a5`: un registro delle richieste in `periodChanges.ts`, 24 casi di unità e 8 E2E) — piccolo, **dopo X-R48**; X, 17/10 (Y, girata dal
   coordinatore). Prima il punto 1.
   1. Cambi, una coppia sola (`loadPairPeriodChanges`): nessun indicatore, quindi `data-busy` può dirsi finito mentre la
      Δ di quella coppia è in volo; e non avanza la versione, quindi una risposta completa più vecchia che arriva dopo
@@ -5585,7 +5590,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
 - **X-R70 · Il refresh conta le date rifiutate dal controllo OHLC** — basso; X, 17/10 (Z, nota di X-R65).
   - `_persist_refresh_item` toglie dal conteggio le date che nessuna colonna tiene e quelle fuori intervallo, ma non
     quelle che `bulk_upsert_prices` rifiuta per OHLC impossibile (chiusura fuori da [minimo, massimo]).
-- **X-R71 · Il caricamento manuale dei prezzi non è tutto o niente sulla valuta** — basso-medio, **nella 1.3, fatta da B**
+- ✅ **X-R71 · Il caricamento manuale dei prezzi non è tutto o niente sulla valuta** (fatta da B: `d5963fa60`, entrata in
+  dev `1c7937984` il 17/10; rivista da X: OK) — basso-medio, **nella 1.3, fatta da B**
   (il coordinatore, 17/10; X rivede); X, 17/10 (Z, nota di X-R65).
   - Una valuta diversa da quella dell'asset è rifiutata asset per asset, dopo che gli asset precedenti sono stati
     scritti. Il controllo va prima della prima scrittura, come X-R65 fa ora per le date.
@@ -5599,8 +5605,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
 - **X-R73 · `_range_start_in_bounds` ripete `stored_date_bounds()`** — minimo; X, 17/10 (Z, nota di X-R65).
   - `api/v1/assets/prices.py` (di MF, R13-SEC9-4) confronta a mano [`EARLIEST_RANGE_START`, `latest_range_end()`]:
     deve chiamare l'aiuto unico di `utils/date_range_limits.py`.
-- ✅ **X-R74 · Le rotte di asset e cambi rispondono 500 con il testo dell'errore** (chiusa il 17/10, in attesa del commit
-  del coordinatore: 26 siti in 6 file rispondono «Internal error while …» e registrano l'errore; in più il 400
+- ✅ **X-R74 · Le rotte di asset e cambi rispondono 500 con il testo dell'errore** (chiusa il 17/10, `8224a0cec`, entrata in dev `1c1456713`: 26 siti in 6 file rispondono «Internal error while …» e registrano l'errore; in più il 400
   `MERGE_FAILED` della fusione, «Merge failed: internal error»; `services routes-generic-500` 34 passed, 8 suite API e DB 165 passed) — basso, sicurezza (fuga di testo SQL),
   **nella 1.3, primo lotto dopo X-R58**; X, 17/10 (revisione di X-R62, punto 1 di J; decisione del coordinatore).
   - X-R62 ha tolto l'`IntegrityError` dal 500 (ora `PROVIDER_REMOVAL_CONFLICT`, senza SQL). Il `except Exception` di
@@ -5615,7 +5620,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     i 400/404/409 scritti apposta restano. Prima un rosso parametrizzato su ogni rotta, come
     `test_sec9_3_a_failure_answers_500_without_echoing_it`.
   - Registrata prima, per errore, come «H-51» nella sezione di H: l'ID era già di H (`trusted_schema`).
-- **X-R65 · Il pavimento delle date sulle scritture manuali di prezzi e cambi** — decisione notturna N83; **fatta da Z** (`30e19b9d9`, rivista da X il 17/10: OK); X, 17/10
+- ✅ **X-R65 · Il pavimento delle date sulle scritture manuali di prezzi e cambi** — decisione notturna N83; **fatta da Z** (`30e19b9d9`, entrata in dev `c726b9d89`, rivista da X il 17/10: OK); X, 17/10
   (il coordinatore; numerata X-R65 per lo scontro con X-R64).
   - Le letture si fermano al 1900-01-01 (`EARLIEST_RANGE_START`), le scritture manuali di prezzi e di tassi di cambio
     no: un prezzo prima del 1900 si può salvare, e «Tutto» risolve allora l'inizio dell'intervallo prima del 1900
@@ -5624,11 +5629,11 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Dettagli del coordinatore: un prezzo piantato al 0001-01-01 faceva percorrere a un replay del rischio o a una query
     circa 740.000 giorni per asset (J, SEC8-1b); intervallo [`EARLIEST_RANGE_START`, `latest_range_end()`], 422 con
     codice (`date_out_of_range`); i punti dei provider fuori intervallo scartati e non contati.
-- ✅ **X-R44c · Solo asset e cambi possono dichiarare `test_only`** (chiusa il 17/10, in attesa del commit del coordinatore: due guardie in `services test-only-providers`, provate con una mutazione) — piccolo, **subito** (il coordinatore, 17/10); X, 17/10.
+- ✅ **X-R44c · Solo asset e cambi possono dichiarare `test_only`** (chiusa il 17/10, `4bda99953`, entrata in dev `e41427916`: due guardie in `services test-only-providers`, provate con una mutazione) — piccolo, **subito** (il coordinatore, 17/10); X, 17/10.
   - Il filtro di X-R44 sta nella base dei registri (`_withheld()`), ma segnali e rischio (`list_definitions`), BRIM
     (rilevamento ed elenco) e tools (la sua istantanea) leggono il proprio archivio senza chiederlo: un `test_only` lì
     sarebbe servito in produzione. Un test di guardia lo vieta fuori da asset e cambi.
-- ✅ **X-R64 · La richiesta di period-changes divisa in lotti da 1.000** (chiusa il 17/10, in attesa del commit del coordinatore; con il sondaggio dal vivo di `/prices/current`, tetto di R13-SEC9-1: sì del coordinatore, 17/10) — piccolo, **dopo l'ingresso di Z-27**, con il suo
+- ✅ **X-R64 · La richiesta di period-changes divisa in lotti da 1.000** (chiusa il 17/10, `aedf5d8c3`, entrata in dev `15132b448`; con il sondaggio dal vivo di `/prices/current`, tetto di R13-SEC9-1: sì del coordinatore, 17/10) — piccolo, **dopo l'ingresso di Z-27**, con il suo
   aiuto e la sua costante; X, 17/10 (dalla revisione di X-R59: il limite scende da 10.000 a 1.000).
   - Dentro `fetchAssetPeriodChanges`/`fetchFxPeriodChanges` (il registro di X-R60 vede una sola risposta unita); poi
     aggiornare i due passi della documentazione di MF (`assets/architecture.md` ~374, `fx/architecture.md` ~238), che
@@ -5643,7 +5648,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Verso la riga 8672 di `e2e/assets/asset-detail.spec.ts` il commento dice «by its UTC reckoning…»; dopo Z-3 (dev
     `0f55265a1`) le pagine degli asset leggono il giorno dell'utente (`todayIso()`). Lo stub resta giusto: cambia solo
     la ragione scritta. Da fare al prossimo tocco di quel file.
-- **X-R55 · Intervalli senza tetto: una data estrema blocca l'istanza** — sicurezza, disponibilità; **passata a Z** (il
+- ✅ **X-R55 · Intervalli senza tetto: una data estrema blocca l'istanza** (fatta da Z: `a71d23e7e` + `0ca0c0d59`,
+  entrata in dev `ab7711f04` il 17/10; il portafoglio con J-43, `a46f85bda`, in dev `09cb9231a`) — sicurezza, disponibilità; **passata a Z** (il
   coordinatore, 17/10 06:38: Z è libera; X rivede al checkpoint di Z, perché i file sono di X); X, 17/10 (J, lo stesso
   vettore di R13-SEC7-1; girato dal coordinatore). E rivede.
   - `services/assets/price_query.py` `_build_backward_filled_series`: un punto per giorno su qualunque intervallo chiesto
@@ -5680,11 +5686,44 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     pensato per i provider che mandano solo la chiusura).
   - Da decidere: rifiutare un limite vero dalla parte sbagliata (`ohlc_inconsistent`), allargarlo, o scriverlo. Poi
     cambia il test.
-- ✅ **C-97c-4 · I cambi delle valute deboli letti come zeri** (chiusa il 17/10, in attesa del commit del coordinatore) —
+- ✅ **C-97c-4 · I cambi delle valute deboli letti come zeri** (chiusa il 17/10, `7ac14656a`, entrata in dev `e414edf0b`) —
   piccolo, **nella 1.3**; X, 17/10 (revisione di C-97c-3, decisione del coordinatore).
   - La lista, la card e il riepilogo dei cambi, il Δ della lista e il tooltip del cambio di una transazione usano
     `formatPrice(x, {minDecimals: 4})`. Prima scrivevano `formatFixed(x, 4)`, e VND→USD si leggeva `0.0000`.
   - Dettagli nel piano 03, «C-97c-4».
+- **X-R81 · La conferma di cancellazione aperta già bloccata non vede le transazioni cancellate nel frattempo** — basso,
+  **dopo la 1.3**; X, 19/10 (coordinatore colori, revisione di X-R18, girata dal coordinatore il 17/10).
+  - La conferma singola si apre bloccata dal `tx_count` della riga com'era al caricamento della lista. Se le transazioni
+    dell'asset si cancellano intanto (un'altra scheda), resta bloccata finché la lista non si ricarica, anche se il
+    DELETE ora passerebbe.
+  - Cure possibili, nello stato bloccato: un'azione «Controlla di nuovo» che rilegge il conteggio della riga, oppure una
+    che manda il DELETE e lascia decidere il backend (`HAS_TRANSACTIONS` rifiuta comunque).
+  - Costo: una chiave in 4 lingue e una E2E. La revisione: colori puliti, logica giusta.
+- **X-R82 · PAC, cambi salvati: un ramo e un codice che nessun dato raggiunge più** — minimo, **dopo la 1.3**, non tocca i
+  numeri; X, 19/10 (MF, revisione di X-R45, voce 1, girata dal coordinatore il 17/10).
+  - In `build_planner_fx_quotes` (`pac_allocator/source/fx_quotes.py` ~103–116), `rate if rate > 0 else None` e il
+    problema `allocation.saved_fx_invalid` non si raggiungono più. L'unica fonte è `_load_latest_planner_fx_rows`, la
+    condizione di X-R45 sta nella sottoquery della data e `(date, base, quote)` è unico (`uq_fx_rates_date_base_quote`):
+    la riga unita è quella che l'ha passata, quindi almeno 1E-10.
+  - Toglierlo del tutto non è gratis: il codice sta nei due enum (`schemas/portfolio.py:1630`,
+    `schemas/pac_allocator/base.py:178`), quindi in OpenAPI e nel contratto versionato del tool `pac_allocator`
+    (`tool-contracts.openapi.json`), più 4 chiavi i18n in `pacAllocator`.
+  - Strade: (a) tenerlo, con un commento «irraggiungibile dopo X-R45: la guardia è nella lettura» (consigliata: nessun
+    contratto cambia); (b) togliere solo il ramo, lasciando codice e chiavi; (c) togliere tutto, con OpenAPI, contratto del
+    tool e chiavi.
+  - Accanto: la docstring di `_validate_canonical_fx_pair` (`schemas/portfolio.py:1255`) promette «'usd/eur' ->
+    'EUR/USD'», ma il codice rifiuta l'ordine discendente con un 422. Da correggere la docstring.
+- **X-R83 · Pagina dell'asset: il ramo che fonde il Sync dell'asset della pagina non si raggiunge** — minimo, **dopo la
+  1.3**; X, 19/10 (lettura del codice per N64). L'ipotesi registrata qui come difetto visibile è smentita dalla lettura,
+  prima di scrivere il rosso.
+  - Il Sync della barra passa da `handlePageSyncComplete` → `handleRefresh()`, che invalida la cache dei prezzi e ricarica
+    forzando: il grafico finisce sulla risposta del server.
+  - Il ramo `canMergeOnly` sta in `runSyncAsset` (`routes/(app)/assets/[id]/+page.svelte` ~2001), con la condizione
+    `assetId === pageAssetId`. Lo raggiunge solo il Sync di una card di confronto, e la pagina esclude il proprio asset
+    dai confronti (`availableAssets`, ~2341): è un ramo morto.
+  - Se tornasse vivo, avrebbe il difetto: fonde il delta solo in `chartData`, poi la ricarica legge la cache, che non lo
+    ha, e il grafico torna ai valori di prima.
+  - Cura: togliere il ramo, come X-R68.
 
 ## W · Import e transazioni (fase 01)
 

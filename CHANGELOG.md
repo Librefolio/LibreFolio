@@ -340,6 +340,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Assets: deleting an asset that transactions use opens its confirmation already on the result (how many transactions, with the link to them) instead of asking first; the confirmation also says the asset's events go with it; and the search's failure message, the source title, the «Manual» badge and the count of assets to delete follow your language.
 - API: converting an amount of 0 (`POST /api/v1/fx/currencies/convert`) answers 0 with the day's rate instead of a server error.
 - Exchange rates an older version could save but not use (0, infinite, or more than 14 digits) no longer reach the PAC planner's quotes and costs, where they gave absurd amounts; the scheduler fetches those days again from the provider.
+- An invalid technical signal no longer breaks the chart of an asset or an exchange rate: the prices and rates stay on the chart and in the page's cache, and **All** resolves the start of the range; only the signals are reported as unavailable.
 
 #### 🔒 Security
 
