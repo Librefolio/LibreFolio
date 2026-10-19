@@ -7782,3 +7782,133 @@ Vincoli:
   > impara quella parola. È voluto: nessun export vero ha mai mostrato quegli stati.
 - ✅ 5. Simulazione d'integrazione (`n74_sim_light.sh dev_release2 merge`, dev `ccc2a4141`): pulita. La base di fusione è il mio HEAD
   `9857be3d2`, e dev non tocca nessuno dei 12 file.
+- ✅ 6. Dopo il commit (`323c120eb`, `8ccf38604`), con l'OK del coordinatore: IT, FR ed ES di `user/transactions/import/danske-bank`
+  correggono solo la frase che prometteva «niente scartato in silenzio» (`files/scripts/wb85_danske_tr.py`, ogni sostituzione
+  contata). Ora dicono che nessuna riga si perde e che gli avvisi elencano quelle da controllare: è vero anche senza le due voci nuove,
+  che restano ad Aphra. Nessuno stamp.
+
+### B-52 · La data dell'operazione: analisi (2026-10-19, sola lettura, base `8ccf38604`)
+
+**Il principio del developer**, testuale: «usare la data dell'operazione fatta dall'utente, e in base alle colonne disponibili capire
+se è "stabile e contabilizzata", chi lo espone come colonna si usa quella, chi ha la colonna della data valuta, verifica che quella
+data è antecedente ad oggi, ma registra con la data della operazione».
+
+**L'applicazione**, testuale: «si applicalo per fineco tanto non ci sono utenti, mentre per danske fallo ma scrivimi subito un
+messaggio che mando all'utente nella issue 26 in cui lo avvisiamo». Il messaggio l'ha scritto il coordinatore: qui lo verifico
+(punto 8).
+
+**1. Gli export veri di Danske** (issue #26). I due allegati sono stati scaricati in una cartella privata della sessione, contati e
+cancellati; sono usciti solo i conteggi, senza valori. Script: `files/scripts/b52_danske_dates.py`.
+- 53 righe di custodia.
+- 48 compravendite, tutte con le due date diverse (valuta dopo l'operazione):
+  - in giorni lavorativi: +2 in 42 righe, +1 in 3, +3 in 3;
+  - in giorni di calendario: +1 in 3, +2 in 26, +3 in 3, +4 in 16.
+- 5 eventi (2 `Tuotto`, 3 `Jakautuminen`), tutti con le due date uguali.
+- Datando con l'operazione, 8 compravendite cambiano mese e 3 cambiano anno.
+
+**2. I saldi di cassa e le posizioni** (il punto principale). È una **condizione del lotto**: senza questa cura B-52 su Danske non
+esce.
+
+Oggi:
+- i segmenti di custodia si costruiscono sulla data dell'operazione (`_raw_segments`), le zone delle righe sulla data valuta (`_zone`,
+  `row.day`);
+- la verità di cassa di un checkpoint è il `Saldo` della banca alla data valuta più `border_cash` (le compravendite riassunte e
+  regolate dopo il checkpoint: per quelle è già un conto in data dell'operazione);
+- le posizioni vere sono le prove E1-E3 meno i movimenti contati alla data valuta (`_moved`, `_Movement.day = row.value`);
+- la verifica finale cade al minimo fra l'ultima operazione della custodia e l'ultimo giorno di cassa (`verification_day`).
+
+Datando le compravendite all'operazione (T), con la cassa che la banca muove alla valuta (V):
+- **regge** il checkpoint d'apertura normale (la cassa comincia prima della custodia): ogni compravendita del segmento ha T dopo il
+  checkpoint;
+- **non regge**:
+  1. la verifica finale, quando la cassa va oltre l'ultima operazione: le compravendite degli ultimi 1-2 giorni lavorativi hanno T ≤
+     giorno < V, quindi un falso allarme. Probabilmente è il caso comune;
+  2. l'apertura del caso A13 (la cassa comincia dopo la custodia): T prima del primo giorno di cassa, V dal primo giorno in poi. Il
+     gap-fix propone una correzione finta di cassa, e una di posizione (un ADJUSTMENT);
+  3. i checkpoint di buco fra segmenti più vicini del ritardo di regolamento (5 giorni lavorativi): lo stesso, ma raro.
+
+La cura, solo nel plugin: ogni verità a un giorno D in data dell'operazione.
+- La cassa: saldo della banca + `border_cash` + la cassa delle compravendite importate «in volo» a D (T ≤ D < V).
+- Le posizioni: la prova + la quantità in volo, per titolo.
+- I test:
+  - una compravendita a cavallo della verifica finale, una dell'apertura A13 e una di un checkpoint di buco: niente correzioni e
+    verifica riuscita;
+  - una guardia sull'apertura normale.
+- Peso M.
+
+**3. Fineco.**
+- Si registra con `Operazione` (la data dell'operazione); `Data valuta` solo se l'operazione manca o non si legge.
+- Regolata o no: `Data valuta` dopo oggi del server lascia fuori la riga intera, con la nota di N74 (oggi del server è
+  `server_today()`). Senza `Data valuta`, decide `Operazione`.
+- La FEE e l'INTEREST del premio a scadenza prendono la stessa data.
+- `plugin_version` 1.3.0.
+- Test: le date attese di `FINECO_SAMPLE_TRANSACTIONS` e delle righe di `TestFinecoSafeRows` passano alla data dell'operazione (per
+  esempio 2024-01-17 → 2024-01-15); un rosso per «registra l'operazione, decide la valuta».
+- Peso S–M, quasi tutto nei test.
+
+**4. Danske.**
+- `_pair()` registra con `custody:Kauppapäivä` invece di `cash:Pvm`. `_demerger()` passa da `custody:Arvopäivä` a `Kauppapäivä`
+  (sono uguali negli eventi). Le righe di sola cassa restano con `Pvm`: hanno una data sola.
+- L'abbinamento, le zone, `not_yet_settled` e `deferred_rows` restano sulla data valuta.
+- Lo stato ha la precedenza: è già così. La riga di cassa abbinata deve essere «Toteutunut», e una compravendita senza la sua cassa
+  nell'estratto resta fuori come `not_yet_settled`. La regola «valuta dopo oggi» qui è superflua: un estratto di cassa non contiene
+  righe future.
+- La cura del punto 2.
+- `plugin_version` 1.1.0.
+- Test: le date delle coppie; i valori delle verifiche; i tre scenari a cavallo; i flussi Danske di `test_api/test_brim_api.py`.
+- Peso M–L.
+
+**5. I doppioni.** Il controllo del wizard vuole la data esatta (`importDedup.ts:247`).
+- Un file Danske reimportato fa tornare come nuove tutte le compravendite. Restano riconosciuti i dividendi, le scissioni e le righe
+  di sola cassa, che hanno una data sola.
+- Lo stesso vale per un **export nuovo che si sovrappone** a giorni già importati: le compravendite della parte comune entrano due
+  volte.
+- Le opzioni (la decisione la chiede il coordinatore al developer):
+  - **(a)** il plugin dà la data valuta come seconda data di confronto, non salvata (un campo dell'uscita BRIM letto solo dal
+    wizard). Peso M; protegge anche i cambi futuri;
+  - **(b)** il messaggio della issue chiede di cancellare e reimportare. Così però non copre le sovrapposizioni.
+
+**6. Il CSV generico.** Oggi «date» accetta anche `settlement_date`, `value_date` e `trade_date`, e vince la prima colonna da
+sinistra (`_detect_columns`, `broker_generic_csv/plugin.py:500-508`).
+
+| Opzione | Cosa fa | Note |
+|---|---|---|
+| **(a)** | Separare: `date` per l'operazione (`date`, `data`, `trade_date`, `transaction_date`, `exec_date`, `fecha`, `datum`) e un campo facoltativo `settlement_date` (`settlement_date`, `value_date`). Si registra l'operazione. Con le due colonne, una riga con la valuta dopo oggi resta fuori con una nota. Con la sola valuta, è la data, come oggi | *consiglio* |
+| **(b)** | Come (a), ma la valuta non decide nulla | |
+| **(c)** | Come oggi | |
+
+In (a) e (b) cambiano anche la tabella delle colonne in `user/transactions/import/generic-csv.en.md:56` e le sue traduzioni.
+
+**7. La regola 9 della skill, riscritta** (bozza):
+> **9. The operation date, and only settled rows.** Record every row on its **operation date**, the day the operation was made (the
+> trade date), never the settlement or value date. Decide whether the row is stable and booked from the columns the report has:
+> - a **status** column, when there is one, decides (and rule 10 says what to do with what it says);
+> - otherwise a **value or settlement date** after the server's today (`server_today()`) marks a provisional row, left out whole,
+>   with one info note: it arrives with the next import;
+> - with neither, the operation date must not be after today.
+>
+> A report set that compares balances with the bank's (Danske Bank) compares them in operation-date terms: it adds the cash and the
+> quantities still in flight on that day (operation date ≤ day < value date).
+
+**8. Il messaggio per la issue #26** (`928ffa97…/files/issue26-danske-messaggio-20261019.md`): esatto su 48/48, T+2, i 3 cambi d'anno,
+la nota per le righe non regolate, le prenotazioni in silenzio, l'avviso per gli stati ignoti, il rischio dei file già importati.
+Le correzioni che propongo:
+- **(i)** «New exports: nothing to do» vale solo per un export che **non si sovrappone** a giorni già importati, salvo l'opzione (a)
+  del punto 5.
+- **(ii)** Meglio chiedere la parola di `Tila` che uno screenshot: l'evidenza sotto l'avviso elenca le righe con gli importi.
+- **(iii)** Una riga in più: in LibreFolio la cassa si muove alla data dell'operazione, in banca alla valuta. Per uno o due giorni
+  dopo una compravendita i due saldi differiscono di quella somma.
+- **(iv)** «they never change your balances» → «in LibreFolio»: il `Saldo` della banca con una prenotazione non l'abbiamo mai visto.
+- **(v)** «the date you actually see in your bank's transaction list»: la lista della custodia mostra tutte e due le date. Meglio
+  «the day you placed the trade».
+
+**9. Fuori dal lotto** (proposta **W-B88**): 13 plugin nominano una data valuta o di regolamento (Avanza, Crédit Agricole, DEGIRO,
+Directa, Disnat, Intesa, InvestEngine, Rabobank, Saxo, Schwab, il CSV generico, Fineco, Danske). Va fatto l'inventario di quale data
+registra ciascuno, contro il principio. Dopo lo sprint, come W-B86.
+
+**10. Decisioni.**
+- **D-B52-1**, i doppioni: (a) o (b). La chiede il coordinatore.
+- **D-B52-2**, il CSV generico: (a) *(consiglio)*, (b) o (c).
+- **D-B52-3**, W-B88 dopo lo sprint.
+
+**Pesi**: Fineco S–M; Danske M–L, con la cura; i doppioni (a) M; il CSV generico M, con la doc e le traduzioni; la skill e la guida S.
