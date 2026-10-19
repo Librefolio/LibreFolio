@@ -6662,3 +6662,74 @@ Il rischio latente, nessuna azione per la 1.3:
 
 **Per dopo la 1.3**: J-56 (il gradino nel secchio del taglio) e J-59 stanno nella sezione di J del backlog, ma sono per Y
 (FE2): li prendo io quando il coordinatore li assegna. Non tocco la sezione di J.
+
+## 19/10 · Revisione di J-48 (`ab4be3daa`, ramo di J), sola lettura
+
+Richiesta del coordinatore alle 12:35, sulla base `88fdf4517`. Letti gli oggetti git dal mio worktree, non il worktree di
+J. Nessun test lanciato. J-48 è su `5da188c15`, che contiene Y-30 (`ede7adf75`). Dalla base comune, nei file dei lotti
+c'è solo J-48, e il mio ramo differisce solo nel giornale: nessun conflitto atteso.
+
+**Cosa fa.** Una gamba di trasferimento il cui partner sta presso un broker fuori dall'ambito si legge come una rettifica
+(J-10), e le viste dei lotti dicevano «rettifica». J-48 aggiunge `LotTimelineEventSchema.scope_boundary`: `IN` sulla
+riga d'apertura della gamba in arrivo, `OUT` su ogni riga di chiusura della gamba in partenza, `None` altrove.
+Il frontend lo legge con `scopeBoundaryOf` ed `eventLabelKind` (`lotChartShared.ts`) per l'etichetta e la categoria del
+marcatore, nelle tre viste: storia della modale, Gantt, grafico prezzo/costo medio. Chiavi `TRANSFER_IN`/`TRANSFER_OUT`
+in `brokers.lots.modal.event` e `brokers.lots.chartMarkers.eventType`, nelle 4 lingue. Una riga del CHANGELOG, la pagina
+utente, due pagine per sviluppatori e i test (backend 8, Vitest in 5 file).
+
+**Verdetto: OK.** Le tre cose chieste tengono; quattro note, nessuna bloccante.
+
+1. **Nessun numero cambia** ✅
+   - Backend: solo il campo nuovo. `kind`, prezzi, P&L e proventi non cambiano. Un `BoundaryLeg` tiene solo l'id e la
+     direzione.
+   - Frontend: `scope_boundary` lo leggono solo l'etichetta e la categoria del marcatore. `applyLotEvent` (la
+     ricostruzione di quantità e prezzo), le voci di dettaglio della modale e le righe di quantità ed effetto del tooltip
+     leggono ancora `kind`. Per una gamba in uscita `closureValueLabelKey` resta «consegnato», non «proventi».
+   - I test lo fissano: `applyLotEvent` uguale con e senza il campo, in entrata e in uscita; `closureValueLabelKey`.
+   - La tabella dei lotti ricava lo stato dalle quantità (aperto, parziale, chiuso), quindi lì nessuna etichetta di
+     rettifica rimane indietro.
+2. **Il broker dell'altro lato non viene mai nominato** ✅
+   - La gamba entra nel motore come un ADJUSTMENT a sé, sul proprio broker, con `related_transaction_id=None` (`_read` in
+     `scope_boundary.py`): nessuna riga riceve l'id o il broker del partner. Il test c3 lo fissa per tutti e due i lati.
+   - Le etichette («TRANSFER+/-», «Transfer In/Out») non nominano broker. Il tooltip del grafico per queste righe non ha
+     «Da/A» né il broker. La riga della modale nomina un broker dell'ambito (nota 2).
+3. **Etichette e colori coerenti, anche con Y-30** ✅
+   - Stessa famiglia nelle tre viste e nelle 4 lingue. Storia: «ADJUSTMENT+/-» diventa «TRANSFER+/-», mentre un
+     trasferimento dentro l'ambito resta «TRANSFER». Marcatori: «Adjustment In/Out» diventa «Transfer In/Out».
+   - Colori e glifi: la riga prende l'aspetto dei trasferimenti di ogni vista, senza nuovi colori:
+     - modale: il ⇄ blu, prima il + verde o il − ambra;
+     - Gantt: ◆, prima + o ×;
+     - grafico: la serie dei trasferimenti.
+     Nel diff nessuna classe cambia, quindi il cricchetto dei colori non si muove; i colori del distintivo della modale
+     sono categorici e preesistenti.
+   - Y-30: nel grafico l'unico pezzo vicino al codice di Y-30 è la chiamata di `eventCategory`. I marcatori restano sulla
+     linea del prezzo senza lotti (`resolveMarketPriceAtOrBefore` su `marketPriceLookupPoints`), quindi un marcatore
+     d'uscita sta sulla linea anche quando non resta nessun lotto. Con `FAILED` non ci sono eventi dei lotti, quindi
+     nessun marcatore.
+4. **Documentazione e testi** ✅: la pagina utente (una frase; le traduzioni restano in debito, vero, nessuno stamp), le
+   due pagine per sviluppatori (le àncore `#scope-edge-transfers` esistono in entrambe), la riga del CHANGELOG, le chiavi
+   in 4 lingue × 2 spazi.
+
+Le note:
+1. **La nota di J sul Gantt è confermata.** La serie `__event-markers` ha `tooltip: {show: false}` e nient'altro legge il
+   `label` del marcatore. Sul Gantt quindi cambia solo il glifo; `eventMarkerLabel` ed `eventMarkerLabelKey` producono un
+   testo che nessuno vede, già prima di J-48.
+   - Da aggiungere alla domanda per il developer: senza etichetta, sul Gantt entrata, uscita e trasferimento interno sono
+     tutti ◆. La direzione si legge solo dalla posizione: ◆ all'inizio di una corsia è un arrivo, alla fine un'uscita.
+   - Di conseguenza la chiave di deduplica `${kind}:${lotId}:${laneIndex}:${dateMs}` unisce in un solo ◆ un'uscita al bordo
+     e un trasferimento interno nello stesso giorno sulla stessa corsia (prima ◆ e ×). Nessun numero, ed è un caso raro.
+   - Se il developer sceglie di mostrare l'etichetta, `lots-analysis.md` ha bisogno di una frase.
+2. **Preesistente, non di J-48: la riga di chiusura nomina il broker d'apertura del lotto.** `_build_closure_rows` mette
+   `broker_id = lot.opening_broker_id`: `LotClosure` non ha un broker, solo `fragment_id`. La modale scrive
+   «<etichetta> <broker>».
+   - Con «TRANSFER-» la riga si legge «uscito da <broker>». È sbagliata quando il lotto si è spostato dentro l'ambito
+     prima di uscirne: aperto in A, spostato in B, mandato fuori da B, la riga dice «TRANSFER- A». Lo stesso vale oggi per
+     «SELL A» su una vendita in B, e prima di J-48 era «ADJUSTMENT- A».
+   - Resta un broker dell'ambito: il partner non è mai nominato.
+   - Dalla lettura del codice, non provato. Il test c3 filtra un broker solo, quindi non copre il caso.
+   - Rimedio possibile, nel backend di J: il broker di chiusura dal frammento chiuso (`closure.fragment_id`). Cambia un
+     testo visibile, quindi è una domanda; peso minimo, chiarezza.
+3. **`scripts/test_runner/_frontend_utility.py`, una riga**: il file di test nuovo in `front_utility_unit`, nel blocco dei
+   lotti. Nelle regole del mio avvio è un file del programma colori, che si tocca solo passando dal coordinatore. È
+   un'aggiunta e non porta conflitti: va solo confermato che J aveva il via.
+4. **Le prove di J non le ho viste girare**: la revisione è di lettura.
