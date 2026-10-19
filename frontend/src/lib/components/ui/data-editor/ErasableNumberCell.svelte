@@ -3,16 +3,16 @@
 
   Semantics:
   - `value == null` -> shows italic gray "not set" placeholder (input empty, no sample).
-  - `value == -1`   -> sentinel for "user cleared this field"; displays "cleared"
+  - `value === 'clear'` (CLEARED_CELL, N92) -> "user cleared this field"; displays "cleared"
                       italic; user can type a value or click the eraser to re-clear.
   - any other number -> displays the value; hovering shows the eraser button at left.
-  - Clicking the eraser -> sets value to -1 sentinel (no confirm, row-level revert
+  - Clicking the eraser -> sets value to 'clear' (no confirm, row-level revert
                            action covers accidental clears).
   - Pressing `Delete` while the input is focused and empty -> same as eraser.
 
-  The sentinel -1 is intercepted by the save path in AssetDataEditorSection which
-  sends it verbatim to the backend where PriceHistory.bulk_upsert interprets it as
-  "SET NULL" on the target column (F.4 MERGE refactor).
+  The save path in AssetDataEditorSection sends 'clear' as it is: the backend's
+  bulk_upsert_prices empties the target column (N92). A -1, which a CSV import can
+  bring, is just a negative number, never a clear.
 
   Uses Svelte 5 runes.
 -->
@@ -20,10 +20,11 @@
     import {Eraser} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {CLEARED_CELL} from './DataEditorTypes';
 
     interface Props {
-        /** Current numeric value. `null`/`undefined` = not set. `-1` = user-cleared sentinel. */
-        value: number | null | undefined;
+        /** Current numeric value. `null`/`undefined` = not set. `CLEARED_CELL` = cleared by the user (N92). */
+        value: number | typeof CLEARED_CELL | null | undefined;
         /** Minimum allowed value (values below this are clamped on commit). */
         min?: number;
         /**
@@ -32,8 +33,8 @@
          * italic gray - no sample number is displayed, per user feedback.
          */
         placeholder?: string;
-        /** Called when the user commits a new value (including `-1` sentinel). */
-        onchange: (newValue: number | null) => void;
+        /** Called when the user commits a new value (including `CLEARED_CELL`). */
+        onchange: (newValue: number | typeof CLEARED_CELL | null) => void;
     }
 
     let {value, min, placeholder = '', onchange}: Props = $props();
@@ -50,12 +51,12 @@
     // user while they type (the input is bound to `draft`).
     $effect(() => {
         if (editing) return;
-        const desired = value == null || value === -1 ? '' : String(value);
+        const desired = value == null || value === CLEARED_CELL ? '' : String(value);
         if (draft !== desired) draft = desired;
     });
 
     let isNotSet = $derived(value == null);
-    let isCleared = $derived(value === -1);
+    let isCleared = $derived(value === CLEARED_CELL);
 
     function commit() {
         const normalized = normalizeDecimalInput(draft ?? '');
@@ -77,7 +78,7 @@
         // confirm on every erase is too much friction (user feedback 2026-04-22).
         draft = '';
         editing = false;
-        onchange(-1);
+        onchange(CLEARED_CELL);
     }
 
     function handleKeyDown(ev: KeyboardEvent) {
