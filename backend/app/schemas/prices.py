@@ -59,6 +59,10 @@ from backend.app.schemas.signals import (
     SignalRequest,
     SignalResult,
 )
+from backend.app.services.assets.price_sampling import SampleResolution  # Z-29: a pure module of dates, no service
+
+#: A price query item's key, and a sample_like naming one (Z-29)
+SAMPLE_KEY_PATTERN = r"^[A-Za-z0-9_.:-]{1,64}$"
 
 # ============================================================================
 # BACKWARD-FILL INFO (EXTENDED FOR FX STALENESS)
@@ -87,6 +91,15 @@ class AssetBackwardFillInfo(BackwardFillInfo, FxBackwardFillInfo):
 # ============================================================================
 
 
+def _description_without_backticks(schema: dict) -> None:
+    """The web client's generator writes the description of a required field's model between backticks
+    (openapi-zod-client, a multi-line text in a template literal): a backtick inside would end it. Since Z-29,
+    ``FAPriceSampleBounds`` holds two required ``FAPricePoint`` fields; the docstring keeps its backticks, the
+    schema says quotes."""
+    if isinstance(schema.get("description"), str):
+        schema["description"] = schema["description"].replace("`", "'")
+
+
 class FAPricePoint(StrictModel):
     """Single price point with OHLC data.
 
@@ -108,6 +121,8 @@ class FAPricePoint(StrictModel):
     and always written verbatim. To "clear" a row use the DELETE endpoint on
     that date; to clear OHLC auxiliary fields use ``-1``.
     """
+
+    model_config = ConfigDict(json_schema_extra=_description_without_backticks)
 
     date: date_type = Field(..., description="Price date")
     open: Optional[SafeDecimal] = Field(None, description="Opening price (upsert: None=no-op, -1=SET NULL, >=0=write)")
@@ -309,6 +324,26 @@ class FAPriceQueryItem(StrictModel):
         default_factory=list,
         description="Optional cross/threshold rules evaluated on extended signal output",
     )
+    key: Optional[str] = Field(None, pattern=SAMPLE_KEY_PATTERN, description="A name for this item, unique in the request, that another item's sample_like can give (Z-29)")
+    max_points: Optional[int] = Field(
+        None,
+        ge=1,
+        le=10_000,
+        description=(
+            "Sample the series for a compact chart (Z-29): the most points the chart's plot takes. Per asset, the finest of daily, weekly (ISO, Monday to Sunday) and monthly whose count over the asset's own fill fits, "
+            "monthly when none does; a weekly or monthly series is the last point of each week or month, each the point the daily series has on that date, and sample_bounds its first and last points. "
+            "The result's resolution says the step. At most one of max_points, resolution and sample_like; not with signals, annotation_requests or include_events. None: every day."
+        ),
+    )
+    resolution: Optional[SampleResolution] = Field(None, description="Sample the series at this step whatever its length (Z-29): daily, weekly (ISO, Monday to Sunday) or monthly; as max_points does otherwise")
+    sample_like: Optional[str] = Field(
+        None,
+        pattern=SAMPLE_KEY_PATTERN,
+        description=(
+            "Sample the series like the item of this request whose key this is (Z-29): its step and buckets, from the later of its first day and this item's own; the same date_range. "
+            "A comparison's target, on its card. That item has no sample_like itself; with nothing to fill it lends its max_points or resolution."
+        ),
+    )
 
     @field_validator("target_currency")
     @classmethod
@@ -335,6 +370,25 @@ class FAPriceQueryItem(StrictModel):
                     raise ValueError(f"annotation source '{source.instance_id}' is not in signals")
         return self
 
+    @model_validator(mode="after")
+    def validate_sampling(self) -> FAPriceQueryItem:
+        """One way to sample the series at most, and a sampled series alone: signals, their annotations and events need
+        every day (Z-29)."""
+        asked = [name for name in ("max_points", "resolution", "sample_like") if getattr(self, name) is not None]
+        if len(asked) > 1:
+            raise ValueError(f"at most one of max_points, resolution and sample_like, not {' and '.join(asked)}")
+        if asked and (self.signals or self.annotation_requests or self.include_events):
+            raise ValueError(f"{asked[0]} samples the price series alone: not with signals, annotation_requests or include_events")
+        return self
+
+
+class FAPriceSampleBounds(StrictModel):
+    """The ends of a sampled price series (Z-29): the chart draws the last point of each week or month, and these two
+    points apart — the fill's first, from which the percentage view and «All» start, and its last."""
+
+    first: FAPricePoint = Field(..., description="The fill's first point: the range's start when a row precedes it, else the asset's first row in the range (with sample_like, the later of that and the item named's)")
+    last: FAPricePoint = Field(..., description="The fill's last point, on the range's end once cut at the ceiling: the last point of prices too")
+
 
 class FAPriceQueryResult(StrictModel):
     """Response for a single asset price query."""
@@ -350,6 +404,8 @@ class FAPriceQueryResult(StrictModel):
         default_factory=list,
         description="Technical signal results keyed by request instance_id",
     )
+    resolution: SampleResolution = Field("daily", description="The step of prices (Z-29): daily, or weekly or monthly when the item's max_points, resolution or sample_like sampled the series")
+    sample_bounds: Optional[FAPriceSampleBounds] = Field(None, description="A weekly or monthly series' first and last points (Z-29); None for a daily one")
 
 
 class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
