@@ -8522,3 +8522,211 @@ poi, in V1 e V3, `assignments|reported_currency|VARCHAR(8)` (in V2 e V4 nessuna 
   - l'involucro Docker: la SQL è la stessa; `sqlite3` nell'immagine deve essere almeno 3.35 per `DROP COLUMN`;
   - i dati veri del developer. **Consiglio**: prima su una copia di lavoro del suo DB (skill `real-data-copy`), per
     vedere davvero la sua impronta.
+
+### Lotto «H-57: le migrazioni della 1.3 in una sola `005_release_1_3_0_schema`, variante V4» (19/10, 12:27) — passi
+
+> Via del coordinatore, con le decisioni del developer (19/10, 12:27).
+> - La 010 esce, testuale: «nessuna colonna nel db, sono certo». Il codice di Z-32 (c) lo toglie Z sul suo ramo.
+> - I 13 indici inutili si tolgono nella 005, con `DROP INDEX IF EXISTS`. La 001 non si tocca: gli oggetti sono già
+>   rilasciati.
+> - I modelli si allineano, così gli indici non tornano.
+> - Una regola nuova nelle istruzioni del DB e in `patterns/alembic.md`. Testuale: «segna anche nelle skill del backend
+>   quando tocca il DB di stare attento a creare solo gli indici utili».
+> - Una guardia in `db validate` contro i doppioni.
+> - La procedura manuale V4 (da 011 e da 010) nel piano.
+> - Prima i rossi, poi la cura. L'equivalenza diventa un test, e i test vecchi delle migrazioni si sostituiscono
+>   (test-author).
+> - Entra nello stesso treno di Z-33r e della rimozione di Z-32 (c), con la produzione del developer ferma.
+>
+> Base: `884f32d1f` (merge di Z-33r, `065c9df77`; la 011 e il suo test sono già via). La rimozione di Z-32 (c) arriverà
+> con un altro aggiornamento di base. Fino ad allora `db/models.py` ha ancora `reported_currency` e il DB no: i test
+> che leggono le assegnazioni non possono andare a verde. `db/models.py` è condiviso con Z, su parti diverse; il merge è
+> additivo e lo fa il coordinatore.
+
+**Passi**:
+0. ✅ L'istantanea dello schema lasciato dalla catena vecchia, variante V4: 004→009, poi i 13 `DROP INDEX`.
+   - File `files/squash/schema_1_3_retired_chain_v4.json`: 50 oggetti (19 tabelle, 31 indici), nessuna riga.
+   - Generata prima di cancellare i file e rigenerata sulla base nuova: identica.
+   - Il prototipo V4 la riproduce esattamente.
+1. Rossi (test-author, due in parallelo):
+   - A: `test_migration_005_release_1_3.py` al posto di `test_migration_005…010`, l'harness in un modulo comune,
+     l'istantanea come fixture;
+   - B: la guardia contro i doppioni in `db_schema_validate.py`; la revisione «vecchia» dei test del ripristino, che
+     diventa la 004.
+2. Cura:
+   - la 005 (dal prototipo, V4, senza varianti);
+   - via `005_accounts_invites.py` … `010_provider_reported_currency.py`;
+   - le 13 dichiarazioni di `db/models.py`;
+   - le azioni `migration-0xx` in `_backend_db.py`;
+   - la regola in `.github/instructions/backend-db.instructions.md`.
+3. Doc (docs-writer): le pagine del DB, `patterns/alembic.md` con la regola degli indici.
+4. Verdi, dopo che la rimozione di Z-32 (c) è nella base:
+   - la categoria `db`, ricreando la corsia con `db populate --force --clean`;
+   - le suite del backup;
+   - `all-backend` in uno slot.
+5. Checkpoint, con la procedura V4 confermata.
+
+> **Avanzamento H-57 (19/10, 12:45)**:
+> - Passo 1 avviato: i due test-author lavorano in parallelo, su file distinti.
+> - Passo 2 pronto a secco: `files/h57/apply_h57.py`.
+>   - La migrazione definitiva (`files/h57/dry/005_release_1_3_0_schema.py`) dà, su un DB nuovo, oggetti e righe
+>     **identici** all'istantanea della catena ritirata. Il suo downgrade dà una 004 identica a una nuova, testo SQL
+>     compreso.
+>   - I modelli: 12 righe; `broker_id` solo in `transactions`, perché quello di `broker_user_access` tiene il suo
+>     indice.
+>   - Il runner: un'azione `migration-005`.
+>   - La regola: nelle istruzioni del DB e nello skill `devpy-server`, come chiesto dal developer («nelle skill del
+>     backend»).
+> - `create_all` dei modelli di oggi: `unique=True, index=True` dà un indice unico e nessun vincolo. Con `unique=True`
+>   da solo dà il vincolo, come il DB migrato.
+
+> **Avanzamento H-57 (19/10, 13:20)**:
+> - Basi: `11fcfa626` (merge di Z-32cr, `4eccb5d43`): il modello non ha più `reported_currency`. Rivista la parte di Z
+>   su `db/models.py`: OK.
+> - **Passo 1, B ✅**: la guardia `test_no_redundant_indexes` in `db_schema_validate.py` e la revisione «vecchia» dei
+>   test del ripristino portata alla 004.
+>   - Rosso provato, per la ragione giusta: prima ho ricreato la corsia sulla catena di oggi (`db populate --force
+>     --clean`, revisione `010_provider_reported_currency`), perché alla 011 ritirata il rosso sarebbe stato un altro.
+>   - `db validate`: **1 fallito, 17 passati**. Il fallito è `test_no_redundant_indexes`: 12 coppie su 11 indici
+>     (`ix_fx_conversion_routes_base` è prefisso di due). I due indici senza lettore (`ix_transactions_date`,
+>     `ix_fx_conversion_routes_quote`) non si vedono con regole sul catalogo: li toglie la 005, e nessuna guardia li
+>     può trovare. Log: `files/runs/h57-red-validate.log`.
+>   - I 12 moduli del backup cadono alla raccolta fino alla cura: il modulo di staging fissa
+>     `005_release_1_3_0_schema`, che ancora non esiste.
+> - **Passo 1, A**: prima stesura fatta (49 test, 104 casi; `alembic_harness.py`, l'istantanea come fixture). Ora riscrive
+>   i test del controllo dei doppioni, vedi sotto.
+> - **⚠️ Fuori pista: il controllo delle email doppie torna dove stava la 009.**
+>   - Nella prima stesura della 005 l'avevo messo in testa («niente scritto»). A ha trovato il problema: il rimedio che
+>     il messaggio nomina, `./dev.py user set-email` (`scripts/user_cli.py`, `cmd_set_email`), legge e scrive gli
+>     account col modello 1.3 (`session_version`…). Su una 004 nuda fallisce con «no such column».
+>   - Cura: il controllo va dopo i passi 1–5 (colonne, `account_tokens`, `registration_mode`, tabelle dei plugin,
+>     default degli inviti) e prima di `ux_users_email_lower`. È il comportamento della catena ritirata. Docstring
+>     rinumerata, 7 passi.
+>   - Provato su una 004 con due account `dup@example.com`/`Dup@Example.com`: rc 1; il messaggio nomina `#1 'user0'`,
+>     `#2 'user1'`; la versione resta 004; ci sono le 3 colonne e `account_tokens`; `ux` assente; gli indici inutili
+>     ancora lì. Dopo il rimedio, il secondo giro arriva alla 005 e gli oggetti sono uguali all'istantanea.
+>   - Lo stato parziale dipende dalla transazione. Il DDL prima del primo DML va in autocommit (controllo legacy delle
+>     transazioni di pysqlite); il primo DML (passo 3 o 5) apre la transazione che il fallimento annulla. Per questo
+>     i test fissano solo il garantito: versione, `ux` assente, righe degli account invariate, colonne e token
+>     presenti.
+>   - Verifiche ripetute sulla migrazione nuova: DB nuovo uguale all'istantanea; downgrade uguale a una 004 nuova.
+> - **Via del coordinatore (19/10) su due file di A, solo per l'effetto della fusione**:
+>   - `test_email_case.py`: ECASE-010 verificava `ix_users_email` su un DB di `create_all`. Lo riscrive A (test-author)
+>     perché verifichi l'unicità, non il nome dell'indice;
+>   - `scripts/user_cli.py`: solo la docstring di `cmd_set_email` («stops migration 009» → la 005 prima del suo
+>     indice), dentro `apply_h57.py`.
+> - Il runner: la descrizione dice «duplicate addresses stop it before the unique index, as the retired 009 did, and
+>   the remedy works».
+> - **Superficie della doc** (grep degli id ritirati fuori dal giornale, 47 righe):
+>   - il runner (23), dalla cura;
+>   - `database/users_access.md` (10). Riga 169: «stays at `008_registration_invite_default`, where `set-email` works»
+>     diventa «resta alla 004 con le colonne e i token della 1.3 già aggiunti»;
+>   - `database/index.md` (6 righe della tabella delle migrazioni → una);
+>   - `patterns/plugin_settings.md` (2, compresa l'azione `migration-007`), `settings.md` (1), `access_control.md` (1);
+>   - devWiki `domains/auth.md` (4): due percorsi della tabella delle fonti, che `check_source_paths.py` segnalerebbe.
+
+> **Avanzamento H-57 (19/10, 14:05): passi 1, 2, 3 e 5 ✅; del passo 4 manca solo `all-backend` (slot)**.
+> - **Passo 1, A ✅**. Il test del rifiuto dei doppioni segue il contratto della vecchia 009: si ferma prima
+>   dell'indice; la versione resta 004; `ux` assente; gli account invariati; colonne e `account_tokens` presenti, con
+>   lo stesso SQL dell'istantanea. Il rimedio `set-email` va a verde.
+>   - ECASE-010 (`test_email_case.py`, via del coordinatore) verifica la proprietà: un doppione esatto è rifiutato dal
+>     DB, via ORM e in SQL puro. Non verifica più il nome `ix_users_email`.
+>   - Il filtro mirato del warning SQLAlchemy in `test_unique_constraints` (vedi sotto).
+> - **La registrazione nel runner è andata con i rossi** (fa parte della definizione di fatto del test-author: senza,
+>   il rosso non si lancia). `apply_h57.py` ora legge il runner da `HEAD`, così la cura riscrive gli stessi byte.
+> - **Rosso `db migration-005`** (`files/runs/h57-red-migration-005.log`): 99 falliti e 5 passati. Le 99 sezioni di
+>   errore dicono tutte «red until H-57» (revisione assente, DB non alla revisione, file ritirati ancora lì). I 5
+>   verdi sono le autoverifiche dell'istantanea e dell'helper `shape`.
+> - **Rosso `services backup-staging`**: errore di raccolta, «the revision '005_release_1_3_0_schema' this module pins
+>   is not among this LibreFolio's migrations».
+> - **Passo 2, la cura ✅**: `python3 files/h57/apply_h57.py --apply`. Sei file scritti, uguali byte per byte alle
+>   copie a secco: la 005, `models.py`, il runner, le istruzioni del DB, lo skill `devpy-server`, la docstring di
+>   `cmd_set_email`. Via i sei file 005–010; `alembic heads` = `005_release_1_3_0_schema (head)`.
+>   - Docstring della 005: la parte «Not a step» porta il ragionamento di C-97 della vecchia 009 (a cui
+>     `database/index.md` rimanda); i dettagli di `account_tokens` (censimento D1, riuso degli id) vengono dalla
+>     vecchia 005. Rifatte sul file definitivo: equivalenza con l'istantanea (oggetti e righe) e downgrade uguale a
+>     una 004 nuova; ruff e black puliti.
+>   - Il commento di `models.py` su `ux_users_email_lower` («migration 009» → «migration 005, step 6»).
+> - **Passo 3, la doc ✅** (docs-writer): `database/index.md` (una riga al posto di sei; l'avviso «Retired revision
+>   ids»; la riga della 001), `users_access.md` (il paragrafo dei doppioni riscritto: resta alla 004 con colonne e
+>   token), `patterns/plugin_settings.md`, `settings.md`, `access_control.md`, `security.md`, `patterns/alembic.md`
+>   (due sezioni nuove: «One Migration per Release» e «Indexes: Only the Ones a Query Uses», con un `EXPLAIN QUERY
+>   PLAN` provato). `mkdocs build` stretto e `check-links` (97) puliti. La devWiki `domains/auth.md`: la tabella
+>   delle fonti punta alla 005 (`check_source_paths.py`: 7 percorsi su 4247, nessuno di H-57).
+> - **Passo 4, verdi** (corsia 6181, DB ricreato con `db populate --force --clean`: revisione 005, 31 indici,
+>   `integrity_check` ok, nessuna violazione di FK):
+>   - `db migration-005` 104/104, `db validate` 18/18, `db session-pragmas` 15/15;
+>   - `db post-migration` 45, `post-migration-event-types` 36, `post-migration-orphan-pairs` 47;
+>   - services `backup-staging` 202, `restore-non-iso-warning` 46, `backup-totals` 91, `backup-apply` 255,
+>     `backup-secure` 77, `stored-currencies` 38, `backup-leftovers` 44, `backup-outcome` 164, `email-case` 67,
+>     `registration` 151, `account-tokens` 76; utils `backup-cli-restore` 109;
+>   - api `backup-restore` 161, `backup-restore-apply` 215, `backup-secure` 24; e2e `backup-roundtrip` 3;
+>   - `check-orphans`: 486 file backend, tutti raggiungibili;
+>   - porta 6181 libera alla fine.
+>   - Manca `all-backend`: chiesto lo slot al coordinatore.
+> - **⚠️ Fuori pista: un warning nuovo in `db validate`**. Con `unique=True` da solo, `username` ed `email` diventano un
+>   `UniqueConstraint` del modello, e `test_unique_constraints` riflette `users`. Il `get_unique_constraints` di
+>   SQLAlchemy salta l'indice sull'espressione `ux_users_email_lower` con un `SAWarning`, lo stesso limite che la
+>   docstring di `test_indexes` descrive. Cura del test-author: `filterwarnings` su quel solo messaggio, in quel solo
+>   test. Rieseguito: 18/18, nessun warning.
+> - **⚠️ Fuori pista: black su `models.py`**. Togliere un `Index(...)` lascia una tupla di un elemento, che black
+>   compatta su una riga (2 punti). `models.py` era pulito a `HEAD`, quindi black sul file tocca solo quei due punti.
+>   - `_backend_db.py` non segue black già a `HEAD` (5 punti, lo stile del runner): niente riformattazione. La mia
+>     riga troppo lunga (354 caratteri) è accorciata a 255.
+>   - I 3 `PLC0415` di ruff su `_backend_db.py` c'erano già a `HEAD`.
+> - **⚠️ Fuori pista: il primo grep degli id ritirati usava `\b`**, che il `git grep -E` di questo Mac non capisce.
+>   Rifatto senza: restano menzioni solo nei commenti, in file di A (`user_service.py:141`,
+>   `test_registration_api.py:1087`, `test_registration_service.py:9` e `:411`, il blocco P18 di
+>   `test_dev_cli_image.py:2030`, `emailCase.test.ts:5`) e nella pagina storica `F-001.md:60` della devWiki. Chiesto
+>   al coordinatore il via per i soli commenti. Le pagine di Z sulla 011 sono storia e restano.
+> - **Passo 5 ✅: la procedura manuale V4, confermata sulla 005 definitiva** (`files/squash/procedure/confirm_v4.sh`).
+>   - Il DB di riferimento si fa con la catena vera del worktree. Per avere un DB alla 010, la catena ritirata viene
+>     dalla storia (`git archive 742b4c5ff`), in una cartella temporanea, e scende dalla 011 alla 010.
+>   - «da 011» e «da 010»: rc 0. La riga di verifica è uguale a quella di un DB nuovo (impronta
+>     `eeba1a55c8be8f71236eb734e05c036716c9d67d71b13cf5943a38546960112c`, quella del piano). Le righe sono invariate
+>     (11/76/2744/14). Poi `alembic upgrade head` con la catena vera trova il DB già alla 005.
+> - Backlog: H-57 (fatto, in attesa del treno) e H-58 (due lacune vecchie della doc del DB, viste dal docs-writer).
+
+> **Avanzamento H-57 (19/10, 14:20): `all-backend` nello slot del coordinatore (13:48–14:30)**.
+> - Comando: `files/runs/h57-allbackend.sh` (`--fresh-run --workers 2`, corsia 6181), sull'albero di H-57 prima delle
+>   modifiche ai commenti. Durata 13:48:38–14:12:41; porta libera alla fine; il backend condiviso è partito due volte
+>   (la pausa per `db create`) e si è fermato pulito tutte e due le volte.
+> - **28 771 passati, 10 falliti, 7 saltati.** Nessuno dei 10 viene da H-57:
+>   - i test che falliscono e il codice che provano sono identici a `HEAD`;
+>   - rifatti su una copia pulita di `HEAD` `11fcfa626` (`git archive`, senza il lavoro di H-57;
+>     `files/h57/base_repro.sh`), i 9 che non vogliono un server falliscono uguali, con gli stessi errori. Il decimo è
+>     il gemello API di EMF-009, con lo stesso errore.
+> - **Sono rossi della base**, e quindi di `dev_release2`. Mandati al coordinatore con le origini:
+>   1. **H-43 (`cd04b17b0`), miei**: `cmd_server` passa sempre `lane_settings=` a `configure_test_runtime`, e i
+>      sostituti dei test non lo accettano (`TypeError`). Sono 5 test: `test_probe_rate_limit.py` ×1,
+>      `test_dev_server_interrupt.py` ×3, `test_dev_designer_lab_banner.py` ×1. Cura proposta, H-59: i sostituti
+>      accettano `lane_settings=None` (test-author, 3 file non miei, serve il via).
+>   2. **A, `9e9dff30c`**: `LIBREFOLIO_DISABLE_WHATS_NEW` (`config/accounts.py:25`) manca in `.env.example`
+>      (`test_env_example`).
+>   3. **Tools, `a8299354f`**: `worker_exit_code` manca nei dizionari attesi di `test_tools_schemas.py` (2 test).
+>   4. **E, dopo `3e12b09ae`**: `get_user_settings` non rifiuta più un tema sconosciuto, e la precondizione di EMF-009
+>      cade (`test_email_flows.py`, `test_email_api.py`: «DID NOT RAISE ValidationError»).
+> - **⚠️ Fuori pista: un `DROP INDEX` non rimpicciolisce il file.** Con `auto_vacuum` a 0 le pagine liberate restano
+>   nel file e vengono riusate dalle scritture successive: sulla copia della procedura V4, 321 pagine prima e dopo,
+>   28 libere. Il backup usa `VACUUM INTO`, quindi gli archivi escono compatti. Da dire nel testo del CHANGELOG
+>   proposto; un `VACUUM` dopo l'upgrade sarebbe una scelta di prodotto, e non la faccio io.
+
+> **Avanzamento H-57 (19/10, 14:45): i commenti nei file di A, poi il checkpoint**.
+> - Via del coordinatore (13:47), solo docstring e commenti che nominavano revisioni ritirate:
+>   - test-author: `test_registration_api.py:1087`, `test_registration_service.py:9,412`, `test_dev_cli_image.py:2030`
+>     (blocco P18), `emailCase.test.ts:5`;
+>   - io: `user_service.py:141`, devWiki `features/F-001.md:60`.
+> - Prova che cambiano solo i commenti: `files/h57/verify_comment_only.py` confronta i file con la copia presa prima
+>   delle modifiche, cioè l'albero su cui ha girato `all-backend`. Per Python confronta l'AST senza docstring, per il
+>   TS il codice senza commenti. Risultato: codice identico in tutti e 5 i file di codice. Ruff e black puliti con la
+>   configurazione del repo; `git diff --check` pulito.
+> - Suite rieseguite sui file toccati: `services registration` 151, `api registration` 102, `utils dev-cli-image` 95,
+>   Vitest `emailCase.test.ts` 23 (binario locked). Porta 6181 libera.
+> - **H-59**, via del coordinatore, commit a parte dopo il checkpoint di H-57:
+>   - (1) le funzioni finte in 2 file accettano `lane_settings=None`; `test_probe_rate_limit` usa quella di
+>     `test_dev_designer_lab_banner`;
+>   - (2) `LIBREFOLIO_DISABLE_WHATS_NEW` va in `UNDOCUMENTED_ON_PURPOSE` di `test_env_example.py`. È la scelta (a), per
+>     D-A7: A la tiene nascosta, e `.env.example` non cambia;
+>   - (3) `worker_exit_code` nelle attese di `test_tools_schemas.py` (J-19).
+>   - EMF-009 va a E. Il brief del test-author è in `files/h59/test_author_prompt.md`.
+> - Fixture `schema_1_3_retired_chain_v4.json`: 50 oggetti, uguali all'istantanea, nessuna riga di dati.
