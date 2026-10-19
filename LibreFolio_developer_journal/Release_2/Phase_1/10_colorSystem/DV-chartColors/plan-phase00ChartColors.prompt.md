@@ -2238,6 +2238,186 @@ Z-29b su `LineChart.svelte`, che resta fuori.
   >   due elementi con fonti di colore diverse, e la precondizione scritta.
   > - Porta 6156 libera alla fine; HEAD invariato. Nel backlog DV-12 e DV-13.
 
+### DPR — I grafici nitidi dopo un cambio di schermo ✅ (19/10/2026; i due file di Y-N65 in DV-14)
+
+Il developer, dall'anteprima 6160: correlazione, dettaglio dell'asset, broker, PAC, «tutto ECharts» ha testi e numeri
+sfocati dopo aver spostato su uno schermo Retina il browser aperto su uno schermo a meno DPI. Lavoro tecnico, non di
+colore. Base `cc3c3af15` (fast-forward del coordinatore, pulita; dentro H-57: una sola migrazione `005`, quindi la
+corsia 6156 + `/tmp/librefolio-r2-dv`, cancellata per liberare disco, va ripopolata con `--force --clean`). File liberi
+secondo la 1.3, tranne `PriceChartFull` e `CandlestickChart` (Y-N65, circa un giorno); `LineChart` libero.
+
+- [x] ✅ (19/10/2026, 15:26–15:45) DPR-0, analisi (sola lettura; carico 72, nessuna run).
+  > **La causa, verificata in `node_modules` (echarts 6.0.0, zrender 6.0.0):**
+  > - `zrender/lib/config.js` calcola la densità una volta, al caricamento: `Math.max(window.devicePixelRatio || …,
+  >   1)`;
+  > - `CanvasPainter` la fissa all'init (`this.dpr = opts.devicePixelRatio || devicePixelRatio`), ogni `Layer` la
+  >   copia, e `Layer.resize` dimensiona il canvas con `this.dpr`;
+  > - `CanvasPainter.resize` ridimensiona gli strati solo se cambia la misura; `ECharts.resize(opts)` non accetta una
+  >   densità. Nessuna API pubblica la cambia dopo l'init.
+  > - Quindi una scheda caricata su uno schermo 1× disegna a 1× ogni grafico, anche quelli aperti dopo, fino al
+  >   ricaricamento. Vale anche per lo zoom del browser (Ctrl +/−), che cambia `devicePixelRatio`.
+  > **I siti:** i 22 risultati di `echarts.init` sono 18 chiamate vere in 17 file (`LotGanttChart` ne ha due: grafico e
+  > asse) più 4 commenti (`GrowthChart.svelte:323`, `echartsTooltipHelpers.ts:269`, `echartsDataZoomTouchPan.ts:31`,
+  > `chartFont.ts:29`).
+  > - `echartsTooltipHelpers` e `echartsDataZoomTouchPan` non chiamano `init`: il primo fa `resize()` su un'istanza
+  >   che riceve, il secondo ascolta i puntatori sull'elemento del grafico.
+  > - Fuori: la sonda 1×1 del Lab (`dev/designer-lab/engine/charts.ts:253`, `ec.init(host, null, …)`), mai disegnata;
+  >   il gate K-13 la esclude già.
+  > - Tre siti non passano opzioni (`ExposureTreemap`, `CorrelationHeatmap`, `ScatterChart`): canvas per default.
+  > **Già presente:** il gate K-13 `components/charts/chartFlagFont.test.ts` (`chart-safety-unit`) scandisce ogni
+  > `echarts.init(` di produzione (solo i blocchi `<script>`, rispettando parentesi e letterali), vuole
+  > `CHART_INIT_THEME` come secondo argomento, nessun accesso a `init` per altre vie, e almeno 18 chiamate in 17 file.
+  > `src/__tests__/component.ts` stubba `matchMedia` in jsdom (tutto «no match», `addEventListener` no-op); i test dei
+  > componenti sostituiscono ECharts con un registratore, e nessuno verifica gli argomenti di `init`.
+  > **Disegno proposto:**
+  > - Un modulo nuovo, `lib/components/charts/chartPixelRatio.ts`, accanto a `chartFont.ts`:
+  >   - `chartPixelRatio()`: `Math.max(window.devicePixelRatio || 1, 1)`, la regola di zrender, letta ogni volta;
+  >   - `chartInitOptions(element, extra?)`: `{renderer: 'canvas', …extra, devicePixelRatio: chartPixelRatio()}`, e
+  >     registra l'elemento per l'ascolto, che arma al primo uso. Ogni sito diventa
+  >     `echarts.init(el, CHART_INIT_THEME, chartInitOptions(el))`: una riga, nella forma che il gate K-13 legge.
+  >   - All'avvio il risultato è identico a oggi (zrender leggeva lo stesso valore): nessuno scatto della galleria
+  >     dovrebbe cambiare.
+  > - **L'ascolto:** una sola `matchMedia('(resolution: <dpr>dppx)')` per l'app, riarmata a ogni `change` col valore
+  >   nuovo, togliendo la precedente. A ogni cambio, per ogni elemento registrato, `echarts.getInstanceByDom(el)` (API
+  >   pubblica): un'istanza viva si aggiorna; un elemento staccato dal documento esce dall'elenco. Senza `matchMedia`
+  >   non fa niente.
+  > - **Aggiornare sul posto, non ricreare** (`setChartPixelRatio(chart, ratio)`): `painter.dpr`; per ogni strato
+  >   `layer.dpr`, `layer.ctx.dpr` e `layer.resize(w, h)` alla misura corrente; poi `painter.refresh(true)`. È il ramo
+  >   che `CanvasPainter.resize` esegue quando la misura cambia; il pennello legge `ctx.dpr` a ogni disegno
+  >   (`canvas/graphic.js:364–369`), quindi testi, linee e ombre tornano nitidi.
+  >   - **Perché non ricreare:** dispose e init perdono la finestra di dataZoom, la selezione della legenda, lo zoom di
+  >     mappe e treemap, la coppia selezionata della correlazione, il tooltip aperto; rigiocano l'animazione d'ingresso;
+  >     e chiedono a ognuno dei 17 componenti di riagganciare i suoi gestori (`chart.on`, `getZr().on` in candele,
+  >     prezzi e lotti, il touch pan, `attachChartReady`). Sul posto tutto lo stato resta, senza lavoro per componente.
+  >   - **Il prezzo:** cinque punti interni di zrender 6 (`painter.dpr`, `getLayers()`, `layer.dpr`, `layer.ctx.dpr`,
+  >     `layer.resize`, più `painter.refresh(true)`). Mitigazioni: si riconoscono prima di toccarli, e se non tornano il
+  >     grafico resta com'è oggi, con un avviso di debug (mai peggio di oggi); un test col vero zrender morde al primo
+  >     aggiornamento che li cambia; la versione è fissata dal lockfile.
+  >   - Dettaglio accettato: i percorsi già costruiti tengono la tolleranza di semplificazione della densità vecchia
+  >     (`PathProxy`, sotto un pixel CSS) fino al prossimo ridisegno dei dati.
+  > **Test, con `test-author`:**
+  > - `chartPixelRatio.test.ts`, nuovo, in `chart-safety-unit`: la regola della densità; `chartInitOptions` con la
+  >   densità del momento della creazione (lo stub passa da 1 a 2: il secondo grafico nasce a 2); l'ascolto con un
+  >   `matchMedia` finto (arma `1dppx`, al cambio toglie il vecchio e arma `2dppx`, aggiorna i grafici vivi, un secondo
+  >   cambio riarma ancora, salta i disposti, toglie gli staccati, senza `matchMedia` non lancia);
+  >   `setChartPixelRatio` sul **vero zrender** in jsdom col contesto 2D finto (ogni canvas a 2×, misura CSS invariata,
+  >   `ctx.dpr` 2, la forma ridisegnata con `setTransform(2, 0, 0, 2, …)`; idempotente; un painter non canvas resta
+  >   intatto).
+  > - Il gate K-13: un controllo in più col suo scanner, cioè il terzo argomento di ogni chiamata è
+  >   `chartInitOptions(<primo argomento>…)`; i due file di Y-N65 in una deroga nominata, che diventa rossa quando resta
+  >   ferma.
+  > - Un test di componente (`CorrelationHeatmap` o `SemiDonutChart`, col registratore): `init` riceve la densità
+  >   corrente.
+  > - Un E2E nuovo (Chromium, CDP `Emulation.setDeviceMetricsOverride`): il rapporto fra larghezza del canvas e
+  >   larghezza CSS passa da 1 a 2 per ogni grafico della pagina, con la finestra di zoom o la selezione intatte; un
+  >   grafico aperto dopo nasce a 2. Rischio: se Chromium headless non emette il `change` della risoluzione sotto
+  >   l'override, l'E2E copre la nascita e il resto lo coprono i test unitari.
+  > **File:** il modulo nuovo e il suo test; i 17 componenti, una riga e un import ciascuno (`PriceChartFull` e
+  > `CandlestickChart` per ultimi, o la riga data alla 1.3 per il merge). Condivisi, da dichiarare: il gate K-13
+  > (`chartFlagFont.test.ts`), `scripts/test_runner/_frontend_portfolio.py` (registrazione), lo spec E2E nuovo e la sua
+  > registrazione.
+  > **Run:** leggere sotto 50 (Prettier, compilatore sui 17 file, `front check`, Vitest: il nuovo, `chartFlagFont`,
+  > `chartFont.load` e i test dei 17 componenti); slot di circa 50–60 minuti nella 6156: prima `test db populate --force
+  > --clean` sulla corsia ricreata, poi `core-unit`, `component-unit`, `chart-safety-unit` e gli E2E (il nuovo,
+  > `dashboard`, `asset-detail`, `risk-lab`, `risk`, broker `detail`, `broker-sharing`, `pac-allocator-real`,
+  > `allocation-negative-cash`).
+  > **Domande aperte:** l'aggiornamento sul posto (interni di zrender) invece della ricreazione; il controllo nel gate
+  > K-13 invece di un gate nuovo; Y-N65, deroga o attesa; una riga nella pagina sviluppatori dei grafici, ora o a fine
+  > programma.
+- [x] ✅ (19/10/2026, 15:41) **OK del coordinatore all'implementazione**, con le risposte:
+  > 1. **Aggiornamento sul posto: sì**, alle condizioni scritte: interni riconosciuti prima di toccarli; se non tornano,
+  >    nessuna eccezione, il grafico resta com'è con l'avviso di debug; il test sul vero zrender morde al primo
+  >    aggiornamento che li cambia.
+  > 2. **Il controllo nel gate K-13**, dichiarato; la 1.3 è avvisata (`chart-safety-unit`).
+  > 3. **Y-N65: deroga nel gate.** `PriceChartFull` e `CandlestickChart` restano fuori finché la 1.3 non li dà liberi;
+  >    poi un lotto piccolo di DV: le due righe e la deroga tolta. Nessuna riga passata alla 1.3.
+  > 4. **Docs ora:** la pagina sviluppatori dei grafici; lo stamp di Aphra se ha traduzioni.
+  > **Run:** leggere sotto 50; lo slot è nostro senza via, appena il checkpoint è pronto, col carico sotto 50 (la 1.3
+  > ha confermato la deroga). T ha portato nel target le colonne fisse (`1fa64ceae`, solo `<style>` di `DataTable` e
+  > `AssetTable`): base merge del coordinatore prima del checkpoint.
+- [x] ✅ (19/10/2026) DPR-1, il codice e la pagina.
+  > **Note implementazione:**
+  > - **`lib/components/charts/chartPixelRatio.ts`, nuovo:** `chartPixelRatio()` (`max(devicePixelRatio, 1)`);
+  >   `chartInitOptions(element, extra?)` (canvas, `extra`, densità del momento; segue l'elemento e arma l'ascolto al
+  >   primo uso); l'ascolto, una `matchMedia` con `resolution` e la grafia WebKit per Safari prima del 16, riarmata a
+  >   ogni `change`, che porta alla densità nuova i grafici vivi (`getInstanceByDom`) e lascia andare gli elementi
+  >   staccati o senza grafico; `setChartPixelRatio(chart, ratio)`, che riconosce gli interni, non lancia mai, salta
+  >   un grafico disposto, uno SVG o uno già alla densità.
+  > - **15 componenti, 16 chiamate:** `echarts.init(el, CHART_INIT_THEME, chartInitOptions(el))` e un import. Fuori
+  >   `PriceChartFull` e `CandlestickChart` (deroga Y-N65).
+  > - **Docs:** `developer/frontend/components/charts.md` (solo inglese, nessuna traduzione e nessuna voce nella cache
+  >   di Aphra, quindi niente stamp): l'esempio di `init`, la sottosezione «Pixel density», la tabella delle guardie
+  >   (il terzo argomento nel gate K-13, il test nuovo).
+  > **Prove leggere** (carico 21): Prettier pulito sui 16 file; compilatore Svelte sui 15 componenti, 0 errori e 0
+  > avvisi; ratchet dei colori pulito.
+- [x] ✅ (19/10/2026, 16:45) DPR-2, i test (`test-author`, agente `56115849`; nessun codice di produzione, nessuna
+  operazione Git).
+  > **Note implementazione:**
+  > - `components/charts/chartPixelRatio.test.ts`, **nuovo, 49 test**, su ECharts e zrender 6 veri in jsdom col
+  >   contesto 2D finto che registra: la densità, `chartInitOptions`, l'ascolto (riarmo, un solo ascolto vivo, senza
+  >   `matchMedia` o con uno stub incompleto non lancia), i grafici seguiti portati alla densità nuova (stessa
+  >   istanza, stessi canvas; staccati, disposti e non seguiti lasciati stare), l'aggiornamento sul vero zrender (i
+  >   membri usati nominati, strato del passaggio del mouse compreso, idempotente, avanti e indietro), il
+  >   riconoscimento (SVG, membri mancanti con l'avviso, `refresh` che lancia).
+  > - `chartFlagFont.test.ts`, il gate K-13, **+4 test**: il terzo argomento è `chartInitOptions(<il primo argomento
+  >   della chiamata>…)`; la deroga `PIXEL_RATIO_PENDING` (`PriceChartFull`, `CandlestickChart`) diventa rossa se il
+  >   file sparisce, non ha chiamate o passa già `chartInitOptions`; due controlli sintetici prima.
+  > - `SemiDonutChart.test.ts`: il finto `init` registra tema e opzioni; un `describe` nuovo, densità 2 e 1,5.
+  > - `e2e/portfolio/chart-pixel-ratio.spec.ts`, **nuovo, 2 test**, Chromium desktop: la densità cambiata via CDP
+  >   (`Emulation.setDeviceMetricsOverride`); i grafici della Dashboard (crescita e torta) passano 1× → 2× → 1× con
+  >   le stesse istanze e gli stessi canvas; la torta di un'altra dimensione aperta dopo nasce a 2×. Una sonda propria
+  >   distingue il caso «Chromium non emette il `change`» (colpa del banco) da «i grafici restano a 1×» (prodotto).
+  >   `data-chart-renders` registrato, non asserito: un `ResizeObserver` può chiamare `resize()` dopo il cambio.
+  > - `scripts/test_runner/_frontend_portfolio.py`: il file nuovo in `chart-safety-unit`; l'azione nuova
+  >   `front-portfolio chart-pixel-ratio`. Il gate `check-orphans` è soddisfatto.
+  > - **Che mordono:** 13 mutanti del modulo costruiti in memoria, ciascuno preso dal suo test; il test di componente
+  >   rosso con le opzioni di prima; i controlli sintetici del gate.
+  > - Vitest di test-author: `chartPixelRatio` 49, `chartFlagFont` 20, `chartFont.load` 16, `SemiDonutChart` 14,
+  >   `CorrelationHeatmap` 10, `AllocationPieChart` 23, `GrowthChart` 166, `AllocationHistoryChart` 38,
+  >   `ExposureBars` 12: tutti verdi.
+  > - La pagina dei grafici, tabella delle guardie: la deroga nel gate e un paragrafo per il test di componente e
+  >   l'E2E, come suggerito.
+- [ ] DPR-3, `front check` e i Vitest toccati; poi lo slot (`files/dpr-slot/dv_dpr_slot.sh`, con
+  `DPR_E2E_ACTION=chart-pixel-ratio`): `test db populate --force --clean` sulla corsia ricreata, `api sync`,
+  `core-unit`, `component-unit`, `chart-safety-unit`, l'E2E nuovo, `dashboard`, `asset-detail`, `risk-lab`, `risk`,
+  broker `detail` (copre i tre grafici dei lotti), `broker-sharing`, `pac-allocator-real`, `allocation-negative-cash`.
+  > **Prove leggere** (16:39–16:54, `files/dv_dpr_light.sh`, log in `files/dpr-light/`, carico 29–43 nei passi,
+  > punte a 115 in attesa): `api sync` senza file tracciati cambiati; Prettier pulito anche sui tre file nuovi;
+  > compilatore sui 15 componenti, 0 errori e 0 avvisi; ratchet pulito; `front check` **0 errori e 0 avvisi**; **21
+  > file Vitest, 989 test, tutti verdi**: i 9 di test-author, poi `CorrelationHeatmap.tooltipEscape`,
+  > `AllocationPieChart.tooltipEscape`, `LineChart`, `ScatterChart`, `ExposureTreemap`, `PerformanceChart`,
+  > `AssetSetRiskReturnSection`, `L3RiskAdjusted`, `chartCoreHelpers`, i gate `htmlInterpolation` e
+  > `themeModeReads`, `scanColors` del Lab.
+  > - Nel backlog **DV-14**: `PriceChartFull` e `CandlestickChart` dopo Y-N65.
+  > **Checkpoint e base:** il coordinatore ha committato il checkpoint in `741a2d5c3` (genitore `cc3c3af15`, i 24 file)
+  > e fatto la base merge `be7033b1c` (genitori `741a2d5c3` e il target `ccc2a4141`, con T: colonne fisse e T2),
+  > pulita. **Slot partito alle 16:59** su `be7033b1c`, carico 49,7, taglio 17:55, `DPR_E2E_ACTION=chart-pixel-ratio`,
+  > log in `files/dpr-slot/`. Disco: 21 GiB liberi.
+  > **La sonda dell'E2E nuovo (17:08–17:16, carico fino a 157):** «nasce a 2×» verde (3,2 s); «seguono» rosso sulla
+  > sonda del test: sotto `Emulation.setDeviceMetricsOverride` `window.devicePixelRatio` arriva a 2, ma la query
+  > `(resolution: 1dppx)` della sonda non riceve nessun `change` in 10 s. È il banco, non il prodotto: la pagina non può
+  > sentire il cambio, e la sonda lo distingue apposta.
+  > **⚠️ Fuori pista:** a test-author la revisione del solo test 1: prima un aggiornamento del rendering a ogni lettura
+  > della sonda (gli eventi `change` delle media query partono in «update the rendering»); se Chromium non emette
+  > ancora niente, un ponte esplicito: `addInitScript` registra le `MediaQueryList` di risoluzione dell'app e il test
+  > le notifica dopo il cambio reale di densità, con un'annotazione che dice chi ha emesso l'evento. Tutto il resto
+  > resta reale: il cambio via CDP, i grafici, zrender, il gestore del modulo e il riarmo.
+- [x] ✅ (19/10/2026, 17:42) DPR-3, lo slot su `be7033b1c` (16:59–17:41, carico 18–157, log in `files/dpr-slot/`).
+  > - `test db populate --force --clean`: corsia ricreata (tabelle pulite, broker e utenti creati); `api sync` senza
+  >   file tracciati cambiati.
+  > - Vitest: `core-unit` 220 file e 9383 test; `component-unit` 191 file e 5010 test; `chart-safety-unit` 9 file e
+  >   144 test (col gate K-13 esteso e `chartPixelRatio.test.ts`); tutti verdi.
+  > - E2E, tutti nel progetto `[desktop]`: `dashboard` 27, `asset-detail` 43, `risk-lab` 44, `risk` 38, broker
+  >   `detail` 40 (i tre grafici dei lotti), `broker-sharing` 17, `pac-allocator-real` 1, `allocation-negative-cash` 4;
+  >   tutti verdi.
+  > - `chart-pixel-ratio`: alla prima esecuzione 1 su 2, rosso sulla sonda del banco; **rivisto e rilanciato da solo
+  >   (17:41–17:42, log `11_rerun-pixel-ratio.log`): 2 su 2.** La sonda, anche con due frame di rendering a ogni
+  >   lettura, non riceve il `change` né all'andata né al ritorno; l'annotazione dice «dispatched by the test», e da
+  >   lì i grafici seguono: 1× → 2× → 1×, stesse istanze, stessi canvas, e `data-chart-renders` invariato (2 → 2,
+  >   4 → 4): niente ridisegnato dalle opzioni.
+  > - Porta 6156 libera alla fine; HEAD `be7033b1c`. Da committare: lo spec rivisto, una clausola della `desc` del
+  >   runner e il piano.
+
 ## Definizione di fatto
 
 - **Un colore fisso per chiave:** ogni chiave ha un colore per tema, uguale in torta e storico, in dashboard, broker
