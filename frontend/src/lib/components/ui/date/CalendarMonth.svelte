@@ -24,7 +24,7 @@
         rangeStart?: string;
         /** Range end date (DateRangePicker) */
         rangeEnd?: string;
-        /** Pending first-click date (DateRangePicker) */
+        /** Pending first-click date (DateRangePicker). Not clickable: a second click on it would make a range of one day. */
         pending?: string;
         /** Currently hovered date for range preview (DateRangePicker) */
         hovered?: string;
@@ -194,6 +194,9 @@
             cls += ' cursor-not-allowed';
         } else if (future) {
             cls += ' opacity-40 cursor-not-allowed italic';
+        } else if (pending) {
+            // The pending day keeps its colour and says "you can't go there" as a future day does.
+            cls += ' cursor-not-allowed';
         }
 
         // Today ring
@@ -254,6 +257,7 @@
                     {#each week as cell}
                         {@const future = isFuture(cell.iso)}
                         {@const disabled = isDisabled(cell.iso)}
+                        {@const pendingDay = cell.iso === highlights.pending}
                         <td
                             class="text-center p-0"
                             onmouseenter={() => {
@@ -267,9 +271,9 @@
                                 data-state={getDayState(cell.iso, cell.inMonth)}
                                 data-in-month={cell.inMonth ? 'true' : 'false'}
                                 class="w-full aspect-square text-xs leading-none rounded-md transition-colors {getDayClasses(cell.iso, cell.inMonth)}"
-                                disabled={future || disabled}
+                                disabled={future || disabled || pendingDay}
                                 onclick={() => {
-                                    if (!disabled) onDayClick(cell.iso);
+                                    if (!disabled && !pendingDay) onDayClick(cell.iso);
                                 }}>{cell.day}</button
                             >
                         </td>
