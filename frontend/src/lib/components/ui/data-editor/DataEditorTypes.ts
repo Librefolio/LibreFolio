@@ -35,8 +35,8 @@ export interface ColumnDef {
     /**
      * F.5 — if `true` (only meaningful on `type: 'number'`) the cell is rendered with
      * the ErasableNumberCell component: NULL values show a "not set" placeholder and
-     * the user can clear the value via an eraser affordance that sends the `-1`
-     * sentinel upstream. Intended for optional OHLC auxiliary fields (open/high/low/volume).
+     * the user can clear the value via an eraser affordance that sets `CLEARED_CELL`
+     * ('clear', N92), sent upstream as is. Intended for optional OHLC auxiliary fields (open/high/low/volume).
      */
     erasable?: boolean;
 }
@@ -73,3 +73,7 @@ export interface GapRow {
     dayCount: number;
     expanded: boolean;
 }
+
+/** The value an erased cell holds and the price write sends (N92): the server empties the stored field. A number,
+ * -1 included, is always a number. */
+export const CLEARED_CELL = 'clear' as const;
