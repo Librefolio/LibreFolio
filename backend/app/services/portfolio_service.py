@@ -929,7 +929,7 @@ class PortfolioService:
             object.__setattr__(h, "nav_weight_percent", nav_weight.quantize(Decimal("0.01")) if nav_weight is not None else None)
 
         # ── 5. Performance from engine (correct daily NAV) ──
-        nav_snapshots, cash_flows_perf = views.build_performance_inputs()
+        nav_snapshots, cash_flows_perf = views.build_performance_inputs(date_from)
 
         # Period re-basing: when date_from is set, compute metrics for that period only
         period = rebase_to_period(nav_snapshots, cash_flows_perf, date_from)
@@ -1238,10 +1238,10 @@ class PortfolioService:
         views = DerivedViewsBuilder(result.daily_states, base_currency)
 
         # ── Build history dicts ──
-        history_dicts = views.build_history()
+        history_dicts = views.build_history(date_from, date_to)
 
         # ── Performance metrics ──
-        nav_snapshots, cash_flows = views.build_performance_inputs()
+        nav_snapshots, cash_flows = views.build_performance_inputs(date_from)
 
         # Period re-basing for ROI metrics
         period = rebase_to_period(nav_snapshots, cash_flows, date_from)
@@ -1359,7 +1359,11 @@ class PortfolioService:
             return []
 
         views = DerivedViewsBuilder(result.daily_states, base_currency)
-        by_broker = views.build_broker_pnl_history()
+        by_broker = views.build_broker_pnl_history(date_from, date_to)
+        if not by_broker:
+            # A window holding no state: the whole-history build still listed every broker, with no point. Otherwise
+            # the window lists them all, in the same order: every state carries every broker of the scope (DailyStateBuilder)
+            by_broker = {broker_id: [] for state in result.daily_states for broker_id in state.broker_contributions}
 
         broker_pnl_history: list[BrokerPnlHistory] = []
         for broker_id, points in by_broker.items():
@@ -1409,7 +1413,7 @@ class PortfolioService:
             return PnlCandleSeries(points=[])
 
         views = DerivedViewsBuilder(result.daily_states, base_currency)
-        raw_points = views.build_pnl_candles()
+        raw_points = views.build_pnl_candles(date_from, date_to)
         sliced_points = [PnlCandlePoint(date=p["date"], open=p["open"], high=p["high"], low=p["low"], close=p["close"]) for p in raw_points if (date_from is None or p["date"] >= date_from) and (date_to is None or p["date"] <= date_to)]
         return PnlCandleSeries(points=sliced_points)
 
@@ -1578,7 +1582,7 @@ class PortfolioService:
             return AcquisitionFundingSeries(points=[])
 
         views = DerivedViewsBuilder(result.daily_states, base_currency)
-        raw_points = views.build_acquisition_funding()
+        raw_points = views.build_acquisition_funding(date_from, date_to)
         # Canonical (date_from, date_to] boundary — exclusive start, inclusive end.
         # NOTE the deliberate difference from get_pnl_candles/get_broker_pnl_history,
         # whose engine-backed slicing this method otherwise mirrors: those two are
