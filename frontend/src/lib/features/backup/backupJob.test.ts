@@ -58,6 +58,9 @@ const zodios = vi.hoisted(() => ({
 vi.mock('$lib/api', () => ({zodiosApi: zodios, schemas: {}}));
 
 import {BACKUP_JOB_STORAGE_KEY, BackupJobController, backupProgress, type BackupFailure, type BackupJobApi, type BackupJobOptions, type BackupJobState} from './backupJob.svelte';
+// The module's namespace as well: the last section (the B-8 review of 19/10) reads through it an export that does not
+// exist yet, so that its red fails on an assertion, never on the import.
+import * as backupJobModule from './backupJob.svelte';
 
 // --- Fixtures -------------------------------------------------------------------------------------------------------
 
@@ -2446,5 +2449,674 @@ describe('B-8, developer 19/10 — no line otherwise: no job named, any other fa
         expect(api.get, 'precondition: three failed reads, then «Check again» and one poll').toHaveBeenCalledTimes(5);
         expect(controller.state, 'precondition: followed to its archive').toBe('done');
         expect(warn, 'a failed read and «Check again» write no line').not.toHaveBeenCalled();
+    });
+});
+
+// --- B-8, defect of the review (19/10): a secure request never follows; a clear one never presents a secure end -----
+
+/*
+ * The defect, found by the automatic review before B-15 + B-8 went in, relayed by the coordinator: `start(password)` — a
+ * SECURE request — refused `409 backup_busy` naming a running job of origin `ui`, nothing on offer, follows that job
+ * whatever its mode (the first B-8 group above; no B-8 case started with a password). The job may be another tab's, or
+ * another administrator's, and clear: the card then offers «Archive ready» for a clear .zip after the user asked for a
+ * secure one — the privacy notice is drawn in clear mode only —, and `onDone` fires `backup.created` as if it were the
+ * user's backup. Conversely, a CLEAR request may end up offering an .lfbk sealed with someone else's password. The
+ * client cannot tell before the end: the server sets `encrypted` on a job only when it ends (jobs.py), so a running job
+ * always reads `encrypted: false`; and a job records no user, so whose backup a 409 names is unknown.
+ *
+ * The decision (the coordinator, 19/10 17:37), verbatim: «confermo la tabella di destra. Con una password, dal 409
+ * nessun seguito; in chiaro, il controllo alla fine (`encrypted: true`, quindi non presentato, id dimenticato,
+ * `backup_busy`)» (the right-hand table confirmed: with a password, no follow from the 409; in clear, the check at the
+ * end — `encrypted: true`, so not presented, the id forgotten, `backup_busy`). The contract under test, the 409 naming a
+ * running job of origin `ui`, nothing on offer:
+ *   - a secure request (`start(password)`), whatever the job: not followed — no read, `failed`, `backup_busy`, failure
+ *     `start`, no job, `onFailed('backup_busy', 'start', null)` once, `onDone` never, the storage untouched (no
+ *     `setItem`, no `removeItem`), `followedJobId` as before (and `canRecheck` with it, as for the other origins),
+ *     nothing scheduled; the console line as today: one;
+ *   - a clear request (`start()`): followed as today, and the adoption remembered under `BACKUP_ADOPTED_STORAGE_KEY =
+ *     'librefolio.backup.adopted'` (exported; its value the job id) from the moment the job is followed, next to
+ *     `BACKUP_JOB_STORAGE_KEY`. Its end: `done` with `encrypted: false` → offered, `onDone` once, as today; `done` with
+ *     `encrypted: true` → NOT presented: `failed`, `backup_busy`, failure `start`, no job, `followedJobId` null, both
+ *     keys removed, `onDone` never, `onFailed('backup_busy', 'start', null)` once when the end is news (the usual rule:
+ *     seen running here, or read here after the refusal), `canRecheck` false, nothing scheduled — whether the polling
+ *     finds it, the first read, or «Check again» after a first read with no answer; `failed` (job) or gone (404) → as
+ *     today, and the adoption key removed too;
+ *   - after a reload, `resume()` applies the same check to the job a previous page adopted (both keys left): read
+ *     running, then polled to `encrypted: true` → not presented, announced once; read ended with `encrypted: true`
+ *     already → not presented, both keys removed, never announced (`resume()` never announces); `encrypted: false` →
+ *     offered, as today;
+ *   - housekeeping: a start that succeeds removes an adoption left over; a secure backup started here that ends
+ *     `encrypted: true` is offered, as today; an adoption key naming another id than the job followed is dropped at
+ *     construction, and has no effect; a path that adopts nothing writes and removes no adoption key, so the guards
+ *     above that find the storage untouched still hold;
+ *   - with an archive on offer, any request: as today — the offer stays, `backup_busy` beside it, nothing adopted.
+ *
+ * `BACKUP_ADOPTED_STORAGE_KEY` is not exported today: the storage is read through the literal (`ADOPTED_KEY`), and the
+ * export is checked on the module's namespace (`backupJobModule`), so that every red fails on its assertion, never on
+ * the import.
+ *
+ * Not pinned, the contract being silent: the adoption key once a clear end is offered (kept, or removed); a reload whose
+ * `resume()` gets no answer, then «Check again» finds the adopted job sealed (not presented, but announced or not?); a
+ * clear request whose 409 names a job this very controller started as a secure one (the 409 says nothing of the mode:
+ * adopted, so its sealed end would not be presented).
+ *
+ * Red today: a secure request follows the job named — its read is where each of those cases fails first —; a clear
+ * request never writes the adoption key, and offers a sealed end (`done`, `onDone`); `resume()` offers a sealed end too,
+ * and never removes an adoption key; a start that succeeds leaves the adoption key where it was; an adoption of another
+ * job is not dropped; the export is missing. Green today, and to stay so: the guards — the archive on offer kept, the
+ * clear end offered, an ordinary secure backup offered, a stale adoption without effect, a path that adopts nothing.
+ */
+
+/** The key of an adoption — a job followed from a 409 for a clear request —, as the decided contract names it (`BACKUP_ADOPTED_STORAGE_KEY`): written out, the export being missing today. */
+const ADOPTED_KEY = 'librefolio.backup.adopted';
+
+/** A job done whose archive is sealed (`encrypted: true`, an .lfbk): the end of a secure backup, perhaps with a password this tab never knew. */
+const sealed = (overrides: Partial<Job> = {}) => done({encrypted: true, file_name: 'librefolio-backup-20261015-120000.lfbk', ...overrides});
+
+/** What a case reads of the controller once a job has ended. */
+interface Outcome {
+    state: BackupJobState;
+    errorCode: string | null;
+    failure: BackupFailure | null;
+    job: InstanceBackupJob | null;
+}
+
+const outcome = (controller: BackupJobController): Outcome => ({state: controller.state, errorCode: controller.errorCode, failure: controller.failure, job: controller.job});
+
+/** A controller over an in-memory storage that holds `initial`: the page after a reload, the keys as the page before left them. */
+function setupWith(initial: Record<string, string>) {
+    const storage = memoryStorage(initial);
+    return {...setup({storage}), storage};
+}
+
+/** Every write and every removal of the adoption key the storage received. */
+const adoptionCalls = (storage: ReturnType<typeof memoryStorage>) => [...storage.setItem.mock.calls, ...storage.removeItem.mock.calls].filter(([key]) => key === ADOPTED_KEY);
+
+/**
+ * A clear start refused `backup_busy` by the running job `JOB_ID` of origin ui, nothing on offer: the job adopted, its
+ * first read held out (the deferred returned); the reads after it answer `after`, in turn.
+ */
+async function adoptedFirstReadOut(context: ReturnType<typeof setup>, after: Array<() => Promise<InstanceBackupJob>> = []): Promise<Deferred<InstanceBackupJob>> {
+    const first = deferred<InstanceBackupJob>();
+    context.api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+    answerReads(context.api, [() => first.promise, ...after]);
+
+    void context.controller.start();
+    await settle();
+
+    expect(context.api.start.mock.lastCall, 'precondition: a clear request, no password').toEqual([]);
+    expect(context.api.get.mock.calls, 'precondition: the job the refusal names is read').toEqual([[JOB_ID]]);
+    expect(context.controller.state, 'precondition: its first read is out').toBe('loading');
+    return first;
+}
+
+describe('B-8, review 19/10 — start(password) refused backup_busy naming a running job of origin ui: never followed (red today); an archive on offer stays on offer, whatever the request (green today)', () => {
+    // Every refusal here names a running job: one console.warn each, asserted where the contract names it.
+    spyOnConsoleWarn();
+
+    it.each<[string, () => Promise<ReturnType<typeof setup>>, string | null, boolean]>([
+        ['nothing followed', async () => setup(), null, false],
+        [
+            'the answer of a first secure start lost: the very case of B-8, with a password',
+            async () => {
+                const context = setup();
+                context.api.start.mockRejectedValueOnce(noAnswer());
+                await context.controller.start(PASSWORD);
+                expect(context.onFailed.mock.calls, 'precondition: the secure start that got no answer was announced').toEqual([['network', 'start', null]]);
+                context.onFailed.mockClear();
+                return context;
+            },
+            null,
+            false,
+        ],
+        ['another job followed, whose id a previous page left', async () => setup({stored: OTHER_JOB_ID}), OTHER_JOB_ID, true],
+        [
+            'the job named itself, a secure backup started here and followed until its reads failed and the polling gave up',
+            async () => {
+                const context = setup();
+                context.api.start.mockResolvedValueOnce(running());
+                context.api.get.mockRejectedValue(noAnswer());
+                await context.controller.start(PASSWORD);
+                await vi.advanceTimersByTimeAsync((1 + 2 + 3) * POLL_MS);
+                expect(context.controller.failure, 'precondition: the polling gave up').toBe('read');
+                context.api.get.mockReset();
+                context.onFailed.mockClear();
+                return context;
+            },
+            JOB_ID,
+            true,
+        ],
+    ])('%s: not followed — no read; failed (start) with backup_busy and no job, announced once; the storage untouched, the job followed before still followed; nothing scheduled; one console line (red today)', async (_case, arrive, followedBefore, canRecheck) => {
+        const {controller, api, storage, onDone, onFailed} = await arrive();
+        const kept = storage.items.get(KEY);
+        storage.setItem.mockClear();
+        storage.removeItem.mockClear();
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+        // A job read would be found running, and followed: the assertions below would say so.
+        api.get.mockResolvedValue(running());
+
+        void controller.start(PASSWORD);
+        await settle();
+
+        expect(api.start.mock.lastCall, 'precondition: a secure request, its password sent').toEqual([PASSWORD]);
+        expect(api.get, 'a secure request followed the job the 409 names: nothing proves it is the backup asked for').not.toHaveBeenCalled();
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe('backup_busy');
+        expect(controller.failure).toBe('start');
+        expect(controller.job).toBeNull();
+        expect(controller.busy).toBe(false);
+        expect(controller.followedJobId, 'the job followed before, as before').toBe(followedBefore);
+        expect(controller.canRecheck, 'as for the other origins: only while a job is still followed').toBe(canRecheck);
+        expect(onFailed.mock.calls, 'the refused start, announced once').toEqual([['backup_busy', 'start', null]]);
+        expect(onDone).not.toHaveBeenCalled();
+        expect(storage.setItem, 'the storage untouched: nothing of the job named is remembered, nothing adopted').not.toHaveBeenCalled();
+        expect(storage.removeItem, 'the storage untouched').not.toHaveBeenCalled();
+        expect(storage.items.get(KEY), 'the storage as it was').toBe(kept);
+        expect(vi.getTimerCount(), 'nothing scheduled').toBe(0);
+        expectOneLine(JOB_ID, 'ui', "the console line as today: one per refusal naming a job, the secure request's included");
+    });
+
+    it.each<[string, string | undefined]>([
+        ['clear', undefined],
+        ['secure', PASSWORD],
+    ])('an archive on offer, a %s request refused naming a running job of origin ui: done, the same archive on offer, backup_busy beside it, the running job not read, nothing adopted (green today: the guard)', async (_request, password) => {
+        const {controller, api, storage, onDone, onFailed} = setup();
+        api.start.mockResolvedValueOnce(done());
+        await controller.start();
+        expect(controller.state, 'precondition: an archive is on offer').toBe('done');
+        const archive = controller.job;
+        onDone.mockClear();
+        storage.setItem.mockClear();
+        storage.removeItem.mockClear();
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: OTHER_JOB_ID, origin: 'ui'}));
+        // A job read would be found running, and followed: the assertions below would say so.
+        api.get.mockResolvedValue(running({job_id: OTHER_JOB_ID}));
+
+        void controller.start(password);
+        await settle();
+
+        expect(api.start.mock.lastCall, 'precondition: the request asked for').toEqual(password === undefined ? [] : [password]);
+        expect(api.get, 'with an archive on offer, the running job is not read').not.toHaveBeenCalled();
+        expect(controller.state).toBe('done');
+        expect(controller.job, 'the archive on offer must be the one offered before').toBe(archive);
+        expect(controller.errorCode).toBe('backup_busy');
+        expect(controller.failure).toBe('start');
+        expect(controller.canRecheck).toBe(false);
+        expect(controller.followedJobId).toBe(JOB_ID);
+        expect(storage.items.get(KEY), 'a reload must still find the archive').toBe(JOB_ID);
+        expect(storage.setItem, 'nothing of the running job remembered, nothing adopted').not.toHaveBeenCalled();
+        expect(storage.removeItem).not.toHaveBeenCalled();
+        expect(onFailed.mock.calls).toEqual([['backup_busy', 'start', null]]);
+        expect(onDone).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+});
+
+describe('B-8, review 19/10 — start() refused backup_busy naming a running job of origin ui, nothing on offer: followed as today, the adoption remembered under BACKUP_ADOPTED_STORAGE_KEY from the moment it is followed (red today)', () => {
+    // Every refusal here names a running job: one console.warn each since 19/10, kept quiet here.
+    spyOnConsoleWarn();
+
+    it('BACKUP_ADOPTED_STORAGE_KEY is exported beside BACKUP_JOB_STORAGE_KEY, and is librefolio.backup.adopted (red today)', () => {
+        expect(Reflect.get(backupJobModule, 'BACKUP_JOB_STORAGE_KEY'), 'precondition: the namespace of backupJob.svelte.ts is read').toBe(KEY);
+        expect(Reflect.get(backupJobModule, 'BACKUP_ADOPTED_STORAGE_KEY'), 'the key of an adoption, exported by backupJob.svelte.ts').toBe(ADOPTED_KEY);
+    });
+
+    it.each<[string, () => ReturnType<typeof setup>]>([
+        ['nothing followed', () => setup()],
+        ['another job followed, whose id a previous page left', () => setup({stored: OTHER_JOB_ID})],
+        ['another job adopted, whose two keys a previous page left', () => setupWith({[KEY]: OTHER_JOB_ID, [ADOPTED_KEY]: OTHER_JOB_ID})],
+    ])('%s: the job named adopted — its id under the adoption key before its first read, next to the job key, and while it runs; a clear end offered and announced once, as today (red today)', async (_case, arrive) => {
+        const context = arrive();
+        const {controller, api, storage, onDone, onFailed} = context;
+        const first = await adoptedFirstReadOut(context, [ok(done())]);
+
+        expect(storage.items.get(KEY), 'precondition, B-8 decision 3: the job named is in the storage before its first read').toBe(JOB_ID);
+        expect(storage.items.get(ADOPTED_KEY), 'the adoption remembered from the moment the job is followed: before its first read, next to the job key, in place of any adoption left there').toBe(JOB_ID);
+
+        first.resolve(running());
+        await settle();
+
+        expect(controller.state).toBe('running');
+        expect(storage.items.get(ADOPTED_KEY), 'still adopted while it runs').toBe(JOB_ID);
+
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(api.get.mock.calls, 'only the job named was read').toEqual([[JOB_ID], [JOB_ID]]);
+        expect(controller.state, 'a clear end: offered, as today').toBe('done');
+        expect(controller.job).toEqual(done());
+        expect(controller.errorCode).toBeNull();
+        expect(controller.followedJobId).toBe(JOB_ID);
+        expect(storage.items.get(KEY), 'the archive must stay downloadable after a reload').toBe(JOB_ID);
+        expect(onDone.mock.calls, 'its end is news here: once').toEqual([[done()]]);
+        expect(onFailed).not.toHaveBeenCalled();
+        expect(vi.getTimerCount(), 'a timer outlived the job').toBe(0);
+    });
+});
+
+describe('B-8, review 19/10 — the end of an adopted job: done with encrypted: true, not presented (red today); failed or gone, as today, the adoption key removed too (red today)', () => {
+    // Every refusal here names a running job: one console.warn each, asserted where the contract names it.
+    spyOnConsoleWarn();
+
+    it.each<[string, Array<() => Promise<InstanceBackupJob>>, (first: Deferred<InstanceBackupJob>, controller: BackupJobController) => Promise<void>, unknown[][]]>([
+        [
+            'the polling finds it: read running, then done with encrypted: true',
+            [ok(sealed())],
+            async (first, controller) => {
+                first.resolve(running());
+                await settle();
+                expect(controller.state, 'precondition: followed while it runs, as today (a running job reads encrypted: false)').toBe('running');
+                await vi.advanceTimersByTimeAsync(POLL_MS);
+            },
+            [['backup_busy', 'start', null]],
+        ],
+        [
+            'its first read finds it done with encrypted: true already',
+            [],
+            async (first) => {
+                first.resolve(sealed());
+                await settle();
+            },
+            [['backup_busy', 'start', null]],
+        ],
+        [
+            'its first read gets no answer, then «Check again» finds it done with encrypted: true',
+            [ok(sealed())],
+            async (first, controller) => {
+                first.reject(noAnswer());
+                await settle();
+                expect(controller.failure, 'precondition: its first read failed').toBe('read');
+                expect(controller.canRecheck, 'precondition: «Check again» is offered').toBe(true);
+                await controller.recheck();
+            },
+            [
+                ['network', 'read', null],
+                ['backup_busy', 'start', null],
+            ],
+        ],
+    ])('a clear request, the job adopted — %s: not presented; failed (start) with backup_busy and no job, forgotten (both keys), onDone never, onFailed(backup_busy, start, null) once, no recheck, nothing scheduled (red today)', async (_path, after, reachEnd, announced) => {
+        const context = setup();
+        const {controller, api, storage, onDone, onFailed} = context;
+        const first = await adoptedFirstReadOut(context, after);
+        // The presence barrier of «both keys removed», below: taken while the job is followed, asserted once its end is
+        // checked, so that the red names the end first.
+        const whileFollowed = {job: storage.items.get(KEY), adopted: storage.items.get(ADOPTED_KEY)};
+
+        await reachEnd(first, controller);
+
+        expect(controller.state, 'a sealed archive offered to a clear request: another tab or another administrator may have asked for it, with a password this tab never knew').toBe('failed');
+        expect(controller.errorCode).toBe('backup_busy');
+        expect(controller.failure).toBe('start');
+        expect(controller.job, 'not presented: no job drawn').toBeNull();
+        expect(controller.busy).toBe(false);
+        expect(onDone, 'not presented: no archive announced').not.toHaveBeenCalled();
+        expect(onFailed.mock.calls, 'its end is news here: backup_busy, once').toEqual(announced);
+        expect(controller.followedJobId, 'the id forgotten').toBeNull();
+        expect(controller.canRecheck, 'forgotten: nothing left to check again').toBe(false);
+        expect(vi.getTimerCount(), 'nothing scheduled').toBe(0);
+        expect(whileFollowed, 'precondition, the presence barrier of the two expectations below: both keys named the job while it was followed').toEqual({job: JOB_ID, adopted: JOB_ID});
+        expect(storage.items.has(KEY), 'forgotten: the job key removed').toBe(false);
+        expect(storage.items.has(ADOPTED_KEY), 'forgotten: the adoption key removed').toBe(false);
+
+        const reads = api.get.mock.calls.length;
+        await controller.recheck();
+        await vi.advanceTimersByTimeAsync(100 * POLL_MS);
+
+        expect(api.get, 'a forgotten job was read again').toHaveBeenCalledTimes(reads);
+        expect(onFailed.mock.calls, 'announced once, and once only').toEqual(announced);
+        expectOneLine(JOB_ID, 'ui', 'the check at the end wrote a line: one per refusal, and only there');
+    });
+
+    it.each<[string, Array<() => Promise<InstanceBackupJob>>, (first: Deferred<InstanceBackupJob>) => Promise<void>, Outcome, unknown[][]]>([
+        [
+            'the polling finds it failed on the server',
+            [ok(failedJob('backup_no_space'))],
+            async (first) => {
+                first.resolve(running());
+                await settle();
+                await vi.advanceTimersByTimeAsync(POLL_MS);
+            },
+            {state: 'failed', errorCode: 'backup_no_space', failure: 'job', job: failedJob('backup_no_space')},
+            [['backup_no_space', 'job', failedJob('backup_no_space')]],
+        ],
+        [
+            'its first read finds it failed already',
+            [],
+            async (first) => {
+                first.resolve(failedJob('backup_interrupted'));
+                await settle();
+            },
+            {state: 'failed', errorCode: 'backup_interrupted', failure: 'job', job: failedJob('backup_interrupted')},
+            [['backup_interrupted', 'job', failedJob('backup_interrupted')]],
+        ],
+        [
+            'its first read finds it gone (404)',
+            [],
+            async (first) => {
+                first.reject(refusal(404, 'backup_job_not_found'));
+                await settle();
+            },
+            {state: 'failed', errorCode: 'backup_job_not_found', failure: 'read', job: null},
+            [['backup_job_not_found', 'read', null]],
+        ],
+        [
+            'the polling finds it gone (404)',
+            [ko(refusal(404, 'backup_job_not_found'))],
+            async (first) => {
+                first.resolve(running());
+                await settle();
+                await vi.advanceTimersByTimeAsync(POLL_MS);
+            },
+            {state: 'failed', errorCode: 'backup_job_not_found', failure: 'read', job: null},
+            [['backup_job_not_found', 'read', null]],
+        ],
+    ])('a clear request, the job adopted — %s: as today, and the adoption key removed with the job key (red today)', async (_path, after, reachEnd, expected, announced) => {
+        const context = setup();
+        const {controller, storage, onDone, onFailed} = context;
+        const first = await adoptedFirstReadOut(context, after);
+        // The presence barrier of «the adoption key removed», below: taken while the job is followed, asserted after
+        // what today already does.
+        const whileFollowed = {job: storage.items.get(KEY), adopted: storage.items.get(ADOPTED_KEY)};
+
+        await reachEnd(first);
+
+        expect(outcome(controller), 'as today').toEqual(expected);
+        expect(controller.followedJobId, 'as today: forgotten').toBeNull();
+        expect(controller.canRecheck, 'as today: nothing left to tell').toBe(false);
+        expect(onFailed.mock.calls, 'as today: its end is news here, once').toEqual(announced);
+        expect(onDone).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+        expect(storage.items.has(KEY), 'as today: the job key removed').toBe(false);
+        expect(whileFollowed, 'precondition, the presence barrier of the expectation below: both keys named the job while it was followed').toEqual({job: JOB_ID, adopted: JOB_ID});
+        expect(storage.items.has(ADOPTED_KEY), 'the adoption key removed with the job key').toBe(false);
+    });
+});
+
+describe('B-8, review 19/10 — after a reload: resume() applies the same check to the job a previous page adopted', () => {
+    // The page that adopts the job in the last case is refused by a running job: one console.warn, kept quiet here.
+    spyOnConsoleWarn();
+
+    /** The page after a reload: the job `JOB_ID` followed and adopted by the page before, both keys left; its reads answer `reads`, in turn. */
+    function reloadedAfterAdoption(reads: Array<() => Promise<InstanceBackupJob>>) {
+        const context = setupWith({[KEY]: JOB_ID, [ADOPTED_KEY]: JOB_ID});
+        expect(context.controller.followedJobId, 'precondition: the job the previous page followed').toBe(JOB_ID);
+        expect(context.storage.items.get(ADOPTED_KEY), 'precondition: its adoption, which names it, kept at construction').toBe(JOB_ID);
+        answerReads(context.api, [...reads]);
+        return context;
+    }
+
+    it.each<[string, Array<() => Promise<InstanceBackupJob>>, unknown[][]]>([
+        ['read running, then polled to done with encrypted: true — seen running here, so announced once', [ok(running()), ok(sealed())], [['backup_busy', 'start', null]]],
+        ['read done with encrypted: true already — never announced: resume() never announces', [ok(sealed())], []],
+    ])('a job the previous page adopted (both keys left), %s: not presented — failed (start) with backup_busy and no job, forgotten (both keys), onDone never, no recheck, nothing scheduled (red today)', async (_case, reads, announced) => {
+        const {controller, api, storage, onDone, onFailed} = reloadedAfterAdoption(reads);
+
+        await controller.resume();
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(api.get.mock.calls.flat(), 'precondition: the job read, then polled while it ran').toEqual(reads.map(() => JOB_ID));
+        expect(controller.state, 'the sealed end of a job the page before adopted, offered after a reload').toBe('failed');
+        expect(controller.errorCode).toBe('backup_busy');
+        expect(controller.failure).toBe('start');
+        expect(controller.job, 'not presented').toBeNull();
+        expect(controller.followedJobId, 'the id forgotten').toBeNull();
+        expect(controller.canRecheck).toBe(false);
+        expect(onDone, 'not presented: no archive announced').not.toHaveBeenCalled();
+        expect(onFailed.mock.calls).toEqual(announced);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(storage.items.has(KEY), 'forgotten: the job key removed').toBe(false);
+        expect(storage.items.has(ADOPTED_KEY), 'forgotten: the adoption key removed').toBe(false);
+    });
+
+    it.each<[string, Array<() => Promise<InstanceBackupJob>>, Outcome]>([
+        ['read failed on the server', [ok(failedJob('backup_interrupted'))], {state: 'failed', errorCode: 'backup_interrupted', failure: 'job', job: failedJob('backup_interrupted')}],
+        ['found gone (404)', [ko(refusal(404, 'backup_job_not_found'))], {state: 'idle', errorCode: null, failure: null, job: null}],
+    ])('a job the previous page adopted (both keys left), %s: as today, silently, and the adoption key removed with the job key (red today)', async (_case, reads, expected) => {
+        const {controller, storage, onDone, onFailed} = reloadedAfterAdoption(reads);
+
+        await controller.resume();
+
+        expect(outcome(controller), 'as today').toEqual(expected);
+        expect(controller.followedJobId, 'as today: forgotten').toBeNull();
+        expect(onDone).not.toHaveBeenCalled();
+        expect(onFailed, 'resume() never announces').not.toHaveBeenCalled();
+        expect(storage.items.has(KEY), 'as today: the job key removed').toBe(false);
+        expect(storage.items.has(ADOPTED_KEY), 'the adoption key removed with the job key').toBe(false);
+    });
+
+    it.each<[string, Array<() => Promise<InstanceBackupJob>>, unknown[][]]>([
+        ['read done with encrypted: false already — silently', [ok(done())], []],
+        ['read running, then polled to done with encrypted: false — seen running here, so announced once', [ok(running()), ok(done())], [[done()]]],
+    ])('a job the previous page adopted (both keys left), %s: offered, as today (green today: the guard)', async (_case, reads, announced) => {
+        const {controller, storage, onDone, onFailed} = reloadedAfterAdoption(reads);
+
+        await controller.resume();
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(outcome(controller)).toEqual({state: 'done', errorCode: null, failure: null, job: done()});
+        expect(controller.followedJobId).toBe(JOB_ID);
+        expect(storage.items.get(KEY), 'the archive must stay downloadable after a reload').toBe(JOB_ID);
+        expect(onDone.mock.calls).toEqual(announced);
+        expect(onFailed).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('the whole reload: the page that adopted the job goes while it runs; on the next page resume() follows it to done with encrypted: true — not presented, forgotten, announced once (red today)', async () => {
+        const first = setup();
+        first.api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+        first.api.get.mockResolvedValueOnce(running());
+        void first.controller.start();
+        await settle();
+        expect(first.controller.state, 'precondition: the job named is followed').toBe('running');
+        expect(first.storage.items.get(KEY), 'precondition: the job named is remembered for the next page').toBe(JOB_ID);
+        // The page goes, and its controller with it; the next page finds the storage as this one left it.
+        first.controller.dispose();
+        const left = Object.fromEntries(first.storage.items);
+        const {controller, api, storage, onDone, onFailed} = setupWith(left);
+        answerReads(api, [ok(running()), ok(sealed())]);
+
+        await controller.resume();
+        expect(controller.state, 'precondition: picked up running').toBe('running');
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(api.get.mock.calls, 'precondition: the next page read the job, then polled it').toEqual([[JOB_ID], [JOB_ID]]);
+        expect(controller.state, 'the next page offered the sealed end of a job the page before adopted').toBe('failed');
+        expect(controller.errorCode).toBe('backup_busy');
+        expect(controller.failure).toBe('start');
+        expect(controller.job).toBeNull();
+        expect(controller.followedJobId).toBeNull();
+        expect(onDone).not.toHaveBeenCalled();
+        expect(onFailed.mock.calls, 'seen running on this page: its end is news, once').toEqual([['backup_busy', 'start', null]]);
+        expect(vi.getTimerCount()).toBe(0);
+        // The presence barrier of the last expectation, asserted after the end so that the red names the end first.
+        expect(left, 'precondition: the page before left both keys').toEqual({[KEY]: JOB_ID, [ADOPTED_KEY]: JOB_ID});
+        expect(storage.items.size, 'forgotten: neither key is left').toBe(0);
+    });
+});
+
+describe('B-8, review 19/10 — housekeeping: a start that succeeds ends an adoption left over; a secure backup started here is offered; an adoption of another job is dropped at construction; no other path touches the adoption key', () => {
+    // No refusal here names a job: the spy only keeps a stray line off the run's output.
+    spyOnConsoleWarn();
+
+    it.each<[string, string | undefined, InstanceBackupJob]>([
+        ['clear', undefined, done({job_id: OTHER_JOB_ID})],
+        ['secure', PASSWORD, sealed({job_id: OTHER_JOB_ID})],
+    ])('a %s start that succeeds removes the adoption a previous page left; the job started here, polled to its end, is offered and announced once (red today)', async (_request, password, end) => {
+        const {controller, api, storage, onDone, onFailed} = setupWith({[KEY]: JOB_ID, [ADOPTED_KEY]: JOB_ID});
+        expect(storage.items.get(ADOPTED_KEY), 'precondition: the adoption a previous page left, which names the job followed, kept at construction').toBe(JOB_ID);
+        api.start.mockResolvedValueOnce(running({job_id: OTHER_JOB_ID}));
+        answerReads(api, [ok(end)]);
+
+        await controller.start(password);
+
+        expect(api.start.mock.lastCall, 'precondition: the request asked for').toEqual(password === undefined ? [] : [password]);
+        expect(controller.state, 'precondition: the job started here runs').toBe('running');
+        expect(storage.items.get(KEY), 'the job started here is the one followed now').toBe(OTHER_JOB_ID);
+        expect(storage.items.has(ADOPTED_KEY), 'a start that succeeds removes the adoption left over: the job followed now was started here').toBe(false);
+
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(api.get.mock.calls, 'only the job started here was read').toEqual([[OTHER_JOB_ID]]);
+        expect(controller.state, 'a job started here: offered, whatever its mode').toBe('done');
+        expect(controller.job).toEqual(end);
+        expect(onDone.mock.calls).toEqual([[end]]);
+        expect(onFailed).not.toHaveBeenCalled();
+        expect(storage.items.get(KEY)).toBe(OTHER_JOB_ID);
+    });
+
+    it.each<[string, () => Promise<ReturnType<typeof setup>>]>([
+        [
+            'polled to its end',
+            async () => {
+                const context = setup();
+                context.api.start.mockResolvedValueOnce(running());
+                answerReads(context.api, [ok(sealed())]);
+                await context.controller.start(PASSWORD);
+                await vi.advanceTimersByTimeAsync(POLL_MS);
+                return context;
+            },
+        ],
+        [
+            'its start answered with the archive already sealed',
+            async () => {
+                const context = setup();
+                context.api.start.mockResolvedValueOnce(sealed());
+                await context.controller.start(PASSWORD);
+                return context;
+            },
+        ],
+        [
+            'its reads failed until the polling gave up, then «Check again» finds it ended',
+            async () => {
+                const context = setup();
+                context.api.start.mockResolvedValueOnce(running());
+                answerReads(context.api, [ko(noAnswer()), ko(noAnswer()), ko(noAnswer()), ok(sealed())]);
+                await context.controller.start(PASSWORD);
+                await vi.advanceTimersByTimeAsync((1 + 2 + 3) * POLL_MS);
+                expect(context.controller.canRecheck, 'precondition: the polling gave up, «Check again» is offered').toBe(true);
+                context.onFailed.mockClear();
+                await context.controller.recheck();
+                return context;
+            },
+        ],
+        [
+            'the page reloaded while it ran, picked up running by resume()',
+            async () => {
+                const context = setup({stored: JOB_ID});
+                answerReads(context.api, [ok(running()), ok(sealed())]);
+                await context.controller.resume();
+                await vi.advanceTimersByTimeAsync(POLL_MS);
+                return context;
+            },
+        ],
+    ])('a secure backup started here — %s — ends done with encrypted: true: offered and announced once, as today; the check at the end is for an adopted job only (green today: the guard)', async (_case, reachEnd) => {
+        const {controller, storage, onDone, onFailed} = await reachEnd();
+
+        expect(controller.state).toBe('done');
+        expect(controller.job).toEqual(sealed());
+        expect(controller.errorCode).toBeNull();
+        expect(controller.followedJobId).toBe(JOB_ID);
+        expect(storage.items.get(KEY), 'the archive must stay downloadable after a reload').toBe(JOB_ID);
+        expect(onDone.mock.calls, 'its end is news here: once').toEqual([[sealed()]]);
+        expect(onFailed).not.toHaveBeenCalled();
+        expect(adoptionCalls(storage), 'nothing adopted: no call names the adoption key').toEqual([]);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it.each<[string, Record<string, string>, string | null]>([
+        ['naming another job than the one followed', {[KEY]: JOB_ID, [ADOPTED_KEY]: OTHER_JOB_ID}, JOB_ID],
+        ['naming a job, with no job followed', {[ADOPTED_KEY]: JOB_ID}, null],
+        ['that is not a job id', {[KEY]: JOB_ID, [ADOPTED_KEY]: 'not-a-backup-job-id-at-all-00000'}, JOB_ID],
+    ])('an adoption key %s is dropped at construction: removed, and nothing else touched (red today)', (_case, initial, followed) => {
+        const {controller, storage} = setupWith(initial);
+
+        expect(controller.followedJobId, 'precondition: the job followed, as the job key says').toBe(followed);
+        expect(storage.removeItem.mock.calls, 'an adoption that does not name the job followed is dropped at construction, and only it').toEqual([[ADOPTED_KEY]]);
+        expect(storage.items.has(ADOPTED_KEY)).toBe(false);
+        expect(storage.items.get(KEY), 'the job key as it was').toBe(initial[KEY]);
+        expect(storage.setItem).not.toHaveBeenCalled();
+    });
+
+    it('an adoption of another job has no effect: the job followed, picked up running by resume(), ends done with encrypted: true — offered and announced once, as a job this tab followed (green today: the guard)', async () => {
+        const {controller, api, storage, onDone, onFailed} = setupWith({[KEY]: JOB_ID, [ADOPTED_KEY]: OTHER_JOB_ID});
+        answerReads(api, [ok(running()), ok(sealed())]);
+
+        await controller.resume();
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(api.get.mock.calls, 'only the job followed is read').toEqual([[JOB_ID], [JOB_ID]]);
+        expect(controller.state, 'an adoption of another job turned the check at the end on for this one').toBe('done');
+        expect(controller.job).toEqual(sealed());
+        expect(onDone.mock.calls).toEqual([[sealed()]]);
+        expect(onFailed).not.toHaveBeenCalled();
+        expect(storage.items.get(KEY)).toBe(JOB_ID);
+    });
+
+    it.each<[string, Record<string, string>]>([
+        ['an adoption key naming the job followed', {[KEY]: JOB_ID, [ADOPTED_KEY]: JOB_ID}],
+        ['a job followed, no adoption key', {[KEY]: JOB_ID}],
+        ['nothing stored', {}],
+    ])('at construction, %s: nothing written, nothing removed (green today: the guard)', (_case, initial) => {
+        const {storage} = setupWith(initial);
+
+        expect(storage.setItem).not.toHaveBeenCalled();
+        expect(storage.removeItem).not.toHaveBeenCalled();
+        expect(Object.fromEntries(storage.items), 'the storage as the previous page left it').toEqual(initial);
+    });
+
+    it.each<[string, () => Promise<ReturnType<typeof setup>>]>([
+        [
+            'a clear start that succeeds, its job polled to its archive, the archive deleted',
+            async () => {
+                const context = setup();
+                context.api.start.mockResolvedValueOnce(running());
+                answerReads(context.api, [ok(done())]);
+                context.api.remove.mockResolvedValueOnce(undefined);
+                await context.controller.start();
+                await vi.advanceTimersByTimeAsync(POLL_MS);
+                await context.controller.remove();
+                expect(context.controller.state, 'precondition: the archive deleted').toBe('idle');
+                return context;
+            },
+        ],
+        [
+            'a secure start that succeeds, its job read failed on the server',
+            async () => {
+                const context = setup();
+                context.api.start.mockResolvedValueOnce(running());
+                answerReads(context.api, [ok(failedJob('backup_no_space'))]);
+                await context.controller.start(PASSWORD);
+                await vi.advanceTimersByTimeAsync(POLL_MS);
+                expect(context.controller.failure, 'precondition: the job failed').toBe('job');
+                return context;
+            },
+        ],
+        [
+            'a start that succeeds, its job found gone (404)',
+            async () => {
+                const context = setup();
+                context.api.start.mockResolvedValueOnce(running());
+                answerReads(context.api, [ko(refusal(404, 'backup_job_not_found'))]);
+                await context.controller.start();
+                await vi.advanceTimersByTimeAsync(POLL_MS);
+                expect(context.controller.errorCode, 'precondition: the job found gone').toBe('backup_job_not_found');
+                return context;
+            },
+        ],
+        [
+            'a job a previous page followed, picked up by resume(), then reset()',
+            async () => {
+                const context = setup({stored: JOB_ID});
+                answerReads(context.api, [ok(done())]);
+                await context.controller.resume();
+                context.controller.reset();
+                expect(context.controller.state, 'precondition: reset').toBe('idle');
+                return context;
+            },
+        ],
+    ])('%s: the job key forgotten, the adoption key never written nor removed (green today: the guard)', async (_case, arrive) => {
+        const {storage} = await arrive();
+
+        expect(storage.removeItem.mock.calls, 'precondition: the job key was removed').toContainEqual([KEY]);
+        expect(adoptionCalls(storage), 'a path that adopts nothing wrote or removed the adoption key').toEqual([]);
     });
 });
