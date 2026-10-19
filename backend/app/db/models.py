@@ -1261,11 +1261,6 @@ class AssetProviderAssignment(SQLModel, table=True):
         max_length=8,
         description="Quote currency the provider reported at its last history fetch, as reported (Yahoo's GBp: pence); NULL until then (Z-32)",
     )
-    exchange_timezone: Optional[str] = Field(
-        default=None,
-        max_length=64,
-        description="The exchange's IANA timezone the provider dates its rows in, learnt at a fetch; 'legacy-utc' marks an assignment whose rows an older version dated by UTC, checked once at its next fetch (Z-33)",
-    )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

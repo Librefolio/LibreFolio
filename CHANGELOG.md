@@ -167,7 +167,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
-- **Yahoo Finance prices, dividends and splits of exchanges east of UTC (e.g. Milan, London in summer, Tokyo) were stored one day early.** They are now dated on the exchange's own day, and the rows saved by earlier versions are moved to it once, at each asset's first sync after the update: that sync reads the full history and may take a little longer.
+- **Yahoo Finance prices, dividends and splits of exchanges east of UTC (e.g. Milan, London in summer, Tokyo) were stored one day early.** New ones are dated on the exchange's own day; rows saved by earlier versions stay as they are.
 - The asset page now names the data provider (for example "Yahoo Finance") instead of its internal code when the provider list arrives after the asset.
 - **The bulk editor names a broker you can only view, and flags the row it refuses.** Copying a transfer whose receiving broker is shared with you as a viewer showed that side as "—" and reported the refusal on the sending row as "Broker #N". The grid and the message now name the broker, and the refusal sits on the row that caused it; refused edits, deletions and splits are flagged on their own rows too.
 - **Deleting a broker also removes its leftover import folders and lock file**, which used to pile up in the broker reports storage.
