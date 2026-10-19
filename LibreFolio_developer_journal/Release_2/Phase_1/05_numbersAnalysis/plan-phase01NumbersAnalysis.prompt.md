@@ -7261,3 +7261,195 @@ né nel form, che lo colora soltanto. Da decidere (developer): (a) rifiutarlo co
 (c) com'è oggi. La sfumatura: per N92 un prezzo negativo esiste.
 
 - **Stato**: consegnato al coordinatore; FROZEN. Nessun server avviato, porta 6185 libera.
+
+#### J-48 — le etichette esplicite di trasferimento (via del 19/10 ~11:42; base `5da188c15`)
+
+- **Via del coordinatore**, col developer: «se lo riesci a risolvere ok». Si riapplicano le patch parcheggiate: prima i
+  rossi, poi la cura. Adesso codice e controlli leggeri, solo con carico sotto 50. Suite pesanti ed E2E dopo le 14:00,
+  in uno slot del coordinatore. **J-57 non parte**: Q-J57-1/3/4 e J-60 aspettano il developer.
+- **Forma, già approvata il 17/10**: un campo additivo `LotTimelineEventSchema.scope_boundary: "IN" | "OUT" | None`.
+  Solo etichette: l'economia resta su `kind`, il broker compagno non compare mai (R13-SEC7). Y rivede il frontend.
+- **Base**: `5da188c15`, pulita. Y-30 è entrata (`6db475ac9`): ha toccato `lots_analysis_service.py`,
+  `schemas/portfolio.py`, `LotWacPriceChart.svelte` e `lotWacPriceChartHelpers.ts`. La patch del backend parcheggiata
+  si applica ancora (`git apply --check`, spostamento di 13 righe).
+- **Passi**:
+  1. rossi del backend (test-author), visti fallire sul codice di oggi;
+  2. la cura del backend (schema e servizio), `api sync`, verdi;
+  3. rossi Vitest dei tre aiuti (test-author), visti fallire;
+  4. la cura del frontend (le tre viste, solo etichette) e la coppia di chiavi i18n in `brokers`, verdi;
+  5. doc (pagina utente dei lotti, `lots-analysis.md` per gli sviluppatori);
+  6. slot dopo le 14:00: suite dei lotti, E2E dei broker; checkpoint FROZEN.
+- ✅ **Passo 1 — rossi del backend** (19/10, test-author, 11:45–11:57; corsa 11:59 a carico 18): 9 casi in coda a
+  `test_lots_transfer_scope_boundary.py`, tutti col prefisso `j48`.
+  - Rossi R1–R5: l'arrivo visto dal ricevente (`IN`, nelle due cronologie), la partenza vista dal mittente (`OUT`), il
+    mittente senza prezzi (le chiusure al costo proprio, `OUT`), il co-proprietario del solo ricevente (`IN`), e il campo
+    dichiarato nello schema (default `None`; `IN`, `OUT` e `None` accettati, `TRANSFER` rifiutato).
+  - Controlli C1–C3: un trasferimento tutto dentro il perimetro non ha etichette; una rettifica normale nemmeno; nessuna
+    riga nomina il broker compagno (C3 per ricevente e mittente).
+  - Ogni rosso controlla anche che nessun'altra riga abbia un'etichetta: una cura che etichettasse per `lot_id` invece
+    che per `transaction_id` fallirebbe.
+  - Prova: `services roi-fifo-utils test_lots_transfer_scope_boundary` → **5 failed, 20 passed**. I 5 falliscono sul
+    valore dell'etichetta (`None` invece di `IN`/`OUT`; campo non dichiarato), nessun `AttributeError`.
+  > **⚠️ Fuori pista**: `dev.py test` non accetta `-k`. Un sottoinsieme si sceglie col nome del modulo dopo l'azione;
+  > `runs.sh` corretto.
+- ✅ **Passo 2 — la cura del backend** (19/10, 12:00): la patch parcheggiata, applicata con `git apply` (spostamento di
+  13 righe dopo Y-30).
+  - `schemas/portfolio.py`: `LotTimelineEventSchema.scope_boundary: Optional[Literal["IN", "OUT"]] = None`, con una
+    descrizione di una riga sola (niente backtick: `generated.ts` resta valido).
+  - `lots_analysis_service.py`: `_build_lot_event_rows` riceve `boundary.legs` e lo passa alle righe d'apertura e di
+    chiusura; `_boundary_direction(legs, transaction_id)` dà la direzione della gamba della riga, o `None`. Le righe
+    dei trasferimenti dentro il perimetro non cambiano. Nessuna cifra cambia.
+  - Prove: ruff e black puliti; `roi-fifo-utils test_lots_transfer_scope_boundary` **25 passed**;
+    `lots-analysis-pure` **198 passed**; `api sync` senza file tracciati cambiati. Il client generato ha
+    `scope_boundary: z.union([z.enum(['IN', 'OUT']), z.null()]).optional()`.
+- ✅ **Passo 3 — rossi Vitest** (19/10, test-author, 11:45–12:03; corsa 12:04 a carico 25): 43 casi, 30 rossi e 13
+  controlli.
+  - `lotChartShared.scopeBoundary.test.ts`, nuovo: `scopeBoundaryOf` (anche la forma ad array del client) ed
+    `eventLabelKind` (`TRANSFER_IN`/`TRANSFER_OUT`; ogni altro tipo resta il suo).
+  - `lotGanttChartHelpers.test.ts`: `eventMarkerKind(kind, boundary)` → `TRANSFER`; il nuovo `eventMarkerLabelKey`.
+  - `lotWacPriceChartHelpers.test.ts`: `eventCategory(kind, boundary)` → `transfer`. Controlli: `applyLotEvent` dà lo
+    stesso stato con e senza l'etichetta, quindi l'economia non si muove.
+  - `lotCustodyModalHelpers.test.ts`: `eventMarkerKind(event)` → `transfer`. Controllo: la chiusura di una gamba in
+    uscita resta «handed over».
+  - Prova: le 4 suite → **30 failed, 258 passed**. Le funzioni che esistono falliscono sul valore («expected 'open' to
+    be 'transfer'»); le nuove per l'export che manca.
+  - Il file nuovo è registrato nel runner (`_frontend_utility.py`, dopo `lotChartShared.test.ts`; le mie righe).
+- ✅ **Passo 4 — la cura del frontend e l'i18n** (19/10, 12:05–12:09): script `files/j/j48/patch_frontend.py`, 24
+  modifiche in 7 file, solo etichette e categoria dei segni.
+  - `lotChartShared.ts`: `ScopeBoundary`, `scopeBoundaryOf` (scioglie la forma ad array del client) ed
+    `eventLabelKind`. È il posto unico della regola, letto dalle tre viste.
+  - Gantt: `eventMarkerKind(kind, boundary)` dà il ◆ `TRANSFER`, e `eventMarkerLabelKey` la chiave dell'etichetta.
+  - Grafico WAC: `eventCategory(kind, boundary)` mette il segno nella serie dei trasferimenti. Il titolo del tooltip
+    legge l'etichetta del trasferimento; la riga «Adjustment type» cade per una riga di confine.
+  - Modale: l'etichetta della riga dello Storico, e il suo segno (`eventMarkerKind`).
+  - `applyLotEvent` e ogni ramo di quantità e prezzo leggono ancora `kind`.
+  - i18n, 4 chiavi in `brokers` con `dev.py i18n add`, ognuna nello stile della sua vista:
+    - la modale usa il maiuscolo: `brokers.lots.modal.event.TRANSFER_IN`/`TRANSFER_OUT`, «TRANSFER+»/«TRANSFER-»,
+      «TRASFERIMENTO+»/«-», «TRANSFERT+»/«-», «TRANSFERENCIA+»/«-»;
+    - i grafici usano le iniziali maiuscole: `brokers.lots.chartMarkers.eventType.TRANSFER_IN`/`TRANSFER_OUT`, «Transfer
+      In»/«Out», «Trasferimento in entrata»/«in uscita», «Transfert entrant»/«sortant», «Transferencia de
+      entrada»/«de salida».
+  - Prove: le 7 suite Vitest dei lotti **325 passed**; svelte-check **0 e 0**; `gate-i18n-catalog` **176 passed**;
+    `gate-i18n-usage` **195 passed**. L'audit non mette nessuna delle 4 chiavi fra le inutilizzate o le non verificate.
+    Prettier pulito, dopo un `--write` su `LotGanttChart.svelte`, che ha rimesso su una riga il ternario delle
+    etichette.
+  > **⚠️ Fuori pista**: le chiavi sono due coppie, non una come nell'analisi del 17/10. La modale scrive i tipi in
+  > maiuscolo («ADJUSTMENT+»), i grafici con le iniziali maiuscole («Adjustment In»): una coppia sola non sta in tutti e
+  > due gli stili.
+- ✅ **Passo 4b — la modale nel suo test di componente** (19/10, test-author, 12:10–12:19): 7 casi in coda a
+  `LotCustodyModal.test.ts`, 2 rossi e 5 controlli. L'i18n è quella vera, il lotto passa dallo schema generato, e
+  l'etichetta attesa viene dallo stesso runtime (`get(_)`), mai una stringa fissa.
+  - Prova rossa: con la sola `LotCustodyModal.svelte` di HEAD al suo posto (copia della curata nella cartella di
+    sessione, poi rimessa e confrontata byte per byte) → **2 failed, 13 passed**: «expected [...] to include
+    'TRANSFER+'».
+  - Prova verde: le 7 suite Vitest dei lotti **332 passed**.
+  - Il controllo 7 verifica che i dettagli della chiusura seguano ancora `kind`: prezzo di chiusura e «handed over».
+- ✅ **Passo 5 — documentazione** (docs-writer, 12:10–12:19; tre pagine EN):
+  - `user/dashboard/positions.en.md`, «Lot Detail»: nella frase sui trasferimenti col broker fuori dal pannello, lo
+    Storico scrive TRANSFER+/TRANSFER-, Lot Life mette il ◆, il grafico Avg. Cost dà «Transfer In»/«Transfer Out»;
+    l'altro broker non è nominato. IT, FR ed ES non hanno mai avuto il punto di J-10: è debito di traduzione vero,
+    quindi niente stamp;
+  - `developer/backend/transactions/lots_analysis_service.md`, il punto «**Labels.**» della sezione sul confine;
+  - `developer/frontend/components/features/lots-analysis.md`, la sottosezione «Transfers across the scope's edge».
+  - Prova: `mkdocs build` stretto ✓, `check-links` ✓ (97 validi).
+  > **⚠️ Fuori pista**: l'etichetta dei segni del Gantt si calcola ma non si vede: la serie dei segni ha il tooltip
+  > spento (`LotGanttChart.svelte:979`), e `meta.label` non lo legge nessuno. Era già così prima di J-48. Lì si vede il
+  > ◆ col colore dei trasferimenti. Mostrare l'etichetta sarebbe un cambio d'interfaccia: lo segnalo a Y.
+- **Restano per lo slot dopo le 14:00**: `services roi-fifo-utils` intera, `api portfolio`, `front-utility core-unit`,
+  l'E2E `front-broker detail`. Poi il checkpoint.
+
+#### Revisione della voce 1 di J-1 di MF (`068d5dd51`, la parte del rischio; 19/10 ~12:20, sola lettura)
+
+- **OK, con un reperto per R11.** Le mie 6 condizioni del 17/10:
+  1. **Un 365 con nome solo** ✓: `DAYS_PER_YEAR` in `returns.py`, letto dal fattore e dalle due conversioni. Nel
+     codice di `risk/`, `risk_plugins/`, `financial_math/` e dei segnali non resta un 365 scritto. In
+     `schemas/risk.py` il 365 compare solo nel testo dei messaggi: il conto passa da `observations_per_year`.
+  2. **L'inversa nella casa, senza rifiuti nuovi** ✓. `observations_to_calendar_days` fa gli stessi conti
+     dell'inline (`max(1, round(n × 365 / f))`), quindi i valori sono identici.
+     - Rifiuta `n ≤ 0` e un fattore non positivo o non finito, che l'inline accettava.
+     - Ma in `run_block_bootstrap` il fattore è già validato prima (`:179`, `calendar_days_to_observations`), e
+       `block_length ≥ 1` (`resolve_block_length`, più la divisione a `:183`): nessun valore che passa oggi è
+       rifiutato.
+  3. **Un validatore solo**, in parte: `positive_annualization_factor` è nella casa e `metrics.py` lo usa. Restano però
+     due copie della stessa regola in `signals/risk_adapters.py:191-193` e `:222-224` (volatilità e Sharpe mobili, i
+     gemelli pandas di R11). Il file è mio: propongo di chiuderle in R11, col suo test di parità. Non blocca la voce di
+     MF.
+  4. **Niente shim** ✓: 5 chiamanti e 2 test spostati; nel codice dell'app non resta né il vecchio percorso né il nome
+     privato (solo nel test nuovo, come guardia).
+  5. **Nessun `algorithm_version`**, stessi conteggi ✓: lo dichiara il piano di MF (`risk-all` 918, uguale; parità
+     con le copie di HEAD).
+  6. **La mappa della casa** ✓: `financial_math/__init__.py`, `backend.instructions.md` e `financial_math.md`.
+- **In coda dopo J-48** (coordinatore, 19/10 12:19): R1 (il rischio sulle osservazioni, dopo Q1 di X) e L1 (i lotti
+  solo nei giorni d'evento, i costi medi solo nei giorni di transazione, con Y per i grafici), dal piano «formule
+  veloci» di MF (`6fcde8176`). Prima un'analisi breve, valori identici e test di parità.
+- ✅ **Passo 6 — slot** (coordinatore: «slot tuo» 12:24–13:00; finito 12:32), `files/j/j48/slot.sh`, una corsa alla
+  volta, carico a 1 minuto fra 13 e 41:
+  - `services roi-fifo-utils` (tutto `test_financial`) **1512 passed**;
+  - `api portfolio` **56 passed**;
+  - `front-utility core-unit` **218 file, 9331 passed**;
+  - E2E `front-broker detail` (`brokers-detail.spec.ts`, col pannello dei lotti) **40 passed**.
+  - Porta 6185 libera.
+- **Checkpoint J-48** (19/10 ~12:35): consegnato al coordinatore, FROZEN.
+
+#### Analisi breve di R1 e L1 («formule veloci» di MF, `6fcde8176`; 19/10 ~12:35, sola lettura)
+
+Fonti: la sezione «Piano «formule veloci»» del piano di MF; due mappe `explore` in sola lettura (rischio, lotti),
+riverificate da me nei punti decisivi. Nessun codice.
+
+**L1 — i lotti nei soli giorni d'evento.**
+- **Oggi.** `history_dates` è ogni giorno da `computed_from` a `actual_to` (`lots_analysis_service.py:258`); poi si
+  taglia alla finestra visibile (`trim_dates`, `:426-528`). Su quei giorni lavorano:
+  - il prezzo del giorno e la sua conversione (`:355-374`): una risoluzione e una conversione al giorno;
+  - i fabbisogni di cambio, un tasso per giorno per valuta (`lots/conversions.py:176-185`), caricati però in una sola
+    `convert_bulk`;
+  - valore, rendimento e prezzo per lotto (`lots/histories.py:313-483`): lotti × giorni, con le somme dei frammenti e
+    i prefissi di proventi e costi;
+  - il NAV della performance (`:57-201`): giorni × lotti × frammenti;
+  - le linee del costo medio (`lots/average_cost_lines.py:43-55`): giorni × linee;
+  - `last_day_without_observation`, che cammina i giorni (`lots/prices.py:43-55`).
+- **La condizione per avere valori identici.** Ogni segno è convertito al cambio **del suo giorno** (`:357-374`). Un
+  prezzo estero portato avanti cambia valore ogni giorno col cambio. Quindi i giorni d'evento sono: transazioni,
+  chiusure, giorni con un prezzo salvato, **giorni in cui cambia il cambio**, e i confini (`at_cost_until`,
+  `display_from`, il primo flusso, `invalid_external_flow_from`). In mezzo nulla si muove: le formule non hanno termini
+  di tempo (giorni tenuti, annualizzati, interessi).
+- **Il contratto d'uscita resta un punto per giorno.** Il frontend conta i punti per scegliere la risoluzione
+  (`computeLineBucketCounts`), somma i lotti per data (`aggregateValuePoints`), e una data assente è un buco
+  (`connectNulls: false`). Quindi il backend **calcola** nei giorni d'evento e **espande** i valori portati solo nella
+  finestra visibile. Le serie a gradini sarebbero un cambio d'interfaccia (Y e il developer, come D1 di MF): non stanno
+  in L1.
+- **Due lotti**:
+  - **L1a**: calcolo nei soli giorni di cambiamento ed espansione nella finestra. I giorni di cambio si ricavano dai
+    tassi già caricati, confrontando giorno con giorno; `last_day_without_observation` in forma chiusa, dalla prima
+    osservazione. Non dipende da nessuno.
+  - **L1b**: dopo P3 (MF e X), si caricano solo i gradini del cambio invece di un tasso al giorno.
+- **Test**: parità campo per campo fra le serie di oggi (una copia dei costruttori di HEAD nel test) e quelle nuove,
+  su libri con valuta estera e cambi giornalieri, trasferimenti, split, giorni al costo, chiusure, proventi e costi,
+  e il broker co-posseduto. Restano verdi i test che fissano la forma giornaliera (`test_lots_analysis_service.py:73-86`,
+  `test_lots_analysis_pure.py`).
+- **Peso**: L1a medio (~5–6 h, più i test di parità col test-author); L1b piccolo, dopo P3. Rischio medio: i confini.
+
+**R1 — il rischio sulle osservazioni.**
+- **Il livello del rischio non cammina i giorni.** `prepare_asset_series_set` riduce già la serie alle sole quotazioni
+  (`market_series.py:249`, `:269`; i punti riempiti non contano). `calendar_days` è una differenza di date
+  (`:385-389`), e il controllo della finestra del replay è SQL (`risk/eligibility.py:241-253`). Il cammino giornaliero
+  è nel livello dei prezzi: `price_query._build_backward_filled_series` (`:174-222`), cioè Q1 di X.
+- **Il punto delicato**: nelle date comuni (la quotazione di un altro asset) il rischio legge il punto denso **già
+  convertito al cambio di quel giorno** (`_valuation_point(item.target_points[d])`, `market_series.py:155-170`,
+  `:332`). Dopo Q1 a R1 serve, per ogni data richiesta, l'ultimo prezzo ≤ d convertito al cambio di d: va concordato
+  con X nel disegno di Q1/Q2.
+- **La parte di J**:
+  - `prepare_asset_series` (`risk/scope.py:338-386`) e il replay (`risk/replay.py:101-106`) passano alla lettura per
+    osservazioni di Q1;
+  - `market_series` chiede le sole date di osservazione e le date comuni;
+  - il limite di risorse «punti per giorno» (`scope.py:371-379`) segue il nuovo budget di X.
+  - La storia del portafoglio non cambia: `portfolio_twrr_returns` legge il TWRR cumulato alla base e alle date
+    d'osservazione (`risk/results.py:61-105`), e dopo P2/P4 di MF costa la sola finestra.
+- **Valori identici**: la stessa `PreparedSeries` (date, rendimenti, annualizzazione, copertura) dalla serie densa e
+  da quella per osservazioni, su asset con festivi, prezzi portati, date comuni, buchi, split ed esteri. Più il replay
+  dello stress (`3.0.1`).
+- **Il pavimento SEC8-1b** (`bounded_range`) si toglie dopo, nel suo lotto (D2 di MF). I test che lo fissano sono
+  `test_risk_replay_range_bounds.py` r2, r5, r6 e r7 (`algorithm_version` 3.0.1), più `test_range_ceiling.py`.
+- **Peso**: piccolo-medio, dopo Q1 (~3 h più la parità). Rischio: il punto delle date comuni.
+
+**Domande**: nessuna di prodotto per L1a e R1 (valori identici, uscita invariata). Con X, per R1: la forma della
+lettura di Q1 nelle date comuni. Con Y, per un'uscita a gradini: solo se il developer la vuole (come D1).
