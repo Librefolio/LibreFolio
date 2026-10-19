@@ -1,12 +1,15 @@
 # Piano — fase 01, 09: Y · Cruscotto e grafici (1.3.0)
 
-> **Stato**: 🧊 **Y1 consegnato FROZEN** (2026-10-15, 14:40), in attesa del commit del coordinatore; il cancello
-> d'ingresso è la galleria filtrata, dopo il commit. Y2 in preparazione in sola lettura, fino alla conferma
-> dell'annuncio. Autorizzati solo **Y1** e **Y2** (§0.2).
+> **Stato al 19/10** (base `ede7adf75`): tutti i lotti di Y sono entrati in `dev_release2` tranne **Y4a** (fermo: il
+> coordinatore ha portato al developer «non nella 1.3, oppure una finestra notturna», 16/10 20:21) e **Y13** (parcheggiato
+> fino alla risposta del developer a Y13-1). L'ultimo ingresso è Y-30 (`ede7adf75`, 19/10). Lotto per lotto, con i commit:
+> §4, «Stato dei lotti». Dal 19/10 valgono le regole nuove del coordinatore: nessuna decisione di prodotto da Y (ogni
+> scelta diventa una domanda, con le opzioni e un consiglio), si implementa solo col suo via esplicito, carichi pesanti
+> solo in uno slot.
 >
 > - **Workstream Y** · worktree `LibreFolio-worktrees/e-alfy-redesigned-spork` · ramo `e-alfy-y-cruscotto-e-grafici`
 >   (rinominato dall'app all'avvio; prima `e-alfy-redesigned-spork`).
-> - **Base**: `1e9e567f79488cfb5630f3c05e1bd2727bf856d7` (avanzamento veloce del coordinatore dal `23f6578f3`
+> - **Base di partenza**: `1e9e567f79488cfb5630f3c05e1bd2727bf856d7` (avanzamento veloce del coordinatore dal `23f6578f3`
 >   dell'analisi: Designer Lab, chiusura di R, la 1.2.1 di sicurezza; nessun file del perimetro di Y).
 > - **Corsia**: `--test-port 6189 --data-dir /tmp/librefolio-r13-y`, con
 >   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`; un comando alla volta; mai 6040 né
@@ -159,6 +162,9 @@ E2E del Lab legge il token della sua intestazione.
 | FE9, FE10, FE11 | ✗ | — | Y13, per ultimi |
 | Y-4 (G-12, dal coordinatore, 15/10) | ✗ | `charts/SignalTreeSelect.test.ts:16-17` e `:306-310`: i commenti descrivono `selectIndicatorFromTree` della galleria che espande la famiglia con un clic e clicca l'opzione; da G-9 (`1470bd693`) la galleria sceglie l'indicatore da tastiera. Solo testo | Y4 (FE2), passando dal file |
 
+Questa tabella è lo stato **all'analisi** del 15/10. Lo stato di oggi di ogni lotto, con il commit d'ingresso: §4, «Stato
+dei lotti».
+
 ## 3. Confini (D-Y5)
 
 **Nessun barile nuovo**: fra feature si importa dal file che definisce (D-P4 del 43 rinviato a FE9).
@@ -188,7 +194,7 @@ E2E del Lab legge il token della sua intestazione.
 
 Ognuno si chiude con un handoff `FROZEN`; commit e merge li fa il coordinatore.
 
-### Y1 — `GrowthChart` tagliato sul posto (FE6a) [autorizzato; via del 15/10]
+### Y1 — `GrowthChart` tagliato sul posto (FE6a) [autorizzato, via del 15/10; entrato in `dev_release2` il 15/10, `badec1465`]
 
 Forma (D-Y3): il componente tiene props, stato, `$derived`, effetti, ciclo di vita di ECharts (render, aggiornamento
 parziale, opzione completa, zoom, scala delle candele) e template. Escono, in moduli puri accanto:
@@ -222,7 +228,7 @@ Passi:
 Fatto quando: oracoli invariati e verdi; `--check` pulito con la riga `~split`; galleria identica salvo il rumore noto;
 handoff `FROZEN` con il messaggio di commit proposto.
 
-### Y2 — `DataTable` tagliata sul posto [autorizzato; forma approvata e taglio annunciato il 15/10; fatto, checkpoint FROZEN alle 16:45, galleria d'ingresso dopo il commit]
+### Y2 — `DataTable` tagliata sul posto [autorizzato; forma approvata e taglio annunciato il 15/10; entrato in `dev_release2` il 15/10, `c747a74c3`]
 
 **Stato verificato a `cf8101f29`** (il file non è cambiato dalla base `1e9e567f7`):
 - `components/table/DataTable.svelte`, 2 431 righe: script 13–960, template 961–1559, `<style>` 1560–2431. Lo stile
@@ -414,7 +420,7 @@ Passi:
 5. Documentazione, se cambia un contratto: l'asse sotto zoom in `charts.md`; tabelle della devWiki.
 6. Checkpoint FROZEN.
 
-### Y7 — tabelle sul telefono e ridimensionamento [via del coordinatore e dei colori, 15/10 20:52–21:22; in corso]
+### Y7 — tabelle sul telefono e ridimensionamento [via del coordinatore e dei colori, 15/10 20:52–21:22; entrato in `dev_release2` il 16/10, `a613a217c`]
 
 Base: `f98c20f1b` (`dev_release2` dopo l'ingresso di Y8). Decisioni D-Y17 e D-Y18 in §0.3. Verificato sul codice dopo
 il taglio di Y2.
@@ -449,11 +455,34 @@ Passi:
 6. Checkpoint FROZEN, con il filtro regex della galleria mobile d'ingresso, che si fa nello slot dei colori dopo G-13
    ed è confrontata con il riferimento di G-13.
 
-### Y3–Y13 — da avviare nell'ordine del §0.2
+### Stato dei lotti (19/10, base `ede7adf75`)
 
-Y3 FE6b; Y4 FE2a e FE2b; Y5 FE7 (dopo FE8a); Y6 FE3 (dopo FE8a); Y7 C-38 e C-62; Y9 K-15, C-34, C-15, K-13; Y10 54-1;
-Y11 C-85; Y12 U8 a/b; Y13 FE9–FE11. I dettagli sono nell'analisi del 15/10 (cartella di sessione) e nel §2; si
-scrivono qui quando partono.
+Ogni ingresso è il merge in `dev_release2` (numero del treno nel registro del [README della fase](../README.md)), verificato
+antenato della base il 19/10. I titoli ⏳ del §7 sono il registro del momento: lo stato di oggi è questa tabella.
+
+| Lotto | Contenuto | Stato | Ingresso (treno) | Dettagli |
+|---|---|---|---|---|
+| Y1 | taglio di `GrowthChart` (FE6a), B10 | ✅ 15/10 | `badec1465` (36) | §4 «Y1», §7 |
+| Y2 | taglio di `DataTable`, `~split` dichiarato | ✅ 15/10 | `c747a74c3` (45) | §4 «Y2», §7 |
+| Y8 | I-01, I-03 (Y-1), 47-1, O-16, 48-1 | ✅ 15/10 | `160562b56` (57) | §4 «Y8», §7 |
+| Y7 | C-38 e difetti 2 e 5 del PAC (D-Y17), C-62 (D-Y18) | ✅ 16/10 | `a613a217c` (76) | §4 «Y7», §7 |
+| Y4b | FE2b, il rischio in `lib/features/risk/` | ✅ 16/10 | `08efa5ac3` (81) | §7 «Y4b» |
+| Y3 | FE6b, la dashboard in `lib/features/dashboard/` | ✅ 16/10 | `4447814ed` (104) | §7 «Y3» |
+| Y9 | K-15, C-34 (con la guardia), C-15, K-13 | ✅ 16/10 | `4447814ed` (104) | §7 «Y9», «C-34» |
+| Y10 | 54-1, Y-6, decisione 49 | ✅ 16/10 | `4447814ed` (104) | §7 «Y10» |
+| Y5 | FE7, broker e lotti in `lib/features/brokers/` | ✅ 16/10 | `4447814ed` (104) | §7 «Y5» |
+| Y6 | FE3, i file in `lib/features/files/` | ✅ 16/10 | `4447814ed` (104) | §7 «Y6» |
+| Y12a | U8 senza campi nuovi: W7, le dichiarazioni, `LotCustodyModal` | ✅ 16/10 | `0c79932a7` (130) | «Y12a» |
+| Y11 | C-85, `pageBusy` (decisione 48, N55): passi 1–4b, poi il lotto `assets` | ✅ 16–17/10 | `0c79932a7` (130), `d32d0f3d9` (191) | «Y11» |
+| Y12b | U8 con i campi di J e MF: P19; R17, W8, P4; V11 e P5 | ✅ 16–17/10 | `23f71e739` (140), `1565b6bbb` (202), `d4ecfb692` (255) | «Y12b», «R17 · W8 · P4» |
+| Y4a | FE2a, i segnali in `lib/features/signals/` | ⏸ fermo | — | «Y4a · analisi aggiornata»: per il developer, «non nella 1.3, oppure una finestra notturna» (16/10 20:21) |
+| Y13 | FE9–FE11 | ⏸ parcheggiato | — | «Y13»: fino alla risposta del developer a Y13-1 (dopo il tag?) |
+
+Fuori dai lotti:
+- **Le voci Y-N** della mia sezione del backlog: ognuna ✅ porta il suo commit d'ingresso (rimesse in pari il 19/10). Aperte,
+  tutte in attesa del developer: Y-7 (dopo Y4a), Y-9, Y-10, Y-15, Y-18, Y-26, Y-32, Y-35.
+- **Lavori per altri, fatti da Y**: la metà del pannello di J-12 (`46b5fbc0e`, treno 280), X-R59 lotti A e B (`f317e3a9f`,
+  330), J-53 (`fb6d58d17`, 338), Y-30 (`ede7adf75`, 19/10, dopo il sì del developer a N89).
 
 ## 5. Test e specialisti
 
@@ -6453,3 +6482,124 @@ diventa un aiuto puro di `lotWacPriceChartHelpers.ts`, una data un punto; il gra
      worktree).
 6. ✅ 17/10 — **CHECKPOINT READY** al coordinatore (~21:5x): riga 🐛, nota per la 🔄 di J-12, J revisore del backend;
    l'eccezione di S7 per J, la trappola della corsia, Y-35 (il `PRICE_HISTORY` senza lettori) nella mia sezione. FROZEN.
+7. ✅ 19/10 — **Ingresso**: dopo il sì del developer a N89 («la linea del prezzo deve continuare anche dopo l'ultima
+   vendita»), il coordinatore fa entrare Y-30 in `dev_release2` con il merge `ede7adf75` (conflitto solo sul log della
+   devWiki, risolto da lui tenendo le righe di tutte e due le parti).
+
+## 19/10 · Ripartenza: contabilità e analisi (Y-30 dopo l'ultima vendita, N65)
+
+Base `ede7adf75`, worktree pulito. Fonte: le risposte del developer al resoconto, file del coordinatore
+`risposte-resoconto-20261019.md`, §4 e §6. **Regole nuove del coordinatore, da ora**: nessuna decisione di prodotto da
+Y (ogni scelta che cambia ciò che l'utente vede, i numeri o i dati diventa una domanda, con le opzioni e un consiglio);
+si implementa solo col suo via esplicito; niente carichi pesanti senza uno slot. Questa sezione è in sola lettura: nessun
+codice, nessun test lanciato, nessun server.
+
+### Contabilità ✅ (19/10, 11:10–11:45)
+
+- **Piano**: la testata «Stato al 19/10»; i titoli di Y1, Y2 e Y7 nel §4 con il commit d'ingresso (Y7 diceva ancora «in
+  corso»); nel §4 la tabella «Stato dei lotti» al posto di «Y3–Y13 — da avviare»; nel §2 un rimando a quella tabella.
+- **Backlog, sezione Y** (26 sostituzioni in 24 voci, ognuna limitata alla sua voce, `files/scripts/y19_backlog_proofs.py`):
+  - Y-3 e Y-4 ✅: fatte il 17/10 da `test-author` (`034f0f13a`, `1130d2eff`), entrate con `73443c6db` (treno 237), ma
+    non marcate. Verificate nel codice di oggi: `I18N_CALL` con `\bt\(`; il titolo del caso a clic di
+    `SignalTreeSelect.test.ts` non nomina più l'aiuto della galleria;
+  - il commit d'ingresso su 22 voci ✅ che non lo citavano: 14 senza alcun commit (Y-1, Y-5, Y-8, Y-14, Y-16, Y-19,
+    Y-20, Y-24, Y-25, Y-27, Y-29, Y-30, Y-31, Y-33), 8 con solo quello di contenuto (Y-2, Y-6, Y-11, Y-12, Y-13, Y-21,
+    Y-22, Y-23);
+  - aperte, tutte in attesa del developer: Y-7 (dopo Y4a), Y-9, Y-10, Y-15, Y-18, Y-26, Y-32, Y-35.
+- **Prove**: i 48 commit citati nella sezione e quelli della tabella sono antenati della base
+  (`git merge-base --is-ancestor`). Gli ingressi vengono dal registro dei treni del [README della fase](../README.md)
+  (fino al treno 370) e da `git log` per Y-34 (`7dbd46aa6`) e Y-30 (`ede7adf75`), che il registro non ha ancora. Per un
+  commit di contenuto, il primo commit della linea di `dev_release2` che lo contiene (`files/scripts/y19_entry_merge.sh`).
+- `git diff --check` pulito; un solo `## MF ·` nel backlog.
+
+### Analisi 1 · Y-30: la linea del prezzo continua dopo l'ultima vendita ✅ confermato
+
+- **Il percorso.** `get_lots_analysis` costruisce i giorni da `computed_from` (la prima transazione dell'ambito, mai
+  prima del 1900) ad `actual_to`, cioè `date_to` o oggi, con il tetto `latest_range_end()` (domani del server).
+  `MARKET_PRICE_HISTORY` è un'analisi giornaliera (`daily_series`), quindi ogni giorno ha il suo segno in
+  `estimated_market_prices`. `build_market_price_history` (`financial_math/lots/histories.py`) mette un punto per ogni
+  giorno con un segno, qualunque lotto sia aperto, e `trim_dates` taglia a `[display_from, actual_to]`.
+- **Dopo l'ultima vendita** il risolutore dei prezzi porta avanti l'ultima osservazione: la quotazione (linea piena) o,
+  senza quotazioni, l'ultimo scambio (linea tratteggiata, `estimated`). Il sync pianificato (`run_history_sync`,
+  `platform/scheduler/jobs.py`) prende ogni asset attivo con un provider, posseduto o no. Quindi dopo una vendita
+  totale la linea segue le quotazioni vere; resta piatta sull'ultimo valore solo per un asset senza provider o
+  disattivato.
+- **La fine della finestra.** Il pannello non manda `date_range` (`LotsAnalysisPanel.loadMain`): la finestra va dalla
+  prima transazione a oggi (data del server), e l'asse del grafico segue `computed_date_to` (`xAxisRange`).
+- **Le prove**, verdi il 17/10:
+  - D1 (`test_portfolio_api.py::test_market_price_history_continues_after_the_last_sale`) è il caso esatto del developer:
+    BUY 10 il 10/1/2026, vendita di tutto il 15/1, nessun riacquisto, letto fino al 20/1. Ha un punto per ogni giorno
+    fino al 20/1: 100 fino al 14, 110 dal 15, stimati. 8/8;
+  - A1 (`test_lots_market_price_history.py`): ultima vendita il 13/3, punti fino al 16/3. 213/213.
+- **Codice invariato** da `6db475ac9`: dopo, nei file della linea, solo `81a927681` (il banner dei lotti) e `279764d88`
+  (una riga di enum in `schemas/portfolio.py`).
+- **Non coperto**: nessun test nel browser fissa il tratto dopo l'ultima vendita (J12-1 legge `data-price-line` con
+  `FAILED`). Un caso E2E piccolo è possibile, se il developer lo vuole.
+
+### Analisi 2 · N65: il righello con lo stesso giorno in «Da» e «A»
+
+**La causa vera** non è nel `DateRangePicker`: è il righello, che rifiuta in silenzio.
+1. Il selettore della scheda della misura riceve le date a senso unico (`MeasurePanel.svelte:560`: `start={…} end={…}`,
+   nessun `bind:`) e avvisa con `onchange`.
+2. Il selettore scrive le sue date **prima** di avvisare. `start` ed `end` sono `$bindable` (`DateRangePicker.svelte:108-109`);
+   il clic del calendario (`handleDayClick`, `:463-480`) e i campi scritti (`flushTypedRange`, `:965-976`) le assegnano e
+   poi chiamano `onchange`. Se il genitore non le lega, quel valore resta locale finché il genitore non ne passa uno
+   diverso.
+3. Il righello rifiuta lo stesso giorno: `updateMeasureDates` (`MeasurePanel.svelte:228-233`) esce con
+   `if (s === e) return; // measure needs 2 different days`, prima di toccare la misura e senza riassegnare `measures`.
+4. Quindi la misura resta sulle date vecchie (i numeri della scheda, la riga riassuntiva, la sovrapposizione sul
+   grafico), e al selettore non arriva nessuna data nuova: resta sul giorno scelto. Due componenti in disaccordo, e niente
+   dice all'utente che la scelta è stata rifiutata. È «il componente mostra il dato giusto, il resto resta sul vecchio».
+
+**Due fatti che pesano sulla scelta:**
+- La misura **sa già** misurare un giorno solo. `MeasureSignal.getMeasurement` dà Δ 0, Δ% 0 % (o «—» se il valore è 0,
+  N65), 0 giorni, Δ%/anno «—» (sotto i 30 giorni, N65); `computePoints` dà un punto solo. È fissato da test:
+  `measureSignal.test.ts:105` e `:173`, il rosso T-D9 che vuole «—» per l'annualizzato di un giorno.
+- Il grafico **crea già** misure di un giorno. `addPoint` (`MeasurePanel.svelte:154-184`) non controlla lo stesso giorno:
+  un secondo clic sullo stesso punto, dopo 300 ms, ne crea una. Invece l'anteprima le rifiuta (`updatePendingEnd`, `:140`,
+  test `MeasurePanel.test.ts:246`), e così «misura tutto il grafico» (`:195`). Le due entrate oggi non sono d'accordo
+  (dalla lettura del codice; non provato nel browser).
+
+**Opzioni** (nessuna decisa):
+- **(a) Il righello accetta lo stesso giorno.** Tocca solo `MeasurePanel.svelte`: si toglie il rifiuto di
+  `updateMeasureDates` (l'anteprima può restare com'è).
+  - L'utente vede una misura di un giorno: Δ 0, Δ% 0 % (o «—»), 0 giorni, Δ%/anno «—»; sul grafico il segnaposto e la
+    freccia sullo stesso punto. È ciò che oggi esce da due clic sullo stesso punto.
+  - Nessun file condiviso, nessun testo nuovo, nessun colore.
+  - Test: un rosso in `MeasurePanel.test.ts` che sceglie lo stesso giorno nel calendario della scheda (oggi la scheda
+    resta sulle date vecchie). Documentazione: una riga in `user/assets/detail/measures.en.md` e
+    `user/fx/detail/measures.en.md`. Circa mezza giornata.
+- **(b) Il selettore non lascia scegliere lo stesso giorno, solo per il righello** (la proposta del developer, nella forma
+  del coordinatore).
+  - Una prop nuova di `DateRangePicker`, spenta di default. Gli altri 9 usi non cambiano (Dashboard, pagina del broker,
+    lista e dettaglio di asset e cambi, filtro delle colonne, `CellDateRange`, replay L4), e lì un giorno solo resta
+    valido.
+  - Il calendario disabilita il giorno già scelto finché si sceglie il secondo. `CalendarMonth` ha già i giorni
+    disabilitati (`disabledDates`), con l'aspetto già sui ruoli: nessun colore nuovo.
+  - Servono due scelte in più del developer:
+    - **(b1)** lo stesso giorno scritto a mano nei due campi: rifiutato con un messaggio sotto il campo (una stringa nuova
+      nelle 4 lingue; il mio consiglio) oppure spostato di un giorno da solo;
+    - **(b2)** le frecce che portano un capo sull'altro: saltano quel giorno (il mio consiglio) oppure si fermano.
+  - Per coerenza il secondo clic sul grafico sullo stesso giorno va ignorato, come fa già l'anteprima: così il righello
+    non ha mai misure di un giorno.
+  - Test in `DateRangePicker.test.ts` e `MeasurePanel.test.ts`; le stesse due pagine utente. Circa una giornata.
+- **(c) La minima**, solo se né (a) né (b): il righello continua a rifiutare, ma rimette il selettore sulle date della
+  misura. La scelta sparisce senza spiegazione e sembra un difetto: sconsigliata.
+
+**Il mio consiglio: (a).** La causa è un rifiuto silenzioso del righello, non il selettore. La misura di un giorno era
+già specificata (T-D9, N65) e già raggiungibile dal grafico; (a) mette d'accordo le due entrate con la modifica più
+piccola, senza toccare un componente condiviso né aprire sotto-decisioni. Se invece il developer vuole che una misura
+abbia sempre due giorni diversi (la sua proposta), allora (b), con (b1) il messaggio e (b2) il salto.
+
+**Il programma colori.** `DateRangePicker.svelte`, con `CalendarMonth.svelte`, era nell'ondata **W1-c di T** (`ui/date`):
+da 73 classi legacy a 0, `a5c7714ca` (16/10, 03:31), chiusa. Da allora nessun commit di colore sul file, e non è nel
+registro del cricchetto: oggi non è in un lotto aperto. (a) non lo tocca; (b) sì, solo nel comportamento, con l'aspetto
+disabilitato che c'è già: un avviso a T, tramite il coordinatore.
+
+**Domande per il developer**, tramite il coordinatore:
+- **N65-1**: (a), (b) o (c)? Il mio consiglio è (a).
+- Solo con (b): **N65-2**, cioè (b1), e **N65-3**, cioè (b2).
+
+**Definizione di fatto, dopo il via**: prima i rossi (Vitest; nessuna E2E nuova necessaria), poi la cura; `front check`,
+Prettier, `theme-roles --check`; le due pagine utente in inglese (il debito di traduzione resta visibile); checkpoint
+FROZEN.
