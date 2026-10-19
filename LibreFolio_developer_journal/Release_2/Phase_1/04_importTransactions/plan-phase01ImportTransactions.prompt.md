@@ -7349,3 +7349,158 @@ finestra di conferma «Avvisi rilevati … Alcune transazioni potrebbero essere 
 - **Q-N74-4 · Il limite del batch** (N74 vero e proprio, analisi C) nello stesso lotto? *(Consiglio: sì. È lo stesso domani,
   `stored_date_bounds()`; il paragrafo della guida cambia comunque; i test sono quelli elencati in C.)*
 - Resta com'è: con la valuta vuota si usa la data dell'operazione, come dice la pagina utente.
+
+#### Via e decisioni (coordinatore, 19/10 14:14; developer 14:05)
+
+**Via** al lotto «N74 · Fineco, righe sicure». Il testo del developer è citato alla lettera.
+1. **La nota blu**, anche se apre la finestra «Note dall'importazione».
+2. **Q-N74-3, la soglia: «dopo oggi».** Il developer: «entrano solo righe già regolate». Per Fineco una riga con la data valuta dopo
+   oggi del server resta fuori intera, con FEE e INTEREST, e la nota. È più severo del batch, ed è voluto. Per «oggi del server» si
+   usa una funzione esistente, o se ne aggiunge una accanto a `latest_range_end()`; mai la data del browser.
+3. **W-B83 cambia.** Il developer: «siccome fineco per ora è in beta, io importerei tutto ma metterei un banner nota che dice che il
+   plugin è in beta, e che questo import pare sbagliato e suggerisce di aprire una issue su github per analizzare e risolvere il
+   problema».
+   - Le righe incomplete **entrano** come oggi: nessuna esclusione.
+   - Una nota info che nomina le righe e invita ad aprire una issue, riusando `importWizard.fixStep.reportIssueHint` col link
+     `issues/new` (`FixFlaggedStep.svelte:520`), o facendo lo stesso.
+   - Il perimetro: ogni riga con un campo necessario vuoto, di qualsiasi tipo (Q-N74-2 è superata).
+   - Se Fineco non risulta «beta» da nessuna parte, va detto.
+4. **Danske: sì.** `excluded_not_yet_settled` passa da avviso a nota. `excluded_status` resta un avviso, salvo che sia lo stesso caso:
+   verificarlo e dirlo nel checkpoint.
+5. **Q-N74-4** (decisione organizzativa del coordinatore): il limite «domani» del batch entra nello stesso lotto.
+6. **OK di scrittura** su `frontend/src/lib/i18n/importWizard/*.json`, solo per le chiavi del lotto.
+7. **Doc.** Il docs-writer per la pagina Fineco, l'architettura e la guida dei plugin, compreso il paragrafo di `:1125`; io per la regola
+   9 della skill. Il principio: si importano solo righe con date sicure (già regolate); quelle provvisorie arrivano al prossimo import,
+   con una nota.
+
+**Verifiche prima del codice** (19/10)
+- **«Beta».** Fineco è beta solo nella doc: l'avviso «Beta» della pagina utente (`user/transactions/import/fineco.en.md`) e «🧪 Beta»
+  nella scheda dell'indice (`user/transactions/import/index.en.md:130`). Il backend non ha nessun flag beta, né per Fineco né per
+  altri: la nota lo dice nel suo testo.
+- **Danske, `excluded_status`.** È solo in parte lo stesso caso. Raccoglie gli ordini di custodia non eseguiti (`Tila` diverso da
+  «toteutettu»: nei test, «Peruttu», annullato) e le righe di cassa non contabilizzate o in prenotazione («Odottaa», in attesa;
+  «Varaus», prenotazione) (`broker_danske_bank/plugin.py:487-488`, `:525-526`). Quelle in attesa e le prenotazioni sono
+  provvisorie e arrivano con un import successivo; un ordine annullato non arriva mai. Lo Scalable mette lo stesso miscuglio in una
+  nota (`scalable_not_executed`: «pending, cancelled, expired or rejected»). → In questo lotto resta un avviso; la domanda va al
+  checkpoint.
+- **Il link della issue.** `FixFlaggedStep` lo mostra sempre; la ricerca degli asset (P20, `components/assets/assetSearchReport.ts`)
+  lo toglie invece su un'istanza gestita (N61). La nota lo mostra sempre, come `FixFlaggedStep`; la questione del cloud va al
+  checkpoint.
+
+**Il contratto della cura** (i rossi lo fissano prima)
+1. `backend/app/utils/datetime_utils.py`: `server_today()`, la data locale del server, accanto a `latest_range_end()`, che diventa
+   `server_today()` più un giorno (stesso valore di oggi).
+2. **Fineco, la data** (`broker_fineco/plugin.py`). Se la data della riga (la valuta, o l'operazione se la valuta manca) viene dopo
+   `server_today()`, la riga resta fuori intera: nessuna transazione, nessuna FEE, nessun INTEREST. Una nota info:
+   - codice `fineco_not_yet_settled`, `context.count`;
+   - le righe d'origine come evidenza (titolo vuoto, così il wizard mette il suo; le intestazioni del file; i numeri di riga);
+   - il messaggio del plugin in italiano.
+3. **Fineco, le righe incomplete (W-B83).**
+   - Un campo necessario non dà un numero (vuoto o illeggibile):
+     - la quantità per BUY, SELL (rimborso compreso) e ADJUSTMENT (aumento di capitale);
+     - il controvalore per BUY, SELL, DIVIDEND e INTEREST.
+
+     Allora la riga entra **come oggi**: un controvalore vuoto entra a 0, una quantità vuota resta l'errore di validazione di oggi.
+   - In più, una nota info `fineco_incomplete_rows`, con `context.count` e `context.report_issue: true`. Le righe vanno come evidenza,
+     con una colonna in più che nomina il campo vuoto.
+   - Il messaggio dice che il plugin è in beta, che l'import potrebbe essere sbagliato, e invita ad aprire una issue.
+   - Una riga già fuori per la data non conta qui.
+   - La divisa vuota resta fuori dal perimetro: la ricaduta su EUR può essere legittima, e non c'è un export vero per saperlo. Il
+     prezzo non entra nelle transazioni.
+4. Fineco: `plugin_version` 1.2.0 (i file già analizzati si rianalizzano); la docstring del modulo.
+5. **Danske**: `excluded_not_yet_settled` con `severity="info"`; tutti gli altri `excluded_*` restano `warning`.
+6. **Il batch**: `transaction_date_bounds()` diventa `stored_date_bounds()` (dal 1900 a domani del server, come prezzi e cambi); via
+   `TRANSACTION_DATE_YEARS_AHEAD`; il commento di `TXValidationCode.DATE_OUT_OF_RANGE`.
+7. **Frontend** (`BrimNoticeList.svelte`): sotto una nota con `context.report_issue === true`, il link
+   `importWizard.fixStep.reportIssueLink` verso `issues/new` (`GITHUB_NEW_ISSUE_URL`), in una nuova scheda, `data-testid`
+   `brim-notice-report-issue`, del colore della nota (solo ruoli) e col fuoco visibile.
+8. **i18n**, nelle 4 lingue: `importWizard.brimNotice.fineco_not_yet_settled`, `importWizard.brimNotice.fineco_incomplete_rows`, e il
+   commento dell'evidenza `importWizard.brimEvidence.fineco_*`.
+
+**Passi**: 1. rossi (test-author); 2. cura (script nella cartella di sessione, prima a vuoto); 3. verdi leggeri; 4. doc (docs-writer;
+io la skill); 5. backlog (W-B83 ✅, N74); 6. simulazione e checkpoint.
+
+**Avanzamento**
+- ⏳ 1. Rossi: test-author `n74-reds` (19/10 ~14:25). La corsia è ripopolata (`db populate --force`, 14:19; `/tmp` era stato
+  svuotato).
+- ✅ 2a. La cura è pronta e non applicata: `files/scripts/n74_cure.py`, prova a vuoto pulita su 6 file (`datetime_utils.py`, Fineco,
+  Danske, `transaction_batch_stages.py`, `batch.py`, `BrimNoticeList.svelte`); le chiavi in `files/scripts/n74_i18n.sh` (4 × 4
+  lingue, solo `importWizard`).
+  > **Note implementazione**: `transaction_date_bounds()` rende `EARLIEST_RANGE_START, latest_range_end()`, la stessa coppia di
+  > `stored_date_bounds()`, e non chiama `stored_date_bounds()`: il test `TestTheDateFloorIsTheReplayFloor` chiede che il modulo
+  > importi l'oggetto `EARLIEST_RANGE_START`, non una copia. Il titolo dell'evidenza è vuoto, così il wizard mette il suo
+  > (`importWizard.evidenceRowsTitle`). «No valid transactions found in file», un avviso, non esce più quando le sole righe del
+  > file sono ancora da regolare: lo dice già la nota.
+- ✅ 4a. La regola 9 della skill `brim-plugin`, «Only safe rows» (`.github/skills/brim-tools/brim-plugin/SKILL.md`).
+- ✅ 1a. Rossi, primo giro (test-author `n74-reds`, 19/10 ~14:50): Fineco 5 rossi e 21 verdi (`TestFinecoSafeRows`, contratti A, B,
+  C), Danske 2 rossi e 7 verdi, le date 11 rossi e 5 verdi, `BrimNoticeList.test.ts` (nuovo, registrato in `front-transaction
+  tx-unit`) 4 rossi e 6 verdi, `resolveValidationMessage.decimals.test.ts` 37 verdi (solo testo). Riletti contro la cura: coerenti
+  (titoli dell'evidenza, numeri di riga, `context`, «oggi» fissato sul nome `server_today` del modulo del plugin).
+  > **⚠️ Fuori pista**: l'analisi del 19/10 (C, «Test da cambiare») ha mancato due test che il limite «domani» rompe:
+  > - il cancello J-49 (`test_financial/test_date_range_bounds.py::TestRangeBoundSeamCoversEveryReader`): `transaction_batch_stages`
+  >   ora importa `latest_range_end` per nome, quindi entra in `RANGE_BOUND_CONSUMERS` (`test_services/_range_bounds.py`). Effetto:
+  >   le suite «nel futuro lontano» sollevano anche il limite delle date delle transazioni; nessuna di loro passa dal batch;
+  > - `test_transaction_edge_cases.py::test_future_date_transaction`: un DEPOSIT a oggi + 30 giorni tramite `create_bulk`, con la
+  >   premessa «le date future sono permesse». N74 la ritira: va riscritto come rifiuto.
+  >
+  > Trovati con una scansione di `date.today() + timedelta`, delle date letterali nella finestra fra domani e oggi + 1 anno, e
+  > delle suite che chiamano `lift_range_bound`. Il resto della finestra non scrive transazioni dal batch: inserimenti ORM, prezzi,
+  > verifiche del gap-fix. L'E2E `transactions-modals` rifiuta lato client. `test_brokers_api` (riga «domani») resta dentro il
+  > limite. Al test-author, 19/10 ~15:05, con due spilli Fineco in più: gli asset estratti delle sole righe escluse, e un file di
+  > sole righe future senza alcun avviso.
+- ✅ 1b. Rossi, secondo giro, e conferma mia (19/10 15:03-15:05, carico 20-29, `files/scripts/n74_light.sh reds`, log in
+  `files/logs/n74/reds_*.log`): Fineco 6 rossi e 21 verdi, Danske 2 e 7, le date 11 e 5, `edge-cases` 1 e 16
+  (`test_future_date_deposit_is_refused_after_tomorrow`, che sostituisce `test_future_date_transaction`), J-49 1 e 10 («listed but not
+  binding: transaction_batch_stages»), Vitest 4 e 43. Ogni rosso fallisce per la ragione del contratto.
+- ✅ 2. La cura, applicata (19/10 ~15:10): `files/scripts/n74_cure.py --apply` sui 6 file, poi `files/scripts/n74_i18n.sh` (4 chiavi
+  × 4 lingue in `frontend/src/lib/i18n/importWizard/<lang>.json`: `brimNotice.fineco_not_yet_settled`,
+  `brimNotice.fineco_incomplete_rows`, `brimEvidence.fineco_not_yet_settled`, `brimEvidence.fineco_incomplete_rows`).
+  > **Note implementazione**: `black` sul plugin Fineco (era pulito su HEAD: ha toccato solo le mie righe) e poi il messaggio
+  > `INCOMPLETE_MESSAGE` riunito in una sola stringa (black aveva messo due letterali adiacenti sulla stessa riga; ora 300 colonne,
+  > il limite del progetto). Due `zip()` dei test nuovi con `strict=True` (ruff B905): la riga prima ne controlla già le lunghezze.
+  > `ruff` e `black --check` puliti sui 10 file Python del lotto.
+  > **⚠️ Fuori pista**: `scripts/test_runner/_frontend_transaction.py` non passa né `black --check` né `ruff` (4 PLC0415), ma già su
+  > HEAD: non lo riformatto, fuori perimetro; tolto dal passo di lint dello script.
+- ✅ 3. I verdi (19/10 15:08-15:14, carico 18-41, `files/scripts/n74_light.sh greens`, log `files/logs/n74/greens_*.log`), tutti exit 0:
+  - le selezioni del lotto: Fineco 27, Danske 9, le date 16, `edge-cases` 17, J-49 11, Vitest 47;
+  - i file interi: `external brim-providers` 750 (1 saltato), `external brim-danske-bank` 325, `services
+    transaction-decimal-places` 202, `services range-ceiling` 72 (RC-001: `lift_range_bound` arriva anche a
+    `transaction_batch_stages`);
+  - i cancelli: `utils gate-plugin-i18n-ownership` 64, `gate-i18n-catalog` 176, `gate-i18n-usage` 195, `dev.py i18n check` (5102
+    chiavi, strict), `check-orphans`;
+  - lint e frontend: `ruff` e `black --check` sui 10 file Python, Prettier, `theme-roles --check` pulito, `api sync` senza
+    differenze, `front-transaction tx-unit` 997, `front check` 0 errori e 0 avvisi.
+  Porta 6184 libera dopo i verdi.
+  - E2E sui percorsi toccati, uno alla volta col carico sotto 50 (`files/scripts/n74_e2e.sh`, 15:20-15:32, carico 23-46):
+    `front-transaction tx-asset-identity` 9 su 9 (i due campioni Fineco nel wizard: stesse righe, nessuna nota nuova) e
+    `front-transaction tx-ca-contract` 12 su 12 (la lista delle note e delle evidenze). Porta 6184 libera dopo.
+- ✅ 4. La doc (docs-writer `n74-docs`, 19/10 15:10-15:45, solo inglese, nulla timbrato): la guida dei plugin (la regola «Only safe
+  rows», il paragrafo delle date del batch, la chiave `report_issue`), `service.md` («Transaction dates»), l'architettura BRIM
+  (Fineco), `danske_bank.md` (la nota `excluded_not_yet_settled`), la pagina utente Fineco (due punti in «Good to know»), e i resti
+  del limite di un anno in `assets/architecture.md`, `form.en.md`, `import/index.en.md`, `import/how-to.en.md`. `mkdocs build`
+  (strict) e `check-links` verdi. `translate-validate` esce 1: il debito delle due voci nuove di `fineco.en.md` (resta, come
+  deciso) e tre errori di `form.en.md` vecchi (una voce del 15/10, `0ffaa9127`, mai tradotta).
+  > **⚠️ Fuori pista**:
+  > - **Danske `plugin_version` 1.0.0 → 1.0.1.** Lo segnala il docs-writer: il contratto di `brim_provider.py` chiede il salto
+  >   quando l'uscita cambia, e la gravità di `excluded_not_yet_settled` cambia. Applicato, con i due test che fissavano la
+  >   versione (test-author) e `danske_bank.md:6`; `external brim-danske-bank` 325 verdi. Effetto: i file Danske già letti mostrano
+  >   «rilettura disponibile».
+  > - **Il disco pieno, verso le 15:45**: liberati i miei 174 MB (`files/devtree_1c2bac918`, un vecchio albero esportato); il
+  >   coordinatore ha poi liberato ~21 GiB.
+  > - **N83 su dev** (developer, 19/10, `cb5ad77be`): i prezzi e i cambi scritti a mano non hanno più il pavimento del 1900, e
+  >   `stored_date_bounds()` è diventata `latest_stored_date()`, che rende solo domani. Il codice del lotto non la chiama
+  >   (`EARLIEST_RANGE_START, latest_range_end()`), quindi si fonde pulito. Andavano corretti i testi che dicevano «la stessa coppia
+  >   di `stored_date_bounds()`»: la docstring di `transaction_date_bounds()`, `service.md` e tre docstring dei test (al
+  >   test-author). Ora dicono «lo stesso ultimo giorno di un prezzo o un cambio scritto a mano (N83)».
+  >   `developer/backend/assets/architecture.md` ha un conflitto vero: N83 ha riscritto lo stesso paragrafo. Risoluzione al merge:
+  >   tenere il paragrafo di dev e cambiare solo «with an end a year ahead» in «and the same last date».
+- ✅ 5. Il passo finale dopo le modifiche tardive (19/10 15:51-15:52, `files/scripts/n74_final.sh`, log `files/logs/n74/final_*.log`):
+  - `ruff` e `black --check` puliti; `services transaction-decimal-places` 202; `mkdocs build` (strict) verde; `mkdocs check-links`
+    verde. Porta 6184 libera.
+  - Simulazione d'integrazione, alla maniera del coordinatore (`files/scripts/n74_sim_light.sh dev_release2 merge`: base `ede7adf75`,
+    dev `1fa64ceae`, 30 file). Un solo conflitto, quello atteso: `developer/backend/assets/architecture.md` (N83). Il giornale si
+    fonde da sé. I rilievi di lint sui file fusi sono tutti di `scripts/test_runner/_frontend_transaction.py`, già su HEAD.
+  - La simulazione «cherry-pick» (base HEAD) dava conflitti anche sul giornale: è un artefatto, perché dev non ha ancora i miei
+    commit di giornale.
+- ✅ 6. Backlog: W-B83 ✅ nella forma decisa; W-B84 (il link GitHub sulle istanze gestite) e W-B85 (Danske, `excluded_status` misto)
+  aperte come domande.

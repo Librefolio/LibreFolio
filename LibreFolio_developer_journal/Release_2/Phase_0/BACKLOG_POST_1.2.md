@@ -6225,7 +6225,31 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   sia, e la 11 salta il segno sullo zero (`schemas/transactions/transactions.py:132-133`, `:169-173`); così un BUY a 0 €, o un
   rimborso (SELL) a 0 €, cioè la perdita di tutto il costo. Una riga provvisoria così, se Fineco ne scrive (non verificato: nessun
   export vero), entrerebbe. Cura decisa (Q-N74-1, developer 19/10): la riga resta fuori, con una nota o niente, nessun avviso.
+  Superata dal developer il 19/10 alle 14:05: «siccome fineco per ora è in beta, io importerei tutto ma metterei un banner nota».
   Dettagli: piano 04, «N74 · Fineco opzione (a), W-B83 e le righe sicure».
+  ✅ 19/10 (lotto N74, via del coordinatore con le decisioni del developer): la riga entra come prima. Una nota info,
+  `fineco_incomplete_rows`, nomina le righe a cui manca un numero necessario, di ogni tipo: la quantità di BUY, SELL e ADJUSTMENT, il
+  controvalore di BUY, SELL, DIVIDEND e INTEREST, mai la divisa o il prezzo. Dice che il plugin è in beta e porta il link «apri una
+  issue su GitHub» (`context.report_issue`, `BrimNoticeList.svelte`). Nello stesso lotto: le righe Fineco con la data valuta dopo
+  oggi del server restano fuori intere, con la nota `fineco_not_yet_settled`; `excluded_not_yet_settled` di Danske Bank diventa
+  nota; il limite delle date del batch è domani del server. Commit: il checkpoint N74 del coordinatore. Dettagli: piano 04, «N74 ·
+  Fineco opzione (a), W-B83 e le righe sicure».
+- **W-B84 · Il link «apri una issue su GitHub» del wizard d'import anche sulle istanze gestite** — basso, chiarezza (cloud); W,
+  19/10 (lotto N74). Il wizard porta su GitHub da due punti: il passo delle righe da sistemare (`FixFlaggedStep.svelte:521`, già
+  prima) e la nota di un plugin in beta (`BrimNoticeList.svelte`, N74), su ogni istanza. La ricerca degli asset invece (P20, N61,
+  `assetSearchReport.ts`, `supportChannel()`) usa l'indirizzo di supporto dell'istanza (`support_url`). GitHub vale solo
+  sull'istanza in proprio: su un'istanza gestita senza indirizzo, nessun link. Un utente del cloud verrebbe mandato sul GitHub
+  pubblico. Proposta: i due link del wizard seguono `supportChannel()`. Sull'istanza gestita senza canale, il testo della nota non
+  finisce più con «:». Domanda al developer, via il coordinatore. Dettagli: piano 04, «N74 · Fineco opzione (a), W-B83 e le
+  righe sicure», «Checkpoint».
+- **W-B85 · Danske Bank: `excluded_status` mescola le righe annullate e quelle in attesa** — minimo, chiarezza; W, 19/10 (lotto
+  N74). `_classify_custody()` e `_classify_cash()` (`broker_danske_bank/plugin.py`) mettono sotto `status` ogni riga non contabilizzata:
+  un ordine di custodia con un `Tila` diverso da «Toteutettu», una riga di cassa con un `Tila` diverso da «Toteutunut», o una
+  prenotazione «Varaus». Un ordine annullato non arriverà mai: un avviso va bene. Una riga in attesa o una prenotazione arriverà
+  invece regolata col prossimo import: è il caso di `excluded_not_yet_settled`, che con N74 è una nota. Il codice non le distingue:
+  confronta soltanto con lo stato «contabilizzato». Proposta, se il developer la vuole: due ragioni, `pending` (nota) e `status`
+  (avviso), col vocabolario degli stati di Danske preso da un export vero. Domanda al developer, via il coordinatore. Dettagli: piano
+  04, «N74 · Fineco opzione (a), W-B83 e le righe sicure», «Checkpoint».
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
