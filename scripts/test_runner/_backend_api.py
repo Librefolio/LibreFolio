@@ -466,7 +466,7 @@ def api_assets_patch_fields(verbose: bool = False, test_names: list = None) -> b
 def api_ohlc_sentinel(verbose: bool = False, test_names: list = None) -> bool:
     """Run OHLC sentinel semantics tests."""
     print_section("OHLC Sentinel (F.4) API Tests")
-    print_info("Testing sentinel rules on POST /assets/prices: None/-1/value")
+    print_info("Testing F.4 merge rules on POST /assets/prices: None/'clear'/value (N92: -1 is a negative number, refused)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_ohlc_sentinel.py", test_names)
     return run_command(cmd, "OHLC sentinel tests", verbose=verbose)
@@ -1169,7 +1169,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
     add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")
     add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets/{id} field-level updates")
-    add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="Sentinel rules on POST /assets/prices")
+    add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="F.4 merge on POST /assets/prices (N92): null or absent keeps the stored value, 'clear' empties it, a number writes it; -1, any other text and a close not above 0 refused with 422, nothing written")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")
     add_test(api, "prices-currency-coherence", api_prices_currency_coherence, name="Prices Currency Coherence", desc="Hard reject on currency mismatch; X-R71: 422 price_currency_mismatch (items per asset at fault, count), the whole upload refused, no asset written; an unknown asset still reported")
     add_test(api, "asset-currency-change", api_asset_currency_change, name="Asset Currency Change", desc="409 blocked, wipe + retry")

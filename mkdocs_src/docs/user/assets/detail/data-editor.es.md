@@ -24,7 +24,7 @@ Hasta que guardes, los precios nuevos y modificados se muestran en el gráfico c
 
 ## 💰 Pestaña Precios
 
-- **Cierre** es obligatorio y debe ser un número positivo; **Apertura**, **Máximo**, **Mínimo** y **Volumen** son opcionales, y la goma de borrar en una celda limpia su valor.
+- **Cierre** es obligatorio y debe ser mayor que 0; **Apertura**, **Máximo**, **Mínimo** y **Volumen** son opcionales, 0 o más, y la goma de borrar en una celda limpia su valor. LibreFolio no guarda precios negativos: una fila con uno, que solo un archivo importado puede traer, no se guarda y cuenta entre las omitidas.
 - Los precios están en la moneda del activo, que se muestra junto a las pestañas (*Precios en USD*).
 - Las **filas obsoletas** son días sin un precio propio, rellenados con el último conocido. Cuando las hay, aparecen un contador ⚠️ y un interruptor: actívalo para ocultarlas.
 

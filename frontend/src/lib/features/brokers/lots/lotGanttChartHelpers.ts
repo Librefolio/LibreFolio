@@ -22,7 +22,7 @@
 
 import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
-import {clamp, LOT_QUANTITY_FRACTION_DIGITS} from './lotChartShared';
+import {clamp, LOT_QUANTITY_FRACTION_DIGITS, type ScopeBoundary} from './lotChartShared';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {themed} from '$lib/theme/themePair';
 import {CHART_GAIN_LOSS, LOT_GANTT_COLORS} from '$lib/theme/chartTheme';
@@ -255,14 +255,22 @@ export function laneSortKey(segmentsForLane: ReadonlyArray<{startMs: number}>, l
 // Event marker classification
 // ---------------------------------------------------------------------------
 
-/** Map a raw event kind string to a marker kind (unknown kinds fall back to BUY). */
-export function eventMarkerKind(kind: string): EventMarkerKind {
+/** Map a raw event kind string to a marker kind (unknown kinds fall back to BUY). A transfer leg read at the scope's
+ *  edge (`scopeBoundary`, J-48) is a transfer, whatever adjustment kind carries its figures. */
+export function eventMarkerKind(kind: string, scopeBoundary?: ScopeBoundary | null): EventMarkerKind {
+    if (scopeBoundary === 'IN' || scopeBoundary === 'OUT') return 'TRANSFER';
     if (kind === 'TRANSFER_DEPART' || kind === 'TRANSFER_ARRIVE') return 'TRANSFER';
     if (kind === 'ADJUSTMENT_IN') return 'ADJUSTMENT_IN';
     if (kind === 'ADJUSTMENT_OUT') return 'ADJUSTMENT_OUT';
     if (kind === 'SPLIT') return 'SPLIT';
     if (kind === 'SELL') return 'SELL';
     return 'BUY';
+}
+
+/** The i18n key of a marker's label: `labelKind` when the event has one (`TRANSFER_IN`/`TRANSFER_OUT`, J-48), else the
+ *  marker kind's own, a transfer reading the departure's. */
+export function eventMarkerLabelKey(kind: EventMarkerKind, labelKind?: string | null): string {
+    return `brokers.lots.chartMarkers.eventType.${labelKind ?? (kind === 'TRANSFER' ? 'TRANSFER_DEPART' : kind)}`;
 }
 
 /** The glyph drawn for a marker kind. */

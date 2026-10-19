@@ -344,11 +344,11 @@ class PriceQueryOperations:
             # E1: a full-history computation (e.g. underwater drawdown, whose
             # relevant peak may predate the visible range by years) loads from
             # the beginning of the available history, which Z-30 sets at
-            # EARLIEST_RANGE_START (1900-01-01, the floor of every stored date):
-            # the load starts at the earlier of that floor and the warm-up's
-            # start above. A row an older version stored before 1900 is at most
-            # the fill's seed, so a price left at 0001-01-01 no longer makes one
-            # visible day walk ~740,000 days.
+            # EARLIEST_RANGE_START (1900-01-01, the floor of every full-history
+            # load): the load starts at the earlier of that floor and the warm-up's
+            # start above. A row stored before 1900 (writes have no floor since
+            # N83) is at most the fill's seed, so a price at 0001-01-01 no longer
+            # makes one visible day walk ~740,000 days.
             if plan.requires_full_history:
                 warmup_days = max(warmup_days, (req.date_range.start - EARLIEST_RANGE_START).days)
             warmup_days = min(

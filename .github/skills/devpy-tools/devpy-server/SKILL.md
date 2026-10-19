@@ -81,6 +81,11 @@ Playwright `webServer` command line.
   file *and* `revision` before committing: `004_release_1_2_0_schema` (target version) or
   `003_scheduler_timezone` (self-contained scope). Safe only while unreleased: once an id is
   inside a published tag it lives in users' `alembic_version` and must never change.
+- **One migration per release**: before tagging, the cycle's unreleased migrations are folded into one
+  `00N_release_<version>_schema` (004, 005), tested against the schema of the chain it replaces
+- **Only the indexes a query uses**: a `UNIQUE` constraint already has its index; no index that is the
+  left prefix of another; every new index needs a query proven with `EXPLAIN QUERY PLAN`. `db validate`
+  refuses duplicates (`.github/instructions/backend-db.instructions.md`, «Indexes»)
 - **Never `alembic merge`.** Two heads make startup skip migrations entirely and boot anyway
   (see `.github/instructions/backend-db.instructions.md`). Re-parent instead.
 - Test DB and prod DB are completely isolated (`backend/data/test/` by default,
