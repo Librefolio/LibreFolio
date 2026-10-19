@@ -18,7 +18,6 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetProviderAssignment, FxConversionRoute, FxRate, PriceHistory
-from backend.app.db.precision import usable_fx_rate_clause
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.refresh import FARefreshItem, SyncStatus
@@ -98,8 +97,7 @@ async def _last_fx_dates(session: AsyncSession, pairs: list[str]) -> dict[str, d
     if not keys:
         return {}
     conditions = [and_(FxRate.base == base, FxRate.quote == quote) for base, quote in sorted(set(keys.values()))]
-    # X-R45: the last *usable* rate, so a day an older version stored as 0 or inf is fetched again and overwritten
-    statement = select(FxRate.base, FxRate.quote, func.max(FxRate.date)).where(or_(*conditions), usable_fx_rate_clause()).group_by(FxRate.base, FxRate.quote)
+    statement = select(FxRate.base, FxRate.quote, func.max(FxRate.date)).where(or_(*conditions)).group_by(FxRate.base, FxRate.quote)
     rows = (await session.execute(statement)).all()
     last_by_key = {(base, quote): last for base, quote, last in rows if last is not None}
     return {pair: last_by_key[key] for pair, key in keys.items() if key in last_by_key}
