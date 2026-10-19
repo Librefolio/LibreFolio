@@ -9113,6 +9113,22 @@ da Y il 15/10.
   nell'API pubblica (`POST /portfolio/lots/analysis`), con i suoi test, e l'AI Export non lo usa. Da decidere: tenerlo
   (API pubblica, nessun costo se nessuno lo chiede) o dichiararlo deprecato e toglierlo in una release successiva.
   Dettagli: piano di Y, «Y-30».
+- **Y-36 · Un intervallo con la fine vuota: il frontend dice «da X in poi», il backend «solo X»** — minimo, latente;
+  Y, 19/10 (Y-N65, nota di `docs-writer`, verificata).
+  - Da Y-N65, nel filtro per data di una tabella una data sola in «Da» vale «da X in poi».
+  - Nel backend, `DateRangeModel` (`backend/app/schemas/common.py`) legge `end: null` come un giorno solo, e
+    `GET /api/v1/transactions` lo costruisce così da `date_start` senza `date_end`.
+  - Oggi non si incontrano: la pagina delle transazioni chiede tutte le transazioni senza parametri e filtra nel
+    browser.
+  - Da allineare se un giorno il filtro passa al server: o il backend accetta un intervallo aperto, o il frontend
+    manda la fine.
+  - Dettagli: piano di Y, «Il lotto Y-N65».
+- **Y-37 · `datePickers.md`: tre affermazioni che il codice smentisce** — minimo, documentazione; Y, 19/10 (Y-N65,
+  nota di `docs-writer`, verificata).
+  - Nella sezione `CalendarMonth`: «Keyboard navigation within the grid», ma la griglia non ha tasti (solo
+    `numericArrows` sull'anno); «week starts on Monday for most locales», ma parte sempre da lunedì.
+  - Il riferimento `DateRangePicker.svelte:36,216-251` (8/10) è approssimato.
+  - Y-N65 non li tocca. Dettagli: piano di Y, «Il lotto Y-N65», passo 6.
 
 ## MF · Matematica finanziaria (fase 01)
 

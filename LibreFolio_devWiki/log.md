@@ -3902,3 +3902,12 @@ in the refresh, the re-date helpers, the timezone the plugin declared. `exchange
 `_exchange_zone()`. A DB already at 011 is fixed by hand (plan 06, «Z-33r»). Page rewritten in short.
 Filed: revision of [[problems/yahoo-bars-dated-one-day-early-east-of-utc]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-19] file | No range of a single day; zrender's cursor; jsdom and disabled buttons (Y-N65)
+Workstream Y, lot Y-N65 (developer decision 19/10, N65-2…N65-7). No range picker in the app makes a range of a single
+day, and the measuring ruler ignores a second click on its start. In measure mode the chart now owns its cursor through
+zrender (crosshair, not-allowed over the start), because zrender resets an inline cursor on every move. A Vitest
+finding, verified with a jsdom 30.0.1 probe: a dispatched click reaches a disabled button's handlers.
+Filed: [[decisions/no-range-of-a-single-day]], [[problems/zrender-resets-cursor-on-every-move]],
+[[problems/dispatched-click-reaches-disabled-button-in-jsdom]]; section and history row in [[features/F-045]].
+Graph: not updated; graphify is not available in this worktree.
