@@ -244,17 +244,38 @@ Il lotto si divide in due:
 
 ## 4. Checkpoint e passi (lotti piccoli)
 
-| CP | Contenuto | Sblocca | Dipende da |
-|---|---|---|---|
-| CP1 | **Rinomina** (`git mv`) verso `services/platform/` e `services/files/`, più gli import, le patch dei test, le stringhe del runner, `coverage_analysis.py:71`, la doc per sviluppatori, la mappa in `backend.instructions.md` e le tabelle delle fonti della wiki (17 pagine, 35 citazioni) | Z (scheduler), B (backup), percorsi stabili per tutti | niente (né il commit del coordinatore su `main.py` né npm) |
-| CP2 | **Taglio di `main.py`**: lifecycle, database_bootstrap, middleware, static_site. Configurazione unica (pacchetto `config/`, D2) con le letture spostate e la guardia su `os.environ`. Patch dei test su `lifecycle` con `raising=True` | A, Z, B, X (agganci senza toccare `main.py`, sezioni di config) | il commit del coordinatore su `main.py` + aggiornamento di base |
-| CP3 | **Segreti (F03)**: sorgente `_FILE`, `JWT_SECRET_FILE` (e `dev.py`), `instance_key`, `config_audit` nei log, `.env.example` completo e a sezioni con la guardia «ogni variabile è in `.env.example`», doc admin (configuration, filesystem) | B, X (chiave), E | CP2 |
-| CP4 | **Config pubblica e avvisi**: due endpoint, `features/instance/`, layout, interceptor, i18n, Vitest, `api sync` | A (login, link), Z, X | CP3; `npm ci` approvato |
-| CP5 | **Prontezza e versione (F08)**: `/system/ready`, `/system/info` minimo senza sessione (D14 modificata), R2, C-84. CP5a backend, CP5b frontend | pannello di controllo | CP2a |
-| CP6 | **Blocco dell'istanza (D4)**: variabili, guardia sul router v1 con un elenco corto di permessi, `/system/block`, pagina di blocco; (C) `JWT_SECRET` corto fatale nel profilo gestito; pagina admin per gli hoster | il pannello del cloud (blocco) | CP4, CP5 |
-| CP7a | **Lotto Docker**: P-4, M-25, C-37, N-8, 32-3, istruzioni per C-26. Poi i file Docker passano a B | B (Litestream) | Docker acceso; anticipabile subito dopo CP3 |
-| CP7b | **Lotto HTTP**: cache di `/_app` (F28), default di 60 s nel profilo gestito (F27), header con CSP in sola segnalazione (F15) | — | CP6 |
-| TS1 | Decisione sui test speculari, con i numeri (§13) | — | riordino del backend finito |
+| CP | Contenuto | Sblocca | Dipende da | Stato (19/10) |
+|---|---|---|---|---|
+| CP1 | **Rinomina** (`git mv`) verso `services/platform/` e `services/files/`, più gli import, le patch dei test, le stringhe del runner, `coverage_analysis.py:71`, la doc per sviluppatori, la mappa in `backend.instructions.md` e le tabelle delle fonti della wiki (17 pagine, 35 citazioni) | Z (scheduler), B (backup), percorsi stabili per tutti | niente (né il commit del coordinatore su `main.py` né npm) | ✅ in dev `6a605904c` |
+| CP2 | **Taglio di `main.py`**: lifecycle, database_bootstrap, middleware, static_site. Configurazione unica (pacchetto `config/`, D2) con le letture spostate e la guardia su `os.environ`. Patch dei test su `lifecycle` con `raising=True` | A, Z, B, X (agganci senza toccare `main.py`, sezioni di config) | il commit del coordinatore su `main.py` + aggiornamento di base | ✅ CP2a `60f8a35ce`, CP2b `4fb017a9a` |
+| CP3 | **Segreti (F03)**: sorgente `_FILE`, `JWT_SECRET_FILE` (e `dev.py`), `instance_key`, `config_audit` nei log, `.env.example` completo e a sezioni con la guardia «ogni variabile è in `.env.example`», doc admin (configuration, filesystem) | B, X (chiave), E | CP2 | ✅ `d08d9358f` |
+| CP4 | **Config pubblica e avvisi**: due endpoint, `features/instance/`, layout, interceptor, i18n, Vitest, `api sync` | A (login, link), Z, X | CP3; `npm ci` approvato | ✅ `1b3eb54c7` |
+| CP5 | **Prontezza e versione (F08)**: `/system/ready`, `/system/info` minimo senza sessione (D14 modificata), R2, C-84. CP5a backend, CP5b frontend | pannello di controllo | CP2a | ✅ CP5a `9deb0ea08`; CP5b con CP6, `83eaa5a28` |
+| CP6 | **Blocco dell'istanza (D4)**: variabili, guardia sul router v1 con un elenco corto di permessi, `/system/block`, pagina di blocco; (C) `JWT_SECRET` corto fatale nel profilo gestito; pagina admin per gli hoster | il pannello del cloud (blocco) | CP4, CP5 | ✅ `83eaa5a28` |
+| CP7a | **Lotto Docker**: P-4, M-25, C-37, N-8, 32-3, istruzioni per C-26. Poi i file Docker passano a B | B (Litestream) | Docker acceso; anticipabile subito dopo CP3 | 🟡 `744f5a0ee`; manca la prova dell'immagine a runtime (Docker spento, H-11) |
+| CP7b | **Lotto HTTP**: cache di `/_app` (F28), default di 60 s nel profilo gestito (F27), header con CSP in sola segnalazione (F15) | — | CP6 | ✅ CP7b-1 `1f4c5aeca`, CP7b-2 `d8549c69a` |
+| TS1 | Decisione sui test speculari, con i numeri (§13) | — | riordino del backend finito | ⏳ aspetta la decisione P23 del developer |
+
+**Lotti dopo i CP** (§14), entrati in dev (riconciliazione del 19/10; gli SHA delle singole voci H-NN sono nel backlog):
+
+| Lotti | In dev |
+|---|---|
+| `web_link_finder` (le ultime letture d'ambiente in `config/`) | `9dda5ccd9` |
+| C-96 (le corsie ignorano la configurazione dell'istanza), filtro delle credenziali nel log d'accesso, G-10 | `744f5a0ee` (con CP7a) |
+| `billing_url` e rotte dei link nel blocco, H-12 (porta), l'anteprima della cancellazione da bloccata (A6a) | `eacc34784` |
+| Scopo dei file caricati: CP-U1, CP-U2 | `6a3a2a1cc`, `2d1eee33a` |
+| H-17, b-doc-notes (B-4, B-5), H-1, H-4, H-6, H-9, H-3 opzione B | `0ecc5ed27` |
+| P17 (l'indirizzo del client dietro un proxy fidato); TC-16 | `b1df87bd4`; `65fc63e7e` |
+| H-12 (log condiviso), H-21, H-22, la docstring di `instance_block.py`, H-23, H-24, H-25 | `7ac8b17de`, `946e02d55`, `fa16ce787`, `3f561e204`, `9eb934218`, `4bf824362`, `9839ea00b` |
+| H-26 con il residuo di H-24 e H-28; H-27; H-29 e H-30 | `40a76bf1a`; `bfdc1f72c`; `1b11869f7` |
+| H-32, H-33, il wiki-file della notte, H-36, H-37 | `ec6aa2007`, `5bba93280`, `1937e6cf4`, `d107b6f26`, `b37e926af` |
+| Z-24 con la regola di review di H-39; H-34; H-39; H-35 | `36a487e84`; `75bfac237`; `0403b5eb7`; `d28a6d7df` |
+| H-19; H-42; H-46; H-45; H-49 | `9b23bdbfe`; `3b0af4094`; `b7dcd3a25`; `d617cb406`; `96da36422` |
+| X-R62 (dalla coda di X); W-B75 (dalla coda di W); H-51; H-47, solo il disegno | `907fb3b97`; `9ba7ef9d3`; `70ab2fcc6`; `13b6cfde1` |
+| H-43, fase 1; H-52; H-54 | `d3212e9f2` e `a6adb0066`; `ca7ba117c`; `d6c252ec4` |
+
+Aperti: TS1 (P23), la prova dell'immagine di CP7a (H-11), H-55 (sospesa, §14), H-53 (con H-55); dopo la 1.3: H-47 (il
+codice), H-48, H-50, H-56. Il resto delle voci aperte è nella sezione H del backlog.
 
 **Primo treno (M3)**: H CP1 → X CP1 → A A1, integrati in quest'ordine, con gli aggiornamenti di base in mezzo. CP2
 segue appena il commit del coordinatore su `main.py` è in `dev_release2`. Insieme danno
@@ -7862,3 +7883,228 @@ secco); 3. verdi leggeri; 4. doc; 5. slot (cloud smoke con la policy applicata);
 >    - la rotta di `page-policy.spec.ts` sostituisce tutto l'header e così toglie la policy applicata: su una corsia
 >      che applica, quella spec non la prova;
 >    - la descrizione di `csp-collector` in `_frontend_utility.py` è da aggiornare.
+
+### Ripartenza del 19/10: pulizia, contabilità, due analisi
+
+> Regole nuove del coordinatore (19/10, 11:08), valide da ora:
+> - nessuna decisione di prodotto da parte mia: ogni scelta che cambia ciò che l'utente vede, i numeri o i dati è una
+>   domanda, con le opzioni e il mio consiglio;
+> - si implementa solo dopo il suo via esplicito;
+> - niente carichi pesanti senza uno slot.
+
+- **Fase 1, pulizia ✅** (11:10): H-55 parcheggiato (note «Sospeso» qui sopra). Il coordinatore ha committato il giornale
+  in `e48c7de39` e aggiornato la base a `36fe568e3`.
+- **La review del fix di Z (`b5da2277d`)**: annullata dal coordinatore. La riparazione D″ esce per decisione del
+  developer: resta solo la correzione del plugin.
+- **Contabilità ✅** (11:20):
+  - backlog: ✅ con i commit su H-43 (la fase 2 resta al cancello della RC), H-51, H-52 e H-54; H-47 ✅ solo il disegno,
+    il codice resta aperto;
+  - righe nuove: H-55 (sospesa) e H-56 (lo spegnimento non aspetta i compiti in background, nota di E);
+  - §4: la colonna dello stato nei CP e la tabella dei lotti dopo i CP, con gli SHA d'ingresso.
+
+#### Analisi: gli indici del DB (19/10, sola lettura) ✅
+
+> La domanda del developer, testuale: «abbiamo creato vari index nel DB per aiutare le query, puoi verificare che servono
+> tutte? o al contrario se ne servirebbero altre?»
+
+**Come** (script e uscite nella cartella della sessione, `files/idx/`):
+- un DB di test fresco nella corsia (`db populate --force --clean`, 8 s), revisione `011`: 44 indici, autoindex dei
+  vincoli compresi;
+- un giro in-process, senza server e senza porta, con un listener di SQLAlchemy:
+  - 67 endpoint, 150 chiamate, 149 riuscite. Il 503 è il dataset `portfolio.asset_history` di AI Export: nei dati di
+    prova c'è un asset in KRW senza cambio;
+  - 1727 statement catturati, 192 distinti;
+- `EXPLAIN QUERY PLAN` di ciascuno sulla copia intatta del DB;
+- un «what-if»: gli indici candidati tolti su una copia, e i 191 piani confrontati;
+- un volume sintetico su una copia (200 asset × 5000 giorni = 1 milione di prezzi): pesi (`dbstat`) e tempi;
+- grep statici per i percorsi che il giro non tocca: suggerimento degli eventi, split, sentinella delle date, audit di E,
+  scheduler.
+- Il codice non lancia mai `ANALYZE` né `PRAGMA optimize`. I piani senza statistiche sono quindi quelli dei DB degli
+  utenti.
+
+**Doppioni esatti** (stesse colonne, stesso ordine; si toglie l'indice esplicito, il vincolo resta):
+
+| Tabella | Si toglie | Resta | Nota |
+|---|---|---|---|
+| `price_history` | `idx_price_history_asset_date` | `UNIQUE (asset_id, date)` | il caso visto dal developer; il vincolo serve anche l'`ON CONFLICT` dell'upsert |
+| `asset_provider_assignments` | `idx_asset_provider_asset_id` | `UNIQUE (asset_id)` | |
+| `assets` | `uq_assets_display_name` (indice) | `UNIQUE (display_name)` | `001` crea sia il vincolo sia un indice con lo stesso nome |
+| `brokers` | `ix_brokers_name` | `UNIQUE (name)` | |
+| `users` | `ix_users_username` | `UNIQUE (username)` | |
+| `users` | `ix_users_email` | `UNIQUE (email)` e `ux_users_email_lower` | nessuna query cerca l'email esatta; l'unicità senza maiuscole è già più forte |
+
+**Prefissi a sinistra di un altro indice** (ogni query li sostituisce con l'indice più lungo):
+
+| Tabella | Si toglie | Coperto da |
+|---|---|---|
+| `transactions` | `ix_transactions_broker_id` | `idx_transactions_broker_date (broker_id, date, id)` |
+| `transactions` | `ix_transactions_asset_id` | `idx_transactions_asset_date (asset_id, date)` |
+| `broker_user_access` | `ix_broker_user_access_user_id` | `UNIQUE (user_id, broker_id)` |
+| `fx_conversion_routes` | `idx_route_base_quote`, `ix_fx_conversion_routes_base` | `UNIQUE (base, quote, priority)` |
+
+**Senza lettori**:
+- `ix_transactions_date`: ogni query sulle transazioni è filtrata per broker o per asset, per il controllo d'accesso;
+  la sentinella delle date (`min`/`max`) usa `idx_transactions_broker_date`;
+- `ix_fx_conversion_routes_quote`: la coppia si cerca sempre con la base. Solo l'audit di E fa un `GROUP BY quote`, su
+  una tabella di poche decine di righe.
+
+**Restano, e servono** (con chi li usa):
+- `transactions`: `idx_transactions_broker_date` (21 statement: lista, riepilogo del broker, portafoglio, AI Export) e
+  `idx_transactions_asset_date` (lotti, WAC, AI Export); `idx_transactions_asset_event` e `idx_transactions_related`
+  (collegamenti e chiavi esterne);
+- `asset_events`:
+  - `idx_asset_event_asset_date` (grafici ed eventi);
+  - `idx_asset_event_asset_type_date`: il giro non lo tocca, ma lo usano il suggerimento degli eventi
+    (`event_suggestions.py:67`, asset + tipo + intervallo) e le ricerche per tipo;
+  - `idx_asset_event_provider_assignment` (il `CASCADE` dalla tabella delle assegnazioni);
+- `fx_rates`: tutti e due. `UNIQUE (date, base, quote)` serve l'upsert e le letture per data; `(base, quote, date)` serve
+  gli intervalli di una coppia (613 esecuzioni nel giro). Unirli vorrebbe ricostruire la tabella: non lo propongo;
+- `assets`: `ix_assets_identifier_isin` e `ix_assets_identifier_ticker` (ricerca, candidati BRIM);
+- `broker_user_access`: `ix_broker_user_access_broker_id` (accessi del broker, chiave esterna);
+- `account_tokens`: tutti e tre; gli autoindex dei vincoli `UNIQUE`; `ux_users_email_lower` (accesso per email).
+
+**Verifiche**:
+- What-if, togliendo tutti i 13 indici: 50 piani cambiano solo nel nome dell'indice scelto, nessuno peggiora (nessuna
+  scansione nuova, nessun B-tree temporaneo in più, nessun indice automatico).
+- Le chiavi esterne restano coperte: per ogni colonna figlia resta un indice che comincia con lei. Il controllo di
+  SQLite su un `DELETE` del padre non diventa una scansione.
+- **Il peso**: a 1 milione di prezzi la tabella occupa 69,3 MB e ciascuno dei due indici gemelli 24,7 MB.
+  - Togliere il doppione ne libera circa il 21 % (da 118,7 a 94,0 MB): a 3 milioni di prezzi sono circa 75 MB.
+  - Ogni prezzo scritto aggiorna un indice in meno, e il backup e Litestream copiano meno pagine.
+  - `DROP INDEX` dura 9 ms.
+
+**Indici mancanti: nessuno.** Nel giro nessuna tabella grande viene scansionata per intero, tranne un caso voluto: la
+lista degli asset legge tutte le transazioni con un asset (`assets/crud.py:284`, «detenuto da me / da altri»), e un
+indice non lo eviterebbe. Il costo sta invece nella **forma** di due query, che leggono tutto lo storico:
+- **«L'ultima data per asset (o per coppia)» con `GROUP BY` e `max`.** Legge ogni voce dell'indice dell'asset fino alla
+  data, e non salta all'ultima.
+  - Misura: 143 ms per 200 asset su 1 milione di prezzi; 0,8 ms con un `max` scalare per asset nella stessa query, con
+    le stesse 200 righe (verificato uguale).
+  - Dove:
+    - X: `assets/price_query.py:93`, `assets/period_changes.py:37` e `:44`, `assets/refresh.py:103`;
+    - W: `brokers/summary.py:245`;
+    - J: `pac_allocator/source/loaders.py:55` e `fx_quotes.py:34`;
+    - H: `platform/scheduler/jobs.py:87` e `:102` (Z lavora anche sullo scheduler).
+- **Le valute distinte dei prezzi** (`financial_math/portfolio/engine.py:134`, MF/J): legge ogni riga fino alla data.
+  - 23,6 ms per 50 asset × 5000 giorni.
+  - Un indice coprente `(asset_id, date, currency)` lo porta a 14 ms, ma pesa 25,6 MB per milione di prezzi: non ne
+    vale la pena.
+
+**Proposte** (domande per il developer, tramite il coordinatore; niente implementato):
+- **P-IDX-1, una migrazione incrementale `0NN_drop_redundant_indexes`.**
+  - Il numero è il primo libero quando si fa: dipende dal destino di 010 e 011 di Z (D″ esce).
+  - `upgrade()`: `DROP INDEX IF EXISTS` dei 13 indici. `downgrade()`: li ricrea con le definizioni esatte
+    (`IF NOT EXISTS`). Quelli unici non possono fallire, perché i vincoli restano.
+  - I modelli si allineano in `db/models.py`, condiviso:
+    - via `index=True` da `transactions.broker_id`, `transactions.asset_id`, `transactions.date`,
+      `broker_user_access.user_id`, `fx_conversion_routes.base` e `fx_conversion_routes.quote`;
+    - via gli `Index(...)` dei doppioni;
+    - `unique=True, index=True` diventa `unique=True` per `users.username`, `users.email` e `brokers.name`.
+  - Niente `VACUUM`: le pagine liberate tornano nella lista libera e si riusano. Il file si accorcia solo con un
+    `VACUUM`, che riscriverebbe tutto il DB.
+  - Test:
+    - la migrazione su un DB usa e getta, in su e in giù;
+    - l'unicità ancora applicata sui sei gemelli;
+    - le chiavi esterne ancora coperte;
+    - una guardia nuova in `db validate`: nessun indice uguale a un altro, o prefisso a sinistra di un altro, nella
+      stessa tabella, autoindex compresi. Oggi `test_indexes` controlla solo che gli indici dei modelli esistano nel
+      DB, ed è così che i gemelli creati dal SQL di `001` sono passati.
+  - Taglia S, rischio basso.
+- **P-IDX-2, un solo helper per «l'ultima data per asset/coppia»**, e i 9 punti sopra passati a lui. Nessun indice,
+  risultati identici.
+  - Proprietari: X, W, J e H.
+  - Prima conviene misurarlo sui dati veri del developer (copia di lavoro, skill `real-data-copy`).
+- **Opzioni**:
+  - A) P-IDX-1 nella 1.3, P-IDX-2 dopo (**il mio consiglio**: il guadagno di spazio e di scrittura è sicuro, il rischio
+    è basso);
+  - B) nella 1.3 solo il doppione di `price_history`;
+  - C) tutto dopo la 1.3.
+- **Limiti**: il giro copre dell'import BRIM i doppioni (`idx_transactions_broker_date`, broker + data) e i candidati
+  degli asset, non il parse. Non tocca lo scheduler, che ho controllato con grep (le due query in `jobs.py`, sopra), né
+  il rischio, che legge prezzi e cambi da `market_series.py` e `assets/price_query.py`, come i grafici.
+
+#### Analisi: i testi dei controlli d'istanza e le ancore della guida (19/10, sola lettura) ✅
+
+> Il developer non ha capito l'avviso del reverse proxy («Le richieste passano da un reverse proxy di cui LibreFolio non
+> si fida (X-Forwarded-For): i limiti per indirizzo del visitatore non si applicano…»). Chiede un testo più chiaro, che
+> dica cosa significa e cosa fare, e un bottone «Guida» su ogni controllo, anche su quelli superati. L'interfaccia è di
+> A: ci si accorda tramite il coordinatore.
+
+**Stato vero**:
+- I testi sono chiavi `instance.checks.*` nel sottosistema i18n `instance` (mio), in quattro lingue; quelli di A, B ed E
+  stanno nei loro sottosistemi (`auth.checks.*`, `backup.checks.*`, `email.checks.*`).
+- La scheda Sicurezza è di A (`features/settings/security/`). `securityFindings.ts` ha già una mappa per controllo,
+  `SERVER_ACTIONS`, per i link dentro l'app («Apri la scheda Email», «Apri le impostazioni dei plugin»).
+- Il frontend costruisce già link localizzati alla guida (`AboutTab.svelte`, `mkdocsUrl()`); i segnali e gli eventi
+  tengono il percorso della pagina in una mappa del frontend (`docsPath`).
+- La guida admin usa già ancore esplicite (`{: #client-address }`, `{: #security-passed }`…), stabili fra le lingue. Ma
+  le sezioni scritte nella 1.3 ci sono **solo nelle pagine inglesi**: le traduzioni IT/FR/ES di `configuration`,
+  `connection_checks` e `settings` sono indietro. Così un link localizzato oggi atterra in cima a una pagina che non ha
+  la sezione. Fanno eccezione `#session-cookie` e `#reverse-proxy` (`connection_checks`) e `#session-persistence`
+  (`index`), presenti in tutte e quattro.
+- Perché il testo non si capisce: «di cui non si fida», «header di inoltro» e «limiti per indirizzo del visitatore» sono
+  gergo; la conseguenza non è detta in parole semplici; l'azione (dove si scrive la variabile, quale valore) non c'è.
+
+**Proposta di testo** (EN, la fonte, e IT; FR ed ES all'implementazione):
+
+| Chiave | EN | IT |
+|---|---|---|
+| `clientAddress.untrustedProxy` (⚠️) | Some requests reach LibreFolio through a proxy it was not told about (it sent {headers}). LibreFolio therefore sees every visitor behind it with the same address, and cannot slow down someone who tries many passwords, or asks for many emails, from one address: for those requests only the limits per account and per email address still apply. To fix it, add the proxy's address to FORWARDED_ALLOW_IPS in the .env file (with Docker, the proxy's network, such as 172.18.0.0/16), then restart LibreFolio. No proxy of yours in front of LibreFolio? Then there is nothing to do. | Alcune richieste arrivano a LibreFolio attraverso un proxy che non gli è stato indicato (ha inviato {headers}). Così LibreFolio vede tutti i visitatori dietro di lui con lo stesso indirizzo, e non può frenare chi prova molte password, o chiede molte email, da uno stesso indirizzo: per quelle richieste restano solo i limiti per account e per indirizzo email. Per sistemare, aggiungi l'indirizzo del proxy a FORWARDED_ALLOW_IPS nel file .env (con Docker, la rete del proxy, per esempio 172.18.0.0/16), poi riavvia LibreFolio. Davanti a LibreFolio non hai un tuo proxy? Allora non c'è nulla da fare. |
+| `clientAddress.publicForwarding` (ℹ️) | Some requests from the internet carried proxy headers ({headers}), and LibreFolio ignored them, as it should. If your own proxy has a public address, add it to FORWARDED_ALLOW_IPS in the .env file and restart; otherwise there is nothing to do: a visitor's browser, or a proxy of their own, can add these headers. | Alcune richieste da internet avevano intestazioni da proxy ({headers}), e LibreFolio le ha ignorate, com'è giusto. Se il tuo proxy ha un indirizzo pubblico, aggiungilo a FORWARDED_ALLOW_IPS nel file .env e riavvia; altrimenti non c'è nulla da fare: il browser di un visitatore, o un suo proxy, può aggiungere queste intestazioni. |
+| `clientAddress.ok` (✅) | Since the last start, no request has arrived through a proxy LibreFolio does not know about. | Dall'ultimo avvio nessuna richiesta è arrivata da un proxy che LibreFolio non conosce. |
+
+- Il testo nomina solo `FORWARDED_ALLOW_IPS`, la cura del caso comune. L'altra strada, `LIBREFOLIO_CLIENT_IP_HEADER`
+  (proxy che scrivono un header proprio, come Fly.io), resta nella guida dietro il bottone.
+- `ok` non promette «ogni visitatore ha il suo indirizzo»: un proxy che non manda nessuna intestazione non si vede.
+- Lo stesso difetto, cioè nessuna azione nel testo, c'è in altri due testi, su cui propongo una frase in più:
+  - `sessionCookie.never`: «Set SESSION_COOKIE_SECURE back to auto, unless your proxy really needs never.» / «Rimettilo
+    su auto, a meno che il tuo proxy non abbia davvero bisogno di never.»;
+  - `jwtSecret.ephemeral`: «To keep users signed in, set JWT_SECRET to 32 or more random characters.» / «Per tenerli
+    collegati, imposta JWT_SECRET con almeno 32 caratteri casuali.».
+- Variante V2, da decidere: ogni messaggio non `ok` diviso in due chiavi, cosa significa (`…`) e cosa fare
+  (`…Action`), e A mostra «Cosa fare» su una riga sua. È più leggibile, ma cambia lo schema per tutti i controlli,
+  compresi quelli di A, B ed E.
+
+**Le ancore del bottone «Guida»** (una per controllo, uguale per ogni stato, superato compreso):
+
+| Controllo | Pagina e ancora | Lingue |
+|---|---|---|
+| `platform.jwt_secret` | `admin/configuration/#secrets` | solo EN |
+| `platform.secrets_set_twice` | `admin/configuration/#secret-files` | solo EN |
+| `platform.instance_key` | `admin/configuration/#instance-key` | solo EN |
+| `platform.session_cookie` | `admin/connection_checks/#session-cookie` | 4 |
+| `platform.client_address` | `admin/connection_checks/#client-address`; meglio un'ancora nuova `#untrusted-proxy` sul paragrafo «When LibreFolio does not trust your proxy», che oggi è solo grassetto | solo EN |
+| `platform.frame_protection` | **ancora nuova** `admin/configuration/#frame-protection` (oggi è solo una riga di tabella) | — |
+| `platform.csp_report_only` | **ancora nuova** `admin/configuration/#csp-report-only` | — |
+| `platform.log_level`, `platform.test_mode` | `admin/configuration/#startup-checks` | solo EN |
+| `platform.plugin_secrets` | `admin/configuration/#plugin-secrets` | solo EN |
+| `backup.panel_token` | `admin/hosting_providers/#panel-token` | pagina solo EN |
+| `backup.upload_limit`, `backup.restore_limit` | `admin/hosting_providers/#restore-upload-limit` | pagina solo EN |
+| `accounts.login_limit` | `admin/configuration/#login-limit` | solo EN |
+| `email.smtp` | `admin/email/#variables` | pagina solo EN |
+| `email.smtp_encryption` | `admin/email/#encryption-modes` | pagina solo EN |
+| `email.links` | `admin/email/#links-check` | pagina solo EN |
+| la registrazione aperta (dal browser) | `admin/settings/#open-registration-warning` | solo EN |
+
+**Domande** (per il developer, tramite il coordinatore):
+1. **Il testo**: V1, i tre testi sopra più le due frasi in più (**il mio consiglio**), oppure V2, il «Cosa fare» su una
+   riga sua per tutti i controlli.
+2. **La lingua dei link «Guida»**, finché le pagine admin non sono tradotte:
+   - L1: la pagina nella lingua dell'app. Funziona dopo una traduzione delle pagine admin; prima atterra in cima a una
+     pagina vecchia;
+   - L2: sempre la pagina inglese, poi L1 dopo la traduzione.
+   - **Il mio consiglio**: L1 se la traduzione delle pagine admin è prevista per la 1.3, altrimenti L2. Più un test
+     che fallisce se l'ancora di un controllo manca nella pagina che il link apre.
+3. **Dove sta la mappa** (da decidere con A):
+   - a) nel frontend, accanto a `SERVER_ACTIONS`, con un test Vitest che legge le pagine `.en.md` e verifica ogni
+     ancora. È lo schema che la scheda usa già e non cambia l'API (**il mio consiglio**);
+   - b) un campo nuovo nella risposta di `GET /security/checks`, scritto da chi possiede ogni controllo (H, A, B, E):
+     cambio di schema e `api sync`.
+
+**Lavoro di H, se approvato** (piccolo):
+- i testi nelle quattro lingue (`instance/<lang>.json`);
+- le tre ancore nuove (`#untrusted-proxy`, `#frame-protection`, `#csp-report-only`), con il docs-writer: in inglese, e
+  nelle traduzioni, dove la sezione c'è già, solo la riga dell'ancora;
+- la tabella della scheda Sicurezza in `settings.en.md`, con le parole nuove;
+- se si sceglie b), il campo in `ConfigCheck`.
+- A fa il bottone, il link e il suo test.
