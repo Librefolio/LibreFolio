@@ -439,21 +439,40 @@ Sulle decisioni aperte del piano generale (§10):
 
 ## 8. Passi ordinati, lotti e checkpoint
 
-| Lotto | Contenuto | Checkpoint |
-|---|---|---|
-| A1 | Rinomina del backend in `services/accounts/`, nessun cambio di comportamento | **CP1**, treno M3 |
-| A2 | Rinomina del frontend: auth, settings, support, modali degli aggiornamenti. Aspetta l'elenco del lotto A dei colori | **CP2** |
-| A3 | Registro delle schede (stesse 4 schede), O-15, K-17, L12 | **CP3**, sblocca le schede di B e X |
-| A4 | Migrazione 005, modelli, token, `sv` e chiusura delle sessioni, `registration_mode` con il blocco da variabile, `user reset` che alza la versione | — |
-| A5 | Inviti, modalità di registrazione, limite utenti, API admin, link di reset, 21-5, CLI; pagine `/invite` e `/reset-password` | **CP4**, «token e inviti»: **sblocca E** |
-| A6 | Scheda Utenti, modali dell'invito e del link di reset, banner del limite | **CP5** |
-| A7 | F02 con `/setup`, `setup-link`, K-5 (`setup_required` e il pulsante nel login), avviso di registrazione aperta ed esposta. Dopo il primo checkpoint di H | — |
-| A8 | F15: limite dei tentativi su login e token, 429 nella UI | **CP6** |
-| A9 | F05, parte di A, e F09, dopo la configurazione pubblica di H | **CP7** |
-| A10 | Rilettura finale della documentazione (ogni lotto porta la sua), galleria dopo G, catalogo del runner, sezione di `.env.example`, testo per il CHANGELOG, righe del backlog, tabella vecchio → nuovo per lo storico | **Finale** |
-| A11 | C-54, se c'è spazio | **CP8** |
+| Lotto | Contenuto | Checkpoint | Stato (19/10, base `6578f1d75`) |
+|---|---|---|---|
+| A1 | Rinomina del backend in `services/accounts/`, nessun cambio di comportamento | **CP1**, treno M3 | ✅ 15/10, `769cc31cb` |
+| A2 | Rinomina del frontend: auth, settings, support, modali degli aggiornamenti. Aspetta l'elenco del lotto A dei colori | **CP2** | ✅ 15/10, `73b8cbebd` |
+| A3 | Registro delle schede (stesse 4 schede), O-15, K-17, L12 | **CP3**, sblocca le schede di B e X | ✅ 15/10, `755eaa27d` |
+| A4 | Migrazione 005, modelli, token, `sv` e chiusura delle sessioni, `registration_mode` con il blocco da variabile, `user reset` che alza la versione | — | ✅ 15/10: A4 `75a8af5a7`, A4b (la versione della sessione) `dbf89cdd5` |
+| A5 | Inviti, modalità di registrazione, limite utenti, API admin, link di reset, 21-5, CLI; pagine `/invite` e `/reset-password` | **CP4**, «token e inviti»: **sblocca E** | ✅ 15/10, A5a e A5b, ingresso `8bcb23502` |
+| A6 | Scheda Utenti, modali dell'invito e del link di reset, banner del limite | **CP5** | ✅ in cinque parti: A6a `1840ebd62` e A6b `09ca36b9d` (15/10); A6d + A6e `19dd8a96d` e A6c `3b3f6a1f0` (16/10) |
+| A7 | F02 con `/setup`, `setup-link`, K-5 (`setup_required` e il pulsante nel login), avviso di registrazione aperta ed esposta. Dopo il primo checkpoint di H | — | ✅ in quattro parti: A7a e A7c `68355911f` (16/10); A7b `3e5336a0a` e A7b-2 `90219770c` (17/10) |
+| A8 | F15: limite dei tentativi su login e token, 429 nella UI | **CP6** | ✅ 17/10: A8a con N70 ed E-13 `440616c61`; A8b con A-21a `6e2b2c8b7` |
+| A9 | F05, parte di A, e F09, dopo la configurazione pubblica di H | **CP7** | ✅ 17/10, `ba8f3b06e`; correzione FPM-08 `cd52e25fc` |
+| A10 | Rilettura finale della documentazione (ogni lotto porta la sua), galleria dopo G, catalogo del runner, sezione di `.env.example`, testo per il CHANGELOG, righe del backlog, tabella vecchio → nuovo per lo storico | **Finale** | ⏳ aperto. Fatti lotto per lotto: catalogo del runner, `.env.example`, testi del CHANGELOG, righe del backlog. Restano: la galleria (dopo G), la tabella vecchio → nuovo della devWiki (A-4), la rilettura finale |
+| A11 | C-54, se c'è spazio | **CP8** | ✅ 17/10, `630c478cd`; `mark_seen` monotòno `119230f9f` |
 
 Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali cambi.
+
+Lotti nati dopo il piano (14–19/10):
+
+| Lotto | Contenuto | Stato (19/10) |
+|---|---|---|
+| P18, A-22, A-24, A-27 | Email uniche senza distinzione di maiuscole; i login falliti senza l'identificativo nel log; tre test di E; i link di reset revocati da un cambio d'indirizzo o di password | ✅ 16/10, `68355911f` (con A7a e A7c) |
+| A-25 | Il Profilo non chiede la password per un cambio di sole maiuscole | ✅ 16/10, `b7e50b359` |
+| A-21a | Niente `@` nei nomi nuovi, la ricerca per indirizzo prima (A-21b aspetta il developer) | ✅ 17/10, `6e2b2c8b7` (con A8b) |
+| A-42 + A-43 | Il ciclo di vita del link di setup: la gara col setup, l'annullamento | ✅ 17/10, `7156a24af` |
+| Aiuto del profilo + A-50 + SC-LANE-01 | `features/instance/profile.ts`, l'avviso «withdrawn» | ✅ 17/10, `d7641f368` |
+| A-46 + A-47 | La lunghezza dei nomi nella CLI; `AccountError` con il codice | ✅ 17/10, `abbe19d37` |
+| A-51 + A-45 | L'annullamento e la cancellazione dell'admin in attesa sotto il lock; la riga `/auth` della guida API | ✅ 17/10, `180be0ff1` |
+| X-R66 (dalla sezione di X) | Il limite delle sonde dei provider nella lingua dell'utente | ✅ 17/10, `e50c23919` |
+| A-11 + A-16 + A-40 + A-26 | Il tema salvato sconosciuto; `LAST_ADMIN` dell'eliminazione di sé; l'avviso del limite in `user activate`; gli indici su espressione della 005 | ✅ 17/10, `250031cd1` |
+| A-52…A-56, C-54 nota 1 di E | Le decisioni sugli account sotto il lock di scrittura; `mark_seen` non torna indietro | ✅ 17/10, `119230f9f` |
+| A-57 | LGM-E-01/03 leggono il profilo della corsia | ⏸ sospeso dal developer (19/10): analisi e prova 1 fatte |
+
+Le intestazioni di §17 che dicono «in corso» sono lo stato di quando sono state scritte: lo stato vero è in queste due
+tabelle.
 
 ## 9. Definizione di fatto
 
@@ -7468,3 +7487,319 @@ LIBREFOLIO_PROFILE=managed`. **Peso**: basso.
   **A-57 sospeso** finché il developer non finisce di leggere i lotti piccoli. In attesa con lui: la frase rc in
   `developer/frontend/onboarding.md` (nota 2 di E su C-54, legata al checkpoint di A-57). Il punto AUSR-E-07 di A-58 va
   nella contabilità dell'indice (fase 2).
+
+## Ripartenza del 19/10 — Fase 2 (base `6578f1d75`)
+- Coordinatore (11:12): base aggiornata a `6578f1d75` (il mio giornale in `52421559f`, poi il merge di `dev_release2`,
+  `ede7adf75`); la frase sulle pre-release resta con A-57, sospesa. Fase 2: prima la contabilità, poi l'analisi N69.
+- Regole nuove (19/10): nessuna decisione di prodotto da A, ogni scelta che cambia ciò che l'utente vede, i numeri o i
+  dati diventa una domanda per il coordinatore, con le opzioni e un consiglio; implementazione solo dopo il via
+  esplicito; niente carichi pesanti senza slot.
+
+### F2.1 — Contabilità ✅ (19/10, 11:15–11:45)
+- **Indice, sezione A**: ogni riga aperta confrontata con il codice e con i commit (solo letture e `grep`).
+  - Chiuse con ✅, data e commit:
+    - A-2 (A6d, `683b4ff5b`);
+    - A-5, la parte di A (A3);
+    - A-6 (A6c, `4bbc6fbf6`);
+    - A-7, i punti di A;
+    - A-8 (A5b, `2b0715532`);
+    - A-9 (H, C-96, `901fa33f6`);
+    - A-12 (A6b, `1577663c1`);
+    - A-15 (H, `ef3f29f52`);
+    - A-21 (A-21a, `5da71d037`);
+    - A-39 in inglese (A-50, `6700a04b4`).
+  - Nuova **A-21b**: il resto di A-21, che aspetta il developer. Un tempo prevedeva «la migrazione 010», che ora è di
+    Z-32 (c).
+  - Aggiornate con lo stato a `6578f1d75`: A-4, A-10, A-37, A-38, A-57, A-58.
+    - A-4: 14 righe in 13 pagine.
+    - A-10: le pagine dei lotti A8a–C-54.
+    - A-37: anche `backup/instance.py` di B usa la classe.
+    - A-38: il limite ora è descritto in `security.md`.
+    - A-57: sospesa.
+    - A-58: AUSR-E-07 e `LIBREFOLIO_CSP_ENFORCE`.
+  - Una nota di contabilità in testa alla sezione. Risultato: 41 chiuse, 19 aperte.
+- **Fuori dal dominio di A**, da dire al coordinatore:
+  - black fallisce ancora su `scripts/coverage_analysis.py` e `test_portfolio_api.py`;
+  - due punti di A-7 sono ancora veri: la prop `icon` di `PasswordInput` manca in `core-ui/atoms.md` (T), e
+    `patterns/alembic.md` usa ancora il batch senza l'avvertenza.
+- **Tabella dei lotti** (§8):
+  - una colonna «Stato» con i commit d'ingresso;
+  - una seconda tabella con gli 11 lotti nati dopo il piano;
+  - una nota: le intestazioni «in corso» di §17 sono storiche.
+  - Tutti i commit citati sono antenati di HEAD (`git merge-base --is-ancestor`).
+- **⚠️ Fuori pista**: un giro di `git rev-list` per trovare l'ingresso di A4 era lento: fermato, perché non serviva (ho
+  citato i commit dei lotti).
+
+### F2.2 — Analisi N69: l'amministrazione, dalle prove del developer (19/10, sola lettura)
+Fonte: `risposte-resoconto-20261019.md` del coordinatore, §6 «Cose nuove dalle tue prove», N69; la sua richiesta delle
+11:08. Nessun file del repo toccato; skill `design-system` caricata (solo ruoli, contrasti, stato per i test). Ogni scelta
+che cambia ciò che l'utente vede è nelle domande in fondo (D1–D11), con le opzioni e il mio consiglio.
+
+| Punto | Cosa | File principali | Costo | Rischio principale |
+|---|---|---|---|---|
+| 1 | Un puntino sull'icona della connessione; nel pannello «N avvisi di sicurezza» → la lista | `ConnectionSecurityIndicator.svelte`, forse `Header.svelte` | piccolo–medio | la shell, la galleria di ogni pagina admin |
+| 2 | Amministrazione solo per gli admin | `settingsTabs.ts` (una riga) | piccolo | due E2E e la doc con traduzioni |
+| 3 | «Chi può iscriversi» anche nella scheda Utenti | `UsersTab.svelte`, `GlobalSettingsTab.svelte`, un modulo comune | medio | l'impostazione è condivisa dalla corsia |
+| 4 | L'icona dell'utente dopo la freccia | `AdminUserRead`, `UserRow.svelte` | piccolo–medio | la decisione A-1 sui file |
+| 5 | L'avviso del proxy spiegato; «Guida» su ogni controllo | `SecurityTab.svelte`, `schemas/security.py`; testi e ancore di H | medio | il contratto con H, le ancore non tradotte |
+
+#### N69-1 · Il puntino degli avvisi di sicurezza sull'icona della connessione
+**Stato reale**
+- Il «1» che il developer ha visto è il badge della scheda Sicurezza, ripetuto sul gruppo Amministrazione:
+  `settingsTabs.ts` (`badge: () => securityChecks.attentionCount`) e la somma del gruppo in
+  `routes/(app)/settings/+page.svelte:58-79`. Conta errori e avvisi, non le info (`securityFindings.ts`, `attentionCount`).
+- Lo stato è uno store di modulo (`security/securityChecks.svelte.ts`): una lettura di `GET /api/v1/security/checks` (solo
+  admin, `api/v1/security.py`) per caricamento di pagina. Oggi la chiede solo la pagina Impostazioni (`prefetch`). La rotta
+  valuta i controlli di `services/platform/config_audit.py` (file letti fuori dal loop) e i segreti dei plugin (una
+  query): leggera.
+- La riga della connessione è `components/layout/ConnectionSecurityIndicator.svelte`, nella barra verde
+  (`Sidebar.svelte:280`). Mostra l'icona del livello (scudo in `text-lf-bar-success/warning/danger`). Il pannello contiene
+  il motivo, l'avviso del cookie per gli admin e la guida, e si chiude da solo dopo 30 s (piano 48). Con la barra
+  compatta, un clic allarga la barra e apre il pannello.
+- Sul telefono la barra è fuori schermo. Il pulsante del menu (`Header.svelte:240-251`) ha già un puntino rosso quando la
+  connessione è `insecure` (`mobile-menu-security-dot`: `bg-lf-danger ring-2 ring-lf-header`, piano 36): è il precedente
+  di questo disegno.
+
+**Disegno proposto**
+- Per un admin con almeno un errore o un avviso, un puntino sull'angolo dell'icona della connessione, con la barra larga o
+  compatta.
+  - Rosso con almeno un errore, ambra con soli avvisi: `bg-lf-bar-danger` / `bg-lf-bar-warning`, con un anello del colore
+    della barra che lo stacca dall'icona.
+  - Sulla barra verde reggono 3:1, coppie già misurate dal cancello (`bar-danger`, `bar-warning` sulla barra e sul suo
+    hover).
+- Nel pannello, sotto il motivo, un pulsante «N avvisi di sicurezza» (plurale ICU) che chiude il pannello e porta a
+  `/settings?tab=security`.
+  - Testo `text-lf-bar-text`, bordo e icona nello stato, come l'avviso del cookie di oggi (`border-lf-bar-warning`).
+  - Mai `text-lf-bar-danger` per un testo: sulla barra è misurato a 3:1, non a 4.5.
+- Il colore da solo non basta (WCAG 1.4.1): il conteggio entra nel nome accessibile del pulsante della connessione, e nel
+  `title` quando la barra è compatta. Per i test, `data-security-attention` con il numero e `data-security-severity`.
+- Caricamento: l'indicatore chiama `securityChecks.ensureLoaded()` solo se l'utente è admin, cioè una richiesta in più per
+  caricamento di pagina, solo per gli admin. La scheda e i badge leggono lo stesso store: dopo «Controlla di nuovo» il
+  puntino segue.
+- `components/layout` importa già da `features/` (`Sidebar.svelte`: `features/legal`, `features/onboarding`).
+
+**File e costo**
+- `ConnectionSecurityIndicator.svelte` e il suo test; `Header.svelte` se il puntino del menu si allarga (D2); 2–3 chiavi
+  i18n nella sorgente `app` (`connectionSecurity.*`).
+- Costo piccolo–medio.
+
+**Rischi**
+- File della shell: gli ultimi a toccarli sono T (i ruoli) e A9 (la nota legale). Tutti e due già sui ruoli: nessuna
+  riga nella baseline del cricchetto.
+- La galleria: la barra c'è in ogni scatto di un admin. Se la corsia della galleria ha avvisi, cambiano tutti (G).
+- Sul profilo gestito, l'admin del cliente vedrebbe avvisi sulla configurazione che fa l'operatore (D1).
+
+**Test**
+- Vitest `ConnectionSecurityIndicator.test.ts`:
+  - il puntino solo per un admin e solo con il conteggio maggiore di 0, la gravità via `data-*`;
+  - nessuna richiesta per un non admin;
+  - il pulsante e la sua destinazione, il nome accessibile, la barra compatta.
+- E2E `layout/connection-security.spec.ts`:
+  - admin: il puntino c'è se e solo se `GET /security/checks` della corsia ha errori o avvisi, letto prima (write-safe);
+  - utente normale: mai.
+
+#### N69-2 · La scheda Amministrazione solo per gli admin
+**Stato reale**
+- `settingsTabs.ts`: la voce `admin` (Impostazioni globali) è l'unica del gruppo senza `visible`. Un non admin vede quindi
+  il gruppo Amministrazione con questa sola scheda, in sola lettura (`canEdit: false`, `settings-readonly-indicator`).
+- Un gruppo senza membri visibili sparisce da solo (`settingsBar`). Un `?tab=admin` vecchio cade sulla prima scheda
+  visibile (`+page.svelte:32-40`).
+- Pochi rimandi a quella scheda:
+  - l'unico link interno a `?tab=admin` è l'avviso della registrazione aperta, solo per gli admin
+    (`openRegistrationNotice.svelte.ts:30,39`);
+  - nessuna guida dell'onboarding punta lì.
+- `GET /settings/global` resta leggibile da ogni utente con il login (A6d): lo leggono anche `PreferencesTab.svelte:72` e
+  il bootstrap dell'app (`onboarding/appBootstrap.svelte.ts`). Il backend non cambia.
+
+**Disegno**: `visible: (ctx) => ctx.isSuperuser` sulla voce `admin`. Il ramo in sola lettura di `GlobalSettingsTab`
+(`canEdit`) non si raggiunge più dalla UI. Proposta: resta, per ora, e si toglie in un lotto di pulizia.
+
+**File e costo**: `settingsTabs.ts`, una riga (mia). Costo piccolo.
+
+**Test**
+- `settingsTabs.test.ts` e `routes/(app)/settings/page.tabs.test.ts`.
+- E2E `settings.spec.ts`: i due test «non-admin can view but not edit global settings» (:518) e «non-admin sees disabled
+  toggles and inputs» (:691) diventano «un non admin non vede Amministrazione», più un `?tab=admin` che cade sul Profilo.
+
+**Doc**
+- `user/settings/index.en.md` (:5, :11, :24 «Not an administrator?»), `admin/settings.en.md:4` («every signed-in user can
+  read them»).
+- `developer/frontend/components/features/settings.md` (il titolo «GlobalSettingsTab (read by everyone, edited by
+  administrators)»), `developer/architecture/settings.md` (la scheda no, l'API sì).
+- Le prime due hanno IT/FR/ES: il debito di traduzione cresce (A-10).
+
+**Rischi**: gli scatti della galleria di un non admin (G); i test E2E sistemati in A-12, da riscrivere.
+
+#### N69-3 · «Chi può iscriversi» anche nella scheda Utenti
+**Stato reale**
+- Una fonte sola: l'impostazione globale `registration_mode` (`open`, `invite`, `disabled`), scritta da `PATCH
+  /settings/global/bulk`.
+- `LIBREFOLIO_REGISTRATION` la blocca: il PATCH risponde 409 `SETTING_LOCKED_BY_ENV`, e `GET /system/instance` porta
+  `registration_locked`.
+- In `GlobalSettingsTab.svelte`:
+  - sta nella categoria «security» con `require_email_verification` di E (:63), una `SettingSelect` dietro il lucchetto
+    della pagina (`settings-lock-toggle`);
+  - con la variabile, sola lettura e il suggerimento `settings.lockedByEnv` (:86-99, :682-700);
+  - dopo il salvataggio rilegge la configurazione pubblica (`instanceConfig.load({force: true})`, :289-291).
+- La scheda Utenti legge già quella configurazione. Con `disabled` spegne «Invita» e dice perché (`users-invite-blocked`,
+  `UsersTab.svelte:90-93, 245-249`).
+
+**Disegno**
+- Nella prima sezione della scheda Utenti, sotto il titolo e l'uso, accanto a «Invita»: «Chi può iscriversi» con le tre
+  modalità e le stesse etichette (`settings.registrationModes.*`), bloccato e spiegato quando la variabile lo fissa.
+- Una sola fonte anche nel codice: un modulo comune in `features/settings/`, usato da entrambe le schede, con le opzioni,
+  «bloccato dalla variabile», il salvataggio e la rilettura della configurazione. Il controllo è la `SettingSelect` che
+  c'è già.
+- Come si modifica è la domanda D5.
+
+**File e costo**
+- `UsersTab.svelte`, `GlobalSettingsTab.svelte` (solo per usare il modulo comune), il modulo nuovo, 1–3 chiavi i18n,
+  forse un dialogo di conferma (`ModalBase`).
+- Costo medio.
+
+**Rischi**
+- `registration_mode` è un'impostazione condivisa da ogni test della corsia: la corsia gira `open` e nessuna E2E la
+  cambia (`e2e/fixtures/instance-config.ts`). L'E2E nuova intercetta il PATCH nel suo contesto invece di scriverlo; in
+  alternativa gira esclusiva e rimette il valore.
+- Nella stessa sezione di `GlobalSettingsTab` c'è la logica di E (`verificationBlocked`).
+- L'avviso della registrazione aperta (A7b) e il ritrovamento del browser nella scheda Sicurezza seguono la
+  configurazione riletta.
+
+**Test**
+- Vitest `UsersTab.test.ts`:
+  - mostra la modalità, salva con il PATCH e rilegge la configurazione;
+  - bloccata dalla variabile; 409 `SETTING_LOCKED_BY_ENV`;
+  - la conferma, se scelta (D5).
+- `GlobalSettingsTab.test.ts`: comportamento invariato.
+- E2E `settings/admin-users.spec.ts`, con lo stub.
+
+**Doc**: `admin/users.en.md` (senza traduzioni) e `admin/settings.en.md` («Who Can Sign Up», `#registration`: il secondo
+punto d'accesso).
+
+#### N69-4 · L'icona dell'utente nella lista degli account
+**Stato reale**
+- «La freccia» è il `ChevronRight` del pulsante della riga (`UserRow.svelte:65-66`), seguito dal nome e dai badge.
+- L'icona è `user_settings.avatar_url`, un'immagine caricata o un indirizzo (al massimo 500 caratteri).
+  - `GET /users/search` la dà già (`schemas/users.py:22`, la condivisione dei broker).
+  - `AdminUserRead` no (`GET /users` e la risposta del PATCH).
+- L'app la disegna già in due modi:
+  - `UserSearchSelect.svelte`: `LazyImage` con `?img_preview=48x48`, un cerchio di 24 px, e l'iniziale su
+    `bg-lf-neutral` / `text-lf-muted` se manca (solo ruoli);
+  - `BrokerSharingPanel.svelte`: lo stesso, ma con classi della palette ambra non ancora migrate.
+
+**Disegno**
+- Backend: `avatar_url` in `AdminUserRead`, cioè una query in più per la lista e una per la risposta del PATCH; poi
+  `api sync`.
+- Frontend:
+  - `avatar_url` nel tipo `AdminAccount`;
+  - un cerchio di 24 px dopo la freccia, come in `UserSearchSelect`, con l'iniziale se manca (D8).
+- Proposta: un piccolo `UserAvatar.svelte`, solo ruoli, usato dalla riga. Le altre due copie si allineano dopo, con i
+  loro proprietari.
+
+**File e costo**
+- `schemas/users.py`, `api/v1/users.py` (`list_accounts`, `_admin_user_read`), `user_service` (la mappa degli avatar),
+  `users/types.ts`, `UserRow.svelte`, forse `components/ui/media/UserAvatar.svelte`.
+- Costo piccolo–medio.
+
+**Rischi**
+- A-1, decisione aperta: oggi ogni utente con il login legge ogni file caricato. Se si restringe la lettura ai
+  proprietari, gli avatar degli altri si rompono qui e nella condivisione dei broker: la decisione di A-1 deve tenerli
+  leggibili.
+- Con la CSP imposta (`LIBREFOLIO_CSP_ENFORCE` di H) un avatar su un altro sito può essere bloccato (`img-src`). Vale già
+  per la condivisione.
+- La terza copia, in `BrokerSharingPanel` (palette ambra), è del programma colori.
+
+**Test**
+- `test_users_admin_api.py`: `avatar_url` nella lista e nella risposta del PATCH, `null` senza.
+- Vitest della riga: l'immagine con `?img_preview`, l'iniziale se manca, l'`alt`.
+- La galleria della scheda Utenti (G).
+
+#### N69-5 · L'avviso del proxy spiegato, e «Guida» su ogni controllo
+**Stato reale**
+- Il controllo è di H: `platform.client_address` in `services/platform/config_audit.py:133-148`.
+  - `warning` «untrustedProxy»: un peer locale con header di inoltro di cui LibreFolio non si fida;
+  - `info` «publicForwarding»: header di inoltro da peer pubblici;
+  - altrimenti `ok`.
+  - I testi sono `instance.checks.clientAddress.*` nella sorgente i18n `instance`, di H.
+- La guida c'è: `admin/connection_checks.en.md`, «🧭 The Visitor's Address» `{: #client-address }` (:203). IT, FR ed ES
+  non hanno ancora l'ancora (debito A-10, da A8a).
+- La scheda Sicurezza (`security/SecurityTab.svelte`, mia, A8b):
+  - elenca i ritrovamenti, con un link interno dove un'impostazione dell'app li risolve (`SERVER_ACTIONS` di
+    `securityFindings.ts`), e piegati i controlli superati;
+  - nessun link alla guida.
+- Un controllo arriva come `{check_id, severity, i18n_key, detail}` (`schemas/security.py` e `api/v1/security.py`, di A):
+  nessun percorso di guida.
+- Il componente comune c'è già: `components/ui/DocsLink.svelte` (icona del libro, etichetta visibile, la lingua nell'URL
+  `/mkdocs/<lang>/…`, `localizedFallbackPath`).
+
+**Disegno (parte di A)**
+- Su ogni riga, ritrovamenti e superati, un pulsante «Guida» (`DocsLink`, libro, etichetta visibile, nuova scheda) verso
+  la pagina e l'ancora del controllo, nella lingua dell'utente. Il link interno di oggi resta dov'è.
+- Due modi di sapere la guida di un controllo:
+  - (a) dal backend: un campo `docs` (percorso con ancora, senza lingua) in `ConfigCheck` e in `SecurityCheckRead`.
+    - H lo mette nei suoi controlli, A, B ed E nei propri.
+    - Un test del backend controlla che ogni ancora esista nella pagina inglese.
+    - Una fonte sola, accanto al controllo.
+  - (b) dal frontend: una tabella `check_id → percorso` in `securityFindings.ts`, come `SERVER_ACTIONS`. È più veloce, ma
+    un controllo nuovo di H resta senza pulsante finché qualcuno non la aggiorna.
+  - Consiglio (a). Il contratto con H passa dal coordinatore: il nome del campo, il formato
+    (`admin/connection_checks/#client-address`), chi lo scrive per i controlli di B ed E.
+- Il ritrovamento del browser (la registrazione aperta) ha la sua guida in `admin/settings.md#registration`.
+- I testi spiegati meglio e le ancore sono di H (stesso compito, N69): A fa solo l'interfaccia.
+
+**File e costo**
+- Di A: `schemas/security.py`, `api/v1/security.py`, `SecurityTab.svelte`, `securityFindings.ts`, una chiave i18n.
+- Di H: `config_audit.py` e i suoi controlli, i testi, le ancore.
+- Costo medio, insieme a H.
+
+**Rischi**
+- Le ancore mancanti nelle traduzioni (A-10): in un'altra lingua il link arriva in cima alla pagina tradotta finché non è
+  tradotta (D11).
+- I moduli dei controlli di B ed E.
+
+**Test**
+- Backend: ogni controllo ha `docs`, e l'ancora esiste in `mkdocs_src/docs/<pagina>.en.md`.
+- Vitest `SecurityTab.test.ts`: un pulsante per riga, anche fra i superati, con la lingua nell'URL.
+- E2E `settings/security-tab.spec.ts`: il pulsante c'è e punta alla guida, senza cliccarlo.
+
+#### Domande (le opzioni e il mio consiglio)
+- **D1** (punto 1) Sul profilo gestito il puntino c'è come sul self-hosted? (a) Sì, ovunque, e H dice quali controlli
+  l'admin di un'istanza gestita non deve vedere, perché li sistema l'operatore; (b) mai sul profilo gestito.
+  **Consiglio (a)**: niente codice «solo cloud», la scelta resta sui controlli (di H).
+- **D2** (punto 1) Sul telefono la barra è nascosta: il puntino del pulsante del menu, oggi solo per la connessione
+  insicura, vale anche per gli avvisi di sicurezza di un admin? (a) Sì, lo stesso puntino, rosso o ambra; (b) no.
+  **Consiglio (a)**, altrimenti sul telefono resta nascosto come prima.
+- **D3** (punto 1) Un puntino o un numero? (a) Il puntino, come chiesto, con il numero nel pannello e nel nome
+  accessibile; (b) un piccolo numero come il badge della scheda. **Consiglio (a)**.
+- **D4** (punto 2) Il non admin perde la vista dell'istanza: durata della sessione, iscrizioni, aggiornamenti
+  automatici, limite dei file, valori predefiniti. (a) Va bene così; (b) un riassunto in Informazioni.
+  **Consiglio (a)**: niente lì serve a un non admin, e l'API resta com'è.
+- **D5** (punto 3) Come si cambia la modalità nella scheda Utenti? (a) Come in Impostazioni globali: lucchetto, poi
+  salva o annulla; (b) si salva alla scelta, con una conferma solo per «aperta a tutti»; (c) una scelta e un pulsante
+  «Salva». **Consiglio (b)**: è un controllo solo, e la conferma protegge la scelta rischiosa.
+- **D6** (punto 3) Solo la modalità, o anche «Richiedi la verifica dell'email» (di E, stessa sezione «Chi può
+  iscriversi»)? **Consiglio: solo la modalità** per ora; la verifica ha le sue regole (servono i link dell'email).
+- **D7** (punto 3) Dove: nella prima sezione, accanto a «Invita», o in una sezione «Iscrizioni» sua, sopra gli account?
+  **Consiglio: nella prima sezione**: il motivo per cui «Invita» è spento sta accanto al controllo che lo riaccende.
+- **D8** (punto 4) Senza icona: (a) l'iniziale in un cerchio neutro, come nella ricerca degli utenti; (b) un'icona
+  generica; (c) nulla. **Consiglio (a)**.
+- **D9** (punto 5) L'etichetta: «Guida» (come nella richiesta) o «Scopri di più» (come nel pannello della connessione)?
+  **Consiglio «Guida»**, con il libro.
+- **D10** (punto 5, per il coordinatore e H) Il percorso della guida dal backend (a) o da una tabella nel frontend (b)?
+  **Consiglio (a)**.
+- **D11** (punto 5) Una lingua senza l'ancora (traduzioni indietro): il link porta (a) alla pagina tradotta, in cima, o
+  (b) alla sezione inglese? **Consiglio (a)**: la lingua dell'utente; il debito è A-10.
+
+#### Ordine proposto
+1. N69-2: piccolo.
+2. N69-4: piccolo–medio.
+3. N69-1: piccolo–medio.
+4. N69-3: medio.
+5. N69-5: medio, dopo l'accordo con H.
+
+Ognuno con i rossi prima e uno slot. Uno slot API (`users-admin`) per N69-4 e N69-5. Uno slot E2E (`settings`,
+`admin-users`, `security-tab`, `connection-security`) e la galleria con G.
+
+#### Trovato strada facendo (fuori da N69)
+- `Header.svelte:241`: il nome accessibile del pulsante del menu è in inglese scritto a mano («Toggle menu»), in ogni
+  lingua. File della shell: da girare a chi la tiene.
