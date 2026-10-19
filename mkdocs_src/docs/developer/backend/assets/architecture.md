@@ -394,6 +394,9 @@ Each query item can request:
 
 - `include_price: true` — price history with backward-fill
 - `include_events: true` — asset events in the date range
+- `max_points`, `resolution` or `sample_like`, at most one of them — the price series sampled
+  for a compact chart, daily, weekly or monthly; `key` names an item for another item's
+  `sample_like` ([Sampled Price Series](#price-query-sampling))
 
 `get_prices_bulk()` never invokes a provider. Provider acquisition belongs to
 `refresh.py` through `POST /assets/prices/sync`; the query path remains DB-only while retaining
@@ -445,7 +448,9 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
   per day from the first stored price to the end; none when the fill emits nothing (no price, or a
   first price after the end). The comparison series of a signal that needs a prepared asset series
   (a rolling beta against another asset) count too; a comparison against the item's own asset is
-  not counted twice. An item that starts after the ceiling counts zero. Over `MAX_BULK_ITEM_DAYS`
+  not counted twice. An item that starts after the ceiling counts zero. A
+  [sampled](#price-query-sampling) weekly or monthly item counts its points plus two for its
+  `sample_bounds`, before any of its bucket rows is read. Over `MAX_BULK_ITEM_DAYS`
   (1,000,000) the method raises `BulkTooManyDaysError`, its `item_days` the request's exact total,
   and the route answers 422 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`.
 
@@ -481,7 +486,8 @@ get their prices, the others no new ones, and the error reaches only the browser
 window shows its generic *Technical signals could not be updated*. An explicit message is a
 follow-up (workstream X, X-R58). Batching bounds each request, not the total: on «All» each card
 still loads its asset's full daily history, and 300 assets without signals still fill about
-2.9 million points (backlog Z-29, post-1.3).
+2.9 million points: the asset list does not ask for the [sampled series](#price-query-sampling)
+the query can return (backlog Z-29).
 
 With `target_currency`, the conversion pass converts every close not already in that currency
 through one `convert_bulk()` call per result, scales open, high and low by the same factor, keeps
@@ -491,6 +497,102 @@ native price and currency, and the result's `errors` lists the failures, dedupli
 ten plus one "… and N more" line. The query never registers an FX pair: the asset page reports
 the pair through its `requiredFxPairs` banners, and its comparison loader drops those points (see
 [Chart internals](../../frontend/components/charts.md#asset-detail-page-sync-and-comparison-sync)).
+
+### 🗜️ Sampled Price Series {: #price-query-sampling }
+
+A card's compact chart (`LineChart` with `compact`, through `PriceChartCompact.svelte`) keeps the
+daily points while they are at most 1.3 per pixel of its plot, else the last point of each ISO week
+while those are, else the last point of each calendar month (`chooseStaticResolution()` in
+`frontend/src/lib/components/charts/LineChart.svelte`, on the buckets of `mapDateToBucket()` and
+`aggregateLineSeries()` in `timeSeriesAggregation.ts`). An item of `POST /assets/prices/query` can
+ask for that sample instead of its whole daily fill (Z-29a), through four optional fields of
+`FAPriceQueryItem` (`backend/app/schemas/prices.py`):
+
+| Field | What the item asks |
+|---|---|
+| `max_points` | An integer from 1 to 10,000, the most points the chart's plot takes: the backend chooses the step on the item's own fill |
+| `resolution` | A step, `daily`, `weekly` or `monthly`, whatever the length of the fill |
+| `sample_like` | The step and the buckets of the item of the request whose `key` it gives |
+| `key` | A name for the item, unique in the request, that another item's `sample_like` gives; it changes nothing in the item's own answer. `key` and `sample_like` take 1 to 64 characters among ASCII letters, digits, `_`, `.`, `:` and `-` (`SAMPLE_KEY_PATTERN`) |
+
+An item asks one way at most. The model validator `validate_sampling()` refuses two of
+`max_points`, `resolution` and `sample_like` together, and any of them with `signals`,
+`annotation_requests` or `include_events: true`, which need every day: a sampled item carries its
+price series alone. Both refusals are 422 validation errors on the request body, before the
+handler runs. `target_currency` and `include_price` stay allowed.
+
+**The step.** The rule is pure, in `backend/app/services/assets/price_sampling.py`;
+`_plan_samples()` in `price_query.py` applies it once the [ceiling](#price-query-range-ceiling) has
+cut the range. An item's fill starts on its first day F: the range's start when a stored row of the
+asset precedes it (the fill's seed), else the asset's first row in the range. With `max_points`,
+`choose_resolution()` takes the finest of daily, weekly and monthly whose count over F … end
+(`fill_counts()`: the days, the ISO weeks and the calendar months the fill touches) fits in
+`max_points`; monthly is the floor and may exceed it. With `resolution`, the step is the one
+asked. A daily step gives the ordinary daily fill, the answer without the fields. An item with
+nothing to fill, no seed and no row in the range, gets an empty series whatever it asks.
+
+**The points.** A weekly or monthly series holds the dates of `sample_dates()`: the last day of
+each ISO week (Monday to Sunday) or calendar month (`bucket_of()`) from F's bucket to the end's,
+the last bucket cut at the range end. Each point is the one the daily fill has on that date
+(`_fill_point()`, which `_build_backward_filled_series()` uses too): the last stored row on or
+before it, with its `backward_fill_info`. F is one of these dates only when it closes its bucket or
+is the end. With `target_currency`, the conversion pass converts the sample and the point on F like
+any series, each point on its own date.
+
+**The answer.** `FAPriceQueryResult.resolution` is always present: the step of `prices`, `daily`
+by default. A weekly or monthly result also carries `sample_bounds` (`FAPriceSampleBounds`, two
+`FAPricePoint`): `first`, the fill's point on F, and `last`, its point on the range end, which is
+also the last point of `prices`. A daily result, an empty one included, has no `sample_bounds`, and
+`include_price: false` gives neither points nor bounds. In the OpenAPI document, the description
+of `FAPricePoint` has single quotes where its docstring has backticks
+(`_description_without_backticks()`): the web client's generator, openapi-zod-client, writes the
+description of the model a required field refers to into a template literal, which a backtick
+would close.
+
+**`sample_like`.** It puts an item on the buckets of another item of the request, named by its
+`key`, as a comparison drawn on a card needs. The follower takes the step of the item it names,
+the one that item's `max_points` or `resolution` gives on that item's own fill (daily with
+neither), from the later of the two first days: its points are its own daily fill's on the bucket
+dates from that day's bucket on, and `sample_bounds.first` is its point on that day. A daily step
+gives the follower the daily fill from that later day. When the named item has nothing to fill,
+the follower is sampled on its own fill by that item's `max_points` or `resolution`.
+
+`resolve_sample_references()` checks every reference on the whole request, before the
+ceiling cut and before any read, and refuses the request at the first fault. The route turns its
+`SampleReferenceError` into a 422
+`{"code": "sample_reference", "reason", "item", "key", "message"}` (`sample_reference_detail()`),
+`item` the position of the item at fault in the request and `key` that item's own `key`:
+
+| `reason` | The item at fault |
+|---|---|
+| `unknown_key` | Gives in `sample_like` a key no item of the request carries |
+| `duplicate_key` | Carries a `key` an earlier item already carries |
+| `chained` | Names an item that has a `sample_like` itself, itself included: one level only, so no cycle |
+| `range_mismatch` | Names an item with another `date_range`, an absent `end` counting as its `start` (`DateRangeModel`'s single day) |
+
+**The reads.** The weekly and monthly items stay out of the day-by-day read. For them,
+`_plan_samples()` reads only the seed and the first row in the range of each asset, and, for a
+follower that starts later, its last row on or before that day: the dates of each sample are known,
+and counted against the [day budget](#bulk-request-limits), before any bucket row is read. Once the
+budget has passed them, `_read_samples()` reads their points. An asset another item of the request
+already loads whole, on a range that holds the sampled item's (a daily item, or a signal's
+comparison series), is sampled from those rows, not read a second time. The other items are read
+by one statement per range and step, which covers every asset of that group
+(`_bucket_last_rows()`): SQLite groups the rows by asset and ISO week or calendar month and, through
+its bare-column rule for `max()`, returns only the last row of each bucket. No daily fill is built
+for a weekly or monthly item.
+
+The step rule is the chart's. The case table
+`frontend/src/lib/components/charts/__tests__/compactDensityCases.json` holds cases of the
+chart's rule at 1.3 points per pixel (first day, end, plot width, days, weeks, `max_points`, step),
+`max_points` being the most points the plot width takes at that density;
+`test_price_query_sampling.py` checks every case against the chart's rule, and `fill_counts()` and
+`choose_resolution()` against every case. Tests: `test_price_query_sampling.py`
+(`./dev.py test services price-query-sampling`, PURE: a private SQLite file) pins the rule, the
+buckets, the references, the budget and the reads; the Z-29a block at the end of
+`test_assets_prices.py` (`./dev.py test api assets-price`) the route's 422s, the OpenAPI document
+and sampled answers on the lane's server. The web app sends none of these fields: the asset list
+still asks each card's daily fill.
 
 ### 📅 Fixed-Period Changes {: #fixed-period-changes }
 
