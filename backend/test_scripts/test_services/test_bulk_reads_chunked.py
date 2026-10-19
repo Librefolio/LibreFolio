@@ -79,27 +79,51 @@ lettori devono restare come prima di X-R45, quindi ancora filtrati.» X-R38's wr
 nothing cleans such a row up, at startup or from the scheduler (D-W63-1: no). Pinned in section 4 on ERN/STN, its rows
 planted with raw SQL past the model, as an older release could leave them:
 
-5. the planner's latest saved row on or before ``as_of`` is the latest stored one — D2's 0, inf or 1E+14 over D1's 2.5
-   —, its rate as the column reads it back (a REAL inf is ``Decimal('Infinity')``);
-6. the quote is built from that row, with no fallback to D1: 0 takes the ``rate > 0 else None`` branch again — no rate,
-   the issue ``allocation.saved_fx_invalid`` naming D2's quote (backlog X-R82 decays with it) —, 1E+14 is quoted as read
-   back, with no issue; a pair whose only saved rate is unusable is quoted from that row the same way, never «missing».
-   An inf is pinned at the loader only: on this path ``build_planner_fx_quotes`` raises on it — ``rate > 0`` holds for
-   an infinity, and ``PortfolioPlannerSourceFxQuote`` refuses a Decimal that is not finite (pydantic ``finite_number``)
-   —, a crash the decision accepts and these tests do not pin;
-7. the WAC evidence reads the stored row of each exact key, whatever its rate (0, inf, 1E+14, as read back), beside the
+5. the planner's latest saved row on or before ``as_of`` is the latest stored one — D2's 0, inf or 1E+14 over D1's 2.5,
+   or alone —, its rate as the column reads it back (a REAL inf is ``Decimal('Infinity')``);
+6. the WAC evidence reads the stored row of each exact key, whatever its rate (0, inf, 1E+14, as read back), beside the
    usable key;
-8. ``convert_bulk`` (its backward-fill anchor and its window) and ``_first_rate_days_inside`` still read only the rates
+7. ``convert_bulk`` (its backward-fill anchor and its window) and ``_first_rate_days_inside`` still read only the rates
    within the bounds: the nine cases of the deleted gate's clause test (``test_utilities/test_usable_fx_rate_gate.py``),
    1E-10, 1.5 and 99999999999999 read, 0, 1E-11, -1.5, inf, 1E+14 and 1E+19 skipped.
 
-RED until the X-R45 revert (``usable_fx_rate_clause()`` still filters the two planner reads):
-``test_xr45_reverted_the_latest_saved_planner_fx_row_is_the_latest_stored_one`` (0, inf and 1E+14, as of D2 and later),
-``test_xr45_reverted_the_planner_fx_quote_is_built_from_the_latest_stored_row`` (0 and 1E+14),
-``test_xr45_reverted_a_planner_fx_pair_whose_only_saved_rate_is_unusable_has_that_row`` (0, inf and 1E+14),
-``test_xr45_reverted_a_planner_fx_pair_whose_only_saved_rate_is_unusable_is_quoted_from_it`` (0 and 1E+14) and
-``test_xr45_reverted_wac_fx_evidence_reads_the_stored_row_of_its_exact_date`` (0, inf and 1E+14). Green before and after
-(guards): ``test_xr45_guard_the_latest_usable_planner_fx_rate_wins`` and
+X-R45b — the planner's quote skips a saved rate of 0 or not finite for the previous valid one, with a warning. The
+decision (developer, 19/10), verbatim: «Sì: tasso valido precedente con l'avviso, e lo 0 trattato allo stesso modo». In
+``build_planner_fx_quotes``, when the latest saved row of a pair (on or before ``as_of``, from the loader, which does not
+change) has a rate of 0 or not finite — a negative one too, the cure's ``_usable_rate`` being finite and > 0; no case
+pins it —, the quote is built from the pair's most recent earlier row whose rate is finite and above 0
+(``_previous_usable_row``, as many rows back as it takes), with ONE warning ``allocation.saved_fx_skipped`` (kind
+``invalid``) about that quote, its params the pair, ``skipped_date`` (the most recent row skipped) and ``used_date``,
+and no ``allocation.saved_fx_invalid``. With no such row, today's error: the latest row's quote with no rate and
+``allocation.saved_fx_invalid`` — for an infinite rate too, where today the builder raises (``rate > 0`` holds for an
+infinity, and ``PortfolioPlannerSourceFxQuote`` refuses a Decimal that is not finite, pydantic ``finite_number``: a 500
+on ``POST /portfolio/allocation-source``). A finite rate from 1E+14 up stays a value, quoted as read back. The code is
+the allocation-source API's (``PortfolioPlannerSourceIssueCode``), not the tool contract's (``PlannerIssueCode``). Pinned
+on ERN/STN, beside the valid rates of two neighbouring pairs (ERN/SZL, BBD/STN) on the day between D1 and D2, which a
+look-back must not take:
+
+8. 0 or inf on D2 over 2.5 on D1, as of D2 and later: D1's quote — 2.5, D1, its source, its age — and the warning
+   (``skipped_date`` D2, ``used_date`` D1);
+9. two skipped rows in a row, 0 then inf and inf then 0 on D2 and D3, over 2.5 on D1, as of D3 and later: D1's quote and
+   ONE warning, ``skipped_date`` D3, the most recent;
+10. no valid row before the latest (an inf alone, 0 then inf; a 0 alone, inf then 0): the latest row's quote with no
+    rate, and the error ``allocation.saved_fx_invalid`` about it, no warning;
+11. 1E+14 on D2, over 2.5 on D1 and alone: D2's quote, 1E+14 as read back, no issue;
+12. ``allocation.saved_fx_skipped`` is one of ``PortfolioPlannerSourceIssueCode`` and not one of ``PlannerIssueCode``.
+
+Red until the X-R45 revert (c720e25cb), green since, and unchanged by X-R45b, which touches neither the loader nor the
+WAC read: ``test_xr45_reverted_the_latest_saved_planner_fx_row_is_the_latest_stored_one`` (0, inf and 1E+14, as of D2
+and later), ``test_xr45_reverted_a_planner_fx_pair_whose_only_saved_rate_is_unusable_has_that_row`` (0, inf and 1E+14)
+and ``test_xr45_reverted_wac_fx_evidence_reads_the_stored_row_of_its_exact_date`` (0, inf and 1E+14).
+
+RED until X-R45b: ``test_xr45b_a_zero_or_infinite_latest_planner_fx_rate_falls_back_to_the_previous_valid_one`` (0 and
+inf, as of D2 and later), ``test_xr45b_several_unusable_planner_fx_rates_in_a_row_fall_back_to_the_previous_valid_one``
+(both runs, as of D3 and later), ``test_xr45b_a_planner_fx_pair_with_no_valid_rate_is_invalid_from_its_latest_row`` (an
+inf alone, 0 then inf) and ``test_xr45b_saved_fx_skipped_is_a_source_issue_code_and_not_a_tool_issue_code``.
+
+Green before and after (guards): ``test_xr45b_guard_a_pair_whose_latest_rate_is_zero_and_none_valid_before_is_invalid``
+(a 0 alone, inf then 0), ``test_xr45b_guard_a_finite_planner_fx_rate_from_1e14_up_is_quoted_as_read_back``,
+``test_xr45_guard_the_latest_usable_planner_fx_rate_wins`` and
 ``test_xr45_guard_wac_fx_evidence_reads_a_usable_saved_rate_on_its_exact_date`` (an ordinary rate and the two bounds,
 1E-10 and 99999999999999); ``test_xr45_guard_convert_bulk_still_reads_only_rates_within_the_usable_bounds`` and
 ``test_xr45_guard_first_rate_days_inside_still_reads_only_rates_within_the_usable_bounds`` (the nine cases).
@@ -110,7 +134,10 @@ Isolation: PURE — no lane database, no server, no network. Each test has its o
 Reference: backend/app/utils/sql_chunks.py, backend/app/services/brim/brim_provider.py (search_asset_candidates,
 search_asset_candidates_bulk, _classify_candidates, _contains_matcher, _like_to_regex, _other_as_text),
 backend/app/services/pac_allocator/source/wac.py (_load_wac_fx_rows),
-backend/app/services/pac_allocator/source/fx_quotes.py (_load_latest_planner_fx_rows, build_planner_fx_quotes),
+backend/app/services/pac_allocator/source/fx_quotes.py (_load_latest_planner_fx_rows, build_planner_fx_quotes, and the
+cure's _previous_usable_row),
+backend/app/schemas/portfolio.py (PortfolioPlannerSourceIssueCode, PortfolioPlannerSourceFxQuote),
+backend/app/schemas/pac_allocator/base.py (PlannerIssueCode),
 backend/app/services/fx/conversion.py (convert_bulk), backend/app/services/fx/period_changes.py
 (_first_rate_days_inside), backend/app/db/precision.py (usable_fx_rate_bounds),
 backend/test_scripts/test_db/test_brim_bulk_candidates.py (the same parity on a small universe).
@@ -124,7 +151,7 @@ import threading
 from collections.abc import AsyncIterator
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, get_args
 
 import pytest
 import pytest_asyncio
@@ -136,6 +163,8 @@ from backend.app.db.base import SQLModel  # imports every model, and backend.app
 from backend.app.db.models import Asset, AssetType, FxRate
 from backend.app.schemas.brim import BRIMMatchConfidence
 from backend.app.schemas.common import Currency
+from backend.app.schemas.pac_allocator.base import PlannerIssueCode
+from backend.app.schemas.portfolio import PortfolioPlannerSourceIssueCode
 from backend.app.services.brim import brim_provider
 from backend.app.services.fx import period_changes as fx_period_changes
 from backend.app.services.fx.conversion import convert_bulk
@@ -826,7 +855,8 @@ async def test_guard_bulk_exact_hits_keep_the_universe_order(session):
 
 # =============================================================================
 # 4. X-R45 REVERTED: THE PLANNER'S SAVED FX READS TAKE THE STORED ROW AS IT IS; convert_bulk AND
-#    _first_rate_days_inside STILL SKIP A RATE OUTSIDE usable_fx_rate_bounds()
+#    _first_rate_days_inside STILL SKIP A RATE OUTSIDE usable_fx_rate_bounds(). X-R45b: THE PLANNER'S QUOTE SKIPS A
+#    SAVED RATE OF 0 OR NOT FINITE FOR THE PREVIOUS VALID ONE, WITH A WARNING
 # =============================================================================
 
 #: The pair of this section, as ``fx_rates`` keeps it (base < quote): real ISO 4217 codes, since a planner quote
@@ -835,7 +865,8 @@ XR45_BASE, XR45_QUOTE = "ERN", "STN"
 XR45_PAIR = f"{XR45_BASE}/{XR45_QUOTE}"
 XR45_D1 = date(1987, 6, 8)  # a usable rate
 XR45_D2 = date(1987, 6, 10)  # the pair's latest row: a rate outside usable_fx_rate_bounds(), in the reverted cases
-XR45_LATER = date(1987, 6, 15)  # an as_of after both
+XR45_D3 = date(1987, 6, 12)  # X-R45b: the second row of a run of skipped rates, after D2
+XR45_LATER = date(1987, 6, 15)  # an as_of after D1, D2 and D3
 XR45_D1_RATE = Decimal("2.5")
 #: Rates a 1.2 install could store outside X-R38's ``usable_fx_rate_bounds()`` (1E-10 <= rate < 1E+14), as SQLite binds
 #: them, with the Decimal the ORM reads back from ``fx_rates.rate`` (``Numeric(24, 10)`` on SQLite: ``"%.10f" % value``,
@@ -845,13 +876,6 @@ XR45_UNUSABLE = [
     pytest.param(float("inf"), Decimal("Infinity"), id="inf"),  # 1E+400, written as an SQLite REAL
     pytest.param(1e14, Decimal("1E+14"), id="1E+14"),  # the first rate refused
 ]
-#: The two of them ``build_planner_fx_quotes`` answers for on the reverted path: (the rate planted on D2, the quote's rate,
-#: the codes of its issues). 0 takes the ``rate > 0 else None`` branch; 1E+14 is a positive rate, quoted as read back.
-#: Not inf: the builder raises on it (the module docstring says how), so it is pinned at the loader only.
-XR45_QUOTED = [
-    pytest.param(0.0, None, ["allocation.saved_fx_invalid"], id="0-saved-fx-invalid"),
-    pytest.param(1e14, Decimal("1E+14"), [], id="1E+14-quoted-as-read-back"),
-]
 #: Rates a read may use, the two bounds among them, with the Decimal ``fx_rates.rate`` reads back.
 XR45_USABLE = [
     pytest.param(4.0, Decimal("4"), id="ordinary-4"),
@@ -859,6 +883,21 @@ XR45_USABLE = [
     pytest.param(99999999999999.0, Decimal("99999999999999"), id="largest-99999999999999"),
 ]
 XR45_AS_OF = [pytest.param(XR45_D2, id="as-of-D2"), pytest.param(XR45_LATER, id="as-of-later")]
+#: X-R45b: the saved rates the planner's quote skips — 0 and not finite —, as SQLite binds them.
+XR45B_SKIPPED = [
+    pytest.param(0.0, id="0"),  # a manual 1E-11, truncated to the column's 10 decimals
+    pytest.param(float("inf"), id="inf"),  # 1E+400, written as an SQLite REAL
+]
+#: X-R45b: two skipped rates in a row, on D2 then on D3, in both orders.
+XR45B_RUNS = [
+    pytest.param(0.0, float("inf"), id="0-then-inf"),
+    pytest.param(float("inf"), 0.0, id="inf-then-0"),
+]
+XR45B_RUN_AS_OF = [pytest.param(XR45_D3, id="as-of-D3"), pytest.param(XR45_LATER, id="as-of-later")]
+#: X-R45b: valid rates of two neighbouring pairs — one shares ERN, the other STN —, on a day between D1 and D2. A look-back
+#: that forgot the pair, or one side of it, takes one of them before D1's 2.5.
+XR45B_DECOY_DAY = date(1987, 6, 9)
+XR45B_DECOYS = {("ERN", "SZL"): 7.0, ("BBD", "STN"): 9.0}
 
 
 def _xr45_source(day: date) -> str:
@@ -881,28 +920,65 @@ async def _xr45_plant(session: AsyncSession, rates: dict[date, float]) -> None:
     assert found == rates, f"the fixture itself is wrong: raw SQL reads back {found}, not the rates planted, {rates}"
 
 
-async def _xr45_quotes(session: AsyncSession, issues: list, story: str) -> list:
-    """``build_planner_fx_quotes`` for ERN/STN as of ``XR45_LATER``. An exception fails the test, naming it.
+async def _xr45b_plant_decoys(session: AsyncSession) -> None:
+    """The neighbouring pairs' valid rates on ``XR45B_DECOY_DAY``, written as ``_xr45_plant`` writes ERN/STN's.
 
-    Never called with an inf as the pair's latest row: on the reverted path the quote's schema refuses an infinite rate
-    and the builder raises — a crash the developer's decision accepts, not a contract these tests pin.
+    Barrier: raw SQL reads back, on that day, these two rates and no ERN/STN row.
+    """
+    for (base, quote), rate in XR45B_DECOYS.items():
+        await session.execute(
+            text("INSERT INTO fx_rates (date, base, quote, rate, source, fetched_at) VALUES (:day, :base, :quote, :rate, :source, CURRENT_TIMESTAMP)"),
+            {"day": XR45B_DECOY_DAY.isoformat(), "base": base, "quote": quote, "rate": rate, "source": f"XR45B-DECOY-{base}-{quote}"},
+        )
+    stored = (await session.execute(text("SELECT base, quote, rate FROM fx_rates WHERE date = :day"), {"day": XR45B_DECOY_DAY.isoformat()})).all()
+    found = {(base, quote): rate for base, quote, rate in stored}
+    assert found == XR45B_DECOYS, f"the fixture itself is wrong: raw SQL reads back {found} on {XR45B_DECOY_DAY}, not the decoys planted, {XR45B_DECOYS}"
+
+
+async def _xr45_quotes(session: AsyncSession, issues: list, story: str, as_of: date = XR45_LATER) -> list:
+    """``build_planner_fx_quotes`` for ERN/STN as of ``as_of``. An exception fails the test, naming it.
+
+    Before X-R45b an infinite latest rate raises here: ``rate > 0`` holds for an infinity, and the quote's schema refuses
+    a Decimal that is not finite.
     """
     try:
-        return await source_fx_quotes.build_planner_fx_quotes(session, request_pairs=[XR45_PAIR], as_of=XR45_LATER, issues=issues)
+        return await source_fx_quotes.build_planner_fx_quotes(session, request_pairs=[XR45_PAIR], as_of=as_of, issues=issues)
     except Exception as exc:  # any exception fails the test, named: no case here may raise
-        pytest.fail(f"{story}: build_planner_fx_quotes raised {exc!r}")
+        pytest.fail(f"{story}: build_planner_fx_quotes raised {exc!r} (X-R45b: a saved rate of 0 or not finite is skipped, never quoted)")
 
 
-def _xr45_assert_quoted_from_d2(quotes: list, issues: list, quoted_rate: Optional[Decimal], codes: list[str], story: str) -> None:
-    """The one quote of ERN/STN is built from D2's row — its id, its reference date, its source, its age as of
-    ``XR45_LATER`` —, with ``quoted_rate``, and every issue in ``codes`` names that quote (``fx_key`` of D2's row)."""
-    d2_quote_id = fx_key(XR45_PAIR, XR45_D2, _xr45_source(XR45_D2))
+def _xr45_assert_quote(quotes: list, as_of: date, day: date, rate: Optional[Decimal], story: str) -> str:
+    """The one quote of ERN/STN is built from the row of ``day`` — its id, its reference date, its source, its age as of
+    ``as_of`` —, with ``rate``. Returns the quote's id, which its issues name."""
+    quote_id = fx_key(XR45_PAIR, day, _xr45_source(day))
     found = [(quote.fx_quote_id, quote.pair, quote.rate, quote.reference_date, quote.source, quote.days_before_requested) for quote in quotes]
-    expected = [(d2_quote_id, XR45_PAIR, quoted_rate, XR45_D2, _xr45_source(XR45_D2), (XR45_LATER - XR45_D2).days)]
-    assert found == expected, f"{story} is {found}: expected {expected}, the quote of D2's row as stored (X-R45 reverted)"
-    found_issues = [(issue.code, issue.path.entity_id) for issue in issues]
-    expected_issues = [(code, d2_quote_id) for code in codes]
-    assert found_issues == expected_issues, f"{story} reports {found_issues}: expected {expected_issues}, about D2's quote (X-R45 reverted)"
+    expected = [(quote_id, XR45_PAIR, rate, day, _xr45_source(day), (as_of - day).days)]
+    assert found == expected, f"{story} is {found}: expected {expected}, the quote of the row of {day}"
+    return quote_id
+
+
+def _xr45_issue_shapes(issues: list) -> list[tuple]:
+    """Each issue as (code, kind, severity, path, params), its path and its params as plain dicts, in order."""
+    return [(issue.code, issue.kind, issue.severity, issue.path.model_dump(), [param.model_dump() for param in issue.params]) for issue in issues]
+
+
+def _xr45_rate_issue(code: str, kind: str, severity: str, quote_id: str, *params: dict) -> tuple:
+    """The shape of an issue about the rate of the ERN/STN quote ``quote_id``: its params the pair, then ``params``."""
+    path = {"kind": "field", "section": "fx_quotes", "entity_kind": "fx_quote", "entity_id": quote_id, "field": "rate"}
+    return (code, kind, severity, path, [{"kind": "text", "name": "pair", "value": XR45_PAIR}, *params])
+
+
+def _xr45b_skipped_warning(quote_id: str, skipped: date, used: date) -> tuple:
+    """X-R45b's warning: ``allocation.saved_fx_skipped`` about the used row's quote, with the pair, the most recent date
+    skipped and the date used."""
+    skipped_param = {"kind": "date", "name": "skipped_date", "value": skipped}
+    used_param = {"kind": "date", "name": "used_date", "value": used}
+    return _xr45_rate_issue("allocation.saved_fx_skipped", "invalid", "warning", quote_id, skipped_param, used_param)
+
+
+def _xr45_invalid_error(quote_id: str) -> tuple:
+    """The error of a quote with no rate: ``allocation.saved_fx_invalid`` about it, with the pair."""
+    return _xr45_rate_issue("allocation.saved_fx_invalid", "invalid", "error", quote_id)
 
 
 @pytest.mark.asyncio
@@ -929,25 +1005,60 @@ async def test_xr45_reverted_the_latest_saved_planner_fx_row_is_the_latest_store
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("unusable", "quoted_rate", "codes"), XR45_QUOTED)
-async def test_xr45_reverted_the_planner_fx_quote_is_built_from_the_latest_stored_row(session, unusable, quoted_rate, codes):
-    """RED until the X-R45 revert: the clause skips D2, so the quote is D1's — rate 2.5, reference date D1, its source,
-    7 days old — with no issue.
+@pytest.mark.parametrize("as_of", XR45_AS_OF)
+@pytest.mark.parametrize("skipped", XR45B_SKIPPED)
+async def test_xr45b_a_zero_or_infinite_latest_planner_fx_rate_falls_back_to_the_previous_valid_one(session, skipped, as_of):
+    """RED until X-R45b: ``build_planner_fx_quotes`` quotes the latest row as it is. A 0 on D2 takes the ``rate > 0 else
+    None`` branch — no rate and the error ``allocation.saved_fx_invalid``, though D1 holds 2.5 —; an inf passes
+    ``rate > 0`` and the quote's schema refuses it (pydantic ``finite_number``), so the builder raises: a 500.
 
-    Contract (the revert): the quote is built from D2's row, the latest stored, with no fallback to D1's usable 2.5. A 0
-    takes the ``rate > 0 else None`` branch again: no rate, and the one issue ``allocation.saved_fx_invalid`` naming D2's
-    quote (backlog X-R82 decays with it). 1E+14 is quoted as read back, with no issue. Either way the reference date,
-    the source and the age (5 days) are D2's. An inf is not quoted here: the builder raises on it (module docstring).
+    Contract (X-R45b, developer 19/10: «Sì: tasso valido precedente con l'avviso, e lo 0 trattato allo stesso modo»): the
+    latest row on or before ``as_of`` is skipped when its rate is 0 or not finite, and the quote is the previous valid
+    row's (finite and > 0), D1's — its id, 2.5 as read back, reference date D1, its source, its age from D1 —, with
+    exactly one issue: the warning ``allocation.saved_fx_skipped`` (kind ``invalid``) about that quote, its params the
+    pair, ``skipped_date`` D2 and ``used_date`` D1. No ``allocation.saved_fx_invalid``. The neighbouring pairs' valid
+    rates on the day between D1 and D2 are not ERN/STN's.
     """
-    story = f"the planner quote of {XR45_PAIR} as of {XR45_LATER}, 2.5 on {XR45_D1} and a legacy {unusable!r} on {XR45_D2}"
-    print_section(f"X-R45 reverted: {story}")
-    await _xr45_plant(session, {XR45_D1: float(XR45_D1_RATE), XR45_D2: unusable})
+    story = f"the planner quote of {XR45_PAIR} as of {as_of}, 2.5 on {XR45_D1} and a legacy {skipped!r} on {XR45_D2}"
+    print_section(f"X-R45b: {story}")
+    await _xr45_plant(session, {XR45_D1: float(XR45_D1_RATE), XR45_D2: skipped})
+    await _xr45b_plant_decoys(session)
     issues: list = []
 
-    quotes = await _xr45_quotes(session, issues, story)
+    quotes = await _xr45_quotes(session, issues, story, as_of=as_of)
 
-    _xr45_assert_quoted_from_d2(quotes, issues, quoted_rate, codes, story)
-    print_success(f"{story}: D2's quote, rate {quoted_rate}, issues {codes}")
+    quote_id = _xr45_assert_quote(quotes, as_of, XR45_D1, XR45_D1_RATE, story)
+    found = _xr45_issue_shapes(issues)
+    expected = [_xr45b_skipped_warning(quote_id, skipped=XR45_D2, used=XR45_D1)]
+    assert found == expected, f"{story} reports {found}: expected {expected}, one warning, D2 skipped for D1 (X-R45b)"
+    print_success(f"{story}: D1's 2.5, one saved_fx_skipped warning")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("as_of", XR45B_RUN_AS_OF)
+@pytest.mark.parametrize(("on_d2", "on_d3"), XR45B_RUNS)
+async def test_xr45b_several_unusable_planner_fx_rates_in_a_row_fall_back_to_the_previous_valid_one(session, on_d2, on_d3, as_of):
+    """RED until X-R45b: the quote is D3's row as it is — an inf on D3 makes the builder raise; a 0 on D3 gives no rate
+    and the error ``allocation.saved_fx_invalid``.
+
+    Contract (X-R45b, «Sì: tasso valido precedente con l'avviso, e lo 0 trattato allo stesso modo»): the look-back goes
+    as many rows as it takes. D3 and D2 skipped, whichever holds the 0 and whichever the inf, the quote is D1's 2.5, and
+    there is ONE warning ``allocation.saved_fx_skipped`` about it, ``skipped_date`` D3 — the most recent row skipped —
+    and ``used_date`` D1. No ``allocation.saved_fx_invalid``.
+    """
+    story = f"the planner quote of {XR45_PAIR} as of {as_of}, 2.5 on {XR45_D1}, a legacy {on_d2!r} on {XR45_D2} and {on_d3!r} on {XR45_D3}"
+    print_section(f"X-R45b: {story}")
+    await _xr45_plant(session, {XR45_D1: float(XR45_D1_RATE), XR45_D2: on_d2, XR45_D3: on_d3})
+    await _xr45b_plant_decoys(session)
+    issues: list = []
+
+    quotes = await _xr45_quotes(session, issues, story, as_of=as_of)
+
+    quote_id = _xr45_assert_quote(quotes, as_of, XR45_D1, XR45_D1_RATE, story)
+    found = _xr45_issue_shapes(issues)
+    expected = [_xr45b_skipped_warning(quote_id, skipped=XR45_D3, used=XR45_D1)]
+    assert found == expected, f"{story} reports {found}: expected {expected}, one warning, D3 the most recent skipped, D1 used (X-R45b)"
+    print_success(f"{story}: D1's 2.5, one warning naming {XR45_D3}")
 
 
 @pytest.mark.asyncio
@@ -971,25 +1082,104 @@ async def test_xr45_reverted_a_planner_fx_pair_whose_only_saved_rate_is_unusable
     print_success(f"{story}: D2's row, {read_back}")
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(("unusable", "quoted_rate", "codes"), XR45_QUOTED)
-async def test_xr45_reverted_a_planner_fx_pair_whose_only_saved_rate_is_unusable_is_quoted_from_it(session, unusable, quoted_rate, codes):
-    """RED until the X-R45 revert: with no row through the clause the pair is «missing» — no rate, reference date,
-    source or age — with the issue ``allocation.saved_fx_missing``.
-
-    Contract (the revert): that row is the pair's saved quote, never «missing». 0 gives no rate and the one issue
-    ``allocation.saved_fx_invalid`` naming D2's quote; 1E+14 is quoted as read back, with no issue. The reference date,
-    the source and the age are D2's.
-    """
-    story = f"the planner quote of {XR45_PAIR} as of {XR45_LATER}, whose only rate is a legacy {unusable!r} on {XR45_D2}"
-    print_section(f"X-R45 reverted: {story}")
-    await _xr45_plant(session, {XR45_D2: unusable})
+async def _xr45b_assert_invalid_from_the_latest_row(session: AsyncSession, rates: dict[date, float], story: str) -> None:
+    """``rates`` planted for ERN/STN, none valid, beside the decoys: the quote as of ``XR45_LATER`` is the latest row's,
+    with no rate, and its one issue the error ``allocation.saved_fx_invalid`` about it — no warning."""
+    await _xr45_plant(session, rates)
+    await _xr45b_plant_decoys(session)
     issues: list = []
 
     quotes = await _xr45_quotes(session, issues, story)
 
-    _xr45_assert_quoted_from_d2(quotes, issues, quoted_rate, codes, story)
-    print_success(f"{story}: D2's quote, rate {quoted_rate}, issues {codes}")
+    latest = max(rates)
+    quote_id = _xr45_assert_quote(quotes, XR45_LATER, latest, None, story)
+    found = _xr45_issue_shapes(issues)
+    expected = [_xr45_invalid_error(quote_id)]
+    assert found == expected, f"{story} reports {found}: expected {expected}, the error of the latest row's quote, no warning"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "rates",
+    [
+        pytest.param({XR45_D2: float("inf")}, id="inf-alone"),
+        pytest.param({XR45_D1: 0.0, XR45_D2: float("inf")}, id="0-then-inf"),
+    ],
+)
+async def test_xr45b_a_planner_fx_pair_with_no_valid_rate_is_invalid_from_its_latest_row(session, rates):
+    """RED until X-R45b: the latest row, D2, holds an inf: it passes ``rate > 0``, the quote's schema refuses it, and the
+    builder raises — a 500.
+
+    Contract (X-R45b, «Sì: tasso valido precedente con l'avviso, e lo 0 trattato allo stesso modo»): no row before D2 is
+    valid (none, or a 0), so the look-back finds nothing and today's error stands, for an infinite rate too: the quote of
+    the latest row, D2 — its id, reference date, source and age —, with no rate, and the one issue
+    ``allocation.saved_fx_invalid`` about it. No ``allocation.saved_fx_skipped``.
+    """
+    story = f"the planner quote of {XR45_PAIR} as of {XR45_LATER}, its saved rates {rates}"
+    print_section(f"X-R45b: {story}")
+
+    await _xr45b_assert_invalid_from_the_latest_row(session, rates, story)
+    print_success(f"{story}: D2's quote, no rate, saved_fx_invalid")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "rates",
+    [
+        pytest.param({XR45_D2: 0.0}, id="0-alone"),
+        pytest.param({XR45_D1: float("inf"), XR45_D2: 0.0}, id="inf-then-0"),
+    ],
+)
+async def test_xr45b_guard_a_pair_whose_latest_rate_is_zero_and_none_valid_before_is_invalid(session, rates):
+    """Guard: green before and after X-R45b. The latest row, D2, holds a 0, and no row before it is valid (none, or an
+    inf): before X-R45b the ``rate > 0 else None`` branch; after it, a look-back that finds nothing. Either way the quote
+    of the latest row, D2, with no rate, and the one issue ``allocation.saved_fx_invalid`` about it — never the inf of
+    D1, never a decoy's rate, no warning."""
+    story = f"the planner quote of {XR45_PAIR} as of {XR45_LATER}, its saved rates {rates}"
+    print_section(f"X-R45b guard: {story}")
+
+    await _xr45b_assert_invalid_from_the_latest_row(session, rates, story)
+    print_success(f"{story}: D2's quote, no rate, saved_fx_invalid")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "rates",
+    [
+        pytest.param({XR45_D1: float(XR45_D1_RATE), XR45_D2: 1e14}, id="over-2.5"),
+        pytest.param({XR45_D2: 1e14}, id="alone"),
+    ],
+)
+async def test_xr45b_guard_a_finite_planner_fx_rate_from_1e14_up_is_quoted_as_read_back(session, rates):
+    """Guard: green before and after X-R45b. A finite rate from 1E+14 up, past X-R38's bounds, is a value to the planner's
+    quote: 1E+14 on D2, over D1's 2.5 or alone, gives D2's quote with 1E+14 as read back, and no issue — X-R45b skips 0
+    and what is not finite, nothing else."""
+    story = f"the planner quote of {XR45_PAIR} as of {XR45_LATER}, its saved rates {rates}"
+    print_section(f"X-R45b guard: {story}")
+    await _xr45_plant(session, rates)
+    issues: list = []
+
+    quotes = await _xr45_quotes(session, issues, story)
+
+    _xr45_assert_quote(quotes, XR45_LATER, XR45_D2, Decimal("1E+14"), story)
+    assert _xr45_issue_shapes(issues) == [], f"{story} reports {_xr45_issue_shapes(issues)}: expected none"
+    print_success(f"{story}: D2's 1E+14, no issue")
+
+
+def test_xr45b_saved_fx_skipped_is_a_source_issue_code_and_not_a_tool_issue_code():
+    """RED until X-R45b: ``PortfolioPlannerSourceIssueCode`` (``schemas/portfolio.py``) has no
+    ``allocation.saved_fx_skipped``, so no issue can carry it.
+
+    Contract (X-R45b): the allocation-source API's codes gain it; the tool's ``PlannerIssueCode``
+    (``schemas/pac_allocator/base.py``, the versioned contract of the ``pac_allocator`` tool) does not: a source-only code,
+    as ``allocation.saved_fx_missing`` is (``test_pac_planner_schemas.py`` keeps those out of the tool on purpose).
+    """
+    print_section("X-R45b: allocation.saved_fx_skipped among the source issue codes, not the tool's")
+    source_codes, tool_codes = get_args(PortfolioPlannerSourceIssueCode), get_args(PlannerIssueCode)
+
+    assert "allocation.saved_fx_skipped" in source_codes, f"PortfolioPlannerSourceIssueCode is {source_codes}: expected allocation.saved_fx_skipped among them (X-R45b)"
+    assert "allocation.saved_fx_skipped" not in tool_codes, "PlannerIssueCode has allocation.saved_fx_skipped: the tool contract stays unchanged, the code is the source's alone (X-R45b)"
+    print_success("allocation.saved_fx_skipped: a source issue code, not a tool one")
 
 
 @pytest.mark.asyncio

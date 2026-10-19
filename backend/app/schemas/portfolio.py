@@ -1631,6 +1631,7 @@ PortfolioPlannerSourceIssueCode = Literal[
     "allocation.fiscal_currency_missing",
     "allocation.saved_fx_missing",
     "allocation.saved_fx_invalid",
+    "allocation.saved_fx_skipped",
     "allocation.negative_inventory_unsupported",
     "allocation.negative_cash_unsupported",
     "allocation.broker_execution_profile_unsupported",
