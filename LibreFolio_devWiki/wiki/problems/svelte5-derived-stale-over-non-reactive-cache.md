@@ -89,14 +89,24 @@ Two side notes found on the way:
 - **The test that shows it**: close during the load, let it resolve, reopen (M1 in `ChangelogModal.test.ts`). M2 is the
   failed-then-loaded variant.
   - A faithful fake of the module must mirror its reactivity: the fakes' cache is a `SvelteMap` since A-CL1. The red
-    was observed with the plain-`Map` fake, today's module semantics.
-  - jsdom cannot load the real module: its `?raw` import of the repo-root `CHANGELOG.md` is refused («Denied ID …»),
-    even with `vi.mock` of the raw path. So the real module's reactivity is pinned by an E2E, E1 in
-    `changelog-locale.spec.ts`:
-    - the translation chunk is held with `page.route`, recognised by its body through a marker read from
-      `CHANGELOG.it.md`, then continued with `route.continue()`;
-    - after the release, the page calls `import(url)` twice before reopening. The first import alone may resolve before
-      the app's own continuation, which would hide the bug.
+    was observed with the plain-`Map` fake, today's module semantics. A fake proves the component's side only: with
+    `new Map` back in the module, every test on the fake would stay green (the automatic review of `5ccb495e5`).
+- **The real module, in Vitest.** Two walls stood in the way, and both are worth knowing:
+  - the default `node` environment has no reactivity: `svelte/reactivity` is the server build (`SvelteMap =
+    globalThis.Map`), `$derived` is computed once and `$effect` never runs (`src/__tests__/runes.svelte.ts`);
+  - jsdom refuses the module's `?raw` import of the repo-root `CHANGELOG.md` («Denied ID …»,
+    `isServerAccessDeniedForTransform`), even when that raw path is mocked (relative, absolute or `/@fs`).
+  - The seam: the bundle imports live in `changelogSources.ts` (the `?raw` CHANGELOG.md and the `import.meta.glob` of
+    its translations); a jsdom test mocks that normal module and loads the real `changelog.ts`.
+    `changelog.reactivity.test.ts` reads `peek('it')` from an effect (`recordReads`) across a `load('it')`: red with
+    `new Map` (4 failed, in a copy of the module that was in the tree only for that run), green with `SvelteMap`.
+  - A new `.test.ts` is also registered in `scripts/test_runner/_frontend_utility.py`: `dev.py test check-orphans`
+    lists the ones that are not (two were, here).
+- **In the real app**, the E2E E1 in `changelog-locale.spec.ts`:
+  - the translation chunk is held with `page.route`, recognised by its body through a marker read from
+    `CHANGELOG.it.md`, then continued with `route.continue()`;
+  - after the release, the page calls `import(url)` twice before reopening. The first import alone may resolve before
+    the app's own continuation, which would hide the bug.
 
 ## Impact
 
@@ -118,6 +128,8 @@ Two side notes found on the way:
 | The other entry point | `frontend/src/lib/features/settings/tabs/AboutTab.svelte` |
 | The other reader of the cache | `frontend/src/lib/features/changelog/WhatsNewModal.svelte` |
 | Vitest M1, M2 (the faithful fake) | `frontend/src/lib/components/layout/ChangelogModal.test.ts` |
+| Vitest: the real module's cache tells its readers | `frontend/src/lib/features/changelog/changelog.reactivity.test.ts` |
+| The bundle imports a jsdom test replaces (the seam) | `frontend/src/lib/features/changelog/changelogSources.ts` |
 | Vitest: one window, bound to the shared state | `frontend/src/lib/components/layout/Sidebar.changelog.test.ts` |
 | E2E E1, E2 | `frontend/e2e/layout/changelog-locale.spec.ts` |
 | The plan (analysis, lot, slot) | `LibreFolio_developer_journal/Release_2/Phase_1/02_accounts/plan-phase01Accounts.prompt.md` |
