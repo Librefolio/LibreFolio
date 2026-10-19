@@ -3050,16 +3050,28 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   i dati mancanti, blu per le note, verde per i successi) e il `MISSING_PRICE` del rischio diventato un avviso. Per la
   passata della documentazione a fine programma (docs-writer). Dettagli: piano di T, «Giro 3 della designer».
 - ✅ **TC-20 · Il caso «export JSON, reset all, import back» del Lab dava per diverse due sorgenti di colore diventate
-  una** — basso, test; T, 18/10, verifica per l'ingresso di DV; **chiusa il 18/10 nel checkpoint di R3-c**: per il passo
-  L2 il caso usa la radice della pagina delle transazioni (`transactionsPageRoot`, `text-lf-primary`), con le
-  precondizioni che le due sorgenti siano diverse e che dopo L1 la radice tenga il suo colore; `front-designer-lab live`
-  12/12 sulla punta `b238d5b6e` più l'albero (01:11–01:14). La segnalazione com'era:
-  `frontend/e2e/designer-lab/designer-lab-live.spec.ts:673` cambia nella stessa run la variabile del sottotitolo delle
-  transazioni (L1, rosa) e il letterale dell'intestazione della data di `DataTable` (L2, blu); dal 16/10 leggono
-  entrambi `--lf-text-muted` (`546204732`, e il lotto delle tabelle di T `77bfa6a39`), così l'override di L1 vince e
-  l'intestazione resta rosa: rosso deterministico, anche sul target senza DV (`7845fc3d3`: 11 verdi e 1 rosso). Verdetto
-  della triage: un'assunzione del test. La spec era di L (archiviato): la prende T. Dettagli: piano di T, «Una verifica
-  per l'ingresso di DV» e «R3-c e TC-20».
+  una** — basso, test; T, 18/10, verifica per l'ingresso di DV; **chiusa il 18/10 nel checkpoint di R3-c** (commit
+  `6b218d4a4`, entrato in `cd686f445`): per il passo L2 il caso usa la radice della pagina delle transazioni
+  (`transactionsPageRoot`, `text-lf-primary`), con le precondizioni che le due sorgenti siano diverse e che dopo L1 la
+  radice tenga il suo colore; `front-designer-lab live` 12/12 sulla punta `b238d5b6e` più l'albero (01:11–01:14). La
+  segnalazione com'era: `frontend/e2e/designer-lab/designer-lab-live.spec.ts:673` cambia nella stessa run la variabile
+  del sottotitolo delle transazioni (L1, rosa) e il letterale dell'intestazione della data di `DataTable` (L2, blu); dal
+  16/10 leggono entrambi `--lf-text-muted` (`546204732`, e il lotto delle tabelle di T `77bfa6a39`), così l'override di
+  L1 vince e l'intestazione resta rosa: rosso deterministico, anche sul target senza DV (`7845fc3d3`: 11 verdi e 1
+  rosso). Verdetto della triage: un'assunzione del test. La spec era di L (archiviato): la prende T. Dettagli: piano di
+  T, «Una verifica per l'ingresso di DV» e «R3-c e TC-20».
+- **TC-21 · Una riga cancellata lascia vedere sotto le colonne fisse di `DataTable`** — minimo; T, 19/10, cura delle
+  colonne fisse. `tr.row-deleted td` (bulk delle transazioni, `DataEditor`) sbiadisce ogni cella con `opacity: 0.55`,
+  le fisse comprese (la selezione, e le azioni in `DataEditor`), che lasciano vedere al 45 % il contenuto che scorre
+  sotto. C'era già prima del lotto delle tabelle; non è una tinta di riga e la riga opaca non la cura: va sbiadito il
+  contenuto, non lo sfondo, senza cambiare l'aspetto delle celle normali. Dettagli: piano di T, «Le colonne fisse
+  trasparenti», Fuori pista.
+- **TC-22 · La pagina per sviluppatori di `DataTable` non dice come si tinge una riga** — minimo, docs; T, 19/10, cura
+  delle colonne fisse. `mkdocs_src/docs/developer/frontend/components/core-ui/data-table.md`, «Sticky columns»: una riga
+  dipinge la card e la tinta del suo stato, `--dt-row-tint` (registrata con `@property`), e le celle fisse ereditano i
+  due strati; chi tinge le righe con `getRowClass` imposta `--dt-row-tint`, mai lo sfondo della riga (`AssetTable`).
+  Per la passata della documentazione a fine programma (docs-writer). Dettagli: piano di T, «Le colonne fisse
+  trasparenti».
 
 ---
 
