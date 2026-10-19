@@ -396,7 +396,8 @@ class MyBrokerProvider(BRIMProvider):
 Notices and todos can both carry `BRIMEvidence` — the source rows as a small table, with
 1-based line numbers that render a jump into the file preview. `BRIMFieldTodo.context` also
 carries a small set of keys the correction step reads directly (`split_hint`,
-`split_suggestions`, `compare_nominal`, …).
+`split_suggestions`, `compare_nominal`, …), and a notice's `context.report_issue` puts a link
+to open an issue on GitHub under its message.
 
 The full contract, with worked examples from `broker_credit_agricole/plugin.py`, is in
 [Talking to the import wizard](../../architecture/patterns/brim_plugin_guide.md#talking-to-the-import-wizard).
@@ -542,15 +543,45 @@ eToro itself downloads the statement as XLS.
   `rimborso` → `SELL`, `aumento capitale` → cashless `ADJUSTMENT`; anything else → warning.
 - **Date**: `Data valuta`, else `Operazione` (`DD/MM/YYYY`). **Currency**: `Divisa`, EUR when
   empty. **Numbers**: a value containing `,` is Italian (`.` thousands), otherwise a dot decimal.
+- **Only settled rows** (N74, the plugin guide's rule *Only safe rows* under
+  [Import philosophy](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)):
+  a row whose date comes after the server's today (`server_today()`) has not settled yet,
+  typically a trade of the last one or two working days, whose value date (T+2) is still
+  ahead at export time. It is left out **whole**, before its type is even read: no
+  transaction, no commission `FEE`, no maturity `INTEREST`, and no asset extracted from it.
+  One `info` notice, `fineco_not_yet_settled`, `context` `{"count": n}`, lists those rows as
+  evidence (the file's header, their line numbers, an empty title so the wizard shows its
+  own). It is no warning: the rows arrive with the next export, once settled. A file that
+  yields no transaction because of such rows gets no *No valid transactions found in file*
+  warning: the notice already says why.
+- **A required number missing** (W-B83): a column the row's transaction is built from gives
+  no number, blank or unreadable (`REQUIRED_NUMBER_COLUMNS`): `Quantita` for `BUY`, `SELL`
+  (`rimborso` included) and `ADJUSTMENT`; `Controvalore` for `BUY`, `SELL`, `DIVIDEND` and
+  `INTEREST`; never `Divisa` (EUR when empty) or `Prezzo`. Such a row is read exactly as
+  before: an empty `Controvalore` reads 0, and an empty `Quantita` leaves a quantity of 0,
+  which the schema refuses as before (a validation issue). One `info` notice,
+  `fineco_incomplete_rows`, `context` `{"count": n, "report_issue": true}`, lists the rows;
+  its evidence adds a last column, `Campo vuoto`, naming the empty field(s). The message says
+  the plugin is in beta, so the import may be wrong, and asks the user to check the rows and,
+  if the file is right, to open an issue on GitHub: `report_issue` puts the link under it
+  ([`context` keys](../../architecture/patterns/brim_plugin_guide.md#context-keys-the-frontend-understands)).
+  A row left out for its date is not counted here. The backend has no beta flag: the beta
+  status is in the docs (the user page, the [providers list](providers_list.md)) and in this
+  message.
 - **Above par**: a `rimborso` `SELL` whose `Titolo` passes `_brim_io.looks_like_bond` (`BTP`,
   `BOT`, `CCT`, `CTZ`, `BUND`, `OAT`, `OBBLIG`, `CCTEU`, `BOND`), with `Prezzo` above 100, goes
   through `model_bond_maturity(ctv=Controvalore, price=Prezzo, held_qty=|Quantita|)`: a `SELL` of
   the par principal and an `INTEREST` for the surplus (tag `maturity_premium`).
 - **Assets** are keyed by `Isin`; a row without one gets an asset of its own (`UNKNOWN_ROW_<n>`).
   Every transaction, `FEE` included, carries the row's asset.
-- Warnings are plain English strings, although the module docstring says Italian; only the
+- **Language**: the plain warnings are English strings (coerced to `warning` notices with code
+  `legacy`), although the guide wants the export's language, as the module docstring admits.
+  The two notices above are in Italian, and the wizard shows them in the user's language from
+  their codes (`importWizard.brimNotice.<code>`, `importWizard.brimEvidence.<code>`). The
   descriptions of the generated legs (`Commissioni: …`,
-  `Rimborso a scadenza — premio/rivalutazione oltre la pari: …`) are Italian.
+  `Rimborso a scadenza — premio/rivalutazione oltre la pari: …`) are Italian too.
+- **`plugin_version`** 1.2.0: the two notices above (1.1.0 brought the split above par). A
+  file parsed by an older version shows as stale (`parse_is_stale`) until it is parsed again.
 
 ---
 
