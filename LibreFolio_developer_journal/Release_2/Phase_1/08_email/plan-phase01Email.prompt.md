@@ -7971,3 +7971,68 @@ non sposti il registro.
 >     nessun avviso lo legge): coerente, non un resto;
 >   - nessun resto dei pence nelle traduzioni del CHANGELOG né nei documenti; i documenti di E-19b2
 >     (`data-quality-banner.md`, la pagina del cruscotto) sono aggiornati con coerenza.
+
+### E-EMF9 — EMF-009 ed EMA-017 rossi dopo A-11: analisi (2026-10-19, 14:1x–14:2x; sola lettura, HEAD `664c56c20`)
+> **La richiesta** (coordinatore, 14:15): H, nella suite completa, trova rossi EMF-009 (`test_email_flows.py`) e il
+> gemello EMA-017 (`test_email_api.py`): «DID NOT RAISE ValidationError». La precondizione era che `get_user_settings`
+> rifiutasse un tema salvato sconosciuto; dopo `3e12b09ae` di A (A-11, entrato con `250031cd1`) non lo rifiuta più, ed
+> è voluto. Prima un'analisi breve, senza codice; dopo il via la riscrittura la fa il `test-author`.
+> - **Cosa proteggono**: la scelta di E2a, cioè che `account_language` (`flows.py:93`) legga solo la colonna della lingua
+>   e mai il modello di lettura. La chiamano tutte le email di un account:
+>   - l'email di prova (`POST /email/test`);
+>   - il link di reset mandato dall'admin (`POST /email/links`);
+>   - «password dimenticata» (`forgotten_password_work`, in background);
+>   - l'avviso di cambio email (`email_changed_work`, in background);
+>   - la verifica dell'indirizzo (`verification._issue_and_send`).
+>
+>   Il rischio: con la lingua letta da `get_user_settings`, una riga rifiutata dal modello farebbe fallire il flusso.
+>   Sulle rotte sarebbe un 500 (in una versione precedente della rotta era peggio: il 422 «indirizzo non valido», che
+>   oggi EMA-018 esclude). In background l'email non partirebbe mai, in silenzio, proprio nel reset di chi non riesce a
+>   entrare.
+> - **Cosa ha cambiato A-11**:
+>   - `get_user_settings` e `update_user_settings` mostrano un tema sconosciuto come il `default_theme` dell'istanza,
+>     se è noto, altrimenti come `auto`; scrivono un warning e non riscrivono la riga;
+>   - lo schema `UserSettingsRead` rifiuta ancora `sepia`: A ne ricava `KNOWN_THEMES`;
+>   - la barriera dei due test (`_refused_by_the_read_model`, che chiama `get_user_settings`) non si può più
+>     costruire, ed è l'unico punto rosso.
+> - **Un altro modo legittimo per far fallire quel passo? No.**
+>   - Il modello vincola solo `theme`: `language` e `base_currency` sono `str` liberi, `avatar_url` è facoltativo, e le
+>     tre colonne sono `NOT NULL` (migrazione 001). Una valuta non ISO salvata (`978`) passa.
+>   - Lo fanno fallire solo dati corrotti, provati col python del venv: byte non UTF-8 in una colonna di testo (un BLOB:
+>     `ValidationError` `string_unicode`; B-49 rifiuta già questi archivi al controllo del restore), oppure una riga
+>     `default_theme` scritta a mano come JSON (un `TypeError` in `_shown_theme`, nemmeno una `ValidationError`).
+>   - Il caso «una riga che il modello di lettura rifiuta» quindi non esiste più. Resta vero, e controllabile, che un
+>     tema che questa versione non conosce non cambia la lingua delle email e non viene riscritto da nessun flusso.
+> - **La promessa del prodotto non cambia**: le email di un account vanno nella sua lingua, altrimenti in quella
+>   dell'istanza, altrimenti in inglese, e leggere la lingua non cambia nessuna riga. A-11 la rafforza (accesso e
+>   impostazioni non cadono più). Nessuna domanda per lo sviluppatore.
+> - **La prova** (`files/tools/emf9_probe.sh`, nella cartella della sessione): export di HEAD, il python del venv
+>   condiviso chiamato direttamente; nessun server, nessun DB della corsia, nessuna modifica al worktree.
+>   - I due file così come sono: **2 falliti** (EMF-009, EMA-017, «DID NOT RAISE ValidationError»), **315 passati**.
+>   - Con la sola barriera spostata sullo schema (`UserSettingsRead(theme="sepia")` rifiutato), nell'export: **2
+>     passati**. Il resto dei due test regge sulla base di oggi: la lingua `it`, il 200 con l'email in italiano,
+>     un'unità spesa, la riga intatta.
+>
+>   > **⚠️ Fuori pista**: al primo giro il passo 2 era rosso per un errore della prova, non del test: il controllo
+>   > dell'import trovava `UserSettingsRead` nella docstring del modulo e non lo aggiungeva (`NameError`). Corretto il
+>   > controllo, rifatto solo il passo 2.
+> - **Proposta per la riscrittura** (decide il coordinatore; la fa il `test-author`):
+>   - **R1, la mia raccomandazione.** Tenere i due test e spostare la barriera su «un tema che questa versione non
+>     conosce», che lo schema rifiuta, senza fissare quale tema mostra `get_user_settings` (è di A, e lo coprono i suoi
+>     test). Poi:
+>     - dare ai test nomi nuovi (un tema sconosciuto, non più una «riga rifiutata»);
+>     - riallineare il contratto 4 di `test_email_flows.py` e il 3 di `test_email_api.py`, i messaggi e l'helper nei due
+>       file;
+>     - in EMA-017 togliere il motivo «la riga si scrive dopo l'accesso perché il login la legge dal modello»; l'ordine
+>       può restare.
+>   - R2: cancellarli come obsoleti. Si perde un controllo economico che un tema sconosciuto lasci in pace email e riga.
+>     Sconsigliato.
+>   - R3: un altro campo da rendere illeggibile. Non c'è un caso legittimo (vedi sopra).
+>   - Da non toccare: EMA-018 e `_read_model_refusal`. L'errore iniettato lì si costruisce dallo schema, che lo rifiuta
+>     ancora, e il test è verde.
+>   - Facoltativo, mio (`flows.py`, solo la docstring di `account_language`): «a settings row that no longer validates
+>     (an old theme, say)» diventerebbe «qualunque altra cosa contenga la riga».
+> - **La dimensione**: piccola. Due file di test, due funzioni, due helper, due paragrafi di contratto. Nessun codice di
+>   prodotto e nessuna registrazione nel runner: i file sono già registrati e i nomi dei test non compaiono altrove.
+> - **I selettori**: `services email-flows` e `api email`, entrambi puri (la categoria api avvia comunque il backend
+>   della corsia), nella corsia 6188.
