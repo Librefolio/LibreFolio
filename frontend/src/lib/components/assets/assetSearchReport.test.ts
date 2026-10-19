@@ -10,8 +10,11 @@
  *     N61 — a managed instance has no public fallback);
  *   - `buildSearchReport` writes a fixed English text, pinned here line by line: it is what a maintainer reads,
  *     whatever the language of the user's UI;
- *   - `reportHref` encodes it for its channel: RFC 6068 line breaks (CRLF) for a mail, plain ones for GitHub,
- *     nothing at all for a page (the body goes to the clipboard there, not into the URL).
+ *   - `reportHref` encodes it for its channel: RFC 6068 line breaks (CRLF) for a mail, plain ones for GitHub, and
+ *     for a page the same as GitHub's (N61-form): the report's `title` and `body`, each as `encodeURIComponent`
+ *     writes it, added to the page's own query after its params, a `title` or a `body` already there replaced, the
+ *     page's fragment kept last. The page cases are RED until N61-form: today a page's link is the page alone, and
+ *     the body reaches it only through the clipboard (the component's click, which stays as it is).
  *
  * Round-trips are proven by decoding the link (`decodeURIComponent`, `new URL().searchParams`), never by encoding
  * the expected one by hand. Privacy is pinned three ways: the body is exact (nothing but the input's fields can be
@@ -327,6 +330,15 @@ describe('reportHref', () => {
         body: [FIRST_LINE, '', 'Search: S&P 500 = 50% + "x"? #1 é', 'Providers: none', 'LibreFolio v1, selfhosted, language en', '', LAST_LINE].join('\n'),
     });
 
+    /**
+     * N61-form: a report as the app writes it, with what an encoding gets wrong — in its subject the dash, the ellipsis
+     * of a query cut at 80 characters and an emoji; in its body a +, spaces, &, #, = and line breaks.
+     */
+    const TRICKY_REPORT = deepFreeze(buildSearchReport({...INPUT, query: `S&P 500 = 50% + #1 🌍 ${'world '.repeat(15)}`}));
+
+    /** N61-form, the rule for a page as for GitHub: the report's `title`, then its `body`, each as `encodeURIComponent` writes it. */
+    const reportParams = (report: SearchReport): string => `title=${encodeURIComponent(report.subject)}&body=${encodeURIComponent(report.body)}`;
+
     it('mailto: the address, then the subject and the body as parameters, every line break as CRLF (RFC 6068)', () => {
         const href = reportHref({kind: 'mailto', address: 'support+librefolio@example.org'}, REPORT);
 
@@ -365,10 +377,65 @@ describe('reportHref', () => {
         expect(new URL(href).searchParams.get('body')).toBe(REPORT.body);
     });
 
-    it('page: the page itself, nothing added — the report goes to the clipboard there', () => {
-        const url = 'https://help.example.org/support?topic=assets#form';
+    // RED until N61-form: today a page's link is the page alone, nothing added. The rule, as GitHub's: the report's
+    // title then its body, each encodeURIComponent's, after the page's own params (`?` when it has none), its fragment last.
+    it.each<[string, string, (params: string) => string]>([
+        ['no query of its own: ?, then title and body', 'https://help.example.org/support', (params) => `https://help.example.org/support?${params}`],
+        ['a query of its own: &, after its params, which stay as they are, in their order', 'https://help.example.org/support?lang=it&src=app', (params) => `https://help.example.org/support?lang=it&src=app&${params}`],
+        ['a fragment: it stays at the very end, after the query', 'https://help.example.org/support#form', (params) => `https://help.example.org/support?${params}#form`],
+        ['a query and a fragment: the params after the page’s own, the fragment last', 'https://help.example.org/support?topic=assets#form', (params) => `https://help.example.org/support?topic=assets&${params}#form`],
+    ])('page: the report as GitHub’s, in the page’s own query — %s', (_label, page, expected) => {
+        expect(supportChannel(page, {githubFallback: false}), 'premise: the page, as its channel carries it').toStrictEqual({kind: 'page', url: page});
 
-        expect(reportHref({kind: 'page', url}, REPORT)).toBe(url);
+        const href = reportHref({kind: 'page', url: page}, REPORT);
+
+        expect(href).toBe(expected(reportParams(REPORT)));
+        const url = new URL(href);
+        expect([...url.searchParams.keys()], 'the page’s own params, then title and body: nothing else').toEqual([...new URL(page).searchParams.keys(), 'title', 'body']);
+        expect(url.searchParams.get('title')).toBe(REPORT.subject);
+        expect(url.searchParams.get('body'), 'LF, as the report has them').toBe(REPORT.body);
+        expect(url.hash, 'the page’s fragment, and only it: the # of the report opens none').toBe(new URL(page).hash);
+    });
+
+    it('page: a title or a body already in its query is replaced by the report’s, never duplicated; its other params stay', () => {
+        // RED until N61-form: today a page's link is the page alone — x and y would stay its title and its body.
+        const page = 'https://help.example.org/support?title=x&body=y&keep=1';
+        expect(supportChannel(page, {githubFallback: false}), 'premise: the page, as its channel carries it').toStrictEqual({kind: 'page', url: page});
+
+        const href = reportHref({kind: 'page', url: page}, REPORT);
+
+        const url = new URL(href);
+        expect(`${url.origin}${url.pathname}`).toBe('https://help.example.org/support');
+        expect(url.searchParams.getAll('title'), 'one title: the report’s subject').toEqual([REPORT.subject]);
+        expect(url.searchParams.getAll('body'), 'one body: the report’s').toEqual([REPORT.body]);
+        const keys = [...url.searchParams.keys()];
+        const others = keys.filter((key) => key !== 'title' && key !== 'body');
+        expect(others, 'the page’s other params stay').toEqual(['keep']);
+        expect(keys.indexOf('title'), 'title, then body').toBeLessThan(keys.indexOf('body'));
+        // Encoded as GitHub's here too, wherever the two stand: the raw pairs, keep=1 as it was written.
+        const pairs = href.slice(href.indexOf('?') + 1).split('&');
+        expect(pairs.sort()).toEqual(['keep=1', `title=${encodeURIComponent(REPORT.subject)}`, `body=${encodeURIComponent(REPORT.body)}`].sort());
+    });
+
+    it('page: encoded as GitHub’s — a space %20, never +; a + %2B; a line break %0A, never %0D — and URLSearchParams gives the very report back', () => {
+        // RED until N61-form: today a page's link is the page alone, with no title and no body to decode.
+        for (const character of ['—', '…', '🌍']) expect(TRICKY_REPORT.subject, `premise: the subject holds ${character}`).toContain(character);
+        for (const character of ['+', ' ', '&', '#', '=', '\n']) expect(TRICKY_REPORT.body, `premise: the body holds ${JSON.stringify(character)}`).toContain(character);
+        const page = 'https://help.example.org/support';
+
+        const href = reportHref({kind: 'page', url: page}, TRICKY_REPORT);
+
+        const url = new URL(href);
+        expect([...url.searchParams.keys()], 'the &, = and # of the report open no param of their own').toEqual(['title', 'body']);
+        expect(url.hash, 'nor a fragment').toBe('');
+        expect(url.searchParams.get('title'), 'decoded: the subject, exactly').toBe(TRICKY_REPORT.subject);
+        expect(url.searchParams.get('body'), 'decoded: the body, exactly').toBe(TRICKY_REPORT.body);
+        expect(href, 'a space is %20').toContain('%20');
+        expect(href, 'never a +: neither for a space nor for itself').not.toContain('+');
+        expect(href, 'a + is %2B').toContain('%2B');
+        expect(href, 'a line break is %0A').toContain('%0A');
+        expect(href, 'LF, as the report has them: no CR, unlike a mail').not.toMatch(/%0D/i);
+        expect(href, 'the whole link: the page, then each value as encodeURIComponent writes it').toBe(`${page}?${reportParams(TRICKY_REPORT)}`);
     });
 
     it('end to end: an address read, a report written, a link that gives that very report back', () => {
