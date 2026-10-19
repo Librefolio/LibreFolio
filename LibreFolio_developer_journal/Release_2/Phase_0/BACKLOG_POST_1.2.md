@@ -4259,10 +4259,36 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Alla chiusura del ciclo di eventi Python 3.13 cancella i compiti rimasti, poi aspetta i thread dell'executor di
     default fino a 300 s (`shutdown_default_executor`). Uno stop subito dopo l'avvio aspetta quindi i thread ancora al
     lavoro. L'audit legge e basta (circa 1,6 s a 3 milioni di prezzi), quindi interromperlo non fa danni.
-  - Cura possibile: un passo dello spegnimento che cancella i compiti, aspetta al massimo qualche secondo e scrive nel
-    log i nomi di quelli ancora vivi. Da accordare con Z, che possiede lo spegnimento (C-49).
+  Dettagli: questa riga.
+- **H-57 · Le migrazioni della 1.3 in una sola, `005_release_1_3_0_schema`, e 13 indici inutili tolti** — medio,
+  schema; il developer, via coordinatore, 19/10 (variante V4: la 010 fuori, gli indici tolti nella 005). Fatto il
+  19/10. `all-backend`: 28 771 passati; i 10 falliti sono rossi della base, non di H-57 (H-59 e altri, riprodotti su
+  `HEAD` pulito). In attesa del treno con Z-33r e Z-32cr (produzione del developer ferma prima).
+  - Una sola revisione al posto di 005–010, uguale allo schema che lasciava la catena (istantanea congelata, test);
+    i 13 indici via con `DROP INDEX IF EXISTS`, modelli allineati, guardia `test_no_redundant_indexes` in
+    `db validate`; la regola nelle istruzioni del DB, nello skill `devpy-server` e in `patterns/alembic.md`.
+  - Un DB a una revisione ritirata (011 o 010) si porta avanti a mano, con la procedura V4 del piano H (provata
+    sulla 005 definitiva). Il server non parte su quelle revisioni e il ripristino le rifiuta, per scelta.
+
+  Dettagli: piano H, §14, lotto «H-57».
+- **H-58 · Due lacune vecchie della doc del DB, viste in H-57** — basso, doc; docs-writer di H-57, 19/10.
+  - `patterns/alembic.md`, «SQLite and Alembic Limitations»: presenta il batch mode senza l'avvertenza su
+    `PRAGMA foreign_keys=ON` (ricostruire una tabella fa scattare gli `ON DELETE` delle tabelle figlie), che la
+    docstring della 005 spiega; l'esempio del `CHECK` usa `op.batch_alter_table`.
+  - `database/assets_pricing.md:63`: «(`identifier_isin`, `identifier_ticker`, …) are indexed», ma solo quelle due
+    colonne hanno un indice.
 
   Dettagli: questa riga.
+- **H-59 · I sostituti di `configure_test_runtime` nei test non accettano `lane_settings` (rossi della base da H-43)**
+  — medio, test rossi in `dev_release2`; trovato da `all-backend` di H-57, 19/10. Proposta mandata al coordinatore.
+  - H-43 (`cd04b17b0`) fa passare sempre `lane_settings=` da `cmd_server` a `configure_test_runtime`. Le funzioni che
+    nei test ne fanno le veci accettano solo `port` e `data_dir`, quindi `TypeError` in 5 test:
+    `test_probe_rate_limit.py::test_lane_server_starts_with_the_probe_limit_off`, `test_dev_server_interrupt.py` (3)
+    e `test_dev_designer_lab_banner.py` (1, `[test-server]`).
+  - Cura: i sostituti accettano `lane_settings=None`, come la funzione vera (test-author). I 3 file non sono di H:
+    serve il via del coordinatore.
+
+  Dettagli: piano H, §14, lotto «H-57», nota delle 14:20.
 
 ## A · Account e accessi (fase 01)
 
