@@ -320,137 +320,57 @@ both left the date out. The editor counts `count` as saved and names the refused
 five, then a count) with their reasons in a warning (`rejectedMessage()` in
 `frontend/src/lib/api/writeRefusal.ts`).
 
-### 💷 The Provider's Own Quote Currency {: #reported-currency }
+### 🕛 Dates on the Exchange's Own Day {: #exchange-timezone }
 
-`FAHistoricalData.currency` (`backend/app/schemas/prices.py`) is the quote currency as the
-provider reports it, never normalized: Yahoo reports a London line quoted in pence as `GBp`,
-while its price points carry `GBP` (`FAPricePoint.currency` goes through
-`Currency.validate_code()`, which upper-cases it) with the numbers unchanged — pence stored as
-pounds. FETCH keeps the code in `_FetchedRefreshData.reported_currency`, from the history call
-or from the core history cache, whose entry stores it as `"currency"` beside its dates and
-events for a later full hit; a provider without history, or a range that starts today, gives
-none. PERSIST writes it, stripped, next to `last_fetch_at`, in
-`asset_provider_assignments.reported_currency` (`VARCHAR(8)`, nullable, migration
-`010_provider_reported_currency`): no code, or one longer than 8 characters, leaves the last
-value. `bulk_assign_providers()` (`provider_management.py`) clears it when an assignment's
-provider, identifier or identifier type changes: another line, learnt again at its next history
-fetch. No API schema exposes the column.
+A provider dates each price point and event on its session's day at the exchange, not on the UTC
+date of a timestamp ([Asset Plugin Guide](../../architecture/patterns/asset_plugin_guide.md)). The
+refresh stores the dates as the provider gives them: no schema field or column holds an exchange
+timezone.
 
-`MINOR_UNIT_FACTORS` (`backend/app/utils/currency_units.py`) maps each minor-unit code a
-provider may report, exactly as reported (the case tells `GBp` from `GBP`), to its factor:
-`{"GBp": 100}`; `minor_unit_factor()` gives the factor of a stripped code, or None. The
-portfolio data-quality report reads both: `PortfolioService._held_asset_quote_facts()` reads the
-assets held at the end of the period with their assignments once (`HeldAssetQuoteFacts`), a
-helper shared by the report's checks on held assets' quotes, and `_quote_in_minor_unit_assets()`
-lists those quoted in a minor unit whose quote base (`quote_base_quantity`, «Units per single
-price») is not its factor: the warning `QUOTE_IN_MINOR_UNIT`
-([Data Quality Banner](../../frontend/data-quality-banner.md)). The fix is a quote base of 100,
-which `compute_holding_value()` divides the prices by; the dividends stay in pence, since no
-event path reads it. The `test_z32_*` tests of `test_asset_source_refresh.py` and
-`test_assets_provider.py` pin the column, and two guards of `test_yahoo_finance_errors.py` the
-raw code.
+The Yahoo plugin (`yahoo_finance/plugin.py`) keeps that rule since Z-33:
 
-### 🕛 The Exchange's Timezone and the One-Time Date Check {: #exchange-timezone }
+- **History**: yfinance stamps a daily bar, a dividend and a split at midnight in the exchange's
+  timezone, so `_normalize_yahoo_date()` takes the index value's own date. Up to 1.2.1 the plugin
+  converted it to UTC first, which gave the day before the session for every exchange east of UTC:
+  Milan all year, London in summer time, Tokyo.
+- **Current value**: `as_of_date` is `regularMarketTime` read in the timezone of
+  `info["exchangeTimezoneName"]`, UTC when Yahoo gives none or the server does not know it, and
+  the server's today without `regularMarketTime`.
 
-`FAHistoricalData.exchange_timezone` and `FACurrentValue.exchange_timezone`
-(`backend/app/schemas/prices.py`, optional; neither schema is in the OpenAPI document) name the
-IANA timezone the provider dated its rows in: Yahoo declares its exchange's (`Europe/Rome`), and
-no other shipped provider declares one. FETCH keeps it in `_FetchedRefreshData.exchange_timezone`,
-from the history call or the core history cache (whose entry stores it beside the currency), else
-from the current value. Before PERSIST writes anything, `_settle_exchange_timezone()`
-(`refresh.py`) stores it in `asset_provider_assignments.exchange_timezone` (`VARCHAR(64)`,
-nullable, migration `011_provider_exchange_timezone`) when `zoneinfo` knows it and the stored
-value differs; a refresh that reports none leaves the last one. Unlike `reported_currency`, a
-change of provider or identifier keeps it. No API schema exposes the column; only the refresh
-reads it, for the mark below.
+**Rows saved by earlier versions stay as they are**, by decision (Z-33r): no migration or refresh
+re-dates them. A sync writes the session days it fetches, each on its own day; after the update,
+the scheduler's first [history sync](../scheduler.md#history-sync) fetches its window, the
+**Lookback horizon** (14 days by default). So:
 
-**The mark.** Up to 1.2.1 the Yahoo plugin dated its rows by UTC, the day before the session for
-an exchange east of UTC ([Yahoo Finance Provider](provider_yahoo_finance.md)). A refresh alone
-cannot repair them: it rewrites only the session days of the range it asks, and the event upsert
-would add each dividend or split beside its shifted copy
-([Dedup Strategy](events.md#dedup-strategy)). So migration 011 writes `'legacy-utc'`
-(`LEGACY_UTC_DATES`, `backend/app/utils/exchange_dates.py`) on every `yfinance` assignment
-(`LEGACY_UTC_PROVIDER`) still NULL, those of an older backup a restore upgrades included
-(`backend/app/services/platform/instance_backup/staging.py`). It is no timezone
-(`exchange_zone()` reads it as none) but the mark of rows dated by the old rule. Other
-assignments, and any created later, stay NULL until a fetch reports a timezone, and are never
-re-dated. Outside the check a reported timezone never replaces the mark: an asset moved to
-another provider keeps it, and is checked if it comes back to Yahoo.
+- **Prices**: in the range a sync fetches, each session day gets its own close; older rows of an
+  exchange east of UTC stay a day early. A day without a session before a session, a Sunday or a
+  holiday, keeps the next session's close: no fetch writes it again.
+- **Events**: a dividend or a split a sync fetches again is stored twice, the old one a day early
+  and the new one on its day, since the upsert keeps a stored event the provider no longer returns
+  ([Dedup Strategy](events.md#dedup-strategy)). A split counts only through the `ADJUSTMENT` rows
+  linked to it, so the new one changes no figure unless the user links it too.
 
-**The check.** `_PreparedRefreshItem.legacy_check` is true when the assignment holds the mark and
-its provider is `LEGACY_UTC_PROVIDER`. FETCH then makes one history call, step 0 of
-`_fetch_refresh_item()`: the provider's full history up to today (`start="min"`), past the core
-history cache, which it neither reads nor fills. That answer is the check's calendar (session
-dates; date and type of events) and the source of the range the refresh asked for, cut as step 1
-would cut it: only that range is written, and step 1 does not run. Before anything is written,
-`_settle_exchange_timezone()` reads the assignment again and, if it still holds the mark, moves
-the stored dates, never the values, and stores the timezone, which clears the mark for good, in
-one transaction:
+The remedy, for a user who asks: delete both events, then sync their dates again; an event linked
+to a transaction is deleted only once unlinked (`EVENT_IN_USE`). A clean price history takes the
+[market-data wipe](events.md#market-data-wipe)
+(`POST /api/v1/assets/{asset_id}/market-data/wipe`), then a sync of the whole history. The wipe
+also deletes the asset's manual events and unlinks every transaction from its events, and is
+refused (409, X-R48) while a split of the asset has linked incoming `ADJUSTMENT` rows without a
+purchase cost.
 
-- **The claim**: a conditional UPDATE (`… AND exchange_timezone = 'legacy-utc'`) stores the zone
-  before anything moves, since the manual sync and the scheduler can refresh one asset at once: a
-  refresh prepared before another settled would re-date rows already on their day. A refresh whose
-  UPDATE finds the mark gone (pysqlite opens the transaction there: behind another refresh's write
-  lock it waits for that commit, `busy_timeout`) moves nothing and writes its data as usual.
-- **The rule**, `local_date_of_legacy_utc_date(S, zone)`: a stored date S belongs to S + 1 when
-  the zone's UTC offset at local midnight of S + 1 is positive (Milan and Tokyo always, London in
-  summer time), to S otherwise (New York, UTC).
-- **Prices**, `PriceStoreOperations.redate_provider_rows()` (`price_store.py`): a row of the
-  provider (`source_plugin_key`) moves from S to S + 1 when the rule says so, the full history
-  has a session on S + 1, and S ≤ D − 2, D being the server's local date of the assignment's
-  `last_fetch_at` before this refresh (`_server_date()`; never fetched: no price moves). Released
-  versions asked their history up to yesterday, so east of UTC a dated range's last bar landed on
-  D − 2 at the latest: a later row is a current value, not a shifted bar. So is a Friday's or a
-  holiday eve's row, which has no session on S + 1. Latest first; when S + 1 already holds a row,
-  of any source, that row stays and the moved one is dropped. A moved row gets a new
-  `fetched_at`: the portfolio cache keys on COUNT + MAX(`fetched_at`)
-  (`financial_math/portfolio/engine.py`). `MANUAL` rows, the current-quote write-back's
-  `provider:yfinance` rows and every other source never move.
-- **Events**, `EventStoreOperations.redate_provider_events()` (`event_store.py`): an event of the
-  assignment moves when the rule says so and the full history has an event of its type on S + 1
-  and none on S, latest first, merging into one of the same assignment and type it meets there.
-  A `SPLIT` carries along its linked `ADJUSTMENT` rows dated on S; no other transaction moves
-  ([Asset Events](events.md#yahoo-redate)).
-- **Logging**: one INFO line per asset, *Stored dates checked against the exchange calendar*,
-  counts only, with `rows_before_calendar`: the provider's rows dated before the day before the
-  full history's first session, which no session confirms and which stay.
-- **Failure**: without a full history or a timezone `zoneinfo` knows, the mark stays and the
-  refresh writes nothing, `last_fetch_at` included. The item is `failed`, with *Nothing written:
-  the stored dates await their one-time check, …* or the fetch's own error, and `RATE_LIMITED`
-  with `retry_after` after a refusal for too many requests
-  ([Provider Pauses](#provider-pauses)). A check that raises (a database error, for instance)
-  fails its asset alone: its session rolls back and the mark stays, the item is `failed` with
-  *Nothing written: the exchange timezone check failed (…)*, and the other assets of the call
-  go on. The next refresh tries again.
+**Unknown timezone** (Z-36). `_exchange_zone()`, private to the plugin, gives the name's
+`ZoneInfo`, or None. On a server whose timezone database lacks the name (Windows outside Docker
+without the PyPI `tzdata` package, a minimal container; the
+[Docker image](../../architecture/overview.md#docker-image) installs one) the current value is
+dated in UTC: the day before for the part of a session that falls before UTC midnight, such as
+Sydney's or Auckland's. For an Area/Location name (`Europe/Rome`) the plugin then logs a warning
+once per name and process, *Exchange timezone unknown to this server's timezone database: the
+current value is dated in UTC*, with `timezone`; a fixed offset or a name without an area is not
+logged. Adding `tzdata` to the dependencies is Z-36, a developer decision.
 
-Known limits:
-{: #exchange-timezone-limits }
-
-- **Z-34** (after 1.3): an asset whose `yfinance` assignment was removed before the upgrade, or
-  before its first refresh after it, keeps its shifted rows. When the identifier changed before
-  that refresh to a line on the other side of UTC, the check applies the new line's timezone and
-  calendar to the old line's rows.
-- **Rows older than Yahoo's history** stay, counted in the log line.
-- **Downgrade**: a database taken below 011 after the check, then upgraded again, is marked
-  again, and its next refresh would move prices already on their day: do not downgrade past 011
-  once the server has synced.
-- **No timezone database**: a server with none (Windows outside Docker without the PyPI `tzdata`
-  package, a minimal container; the [Docker image](../../architecture/overview.md#docker-image)
-  installs one) cannot resolve the exchange's zone: a marked Yahoo asset writes nothing until it
-  can, and `exchange_zone()` logs a warning, *Exchange timezone unknown to this server's timezone
-  database: …*, once per process for each Area/Location name (`Europe/Rome`). Adding `tzdata` is
-  Z-36 (a developer decision).
-- **Z-35** (after 1.3, a separate and older finding): `ticker.history()` runs without
-  `auto_adjust`, so the stored closes are dividend- and split-adjusted as of each fetch. The
-  check changes no value.
-
-Tests: the `test_z33_*` of `test_yahoo_finance_errors.py` (dates, timezones and the warning for
-an unknown one, the rule over a year), of `test_asset_source_refresh.py` (the check; one that
-raises: `test_z33_a_failing_check_fails_its_asset_alone`; the re-read and the claim:
-`test_z33_a_second_refresh_with_a_stale_mark_moves_nothing` and
-`test_z33_a_refresh_that_read_the_mark_before_another_settled_moves_nothing`) and of
-`test_assets_provider.py` (the column across saves); `test_migration_011_exchange_timezone.py`
-(`./dev.py test db migration-011`).
+Tests: the `test_z33_*` of `test_yahoo_finance_errors.py` (each bar and event on its exchange day,
+the current value in the exchange's timezone, the warning once per name and never for a name
+without an area).
 
 ---
 
