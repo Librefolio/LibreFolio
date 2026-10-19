@@ -70,8 +70,11 @@
         measureMode?: boolean;
         /** Called on click in measure mode (date, close value) */
         onMeasureClick?: (date: string, value: number) => void;
-        /** Called on mousemove in measure mode (date, close value) */
-        onMeasureHover?: (date: string, value: number) => void;
+        /**
+         * Called on mousemove in measure mode (date, close value). Answers `true` on a day the measure
+         * refuses (its start: no measure of one day), and the chart shows the not-allowed cursor.
+         */
+        onMeasureHover?: (date: string, value: number) => boolean | void;
         /** Called on double-click on a data point (date, value) — for editor scroll */
         onDblClick?: (date: string, value: number) => void;
         /** Main series label for tooltip header (e.g. asset name) */
@@ -133,6 +136,16 @@
 
     let chartContainer: HTMLDivElement;
     let chartInstance: echarts.ECharts | null = null;
+    /**
+     * The last resolved measure hover: `blocked` over a day `onMeasureHover` refuses, `free`
+     * elsewhere, null out of measure mode. It picks the cursor, and the container publishes it.
+     */
+    let measureHover = $state<'blocked' | 'free' | null>(null);
+
+    // Out of measure mode the container publishes no hover, and the next measure starts free.
+    $effect(() => {
+        if (!measureMode) measureHover = null;
+    });
     let resizeObserver: ResizeObserver | null = null;
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let chartOptionSet = false;
@@ -319,11 +332,16 @@
             // Measure mode: hover handler
             let hoverRaf = false;
             chartInstance.getZr().on('mousemove', (params: any) => {
-                if (!measureMode || !onMeasureHover || !chartInstance || hoverRaf) return;
+                if (!measureMode || !onMeasureHover || !chartInstance) return;
+                // zrender puts its own default cursor back on every move, before its listeners: in
+                // measure mode the chart sets its own at once — not-allowed while the last hover was refused.
+                chartInstance.getZr().setCursorStyle(measureHover === 'blocked' ? 'not-allowed' : 'crosshair');
+                if (hoverRaf) return;
                 hoverRaf = true;
                 requestAnimationFrame(() => {
                     hoverRaf = false;
-                    if (!chartInstance) return;
+                    if (!chartInstance || !measureMode || !onMeasureHover) return;
+                    let blocked = false;
                     const pointInPixel = [params.offsetX, params.offsetY];
                     if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
                         const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
@@ -332,10 +350,12 @@
                             if (dateIdx >= 0 && dateIdx < data.length) {
                                 const d = data[dateIdx];
                                 const closeVal = d.close ?? d.value;
-                                onMeasureHover!(d.date, closeVal);
+                                blocked = onMeasureHover(d.date, closeVal) === true;
                             }
                         }
                     }
+                    measureHover = blocked ? 'blocked' : 'free';
+                    chartInstance.getZr().setCursorStyle(blocked ? 'not-allowed' : 'crosshair');
                 });
             });
 
@@ -640,4 +660,4 @@
     }
 </script>
 
-<div bind:this={chartContainer} class="w-full" class:cursor-crosshair={measureMode} data-testid="candlestick-chart" style="height: {height};"></div>
+<div bind:this={chartContainer} class="w-full" class:cursor-crosshair={measureMode} data-testid="candlestick-chart" data-measure-hover={measureHover ?? undefined} style="height: {height};"></div>
