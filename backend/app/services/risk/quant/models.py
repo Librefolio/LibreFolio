@@ -16,7 +16,7 @@ from backend.app.schemas.risk import (
     RiskSimulationProcess,
     RiskSimulationRegime,
 )
-from backend.app.services.risk.metrics import calendar_days_to_observations
+from backend.app.services.financial_math.returns import calendar_days_to_observations
 
 MAX_SOBOL_DIMENSION = 21_201
 MAX_HISTORY_OBSERVATIONS = 5_000

@@ -15,6 +15,7 @@ from backend.app.db.models import FxRate
 from backend.app.db.precision import storable_fx_rate, usable_fx_rate_clause
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import Currency
+from backend.app.services.financial_math.fx_rates import oriented_rate
 from backend.app.services.fx.base import RateNotFoundError
 from backend.app.utils.sql_chunks import OR_TERMS_PER_QUERY
 
@@ -70,12 +71,8 @@ def compute_chain_rate(
         rate = leg_rates.get(key)
         if not _usable_rate(rate):
             return None
-        if fc < tc:
-            # Direct order: multiply by rate
-            composite *= rate
-        else:
-            # Inverse order: multiply by 1/rate
-            composite *= Decimal("1") / rate
+        # The stored rate read from fc to tc: as it is in alphabetical order, inverted otherwise
+        composite *= oriented_rate(rate, fc, tc)
     return composite
 
 

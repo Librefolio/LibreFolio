@@ -3617,3 +3617,49 @@ apertura dopo ogni cambio di dati (per esempio dopo il sync notturno dei prezzi)
   `nice`), nessun server, nessun `dev.py test`. **⚠️ Fuori pista**: la prima prova del MWRR puro aveva il segno dei flussi
   sbagliato (qui un versamento è negativo): rifatta. Una frase sulla qualità dei dati, non verificata, riscritta come
   «da verificare».
+
+#### J-1 voci 1, 4, 8a — via del developer (19/10, 11:31; base `8eb783b0b`)
+- Coordinatore, testuale del developer: «se ci sono funzioni matematiche fuori dal layer giusto è corretto che le
+  fattorizzi». Via per 1, 4 e 8a; per la 1 le 6 condizioni di J; ogni valore che cambia va dichiarato prima come domanda
+  se tocca numeri mostrati; rossi prima. **Slot pesante** fino alle 14:00 sulla corsia 6190, carico a 1 minuto < 50.
+- ✅ **8a**: test rimesso da `files/parked/` (sha256 `aa979ad6…`, identico). Corsia: `roi-fifo-utils
+  test_fx_gap_single_reading` **5** verdi (guardia, nessun cambio di prodotto).
+- ✅ **Codice voce 1** (nessun valore cambia): `financial_math/returns.py` + `DAYS_PER_YEAR = 365` (usato da
+  `observations_per_year` e dalle due conversioni: nessun 365 nuovo), `positive_annualization_factor` (spostato dal
+  rischio, stesso messaggio), `calendar_days_to_observations` (spostato tale e quale), `observations_to_calendar_days`
+  (nuova, l'inversa di `resampling.py:235`). `risk/metrics.py`: via le due definizioni e la voce di `__all__`, importa
+  il validatore della casa per i suoi 7 usi; **nessuno shim** (verificato: `risk.metrics` non ha più né l'una né
+  l'altra). Chiamanti aggiornati: `asset_set_var`, `historical_var`, `simulation`, `quant/models.py`,
+  `quant/resampling.py` (import + `:235`). Mappa della casa: `backend.instructions.md`, `financial_math.md`,
+  docstring di `financial_math/__init__.py`. Nessun `algorithm_version` toccato.
+- ✅ **Codice voce 4** (nessun valore cambia): nuovo `financial_math/fx_rates.py` — `oriented_rate(rate, source,
+  destination)`, `rate` se `source < destination`, altrimenti `type(rate)(1) / rate` (Decimal ed `ExactRatio` del PAC,
+  senza importare il PAC); involuzione, quindi serve anche alla normalizzazione per il salvataggio. Siti:
+  `fx/conversion.py` (passo della rotta), `fx/storage.py::normalize_rate_for_storage` (`min`, `max`, `oriented_rate`:
+  identico anche con `base == quote`), `pac_allocator/evaluation/scenario.py::fx_rate`, `pac_allocator/source/wac.py`
+  (prova del WAC). ruff (anche `I`), black, import a freddo verdi. Mappa della casa aggiornata.
+- In corso: test-author `j1-items-tests` (parità con le copie di HEAD, rossi per assenza, guardie strutturali, i due
+  test esistenti che importano dal vecchio percorso). Script `files/j1.sh` (`red`, `light`, `slot`).
+- ✅ **Test J-1** (test-author `j1-items-tests`): `test_financial_math/test_observation_calendar.py` (20 test, 146 casi:
+  parità con le copie di HEAD — `observations_per_year`, `calendar_days_to_observations` sulla griglia e i casi
+  fissati, `observations_to_calendar_days` contro l'espressione in linea della divulgazione su 1..400 × fattori, il
+  validatore; il viaggio di andata e ritorno con il suo limite dimostrato, `|ritorno − d| ≤ 365/(2s) + ½` quando l'andata
+  dà ≥ 1, e la regione in cui dà 0 a parte; «non rifiuta nulla di oggi» da `resolve_block_length`; le divulgazioni di
+  `test_risk_simulation.py` incrociate; nessuno shim, un solo validatore, i chiamanti tengono la funzione della casa,
+  nessun `* 365 /` in `resampling.py`) e `test_financial_math/test_fx_rates.py` (24 test, 37 casi: parità con le quattro
+  espressioni di HEAD, Decimal ed `ExactRatio`, codici uguali, tasso zero; involuzione esatta per `ExactRatio`, entro due
+  arrotondamenti per Decimal; registratori ai quattro siti, il WAC guidato come in `test_portfolio_allocation_source.py`;
+  la casa non importa né PAC né fx). Test esistenti, solo il percorso d'importazione: `test_risk_metrics_oracle.py:49`
+  (e la docstring ~:3541), `test_risk_metrics.py:502`. 15 mutanti presi tutti. Grep del vecchio percorso: zero (il
+  file di guardia nomina i nomi vecchi apposta).
+- ✅ **Corsia** (11:55; prodotto tolto, 12 file + `fx_rates.py`, sha `711944c8…`/`b4a49175…` uguali dopo):
+  `financial-math test_observation_calendar` rosso **133** / 13 (parità verdi anche su HEAD), `test_fx_rates` rosso
+  **29** / 8, `risk-oracle` errore di raccolta su HEAD (il test importa dalla casa). Verdi leggeri: 8a **5**,
+  `financial-math` **1727**, `risk-oracle` **214**.
+- ✅ **Slot pesante** (11:57–12:05, HEAD `8eb783b0b`, carico 15–35): `roi-fifo-utils` **1494**, `portfolio-engine` 41,
+  `risk-all` **918** (uguale: nessun conteggio cambiato), PAC `pac-planner-core` 270, `-evaluator` 170, `-oracle` 24,
+  `-policies` 50, `-solver` 40, `-proof` 30, `-wire-numbers` 39, `-report` 56, `-service` 80,
+  `portfolio-allocation-source` 98; FX `fx-conversion` 44, `fx-core` 42, `fx-pairs-per-query` 6, `fx-sync-service` 38,
+  `db fx-rates` 6, `api fx` 33; `api pac-planner-tool` 12; `api portfolio` 55. ruff, black (18 file), diff-check,
+  `mkdocs build` stretto, `check-links`. Porta libera. **CHECKPOINT READY** inviato, FROZEN sul lotto; poi il piano
+  «formule veloci» (ordine del coordinatore), poi l'analisi MF-E2.
