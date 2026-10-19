@@ -8261,3 +8261,141 @@ Totale: circa 1,5–2 giorni di H e 0,5–1 di A.
 4. Le categorie: `cloud` virtuale e `front-cloud` con la corsia managed messa da sé (**consiglio**), oppure le cartelle
    spostate.
 5. Lo slot del passo 0 (inventario, circa un'ora), prima di ogni codice.
+
+#### Analisi: le migrazioni della 1.3 in una sola `005_release_1_3_0_schema` (19/10, sola lettura, con un prototipo) ✅
+
+> Il developer, testuale: «come siamo arrivati alla migrazione 010?! … bisogna fattorizzare e scendere solo a 1 con la
+> 005». Lavoro prioritario. La 011 la toglie Z-33r (`065c9df77`, sul ramo di Z, non ancora in dev). Nessuna delle
+> 005–011 è in un tag rilasciato: l'ultimo è `v1.2.1`, e `git cat-file -e` lo conferma su ogni file.
+
+**1. Cosa fanno, e la 005 unica.**
+
+| Oggi | Schema | Dati |
+|---|---|---|
+| `005_accounts_invites` | `users` + 3 colonne (`session_version INTEGER NOT NULL DEFAULT 0`, `email_verified_at DATETIME`, `last_seen_version VARCHAR(40)`), con `ADD COLUMN` e mai un batch; la tabella `account_tokens` (CHECK su `purpose`, `UNIQUE (token_hash)`, 3 chiavi esterne: `CASCADE` per l'account, `SET NULL` per chi crea e chi consuma) con 2 indici | — |
+| `006_registration_mode` | — | `enable_registration` diventa `registration_mode`: `open` se il valore era vero, altrimenti `disabled`; restano data e autore; la riga vecchia si cancella |
+| `007_plugin_settings` | `plugin_system_settings` e `plugin_user_settings` (unici per campo, 2 CHECK ciascuna, `SET NULL` / `CASCADE`) | — |
+| `008_registration_invite_default` | — | `registration_mode = open` dove manca e ci sono account (decisione 36); il downgrade non fa nulla |
+| `009_email_unique_ignoring_case` | `CREATE UNIQUE INDEX ux_users_email_lower ON users (lower(email))` | prima controlla i doppioni a meno delle maiuscole, e si ferma nominando gli account per id e username |
+| `010_provider_reported_currency` | `asset_provider_assignments.reported_currency VARCHAR(8)` | — (NULL, si impara al fetch) |
+| `011_provider_exchange_timezone` | (la toglie Z-33r) | — |
+
+- La 005 unica fa gli stessi passi, nello stesso ordine, con una sola differenza: il controllo dei doppioni di 009 va
+  **in testa**.
+  - Oggi, su un DB con doppioni, 005–008 sono già passate quando la 009 si ferma.
+  - Nella 005 unica ci si ferma prima di scrivere qualunque cosa.
+- È rieseguibile come la 004: ogni passo controlla prima di agire. Il downgrade va all'indietro, come i downgrade di oggi.
+- Il prototipo è nella cartella della sessione: `files/squash/proto/alembic/versions/005_release_1_3_0_schema.py`. È
+  composto dai corpi delle sei migrazioni, con le varianti come opzioni.
+
+**2. La prova di equivalenza** (`files/squash/squash_check.py` e `squash_check_v4.py`, su DB temporanei; nulla nel repo
+e nulla nel DB della corsia). Tutti verdi:
+
+| Scenario | Confronto | Esito |
+|---|---|---|
+| S1, S2, S3, S3b: DB nuovi | catena 004→010 (o →009, con o senza i 13 `DROP INDEX`) contro la 005 unica nella variante corrispondente: struttura (colonne, CHECK, indici, chiavi esterne, `AUTOINCREMENT`), **testo SQL** e righe | identici |
+| S4: un DB 1.2 con dati (la copia popolata della corsia, riportata a 004; `enable_registration = true`, 11 account) | catena 004→010 contro la 005 unica: struttura, testo e **righe** | identici |
+| S5 (quattro varianti): un DB alla 011 | la conversione (sotto) contro una 005 nuova | struttura identica, righe tutte conservate |
+| S6: un DB alla 006 (rimasto indietro) | la conversione contro una 005 nuova | struttura identica: la 005 rieseguibile completa ciò che manca |
+| S7: due account con email uguali a meno delle maiuscole | la 005 unica | si ferma, nessuna modifica, resta alla 004 |
+| D1 | il downgrade della 005 unica contro una 004 nuova | struttura identica |
+
+- Nel lotto la prova diventa un test.
+  - Si conserva un'istantanea dello schema prodotto dalla catena vecchia (JSON, generato prima di cancellare i file) e
+    la si confronta con la 005 unica.
+  - Lo scenario S4 resta come fixture.
+  - Dopo la cancellazione la catena vecchia non si può più eseguire: la prova vera si fa una volta, quando si fonde.
+
+**3. Il comando unico per i DB a una revisione ritirata.**
+- **Perché serve.** All'avvio `ensure_database_exists()` lancia `alembic upgrade head`. Con una revisione che Alembic
+  non trova più, l'upgrade fallisce e il server esce (`sys.exit(1)`).
+  - Vale per ogni DB a 005–011. Per la 011 vale già con Z-33r da sola: per questo devono entrare insieme.
+  - Il ripristino di B rifiuta oggi un archivio così con `revision_unknown`, «viene da un LibreFolio più recente»: un
+    messaggio sbagliato.
+- **Il disegno.** `RETIRED_1_3_REVISIONS`, i sette id, e `reconcile_retired_revision(db)`:
+  1. **Su una copia**:
+     - toglie le colonne ritirate presenti: `exchange_timezone`, e `reported_currency` se la 010 esce;
+     - `stamp --purge 004`, poi `upgrade head`: la 005 unica completa ciò che manca (S6);
+     - poi verifica.
+  2. **La verifica è mirata**, non «uguale a un DB nuovo».
+     - I DB della 1.2 tengono i tipi dichiarati del loro tempo: `NUMERIC(18, 6)` per prezzi e quantità, mentre la
+       `001` di oggi dice `24, 12` e `22, 10`, cambiati dopo `v1.2.1`.
+     - Un confronto completo rifiuterebbe quindi ogni DB vero.
+     - Si verifica che:
+       - la differenza fra prima e dopo sia solo quella attesa: colonne tolte, oggetti creati solo dove mancavano,
+         gli indici della variante;
+       - gli oggetti della 1.3 (le tre colonne, `account_tokens`, `plugin_*`, `ux_users_email_lower`,
+         `reported_currency`, l'insieme degli indici) siano identici a quelli di un DB nuovo;
+       - `integrity_check` e `foreign_key_check` siano puliti.
+  3. **Solo se la copia passa**, gli stessi passi sull'originale, sul posto (nessun file sostituito: va bene con
+     Litestream e con i permessi dell'immagine Docker), con un controllo rapido alla fine. Altrimenti si ferma:
+     l'originale non è toccato e il log elenca le differenze.
+     - Se si interrompe a metà, il passo dopo riprende: la revisione è ancora ritirata (si ripete), oppure è già 004
+       (upgrade normale), e le colonne sono già state tolte prima dello `stamp`.
+  4. Sotto il lock che esiste già, `<db>.post-migration.lock`: il lifespan parte in ogni worker.
+- **Dove**: in automatico in `ensure_database_exists()`, prima dell'upgrade (H); a mano con
+  `./dev.py db reconcile-retired [--dry-run]`; nel ripristino di B, sulla copia di stage (`_revision_plan`, codice di B).
+  L'elenco resta fino alla 1.4, documentato, poi si toglie.
+- **I casi**:
+  - il DB di produzione del developer sul Mac, alla 011:
+    - il coordinatore ferma il server;
+    - al primo avvio dopo l'aggiornamento la conversione è automatica, oppure prima la CLI con `--dry-run`;
+    - **consiglio una prova su una copia di lavoro dei suoi dati** (skill `real-data-copy`): è l'unica prova vera sui
+      tipi del suo DB;
+  - la nightly Docker del developer, e quella pubblica di chiunque l'abbia usata: in automatico al primo avvio
+    dell'immagine nuova, oppure con `docker compose run --rm librefolio python dev.py db reconcile-retired`;
+  - le corsie di test: sono usa e getta, quindi basta `db populate --force --clean` (o `db create`). La via automatica
+    copre anche quelle non ricreate.
+
+**4. Le varianti** (tutte e quattro provate):
+- V1: 010 dentro, indici invariati;
+- V2: 010 fuori;
+- V3: 010 dentro, i 13 indici tolti;
+- V4: 010 fuori, indici tolti.
+
+Con V2 e V4, Z toglie il codice di Z-32 (c): la scrittura di `reported_currency` nel refresh e l'avviso
+`QUOTE_IN_MINOR_UNIT`. Con V3 e V4 si allineano le 13 dichiarazioni di `db/models.py` e si aggiunge la guardia in
+`db validate`: la proposta P-IDX-1 entra qui, senza una migrazione `0NN` separata.
+
+**5. Effetti**:
+- **Test**: i sei file `test_migration_005…010` (3933 righe; quello della 011 lo toglie Z-33r) diventano:
+  - un solo `test_migration_005_release_1_3.py`, con gli stessi scenari di dati verso un unico obiettivo;
+  - `test_retired_revisions.py`, per la conversione;
+  - l'istantanea dell'equivalenza.
+  - Circa un giorno di test-author.
+- **Runner**: in `_backend_db.py` le azioni `migration-005…011` diventano `migration-005` e `retired-revisions` (anche
+  l'elenco alla r. 376).
+- **`db validate`**: la head unica c'è già; il controllo degli indici legge i modelli (V3/V4); il commento alla r. 553.
+- **Backup**:
+  - `test_backup_staging.py` fissa `OLDER = "005_accounts_invites"`, che diventa la 004 rilasciata;
+  - anche `test_restore_non_iso_warning.py` cambia;
+  - un archivio a una revisione ritirata si accetta con la stessa conversione sulla copia (consiglio), oppure si
+    rifiuta con un messaggio giusto.
+- **Doc**:
+  - `database/index.md` (elenco delle migrazioni), `users_access.md`, `assets_pricing.md`,
+    `patterns/plugin_settings.md`, `settings.md`, `access_control.md`, `backend/assets/architecture.md`;
+  - `patterns/alembic.md`: la regola della fusione e le revisioni ritirate;
+  - `.github/instructions/backend-db.instructions.md` (gli esempi dei nomi), che è condiviso.
+- **CHANGELOG**: per chi viene dalla 1.2 non cambia nulla, vede una sola migrazione. Una riga per chi ha usato una
+  nightly è da decidere.
+
+**6. Costo e ordine.**
+- Prerequisito: Z-33r nella mia base.
+- Passi:
+  1. la 005 unica dal prototipo, nella variante decisa; via i file 005–010; i modelli per V3/V4 (S);
+  2. la conversione, l'aggancio all'avvio e la CLI (M);
+  3. l'aggancio nel ripristino (B, o io con il suo OK) (S);
+  4. i test (M);
+  5. la doc (S);
+  6. le verifiche: la categoria `db`, le suite del backup, `all-backend` in uno slot, e la prova sulla copia dei dati
+     del developer **prima** che riavvii la produzione.
+- Circa 2 giorni di H più una parte piccola di B.
+- Entra nello stesso treno di Z-33r, con il server di produzione fermato prima.
+
+**Domande** (per il developer):
+1. La 010: dentro o fuori (D8 di Z). Non do consigli: è il dominio di Z.
+2. I 13 indici nella stessa 005 (V3/V4): **consiglio sì**, una migrazione invece di due, già provata.
+3. La conversione: automatica all'avvio (**consiglio**) o solo da CLI.
+4. Gli archivi a una revisione ritirata: accettarli (**consiglio**) o rifiutarli.
+5. La prova su una copia di lavoro dei dati veri del developer, prima di riavviare la produzione (**consiglio sì**):
+   serve la copia, dal coordinatore.
