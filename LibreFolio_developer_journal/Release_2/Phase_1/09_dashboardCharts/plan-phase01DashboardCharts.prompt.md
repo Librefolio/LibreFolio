@@ -6733,3 +6733,161 @@ Le note:
    lotti. Nelle regole del mio avvio è un file del programma colori, che si tocca solo passando dal coordinatore. È
    un'aggiunta e non porta conflitti: va solo confermato che J aveva il via.
 4. **Le prove di J non le ho viste girare**: la revisione è di lettura.
+
+## 19/10 · Y-N65 — lo stesso giorno in «Da» e «A», in tutti i selettori: analisi (sola lettura)
+
+**La decisione del developer** (inoltrata dal coordinatore alle 14:31), testuale: «va impedita sia nel grafico che
+selezionando le date, e come dicevo, nel datapicker range, non permettiamo proprio da ui di scegliere 2 volte la stessa
+data, se si fa 2 volte click sulla stessa data il click viene ignorato, anche meglio compare come per i giorni futuri
+l'icona che fa capire che non ci puoi andare sopra». Alla domanda del coordinatore («solo nel righello o in tutti i
+selettori?») ha risposto: in tutti i selettori di intervallo dell'app, sapendo che il filtro per data delle tabelle non
+potrà più avere un giorno solo.
+
+Base `918c2ce39`; `dev_release2` è a `84c1bcba1`, 36 commit avanti. Nei file del lotto, in quei commit, c'è solo X-R16
+sulle pagine di dettaglio di asset e cambi. Nessun codice, nessun test lanciato.
+
+### Dove nasce oggi un intervallo di un giorno
+
+1. **Calendario**: il secondo clic sul giorno in attesa dà inizio = fine (`handleDayClick`, `DateRangePicker.svelte:463-480`).
+2. **Data scritta uguale all'altro capo**: `applyRangeDate` (`:950-962`) la accetta.
+3. **Data scritta con l'altro capo vuoto o una sentinella**: `fieldIso(altro) || iso` copia la data sull'altro capo.
+   - Il filtro per data delle tabelle parte vuoto: una sola data in «Da» oggi filtra quel giorno solo.
+   - Con MAX attivo (`min`/`max`), una data d'inizio scritta dà [X, X].
+4. **Frecce**: un capo portato sull'altro dà inizio = fine (`handleFieldKeydown`, `:1042-1050`).
+5. **Grafico**: `MeasurePanel.addPoint` (`:154-184`) crea una misura se il secondo clic è sullo stesso giorno. Già oggi
+   rifiutano l'anteprima (`:140`) e «misura tutto il grafico» (`:195`).
+
+Non ne creano:
+- le scorciatoie: YTD, MTD e QTD hanno un minimo di 14 giorni, WTD di 6 (`withMinWindow`, `:301`);
+- la finestra personalizzata: `min={1}`, applicato da `isDraftValid` di `CompactDurationBadge`;
+- MAX, che dà `min`/`max`.
+
+**«L'icona» dei giorni futuri** è il cursore `not-allowed`, sul bottone del giorno `disabled`
+(`CalendarMonth.svelte:192-196`, `:270-273`).
+
+**Il backend accetta ovunque un giorno solo**: `DateRangeModel` (`end >= start`, un giorno solo documentato), il periodo
+dell'investimento programmato («end on or after start»), il replay del rischio («on or before»). Quindi il lotto è solo
+d'interfaccia: l'API non cambia (segnalibri, client dell'API).
+
+### La proposta, punto per punto
+
+1. **Il calendario del selettore.**
+   - Il giorno in attesa non si può cliccare: `disabled` e cursore `not-allowed`, come un giorno futuro. Tiene il suo
+     colore d'attesa, senza la barratura dei `disabledDates`.
+   - Passandoci sopra non si vede l'anteprima di un giorno solo (`hoveredDate` a `null` su quel giorno).
+   - `handleDayClick` lo ignora anche lui.
+   - Dove: `CalendarMonth`, perché solo il selettore d'intervallo imposta `pending` (`SingleDatePicker` mai), e
+     `DateRangePicker`. Nessun colore nuovo: `cursor-not-allowed` è già la classe dei giorni futuri.
+2. **Il grafico.**
+   - `addPoint` ignora il secondo clic sul giorno d'inizio: nessuna misura, la modalità misura resta accesa, l'inizio
+     resta in attesa.
+   - Sul giorno d'inizio `updatePendingEnd` toglie l'anteprima, invece di lasciare l'ultima.
+   - Facoltativo: il cursore di divieto anche sul grafico (N65-5).
+3. **`MeasurePanel`: niente più rifiuto silenzioso.** Si toglie `if (s === e) return` da `updateMeasureDates` (`:233`).
+   - Il selettore non può più mandare due date uguali.
+   - Se qualcos'altro lo facesse, una misura di un giorno si calcola giusta (T-D9): nessun disallineamento.
+4. **Lo stesso giorno scritto a mano** (N65-2): rifiutato come una data futura scritta, cioè testo rosso
+   (`text-lf-danger`, `data-invalid`), non applicato, nessun messaggio.
+   - In più, appena l'altro capo cambia e i due giorni sono diversi, il testo in attesa si applica.
+   - Senza questo, chi scrive un «Da» nuovo uguale al vecchio «A», e poi il nuovo «A», resterebbe con «Da» rifiutato.
+     È l'ordine delle E2E di `fx-detail` e il più naturale per un utente.
+5. **Le frecce su un capo** (N65-3): saltano il giorno uguale, cioè un giorno in più nella stessa direzione; lo scambio
+   dei capi continua a valere. Se il salto passerebbe oltre oggi (futuro non ammesso), il passo non fa nulla.
+6. **Una data scritta con l'altro capo vuoto o con MAX** (N65-4): l'altro capo non si copia più.
+   - Vuoto resta vuoto, cioè un intervallo aperto: «dal giorno X» o «fino al giorno X». Il filtro di colonna, l'URL
+     delle transazioni (`?date_start=&date_end=`, `transactions/filterState.ts`) e quello dei file (`?date=da,a`) lo
+     accettano già.
+   - Con MAX la sentinella resta: `max` vale «da X a oggi», risolto dalle pagine con `resolveDateSentinel`; `min` vale
+     «dai primi dati fino a X».
+   - Cambio visibile: nel filtro di una tabella, una sola data in «Da» significa «da X in poi», non più «solo X».
+   - Nota: con `min` il bottone MAX resta acceso anche con una fine diversa da oggi (`effectivePreset`, `:272-288`). È
+     una regola che c'è già; la lascerei.
+7. **Gli intervalli di un giorno già salvati** (N65-6): non li riscrive nulla, si caricano e funzionano.
+   - Dove stanno:
+     - il periodo delle pagine: `sessionStorage` `librefolio_dateRange`, per scheda, e l'URL `?start=&end=`;
+     - i filtri: transazioni, file, e il link della Dashboard verso le transazioni, che porta il periodo della pagina;
+     - i periodi degli investimenti programmati, nel DB.
+   - Il selettore li mostra; solo non se ne possono fare di nuovi.
+   - Le misure e il periodo del replay L4 non si salvano: non ce ne sono.
+   - L'alternativa, normalizzarli al caricamento, riscriverebbe un segnalibro o un periodo salvato dall'utente:
+     sconsigliata.
+
+### I 10 usi del selettore
+
+In nessuno serve codice: il comportamento viene dal componente condiviso.
+
+| Uso | Oggi un giorno solo nasce da | Dopo |
+|---|---|---|
+| Pagine ×6: Dashboard, broker, lista e dettaglio di asset e cambi | due clic sullo stesso giorno; data scritta uguale; data d'inizio scritta con MAX: [X, X] | impedito; con MAX, da X a oggi |
+| `DataTableColumnFilter`, il filtro per data | due clic; una data scritta sola, copiata | impedito; una data sola è un intervallo aperto |
+| `CellDateRange`, il periodo dell'investimento programmato (`allowFuture`) | due clic; data scritta | impedito; i periodi di un giorno già salvati restano |
+| `L4Replay`, senza MAX | due clic; data scritta | impedito |
+| `MeasurePanel` | nella scheda, due clic o la data scritta, rifiutati in silenzio (il difetto N65); sul grafico, il secondo clic ne crea uno | impedito nella scheda; secondo clic sul grafico ignorato |
+
+### I file, e chi li ha aperti
+
+- **Il nucleo del lotto**: `ui/date/DateRangePicker.svelte`, `ui/date/CalendarMonth.svelte`, `charts/MeasurePanel.svelte`
+  e i loro test.
+  - Invariati in `dev_release2` dalla mia base.
+  - Programma colori: `ui/date` era la W1-c di T, chiusa (`a5c7714ca`). `charts/` è l'area di DV, integrata fino a B4. Il
+    lotto non porta colori nuovi; basta un avviso a T e a DV, tramite il coordinatore.
+  - Lavoro committato su questi file negli altri rami: nessuno. Quello non committato non lo vedo: lo conferma il
+    coordinatore.
+- **Solo con N65-5 (b)**, il cursore sul grafico: `charts/PriceChartFull.svelte` (oggi `cursor-crosshair` in modalità
+  misura, `:1152`), `routes/(app)/assets/[id]/+page.svelte` e `routes/(app)/fx/[pair]/+page.svelte`. Le due pagine le ha
+  toccate X-R16 (`299393b19`, già in dev) e sono vicine al lavoro di X e di Z-29.
+- I 10 usi: nessuna modifica.
+- **Documentazione** (`docs-writer`, solo inglese):
+  - per sviluppatori: `developer/frontend/components/core-ui/datePickers.md`, `developer/frontend/components/charts.md`
+    (MeasurePanel), `core-ui/data-table.md` (il filtro per data);
+  - per gli utenti: `user/assets/detail/measures.en.md`, `user/fx/detail/measures.en.md`, e una frase sul filtro aperto
+    in `user/transactions/index.en.md`. Le traduzioni restano un debito vero.
+- **CHANGELOG**: una riga 🔄, del coordinatore.
+- **Prima del codice**: aggiornare la mia base a `dev_release2`.
+
+### Rossi, test, costo
+
+**Rossi** (Vitest, `test-author`):
+- `DateRangePicker.test.ts`:
+  - il secondo clic sul giorno in attesa non pubblica nulla, il giorno è `disabled`, il calendario resta aperto; un
+    altro giorno chiude l'intervallo;
+  - sul giorno in attesa nessuna anteprima;
+  - «A» scritto uguale a «Da» resta rosso, nessun `onchange` con due date uguali; con un nuovo «Da» il testo in attesa
+    si applica;
+  - un «Da» uguale al vecchio «A», poi un nuovo «A», pubblica i due nuovi;
+  - le frecce saltano il giorno uguale, e al tetto di oggi non fanno nulla;
+  - con «A» vuoto si pubblica `(X, '')`, con MAX `(X, 'max')` e `('min', X)`: oggi `(X, X)`.
+- `CalendarMonth.test.ts`: il giorno in attesa è `disabled` e il clic non arriva; controllo: senza `pending` nessun
+  giorno è disabilitato.
+- `MeasurePanel.test.ts`:
+  - due clic sullo stesso giorno non creano una misura e la modalità resta accesa;
+  - sul giorno d'inizio l'anteprima sparisce;
+  - nella scheda espansa, due clic sullo stesso giorno lasciano la misura e il selettore sulle stesse date. È il difetto
+    N65 di oggi: i campi mostrano X–X, la misura le date vecchie.
+
+**I test esistenti**: nessuno fissa un giorno solo dal selettore.
+- `MeasurePanel.test.ts:246` (anteprima sullo stesso giorno, nessun effetto) diventa «l'anteprima sparisce».
+- `measureSignal.test.ts:105` e `:173`, sul modello, restano.
+- `DataTableColumnFilter.test.ts:545` resta verde: controlla solo `from`.
+- Le E2E (`asset-browse`, `asset-detail`, `fx-detail`, `risk-analysis`, galleria) scrivono sempre due date diverse.
+
+**Prove**:
+- leggere, col carico sotto 50: i Vitest toccati più `DataTableColumnFilter`, `L4Replay` e `CellDateRange`;
+  `front check`, Prettier, `theme-roles --check`;
+- slot E2E di circa 30 minuti, solo regressione: `front-asset asset-detail` (le misure), `front-fx detail`,
+  `front-portfolio` sul replay L4, `front-asset asset-browse`. Una E2E nuova non serve.
+
+**Costo**: circa una giornata (selettore 3 h, calendario e righello 1 h, rossi 2 h, documentazione 1 h, slot); con
+N65-5 (b) da 1 a 2 ore in più.
+
+### Domande per il developer (tramite il coordinatore)
+
+- **N65-2, lo stesso giorno scritto a mano**: (a) rosso come una data futura, nessun testo nuovo (**consiglio**: è il
+  «come per i giorni futuri» del developer); (b) rosso, con un tooltip proprio in 4 lingue.
+- **N65-3, le frecce**: (a) saltano il giorno (**consiglio**); (b) si fermano prima.
+- **N65-4, una data scritta con l'altro capo vuoto o con MAX**: (a) l'altro capo resta com'è: intervallo aperto, con MAX
+  fino a oggi (**consiglio**); (b) «A» vuoto diventa oggi.
+- **N65-5, il cursore sul grafico**: (a) clic ignorato e anteprima tolta, senza cursore; (b) anche il cursore di divieto
+  sul punto d'inizio (**consiglio**, è il suo «anche meglio»), se X e Z-29 lasciano libere le due pagine di dettaglio.
+- **N65-6, gli intervalli di un giorno già salvati**: (a) restano come sono (**consiglio**); (b) normalizzati al
+  caricamento.
