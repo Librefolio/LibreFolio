@@ -7141,6 +7141,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   verdi con. Era: con la data UTC, la sera a ovest di Greenwich un periodo che finisce oggi sembrava passato (niente
   prezzo dal vivo), e subito dopo mezzanotte a est un periodo finito ieri sembrava vivo e interrogava il fornitore.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto A».
+  - Prova (19/10): `a43502298` (lotto A), entrato in `0f55265a1`; CHANGELOG `ac9671fd3`.
 - **Z-4 · Risvegli orari per singolo titolo** — medio; Z, 14/10, dalla decisione D-19 del business plan. Serve un campo
   per asset; nella 1.3 c'è solo l'intraday globale, spento di default (D8). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «4. Decisioni».
@@ -7150,10 +7151,12 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   (`_history_sync_start` in `scheduler/jobs.py`); senza dati salvati resta l'orizzonte. Era: la finestra era sempre e
   solo l'orizzonte («Lookback horizon», 14 giorni di default), e chi restava indietro di più teneva il buco. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-5».
+  - Prova (19/10): `b36542f81`, entrato in `ebe9eb346`; CHANGELOG `7344dda47`.
 - ✅ **Z-6 · Il docstring dello scheduler dice che l'elezione del leader gira in un thread** — chiusa da Z3 il 15/10:
   `run_due_jobs` chiama `am_i_leader()`, `load_state` e `save_state` con `asyncio.to_thread`, e la docstring nuova lo
   dice. Era: `services/platform/scheduler/scheduler.py:108` chiamava `am_i_leader()` (psutil) sul loop. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z3 — scheduler».
+  - Prova (19/10): `a4da204b4` (con Z3).
 - **Z-7 · Calendario dei risvegli: prossima esecuzione per job, `next_wake_at` e jitter** — medio; developer, 15/10
   (decisione 33: «il next_wakeup per ora non serve [...] è una cosa per il futuro quando servirà»). Quando il pannello
   del cloud terrà un calendario: la prossima esecuzione di ogni job (con l'ora legale), `next_wake_at` nella risposta di
@@ -7166,6 +7169,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   controlla più il fornitore. Era: un asset manuale chiedeva `POST /assets/prices/current` ogni 30 s, e ogni risposta
   (solo il prezzo salvato) contava come scrittura del portafoglio.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto A».
+  - Prova (19/10): `a43502298` (lotto A), entrato in `0f55265a1`; CHANGELOG `ac9671fd3`.
 - ✅ **Z-9 · Doc delle pause dei fornitori** — basso; Z, 15/10 (Z7a). **Chiusa il 16/10 col lotto Z-9** (sola doc,
   dopo Z7c-1): la sezione `#provider-pauses` di `admin/sleep_wake.en.md` (durata, chi aspetta e cosa si vede, memoria
   e sospensione, log) e le due righe in `admin/configuration.en.md`; la parte di sviluppo l'aveva già scritta X
@@ -7176,6 +7180,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 
   Le variabili esistono da Z7a ma non hanno effetto finché X non aggancia il confine (X1–X4): la doc va scritta con
   l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-9».
+  - Prova (19/10): `467fbac05`, entrato in `dd4a97e01` (treno 105).
 - ✅ **Z-10 · Ctrl+C su `./dev.py server` uccide il server dopo 0,25 s** — basso; docs-writer di Z, 15/10 (Z6b).
   **Chiusa il 17/10 col lotto Z-10** (il commit è del coordinatore; via da scrittore su `cli_base.py`, `dev.py:448` e
   tre test di H e L). `dev.py server` lancia il server con `run_server_live` (`scripts/cli_base.py`):
@@ -7187,6 +7192,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   Era: con `subprocess.run` il server moriva di SIGKILL 0,25 s dopo il Ctrl+C, a metà del suo spegnimento (provato
   il 17/10 con un finto server: uscita a 0,29 s, server ucciso), e un SIGTERM a `dev.py` lasciava il server orfano.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-10».
+  - Prova (19/10): `1bd8dc332`, entrato in `a38d6bdfe`; CHANGELOG `75a1107a7`.
 - ✅ **Z-11 · Lock dei job tra processi (flock) per più worker** — basso; coordinatore, 15/10 (D-Z3-3). **Chiusa il
   17/10 col lotto Z-11** (il commit è del coordinatore; decisione notturna N71, da rivedere col developer).
   - Dove c'è `fcntl`, ogni giro prende `<data_dir>/.scheduler.lock` (`scheduler/run_lock.py`) prima di leggere lo
@@ -7197,12 +7203,14 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   `not_leader`, e la spinta del ritorno aspettava il giro del leader, entro 60 s. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra processi:
   analisi».
+  - Prova (19/10): `2db7edd68`, entrato in `c5e3c199d`; CHANGELOG `47405701f`.
 - ✅ **Z-12 · `admin/filesystem`: il commento di `scheduler_state.json`** — minimo, doc; docs-writer di Z, 16/10
   (Z7c-2). **Chiusa il 16/10 col lotto Z-12** (il commit è del coordinatore): nelle quattro lingue, a mano e senza
   stamp, il commento dice l'ultima esecuzione e il nuovo tentativo previsto («Scheduled syncs: last run, pending
   retry»); in `filesystem.es.md` ora è in spagnolo. Era: diceva solo «Last run of the scheduled syncs», mentre da Z7b il
   file tiene anche i rimandati, il nuovo tentativo e l'attesa dopo i fallimenti. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z7c-2», passo 4, e «Z-12».
+  - Prova (19/10): `f561aec07`, entrato in `ebe9eb346`.
 - ✅ **Z-13 · Dopo un recupero dei prezzi la pagina aperta non si ricarica da sola** — basso; docs-writer di Z, 16/10
   (Z5). **Chiusa il 16/10 col lotto Z-13** (commit `9d19c2093`; Z-13b, per il vincolo di Y11, nel checkpoint
   successivo): a fine recupero il frontend manda `{kind: 'prices'}` sul bus del portafoglio, e il Dashboard e la pagina
@@ -7212,6 +7220,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   alza solo un contatore non reattivo): la pagina già sullo schermo mostrava le cifre nuove al prossimo caricamento o
   con «Aggiorna». Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z5 —
   codice» e «Z-13».
+  - Prova (19/10): entrato in `12cd3c2e0` con Z5; Z-13b `f83ab0c5b`, entrato in `26dda1a26`.
 - ✅ **Z-14 · Le pagine di un asset e di un cambio non vedono un recupero dei prezzi** — basso; docs-writer di Z, 16/10
   (Z-13). **Chiusa il 17/10 col lotto Z-14** (il commit è del coordinatore): `TimeSeriesStore.markStale()` tiene i
   punti e fa chiedere di nuovo la lettura successiva, anche dove ci sono dati (le risposte riempiono all'indietro i
@@ -7220,6 +7229,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   un cambio d'intervallo, chiede di nuovo, una volta. Una pagina già aperta resta com'è: Z-14b. Era: un intervallo
   già caricato nella sessione tornava dalla cache finché non si premeva «Aggiorna» su quella pagina. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-14 — analisi».
+  - Prova (19/10): `1f4986c70`, entrato in `2765773f5`; CHANGELOG `6e02e56ec`.
 - **Z-14b · Una pagina dei prezzi o dei cambi aperta durante un recupero non si ricarica da sola** — basso, UX;
   Z, 17/10 (Z-14). Con Z-14 i negozi dei prezzi e dei cambi diventano stale su `{kind: 'prices'}` e la lettura
   successiva chiede di nuovo; ma una pagina già aperta (lista e dettaglio degli asset, lista e dettaglio dei cambi)
@@ -7230,6 +7240,8 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   negozio tiene. Decisione di UX del developer, fra le domande del mattino del coordinatore; il dettaglio asset è
   ora di Y. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-14 — analisi», punto B.
+  - Stato (19/10): piano pronto (piano 06, «Z-14b + Z-15 — piano per il mattino»), non partito: aspetta il sì del
+    developer.
 - **Z-15 · Dopo un recupero dei prezzi i pannelli di rischio e dei lotti restano indietro** — basso; coordinatore e Y,
   16/10 (Z-13b, vincolo Y11). La ricarica in background di Z-13 chiede di nuovo solo il report della pagina: non tocca
   `refreshVersion` né `requestPortfolioRefresh()`, che sono l'«Aggiorna» dell'utente e con Y11 farebbero girare
@@ -7237,6 +7249,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   finché non si ricaricano. Da decidere con Y dopo Y11: per esempio i pannelli si ricaricano da soli su
   `{kind: 'prices'}`, fuori da `pageBusy`. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-13», passo 6.
+  - Stato (19/10): con Z-14b, piano pronto e non partito: aspetta il sì del developer.
 - ✅ **Z-16 · `admin/filesystem`: l'albero tradotto è indietro** — minimo, traduzione; Z, 16/10 (Z-12). **Chiusa il
   17/10 a mano** (il commit è del coordinatore; via del 17/10 ~05:32, senza stamp): gli alberi IT, FR ed ES hanno le
   tre righe (`backups/`, `secrets/`, `instance.key`), con la colonna dei commenti allineata all'inglese, e i nove
@@ -7244,6 +7257,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   di Aphra è del 10/10): il prossimo giro lo chiude. Era: in `filesystem.es.md` nove commenti in inglese, e i tre
   alberi senza le tre righe aggiunte in inglese. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-16».
+  - Prova (19/10): `3d9b30433`, entrato in `737972ef5`.
 - ✅ **Z-17 · `developer/backend/scheduler.md`: «The backend does not validate these values»** — minimo, doc;
   docs-writer di Z, 16/10 (Z-5). **Chiusa il 16/10 col mini-lotto Z-17** (il commit è del coordinatore): la frase dice
   ora che `PATCH /api/v1/settings/global/bulk` controlla ogni valore con `validate_global_setting_value()` contro
@@ -7251,6 +7265,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   valori salvati prima del controllo o scritti a mano. Era: diceva che il backend non valida e che i limiti li fa
   rispettare solo il dialogo, falso da `84d9e3360` (9/10). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-17».
+  - Prova (19/10): `e6f152622`, entrato in `4f0a5d323`.
 - ✅ **Z-18 · Il Dashboard si dichiara «occupato» durante la ricarica dopo un recupero dei prezzi** — basso,
   accessibilità; Y tramite il coordinatore, 16/10 (Z-13, P3 di Y11). **Chiusa il 16/10 col lotto B** (il commit è del
   coordinatore): dopo un recupero il Dashboard ricarica con `loadAll(false, false, {background: true})`, che non accende
@@ -7260,6 +7275,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   i due casi «reload in background» di `page-busy.spec.ts` attendono ora la radice a `false`. Era: la radice passava
   a `aria-busy="true"` e un lettore di schermo annunciava «occupato» per un semplice aggiornamento dei prezzi.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto B».
+  - Prova (19/10): `1b46178bd` (lotto B), entrato in `30483ec38`; CHANGELOG `4e233fe5b`.
 - ✅ **Z-19 · N58: due funzioni di produzione che servono solo ai test** — basso; coordinatore (da H-22), 16/10.
   **Chiusa il 16/10 col lotto A** (il commit è del coordinatore): tolte `reset_provider_cooldowns()`,
   `reset_shutdown_budget_state()` e `Cooldowns.clear()`; i test mettono un `Cooldowns` nuovo al posto di
@@ -7267,6 +7283,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   SDB-032 tolto). `Cooldowns.reset(key)` resta, eccezione di N58 scritta nel docstring: nessun metodo pubblico dà a
   PCD-011 lo stesso stato pulito. `lint --dead-code` non segnala più le due funzioni.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto A», decisione N-ZA-6.
+  - Prova (19/10): `a43502298` (lotto A), entrato in `0f55265a1`.
 - ✅ **Z-20 · Disaccoppiare `zodios-client` dai moduli con le rune** — basso; coordinatore, 16/10 (riga J-26, assegnata
   a Z). **Chiusa il 17/10 col lotto Z-20** (il commit è del coordinatore; H e J hanno scelto): il client delle API e
   l'ingresso della sonda non importano più moduli con le rune. `instanceBlock` è diviso in `instanceBlockState.ts`
@@ -7277,12 +7294,14 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   tiene vero, da `$lib/api` e dall'ingresso della sonda. Era: dal 16/10 11:18 (Z5) il ponte moriva con
   `rune_outside_svelte`, e J l'aveva riparato compilando le rune (`985b10cbd`). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-20 — analisi».
+  - Prova (19/10): `3235837ad`, entrato in `3f654c4da`.
 - ✅ **Z-21 · N58: altre quattro funzioni di Z usate solo dai test** — basso; Z, 16/10 (lotto A, `lint --dead-code`).
   **Chiusa il 17/10 col lotto Z-21** (il commit è del coordinatore): tolte `cooldown_snapshot()`, la proprietà
   `ShutdownWatchdog.armed_at`, `current_shutdown_watchdog()` e `Activity.is_busy()`, con le due menzioni del runner. I
   test leggono l'istanza in uso, il `deadline`, `shutdown_budget._watchdog` e `busy_reasons()`; nessun caso tolto.
   `lint --dead-code` non le segnala più. Nata come Z-20, rinominata il 16/10 (il numero era già di J-26). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-21».
+  - Prova (19/10): `e05b231ff`, entrato in `ffd58ffbd`.
 - ✅ **Z-22 · `instanceBlock.svelte.ts`: un ascoltatore in più a ogni aggiornamento a caldo** — basso, solo sviluppo;
   H, 17/10 (revisione di Z-20). **Chiusa il 17/10 col lotto Z-22** (il commit è del coordinatore): ogni copia della
   faccia ferma la precedente passandosi la funzione per `import.meta.hot.data`; la build toglie il blocco. La riga
@@ -7291,6 +7310,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   passaggio sempre 1). Era: la faccia si iscriveva a `instanceBlockState` all'import, e a ogni aggiornamento a caldo
   del file la copia vecchia restava iscritta. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-22».
+  - Prova (19/10): `d49263b0e`, entrato in `22d46da6e`.
 - **Z-23 · Un aiuto comune per i lock su file (`flock`)** — basso, dopo la 1.3; Z, 17/10 (Z-11, N-Z11-4). Il modello
   «`LOCK_EX|LOCK_NB`, `O_NOFOLLOW`, `0o600`, ripiego per processo senza `fcntl`» è ora in cinque posti:
   `instance_backup/jobs.py` (`_RunLock`), `instance_backup/apply.py`, `db/post_migration`, `brim_provider.py` e
@@ -7319,6 +7339,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     (`#bulk-request-limits`).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-25 — un tetto alle
   richieste di massa di prezzi e cambi: analisi».
+  - Prova (19/10): `4b711e803`, entrato in `d0bc7a547`; CHANGELOG `282c583b5`.
 - ✅ **Z-26 · L'attesa del lock fra processi dello scheduler non ha un tempo massimo** — basso; E (R13-SEC8), via
   coordinatore, 17/10. **Chiusa il 17/10 col lotto Z-26** (il commit è del coordinatore; decisione notturna N79, da
   rivedere col developer).
@@ -7330,6 +7351,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   fermava i giri degli altri, e `wake-sync` rispondeva 409 a chi arrivava dopo. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-26 — l'attesa del lock fra
   processi senza tempo massimo: analisi».
+  - Prova (19/10): `e9999a11a`, entrato in `8c362c1f3`; CHANGELOG `8850fe814`.
 - ✅ **Z-27 · Il web app manda una pagina intera in una richiesta di massa (per Y e X)** — basso, dopo Z-25; Z, 17/10
   (Z-25, N77; via coordinatore).
   - La lista asset (`fetchAllPriceData` in `routes/(app)/assets/+page.svelte`) manda una voce per asset in un solo
@@ -7349,6 +7371,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-25 — un tetto alle
   richieste di massa di prezzi e cambi: analisi», «Z-27 — il web app e i tetti delle richieste di massa: analisi» e
   «Z-27 — le richieste di massa divise in lotti: lavoro».
+  - Prova (19/10): `8d236fa11`, entrato in `726d90d72`; CHANGELOG `f1786a883`.
 - **Z-29 · Una scheda della lista asset carica lo storico giornaliero intero** — **alto** (coordinatore, 17/10, da
   R13-SEC9-2 di E: «it's the real cure, post-1.3»), progetto, dopo la 1.3; Z, 17/10 (dall'analisi di Z-27).
   - Su «All» la lista chiede per ogni asset tutti i giorni dal 2000 (~9 800 punti): 300 asset sono ~2,9 milioni di
@@ -7361,6 +7384,9 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     backend, Z-29b lista (X). In attesa della decisione.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-27 — il web app e i tetti
   delle richieste di massa: analisi» e «Z-29 — una scheda della lista asset e lo storico intero: analisi».
+  - Stato (19/10): analisi fatta e (A) approvata (N90, 17/10); Z-29a sospesa il 19/10 con gli ampliamenti che il
+    developer sta leggendo. I rossi scritti sono parcheggiati come patch nella cartella di sessione di Z
+    (`files/parked/`).
 - ✅ **Z-28 · Due file di lock aperti con `open()`, che segue un symlink** — basso, sicurezza; Z, 17/10
   (dall'analisi di Z-23; via coordinatore, che l'ha assegnata). **Chiusa il 17/10 col lotto Z-28** (il commit è del
   coordinatore).
@@ -7371,6 +7397,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     Revisori: W (BRIM) e H (post-migrazione).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-28 — due file di lock
   aperti con `open()`».
+  - Prova (19/10): `3a3d5ab1c`, entrato in `2b9786ae5`; CHANGELOG `11a6f4ea1`.
 - ✅ **Z-30 · Le righe di prezzi e cambi già salvate prima del 1900** — basso; coordinatore, 17/10 (X-R65, decisione
   D3). **Chiusa il 17/10 col lotto Z-30** (decisione: strada (a); il commit è del coordinatore; revisore MF).
   - Da X-R65 (N83) le scritture le rifiutano, ma una riga già nel database resta: il riempimento dei prezzi parte dal
@@ -7382,6 +7409,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     ~740 000. I riscaldamenti finiti restano com'erano. I cambi non camminano dalla prima riga: fuori.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «X-R65 (N83) — date assurde
   nelle scritture manuali di prezzi e cambi: analisi» e «Z-30 — le righe salvate prima del 1900: lavoro».
+  - Prova (19/10): `501375cdc`, entrato in `fb514073b`; CHANGELOG `93065bc7c`; seguito `06ec7d443` in `80cef0e43`.
 - **Z-31 · La query dei prezzi non limita l'inizio visibile** — basso, residuo di Z-30, **dopo la 1.3**
   (coordinatore, 17/10); Z, 17/10 (nota di test-author).
   - `get_prices_bulk` taglia solo la fine (`latest_range_end()`). Un intervallo chiesto a mano prima del 1900 su un
@@ -7405,6 +7433,8 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     di qualità dei dati. Parere: (c) nella 1.3 se serve, (b) dopo.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «GBp — i dividendi Yahoo e
   `quote_base_quantity`: verifica».
+  - Stato (19/10): (c) ✅ `aa9e07544`, entrato in `46ea09b02`, CHANGELOG `22b9b90ce`; (a) e (b) restano per dopo la 1.3.
+    La migrazione 010 di (c) è in discussione: piano 06, sezione «Z-33 ridotta».
 - ✅ **Z-33 · I prezzi Yahoo delle borse a est di UTC salvati un giorno prima** — **alto**, dati; Z, 17/10 (trovato da
   test-author scrivendo la guardia di Z-32, confermato da Z e dal coordinatore). Proprietario Z; X rivede il plugin.
   Nella 1.3, subito dopo il checkpoint di Z-32 (c).
@@ -7420,7 +7450,15 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     corrente. **Chiusa il 17/10 col lotto Z-33** (il commit è del coordinatore; revisori X, H, MF, W).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-33 — … analisi» e
   «Z-33 — … lavoro».
-- **Z-36 · `tzdata` da PyPI: un server senza database dei fusi non risolve il fuso della borsa** — basso, ambiente,
+  - Prova (19/10): `60170aae5`, entrato in `51b5c8db1`; CHANGELOG `b8bcc8cd2`; seguiti `79265b1a0` (dev `e20055213`) e
+    `b5da2277d` (dev `d01a13b10`); devWiki `f74229303`. **19/10: riduzione decisa dal developer** (solo la correzione
+    del plugin, niente riparazione né colonne): analisi «Z-33 ridotta» nel piano 06; finché non entra, la riparazione
+    resta nel codice.
+  - Z-33r (19/10, via del coordinatore): tolte la riparazione (passo 0 e controllo D″ nel refresh, aiuti di
+    ridatazione), la colonna `exchange_timezone`, il segno e la migrazione 011; resta la correzione del plugin. Guida
+    per i DB già alla 011: piano 06, sezione «Z-33r».
+- **Z-36 · `tzdata` da PyPI: un server senza database dei fusi non risolve il fuso della borsa** — minimo (era basso
+  fino a Z-33r), ambiente,
   **domanda per lo sviluppatore**; Z, 17/10 (dalla revisione di H a Z-33, archiviato su richiesta del coordinatore).
   - Su un host senza database dei fusi (Windows fuori da Docker, un container minimo) o con un nome che tzdata non ha,
     `exchange_zone()` dà None: un'assegnazione Yahoo ancora segnata dalla migrazione 011 non scrive nulla a ogni giro.
@@ -7430,6 +7468,9 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     decisione dello sviluppatore. Nota (docs-writer, 17/10): pandas 3.0.5 dichiara `tzdata` per `win32`, ma il
     `Pipfile.lock`, risolto su macOS, non lo porta: su Windows c'è o no a seconda di come si è installato.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro», passo 12.
+  - Stato (19/10): con la riduzione di Z-33 resta solo la data del valore corrente (in UTC senza fusi); vedi l'analisi
+    «Z-33 ridotta» e la P-4 del coordinatore (`tzdata` nell'immagine). Con Z-33r l'avviso sta nel plugin
+    (`_exchange_zone`) e dice che il valore corrente è datato in UTC.
 - **Z-35 · Le chiusure Yahoo salvate con la rettifica del giorno in cui sono state lette** — medio, dati, **dopo la
   1.3**, decisione dello sviluppatore; proprietari X e MF; Z, 17/10 (trovato nell'analisi di Z-33, archiviato dal
   coordinatore).
@@ -7439,14 +7480,17 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   - Le metriche di rendimento possono contare due volte i dividendi: già nei prezzi rettificati e negli eventi.
   - Da decidere: `auto_adjust=False` (prezzi di borsa veri, split a parte) e la riscrittura della storia.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro».
-- **Z-34 · Il rapporto (C) delle righe Yahoo rimaste spostate** — basso, dati, **dopo la 1.3**; Z, 17/10 (decisione
-  N86, D4).
+- ✅ **Z-34 · Il rapporto (C) delle righe Yahoo rimaste spostate** — basso, dati, **dopo la 1.3**; Z, 17/10 (decisione
+  N86, D4). **Chiusa il 19/10 come superata** (D7, via del coordinatore): con Z-33r non c'è più riparazione, tutte le
+  righe salvate prima restano spostate per decisione del developer, e un rapporto non ha più oggetto.
   - La ridatazione di Z-33 avviene al primo giro di ogni assegnazione yfinance segnata dalla migrazione 011. Restano
     spostate le righe degli asset la cui assegnazione yfinance è stata tolta prima dell'aggiornamento, o prima del
     suo primo giro dopo; e quelle di un cambio di identificativo fra fusi di segno diverso prima di quel giro.
   - Proposta: un comando che le elenca (asset, righe `yfinance` senza assegnazione o col segno ancora presente,
     domeniche senza sabati come indizio) e, con la rete, le ridata con la stessa regola.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro».
+  - Stato (19/10): con la riduzione di Z-33 (nessuna riparazione) il rapporto perde il suo oggetto; chiuderla o tenerla
+    è una domanda nell'analisi «Z-33 ridotta».
 
 ## B · Backup e Docker (fase 01)
 
