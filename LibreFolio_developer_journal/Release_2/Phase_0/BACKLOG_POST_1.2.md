@@ -5997,6 +5997,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `LOT_QUANTITY_FRACTION_DIGITS` (`lotChartShared.ts`, C-97c-2). Se la colonna cambia scala, ognuno va trovato a mano. Cura: una costante
   in `frontend/src/lib/utils/core/` accanto a `formatPrice`, letta da tutti (i lotti la importano). Dopo la 1.3: tocca le aree TR, IW, BK
   e DV. Dettagli: piano 04, sezione «C-97c-3».
+  - **Nello stesso giro** (Y, 17/10, revisione DV di C-97c-3, via il coordinatore): la coppia `priceFractionDigits` + formattatore di
+    valuta è ripetuta in 5 componenti: `components/assets/AssetTable.svelte:220`, `features/dashboard/ExposureTable.svelte:160`
+    (`formatUnitPrice`), `features/brokers/lots/LotCustodyModal.svelte:97`, `features/brokers/lots/LotWacPriceChart.svelte:528`,
+    `features/transactions/wac/WacPreviewSection.svelte:315`. Cura: un aiuto solo in `currencyFormat.ts`, proposta di Y
+    `formatCurrencyPrice(value, currency, {minDecimals, floorDecimals, sensitivity})`, coi rossi Vitest dei cinque formati di oggi
+    (aree AF, DV, BK, TR).
 - **W-B79 · «Promuovi coppia» apre la modale d'unione anche quando differiscono solo data o costo** — minimo, chiarezza; W, 17/10
   (docs-writer di W-B70). `onPromotePair` (`frontend/src/routes/(app)/transactions/+page.svelte:392-402`) conta come divergenza anche
   data e costo base, che `PromoteMergeModal` non offre più dal maggio 2026 (SP-C Step 5): la modale si apre senza campi e il corpo dice
