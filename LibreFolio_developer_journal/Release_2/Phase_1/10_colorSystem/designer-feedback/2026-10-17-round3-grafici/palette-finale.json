@@ -1,0 +1,226 @@
+{
+ "types": {
+  "STOCK": [
+   "#7041C6",
+   "#B69AF0"
+  ],
+  "ETF": [
+   "#2459B8",
+   "#82ACF8"
+  ],
+  "BOND": [
+   "#536A9E",
+   "#9BAED8"
+  ],
+  "CRYPTO": [
+   "#B87916",
+   "#E8BD69"
+  ],
+  "FUND": [
+   "#5147B8",
+   "#9280FF"
+  ],
+  "HOLD": [
+   "#5D687B",
+   "#C6D0E0"
+  ],
+  "CROWDFUND": [
+   "#8B547D",
+   "#D5A0C7"
+  ],
+  "COMMODITY": [
+   "#B85E45",
+   "#E99A82"
+  ],
+  "REAL_ESTATE": [
+   "#96602C",
+   "#D6A36C"
+  ],
+  "INDEX": [
+   "#A33D79",
+   "#E58BB9"
+  ],
+  "OTHER": [
+   "#727B87",
+   "#A9B0BB"
+  ],
+  "Liquidity": [
+   "#3F628C",
+   "#639BC0"
+  ]
+ },
+ "sectors": {
+  "Industrials": [
+   "#586579",
+   "#ACC6DA"
+  ],
+  "Technology": [
+   "#2459B8",
+   "#82ACF8"
+  ],
+  "Financials": [
+   "#6748A8",
+   "#B9A0EB"
+  ],
+  "Consumer Discretionary": [
+   "#8B4F9D",
+   "#D2A0E0"
+  ],
+  "Health Care": [
+   "#2878A8",
+   "#7CC0E8"
+  ],
+  "Real Estate": [
+   "#A45D2A",
+   "#DDA16F"
+  ],
+  "Basic Materials": [
+   "#A84C36",
+   "#E18E7B"
+  ],
+  "Energy": [
+   "#B27A16",
+   "#E7BD69"
+  ],
+  "Consumer Staples": [
+   "#8B647A",
+   "#C6A2B6"
+  ],
+  "Telecommunication": [
+   "#5147B8",
+   "#9280FF"
+  ],
+  "Utilities": [
+   "#526F9A",
+   "#9CB8E3"
+  ],
+  "Corporate Bonds": [
+   "#993D79",
+   "#E58BB9"
+  ],
+  "Government Bonds": [
+   "#263F78",
+   "#7A93CB"
+  ],
+  "Other": [
+   "#727B87",
+   "#A9B0BB"
+  ],
+  "Liquidity": [
+   "#3F628C",
+   "#639BC0"
+  ],
+  "Unknown": [
+   "#718C9F",
+   "#83939D"
+  ]
+ },
+ "countries": [
+  [
+   "#2459B8",
+   "#82ACF8"
+  ],
+  [
+   "#7041C6",
+   "#B69AF0"
+  ],
+  [
+   "#A84C36",
+   "#E18E7B"
+  ],
+  [
+   "#B27A16",
+   "#E7BD69"
+  ],
+  [
+   "#2878A8",
+   "#7CC0E8"
+  ],
+  [
+   "#993D79",
+   "#E58BB9"
+  ],
+  [
+   "#526F9A",
+   "#9CB8E3"
+  ],
+  [
+   "#8B4F9D",
+   "#D2A0E0"
+  ],
+  [
+   "#A45D2A",
+   "#DDA16F"
+  ],
+  [
+   "#5147B8",
+   "#9280FF"
+  ],
+  [
+   "#5D687B",
+   "#C6D0E0"
+  ],
+  [
+   "#8B647A",
+   "#C6A2B6"
+  ],
+  [
+   "#263F78",
+   "#7A93CB"
+  ],
+  [
+   "#727B87",
+   "#A9B0BB"
+  ]
+ ],
+ "geo": {
+  "light": [
+   "#E9EFF8",
+   "#C8D7EF",
+   "#A1BCE4",
+   "#7798D0",
+   "#4E72B3",
+   "#2B477F"
+  ],
+  "dark": [
+   "#202A3A",
+   "#293B57",
+   "#36527B",
+   "#456BA2",
+   "#5D85C2",
+   "#82A8E2"
+  ]
+ },
+ "geo_nodata": {
+  "light": "#D5D9E0",
+  "dark": "#343B46"
+ },
+ "correlation": {
+  "light": {
+   "neg": "#C43D4D",
+   "zero": "#8795A8",
+   "pos": "#2459B8"
+  },
+  "dark": {
+   "neg": "#FF8995",
+   "zero": "#526174",
+   "pos": "#82ACF8"
+  }
+ },
+ "correlation_text": [
+  "#000000",
+  "#FFFFFF"
+ ],
+ "pac_ideal": {
+  "light": "#8C929E",
+  "dark": "#868594"
+ },
+ "kpi_book_value": {
+  "light": "#2459B8",
+  "dark": "#82ACF8"
+ },
+ "kpi_cash": {
+  "light": "#3F628C",
+  "dark": "#639BC0"
+ }
+}

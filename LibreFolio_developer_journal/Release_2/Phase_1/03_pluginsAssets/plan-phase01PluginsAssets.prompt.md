@@ -6772,3 +6772,53 @@ aggiunge due `data-testid` nei miei file (`asset-detail-editor-close`, `fx-impor
 - **CHANGELOG** 🐛, due righe: gli asset (cancellazione bloccata, eventi, quattro testi tradotti) e l'API della
   conversione di 0.
 - La multipla di X-R18 resta com'è, come deciso sopra.
+
+### Revisioni (17/10, 20:30–20:45)
+- **Y-34** (Y, `69b2fe74e`): OK. Il quesito di Y su `assetId` di `expectLotsPanelOpen`: toglierlo, nessun chiamante lo passa.
+- **Z-33** (Z, `60170aae5`, plugin e schemi): OK, `provider-errors` 248. Una nota bassa: un fuso dell'indice che non è un
+  nome IANA sostituisce quello valido dei metadati; la cura è `exchange_zone(index) or exchange_zone(info)`.
+
+### X-R45 ✅ — una sola condizione per un tasso di cambio usabile (20:50–21:40)
+
+**Analisi** (in sola lettura, sul HEAD `16e837153`, inviata al coordinatore). L'esposizione vera è più stretta di quanto
+dica il backlog.
+- **Già filtrati**: `convert_bulk` e `period_changes`, con una copia in linea dei limiti. Passando da `convert_bulk`
+  sono quindi al sicuro le conversioni del motore, i lotti, `price_marks` e i valori FX dell'AI Export.
+- **Non filtrati, e calcolano con il valore**:
+  - `pac_allocator/source/fx_quotes.py`: l'ultima riga vince anche se inusabile; uno 0 diventa «mancante» e un `inf` o
+    un valore oltre 1E+14 passa come valore;
+  - `pac_allocator/source/wac.py`: `inf` o un tasso enorme dà un WAC assurdo.
+- **Solo date**: `scheduler/jobs.py` `_last_fx_dates`. La riga inusabile conta come coperta e non si riprende più.
+- **Devono restare grezzi**: il sync (sovrascrittura e conteggio dei cambi), `storage`, il conteggio del delete,
+  l'export del backup, l'impronta della cache del motore (`engine.py:142`), il `source` dell'AI Export.
+
+**Decisione del coordinatore** (20:50): la (A), prima di X-R16 e X-R48b.
+- `usable_fx_rate_clause()` in `db/precision.py` sostituisce le 2 copie, e si aggiunge a `fx_quotes` (anche nella
+  sottoquery dell'ultima data), a `wac` e a `_last_fx_dates`.
+- Una guardia strutturale con la lista dei lettori ammessi.
+- Revisori: MF per i siti del PAC, Z per la riga dello scheduler.
+- La (B), la riparazione all'avvio, è esclusa. Niente riga di conteggio nell'audit all'avvio: semmai dopo la 1.3.
+
+Codice preparato e provato a secco (`xr45_code.py`, 6 file, black e ruff puliti); rossi affidati al test-author.
+- **Rossi** (test-author):
+  - `utils gate-usable-fx-rate`, nuovo e puro, con la condizione e la guardia strutturale sull'AST di `backend/app`:
+    **4 failed**, 3 passed. La guardia nomina i 5 lettori: `convert_bulk`, `_first_rate_days_inside`,
+    `_load_latest_planner_fx_rows`, `_load_wac_fx_rows`, `_last_fx_dates`;
+  - `services bulk-reads-chunked xr45` (SQLite in memoria, PAC con 0, `inf` e 1E+14): **15 failed**, 6 passed;
+  - `services scheduler-last-fx-dates`, nuovo e sul DB della corsia, senza commit: **6 failed**, 3 passed.
+  - Lista dei lettori ammessi (`RAW_FX_RATE_READERS`), 8 coppie modulo/funzione: `backup_fx_rates`,
+    `delete_rates_endpoint`, `_load_rate_source`, `compute_portfolio_fx_cache_identity`, `delete_rates_bulk`,
+    `upsert_rates_bulk`, `_count_actual_changes`, `_stored_rates`.
+- **Codice** (`xr45_code.py`, 6 file): la condizione in `precision.py`, le 2 copie sostituite, e la condizione
+  aggiunta a `fx_quotes` (nella sottoquery dell'ultima data), `wac` e `_last_fx_dates`. black e ruff puliti, l'app si
+  importa.
+- **Verdi**:
+  - `gate-usable-fx-rate` **7**, `bulk-reads-chunked` **35**, `scheduler-last-fx-dates` **9**;
+  - `scheduler-jobs` 73, `fx-core` 42, `bulk-writes-chunked` 69, `portfolio-allocation-source` 98;
+  - `api fx-unit` 64, `period-changes` 60, `fx-pairs-per-query` 6;
+  - `check-orphans` verde; porta libera.
+- **Doc**: `developer/backend/fx/architecture.md`, dove la finestra di `convert_bulk` nomina la condizione, e un
+  paragrafo su chi la usa, chi resta grezzo e la guardia. `mkdocs build` stretta pulita, `check-links` 97.
+- **CHANGELOG** 🐛: i tassi inusabili non arrivano più al PAC, e lo scheduler riprende quei giorni.
+- **Da notare** (test-author): `test_scheduler_jobs.py::test_last_fx_dates_stays_valid_against_live_schema` calcola
+  la data attesa su tutte le righe. Resta giusto finché la corsia non ha tassi inusabili nelle coppie campionate.

@@ -706,7 +706,7 @@ _TEST_ONLY_FOLDERS = frozenset({"__tests__", "__mocks__"})
 
 
 def _counts_for_the_build(path: Path, src_dir: Path) -> bool:
-    """Whether a file under ``frontend/src`` is an input of the bundle, for ``check_frontend_needs_build()`` (H-24).
+    """Whether a file under ``frontend/src`` or ``frontend/static`` is an input of the build, for ``check_frontend_needs_build()`` (H-24, H-52).
 
     Not a generated file (``_BUILD_GENERATED_SOURCES``), nothing hidden — a name starting with ``.`` anywhere below
     ``src``: the Finder's ``.DS_Store``, ``.gitignore``, the i18n catalogue's ``.generated`` stamp —, no Vitest file
@@ -727,7 +727,7 @@ _TOOL_CONTRACT_FOLDERS = (("backend", "app", "schemas"), ("backend", "app", "ser
 TOOL_CONTRACT_INPUTS_MARKER = Path("frontend") / "build" / ".tool-contract-inputs"
 
 #: The listing's format, hashed with it: a record written under another rule no longer matches, at the cost of one build.
-_TOOL_CONTRACT_LISTING = "tool-contract-inputs/1"
+_TOOL_CONTRACT_LISTING = "tool-contract-inputs/2"
 
 
 def _tool_contract_sources(project_root: Path) -> list[Path]:
@@ -758,9 +758,24 @@ def _tool_contract_folders(project_root: Path) -> list[Path]:
     return folders
 
 
+def _frontend_input_names(project_root: Path) -> list[str]:
+    """The frontend's sources and static files the build reads, by name (H-54): what ``_counts_for_the_build`` counts under
+    ``frontend/src`` and ``frontend/static``, but the translation catalogues, which ``cmd_fe_build`` generates after it
+    takes the listing (their presence has a check of its own in ``check_frontend_needs_build``)."""
+    generated = {catalog.relative_to(project_root).as_posix() for catalog in generated_catalogs(project_root)}
+    names = []
+    for root in (project_root / "frontend" / "src", project_root / "frontend" / "static"):
+        for path in root.rglob("*"):
+            name = path.relative_to(project_root).as_posix()
+            if name not in generated and path.is_file() and _counts_for_the_build(path, root):
+                names.append(name)
+    return names
+
+
 def tool_contract_fingerprint(project_root: Path) -> str:
-    """The Tool codegen inputs' names, hashed: an input added, removed or renamed changes it, a ``.DS_Store`` does not (H-24)."""
-    names = sorted(source.relative_to(project_root).as_posix() for source in _tool_contract_sources(project_root))
+    """The names of the build's inputs a date cannot show gone, hashed: the Tool codegen inputs (H-24) and the frontend's
+    sources and static files (H-54). An input added, removed or renamed changes it, a ``.DS_Store`` does not."""
+    names = sorted([*(source.relative_to(project_root).as_posix() for source in _tool_contract_sources(project_root)), *_frontend_input_names(project_root)])
     return hashlib.sha256("\n".join([_TOOL_CONTRACT_LISTING, *names]).encode()).hexdigest()
 
 
@@ -771,11 +786,12 @@ def record_tool_contract_inputs(project_root: Path, fingerprint: str) -> None:
 
 
 def _tool_contracts_changed(project_root: Path, build_time: float) -> bool:
-    """Whether the Tool codecs may be older than their inputs, for ``check_frontend_needs_build()`` (H-24).
+    """Whether the Tool codecs, or since H-54 the bundle, may be older than their inputs, for ``check_frontend_needs_build()`` (H-24).
 
     An input newer than the build has changed. A removed one leaves no date behind: the listing the last successful
-    build recorded (``record_tool_contract_inputs``) tells an input added, removed or renamed apart from what only sits
-    next to the inputs, a ``.DS_Store``, an editor's hidden file, a ``__pycache__``. A build that recorded none, made
+    build recorded (``record_tool_contract_inputs``: the Tool codegen inputs and the frontend's sources and static files)
+    tells an input added, removed or renamed apart from what only sits next to the inputs, a ``.DS_Store``, an editor's
+    hidden file, a ``__pycache__``. A build that recorded none, made
     before the record existed or by ``npm run build`` alone, falls back on the folders' mtimes, which see all of them.
     """
     if any(source.stat().st_mtime > build_time for source in _tool_contract_sources(project_root)):
@@ -813,10 +829,13 @@ def check_frontend_needs_build() -> bool:
         if any(not path.exists() for path in generated_catalogs(project_root)):
             return True
 
-        # Check all source files: the ones the bundle can include (_counts_for_the_build)
-        for src_file in src_dir.rglob("*"):
-            if src_file.is_file() and _counts_for_the_build(src_file, src_dir) and src_file.stat().st_mtime > build_time:
-                return True
+        # Check all source files: the ones the bundle can include (_counts_for_the_build). And the static files, which
+        # adapter-static copies into the build as they are (sw.js, offline.html, icons, fonts), by the same rule: a hidden
+        # one, such as the font cache's .cache_manifest.json rewritten at every check, does not count (H-52)
+        for source_dir in (src_dir, project_root / "frontend" / "static"):
+            for src_file in source_dir.rglob("*"):
+                if src_file.is_file() and _counts_for_the_build(src_file, source_dir) and src_file.stat().st_mtime > build_time:
+                    return True
 
         # Also check config files
         config_files = [
@@ -835,7 +854,8 @@ def check_frontend_needs_build() -> bool:
                 return True
 
         # Tool codecs are derived from these inputs, not from the generated files'
-        # timestamps. New bundled plugins are discovered without a handwritten list.
+        # timestamps. New bundled plugins are discovered without a handwritten list. The recorded listing also sees a
+        # frontend source or static file deleted, renamed or moved in with an old date (H-54)
         if _tool_contracts_changed(project_root, build_time):
             return True
 

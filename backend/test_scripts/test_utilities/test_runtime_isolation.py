@@ -8,8 +8,11 @@ managed lane's cloud smoke kept out of every ``all`` included, H-43),
 shared-backend ownership, the ``exec_unmasked`` spawn wrapper,
 ``mkdocs gallery --no-populate`` reusing a lane's test database, and the
 frontend build's staleness probe (``check_frontend_needs_build``): what it
-counts as an input, and the listing of the Tool codegen inputs a successful
-build records, which it compares instead of the folders' mtimes (H-24r).
+counts as an input, and the listing a successful build records, which it
+compares with the current one — the Tool codegen inputs, in place of their
+folders' mtimes (H-24r), and the inputs of the build under ``frontend/src``
+and ``frontend/static``, so that a file removed, renamed or moved in with an
+old mtime is seen (H-54).
 Among the production guards, a managed path of a test root (the scheduler's
 state and lock files included, Z-24) is refused when a symlink sends it out of
 the root or a hard link makes it the production file itself.
@@ -23,6 +26,7 @@ from __future__ import annotations
 import argparse
 import ast
 import contextlib
+import hashlib
 import inspect
 import json
 import os
@@ -2379,6 +2383,17 @@ class TestGalleryHandsTheSetupToPlaywright:
 # `testing/helpers.ts`, `lib/tests/x.ts`, `lib/__tests__.ts`), and a folder
 # above `src`, in the checkout's own path, hides nothing.
 #
+# `frontend/static` is an input of the build as well (H-52): adapter-static
+# copies it into `frontend/build` as it is — `sw.js`, `offline.html`, the
+# icons, the emoji font and its stylesheet, `lf-flags.css`, the manifest — so a
+# file there edited after the last build leaves the app serving the old copy,
+# as `offline.html` did under an E2E. Its files count by the rule of `src`,
+# read relative to `static`; a hidden one — the Finder's `.DS_Store`, the font
+# cache's `.cache_manifest.json`, which `scripts/update_js_cache.py` rewrites
+# on every check — is never served from the build (H-28), so one newer than
+# the build must not force a rebuild. A folder's mtime counts no more there
+# than in `src`, and a project without `static` answers as before.
+#
 # The project root is a tree under `tmp_path` and every mtime is set with
 # `os.utime`: no clock, no sleep, no repository file touched.
 
@@ -2387,20 +2402,34 @@ BUILD_MTIME = 1_800_000_000
 OLDER_MTIME = BUILD_MTIME - 3600
 NEWER_MTIME = BUILD_MTIME + 3600
 
+#: The files of ``frontend/static`` that ``make_frontend_project`` writes, by their path relative to ``static``, each with
+#: what it is: adapter-static copies them into the build as they are, so each is an input of the build (H-52).
+STATIC_FILES = {
+    "offline.html": "the page the service worker falls back on offline",
+    "sw.js": "the service worker",
+    "icons/apple-touch-icon.png": "an icon, one folder down",
+    "fonts/noto-color-emoji/noto-color-emoji.css": "the emoji font's stylesheet from the JS cache, two folders down",
+}
+
 
 def make_frontend_project(monkeypatch, root: Path) -> dict[str, Path]:
     """A built frontend under the project root ``root``, every input an hour older than the build.
 
-    Inputs: one ``frontend/src`` file, ``frontend/package.json`` and the root
-    markdown files a test may move forward — the two changelogs and a README that
-    is not one. The Tool codegen inputs are absent here, verified rather than
-    assumed: they could otherwise answer either way for the guards below.
-    ``cli_base.get_project_root`` answers ``root`` for the rest of the test.
+    Inputs: one ``frontend/src`` file, ``frontend/package.json``, the files of
+    ``STATIC_FILES`` under ``frontend/static`` (keyed ``static/<path>``, their
+    folders an hour older as well, set last: writing the files moved their mtimes
+    to now) and the root markdown files a test may move forward — the two
+    changelogs and a README that is not one. The Tool codegen inputs are absent
+    here, verified rather than assumed: they could otherwise answer either way
+    for the guards below. ``cli_base.get_project_root`` answers ``root`` for the
+    rest of the test.
     """
+    static = root / "frontend" / "static"
     files = {
         "index.html": root / "frontend" / "build" / "index.html",
         "source": root / "frontend" / "src" / "app.html",
         "package.json": root / "frontend" / "package.json",
+        **{f"static/{relative}": static / relative for relative in STATIC_FILES},
         "CHANGELOG.md": root / "CHANGELOG.md",
         "CHANGELOG.it.md": root / "CHANGELOG.it.md",
         "README.md": root / "README.md",
@@ -2409,6 +2438,8 @@ def make_frontend_project(monkeypatch, root: Path) -> dict[str, Path]:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("synthetic build input\n", encoding="utf-8")
         os.utime(path, (OLDER_MTIME, OLDER_MTIME))
+    for folder in (static, *(entry for entry in static.rglob("*") if entry.is_dir())):
+        os.utime(folder, (OLDER_MTIME, OLDER_MTIME))
     os.utime(files["index.html"], (BUILD_MTIME, BUILD_MTIME))
     monkeypatch.setattr(cli_base, "get_project_root", lambda: root)
     assert [path for path in cli_base._tool_contract_sources(root) if path.exists()] == [], "a Tool codegen input exists under the fake root"
@@ -2419,6 +2450,37 @@ def make_frontend_project(monkeypatch, root: Path) -> dict[str, Path]:
 def frontend_project(monkeypatch, tmp_path) -> dict[str, Path]:
     """``make_frontend_project`` with ``tmp_path`` itself as the project root."""
     return make_frontend_project(monkeypatch, tmp_path)
+
+
+#: Hidden files of ``frontend/static``, by their path relative to ``static``, each with what it is: the build never serves
+#: a hidden file (H-28), so none of them is an input of it (H-52).
+HIDDEN_STATIC_FILES = {
+    "fonts/noto-color-emoji/.cache_manifest.json": "the JS cache's manifest, which scripts/update_js_cache.py rewrites on every check",
+    ".DS_Store": "the Finder's folder metadata",
+    "icons/.DS_Store": "the Finder's folder metadata, one folder down",
+}
+
+#: An input of each group the probe reads besides ``frontend/static``, by its path relative to the project root: the walk
+#: of ``src``, the config files, the Tool codegen inputs.
+INPUTS_BESIDE_STATIC = {
+    "frontend/src/app.html": "a source",
+    "frontend/package.json": "a config file",
+    "frontend/scripts/generate-tools-client.mjs": "a Tool codegen input",
+}
+
+
+def add_newer_static(project: dict[str, Path], relative: str) -> None:
+    """Write ``frontend/static/<relative>`` into a ``make_frontend_project`` tree as if it arrived after the build.
+
+    The file and every folder above it up to ``static``, ``static`` included, end an hour newer than the build: at least
+    every folder its arrival could move, so a probe that still leaves the build up to date does so whichever really moved.
+    """
+    static = project["static/offline.html"].parent  # the project's offline.html sits at the top of frontend/static
+    path = static / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("synthetic static file\n", encoding="utf-8")
+    for moved in (path, *(parent for parent in path.parents if parent.is_relative_to(static))):
+        os.utime(moved, (NEWER_MTIME, NEWER_MTIME))
 
 
 # The translation catalogue is an input of the build too (workstream U, step U-2): `src/lib/i18n/<lang>.json` is
@@ -2501,7 +2563,7 @@ def add_newer_source(project: dict[str, Path], relative: str) -> None:
 
 
 class TestFrontendBuildStaleness:
-    """``cli_base.check_frontend_needs_build()``: the build is stale once any input it bundles is newer than it."""
+    """``cli_base.check_frontend_needs_build()``: the build is stale once any input it bundles or copies is newer than it."""
 
     def test_every_input_older_than_the_build_leaves_it_up_to_date(self, frontend_project):
         assert cli_base.check_frontend_needs_build() is False
@@ -2581,6 +2643,67 @@ class TestFrontendBuildStaleness:
         os.utime(project["source"], (NEWER_MTIME, NEWER_MTIME))
 
         assert cli_base.check_frontend_needs_build() is True, f"frontend/src/app.html is an input of the bundle: {folder}, a folder above src, must not hide it"
+
+    def test_every_static_file_older_than_the_build_leaves_it_up_to_date(self, frontend_project, tmp_path):
+        # Green before H-52 and after it. Its premises keep it from passing on an empty `static`, or on folders the clock
+        # dated: every file and folder there is an hour older than the build.
+        static = tmp_path / "frontend" / "static"
+        entries = sorted(static.rglob("*"))
+        assert sorted(path.relative_to(static).as_posix() for path in entries if path.is_file()) == sorted(STATIC_FILES), "premise: frontend/static holds the files of STATIC_FILES"
+        assert [path for path in (static, *entries) if path.stat().st_mtime >= BUILD_MTIME] == [], "premise: every file and folder of frontend/static is older than the build"
+
+        assert cli_base.check_frontend_needs_build() is False, "H-52: no file of frontend/static is newer than the build, so none of them may make it stale"
+
+    @pytest.mark.parametrize("relative", list(STATIC_FILES))
+    def test_a_static_file_newer_than_the_build_needs_a_rebuild(self, frontend_project, relative):
+        # Red before H-52: the probe never read frontend/static, and an E2E ran against the offline.html of the last
+        # build. Only the file moves, its folders stay an hour older than the build: the answer comes from the file.
+        os.utime(frontend_project[f"static/{relative}"], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True, f"H-52: frontend/static/{relative} ({STATIC_FILES[relative]}) is copied into the build as it is: edited after the build, it must make the build stale"
+
+    @pytest.mark.parametrize("relative", list(HIDDEN_STATIC_FILES))
+    def test_a_hidden_static_file_newer_than_the_build_leaves_it_up_to_date(self, frontend_project, relative):
+        # Green before H-52 and after it: the walk of `static` leaves out what the build never serves, and no folder's
+        # mtime counts there — the file's arrival moved every folder above it, `static` included.
+        add_newer_static(frontend_project, relative)
+
+        assert cli_base.check_frontend_needs_build() is False, f"H-52: frontend/static/{relative} ({HIDDEN_STATIC_FILES[relative]}) is hidden, never served from the build: newer than it, it must not force a rebuild"
+
+    def test_a_hidden_static_file_is_skipped_and_the_scan_goes_on(self, frontend_project):
+        # Red before H-52. The hidden file sits at the top of `static`, the stylesheet two folders down: `rglob` yields the
+        # first before the second, so a rule that ended the walk at a file left out, instead of skipping it, would answer
+        # False here.
+        add_newer_static(frontend_project, ".DS_Store")
+        os.utime(frontend_project["static/fonts/noto-color-emoji/noto-color-emoji.css"], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True, "H-52: frontend/static/fonts/noto-color-emoji/noto-color-emoji.css is newer than the build: leaving frontend/static/.DS_Store out must not end the walk"
+
+    @pytest.mark.parametrize("folder", [".hidden-root", "__tests__"], ids=["a-hidden-folder", "a-tests-folder"])
+    def test_a_folder_above_static_hides_none_of_its_files(self, monkeypatch, tmp_path, folder):
+        # Red before H-52. As in `src`, each path is read relative to `static`: the checkout's own folder, here a hidden
+        # one or one named `__tests__`, hides none of its files.
+        project = make_frontend_project(monkeypatch, tmp_path / folder)
+        assert cli_base.check_frontend_needs_build() is False
+
+        os.utime(project["static/offline.html"], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True, f"H-52: frontend/static/offline.html is copied into the build: {folder}, a folder above static, must not hide it"
+
+    @pytest.mark.parametrize("relative", list(INPUTS_BESIDE_STATIC))
+    def test_without_static_the_other_inputs_still_decide(self, frontend_project, tmp_path, relative):
+        # Green before H-52 and after it. No frontend/static: nothing there can be newer, and the probe answers on its
+        # other inputs — one of each group it reads, wherever the walk of `static` sits among them: a walk that raised on
+        # the missing folder would turn, through the probe's blanket except, every answer after it into False.
+        shutil.rmtree(tmp_path / "frontend" / "static")
+        assert cli_base.check_frontend_needs_build() is False
+
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic build input\n", encoding="utf-8")
+        os.utime(path, (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True, f"{relative} ({INPUTS_BESIDE_STATIC[relative]}) is newer than the build: without frontend/static the probe must still see it"
 
 
 # ── Frontend build staleness — the Tool codegen inputs, their listing recorded at build time (H-24 residual) ──
@@ -2970,6 +3093,280 @@ class TestToolContractInputsWithoutARecord:
         set_mtime(NEWER_MTIME, tool_contract_project.inputs["tool_plugins/demo/c.py"])
 
         assert cli_base.check_frontend_needs_build() is True
+
+
+# ── Frontend build staleness — the inputs of the build in the recorded listing (H-54) ──
+#
+# The walk of `frontend/src` and `frontend/static` compares the dates of the files that exist: a file removed after the
+# build — deleted, or gone with a branch switch — leaves no date behind, so the build still looked fresh while it
+# bundled a module, or copied a file, that no longer exists; and so did a file renamed keeping its mtime, or moved in
+# with an old one (`mv`, `cp -p`, `rsync -a`). The Tool codegen inputs had the same blind spot, closed by the listing a
+# successful build records (H-24r). H-54 puts the inputs of the build in that listing:
+#   - `tool_contract_fingerprint` also hashes the path, relative to the project root, of every file of `frontend/src`
+#     and `frontend/static` that `_counts_for_the_build` counts: one added, removed or renamed there changes it,
+#     whatever the mtimes say. Touching one does not (an input newer than the build is the walk's business), nor does a
+#     file the walk leaves out: a hidden one, a Vitest file, one in `__tests__` or `__mocks__`, one the API sync
+#     regenerates (`_BUILD_GENERATED_SOURCES`);
+#   - the translation catalogues `generated_catalogs` names stay out, though the walk counts them: `cmd_fe_build` takes
+#     the fingerprint before it generates them, so on a fresh clone the listing it records would lack them and every
+#     check after would find them, for one rebuild too many. Whether they exist has a check of its own;
+#   - the format tag becomes `tool-contract-inputs/2`: a listing recorded under the old rule, the Tool codegen inputs
+#     alone, no longer matches, for one rebuild after the upgrade;
+#   - `_tool_contract_sources` stays the Tool codegen inputs alone, whose mtimes `_tool_contracts_changed` reads
+#     (`TestToolContractListing` and the premise of `make_frontend_project` pin it): the inputs of the build join them
+#     in the fingerprint, not in that list;
+#   - without a record nothing changes: the Tool folders' mtimes decide (`TestToolContractInputsWithoutARecord`), and a
+#     file gone from `src` or `static` goes unseen until a build records a listing.
+#
+# The project is `make_tool_contract_project`'s with one more source, two folders down, its listing recorded as
+# `cmd_fe_build` does once the build exists (`record_tool_contract_listing`). Every change leaves each file and folder
+# it involves an hour older than the build: only the listing can tell. `add_tool_file`, `remove_tool_file` and
+# `rename_tool_file` serve any file of the tree, whatever their names say. Red before the cure: a change of the listing
+# in `src` or `static`, and a marker of the old format. Green before it and after: the controls — nothing changed, a
+# file left out arriving or removed, the catalogues generated after the fingerprint.
+
+#: The source an H-54 project adds to ``make_tool_contract_project``'s, two folders down ``frontend/src``, by its path
+#: relative to the project root: ``frontend/src/app.html``, the other one, sits at the top.
+NESTED_SOURCE = "frontend/src/lib/components/App.svelte"
+
+#: The inputs of the build an H-54 project holds, by their path relative to the project root: its two sources and the
+#: files of ``STATIC_FILES``.
+FRONTEND_INPUTS = ["frontend/src/app.html", NESTED_SOURCE, *(f"frontend/static/{relative}" for relative in STATIC_FILES)]
+
+#: Changes to the listing of ``frontend/src`` and ``frontend/static`` that no mtime shows, by id: each leaves the files
+#: and folders it involves an hour older than the build.
+FRONTEND_LISTING_CHANGES = {
+    "a-source-removed": lambda project: remove_tool_file(project.src / "app.html", OLDER_MTIME),
+    "a-nested-source-removed": lambda project: remove_tool_file(project.root / NESTED_SOURCE, OLDER_MTIME),
+    "a-source-renamed": lambda project: rename_tool_file(project.root / NESTED_SOURCE, "Main.svelte"),
+    "a-source-moved-in": lambda project: add_tool_file(project.src, "lib/utils/format.ts", OLDER_MTIME),
+    "a-static-file-removed": lambda project: remove_tool_file(project.static / "offline.html", OLDER_MTIME),
+    "a-nested-static-file-removed": lambda project: remove_tool_file(project.static / "fonts" / "noto-color-emoji" / "noto-color-emoji.css", OLDER_MTIME),
+    "a-static-file-renamed": lambda project: rename_tool_file(project.static / "icons" / "apple-touch-icon.png", "apple-touch-icon-180.png"),
+    "a-static-file-moved-in": lambda project: add_tool_file(project.static, "icons/brokers/scalable.png", OLDER_MTIME),
+}
+
+#: The files the API sync writes under ``frontend/src`` before every build, by their path relative to ``src``, each with
+#: what it is: left out by name (``_BUILD_GENERATED_SOURCES``).
+GENERATED_API_SOURCES = {
+    "lib/api/generated.ts": "the API client the sync regenerates",
+    "lib/api/openapi.json": "the OpenAPI schema the API client is generated from",
+    "lib/api/tool-contracts.openapi.json": "the schema of the Tool contracts",
+    "lib/api/generated-tools.ts": "the Tool codecs the sync regenerates",
+    "lib/api/tool-contract-map.generated.ts": "the map of the Tool contracts the sync regenerates",
+}
+
+#: The files of ``frontend/src`` and ``frontend/static`` the build does not count, so the listing leaves out (H-54), by
+#: their path relative to the project root, each with what it is: those the walk leaves out (H-24, H-52) and those the
+#: API sync regenerates.
+UNLISTED_FRONTEND_FILES = {
+    **{f"frontend/src/{relative}": what for relative, what in NOT_BUNDLED_SOURCES.items()},
+    **{f"frontend/static/{relative}": what for relative, what in HIDDEN_STATIC_FILES.items()},
+    **{f"frontend/src/{relative}": what for relative, what in GENERATED_API_SOURCES.items()},
+}
+
+#: One file left out of each kind, by its key in ``UNLISTED_FRONTEND_FILES``: hidden in ``src`` and in ``static``, a
+#: Vitest file, one in a ``__tests__`` and one in a ``__mocks__`` folder, one the API sync regenerates.
+UNLISTED_SAMPLES = [
+    "frontend/src/.DS_Store",
+    "frontend/static/fonts/noto-color-emoji/.cache_manifest.json",
+    "frontend/src/x.test.ts",
+    "frontend/src/lib/charts/__tests__/fixtures/series.json",
+    "frontend/src/__mocks__/$app/navigation.ts",
+    "frontend/src/lib/api/generated.ts",
+]
+
+#: What the H-24r rule recorded for a ``make_tool_contract_project`` tree: the format tag ``tool-contract-inputs/1``,
+#: then the paths of the Tool codegen inputs alone, relative to the root, sorted, one per line (the listing
+#: ``TestToolContractListing`` pins for that tree), hashed with sha256. Nothing of ``frontend/src`` or ``frontend/static``.
+OLD_FORMAT_FINGERPRINT = hashlib.sha256("\n".join(["tool-contract-inputs/1", *sorted(TOOL_CONTRACT_INPUTS.values())]).encode()).hexdigest()
+
+
+def make_frontend_inputs_project(monkeypatch, root: Path) -> SimpleNamespace:
+    """``make_tool_contract_project`` plus ``NESTED_SOURCE``, every input of the build an hour older than it (H-54).
+
+    Returns that project's ``root``, ``inputs`` and ``folders``, and its ``src`` and ``static``, the two folders whose
+    files the listing now holds. That the walk counts there exactly the files of ``FRONTEND_INPUTS`` is verified, not
+    assumed.
+    """
+    project = make_tool_contract_project(monkeypatch, root)
+    project.src, project.static = root / "frontend" / "src", root / "frontend" / "static"
+    add_tool_file(root, NESTED_SOURCE, OLDER_MTIME)
+    counted = sorted(path.relative_to(root).as_posix() for folder in (project.src, project.static) for path in folder.rglob("*") if path.is_file() and cli_base._counts_for_the_build(path, folder))
+    assert counted == sorted(FRONTEND_INPUTS), "premise: the walk counts exactly the files of FRONTEND_INPUTS"
+    return project
+
+
+@pytest.fixture
+def frontend_inputs_project(monkeypatch, tmp_path) -> SimpleNamespace:
+    """``make_frontend_inputs_project`` with ``tmp_path`` itself as the project root."""
+    return make_frontend_inputs_project(monkeypatch, tmp_path)
+
+
+class TestFrontendInputsListing:
+    """What the listing holds of ``frontend/src`` and ``frontend/static`` (H-54): the files the build counts, by name, the generated catalogues aside."""
+
+    @pytest.mark.parametrize("change", list(FRONTEND_LISTING_CHANGES))
+    def test_an_input_of_the_build_added_removed_or_renamed_changes_the_fingerprint(self, frontend_inputs_project, change):
+        # Red before the cure: the fingerprint hashed the Tool codegen inputs alone.
+        fingerprint = tool_contract_name("tool_contract_fingerprint")
+        before = fingerprint(frontend_inputs_project.root)
+
+        FRONTEND_LISTING_CHANGES[change](frontend_inputs_project)
+
+        assert fingerprint(frontend_inputs_project.root) != before, f"H-54: {change.replace('-', ' ')}, every mtime an hour older than the build: the listing holds the inputs of the build, so it must change"
+
+    def test_touching_the_inputs_of_the_build_keeps_the_fingerprint(self, frontend_inputs_project):
+        # Green before the cure and after it. Names, no mtimes: an input of the build newer than it is the walk's
+        # business, not the listing's.
+        fingerprint = tool_contract_name("tool_contract_fingerprint")
+        before = fingerprint(frontend_inputs_project.root)
+
+        set_mtime(NEWER_MTIME, *(frontend_inputs_project.root / relative for relative in FRONTEND_INPUTS))
+
+        assert fingerprint(frontend_inputs_project.root) == before
+
+    @pytest.mark.parametrize("relative", list(UNLISTED_FRONTEND_FILES))
+    def test_a_file_the_build_leaves_out_keeps_the_fingerprint_present_or_absent(self, frontend_inputs_project, relative):
+        # Green before the cure and after it. Present or absent, one fingerprint: its arrival and its removal alike
+        # leave the listing as it was.
+        fingerprint = tool_contract_name("tool_contract_fingerprint")
+        absent = fingerprint(frontend_inputs_project.root)
+
+        add_tool_file(frontend_inputs_project.root, relative, OLDER_MTIME)
+
+        assert fingerprint(frontend_inputs_project.root) == absent, f"H-54: {relative} ({UNLISTED_FRONTEND_FILES[relative]}) is not an input of the build: it has no place in the listing"
+
+    def test_the_generated_catalogues_present_or_absent_keep_the_fingerprint(self, frontend_catalogue, tmp_path):
+        # Green before the cure and after it; red on a cure that listed them. The walk counts them, plain JSON under
+        # `src`: only their subtraction keeps them out of the listing. Compared here, not through the probe, which a
+        # missing catalogue makes stale for a reason of its own.
+        fingerprint = tool_contract_name("tool_contract_fingerprint")
+        src = tmp_path / "frontend" / "src"
+        catalogues = [frontend_catalogue[f"generated/{language}.json"] for language in CATALOGUE_LANGUAGES]
+        assert all(cli_base._counts_for_the_build(path, src) for path in catalogues), "premise: the walk counts the generated catalogues"
+        present = fingerprint(tmp_path)
+
+        for path in catalogues:
+            remove_tool_file(path, OLDER_MTIME)
+
+        assert fingerprint(tmp_path) == present, "H-54: the generated catalogues are not in the listing: cmd_fe_build takes the fingerprint before it writes them"
+
+    @pytest.mark.parametrize("relative", ["lib/i18n/assets/en.json", "lib/i18n/base/de.json"], ids=["a-subsystem-source", "a-new-language"])
+    def test_a_catalogue_source_beside_the_generated_ones_changes_the_fingerprint(self, frontend_catalogue, tmp_path, relative):
+        # Red before the cure. The near-miss of the subtraction: a source of the catalogue, named like a generated one,
+        # is an input of the build like any other. What stays out is the files `generated_catalogs` names, never a name
+        # or a folder.
+        fingerprint = tool_contract_name("tool_contract_fingerprint")
+        before = fingerprint(tmp_path)
+
+        add_tool_file(tmp_path / "frontend" / "src", relative, OLDER_MTIME)
+
+        assert fingerprint(tmp_path) != before, f"H-54: frontend/src/{relative} is a source of the catalogue, not a generated catalogue: it is in the listing"
+
+
+class TestFrontendInputsRecorded:
+    """``check_frontend_needs_build()`` once a build recorded the listing: a file of ``src`` or ``static`` added, removed or renamed makes it stale, whatever the mtimes say (H-54)."""
+
+    def test_nothing_changed_since_the_recorded_build_leaves_it_up_to_date(self, frontend_inputs_project):
+        record_tool_contract_listing(frontend_inputs_project.root)
+
+        assert cli_base.check_frontend_needs_build() is False
+
+    @pytest.mark.parametrize("change", list(FRONTEND_LISTING_CHANGES))
+    def test_an_input_of_the_build_added_removed_or_renamed_needs_a_rebuild_though_no_mtime_moved(self, frontend_inputs_project, change):
+        # Red before the cure: nothing is newer than the build, and the recorded listing held the Tool codegen inputs alone.
+        record_tool_contract_listing(frontend_inputs_project.root)
+
+        FRONTEND_LISTING_CHANGES[change](frontend_inputs_project)
+
+        assert cli_base.check_frontend_needs_build() is True, f"H-54: {change.replace('-', ' ')} after the build, every mtime an hour older than it: the build bundles or copies frontend/src and frontend/static as they were, and only the listing can tell"
+
+    @pytest.mark.parametrize("relative", UNLISTED_SAMPLES)
+    def test_a_file_left_out_arriving_after_the_build_leaves_it_up_to_date(self, frontend_inputs_project, relative):
+        # Green before the cure and after it.
+        record_tool_contract_listing(frontend_inputs_project.root)
+
+        add_tool_file(frontend_inputs_project.root, relative, OLDER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is False, f"H-54: {relative} ({UNLISTED_FRONTEND_FILES[relative]}) is not an input of the build: its arrival changes nothing"
+
+    @pytest.mark.parametrize("relative", UNLISTED_SAMPLES)
+    def test_a_file_left_out_removed_after_the_build_leaves_it_up_to_date(self, frontend_inputs_project, relative):
+        # Green before the cure and after it.
+        path = add_tool_file(frontend_inputs_project.root, relative, OLDER_MTIME)
+        record_tool_contract_listing(frontend_inputs_project.root)
+
+        remove_tool_file(path, OLDER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is False, f"H-54: {relative} ({UNLISTED_FRONTEND_FILES[relative]}) is not an input of the build: its removal changes nothing"
+
+    @pytest.mark.parametrize("noise", UNLISTED_SAMPLES)
+    def test_a_source_removed_beside_a_file_left_out_still_needs_a_rebuild(self, frontend_inputs_project, noise):
+        # Red before the cure. The probe turns any exception into "up to date", so the two cases above would pass as well
+        # if a file left out made it raise: here one stays, and a source goes that only the listing can see.
+        record_tool_contract_listing(frontend_inputs_project.root)
+        add_tool_file(frontend_inputs_project.root, noise, OLDER_MTIME)
+
+        remove_tool_file(frontend_inputs_project.root / NESTED_SOURCE, OLDER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is True, f"H-54: {NESTED_SOURCE} is gone: leaving {noise} ({UNLISTED_FRONTEND_FILES[noise]}) out must not hide it"
+
+    def test_the_catalogues_generated_after_the_fingerprint_leave_it_up_to_date(self, frontend_catalogue, tmp_path):
+        # `cmd_fe_build`'s own order on a fresh clone: no catalogue when it takes the fingerprint, the four written by the
+        # build, the fingerprint taken before them recorded after it. Green before the cure and after it; red on a cure
+        # that listed them, for one rebuild too many after every fresh clone.
+        fingerprint, record = tool_contract_name("tool_contract_fingerprint"), tool_contract_name("record_tool_contract_inputs")
+        catalogues = [frontend_catalogue[f"generated/{language}.json"] for language in CATALOGUE_LANGUAGES]
+        for path in catalogues:
+            remove_tool_file(path, OLDER_MTIME)
+        taken = fingerprint(tmp_path)
+        for path in catalogues:
+            path.write_text("{}\n", encoding="utf-8")
+        set_mtime(OLDER_MTIME, *catalogues, catalogues[0].parent)
+        record(tmp_path, taken)
+        marker = tmp_path / tool_contract_name("TOOL_CONTRACT_INPUTS_MARKER")
+        assert marker.read_text(encoding="utf-8") == taken, f"premise: the listing taken before the catalogues were written is the one recorded in {marker}"
+
+        assert fingerprint(tmp_path) == taken, "H-54: the generated catalogues are not in the listing"
+        assert cli_base.check_frontend_needs_build() is False, "H-54: the catalogues the build wrote after taking its fingerprint must not make it stale"
+
+    @pytest.mark.parametrize("inputs_of_the_build", [True, False], ids=["beside-inputs-of-the-build", "without-an-input-of-the-build"])
+    def test_a_listing_recorded_in_the_old_format_needs_a_rebuild(self, frontend_inputs_project, inputs_of_the_build):
+        # Red before the cure: OLD_FORMAT_FINGERPRINT is then the fingerprint itself, the proof that it is computed as the
+        # old rule did. Without an input of the build in `src` or `static`, the new listing names the very files the old
+        # one did: only the format tag tells them apart.
+        root = frontend_inputs_project.root
+        if not inputs_of_the_build:
+            for relative in FRONTEND_INPUTS:
+                remove_tool_file(root / relative, OLDER_MTIME)
+            assert [path for folder in (frontend_inputs_project.src, frontend_inputs_project.static) for path in folder.rglob("*") if path.is_file()] == [], "premise: no file is left in frontend/src or frontend/static"
+        record_tool_contract_listing(root)
+
+        write_tool_contract_marker(root, OLD_FORMAT_FINGERPRINT)
+
+        assert cli_base.check_frontend_needs_build() is True, "H-54: a listing recorded under tool-contract-inputs/1, the Tool codegen inputs alone, no longer matches: one rebuild after the upgrade"
+
+    @pytest.mark.parametrize("folder", [".hidden-checkout", "__tests__"], ids=["a-hidden-folder", "a-tests-folder"])
+    def test_a_folder_above_the_checkout_hides_no_input_of_the_build(self, monkeypatch, tmp_path, folder):
+        # Red before the cure. As the walk does (H-24, H-52), the listing reads each file relative to `src` or `static`:
+        # the checkout's own folder, here a hidden one or one named `__tests__`, hides none of them.
+        project = make_frontend_inputs_project(monkeypatch, tmp_path / folder)
+        record_tool_contract_listing(project.root)
+
+        remove_tool_file(project.root / NESTED_SOURCE, OLDER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is True, f"H-54: {NESTED_SOURCE} is gone: {folder}, a folder above the checkout, must not hide it"
+
+    def test_without_static_a_source_removed_still_needs_a_rebuild(self, frontend_inputs_project):
+        # Red before the cure. Without frontend/static the probe answers on its other inputs (H-52), and the listing of
+        # `src` is one of them: a listing that raised on the missing folder would fail the record, here or in a build.
+        shutil.rmtree(frontend_inputs_project.static)
+        record_tool_contract_listing(frontend_inputs_project.root)
+
+        remove_tool_file(frontend_inputs_project.src / "app.html", OLDER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is True, "H-54: frontend/src/app.html is gone: without frontend/static, the listing of src must still tell"
 
 
 # ── Test lane settings — what a lane may set: --lane-setting (H-43) ────────

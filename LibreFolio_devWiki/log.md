@@ -3868,3 +3868,22 @@ area output into runs at the points without a value, one series each with the sa
 the signals panel badge counts distinct dates (`renderedSignalPointCount`).
 Filed: section added to [[concepts/absence-sentinel-vs-nullable-type]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | Yahoo bars of exchanges east of UTC were stored one day early (Z-33)
+Workstream Z, Z-33 (release 1.3, decision N86). yfinance stamps daily bars, dividends and splits at the exchange's
+local midnight, and `_normalize_yahoo_date` took their UTC date: every row of an exchange east of UTC was a day early,
+in every release up to 1.2.1. Fixed with migration 011 (`exchange_timezone`, a `'legacy-utc'` mark) and a one-time
+check in the refresh that moves old rows only where the full history, read as a calendar, confirms the session (D″).
+Replacing the closes from a fresh history (D′) was dropped: they are adjusted as of each fetch (Z-35). Fix `60170aae5`.
+Filed: [[problems/yahoo-bars-dated-one-day-early-east-of-utc]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | The lots chart keeps its price line, and the reports an `api` run removes (Y-30)
+Y-30 added a lot-free market price series, `MARKET_PRICE_HISTORY` / `market_price_history`, which a FAILED replay keeps
+(`_AVERAGE_COST_ANALYSES` became `_REPLAY_FREE_ANALYSES`); the panel draws its price line from it in every analysis
+(N89). The FAILED rule's one uncovered exception (income, fee and tax rates converted before the engine are still
+reported) is noted on the entity page. In the E2E slot, `LF_SETUP_DONE=1` after an `api` run found every broker's
+import history empty: that run's `--force` populate, without `--with-reports`, had emptied `broker_reports`.
+Filed: revision of [[decisions/fifo-v4-gross-net-status-model]], [[entities/lots-analysis-service]]; section added to
+[[problems/direct-playwright-run-in-a-test-lane]].
+Graph: not updated; graphify is not available in this worktree.

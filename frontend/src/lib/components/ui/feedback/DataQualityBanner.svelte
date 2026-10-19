@@ -18,7 +18,7 @@
     import {_} from '$lib/i18n';
     import {AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp, ArrowLeftRight, Coins, ArrowUpRight, RefreshCw, Loader2} from 'lucide-svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-    import {STATUS_TONES} from '$lib/theme/toneClasses';
+    import {DATA_QUALITY_TONE, STATUS_TONES} from '$lib/theme/toneClasses';
 
     /** Matches backend DataQualityIssue DTO. Only fields that are actively populated. */
     export interface DataQualityIssue {
@@ -78,9 +78,10 @@
         return ids.map((id, i) => ({id, name: names[i] ?? `#${id}`}));
     }
 
+    /** The colours of a severity: its state's tint, icon and divider, and its chips and buttons (designer, round 3). */
     function getSeverityStyles(severity: IssueSeverity) {
-        if (severity === 'error' || severity === 'warning') return STATUS_TONES.dataQuality.attention;
-        return STATUS_TONES.dataQuality.info;
+        const tone = DATA_QUALITY_TONE[severity] ?? 'info';
+        return {tone, ...STATUS_TONES.dataQuality[tone], chip: `border ${STATUS_TONES.bannerChip[tone].base} ${STATUS_TONES.bannerChip[tone].hover}`};
     }
 
     function getIcon(severity: IssueSeverity) {
@@ -140,17 +141,18 @@
     }
 </script>
 
-{#snippet issueRow(issue: DataQualityIssue, buttonClass: string)}
+{#snippet issueRow(issue: DataQualityIssue)}
     {@const Icon = getIcon(issue.severity)}
+    {@const rowStyles = getSeverityStyles(issue.severity)}
     {@const CtaIcon = getCtaIcon(issue.cta_action)}
     {@const targets = issue.cta_action === 'navigate_asset' ? assetTargets(issue) : []}
-    <div class="flex flex-col gap-1 text-xs" data-testid="data-quality-issue-{issue.code}" data-severity={issue.severity}>
+    <div class="flex flex-col gap-1 text-xs" data-testid="data-quality-issue-{issue.code}" data-severity={issue.severity} data-tone={rowStyles.tone}>
         <!-- Message + FX context -->
         <div class="flex items-center gap-2 flex-wrap min-w-0">
-            <Icon size={13} class="shrink-0" />
+            <Icon size={13} class="shrink-0 {rowStyles.icon}" />
             <span>{$_(issue.message_i18n_key, {values: issue.message_params ?? {}})}</span>
             {#if (issue.affected_fx_pairs?.length ?? 0) > 0}
-                <span class="inline-flex items-center gap-1 opacity-70 text-[11px]">
+                <span class="inline-flex items-center gap-1 text-[11px]">
                     {#each (issue.affected_fx_pairs ?? []).slice(0, 3) as pair}
                         {@const fx = formatFxPair(pair)}
                         <span class="inline-flex items-center gap-0.5">
@@ -169,7 +171,7 @@
         {#if targets.length > 0}
             <div class="flex flex-wrap gap-1.5 mt-0.5" data-testid="data-quality-nav-assets-{issue.code}">
                 {#each targets as tgt}
-                    <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded {buttonClass} transition-colors font-medium text-[11px] min-w-0 max-w-[16rem]" onclick={() => onaction?.('navigate_asset', String(tgt.id), issue)} title={tgt.name} data-testid="data-quality-nav-asset-{tgt.id}">
+                    <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded {rowStyles.chip} transition-colors font-medium text-[11px] min-w-0 max-w-[16rem]" onclick={() => onaction?.('navigate_asset', String(tgt.id), issue)} title={tgt.name} data-testid="data-quality-nav-asset-{tgt.id}">
                         <ArrowUpRight size={11} class="shrink-0" />
                         <span class="truncate">{tgt.name}</span>
                     </button>
@@ -178,7 +180,7 @@
         {:else if issue.cta_action}
             <div class="mt-0.5">
                 <button
-                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded {buttonClass} transition-colors font-medium text-[11px] shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded {rowStyles.chip} transition-colors font-medium text-[11px] shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
                     onclick={() => handleCta(issue)}
                     disabled={busyCode === issue.code}
                     data-testid="data-quality-cta-{issue.code}"
@@ -201,19 +203,21 @@
     <!-- Grouped mode (dashboard): single foldable container, issues sorted by severity -->
     {@const groupSeverity = getGroupedSeverity()}
     {@const styles = getSeverityStyles(groupSeverity)}
-    <div class="border rounded-xl text-sm {styles.container} flex flex-col" data-testid="data-quality-banner" role="status">
+    <div class="border rounded-xl text-sm {styles.container} flex flex-col" data-testid="data-quality-banner" data-tone={styles.tone} role="status">
         <!-- Header — a toggle that folds/unfolds the whole issue list ("N avviso/i" when collapsed) -->
         <button type="button" class="flex items-center gap-2 font-medium p-4 w-full text-left" onclick={() => (expanded = !expanded)} aria-expanded={expanded} data-testid="data-quality-toggle">
-            {#if errorCount > 0 || warningCount > 0}
-                <AlertTriangle size={16} class="shrink-0" />
+            {#if errorCount > 0}
+                <AlertCircle size={16} class="shrink-0 {styles.icon}" />
+            {:else if warningCount > 0}
+                <AlertTriangle size={16} class="shrink-0 {styles.icon}" />
             {:else}
-                <Info size={16} class="shrink-0" />
+                <Info size={16} class="shrink-0 {styles.icon}" />
             {/if}
             <span class="flex-1 min-w-0">{getHeaderText()}</span>
             {#if expanded}
-                <ChevronUp size={16} class="shrink-0 opacity-70" />
+                <ChevronUp size={16} class="shrink-0" />
             {:else}
-                <ChevronDown size={16} class="shrink-0 opacity-70" />
+                <ChevronDown size={16} class="shrink-0" />
             {/if}
         </button>
 
@@ -223,15 +227,15 @@
                 <!-- Indented under the header: these are the ones the header counts. -->
                 <div class="flex flex-col gap-2.5 px-4 pb-4 ml-6" data-testid="data-quality-actionable">
                     {#each actionableIssues as issue (issue.code + (issue.group_key ?? ''))}
-                        {@render issueRow(issue, styles.button)}
+                        {@render issueRow(issue)}
                     {/each}
                 </div>
             {/if}
             {#if infoIssues.length > 0}
                 <!-- Notes: not counted in the header, so not indented under it either. -->
-                <div class="flex flex-col gap-2.5 px-4 pb-4 opacity-90 {actionableIssues.length > 0 ? 'pt-3 border-t border-current/15' : ''}" data-testid="data-quality-info">
+                <div class="flex flex-col gap-2.5 px-4 pb-4 {actionableIssues.length > 0 ? `pt-3 border-t ${styles.divider}` : ''}" data-testid="data-quality-info">
                     {#each infoIssues as issue (issue.code + (issue.group_key ?? ''))}
-                        {@render issueRow(issue, styles.button)}
+                        {@render issueRow(issue)}
                     {/each}
                 </div>
             {/if}
@@ -243,10 +247,10 @@
         {@const styles = getSeverityStyles(issue.severity)}
         {@const Icon = getIcon(issue.severity)}
         {@const CtaIcon = getCtaIcon(issue.cta_action)}
-        <div class="border rounded-xl px-4 py-2.5 text-xs flex flex-col sm:flex-row items-start sm:items-center gap-2 {styles.container}" data-testid="data-quality-issue-{issue.code}" role="status">
+        <div class="border rounded-xl px-4 py-2.5 text-xs flex flex-col sm:flex-row items-start sm:items-center gap-2 {styles.container}" data-testid="data-quality-issue-{issue.code}" data-severity={issue.severity} data-tone={styles.tone} role="status">
             <!-- Left: icon + message + FX pairs + asset context -->
             <div class="flex items-center gap-2 flex-wrap min-w-0 flex-1">
-                <Icon size={14} class="shrink-0" />
+                <Icon size={14} class="shrink-0 {styles.icon}" />
                 <span>{$_(issue.message_i18n_key, {values: issue.message_params ?? {}})}</span>
                 <!-- FX pairs with flags -->
                 {#if (issue.affected_fx_pairs?.length ?? 0) > 0}
@@ -261,9 +265,9 @@
                         </span>
                     {/each}
                 {/if}
-                <!-- Asset context (dimmed, in parens) -->
+                <!-- Asset context, in parens: smaller, never dimmed by an opacity (designer, round 3) -->
                 {#if (issue.affected_asset_names?.length ?? 0) > 0}
-                    <span class="inline-flex items-center gap-1 text-[11px] opacity-60">
+                    <span class="inline-flex items-center gap-1 text-[11px]">
                         ({issue.affected_asset_names?.slice(0, 2).join(', ')}{(issue.affected_asset_names?.length ?? 0) > 2 ? ` +${(issue.affected_asset_names?.length ?? 0) - 2}` : ''})
                     </span>
                 {/if}
@@ -271,7 +275,7 @@
             <!-- Right: CTA -->
             {#if issue.cta_action}
                 <div class="flex items-center gap-1 self-end sm:self-auto sm:ml-auto">
-                    <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.button} transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed" onclick={() => handleCta(issue)} disabled={busyCode === issue.code} data-testid="data-quality-cta-{issue.code}">
+                    <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.chip} transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed" onclick={() => handleCta(issue)} disabled={busyCode === issue.code} data-testid="data-quality-cta-{issue.code}">
                         {#if busyCode === issue.code}
                             <Loader2 size={13} class="animate-spin" />
                         {:else}

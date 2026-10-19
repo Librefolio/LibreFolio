@@ -99,7 +99,9 @@ def _data_quality_issues(data_quality: DataQualityReport, *, names: dict[int, st
         issues.append(_asset_issue(IssueCode.STALE_PRICE, IssueSeverity.WARNING, message_i18n_key="dataQuality.stalePrice", action="sync_asset_prices", group_key="stale_price", ids=stale, names=names))
     missing = _missing_price_ids(data_quality)
     if missing:
-        issues.append(_asset_issue(IssueCode.MISSING_PRICE, IssueSeverity.ERROR, message_i18n_key="risk.quality.missingPrice", action="navigate_asset", group_key="missing_price", ids=missing, names=names))
+        # A warning, not an error (developer and designer, 17/10): the analysis runs on the other assets, a partial
+        # result still worth reading. The portfolio's MISSING_PRICE, out of the NAV, stays an error.
+        issues.append(_asset_issue(IssueCode.MISSING_PRICE, IssueSeverity.WARNING, message_i18n_key="risk.quality.missingPrice", action="navigate_asset", group_key="missing_price", ids=missing, names=names))
     pairs = _issue_fx_pairs(data_quality)
     no_route = [pair for pair in pairs if pair not in configured_pairs]
     synced = [pair for pair in pairs if pair in configured_pairs and pair in provider_pairs]

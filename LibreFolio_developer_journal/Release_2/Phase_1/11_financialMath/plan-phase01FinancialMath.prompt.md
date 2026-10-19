@@ -3270,3 +3270,90 @@ posizioni è scritta in linea — `price_change_1d = ((corrente − precedente) 
 `|precedente| > 0,01` (`:759`) — accanto a `returns.price_return` e `returns.change_ratio`. Valori: `price_return` fa
 `fine/inizio − 1`, non `(fine − inizio)/inizio`; dopo il quantize a 4 decimali coincidono salvo un pareggio al bordo
 dell'arrotondamento (da provare con un corpus). Proposta: voce MF a sé, dopo J-14, se il coordinatore la vuole.
+
+#### A10 entrato (dev `4753b66f6`); J-14 — l'identità del periodo nella casa (17/10, 20:1x)
+- Coordinatore: A10 **entrato** (dev `4753b66f6`, miei `dddadd359` + `e80766d69`, CHANGELOG 🐛 `e6d3e61e0`); worktree a
+  `e6d3e61e0`, pulito. **GO per J-14**, poi MF-A12. Revisore post-ingresso di A10: J.
+- ✅ **Codice J-14** (nessun cambio di valore): `financial_math/portfolio/period.py` + `period_identity_residual(pnl,
+  ugl_delta, realized, income, fees_taxes, other_result)` (`pnl − (ugl_delta + realized + income − fees_taxes +
+  other_result)`, l'associazione dell'AI Export) e `is_reconciled(residual)` (`|residual| < CONVERSION_DUST`, importata da
+  `native_cash`: nessun ciclo). Chiamanti: `ai_export/components/portfolio_financial._build_portfolio_reconciliation`,
+  `broker_financial._build_broker_reconciliation` (l'import di `CONVERSION_DUST` sostituito da quello della casa), e
+  `portfolio_service.get_positions_contribution` chiama `period_math.period_other_result` (stesso ordine: identico al
+  bit). Versione dei componenti invariata: stesso valore, stessa bandiera calcolata allo stesso modo (devWiki
+  `ai-export-version-bump-once-per-release`, punto 1; approvato dal coordinatore). Doc sviluppatore:
+  `developer/backend/financial_math.md`, mappa del pacchetto (`period.py` … «e il suo residuo»). ruff (anche `I`), black,
+  import a freddo verdi.
+- In corso: test-author `j14-tests` (parità esatta con la copia di oggi, la ricerca d'un caso in cui l'associazione conta,
+  il bordo di `CONVERSION_DUST`, il componente legato alla casa).
+- ✅ **Test J-14** (test-author `j14-tests`): in `test_period_and_unit_costs.py` `TestPeriodIdentityResidual` (parità con la
+  copia di HEAD, `_same_decimal`, 144 casi brevi + 15 625 a molte cifre; l'identità si chiude col suo termine;
+  **l'associazione conta**: con conversioni per divisione — `/1,19533`, `/1,27229` — quattro raggruppamenti alternativi
+  danno `0E-23`, `1E-22`, `4E-23` o l'esponente diverso, dove oggi `6E-23`/`0E-23`: due casi fissati), `TestIsReconciled`
+  (bordo di `CONVERSION_DUST` sui due segni, parità, la costante è quella di `native_cash` e la funzione la segue) e
+  `TestPeriodOtherResultInPositionsContribution` (la copia in linea di `get_positions_contribution` a molte cifre: verde
+  su HEAD per costruzione); in `test_ai_export_components_portfolio_broker_financial.py`
+  `TestReconciliationFromTheHouse` (portafoglio e broker: residuo e bandiera della casa e di oggi su 4 casi a molte
+  cifre, sotto e alla soglia; il componente chiama la casa una volta per costruzione — guardia strutturale). Mutanti:
+  associazione scambiata, `<=`, soglia 1e-8, componente reinlineato (altra o stessa associazione), `period_other_result`
+  riordinato: tutti presi.
+- ✅ **Corsia** (20:23; prodotto tolto `period.py`, `portfolio_service.py`, i due componenti, sha `3e1965c5…` uguale dopo):
+  `financial-math test_period_and_unit_costs` rosso **18** / 26, `ai-export
+  test_ai_export_components_portfolio_broker_financial` rosso **10** / 132 (tutti `AttributeError` sui nomi nuovi di
+  `period`). Verdi: `financial-math` **1523**, quel file **142**, `roi-fifo-utils` **1450**, `portfolio-engine` 41,
+  `services ai-export` intera **1093**. ruff, black, diff-check, `mkdocs build` stretto, `check-links`. Porta libera.
+- **Fuori pista**: `services ai-export` intera lanciata a mano con il carico a 1 minuto a **66** (sopra 50: la regola delle
+  prove leggere); la corsa è passata, ma il controllo del carico andava fatto prima — d'ora in poi solo dagli script con
+  `wait_load`.
+- Backlog: J-14 sta nella sezione di J — non la tocco; al coordinatore la chiusura.
+- ✅ **Slot** (GO 20:32; HEAD `e6d3e61e0`): `api portfolio` **53** passati; porta 6190 libera. Il coordinatore chiude J-14
+  nella sezione di J all'ingresso. Revisione post-ingresso di Z-33 (`60170aae5`, `price_store.redate_provider_rows`):
+  OK; LOW — l'ordine «dal più recente» vale solo per bersagli in avanti (`target > stored`; l'unico chiamante lo
+  rispetta), da dire nella docstring o rifiutare; nit — un commento sul `flush()` per riga (la chiave unica fra gli
+  spostamenti). **CHECKPOINT READY** inviato, FROZEN.
+
+#### J-14 entrato (dev `f44340118`); MF-A12 — la variazione d'un giorno nella casa (17/10, 20:4x)
+- Coordinatore: J-14 **entrato** (dev `f44340118`, miei `8cc5661bc` + `c17e7ba11`), chiusa nella sezione di J (`efef5c876`);
+  worktree a `efef5c876`, pulito. **GO per MF-A12**. La revisione di Z-33 è passata a Z.
+- ✅ **Codice A12** (`portfolio_service.get_summary`, ~:745/:760): `price_change_1d =
+  price_return(prev_price_base, current_price).quantize(0,0001)` (prima `((c − p)/p).quantize(0,0001)`: stessa semantica,
+  segno compreso — `c/p − 1` —, possibile differenza solo a un pareggio d'arrotondamento a 28 cifre);
+  `gain_loss_change_1d_percent = (change_ratio(variazione, valore precedente) × 100).quantize(0,01)` (prima `variazione /
+  |precedente| × 100`: identico al bit, `a / b * 100` è `(a / b) * 100`). La guardia di materialità `|precedente| > 0,01`
+  e gli arrotondamenti di colonna restano al chiamante. ruff, black verdi.
+- In corso: test-author `a12-tests` (parità, ricerca d'un pareggio, guardia del punto di chiamata).
+- ✅ **Test A12, prima stesura** (test-author `a12-tests`): puro `TestDayChangeColumnsFromTheHouse` (percentuale identica al
+  bit su 4 280 casi; variazione di prezzo uguale fuori dai pareggi su 3 360; ricerca dei pareggi; prezzo negativo; prezzo
+  fermo; `change_ratio` non è la guardia di materialità), servizio nuovo `test_financial/test_summary_day_change_house.py`
+  (punto di chiamata, guardia di materialità, il pareggio fino alla colonna).
+- **Fuori pista — il pareggio è reale**: con i prezzi convertiti per divisione `c/p − 1` e `(c − p)/p` differiscono a
+  ogni mossa esattamente a metà della 4ª cifra (USD 200,00 → 202,47 a 1,08: 0,0124 contro 0,0123 di HEAD; il ritorno
+  esatto è 0,01235, la casa arrotonda meglio). Per moltiplicazione o senza conversione: nessuna differenza. Ma sulla riga
+  di un pareggio la colonna % (`change_ratio` sui valori, l'associazione di HEAD) resta 1,23: le due colonne del giorno
+  si separerebbero. E su HEAD, con un prezzo negativo, le due colonne hanno già segni opposti (prezzo `(c−p)/p`, %
+  `variazione/|valore|`). Chiesto al coordinatore: (1, raccomandata) `change_ratio(corrente − precedente, precedente)`
+  per la colonna del prezzo — identica al bit per ogni prezzo positivo, la riga coerente anche ai pareggi, il prezzo
+  negativo prende il segno della mossa; (2) `price_return` com'è ora.
+- Coordinatore (21:08): **opzione 1** (N92). ✅ Codice: `price_change_1d = change_ratio(corrente − precedente,
+  precedente).quantize(0,0001)` (`price_return` non più usata lì); la % invariata. Identica al bit per ogni prezzo
+  positivo (stessa associazione), pareggi compresi; una riga lunga ha le due colonne d'accordo; un prezzo negativo
+  prende il segno della mossa (−10 → −12,5: −25 %, HEAD +25 %), come la %; per un corto la % ha il segno opposto per
+  costruzione (valore, non prezzo). Riga CHANGELOG 🐛 approvata. Test-author `a12-tests` rigira le puntine (pareggio →
+  parità, prezzo negativo → rosso, chiamata di `change_ratio` due volte).
+- ✅ **Test A12 rigirati** (test-author `a12-tests`, N92): puro — prezzi positivi identici al bit su tutta la griglia,
+  pareggi compresi (980 casi di pareggio, ≥100 dove `price_return` arrotonderebbe diverso); `test_the_declared_tie` ora
+  parità (0,0123; `price_return` darebbe 0,0124); prezzo negativo −10 → −12,5 = −0,2500 (HEAD +0,2500), su tutta la
+  griglia negativa il valore di HEAD col segno opposto; prezzo negativo fermo `"0.0000"` (HEAD `"-0.0000"`). Servizio
+  `test_summary_day_change_house.py`: `change_ratio` chiesto due volte (prezzo, poi valore), una sola sotto la guardia di
+  materialità, la riga del pareggio a 0,0123/1,23 (parità), il prezzo negativo −0,2500/−25,00. Tutti i mutanti presi.
+  **Correzione**: «le due colonne d'una riga lunga coincidono anche al pareggio» non vale in generale — con 12,5 unità
+  q·p e q·c arrotondano alla 28ª cifra e la riga dà 0,0123/1,24 (com'era su HEAD: la % non cambia); commento del codice
+  riscritto («stessa associazione: un pareggio arrotonda come prima»).
+- ✅ **Corsia** (21:15; prodotto tolto `portfolio_service.py`, sha `ebb94aa5…` uguale dopo): `financial-math
+  test_returns_rebase_and_ratios` 96 verdi anche su HEAD (parità, per costruzione); `roi-fifo-utils
+  test_summary_day_change_house` rosso **3** / 1 (chiamata assente ×2, segno del prezzo negativo). Verdi:
+  `financial-math` **1543**, `roi-fifo-utils` **1454**, `portfolio-engine` 41. ruff, black, diff-check. Porta libera.
+  Slot chiesto (`files/a12.sh slot`: `api portfolio`).
+- ✅ **Slot** (GO 21:17; HEAD `efef5c876`): `api portfolio` **53** passati; porta 6190 libera. **CHECKPOINT READY** inviato,
+  FROZEN. In coda: revisione di X-R45 (siti del PAC `pac_allocator/source/fx_quotes.py` e `wac.py`, dev `b690c0785`, di X
+  `629304ab3`).

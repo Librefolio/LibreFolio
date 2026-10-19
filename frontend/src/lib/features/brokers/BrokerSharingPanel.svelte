@@ -223,6 +223,7 @@
         owners
             .filter((o) => Math.round(o.share_percentage * 10000) / 100 > 0)
             .map((o) => ({
+                key: o.user_id,
                 name: o.username,
                 percentage: Math.round(o.share_percentage * 10000) / 100,
                 avatarUrl: o.avatar_url ? `${o.avatar_url}?img_preview=64x64` : null,

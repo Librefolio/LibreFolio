@@ -60,8 +60,8 @@ LibreFolio is installable as a **Progressive Web App (PWA)**. This page document
 | `frontend/src/lib/components/layout/HelpMenu.svelte` | Install button logic |
 | `dev.py` → `generate_pwa_icons()` | Icon generation from `logo_square.png` |
 | `frontend/generated-icons.json` | Committed record of the source sha256 and recipe each generated icon set was drawn from: an icon set is redrawn only when it no longer matches |
-| `dev.py` → `stamp_service_worker()` | Writes the `// build:` stamp of `sw.js` from `offline.html` |
-| `backend/test_scripts/test_utilities/test_pwa_assets.py` | Gate: icons, manifest icon entries, `apple-touch-icon` link, `sw.js` stamp |
+| `dev.py` → `stamp_service_worker()` | Writes the `// build:` stamp of `sw.js` from `offline.html`, and only when the stamp changes; run by every docs build and by `./dev.py front build` |
+| `backend/test_scripts/test_utilities/test_pwa_assets.py` | Gate: icons, manifest icon entries, `apple-touch-icon` link, `sw.js` stamp, and how `stamp_service_worker()` and `./dev.py front build` stamp it |
 
 ---
 
@@ -158,16 +158,16 @@ The iOS home-screen icon is `apple-touch-icon.png` (180×180), linked from `app.
 
 Every icon is saved as opaque RGB, with no alpha channel. The logo is resized premultiplied (`RGBa`), so its transparent black pixels do not bleed a dark fringe into its edge, then laid on the background with `Image.alpha_composite`.
 
-The generator runs inside `copy_docs_assets()`, right before `stamp_service_worker()`: on `./dev.py mkdocs build`, `serve` and `deploy`, and when `./dev.py server` or `./dev.py docker build` rebuilds a stale docs site. `./dev.py front build` does not run it. The PNGs are committed, and mirrored into `mkdocs_src/docs/static/icons/`: after changing `logo_square.png`, run `./dev.py mkdocs build` and commit the regenerated icons together with `frontend/generated-icons.json`, which records the sha256 of the logo they were drawn from. The generator redraws only when an icon is missing or when that hash, or `PWA_ICONS_RECIPE` in `dev.py`, no longer matches the record: Pillow does not write the same PNG bytes on every platform, so the decision never looks at the PNGs themselves. A change to the code that draws the icons must therefore bump `PWA_ICONS_RECIPE`, or nothing is regenerated.
+The generator runs inside `copy_docs_assets()`, right before `stamp_service_worker()`: on `./dev.py mkdocs build`, `serve` and `deploy`, and when `./dev.py server` or `./dev.py docker build` rebuilds a stale docs site. `./dev.py front build` does not run it, though it does stamp `sw.js` before building (see the note below). The PNGs are committed, and mirrored into `mkdocs_src/docs/static/icons/`: after changing `logo_square.png`, run `./dev.py mkdocs build` and commit the regenerated icons together with `frontend/generated-icons.json`, which records the sha256 of the logo they were drawn from. The generator redraws only when an icon is missing or when that hash, or `PWA_ICONS_RECIPE` in `dev.py`, no longer matches the record: Pillow does not write the same PNG bytes on every platform, so the decision never looks at the PNGs themselves. A change to the code that draws the icons must therefore bump `PWA_ICONS_RECIPE`, or nothing is regenerated.
 
 !!! note "Icons and the splash screen"
 
     - **Maskable safe zone**: a launcher crops a `maskable` icon to its own shape (circle, squircle…), and only a centred circle of radius 0.40 × size is sure to survive. The logo reaches 0.37 × size, about 0.38 with its antialiased edge, so the crop never bites into it. An `any` icon is shown whole instead, which is why each purpose has its own files.
     - **Beige**: the maskable icons are beige to the edges because `#f5f4ef` is the colour of the Android splash screen (`background_color`), so the cropped icon meets it without a seam. Change both or neither.
     - **Opacity**: Android's splash screen and iOS paint transparent pixels black, so every icon is opaque RGB — no alpha channel and no `tRNS` colour key. That is what keeps black corners off the Android splash and off the iPhone home-screen icon.
-    - **Service-worker stamp**: `stamp_service_worker()` writes `// build: <md5(offline.html)[:8]>` as line 2 of `sw.js`. Any byte change in `sw.js` makes browsers update the worker, so every `offline.html` edit must be restamped (see [Updating the Offline Page](#updating-the-offline-page)).
+    - **Service-worker stamp**: `stamp_service_worker()` writes `// build: <md5(offline.html)[:8]>` as line 2 of `sw.js`. Any byte change in `sw.js` makes browsers update the worker, so every `offline.html` edit must be restamped (see [Updating the Offline Page](#updating-the-offline-page)). It writes `sw.js` only when the stamp changes: with `offline.html` unchanged, `sw.js` keeps its bytes and its modification time. `check_frontend_needs_build()` watches `frontend/static/`, so a rewrite at every docs build would cost a frontend rebuild for nothing. It runs with every docs build (`copy_docs_assets()`) and with `./dev.py front build`, before the npm build, so a build always ships the stamp of the `offline.html` it copies.
 
-    The gate is `backend/test_scripts/test_utilities/test_pwa_assets.py`, a pure pytest module. It reads the committed files and checks the icons are opaque RGB at their exact sizes, the maskable logo stays inside 0.40 × size on the beige, the manifest has the four icon entries, `app.html` links the 180×180 `apple-touch-icon.png`, and the stamp equals `md5(offline.html)[:8]`. Run it with `./dev.py test utils pwa-assets`.
+    The gate is `backend/test_scripts/test_utilities/test_pwa_assets.py`, a pure pytest module. It reads the committed files and checks the icons are opaque RGB at their exact sizes, the maskable logo stays inside 0.40 × size on the beige, the manifest has the four icon entries, `app.html` links the 180×180 `apple-touch-icon.png`, and the stamp equals `md5(offline.html)[:8]`. On copies of `sw.js` and `offline.html` under `tmp_path`, it also runs the stamping: stamping twice leaves `sw.js` untouched, an edited page is restamped on line 2 with the rest of `sw.js` kept, a missing `sw.js` or `offline.html` writes nothing, and `./dev.py front build` stamps before its build command, debug or production. Run it with `./dev.py test utils pwa-assets`.
 
 ---
 
@@ -270,8 +270,8 @@ fetch(request) fails → serve cached /offline.html
 
 ### Updating the Offline Page
 
-1. Edit `frontend/static/offline.html`
-2. Restamp `sw.js` with `./dev.py mkdocs build`, which runs `stamp_service_worker()` (`./dev.py front build` does not)
+1. Edit `frontend/static/offline.html`. Keep its event handlers in its script (`addEventListener`), never an inline `onclick`: the managed profile's report-only policy allows the page's script by its hash, and no hash covers an inline handler (see [Frame Protection and the Report-Only Policy](../architecture/security.md#managed-headers))
+2. Restamp `sw.js` with `./dev.py mkdocs build` or `./dev.py front build`, which both run `stamp_service_worker()`
 3. Commit `sw.js` together with the page: the gate `test_pwa_assets.py` fails while the stamp and the page disagree
 4. Deploy — browser auto-updates SW on next PWA open
 

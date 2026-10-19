@@ -5343,21 +5343,22 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
    > valore corrente) e `_settle_exchange_timezone` prima di ogni scrittura; `PriceStoreOperations.redate_provider_rows`
    > (MF) e `EventStoreOperations.redate_provider_events` (W, con la regola degli split); l'azione `migration-011`.
    > Provata su copie: compilazione, black (dopo aver unito tre righe come vuole il limite di 300), inverso esatto.
-3. ✅ 17/10 ~19:30–20:05 — Rossi del refresh ripinzati da test-author secondo D″: 31 `test_z33_*` rossi sulla stessa
-   verifica di contratto, i 26 esistenti verdi (asset-source-refresh 26 → 57). Il cancello col provider non patchato,
-   **una sola** lettura `"min"` che salta la cache e scrive solo l'intervallo chiesto, i prezzi (seduta in S+1, S ≤
-   D_f − 2, nessuna mossa senza `last_fetch_at`), gli eventi (la storia fresca in S+1 e non in S), il conto delle
-   righe più vecchie nel log (`capture_logs`), i quattro fallimenti che non scrivono nulla (nemmeno `last_fetch_at`),
-   il venerdì giusto che resta e il giovedì spostato che gli cede il posto, i limiti D_f − 2 / D_f − 1, Londra.
+3. ✅ 17/10, prima delle 19:23 — Rossi del refresh ripinzati da test-author secondo D″: 31 `test_z33_*` rossi sulla
+   stessa verifica di contratto, i 26 esistenti verdi (asset-source-refresh 26 → 57). Il cancello col provider non
+   patchato, **una sola** lettura `"min"` che salta la cache e scrive solo l'intervallo chiesto, i prezzi (seduta in
+   S+1, S ≤ D_f − 2, nessuna mossa senza `last_fetch_at`), gli eventi (la storia fresca in S+1 e non in S), il conto
+   delle righe più vecchie nel log (`capture_logs`), i quattro fallimenti che non scrivono nulla (nemmeno
+   `last_fetch_at`), il venerdì giusto che resta e il giovedì spostato che gli cede il posto, i limiti
+   D_f − 2 / D_f − 1, Londra.
    > **Note implementazione**: le scelte di test-author accettate: una sola chiamata (la storia intera sostituisce
    > quella dell'intervallo), gli eventi non guardano D_f, `last_fetch_at` non si scrive in un fallimento. La sua
    > domanda 1 (fine del calendario) era già coperta: la lettura arriva sempre a oggi. La 2 (DB di sviluppo che hanno
    > fatto girare X-R12 prima di questa correzione) non tocca i dati rilasciati.
    > **⚠️ Fuori pista**: la mia bozza faceva due chiamate (calendario + intervallo): rifatta, il passo 0 ricava anche
    > i dati dell'intervallo chiesto dalla storia intera e il passo 1 non parte per un controllo.
-4. ✅ 17/10 ~20:10 — Codice applicato (`apply_z33.py`, da HEAD `22b9b90ce`): ruff e black puliti nel repo.
-5. ⏳ 17/10 ~19:40 — Corse leggere (`files/z33_light.sh`, carico < 50, una alla volta): `services provider-errors` 248,
-   `db migration-011` 15, `services asset-source-refresh` 57, `api assets-provider` 40, `api assets-price` 22,
+4. ✅ 17/10, prima delle 19:23 — Codice applicato (`apply_z33.py`, da HEAD `22b9b90ce`): ruff e black puliti nel repo.
+5. ✅ 17/10 19:23–19:48 — Corse leggere (`files/z33_light.sh`, carico < 50, una alla volta): `services provider-errors`
+   248, `db migration-011` 15, `services asset-source-refresh` 57, `api assets-provider` 40, `api assets-price` 22,
    `db validate` 17; due rossi.
    > **⚠️ Fuori pista**: `db migration-010`, 1 rosso: il suo test «un database nuovo alla testa» dava per scontato che
    > la testa fosse 010; ora c'è 011 → riparazione a test-author (costruire a `010_provider_reported_currency`).
@@ -5366,10 +5367,10 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
    > dal `try`) faceva perdere il valore corrente → FAILED invece di PARTIAL. I campi nuovi ora si leggono con
    > `getattr` (anche la mia riga di Z-32 su `hist_data.currency`, che con quei finti alzava in silenzio). Script
    > rifatto e riapplicato, ruff e black puliti. Docs a docs-writer intanto.
-   > **Note implementazione** (~20:20): test-author ha riparato MIG010-002/003 (costruiti a `010_provider_reported_
+   > **Note implementazione** (~19:48): test-author ha riparato MIG010-002/003 (costruiti a `010_provider_reported_
    > currency`, non alla testa; MIG010-004 resta alla testa di proposito) e ha fatto lo stesso nel file di 011:
    > `db migration-010` 13, `db migration-011` 15. Col `getattr`: `services asset-source` 61, `asset-source-refresh` 57.
-6. ✅ 17/10 ~20:20–21:00 — Docs (docs-writer), 8 pagine: `developer/backend/assets/architecture.md`
+6. ✅ 17/10 ~19:50–20:11 — Docs (docs-writer), 8 pagine: `developer/backend/assets/architecture.md`
    (`#exchange-timezone`,
    limiti in `#exchange-timezone-limits`), `provider_yahoo_finance.md`, `events.md` (`#yahoo-redate`), DB
    `assets_pricing.md` e `index.md` (riga 011), `scheduler.md` (il controllo legge la storia intera ma scrive solo la
@@ -5385,7 +5386,166 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
    > **Note implementazione**: le release toccate sono anche 1.0.x e 1.1.0 (docs-writer: «up to 1.2.1»); la migrazione
    > segna comunque tutte le assegnazioni yfinance. Un ultimo full sync rilasciato fatto il giorno D lascia la barra
    > di D su D − 1 (S > D_f − 2, non spostata): la prima finestra dello scheduler la riscrive giusta.
-   > **Note implementazione** (~21:10): docs-writer ha aggiunto il fallimento isolato e il test in
+   > **Note implementazione** (20:04–20:11): docs-writer ha aggiunto il fallimento isolato e il test in
    > `#exchange-timezone`. Build stretta (`files/z33_build.sh`) rc 0, 0 avvisi; `check-links` 97 validi.
-7. ✅ 17/10 ~21:15 — Checkpoint FROZEN al coordinatore (revisori X: plugin e schemi; H: migrazione e refresh; MF:
+7. ✅ 17/10 ~20:12 — Checkpoint FROZEN al coordinatore (revisori X: plugin e schemi; H: migrazione e refresh; MF:
    `price_store`; W: `event_store`). Backlog: Z-33 ✅.
+   > **⚠️ Fuori pista**: gli orari dei passi 3–7 erano avanti di 30–60 minuti; corretti il 17/10 ~20:30 sugli orari
+   > dei log (`files/logs/z_z33_*`: verdi 19:23–19:40, correzione 19:48, v2 20:07–20:08, build 20:11).
+8. ✅ 17/10 20:13–20:23 — Il coordinatore ha committato Z-33 (`60170aae5` + `4fc738106`) e unito dev nel mio ramo
+   (`aea501431`). Corse combinate (`files/z33_combined.sh`, 16 azioni, una alla volta, nessun salto): provider-errors
+   248, migration-011 15, migration-010 13, asset-source-refresh 58, asset-source 61, asset-source-guards 52,
+   asset-event-store 71, event-split-ratio 78, asset-digit-limits 99, backup-staging 181, backup-apply 255;
+   api assets-provider 40, assets-price 22, assets-events 45, backup-restore-apply 215; db validate 17. Porta libera.
+9. ✅ 17/10 ~20:27 — Ingresso: dev `51b5c8db1`, CHANGELOG 🐛 `b8bcc8cd2`. Pagina devWiki
+   `wiki/problems/yahoo-bars-dated-one-day-early-east-of-utc.md` (riga dell'indice, voce del log;
+   `check_source_paths.py`: i 13 percorsi della pagina esistono, i 7 mancanti del controllo sono di altre pagine).
+10. ✅ 17/10 20:36–20:48 — Revisione di MF su `redate_provider_rows` (OK, due punti), dal coordinatore (~20:35):
+    - **LOW**: «latest first» regge solo con date in avanti; un `target_of` generico che desse una data prima
+      incontrerebbe una riga non ancora spostata e la riga in movimento verrebbe cancellata per sbaglio. Ora ogni
+      destinazione si calcola prima di toccare qualcosa, e una data prima della riga alza `ValueError` (asset e due
+      date, nessun valore) senza spostare nulla. L'unico chiamante dà S o S+1: niente cambia.
+    - **Nit**: commento sul `flush()` per riga (una sola flush alla fine manderebbe gli UPDATE in ordine di chiave
+      primaria, poi i DELETE, e un UPDATE cadrebbe su una data ancora occupata: `uq_price_history_asset_date`).
+      Verificato in SQLAlchemy 2.0.52: `persistence._sort_states` ordina le righe persistenti per chiave primaria.
+    - Rossi di test-author (`test_asset_source_refresh.py`, sezione «§3, MF»): 3 rossi per il motivo detto (il terzo
+      è la perdita di dati di MF, `(0, 1)`), 1 verde di guardia; la sessione si chiude con un commit, così una
+      correzione che spostasse e poi alzasse si vedrebbe. Codice: `files/mf-redate-draft/apply_mf_redate.py`
+      (provato su copia, inverso esatto); ruff e black puliti. `services asset-source-refresh` 62 (58 + 4).
+    - Pagina devWiki: la regola «solo in avanti» e il perché del `flush()` per riga.
+11. ✅ 17/10 20:50–21:05 — Secondo seguito di Z-33 (coordinatore, ~20:50; W occupato con K3, la guardia degli eventi è
+    mia, W rivede):
+    - **Nit di X** (plugin Yahoo): il fuso dell'indice si convalida per primo; se non nomina una zona nota (un offset
+      fisso, `UTC+02:00`) si ricade su `info["exchangeTimezoneName"]`. Prima il testo dell'indice sostituiva quello di
+      Yahoo e il fuso dichiarato era `None`.
+    - **La stessa guardia in `redate_provider_events`**: tutte le destinazioni prima di toccare qualcosa; una data prima
+      dell'evento alza `ValueError` e niente cambia (nessun evento spostato o unito, nessuna transazione ricollegata o
+      ridatata). `asset_events` non ha chiave unica: la sua flush unica alla fine resta corretta.
+    - Rossi di test-author: 1 parametro rosso (`an-unnamed-index-zone-falls-back-to-info`: `None == 'Europe/Rome'`) e
+      uno verde di guardia; 4 rossi degli eventi (`(1, 0)`, `(2, 0)`, `(0, 1)` — l'unione sbagliata —, `(1, 0)` con lo
+      SPLIT e la sua ADJUSTMENT spostate indietro) e 1 verde di guardia. Codice: `files/z33f2-draft/apply_z33f2.py`
+      (provato su copia, inverso esatto). Verdi: `services provider-errors` 250, `services asset-source-refresh` 67,
+      `services asset-event-store` 71; ruff e black puliti.
+    - Pagina devWiki: la regola per tutti e due gli aiuti, e la precedenza del fuso. Doc developer
+      (`provider_yahoo_finance.md`): la frase della precedenza, a docs-writer.
+12. ✅ 17/10 21:08–21:40 — Revisione di H su Z-33 (coordinatore, ~21:08, priorità): migrazione 011 OK, due punti.
+    - **MEDIUM, due refresh dello stesso asset** (sync manuale e scheduler): `legacy_check` veniva dalla preparazione,
+      letta prima della rete; il passo di assestamento rileggeva l'assegnazione ma non il segno. Se A si assesta
+      mentre B scarica, B rifà la regola su righe già giuste e le sposta avanti di un giorno (giovedì→venerdì scartata).
+      Correzione: il segno si legge sulla riga appena letta (la riga di H) **e si prende** con un `UPDATE` condizionato
+      (`… WHERE exchange_timezone = 'legacy-utc'`) prima di spostare qualcosa: pysqlite apre la transazione a quella
+      scrittura, quindi l'altro refresh aspetta il commit (busy_timeout) e non trova più il segno. Chi non lo prende
+      non sposta nulla e scrive i suoi dati come ogni refresh.
+      > **⚠️ Fuori pista**: la sola riga di H non basta. Provato: applicata da sola, il test della finestra (B legge il
+      > segno, A fa il commit prima dello spostamento di B) resta rosso; passa solo con l'`UPDATE` condizionato.
+      > **⚠️ Fuori pista**: ruff C901 (11 > 10) su `_settle_exchange_timezone`: gli spostamenti sono andati in
+      > `_redate_legacy_rows` (v2 dello script, `files/z33f3-draft/apply_z33f3.py`; la v1 in
+      > `apply_z33f3_v1_superseded.py`). `_server_date` resta prima della presa: il test della finestra si aggancia lì.
+    - **LOW, un fuso che il server non risolve**: senza database dei fusi ogni nome dà None e un asset segnato non
+      scrive mai nulla. La metà a basso costo: `exchange_zone()` avvisa nel log una volta per nome Area/Luogo e
+      processo (`_UNKNOWN_ZONES_LOGGED`); niente per un offset fisso, il segno o un nome vuoto. Nessuna dipendenza
+      nuova: `tzdata` da PyPI è Z-36 nel backlog, domanda per lo sviluppatore. Il problema di qualità dei dati non è
+      economico (codice nuovo, chiave i18n in 4 lingue, enum in OpenAPI, frontend): non fatto.
+    - Rossi di test-author: 2 della corsa (il secondo con un aggancio a `refresh._server_date` che fa il commit da un
+      altro motore, sincrono), 1 dell'avviso, 1 verde di guardia; il commento vecchio del modulo di test corretto.
+      Rossi visti: righe spostate `{06-02…06-05}`, avviso assente. Verdi su v2: `services asset-source-refresh` 69,
+      `services provider-errors` 252, `services asset-source` 61, `services asset-event-store` 71, `db migration-011`
+      15; ruff e black puliti.
+    - Pagina devWiki: la presa del segno e il limite del server senza fusi. Doc developer (`architecture.md`,
+      `#exchange-timezone` e i limiti): a docs-writer. Backlog: Z-36.
+
+### Z-29 — una scheda della lista asset e lo storico intero: analisi (17/10 ~20:35, sola lettura, HEAD `b8bcc8cd2`)
+
+Richiesta del coordinatore (17/10 ~20:24): sapere se Z-29 entra nella 1.3 (su un'istanza gestita piccola è un rischio
+vero di memoria e CPU); strade, costo nella lista (file di X) e nella query dei prezzi, rossi, dimensione,
+raccomandazione. Nessun codice.
+
+**Stato reale.**
+- La lista (`routes/(app)/assets/+page.svelte`, file di X) manda a `POST /assets/prices/query` una voce per asset con
+  l'intervallo della pagina (`:741`). Su «All» l'inizio è `2000-01-01` (`dateRangeStore.svelte.ts:145`): ~9 787
+  giorni. L'intervallo predefinito è di 3 mesi; «All» lo sceglie l'utente e resta per la sessione della scheda.
+- Il backend (`api/v1/assets/prices.py:148`: `async`, `response_model`, nessun thread) legge tutte le righe ORM degli
+  asset dell'intervallo (`price_query.py:382–394`) e costruisce **un `FAPricePoint` per giorno di calendario**, fine
+  settimana compresi (`_build_backward_filled_series`, `:174–222`, chiamata a `:494`).
+  - Misure di E: 25,5 µs e ~1,9 KB per giorno di riempimento; ~26 µs per punto di serializzazione. Misurato ora: il
+    JSON di un punto è 293 B (riga salvata) o 376 B (riempito), ~317 B in media. Nessun gzip.
+  - «All», 300 asset: 2,94 M punti; i lotti di Z-27 (800 000) sono 4, in sequenza, ognuno ~20 s di riempimento e
+    ~21 s di serializzazione sul loop (l'istanza non risponde, controlli di salute compresi) e ~1,45 GB; ~930 MB di
+    JSON in tutto. Già 30 asset (294 000 punti) sono ~15 s di loop e ~0,55 GB: su una macchina da 512 MB–1 GB basta
+    per un OOM.
+  - Il browser tiene ogni punto due volte (`AssetPricePoint` nello store dei prezzi, `:813`, e un punto di
+    `chartData`): stima ~0,6 GB di heap per 300 asset, più il parse.
+- Chi usa davvero il punto giornaliero:
+  - **la scheda** lo riduce già al disegno: `LineChart` compatto sceglie giornaliero, settimanale o mensile per densità
+    (soglia 1,3 punti per pixel, `LineChart.svelte:193`, `:296–304`, `:423–434`) e tiene l'ultimo punto di ogni secchio
+    (`aggregateLineSeries`, `timeSeriesAggregation.ts:168`; settimana ISO lun–dom e mese di calendario,
+    `mapDateToBucket`, `:135`). Su «All» una scheda di ~300 px disegna ~322 punti mensili su 9 787;
+  - **la tabella** non legge nessuna serie (`AssetTable.svelte`: nessun `chartData`), solo `lastPrice`;
+  - `lastPrice` è l'ultimo punto (`assetPriceDerived.ts:126`); i Δ sono già del backend (X-R53, X-R59);
+  - «All» si risolve dal primo punto (`:615`); la percentuale e i segnali del backend prendono la base dal primo punto
+    (`backendRenderer.ts:341`), che oggi non viene disegnato (il primo secchio mostra il suo ultimo giorno);
+  - i segnali locali delle schede (riferimento: lineare, composto, seno; confronto: asset, cambio) girano sulla serie
+    della scheda; `AssetComparisonSignal` allinea per data esatta (`:40–44`);
+  - i segnali del backend tornano giornalieri e la scheda li riduce con sei profili (`last_with_range`,
+    `band_envelope`…; `downsampleRenderedSignal`, `:386`);
+  - lo store dei prezzi (`store.merge` + `markFetched`, `:813`) fa da cache alla pagina di dettaglio.
+- La lista dei cambi ha lo stesso schema (`fxStoreRegistry.ts`, `/fx/currencies/convert`), con meno voci.
+- `ai_export/temporal/` ha secchi di calendario, ma con statistiche per secchio: semantica diversa, non riusabile qui.
+
+**Strade.**
+- **(A) Serie campionata dal backend**: campo facoltativo `max_points` in `FAPriceQueryItem`.
+  - Backend: per ogni asset il passo più fine fra giornaliero, settimanale e mensile che sta in `max_points` (la
+    regola del grafico compatto: densità ≤ 1,3 ⇔ punti ≤ 1,3 × larghezza), sui giorni del **suo** riempimento: il
+    backend conosce il primo prezzo, la pagina no (un asset dal 2020 oggi si disegna settimanale, non mensile).
+    Lettura ridotta in SQL (primo giorno e seme per asset, poi l'ultima riga di ogni secchio: ~322 righe invece di
+    ~6 700–9 800 righe ORM); emessi il primo punto del riempimento e l'ultimo giorno di ogni secchio (riempito da
+    prima se il secchio non ha righe); il budget conta i punti emessi; con segnali o eventi un 422 (restano
+    giornalieri). Risposta invariata (`FAPricePoint`): il worker, lo Zod e la scheda non cambiano.
+  - Lista (X): `max_points` dalla larghezza della griglia con le costanti del grafico (esportate da
+    `timeSeriesAggregation.ts`); le schede con segnali del backend restano giornaliere, e con loro gli asset che un
+    loro confronto cita (allineamento per data esatta); i punti campionati non entrano nello store giornaliero (né
+    `markFetched`); a un cambio di larghezza che cambia la soglia, una nuova richiesta.
+  - Effetto su «All», 300 asset: ~97 000 punti invece di 2,94 M (30×), un lotto, ~2,5 s di serializzazione, ~31 MB di
+    JSON. Disegno uguale, più il primo giorno a sinistra (oggi solo base); se X vuole la parità al pixel, il primo
+    punto va in un campo a parte.
+  - La regola della densità vivrebbe in due posti (grafico e backend): una tabella di casi comune ai due test.
+- **(B) Endpoint «riassunto della scheda»** (`POST /assets/prices/card-summary`: primo giorno, ultimo prezzo con la sua
+  data, N punti di sola chiusura).
+  - Stessa lettura ridotta, stessa regola; a parità di punti un payload ~6× più piccolo di (A) (~50 B per punto).
+  - Ma un secondo contratto per i punti di prezzo (la semantica del riempimento duplicata, da tenere in parità), un
+    caricatore nuovo nella lista e le schede con segnali sul percorso vecchio: due strade in `fetchPriceSeries`. Più
+    superficie di (A), per un guadagno che dopo il 30× conta poco.
+- **(C) Un tetto all'intervallo che chiede «All»** (solo lista, poche righe).
+  - Cambia il senso di «All» (il grafico mostra meno di quel che dice l'etichetta; il Δ del backend usa l'inizio vero)
+    e non cura: 300 asset × 10 anni sono ancora 1,1 M punti. Solo come tampone.
+- Non sono cure: gzip (meno rete, più CPU sul loop), `to_thread` del riempimento (il loop respira, la memoria no).
+
+**Rossi proposti, per (A).**
+- Backend (asset propri, sotto un nome unico):
+  - parità: ogni punto campionato = l'ultimo punto del riempimento giornaliero nel suo secchio (data, chiusura,
+    `backward_fill_info`), settimana ISO e mese, contro `_build_backward_filled_series` sugli stessi dati;
+  - la scelta del passo per asset (tabella di casi: 9 787 giorni a 400 punti → mensile; dal 2020 → settimanale; 300
+    giorni → giornaliero);
+  - il primo punto (con e senza seme prima dell'intervallo), un secchio senza righe, l'ultimo tagliato alla fine, la
+    fine a domani (X-R55), `target_currency` (il cambio del giorno del punto), `include_price=false`;
+  - senza `max_points` la risposta di oggi, uguale; la lettura ridotta (righe lette ≤ secchi + 2 per asset);
+  - il budget: 300 voci «All» in una richiesta; una giornaliera conta ancora i giorni;
+  - il 422 con segnali o eventi; OpenAPI.
+- Frontend (Vitest; E2E in `front-asset asset-list`):
+  - `max_points` = soglia del grafico per la larghezza data; la stessa tabella di casi del backend;
+  - il piano delle voci: senza segnali del backend campionata, con segnali giornaliera, il bersaglio di un confronto
+    di una scheda giornaliera giornaliero;
+  - nessun `merge`/`markFetched` dei punti campionati; «All» risolto alla stessa data; la base della percentuale;
+  - E2E: su «All» la richiesta porta `max_points`, le schede disegnano, il dettaglio carica i suoi dati.
+
+**Dimensione.** Due lotti indipendenti.
+- Z-29a backend (`schemas/prices.py`, `price_query.py`, docs di `#bulk-request-limits` e della query, `api sync`):
+  ~1 giorno con i test; additivo, nessun chiamante cambia finché non manda il campo. Revisori: MF (query dei prezzi), X.
+- Z-29b lista (file di X: `fetchPriceSeries`, le costanti del grafico): ~0,5–1 giorno con Vitest ed E2E; X, o io con
+  la sua revisione, quando la sua coda lascia il file.
+- Dopo la 1.3: la lista dei cambi con lo stesso campo su `/fx/currencies/convert`; i segnali del backend campionati sul
+  server (i sei profili); un punto più snello.
+
+**Raccomandazione.** (A), nella 1.3: il rischio è un OOM con 30 asset su «All» in una macchina piccola, il caso normale
+di un cliente del cloud, e la cura è additiva e piccola. Ordine: Z-29a, poi Z-29b. (C) solo come tampone, se la 1.3 non
+ha posto per Z-29b. In attesa della decisione.

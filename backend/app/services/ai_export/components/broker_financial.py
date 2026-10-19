@@ -72,7 +72,7 @@ from backend.app.services.ai_export.components.resources import BROKER_LOTS_RESU
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext
-from backend.app.services.financial_math.native_cash import CONVERSION_DUST
+from backend.app.services.financial_math.portfolio.period import is_reconciled, period_identity_residual
 from backend.app.services.financial_math.weights import concentration
 
 _BROKER_FIFO_ASSET_METADATA_RESOURCE: ResourceKey[Mapping[int, Asset]] = ResourceKey("broker.fifo_asset_metadata", Mapping)
@@ -429,11 +429,18 @@ async def _build_broker_reconciliation(context: BuildContext, dependencies: Mapp
             summary.period_other_result,
         )
         if summary.period_pnl is not None and all(component is not None for component in components):
-            residual_amount = summary.period_pnl.amount - (summary.period_unrealized_gain_loss_delta.amount + summary.period_realized_gain_loss.amount + summary.period_income.amount - summary.period_fees_taxes.amount + summary.period_other_result.amount)
+            # J-14: the identity and its tolerance live in financial_math.portfolio.period; the summary closes the
+            # decomposition with period_other_result, so the residual is the rounding of converted amounts.
+            residual_amount = period_identity_residual(
+                summary.period_pnl.amount,
+                summary.period_unrealized_gain_loss_delta.amount,
+                summary.period_realized_gain_loss.amount,
+                summary.period_income.amount,
+                summary.period_fees_taxes.amount,
+                summary.period_other_result.amount,
+            )
             residual = Currency(code=currency_code, amount=residual_amount)
-            # A residual below CONVERSION_DUST is the rounding of Decimal arithmetic on converted
-            # amounts, not a gap: the summary closes the decomposition with period_other_result.
-            reconciled = abs(residual_amount) < CONVERSION_DUST
+            reconciled = is_reconciled(residual_amount)
     return BrokerReconciliationPayload(
         broker_id=scope.broker_id,
         period_start=scope.period_start,

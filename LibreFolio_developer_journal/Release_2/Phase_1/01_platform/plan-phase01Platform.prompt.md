@@ -7498,4 +7498,280 @@ Revocation).
      cambiata in dev: la fase 2 la rivede comunque.
    - Backlog: H-43 aggiornata (fase 1 fatta, note per la fase 2), H-52 (D4) e H-53 (F3, metà sicurezza). Le due righe di
      A (F2 e la metà esperienza di F3) vanno al coordinatore: non scrivo nella sezione di A.
-5. Doc e checkpoint.
+   - Entrato il 17/10 (dev `d3212e9f2`, `cd04b17b0` + `11d0bce48`; seguito `3b01fff93` per i due file di test del
+     runner, poi `a6adb0066`). Sulla punta: runtime-isolation 373, test-runner-cli 760. Nessuna riga nel CHANGELOG.
+
+### Review di E-19a: il passo `stored-currencies` di `app_lifespan.py` (2026-10-17, 19:20) — ✅ OK, due appunti bassi
+
+- Va bene: il passo gira in un thread, non solleva mai, ha i valori nel log tagliati e con repr, e `mode=rw` più
+  `query_only`. Dopo `0d9781f22` sta dopo `lone-transfer-legs`, come dice `overview.md` 12–14.
+- LOW-1: `_read_only()` non mette `PRAGMA trusted_schema=OFF` per primo, come fa B-37 in `post_migration`. Oggi è
+  innocuo, perché `sqlite3` semplice non registra funzioni Python né carica estensioni.
+- LOW-2: i passi d'avvio non hanno un tempo massimo, e le query leggono tabelle intere. Piani sulla DB della corsia:
+  `SCAN price_history` e `SCAN transactions` ×2, più B-tree temporanei; `fx_rates` scandito tutto sull'indice. Ogni
+  avvio, e ogni risveglio di un'istanza managed, aspetta la lettura. Proposta: misurarlo sulla copia dei dati veri e,
+  se pesa, toglierlo dal cammino critico, come `provider-prewarm`.
+
+### Lotto «H-52: gli script inline nella CSP per hash, e `'report-sample'`» (2026-10-17, 19:30) — analisi
+
+> Dal coordinatore (19:15, dopo l'entrata di H-43): «Next: H-52 (the D4 inline-script hashes plus the
+> 'report-sample' narrowing), analysis first. Your D4 is in 1.3 if it stays small.»
+
+**Stato vero** (HEAD `a6adb0066`):
+- `CSP_REPORT_ONLY_POLICY` (`security_headers.py:73`) è una costante, con `script-src 'self' 'wasm-unsafe-eval'`. Il
+  middleware la mette, come header già pronto, sulle risposte `text/html` della web app (non su `/mkdocs` né su
+  `/api/`), quando `LIBREFOLIO_CSP_REPORT_ONLY` è acceso (il default di managed).
+- La build ha tre file HTML serviti come pagine, con script inline:
+  - `index.html`: l'anti-FOUC di `app.html` (1459 caratteri, riga 14) e il bootstrap di SvelteKit (374 caratteri,
+    riga 116, `base: new URL(".", location)…`);
+  - `200.html`: lo stesso anti-FOUC e un bootstrap **diverso** (330 caratteri, `base: ""`). Per la SPA servono
+    quindi tre hash;
+  - `offline.html` (da `static/offline.html`, la pagina offline del service worker, servita anche come pagina): uno
+    script di 5335 caratteri e un gestore inline `onclick="location.reload()"`. Un gestore inline è
+    `script-src-attr`, e un hash di script non lo copre.
+  - Il bootstrap contiene nomi della build (`__sveltekit_12g6x0f`, i percorsi del chunk d'ingresso), quindi l'hash
+    cambia a ogni build: va calcolato dalla build, non può essere una costante.
+- Sonda (Chromium 149, `files/h52/probe-sample.*`): con `'report-sample'` il campione di un eval sono i primi 40
+  caratteri del sorgente valutato.
+  - `new Function("return this")` dà `"(function anonymous(\n) {\nreturn this\n})"`, sia la sonda di cheetah-grid sia
+    il preambolo di istanbul.
+  - `eval("1 + 1")` dà `"1 + 1"`; uno script inline dà i suoi primi 40 caratteri.
+
+**Disegno**:
+1. Backend (file di H):
+   - `static_site.py`: `spa_inline_script_hashes(build_dir)`, pura. Legge ogni `*.html` in cima alla build e ogni
+     `<script>` senza `src`, di qualunque tipo (l'hash di un blocco di dati non fa danni). Normalizza gli a capo come il parser
+     HTML (CRLF e CR diventano LF), produce `'sha256-<base64>'`, senza doppioni e in ordine.
+   - `security_headers.py`: `CSP_REPORT_ONLY_POLICY` tiene la parte fissa, con `'report-sample'` in `script-src`;
+     `report_only_policy(hashes)` vi inserisce gli hash.
+   - L'header si calcola una volta, quando si costruisce il middleware e solo se la policy è accesa (come gli
+     interruttori): nessun I/O sul cammino delle richieste. Una build nuova vuole un riavvio; il runner costruisce
+     prima di avviare, un'immagine non cambia mai. Senza build, niente hash.
+2. `static/offline.html`: il gestore inline diventa un `addEventListener` nel suo script, due righe. Altrimenti il
+   clic su «Riprova» viene segnalato, e con una policy applicata bloccato. L'ultimo a toccare il file è stato il
+   programma colori: serve l'OK.
+3. E2E (file di H, H-43):
+   - la baseline perde `index-inline-script-0/1`, ora permessi. F1 prende `"sample"` esatto e non conosce più ogni
+     `eval`;
+   - `csp.ts`: un confronto `sample` facoltativo, esatto;
+   - D-H52-2: via il meccanismo delle righe (`indexInlineScript`, `inlineScriptLines`, `appIndexInlineScripts()` nella
+     fixture). Nessuna voce lo usa più; sparisce anche la differenza fra `/` e `200.html`, e un GET per worker;
+   - la spec del raccoglitore:
+     - la sua copia della policy prende `'report-sample'`;
+     - calcola gli hash di `/`, `/200.html` e `/offline.html` allo stesso modo, e li inietta su una corsia
+       self-hosted;
+     - su una managed confronta l'header della corsia con la copia più gli hash, alla lettera: una prova da un capo
+       all'altro del calcolo del backend;
+     - la pagina d'accesso non segnala più **niente**.
+4. Test (test-author):
+   - backend: un file nuovo per la funzione pura (con o senza `src`, module, blocco di dati, CRLF, doppioni, build
+     assente, un vettore noto);
+   - `services managed-headers`: `script-src` con `'report-sample'` e gli hash di una build temporanea; il resto
+     invariato, e self-hosted invariato;
+   - E2E come sopra.
+5. Doc: `security.md` (la policy report-only), `e2e.md` (la baseline), `front-utility.md` (i test del raccoglitore).
+6. Corsia: leggeri `services managed-headers`, il test nuovo, `front-utility csp-collector` (self-hosted e managed)
+   e `page-policy`. Uno slot per un cloud smoke (~20 min): zero violazioni inline, e F1 riconosciuto dal campione.
+
+**Decisioni**: D-H52-1 hash calcolati alla costruzione del middleware (consigliato) oppure un controllo di mtime a ogni
+risposta HTML; D-H52-2 via il meccanismo delle righe (consigliato); D-H52-3 il gestore di `offline.html` (consigliato,
+serve l'OK); D-H52-4 campione esatto, che vale per Chromium, l'unico browser degli E2E (consigliato).
+- Nota: `'report-sample'` oggi non manda niente fuori dal browser (nessun endpoint di report). Se un giorno se ne
+  aggiunge uno, i primi 40 caratteri di uno script bloccato uscirebbero.
+
+**Costo**: backend ~60 righe più i test; E2E circa −40/+60 righe; doc. Circa 2,5 ore, slot compreso. Superfici:
+`security_headers.py`, `static_site.py` e i file E2E di H-43 sono di H; `offline.html` no; `app.html` non si tocca.
+
+**Via del coordinatore** (19:21): GO su tutte le raccomandazioni.
+- D-H52-1: gli hash si calcolano quando si costruisce il middleware.
+- D-H52-2: via il meccanismo delle righe.
+- D-H52-3: il gestore di `offline.html`, con l'OK di scrittura: solo lo script, nessun markup o classe oltre allo
+  spostamento di `onclick` in un listener.
+- D-H52-4: campione esatto.
+- OK di scrittura sugli altri file elencati. La nota su `'report-sample'` va in `security.md`. Prima i rossi, poi lo
+  slot per il cloud smoke.
+
+**Review di B-43** (19:25), in mezzo: ✅ OK, verificata con una sonda su SQLite 3.54.0 (`files/b43review/`). Un appunto
+di precisione: in `_stage` la lettura con le funzioni finte (`_refuse_foreign_objects`) viene prima di
+`describe_database()`. Un indice o una colonna generata che chiama `regexp` o `floor` si ferma quindi lì, non al
+controllo d'integrità; «such as `regexp`» va cambiato.
+> **⚠️ Fuori pista**: `pipenv run` lanciato dalla cartella di sessione ha creato un `Pipfile` vuoto lì (fuori dal
+> repo). L'ho tolto; il venv condiviso è intatto (sqlalchemy 2.0.52, fastapi 0.141.1). Le sonde si lanciano dal
+> worktree.
+
+**Passi di H-52**:
+1. ✅ (2026-10-17, 20:01) Rossi (test-author, due in parallelo; `files/runs/h52-reds.sh`):
+   - backend in `test_managed_headers.py`: `services managed-headers` **52 failed / 359 passed**;
+   - E2E in `layout/csp-collector.spec.ts`: `front-utility csp-collector` self-hosted **5 rossi** (il test della pagina
+     d'accesso è verde, come previsto: lì la policy la inietta la spec), managed **6 rossi**; tsc 13 TS2554 (le chiamate
+     a due argomenti di `isKnown`). Prettier ha riformattato la spec (solo forma, verificato).
+2. ✅ (20:06) Cura (`files/h52/apply_cure.py`, a secco, `--apply`, `cmp` OK sui sei file). Verdi: `services
+   managed-headers` **411/411**, `security-headers` 15, `config-audit` 220, `page-policy` 4/4; ruff, black, Prettier, tsc
+   puliti. La spec del raccoglitore: verde tranne la pagina offline, su entrambe le corsie.
+   > **⚠️ Fuori pista (reperto)**: la corsia serviva una build vecchia. `check_frontend_needs_build()` non guarda
+   > `frontend/static/`, che adapter-static copia nella build: `static/offline.html` (20:05) era più recente di
+   > `build/index.html` (20:03), eppure la risposta era `False`. Ricostruita a mano (`dev.py server --test --build-only
+   > --rebuild`), la spec è **12 passed + 1 skipped** su entrambe le corsie. OK del coordinatore (20:13) per la cura
+   > dentro H-52.
+3. ✅ (20:30) La cura della build vecchia:
+   - rossi di test-author in `TestFrontendBuildStaleness`: `utils runtime-isolation` **7 failed / 380**;
+   - cura `files/h52/apply_static.py`: `frontend/static/` entra nella scansione con la regola di `src` (niente di
+     nascosto: il `.cache_manifest.json` della cache dei font, riscritto a ogni controllo, non conta);
+   - verde **387/387**.
+   > **⚠️ Fuori pista (test-author)**: `stamp_service_worker()` (`dev.py`) riscrive `sw.js` sempre, anche uguale; con
+   > `static/` guardata, ogni build della doc avrebbe causato una ricostruzione inutile del frontend. E il timbro di
+   > `sw.js` (l'md5 di `offline.html`) era vecchio dopo la mia modifica: `test_pwa_assets` rosso, e i browser avrebbero
+   > tenuto la vecchia pagina offline. OK del coordinatore (20:28): scrivere solo se cambia, timbrare anche in
+   > `cmd_fe_build` prima della build, il timbro nuovo di `sw.js`, e i rossi in `test_pwa_assets.py`.
+4. ✅ (20:50) Il timbro:
+   - rossi di test-author in `test_pwa_assets.py`: `utils pwa-assets` **4 failed / 22**. Sono i tre nuovi (timbrare due
+     volte lascia `sw.js` intatto, bytes e mtime; `cmd_fe_build` timbra prima del comando di build, debug e produzione)
+     più quello esistente, rosso per il timbro vecchio di `sw.js`;
+   - nell'imbracatura Contract 8 di `test_test_server_preparation.py` (OK delle 20:42) `stamp_service_worker` è finto,
+     così nessun caso timbra il `sw.js` vero;
+   - `sw.js` ritimbrato con la funzione del progetto (`dev.stamp_service_worker()`): `7e726c69` → `65ba715b`;
+   - cura `files/h52/apply_stamp.py` (a secco, `--apply`, `cmp` OK);
+   - testo del runner per `pwa-assets` (OK delle 20:42).
+   - Verdi (`files/runs/h52-greens-final.sh`): ruff senza reperti nuovi (`dev.py` a 43 come HEAD), black OK; `utils
+     pwa-assets` **26**, `test-server-preparation` 91, `runtime-isolation` 387, `test-runner-cli` 760, `services
+     managed-headers` 411, `utils dev-cli-image` 94; `mkdocs build` stretto 0 avvisi, **e `sw.js` intatto dopo la build
+     della doc** (la prova dal vivo della cura); `check-links` 97 validi; `git diff --check` pulito.
+   - Doc della PWA (`developer/frontend/pwa.md`, docs-writer): il timbro scritto solo se cambia, `front build` che
+     timbra, i nuovi casi del controllo, e nel passo 1 di «Updating the Offline Page» la regola dei gestori inline.
+5. Altri testi: le descrizioni del runner (`_backend_services.py`, `_frontend_utility.py`, OK delle 20:16) applicate
+   (`files/h52/apply_texts.py`, `cmp` OK). Doc: docs-writer, 25 modifiche in sei pagine più
+   `admin/hosting_providers.en.md` (testo di H, `59fa4b645`). Nessun timbro di traduzione: le pagine per sviluppatori
+   sono solo in inglese, e quella pagina admin non ha traduzioni.
+2. Cura: `files/h52/apply_cure.py`, a secco (fatto), poi `--apply` e `cmp`. Tocca `static_site.py`
+   (`spa_inline_script_hashes`, `HTMLParser` della libreria standard), `security_headers.py` (`'report-sample'`,
+   `report_only_policy`, l'header costruito una volta, import pigro di `static_site` per non fare un ciclo), `csp.ts`
+   (via le righe, `sample`, `isKnown` a due argomenti), la fixture (via il GET di `/` per worker), la baseline (due
+   voci; F1 con `sample`) e `offline.html` (il listener).
+3. Verdi leggeri; doc (docs-writer, con la nota su `'report-sample'` in `security.md`); slot per il cloud smoke.
+6. ✅ (2026-10-17, 20:50–21:02) **Slot: il cloud smoke** (`files/runs/h52-slot.sh`, `files/runs/h52/s-cloud.*`): corsia
+   managed, **227 passed, 0 inattesi, 1 skipped** (più il fallimento atteso), 8,9 min.
+   - «Frontend sources changed, rebuilding…» per `sw.js` e `offline.html`: la scansione di `static/` funziona dal vivo.
+   - **Nessuna violazione di script inline sulle pagine dell'app**. I test con un allegato `csp-violations` passano da
+     218 a 7, tutti attesi: F3 (la sonda dell'indirizzo, 6), F1 (l'eval di cheetah-grid, conosciuto dal campione),
+     i documenti sintetici e il controllo della sonda globale della spec, i controlli di `page-policy`.
+   - Porta 6181 libera alle 21:02.
+7. ✅ (21:05) **Checkpoint**:
+   - previsione del merge con `dev_release2` (`e20055213`, 89 commit dopo la base): fra i miei file, dev ha toccato
+     solo i tre del runner (`_backend_services.py`, `_backend_utils.py`, `_frontend_utility.py`), con **0 conflitti**
+     (le registrazioni degli altri sono aggiunte);
+   - backlog: H-52 ✅, e una riga nuova, H-54 (un file tolto da `src/` o da `static/` non si vede);
+   - CHANGELOG: proposta una clausola nella voce esistente della policy report-only (r. 361).
+
+### H-52 entrato; review di W-B77 e Z-33; proposta «CSP applicata» (2026-10-17, 21:10–21:40)
+
+- **H-52 entrato**: dev `ca7ba117c` (`aaea0824b`, `cfb59de97`, `70da097fb`), CHANGELOG `1ec74c8e5` con la mia
+  clausola. HEAD `1ec74c8e5`, pulito.
+- **Review di W-B77** (`utils/pydantic_errors.py`): ✅ OK. Solo una nota: un vincolo scritto con un limite `Decimal`
+  porterebbe `params=None`, ma oggi nessuno schema lo fa.
+- **Review di Z-33** (migrazione 011 e il passo che sistema le date): la migrazione va bene, con un reperto MEDIO e uno
+  BASSO per Z.
+  - MEDIO: `_settle_exchange_timezone` si fida di `prep.legacy_check`, letto prima del fetch. Due aggiornamenti dello
+    stesso asset (scheduler e sync manuale, nessun lock per asset) fanno rigirare la regola su righe già giuste: con
+    `redate_provider_rows` le righe vengono tolte o spostate di un giorno. Cura: ricontrollare il segno sulla riga
+    riletta nella transazione.
+  - BASSO: un fuso che non si risolve blocca per sempre un asset segnato.
+- **Proposta «CSP applicata»** (sola analisi, da portare al developer): sotto.
+
+#### Proposta: la CSP applicata (dopo H-52)
+
+**Cosa blocca oggi una `script-src` applicata** (scansione della build, `files/h52/enforce-scan.txt`, e cloud smoke):
+- solo due siti di eval in tutto il bundle:
+  - F1, la sonda globale di cheetah-grid, dentro un try/catch: con la policy applicata ripiega su `window`, funziona ma
+    segnala ogni volta;
+  - il `parseInput` di ECharts, che fa `new Function` solo senza `JSON.parse`: mai nei browser di oggi.
+- Nessun timer con stringa, nessun URL `javascript:`, nessun import da `data:`/`blob:`. Script inline: tutti per hash
+  (H-52). `wasm-unsafe-eval` resta per PDFium.
+- **`connect-src`**:
+  - F3, la sonda dell'indirizzo, la sola fetch su un'altra origine in managed. L'endpoint risponde già con CORS `*`;
+  - il controllo degli aggiornamenti (`api.github.com`) gira solo in self-hosted.
+- **Le build con copertura** (istanbul, `new Function('return this')` in ogni modulo, senza try/catch) si rompono con
+  una policy applicata: le corsie con la CSP applicata girano senza `--coverage`.
+- **Una build nuova senza riavvio** darebbe pagina bianca (hash vecchi). In managed non succede, l'immagine non cambia;
+  in self-hosted da sorgente sì.
+
+**Opzioni e raccomandazioni**:
+- E1, l'interruttore: `LIBREFOLIO_CSP_ENFORCE` (bool, default spento; self-hosted invariato).
+  - Acceso: le pagine HTML della web app ricevono `Content-Security-Policy` con la policy intera più gli hash (contiene
+    le quattro direttive di `PAGE_POLICY`); doc e API HTML tengono `PAGE_POLICY`.
+  - Report-only: non più mandato quando si applica (le violazioni non vanno segnalate due volte). In seguito potrà
+    portare la prossima policy candidata, più stretta.
+  - **Default in managed: decisione del developer** (proposta: acceso nel profilo managed, dopo un cloud smoke verde
+    con la policy applicata).
+- E2, F1: (a) una trasformazione di Vite limitata a cheetah-grid, `new Function("return this")()` → `globalThis`, così
+  zero violazioni (consigliata; `vite.config.ts` è condiviso); oppure (b) un'eccezione documentata (la voce della
+  baseline resta).
+- E3, F3: (a) l'origine di `LIBREFOLIO_PUBLIC_URL` in `connect-src` (consigliata; un indirizzo diverso risulta «non
+  verificabile», decide A per l'esperienza); (b) `connect-src 'self' https:`. Già oggi `img-src https:` permette di far
+  uscire dati, e da una pagina https il mixed content blocca comunque `http:`. (c) Una sonda dal server: scartata,
+  sarebbe SSRF da un admin-inquilino nel cloud.
+- E4, gli hash con la policy applicata: un controllo di (mtime, size) dei file della build per ogni risposta HTML, in
+  un thread, che li ricalcola se cambiano (consigliato); oppure solo all'avvio, con il riavvio documentato.
+- E5, un endpoint per i report: nessuno (consigliato). Con `'report-sample'` i primi 40 caratteri uscirebbero.
+- E6, self-hosted che accende la policy: `connect-src` aggiunge `https://api.github.com` quando il controllo degli
+  aggiornamenti è attivo.
+
+**Cosa deve provare l'E2E**:
+- `TEST_LANE_SETTABLE` aggiunge `LIBREFOLIO_CSP_ENFORCE`;
+- il cloud smoke con `--lane-setting LIBREFOLIO_PROFILE=managed --lane-setting LIBREFOLIO_CSP_ENFORCE=true`, senza
+  copertura: verde, nessuna violazione ignota, F1 sparito se E2-a;
+- AUSR-E-07 (A) prova di proposito altre origini http: su una corsia con la policy applicata le sue attese cambiano
+  (lavoro di A);
+- la fase 2 (`all-frontend` managed) nel cancello RC con la policy applicata.
+
+**Dimensione**:
+- H: impostazione, middleware, controllo nell'audit, nome di corsia, test, doc; ~3–4 h più uno slot.
+- E2-a: ~1 h (Vite, più una scansione della build come guardia).
+- E3: H per la policy, A per esperienza e test, ~1–2 h.
+
+**Decisioni del coordinatore sulla CSP applicata** (21:45): GO per l'implementazione, con l'interruttore **spento ovunque**
+(il default in managed va nella lista del developer, con la mia proposta).
+- E1: `LIBREFOLIO_CSP_ENFORCE`; con la policy applicata niente report-only.
+- E2 (b): eccezione documentata per F1; la trasformazione di Vite (a) dopo la 1.3.
+- E3 (a): l'origine di `LIBREFOLIO_PUBLIC_URL` in `connect-src`, con A per l'esperienza e AUSR-E-07 (dopo A-57).
+- E4: solo all'avvio, con il riavvio documentato. E5: nessun endpoint. E6: `api.github.com` mentre il controllo degli
+  aggiornamenti è acceso.
+- E2E: il nome in `TEST_LANE_SETTABLE`; un cloud smoke managed con la policy applicata, senza copertura; la fase 2
+  applicata nel cancello RC.
+- Ordine: prima H-54, poi la CSP applicata.
+
+### Lotto «H-54: un file tolto da `src/` o da `static/` non si vede» (2026-10-17, 21:50) — analisi e passi
+
+**Stato vero**: `check_frontend_needs_build()` confronta solo le date dei file che esistono. Gli input dei contratti
+dei Tool hanno già l'impronta del loro elenco: `tool_contract_fingerprint()` è calcolata in `cmd_fe_build` **prima**
+della build (`dev.py:712`) e registrata dopo una build riuscita (`record_tool_contract_inputs`, `:750`, nel marcatore
+`frontend/build/.tool-contract-inputs`); `_tool_contracts_changed()` la confronta.
+
+**Disegno** (niente `dev.py`, niente imbracatura dei test):
+- l'elenco dell'impronta si allarga ai file di `frontend/src` e `frontend/static` che `_counts_for_the_build` conta, tolti i
+  cataloghi generati (`generated_catalogs()`): `cmd_fe_build` li scrive dopo l'impronta, e su un clone nuovo
+  costerebbero una ricostruzione in più. La loro presenza ha già un controllo suo;
+- i file dell'API generati sono già fuori per nome (`_BUILD_GENERATED_SOURCES`); il font scaricato da
+  `update_js_cache()` è prima dell'impronta;
+- l'etichetta del formato passa a `tool-contract-inputs/2`: un marcatore del formato vecchio non corrisponde più,
+  quindi una ricostruzione una volta dopo l'aggiornamento (la regola già scritta);
+- i nomi delle funzioni restano (meno rimescolamento); docstring e doc dicono cosa copre l'elenco;
+- senza marcatore (una build fatta da `npm run build` da solo) resta il ripiego di oggi.
+
+**Passi**:
+1. ✅ (21:34) Rossi (test-author, `files/runs/h54-reds.sh`): +67 test (`TestFrontendInputsListing`,
+   `TestFrontendInputsRecorded`), `utils runtime-isolation` **29 failed / 425**, come previsto; ruff e black puliti.
+   - Vincolo trovato da test-author: `_tool_contract_sources` deve restare dei soli Tool, perché alimenta anche il
+     controllo delle date; quindi una visita a parte dentro `tool_contract_fingerprint`.
+   - Caso limite non coperto: `favicon.png` (tracciato) cancellato a mano. La build lo ricrea dopo l'impronta: una
+     ricostruzione in più.
+2. ✅ (21:34) Cura `files/h54/apply_h54.py` (a secco, `--apply`, `cmp` OK): `_frontend_input_names()` e l'etichetta
+   `/2`, più docstring e commento.
+3. ✅ (21:38) Verdi: `utils runtime-isolation` **454/454**, `test-server-preparation` 91, `test-runner-cli` 766; ruff
+   pulito. L'impronta sul checkout vero: 80 ms per 1014 file.
+   - **Prova dal vivo** (`files/runs/h54-live.sh`): `dev.py server --test --build-only` ha ricostruito una volta (il
+     marcatore era del formato vecchio). Poi il marcatore è uguale all'impronta attuale e la sonda risponde «fresca»;
+     un secondo passaggio non ricostruisce. Niente ciclo.
+4. ✅ (21:40) Doc (docs-writer): `test-walkthrough/front-overview.md` («Automated Setup»: l'elenco registrato copre
+   anche `src/` e `static/`; senza marcatore, solo le date) e `dev_workflow.en.md` (passo 3). `i18n.md` era già giusta.
+   `mkdocs build` stretto 0 avvisi, `check-links` 97 validi, `git diff --check` pulito.
+5. ✅ (21:41) Checkpoint inviato (sotto).

@@ -6766,3 +6766,210 @@ prossimo checkpoint.
   - messaggio provato su un `(1, 1)` finto (`/tmp/libreFolio_j16_demo.py`, 638 caratteri);
   - porta 6185 libera.
 - Il triage con `test-triage` resta per la prossima caduta.
+
+#### Revisioni di MF-A9 e MF-A7 (17/10 ~19:35–20:00, sola lettura; base `a86f8de35`)
+
+- ✅ **CP del 17/10 entrato**: dev `78e2171ee` (`85a1c6f89`, `bb8dca7d3`, `59233f44b`, `e0996ab26`), CHANGELOG 🐛
+  `a86f8de35`; l'esempio rimasto nella skill `wiki-file` corretto dal coordinatore (`67c9e27cd`).
+- ✅ **MF-A9** (`130002b5c`): OK.
+  - La base di ripiego `cb_end + Σ(V − C)` vale il valore all'arrivo: `cost_moved` è la variazione del pool del
+    mittente in valuta del report, quella che il `cb_end` del ricevente porta.
+  - La finestra parte dall'arrivo (D-MF2).
+  - Cifre ricalcolate: 5/645 su 44 giorni → 0,066576; 54/300 su 70 → 1,370355.
+  - Nota di forma: la condizione è «nessuna uscita nel periodo», non «tiene ogni unità ricevuta».
+  - Proposta, preesistente, per dopo la 1.3 (decisione del developer): una base sola per le righe aperte nel periodo,
+    `costo finale + closed_position_base(...)` quando ogni uscita è coperta, finestra dalla prima apertura. Esempi:
+    54/600 = 9 % invece di 18 %; 154/500 invece di 154/300; niente salto all'ultima vendita (−10 % → −1 %).
+- ✅ **MF-A7** (`09d29671d`): OK. Un rilievo LOW: le funzioni della finestra leggono la quantità grezza
+  (`tx.quantity`), mentre la riga e l'elenco delle posizioni leggono quella scalata dalla quota
+  (`daily_state.py:380`). A un broker in comproprietà un residuo in (polvere, polvere/quota] è polvere per la riga e
+  non per la finestra. Cura: una convenzione sola.
+
+#### J-41 — il costo Auto sulla riga sbagliata (17/10, dalle ~20:00; base `a86f8de35`; area di W)
+
+- ✅ **Già fatta: è W-B67** (W, `279b3d5bd`, dev `ac92e6fae`, 14:00).
+  - `_find_created_tx_for_wac` è tolta; ogni create si costa sulla propria riga (`context.created_by_index`), e le
+    righe Auto in ordine di data (N84).
+  - I due casi di J-41 sono test di W-B67 per nome, rossi fino alla cura, verdi da allora:
+    `test_two_auto_rows_on_one_key_each_hold_the_average_before_the_other` e
+    `test_auto_then_manual_on_one_key_each_row_keeps_its_own_cost` (`services transaction-cost-basis-rule`,
+    `TestWB67EachAutoCreateCostsItsOwnRow`). `wac.md` racconta il prima e il dopo.
+  - La variante del modale bulk (`{amount: '0'}`, ora `TransactionBulkModal.svelte:1107`; il modulo fa lo stesso a
+    `TransactionFormModal.svelte:1014`): lo 0 è solo il segnaposto dell'indicazione di valuta, e nessuna riga resta più
+    senza costo. Con un FX mancante il lotto è rifiutato (`WAC_FX_UNAVAILABLE`).
+  - Nessun codice, nessun rosso da scrivere.
+- ⚠️ **Fuori pista, J-57 (nuova, vicina)**: un pool vuoto dà un costo medio **0**, non None
+  (`portfolio_service.py:199-204`, documentato in `wac.md`). Il `Currency` è vero (provato: `bool(Currency(0)) =
+  True`), quindi `_write_auto_cost` lo scrive, e il controllo del costo salta le righe Auto.
+  - Il modulo parte in Auto (`TransactionFormModal.svelte:307`) e non avvisa di un suggerimento a 0. Una rettifica in
+    entrata su un broker senza storia dell'asset diventa un acquisto gratuito (`ADD_ZERO_COST`); senza costo
+    sarebbe ignoto (`ADD_UNKNOWN_COST`).
+  - `test_wacp27_empty_pool_wac_zero` fissa lo 0 per un TRANSFER, che il controllo dei saldi rifiuta al
+    salvataggio.
+  - Cure possibili (a)/(b)/(c) nel backlog; la decisione va col J-11/J-35 (zero o ignoto).
+
+#### J-57 / N88 — il costo Auto senza nulla da mediare (17/10, dalle ~20:15; base `a86f8de35`; area di W, W rivede)
+
+- ✅ **Decisione** del coordinatore, notturna **N88** (da rivedere dal developer): (a), rifiutare.
+  - `autoCostEmptyPool`, senza parametri: il pool non ha unità alla sua data.
+  - Se il motore distingue a buon mercato «tutto ignoto» da «gratuito», un secondo codice, `autoCostUnknownPool`.
+  - Il costo in parte ignoto va in **J-58** (developer).
+  - Riga di CHANGELOG che nomini l'effetto sulle importazioni.
+- ✅ **Analisi** (inviata, approvata):
+  - Le vie: solo il passo Auto del lotto (`_compute_wac_for_auto_items`), in validazione e al salvataggio: modulo (Auto
+    di default, `TransactionFormModal.svelte:307`), modale bulk (Auto per le righe nuove, `:822-823`, e per il lato
+    che riceve di una coppia, `:726`).
+  - Le importazioni non cambiano da sole. BRIM non manda mai Auto; il modale tiene la modalità del plugin
+    (`:2234-2237`), e una riga senza costo è già rifiutata (`costBasisRequired`, il todo del costo). Cambia solo
+    chiudere quel todo con Auto su un broker vuoto: i primi «Receive / Transfer in» di un exchange crypto.
+  - Invariati: passaggi di decisione 47, `delete_by_broker`, il PAC, `POST /portfolio/wac` (che l'interfaccia non
+    chiama).
+- **Disegno** (dopo la verifica del motore): `report_complete` diventa falso a ogni `ADD_UNKNOWN_COST` (e
+  `ADD_MISSING_FX`, che però dà già `wac=None`) e torna vero quando il pool si svuota. Con una media 0:
+  - quantità 0: niente da mediare (`autoCostEmptyPool`);
+  - unità tenute e costo incompleto: niente di noto da mediare (`autoCostUnknownPool`; vale anche per gratuite e
+    ignote insieme);
+  - unità tenute e costo completo: unità gratuite, lo 0 resta.
+  - La facciata `compute_wac_iterative` non espone questo stato, e un test del PAC fissa la sua cache (salva
+    l'oggetto della risposta, 2 query). Quindi c'è una facciata sorella, `wac_pool_holding()`
+    (`portfolio_service.py`), senza cache: stesse righe tramite `_wac_pool_rows()` estratta, stesso motore. Si
+    chiama solo quando la media è 0.
+  - La quantità viene dal motore stesso invece che da `position_quantities`: coincidono salvo una vendita oltre il
+    posseduto, dove il motore taglia a zero, ed è quella del motore ad aver dato lo 0.
+- ✅ **Patch pronta, non applicata**: `files/j/j57/patch_fix.py`, provata a secco su 10 file:
+  - `schemas/transactions/batch.py` (2 codici);
+  - `portfolio_service.py` (`_wac_pool_rows`, `WacPoolHolding`, `wac_pool_holding`, una riga nella docstring del
+    modulo);
+  - `auto_cost.py` (`NothingToAverageError`, `_nothing_to_average`, la lista `nothing_to_average`);
+  - `batch_costs.py` (`_auto_cost_nothing_to_average`);
+  - i18n `transactions/{en,it,fr,es}.json`;
+  - `wac.md` (sezione «Nothing to average», passo 4, elenco dei casi) e `service.md` (riga della fase 10).
+- ✅ **J-58** registrata (developer): con un pool in parte a costo ignoto, la media scritta è sottostimata.
+- ✅ **Rossi** (test-author, 17/10 ~20:00–20:10), sul codice vecchio:
+  - `TestN88AutoCostWithNothingToAverage`, in `test_transaction_cost_basis_rule.py`: **11 rossi** e 7 controlli. Ogni
+    rosso cade sull'asserzione N88. Ci sono anche le varianti auto/auto-detail × validazione/salvataggio.
+    - R1/R2: un broker che non ha mai avuto l'asset; oggi «stores 0 EUR».
+    - R3: venduto tutto.
+    - R4: due Auto nello stesso lotto, salvate entrambe a 0.
+    - R5: un aggiornamento passato ad Auto sovrascrive i 42 EUR.
+    - R6: pool a costo ignoto.
+    - C1–C4: 100 EUR; le unità gratuite restano a 0; lo 0 manuale è accettato; il valore di oggi di J-58 è fissato
+      (50 EUR).
+    - Un aiutante `_pool` controlla cosa tiene davvero il pool, invece di supporlo.
+  - P27 rinominato `test_wacp27_empty_pool_is_refused`; tolta la guardia che lo faceva passare a vuoto. Oggi c'è solo
+    `balanceAssetNegative`.
+  - Conteggi: `transaction-cost-basis-rule` 11 falliti / 178 passati; `api transactions-wac` 1 / 19.
+- ✅ **Correzione**: `patch_fix.py`, applicata così com'era provata a secco; ruff, black e prettier puliti.
+- ✅ **Verdi (17/10 20:12–20:28)**:
+  - `services transaction-cost-basis-rule` **189/189** (anche il cancello delle traduzioni, per i due codici nuovi);
+  - `api transactions-wac` **20/20**;
+  - `portfolio-allocation-source` **98**: il contratto della cache di `compute_wac_iterative` tiene, con 2 query;
+  - `auto-cost-unreadable-pool` 17, `lone-transfer-legs` 20, `broker` 81, `transaction` 130,
+    `transaction-decimal-places` 201, `roi-fifo-utils` **1 439**;
+  - `api portfolio-wac` 12, `api batch-split-promote` 38;
+  - `utils gate-i18n-catalog` 176, `gate-i18n-usage` 195;
+  - `mkdocs build` stretto ✓, `check-links` ✓;
+  - E2E `front-transaction`: `tx-wac-bulk` 11, `tx-wac-formmodal` 10, `tx-transfer-auto-cost` 2, `tx-wac` 7,
+    `tx-wac-mode` 5, `tx-commit-all-types` 19.
+  - Porta 6185 libera.
+  > **⚠️ Fuori pista**: la prima corsa dello script dei verdi è uscita con 127 su ogni passo: copiando il modello con
+  > `head -n 13` erano rimaste fuori le definizioni di `P` e `T`. Aggiunte; rifatta.
+
+#### J-21 bis — il tetto ai tratti di un'uscita (17/10, dalle ~20:30; base `a86f8de35`; Y rivede)
+
+- ✅ **Verifica della nota di Y** (sonda in processo su `rolling_annualized_sharpe_values`, senza DB e senza corsia):
+  - le metriche di rischio girano sul calendario preparato, cioè solo le date di quotazione fresca dell'asset
+    (`market_series.py`);
+  - **tratti di un punto: no.** Con una finestra di 3 o più non possono esserci, perché le due finestre accanto si
+    sovrappongono. Con 2 serve un rendimento ripetuto identico. Su un asset mensile, 10 anni, finestre 2/3/6/12: 0
+    tratti di un punto, il più corto lungo quanto la finestra;
+  - **numero di serie: sì**, con finestre piccole su un asset giornaliero poco scambiato: con il 30 % di chiusure
+    invariate, 157 tratti (finestra 2), 46 (3), 1 (20); con il 60 %, 371, 214 (3) e 65 (5). Con la finestra di
+    default (90) c'è 1 tratto.
+- ✅ **Decisione** del coordinatore: subito il tetto, nel solo `backendRenderer.ts`. La cura vera (una serie per
+  uscita, dati a coppie, i tooltip di `PriceChartFull` e `LineChart`) va dopo la 1.3: **J-59**, accanto a J-56.
+- **Tetto: `MAX_LINE_RUNS = 30`.**
+  - Ogni tratto è una serie lunga quanto l'asse: 30 su 10 anni giornalieri sono ~75 000 punti, quanto qualche linea di
+    prezzo.
+  - La sonda separa i casi: asset mensili al più 19 tratti, anche con la finestra minima; casi patologici da 46 in su.
+  - Oltre il tetto, un'uscita senza stile (o un'area) torna la linea unita di prima di J-21. Il nome diventa «RSI (gaps
+    joined)» (chiave `signals.gapsJoined.label`) e gli avvisi del risultato ricevono «Too many gaps to draw: the line
+    joins them.» (`signals.gapsJoined.warning`); entrambi in 4 lingue in `i18n/charts`.
+  - Il nome è l'unico canale visibile dentro il renderer: gli `warnings` del risultato oggi nessuna pagina li mostra, e
+    i problemi della scheda vengono dal risultato del backend, che in questi casi dice già `partial_undefined_metric`.
+  - Le linee con stile e le barre restano come sono.
+- ✅ **Patch pronta, non applicata**: `files/j/j21b/patch_cap.py`, provata a secco (renderer e 4 cataloghi).
+- ✅ **Rossi** (test-author, 17/10 ~20:30–20:42, `backendRendererSegments.test.ts`), sul codice vecchio:
+  - **8 rossi**, tutti su un'asserzione:
+    - la riscrittura del test dei 120 tratti senza stile (`got 120`);
+    - la costante (`undefined` invece di 30);
+    - a (31 tratti);
+    - c, l'area;
+    - c2, area con regioni a stile, che si unisce comunque perché solo una linea si taglia per stile;
+    - d, livelli e regioni;
+    - f, due uscite, `got 33`;
+    - g, traduzione.
+  - Controlli verdi: b (30 tratti restano 30), e (linea con stile non toccata), h (barre).
+  - Il test dei 120 tratti con stile resta com'era, verde.
+  - core-unit: 8 falliti / 9 101 passati.
+- ✅ **Tetto applicato** (`patch_cap.py`, identica alla prova a secco); prettier pulito su renderer, 4 cataloghi e test.
+- ✅ **Verdi (17/10 20:43–20:46)**:
+  - `front-utility core-unit` **9 109/9 109**;
+  - `front-ai-export unit` **674**;
+  - `front-asset asset-unit` **1 110**;
+  - `front check` 0 errori, 0 avvisi;
+  - `utils gate-i18n-catalog` 176, `gate-i18n-usage` 195.
+  - Porta 6185 libera.
+
+#### J-42 e J-19 (17/10, dalle ~20:52; base `c80031659`)
+
+- ✅ **J-57 e J-21 bis entrati**: dev `539371064` (`b7e2bb3bd`, `def1d5259`, `203a36231`), CHANGELOG `c80031659`. W rivede
+  J-57, Y il tetto.
+- ✅ **Revisioni**: MF-A10 (`dddadd359`) OK; J-14 di MF (`8cc5661bc`) OK.
+- ✅ **J-42, già fatta** (tornata da X a J, verificata in sola lettura):
+  - La scrittura è **X-R47** (`5f68a8db0`): `bulk_upsert_events` → `_reject_invalid_split_ratios`
+    (`is_valid_split_ratio`). Copre creazione, inserimento o CSV, modifica per id (anche quella che tiene il tipo, che
+    P-10 lascia passare) e un dividendo trasformato in SPLIT; risponde 400 `EVENT_INVALID_SPLIT_RATIO`
+    (`eventSaveError.ts:130`, `assets.…invalidSplitRatio` in 4 lingue).
+  - L'aggiornamento del provider (`refresh.py:760` → `_storable_events`) scarta lo SPLIT con un avviso nel log; in
+    `api/v1/assets/events.py` non c'è un'altra via di scrittura.
+  - La lettura è **MF-D4**: un rapporto salvato non valido conta come mancante (`portfolio/engine.py:266-275`); il
+    riepilogo e il rapporto rispondono 200 con `INVALID_SPLIT_RATIO`, FIFO e YoC lo saltano.
+  - Verdi su HEAD: `services event-split-ratio` **78**, `roi-fifo-utils -k invalid_split` **69**.
+- **J-19, analisi** (sola lettura):
+  - `services/tools/executor.py`, `process_tree.py` e `schemas/tools.py` non hanno un proprietario nella 1.3:
+    invariati dal 16/09 (`4a38b9061`, la piattaforma dei Tool della 1.2), salvo il riordino del 12/10 (`2eed3d26c`).
+  - Esecutore e albero dei processi non scrivono nessuna riga di log.
+  - Il picco di memoria è già nelle metriche di ogni elemento (`resources.memory.peak_observed_bytes`, dalla pulizia).
+  - Il codice d'uscita va letto **prima** della pulizia: dopo, un figlio ancora vivo mostrerebbe la nostra
+    uccisione.
+  - Piano proposto: `ToolItemMetrics.worker_exit_code`, una riga di avviso su `worker_crashed`, rossi in
+    `tools-lifecycle`.
+- ✅ **J-19, via** del coordinatore: `schemas/tools.py` ed `executor.py` a J per il lotto; nessuna riga di CHANGELOG
+  (diagnostica per chi contribuisce).
+- ✅ **Rossi** (test-author, 17/10 ~21:00), `TestJ19CrashedWorkerExitStatus` in `test_tools_executor.py`:
+  - **4 rossi**: `crash` → 23; `signal_kill` → −9; `close_and_linger` → null; la riga di log con esattamente le sue chiavi
+    e nessun dato dell'elemento.
+  - **3 controlli**: successo, `invalid_output`, `oversize`.
+  - Scenari nuovi nel modulo di supporto (`_end_without_a_result`).
+  - Una sonda del test-author ha misurato prima e dopo la pulizia: `close_and_linger` passa da None a −15. Per questo
+    va letto prima.
+- ✅ **Correzione**: `patch_fix.py`, con due aggiunte venute dalle note del test-author:
+  - attesa di raccolta 0,5 s invece di 0,05 (`join` torna appena il figlio esce: aspetta tutto solo un figlio vivo);
+  - `_accept_result` scarta un `worker_exit_code` mandato dal worker.
+  - Più una frase in `tool_plugins.en.md` («Timing metrics», solo EN, senza traduzioni).
+- ⚠️ **Fuori pista (tre, tutti risolti)**:
+  - La docstring di `ToolItemMetrics`, resa su più righe con dei backtick, è finita nella descrizione OpenAPI, e il
+    generatore del client scrive le descrizioni su più righe come template literal JS senza proteggere i backtick:
+    `generated.ts` rotto, `front check` con 2 errori e molte suite di core-unit non caricate. Quelle su una riga
+    vanno tra apici singoli: per questo «``mode``» di `ToolMemoryMetrics` non ha mai rotto nulla. Docstring tornata a
+    una riga, campo spiegato in un commento.
+  - Un doppione di test dei processi (`_OwnedRunTree`) non ha `process`: `_crashed_exit_code` lo legge con `getattr`.
+  - `test_tools_api.py` fissa l'insieme esatto delle chiavi delle metriche: aggiunto `worker_exit_code` (il campo
+    nuovo è voluto).
+- ✅ **Verdi (17/10 21:20–21:26)**:
+  - `services tools-lifecycle` **98**, `tools-registry` 109;
+  - `api tools` 12, `api pac-planner-tool` 12;
+  - `api sync` (nessun file tracciato), `front check` 0/0, `front-utility core-unit` **9 244**;
+  - `mkdocs build` stretto ✓, `check-links` ✓.
+  - Porta 6185 libera.

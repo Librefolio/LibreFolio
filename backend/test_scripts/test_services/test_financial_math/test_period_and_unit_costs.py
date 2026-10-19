@@ -28,6 +28,29 @@ Red by absence until CP-4c: ``period.py`` is imported while a test runs (``_peri
 names of ``average_cost`` are read as attributes of the module, so the file collects today and each
 test fails on the missing module or name, after the checks of today's code it makes first.
 
+J-14 (the rest of it), no value change either: the period identity's residual and its tolerance
+move into ``period.py`` too.
+
+* ``period_identity_residual(pnl, ugl_delta, realized, income, fees_taxes, other_result)``:
+  ``pnl − (ugl_delta + realized + income − fees_taxes + other_result)``, in that association. It
+  replaces the two copies the AI Export's reconciliation wrote in line at ``e6d3e61e0``,
+  ``portfolio_financial._build_portfolio_reconciliation`` (``:491``) and
+  ``broker_financial._build_broker_reconciliation`` (``:432``); its oracle is
+  ``_identity_residual_today``.
+* ``is_reconciled(residual)``: ``abs(residual) < CONVERSION_DUST``, the constant of ``native_cash``
+  read where it lives. It replaces the tolerance those two components applied in line (``:495`` and
+  ``:436``); its oracle is ``_reconciled_today``.
+* ``get_positions_contribution`` (``portfolio_service.py:1854``) wrote ``period_other_result``'s
+  expression in line a second time; it now calls the function, in the same order. Its copy is
+  ``_positions_other_result_today``.
+
+The association is the point. Amounts converted into the report currency carry Decimal's 28
+significant digits (``CONVERTED``), and on them each other way of writing the sum rounds differently,
+in the last digit or in the exponent: the grids hold such amounts and first prove they tell every
+alternative from today's, and ``TestPeriodIdentityResidual`` keeps two concrete cases with the figure
+each alternative gives. Red by absence until J-14, like the rest: the new names are read off
+``_period()`` after the checks of today's code.
+
 States are real ``DailyPortfolioState`` objects. The period rule reads only their date, NAV, book
 value, market value, open cost basis and cumulative external cash flow (the breakdown also reads
 ``unrealized_by_currency``); every other figure holds a poison value, so a figure read from the
@@ -46,7 +69,7 @@ import dataclasses
 import importlib
 import itertools
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Context, Decimal, localcontext
 from types import ModuleType, SimpleNamespace
 from typing import Any
 
@@ -54,8 +77,9 @@ import pytest
 
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import UnrealizedBreakdownRow
-from backend.app.services.financial_math import average_cost
+from backend.app.services.financial_math import average_cost, native_cash
 from backend.app.services.financial_math.average_cost import CostEffect, CostMovement, CostMovementKind, CostPosition, CostStep, compute_average_costs
+from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, UnrealizedSplit
 
 PERIOD_MODULE = "backend.app.services.financial_math.portfolio.period"
@@ -203,6 +227,25 @@ def _breakdown_rows_today(engine_result: Any, date_from: date | None, as_of: dat
 def _other_result_today(period_pnl_val: Decimal, period_ugl_delta: Decimal, period_realized_val: Decimal, period_income_val: Decimal, period_fees_taxes_val: Decimal) -> Decimal:
     """``get_summary``'s residual that closes the period identity, ``portfolio_service.py:1049``, as written."""
     return period_pnl_val - period_ugl_delta - period_realized_val - period_income_val + period_fees_taxes_val
+
+
+def _positions_other_result_today(period_pnl_total: Decimal, period_ugl_delta: Decimal, total_realized: Decimal, total_income: Decimal, total_fees: Decimal) -> Decimal:
+    """``get_positions_contribution``'s term that closes the period identity, ``portfolio_service.py:1854`` at
+    ``e6d3e61e0``, as written (J-14)."""
+    return period_pnl_total - period_ugl_delta - total_realized - total_income + total_fees
+
+
+def _identity_residual_today(pnl: Decimal, ugl_delta: Decimal, realized: Decimal, income: Decimal, fees_taxes: Decimal, other_result: Decimal) -> Decimal:
+    """What the AI Export's reconciliation left of the identity, ``portfolio_financial.py:491`` and
+    ``broker_financial.py:432`` at ``e6d3e61e0``, as written: each ``summary.period_*.amount`` is named
+    by its argument (J-14)."""
+    return pnl - (ugl_delta + realized + income - fees_taxes + other_result)
+
+
+def _reconciled_today(residual_amount: Decimal) -> bool:
+    """The tolerance both components applied to that residual, ``portfolio_financial.py:495`` and
+    ``broker_financial.py:436`` at ``e6d3e61e0``, as written (J-14)."""
+    return abs(residual_amount) < CONVERSION_DUST
 
 
 def _unit_costs_today(steps: tuple[CostStep, ...]) -> list[tuple[Decimal, Decimal | None]]:
@@ -523,6 +566,212 @@ class TestPeriodOtherResult:
 
         for args in grid:
             result, expected = period_other_result(*args), _other_result_today(*args)
+            assert _same_decimal(result, expected), f"{args}: {result!r}, today {expected!r}"
+
+
+# =============================================================================
+# J-14: the identity's residual and its tolerance, in the same home
+# =============================================================================
+
+# Figures converted into the report currency, as the engine sums them: amounts times 10-digit rates (exact, 23 and 22
+# significant digits), amounts divided by a rate, and one converted across two rates (Decimal's 28 digits, rounded).
+# On them the association of a sum shows.
+CONVERTED = (
+    Decimal("1234567.891234") * Decimal("1.0876543219"),
+    Decimal("-987654.321987") * Decimal("0.9123456789"),
+    Decimal("2500") / Decimal("1.09"),
+    Decimal("-31465") / Decimal("1.19533"),
+    Decimal("8109.5") / Decimal("1.19533") * Decimal("1.0876543219"),
+)
+
+# The short figures of the identity: signs, zeros (one negative), exponents (one positive), the closing −21.80 of
+# TestPeriodOtherResult among them.
+SHORT_IDENTITY_GRID = [tuple(Decimal(text) for text in texts) for texts in itertools.product(("19.50", "-7", "0"), ("50.75", "0.0000001"), ("-12.30", "-0"), ("4.05", "0.000"), ("1.20", "0"), ("-21.80", "0", "3E+2"))]
+
+# Decimal's default context, pinned where a case depends on the precision of its rounding.
+DEFAULT_28_DIGITS = Context(prec=28, rounding=ROUND_HALF_EVEN)
+
+
+def _other_associations(pnl: Decimal, ugl_delta: Decimal, realized: Decimal, income: Decimal, fees_taxes: Decimal, other_result: Decimal) -> dict[str, Decimal]:
+    """The same identity residual written four other ways: each is the same sum in exact arithmetic, and each rounds
+    differently from today's on converted amounts."""
+    return {
+        "the closing term minus other_result": _other_result_today(pnl, ugl_delta, realized, income, fees_taxes) - other_result,
+        "other_result added first": pnl - (other_result + ugl_delta + realized + income - fees_taxes),
+        "other_result taken from pnl first": (pnl - other_result) - (ugl_delta + realized + income - fees_taxes),
+        "fees_taxes subtracted last": pnl - (ugl_delta + realized + income + other_result - fees_taxes),
+    }
+
+
+class TestPeriodIdentityResidual:
+    """``period_identity_residual``: what ``pnl = ugl_delta + realized + income − fees_taxes + other_result`` leaves,
+    ``pnl − (ugl_delta + realized + income − fees_taxes + other_result)``, in that association (J-14)."""
+
+    def test_what_the_identity_leaves(self):
+        """The figures of TestPeriodOtherResult: its −21.80 closes the identity, −20.80 leaves −1.00."""
+        figures = {"pnl": Decimal("19.50"), "ugl_delta": Decimal("50.75"), "realized": Decimal("-12.30"), "income": Decimal("4.05"), "fees_taxes": Decimal("1.20")}
+        period_identity_residual = _period().period_identity_residual
+
+        assert _same_decimal(period_identity_residual(**figures, other_result=Decimal("-21.80")), Decimal("0.00"))
+        assert _same_decimal(period_identity_residual(**figures, other_result=Decimal("-20.80")), Decimal("-1.00"))
+
+    def test_matches_today(self):
+        """Characterization: the AI Export's expression, exponent and sign of zero included, on short figures and on
+        every combination of six converted amounts.
+
+        First, on today's code alone: the converted amounts carry 20 significant digits or more, and for each other
+        association of the sum the grid holds a case where it differs from today's, so a swapped association would
+        not pass.
+        """
+        converted_grid = list(itertools.product(CONVERTED, repeat=6))
+        assert all(len(amount.as_tuple().digits) >= 20 for amount in CONVERTED)
+        for name in _other_associations(*converted_grid[0]):
+            assert any(not _same_decimal(_other_associations(*args)[name], _identity_residual_today(*args)) for args in converted_grid), f"the grid cannot tell «{name}» from today's"
+
+        period_identity_residual = _period().period_identity_residual
+        for args in SHORT_IDENTITY_GRID + converted_grid:
+            result, expected = period_identity_residual(*args), _identity_residual_today(*args)
+            assert _same_decimal(result, expected), f"{args}: {result!r}, today {expected!r}"
+
+    def test_the_identity_closes_with_its_closing_term(self):
+        """With ``other_result = period_other_result(...)`` the residual is zero on short figures, and below
+        CONVERSION_DUST on converted amounts, where it is not always zero: Decimal's rounding, which is why
+        ``is_reconciled`` has a tolerance."""
+        short_figures = list({tuple(str(figure) for figure in args[:5]): args[:5] for args in SHORT_IDENTITY_GRID}.values())
+        converted_figures = list(itertools.product(CONVERTED, repeat=5))
+        rounded = [_identity_residual_today(*args, _other_result_today(*args)) for args in converted_figures]
+        assert any(residual != 0 for residual in rounded) and all(abs(residual) < CONVERSION_DUST for residual in rounded)
+
+        period = _period()
+        for args in short_figures:
+            residual = period.period_identity_residual(*args, period.period_other_result(*args))
+            assert residual == 0 and period.is_reconciled(residual) is True, f"{args}: {residual!r}"
+        residuals = [period.period_identity_residual(*args, period.period_other_result(*args)) for args in converted_figures]
+        assert all(period.is_reconciled(residual) is True for residual in residuals)
+        assert any(residual != 0 for residual in residuals), "the converted amounts must show the rounding"
+
+    @pytest.mark.parametrize(
+        ("amounts", "rate", "today", "alternatives"),
+        [
+            pytest.param(
+                ("92967.16", "42957.89", "31465", "58674.48", "8109.5"),
+                "1.19533",
+                "6E-23",
+                {"the closing term minus other_result": "0E-23", "other_result added first": "0E-23", "other_result taken from pnl first": "1E-22", "fees_taxes subtracted last": "4E-23"},
+                id="the-last-digit",
+            ),
+            pytest.param(
+                ("49544.02", "-96960.8", "20294", "15186.3", "93345.15"),
+                "1.27229",
+                "0E-23",
+                {"the closing term minus other_result": "0E-22", "other_result added first": "8E-23", "other_result taken from pnl first": "0E-22", "fees_taxes subtracted last": "-2E-23"},
+                id="the-exponent",
+            ),
+        ],
+    )
+    def test_the_association_is_today_s_and_it_matters(self, amounts, rate, today, alternatives):
+        """Why the association is kept. Five figures of one period (pnl, ugl_delta, realized, income, fees_taxes), in
+        one currency converted at one 6-digit rate, carry 28 significant digits; ``other_result`` is their closing
+        term. Each other way of writing the sum rounds differently: by the last digit (today's 6E-23), or by the
+        exponent alone (today's zero is 0E-23; two alternatives give 0E-22, equal in value, told apart only by
+        ``str()``). The house gives today's figure and none of the others. Decimal's default context (28 digits,
+        half-even), pinned."""
+        with localcontext(DEFAULT_28_DIGITS):
+            pnl, ugl_delta, realized, income, fees_taxes = (Decimal(amount) / Decimal(rate) for amount in amounts)
+            args = (pnl, ugl_delta, realized, income, fees_taxes, _other_result_today(pnl, ugl_delta, realized, income, fees_taxes))
+            expected = _identity_residual_today(*args)
+            others = _other_associations(*args)
+        assert all(len(amount.as_tuple().digits) == 28 for amount in args)
+        assert str(expected) == today
+        assert {name: str(value) for name, value in others.items()} == alternatives
+
+        with localcontext(DEFAULT_28_DIGITS):
+            result = _period().period_identity_residual(*args)
+
+        assert _same_decimal(result, expected), f"{result!r}, today {expected!r}"
+        for name, value in others.items():
+            assert not _same_decimal(result, value), f"the house rounds as «{name}» does"
+
+
+class TestIsReconciled:
+    """``is_reconciled``: the identity closes when its residual is below ``CONVERSION_DUST`` (``native_cash``, 1E-9) in
+    absolute value; strictly, on either side of zero (J-14). A value test: ``1.0000E-9`` is the dust itself."""
+
+    @pytest.mark.parametrize(
+        "residual",
+        [
+            pytest.param(Decimal("0"), id="zero"),
+            pytest.param(Decimal("-0"), id="negative-zero"),
+            pytest.param(Decimal("0E-28"), id="zero-with-an-exponent"),
+            pytest.param(Decimal("6E-23"), id="rounding"),
+            pytest.param(CONVERSION_DUST - Decimal("1E-27"), id="dust-less-1e-27"),
+            pytest.param(CONVERSION_DUST - Decimal("1E-18"), id="dust-less-1e-18"),
+        ],
+    )
+    def test_below_conversion_dust_is_reconciled_on_either_side(self, residual):
+        assert _reconciled_today(residual) is True and _reconciled_today(-residual) is True
+        is_reconciled = _period().is_reconciled
+
+        assert is_reconciled(residual) is True
+        assert is_reconciled(-residual) is True
+
+    @pytest.mark.parametrize(
+        "residual",
+        [
+            pytest.param(CONVERSION_DUST, id="the-dust"),
+            pytest.param(Decimal("1.0000E-9"), id="the-dust-with-another-exponent"),
+            pytest.param(CONVERSION_DUST + Decimal("1E-27"), id="dust-plus-1e-27"),
+            pytest.param(Decimal("1E-8"), id="ten-dusts"),
+            pytest.param(Decimal("899"), id="material"),
+        ],
+    )
+    def test_conversion_dust_or_more_is_not_on_either_side(self, residual):
+        assert _reconciled_today(residual) is False and _reconciled_today(-residual) is False
+        is_reconciled = _period().is_reconciled
+
+        assert is_reconciled(residual) is False
+        assert is_reconciled(-residual) is False
+
+    def test_matches_today(self):
+        """Characterization: today's ``abs(residual) < CONVERSION_DUST``, on a grid around the boundary, of both signs,
+        with the residuals the identity leaves on converted amounts, closed and not; the grid reaches both answers."""
+        magnitudes = [Decimal(text) for text in ("0", "0E-28", "1E-28", "6E-23", "1E-21", "9.99999999E-10", "9.999999999999999999E-10", "1E-9", "1.0E-9", "1.000000001E-9", "2E-9", "1E-8", "0.01", "899", "1E+3")]
+        closed = [_identity_residual_today(*args, _other_result_today(*args)) for args in itertools.product(CONVERTED, repeat=5)]
+        unclosed = [_identity_residual_today(*args) for args in itertools.product(CONVERTED[2:], repeat=6)]
+        grid = magnitudes + [-magnitude for magnitude in magnitudes] + closed + unclosed
+        assert {_reconciled_today(residual) for residual in grid} == {True, False}
+
+        is_reconciled = _period().is_reconciled
+        for residual in grid:
+            assert is_reconciled(residual) is _reconciled_today(residual), repr(residual)
+
+    def test_the_tolerance_is_native_cash_s(self, monkeypatch):
+        """One constant, no copy: ``period`` holds ``native_cash.CONVERSION_DUST`` itself, and ``is_reconciled`` reads
+        it when called (a literal would not follow the patched value)."""
+        period = _period()
+        assert period.CONVERSION_DUST is native_cash.CONVERSION_DUST
+
+        monkeypatch.setattr(period, "CONVERSION_DUST", Decimal("1E-6"))
+
+        assert period.is_reconciled(Decimal("5E-7")) is True
+        assert period.is_reconciled(Decimal("-1E-6")) is False
+
+
+class TestPeriodOtherResultInPositionsContribution:
+    """J-14: ``get_positions_contribution`` wrote ``period_other_result``'s expression in line a second time
+    (``portfolio_service.py:1854`` at ``e6d3e61e0``) and now calls the function: the same association, so the same
+    figure to its last digit. A characterization lock, green before J-14 too: ``period_other_result`` was already
+    there."""
+
+    def test_matches_today_on_converted_amounts(self):
+        """Every combination of five converted amounts, exponent included. First: the grid tells today's expression
+        from ``pnl − (ugl_delta + realized + income − fees_taxes)``, so a regrouped sum would not pass."""
+        grid = list(itertools.product(CONVERTED, repeat=5))
+        assert any(not _same_decimal(pnl - (ugl_delta + realized + income - fees_taxes), _positions_other_result_today(pnl, ugl_delta, realized, income, fees_taxes)) for pnl, ugl_delta, realized, income, fees_taxes in grid)
+
+        period_other_result = _period().period_other_result
+        for args in grid:
+            result, expected = period_other_result(*args), _positions_other_result_today(*args)
             assert _same_decimal(result, expected), f"{args}: {result!r}, today {expected!r}"
 
 
