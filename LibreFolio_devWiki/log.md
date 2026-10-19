@@ -3907,3 +3907,11 @@ Graph: not updated; graphify is not available in this worktree.
 Workstream A, A-CL1 (the developer's nightly, Settings › About). `ChangelogModal`'s `ready` read the translations through `peek()` on a plain `Map`: a window closed while its translation loaded dropped the answer and, once reopened, kept its stale `undefined` (the sidebar's was another instance, computed after the fill). Cure `5ccb495e5`: the cache is a `SvelteMap`; one window, the Sidebar's, opened from both versions.
 Filed: [[problems/svelte5-derived-stale-over-non-reactive-cache]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-19] update | The real module of the changelog cache, in Vitest (A-CL1 review)
+The automatic review of `5ccb495e5` found that only a fake proved the cure. The node environment has no reactivity
+and jsdom refuses the `?raw` import, mocked or not; the bundle imports moved to `changelogSources.ts`, which a jsdom
+test mocks, and `changelog.reactivity.test.ts` drives the real `createLocalizedChangelog` (red with `new Map`, green
+with `SvelteMap`). Page section «Prevention» and its source files updated.
+Filed: revision of [[problems/svelte5-derived-stale-over-non-reactive-cache]].
+Graph: not updated; graphify is not available in this worktree.
