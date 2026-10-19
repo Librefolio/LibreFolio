@@ -1,7 +1,7 @@
 <script lang="ts">
     import {page} from '$app/stores';
     import {browser} from '$app/environment';
-    import {onMount} from 'svelte';
+    import {onDestroy, onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {auth} from '$lib/stores/app/auth';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
@@ -11,14 +11,12 @@
     import {APP_VERSION} from '$lib/version';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import ChangelogModal from './ChangelogModal.svelte';
+    import {changelogModal} from '$lib/features/changelog/changelogModalStore.svelte';
     import ConnectionSecurityIndicator from './ConnectionSecurityIndicator.svelte';
     import LegalLinks from '$lib/features/legal/LegalLinks.svelte';
 
     // Mobile sidebar state (exported so parent can control it)
     export let isOpen = false;
-
-    /** Changelog modal visibility (F12) */
-    let changelogOpen = false;
 
     // Collapsed state (icons only) - exported and persisted in localStorage
     export let collapsed = false;
@@ -33,6 +31,9 @@
             collapsed = saved === 'true';
         }
     });
+
+    // The app's one changelog window lives as long as the sidebar that mounts it (A-CL1)
+    onDestroy(() => changelogModal.close());
 
     // Navigation groups
     // Group 1: My Portfolio (user-specific data)
@@ -285,7 +286,7 @@
                 type="button"
                 class="w-full text-center text-lf-bar-muted hover:text-lf-bar-text text-xs pt-2 transition-colors cursor-pointer rounded focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus"
                 title="LibreFolio {APP_VERSION} — {$_('changelog.title')}"
-                on:click={() => (changelogOpen = true)}
+                on:click={() => changelogModal.show()}
                 data-testid="sidebar-version"
             >
                 {APP_VERSION}
@@ -298,6 +299,7 @@
     </div>
 </nav>
 
-<!-- Rendered OUTSIDE <nav>: the sidebar's transform/overflow-hidden would trap
+<!-- The app's one changelog window (A-CL1): every entry point opens it through changelogModal.show().
+     Rendered OUTSIDE <nav>: the sidebar's transform/overflow-hidden would trap
      the modal's fixed positioning inside the narrow drawer (F12 round-2). -->
-<ChangelogModal open={changelogOpen} onClose={() => (changelogOpen = false)} currentVersion={APP_VERSION} />
+<ChangelogModal open={changelogModal.open} onClose={changelogModal.close} currentVersion={APP_VERSION} />

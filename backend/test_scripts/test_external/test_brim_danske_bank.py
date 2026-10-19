@@ -112,8 +112,12 @@ CHARGES = "danske_trade_charges_included"
 DEMERGER = "demerger"
 DEMERGER_OLD = "demerger_old_leg"
 DANSKE_REASON_CODES = {CHARGES, DEMERGER, DEMERGER_OLD}
-# Parse notices and their severity; every excluded reason has its own "excluded_<reason>" warning.
+# Parse notices and their severity; every excluded reason has its own "excluded_<reason>" notice, a warning except where
+# EXCLUDED_NOTICES says otherwise.
 PARSE_NOTICES = {"deferred_rows": "info", "name_mismatch": "warning", "proof_discarded": "info", "balance_chain_broken": "warning", "deposit_assumed": "info"}
+# Lot N74 (Fineco, safe rows): a trade the cash statement settles after its last row is not a fault — it comes with the
+# next import — so its notice is a note (info). Every other excluded reason stays a warning, excluded_status included.
+EXCLUDED_NOTICES = {"excluded_not_yet_settled": "info"}
 SET_NOTICES = {"gap", "overlap_mismatch", "empty_member", "balance_chain_broken", "mixed_accounts_in_file"}
 # The todo context keys the wizard reads (developer guide, "context keys the frontend understands").
 CHARGES_CONTEXT = ("row", "cash", "currency", "compare_nominal", "split_hint", "split_suggestions")
@@ -996,7 +1000,8 @@ class TestIdentity:
     def test_metadata(self) -> None:
         plugin = _danske()
 
-        assert (plugin.provider_name, plugin.supported_extensions, plugin.detection_priority, plugin.plugin_version) == ("Danske Bank", [".xlsx", ".csv"], 100, "1.0.0")
+        # 1.0.1: lot N74, excluded_not_yet_settled is a note.
+        assert (plugin.provider_name, plugin.supported_extensions, plugin.detection_priority, plugin.plugin_version) == ("Danske Bank", [".xlsx", ".csv"], 100, "1.0.1")
         assert plugin.description and plugin.description.strip()
         assert (plugin.icon_url, plugin.docs_url) == ("https://danskebank.fi/favicon.ico", "/mkdocs/user/transactions/import/danske-bank/")
         assert plugin.test_file_pattern == "danske_bank"
@@ -1021,7 +1026,8 @@ class TestIdentity:
         info = plugin.to_plugin_info()
         catalogue = {item.code: item for item in BRIMProviderRegistry.list_plugin_info()}
 
-        assert (info.code, info.name, info.plugin_version, info.detection_priority, info.icon_url, info.docs_url) == (PLUGIN_CODE, "Danske Bank", "1.0.0", 100, plugin.icon_url, plugin.docs_url)
+        # 1.0.1: lot N74, excluded_not_yet_settled is a note.
+        assert (info.code, info.name, info.plugin_version, info.detection_priority, info.icon_url, info.docs_url) == (PLUGIN_CODE, "Danske Bank", "1.0.1", 100, plugin.icon_url, plugin.docs_url)
         assert info.report_roles == plugin.report_roles
         assert [role.code for role in catalogue[PLUGIN_CODE].report_roles] == ["custody", "cash"]
 
@@ -1512,6 +1518,16 @@ class TestClassification:
         notices = [notice for notice in output.warnings if notice.code == "deposit_assumed"]
 
         assert notices and all(notice.severity == "info" for notice in notices)
+
+    def test_guard_an_excluded_row_stays_a_warning_unless_not_yet_settled(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Guard (lot N74): only ``excluded_not_yet_settled`` became a note. The rows this scenario excludes for their status,
+        as invalid or of an unknown type are still a warning each — green today and after."""
+        _builder, _table, _path, output = _scenario_parse("classes", tmp_path_factory)
+
+        excluded = {notice.code: notice.severity for notice in output.warnings if notice.code.startswith("excluded_") and notice.code != "excluded_not_yet_settled"}
+
+        assert {"excluded_status", "excluded_invalid", "excluded_unknown_type"} <= set(excluded), f"premise: the classes scenario excludes rows for these reasons, the parse noted {sorted(excluded)}"
+        assert excluded == dict.fromkeys(excluded, "warning"), f"every excluded reason but not_yet_settled stays a warning: {excluded}"
 
 
 # =============================================================================
@@ -2151,7 +2167,7 @@ class TestParseContract:
             by_code[notice.code].append(notice)
 
         for code, notices in by_code.items():
-            severity = "warning" if code.startswith("excluded_") else PARSE_NOTICES.get(code)
+            severity = EXCLUDED_NOTICES.get(code, "warning") if code.startswith("excluded_") else PARSE_NOTICES.get(code)
             assert severity, f"unknown parse notice code {code!r}"
             for notice in notices:
                 assert notice.severity == severity, code
@@ -2465,9 +2481,12 @@ class TestGapSampleFacts:
         assert [todo[4] for todo in todos if todo[0] in (3, 8)] == ["644.50", "428.56"]
 
     def test_notices(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Lot N74: the purchase settled after the statement is a note (info), like the assumed deposit — red until the plugin
+        stops calling it a warning."""
         _table, _path, output = _sample_parse("gap", tmp_path_factory)
 
         assert sorted(set(_codes(output.warnings))) == ["deposit_assumed", "excluded_not_yet_settled"]
+        assert sorted({(notice.code, notice.severity) for notice in output.warnings}) == [("deposit_assumed", "info"), ("excluded_not_yet_settled", "info")]
 
     def test_checkpoints_and_verification(self, tmp_path_factory: pytest.TempPathFactory) -> None:
         """The opening absorbs the two rows before 2020-09-01 over an opening balance of 1523.36; the gap checkpoint the two trades of the gap."""
