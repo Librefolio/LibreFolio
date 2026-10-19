@@ -146,7 +146,9 @@
           "ADJUSTMENT_OUT": "Rettifica in uscita",
           "TRANSFER_DEPART": "Trasferimento",
           "TRANSFER_ARRIVE": "Trasferimento",
-          "SPLIT": "Split"
+          "SPLIT": "Split",
+          "TRANSFER_IN": "Trasferimento in entrata",
+          "TRANSFER_OUT": "Trasferimento in uscita"
         },
         "unitPrice": "Prezzo unitario",
         "transitInterval": "Intervallo transito",
@@ -224,7 +226,9 @@
           "ADJUSTMENT_OUT": "RETTIFICA-",
           "TRANSFER_DEPART": "TRASFERIMENTO",
           "TRANSFER_ARRIVE": "TRASFERIMENTO",
-          "SPLIT": "SPLIT"
+          "SPLIT": "SPLIT",
+          "TRANSFER_IN": "TRASFERIMENTO+",
+          "TRANSFER_OUT": "TRASFERIMENTO-"
         },
         "historyDetail": {
           "openPrice": "Prezzo apertura",
