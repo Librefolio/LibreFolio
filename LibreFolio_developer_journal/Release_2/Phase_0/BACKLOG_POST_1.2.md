@@ -5027,6 +5027,13 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
     `'self'` e l'origine di `LIBREFOLIO_PUBLIC_URL`). Quando H manda la politica esatta, A rivede anche le attese di
     AUSR-E-07 (`e2e/settings/admin-users.spec.ts`), che prova apposta altre origini http, su una corsia che la
     applica.
+- ✅ **A-CL1 · Il changelog aperto da Impostazioni › Informazioni resta «in caricamento»** — basso, UX; chiusa il 19/10
+  (commit del coordinatore): una finestra sola per tutta l'app, quella della Sidebar, aperta dalle due versioni tramite
+  `changelogModalStore.svelte.ts`; la cache delle traduzioni è una `SvelteMap`. Visto dal developer sulla nightly
+  (`v1.2.1-2591-g5e1a7c3af`), tramite il coordinatore (19/10). La finestra chiusa mentre la traduzione caricava
+  scartava il risultato, e alla riapertura leggeva una cache non reattiva. Verde con Vitest (M1, M2, About, Sidebar
+  1–4) e con l'E2E E1/E2 di `changelog-locale.spec.ts`, rosso prima della cura. Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-CL1» e «CL1.1»–«CL1.7».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
