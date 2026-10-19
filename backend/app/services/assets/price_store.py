@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import List, Optional
@@ -27,7 +26,7 @@ from backend.app.schemas import (
     FAUpsert,
 )
 from backend.app.schemas.prices import FACurrentValue
-from backend.app.utils.date_range_limits import DateOutOfRangeError, stored_date_bounds
+from backend.app.utils.date_range_limits import DateOutOfRangeError, latest_stored_date
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.sql_chunks import chunks
 
@@ -73,8 +72,8 @@ def _reject_prices_over_the_limit(data: List[FAUpsert]) -> None:
             )
 
 
-def _reject_dates_out_of_range(data: List[FAUpsert], earliest: date, latest: date) -> None:
-    """Refuse a manual upsert holding a date outside ``stored_date_bounds()``, before anything is written (X-R65, N83).
+def _reject_dates_out_of_range(data: List[FAUpsert], latest: date) -> None:
+    """Refuse a manual upsert holding a date after ``latest_stored_date()``, before anything is written (X-R65, N83).
 
     One entry per asset with such dates, in the request's order, with at most 10 of them; ``count`` is every one. A
     provider's points are not refused: ``bulk_upsert_prices`` skips them, as it skips the unstorable ones.
@@ -85,12 +84,12 @@ def _reject_dates_out_of_range(data: List[FAUpsert], earliest: date, latest: dat
     items: list[dict] = []
     count = 0
     for item in data:
-        dates = [price.date.isoformat() for price in item.prices if not earliest <= price.date <= latest]
+        dates = [price.date.isoformat() for price in item.prices if price.date > latest]
         if dates:
             items.append({"asset_id": item.asset_id, "dates": dates[:10]})
             count += len(dates)
     if items:
-        raise DateOutOfRangeError(items=items, count=count, earliest=earliest, latest=latest)
+        raise DateOutOfRangeError(items=items, count=count, latest=latest)
 
 
 class PriceCurrencyMismatchError(Exception):
@@ -252,7 +251,7 @@ class PriceStoreOperations:
                 HTTP 400); under a provider's key, a point whose currency is not its asset's (I.2 — Supersedes E.3:
                 soft-skip with ``errors[]`` was dropped because, post-I.5/I.8, the DataEditor no longer sends a
                 per-point currency. See ``plan-phase07-transaction-Part3_1_Closure.md`` §E.3).
-            DateOutOfRangeError: a manual date outside ``stored_date_bounds()`` (X-R65, N83; HTTP 422).
+            DateOutOfRangeError: a manual date after ``latest_stored_date()`` (X-R65, N83; HTTP 422).
             PriceCurrencyMismatchError: a manual price in a currency other than its asset's, on any item of the call
                 (X-R71; HTTP 422 ``price_currency_mismatch``). The three refusals of a manual call come before anything
                 of it is written.
@@ -261,10 +260,10 @@ class PriceStoreOperations:
         """
         if not data:
             return {"inserted_count": 0, "updated_count": 0, "results": []}
-        earliest, latest = stored_date_bounds()
+        latest = latest_stored_date()
         if source_plugin_key == "MANUAL":
             _reject_prices_over_the_limit(data)
-            _reject_dates_out_of_range(data, earliest, latest)
+            _reject_dates_out_of_range(data, latest)
             await _reject_currency_mismatches(session, data)
 
         total_inserted = 0
@@ -336,14 +335,14 @@ class PriceStoreOperations:
             unstorable_dates: list[str] = []
             out_of_range_dates: list[str] = []
             if source_plugin_key != "MANUAL":
-                # X-R65 (N83): a provider's date outside stored_date_bounds() is skipped, never stored.
+                # X-R65 (N83): a provider's date after latest_stored_date() is skipped, never stored.
                 for date_key in list(valid_inputs):
-                    if not earliest <= date_key <= latest:
+                    if date_key > latest:
                         del valid_inputs[date_key]
                         out_of_range_dates.append(date_key.isoformat())
                         rejections.append((date_key, "date_out_of_range"))
                 if out_of_range_dates:
-                    logger.warning("Provider prices skipped: date out of range", asset_id=asset_id, source=source_plugin_key, dates=out_of_range_dates[:5], count=len(out_of_range_dates), earliest=earliest.isoformat(), latest=latest.isoformat())
+                    logger.warning("Provider prices skipped: date out of range", asset_id=asset_id, source=source_plugin_key, dates=out_of_range_dates[:5], count=len(out_of_range_dates), latest=latest.isoformat())
                 for date_key, price in list(valid_inputs.items()):
                     reason = _unstorable_provider_point(price)
                     if reason is not None:
@@ -471,7 +470,7 @@ class PriceStoreOperations:
             if rejected_dates:
                 msg += f"; rejected {len(rejected_dates)} date(s) with impossible OHLC (close outside [low, high]): " + ", ".join(rejected_dates[:5]) + (f" (+ {len(rejected_dates) - 5} more)" if len(rejected_dates) > 5 else "")
             if out_of_range_dates:
-                msg += f"; rejected {len(out_of_range_dates)} date(s) outside {earliest.isoformat()} to {latest.isoformat()}: " + ", ".join(out_of_range_dates[:5]) + (f" (+ {len(out_of_range_dates) - 5} more)" if len(out_of_range_dates) > 5 else "")
+                msg += f"; rejected {len(out_of_range_dates)} date(s) after {latest.isoformat()}: " + ", ".join(out_of_range_dates[:5]) + (f" (+ {len(out_of_range_dates) - 5} more)" if len(out_of_range_dates) > 5 else "")
             if unstorable_dates:
                 msg += f"; rejected {len(unstorable_dates)} date(s) with a value no price column can keep: " + ", ".join(unstorable_dates[:5]) + (f" (+ {len(unstorable_dates) - 5} more)" if len(unstorable_dates) > 5 else "")
 
@@ -485,42 +484,6 @@ class PriceStoreOperations:
             )
         # update_count = 0 because SQLite doesn't distinguish
         return {"inserted_count": total_inserted, "updated_count": 0, "results": results}
-
-    @staticmethod
-    async def redate_provider_rows(session: AsyncSession, asset_id: int, source_plugin_key: str, target_of: Callable[[date], Optional[date]]) -> tuple[int, int]:
-        """Move the asset's prices written by ``source_plugin_key`` to the date ``target_of`` gives them (None: the row
-        stays), latest first, so no row lands on one not yet moved (Z-33). A row already on the target date, of any
-        source, stays and the moved one is dropped. The values never change; a moved row gets a new ``fetched_at``, as
-        every write does: the portfolio cache keys on COUNT + MAX(fetched_at). Flushed, not committed. Returns (moved,
-        dropped).
-
-        Targets go forward only: latest first is safe only then. An earlier target could meet a row of the provider not
-        yet processed, and the moving row would be dropped by mistake: it raises ``ValueError`` before anything moves."""
-        rows = (await session.execute(select(PriceHistory).where(PriceHistory.asset_id == asset_id, PriceHistory.source_plugin_key == source_plugin_key).order_by(PriceHistory.date.desc()))).scalars().all()
-        targets = [(row, target_of(row.date)) for row in rows]
-        backward = next(((row, target) for row, target in targets if target is not None and target < row.date), None)
-        if backward is not None:
-            raise ValueError(f"redate_provider_rows moves rows forward only: asset {asset_id}, {backward[0].date.isoformat()} -> {backward[1].isoformat()}")
-        occupied = set((await session.execute(select(PriceHistory.date).where(PriceHistory.asset_id == asset_id))).scalars().all())
-        moved = dropped = 0
-        now = utcnow()
-        for row, target in targets:
-            if target is None or target == row.date:
-                continue
-            occupied.discard(row.date)
-            if target in occupied:
-                await session.delete(row)
-                dropped += 1
-            else:
-                row.date = target
-                row.fetched_at = now
-                occupied.add(target)
-                moved += 1
-            # Row by row, never once at the end: one flush would emit the UPDATEs sorted by primary key, not in this
-            # order, and the DELETEs after them, so a row could land on a date another still holds (the unique key
-            # uq_price_history_asset_date).
-            await session.flush()
-        return moved, dropped
 
     @staticmethod
     async def bulk_delete_prices(data: List[FAAssetDelete], session: AsyncSession) -> FABulkDeleteResponse:

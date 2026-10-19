@@ -101,11 +101,12 @@ before committing, while the migration is still unreleased:
 ```
 001_initial.py                  002_identifier_other_json_list.py
 003_scheduler_timezone.py       004_release_1_2_0_schema.py
+005_release_1_3_0_schema.py
 ```
 
 - **Zero-padded sequential prefix** (`00N_`) so the chain reads in order on disk.
 - After the prefix, either the **target release version** it ships in
-  (`004_release_1_2_0_schema` → v1.2.0) or the **functional scope** when the migration is a
+  (`004_release_1_2_0_schema` → v1.2.0, `005_release_1_3_0_schema` → v1.3.0) or the **functional scope** when the migration is a
   single self-contained change (`003_scheduler_timezone`).
 - The `revision` string inside the file equals the filename without `.py`.
 - ⚠️ **Keep the id at 32 characters or fewer.** Alembic's own `alembic_version.version_num`
@@ -127,6 +128,13 @@ git cat-file -e <tag>:backend/alembic/versions/<file>   # is it inside a release
 
 Anything inside a released tag stays in the chain. Anything not released may be consolidated.
 
+**One migration per release.** Before a release, the cycle's unreleased migrations are folded into one
+`00N_release_<version>_schema`: 004 for 1.2, and `005_release_1_3_0_schema` for 1.3 (decision of 19/10/2026).
+The folded file must give the same schema as the chain it replaces: freeze that schema before deleting
+the chain, and test the new file against it (`test_migration_005_release_1_3.py`). A database stamped with a
+retired id comes from an unreleased build only: it is brought forward by hand (the developer journal holds the
+procedure), never by code in the app, and a backup at such an id is refused as from a newer LibreFolio.
+
 ### One head, always — never `alembic merge`
 
 Two migrations authored in parallel that declare the same `down_revision` produce **no Git
@@ -142,6 +150,24 @@ check exists to prevent. A fork therefore disables auto-upgrade for every instal
 leaving only a warning in the log, and `/system/ready` answering `migrations: unknown`.
 
 `db_schema_validate.py` enforces `len(ScriptDirectory.get_heads()) == 1`.
+
+### Indexes: only the ones a query uses
+
+The developer's rule (19/10/2026), after an analysis found 13 indexes nobody needed (dropped by
+`005_release_1_3_0_schema`; `001_initial.py` stays as released):
+
+- **A `UNIQUE` constraint already creates its index** (`sqlite_autoindex_<table>_<n>`). Never add an `Index`,
+  `index=True` or `CREATE INDEX` on the same columns. In a model, `Field(unique=True)` or a `UniqueConstraint`
+  alone: `unique=True, index=True` makes `create_all` build a unique index where a migration writes the
+  constraint, and a migration that wrote both left six duplicates in the 1.2 schema.
+- **No index that is the left prefix of another.** `(broker_id, date, id)` already serves every query on
+  `broker_id`, and SQLite's foreign-key checks on it.
+- **Every new index has a query that uses it, proven with `EXPLAIN QUERY PLAN`**: name the query in the
+  migration's docstring, with the plan line (`SEARCH <table> USING INDEX <name> (...)`). An index nobody reads
+  costs space and every write.
+- **The guard**: `db validate` (`db_schema_validate.py`) fails on an index equal to, or a left prefix of, another
+  index of the same table, automatic ones included. A `UNIQUE` prefix of a longer index, a partial index and an
+  expression index are not redundancy.
 
 ### Standard Commands
 

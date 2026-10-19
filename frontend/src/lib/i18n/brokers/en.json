@@ -146,7 +146,9 @@
           "ADJUSTMENT_OUT": "Adjustment Out",
           "TRANSFER_DEPART": "Transfer",
           "TRANSFER_ARRIVE": "Transfer",
-          "SPLIT": "Split"
+          "SPLIT": "Split",
+          "TRANSFER_IN": "Transfer In",
+          "TRANSFER_OUT": "Transfer Out"
         },
         "unitPrice": "Unit Price",
         "transitInterval": "Transit Interval",
@@ -224,7 +226,9 @@
           "ADJUSTMENT_OUT": "ADJUSTMENT-",
           "TRANSFER_DEPART": "TRANSFER",
           "TRANSFER_ARRIVE": "TRANSFER",
-          "SPLIT": "SPLIT"
+          "SPLIT": "SPLIT",
+          "TRANSFER_IN": "TRANSFER+",
+          "TRANSFER_OUT": "TRANSFER-"
         },
         "historyDetail": {
           "openPrice": "Open price",
