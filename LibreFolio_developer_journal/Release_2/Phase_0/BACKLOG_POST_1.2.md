@@ -4292,6 +4292,16 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     8 rossi → verdi, checkpoint inviato; il ✅ col commit va alla prossima riconciliazione.
 
   Dettagli: piano H, §14, lotto «H-57», nota delle 14:20.
+- **H-60 · Errori leggibili: le informazioni utili stampate in caso di errore, anche in console** — alto, regola del
+  developer (19/10), via coordinatore. Analisi fatta il 19/10 (sola lettura); in attesa delle decisioni D1–D5.
+  - Il log dell'app è JSON; la forma raddoppiata dell'estratto viene dallo strumento che l'ha letto. Difetto vero:
+    `logger.exception()` scrive la traceback due volte e il livello `EXCEPTION` (84 punti).
+  - 90 `except` larghi senza traccia nel log; P1 l'AI Export (`dependencies.py:478`, i `diagnostics` mai letti) e
+    `tools/executor.py:273` (J).
+  - Proposta: `request_id` e gestore unico dei 5xx (H), console del frontend da `zodios-client.ts` (H, ok di A), la
+    regola nelle istruzioni, i P2 per area (W, X, MF, Y/J).
+
+  Dettagli: piano H, §14, lotto «H-60».
 
 ## A · Account e accessi (fase 01)
 
