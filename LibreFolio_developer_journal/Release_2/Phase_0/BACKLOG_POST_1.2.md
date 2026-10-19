@@ -6613,6 +6613,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   avviso in cui si evidenzia il fatto all'utente e gli si dice di aprire la issue per far gestire il caso, con link a github». Per
   Danske: «Varaus» in silenzio con il log; ogni altro stato non contabilizzato con un avviso e `report_issue`; versione 1.0.2. Il
   lotto è in analisi. Dettagli: piano 04, «W-B85 · «Noto in silenzio, ignoto con avviso»: analisi».
+  ✅ 19/10, la parte decisa (via del coordinatore 16:23):
+  - Danske: «Varaus» → `reservation`, in silenzio con il log e nel conto del set; `excluded_status` → avviso con `report_issue`;
+    versione 1.0.2;
+  - la regola 10 della skill `brim-plugin`, e la guida dei plugin.
+  Restano aperte D-W85-1…4: gli altri motivi di Danske, le note delle righe non regolate, gli altri plugin (W-B86), i salti con
+  effetto economico (W-B87). Commit: il checkpoint W-B85 del coordinatore. Dettagli: piano 04, «W-B85 · Danske Bank, «noto in
+  silenzio, ignoto con avviso»: cura».
 - **W-B86 · Gli altri plugin BRIM col principio «noto in silenzio, ignoto con avviso»** — medio, chiarezza (cloud); W, 19/10
   (inventario di W-B85). Oggi 25 plugin saltano le righe ignote o illeggibili con un avviso a stringa per riga, che diventa
   `generic` e non può portare il link «apri una issue». DEGIRO, Scalable e Crédit Agricole hanno già note a codice: basta
