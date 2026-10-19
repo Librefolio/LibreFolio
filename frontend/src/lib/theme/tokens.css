@@ -26,6 +26,9 @@
  * «provisional». A minimal contrast correction changes the OKLCH lightness alone and keeps her value in a comment, to be
  * confirmed by her (policy D-T6). Roles that do not change with the theme sit in the derived block: one value to tune.
  *
+ * Round 3 (17/10/2026), approved by the developer with the designer: the categories of the asset types, --lf-cat-*
+ * (§1.2 and §1.9 of designer-feedback/2026-10-17-round3-grafici/decisioni.md), her values as written.
+ *
  * Plan: LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/T-tokensTheme/plan-phase01TokensTheme.prompt.md
  */
 
@@ -101,6 +104,35 @@ html.light,
     --lf-mark-text: #1c2420;
     --lf-mark-line: transparent; /* no edge in light */
 
+    /* Categories (round 3, §1.2 and §1.9): each asset type's colour, the one the charts draw it in — chartCategories.ts
+       holds the same values, and a parity test of DV ties the two copies — and its badge text, -on-soft: the colour
+       itself, or the colour moved in lightness alone, only as far as 4.5:1 on its tint. The tint, -soft, is derived.
+       No green, teal or cyan among them (§1.1): the cash is slate blue */
+    --lf-cat-stock: #7041c6;
+    --lf-cat-stock-on-soft: #7041c6;
+    --lf-cat-etf: #2459b8;
+    --lf-cat-etf-on-soft: #2459b8;
+    --lf-cat-bond: #536a9e;
+    --lf-cat-bond-on-soft: #4f669a; /* her #50679b (4.51:1 on the rounded #e3e7ed) gives 4.49:1 on the exact tint: OKLCH lightness -0.003 (D-T6), 4.56:1; accepted by the coordinator, 17/10 */
+    --lf-cat-crypto: #b87916;
+    --lf-cat-crypto-on-soft: #925e0c; /* her badge text: the colour, darker */
+    --lf-cat-fund: #5147b8;
+    --lf-cat-fund-on-soft: #5147b8;
+    --lf-cat-hold: #5d687b; /* G1-la, was #657184 */
+    --lf-cat-hold-on-soft: #5c677a; /* her badge text: the colour, darker */
+    --lf-cat-crowdfund: #8b547d;
+    --lf-cat-crowdfund-on-soft: #8b547d;
+    --lf-cat-commodity: #b85e45;
+    --lf-cat-commodity-on-soft: #a64e35; /* her badge text: the colour, darker */
+    --lf-cat-real-estate: #96602c;
+    --lf-cat-real-estate-on-soft: #905a26; /* her badge text: the colour, darker */
+    --lf-cat-index: #a33d79;
+    --lf-cat-index-on-soft: #a33d79;
+    --lf-cat-other: #727b87;
+    --lf-cat-other-on-soft: #616a75; /* her badge text: the colour, darker */
+    --lf-cat-liquidity: #3f628c;
+    --lf-cat-liquidity-on-soft: #3f628c;
+
     /* Shadows (Q8) */
     --lf-shadow-raised: color-mix(in oklab, #0d1110 25%, transparent); /* modals and dropdowns */
     --lf-shadow-card: color-mix(in oklab, #0d1110 7%, transparent); /* the cards of a page: her 6–8% */
@@ -172,6 +204,21 @@ html.light,
     --lf-terminal-text: #edf2f0;
     --lf-terminal-prompt: #36d399; /* the prompt and the commands */
     --lf-terminal-comment: color-mix(in oklab, var(--lf-terminal-text) 60%, var(--lf-terminal-bg)); /* provisional: `# Docker` */
+
+    /* Categories (round 3, §1.9): a type's tint, its colour at 14% on the card, mixed in sRGB as her badge values
+       were (#e7e1f3 for STOCK in light, #2c2d37 in dark) */
+    --lf-cat-stock-soft: color-mix(in srgb, var(--lf-cat-stock) 14%, var(--lf-surface-card));
+    --lf-cat-etf-soft: color-mix(in srgb, var(--lf-cat-etf) 14%, var(--lf-surface-card));
+    --lf-cat-bond-soft: color-mix(in srgb, var(--lf-cat-bond) 14%, var(--lf-surface-card));
+    --lf-cat-crypto-soft: color-mix(in srgb, var(--lf-cat-crypto) 14%, var(--lf-surface-card));
+    --lf-cat-fund-soft: color-mix(in srgb, var(--lf-cat-fund) 14%, var(--lf-surface-card));
+    --lf-cat-hold-soft: color-mix(in srgb, var(--lf-cat-hold) 14%, var(--lf-surface-card));
+    --lf-cat-crowdfund-soft: color-mix(in srgb, var(--lf-cat-crowdfund) 14%, var(--lf-surface-card));
+    --lf-cat-commodity-soft: color-mix(in srgb, var(--lf-cat-commodity) 14%, var(--lf-surface-card));
+    --lf-cat-real-estate-soft: color-mix(in srgb, var(--lf-cat-real-estate) 14%, var(--lf-surface-card));
+    --lf-cat-index-soft: color-mix(in srgb, var(--lf-cat-index) 14%, var(--lf-surface-card));
+    --lf-cat-other-soft: color-mix(in srgb, var(--lf-cat-other) 14%, var(--lf-surface-card));
+    --lf-cat-liquidity-soft: color-mix(in srgb, var(--lf-cat-liquidity) 14%, var(--lf-surface-card));
 }
 
 /* ===== Dark theme: «Ardesia e Salvia» — after the derived block, so that it wins on a `.dark` subtree ===== */
@@ -242,6 +289,32 @@ html.dark,
     --lf-mark-bg: #78350f;
     --lf-mark-text: #fef3c7;
     --lf-mark-line: #b45309;
+
+    /* Categories (round 3, §1.2 and §1.9): every badge text is the colour itself in dark */
+    --lf-cat-stock: #b69af0;
+    --lf-cat-stock-on-soft: #b69af0;
+    --lf-cat-etf: #82acf8;
+    --lf-cat-etf-on-soft: #82acf8;
+    --lf-cat-bond: #9baed8;
+    --lf-cat-bond-on-soft: #9baed8;
+    --lf-cat-crypto: #e8bd69;
+    --lf-cat-crypto-on-soft: #e8bd69;
+    --lf-cat-fund: #9280ff; /* V1-dc, was #a7a0f5 */
+    --lf-cat-fund-on-soft: #9280ff;
+    --lf-cat-hold: #c6d0e0; /* G1-db, was #a6b0c0 */
+    --lf-cat-hold-on-soft: #c6d0e0;
+    --lf-cat-crowdfund: #d5a0c7;
+    --lf-cat-crowdfund-on-soft: #d5a0c7;
+    --lf-cat-commodity: #e99a82;
+    --lf-cat-commodity-on-soft: #e99a82;
+    --lf-cat-real-estate: #d6a36c;
+    --lf-cat-real-estate-on-soft: #d6a36c;
+    --lf-cat-index: #e58bb9;
+    --lf-cat-index-on-soft: #e58bb9;
+    --lf-cat-other: #a9b0bb;
+    --lf-cat-other-on-soft: #a9b0bb;
+    --lf-cat-liquidity: #639bc0; /* B1-dc, was #83a9d8 */
+    --lf-cat-liquidity-on-soft: #639bc0;
 
     /* Shadows (Q8) */
     --lf-shadow-raised: color-mix(in oklab, #0d1110 50%, transparent);
@@ -354,6 +427,45 @@ html.dark,
     --color-lf-ai-soft: var(--lf-ai-soft);
     --color-lf-ai-line: var(--lf-ai-line);
     --color-lf-on-ai: var(--lf-on-ai);
+
+    /* Categories: the asset types (round 3): `bg-lf-cat-stock-soft text-lf-cat-stock-on-soft` for a badge,
+       `bg-lf-cat-etf` for a bar drawn in a type's colour */
+    --color-lf-cat-stock: var(--lf-cat-stock);
+    --color-lf-cat-stock-soft: var(--lf-cat-stock-soft);
+    --color-lf-cat-stock-on-soft: var(--lf-cat-stock-on-soft);
+    --color-lf-cat-etf: var(--lf-cat-etf);
+    --color-lf-cat-etf-soft: var(--lf-cat-etf-soft);
+    --color-lf-cat-etf-on-soft: var(--lf-cat-etf-on-soft);
+    --color-lf-cat-bond: var(--lf-cat-bond);
+    --color-lf-cat-bond-soft: var(--lf-cat-bond-soft);
+    --color-lf-cat-bond-on-soft: var(--lf-cat-bond-on-soft);
+    --color-lf-cat-crypto: var(--lf-cat-crypto);
+    --color-lf-cat-crypto-soft: var(--lf-cat-crypto-soft);
+    --color-lf-cat-crypto-on-soft: var(--lf-cat-crypto-on-soft);
+    --color-lf-cat-fund: var(--lf-cat-fund);
+    --color-lf-cat-fund-soft: var(--lf-cat-fund-soft);
+    --color-lf-cat-fund-on-soft: var(--lf-cat-fund-on-soft);
+    --color-lf-cat-hold: var(--lf-cat-hold);
+    --color-lf-cat-hold-soft: var(--lf-cat-hold-soft);
+    --color-lf-cat-hold-on-soft: var(--lf-cat-hold-on-soft);
+    --color-lf-cat-crowdfund: var(--lf-cat-crowdfund);
+    --color-lf-cat-crowdfund-soft: var(--lf-cat-crowdfund-soft);
+    --color-lf-cat-crowdfund-on-soft: var(--lf-cat-crowdfund-on-soft);
+    --color-lf-cat-commodity: var(--lf-cat-commodity);
+    --color-lf-cat-commodity-soft: var(--lf-cat-commodity-soft);
+    --color-lf-cat-commodity-on-soft: var(--lf-cat-commodity-on-soft);
+    --color-lf-cat-real-estate: var(--lf-cat-real-estate);
+    --color-lf-cat-real-estate-soft: var(--lf-cat-real-estate-soft);
+    --color-lf-cat-real-estate-on-soft: var(--lf-cat-real-estate-on-soft);
+    --color-lf-cat-index: var(--lf-cat-index);
+    --color-lf-cat-index-soft: var(--lf-cat-index-soft);
+    --color-lf-cat-index-on-soft: var(--lf-cat-index-on-soft);
+    --color-lf-cat-other: var(--lf-cat-other);
+    --color-lf-cat-other-soft: var(--lf-cat-other-soft);
+    --color-lf-cat-other-on-soft: var(--lf-cat-other-on-soft);
+    --color-lf-cat-liquidity: var(--lf-cat-liquidity);
+    --color-lf-cat-liquidity-soft: var(--lf-cat-liquidity-soft);
+    --color-lf-cat-liquidity-on-soft: var(--lf-cat-liquidity-on-soft);
 
     /* Controls and special surfaces */
     --color-lf-switch-off: var(--lf-switch-off);

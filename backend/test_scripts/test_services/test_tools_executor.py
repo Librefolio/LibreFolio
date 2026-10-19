@@ -28,8 +28,11 @@ from uuid import uuid4
 import psutil
 import pytest
 import pytest_asyncio
+import structlog
 from pydantic import BaseModel, ConfigDict, Field
+from structlog.testing import capture_logs
 
+from backend.app.logging_config import get_logger
 from backend.app.schemas.tools import (
     ToolComputeBatchRequest,
     ToolComputeFailure,
@@ -1160,6 +1163,148 @@ async def test_real_worker_failures_are_platform_errors_and_leave_no_owned_proce
         assert result.metrics.input_validation_ms is not None
         assert result.metrics.compute_ms is None
         assert not any(frame["kind"] in {"constructed", "compute"} for frame in handle.frames)
+
+
+# J-19: a worker_crashed says how the worker ended, so a crash under load can be
+# triaged: killed by a signal (OOM killer, SIGKILL) or an exit of its own. The
+# status is read before the cleanup that may signal the worker, and logged once,
+# without any of the item's input or output.
+_EXECUTOR_LOGGER = "backend.app.services.tools.executor"
+_CRASH_EVENT = "Tool worker crashed"
+_CRASH_EVENT_KEYS = frozenset({"execution_id", "tool_code", "exit_code", "peak_observed_bytes", "memory_limit_bytes", "memory_mode", "execution_ms"})
+# Not keyword arguments of the log call: the event name, and what the capture adds.
+_CAPTURE_KEYS = frozenset({"event", "log_level", "logger"})
+_CAPTURE_PROBE_EVENT = "J-19 capture probe"
+# How a missing ToolItemMetrics.worker_exit_code reads: it fails on the assertion that needs it.
+_ABSENT = "<absent: ToolItemMetrics has no worker_exit_code>"
+
+
+async def _run_one_worker_item(runtime: _Runtime, executor: ToolExecutor, item: ToolComputeItem, *, stage: str):
+    """Run ``item`` on a real worker and prove production cleanup before the caller asserts anything.
+
+    ``stage`` is the control frame the worker publishes just before it ends: the
+    barrier that the scenario itself ended the job, not an earlier failure.
+    """
+    task = runtime.compute(executor, _batch(item))
+    handle = await _begin_worker(runtime.harness, stage=stage)
+    response = await asyncio.wait_for(task, timeout=_WAIT)
+    (result,) = response.results
+    assert result.correlation_id == item.correlation_id
+    assert result.execution_id == handle.execution_id
+    # Before any J-19 assertion, so a red there never hides a leaked worker.
+    await _until(lambda: executor.snapshot().pending == 0, "the job released its lane only after cleanup")
+    await asyncio.to_thread(_assert_native_termination, handle)
+    snapshot = executor.snapshot()
+    assert (snapshot.active, snapshot.degraded_lanes) == (0, 0)
+    return result
+
+
+async def _run_one_worker_item_capturing_logs(runtime: _Runtime, executor: ToolExecutor, item: ToolComputeItem, *, stage: str):
+    """``_run_one_worker_item`` under ``capture_logs``; barrier first: the capture sees a warning from the executor's logger.
+
+    capture_logs swaps structlog's processors inside the configured list, so a
+    logger cached before the capture still reaches it (test_post_migration.py,
+    section 13). The I/O owner logs from a worker thread, so the probe does too.
+    """
+    with capture_logs(processors=[structlog.stdlib.add_logger_name]) as logs:
+        result = await _run_one_worker_item(runtime, executor, item, stage=stage)
+        await asyncio.to_thread(get_logger(_EXECUTOR_LOGGER).warning, _CAPTURE_PROBE_EVENT)
+    probes = [(entry.get("logger"), entry.get("log_level")) for entry in logs if entry.get("event") == _CAPTURE_PROBE_EVENT]
+    assert probes == [(_EXECUTOR_LOGGER, "warning")], f"barrier: capture_logs did not see the probe warning from {_EXECUTOR_LOGGER!r} among {[entry.get('event') for entry in logs]}"
+    return result, logs
+
+
+def _crash_events(logs: list[dict]) -> list[dict]:
+    return [entry for entry in logs if entry.get("event") == _CRASH_EVENT]
+
+
+@pytest.mark.asyncio
+class TestJ19CrashedWorkerExitStatus:
+    """J-19: ``worker_crashed`` carries the worker's own exit status, and one structured warning.
+
+    ``ToolItemMetrics.worker_exit_code`` is the exit code of a worker that exited,
+    the negative signal number of one killed by a signal, and None when the crash
+    is seen while the worker still runs. Every other outcome leaves it None.
+    """
+
+    @pytest.mark.parametrize(
+        ("scenario", "expected_exit_code"),
+        [("crash", 23), ("signal_kill", -signal.SIGKILL)],
+        ids=["R1-os-exit-23", "R2-sigkill-minus-9"],
+    )
+    async def test_crashed_worker_reports_how_it_ended(self, runtime, scenario, expected_exit_code):
+        """R1, R2 (RED until J-19): ``os._exit(23)`` reads 23 and a SIGKILL reads -9, never the cleanup's own signal."""
+        executor = runtime.executor(workers=1)
+        result = await _run_one_worker_item(runtime, executor, _item("owned", scenario), stage="compute")
+
+        assert result.status == "error"
+        assert result.error.code == "worker_crashed"
+        assert getattr(result.metrics, "worker_exit_code", _ABSENT) == expected_exit_code
+
+    async def test_crash_seen_while_the_worker_lives_has_no_exit_status(self, runtime):
+        """R3 (RED until J-19): the worker closes its response pipe and lingers, so it has no exit status of its own.
+
+        Only production cleanup ends it, and the helper proves the tree is gone.
+        Reading the status after that cleanup would report the supervisor's own
+        SIGTERM (-15) instead of None.
+        """
+        executor = runtime.executor(workers=1)
+        result = await _run_one_worker_item(runtime, executor, _item("owned", "close_and_linger"), stage="lingering")
+
+        assert result.status == "error"
+        assert result.error.code == "worker_crashed"
+        assert getattr(result.metrics, "worker_exit_code", _ABSENT) is None
+
+    async def test_worker_crash_logs_one_structured_warning_without_item_data(self, runtime):
+        """R4 (RED until J-19): exactly one ``Tool worker crashed`` warning, with these keys and none of the item's data."""
+        marker = f"PRIVATE_J19_INPUT_{uuid4().hex}"
+        item = _item("owned", "crash", text=marker)
+        executor = runtime.executor(workers=1)
+        result, logs = await _run_one_worker_item_capturing_logs(runtime, executor, item, stage="compute")
+
+        assert result.status == "error"
+        assert result.error.code == "worker_crashed"
+        assert result.metrics.resources is not None, "cleanup publishes the memory facts the warning repeats"
+        memory = result.metrics.resources.memory
+        events = _crash_events(logs)
+        assert len(events) == 1, f"expected exactly one {_CRASH_EVENT!r} warning; captured events: {[entry.get('event') for entry in logs]}"
+        (event,) = events
+        assert (event.get("logger"), event.get("log_level")) == (_EXECUTOR_LOGGER, "warning"), event
+        assert set(event) - _CAPTURE_KEYS == _CRASH_EVENT_KEYS, f"the keys of the log call: {sorted(set(event) - _CAPTURE_KEYS)}"
+        assert (event["execution_id"], event["tool_code"], event["exit_code"]) == (result.execution_id, item.tool_code, 23)
+        assert event["exit_code"] == getattr(result.metrics, "worker_exit_code", _ABSENT), "the warning and the metric carry the same exit status"
+        assert (event["memory_limit_bytes"], event["memory_mode"]) == (memory.limit_bytes, memory.mode)
+        peak = event["peak_observed_bytes"]
+        assert peak is None or (type(peak) is int and peak >= 0), f"peak_observed_bytes is None or a byte count; got {peak!r}"
+        assert type(event["execution_ms"]) is int and event["execution_ms"] >= 0, f"execution_ms is an int of milliseconds; got {event['execution_ms']!r}"
+        assert not [entry for entry in logs if marker in repr(entry)], "the item's parameter value reached the log"
+
+    async def test_successful_item_has_no_exit_status_and_logs_no_crash(self, runtime):
+        """C1 (CONTROL): a success carries no exit status, no crash warning, and none of its input or output in the log."""
+        marker = f"PRIVATE_J19_ECHO_{uuid4().hex}"
+        executor = runtime.executor(workers=1)
+        result, logs = await _run_one_worker_item_capturing_logs(runtime, executor, _item("owned", "echo", text=marker), stage="compute")
+
+        assert result.status == "success"
+        assert result.result["text"] == marker, "the output carries the marker, so the log check below covers it too"
+        assert getattr(result.metrics, "worker_exit_code", None) is None
+        assert _crash_events(logs) == []
+        assert not [entry for entry in logs if marker in repr(entry)], "the item's input or output reached the log"
+
+    @pytest.mark.parametrize(
+        ("scenario", "parameters", "expected_code"),
+        [("invalid_output", {}, "invalid_output"), ("oversize", {"size": 2_048}, "output_limit_exceeded")],
+        ids=["C2-invalid-output", "C2-oversize"],
+    )
+    async def test_worker_reported_failure_has_no_exit_status_and_logs_no_crash(self, runtime, scenario, parameters, expected_code):
+        """C2 (CONTROL): a failure the worker reports itself is not a crash: no exit status, no crash warning."""
+        executor = runtime.executor(workers=1, max_result_bytes=1_024)
+        result, logs = await _run_one_worker_item_capturing_logs(runtime, executor, _item("owned", scenario, **parameters), stage="compute")
+
+        assert result.status == "error"
+        assert result.error.code == expected_code
+        assert getattr(result.metrics, "worker_exit_code", None) is None
+        assert _crash_events(logs) == []
 
 
 @pytest.mark.asyncio

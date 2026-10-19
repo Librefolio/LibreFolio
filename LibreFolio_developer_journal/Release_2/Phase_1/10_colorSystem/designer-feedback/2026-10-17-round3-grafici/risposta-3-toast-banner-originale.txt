@@ -1,0 +1,450 @@
+Hai ragione: la richiesta iniziale meritava una risposta completa, con decisioni concrete e una verifica sistematica. Ho ripreso il documento “Toast e banner di LibreFolio, con i tuoi colori (giro 2)” e qui sotto trovi una proposta operativa per tutte e tre le domande aperte, tutte le 11 famiglie di banner e gli scostamenti cromatici da confermare.&#x20;
+
+toast-e-banner.md
+
+
+
+La mia raccomandazione generale è mantenere la palette minerale che hai impostato: sfondi scuri e desaturati nel tema scuro, colori di stato riconoscibili ma non fluorescenti, testo ben leggibile e verde riservato alle azioni positive o attive. Non introdurrei nuovi colori dove i token già previsti soddisfano il contrasto: preferisco consolidare i valori esistenti e usarli in modo coerente.
+
+# 1. Le tre domande aperte: decisione consigliata
+
+## 1.1 Toast: pieni o tenui?
+
+Scelta: tenui in entrambi i temi.
+
+I toast sono notifiche temporanee che compaiono sopra la pagina. Il loro scopo è comunicare un esito, non diventare l'elemento visivo dominante. La variante tenue si accorda meglio con le card e i banner e riduce l'effetto dei grandi blocchi colorati, soprattutto nel tema scuro.
+
+La variante tenue usa il colore di sfondo `X-soft`, il bordo `X-line`, il testo `X-on-soft` e l'icona `X`. I contrasti riportati nel documento superano le soglie richieste: testo almeno 4,5:1 e icone almeno 3:1.&#x20;
+
+toast-e-banner.md
+
+
+
+| Tipo di toast | Tema chiaro: fondo / testo / icona | Tema scuro: fondo / testo / icona | Contrasto testo e icona                    |
+| ------------- | ---------------------------------- | --------------------------------- | ------------------------------------------ |
+| Successo      | `#E6F4ED` / `#145937` / `#18794E`  | `#13261E` / `#86EFAC` / `#5ED69A` | Chiaro 7,4:1 / 4,8:1; scuro 11,3:1 / 8,7:1 |
+| Errore        | `#FFE5E5` / `#991B1B` / `#C82838`  | `#2A1417` / `#FCA5A5` / `#FF7A86` | Chiaro 7,0:1 / 4,6:1; scuro 9,1:1 / 6,9:1  |
+| Avviso        | `#FEF3C7` / `#92400E` / `#AE4E00`  | `#291E0C` / `#FCD34D` / `#F59E0B` | Chiaro 6,4:1 / 4,8:1; scuro 11,3:1 / 7,6:1 |
+| Informazione  | `#DEEDFF` / `#1E40AF` / `#155EEF`  | `#131F33` / `#93C5FD` / `#3F86FA` | Chiaro 7,3:1 / 4,6:1; scuro 9,2:1 / 4,7:1  |
+
+Ordine dei contrasti: testo / icona. I valori sono quelli riportati nel documento allegato.
+
+Perché non sceglierei i toast pieni? Sono accessibili anche loro secondo i contrasti riportati, ma nel tema scuro usano superfici più accese, per esempio il verde `#5ED69A` e il rosso `#FF7A86`. Sono una scelta valida se vuoi dare ai toast la massima evidenza; per l'estetica sobria che cerchi, però, preferisco la versione tenue.
+
+Eccezione: se un toast dovesse segnalare un problema critico e immediato, valuterei una maggiore evidenza attraverso icona, titolo e posizione, prima di rendere tutti i toast più saturi.
+
+## 1.2 Chip e pulsanti dentro i banner: proposta a o b?
+
+Scelta: a) fondo della card, bordo `X-line`, testo `X-on-soft`.
+
+Il documento mette a confronto due soluzioni:
+
+- a) il chip o pulsante ha il fondo della card, un bordo del colore dello stato e il testo dello stato;
+- b) il chip usa lo stesso fondo tenue del banner che lo contiene.
+
+La soluzione a) è preferibile perché separa visivamente l'azione dal messaggio. Con la b), il pulsante rischia di confondersi con il banner, anche se il testo rimane leggibile.&#x20;
+
+toast-e-banner.md
+
+
+
+| Stato        | Testo su card, tema chiaro | Contrasto | Testo su card, tema scuro | Contrasto |
+| ------------ | -------------------------- | --------- | ------------------------- | --------- |
+| Successo     | `#145937` su `#FAFBFA`     | 8,1:1     | `#86EFAC` su `#151B19`    | 12,4:1    |
+| Avviso       | `#92400E` su `#FAFBFA`     | 6,8:1     | `#FCD34D` su `#151B19`    | 12,1:1    |
+| Errore       | `#991B1B` su `#FAFBFA`     | 8,0:1     | `#FCA5A5` su `#151B19`    | 9,2:1     |
+| Informazione | `#1E40AF` su `#FAFBFA`     | 8,4:1     | `#93C5FD` su `#151B19`    | 9,7:1     |
+
+Tutti i valori superano il minimo WCAG AA per il testo. Per i chip che contengono soltanto un'icona, occorre verificare anche il contrasto dell'icona; non basta quello del testo.
+
+Per i pulsanti secondari neutri del pianificatore PAC, manterrei invece il trattamento neutro già previsto: fondo card, `border-raised` e `text-primary`. In questo modo non ogni pulsante dentro un avviso assume un colore semantico.
+
+## 1.3 Gli errori nella qualità dei dati devono restare ambra o diventare rossi?
+
+Scelta: gli errori reali diventano rossi; le anomalie non bloccanti restano ambra.
+
+Nel documento, `DataQualityBanner` e `LotDataQualityBanner` usano attualmente l'ambra anche per gli errori, distinguendoli soprattutto attraverso l'icona. È una distinzione troppo debole se lo stesso componente presenta sia un problema da correggere sia una semplice avvertenza.&#x20;
+
+toast-e-banner.md
+
+
+
+Userei questa regola:
+
+- Rosso (`danger`): dati mancanti o invalidi che impediscono un calcolo affidabile, rendono un risultato scorretto o richiedono una correzione.
+- Ambra (`warning`): dati incompleti o anomali che meritano attenzione, ma per cui il risultato resta utilizzabile con cautela.
+- Blu (`info`): informazioni contestuali, spiegazioni e indicazioni che non rappresentano un problema.
+- Verde (`success`): completamento corretto, esito positivo o conferma di un'azione.
+
+Non trasformerei automaticamente ogni voce oggi ambra in rossa: prima classificherei la gravità effettiva della singola condizione. Il rosso deve significare qualcosa di più serio dell'ambra, non semplicemente un'altra variante grafica.
+
+# 2. Verifica dei colori di stato nei due temi
+
+Questa è la base comune da applicare a toast, banner, avvisi e riquadri in linea. I valori sono già presenti nel documento e non richiedono di inventare una seconda palette.&#x20;
+
+toast-e-banner.md
+
+
+
+| Stato e ruolo                              | Tema chiaro | Tema scuro |
+| ------------------------------------------ | ----------- | ---------- |
+| Successo — `success-soft`                  | `#E6F4ED`   | `#13261E`  |
+| Successo — `success-line`                  | `#B8DFCA`   | `#1F4435`  |
+| Successo — `success-on-soft`               | `#145937`   | `#86EFAC`  |
+| Successo — `success` (icona/colore pieno)  | `#18794E`   | `#5ED69A`  |
+| Avviso — `warning-soft`                    | `#FEF3C7`   | `#291E0C`  |
+| Avviso — `warning-line`                    | `#FDE68A`   | `#54380E`  |
+| Avviso — `warning-on-soft`                 | `#92400E`   | `#FCD34D`  |
+| Avviso — `warning` (icona/colore pieno)    | `#AE4E00`   | `#F59E0B`  |
+| Errore — `danger-soft`                     | `#FFE5E5`   | `#2A1417`  |
+| Errore — `danger-line`                     | `#FECACA`   | `#581C24`  |
+| Errore — `danger-on-soft`                  | `#991B1B`   | `#FCA5A5`  |
+| Errore — `danger` (icona/colore pieno)     | `#C82838`   | `#FF7A86`  |
+| Informazione — `info-soft`                 | `#DEEDFF`   | `#131F33`  |
+| Informazione — `info-line`                 | `#BFDBFE`   | `#1E3A5F`  |
+| Informazione — `info-on-soft`              | `#1E40AF`   | `#93C5FD`  |
+| Informazione — `info` (icona/colore pieno) | `#155EEF`   | `#3F86FA`  |
+
+I colori sono diversi tra i temi, ma la logica è coerente: nel tema chiaro si usano fondi chiari e testi scuri; nel tema scuro si usano fondi profondi e testi luminosi. Non è necessario che il valore esadecimale sia uguale tra i due temi: è importante che ruolo, significato e leggibilità restino coerenti.
+
+## Colori AI
+
+Terrei la famiglia AI separata dai quattro stati, perché identifica una funzione specifica e non un successo o un errore.
+
+| Ruolo                | Chiaro    | Scuro     | Contrasto testo riportato |
+| -------------------- | --------- | --------- | ------------------------- |
+| `ai-soft`            | `#F3E8FF` | `#1E1B2E` | —                         |
+| `ai-line`            | `#DDD6FE` | `#3B3054` | —                         |
+| `ai` / testo e icona | `#6D28D9` | `#A78BFA` | 6,0:1 / 6,2:1             |
+
+Anche qui il contrasto supera 4,5:1 per il testo e 3:1 per l'icona, secondo i valori del documento.&#x20;
+
+toast-e-banner.md
+
+
+
+# 3. I cinque valori diversi dai tuoi: cosa confermare e cosa cambiare
+
+Il documento identifica cinque valori diversi da quelli del giro 2. Non li considererei tutti errori: tre sono correzioni motivate dal contrasto, due sono scelte progettuali dello sviluppatore.&#x20;
+
+toast-e-banner.md
+
+
+
+| Ruolo                      | Tuo valore iniziale | Valore nel documento | Decisione                                                                                                                                    |
+| -------------------------- | ------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `warning`, tema chiaro     | `#B45309`           | `#AE4E00`            | Confermare `#AE4E00`: il documento segnala 4,21:1 per il valore iniziale sulla superficie secondaria, sotto il requisito 4,5:1 per il testo. |
+| `danger-soft`, tema chiaro | `#FEE2E2`           | `#FFE5E5`            | Confermare `#FFE5E5`: il valore iniziale dava 4,42:1 con il testo attenuato indicato nel documento.                                          |
+| `info-soft`, tema chiaro   | `#DBEAFE`           | `#DEEDFF`            | Confermare `#DEEDFF`: il documento segnala contrasti di 4,44:1 e 4,42:1 per gli accoppiamenti originari.                                     |
+| `danger`, tema scuro       | `#F84361`           | `#FF7A86`            | Confermare provvisoriamente `#FF7A86`: scelta dello sviluppatore per un rosso più morbido; contrasto indicato sulla card 7,0:1.              |
+| `success`, tema scuro      | `#36D399`           | `#5ED69A`            | Confermare provvisoriamente `#5ED69A`: scelta dello sviluppatore per un verde meno acceso; contrasto indicato sulla card 9,6:1.              |
+
+Le prime tre sostituzioni sono motivate da problemi di contrasto riportati nel file. Le ultime due sono preferenze estetiche con un contrasto dichiarato adeguato: le manterrei, salvo che tu voglia deliberatamente conservare il rosso o il verde originari.
+
+### Le modifiche da annotare nella decisione finale
+
+Per chiarezza, questi sono i ruoli e gli esadecimali che confermerei:
+
+- `warning`, tema chiaro → `#AE4E00`
+- `danger-soft`, tema chiaro → `#FFE5E5`
+- `info-soft`, tema chiaro → `#DEEDFF`
+- `danger`, tema scuro → `#FF7A86`
+- `success`, tema scuro → `#5ED69A`
+
+Non propongo altri esadecimali sostitutivi per questi ruoli: i valori del documento sono già coerenti con i contrasti dichiarati e la direzione visiva desiderata.
+
+Nota di precisione: i contrasti dei valori alternativi iniziali non sono tutti riportati per ogni possibile fondo e ogni variante di testo. Non si può quindi dedurre che il valore iniziale fallisca su qualsiasi fondo: si può concludere soltanto che fallisce negli accoppiamenti specifici citati dal documento. Per dichiarare un colore universalmente conforme occorre verificare ciascun accoppiamento effettivamente usato.
+
+# 4. Audit famiglia per famiglia: tutte le 11 famiglie
+
+La regola comune proposta è: fondo `X-soft`, bordo `X-line`, testo `X-on-soft`, icona `X`. Per i chip e i pulsanti dentro i banner, fondo card e bordo `X-line`. L'audit qui sotto distingue cosa mantenere, cosa uniformare e cosa richiede una decisione funzionale.&#x20;
+
+toast-e-banner.md
+
+
+
+## 2.1 — `InstanceNotices`
+
+Da mantenere
+
+È già l'unica famiglia che usa i colori del progetto anziché le classi standard Tailwind.
+
+- Tema chiaro e scuro: mantenere `info`, `warning` e `danger` con i token semantici già previsti.
+- Fondo: `X-soft`.
+- Bordo: `X-line`.
+- Testo: `X-on-soft`.
+- Icona: `X`.
+- Link: token `link`, sottolineato.
+- Chiusura: mantenere l'icona di chiusura distinguibile anche nello stato normale, senza affidarsi solo a un'opacità troppo bassa.
+
+Decisione: nessun cambio di palette; controllare solo che il link e il controllo di chiusura rimangano ben leggibili in entrambi i temi. Il fatto che oggi non sia usata da funzioni attive non è una ragione per cambiare i colori.
+
+## 2.2 — `OnboardingBootstrapBanner`
+
+Da uniformare
+
+Oggi usa classi Tailwind ambra, con fondi e bordi differenti nei due temi.
+
+- Sostituire fondo, bordo e testo con `warning-soft`, `warning-line` e `warning-on-soft`.
+- Usare `warning` per l'icona, se presente.
+- Il pulsante Retry deve adottare il trattamento dei controlli dentro i banner: fondo card, bordo `warning-line`, testo `warning-on-soft`.
+- L'hover deve restare distinguibile, ma non introdurre una nuova tinta non prevista dal sistema.
+
+Decisione: nessun nuovo esadecimale; usare i token `warning` esistenti in entrambi i temi.
+
+## 2.3 — `InfoBanner` e `RiskBetaBanner`
+
+Da uniformare
+
+È una famiglia importante: il documento riporta 54 utilizzi, inclusi impostazioni, form, transazioni Bulk e analisi del rischio.
+
+Le varianti attuali usano blu, ambra, rosso e smeraldo con opacità differenti nel tema scuro. In particolare, alcuni testi e icone scuri sono attenuati con opacità del 50–60%: è un rischio di leggibilità e coerenza, perché il colore finale dipende anche dal fondo sottostante.
+
+- `info-banner-info` → token `info`.
+- `info-banner-warning` → token `warning`.
+- `info-banner-error` → token `danger`.
+- `info-banner-success` → token `success`.
+- `RiskBetaBanner` e il suggerimento Bulk devono ereditare gli stessi token della variante info, senza una palette autonoma.
+- Evitare opacità che rendono testo e icone meno leggibili; usare i colori pieni definiti nei token.
+
+Decisione: migrazione prioritaria, dato il numero di utilizzi. I colori non devono essere ricalcolati componente per componente: devono provenire dagli stessi token usati dai toast.
+
+## 2.4 — `TransactionResultBanner` e `TxBulkBanners`
+
+Da uniformare
+
+Le varianti sono successo, avviso ed errore, con righe cliccabili e azioni.
+
+- Successo → `success`.
+- Avviso → `warning`.
+- Errore → `danger`.
+- Titolo e corpo devono usare `X-on-soft`; niente varianti di colore del testo specifiche per il singolo componente.
+- I link alle righe devono restare riconoscibili come link e mantenere un contrasto sufficiente.
+- Pulsanti e chip devono usare la proposta a): card, bordo `X-line`, testo `X-on-soft`.
+
+Decisione: uniformare fondo, bordo e testo ai token condivisi. Verificare separatamente gli stati hover e focus dei link e dei pulsanti, perché il contrasto del testo normale non dimostra automaticamente quello degli stati interattivi.
+
+## 2.5 — `DataQualityBanner`
+
+Da correggere nella semantica
+
+Questa famiglia mostra problemi nei pannelli del rischio e dell'insieme di asset; include righe espandibili e chip per raggiungere l'asset interessato.
+
+- Le informazioni contestuali → `info`.
+- Le anomalie non bloccanti → `warning`.
+- Gli errori che compromettono l'affidabilità o la correttezza del risultato → `danger`.
+- La riga compatta deve ereditare il tono del problema, senza introdurre una palette indipendente.
+- I chip di navigazione devono essere distinguibili dal fondo del banner.
+
+Decisione: non usare l'ambra per qualsiasi problema. La correzione principale è funzionale: distinguere gli errori veri dagli avvisi. I token `danger` e `warning` già elencati sono sufficienti; non serve creare un nuovo rosso.
+
+## 2.6 — `LotDataQualityBanner`
+
+Da correggere nella semantica
+
+Questa famiglia è dedicata alla qualità dei dati dei lotti e ha un comportamento simile a `DataQualityBanner`.
+
+- Informazione → `info`.
+- Problema non bloccante → `warning`.
+- Errore che invalida il dato o impedisce una valutazione affidabile → `danger`.
+- I chip che portano al lotto devono seguire la stessa regola di contrasto e di fondo dei chip della famiglia 2.5.
+
+Decisione: stessa logica di `DataQualityBanner`, senza inventare varianti cromatiche specifiche per i lotti. La coerenza tra le due famiglie è più importante di una differenza estetica.
+
+## 2.7 — `RiskPartialNotice`
+
+Da uniformare
+
+Questa famiglia presenta risultati parziali dell'analisi del rischio e pillole per le misure coinvolte.
+
+- Info → `info`.
+- Warning → `warning`.
+- Le pillole non devono conservare un trattamento autonomo blu o ambra.
+- Applicare la regola dei chip: fondo card, bordo `X-line`, testo `X-on-soft`.
+
+Decisione: uniformare i token e mantenere il significato dei due stati. Non trasformare una notifica di risultato parziale in un errore se il sistema può ancora fornire un risultato utile.
+
+## 2.8 — `AssetModalImportNotices`
+
+Da uniformare
+
+È la famiglia di avvisi all'interno della finestra di importazione dell'asset.
+
+- Usare `warning-soft`, `warning-line`, `warning-on-soft` e `warning`.
+- Titolo, elenco e testo secondario devono restare leggibili; non attenuare il footer al punto da compromettere il contrasto.
+- Se un messaggio descrive un errore bloccante e non un semplice avviso, deve essere classificato `danger` invece di restare sempre ambra.
+
+Decisione: migrare ai token condivisi e distinguere avviso ed errore secondo il significato del messaggio, non secondo il componente in cui compare.
+
+## 2.9 — `BrimNoticeList`
+
+Da verificare con attenzione
+
+Questa famiglia è particolare perché mostra testo colorato direttamente sulla card, senza un riquadro di sfondo.
+
+- Info → `info`.
+- Warning → `warning`.
+- Il colore del testo va verificato contro il fondo reale della card, non contro `info-soft` o `warning-soft`, perché questi fondi non vengono disegnati.
+- Le icone devono avere contrasto sufficiente rispetto alla card.
+- La tabella espandibile che mostra le evidenze deve rimanere accessibile e leggibile anche quando il messaggio è colorato.
+
+Decisione: usare i token semantici per il significato, ma non copiare alla cieca il contrasto dichiarato per i banner. Il fondo è diverso, quindi anche il rapporto di contrasto è diverso. Il documento non fornisce tutti i rapporti numerici di questa famiglia senza riquadro: andranno verificati sul fondo card effettivo.
+
+## 2.10 — Pianificatore PAC: `StateNotice`, `StaleBanner`, `RefreshNotice`, `CopyNotice`
+
+Da uniformare
+
+È una famiglia composta da più tipi di avviso: esito del calcolo, risultato non aggiornato, dati riletti e copia completata.
+
+- `StateNotice`: info, warning e danger → token omonimi.
+- `StaleBanner`: warning → `warning`.
+- `RefreshNotice`: info o warning → token corrispondenti.
+- `CopyNotice`: success o warning → token corrispondenti.
+- Pulsanti secondari: mantenere fondo card, `border-raised`, `text-primary`.
+- Link come “Chiudi”: mantenere `link`.
+- Badge neutri che contengono icone, come quelli per refresh o copia, devono mantenere contrasto sufficiente tra icona e fondo neutro.
+
+Decisione: unificare i colori degli avvisi e non colorare tutti i pulsanti secondari con il tono del messaggio. Il pulsante che esegue un'azione deve restare leggibile e riconoscibile come controllo.
+
+## 2.11 — Riquadri in linea sparsi nei componenti
+
+Da migrare in modo sistematico
+
+Il documento segnala 61 riquadri distribuiti tra editor dei cambi, coppie di transazioni, strumenti, pannelli diagnostici, PAC, lotti e finestre: 25 rossi, 16 ambra, 8 smeraldo/verdi e 12 blu/azzurri.&#x20;
+
+toast-e-banner.md
+
+
+
+Questa è la famiglia in cui la coerenza del sistema rischia maggiormente di perdersi, perché i colori sono scritti direttamente nelle classi dei componenti.
+
+- Tutte le classi rosse → `danger`, se il messaggio rappresenta davvero un errore.
+- Tutte le classi ambra → `warning`, se il messaggio richiede attenzione.
+- Tutte le classi smeraldo/verdi → `success`.
+- Tutte le classi blu/azzurre → `info`.
+- I due verdi e i due blu attuali devono essere consolidati rispettivamente in un solo `success` e un solo `info`, come previsto dal documento.
+- Ogni riquadro deve adottare lo stesso schema: fondo `X-soft`, bordo `X-line`, testo `X-on-soft`, icona `X`.
+
+Decisione: centralizzare i token e sostituire le classi Tailwind sparse. Questa migrazione è importante anche per le modifiche future: un aggiustamento del contrasto deve poter essere applicato una volta sola, non corretto manualmente in decine di componenti.
+
+# 5. Verifica delle superfici, dei testi e dei link
+
+Oltre ai colori degli stati, controllerei che la gerarchia delle superfici rimanga coerente con il tuo obiettivo: sfondo più scuro, card appena più chiare, pannelli intermedi e campi distinguibili soprattutto attraverso il bordo.
+
+I valori delle superfici riportati nel documento sono questi.&#x20;
+
+toast-e-banner.md
+
+
+
+| Ruolo             | Tema chiaro | Tema scuro | Valutazione                                                 |
+| ----------------- | ----------- | ---------- | ----------------------------------------------------------- |
+| `surface-page`    | `#F3F5F3`   | `#0D1110`  | Da mantenere: sfondo principale                             |
+| `surface-card`    | `#FAFBFA`   | `#151B19`  | Da mantenere: card poco più chiare della pagina             |
+| `surface-panel`   | `#E8ECE9`   | `#1B2421`  | Da mantenere: pannelli distinguibili senza eccessivo stacco |
+| `surface-neutral` | `#D8E0DC`   | `#222C28`  | Da mantenere: fondi neutri per icone                        |
+| `text-primary`    | `#1C2420`   | `#EDF2F0`  | Da mantenere: testo principale                              |
+| `text-secondary`  | `#4A5550`   | `#9BA8A2`  | Da mantenere, verificando i fondi effettivi                 |
+| `border-subtle`   | `#D8E0DC`   | `#222C28`  | Da mantenere per separazioni discrete                       |
+| `border-raised`   | `#D8E0DC`   | `#2E3B36`  | Da mantenere per i controlli secondari                      |
+| `link`            | `#236B4D`   | `#429E79`  | Da mantenere se conserva contrasto sufficiente              |
+| `on-status`       | `#FAFBFA`   | `#151B19`  | Da usare sui toast pieni, se scegliessi quella variante     |
+
+Questa gerarchia è coerente con un'interfaccia sobria. Non cambierei le superfici per uniformarle numericamente tra i temi: il tema scuro deve conservare una differenza percettibile tra pagina, card e pannelli, senza diventare luminoso o troppo contrastato.
+
+## Link dentro i banner
+
+Il documento riporta questi contrasti per il colore `link` sul fondo `X-soft`. Sono tutti superiori a 4,5:1, quindi soddisfano il requisito WCAG AA per il testo normale.&#x20;
+
+toast-e-banner.md
+
+
+
+| Stato        | Chiaro | Scuro |
+| ------------ | ------ | ----- |
+| Successo     | 5,6:1  | 4,8:1 |
+| Avviso       | 5,7:1  | 5,0:1 |
+| Errore       | 5,4:1  | 5,3:1 |
+| Informazione | 5,4:1  | 5,0:1 |
+
+Decisione: manterrei i token `link` attuali. Nel tema scuro il link ha meno margine sul fondo di successo rispetto al tema chiaro, ma il valore riportato è comunque sopra la soglia. Eviterei di abbassarne l'opacità. L'eventuale hover va verificato come stato separato.
+
+## Un'importante distinzione sul contrasto dei bordi
+
+Il rapporto di contrasto del testo non garantisce da solo che un bordo sia sufficientemente distinguibile. Per i controlli interattivi — soprattutto chip, pulsanti e campi — verificherei anche il contrasto del bordo rispetto alle superfici adiacenti. Come riferimento per gli elementi visivi necessari a identificare un controllo, WCAG 2.2 criterio 1.4.11 usa una soglia di 3:1 rispetto ai colori adiacenti.
+
+Il documento fornisce i rapporti del testo e delle icone, ma non tutti i rapporti dei bordi rispetto a ogni superficie. Non dichiarerei quindi quei bordi conformi senza una verifica ulteriore. Per i campi del tema scuro, in particolare, il bordo deve essere visibile senza diventare un contorno luminoso dominante.
+
+# 6. Piano di implementazione consigliato
+
+Per evitare di modificare contemporaneamente troppe cose, procederei in questo ordine.
+
+1. Confermare i token. Approvare i cinque valori indicati nella sezione 3 e mantenere gli altri valori di stato del documento.
+2. Uniformare il componente generico. Migrare `InfoBanner` e `RiskBetaBanner`, perché sono usati in 54 punti e costituiscono il modello di riferimento.
+3. Uniformare i toast. Passare alla variante tenue nei due temi e riutilizzare i token semantici già definiti.
+4. Uniformare gli avvisi con azioni. Applicare la proposta a) ai chip e pulsanti, preservando i pulsanti secondari neutri.
+5. Separare gli errori dagli avvisi. Correggere `DataQualityBanner` e `LotDataQualityBanner` in base alla gravità reale delle condizioni.
+6. Migrare le altre famiglie. Portare le famiglie 2.1–2.10 ai token condivisi, mantenendo le eccezioni strutturali necessarie, come i messaggi BRIM senza riquadro.
+7. Eliminare i colori duplicati. Sostituire le classi Tailwind nei 61 riquadri della famiglia 2.11 con i token semantici centralizzati.
+8. Verificare il risultato reale. Testare tema chiaro e scuro, contrasto di testo e icone, bordi, hover, focus, link, chip e pulsanti, nonché la leggibilità su tutte le superfici effettivamente usate.
+
+## Cosa verificare prima di considerare concluso il lavoro
+
+- Testo normale: contrasto almeno 4,5:1.
+- Icone e indicatori visivi necessari: contrasto almeno 3:1.
+- Bordi dei controlli: verificati rispetto ai fondi adiacenti.
+- Nessun testo reso troppo debole da opacità applicate sopra altri fondi.
+- Nessuna differenza cromatica ingiustificata tra componenti che rappresentano lo stesso stato.
+- Errori veri in rosso, avvisi non bloccanti in ambra, informazioni in blu, successi in verde.
+- Stati hover e focus verificati separatamente.
+- Link riconoscibili anche senza affidarsi soltanto al colore, ove necessario.
+
+# 7. Risposta finale pronta da dare allo sviluppatore
+
+Puoi usare direttamente questo testo come decisione per il prossimo giro.
+
+## Decisioni per il giro 3 — Toast e banner di LibreFolio
+
+**Toast:** scelgo la variante **tenue** in entrambi i temi. Utilizzare `X-soft` come fondo, `X-line` come bordo, `X-on-soft` per il testo e `X` per l'icona. Evitare i blocchi saturi nel tema scuro, mantenendo la palette di stato già definita.
+
+**Chip e pulsanti dentro i banner:** scelgo la **proposta a)**: fondo della card, bordo `X-line`, testo `X-on-soft`. I pulsanti secondari neutri del PAC mantengono `surface-card`, `border-raised` e `text-primary`. Verificare anche il contrasto dei bordi e gli stati hover/focus.
+
+**Errori nella qualità dei dati:** gli errori che compromettono l'affidabilità o la correttezza del risultato diventano `danger` (rosso). Le anomalie non bloccanti restano `warning` (ambra). Le informazioni contestuali restano `info` e le conferme positive `success`. Applicare questa distinzione a `DataQualityBanner` e `LotDataQualityBanner`.
+
+**Famiglia 2.1 — InstanceNotices:** va bene. Mantenere i token attuali; verificare link e pulsante di chiusura.
+
+**Famiglia 2.2 — OnboardingBootstrapBanner:** da cambiare. Sostituire le classi Tailwind con `warning-soft`, `warning-line`, `warning-on-soft` e `warning`.
+
+**Famiglia 2.3 — InfoBanner / RiskBetaBanner:** da cambiare. Usare i token semantici condivisi per info, warning, danger e success; rimuovere le opacità che rendono testo e icone troppo deboli.
+
+**Famiglia 2.4 — TransactionResultBanner / TxBulkBanners:** da cambiare. Uniformare fondi, bordi, titoli e testi ai token semantici; applicare la proposta a) a chip e pulsanti.
+
+**Famiglia 2.5 — DataQualityBanner:** da cambiare. Distinguere gli errori reali (`danger`) dalle anomalie non bloccanti (`warning`); mantenere `info` per le informazioni contestuali.
+
+**Famiglia 2.6 — LotDataQualityBanner:** da cambiare. Applicare la stessa classificazione e gli stessi token della famiglia 2.5.
+
+**Famiglia 2.7 — RiskPartialNotice:** da cambiare. Uniformare info e warning ai token condivisi e adottare la proposta a) per le pillole.
+
+**Famiglia 2.8 — AssetModalImportNotices:** da cambiare. Usare i token warning condivisi; passare a danger soltanto per i messaggi che rappresentano veri errori.
+
+**Famiglia 2.9 — BrimNoticeList:** da verificare. Mantenere il testo senza riquadro, ma verificare i contrasti sul fondo card effettivo, non sul fondo `X-soft`.
+
+**Famiglia 2.10 — PAC notices:** da cambiare. Uniformare StateNotice, StaleBanner, RefreshNotice e CopyNotice ai token semantici. Mantenere neutri i pulsanti secondari e il token link per le azioni testuali.
+
+**Famiglia 2.11 — Riquadri in linea:** da cambiare. Migrare i 61 riquadri alle quattro famiglie semantiche `success`, `warning`, `danger` e `info`, eliminando le varianti Tailwind duplicate.
+
+### Valori da confermare
+
+- `warning`, chiaro: `#AE4E00`
+- `danger-soft`, chiaro: `#FFE5E5`
+- `info-soft`, chiaro: `#DEEDFF`
+- `danger`, scuro: `#FF7A86`
+- `success`, scuro: `#5ED69A`
+
+Mantenere gli altri token riportati nel documento. Verificare WCAG AA sul rendering effettivo di entrambi i temi: testo ≥ 4,5:1, icone ≥ 3:1 e contrasto dei bordi dei controlli rispetto alle superfici adiacenti. I valori di contrasto già documentati vanno conservati come riferimento, ma non estesi automaticamente a combinazioni di colori differenti.
+
+## Conclusione
+
+La decisione centrale è non creare una nuova palette, ma rendere coerente quella che hai già. I valori del documento sono una buona base: le modifiche principali sono il passaggio dei toast alla variante tenue, la standardizzazione dei controlli interni ai banner, la distinzione semantica fra errore e avviso e la migrazione delle classi duplicate ai token condivisi.
+
+L'unico controllo che lascerei esplicitamente aperto prima di approvare tutto è la verifica numerica dei bordi e dei componenti senza riquadro sui loro fondi reali: il documento non fornisce tutti quei rapporti. In questo modo la decisione estetica è chiara, ma la conformità accessibile non viene dichiarata più ampia di quanto i dati dimostrino.

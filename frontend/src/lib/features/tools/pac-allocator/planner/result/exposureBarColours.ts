@@ -7,25 +7,27 @@
  *     the generic member keeps the family's colour, the others take `familyShade` by rank of ideal weight, largest
  *     first, ties by id, and never the family's own colour.
  *   - The uncategorised remainder reads «Non classificato».
- * - **The ideal weight** is a neutral role, {@link idealColour}, so the colour on a row belongs to the actual weight
- *   alone.
+ * - **The ideal weight** is a neutral grey of its own, {@link idealColour}, so the colour on a row belongs to the actual
+ *   weight alone.
  *
- * Pure: the chart reads the roles (`chartRoles`) and hands in the shade poles of its card.
+ * Pure: the chart reads its card (`chartRoles`) and hands in the shade poles.
  *
  * @module features/tools/pac-allocator/planner/result/exposureBarColours
  */
 import {categoryColor} from '$lib/theme/chartCategories';
 import {familyShade, type ShadePoles} from '$lib/theme/chartShades';
-import type {ChartRoles} from '$lib/theme/roleColors';
+import {PAC_EXPOSURE_COLORS} from '$lib/theme/chartTheme';
+import {themed} from '$lib/theme/themePair';
 import {assetTypeFamily} from '$lib/utils/assetTypes';
 import {compareExact, UNCATEGORISED_CATEGORY_ID, type WeightRow} from './model';
 
 /**
- * The colour of the ideal weight: the secondary text role (TD-1, coordinator, 15/10/2026). It stays at least ΔE00 10
- * from every category colour, with one recorded exception: «Other» in the dark theme, at 9.0.
+ * The colour of the ideal weight: the designer's neutral grey (round 3, §1.7), `PAC_EXPOSURE_COLORS.ideal`. It stays at
+ * least ΔE00 10 from every colour a row can draw, with two recorded exceptions in the light theme: «Non classificato»
+ * at 8.0 and «Other» at 8.7.
  */
-export function idealColour(roles: ChartRoles): string {
-    return roles.color('--lf-text-secondary');
+export function idealColour(dark: boolean): string {
+    return themed(PAC_EXPOSURE_COLORS.ideal, dark);
 }
 
 /** The engine's bucket the uncategorised remainder reads as, in both tables. */

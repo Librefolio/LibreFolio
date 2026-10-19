@@ -273,6 +273,29 @@
   - **Una galleria completa o grande si annuncia alla 1.3 come blocco quando la si programma**, non quando parte.
   - **Un ruolo letto da JS si chiede a DV** (`ChartRole` in `roleColors.ts`), con `PENDING_READERS` finché non ha un
     lettore; `color()` restituisce sempre `#rrggbb` o `rgba()`.
+- **17/10 giorno:** la 1.3 è entrata per tutto il giorno, sempre pulita per i colori. Gli OK sui file nostri: Y
+  R17/W8/P4, A8b (con la run del punto 33, `8a9e8c6d6`), Y-8, X-R53, C-97c, H-52, K3. Il rosso di `theme-roles` (caso
+  (c), `daea7b31c` di DV contro D-T3) l'ha corretto T con le sonde del remap (`c1578a8bf`). **Regola nuova:** un lotto
+  che migra un componente nominato in `theme-roles.spec.ts` aggiorna la spec nello stesso lotto. **STOP del developer
+  alla 1.3 alle 21:45.**
+- **Giro 3 della designer (17/10 22:05 → 18/10 04:05)**, approvato dal developer con la designer accanto: «leggilo e
+  applicalo, modifica i temi colori esistenti, e se ne servono altri, creali».
+  - **Archiviati** i due messaggi (grafici; toast e banner) e le loro fonti in
+    `designer-feedback/2026-10-17-round3-grafici/` (`0ccb411e9`, `1995e11a2`). Le scelte sul foglio delle opzioni
+    (coppie vicine, ideale del PAC, chip, gravità, sottotipi) stanno in `decisioni.md` (`38b7e6313`, `ba8e06763`).
+  - **Archiviate** le sessioni IM, IW, TR, L, BK e AF (via del developer), dopo i controlli.
+  - **Entrati:** T R3-a `050741670` (toast tenui, chip col bordo `X`, qualità dei dati per gravità, il rischio
+    `MISSING_PRICE` ad avviso); T R3-b `7845fc3d3` (i ruoli `--lf-cat-*` dei tipi, i badge per famiglia col pallino del
+    contenuto); DV `b238d5b6e` (la palette dei grafici: tipi, settori, paesi, mappa blu, correlazione col testo
+    nero/bianco, ideale del PAC, effetto tempi sui segni, barre della card del patrimonio); T R3-c `cd686f445` (lo
+    skill: regola 11 per i tipi, regola 12 per le quattro gravità; TC-20 Lab live); G `ad647bc4e` (i record della
+    galleria).
+  - **Misure:** m1 590 (da 674), m2 2.
+  - **Galleria prima/dopo dello stesso giorno:** «prima» `ba8e06763`, «dopo» e «dopo2» `cd686f445`, 2.900 PNG per
+    lato, 495 scatti oltre il rumore, 0 strutturali. Foglio `LibreFolio_visual_review/sheets/r3-2026-10-18/`, zip
+    `package/LibreFolio_review_colori_giro3_2026-10-18.zip`; il rumore di oggi è il nuovo riferimento dopo A8b e A9.
+  - **Aperte:** DV-11 (il Lab sui ruoli `--lf-cat-*`), DV-12 (`dashboard` data-busy, per la 1.3), G-22–G-26, TC-19 (la
+    pagina dei docs del banner), l'opzione dell'etichetta del «prima» nello strumento dello zip.
 
 ## 🛤️ Workstream e corsie
 
