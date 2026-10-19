@@ -12,8 +12,10 @@
   is not noise to be skipped, it is a decision the user should be aware of before
   the data lands in the portfolio.
 
-  A notice whose `context.report_issue` is `true` (a plugin in beta that suspects its own reading, Fineco's W-B83)
-  carries, under its message, the fix step's link «open an issue on GitHub» (`importWizard.fixStep.reportIssueLink`).
+  A notice whose `context.report_issue` is `true` carries, under its message, the fix step's link «open an issue on
+  GitHub» (`importWizard.fixStep.reportIssueLink`), on every instance. Two uses: a warning for rows the plugin left out
+  because it does not know them (W-B85, Danske Bank's `excluded_status`), and a note from a plugin in beta that suspects
+  its own reading (Fineco's `fineco_incomplete_rows`, W-B83).
 
   Legacy plugins that append plain strings are coerced backend-side into
   `{severity: 'warning', code: 'generic', message: <string>}`, so this component

@@ -194,17 +194,41 @@ mandatory for every new plugin:
 - **Only safe rows.** Import only rows whose date the broker will not change any more:
   movements already settled, executed and booked. A provisional row — its value or
   settlement date after the server's today (`server_today()` in
-  `backend/app/utils/datetime_utils.py`, never the browser's date), or a status that says
-  pending or reserved — is left out **whole**, with every transaction it would have
-  produced (its fee, its premium), and arrives with the next import. Say so with one
-  `severity="info"` notice per reason (a `code`, `context.count`, the rows as
-  [evidence](#brim-evidence)), never a warning: nothing is wrong, the rows are simply not
-  final yet. When the report holds no export date and no status, compare the row's own
-  date with `server_today()`: Fineco, notice `fineco_not_yet_settled`
-  ([Fineco notes](../../backend/brim/architecture.md#plugin-fineco)). When it covers a
-  known period, compare with the period's end: Danske Bank, notice
+  `backend/app/utils/datetime_utils.py`, never the browser's date) — is left out **whole**,
+  with every transaction it would have produced (its fee, its premium), and arrives with the
+  next import. Say so with one `severity="info"` notice per reason (a `code`,
+  `context.count`, the rows as [evidence](#brim-evidence)), never a warning: nothing is
+  wrong, the rows are simply not final yet. When the report holds no export date and no
+  status, compare the row's own date with `server_today()`: Fineco, notice
+  `fineco_not_yet_settled` ([Fineco notes](../../backend/brim/architecture.md#plugin-fineco)).
+  When it covers a known period, compare with the period's end: Danske Bank, notice
   `excluded_not_yet_settled`, for the custody trades valued after the cash statement's last
-  day ([Finnish notices](../../backend/brim/danske_bank.md#finnish-notices)).
+  day ([Finnish notices](../../backend/brim/danske_bank.md#finnish-notices)). A row the
+  broker marks by its status (reserved, cancelled, pending) follows the next rule.
+- **Known rows quietly, unknown rows loudly.** Leave a row out only for a reason the plugin
+  can name (lot W-B85, the developer's principle of 19/10/2026):
+    - **Known and safe to leave out** — a blank, header or total row, a reservation, a row
+      the broker marks as cancelled, a duplicate of another row: no notice, at most one
+      backend log line per reason (`logger.info(…, reason=…, count=…)`). In a report set the
+      row keeps its place in the set's accounting: an `excluded` outcome with its reason,
+      counted in the summary's `reasons` and labelled in the wizard by
+      `importWizard.reportSet.reason.<reason>`. Example: Danske Bank's `reservation`, a cash
+      row labelled `Varaus` (*reserved, not booked*).
+    - **Unknown or unreadable** — a type, status or description the plugin does not
+      recognise; a date, amount or required field it cannot read: leave it out, and say so
+      with one `severity="warning"` notice per reason (a `code`, `context.count`, the rows as
+      evidence) that carries `context.report_issue = True`. The wizard then shows the link
+      *open an issue on GitHub* under the warning, on every instance, self-hosted or hosted
+      ([`context` keys](#context-keys-the-frontend-understands)): the users become the
+      canaries of a broker whose export changes. Example: Danske Bank's `excluded_status`,
+      the rows whose `Tila` is neither executed nor booked.
+    - **Never silently** leave out a row that may carry an economic effect (a split, a fee, a
+      tax, a currency conversion) unless the plugin knows that is safe: a row it cannot
+      import is unknown.
+    - The provisional rows of *Only safe rows* are neither: they keep their info note.
+    - `report_issue` also serves a plugin in beta that imports a row but doubts its own
+      reading, on an info note: Fineco's `fineco_incomplete_rows` imports the rows missing a
+      required number and asks the user to open an issue if the file is right.
 
 ### 🔢 Decimal places {: #decimal-places }
 
@@ -893,7 +917,10 @@ warnings.append(
   `ADJUSTMENT`, rows left for the next import because they have not settled yet (the rule
   *Only safe rows*, under [Import philosophy](#import-philosophy-currency-rules)). Blue,
   still surfaced in the confirmation modal.
-- `severity="warning"` — *the plugin had to fall back or guess*: look at it.
+- `severity="warning"` — *the plugin had to fall back or guess*: look at it. Also a row left
+  out because the plugin does not know it, with `context.report_issue` (the rule *Known rows
+  quietly, unknown rows loudly*, under [Import philosophy](#import-philosophy-currency-rules)).
+  A row the plugin knows it may leave out gets no notice at all.
 - A bare `str` still works (coerced to `severity="warning"`, `code="legacy"`), but new code
   should never use it: the `code` is what lets the frontend and the tests address the notice.
 
@@ -987,7 +1014,7 @@ A `BRIMNotice` has one key of its own, read by the notice list (`BrimNoticeList.
 
 | Key | Type | Effect in the wizard |
 |-----|------|----------------------|
-| `report_issue` | `bool` | Only the boolean `True` counts. The wizard then shows, under the notice's message, the link *open an issue on GitHub* (`importWizard.fixStep.reportIssueLink`, the same words as the correction step's link) to `https://github.com/Librefolio/LibreFolio/issues/new`, opened in a new tab (`data-testid="brim-notice-report-issue"`). It is meant for a plugin in beta that suspects its own reading: Fineco's `fineco_incomplete_rows` asks the user to check the rows and, if the file is right, to open an issue. |
+| `report_issue` | `bool` | Only the boolean `True` counts. The wizard then shows, under the notice's message, the link *open an issue on GitHub* (`importWizard.fixStep.reportIssueLink`, the same words as the correction step's link) to `https://github.com/Librefolio/LibreFolio/issues/new`, opened in a new tab (`data-testid="brim-notice-report-issue"`), on every instance, self-hosted or hosted. Two uses. A row the plugin does not know, left out: a warning, under the rule *Known rows quietly, unknown rows loudly* ([Import philosophy](#import-philosophy-currency-rules)) — Danske Bank's `excluded_status` asks the user to open an issue if the rows are real movements. A plugin in beta that suspects its own reading of rows it imported: an info note — Fineco's `fineco_incomplete_rows` asks the user to check the rows and, if the file is right, to open an issue. |
 
 Everything else in `context` is free: it is passed through untouched and is useful for tests
 and for i18n interpolation.
@@ -1386,7 +1413,8 @@ Danske places every row on the **value-date** axis:
 - **before** is up to the first checkpoint, a **gap** lies between a window and the next
   checkpoint, and **after** is beyond the last window.
 
-Every row gets exactly one outcome, with a reason when it is excluded: nothing is lost silently.
+Every row gets exactly one outcome, with a reason when it is excluded: no row leaves the set's
+accounting, not even one left out without a notice (`reservation`).
 
 | Row | before | window | gap | after |
 |---|---|---|---|---|
@@ -1395,7 +1423,7 @@ Every row gets exactly one outcome, with a reason when it is excluded: nothing i
 | Cash trade or income **without** its custody row | `summarized` in the first checkpoint | in the border: `summarized` in that checkpoint (a trade made before the custody export, settled after its start); after the segment's last day: the next zone; elsewhere `excluded` (`no_counterpart`) | `summarized` in the next checkpoint | `deferred`: it comes with the next import |
 | Custody trade or income without its cash row | — | `excluded`: `not_yet_settled` (settled after the last cash row), `outside_cash_coverage` (outside the cash statement), otherwise `no_counterpart` | — | — |
 | Custody demerger line | — | `standalone`: a cashless `ADJUSTMENT` | — | — |
-| Not executed or not booked; unknown type; invalid | `excluded` (`status`, `unknown_type`, `invalid`) | same | same | same |
+| Not executed or not booked; reserved (`Varaus`); unknown type; invalid | `excluded` (`status`, `reservation`, `unknown_type`, `invalid`) | same | same | same |
 
 Pairing keys on value date, amount to the cent, currency and direction (`Osto` with a positive
 quantity, `Myynti` with a negative one, income with a positive amount). The name is only a
