@@ -8604,6 +8604,9 @@ punto di partenza, l'audit dello stesso giorno:
 - **MF-A…MF-P · I 16 lotti dell'audit** — tutti nella 1.3 per decisione del developer (16/10). Voci per lotto
   scritte da MF nell'analisi del 16/10 (base `f77743d47`); la ripartizione con J (CP-3, CP-5, U3/U7, CP-12, CP-13) è
   la domanda Q1 al coordinatore. Ordine e ondate: piano MF, §4.
+  **Stato al 19/10**: 14 lotti su 16 ✅ (A, B, C, D, F, G, H, I, J, K, M, N, O, P); aperti **E** (E2, domanda al
+  developer: gli short nello storico, opzione (b)) e **L** (D-MF1, domanda al developer). Tabella: piano MF, «Stato dei
+  lotti (19/10)».
 - ✅ **MF-A · Contributo per posizione dal motore** (CP-3 di J: B8, V2/P2, R4, B19; TRANSFER per broker secondo P22) —
   grande, numeri; audit 16/10. Dettagli: [piano MF](../Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md),
   sezione «MF-A».
@@ -8625,9 +8628,12 @@ punto di partenza, l'audit dello stesso giorno:
 - ✅ **MF-F · Segno del reddito nei lotti e nella timeline dei redditi dell'AI Export** (O3, B9) — piccolo, numeri; audit
   16/10. Decisione D-MF3. Dettagli: piano MF, sezione «MF-F».
   **Entrato** il 16/10: F1 e F2 in dev `8d244d1c6`.
-- **MF-G · Quantità e cassa senza `SUM` SQL** (PAC; `balances.py` col via di W, accanto a W-B19; O4) — piccolo-medio;
+- ✅ **MF-G · Quantità e cassa senza `SUM` SQL** (PAC; `balances.py` col via di W, accanto a W-B19; O4) — piccolo-medio;
   audit 16/10. Dettagli: piano MF, sezione «MF-G».
   **G1 entrato** il 16/10 (dev `8d244d1c6`); **G2** (`balances.py`) resta col via di W, accanto a W-B19.
+  **Chiusa** (riconciliazione del 19/10): G2 l'hanno fatta altri lotti — `transactions/balances.py` legge
+  `ledger_totals.position_quantities` per le quantità (C-97, `bab52635d`) e `native_cash.native_balances` per la cassa
+  (W-B19, `6be11ecf3`); nessun `SUM` SQL resta.
 - ✅ **MF-H · Finestra di detenzione nella casa** (T-B4, T-U6, L1–L2) — piccolo-medio, numeri; audit 16/10. Decisione
   D-MF2. Dettagli: piano MF, sezione «MF-H».
   **Entrato** il 16/10: dev `bcc644491` (D-MF2 = arrivo al broker).
@@ -8652,10 +8658,11 @@ punto di partenza, l'audit dello stesso giorno:
 - ✅ **MF-O · Yield on Cost: mai il WAC convertito al cambio di `as_of`** — minimo; audit 16/10. Dettagli: piano MF,
   sezione «MF-O».
   **Entrato** il 16/10: dev `8d244d1c6`.
-- **MF-P · Campi del backend per il frontend** (T-U8 lato backend, CP-13 meno CP-13a; W8, P4, P5, V11, R17 di Y; il
+- ✅ **MF-P · Campi del backend per il frontend** (T-U8 lato backend, CP-13 meno CP-13a; W8, P4, P5, V11, R17 di Y; il
   consumo è di Y) — medio; audit 16/10, Y12a. Decisione D-MF6. Dettagli: piano MF, sezione «MF-P».
   **Lato backend entrato** il 17/10: P dev `536501541`, P4b `d93de2899`, P2 `aa4370905`, P2b `c9b1162d4`; il consumo
   nel web app è di Y.
+  **Chiusa per MF** (19/10): il backend è entrato e Y lo usa; il consumo resta nelle voci di Y.
 - ✅ **MF-O2 · Yield on Cost: un reddito netto negativo nella finestra fa fallire il report** — basso (dati legacy),
   robustezza; test-author di MF, 16/10 (letto nel codice, non provato). Il reddito per unità somma i redditi col segno
   (`yield_on_cost.py`, `_calculate_income_position`): se nei 365 giorni le correzioni negative superano i dividendi, il
@@ -8786,6 +8793,10 @@ punto di partenza, l'audit dello stesso giorno:
   30 minuti) è restituito tale e quale a ogni richiesta: un consumatore che lo modificasse in luogo cambierebbe le
   risposte degli altri. Nessun caso visto; una guardia simile (istantanea profonda prima e dopo) lo fisserebbe.
   Dettagli: piano MF, «MF-J45b».
+- ✅ **MF-J45d · Un errore deterministico della costruzione fa riprovare i seguaci uno dopo l'altro** — basso, carico; J,
+  17/10 (revisione di MF-J45b). **Chiusa il 17/10**: l'errore del capofila arriva ai seguaci, `_LeaderGone` solo per la
+  cancellazione; nit di doc sull'intervallo esatto; dev `685d76dab`. Compromesso dichiarato: anche un errore transitorio
+  del capofila fa fallire i seguaci. Dettagli: piano MF, «MF-J45d».
 - **MF-SEC9d · Nessun tetto globale alle chiamate concorrenti per fornitore** — basso, carico; E, 17/10 (revisione di
   R13-SEC9). Il semaforo di `get_current_prices_bulk` limita una richiesta, non il processo: 1 000 id distinti con un
   fornitore lento sono ~33 minuti di chiamate in uscita per richiesta, e più richieste si sommano. Proposta: un
@@ -8831,7 +8842,7 @@ punto di partenza, l'audit dello stesso giorno:
   A→B→C la riga di C dà 5/500 invece di 5/645. Cura possibile, il rovescio di MF-A8 sul costo alla fine:
   `annualized_period_return(..., end_cost + Σ(V_a − C_a))`. Rossi prima. Dettagli: piano MF, «MF-A8».
 - **MF-A6 · La polvere rompe l'identità del §7** — basso, numeri, dopo la 1.3; J, 17/10 (revisione di MF-A2). Lo stato
-  **Lato doc pronto (17/10, con MF-A7)**: §7 e `period-pnl` dicono «polvere a parte»; l'allineamento di
+  **Lato doc entrato (17/10, con MF-A7, dev `09d29671d`)**: §7 e `period-pnl` dicono «polvere a parte»; l'allineamento di
   `daily_state.py` alla stessa soglia resta dopo la 1.3 (coordinatore).
   giornaliero valuta ogni quantità > 0, le righe considerano ≤ 1e-5 come non tenuta: la stessa soglia dai due lati, o il
   §7 dice «polvere a parte». Dettagli: piano MF, «MF-A5».
@@ -8840,8 +8851,8 @@ punto di partenza, l'audit dello stesso giorno:
   da parte, None se la posizione tiene solo polvere.
   MF-A2). Un residuo di polvere può spostare l'inizio della finestra di ricaduta dell'annualizzato. Dettagli: piano MF,
   «MF-A5».
-- **MF-A10 · Le finestre di detenzione leggono la quantità grezza, le righe quella alla quota** — basso, numeri, nella
-  1.3 (coordinatore); J, 17/10 (revisione di MF-A7). **Pronto (17/10)**. `quantity_moves` → `oldest_open_lot_date`,
+- ✅ **MF-A10 · Le finestre di detenzione leggono la quantità grezza, le righe quella alla quota** — basso, numeri, nella
+  1.3 (coordinatore); J, 17/10 (revisione di MF-A7). **Chiusa il 17/10**: dev `4753b66f6`, CHANGELOG `e6d3e61e0`. `quantity_moves` → `oldest_open_lot_date`,
   `closed_position_window` leggono `tx.quantity`; il test della polvere della riga (`is_fully_sold`, `qty_at_end`) e la
   lista delle posizioni leggono la quantità del motore alla quota (`daily_state.py:380`). Su un broker posseduto in
   parte (s < 1) un residuo in (polvere, polvere/s] è polvere per la riga e non per la finestra: s = 0,5, residuo
@@ -8856,8 +8867,8 @@ punto di partenza, l'audit dello stesso giorno:
   del developer (coordinatore). Caso estremo trovato col test di MF-A10: a broker intero un residuo di 0,000012 (sopra
   la polvere) lascia una riga tenuta con costo alla fine 0,0012, e l'annualizzato vale 1 774 600,33 (oggi): con la base
   proposta (0,0012 + il costo venduto) torna sensato. Dettagli: piano MF, «MF-A10».
-- **MF-A12 · La variazione d'un giorno delle posizioni scritta in linea** — minimo, nessun valore (salvo un pareggio
-  **Pronto (17/10, N92)**: `change_ratio` per le due colonne; identico al bit per ogni prezzo positivo, un prezzo negativo
+- ✅ **MF-A12 · La variazione d'un giorno delle posizioni scritta in linea** — minimo, nessun valore (salvo un pareggio
+  **Chiusa il 17/10 (N92)**: dev `5a6d71a1e`, CHANGELOG `5d87dec28`; `change_ratio` per le due colonne; identico al bit per ogni prezzo positivo, un prezzo negativo
   prende il segno della mossa.
   d'arrotondamento); MF, 17/10 (analisi di J-14). In `get_summary` `price_change_1d = ((corrente − precedente) /
   precedente).quantize(0,0001)` (`portfolio_service.py` ~:745) e `gain_loss_change_1d_percent = (variazione / |valore
