@@ -2238,7 +2238,7 @@ Z-29b su `LineChart.svelte`, che resta fuori.
   >   due elementi con fonti di colore diverse, e la precondizione scritta.
   > - Porta 6156 libera alla fine; HEAD invariato. Nel backlog DV-12 e DV-13.
 
-### DPR — I grafici nitidi dopo un cambio di schermo ⏳ (19/10/2026)
+### DPR — I grafici nitidi dopo un cambio di schermo ✅ (19/10/2026; i due file di Y-N65 in DV-14)
 
 Il developer, dall'anteprima 6160: correlazione, dettaglio dell'asset, broker, PAC, «tutto ECharts» ha testi e numeri
 sfocati dopo aver spostato su uno schermo Retina il browser aperto su uno schermo a meno DPI. Lavoro tecnico, non di
@@ -2389,6 +2389,34 @@ secondo la 1.3, tranne `PriceChartFull` e `CandlestickChart` (Y-N65, circa un gi
   > `AssetSetRiskReturnSection`, `L3RiskAdjusted`, `chartCoreHelpers`, i gate `htmlInterpolation` e
   > `themeModeReads`, `scanColors` del Lab.
   > - Nel backlog **DV-14**: `PriceChartFull` e `CandlestickChart` dopo Y-N65.
+  > **Checkpoint e base:** il coordinatore ha committato il checkpoint in `741a2d5c3` (genitore `cc3c3af15`, i 24 file)
+  > e fatto la base merge `be7033b1c` (genitori `741a2d5c3` e il target `ccc2a4141`, con T: colonne fisse e T2),
+  > pulita. **Slot partito alle 16:59** su `be7033b1c`, carico 49,7, taglio 17:55, `DPR_E2E_ACTION=chart-pixel-ratio`,
+  > log in `files/dpr-slot/`. Disco: 21 GiB liberi.
+  > **La sonda dell'E2E nuovo (17:08–17:16, carico fino a 157):** «nasce a 2×» verde (3,2 s); «seguono» rosso sulla
+  > sonda del test: sotto `Emulation.setDeviceMetricsOverride` `window.devicePixelRatio` arriva a 2, ma la query
+  > `(resolution: 1dppx)` della sonda non riceve nessun `change` in 10 s. È il banco, non il prodotto: la pagina non può
+  > sentire il cambio, e la sonda lo distingue apposta.
+  > **⚠️ Fuori pista:** a test-author la revisione del solo test 1: prima un aggiornamento del rendering a ogni lettura
+  > della sonda (gli eventi `change` delle media query partono in «update the rendering»); se Chromium non emette
+  > ancora niente, un ponte esplicito: `addInitScript` registra le `MediaQueryList` di risoluzione dell'app e il test
+  > le notifica dopo il cambio reale di densità, con un'annotazione che dice chi ha emesso l'evento. Tutto il resto
+  > resta reale: il cambio via CDP, i grafici, zrender, il gestore del modulo e il riarmo.
+- [x] ✅ (19/10/2026, 17:42) DPR-3, lo slot su `be7033b1c` (16:59–17:41, carico 18–157, log in `files/dpr-slot/`).
+  > - `test db populate --force --clean`: corsia ricreata (tabelle pulite, broker e utenti creati); `api sync` senza
+  >   file tracciati cambiati.
+  > - Vitest: `core-unit` 220 file e 9383 test; `component-unit` 191 file e 5010 test; `chart-safety-unit` 9 file e
+  >   144 test (col gate K-13 esteso e `chartPixelRatio.test.ts`); tutti verdi.
+  > - E2E, tutti nel progetto `[desktop]`: `dashboard` 27, `asset-detail` 43, `risk-lab` 44, `risk` 38, broker
+  >   `detail` 40 (i tre grafici dei lotti), `broker-sharing` 17, `pac-allocator-real` 1, `allocation-negative-cash` 4;
+  >   tutti verdi.
+  > - `chart-pixel-ratio`: alla prima esecuzione 1 su 2, rosso sulla sonda del banco; **rivisto e rilanciato da solo
+  >   (17:41–17:42, log `11_rerun-pixel-ratio.log`): 2 su 2.** La sonda, anche con due frame di rendering a ogni
+  >   lettura, non riceve il `change` né all'andata né al ritorno; l'annotazione dice «dispatched by the test», e da
+  >   lì i grafici seguono: 1× → 2× → 1×, stesse istanze, stessi canvas, e `data-chart-renders` invariato (2 → 2,
+  >   4 → 4): niente ridisegnato dalle opzioni.
+  > - Porta 6156 libera alla fine; HEAD `be7033b1c`. Da committare: lo spec rivisto, una clausola della `desc` del
+  >   runner e il piano.
 
 ## Definizione di fatto
 

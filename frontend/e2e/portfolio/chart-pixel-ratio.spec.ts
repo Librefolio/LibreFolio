@@ -29,19 +29,47 @@ import {TEST_USER} from '../fixtures/test-users';
  * - The density changes at runtime through the test's own CDP session: `Emulation.setDeviceMetricsOverride`, the same
  *   viewport and screen, deviceScaleFactor 2 — what moving the window to a Retina screen does to the page. No reload:
  *   the page keeps the zrender it loaded at 1.
- * - The page hears a change of density only through a `resolution` media query's `change`. A probe of the test's own,
- *   armed in the page on the same kind of query, says whether Chromium fired it under the override: if it did not, the
- *   first test fails on that, naming the harness, before any chart is read. The second test does not depend on it.
+ * - The page hears a change of density only through a `resolution` media query's `change`, which the browser fires on a
+ *   query whose match flipped, in the «update the rendering» step. A probe of the test's own, armed on the density of
+ *   the moment before each change, says whether Chromium fired it under the override: read after two rendering updates
+ *   each time (layout forced, then two animation frames), for up to 5 s. The second test does not depend on it.
  * - In place: the same instance id on every host and the same canvas nodes (remembered in the page before the change).
  *   `data-chart-renders` is recorded, not asserted: a change of density may move sub-pixel layout, and a chart's
  *   ResizeObserver then redraws it through `resize()` — the product's own path, not this one. That nothing is drawn
  *   again from the options is `chartPixelRatio.test.ts`'s (no `setOption`, `resize` or `clear` on the change).
  *
+ * ## The bridge: a change Chromium does not fire
+ *
+ * Measured in the slot of 19/10 (Playwright 1.61's Chromium): under `Emulation.setDeviceMetricsOverride`,
+ * `window.devicePixelRatio` reached 2, and the probe's `(resolution: 1dppx)` heard no `change` in 10 s. When the probe
+ * hears nothing, the first test supplies that event itself, in the open:
+ *
+ * - an init script, installed before the test's first navigation, wraps `window.matchMedia`: every `MediaQueryList`
+ *   whose media names `resolution` is recorded in the page (`__lfResolutionQueries`), the real object returned
+ *   unchanged. The probe creates its queries through the native `matchMedia`: none of them is ever recorded;
+ * - the test dispatches `change` — a `MediaQueryListEvent` with the list's own `media` and `matches`, what the browser
+ *   sends — on the latest query the app created, provided it still names the density before the change: the one the
+ *   app's watcher armed. If the app has armed another since, Chromium's own event came after the probe's 5 s and nothing
+ *   is dispatched; a native event arriving after a dispatch finds the old query without its listener (the app re-armed)
+ *   and the charts already at the density: it changes nothing;
+ * - a `density-change` annotation, also printed, says for each direction which it was: `fired by Chromium`, or
+ *   `dispatched by the test: Chromium fired no resolution change under Emulation.setDeviceMetricsOverride`. A fact
+ *   about the harness, never a failure.
+ *
+ * Why it is honest: firing that event is the browser's job — MDN's «Monitoring screen resolution or zoom level
+ * changes» (`Window.devicePixelRatio`) documents this very query as how a page learns that its density changed — and
+ * the test leaves it to the browser whenever the browser does it. Everything else is real: the density change through
+ * CDP (`window.devicePixelRatio` is the new one before anything is dispatched), the charts, zrender, the module's
+ * handler and its re-arming on the new density, which is asserted, so the way back is delivered on the query the app
+ * armed itself. Every failure after the delivery is the product's, and reads so: «the page received the change of
+ * density (fired by Chromium | dispatched by the test), yet …».
+ *
  * ## Why it is red without the fix
  *
  * Without `chartInitOptions` the charts are created with `{renderer: 'canvas'}`: at the density zrender read when the
  * page loaded (1) whatever the screen's at their creation — the sector pie opened after the change is born at 1× — and
- * nothing brings the charts on screen to the new density: they stay at 1×.
+ * nothing brings the charts on screen to the new density: they stay at 1×. Nothing arms a resolution query either, so
+ * the first test fails before any change, on the app's watcher: there is nothing to fire, or to dispatch, a change on.
  *
  * Read-only: TEST_USER's seeded data, nothing written; the override is cleared at the end of each test.
  */
@@ -58,6 +86,33 @@ const PIE = `${HOSTS}:not([data-testid="allocation-history-chart"])`;
 
 /** The density the screen moves to: a Retina screen. */
 const DENSE = 2;
+
+/** How long the probe listens for Chromium's own `change` before the bridge dispatches it. */
+const PROBE_MS = 5_000;
+
+/** The `density-change` annotation when the test dispatched the change. */
+const DISPATCHED = 'dispatched by the test: Chromium fired no resolution change under Emulation.setDeviceMetricsOverride';
+
+/** How the page received a change of density. */
+type Delivery = 'fired by Chromium' | 'dispatched by the test';
+
+/** The page's screen, kept as it is when the density changes. */
+interface Screen {
+    width: number;
+    height: number;
+}
+
+/** What this spec keeps on the page's `window`. */
+interface DensityWindow {
+    /** Every `MediaQueryList` the page created whose media names `resolution`, oldest first: the init script's record. */
+    __lfResolutionQueries?: MediaQueryList[];
+    /** The native `window.matchMedia`, kept by the init script: the probe creates its queries through it. */
+    __lfNativeMatchMedia?: (query: string) => MediaQueryList;
+    /** The probe's query and its listener. */
+    __lfDensityProbe?: {query: MediaQueryList; heard: () => void};
+    /** The `change` events the probe heard since it was armed. */
+    __lfDensityChanges?: number;
+}
 
 /** A canvas as the page lays it out: its backing store, its CSS box, and whether it is the node remembered for its host. */
 interface CanvasReading {
@@ -136,6 +191,12 @@ const densitiesAt = (hosts: HostReading[], ratio: number): string[] => hosts.map
 /** The hosts of `readings` whose ids are `ids`, in the order of `ids`: a host gone (created again under a new id) is missing. */
 const byIds = (readings: HostReading[], ids: string[]): HostReading[] => ids.flatMap((id) => readings.filter((host) => host.id === id));
 
+/** Every host as `id: n canvas(es), the same nodes | new nodes`: the same nodes as those remembered before the change. */
+const nodesOf = (hosts: HostReading[]): string[] => hosts.map((host) => `${host.id}: ${host.canvases.length} canvas(es), ${host.canvases.every((canvas) => canvas.same === true) ? 'the same nodes' : 'new nodes'}`);
+
+/** The same hosts, each still on the canvas nodes remembered before the change. */
+const sameNodesAs = (hosts: HostReading[]): string[] => hosts.map((host) => `${host.id}: ${host.canvases.length} canvas(es), the same nodes`);
+
 // ============================================================================
 // The page and the density
 // ============================================================================
@@ -161,12 +222,12 @@ async function openOverview(page: Page): Promise<void> {
 }
 
 /** The page's screen, as Playwright emulates it: kept as it is when the density changes. */
-async function screenOf(page: Page): Promise<{width: number; height: number}> {
+async function screenOf(page: Page): Promise<Screen> {
     return page.evaluate(() => ({width: window.screen.width, height: window.screen.height}));
 }
 
 /** Chromium at `deviceScaleFactor`, the same viewport and screen, through the test's own CDP session; the page reads it. */
-async function moveToDensity(cdp: CDPSession, page: Page, screen: {width: number; height: number}, deviceScaleFactor: number): Promise<void> {
+async function moveToDensity(cdp: CDPSession, page: Page, screen: Screen, deviceScaleFactor: number): Promise<void> {
     const viewport = page.viewportSize();
     if (!viewport) throw new Error('the page has no viewport to keep while the density changes');
     try {
@@ -184,36 +245,128 @@ async function leaveDensity(cdp: CDPSession): Promise<void> {
 }
 
 /**
- * The probe: a `(resolution: <density>dppx)` query of the test's own, armed in the page, re-armed at each change, that
- * counts the changes Chromium fires. The product hears a change of density in no other way.
+ * The probe: a `(resolution: <density>dppx)` query of the test's own on the density of this moment, in place of the
+ * previous one, its count of `change` events back to 0. Created through the native `matchMedia`, so the bridge never
+ * records it, and never dispatches on it.
  */
-async function listenToDensity(page: Page): Promise<void> {
+async function armProbe(page: Page): Promise<void> {
     await page.evaluate(() => {
-        const holder = window as unknown as {__lfDensityChanges?: number};
-        holder.__lfDensityChanges = 0;
-        const arm = (): void => {
-            const query = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
-            const heard = (): void => {
-                query.removeEventListener('change', heard);
-                holder.__lfDensityChanges = (holder.__lfDensityChanges ?? 0) + 1;
-                arm();
-            };
-            query.addEventListener('change', heard);
+        const holder = window as unknown as DensityWindow;
+        if (holder.__lfDensityProbe) holder.__lfDensityProbe.query.removeEventListener('change', holder.__lfDensityProbe.heard);
+        const matchMedia = holder.__lfNativeMatchMedia ?? window.matchMedia;
+        const query = matchMedia.call(window, `(resolution: ${window.devicePixelRatio}dppx)`);
+        const heard = (): void => {
+            holder.__lfDensityChanges = (holder.__lfDensityChanges ?? 0) + 1;
         };
-        arm();
+        query.addEventListener('change', heard);
+        holder.__lfDensityProbe = {query, heard};
+        holder.__lfDensityChanges = 0;
     });
 }
 
-const densityChangesHeard = (page: Page): Promise<number> => page.evaluate(() => (window as unknown as {__lfDensityChanges?: number}).__lfDensityChanges ?? 0);
+/**
+ * The probe's count, read after two rendering updates — the step in which a browser fires the media query changes it
+ * owes: layout forced first, so that an evaluation of the media queries deferred to the next style update runs, then
+ * two animation frames, the second of which comes after the changes the first one enqueued are dispatched.
+ */
+function probeChanges(page: Page): Promise<number> {
+    return page.evaluate(
+        () =>
+            new Promise<number>((resolve) => {
+                void document.documentElement.getBoundingClientRect();
+                requestAnimationFrame(() => requestAnimationFrame(() => resolve((window as unknown as DensityWindow).__lfDensityChanges ?? 0)));
+            }),
+    );
+}
 
-/** Waits for the probe to have heard `count` changes, or fails naming the harness. */
-async function expectDensityChangeHeard(page: Page, count: number): Promise<void> {
-    await expect
-        .poll(() => densityChangesHeard(page), {
-            message: 'Chromium fired no `change` on a (resolution: …dppx) media query under Emulation.setDeviceMetricsOverride: the page cannot hear the density change in this harness, so the charts on screen cannot follow it here. A harness limit to check before suspecting the product',
-            timeout: 10_000,
+/** Whether the probe hears Chromium's `change` within {@link PROBE_MS}, each read after two rendering updates. A silence is an answer, not a failure. */
+function chromiumFired(page: Page): Promise<boolean> {
+    return expect
+        .poll(() => probeChanges(page), {
+            message: `probe: does Chromium fire a resolution change within ${PROBE_MS} ms? A timeout here is the harness's answer, bridged next — not a failure`,
+            timeout: PROBE_MS,
+            intervals: [0],
         })
-        .toBeGreaterThanOrEqual(count);
+        .toBeGreaterThan(0)
+        .then(
+            () => true,
+            () => false,
+        );
+}
+
+/**
+ * The init script of the bridge, installed before the test's first navigation: in each document, every `MediaQueryList`
+ * the page creates through `window.matchMedia` whose media names `resolution` is recorded, the real object returned
+ * unchanged; the native `matchMedia` is kept for the probe. It only records: no query is altered, none is answered for
+ * the browser. Playwright sends its source to the page, so it uses nothing outside itself.
+ */
+function recordResolutionQueries(): void {
+    const holder = window as unknown as DensityWindow;
+    const native = holder.__lfNativeMatchMedia ?? window.matchMedia;
+    if (typeof native !== 'function') return;
+    const recorded: MediaQueryList[] = [];
+    Object.defineProperty(window, '__lfResolutionQueries', {value: recorded, configurable: true});
+    Object.defineProperty(window, '__lfNativeMatchMedia', {value: native, configurable: true});
+    window.matchMedia = function matchMedia(query: string): MediaQueryList {
+        const list = native.call(window, query);
+        if (/resolution/i.test(list.media)) recorded.push(list);
+        return list;
+    };
+}
+
+/** The media of every resolution query the page created, oldest first, as the init script recorded them; `null` in a document it did not run in. */
+function resolutionQueries(page: Page): Promise<string[] | null> {
+    return page.evaluate(() => (window as unknown as DensityWindow).__lfResolutionQueries?.map((query) => query.media) ?? null);
+}
+
+/** A list's media that names `(resolution: <ratio>dppx)`. */
+const densityQuery = (ratio: number): RegExp => new RegExp(`\\(\\s*resolution\\s*:\\s*${String(ratio).replace('.', '\\.')}dppx\\s*\\)`, 'i');
+
+/**
+ * The bridge: `change` dispatched on the latest resolution query the app created — a `MediaQueryListEvent` with the
+ * list's own `media` and `matches`, what the browser sends — provided it still names `from`, the density before the
+ * change: the query the app's watcher armed. When the app has armed another since, Chromium's own event came after the
+ * probe's window: nothing is dispatched.
+ */
+function dispatchDensityChange(page: Page, from: number): Promise<{dispatched: boolean; media: string | null}> {
+    return page.evaluate((source) => {
+        const latest = (window as unknown as DensityWindow).__lfResolutionQueries?.at(-1);
+        if (!latest || !new RegExp(source, 'i').test(latest.media)) return {dispatched: false, media: latest?.media ?? null};
+        const event = typeof MediaQueryListEvent === 'function' ? new MediaQueryListEvent('change', {media: latest.media, matches: latest.matches}) : new Event('change');
+        latest.dispatchEvent(event);
+        return {dispatched: true, media: latest.media};
+    }, densityQuery(from).source);
+}
+
+/**
+ * The screen from `from` to `to`, and the change delivered to the page: fired by Chromium, or else dispatched by the
+ * bridge on the app's own query — annotated `density-change` and printed, either way. From there the page has the
+ * change, so what follows is the product's: the app arms its query again on `to`, the query the next change reaches.
+ */
+async function changeDensity(page: Page, cdp: CDPSession, screen: Screen, from: number, to: number): Promise<Delivery> {
+    await armProbe(page);
+    await moveToDensity(cdp, page, screen, to);
+    let delivery: Delivery = 'fired by Chromium';
+    let account = 'fired by Chromium';
+    if (!(await chromiumFired(page))) {
+        const bridge = await dispatchDensityChange(page, from);
+        if (bridge.dispatched) {
+            delivery = 'dispatched by the test';
+            account = `${DISPATCHED}; dispatched on «${bridge.media}»`;
+        } else {
+            account = `fired by Chromium, after the probe's ${PROBE_MS} ms: the app had armed «${bridge.media ?? '(no query)'}» already`;
+        }
+    }
+    const description = `${account} (${from}× → ${to}×)`;
+    test.info().annotations.push({type: 'density-change', description});
+    console.log(`[density-change] ${description}`);
+    await expect
+        .poll(async () => (await resolutionQueries(page))?.at(-1) ?? '(no query)', {
+            message: `the page received the change of density (${delivery}), yet the app did not arm its resolution query again on ${to}dppx: its query did not get the change, or the handler of chartPixelRatio.ts did not run, or did not re-arm`,
+            timeout: 5_000,
+        })
+        .toMatch(densityQuery(to));
+    return delivery;
 }
 
 // ============================================================================
@@ -224,7 +377,9 @@ test.describe('Chart pixel density on the Dashboard (DV)', () => {
     test.skip(({browserName, isMobile}) => browserName !== 'chromium' || isMobile, 'Desktop Chromium only: the density is changed through a Chromium DevTools command, from the desktop project’s deviceScaleFactor 1');
 
     test('the charts on screen follow a change of density in place: 1× → 2× → 1×, the same instances and the same canvases', async ({page}) => {
-        test.setTimeout(90_000);
+        test.setTimeout(120_000);
+        // Before the first navigation: every resolution query the page creates is recorded, for the bridge (see the header).
+        await page.addInitScript(recordResolutionQueries);
         await openOverview(page);
         const hosts = chartHosts(page);
         const before = (await readHosts(hosts)).filter((host) => host.canvases.length > 0);
@@ -234,36 +389,35 @@ test.describe('Chart pixel density on the Dashboard (DV)', () => {
         expect(ids, 'precondition: the growth chart and the allocation pie are laid out and measured').toEqual(expect.arrayContaining([...growthIds, pieId ?? '(no pie)']));
         expect(growthIds.length, 'precondition: the growth chart is laid out').toBeGreaterThan(0);
         expect(densities(before), "precondition: at the desktop project's deviceScaleFactor 1, every canvas is drawn at 1×").toEqual(densitiesAt(before, 1));
+        const queries = await resolutionQueries(page);
+        expect(queries, 'precondition: the init script records the resolution queries of this document').not.toBeNull();
+        expect(queries?.at(-1) ?? '(no query)', 'the app armed no resolution query on the density of the screen, 1dppx: nothing in the page hears a change of density (the watcher of chartPixelRatio.ts, armed by the first chart created through chartInitOptions)').toMatch(densityQuery(1));
         await rememberCanvases(hosts);
-        await listenToDensity(page);
         const screen = await screenOf(page);
 
         const cdp = await page.context().newCDPSession(page);
         try {
-            await moveToDensity(cdp, page, screen, DENSE);
-            await expectDensityChangeHeard(page, 1);
+            const toDense = await changeDensity(page, cdp, screen, 1, DENSE);
             await expect
                 .poll(async () => densities(byIds(await readHosts(hosts), ids)), {
-                    message: 'the page heard the change of density, yet the charts created through chartInitOptions did not follow it: their canvases kept their backing store (or a chart was created again under a new id)',
+                    message: `the page received the change of density (${toDense}), yet the charts created through chartInitOptions did not follow it: their canvases kept their backing store, or a chart was created again under a new id`,
                     timeout: 10_000,
                 })
                 .toEqual(densitiesAt(before, DENSE));
-
             const after = byIds(await readHosts(hosts), ids);
-            expect(
-                after.map((host) => `${host.id}: ${host.canvases.length} canvas(es), ${host.canvases.every((canvas) => canvas.same === true) ? 'the same nodes' : 'new nodes'}`),
-                'in place: the same instances, the same canvas nodes',
-            ).toEqual(before.map((host) => `${host.id}: ${host.canvases.length} canvas(es), the same nodes`));
-            test.info().annotations.push({type: 'chart-renders', description: `data-chart-renders before → after the change: ${before.map((host) => `${host.id} ${host.renders} → ${after.find((other) => other.id === host.id)?.renders}`).join(', ')}`});
+            expect(nodesOf(after), `the page received the change of density (${toDense}): the charts followed it in place, the same instances on the same canvas nodes`).toEqual(sameNodesAs(before));
+            const renders = `data-chart-renders before → after the change: ${before.map((host) => `${host.id} ${host.renders} → ${after.find((other) => other.id === host.id)?.renders}`).join(', ')}`;
+            test.info().annotations.push({type: 'chart-renders', description: renders});
+            console.log(`[chart-renders] ${renders}`);
 
-            await moveToDensity(cdp, page, screen, 1);
-            await expectDensityChangeHeard(page, 2);
+            const backToOne = await changeDensity(page, cdp, screen, DENSE, 1);
             await expect
                 .poll(async () => densities(byIds(await readHosts(hosts), ids)), {
-                    message: 'back to density 1, the charts stayed at 2×: the query was not armed again on the new density',
+                    message: `the page received the change back to density 1 (${backToOne}), yet the charts stayed at 2×`,
                     timeout: 10_000,
                 })
                 .toEqual(densitiesAt(before, 1));
+            expect(nodesOf(byIds(await readHosts(hosts), ids)), `the page received the change back to density 1 (${backToOne}): the charts followed it in place, the same instances on the same canvas nodes`).toEqual(sameNodesAs(before));
         } finally {
             await leaveDensity(cdp);
         }
