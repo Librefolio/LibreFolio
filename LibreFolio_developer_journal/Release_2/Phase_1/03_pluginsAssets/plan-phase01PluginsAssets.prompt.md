@@ -7809,3 +7809,77 @@ Revisione di Z su N92: OK, con due note minori, da fare in un commit a parte.
   - Quel caso non l'ho girato prima della cura: lo considero rosso per ragionamento, perché la nota vecchia nominava solo
     la data.
   - `git diff --check` pulito; porta 6183 libera.
+
+### X-R45b — un tasso salvato inutilizzabile nel PAC si salta, con un avviso (19/10, base `f7a32150a`)
+
+Decisione del developer, testuale: «facciamo che se succede compare l'avviso, ma per non bloccare filtriamo quel punto, ma
+nella comunicazione lo diciamo che stiamo saltando quel punto e che va corretto, e che quindi i risultati potrebbero
+essere lievemente sbagliati». Poi: «Sì: tasso valido precedente con l'avviso, e lo 0 trattato allo stesso modo». Il testo
+dell'avviso nelle 4 lingue è approvato così com'è.
+
+**Disegno**:
+1. In `build_planner_fx_quotes` (`pac_allocator/source/fx_quotes.py`), se l'ultima riga salvata della coppia (≤ as_of)
+   ha un tasso 0 o non finito, si salta e si usa la precedente valida, cioè finita e > 0.
+   - La cerca all'indietro una query per volta (`date < …`, la più recente), ed è raro che ne serva più d'una.
+   - Il caricatore `_load_latest_planner_fx_rows` resta com'è.
+2. L'avviso: codice `allocation.saved_fx_skipped`, `kind="invalid"`, `severity="warning"`.
+   - Sull'entità `fx_quote` della quota usata.
+   - Parametri: `pair` (testo), `skipped_date` (la più recente delle righe saltate) e `used_date`, entrambi `date`, con un
+     helper `date_param` in `keys.py`.
+   - Il planner blocca solo sugli errori (`issues.py:186`).
+3. Senza nessun tasso valido prima resta l'errore `allocation.saved_fx_invalid` di oggi, con la quota senza tasso. Vale
+   anche per l'infinito, che oggi dà 500.
+4. 1E+14 resta un valore: è finito, e il developer l'ha accettato.
+5. Il codice va solo in `PortfolioPlannerSourceIssueCode` (`schemas/portfolio.py`), cioè in OpenAPI e nel client
+   generato.
+   - Il contratto del tool `pac_allocator` **non cambia**: il tool non riceve né emette i codici della fonte, e
+     `test_pac_planner_schemas.py` li tiene fuori di proposito (`saved_fx_missing`, `price_date_missing`).
+   - Correzione mandata al coordinatore: niente passo di versione, niente revisione di J sul contratto.
+6. i18n: `tools.pacAllocator.planner.issues.allocation.saved_fx_skipped`, con il testo approvato, nella sorgente
+   `pacAllocator`.
+7. Doc: nella guida utente del PAC, passo FX, **Auto** diventa «l'ultimo tasso valido», con l'avviso (4 lingue). Nella
+   doc per lo sviluppatore, dove si descrive la fonte. CHANGELOG: una riga 🐛.
+
+**Rossi** (test-author del rovescio, che conosce la sezione 4 di `test_bulk_reads_chunked.py`):
+- 0 o inf su D2 con 2.5 su D1 dà la quota da D1 con l'avviso;
+- righe inutilizzabili di fila: l'avviso nomina la più recente;
+- inf da solo dà `saved_fx_invalid` invece di sollevare;
+- 1E+14 e il caricatore restano come sono;
+- l'enum della fonte, se un test lo fissa.
+- Il developer approva il testo dell'avviso così com'è, nelle 4 lingue. In IT l'apostrofo è tipografico
+  (`nell’editor`), come nel resto del catalogo `pacAllocator`, dove su 105 apostrofi uno solo è dritto.
+- **Rossi** ✅ 19/10, scritti dal test-author del rovescio:
+  - `services bulk-reads-chunked`: 11 rossi e 54 verdi.
+    - I casi 0 e inf; due righe di fila, nei due ordini; nessun tasso valido prima, con inf da solo e 0 poi inf; il
+      codice nell'enum della fonte e non in quello del tool.
+    - Guardie nuove: 0 da solo, inf poi 0, 1E+14.
+    - Righe esca valide di altre coppie, piantate fra D1 e D2.
+  - `services portfolio-allocation-source`: 1 rosso e 97 verdi.
+    - Il caso `invalid-nonpositive` passava `object()` come sessione, e la ricerca all'indietro l'avrebbe interrogata.
+    - Ora vi sostituisce `_previous_usable_row` con un `AsyncMock` e ne controlla gli argomenti: sessione, coppia,
+      data dello 0.
+- Il negativo si salta come lo 0: `_usable_rate` vuol dire finito e > 0. Oggi negativo e 0 condividono lo stesso ramo,
+  e la scrittura rifiuta i negativi (`gt=0`). Nessun caso lo fissa.
+- **Cura** ✅ 19/10:
+  - `xr45b_code.py`: `fx_quotes.py`, `keys.py` (`date_param`), `schemas/portfolio.py` e il CHANGELOG 🐛;
+  - `xr45b_docs.py`: la guida utente del PAC nelle 4 lingue;
+  - `xr45b_runner.py`: la voce `bulk-reads-chunked`;
+  - `xr45b_i18n.py`: `dev.py i18n add`, con 4 file e una riga ciascuno;
+  - `api sync`: il client generato ha `saved_fx_skipped`;
+  - black e ruff puliti su 6 file.
+- **Verdi** ✅ 19/10, una corsa alla volta:
+
+  | Corsa | Esito |
+  |---|---|
+  | `services bulk-reads-chunked` / `portfolio-allocation-source` | 65 / 98 |
+  | `schemas pac-planner` | 552: il contratto del tool è invariato |
+  | `api pac-planner-tool` / `api portfolio` | 12 / 55 |
+  | `utils gate-i18n-catalog` / `gate-i18n-usage` | 176 / 195 |
+  | `i18n check` | strict, 5 102 chiavi |
+  | `front check` | 0 errori, 0 avvisi |
+  | `check-orphans` | pulito |
+  | `mkdocs build` strict; `check-links` | 0 avvisi; 97 link validi |
+  | `translate-validate` della guida PAC | 0 errori, 2 localizzazioni volute |
+
+- **Niente stamp sulla guida del PAC.** La cache di Aphra ha l'MD5 `1e299f28…` (tradotta il 10/10), mentre la pagina EN a
+  HEAD, prima della mia modifica, era già `f1d2f335…`. Il debito c'era già, e uno stamp lo nasconderebbe.
