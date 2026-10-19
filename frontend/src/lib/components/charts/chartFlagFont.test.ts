@@ -49,13 +49,14 @@
  * third argument — exactly that call, its first argument the call's own first argument (the same expression), more
  * arguments after it allowed — so that a chart is born at the screen's density of that moment and followed when it
  * changes. A literal `{renderer: 'canvas'}`, no third argument, another element, a spread or a call with something after
- * it would create a chart at the density zrender read when the page loaded, never followed. The files of
- * `PIXEL_RATIO_PENDING` are exempt, each with its reason: `PriceChartFull.svelte` and `CandlestickChart.svelte`, owned by
- * workstream Y-N65 for now and migrated by DV in a later batch. The list only shrinks and cannot go stale (the idea of
- * `PENDING_READERS` in `src/lib/theme/roleColors.test.ts` and of the allowlist of
- * `src/lib/utils/core/escapeHtml.single.test.ts`): a listed file that is no longer a production source the scan reads,
- * that has no call any more, or whose every call passes `chartInitOptions` fails the gate, asking for its line to go.
- * Synthetic controls come first: the rule tells those shapes apart, and the staleness check reports what it must.
+ * it would create a chart at the density zrender read when the page loaded, never followed. Since DV-14 (19/10/2026)
+ * the 18 calls in 17 files all pass it, `PriceChartFull.svelte` and `CandlestickChart.svelte` included, the last two to
+ * migrate. `PIXEL_RATIO_PENDING` stays, empty: a chart that cannot migrate at once is listed there with its reason, and
+ * exempt. The list only shrinks and cannot go stale (the idea of `PENDING_READERS` in `src/lib/theme/roleColors.test.ts`
+ * and of the allowlist of `src/lib/utils/core/escapeHtml.single.test.ts`): a listed file that is no longer a production
+ * source the scan reads, that has no call any more, or whose every call passes `chartInitOptions` fails the gate, asking
+ * for its line to go. Empty, that check passes on the real tree without reading a file. Synthetic controls come first,
+ * and keep both checks biting: the rule tells those shapes apart, and the staleness check reports what it must.
  *
  * ## Why it was red before K-13 and DV
  *
@@ -66,9 +67,10 @@
  * - Part B: all 18 calls passed `undefined` or nothing as second argument — e.g. `src/lib/components/charts/LineChart.svelte:384`
  *   (`echarts.init(chartContainer, undefined, {renderer: 'canvas'})`), `src/lib/features/risk/CorrelationHeatmap.svelte:458`
  *   (`echarts.init(container)`).
- * - Part B, DV's rule: the 16 calls outside `PIXEL_RATIO_PENDING` passed `{renderer: 'canvas'}` or nothing as third
- *   argument — e.g. `LineChart.svelte` (`echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'})`),
- *   `CorrelationHeatmap.svelte` (`echarts.init(container, CHART_INIT_THEME)`) — and `chartInitOptions` did not exist.
+ * - Part B, DV's rule: all 18 calls passed `{renderer: 'canvas'}` or nothing as third argument — e.g. `LineChart.svelte`
+ *   (`echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'})`), `CorrelationHeatmap.svelte`
+ *   (`echarts.init(container, CHART_INIT_THEME)`) — and `chartInitOptions` did not exist. DV migrated 16 of them; the
+ *   other two, `PriceChartFull.svelte` and `CandlestickChart.svelte`, waited in `PIXEL_RATIO_PENDING` until DV-14.
  *
  * Registered in chart-safety-unit (scripts/test_runner/_frontend_portfolio.py).
  */
@@ -549,14 +551,13 @@ const describeCall = (call: InitCall): string => `${call.file}:${call.line}  ech
 const PIXEL_RATIO_CALLEE = 'chartInitOptions';
 
 /**
- * The files whose calls do not pass `chartInitOptions` yet, each with its reason. The list only shrinks: once a listed
- * file passes it everywhere, the staleness check asks for its line to go — and for the exemption to leave the
- * developer page (`mkdocs_src/docs/developer/frontend/components/charts.md`).
+ * The files whose calls do not pass `chartInitOptions` yet, each with its reason: exempt from DV's rule. Empty since
+ * DV-14 (19/10/2026), when `PriceChartFull.svelte` and `CandlestickChart.svelte`, the last two, migrated: the 18 calls
+ * in 17 files all pass it. Kept for a chart that cannot migrate at once, listed here with its reason. The list only
+ * shrinks: once a listed file passes it everywhere, the staleness check asks for its line to go — and for the exemption
+ * to leave the developer page (`mkdocs_src/docs/developer/frontend/components/charts.md`).
  */
-const PIXEL_RATIO_PENDING: Readonly<Record<string, string>> = {
-    'src/lib/components/charts/PriceChartFull.svelte': 'Y-N65 (1.3) owns it; DV migrates it after Y-N65 lands',
-    'src/lib/components/charts/CandlestickChart.svelte': 'Y-N65 (1.3) owns it; DV migrates it after Y-N65 lands',
-};
+const PIXEL_RATIO_PENDING: Readonly<Record<string, string>> = {};
 
 /**
  * `callee(a, b, …)` as its callee and its arguments, whitespace collapsed; `null` when `expression` is not exactly one
