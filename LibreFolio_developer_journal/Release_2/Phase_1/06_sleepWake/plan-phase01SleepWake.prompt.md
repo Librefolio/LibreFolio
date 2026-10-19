@@ -53,8 +53,8 @@
 | X-R65 | Date fra il 1900 e domani nelle scritture di prezzi e cambi (lotto di X) | ✅ 17/10: `30e19b9d9`, entrato in `c726b9d89`; CHANGELOG `8df7164c8`; seguito `9539de9d4` |
 | Z-30 | Il caricamento della storia intera parte al più dal 1900 | ✅ 17/10: `501375cdc`, entrato in `fb514073b`; CHANGELOG `93065bc7c`; seguito `06ec7d443` in `80cef0e43` |
 | Z-32 (c) | L'avviso dei titoli quotati in pence (migrazione 010) | ✅ 17/10: `aa9e07544`, entrato in `46ea09b02`; CHANGELOG `22b9b90ce`. 19/10: la 010 è in discussione (sezione «Z-33 ridotta») |
-| Z-33 | Le date Yahoo sul giorno della borsa (migrazione 011, riparazione D″) | ✅ 17/10: `60170aae5`, entrato in `51b5c8db1`; CHANGELOG `b8bcc8cd2`; seguiti `79265b1a0` (`e20055213`) e `b5da2277d` (`d01a13b10`); devWiki `f74229303`. **19/10: riduzione decisa dal developer**, analisi «Z-33 ridotta» |
-| Z-29 | La lista asset su «All»: una serie ridotta per le schede | Analisi ✅ 17/10 (N90 approvata); **Z-29a sospesa il 19/10** con gli ampliamenti che il developer sta leggendo: i rossi sono parcheggiati come patch nella cartella di sessione (`files/parked/`) |
+| Z-33 | Le date Yahoo sul giorno della borsa (migrazione 011, riparazione D″) | ✅ 17/10: `60170aae5`, entrato in `51b5c8db1`; CHANGELOG `b8bcc8cd2`; seguiti `79265b1a0` (`e20055213`) e `b5da2277d` (`d01a13b10`); devWiki `f74229303`. **19/10: riduzione decisa dal developer**, analisi «Z-33 ridotta»; **Z-33r** committata `065c9df77` (sezione «Z-33r»): entra in `dev_release2` con la fusione delle migrazioni 005–010 di H |
+| Z-29 | La lista asset su «All»: una serie ridotta per le schede | Analisi ✅ 17/10 (N90 approvata); sospesa il 19/10; **N90 ridisegnata approvata** dal developer il 19/10 (analisi aggiornata); **via per Z-29a e Z-29b** (19/10 ~12:03), in corso: sezione «Z-29a + Z-29b — lavoro» |
 
 Contabilità rimessa in pari il 19/10 (base `ede7adf75`), con i commit come prova (`git log 459131eb8..HEAD`).
 
@@ -5816,3 +5816,260 @@ DB alla 011 non fa partire il codice nuovo («Can't locate revision identified b
   codice nuovo non ha nulla da applicare.
 
 Le corsie di test: `db populate --force` col codice nuovo (cancella il DB, con WAL e SHM, e lo ricrea alla testa).
+
+### Z-29 ridisegnata (N90 approvata dal developer): analisi aggiornata (19/10 ~12:00, sola lettura, `97fe88996` + Z-33r)
+
+> **Disegno approvato** (developer, 19/10, testuale: «così va bene e vediamo come va»; dal coordinatore):
+> - la lista Asset manda `max_points`, calcolato dai pixel della scheda;
+> - il backend sceglie la risoluzione più fine che ci sta (giornaliera, settimanale o mensile), coi secchielli di
+>   calendario di `timeSeriesAggregation.ts`, che diventa la specifica, e la scrive nella risposta (`resolution`);
+> - la serie ridotta ha una cache sua nel frontend, con la risoluzione nella chiave; la cache giornaliera non si tocca
+>   (testuale: «stiamo attenti a non invalidare le cache e se serve ad espanderle»);
+> - la pagina di dettaglio resta giornaliera;
+> - le schede con segnali restano giornaliere: i segnali si calcolano sul giornaliero e poi si riducono, in un passo
+>   dopo;
+> - casi di test condivisi frontend/backend (`compactDensityCases.json`, parcheggiato).
+
+**Cosa cambia rispetto all'analisi del 17/10.**
+- **La risposta cambia**: `FAPriceQueryResult.resolution` (`"daily" | "weekly" | "monthly"`). Proposta: sempre
+  presente e vera, `"daily"` per ogni voce senza `max_points` o scelta giornaliera. È in OpenAPI: `api sync`. Lo Zod
+  generato che il worker usa la legge da solo.
+- **Una cache sua per la serie ridotta**, chiave (asset, inizio, fine, risoluzione). Tiene anche il primo giorno del
+  riempimento, che la risposta dà come primo punto: con quello la pagina rifà da sola la scelta del backend per un
+  `max_points` nuovo, per esempio dopo un cambio di larghezza. Se la voce c'è, niente richiesta. Il negozio
+  giornaliero (`assetPriceStoreRegistry`, Z-14) non si tocca: niente `merge` né `markFetched` dei punti ridotti.
+- **L'invalidazione si allarga**: la cache nuova ascolta il bus come i due registri di Z-14
+  (`registerPortfolioMutationListener`, solo `{kind: 'prices'}`). Dopo un recupero la richiesta successiva va al
+  server; la cache giornaliera resta com'è.
+
+**Cosa riuso di quanto parcheggiato** (`files/parked/`, `files/z29a-draft/`).
+- Codice backend (`apply_z29a.py`, provato su copia il 17/10): si riapplica com'è, perché nessun commit ha toccato
+  `price_query.py`, `api/v1/assets/prices.py` e il blocco di `FAPriceQueryItem`. Due aggiunte:
+  - il campo `resolution`, scritto in `_sampled_fills` e `"daily"` per le altre voci;
+  - **il budget prima della lettura**: oggi i punti ridotti si costruiscono prima del controllo dei giorni. Il
+    numero dei punti si conosce già dal primo giorno e dal passo, quindi si conta, si controlla il budget, poi si
+    leggono le righe (il rilievo di test-author del 17/10).
+- Test backend (`test_price_query_sampling.py`, 26): si riprendono quasi tutti.
+  `test_pqs_s05_the_answer_has_no_new_field` si rovescia (ora pinna `resolution`). Si aggiungono: `resolution` per
+  ogni passo e per le voci senza `max_points`; «una richiesta ridotta rifiutata non costruisce nessun `FAPricePoint`».
+- Test API (4 in `test_assets_prices.py`): si riprendono, con `resolution` nella parità col giornaliero.
+- La riga del runner (`services price-query-sampling`, già approvata) e `compactDensityCases.json` (12 casi): com'è.
+- `price_sampling.py` (puro): com'è.
+
+**Il frontend (Z-29b), nel dettaglio.**
+- `max_points` dai pixel: la larghezza misurata del riquadro del grafico di una scheda (un `ResizeObserver` sulla
+  prima scheda, con `data-testid`), meno i 10 px di margine del grafico compatto, passata a `compactMaxPoints(w)`
+  (nuova, in `timeSeriesAggregation.ts`, accanto a `COMPACT_DENSITY_THRESHOLD` che esce da `LineChart.svelte`).
+  `compactMaxPoints(w)` è il numero più grande di punti la cui densità resta ≤ 1,3, con la stessa aritmetica del
+  grafico. Le schede appaiono subito con lo scheletro, quindi la misura c'è prima dell'onda 2. Nella vista tabella vale
+  l'ultima larghezza misurata, altrimenti una larghezza di riserva.
+- Un cambio di larghezza che cambia il passo di qualche asset fa una richiesta (con un ritardo); se torna indietro, la
+  cache risponde.
+- Restano giornaliere, come oggi (negozio giornaliero incluso), le schede con segnali del backend e quelle con un
+  segnale di confronto (asset o cambio), insieme agli asset che quei confronti citano: il confronto allinea per data
+  esatta, e due asset ridotti con passi diversi non avrebbero le stesse date. I segnali locali di riferimento
+  (lineare, composto, seno) vanno bene anche sulla serie ridotta.
+- La pagina di dettaglio resta giornaliera. Effetto: su «All» la prima visita di un dettaglio dopo la lista chiede il
+  suo storico giornaliero, che prima arrivava dalla lista (un asset solo).
+- Vitest: `compactMaxPoints` e `chooseStaticResolution` sui 12 casi condivisi; la pianificazione delle voci; la cache
+  (chiave, primo giorno, invalidazione sul bus, nessun tocco al negozio giornaliero). E2E `front-asset asset-list`: su
+  «All» la richiesta porta `max_points`, le schede disegnano, la tabella mostra l'ultimo prezzo, il dettaglio chiede il
+  giornaliero.
+
+**Costo.** Z-29a backend circa 1 giorno (codice e rossi già scritti; si aggiungono `resolution` e il budget prima della
+lettura, `api sync`, doc). Z-29b frontend circa 1,5 giorni (la cache con l'invalidazione, la misura e il ridisegno,
+le regole delle voci, Vitest ed E2E, doc). Totale circa 2,5 giorni.
+
+**Rischi.**
+- I confronti fra asset con passi diversi: coperti tenendo giornaliere quelle schede e i loro bersagli.
+- La cache in più: se il bus non la raggiunge, dopo un recupero le schede mostrano campioni vecchi. Si pinna con un
+  test.
+- La larghezza: una misura sbagliata dà solo un passo più grosso o più fine, mai dati sbagliati; il grafico riduce da
+  sé se i punti sono troppi.
+- Il primo punto in più a sinistra (il primo giorno, che oggi fa solo da base): da far vedere a X.
+- La lista dei cambi ha lo stesso schema: resta fuori, dopo.
+
+**Domande.** Una sola tecnica, per il coordinatore: `resolution` sempre presente (proposta) o solo sulle voci ridotte.
+Risposta (coordinatore, 19/10 ~12:03): sempre presente, `"daily"` anche senza `max_points`, come consigliato.
+
+### Z-29a + Z-29b — la serie ridotta delle schede: lavoro (19/10 ~12:05, base `065c9df77`)
+
+> **Via** (coordinatore, 19/10 ~12:03): «Analisi Z-29 ridisegnata: approvata. Sulla domanda tecnica: `resolution`
+> sempre presente, `"daily"` anche senza `max_points`, come consigli. VIA per Z-29a e Z-29b sul tuo ramo, dopo Z-33r
+> (`065c9df77`)»: riapplicare il parcheggiato; prima i rossi, poi la cura; `api sync` solo col backend pronto; codice e
+> controlli leggeri con carico sotto 50; suite pesanti ed E2E in uno slot da chiedere. Z-33r non entra ancora in
+> `dev_release2`: entra con la fusione delle migrazioni 005–010 in una sola 005 (H).
+
+**Contratto di Z-29a (backend).**
+- `FAPriceQueryItem.max_points` (1–10 000, facoltativo): rifiutato con segnali, `annotation_requests` o
+  `include_events`. Il passo si sceglie sul riempimento dell'asset, dal suo primo giorno F alla fine tagliata (X-R55):
+  giornaliero se i giorni stanno in `max_points`, altrimenti settimanale, altrimenti mensile (il pavimento).
+- Settimanale o mensile: F, poi l'ultimo giorno di ogni secchio (settimana ISO, mese), ognuno il punto della risposta
+  giornaliera in quella data. Giornaliero: la risposta di oggi, uguale.
+- `FAPriceQueryResult.resolution` sempre presente: il passo di `prices`; `"daily"` per ogni voce non ridotta.
+- Ordine nuovo (rilievo di test-author del 17/10): per le voci ridotte si leggono solo il seme e la prima riga
+  dell'intervallo (`_plan_samples`); le loro date contano nel budget dei giorni insieme ai giorni delle voci
+  giornaliere; solo se il budget passa si legge l'ultima riga di ogni secchio (`_read_samples`). Una richiesta
+  rifiutata legge al più 2 righe per asset ridotto.
+- `SampleResolution` vive nel modulo puro `services/assets/price_sampling.py`; lo schema lo importa (come
+  `schemas/risk.py` con `financial_math.returns`): nessun ciclo, i pacchetti non riesportano nulla.
+
+**Passi.**
+1. ✅ 19/10 ~12:06 — Il parcheggiato riapplicato (`git apply` delle due patch di `files/parked/`):
+   `test_assets_prices.py` e `_backend_services.py` modificati, `test_price_query_sampling.py` e
+   `compactDensityCases.json` nuovi, identici alle copie. `apply_z29a.py` del 17/10 si riapplica ancora su una copia
+   (nessun commit sui suoi file da allora).
+2. ⏳ Rossi aggiornati (test-author): `resolution` (PQS-S05 rovesciato; il passo nelle prove che lo conoscono;
+   PQS-API-03/04); nuovo PQS-Q14, «una richiesta rifiutata per i suoi punti non legge nessuna riga dei secchi».
+3. Codice di Z-29a: `files/z29-draft/apply_z29a.py` (v2), provato su una copia di `backend/` con `smoke_z29a.py`:
+   campioni uguali al giornaliero nelle loro date, `resolution` giusta, una richiesta rifiutata a 993 punti legge 1–2
+   righe per asset; ruff e black puliti; inverso esatto. Da applicare dopo i rossi.
+4. `api sync`, `front check`; doc di Z-29a (docs-writer).
+5. Z-29b: rossi (Vitest, E2E `front-asset asset-list`), poi il codice; domande Q-Z29-1 (il primo punto) e Q-Z29-2 (la
+   preview della finestra delle impostazioni) al coordinatore il 19/10 ~12:40, portate al developer coi miei consigli;
+   scelte tecniche accettate. I tre `.svelte` (`assets/+page.svelte`, `AssetCard.svelte`, `LineChart.svelte`) restano
+   intoccati finché il coordinatore dei colori non risponde.
+6. Slot: suite pesanti ed E2E; poi checkpoint FROZEN.
+
+> **In coda dopo Z-29** (coordinatore, 19/10 ~12:45): **Q4** del piano «formule veloci» di MF (decisione del developer:
+> entra tutto nella 1.3): il refresh confrontato col minimo e il massimo della cache invece del cammino giorno per
+> giorno; valori identici, test di parità; prima l'analisi breve, poi il via. Piano: sezione «Piano «formule veloci»»
+> del piano di MF (`6fcde8176`, sul ramo di MF).
+
+### Z-32cr — via l'avviso dei pence, la 010 esce (D8): lavoro (19/10 ~12:35, base `065c9df77`)
+
+> **Decisione del developer** (D8, dal coordinatore, 19/10 ~12:30): «la 010 esce», testuale: «nessuna colonna nel db,
+> sono certo». Al suo posto: «in fase di search e/o "chiedi al provider", come ora con le obbligazioni pre-popoliamo il
+> campo della quantità base a 100, potremmo farlo anche se il plugin ce lo suggerisce. Sono già gli utenti che se si
+> sono accorti del problema avranno messo 100». Due lavori, in quest'ordine, prima di riprendere Z-29: (1) togliere
+> Z-32 (c), la variante «esce»; (2) la base suggerita dal plugin, prima un'analisi breve. Precisazione: non toccare il
+> file della 010, `test_migration_010_reported_currency.py` né le azioni `migration-0xx` di `_backend_db.py` (di H, che
+> li sostituisce con la 005 unica); in `db/models.py` solo la colonna (H tocca gli indici nello stesso file). Il commit
+> entra nello stesso treno di Z-33r e della fusione.
+
+**Contratto.**
+- Escono: `AssetProviderAssignment.reported_currency` (solo il modello: la colonna resta nei DB fino alla fusione, e
+  nessuno la legge né la scrive); in `refresh.py` i sei pezzi di `aa9e07544` (il campo di `_FetchedRefreshData`, la
+  variabile, la voce `"currency"` della cache della storia, la scrittura sull'assegnazione); il reset al cambio di
+  fornitore (`provider_management.py`); `IssueCode.QUOTE_IN_MINOR_UNIT` (con `api sync`); in `data_quality.py` il
+  parametro, il suo paragrafo e il blocco dell'avviso; in `portfolio_service.py` `_quote_in_minor_unit_assets`, i due
+  argomenti e i campi che solo Z-32 (c) leggeva (`quote_base_quantity`, `provider_code`, `reported_currency`), con la
+  join sull'assegnazione; la chiave `dataQuality.quoteInMinorUnit` nelle quattro lingue; la doc e i test di Z-32 (c).
+- Restano: `utils/currency_units.py` (E-19b2 legge `minor_unit_factor`: un `GBp` salvato non è mai suggerito come
+  `GBP`), con la docstring riscritta; `_held_asset_quote_facts` di E-19b2 (`asset_id`, `name`, `currency`, una query
+  sui soli asset); `FAHistoricalData.currency` grezzo e le due guardie Yahoo (`GBp` resta `GBp`).
+- Rosso atteso fino alla fusione di H: `test_the_model_declares_the_column_the_migration_adds` (`db migration-010`).
+  La riga della 010 in `database/index.md` resta ad H (riscrive la tabella delle migrazioni).
+
+**Passi.**
+1. ✅ 19/10 ~12:31 — Z-29a parcheggiata in `files/parked-z29/` (patch tracciata, patch e copie dei nuovi, impronte,
+   README); i file tornati a HEAD, i nuovi tolti; `git apply --check` delle due patch ok. Albero: solo il piano.
+2. ✅ 19/10 12:37–12:52 — Test (test-author). Via: i quattro `test_z32_*` di `test_asset_source_refresh.py` (8 casi) e
+   `test_z32_reported_currency_follows_the_assignment` di `test_assets_provider.py` (6 casi), coi loro aiuti: i due
+   file sono identici a `aa9e07544^`; la classe `TestQuoteInMinorUnitIssue` (7 test, 8 casi) di
+   `test_data_quality_report.py`; la classe `TestQuoteInMinorUnitDataQuality` di `test_portfolio_api.py`. Adattati:
+   `_held(...)` di E-19b2 sui tre campi; il test dell'ordine dei codici (`NON_ISO_CURRENCY` subito dopo
+   `INVALID_SPLIT_RATIO`) e quello dell'ordine degli avvisi; il confronto degli ingressi canonici su
+   `invalid_split_assets`. Le due guardie Yahoo restano, riscritte («Yahoo minor-unit guard»); il controllo di
+   `DataQualityBanner.nonIso.test.ts` su `MISSING_PRICE`. Ruff e prettier puliti; black pulito tranne sette punti
+   di `test_portfolio_api.py` già a HEAD. Rossi visti (12:54, `services roi-fifo-utils test_data_quality_report`):
+   3 su 101, `_held` (TypeError ×2, i tre campi richiesti) e l'ordine dei codici (`QUOTE_IN_MINOR_UNIT` ancora fra i
+   due), ognuno per la sua ragione.
+3. ✅ 19/10 12:54 — Codice: `files/z32cr-draft/apply_z32cr.py`, provato prima su una copia di `backend/` (ruff e black
+   puliti; import: i fatti con tre campi, nessun `QUOTE_IN_MINOR_UNIT`, nessun parametro, nessuna colonna; inverso
+   esatto), applicato con gli stessi byte della copia (`z32cr_applied.md5`).
+   > **⚠️ Fuori pista**: black univa le due parti della descrizione di `FAHistoricalData.currency` (lunghezza 300):
+   > una stringa sola nella chiamata esplosa; e l'ancora `# NON_ISO_CURRENCY` dell'inverso non era unica (presa la riga
+   > intera).
+4. ✅ 19/10 12:54 — `dev.py i18n remove dataQuality.quoteInMinorUnit -f` (una riga per lingua); `i18n check` stretto
+   (5 097 chiavi); `api sync` (nessun `QUOTE_IN_MINOR_UNIT` in `generated.ts` né in `openapi.json`, entrambi ignorati
+   da git); `front check` 0/0.
+5. ✅ 19/10 12:40–12:50 — Doc (docs-writer): `assets_pricing.md` (la riga del diagramma e il punto della colonna;
+   l'ancora `#asset-provider-assignment` resta), `backend/assets/architecture.md` (via la sezione `#reported-currency`,
+   nessun link rimasto), `provider_yahoo_finance.md` (due frasi sul codice grezzo e le guardie; via il limite dei
+   pence e la frase della cache, che non tiene più la valuta), `data-quality-banner.md` (riga, regola, prova; due
+   frasi di E-19b2 riallineate); in EN `create-edit` e `providers/yahoo-finance` tornate identiche a prima di Z-32 (c),
+   `dashboard/index` senza il paragrafo dei pence. `translate-validate`: nessun debito di Z-32 (c); restano debiti
+   più vecchi (yahoo-finance un punto del 15/10; create-edit dal 09/10; dashboard E-19b2 e J-17). Nessuno stamp.
+6. ✅ 19/10 12:54–12:57 — Corse leggere (`files/z32cr_runs.sh light`): `services roi-fifo-utils
+   test_data_quality_report` 101, `services provider-errors` 212, `services asset-source-refresh` 18 (26 − 8),
+   `services asset-source` 61, `db validate` 17, `utils gate-i18n-catalog` ok, `front check` 0/0; `db migration-010`
+   12 + 1 rosso atteso (`test_the_model_declares_the_column_the_migration_adds`, fino alla fusione di H). Porta
+   libera.
+7. ✅ 19/10 13:00–13:08 — Slot del coordinatore (13:00–13:40, `files/z32cr_runs.sh slot`, carico sotto 50):
+   `services roi-fifo-utils` intero 1 495, `api assets-provider` 24 (30 − 6 tolti), `api portfolio` 55,
+   `front-utility component-unit` 187 file e 4 978 test, `utils gate-i18n-usage` 195, `mkdocs build` stretto senza
+   avvisi (37,6 s), `check-links` 97 validi. Porta 6186 libera.
+8. ✅ 19/10 — CHANGELOG: la riga ✨ di `22b9b90ce` la toglie il coordinatore nel commit. Il rosso atteso di
+   `db migration-010` va con la fusione di H (coordinatore, 13:00). Q-Q1…Q4 di Z-32 (d) al developer.
+9. ✅ 19/10 ~13:10 — Slot libero e checkpoint FROZEN al coordinatore.
+
+### Z-32 (d) — la base suggerita dal plugin: analisi breve (19/10 ~13:00, sola lettura, `065c9df77`)
+
+> **Richiesta** (developer, dal coordinatore, 19/10 ~12:30): «in fase di search e/o "chiedi al provider", come ora
+> con le obbligazioni pre-popoliamo il campo della quantità base a 100, potremmo farlo anche se il plugin ce lo
+> suggerisce.
+> Sono già gli utenti che se si sono accorti del problema avranno messo 100». Il coordinatore: un campo generico e
+> facoltativo nella risposta di ricerca e dei metadati dei plugin (per esempio `suggested_quote_base_quantity`); Yahoo
+> mette 100 per `GBp` (e per le altre sottounità che conosco); `AssetModal` lo precompila con la stessa regola delle
+> obbligazioni (modificabile, con un avviso da verificare, solo se il campo è ancora a 1 e non toccato, mai su un
+> valore esplicito, solo alla creazione); gli asset esistenti non si toccano. `AssetModal` è un file di X.
+
+**Stato reale.**
+- La regola delle obbligazioni: `shouldSeedBondQuoteBase(assetType, quoteBaseQuantity, touched)` in
+  `assets/assetFormState.ts:28` (`BOND`, campo a 1, non toccato); `maybeSeedBondQuoteBase()` in `AssetModal.svelte:828`,
+  chiamata dopo il precompilato dell'import (`:665`), dopo la scelta di un risultato di ricerca (`:765`) e quando il
+  tipo cambia dal confronto coi metadati (`:1064`). L'avviso è in `AssetModalDetails.svelte:185-190`
+  (`assets.modal.bondQuoteBaseHint`), mostrato finché il tipo è `BOND`. La regola non guarda `editMode`.
+- La ricerca: `FAProviderSearchResultItem` (`schemas/provider.py:453`) ha `currency` («se nota»); Yahoo la prende da
+  `fast_info["currency"]` (`yahoo_finance/plugin.py:389-408`, `:707`): per una linea di Londra in pence è `GBp`.
+  `applySearchResult` (`AssetModal.svelte:718`) la mette nel campo valuta; al salvataggio `iso_currency_code` la
+  scrive `GBP` (`schemas/common.py:468`).
+- «Chiedi al provider»: la sonda dei metadati (`FAProviderProbeResponse.metadata`, `ProbeMetadataResult.patch_data`,
+  un dict di patch dell'asset) va in `compareMetadata` (`AssetModal.svelte:948`): campo per campo, riempimento o
+  finestra di confronto. Yahoo `fetch_asset_metadata` (`plugin.py:742`) non mette la valuta nella patch: `GBp` lo dà
+  `fast_info` (`_fetch_currency`, `:389-408`, in cache 24 h), che la ricerca già legge.
+- Il rinfresco dei metadati applica all'asset ogni campo della patch del plugin (`metadata.py:153-190`,
+  `patch_assets_bulk`).
+- `utils/currency_units.py`: `MINOR_UNIT_FACTORS = {"GBp": 100}`, resta dopo Z-32cr (lo legge E-19b2).
+- `ZAc` e `ILA` (sottounità di Johannesburg e Tel Aviv): `ZAC` e `ILA` non sono codici ISO, quindi oggi l'asset non si
+  crea con la valuta di Yahoo e i prezzi non si salvano (backlog Z-32). Una base suggerita non le aggiusta: serve prima
+  la valuta (ZAR, ILS), lavoro di Z-32 (a)/(b), dopo la 1.3.
+
+**Proposta.**
+- Backend, generico: `suggested_quote_base_quantity: Optional[int]` (≥ 1, facoltativo, `None` = nessun suggerimento)
+  in `FAProviderSearchResultItem` e in `ProbeMetadataResult`, accanto a `patch_data` e **mai dentro**: i metadati di un
+  plugin sono un `FAAssetPatchItem` (`base.py:719`), che ha `quote_base_quantity` (`schemas/assets/assets.py:289`) e
+  che il rinfresco dei metadati scrive sull'asset: lì un 100 cambierebbe gli asset esistenti al primo rinfresco.
+  - Ricerca: chiave facoltativa del dict di ogni risultato, letta da `search.py:324`.
+  - Metadati: un metodo facoltativo nuovo del plugin, `suggested_quote_base_quantity(identifier, identifier_type,
+    provider_params) -> int | None` (predefinito `None`), chiamato dall'operazione dei metadati della sonda
+    (`provider_management.py:532`); il rinfresco dei metadati non lo chiama.
+  - La guida dei plugin lo documenta.
+- Yahoo: 100 quando la valuta che riporta è una sottounità della tabella (`minor_unit_factor`): nella ricerca dalla
+  valuta del risultato, nel metodo nuovo da quella di `fast_info` (già in cache per 24 h, `plugin.py:389`); altrimenti
+  niente.
+- Frontend (`AssetModal`, di X): una funzione pura `shouldSeedSuggestedQuoteBase(suggested, quoteBaseQuantity,
+  touched, editMode)` in `assetFormState.ts` (solo creazione, campo a 1, non toccato, suggerimento > 1); applicata
+  dopo `applySearchResult` e dopo i metadati della sonda; uno stato «suggerito da {fornitore}» che mostra un avviso
+  accanto a quello delle obbligazioni (nuova chiave i18n in quattro lingue), via quando l'utente tocca il campo.
+- Gli asset esistenti: niente (né migrazione, né rilettura).
+
+**Domande (cambiano ciò che l'utente vede).**
+- **Q-Q1 — quali sottounità.** (a) **solo `GBp` (consiglio)**: l'unica che oggi funziona da capo a fondo; (b) anche
+  `ZAc` e `ILA`: il suggerimento comparirebbe, ma l'asset non si crea finché l'utente non cambia la valuta.
+- **Q-Q2 — il testo dell'avviso.** Proposta EN: «{provider} quotes this line in pence (GBp): 100 units per price.
+  Check it before saving.» (o una forma generica: «… quotes this line per 100 units»). Consiglio la forma con la
+  valuta, che dice perché.
+- **Q-Q3 — dove.** (a) **ricerca e «chiedi al provider» (consiglio**, come chiede il developer, «search e/o»); (b) solo
+  ricerca.
+- **Q-Q4 — un'altra scelta dopo.** L'utente sceglie un risultato in pence (il campo va a 100, non toccato), poi un
+  altro risultato senza suggerimento. (a) **il 100 torna a 1 (consiglio)**: veniva da quella linea sola; (b) resta 100,
+  come oggi per le obbligazioni quando il tipo cambia (la regola delle obbligazioni non torna indietro).
+
+**Superfici.** Backend: `schemas/provider.py`, il servizio di ricerca e quello della sonda (`services/assets/`), Yahoo
+`plugin.py`; test di schema, del plugin (guardie Yahoo esistenti come base) e API. Frontend: `assetFormState.ts` (+
+Vitest), `AssetModal.svelte` (tre punti) e `AssetModalDetails.svelte` (l'avviso) di X, i18n ×4, `api sync`. Doc:
+guida dei plugin, `provider_yahoo_finance.md`, `user/assets/create-edit.en.md` e `providers/yahoo-finance.en.md`.
+
+**Costo.** Circa mezza giornata con i test, più la revisione di X. Rossi prima (test-author), poi il codice.

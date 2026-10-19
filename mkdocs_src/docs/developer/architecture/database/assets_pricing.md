@@ -42,7 +42,6 @@ erDiagram
         string provider_code
         string identifier
         json provider_params
-        string reported_currency "VARCHAR(8), nullable, as reported"
     }
 
     ASSET_EVENT {
@@ -101,7 +100,6 @@ Decouples the asset from its data source. This table configures which provider t
 
 - 📋 Example: "Use Yahoo Finance (`yfinance`) for Apple (`AAPL`)"
 - ⚙️ **`provider_params`** (JSON): Provider-specific configuration (e.g., exchange suffix, custom identifier).
-- 🪙 **`reported_currency`** (`VARCHAR(8)`, nullable): the quote currency the provider reported with the asset's history, as it reported it, at the last history fetch that reported one — Yahoo's `GBp` for a London line quoted in pence, whose prices are stored as `GBP`. NULL until that fetch, and on every row right after migration `010_provider_reported_currency`; cleared when the assignment's provider, identifier or identifier type changes. The portfolio data-quality report warns from it (`QUOTE_IN_MINOR_UNIT`): see [The Provider's Own Quote Currency](../../backend/assets/architecture.md#reported-currency).
 
 The provider system uses the [Registry Pattern](../patterns/registry_pattern.md) for extensibility.
 
