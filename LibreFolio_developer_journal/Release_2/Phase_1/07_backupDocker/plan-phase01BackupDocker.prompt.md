@@ -6935,3 +6935,110 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >     - `fix(backup): B-8 busy job id, B-15 proxy 413`: codice, test, i18n e doc, 20 file;
 >     - `docs(journal): B-15 + B-8 done, B-50 filed`: questo piano e il backlog.
 >   - Aperte: la domanda sul 409 di qualunque origine (variante pronta, non applicata) e B-50.
+
+### N74 di W — revisione: Fineco tiene solo le righe regolate, il batch arriva a domani (2026-10-19, 16:05-16:45) — ✅ 🧊 FROZEN
+
+> **Richiesta** (coordinatore, 16:05): revisione di **N74 di W**, commit `8a86011ce` sul ramo
+> `e-alfy-w-import-e-transazioni`, fuso con dev in `a68a26a75`. Da verificare: che «oggi» e «domani» vengano dal
+> server, mai dal browser; che una riga esclusa porti con sé FEE e premio, senza cassa orfana; che la nota non sia un
+> avviso (ambra contro blu); che il cambio di versione dei due plugin faccia proporre la rilettura; le date del batch
+> contro `range-ceiling` (N83) e J-49. Solo lettura e test leggeri, carico sotto 50. La mia base: `8cc416905`.
+>
+> **Metodo**:
+>
+> - `a68a26a75` non è nella mia base: letto con `git show` e `git grep` (28 file, +980/−150). Il merge tocca uno solo
+>   dei file di N74, `assets/architecture.md`, dal lato di dev. Migrazioni e `backend/app/db` uguali alla mia base.
+> - Corsia ripopolata come chiesto: `db populate --force --clean` (16:13, exit 0, 22 s).
+> - Test leggeri dall'albero di `a68a26a75`, estratto con `git archive` nella cartella di sessione (`review-n74/tree`,
+>   fuori da git): `node_modules` in copia APFS di quelli del mio worktree (`cp -c`), poi `svelte-kit sync` e
+>   `api sync` nell'albero. Script `files/scripts/n74_review.sh`, un passo alla volta, carico fra 17 e 48.
+> - **⚠️ Fuori pista**: il primo Vitest falliva prima di raccogliere (mancava `.svelte-kit/tsconfig.json`, e Vite non
+>   carica un `node_modules` raggiunto con un link simbolico). Infrastruttura: risolta con la copia e `svelte-kit
+>   sync`, nessun test di prodotto coinvolto.
+>
+> **Esito per punto**, tutti ✅:
+>
+> 1. **Oggi e domani dal server.**
+>    - Fineco legge `server_today()` (`date.today()` del processo che legge il file, nel pool del server) una volta
+>      per lettura. Il wizard rilegge a ogni analisi (`POST /files/{id}/parse`) e non usa la cache del backend: una
+>      riga regolata entra alla lettura successiva.
+>    - Il batch: `transaction_date_bounds()` vale 1900-01-01 … `latest_range_end()`, cioè `server_today()` più un
+>      giorno, letto una volta per batch. Prima era l'oggi UTC più un anno: ora c'è un solo calendario, quello del
+>      server, lo stesso di X-R55 e N83.
+>    - Il frontend non ha copie del limite: il messaggio usa il `params.max` del server, e `SingleDatePicker` resta
+>      fermo all'oggi del browser, come prima. I test fissano `server_today` sul modulo del plugin, mai l'orologio.
+> 2. **FEE e premio, nessuna cassa orfana.** Il controllo `tx_date > today` viene subito dopo la data, prima della
+>    descrizione, del tipo, dell'asset e di ogni transazione. Così una riga resta fuori intera: niente BUY o SELL,
+>    niente FEE (le colonne delle commissioni sono della stessa riga), niente INTEREST del rimborso sopra la pari,
+>    nessun asset estratto. L'export dei titoli di Fineco non ha righe di cassa separate. Per Danske cambia solo la
+>    gravità: le operazioni con la valuta dopo l'ultimo giorno dell'estratto conto non hanno ancora la loro cassa in
+>    quel file (il caso simmetrico è `deferred_rows`).
+> 3. **Una nota, non un avviso.**
+>    - `severity="info"` per `fineco_not_yet_settled`, `fineco_incomplete_rows` ed `excluded_not_yet_settled` di
+>      Danske; gli altri `excluded_*` restano avvisi (una guardia di W lo fissa).
+>    - `BrimNoticeList`: icona Info e `text-lf-info`, il blu; il link «open an issue» prende il tono della nota.
+>    - La conferma del passo 3 mette le note sotto «Informational notes» (`lf-info-*`), e il pulsante è blu se ci
+>      sono solo note.
+>    - Nel dettaglio di una lettura ogni nota ha il suo colore.
+> 4. **La rilettura.** `parse_is_stale` confronta la versione del registro con `parsed_plugin_version`, scritta a ogni
+>    lettura riuscita: Fineco passa da 1.1.0 a 1.2.0, e il file mostra «Stale» al passo 2. Per i set di Danske
+>    (1.0.0 → 1.0.1) c'è `combine_is_stale`: il badge «To re-combine» («Built by an older version of the plugin…»).
+>    In più, ogni analisi rilegge comunque: la versione nuova vale dalla prima analisi.
+> 5. **Le date del batch, N83 e J-49.**
+>    - L'ultimo giorno è lo stesso di prezzi e cambi (X-R65 e N83: domani). Il primo è diverso di proposito:
+>      1900-01-01 per le transazioni; per prezzi e cambi nessuno, dalla revisione di N83 del 19/10. Il merge lo dice
+>      giusto in `assets/architecture.md` («Transactions keep their own floor, 1900-01-01 since N74, and the same
+>      last date»).
+>    - J-49: `transaction_batch_stages` ora legge `latest_range_end` per nome ed è in `RANGE_BOUND_CONSUMERS`.
+>      `TestRangeBoundSeamCoversEveryReader` è verde (11).
+>    - Le dieci suite «far-future» (dati fra il 2032 e il 2091) con `lift_range_bound` scrivono le righe direttamente,
+>      senza il batch: non toccate.
+>    - Chi crea transazioni future passando dal batch: solo `test_brokers_api` (una riga a domani, che passa).
+>      `populate_mock_data` scrive senza batch e nel passato; nessuna E2E usa date future.
+>    - Una riga già salvata con una data oltre domani resta modificabile: il frontend manda solo i campi cambiati
+>      (`buildUpdateDiff`), e `check_dates()` controlla un aggiornamento solo se porta una data.
+>
+> **F1, da correggere: il CHANGELOG** (è del coordinatore). In `[Unreleased]` › 🐛 Fixed, la riga 288 dice ancora
+> «…transaction dates outside 1 January 1900 – one year from today are refused…»: ora è «– tomorrow». N74 non porta
+> righe sue. Quelle visibili all'utente: Fineco lascia fuori le righe non ancora regolate, con una nota blu, e
+> segnala le righe senza un numero necessario, con un link per aprire una issue; per Danske le operazioni non ancora
+> regolate sono una nota, non più un avviso.
+>
+> **F2, una domanda** (per W o il developer: non decido io). La regola 9 della skill e della guida dice che una riga
+> «con la data valuta o di regolamento dopo oggi» è provvisoria e resta fuori.
+>
+> - Cinque plugin hanno una colonna di regolamento ma datano per operazione e importano tutto:
+>   - Directa (`Data valuta`), Saxo (`Value Date`), InvestEngine (`Settlement Date`);
+>   - Degiro (la data valuta), Disnat (`Date de règlement`, che usa solo quando manca la data dell'operazione).
+>
+>   Le loro righe passano il batch (data fino a oggi), ma alla lettera della regola sarebbero provvisorie.
+> - Il generic CSV accetta `settlement_date` e `value_date` come colonna della data. Una data di regolamento oltre
+>   domani ora fa rifiutare il salvataggio (`dateOutOfRange`); prima passava fino a un anno.
+> - Da chiarire: la regola vale per chi data per valuta (Fineco) o per periodo (Danske), oppure quei plugin chiedono
+>   un seguito.
+>
+> **Residui**, nessuno blocca:
+>
+> - R1, precedente a N74: la colonna «⚠️» della tabella dei risultati conta tutte le note, anche quelle informative
+>   (tooltip «Parser warnings…»). Un file Fineco con solo righe non regolate mostra «⚠️ 1»; e nel dettaglio la sezione
+>   s'intitola «Warnings».
+> - R2: il testo di `fineco_not_yet_settled` parla di «data valuta», ma la regola usa la data dell'operazione quando
+>   la valuta manca. È un dettaglio di parole.
+> - R3: le pagine IT, FR ed ES del form e dell'import danno ancora l'esempio di un anno (`2027-10-17`). È debito di
+>   traduzione normale: non va timbrato.
+> - R4, fuori da N74: `scripts/test_runner/_frontend_transaction.py` non passa ruff (4 PLC0415) né black già sulla mia
+>   base. `scripts/` è fuori dal cancello di `dev.py lint`.
+>
+> **Prove**, tutte sull'albero di `a68a26a75`, verdi:
+>
+> - Vitest `BrimNoticeList`, `resolveValidationMessage.decimals`, `ParseDetailModal`: 3 file, 65 test;
+> - `utils datetime` 44; `external brim-providers` 750 (1 saltato); `external brim-danske-bank` 325;
+> - `services range-ceiling` 74; J-49 (`roi-fifo-utils TestRangeBoundSeamCoversEveryReader`) 11;
+> - `services transaction-decimal-places` (le due classi delle date) 16; `services edge-cases` (le due date) 2;
+> - ruff e black puliti sui 10 file backend; prettier pulito sui 7 file frontend;
+> - `i18n check` stretto (5105 chiavi); `front check` 0 errori e 0 avvisi;
+> - le ancore delle doc nuove esistono tutte. Porta 6187 libera.
+>
+> - **Backlog**: B-51 (R1) e B-52 (F2) nuove, area di W.
+> - **Pulizia**: l'albero estratto è tolto alla fine; gli script e i log restano nella cartella di sessione.
+> - **Commit proposto**: `docs(journal): B review of W N74`. 🧊 FROZEN.
