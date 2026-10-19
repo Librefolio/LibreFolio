@@ -4448,7 +4448,18 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
   Dettagli: piano H, §14, lotto «H-57», nota delle 14:20.
 - **H-60 · Errori leggibili: le informazioni utili stampate in caso di errore, anche in console** — alto, regola del
-  developer (19/10), via coordinatore. Analisi fatta il 19/10 (sola lettura); in attesa delle decisioni D1–D5.
+  developer (19/10), via coordinatore. Analisi e via il 19/10 (D1 no, D2–D5 sì; D4 (a)). **Fatto il 19/10**: rossi,
+  cura, regola, doc; `all-backend` 29 456 passati e 0 falliti. Checkpoint inviato; il ✅ col commit alla prossima
+  riconciliazione. Restano agli altri D3 (A, J), D5 (J) e i P2 qui sotto.
+  - **I P2 ai proprietari** (li distribuisce il coordinatore; dal piano H, §14, H-60 punto 2): X `assets/refresh.py`
+    (363, 575, 594, 614, 629: anche testi di errori del DB nella risposta), `assets/metadata.py:132`,
+    `assets/core.py:93`; W `brokers/broker_service.py:202,418,461` (`str(e)` per riga), `transactions/batch_*.py` e
+    `lone_transfer_legs.py:98`, `brim/registry.py:45,89`, `brim/brim_provider.py:239`; MF
+    `financial_math/portfolio/engine.py:473`; Y/J `signals/planning.py:197`; J `tools/executor.py:273`,
+    `tools/worker.py:178`, `tools/registry.py:115,170`, `ai_export/dependencies.py:459` (diagnostics mai letti) e
+    `:609` (catene senza `from`), D5 (`reason_code` di `snapshot_source_failure`), D3 per l'AI Export; A D3 per i
+    messaggi generici; J/X `api/v1/fx/currencies.py:95` (`{e!s}` nel 502); H
+    `platform/scheduler/settings.py:44`.
   - Il log dell'app è JSON; la forma raddoppiata dell'estratto viene dallo strumento che l'ha letto. Difetto vero:
     `logger.exception()` scrive la traceback due volte e il livello `EXCEPTION` (84 punti).
   - 90 `except` larghi senza traccia nel log; P1 l'AI Export (`dependencies.py:478`, i `diagnostics` mai letti) e
