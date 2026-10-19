@@ -2,7 +2,7 @@
 Instance backup, starting a run from the API (workstream B, lot B1): what ``POST /backup/instance`` answers when the run
 cannot start.
 
-Under test: ``backend/app/api/v1/backup/instance.py``, ``start_instance_backup``.
+Under test: ``backend/app/api/v1/backup/instance.py``, ``start_instance_backup``, through ``job_views.start_job``.
 
 (a) A folder of ``backups/`` is a link or a file (``BackupPathError``, for ``backups`` or ``backups/.jobs``): 500 with
     ``detail.code`` ``backup_folder_unusable``. A full disk or a quota (``ENOSPC``, ``EDQUOT``, the failure itself or a
@@ -13,7 +13,15 @@ Under test: ``backend/app/api/v1/backup/instance.py``, ``start_instance_backup``
     own message, never the path of the data directory nor the system's words: those go to the server log.
 (b) A run that starts: 202 and its first state. It is the barrier of (a): the app of this test does reach the route, so
     an answer without the code cannot come from a route that was never called.
-(c) OpenAPI: the start documents its 507 beside its 409 and its 500 (``START_RESPONSES``, B-30).
+(c) OpenAPI: the start documents its 507 beside its 409 and its 500 (``START_RESPONSES``, B-30); its 409 says that the
+    refusal names the running job, ``job_id`` and ``origin`` (B-8).
+(d) B-8, the running job named: ``BackupBusyError.running`` is the job a refused start could read from the run lock.
+    The Backup tab (``origin`` ``ui``: an administrator, who reads every job) is told which it is, whatever started it
+    (``ui``, ``panel``, ``cli``, ``pre-restore``): 409, ``detail`` exactly ``{code: backup_busy, message: «Another
+    backup is running», job_id, origin}``, the message as before. Without one (``running`` None) the detail stays
+    exactly ``{code, message}``: no ``job_id`` nor ``origin``, not even null. The error is built as the case
+    ``another-run-in-progress`` builds it, its ``running`` set on it: the test does not depend on how the constructor
+    takes it.
 
 Pure: an app of this test holds ``instance_router`` under ``/api/v1/backup``; ``require_admin`` is overridden by an
 administrator and ``jobs.start_backup`` is replaced for each case, so no data directory, database, server or network
@@ -30,6 +38,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -56,6 +65,8 @@ NO_SPACE_WORDS = tuple(os.strerror(code) for code in (errno.ENOSPC, EDQUOT, errn
 #: B-30: what a start on a full disk answers and logs.
 NO_SPACE_MESSAGE = "Not enough free space to start the backup"
 NO_SPACE_WARNING = "Instance backup could not start: not enough free space"
+#: What a start refused while another run is in progress says, as before B-8.
+BUSY_MESSAGE = "Another backup is running"
 
 
 def administrator() -> SimpleNamespace:
@@ -179,3 +190,66 @@ def test_openapi_documents_507_on_the_start():
     app.include_router(instance_router, prefix="/api/v1/backup")
     documented = set(app.openapi()["paths"][URL]["post"]["responses"])
     assert {"409", "500", "507"} <= documented, f"the start's refusals, 507 included: {sorted(documented)}"
+
+
+def test_openapi_says_the_409_of_the_start_names_the_running_job():
+    """(c) B-8: the 409 of ``POST /backup/instance`` says what its refusal carries: the code ``backup_busy``, and the
+    running job's ``job_id`` and ``origin`` when the caller may read that job."""
+    app = FastAPI()
+    app.include_router(instance_router, prefix="/api/v1/backup")
+    description = app.openapi()["paths"][URL]["post"]["responses"]["409"]["description"]
+    missing = [word for word in ("backup_busy", "job_id", "origin") if word not in description]
+    assert missing == [], f"the 409 of the start must name {missing}: {description!r}"
+
+
+# =============================================================================
+# (d) B-8: the running job named
+# =============================================================================
+
+
+def running_job(origin: str) -> jobs.BackupJob:
+    """A job in progress started from ``origin``, as ``BackupBusyError.running`` carries it (B-8)."""
+    return jobs.BackupJob(job_id=uuid4().hex, origin=origin, status="running", phase="files", done_bytes=10, total_bytes=100, created_at=datetime(2026, 10, 17, 9, 0, tzinfo=UTC))
+
+
+def busy(running: jobs.BackupJob | None) -> jobs.BackupBusyError:
+    """The refusal of a start while another run holds the lock, built as the case ``another-run-in-progress`` builds it,
+    carrying the running job it could read (B-8), or None. ``running`` is set on the instance: the test does not depend
+    on how the constructor takes it."""
+    error = jobs.BackupBusyError(BUSY_MESSAGE)
+    error.running = running
+    return error
+
+
+def status_and_detail(response: httpx.Response) -> tuple[int, object]:
+    """Status and ``detail`` of a JSON answer; the text of any other (a plain 500), so a red always reads."""
+    if response.headers.get("content-type", "").startswith("application/json"):
+        return response.status_code, response.json().get("detail")
+    return response.status_code, response.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("origin", ["ui", "panel", "cli", "pre-restore"])
+async def test_a_start_refused_while_a_job_runs_names_that_job_to_the_backup_tab(monkeypatch, origin):
+    """(d) B-8: the Backup tab reads every job, so its refusal names the running job whatever started it: 409, ``detail``
+    exactly ``{code: backup_busy, message: «Another backup is running», job_id, origin}``, the message as before. With
+    them, a tab whose start answer was lost finds the job it started (the client follows only a job of origin ``ui``)."""
+    print_section(f"B-8: POST /backup/instance while a job of origin {origin} runs")
+    running = running_job(origin)
+    calls = replace_start(monkeypatch, raising(busy(running)))
+    response = await post_start()
+    assert calls == ["ui"], f"precondition: the route asked for a run, from the UI: {calls}"
+    expected = (409, {"code": "backup_busy", "message": BUSY_MESSAGE, "job_id": running.job_id, "origin": origin})
+    assert status_and_detail(response) == expected, f"the refusal must name the running job, its id and its origin {origin}, to the Backup tab: {status_and_detail(response)}"
+    print_success(f"409 backup_busy, job_id and origin {origin}")
+
+
+@pytest.mark.asyncio
+async def test_a_start_refused_without_a_job_it_could_read_answers_its_code_and_message_only(monkeypatch):
+    """(d) B-8, a guard: the refusal carries no running job (the lock named none that runs): ``detail`` exactly
+    ``{code: backup_busy, message}``, as before B-8; no ``job_id`` nor ``origin``, not even null."""
+    calls = replace_start(monkeypatch, raising(busy(None)))
+    response = await post_start()
+    assert calls == ["ui"], f"precondition: the route asked for a run, from the UI: {calls}"
+    assert status_and_detail(response) == (409, {"code": "backup_busy", "message": BUSY_MESSAGE}), f"a refusal that names no job answers its code and its message only: {status_and_detail(response)}"
+    print_success("409 backup_busy, code and message only")

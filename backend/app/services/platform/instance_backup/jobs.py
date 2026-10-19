@@ -55,6 +55,10 @@ _SKIPPED_KEPT = 50
 #: Free space kept beyond the envelope of a secure backup, written beside its archive.
 _ENVELOPE_MARGIN = 64 * 1024 * 1024
 _PROCESS_LOCKS: dict[Path, threading.Lock] = {}
+#: The job each process-local lock was taken for (no fcntl), as the lock file's content says it with fcntl (B-8).
+_PROCESS_HOLDERS: dict[Path, str] = {}
+#: The most bytes of a lock file read back: a job id is 32.
+_HOLDER_MAX_BYTES = 64
 
 JobStatus = Literal["running", "done", "failed"]
 #: The archive's phases (``archive.Phase``), then the encryption of a secure backup.
@@ -64,7 +68,12 @@ JobError = Literal["backup_no_space", "backup_failed", "backup_interrupted"]
 
 
 class BackupBusyError(RuntimeError):
-    """Another backup is running on this data directory."""
+    """Another backup is running on this data directory. ``running``: that backup, when its run lock names it and its
+    state says it runs (B-8); ``None`` otherwise."""
+
+    def __init__(self, message: str, running: BackupJob | None = None):
+        super().__init__(message)
+        self.running = running
 
 
 class BackupJobNotFoundError(LookupError):
@@ -150,6 +159,15 @@ class _RunLock:
         self._fd = fd
         return True
 
+    def record(self, job_id: str) -> None:
+        """Name the job this lock is held for, while it is held (B-8): the lock file's content, which a refused start
+        reads back; in memory where there is no ``fcntl``."""
+        if self._local is not None:
+            _PROCESS_HOLDERS[self._path] = job_id
+        if self._fd is not None:
+            os.ftruncate(self._fd, 0)
+            os.pwrite(self._fd, job_id.encode("ascii"), 0)
+
     def release(self) -> None:
         if self._local is not None:
             self._local.release()
@@ -206,12 +224,13 @@ def _prepare(data_dir: Path, origin: BackupOrigin) -> tuple[_RunLock, BackupJob]
     remove_expired_jobs(data_dir)
     lock = _RunLock(lock_path(data_dir))
     if not lock.try_acquire():
-        raise BackupBusyError("Another backup is running")
+        raise BackupBusyError("Another backup is running", running=_running_job(data_dir))
     try:
         job_id = secrets.token_hex(16)
         folder = ensure_private_dir(job_dir(data_dir, job_id), data_dir)
         job = BackupJob(job_id=job_id, origin=origin, status="running", phase="preparing", done_bytes=0, total_bytes=0, created_at=_now())
         _write_state(folder, job)
+        lock.record(job_id)
     except BaseException:
         lock.release()
         raise
@@ -432,6 +451,32 @@ def remove_expired_jobs(data_dir: Path, *, now: datetime | None = None) -> int:
             shutil.rmtree(path, ignore_errors=True)
             removed += 1
     return removed
+
+
+def _running_job(data_dir: Path) -> BackupJob | None:
+    """The job the held run lock names, while its state says it runs (B-8); ``None`` when the lock names none, or a job
+    that is gone or has ended. The lock file is read, never followed through a link, and only its first bytes."""
+    path = lock_path(data_dir)
+    holder = _PROCESS_HOLDERS.get(path)
+    if fcntl is not None:
+        try:
+            fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        except OSError:
+            return None
+        try:
+            holder = os.read(fd, _HOLDER_MAX_BYTES).decode("ascii", errors="replace").strip()
+        except OSError:
+            return None
+        finally:
+            os.close(fd)
+    if not holder or not is_job_id(holder):
+        return None
+    try:
+        job = get_job(holder, data_dir=data_dir)
+    except (BackupJobNotFoundError, OSError, ValueError, TypeError, KeyError):
+        # A state this module cannot read names no job: the refusal stays a 409, never a 500.
+        return None
+    return job if job.status == "running" else None
 
 
 def _run_lock_held(data_dir: Path) -> bool:

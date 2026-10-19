@@ -223,7 +223,8 @@
         "wrong_password": "Contraseña incorrecta, o el archivo fue modificado: vuelve a escribir la contraseña.",
         "password_required": "Es una copia segura: escribe su contraseña.",
         "envelope_damaged": "La copia segura está dañada o fue modificada: no se puede abrir.",
-        "envelope_unsupported": "La copia segura viene de un LibreFolio más reciente: actualiza primero LibreFolio."
+        "envelope_unsupported": "La copia segura viene de un LibreFolio más reciente: actualiza primero LibreFolio.",
+        "proxy_too_large": "Un proxy delante de LibreFolio rechazó un archivo tan grande: pide a quien lo gestiona que acepte subidas más grandes, o restaura desde la línea de comandos."
       },
       "password": {
         "intro": "Una copia segura: escribe la contraseña con la que se hizo.",
