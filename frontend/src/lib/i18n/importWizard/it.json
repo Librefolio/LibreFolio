@@ -203,7 +203,9 @@
       "scalable_internal_transfers": "{count, plural, one {# trasferimento} other {# trasferimenti}} tra il conto broker e il conto deposito: importa il file dell’altro conto nel suo broker, poi unisci ogni coppia in un «Giroconto» nell’editor bulk.",
       "scalable_dividends_net": "{count, plural, one {# dividendo è stato importato come accreditato} other {# dividendi sono stati importati come accreditati}}, al netto della ritenuta: il file non riporta l’imposta.",
       "scalable_tax_refund": "{count, plural, one {# rimborso d’imposta è stato importato come deposito} other {# rimborsi d’imposta sono stati importati come depositi}}: in LibreFolio un’imposta toglie sempre denaro.",
-      "scalable_cash_by_sign": "{count, plural, one {# riga di liquidità ha un tipo che LibreFolio non conosce, o un segno inatteso: è stata registrata come deposito o prelievo} other {# righe di liquidità hanno un tipo che LibreFolio non conosce, o un segno inatteso: sono state registrate come depositi o prelievi}}, secondo il segno dell’importo."
+      "scalable_cash_by_sign": "{count, plural, one {# riga di liquidità ha un tipo che LibreFolio non conosce, o un segno inatteso: è stata registrata come deposito o prelievo} other {# righe di liquidità hanno un tipo che LibreFolio non conosce, o un segno inatteso: sono state registrate come depositi o prelievi}}, secondo il segno dell’importo.",
+      "fineco_not_yet_settled": "{count, plural, one {# riga non è ancora regolata (la data valuta è dopo oggi) e non è stata importata: arriverà con il prossimo export.} other {# righe non sono ancora regolate (la data valuta è dopo oggi) e non sono state importate: arriveranno con il prossimo export.}}",
+      "fineco_incomplete_rows": "L'importazione Fineco è in beta, quindi questo import potrebbe essere sbagliato: {count, plural, one {# riga non ha} other {# righe non hanno}} un numero necessario (quantità o controvalore). Controlla le righe qui sotto; se il file è giusto, è probabilmente un errore dell'importazione, e puoi aiutarci a correggerlo:"
     },
     "evidenceRowsTitle": "Righe del file",
     "evidenceRowCount": "{n} righe",
@@ -524,7 +526,9 @@
       "scalable_internal_transfers": "Queste righe spostano denaro tra i tuoi due conti Scalable (lf_subtype CASH_TRANSFER_IN o CASH_TRANSFER_OUT): ognuna ha la sua gemella nel file dell’altro conto.",
       "scalable_dividends_net": "La colonna tax è vuota in queste righe: l’importo è quanto arrivato sul conto.",
       "scalable_tax_refund": "Un importo positivo nella colonna tax è denaro restituito.",
-      "scalable_cash_by_sign": "Il segno della colonna amount ha deciso tra deposito e prelievo."
+      "scalable_cash_by_sign": "Il segno della colonna amount ha deciso tra deposito e prelievo.",
+      "fineco_not_yet_settled": "La data valuta di queste righe è dopo oggi: non sono ancora regolate.",
+      "fineco_incomplete_rows": "L'ultima colonna nomina il campo senza numero; la riga è importata così com'è."
     }
   }
 }

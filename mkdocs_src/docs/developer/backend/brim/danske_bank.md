@@ -3,7 +3,7 @@
 `broker_danske_bank` imports the **equity savings account** (*osakesäästötili*) of Danske Bank
 Finland from two exports that only make sense together: the custody transactions (XLSX) and the
 cash statement (CSV). It lives in `backend/app/services/brim_providers/broker_danske_bank/plugin.py`
-(`plugin_version` 1.0.0, 🔬 Alpha — built from the exports of one account, shared in
+(`plugin_version` 1.0.1, 🔬 Alpha — built from the exports of one account, shared in
 [issue #26](https://github.com/Librefolio/LibreFolio/issues/26)) and is LibreFolio's reference
 **report-set plugin**.
 
@@ -351,7 +351,8 @@ are in Finnish. Evidence tables are titled `Arvopaperitapahtumat` (custody colum
 
 | Notice | Severity | Says |
 |---|---|---|
-| `excluded_<reason>` | warning | One per exclusion reason, with its rows: they are not imported (`not_yet_settled`: they come with the next import) |
+| `excluded_<reason>` | warning | One per exclusion reason, with its rows: they are not imported. Every reason but `not_yet_settled`, `excluded_status` included |
+| `excluded_not_yet_settled` | info | Custody trades valued after the cash statement's last day: not imported this time, they come with the next import. A note since N74, no longer a warning: nothing is wrong (the plugin guide's rule *Only safe rows*, under [Import philosophy](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)) |
 | `deferred_rows` | info | Cash trades after the last custody day come with the next import |
 | `name_mismatch` | warning | Paired trades whose names differ: check them |
 | `proof_discarded` | info | Holdings the files could not prove reliably (`context.proofs`) |
