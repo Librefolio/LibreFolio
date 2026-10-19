@@ -192,12 +192,15 @@ i18n nuova `lib/i18n/email/` (prefisso `email`). Galleria con `page.route`.
 | Lotto | Contenuto | Dipende da | Stato |
 |---|---|---|---|
 | E0 | Questo piano, sezione E del backlog | via | ✅ (checkpoint E1) |
-| E1 | Configurazione, `.env.example` (sezione Email), `smtp`, `delivery`, `messages` e testi, `checks`, `rate_window`, SMTP finto, test, doc per sviluppatori | niente | 🧊 checkpoint |
-| E2 | `GET /email/status`, `POST /email/test`, router, `/system/instance.email`, `CONFIG_CHECKS`, scheda «Email», i18n, Vitest, E2E simulate, galleria, doc admin | A5a in base; H per `config_audit`; frontend dopo la finestra e L | ⏳ |
-| E3 | `links.py`, `POST /email/links`, `POST /email/password-reset`, attivazione dell'admin | A5a in base, punto 45 | ⏳ |
-| E4 | modulo «password dimenticata», «Spedisci per email» | A5b e A6 in base | ⏳ |
-| E5 | verifica dell'email | punto 44, A5a+A5b in base | ⏳ |
-| E6 | doc finali, devWiki, `TODO_FUTURI`, testo per il CHANGELOG, `all-backend` + E2E, `security-review` | tutto | ⏳ |
+| E1 | Configurazione, `.env.example` (sezione Email), `smtp`, `delivery`, `messages` e testi, `checks`, `rate_window`, SMTP finto, test, doc per sviluppatori | niente | ✅ dev `f46a93ffd` (15/10) |
+| E2 | `GET /email/status`, `POST /email/test`, router, `/system/instance.email`, `CONFIG_CHECKS`, scheda «Email», i18n, Vitest, E2E simulate, galleria, doc admin | A5a in base; H per `config_audit`; frontend dopo la finestra e L | ✅ dev `755158aad` (E2a ed E2b, 15/10), il cancello i18n `be7de95b6` |
+| E3 | `links.py`, `POST /email/links`, `POST /email/password-reset`, attivazione dell'admin | A5a in base, punto 45 | ✅ dev `8f908623b` (E3 ed E3s, 15/10), `e54ae96bb` (E3p, 15/10) |
+| E4 | modulo «password dimenticata», «Spedisci per email» | A5b e A6 in base | ✅ dev `73a68d95f` (E4a, 16/10), `56759b2c8` (E4b ed E4c, 16/10) |
+| E5 | verifica dell'email | punto 44, A5a+A5b in base | ✅ dev `e9a993e00` (E5a, 15/10), `dbe232723` (E5b, 16/10) |
+| E6 | doc finali, devWiki, `TODO_FUTURI`, testo per il CHANGELOG, `all-backend` + E2E, `security-review` | tutto | ✅ dev `56759b2c8` (16/10), il diario E6.10–E6.11 `30c2459e6` |
+
+> Contabilità del 19/10: gli ingressi sono i merge di primo genitore di `dev_release2`. I lotti venuti dopo E6, da E-4
+> a E-21, si seguono nella sezione E del backlog.
 
 ## 8. Definizione di fatto
 
