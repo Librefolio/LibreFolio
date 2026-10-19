@@ -152,6 +152,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/theme/drawnColors.test.ts",
             "src/lib/theme/roleColors.dom.test.ts",
             "src/lib/features/brokers/lots/lotChartShared.test.ts",
+            "src/lib/features/brokers/lots/lotChartShared.scopeBoundary.test.ts",
             "src/lib/features/brokers/lots/lotWacPriceChartHelpers.test.ts",
             "src/lib/features/brokers/lots/lotComparisonChartHelpers.test.ts",
             "src/lib/features/brokers/lots/lotGanttChartHelpers.test.ts",
