@@ -4924,8 +4924,10 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   (il titolo della fonte nel pannello dei metadati) e «✏️ Manual» (il chip dell'intestazione) non passano dal
   catalogo. Il FE5c li sposta così come sono, in `AssetDetailMetadataPanel` e in `AssetDetailHeader`: due chiavi in
   `assets` dopo il taglio, come O-8. Dettagli: piano 03, sezione «FE5c-3/4/5».
-- ⏸️ **X-R16 · Un segnale non valido salta la cache dei prezzi della pagina dell'asset** (sospesa il 19/10 con i rossi
-  scritti, messi da parte in patch; si lega a N64; piano 03, «X-R16 + X-R48b» e «Fase 2») — basso, frontend; X, 16/10
+- ✅ **X-R16 · Un segnale non valido salta la cache dei prezzi della pagina dell'asset** (chiusa il 19/10, in attesa del
+  commit del coordinatore: un segnale non valido fa fallire solo i segnali, sulle due pagine; su quella di una coppia la
+  conversione si legge con l'isolamento dei segnali, e i tassi restano; si lega a N64; piano 03, «X-R16 ripresa») —
+  basso, frontend; X, 16/10
   (test-author del FE5c-2). In `loadChartData`, `parseBackendSignalResults` rifiuta tutta la risposta se un solo
   segnale non è valido. Questa parte è voluta: nessun segnale del backend viene mostrato, e `signalRequestFailed` lo
   dice.
