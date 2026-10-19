@@ -8769,3 +8769,238 @@ poi, in V1 e V3, `assignments|reported_currency|VARCHAR(8)` (in V2 e V4 nessuna 
    `services probe-rate-limit` 52, `utils dev-server-interrupt` 27, `utils dev-designer-lab-banner` 37,
    `schemas tools` 271. Ruff e black puliti sui 4 file, `git diff --check` pulito, porta 6181 libera.
 4. ✅ Checkpoint inviato (19/10, 14:40).
+
+### Lotto «H-60: errori leggibili» (19/10, 15:10) — analisi, sola lettura
+
+> Dal coordinatore (19/10, 15:07). La regola del developer, testuale: «fai in modo che le info utili vengano printate in
+> caso di errore, da ora in poi, anche in console». Il caso che l'ha fatta nascere: sulla nightly Linux
+> (`v1.2.1-2591-g5e1a7c3af`), AI Export → `portfolio.asset_history` risponde 503 `snapshot_source_failure`, con
+> `component_id: portfolio.technical_prices` e nessun `reason_code`. La causa la cerca il coordinatore; qui non la
+> inseguo. Base `5c1c4873b`; nessun codice; corsia 6181, solo un server di prova breve. L'estratto del log è privato:
+> qui ne descrivo solo la forma, nessun contenuto.
+
+#### 1. Il log del container: l'app scrive JSON, la forma dell'estratto viene da chi lo legge
+
+- **Cosa scrive l'app.** `logging_config.py` ha un solo renderer, `JSONRenderer`, sempre: non guarda se c'è un TTY e
+  non ha processori duplicati. `configure_logging()` è chiamata una volta, all'import di `main.py`, e Docker avvia
+  `uvicorn backend.app.main:app` direttamente, con la stessa configurazione.
+  - Dal 16/10 il file non è cambiato in nessun ref di questo repository, e nemmeno il lifespan e il Dockerfile.
+    Rispetto a `origin/dev_release2` (`v1.2.1-2590`) sono identici. La nightly ha 2591 commit dopo `v1.2.1`, quindi
+    porta lo stesso codice. `5e1a7c3af` però non è in questo repository: un `git show 5e1a7c3af --
+    backend/app/logging_config.py` dal lato del developer lo chiude.
+- **Prova in locale.** Ho avviato `dev.py server --test` sulla corsia 6181 (`--no-scheduler`), poi `ready`, un login e
+  un 404 (log: `files/runs/h60/devserver.log`). Risultato: ogni riga dell'app è un oggetto JSON (`event`, `logger`,
+  `level`, `timestamp` e i campi dell'evento), le righe di uvicorn sono testo (`INFO:     …`). Il login dà una sola
+  riga, `{"user_id": …, "username": …, "event": "User logged in", "logger": …, "level": "INFO", "timestamp": …}`.
+  Lo stesso evento nell'estratto ha le stesse chiavi, nello stesso ordine. **In locale il raddoppio non succede.**
+- **La forma dell'estratto è una funzione di un solo evento.** `files/h60/h60_peel.py` lo verifica su tutte le 58 righe
+  dell'app (le altre 942 sono righe di uvicorn, normali), senza stampare valori.
+  - Ogni riga si scompone esattamente come `S = X X chiave=valore`, ricorsivamente: le chiavi sono quelle del JSON,
+    nel suo ordine, e alle foglie c'è il valore di `level` (`INFO`), mentre la chiave `level` non compare.
+  - Con n chiavi, la prima compare 2^(n−1) volte. Per questo una riga dello scheduler, con 8 chiavi, arriva a 7 457
+    caratteri. «I campi che si accumulano» sono questo: nessun campo passa da un evento a un altro, quindi non è
+    un contesto che cresce (`bind`, `merge_contextvars`).
+  - Nessun renderer di structlog produce questa forma. È lo strumento con cui il log è stato letto o copiato (un
+    visualizzatore web dei container, un alias, uno script) che converte il JSON in `LEVEL chiave=valore`, con un
+    accumulatore raddoppiato a ogni chiave.
+  - **Domanda per il developer**: con che cosa ha preso l'estratto? Un `docker logs --tail 20 <container>` in un
+    terminale dovrebbe mostrare righe JSON.
+  - «Senza messaggio»: il messaggio è nella chiave `event`, quella predefinita di structlog. I visualizzatori cercano
+    `msg` o `message` e non lo trovano.
+- **Problemi veri dal lato dell'app, trovati lungo la strada.**
+  1. **`logger.exception()` scrive la traceback due volte**, e lo fa da 84 punti, 44 in `api/v1`. Prova in-process:
+     una riga JSON con `"level": "EXCEPTION"` e la traceback dentro `exception`, poi la stessa traceback in chiaro su
+     più righe. Il meccanismo:
+     - `structlog.stdlib.BoundLogger.exception` passa a `logging.Logger.exception`, che rimette `exc_info=True`;
+     - il `Formatter("%(message)s")` di `basicConfig` aggiunge la traceback dopo il JSON già reso;
+     - il nostro `add_log_level` scrive `EXCEPTION` dove structlog scriverebbe `error`.
+     Le righe in chiaro non sono JSON, e un visualizzatore le mostra come voci separate. È un difetto, non una scelta.
+  2. La docstring di `logging_config.py` promette «Human-readable formatting for development», ma il codice scrive JSON
+     anche nel terminale di `dev.py server`, con le traceback su una riga sola, piene di `\n`.
+  3. Le righe di uvicorn (avvio, accessi, «Exception in ASGI application») sono testo, con i suoi handler: nello stesso
+     flusso convivono due formati.
+
+#### 2. Le eccezioni inghiottite
+
+- **Inventario** (`files/h60/swallow_scan.py` → `swallow_scan.tsv`, AST di `backend/app`): 323 `except` larghi
+  (`Exception`, `BaseException` o nudi).
+  - 157 scrivono nel log, 27 rilanciano così com'è;
+  - 49 convertono in un'altra eccezione;
+  - **90 non lasciano traccia nel log**: 53 ritornano e 37 proseguono.
+  - Ho tolto i falsi positivi che scrivono nel log dentro un helper: `_report_unusable_key`, `_disable_pool`,
+    `_note_provider_failure`, i messaggi di `readiness` (li scrive il chiamante), la post-migrazione (`errors` finisce
+    nel log a l.182).
+- **P1: l'utente vede un errore generico e la causa non finisce in nessun log.**
+
+  | Punto | Cosa succede | Di chi |
+  |---|---|---|
+  | `services/ai_export/dependencies.py:478` (`_build`) | Ogni eccezione di un componente diventa `_ComponentOutcome(error=exc)`, senza log. Se il componente è richiesto: `RequiredComponentBuildError` → `runtime_service.py:824-836` (`_root_cause`, `reason_code` letto con `getattr`, quasi sempre None) → `api/v1/ai_export.py:171` → 503 senza log. Nel log resta solo la riga di accesso di uvicorn. | J |
+  | `dependencies.py:459` | Componente opzionale: la causa va in `BuildContext.diagnostics` (`reason=str(error)`), che **nessuno legge**. La sezione sparisce senza traccia. | J |
+  | `dependencies.py:609` (`_resolve_resource`) | Avvolge in `ResourceLoadError(key, exc)` senza `__cause__`, e `resolve()` rilancia `RequiredComponentBuildError(id, error)` senza `from`. Una traceback stampata più a valle perde la catena. | J |
+  | `services/ai_export/components/envelope.py:51` | Un payload non valido diventa `ComponentPayloadValidationError` e finisce nel `_build` qui sopra. | J |
+  | `services/tools/executor.py:273` | `except Exception: error = _error("execution_failed")`: nessun log, nessun tipo. | J |
+
+- **P2: la causa arriva all'utente come testo, ma non al log; oppure un fallback silenzioso cambia il risultato.**
+  - `assets/refresh.py:363,575,594,614,629` e `assets/metadata.py:132` (X): l'errore va nei risultati come `str(e)`.
+    Le righe 594 e 614 mettono il testo di un errore del DB (`DB upsert failed: …`) in una risposta: rischio di
+    esporre SQL e parametri.
+  - `brokers/broker_service.py:202,418,461` (W): `str(e)` per riga nella risposta, nessun log; stesso rischio.
+  - `transactions/batch_creates.py:73`, `batch_edits.py:70,221`, `transaction_batch_stages.py:390`,
+    `lone_transfer_legs.py:98` (W): il testo dell'eccezione va nelle issue, nessun log.
+  - `brim/registry.py:45,89` (W): un plugin che fallisce l'istanza sparisce dal rilevamento; l'utente vede «nessun
+    plugin compatibile». `brim/brim_provider.py:239` (W): la testa del file diventa `''` e il rilevamento fallisce
+    senza motivo.
+  - `assets/core.py:93` (X): `provider_params` illeggibili diventano `{}`, e il provider fallisce più tardi con un
+    errore che non spiega.
+  - `financial_math/portfolio/engine.py:473` (MF): la classificazione di un asset diventa None senza traccia.
+  - `signals/planning.py:197` (Y/J): tipo e messaggio vanno nei `details` della risposta (`exception_details`), nessun
+    log.
+  - `tools/worker.py:178` e `tools/registry.py:115,170` (J): codice d'errore senza causa nel log.
+  - `fx/conversion.py:283` (J/X): converte con il messaggio, nessun log.
+  - `platform/scheduler/settings.py:44` (H): un fuso illeggibile fa usare gli orari come UTC, in silenzio.
+- **P3: fallback voluti, parsing, metadati.** I 63 dei plugin BRIM (quasi tutti «questo campo è una data o un
+  numero?»), `utils/*`, `plugin_settings/service.py:103-112`, `provider_registry.py:377,395`,
+  `api/v1/fx/providers.py:50`, le prove dei provider (`provider_management.py:487,521,545`: l'errore lo vede
+  l'amministratore, che è lo scopo). `secret_masking.py:115,180` non può scrivere nel log, per costruzione. Per tutti:
+  la regola del punto 5 quando si tocca il file, non una passata.
+
+#### 3. La risposta d'errore: un codice utile, senza dati né stack
+
+- **Oggi.** Dei 48 `HTTPException` 5xx di `api/`, 39 scrivono nel log subito prima (per esempio
+  `api/v1/assets/crud.py` ×7, `logger.exception`). Dei 9 senza log, 8 sono condizioni attese con un codice proprio:
+  il timeout dei tools, la consegna dell'email, la chiave dei plugin, la sync dei cambi, un file non cancellato. Il
+  nono è il 503 dell'AI Export.
+  - Un'eccezione non gestita la manda `SecurityHeadersMiddleware` come 500 in testo, e uvicorn la scrive nel log in
+    chiaro.
+  - Nessuna risposta porta un identificativo da ritrovare nel log.
+  - `api/v1/fx/currencies.py:95` mette nel `detail` del 502 il messaggio dell'errore (`{e!s}`): un altro testo
+    interno che arriva al client.
+- **Proposta (H, piattaforma).**
+  1. **`request_id`.** Una voce nuova in `MIDDLEWARE_STACK`, la più esterna, che:
+     - genera un id per ogni richiesta;
+     - lo lega con `structlog.contextvars.bind_contextvars`, così ogni riga di log della richiesta lo porta
+       (`merge_contextvars` è già il primo processore);
+     - lo rimanda nell'header `X-Request-Id`, anche sui 500 che manda `security_headers`.
+  2. **Un gestore unico per gli `HTTPException` ≥ 500** (`api/server_errors.py`, `install_server_error_handler(app)`,
+     una riga in `main.py` come i due già presenti). Scrive una riga ERROR con `request_id`, stato, metodo,
+     percorso e la catena dei tipi. La traceback è quella della causa radice, cercata in `__cause__`/`__context__` e
+     in `.cause`.
+     - Un processore segna come scritta l'eccezione che passa da `format_exc_info`, così il gestore non ripete una
+       traceback che il punto di cattura ha già scritto, e un filtro su `uvicorn.error` non ripete la sua.
+     - Risponde come FastAPI, con un campo in più accanto a `detail`: `request_id` e, se deciso (D2), `error_type`, il
+       nome della classe della causa radice.
+     - Mai il messaggio, mai la traceback: possono contenere dati (SQL, valori, percorsi).
+  3. **AI Export (J).**
+     - `_build` scrive nel log il fallimento una volta per componente: WARNING se opzionale, ERROR se richiesto, con
+       `component_id` e `exc_info`. In alternativa basta il gestore unico per i richiesti, e i
+       `diagnostics` letti per gli opzionali.
+     - Catene con `from`.
+     - Un `reason_code` da un elenco chiuso per `snapshot_source_failure` (D5). Oggi il frontend lo ignora per questo
+       codice (`problemMessage`, `ui.ts:110`), quindi aggiungerlo non cambia ciò che si vede.
+- **Il punto 1 del lavoro di J serve subito al coordinatore.** Con il log in `_build`, la prossima nightly scrive il
+  tipo e la traceback del 503. Non cambia niente di ciò che l'utente vede.
+
+#### 4. Il frontend: le risposte d'errore in console, da un punto solo
+
+- **Il punto.** `frontend/src/lib/api/zodios-client.ts`, il ramo d'errore dell'interceptor di risposta di
+  `axiosInstance`. Copre `zodiosApi` e chi usa `axiosInstance` direttamente: tools, onboarding, upload, import,
+  prezzi live.
+  - Oggi lì c'è solo `debug.log`, che la build di produzione elimina. Delle 115 `console.error`/`warn` sparse nei
+    componenti, molte stampano l'oggetto `AxiosError` senza il `detail`.
+- **Cosa stampare.**
+  - Una riga: `[API] 503 POST /api/v1/ai-export/snapshot`, con un oggetto compatto: `code`, `reason_code`,
+    `component_id` se `detail` è un oggetto, poi `request_id` (header o corpo) ed `error_type`.
+  - Per un errore di rete o un timeout: il codice di axios.
+  - Mai i corpi delle richieste, i token o i dati personali.
+- **Il rumore** (D4). Consiglio `console.error` per ≥ 500, per gli errori di rete e per le risposte che non
+  rispettano lo schema, e niente per i 4xx: 401 (login), 404, 409 e 422 sono attesi e l'interfaccia li mostra.
+- **Le risposte che non rispettano lo schema Zod.** Oggi sono un errore generico senza nessuna traccia, e
+  l'interceptor non le vede: lancia `ZodiosError` il plugin `zod-validation`, dopo axios.
+  - In zodios 10.9.6 (`node_modules/@zodios/core/lib/index.mjs`) i plugin di risposta si agganciano in ordine inverso
+    (`interceptResponse`), e il costruttore registra la validazione per prima. Un plugin aggiunto con `use()` gira
+    quindi prima della validazione e non vede l'errore.
+  - Ma `use()` con un nome già presente sostituisce il plugin al suo posto. Un plugin chiamato `zod-validation`, che
+    delega a `zodValidationPlugin({validate: 'response', transform: true, sendDefaults: false})` (esportato) e scrive
+    endpoint e percorso del campo (`issues[].path`, mai i valori), copre il caso senza cambiare l'ordine. Da provare
+    con una Vitest.
+- **Fuori dal client.** Restano 11 `fetch` diretti, 6 verso `/api`: lo stato dei prezzi, la sonda degli indirizzi, i
+  tre del ripristino, lo stream della ricerca. Gestiscono i loro errori: li elenco, non li tocco.
+
+#### 5. La regola: testo proposto, in inglese come le istruzioni
+
+**Backend** (`backend.instructions.md`, sezione nuova «Errors: never lose the cause»):
+
+```markdown
+## Errors: never lose the cause
+
+The developer's rule (19/10/2026): when something fails, the useful information is printed, in the server log and in
+the browser console.
+
+- **Every broad `except` that turns a failure into a fallback, a result field or an HTTP error logs it once, where it
+  is caught**: `logger.warning(...)` or `logger.error(...)` with `exc_info=exc`, and the identifiers of what failed
+  (ids, codes, component), never personal data, addresses or secrets. A caught exception that only becomes
+  `str(exc)` in a response is lost to the log.
+- **Keep the chain**: `raise NewError(...) from exc`. An exception stored to be raised later gets its `__cause__`.
+- **The client gets a code, never a message or a stack**: a `reason_code` from a closed list, the `request_id` (every
+  response carries `X-Request-Id`, every log line of the request `request_id`). The message, the type and the
+  traceback go to the log.
+- **Catch what you expect.** A broad `except Exception` is an isolation boundary and says so in a comment. A parsing
+  probe whose failure *is* the answer («is this a date?») may return without logging, and says so too.
+```
+
+**Frontend** (`frontend.instructions.md`, sotto «Telling the user (and the machine) that something happened»):
+
+```markdown
+### API errors in the console
+
+The API client (`lib/api/zodios-client.ts`) writes every unexpected API failure to the console, in production too: a
+5xx, a network error, a response that does not match its schema. One line: status, method, path, the problem's
+`code`/`reason_code` and the `request_id`. Do not add a `console.*` of your own for an API error, and never print a
+request body, a token or personal data. Expected answers (401, the 404 of a lookup, the 409/422 a form shows) are not
+logged. A console line is for the human who investigates; it is never the signal a test or a component reads
+(«Publish state, do not print it»).
+```
+
+#### 6. Di chi sono i file, e quanto costa
+
+| Pezzo | File | Di chi | Costo |
+|---|---|---|---|
+| Traceback doppia e livello `EXCEPTION`; formato leggibile in opzione (D1) | `logging_config.py`, `.env.example` (sezione H), doc admin «Reading the logs» | H | 2–3 h; +2–3 h con D1 (b) |
+| `request_id` e gestore unico dei 5xx | `services/platform/middleware.py`, nuovo `services/platform/request_id.py`, nuovo `api/server_errors.py`, `main.py` (una riga) | H | 0,5 g |
+| Console del frontend e schema Zod | `lib/api/zodios-client.ts` (condiviso: c'è codice di A e di Z), Vitest | H, con l'ok di A | 0,5 g |
+| La regola | `backend.instructions.md`, `frontend.instructions.md`, `patterns/` (doc) | H | 2 h |
+| AI Export: log in `_build`, catene, `diagnostics`, `reason_code` | `ai_export/dependencies.py`, `runtime_service.py`, `api/v1/ai_export.py`, schema e `ui.ts` solo con D3/D5 | J | 0,5 g; +2 h con D3 |
+| P2 per area | assets e plugin_settings (X); brim, transactions, brokers (W); engine (MF); signals (Y/J); tools (J); scheduler (H) | ognuno | 2–4 h per area, oppure quando si tocca il file |
+
+Ordine proposto:
+1. J: il log in `_build`. Subito, perché aiuta la ricerca del 503 e non cambia l'interfaccia.
+2. H: la traceback doppia.
+3. H: `request_id` e il gestore unico.
+4. H: la console del frontend.
+5. La regola.
+6. I P2, area per area.
+
+#### Decisioni (per il developer, con il mio consiglio)
+
+- **D1. Il formato del log in console.**
+  - (a) Solo JSON com'è, più una pagina della doc su come leggerlo (`jq`).
+  - **(b), consiglio.** Una variabile `LIBREFOLIO_LOG_FORMAT`: `json` per default (il self-hosted non cambia) oppure
+    `console`, leggibile, con le traceback su più righe; il file di log resta JSON. `dev.py server` usa `console`
+    quando gira in un terminale.
+  - (c) `console` per default: cambia il self-hosted, contro la regola del cloud.
+  - In tutti i casi la chiave del messaggio resta `event`: rinominarla romperebbe chi legge il log e i test che
+    catturano gli eventi.
+- **D2. Cosa porta una risposta 5xx.**
+  - (a) Solo `request_id`.
+  - **(b), consiglio.** `request_id` ed `error_type`: il nome della classe, nessun dato.
+  - In nessun caso il messaggio o la traceback.
+- **D3. L'id nel messaggio d'errore che l'utente vede.** Per esempio la «Fonte non disponibile» dell'AI Export, con un
+  «codice: 3f9a…» piccolo, da citare in una segnalazione. **Consiglio: sì**, solo negli errori generici (A e J per
+  l'interfaccia; i18n in 4 lingue).
+- **D4. Il rumore in console del frontend.**
+  - **(a), consiglio.** ≥ 500, rete e schema.
+  - (b) Anche i 4xx tranne 401, 404, 409 e 422.
+- **D5. Il `reason_code` di `snapshot_source_failure`.** Un elenco chiuso a partire dal tipo della causa radice; lo
+  propone J. Consiglio: si parte con `internal_error` e due o tre cause note.
+- **Domanda sull'estratto.** Con quale strumento è stato preso? Serve solo per scriverlo nella doc admin come caso
+  noto.
