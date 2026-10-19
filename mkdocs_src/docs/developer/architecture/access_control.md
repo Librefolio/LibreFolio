@@ -236,7 +236,7 @@ The default of that setting is `invite` (decision 36), and it has one source:
 new install, and `get_setting_value()` answers it while the row is missing: the service passes no
 fallback of its own. The seeding creates only missing rows, so an existing install keeps its row,
 whatever its value. An install that holds accounts but no row has run with the earlier default,
-`open`: migration `008_registration_invite_default` writes that `open` row before the seeding runs
+`open`: step 5 of migration `005_release_1_3_0_schema` writes that `open` row before the seeding runs
 ([`GLOBAL_SETTING`](database/users_access.md#global-setting)), so an upgrade never closes
 registration in silence.
 
