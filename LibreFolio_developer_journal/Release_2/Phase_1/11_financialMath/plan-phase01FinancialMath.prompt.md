@@ -1,7 +1,9 @@
 # Piano — fase 01, 11: MF · Matematica finanziaria (1.3.0)
 
-> **Stato**: ⏳ ondata 1 in corso (16/10/2026). Analisi committata `01b9758d8`; piano approvato dal developer (12:15,
-> §6b) con D-MF5 = (b) e D-MF1 aperta.
+> **Stato** (19/10/2026): 14 lotti dell'audit su 16 entrati; aperti E2 e L, in attesa del developer. Ripartenza del
+> 19/10: nessuna decisione di prodotto da MF, implementazione solo dopo il via esplicito del coordinatore, carichi pesanti
+> solo negli slot. Tabella qui sotto, «Stato dei lotti (19/10)». (Prima: ondata 1 dal 16/10, analisi `01b9758d8`, piano
+> approvato dal developer alle 12:15, §6b, con D-MF5 = (b) e D-MF1 aperta.)
 >
 > - **Workstream MF** · worktree `LibreFolio-worktrees/e-alfy-turbo-waddle` · ramo `e-alfy-mf-matematica-finanziaria`
 >   (rinominato dall'app all'avvio).
@@ -23,6 +25,57 @@
 > - **Verifica**: tre agenti `explore` in sola lettura (servizi portafoglio/broker/lotti; AI Export, rischio, PAC,
 >   transazioni; frontend) più letture mie (`daily_state.py`, `returns.py`, `fifo/engine.py`, `histories.py`,
 >   `ledger_totals.py`, `portfolio_service.py` 815–900 e 1120–1140, `brokers/summary.py`). Nessun test, server o build.
+
+## Stato dei lotti (19/10)
+
+Riconciliato su `b2565a165` (base del 19/10). Commit = merge in `dev_release2` del lotto (più la riga del CHANGELOG
+quando c'è). «Developer» = la scelta è una sua domanda, MF non decide.
+
+| Lotto | Cosa | Stato | Dove è entrato |
+|---|---|---|---|
+| A | Contributo per posizione dal motore (CP-3, R4, P22) | ✅ | `536501541` |
+| B | NAV e utile per broker dal motore | ✅ | `bcc644491` |
+| C | Funzione «pesi» nella casa, HHI unico (D-MF7) | ✅ | `0eb85aa9b` |
+| D | Rapporti, rendimenti di prezzo, annualizzazione | ✅ | `8d244d1c6`, `aca75c7ca`, D3 `482343eb3`, D4 `c2feaf3e4` |
+| E | Sintesi del lotto nella casa (E1); corti nello storico di performance (E2) | E1 ✅, **E2 developer** (opzione (b)?) | E1 `e43dfae68` |
+| F | Segno del reddito nei lotti e nell'AI Export (D-MF3) | ✅ | `8d244d1c6` |
+| G | Quantità e cassa senza `SUM` SQL | ✅ (G2 fatto da C-97 e W-B19) | G1 `8d244d1c6`; G2 `bab52635d`, `6be11ecf3` |
+| H | Finestra di detenzione nella casa (D-MF2) | ✅ | `bcc644491` |
+| I | Caricatore degli split | ✅ | I1 `8d244d1c6`, I2 `3741b95b0` |
+| J | `DailyStateBuilder` più lineare; ripartizione K/R all'arrivo (D-MF4) | ✅ | J1 `d93de2899`, J2 `04a5088ff` |
+| K | Un MWRR solo (D-MF5 = b) | ✅ | `8d244d1c6` |
+| L | `BRSummary.holdings`: togliere o valutare col motore (D-MF1) | **developer** | — |
+| M | PAC: prova del cambio del WAC | ✅ | `8d244d1c6` |
+| N | AI Export: efficienza dei costi con la quota | ✅ | `8d244d1c6` |
+| O | Yield on Cost senza WAC convertito | ✅ | `8d244d1c6` |
+| P | Campi del backend per il frontend (D-MF6); il consumo è di Y | ✅ (backend) | `536501541`, `d93de2899`, `aa4370905`, `c9b1162d4` |
+
+Seguiti nati dal lavoro:
+
+| Voce | Stato | Dove è entrato / chi |
+|---|---|---|
+| O2 (YoC con reddito netto negativo) | ✅ | `8d244d1c6` |
+| W56 (anteprima del WAC arrotondata) | ✅ | `04a5088ff` |
+| D3, SI1, SI2, J45a, SEC8-2a, SEC8-2b | ✅ | `482343eb3` (SI1 anche `16f8c74ed`) |
+| SEC9a, SEC9c | ✅ | `dd416f5bb`, `29e30b6cc` |
+| A2, SEC9e | ✅ | `4507f7507` |
+| J45b, A4 | ✅ | `a228b9d30` |
+| SEC9g | ✅ | `650c02b17` |
+| A5 | ✅ | `aa52a43f7` |
+| J45d | ✅ | `685d76dab` |
+| A8 | ✅ | `bc466d969` |
+| A9 | ✅ | `130002b5c` |
+| J45c | ✅ | `ab74aafbf` |
+| A7 (+ A6 lato doc) | ✅ | `09d29671d` |
+| A10 (+ nit di A9) | ✅ | `4753b66f6` |
+| J-14 (di J, fatto da MF) | ✅ | `f44340118` |
+| A12 (N92) | ✅ | `5a6d71a1e` |
+| K3, C2, J3, A3, A11, SEC9b | **developer** | domande aperte |
+| A6 (allineare `daily_state` alla soglia della polvere) | dopo la 1.3 | — |
+| A13 (tasso ricavato per divisione) | dopo la 1.3 | X, J, AI Export |
+| J4 | di J | — |
+| SEC9d, SEC9f | solo informazione | — |
+| J-1 (di J) | voci 2, 5, 6, 7 chiuse; 8 senza oggetto | 8a (guardia) **sospesa**, test in `files/parked/` della sessione; 1 e 4 avevano il via il 17/10, non iniziate: aspettano un nuovo via; 3 = A13 |
 
 ## 0. Mandato
 
@@ -3357,3 +3410,433 @@ dell'arrotondamento (da provare con un corpus). Proposta: voce MF a sé, dopo J-
 - ✅ **Slot** (GO 21:17; HEAD `efef5c876`): `api portfolio` **53** passati; porta 6190 libera. **CHECKPOINT READY** inviato,
   FROZEN. In coda: revisione di X-R45 (siti del PAC `pac_allocator/source/fx_quotes.py` e `wac.py`, dev `b690c0785`, di X
   `629304ab3`).
+- Revisione X-R45 (siti del PAC, `629304ab3`, dev `b690c0785`), sola lettura: **OK**. `fx_quotes`: `max(date)` fra le
+  righe utilizzabili, unione sul vincolo unico `(date, base, quote)` → la riga è quella; la stessa regola dell'ancora di
+  `convert_bulk`. `wac._load_wac_fx_rows`: rilegge la riga scelta da `convert_bulk` con la stessa clausola, difensiva.
+  Nit: il ramo `saved_fx_invalid` (`rate > 0`) è irraggiungibile dal DB. Domanda fuori perimetro (preesistente): la
+  ricerca in `build_planner_fx_quotes` usa la coppia della richiesta, non quella normalizzata — una coppia chiesta al
+  rovescio non trova la sua riga, salvo che i chiamanti mandino coppie già normalizzate.
+
+#### A12 entrato (dev `5a6d71a1e`); J-1 — riconciliazione (sola lettura, 17/10, 21:3x; base `5d87dec28`)
+- Coordinatore: A12 **entrato** (dev `5a6d71a1e`, miei `29aa1a8a5` + `9a633d9a7`, CHANGELOG `5d87dec28`); worktree a
+  `5d87dec28`. Prossimo: **J-1** (le copie della matematica comune fuori dall'inventario del 43, lista di J), sola
+  lettura: stato per voce, poi proposta; in particolare la doppia lettura dei buchi nei cambi.
+
+| # | Voce di J-1 | Oggi | Stato |
+|---|---|---|---|
+| 1 | 365 in `risk/metrics.py:741` (→ U4a, CP-10) | `calendar_days_to_observations` (`:741-751`) è **l'unica** conversione giorni → osservazioni (5 chiamanti: `asset_set_var`, `historical_var`, `simulation` ×2, `quant/models.py`, `quant/resampling.py`); l'inversa è in linea in `quant/resampling.py:235` (`block_length × 365 / steps_per_year`); `quantlib_worker.py:116,195` è la convenzione di calendario verificata da J (J-49, non un difetto) | **aperta (casa)**: una funzione, ma nel rischio e non in `financial_math`; l'inversa in linea |
+| 2 | G/L % `portfolio_service.py:824` (→ CP-4) | `returns.gain_loss_ratio` (`:730`, `:842`, `:915`) | **chiusa** (CP-4, `58f8e3967`) |
+| 3 | `series_preparation.py:184` fattore di cambio ricavato dal close (→ U1, CP-11) | ora `market_series.py:167` (`fx_rate = close / native_close`), più due gemelli: `ai_export/components/asset_resources.py:209` e `assets/price_query.py:651-652` (`fx_factor = convertito / originale`, X6 del 43) | **aperta**: il tasso usato da `convert_bulk` si ricava tre volte per divisione |
+| 4 | `fx.py:717` inversione nella catena (→ U1, file di X) | quattro copie di «tasso orientato»: `fx/conversion.py:78` (passo della rotta), `fx/storage.py:55` (normalizzazione per il salvataggio), PAC `evaluation/scenario.py:90` (`fx_rate`, `ExactRatio`), PAC `source/wac.py:157` (prova del WAC) | **aperta**: nessuna casa per `1/rate` secondo l'ordine alfabetico |
+| 5 | `fx_timing_context.py:361-362` rendimenti dal minimo/massimo (→ MF-D) | `returns.price_return` (`:362-363`) | **chiusa** (MF-D, `30b464272`) |
+| 6a | `CompoundSignal.ts:69` curva what-if (Y, R19) | eccezione dichiarata (`@financial-math-exception`, `annualizes: true`) nel gate `financialMathExceptions.gate.test.ts` | **chiusa** (`37c441a76`) |
+| 6b | `levelHelpers.ts:359` rendimento che recupera una perdita (Y) | ora `features/risk/levels/levelHelpers.ts:408/442` legge i campi del backend (`maximum_drawdown_trough_to_peak_ratio`, `remaining_to_peak_ratio` ← `returns.required_recovery_return`) | **chiusa** (CP-13a + Y, `c3d0a7fa7`) |
+| 7 | quantità per posizione a una data (→ MF-G) | `ledger_totals.position_quantities` letta da `transactions/balances.py` (`:168`, `get_asset_holdings :216`) e da MF-G1; il `cumulative_qty` del motore è lo stato corrente del replay (alla quota), non un conteggio a una data | **chiusa** per le quantità (C-97, `bab52635d`; MF-G1); la metà della cassa è W-B19 di W |
+| 8 | doppia lettura dei buchi nei cambi (CP-6 → U1) | vedi sotto | **senza oggetto** (una regola sola già oggi); resta la staleness silenziosa |
+
+**Voce 8, verificata nel codice.**
+- `convert_bulk` (`fx/conversion.py:91-277`) riempie all'indietro **senza limite** («Uses unlimited backward-fill», da
+  sempre: nessuna «finestra» da superare, la premessa di CP-6), saltando le righe inutilizzabili
+  (`usable_fx_rate_clause`, X-R38/X-R45).
+- Il motore chiede un tasso per **ogni giorno valutato** (`engine._preload_fx_rates :596-708`: ogni giorno di
+  `[actual_from, actual_to]` per le valute di prezzi e asset, ogni giorno di transito della cassa, ogni data di
+  transazione e di gamba): la lettura a giorno esatto di `DailyStateBuilder._convert` (`daily_state.py:928-935`) trova
+  sempre il tasso già riempito; manca solo prima del primo tasso utilizzabile.
+- La cassa nativa (`compute_native_cash`, `rates_until = actual_to`, `engine.py:524-529`) chiede, con la **stessa**
+  chiamata, un tasso per ogni giorno dalla prima movimentazione; la bisezione di `_rate_at` (`native_cash.py:194-199`)
+  porta avanti solo sui giorni non chiesti — dopo `actual_to`, o fra i movimenti anteriori a `EARLIEST_RANGE_START` —
+  che il motore non valuta mai; e `_foreign_value` (`:226-234`) **solleva** invece di valutare un saldo contato senza
+  tasso.
+- Dunque oggi un buco nei cambi si legge in un modo solo. Il residuo vero è un altro: **il riempimento è illimitato e
+  silenzioso per i cambi** — i prezzi hanno `STALE_PRICE` (`data_quality.py:225`), i cambi nessun avviso: un NAV può
+  poggiare su un tasso vecchio di anni senza che la qualità dei dati lo dica.
+
+**Proposta.**
+- (8a) Una **guardia** che fissa la regola unica, senza codice: su un libro con un buco nei cambi, `fx_rate_map` del
+  motore e i `unit_rates` della cassa nativa coincidono su ogni (valuta, giorno) comune, e valgono l'ultimo tasso
+  utilizzabile prima del buco. test-author, `test_financial/`.
+- (8b) **Da decidere (developer)**: un avviso `STALE_FX` quando il riempimento supera una soglia (la stessa di
+  `STALE_PRICE`?), dai `(rate_date, backward_fill_applied)` che `convert_bulk` già restituisce; nessun valore cambia
+  (codice nuovo, schema, i18n). Sconsigliato: un limite al riempimento (i valori sparirebbero).
+- (1) `calendar_days_to_observations` e la sua inversa (oggi in linea in `resampling.py:235`) in `financial_math/returns.py`,
+  accanto a `observations_per_year` / `observed_annualization`; i 6 import aggiornati; nessun valore cambia (parità
+  esatta, int). File del rischio (J). Piccola.
+- (3) Il tasso, non ricavato: `price_query` conosce il tasso che ha usato — portarlo sul punto (`backward_fill_info` o un
+  campo) e leggerlo in `market_series` e `asset_resources` invece di `close / native_close`. Valori: la divisione d'un
+  prodotto per il suo fattore restituisce il tasso salvo l'arrotondamento a 28 cifre (differenze all'ultima cifra,
+  da misurare). File di X (`price_query`, schema dei prezzi), di J (`market_series`) e AI Export; media; dopo il PL4 di
+  X come previsto da D-J17.
+- (4) Una funzione «tasso orientato» nella casa — `oriented_rate(stored, source, destination)`, generica sul tipo
+  (`Decimal` e `ExactRatio`: `type(rate)(1) / rate`) — per i quattro siti; nessun valore cambia. File di X (fx, PAC).
+  Piccola.
+- Coordinatore (21:34): **8a GO** (sola guardia); **1 GO dopo l'OK di J**; **4 GO**, la scrivo io, rivede X (prima
+  controllare che nessuno dei 4 file sia aperto: X è su X-R16/48b altrove); **3 dopo la 1.3** → backlog **MF-A13** con
+  il piano di misura; **8b** (`STALE_FX`) nelle domande del developer (avviso sì, limite al riempimento no). Ordine
+  8a → 1 → 4. In corso: test-author `j1-8a-tests`.
+
+#### Ripartenza del 19/10 — contabilità (base `b2565a165`)
+- Coordinatore: fermo del developer la sera del 17/10; ripartenza il 19/10 con tre regole (nessuna decisione di prodotto
+  da MF; implementazione solo col via esplicito; niente carichi pesanti senza slot). Fase 1: la guardia 8a di J-1
+  (`test_fx_gap_single_reading.py`, non tracciato) messa da parte in `files/parked/` della sessione (sha256
+  `aa979ad6…`, identica) e tolta dal worktree; giornale committato dal coordinatore (`8d3853062`), merge di
+  `dev_release2` (`97c6cdd99`), base `b2565a165`.
+- ✅ Contabilità: tabella «Stato dei lotti (19/10)» in testa; backlog MF — ✅ su G (G2 fatta da C-97 `bab52635d` e
+  W-B19 `6be11ecf3`), P (backend entrato, consumo di Y), A10, A12; riga ✅ nuova per J45d (`685d76dab`); stato sulla
+  voce ombrello e su A6.
+
+#### N74 — «Perché il motore cammina ogni giorno?» Analisi per il developer (19/10, sola lettura; base `b2565a165`)
+
+**La domanda, testuale.** «Il vero problema non è che metto una data molto vecchia, ma che il portafoglio dovrebbe
+calcolare solo i giorni in cui ci sono dati, e nel mezzo se nulla è cambiato saltare e usare le formule compatte per
+calcolare in 1 passaggio il valore che avrebbe dovuto calcolare in modo iterativo, perché non lo fa?»
+
+**La risposta breve.** In gran parte **lo fa già**. Il cuore del motore calcola davvero solo i giorni in cui succede
+qualcosa; i giorni fermi li copia. Quello che resta legato ai giorni di calendario sono quattro cose intorno al cuore:
+il report riparte sempre dalla prima transazione, il motore consegna comunque un «fotogramma» per ogni giorno, i cambi
+si chiedono un giorno alla volta, e la storia e la linea del MWRR si costruiscono per ogni giorno. Con una data sbagliata
+nel 1900 il motore calcola 393 giorni veri su 46 312, ma il report impiega 4–6 secondi invece di 0,2.
+
+##### 1. Dove e perché cammina giorno per giorno
+
+- **Il cuore salta già i giorni fermi.** `DailyStateBuilder.build` (`financial_math/portfolio/daily_state.py:300-340`)
+  scorre i giorni, ma calcola davvero solo i «giorni sporchi» di `_collect_dirty_days` (`:820-850`): una transazione,
+  un prezzo nuovo, un cambio che varia, l'inizio o la fine di un trasferimento in viaggio, uno split, il giorno in cui un
+  prezzo diventa vecchio, l'inizio del periodo. Ogni altro giorno è una **copia** del precedente (`replace`, `:315-334`).
+  Prima dell'inizio del periodo non copia nemmeno: salta direttamente al giorno sporco successivo (R13-SEC8).
+- **Ma il report parte sempre da zero.** `PortfolioService.get_report` (`portfolio_service.py:2067`) chiama il motore
+  con `date_from=None` («sempre da t=0 per i valori cumulati»), e così fanno `get_history` (`:1230`) e altri tre
+  chiamanti (`:1353`, `:1402`, `:1571`). Il motore allora considera «periodo» tutto, dalla prima transazione a oggi
+  (`engine.py:303`), e consegna **un fotogramma per ogni giorno di calendario** di quel tratto, anche se la pagina
+  mostra un mese. Il motivo è la cache: un solo calcolo da t=0 (cache del motore 24 ore, `engine.py:42`) serve tutte le
+  finestre (1M, 1A, tutto), e la vista taglia il pezzo che serve.
+- **I cambi si chiedono un giorno alla volta.** `_preload_fx_rates` (`engine.py:596-708`) chiede un tasso per ogni
+  giorno e ogni valuta straniera del tratto (92 624 richieste con due valute dal 1900); la cassa nativa fa lo stesso
+  dalla prima movimentazione in valuta (`native_cash._unit_requests`, `:487`). `convert_bulk` risponde riempiendo
+  all'indietro, quindi la maggior parte delle risposte è lo stesso tasso ripetuto.
+- **Le viste costruiscono ogni giorno prima di tagliare.** `DerivedViewsBuilder.build_history`
+  (`derived_views.py:75-102`) crea ~15 importi per **ogni** giorno da t=0, e solo dopo `get_history` tiene quelli della
+  finestra. La linea del MWRR (`returns.period_mwrr_series`, `:743`) risolve un'equazione (XIRR) per **ogni giorno** della
+  finestra, da capo.
+
+##### 2. Chi ha davvero bisogno della serie giornaliera
+
+| Uscita | Ha bisogno di ogni giorno? | Di cosa ha bisogno davvero |
+|---|---|---|
+| Grafici (NAV, allocazione, candele, P&L per broker) | sì, ma **solo nella finestra mostrata** | un punto per giorno della finestra; per finestre lunghe basterebbe meno (scelta di prodotto) |
+| Linea del TWRR / ROI | sì, nella finestra (è una linea) | il NAV ai giorni dei flussi e agli estremi; la linea quotidiana è solo il disegno |
+| Card del TWRR | no | il NAV ai giorni dei flussi e agli estremi |
+| MWRR, card | no | i flussi e il NAV d'inizio e di fine |
+| MWRR, linea | sì, nella finestra | un'equazione per punto; il valore cambia anche nei giorni fermi (passa il tempo) |
+| P&L del periodo, KPI, tabella Performance | no | lo stato al primo e all'ultimo giorno, più i flussi e le vendite in mezzo |
+| Lotti (FIFO) | no | solo gli eventi (motore a parte) |
+| Qualità dei dati | no | gli eventi (un prezzo che invecchia è già un «giorno sporco») |
+| AI Export, rischio | sì, nella finestra dello scope | la serie della finestra (drawdown, rendimenti giornalieri) |
+
+In breve: **nessuna** uscita ha bisogno dei giorni **prima** della finestra; servono solo i cumulati portati fino al
+suo inizio, e il motore li sa già portare saltando da evento a evento.
+
+##### 3. Si può passare a un calcolo per eventi? Cosa servirebbe
+
+Il cuore è già per eventi. Servono quattro passi, dal più piccolo al più grande:
+
+1. **La storia solo per la finestra.** `build_history` riceve la finestra e costruisce i punti solo lì. Nessun numero
+   cambia. Piccolo. Guadagno misurato: ~3 s su 4–6 nel caso del 1900 con finestra 1M.
+2. **Il motore dall'inizio della finestra.** I cinque chiamanti passano `date_from` della finestra invece di `None`: il
+   motore porta i cumulati saltando da evento a evento e consegna fotogrammi solo nella finestra. Medio. Rischi: ogni
+   cumulato deve restare identico al bit (pool K/R/W, costo medio, flussi esterni, prima data del portafoglio); la
+   qualità dei dati potrebbe elencare cose diverse (i giorni con un prezzo o un cambio mancante **fuori** dalla finestra
+   oggi passano dai fotogrammi da t=0): da verificare prima, e se cambia ciò che l'utente vede è una **decisione tua**;
+   la cache non sarebbe più condivisa fra 1M, 1A e «tutto».
+3. **I cambi come «gradini».** Invece di un tasso per giorno, per ogni coppia i soli giorni in cui il tasso cambia, e fra
+   un gradino e l'altro lo stesso tasso. Nessun numero cambia (è la stessa regola di `convert_bulk`). Medio: motore e cassa
+   nativa insieme.
+4. **Tutto per segmenti** («dal giorno A al giorno B nulla cambia»), con le formule compatte negli intervalli fermi: NAV
+   costante, fattore del TWRR 1, ROI costante. Il MWRR invece cambia anche nei giorni fermi, perché passa il tempo:
+   per la linea servirebbe comunque un calcolo per punto, oppure meno punti (scelta di prodotto). Le posizioni con
+   interessi che maturano (investimenti programmati) oggi hanno un «prezzo» per ogni giorno, quindi ogni giorno è
+   sporco: per saltarli servirebbe la formula composta (`interest.compound_growth`, `interest.py:133`) al posto dei
+   punti giornalieri. Grande: tocca il motore, tutte le viste, l'AI Export e il rischio.
+
+Un limite naturale: un portafoglio vero ha un prezzo quasi ogni giorno di borsa (circa 252 su 365), quindi i giorni
+sporchi sono già il 70 % dei giorni. Il calcolo per eventi guadagna molto solo dove non succede nulla per anni: è
+proprio il caso della data sbagliata, non quello normale.
+
+##### 4. Misure (corsia MF, copie del DB di prova, solo letture)
+
+Script e risultati: `files/n74/` della sessione (`measure.py`, `run.sh`, `results.jsonl`, `profile_*.txt`,
+`mwrr_bench.py`). DB: copia di `/tmp/librefolio-r13-mf/sqlite/app.db` (30 utenti, 100 transazioni dal 30/09/2025,
+prezzi e cambi per ~1 anno); utente `e2e_test_admin`; report completo (sintesi, storia, allocazioni, Performance,
+redditi, costi, versamenti), cache vuote, due prove per finestra. Varianti: la stessa copia con **una** transazione
+in più al 1900-01-02 (versamento in EUR, versamento in USD, acquisto). Macchina condivisa, carico 17–35: le cifre
+ballano del ±50 %.
+
+| Caso | Giorni nel tratto | Giorni calcolati | Report, finestra 1M | 1A | «Tutto» |
+|---|---|---|---|---|---|
+| DB di prova così com'è | 385 | 385 | 0,16–0,26 s | 0,18–0,25 s | 0,18–1,1 s |
+| + versamento EUR al 1900 | 46 312 | 393 | 3,8–4,2 s | 4,0–4,3 s | 31–56 s |
+| + versamento USD al 1900 | 46 312 | 393 | 5,2–5,3 s | 4,7–5,7 s | 9–14 s |
+| + acquisto al 1900 | 46 312 | 394 | 4,3–4,5 s | 4,5 s | 12–15 s |
+
+Dove va il tempo (1900, finestra 1M, profilo): il motore ~1,6 s (di cui 92 624 richieste di cambio ~0,2–0,5 s, i
+46 312 fotogrammi ~0,4–0,9 s); la storia costruita per tutti i 46 312 giorni e poi tagliata ~3,2 s (557 686 oggetti
+creati). Con «tutto»: la linea del MWRR, 46 312 equazioni, **46 s su 56**.
+
+Portafogli veri, senza errori (prova pura, nessun DB): la linea del MWRR su 10 anni costa 0,45 s con un versamento al
+mese e 1,35 s con uno alla settimana; il TWRR 0,01 s. A 40–70 µs per giorno, 10 anni (3 650 giorni) costano al motore
+~0,2 s e alla storia ~0,25 s. Le cache (report 30 min, motore 24 h) assorbono le aperture ripetute; si paga alla prima
+apertura dopo ogni cambio di dati (per esempio dopo il sync notturno dei prezzi).
+
+##### 5. Costo, rischi, consiglio
+
+| Passo | Numeri che cambiano | Costo | Rischio | Guadagno |
+|---|---|---|---|---|
+| Tenere il limite del 1900 (N74) | no | già fatto | nessuno | protegge dal caso peggiore |
+| 1. Storia solo nella finestra | no | piccolo | basso (test di parità) | ~3 s nel caso del 1900; poco nei casi veri |
+| 3. Cambi a gradini | no | medio | medio (motore e cassa nativa) | ~0,5 s nel caso del 1900; poco nei casi veri |
+| 2. Motore dall'inizio della finestra | forse la qualità dei dati (da verificare; se sì, decisione tua) | medio | medio-alto (cumulati, cache) | i fotogrammi solo nella finestra |
+| MWRR con meno punti nelle finestre lunghe | la linea, a «tutto» (decisione tua) | piccolo | basso | i secondi di «tutto» |
+| 4. Tutto per segmenti | no, se fatto bene | grande | alto (ogni vista, AI Export, rischio) | solo nei casi con anni vuoti |
+
+**Consiglio di MF.**
+- Tenere il limite del 1900 come protezione: con lui il caso peggiore è 46 000 giorni, non 740 000.
+- Fare il passo **1**, piccolo e senza cambi di numeri, e misurarlo di nuovo.
+- Il passo **3** dopo, se le misure lo giustificano.
+- Per il passo **2** serve prima una verifica (la qualità dei dati) e forse una tua decisione; per la linea del MWRR
+  una tua decisione sulla risoluzione a «tutto».
+- **Non** riscrivere tutto per segmenti adesso: costa molto, rischia molto, e nei portafogli veri i giorni con prezzi
+  sono già la maggioranza.
+
+**Domande per te.**
+1. Il passo 1 (storia solo nella finestra, nessun numero cambia): lo faccio quando dai il via? Consiglio: **sì**.
+2. Il passo 2 potrebbe cambiare ciò che la qualità dei dati elenca (i buchi di prezzi e cambi fuori dalla finestra).
+   Lo verifico in sola lettura e te lo porto con le opzioni? Consiglio: **sì, ma dopo il passo 1**, guardando le misure.
+3. La linea del MWRR a «tutto» con meno punti (uno a settimana o al mese oltre i 2 anni)? Consiglio: **no per ora**:
+   nei portafogli veri costa sotto i 2 secondi.
+
+- ✅ Analisi N74 scritta (sezione qui sopra), sola lettura; misure leggere su copie del DB della corsia (carico 17–35,
+  `nice`), nessun server, nessun `dev.py test`. **⚠️ Fuori pista**: la prima prova del MWRR puro aveva il segno dei flussi
+  sbagliato (qui un versamento è negativo): rifatta. Una frase sulla qualità dei dati, non verificata, riscritta come
+  «da verificare».
+
+#### J-1 voci 1, 4, 8a — via del developer (19/10, 11:31; base `8eb783b0b`)
+- Coordinatore, testuale del developer: «se ci sono funzioni matematiche fuori dal layer giusto è corretto che le
+  fattorizzi». Via per 1, 4 e 8a; per la 1 le 6 condizioni di J; ogni valore che cambia va dichiarato prima come domanda
+  se tocca numeri mostrati; rossi prima. **Slot pesante** fino alle 14:00 sulla corsia 6190, carico a 1 minuto < 50.
+- ✅ **8a**: test rimesso da `files/parked/` (sha256 `aa979ad6…`, identico). Corsia: `roi-fifo-utils
+  test_fx_gap_single_reading` **5** verdi (guardia, nessun cambio di prodotto).
+- ✅ **Codice voce 1** (nessun valore cambia): `financial_math/returns.py` + `DAYS_PER_YEAR = 365` (usato da
+  `observations_per_year` e dalle due conversioni: nessun 365 nuovo), `positive_annualization_factor` (spostato dal
+  rischio, stesso messaggio), `calendar_days_to_observations` (spostato tale e quale), `observations_to_calendar_days`
+  (nuova, l'inversa di `resampling.py:235`). `risk/metrics.py`: via le due definizioni e la voce di `__all__`, importa
+  il validatore della casa per i suoi 7 usi; **nessuno shim** (verificato: `risk.metrics` non ha più né l'una né
+  l'altra). Chiamanti aggiornati: `asset_set_var`, `historical_var`, `simulation`, `quant/models.py`,
+  `quant/resampling.py` (import + `:235`). Mappa della casa: `backend.instructions.md`, `financial_math.md`,
+  docstring di `financial_math/__init__.py`. Nessun `algorithm_version` toccato.
+- ✅ **Codice voce 4** (nessun valore cambia): nuovo `financial_math/fx_rates.py` — `oriented_rate(rate, source,
+  destination)`, `rate` se `source < destination`, altrimenti `type(rate)(1) / rate` (Decimal ed `ExactRatio` del PAC,
+  senza importare il PAC); involuzione, quindi serve anche alla normalizzazione per il salvataggio. Siti:
+  `fx/conversion.py` (passo della rotta), `fx/storage.py::normalize_rate_for_storage` (`min`, `max`, `oriented_rate`:
+  identico anche con `base == quote`), `pac_allocator/evaluation/scenario.py::fx_rate`, `pac_allocator/source/wac.py`
+  (prova del WAC). ruff (anche `I`), black, import a freddo verdi. Mappa della casa aggiornata.
+- In corso: test-author `j1-items-tests` (parità con le copie di HEAD, rossi per assenza, guardie strutturali, i due
+  test esistenti che importano dal vecchio percorso). Script `files/j1.sh` (`red`, `light`, `slot`).
+- ✅ **Test J-1** (test-author `j1-items-tests`): `test_financial_math/test_observation_calendar.py` (20 test, 146 casi:
+  parità con le copie di HEAD — `observations_per_year`, `calendar_days_to_observations` sulla griglia e i casi
+  fissati, `observations_to_calendar_days` contro l'espressione in linea della divulgazione su 1..400 × fattori, il
+  validatore; il viaggio di andata e ritorno con il suo limite dimostrato, `|ritorno − d| ≤ 365/(2s) + ½` quando l'andata
+  dà ≥ 1, e la regione in cui dà 0 a parte; «non rifiuta nulla di oggi» da `resolve_block_length`; le divulgazioni di
+  `test_risk_simulation.py` incrociate; nessuno shim, un solo validatore, i chiamanti tengono la funzione della casa,
+  nessun `* 365 /` in `resampling.py`) e `test_financial_math/test_fx_rates.py` (24 test, 37 casi: parità con le quattro
+  espressioni di HEAD, Decimal ed `ExactRatio`, codici uguali, tasso zero; involuzione esatta per `ExactRatio`, entro due
+  arrotondamenti per Decimal; registratori ai quattro siti, il WAC guidato come in `test_portfolio_allocation_source.py`;
+  la casa non importa né PAC né fx). Test esistenti, solo il percorso d'importazione: `test_risk_metrics_oracle.py:49`
+  (e la docstring ~:3541), `test_risk_metrics.py:502`. 15 mutanti presi tutti. Grep del vecchio percorso: zero (il
+  file di guardia nomina i nomi vecchi apposta).
+- ✅ **Corsia** (11:55; prodotto tolto, 12 file + `fx_rates.py`, sha `711944c8…`/`b4a49175…` uguali dopo):
+  `financial-math test_observation_calendar` rosso **133** / 13 (parità verdi anche su HEAD), `test_fx_rates` rosso
+  **29** / 8, `risk-oracle` errore di raccolta su HEAD (il test importa dalla casa). Verdi leggeri: 8a **5**,
+  `financial-math` **1727**, `risk-oracle` **214**.
+- ✅ **Slot pesante** (11:57–12:05, HEAD `8eb783b0b`, carico 15–35): `roi-fifo-utils` **1494**, `portfolio-engine` 41,
+  `risk-all` **918** (uguale: nessun conteggio cambiato), PAC `pac-planner-core` 270, `-evaluator` 170, `-oracle` 24,
+  `-policies` 50, `-solver` 40, `-proof` 30, `-wire-numbers` 39, `-report` 56, `-service` 80,
+  `portfolio-allocation-source` 98; FX `fx-conversion` 44, `fx-core` 42, `fx-pairs-per-query` 6, `fx-sync-service` 38,
+  `db fx-rates` 6, `api fx` 33; `api pac-planner-tool` 12; `api portfolio` 55. ruff, black (18 file), diff-check,
+  `mkdocs build` stretto, `check-links`. Porta libera. **CHECKPOINT READY** inviato, FROZEN sul lotto; poi il piano
+  «formule veloci» (ordine del coordinatore), poi l'analisi MF-E2.
+
+#### Piano «formule veloci» — togliere i pavimenti all'indietro (19/10, sola lettura; base `068d5dd51`)
+
+**Il principio del developer, testuale.** «Se voglio leggere e salvare più indietro devo poterlo fare, dare la colpa poi
+agli engine che devono calcolare tanto non è una scusa, esistono formule rapide, quelle devono usare.»
+
+**Obiettivo.** Togliere ogni pavimento e tetto all'indietro; restano solo «non oltre domani» (`latest_range_end`) e il
+budget delle richieste in blocco (`MAX_BULK_ITEMS`, `MAX_BULK_ITEM_DAYS`). Prima si tolgono i cammini per giorno di
+calendario, **poi** i pavimenti: un pavimento tolto prima della cura riapre il caso dei 740 000 giorni.
+
+Fonti: l'analisi N74 qui sopra; due esplorazioni in sola lettura (prezzi/cambi; rischio/lotti), riverificate nei punti
+citati; un prototipo misurato (MWRR, sotto). Nessun codice di prodotto.
+
+##### 1. I pavimenti di oggi
+
+| Pavimento | Valore | Dove | Che cosa protegge | Va tolto dopo |
+|---|---|---|---|---|
+| N74, scrittura delle transazioni | 1900-01-01 | `transactions/transaction_batch_stages.py:167-179`, `schemas/common.py:746-752` | un errore di battitura che fa camminare il motore | P1–P4 |
+| R13-SEC8, inizio di stati, storia e cambi | 1900-01-01 (`EARLIEST_RANGE_START`, `utils/datetime_utils.py:106`) | `portfolio/engine.py:303`, `:685`; `daily_state.py:917`; `native_cash.py:504-509`; lotti `lots_analysis_service.py:141`, `:251`; `transactions/balances.py:65` | i cammini per giorno del motore, della cassa nativa e dei lotti | P1–P4, L1 |
+| N83, date di prezzi e cambi salvati | [1900, domani] (`stored_date_bounds`, `utils/date_range_limits.py:74-77`) | scritture a mano (`api/v1/fx/currencies.py:126-135`, `api/v1/assets/prices.py:73`), refresh (`assets/refresh.py:738`), `fx/sync.py:38-39` | un prezzo all'anno 1 che fa camminare il riempimento | Q1–Q3 (resta «domani») |
+| N75 / X-R55, 100 anni dalla fine | `RANGE_SPAN_LIMIT_DAYS` = 36 525 (`date_range_limits.py:20`, `range_span_floor` `:67-71`) | FX `currencies.py:478`, `:508`; refresh `refresh.py:307`; rischio `risk/scope.py:82` | i cammini senza dati propri dove fermarsi | Q1–Q3, R1 |
+| SEC8-1b, finestra del replay del rischio | inizio ≥ `range_span_floor(fine)` (`risk/scope.py:71-85`) | ogni richiesta del rischio (`risk/service.py:64-65`), replay storico (`risk/replay.py:49-51`), stress (`risk_plugins/stress/plugin.py:320-321`) | il riempimento dei prezzi giorno per giorno | Q1, R1 |
+| Z-30, caricamento della storia completa dei segnali | inizio del caricamento ≥ 1900 (`assets/price_query.py:345-353`) | `get_prices_bulk` | una riga del 0001 che fa camminare un giorno visibile per ~740 000 giorni | Q1, S1 |
+| AI Export, periodo massimo | `_MAX_PERIOD_YEARS` prima della fine (`ai_export/runtime_service.py:192-202`) | `prepare_request` | i componenti che camminano il periodo | P2, Q1 (da confermare col proprietario dell'AI Export) |
+
+Restano: `latest_range_end` (domani), `MAX_BULK_ITEMS`, `MAX_BULK_ITEM_DAYS` (che dopo Q1 conterà le righe e i gradini,
+non i giorni). `ASSET_HISTORY_MIN_FALLBACK` / `FX_HISTORY_MIN_FALLBACK` (1900, `assets/base.py:44`, `fx/base.py:21`)
+non sono pavimenti dei dati dell'utente: sono l'inizio di default d'una richiesta «min» al fornitore.
+
+##### 2. I cammini per giorno e cosa usare al posto
+
+| # | Cammino (oggi) | Al posto | Numeri | Chi |
+|---|---|---|---|---|
+| **P1** | linea del MWRR: un'equazione XIRR **da capo** per ogni giorno (`returns.period_mwrr_series` `:743`, `_solve_xirr` `:598`); su 125 anni Newton da 0,1 trabocca e ogni punto scandisce la griglia di 801 valori | **partenza calda dimostrata**: con un solo cambio di segno nei flussi (regola dei segni di Cartesio, vale anche per esponenti reali) la radice è unica, quindi partire dalla radice del giorno prima dà la stessa radice; con più cambi di segno, la partenza da 0,1 di oggi | identici (prototipo: **0 differenze** su 46 311 punti) | MF |
+| **P2** | la storia: ~15 importi per **ogni** giorno da t=0, poi il taglio alla finestra (`derived_views.build_history` `:75-102`, `portfolio_service.get_history` `:1206`); così allocazioni, candele, P&L per broker | costruire solo i giorni della finestra | identici | MF |
+| **P3** | i cambi del motore e della cassa nativa: un tasso per giorno per valuta (`engine._preload_fx_rates` `:596-708`; `native_cash._unit_requests` `:487`) | **gradini**: per ogni coppia i soli giorni in cui il tasso usabile cambia, con la stessa regola di `convert_bulk` (ultimo usabile ≤ giorno, riempimento senza limite, rotte a più gambe = unione dei gradini delle gambe); la lettura del giorno con una bisezione (`native_cash._rate_at` lo fa già) | identici | MF + X (una funzione «gradini» in `fx/conversion.py`) |
+| **P4** | il motore consegna **un fotogramma per giorno** da t=0 (`daily_state.py:300-340`: i giorni fermi sono copie, `replace` con copia dei contenitori) | **segmenti**: un fotogramma per giorno sporco con «vale fino a», e i giorni della finestra letti dal segmento (senza copie); il motore da t=0 resta (la cache serve tutte le finestre), ma costa solo i giorni sporchi | identici (parità su ogni campo) | MF |
+| **Q1** | prezzi: `price_query._build_backward_filled_series` (`:174-222`) emette un punto per giorno di calendario dal primo prezzo; il rischio, i lotti e l'AI Export lo usano | una lettura interna **per osservazioni** (le righe salvate + «portato da A a B», il marcatore `backward_fill_info` c'è già); l'API pubblica resta di un punto per giorno **solo nella finestra visibile** | identici nella finestra | X |
+| **Q2** | conversione dei prezzi: un `convert_bulk` per ogni giorno riempito (`price_query.py:569-660`) | convertire solo ai giorni di cambiamento (giorni dei prezzi ∪ giorni dei tassi): in mezzo prezzo e tasso sono costanti | identici | X |
+| **Q3** | conversione FX dell'API: una richiesta a `convert_bulk` per giorno (`currencies.py:522-538`), due volte (blocco visibile e blocco dei segnali) | le righe salvate della coppia + i gradini (P3); le coppie a catena hanno un tasso dove ogni gamba ne ha uno (`fx/sync.py:87-90`) | identici | X |
+| **Q4** | refresh: un controllo per giorno contro la cache (`refresh.py:303-316`, `walk_floor`) | confronto con il minimo e il massimo della cache e i giorni di seduta | identici | Z / X |
+| **R1** | rischio: la finestra limitata (SEC8-1b) perché il riempimento dei prezzi cammina; il replay storico idem (`risk/replay.py:33-75`). La serie canonica è **già per osservazioni** (`market_series.prepare_asset_series_set` `:205-395`) | leggere i prezzi per osservazioni (Q1); la storia del portafoglio il rischio la usa (`risk/scope.py:176-193` chiede `include_history`; `risk/results.py:72-100` legge il TWRR del report **nei soli giorni d'osservazione**, concatenando quelli saltati): dopo P2/P4 costa la sola finestra | identici | J |
+| **L1** | lotti: `history_dates` = ogni giorno da t=0 (`lots_analysis_service.py:252`), moltiplicato per i lotti nelle storie (`lots/histories.py` `:80`, `:338`, `:401`, `:474`), i fabbisogni di cambio per giorno × valuta (`lots/conversions.py:167-185`), il costo medio per giorno (`lots/average_cost_lines.py:43-50`) | giorni d'evento (transazioni, chiusure, prezzi salvati, tassi) con «portato» in mezzo; il costo medio solo ai giorni delle transazioni; `last_day_without_observation` in forma chiusa (`lots/prices.py:43-55`) | identici; i grafici dei lotti devono accettare serie a gradini (da verificare con Y) | J |
+| **S1** | segnali: vogliono una serie giornaliera densa e un riscaldamento in giorni di calendario (`signals/planning.py:68-82`; `price_query.py:340-358`; `currencies.py:504-513`) | espandere la serie densa **solo** per finestra visibile + riscaldamento; i segnali «a storia completa» lavorano sulle righe salvate (punti di seduta) | identici | X |
+
+##### 3. Misure, prima e dopo, sul caso 1900
+
+Stesso banco dell'analisi N74 (copie del DB della corsia, `e2e_test_admin`, una transazione al 1900-01-02).
+
+| | Prima (misurato) | Dopo (misurato o stimato) |
+|---|---|---|
+| Linea del MWRR, «tutto», 46 311 punti | 21,4 s (prototipo, a freddo); 46 s nel report del profilo | **0,38 s**, 0 differenze (prototipo `files/n74/mwrr_warm.py`); senza errori 1,66 → 0,02 s, 0 differenze |
+| Storia, finestra 1M | ~3,2 s (557 686 oggetti) | ~31 punti: millisecondi (stima: costo lineare nei punti costruiti) |
+| Cambi del motore + cassa nativa | 92 624 + 46 337 richieste, 0,2–0,6 s | qualche centinaio di gradini (stima: le righe di `fx_rates` della coppia, 4 185 in tutto il DB) |
+| Fotogrammi del motore | 46 312 (0,4–0,9 s di copie) | 393 giorni sporchi (stima: come il DB senza errori, ~0,03 s) |
+| Report, finestra 1M / 1A | 3,8–5,7 s | ~0,2–0,3 s (stima: il costo del DB senza errori, 0,16–0,26 s, più i gradini) |
+| Report, «tutto» | 9–56 s | ~1 s (stima): resta da costruire e serializzare un punto per giorno della finestra visibile, 46 312 punti per la storia — vedi D1 |
+| Prezzi / cambi / rischio / lotti con un prezzo al 0001 | oggi impediti dai pavimenti (N83, Z-30, SEC8-1b) | da misurare con Q1–L1, dopo la cura di ciascuno |
+
+##### 4. Costo, rischi, ordine
+
+| Passo | Costo | Rischio | Chi |
+|---|---|---|---|
+| P1 MWRR a partenza calda | piccolo | basso: 0 differenze misurate; il criterio di Cartesio è un teorema; il resto resta com'è | MF |
+| P2 storia solo nella finestra | piccolo | basso: parità campo per campo | MF |
+| P3 cambi a gradini | medio | medio: la stessa regola di `convert_bulk` (rotte, righe inutilizzabili) in due lettori | MF + X |
+| P4 segmenti nel motore | medio-grande | medio-alto: ogni consumatore degli stati giornalieri (viste, sintesi, periodo, contributi, AI Export, rischio) | MF |
+| Q1–Q3 prezzi e cambi per osservazioni | medio | medio: contratti dell'API, budget in blocco da ricontare | X |
+| Q4 refresh | piccolo | basso | Z / X |
+| R1 rischio | piccolo-medio dopo Q1 | medio: i test r2/r4/r6/g2/g3 di `test_risk_replay_range_bounds.py` fissano il pavimento | J |
+| L1 lotti | medio | medio: grafici dei lotti a gradini | J (+ Y per i grafici) |
+| S1 segnali | medio | medio: riscaldamento in punti o in giorni | X |
+| Togliere i pavimenti | piccolo | basso, **se** i passi sopra sono fatti; da riscrivere: `test_engine_replay_floor.py`, `test_replay_floor.py`, `test_range_ceiling.py`, `test_risk_replay_range_bounds.py`, `test_bulk_limits.py` (BL-L), `test_period_changes_bounds.py`, `test_date_range_bounds.py` | ognuno il suo |
+
+**Ordine proposto**: P1 → P2 → P3 → P4 (MF, lotti separati, rossi o parità prima) · in parallelo Q1 → Q2 → Q3 → S1 (X)
+e Q4 (Z) · poi R1 e L1 (J) · per ultimo, un lotto per pavimento, quando i suoi cammini sono curati.
+
+**Rischi trasversali.**
+- **Il contratto «un punto per giorno»** dell'API (storia, prezzi, cambi) resta: con «tutto» e una data del 1900 la storia
+  ha 46 312 punti (qualche MB di JSON). La cura del calcolo non lo cambia: serve una decisione (D1).
+- **Date prima dell'anno 100 nel frontend**: in JavaScript `Date.UTC(24, …)` vale 1924; le date dell'anno 1–99 vanno
+  verificate in ogni grafico e campo prima di togliere il pavimento delle transazioni (Y).
+- **`date.min`**: l'aritmetica Python sulle date all'anno 1 (MF-SEC8-2b l'ha già curata in un punto) va ricontrollata dove
+  si sottrae un riscaldamento.
+
+**Decisioni per il developer.**
+- **D1** — Con una finestra molto lunga, la storia (e i prezzi/cambi dell'API) restano a un punto per giorno, oppure
+  punti a gradini / campionati? Consiglio: **per ora un punto per giorno nella finestra visibile**; il calcolo diventa
+  veloce lo stesso, e il campionamento è una scelta di interfaccia da fare a parte.
+- **D2** — I pavimenti si tolgono tutti alla fine, uno per uno dopo la cura dei loro cammini (consigliato), o prima
+  qualcuno? Consiglio: **alla fine**, uno per lotto.
+- **Coinvolgere J** (rischio R1, lotti L1) e **X** (Q1–Q3, S1, e la funzione dei gradini di P3) tramite il coordinatore.
+
+#### MF-E2 — gli short nello storico di performance dei lotti, opzione (b): analisi (19/10, sola lettura; base `068d5dd51`)
+
+**Decisione del developer**: opzione **(b)**, segni giusti e flussi completi. Il suo principio, testuale: «se i numeri vanno
+in negativo, bisogna mostrarli e comunicarli perché è la scelta dell'utente».
+
+##### Oggi
+
+- **Dove**: `financial_math/lots/histories.py::build_performance_history` (`:56-200`), la serie ROI/TWRR dell'asset nei
+  lotti dello scope (analisi `PERFORMANCE_HISTORY` di `/lots/analysis`, `lots_analysis_service.py:494-551`).
+- **Il valore**: un frammento corto ha la quantità positiva (`abs`, `fifo/engine.py:232-234`), e `_open_value_on_date`
+  (`:612-617`) la somma come un lungo: un corto aperto vale **+q·p** invece di **−q·p**. Nei giorni valutati al costo
+  `_cost_at_opening` (`:203-208`) dà None per un corto: quel giorno non ha punto.
+- **I flussi**: ogni BUY è un versamento (`:116-122`), quindi il riacquisto d'un corto c'è già; la **vendita che apre il
+  corto no** (i proventi entrano solo dalle chiusure dei lotti **lunghi**, `:133-144`).
+- **Le linee** partono dal primo flusso (`:186-191`): per un corto solo, dal giorno del riacquisto.
+- **Chi lo legge**: solo l'API e i test. Né il web app né l'AI Export chiedono `PERFORMANCE_HISTORY` (grep: nessun uso
+  fuori dal client generato). Test che lo fissano: `test_lots_performance_history_at_cost.py`,
+  `test_lots_analysis_pure.py`, `test_lots_analysis_service.py`, `test_lots_transfer_scope_boundary.py`,
+  `test_lots_transfer_in_transit_at_date_to.py`, `test_lots_failed_analysis_withholding.py`, `test_portfolio_api.py`.
+
+##### Segni e flussi giusti non bastano: serve una convenzione per i rendimenti
+
+Con il corto al segno giusto il «valore» dello scope è negativo (un debito), e i rendimenti di oggi dividono per il
+valore (TWRR) o per il capitale versato (ROI). Esempio (calcolato con le funzioni della casa, `files/n74/e2_example.py`):
+**vendo allo scoperto 10 a 100** il 5/1 (incasso 1 000), il prezzo scende a 90 e a 80, **ricompro 10 a 80** l'8/1
+(pago 800). Guadagno: **+200**, il 20 % dell'incasso.
+
+| | 5/1 | 6/1 | 7/1 | 8/1 |
+|---|---|---|---|---|
+| **Oggi** (corto come un lungo, la vendita non conta) | — | — | — | ROI **−100 %**, TWRR **−180 %** |
+| (b) senza convenzione nuova (segni giusti, rendimenti di oggi) | ROI 0 | TWRR **−10 %** | TWRR **−20 %** | ROI 0, TWRR −20 %: il segno è sbagliato (un debito che cala sembra una perdita) e il ROI non ha capitale |
+| **(b) + convenzione 1** (consigliata) | ROI 0 | ROI **+10 %**, TWRR **+10 %** | ROI **+20 %**, TWRR **+22,2 %** | ROI **+20 %**, TWRR **+22,2 %** |
+
+Le convenzioni possibili:
+1. **Base = esposizione lorda** (consigliata). TWRR: ogni sotto-periodo divide per |valore dei lunghi| + |valore dei
+   corti| all'inizio. ROI: guadagno diviso il capitale lordo impegnato, costo dei lunghi comprati + incasso dei corti
+   venduti. Per un asset **solo lungo non cambia nulla** (la base resta il valore e il versato). Per un corto il ROI
+   coincide con il rendimento sull'incasso della sintesi del lotto (E1). Il TWRR (+22,2 %) è più alto del ROI (+20 %)
+   perché si concatena su un'esposizione che cala col prezzo: è il rendimento d'un corto ribilanciato ogni giorno, la
+   definizione corrente; va scritto nella doc.
+2. **Base = nozionale d'apertura costante** (l'incasso del corto per tutta la vita). Il ROI viene uguale alla 1; un TWRR
+   concatenato su una base fissa non ha senso (darebbe +21 %), e non concatenarlo vuol dire non avere più un TWRR.
+   Sconsigliata.
+3. **Rendimenti «—» finché c'è un corto aperto**, solo importi. Va contro il principio («mostrarli e comunicarli»).
+   Sconsigliata.
+
+##### Cosa cambia
+
+- **Numeri**: solo `performance_history` di `/lots/analysis` per un asset con lotti **corti** nello scope; oggi nessuna
+  pagina la mostra. Asset solo lunghi: identici (prova di parità). Il valore e il rendimento per lotto (`value_history`,
+  `return_history`) e la sintesi del lotto tengono già conto della direzione (`lots/summary.lot_value`): non cambiano.
+- **Codice**:
+  - `lots/histories.py`: valore dei frammenti corti a −q·p; nei giorni al costo, un corto vale **−la sua quota
+    d'incasso d'apertura** (al cambio della vendita, regola 26), invece di nessun punto (domanda D3); il flusso della
+    vendita d'apertura, +incasso al cambio della vendita.
+  - `financial_math/returns.py`: due varianti della casa, una serie TWRR su una base data e un ROI su un capitale dato,
+    con il comportamento di oggi quando la base è il valore (le funzioni della Dashboard restano uguali).
+- **Schema e API**: nessun campo nuovo (gli stessi `roi`, `twrr` di `PerformanceHistoryPoint`).
+- **Doc**: la pagina dell'analisi dei lotti (la convenzione degli short) e una riga CHANGELOG 🐛.
+
+##### Costo, rischi, test
+
+- **Costo**: piccolo-medio (un file della casa, le due varianti, i test).
+- **Rischi**:
+  - lungo e corto insieme su broker diversi (l'esposizione lorda lo regge, un valore netto vicino a zero no);
+  - i giorni al costo dei corti;
+  - i trasferimenti di corti non esistono («fase 1», `fifo/engine.py:453-459`): niente casi di confine nuovi.
+- **Test** (test-author, rossi prima):
+  - il corto dell'esempio (oggi −100 % / −180 %; dopo +20 % / +22,2 %);
+  - un lungo e un corto insieme su due broker;
+  - un giorno al costo con un corto aperto;
+  - una vendita allo scoperto in un'altra valuta (incasso al cambio della vendita);
+  - **parità** campo per campo per gli asset solo lunghi su `test_lots_performance_history_at_cost.py` e
+    `test_lots_analysis_pure.py`;
+  - le due varianti pure della casa.
+
+##### Domande per il developer
+
+- **D1** — La convenzione dei rendimenti con gli short: **(1) esposizione lorda** (consigliata), (2) nozionale
+  costante, (3) «—» con un corto aperto?
+- **D2** — Con la (1), per lo stesso corto il TWRR (+22,2 %) e il ROI (+20 %) differiscono: va bene così, spiegato nella
+  doc? Consiglio: **sì**, è la definizione corrente.
+- **D3** — Nei giorni senza prezzo (valutati al costo), un corto aperto vale la sua quota d'incasso con il segno meno
+  (come un lungo vale il suo costo)? Consiglio: **sì**.

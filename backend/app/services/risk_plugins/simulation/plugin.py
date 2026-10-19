@@ -18,6 +18,7 @@ from backend.app.schemas.risk import (
     RiskSimulationProcess,
     RiskSimulationRegime,
 )
+from backend.app.services.financial_math.returns import calendar_days_to_observations
 from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
@@ -25,7 +26,6 @@ from backend.app.services.risk.base import (
     RiskUnavailableError,
     resource_limit_error,
 )
-from backend.app.services.risk.metrics import calendar_days_to_observations
 from backend.app.services.risk.quant import (
     MAX_HISTORY_OBSERVATIONS,
     MAX_SIMULATION_ASSETS,

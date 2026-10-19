@@ -15,6 +15,7 @@ from sqlalchemy.dialects.sqlite import insert
 from backend.app.db.models import FxRate
 from backend.app.db.precision import fx_rate_limits_text, storable_fx_rate
 from backend.app.logging_config import get_logger
+from backend.app.services.financial_math.fx_rates import oriented_rate
 from backend.app.utils.runtime.cache import clear_cache
 from backend.app.utils.sql_chunks import chunks
 
@@ -47,12 +48,8 @@ def normalize_rate_for_storage(base: str, quote: str, rate: Decimal) -> tuple[st
         normalize_rate_for_storage('EUR', 'CHF', 0.95)
         → ('CHF', 'EUR', 1.0526...) because CHF < EUR (inverted)
     """
-    if base < quote:
-        # Already in correct order
-        return base, quote, rate
-    else:
-        # Invert: swap currencies and invert rate
-        return quote, base, Decimal("1") / rate
+    # Alphabetical order; the rate inverted when the order swaps (financial_math.fx_rates: the inversion is its own inverse)
+    return min(base, quote), max(base, quote), oriented_rate(rate, base, quote)
 
 
 def normalize_storable_rate(base: str, quote: str, rate: Decimal) -> tuple[str, str, Decimal] | None:

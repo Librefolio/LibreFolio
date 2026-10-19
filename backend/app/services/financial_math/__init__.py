@@ -35,9 +35,12 @@ Modules:
   net return of a holding, a gain or loss as a fraction of its base (of one holding or a
   group), a change as a fraction of its base, the timing effect (MWRR − TWRR), the gain or loss a
   disposal realizes, the return between two prices (also as a float for a return series), the
-  observed annualization factor of a return series, the change of a price or rate over the
+  observed annualization factor of a return series (with ``DAYS_PER_YEAR``, its validator and
+  the conversions between calendar days and observations), the change of a price or rate over the
   fixed periods of the Assets and FX tables, and the gain that recovers a drawdown.
 * ``valuation`` — the value of a holding from its quantity, price and quote base quantity.
+* ``fx_rates`` — the orientation of a stored FX rate: a pair read from source to destination,
+  either way.
 * ``interest`` — the time fraction between two dates under a day count convention (ACT/365, ACT/360, ACT/ACT,
   30/360), simple interest and daily compounding over a span in closed form: the primitives the Scheduled
   Investment provider builds its accrual on.
