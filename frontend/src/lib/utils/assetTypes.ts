@@ -93,50 +93,70 @@ const ASSET_TYPE_CONTENT_ICON: Record<string, string> = {
 };
 
 /**
- * Badge colour per asset type, as Tailwind utility classes.
+ * Badge colour per asset type, on the categorical roles of `tokens.css` (designer, round 3, §1.9: A1-a and column F,
+ * 17/10): the tint of the type, `--lf-cat-<type>-soft`, and its badge text, `--lf-cat-<type>-on-soft` — the colour
+ * the charts draw the type in.
  *
- * The colour follows what the asset **contains**, while the icon and the label
- * follow what it **is**: an equity ETF is blue like a share, but still shows the
- * ETF icon (with the stock pastille) and reads "Equity ETF". The invariant is
- * `BADGE_CLASS_MAP[x] === BADGE_CLASS_MAP[primaryAssetType(x)]`, which is what
- * makes a list scannable by exposure instead of by packaging.
+ * A subtype takes the colour of its **family**, what it is (`ETF_STOCK` is an ETF: the ETF's blue), and says what
+ * it **contains** with a dot, like the pastille of its icon ({@link assetTypeBadgeDotClass}). The dot is in the
+ * content's badge text colour, `--lf-cat-<content>-on-soft`: the same hue, darker in light where her badge table
+ * darkens it, so it stands at 4.30:1 at least on the family's tint, where the content's own colour gave
+ * ETF_CRYPTO 2.84:1 in light, under her 3:1 for icons (decided with the coordinator, 17/10).
+ * The invariants, held by the enum gate test: `BADGE_CLASS_MAP[x] === BADGE_CLASS_MAP[assetTypeFamily(x)]`, and a
+ * subtype's dot is the role of `ASSET_TYPE_CONTENT_ICON[x]` — the liquidity of `ETF_MONETARY` included.
  *
- * This lives here, not in a component, because two different views render the
- * same badge (`AssetTable`'s HTML cell and `AssetCard`'s markup). They used to
- * carry one hand-written map each, and the two had already drifted apart. The
- * enum gate test reads *this* map.
+ * This lives here, not in a component, because three views render the same badge (`AssetTable`'s HTML cell,
+ * `AssetCard`'s markup and `ProviderComparisonModal`). They used to carry one hand-written map each, and the two
+ * first had already drifted apart. The enum gate test reads *these* maps.
  */
 const BADGE_CLASS_MAP: Record<string, string> = {
-    STOCK: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-    ETF: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
-    BOND: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
-    CRYPTO: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
-    FUND: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400',
-    HOLD: 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400',
-    CROWDFUND: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
-    COMMODITY: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
-    REAL_ESTATE: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400',
-    INDEX: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
+    STOCK: 'bg-lf-cat-stock-soft text-lf-cat-stock-on-soft',
+    ETF: 'bg-lf-cat-etf-soft text-lf-cat-etf-on-soft',
+    BOND: 'bg-lf-cat-bond-soft text-lf-cat-bond-on-soft',
+    CRYPTO: 'bg-lf-cat-crypto-soft text-lf-cat-crypto-on-soft',
+    FUND: 'bg-lf-cat-fund-soft text-lf-cat-fund-on-soft',
+    HOLD: 'bg-lf-cat-hold-soft text-lf-cat-hold-on-soft',
+    CROWDFUND: 'bg-lf-cat-crowdfund-soft text-lf-cat-crowdfund-on-soft',
+    COMMODITY: 'bg-lf-cat-commodity-soft text-lf-cat-commodity-on-soft',
+    REAL_ESTATE: 'bg-lf-cat-real-estate-soft text-lf-cat-real-estate-on-soft',
+    INDEX: 'bg-lf-cat-index-soft text-lf-cat-index-on-soft',
     // Explicit, not left to the fallback: an OTHER asset is a deliberate
     // classification and must not look identical to a type nobody mapped.
-    OTHER: 'bg-slate-100 dark:bg-slate-700/40 text-slate-600 dark:text-slate-300',
-    LIQUIDITY: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
-    ETF_STOCK: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-    ETF_BOND: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
-    ETF_COMMODITY: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
-    ETF_REAL_ESTATE: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400',
-    ETF_CRYPTO: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
-    // The one subtype that rolls up to itself, so it owns its colour.
-    ETF_MONETARY: 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400',
-    CROWDFUND_REAL_ESTATE: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400',
+    OTHER: 'bg-lf-cat-other-soft text-lf-cat-other-on-soft',
+    // Not an AssetType: the cash bucket the backend adds; slate blue, never green (§1.1).
+    LIQUIDITY: 'bg-lf-cat-liquidity-soft text-lf-cat-liquidity-on-soft',
+    // The subtypes, in their family's colour; their content is the dot.
+    ETF_STOCK: 'bg-lf-cat-etf-soft text-lf-cat-etf-on-soft',
+    ETF_BOND: 'bg-lf-cat-etf-soft text-lf-cat-etf-on-soft',
+    ETF_COMMODITY: 'bg-lf-cat-etf-soft text-lf-cat-etf-on-soft',
+    ETF_REAL_ESTATE: 'bg-lf-cat-etf-soft text-lf-cat-etf-on-soft',
+    ETF_CRYPTO: 'bg-lf-cat-etf-soft text-lf-cat-etf-on-soft',
+    ETF_MONETARY: 'bg-lf-cat-etf-soft text-lf-cat-etf-on-soft',
+    CROWDFUND_REAL_ESTATE: 'bg-lf-cat-crowdfund-soft text-lf-cat-crowdfund-on-soft',
 };
 
-/** Neutral grey for a type nobody mapped. The gate test exists so it never shows. */
-const BADGE_CLASS_FALLBACK = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+/** A subtype's dot, in the colour of what it contains (written whole, so the colour gates and Tailwind see it). */
+const BADGE_DOT_CLASS_MAP: Record<string, string> = {
+    ETF_STOCK: 'bg-lf-cat-stock-on-soft',
+    ETF_BOND: 'bg-lf-cat-bond-on-soft',
+    ETF_COMMODITY: 'bg-lf-cat-commodity-on-soft',
+    ETF_REAL_ESTATE: 'bg-lf-cat-real-estate-on-soft',
+    ETF_CRYPTO: 'bg-lf-cat-crypto-on-soft',
+    ETF_MONETARY: 'bg-lf-cat-liquidity-on-soft',
+    CROWDFUND_REAL_ESTATE: 'bg-lf-cat-real-estate-on-soft',
+};
 
-/** Tailwind classes for an asset-type badge. Unknown or empty → neutral grey. */
+/** The neutral chip for a type nobody mapped. The gate test exists so it never shows. */
+const BADGE_CLASS_FALLBACK = 'bg-lf-neutral text-lf-secondary';
+
+/** Role classes for an asset-type badge: the colour of its family. Unknown or empty → the neutral chip. */
 export function assetTypeBadgeClass(type: string | null | undefined): string {
     return BADGE_CLASS_MAP[(type ?? '').toUpperCase()] ?? BADGE_CLASS_FALLBACK;
+}
+
+/** The background class of a subtype badge's dot, the colour of what it contains; `null` for a type with no content. */
+export function assetTypeBadgeDotClass(type: string | null | undefined): string | null {
+    return BADGE_DOT_CLASS_MAP[(type ?? '').toUpperCase()] ?? null;
 }
 
 /**

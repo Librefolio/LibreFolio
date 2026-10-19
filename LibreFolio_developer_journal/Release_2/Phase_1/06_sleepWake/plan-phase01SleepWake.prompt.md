@@ -5413,6 +5413,46 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
       correzione che spostasse e poi alzasse si vedrebbe. Codice: `files/mf-redate-draft/apply_mf_redate.py`
       (provato su copia, inverso esatto); ruff e black puliti. `services asset-source-refresh` 62 (58 + 4).
     - Pagina devWiki: la regola «solo in avanti» e il perché del `flush()` per riga.
+11. ✅ 17/10 20:50–21:05 — Secondo seguito di Z-33 (coordinatore, ~20:50; W occupato con K3, la guardia degli eventi è
+    mia, W rivede):
+    - **Nit di X** (plugin Yahoo): il fuso dell'indice si convalida per primo; se non nomina una zona nota (un offset
+      fisso, `UTC+02:00`) si ricade su `info["exchangeTimezoneName"]`. Prima il testo dell'indice sostituiva quello di
+      Yahoo e il fuso dichiarato era `None`.
+    - **La stessa guardia in `redate_provider_events`**: tutte le destinazioni prima di toccare qualcosa; una data prima
+      dell'evento alza `ValueError` e niente cambia (nessun evento spostato o unito, nessuna transazione ricollegata o
+      ridatata). `asset_events` non ha chiave unica: la sua flush unica alla fine resta corretta.
+    - Rossi di test-author: 1 parametro rosso (`an-unnamed-index-zone-falls-back-to-info`: `None == 'Europe/Rome'`) e
+      uno verde di guardia; 4 rossi degli eventi (`(1, 0)`, `(2, 0)`, `(0, 1)` — l'unione sbagliata —, `(1, 0)` con lo
+      SPLIT e la sua ADJUSTMENT spostate indietro) e 1 verde di guardia. Codice: `files/z33f2-draft/apply_z33f2.py`
+      (provato su copia, inverso esatto). Verdi: `services provider-errors` 250, `services asset-source-refresh` 67,
+      `services asset-event-store` 71; ruff e black puliti.
+    - Pagina devWiki: la regola per tutti e due gli aiuti, e la precedenza del fuso. Doc developer
+      (`provider_yahoo_finance.md`): la frase della precedenza, a docs-writer.
+12. ✅ 17/10 21:08–21:40 — Revisione di H su Z-33 (coordinatore, ~21:08, priorità): migrazione 011 OK, due punti.
+    - **MEDIUM, due refresh dello stesso asset** (sync manuale e scheduler): `legacy_check` veniva dalla preparazione,
+      letta prima della rete; il passo di assestamento rileggeva l'assegnazione ma non il segno. Se A si assesta
+      mentre B scarica, B rifà la regola su righe già giuste e le sposta avanti di un giorno (giovedì→venerdì scartata).
+      Correzione: il segno si legge sulla riga appena letta (la riga di H) **e si prende** con un `UPDATE` condizionato
+      (`… WHERE exchange_timezone = 'legacy-utc'`) prima di spostare qualcosa: pysqlite apre la transazione a quella
+      scrittura, quindi l'altro refresh aspetta il commit (busy_timeout) e non trova più il segno. Chi non lo prende
+      non sposta nulla e scrive i suoi dati come ogni refresh.
+      > **⚠️ Fuori pista**: la sola riga di H non basta. Provato: applicata da sola, il test della finestra (B legge il
+      > segno, A fa il commit prima dello spostamento di B) resta rosso; passa solo con l'`UPDATE` condizionato.
+      > **⚠️ Fuori pista**: ruff C901 (11 > 10) su `_settle_exchange_timezone`: gli spostamenti sono andati in
+      > `_redate_legacy_rows` (v2 dello script, `files/z33f3-draft/apply_z33f3.py`; la v1 in
+      > `apply_z33f3_v1_superseded.py`). `_server_date` resta prima della presa: il test della finestra si aggancia lì.
+    - **LOW, un fuso che il server non risolve**: senza database dei fusi ogni nome dà None e un asset segnato non
+      scrive mai nulla. La metà a basso costo: `exchange_zone()` avvisa nel log una volta per nome Area/Luogo e
+      processo (`_UNKNOWN_ZONES_LOGGED`); niente per un offset fisso, il segno o un nome vuoto. Nessuna dipendenza
+      nuova: `tzdata` da PyPI è Z-36 nel backlog, domanda per lo sviluppatore. Il problema di qualità dei dati non è
+      economico (codice nuovo, chiave i18n in 4 lingue, enum in OpenAPI, frontend): non fatto.
+    - Rossi di test-author: 2 della corsa (il secondo con un aggancio a `refresh._server_date` che fa il commit da un
+      altro motore, sincrono), 1 dell'avviso, 1 verde di guardia; il commento vecchio del modulo di test corretto.
+      Rossi visti: righe spostate `{06-02…06-05}`, avviso assente. Verdi su v2: `services asset-source-refresh` 69,
+      `services provider-errors` 252, `services asset-source` 61, `services asset-event-store` 71, `db migration-011`
+      15; ruff e black puliti.
+    - Pagina devWiki: la presa del segno e il limite del server senza fusi. Doc developer (`architecture.md`,
+      `#exchange-timezone` e i limiti): a docs-writer. Backlog: Z-36.
 
 ### Z-29 — una scheda della lista asset e lo storico intero: analisi (17/10 ~20:35, sola lettura, HEAD `b8bcc8cd2`)
 

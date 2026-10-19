@@ -39,7 +39,7 @@
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {withHexAlpha} from '$lib/theme/colorAlpha';
     import {chartNeutrals} from '$lib/theme/chartTheme';
-    import {categoryColor, isUnclassifiedCountry, KEYLESS_SEQUENCE, sequenceColor} from '$lib/theme/chartCategories';
+    import {categoryColor, COUNTRY_SEQUENCE, isUnclassifiedCountry, sequenceColor} from '$lib/theme/chartCategories';
     import {shadePoles} from '$lib/theme/chartShades';
     import {chartRoles} from '$lib/theme/roleColors';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
@@ -135,8 +135,8 @@
     // Every category wears its own colour (GR1 of the designer's round 2, D-T17), read through
     // `categoryColor` (lib/theme/chartCategories): a family or a sector is the same colour as in
     // the pie, whatever its rank, in every portfolio, broker and period. The countries have no
-    // colour of their own: they take the sector sequence by rank, a GR4 shade of it past the
-    // fourteenth, never a silent repeat; the unclassified one (`Unknown`) keeps its own grey.
+    // colour of their own: they take the country sequence by rank (round 3, §1.4), a GR4 shade
+    // of it past the fourteenth, never a silent repeat; the unclassified one keeps its own.
 
     /** Get an emoji/icon label for a category. */
     function getCategoryEmoji(rawName: string): string {
@@ -579,15 +579,15 @@
 
     /**
      * One entry per sector, or per country, each with its colour. A sector wears its own; a country has none: it takes
-     * the sector sequence by rank among the classified countries, a GR4 shade of it past the fourteenth (GR5), while
-     * the unclassified one keeps its own grey.
+     * the country sequence (§1.4) by rank among the classified countries, a GR4 shade of it past the fourteenth (GR5),
+     * while the unclassified one keeps its own colour.
      */
     function keyedStyling(dataset: AggregatedAllocationDataset, isDark: boolean): SeriesStyle[] {
         if (dimension === 'sector') return dataset.sortedNames.map((name) => ({id: name, color: categoryColor('sector', name, isDark), members: [name]}));
         const poles = shadePoles(isDark, chartRoles(isDark, chartContainer).color('--lf-surface-card'));
-        const rounds = KEYLESS_SEQUENCE.length * 7;
+        const rounds = COUNTRY_SEQUENCE.length * 7;
         let rank = 0;
-        const styling = dataset.sortedNames.map((name) => ({id: name, color: isUnclassifiedCountry(name) ? categoryColor('sector', 'Unknown', isDark) : sequenceColor('sector', KEYLESS_SEQUENCE, rank++, isDark, poles), members: [name]}));
+        const styling = dataset.sortedNames.map((name) => ({id: name, color: isUnclassifiedCountry(name) ? categoryColor('sector', 'Unknown', isDark) : sequenceColor(COUNTRY_SEQUENCE, rank++, isDark, poles), members: [name]}));
         // The sequence and its six shades give 98 colours: past them a colour comes back. Announce it rather than let it pass.
         if (rank > rounds) debug.warn('AllocationHistoryChart', `${rank} countries for ${rounds} distinct colours: ${rank - rounds} repeat an earlier colour`);
         return styling;
