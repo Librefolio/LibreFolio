@@ -33,7 +33,10 @@
  *     busy) or after a read with no usable answer (`network`, `unexpected`) (decision 1, revised);
  *   - `start()` while busy is ignored; `dispose()` and `reset()` drop every answer still on its way;
  *   - a storage that throws, or none at all, never breaks the flow; `backupProgress` is `null` until the size is known,
- *     then the share written, clamped to [0, 1].
+ *     then the share written, clamped to [0, 1];
+ *   - since the developer's decision of 19/10 (the last section): a `backup_busy` refusal naming a running job, whatever
+ *     its origin, leaves one `console.warn` — a sentence, then `{job_id, origin, status: 'running'}` —, written once,
+ *     at the refusal; no other path writes a `console.warn`.
  *
  * Every test injects a fake api and an in-memory storage, and runs on fake timers: a poll is a timer, so the clock is
  * advanced by exactly the pause the contract names, and "not before" is checked one millisecond short of it. `pollMs`
@@ -43,7 +46,7 @@
  * jsdom, not node: `busy` and `progress` are `$derived`, which the node environment leaves stale (see
  * `$test/runes.svelte`); `assertEffectsRun()` fails the whole file loudly if the docblock above is ever lost.
  */
-import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance} from 'vitest';
 import {assertEffectsRun} from '$test/runes.svelte';
 import type {InstanceBackupJob} from './backupApi';
 
@@ -1801,7 +1804,27 @@ function busyRefusal(job: Record<string, unknown> = {}) {
 /** Let every answer already given reach the controller; no time passes. */
 const settle = () => vi.advanceTimersByTimeAsync(0);
 
+/**
+ * `console.warn`, spied around every case of the group that calls `spyOnConsoleWarn()`, and kept off the run's output.
+ * The developer's decision of 19/10 (the last section of this file) has every `backup_busy` refusal naming a running
+ * job leave one line there: the last section asserts it; the B-8 groups before it only keep the run quiet, and assert
+ * nothing of it.
+ */
+let warn: MockInstance<typeof console.warn>;
+
+function spyOnConsoleWarn(): void {
+    beforeEach(() => {
+        warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+    afterEach(() => {
+        warn.mockRestore();
+    });
+}
+
 describe('B-8 — start() refused backup_busy naming a running job of origin ui, nothing on offer: the job followed as if started here', () => {
+    // Every refusal here names a running job: one console.warn each since 19/10 (the last section), kept quiet here.
+    spyOnConsoleWarn();
+
     it.each<[string, () => Promise<ReturnType<typeof setup>>]>([
         ['nothing followed', async () => setup()],
         [
@@ -1929,6 +1952,9 @@ describe('B-8 — start() refused backup_busy naming a running job of origin ui,
 });
 
 describe('B-8 — start() refused backup_busy naming no job this tab may follow: exactly as today, and no job read', () => {
+    // The refusals naming a job of origin cli or panel write one console.warn each since 19/10 (the last section), kept quiet here.
+    spyOnConsoleWarn();
+
     it.each<[string, string, Record<string, unknown>, string | undefined, boolean]>([
         ['a running job started from the command line (origin cli)', 'nothing followed', {job_id: JOB_ID, origin: 'cli'}, undefined, false],
         ['a running job started from the command line (origin cli)', 'another job followed', {job_id: JOB_ID, origin: 'cli'}, OTHER_JOB_ID, true],
@@ -1966,6 +1992,9 @@ describe('B-8 — start() refused backup_busy naming no job this tab may follow:
 });
 
 describe('B-8 — start() from done refused backup_busy naming a running job: the archive stays on offer (B-8 decision 1, decided by the developer on 19/10)', () => {
+    // Every refusal here names a running job: one console.warn each since 19/10 (the last section), kept quiet here.
+    spyOnConsoleWarn();
+
     it.each(['ui', 'cli', 'panel'])('a running job of origin %s: done, the same archive on offer, backup_busy beside it, announced once, the running job not read (green today: pinned)', async (origin) => {
         const {controller, api, storage, onDone, onFailed} = setup();
         api.start.mockResolvedValueOnce(done());
@@ -2008,6 +2037,9 @@ describe('B-8 — start() from done refused backup_busy naming a running job: th
  * (the first B-8 group green, this decision not applied), each case fails where it names decision 3.
  */
 describe('B-8 — decision 3: the job the refusal names is remembered before its first read, so «Check again» reads it', () => {
+    // Every refusal here names a running job: one console.warn each since 19/10 (the last section), kept quiet here.
+    spyOnConsoleWarn();
+
     it.each<[string, () => Promise<ReturnType<typeof setup>>]>([
         ['nothing followed', async () => setup()],
         [
@@ -2127,5 +2159,292 @@ describe('B-8 — decision 3: the job the refusal names is remembered before its
 
         await controller.recheck();
         expect(api.get, '«Check again» is not offered: no job is read, not the one followed before either').toHaveBeenCalledTimes(1);
+    });
+});
+
+// --- B-8, developer 19/10: the card says only «busy», the console names the job ---------------------------------------
+
+/*
+ * The developer's decision of 19/10, relayed by the coordinator. Verbatim: «farei che a schermo compare solo
+ * "occupato", in console magari più dettagli per permetterci di backuppare se serve, non è in vista ma se venisse letto
+ * da un utente non sarebbe grave» (on screen only «busy»; in the console more details, to let us back up if need be;
+ * out of sight, and no harm done if a user read them). The 409 stays as it is: it names the running job
+ * (`detail.job_id`, `detail.origin`). The card never names it, whatever its origin, and keeps following its own `ui`
+ * backup as the B-8 groups above say; the console gets the details, always. The contract under test:
+ *   - every `start()` refused `backup_busy` whose refusal names a job (`backupBusyJob` not null) writes exactly one
+ *     `console.warn` call, whatever the origin (`ui`, `cli`, `panel`, `pre-restore`: the server's `BackupOrigin`),
+ *     whatever is on offer, the job followed or not: a non-empty string first, its wording not pinned, then exactly
+ *     `{job_id, origin, status: 'running'}` — `running` by contract, the server naming a job only while its state says
+ *     it runs: the line says so even when the first read of a followed job finds it ended;
+ *   - once, at the refusal: the line is there while the first read of a followed job is still out, and the follow's
+ *     reads and polls, a read that fails, `recheck()`, `resume()` after a reload write nothing more;
+ *   - no line otherwise: a `backup_busy` naming no job, an id that is not 32 lowercase hex digits, a job id without an
+ *     origin (or with an empty one); any other refusal of a start, even one carrying a job id and an origin; no answer;
+ *     a start that succeeds; a read that fails while a job is followed; `resume()`; `recheck()`.
+ * The state is the B-8 behaviour above, unchanged: asserted here only as far as each case needs it.
+ *
+ * Not pinned, the contract being silent: the wording of the sentence, any argument after the second, and a refusal
+ * that arrives once the controller is disposed or reset (dropped as stale today, with no line).
+ *
+ * Red today: the controller writes nothing to the console, so every case of the first two groups fails at its first
+ * console expectation — `console.warn` called 0 times, 1 (or 3) expected. Green today, and to stay so: the last group
+ * (no line otherwise), and every expectation on the state.
+ */
+
+/** Every origin the server gives a backup (`BackupOrigin`, backend manifest.py). */
+const ORIGINS = ['ui', 'cli', 'panel', 'pre-restore'];
+
+/**
+ * The one line of a start refused by a running job its refusal names (`jobId`, of `origin`): a non-empty string first,
+ * its wording free, then exactly the job's details. Any argument after the second is not pinned.
+ */
+function expectOneLine(jobId: string, origin: string, why = 'a start refused backup_busy naming a running job must write exactly one console.warn'): void {
+    expect(warn, why).toHaveBeenCalledTimes(1);
+    const [sentence, details] = warn.mock.calls[0];
+    expect(sentence, 'the line opens with a sentence of its own: a non-empty string').toEqual(expect.stringMatching(/\S/));
+    expect(details, 'the details of the running job, exactly: its id, its origin, running').toStrictEqual({job_id: jobId, origin, status: 'running'});
+}
+
+/** A refusal of another code that carries a job id and an origin all the same (the server sends none such): only a `backup_busy` names a running job. */
+function otherRefusalNaming(status: number, code: string) {
+    return {isAxiosError: true, message: `Request failed with status code ${status}`, response: {status, data: {detail: {code, message: `refused: ${code}`, job_id: JOB_ID, origin: 'ui'}}}};
+}
+
+describe('B-8, developer 19/10 — start() refused backup_busy naming a running job: one console.warn with its details, whatever the origin, whatever is on offer (red today)', () => {
+    spyOnConsoleWarn();
+
+    it.each<[string, BackupJobState, string[][]]>([
+        ['ui', 'running', [[JOB_ID]]],
+        ['cli', 'failed', []],
+        ['panel', 'failed', []],
+        ['pre-restore', 'failed', []],
+    ])('origin %s, nothing on offer: one line, a sentence then {job_id, origin, status: running}; the state as the B-8 groups above say (%s)', async (origin, state, reads) => {
+        const {controller, api} = setup();
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin}));
+        // A job read would be found running, and followed: only the one of origin ui may be.
+        api.get.mockResolvedValue(running());
+
+        void controller.start();
+        await settle();
+
+        expect(api.get.mock.calls, 'only a job of origin ui is read, and followed').toEqual(reads);
+        expect(controller.state).toBe(state);
+        expect(controller.errorCode).toBe(origin === 'ui' ? null : 'backup_busy');
+        expectOneLine(JOB_ID, origin);
+    });
+
+    it.each<[string, () => Promise<InstanceBackupJob>, BackupJobState]>([
+        ['already done', ok(done()), 'done'],
+        ['already failed', ok(failedJob('backup_interrupted')), 'failed'],
+        ['gone from the server (404)', ko(refusal(404, 'backup_job_not_found')), 'failed'],
+        ['unanswered', ko(noAnswer()), 'failed'],
+    ])('origin ui, nothing on offer, the job named found %s by its first read: the line all the same, once, status running — what the refusal said', async (_case, firstRead, state) => {
+        const {controller, api} = setup();
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+        answerReads(api, [firstRead]);
+
+        void controller.start();
+        await settle();
+
+        expect(api.get.mock.calls, 'the job the refusal names must be read').toEqual([[JOB_ID]]);
+        expect(controller.state).toBe(state);
+        expectOneLine(JOB_ID, 'ui');
+    });
+
+    it.each(ORIGINS)('origin %s, an archive on offer: one line all the same; the archive stays on offer, backup_busy beside it, the running job not read', async (origin) => {
+        const {controller, api} = setup();
+        api.start.mockResolvedValueOnce(done());
+        await controller.start();
+        expect(controller.state, 'precondition: an archive is on offer').toBe('done');
+        const archive = controller.job;
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: OTHER_JOB_ID, origin}));
+        // A job read would be found running, and followed: the assertions below would say so.
+        api.get.mockResolvedValue(running({job_id: OTHER_JOB_ID}));
+
+        void controller.start();
+        await settle();
+
+        expect(api.get, 'with an archive on offer, the running job is not read').not.toHaveBeenCalled();
+        expect(controller.state).toBe('done');
+        expect(controller.job, 'the archive on offer must be the one offered before').toBe(archive);
+        expect(controller.errorCode).toBe('backup_busy');
+        expectOneLine(OTHER_JOB_ID, origin);
+    });
+
+    it('refused three times, nothing on offer — by a cli job, by that same job again, then by a panel job: one line per refused start, each naming the job its refusal names', async () => {
+        const {controller, api} = setup();
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'cli'})).mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'cli'}));
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: OTHER_JOB_ID, origin: 'panel'}));
+
+        await controller.start();
+        await controller.start();
+        await controller.start();
+        await settle();
+
+        expect(api.start, 'precondition: three starts').toHaveBeenCalledTimes(3);
+        expect(controller.state, 'precondition: each refused').toBe('failed');
+        expect(warn, 'one line per refused start, the same running job named twice included').toHaveBeenCalledTimes(3);
+        for (const [sentence] of warn.mock.calls) expect(sentence, 'each line opens with a sentence of its own').toEqual(expect.stringMatching(/\S/));
+        const details = warn.mock.calls.map(([, named]) => named);
+        expect(details, 'each line names the job its refusal names').toStrictEqual([
+            {job_id: JOB_ID, origin: 'cli', status: 'running'},
+            {job_id: JOB_ID, origin: 'cli', status: 'running'},
+            {job_id: OTHER_JOB_ID, origin: 'panel', status: 'running'},
+        ]);
+    });
+});
+
+describe('B-8, developer 19/10 — the line is written once, at the refusal: the follow, a failed read, recheck() and resume() write nothing more (red today)', () => {
+    spyOnConsoleWarn();
+
+    it('origin ui, nothing on offer: the line is there while the first read of the job named is out; that read, two polls and the job done write nothing more', async () => {
+        const {controller, api, onDone} = setup();
+        const read = deferred<InstanceBackupJob>();
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+        answerReads(api, [() => read.promise, ok(running({phase: 'files', done_bytes: 512, total_bytes: 2048})), ok(done())]);
+
+        void controller.start();
+        await settle();
+
+        expect(controller.state, 'precondition: the first read of the job named is out').toBe('loading');
+        expectOneLine(JOB_ID, 'ui', 'written at the refusal: the line must be there while the first read of the job named is still out');
+
+        read.resolve(running());
+        await settle();
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+        expect(controller.state, 'precondition: polled once, still running').toBe('running');
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(api.get.mock.calls, 'precondition: the first read of the job named, then two polls').toEqual([[JOB_ID], [JOB_ID], [JOB_ID]]);
+        expect(controller.state, 'precondition: followed to its archive').toBe('done');
+        expect(onDone, 'precondition: its end announced').toHaveBeenCalledTimes(1);
+        expectOneLine(JOB_ID, 'ui', 'the follow wrote another line: the line is written once, at the refusal');
+        expect(vi.getTimerCount(), 'a timer outlived the job').toBe(0);
+    });
+
+    it('origin ui, nothing on offer, its first read unanswered: that failed read writes nothing; «Check again» follows the job named to its archive and writes nothing either', async () => {
+        const {controller, api} = setup();
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+        answerReads(api, [ko(noAnswer()), ok(running()), ok(done())]);
+
+        void controller.start();
+        await settle();
+
+        expect(controller.failure, 'precondition: the first read of the job named failed').toBe('read');
+        expect(controller.canRecheck, 'precondition: «Check again» is offered').toBe(true);
+        expectOneLine(JOB_ID, 'ui');
+
+        await controller.recheck();
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(api.get.mock.calls, 'precondition: «Check again» read the job named, then polled it').toEqual([[JOB_ID], [JOB_ID], [JOB_ID]]);
+        expect(controller.state, 'precondition: followed to its archive').toBe('done');
+        expectOneLine(JOB_ID, 'ui', 'the failed read or «Check again» wrote another line: the line is written once, at the refusal');
+    });
+
+    it('origin ui, nothing on offer, the page reloaded while the job named runs: resume() on the next page follows it to its archive and writes nothing', async () => {
+        const first = setup();
+        first.api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+        first.api.get.mockResolvedValueOnce(running());
+        void first.controller.start();
+        await settle();
+        expect(first.controller.state, 'precondition: the job named is followed').toBe('running');
+        expect(first.storage.items.get(KEY), 'precondition: the job named is remembered for the next page').toBe(JOB_ID);
+        expectOneLine(JOB_ID, 'ui');
+        // The page goes, and its controller with it; the next page finds the job in the storage.
+        first.controller.dispose();
+        const {controller, api} = setup({stored: first.storage.items.get(KEY)});
+        answerReads(api, [ok(running()), ok(done())]);
+
+        await controller.resume();
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(api.get.mock.calls, 'precondition: the next page read the job named, then polled it').toEqual([[JOB_ID], [JOB_ID]]);
+        expect(controller.state, 'precondition: followed to its archive').toBe('done');
+        expectOneLine(JOB_ID, 'ui', 'resume() wrote another line: only a refused start writes one');
+    });
+});
+
+describe('B-8, developer 19/10 — no line otherwise: no job named, any other failure of a start, a start that succeeds, a read that fails, resume(), recheck() (green today: the guard)', () => {
+    spyOnConsoleWarn();
+
+    it.each<[string, () => unknown, string]>([
+        ['backup_busy naming no job: {code, message}, the refusal of before', () => busyRefusal(), 'backup_busy'],
+        ['backup_busy naming a job whose id is not 32 lowercase hex digits (a path)', () => busyRefusal({job_id: `../${JOB_ID}`, origin: 'cli'}), 'backup_busy'],
+        ['backup_busy naming a job whose id is in upper case', () => busyRefusal({job_id: JOB_ID.toUpperCase(), origin: 'ui'}), 'backup_busy'],
+        ['backup_busy naming a job id without an origin', () => busyRefusal({job_id: JOB_ID}), 'backup_busy'],
+        ['backup_busy naming a job id with an empty origin', () => busyRefusal({job_id: JOB_ID, origin: ''}), 'backup_busy'],
+        ['backup_busy naming an origin without a job id', () => busyRefusal({origin: 'cli'}), 'backup_busy'],
+        ['backup_no_space (507) carrying a job id and an origin: only backup_busy names a running job', () => otherRefusalNaming(507, 'backup_no_space'), 'backup_no_space'],
+        ['backup_no_space (507)', () => refusal(507, 'backup_no_space'), 'backup_no_space'],
+        ['backup_folder_unusable (500)', () => refusal(500, 'backup_folder_unusable'), 'backup_folder_unusable'],
+        ['backup_failed (500)', () => refusal(500, 'backup_failed'), 'backup_failed'],
+        ['no answer', noAnswer, 'network'],
+        ['an answer without a code', codelessAnswer, 'unexpected'],
+    ])('a start refused — %s: no line, with nothing on offer nor with an archive on offer', async (_case, refused, code) => {
+        const {controller, api} = setup();
+        api.start.mockRejectedValueOnce(refused()).mockResolvedValueOnce(done());
+        api.start.mockRejectedValueOnce(refused());
+
+        await controller.start();
+        expect(controller.state, 'precondition: refused, nothing on offer').toBe('failed');
+        await controller.start();
+        expect(controller.state, 'precondition: an archive on offer').toBe('done');
+        await controller.start();
+        await settle();
+
+        expect(controller.state, 'precondition: refused, the archive still on offer').toBe('done');
+        expect(controller.errorCode, 'precondition: refused').toBe(code);
+        expect(api.get, 'no job was read').not.toHaveBeenCalled();
+        expect(warn, 'only a backup_busy naming a running job writes a line').not.toHaveBeenCalled();
+    });
+
+    it.each<[string, Array<() => Promise<InstanceBackupJob>>, BackupJobState, string | null]>([
+        ['read running, then done', [ok(running()), ok(done())], 'done', null],
+        ['unanswered until the polling gives up', [ko(noAnswer()), ko(noAnswer()), ko(noAnswer())], 'failed', 'network'],
+        ['found gone from the server (404)', [ko(refusal(404, 'backup_job_not_found'))], 'failed', 'backup_job_not_found'],
+        ['read failed on the server', [ok(failedJob('backup_no_space'))], 'failed', 'backup_no_space'],
+    ])('a start that succeeds, its job %s: no line', async (_case, reads, state, code) => {
+        const {controller, api} = setup();
+        api.start.mockResolvedValueOnce(running());
+        answerReads(api, reads);
+
+        await controller.start();
+        await vi.advanceTimersByTimeAsync((1 + 2 + 3) * POLL_MS);
+
+        expect(controller.state, 'precondition: the job reached its end, or the polling gave up').toBe(state);
+        expect(controller.errorCode).toBe(code);
+        expect(warn, 'a start that succeeds, and a read that fails, write no line').not.toHaveBeenCalled();
+    });
+
+    it.each<[string, Array<() => Promise<InstanceBackupJob>>, BackupJobState]>([
+        ['running, then done', [ok(running()), ok(done())], 'done'],
+        ['unanswered', [ko(noAnswer())], 'failed'],
+        ['gone from the server (404)', [ko(refusal(404, 'backup_job_not_found'))], 'idle'],
+    ])('resume() of the job a previous page followed, read %s: no line', async (_case, reads, state) => {
+        const {controller, api} = setup({stored: JOB_ID});
+        answerReads(api, reads);
+
+        await controller.resume();
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(controller.state, 'precondition: the job picked up as the server has it').toBe(state);
+        expect(warn, 'resume() writes no line').not.toHaveBeenCalled();
+    });
+
+    it('the polling gave up on a job started here, and «Check again» follows it to its archive: no line', async () => {
+        const {controller, api} = setup();
+        api.start.mockResolvedValueOnce(running());
+        answerReads(api, [ko(noAnswer()), ko(noAnswer()), ko(noAnswer()), ok(running()), ok(done())]);
+        await controller.start();
+        await vi.advanceTimersByTimeAsync((1 + 2 + 3) * POLL_MS);
+        expect(controller.canRecheck, 'precondition: the polling gave up, «Check again» is offered').toBe(true);
+
+        await controller.recheck();
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(api.get, 'precondition: three failed reads, then «Check again» and one poll').toHaveBeenCalledTimes(5);
+        expect(controller.state, 'precondition: followed to its archive').toBe('done');
+        expect(warn, 'a failed read and «Check again» write no line').not.toHaveBeenCalled();
     });
 });

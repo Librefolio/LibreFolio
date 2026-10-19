@@ -875,7 +875,10 @@ the running backup, `job_id` and `origin`, to a caller that can read it: the Bac
 a backup of its own (lot B-8). A run records its job id in the lock it holds (`backups/.jobs/.lock`, its content), once
 its first state is written; a refused start reads it back, never through a link, and names the job only while its state
 says it runs. The tab follows a backup of its own kind (`ui`) whose start answer was lost; one of the command line or
-of the panel it does not.
+of the panel it does not. The tab does not name the backup that runs; the answer does (developer, 19/10). Whatever its
+origin, the card says only that another backup runs, or follows its own, and never shows the job's id or origin. The
+tab writes them to the browser console instead, with the state, `running`: one `console.warn` per refused start
+(`backupJob.svelte.ts`), whatever the log level. None of the three is personal data.
 
 **The creation** (`jobs._run()`). With a password, `build_archive()` writes the zip as for a clear backup, in the
 job's folder `backups/.jobs/<id>/` (`0700`, the zip `0600`), with the instance key entry when there is one to carry
