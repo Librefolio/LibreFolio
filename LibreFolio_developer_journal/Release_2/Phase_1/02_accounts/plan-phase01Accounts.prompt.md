@@ -7995,3 +7995,208 @@ Ognuno con i rossi prima e uno slot. Uno slot API (`users-admin`) per N69-4 e N6
   - Se anche un solo clic, senza chiusura, la blocca, c'è una seconda via che non ho riprodotto.
   - In quel caso il passo successivo è l'E2E sopra, senza la trattenuta, sulla build della nightly.
 - Stato: **FROZEN** in attesa del via; nessun file del prodotto toccato.
+
+## A-CL1 — Via al lotto (19/10, 15:00; base `1d50d8c42`)
+- **Giornale**: l'analisi è in `1d50d8c42`. Il developer non è certo di aver chiuso e riaperto la finestra.
+- **Decisione del developer** (testuale): «mi pare una duplicazione errata di codice, la modale da chiamare è la stessa,
+  solo l'entry point cambia, quindi leva quella vecchia che non funziona e usa quella che funziona in entrambi i posti».
+- **Via del coordinatore**:
+  1. un'istanza sola di `ChangelogModal`, quella della sidebar con `APP_VERSION`; l'Informazioni la apre per la stessa via
+     (uno store o una funzione condivisa, la forma più semplice); via la seconda istanza in `AboutTab.svelte`;
+  2. anche C1 (`merged` come `SvelteMap`), perché con un'istanza sola R1 resta possibile; Vitest M1 e M2; la finta in
+     `SvelteMap` nello stesso commit;
+  3. l'E2E che trattiene il chunk con `page.route`, dall'Informazioni in italiano, e un caso che dalla sidebar e
+     dall'Informazioni apre la stessa istanza;
+  4. una riga 🐛 nel CHANGELOG.
+- Prima i rossi; corsia 6182; lo slot E2E (~5 min) va chiesto quando è pronto.
+
+### Contratto
+- **Una finestra sola.**
+  - La monta la Sidebar: `ChangelogModal` con `currentVersion={APP_VERSION}`, fuori dal `<nav>` come oggi.
+  - Lo stato aperto/chiuso vive in `lib/features/changelog/changelogModalStore.svelte.ts`: `changelogModal.open`,
+    `show()`, `close()`.
+  - La versione della sidebar e quella sotto il logo dell'Informazioni chiamano `show()`. L'Informazioni non monta più
+    una finestra sua: niente `import` di `ChangelogModal`, niente `changelogOpen`.
+  - La Sidebar, quando si smonta, chiude lo stato: la finestra vive quanto la shell dell'app, come lo stato locale di
+    oggi. Così, dopo un nuovo accesso, non si riapre da sola.
+- **C1**: in `changelog.ts`, `merged` diventa `SvelteMap` (`svelte/reactivity`). Nell'ambiente node dei test è la `Map`
+  (la build server di `svelte/reactivity` esporta `SvelteMap = globalThis.Map`), quindi `changelog.test.ts` non cambia.
+- **Le finte** che rispecchiano il modulo (`ChangelogModal.test.ts`; `WhatsNewModal.test.ts` per coerenza) passano a
+  `SvelteMap` nello stesso passo del modulo, non prima: con la finta reattiva i rossi M1/M2 diventerebbero verdi senza la
+  cura.
+- **Effetti da segnalare** (conseguenze della decisione, non scelte mie):
+  - dall'Informazioni il controllo degli aggiornamenti riporta `APP_VERSION` invece della versione del backend (nella
+    stessa immagine sono uguali);
+  - aperta dall'Informazioni, la finestra si comporta come quella della sidebar: resta aperta se si torna indietro col
+    browser, mentre oggi quella dell'Informazioni si chiudeva con la scheda.
+- **CHANGELOG**: il testo della riga 🐛 va nel checkpoint; la scrive il coordinatore, come nei lotti precedenti.
+
+### Passi
+1. **CL1.1** — Il modulo di stato, inerte finché Sidebar e Informazioni non lo usano. Serve perché i rossi falliscano su
+   un'asserzione, non su un import mancante.
+2. **CL1.2** — Rossi Vitest (`test-author`):
+   - M1 e M2 in `ChangelogModal.test.ts`;
+   - «la versione apre la finestra dell'app» in `AboutTab.test.ts`;
+   - `Sidebar.changelog.test.ts`, nuovo.
+3. **CL1.3** — Rossi E2E (`test-author`, in parallelo), in `e2e/layout/changelog-locale.spec.ts`:
+   - E1: dall'Informazioni in italiano, chunk trattenuto, chiusa, rilasciata, riaperta;
+   - E2: dalla sidebar e dall'Informazioni la stessa finestra.
+   - Scritti e controllati staticamente; osservati nello slot.
+4. **CL1.4** — Codice e verdi Vitest:
+   - il codice: Sidebar, Informazioni, `changelog.ts`; le finte; i mock morti del changelog in `AboutTab*.test.ts`;
+   - le verifiche: front check, prettier, cancello dei colori;
+   - poi i file del prodotto tornano a HEAD per il rosso E2E (le bozze restano in `work/acl1/`).
+5. **CL1.5** — Doc: `app-state.md` (il nuovo store); la riga `desc` di `changelog-locale` nel registro, se il
+   coordinatore dà il via alla scrittura.
+6. **CL1.6** — Slot E2E: rosso sul codice di oggi, poi il codice rimesso, poi verde.
+7. **CL1.7** — Checkpoint e FROZEN.
+
+### CL1.1 — Il modulo di stato ✅ (19/10, 15:20)
+- `frontend/src/lib/features/changelog/changelogModalStore.svelte.ts`, nuovo: `changelogModal.open`, `show()`, `close()`.
+  Nessuno lo importa ancora, quindi il prodotto non cambia. Prettier pulito.
+- **Note implementazione**:
+  - le bozze del codice sono in `work/acl1/apply_code.py`: 13 modifiche a corrispondenza esatta su Sidebar,
+    Informazioni e `changelog.ts`, tutte trovate una volta sola nella prova a vuoto;
+  - in `work/acl1/apply_tests.py` ci sono i seguiti dei test (9 modifiche, prova a vuoto pulita):
+    - le finte in `SvelteMap`;
+    - via i mock del changelog, ormai morti, da `AboutTab.test.ts` e `AboutTab.legal.test.ts`;
+  - i file del prodotto di HEAD sono copiati in `work/acl1/orig/`; `restore_orig.sh` li rimette per il rosso E2E.
+- Due `test-author` in parallelo, su file distinti:
+  - Vitest: `ChangelogModal.test.ts`, `AboutTab.test.ts`, `Sidebar.changelog.test.ts` nuovo;
+  - E2E: `changelog-locale.spec.ts`, senza esecuzione.
+
+### CL1.2 — Rossi Vitest ✅ (19/10, 15:20–15:37; `test-author` `34a0ecfe`)
+- Una corsa sui tre file, con il carico a 43,9 (1 min 48 s), log `work/acl1/cl12-red-run1.log`. I 7 test nuovi sono
+  rossi su un'asserzione: nessun errore d'import o di caricamento. I test già nei file restano verdi: ChangelogModal
+  48/48, AboutTab 38/38.
+  - **M1** (`ChangelogModal.test.ts`): riaperta dopo il caricamento, `changelog-loading` c'è ancora. Prima di riaprire il
+    test verifica `cached.has('it')`.
+  - **M2**: riaperta dopo il caricamento fatto da un altro consumatore, v1.2.0 resta `lang="en"`. Il test verifica le due
+    letture del file, quella fallita e quella riuscita.
+  - **About** (`AboutTab.test.ts`): `changelogModal.open` resta falso, e la scheda disegna una sua `changelog-modal`.
+    Il test usa `expect.soft`, così il rosso mostra entrambe le cose.
+  - **`Sidebar.changelog.test.ts`**, nuovo: la `ChangelogModal` vera; mock solo il modulo del changelog e
+    `ConnectionSecurityIndicator`. I test 1–4 sono rossi:
+    1. `show()` da fuori: nessuna finestra;
+    2. la versione della sidebar apre la finestra, ma `open` resta falso;
+    3. la chiusura: rosso già all'apertura, per la stessa causa del test 1;
+    4. lo smontaggio non chiude lo stato.
+- **Note implementazione**:
+  - nella Sidebar, che è in modalità legacy, Svelte 5.48 compila `open={changelogModal.open}` in
+    `($.deep_read_state(changelogModal), $.untrack(() => changelogModal.open))`;
+  - resta reattivo perché `deep_read_state` scorre l'oggetto e chiama il getter `open`. Se smettesse di funzionare, lo
+    coglie il test 1 della Sidebar.
+
+### CL1.4 — Codice e verdi Vitest ✅ (19/10, 15:33–15:45)
+- `work/acl1/apply_code.py` applicato. Le modifiche:
+  - **`Sidebar.svelte`**:
+    - importa `changelogModal`; la variabile locale `changelogOpen` non c'è più;
+    - la versione chiama `changelogModal.show()`;
+    - `<ChangelogModal open={changelogModal.open} onClose={changelogModal.close} currentVersion={APP_VERSION} />`
+      resta fuori dal `<nav>`;
+    - `onDestroy(() => changelogModal.close())`.
+  - **`AboutTab.svelte`**: niente import di `ChangelogModal`, niente `changelogOpen`, niente seconda finestra; la versione
+    chiama `changelogModal.show()`. Il testo del bottone non cambia (la versione del backend, `systemInfo.app_version`).
+  - **`changelog.ts`**:
+    - `merged` diventa `new SvelteMap(...)`, con un commento;
+    - il commento di `peek()` dice che è reattivo.
+- `work/acl1/apply_tests.py` applicato:
+  - le finte di `ChangelogModal.test.ts` e `WhatsNewModal.test.ts` passano a `SvelteMap`, con
+    `await vi.hoisted(async () => { const {SvelteMap} = await import('svelte/reactivity'); … })`; anche il loro commento
+    lo dice;
+  - via i mock del changelog, ormai morti, e il loro commento da `AboutTab.test.ts` e `AboutTab.legal.test.ts`. La
+    scheda non importa più niente che legga `?raw`.
+- **Verdi**: Vitest su 7 file (i tre dei rossi, `AboutTab.legal`, `Sidebar.legal`, `WhatsNewModal`,
+  `ChangelogModal.managed`): **121/121**, carico 40.
+  - Il log non ha avvisi di Svelte né errori non gestiti (`work/acl1/cl14-green-run1.log`).
+- **Controlli**:
+  - Prettier pulito sui 9 file;
+  - `theme-roles.mjs --check` pulito («0 files dropped below their record»);
+  - `dev.py front check`: **0 errori, 0 avvisi** (carico 43; `work/acl1/cl14-front-check.log`).
+  - **⚠️ Fuori pista**: un'attesa del carico (54, poi 48).
+- **Doc** (CL1.5, fatta qui perché è una riga sola): `developer/frontend/state/app-state.md`, una riga «Changelog window»
+  nella tabella degli store, dopo «What's new» (3 celle, come le altre).
+  - La pagina utente `user/settings/about.en.md` nomina già i due punti d'accesso, e resta vera.
+  - `developer/docs/release-pipeline.md` («App: the sidebar, and the changelog modal it opens») resta vera.
+- Lo slot è pronto, `work/slot_acl1/slot.sh <HEAD> both`:
+  - prima `restore_orig.sh`, che rimette i tre file del prodotto a HEAD, e il rosso;
+  - poi `apply_code.py` e il verde;
+  - in mezzo il runner ricostruisce da sé la build di debug, perché è vecchia.
+
+### CL1.3 — Rossi E2E scritti ✅ (19/10, 15:20–15:50; `test-author` `84ceedb4`; nessuna esecuzione)
+- `e2e/layout/changelog-locale.spec.ts`, nuovo blocco «Changelog window — one window for every entry point (A-CL1)»,
+  solo desktop, TEST_USER, sola lettura, tetto di 90 s per test.
+  - **Precondizioni rilette**: nessun onboarding dovuto, e `GET /api/v1/auth/me` con `whats_new` nullo. Le corsie di
+    test hanno `LIBREFOLIO_DISABLE_WHATS_NEW`.
+  - **E1** (UI italiana, Informazioni):
+    - il chunk della traduzione viene trattenuto con `page.route('**/_app/immutable/**/*.js')`. Lo riconosce un marcatore
+      letto da `CHANGELOG.it.md`: la prima sequenza ASCII di almeno 40 caratteri che nessun altro `CHANGELOG*.md`
+      contiene;
+    - poi apri («loading», una sola richiesta trattenuta), Esc, rilascia, aspetta la valutazione, riapri;
+    - alla fine i capitoli devono essere nelle lingue che dice `CHANGELOG.it.md`.
+  - **E2** (UI inglese): dall'Informazioni, nessuna finestra dentro `about-tab`. Il genitore della finestra riceve un
+    segno; Esc; poi la versione della sidebar apre una finestra figlia dello stesso elemento segnato.
+- **Due scostamenti dal brief**, motivati dall'autore:
+  - `route.continue()` invece di `route.fulfill({response, body})`. Il backend comprime in gzip i JS sopra 1 KB, e un
+    corpo decodificato servito con la `content-encoding` originale rompe la pagina, come in `auth.spec.ts`
+    (`holdItalianCatalogue`);
+  - due `import(url)` nella pagina, sotto un `expect.poll` di 10 s:
+    - in Chromium gli import in attesa dello stesso fetch si risolvono in un ordine non fisso, quindi uno solo non basta;
+    - il secondo trova la voce del module map già completa e si risolve con un task in coda dopo quello dell'app;
+    - la continuazione dell'app (il merge nella cache) è fatta solo di microtask.
+- **Controlli**: prettier pulito; `tsc --noEmit -p tsconfig.e2e.json` esce 0 (`work/acl1/e2e-acl1-*.log`).
+- **Atteso**:
+  - E1 rosso oggi: «loading» resta dopo la riapertura;
+  - E2 rosso oggi: la finestra dell'Informazioni sta dentro `about-tab`;
+  - entrambi verdi con la cura;
+  - i due test esistenti, aperti dalla sidebar alla prima apertura, verdi in tutte e due le corse.
+- **Filtro del runner**: le parole dopo l'azione diventano il `--grep` di Playwright. Lo slot fa girare l'intera voce,
+  4 test.
+- La riga `desc` della voce `changelog-locale` nel registro descrive ancora solo i due test vecchi. È un file condiviso:
+  serve il via del coordinatore per scriverla.
+
+### CL1.6 — Slot E2E (coordinatore, 15:48: «slot E2E tuo da adesso, ~12 minuti»; ok di scrittura sulla riga `desc`)
+- Il coordinatore segnala il disco pieno verso le 15:45, e ha cancellato la mia `mkdocs_src/site`.
+- Le verifiche prima dello slot:
+  - 21 GiB liberi;
+  - il piano è integro;
+  - le scritture dei passi CL1.1–CL1.4 sono tutte anteriori alle 15:45, e i verdi e il front check sono passati;
+  - le copie dei tre file curati sono in `work/acl1/cured/`.
+- `work/slot_acl1/slot.sh 1d50d8c42 both`, partito alle 15:49:05, impronta prima `017cd12d872dc986`.
+  - **Corsa 1, rosso** (15:49–15:54; i tre file del prodotto rimessi a HEAD, diff 0+/0−; build di debug rifatta):
+    **2 failed, 2 passed** (46,5 s).
+    - I due test vecchi dalla sidebar sono verdi.
+    - **E1** è rosso dove deve: dopo la riapertura dall'Informazioni, `changelog-loading` c'è ancora («Expected: 0,
+      Received: 1», riga 357, dopo `MODAL_TIMEOUT_MS`).
+      - Tutto ciò che precede è passato: l'apertura con «loading», una sola richiesta trattenuta, Esc, il rilascio, la
+        barriera di valutazione.
+      - È il sintomo del developer, riprodotto con il modulo vero e il chunk vero.
+    - **E2** è rosso dove deve: `about-tab` contiene la sua `changelog-modal` («Expected: 0, Received: 1», riga 384).
+  - **Corsa 2, verde** (15:54–16:00; la cura rimessa con `apply_code.py`, diff 16+/14−; build di debug rifatta):
+    **4 passed** (1,1 min).
+  - Impronta dopo `017cd12d872dc986`, identica a prima. I tre file curati sono identici byte per byte alle copie di
+    `work/acl1/cured/` (`cmp`). Porta 6182 libera; «slot libero» al coordinatore alle 16:00.
+- ✅ CL1.6 chiuso.
+
+### CL1.5 — La riga `desc` del registro ✅ (19/10, 16:02)
+- Ok di scrittura del coordinatore (15:48) sulla sola riga `desc` di `changelog-locale` in
+  `scripts/test_runner/_frontend_utility.py`. La riga aggiunge il blocco A-CL1 (E2: la finestra della sidebar, nello
+  stesso elemento, mai dentro la scheda; E1: chiusa con il chunk trattenuto, riaperta dall'Informazioni dopo il
+  caricamento).
+- Applicata con `work/acl1/apply_desc.py`: `ruff` e `black --check` puliti, il file si analizza, `git diff --check`
+  pulito.
+
+### CL1.7 — Verifiche finali e checkpoint (19/10, 16:00–16:15)
+- **Vitest dei vicini** (carico 39): 12 file, **636/636**:
+  - `changelog.test.ts` (ambiente node: la `SvelteMap` della build server è la `Map`);
+  - `whatsNewStore`, `whatsNew`, `DeferredAppPopups`, `OnboardingCoachmark`, `settingsTabs`;
+  - `layout.authGate`, `layout.gate`, `settings/page.tabs`;
+  - i cancelli `instanceProfile`, `themeColorMeta`, `themeRoles`.
+  - Nessun avviso di Svelte (`work/acl1/cl17-neighbours.log`).
+- **Indice**: ✅ A-CL1 aggiunta in fondo alla sezione A di `BACKLOG_POST_1.2.md`. Nessun residuo da indicizzare.
+- **Previsione dei conflitti** (base = `git merge-base HEAD dev_release2` = `f3805aa09`; dev locale `a397812d1`):
+  - **`_frontend_utility.py`**: 7 commit di dev. `git merge-file` è pulito: la mia riga è la `desc` di
+    `changelog-locale`, lontana dalle loro.
+  - **`BACKLOG_POST_1.2.md`**: 37 commit di dev, `merge-file` pulito.
+  - **Nessun altro file**: il diff a tre punti è vuoto su ogni ramo locale.
+- Checkpoint mandato al coordinatore; FROZEN.
