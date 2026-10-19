@@ -89,6 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- **The Fineco importer (beta) brings in only settled operations.** An operation whose value date is still ahead (usually the last one or two working days) waits for your next export, commission included; a blue note says how many. A row missing a quantity or an amount is imported as before, with a note that lists it and links to a new GitHub issue.
+- **Danske Bank**: trades settled after the cash statement's last day are a blue note instead of a warning; they arrive with the next import.
 - **Leaner database indexes.** The upgrade to 1.3 removes 13 database indexes no query used: copies of the indexes unique constraints already have, and shorter versions of other indexes. Every new price now updates one index fewer, and price history takes about a fifth less space with its indexes. An existing database file keeps its size: the freed space is reused as new data arrives. Backups are written compact.
 - The same portfolio report requested twice at once (two tabs, a refresh during a slow load) is computed once.
 - **One change over the range, from the server.** The change over the selected range on the Assets cards, in the FX table and cards, on an FX pair's page and on an asset's page is now computed by the server, so the same figure appears everywhere; beside a live price it is the change up to that price. A price written down to 0 shows −100 %, and a change that cannot be computed in the display currency is left out instead of mixing currencies.
@@ -285,7 +287,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A portfolio, lots, risk or AI Export request with a date range reaching far into the future or the past no longer freezes the server: a range now ends no later than tomorrow and starts no earlier than your first transaction.
 - Scheduled Investment: the first sync of a new asset no longer fails, and an asset's late-interest value is the same in its history, its current price and its settlement.
 - A number too large for the server (`1E+400`) or `NaN` in a request body gets a validation error instead of a server error.
-- Numbers with an absurd exponent and transaction dates outside 1 January 1900 – one year from today are refused with a clear message, instead of slowing the server; the merged fields of a pair promotion are checked like a new transaction's.
+- Numbers with an absurd exponent and transaction dates outside 1 January 1900 – tomorrow (the server's date) are refused with a clear message, instead of slowing the server; the merged fields of a pair promotion are checked like a new transaction's.
 - The lots analysis no longer fails when shares moved by a transfer to or from a broker outside the view (a broker's page, a broker filter, a co-owner who sees one broker, AI Export): units received open a lot at the transfer's cost, units sent close at that day's market price.
 - The lots analysis no longer fails when a transfer between your brokers is still on its way at the end of the chosen period: its units show as in transit.
 - Lots performance for a position entered before the asset's first price: the days before that price are now valued at cost, as on the Dashboard. The TWRR now includes the move from cost to the first price (it used to miss it and disagree with the ROI), and a transfer on such a day no longer empties the chart.
@@ -403,6 +405,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⚠️ Breaking changes
 
+- **A transaction dated after tomorrow (the server's date) is refused** with `dateOutOfRange`, in the form, the bulk editor, the import and the API; 1.2 accepted later dates.
 - **`POST /api/v1/assets/prices`: `-1` no longer empties a field.** Open, high, low and volume take a number of 0 or more, `null` (or no field) to leave the stored value as it is, or the string `"clear"` to empty it; `-1` is now a negative number, refused with 422 like any other. A close must be above 0.
 - `POST /api/v1/fx/currencies/rate`: when every rate in a request is refused, the 400 answer's `detail` is now an object `{code: "fx_rates_refused", message, rejected}` instead of a plain string (the `message` keeps the old text). API clients that read `detail` as a string should read `detail.message`.
 - The global setting `enable_registration` becomes `registration_mode` (`open`, `invite`, `disabled`): an API client that read the old key must read the new one.

@@ -41,6 +41,15 @@ their name (BTP, BOT, CCT…). Bonds repaid at or below par, and other redemptio
 - **Amounts as written.** Each row keeps its own currency (**Divisa**), with no conversion; the
   **Cambio** column is ignored.
 - **Dates.** LibreFolio uses the value date (**Data valuta**), or the trade date when it is missing.
+- **Only settled operations.** An operation whose date is after today has not settled yet:
+  typically one of the last one or two working days, whose value date is still ahead when you
+  export. It is not imported this time, commission included, and a blue note says how many.
+  Nothing to do: it arrives with your next export, once settled.
+- **Rows with a missing number.** If a row has no quantity or no amount, LibreFolio reads it as
+  it is: a missing amount counts as 0, and an operation that needs a quantity cannot be
+  imported without one. A blue note lists these rows and asks you to check them. The importer
+  is in beta, so it may be wrong: if the file looks right to you, use the link in the note to
+  open an issue on GitHub, and we will look into it.
 
 ## 🔗 Developer Reference
 
