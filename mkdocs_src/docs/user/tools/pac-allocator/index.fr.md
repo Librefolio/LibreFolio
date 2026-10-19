@@ -206,8 +206,13 @@ Deux actions vous aident à y parvenir :
 Cette étape n'apparaît que lorsque le scénario nécessite des taux de change. Elle contient un
 taux $x$ par paire de devises en jeu, chacun **Auto** ou **Manuel** :
 
-- **Auto** : le dernier taux stocké dans LibreFolio, lu à l'ouverture de l'étape et
-  à nouveau juste avant le calcul. Aucun fournisseur de données n'est appelé.
+- **Auto** : le dernier taux valide stocké dans LibreFolio, lu à l'ouverture de l'étape et
+  à nouveau juste avant le calcul. Aucun fournisseur de données n'est appelé. Un taux
+  stocké que le planificateur ne peut pas utiliser (0 ou infini, qu'une version
+  précédente pouvait enregistrer) est ignoré au profit du précédent taux valide, avec
+  un avertissement qui nomme la paire, le jour ignoré et le jour utilisé : corrigez ce
+  jour dans **Modifier les taux** de la paire ; d'ici là, les résultats peuvent être
+  légèrement approximatifs.
 - **Manuel** : votre propre taux.
 
 Elle contient aussi un **Spread de conversion** $s$ : un pourcentage de chaque montant converti,
