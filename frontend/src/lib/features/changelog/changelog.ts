@@ -18,6 +18,7 @@
  * keeps its plain spaces, as the translation pipeline writes them.
  */
 
+import {SvelteMap} from 'svelte/reactivity';
 import changelogRaw from '../../../../../CHANGELOG.md?raw';
 
 export interface ChangelogSubsection {
@@ -390,7 +391,8 @@ export function translationLoaders(modules: Record<string, () => Promise<string>
 
 export interface LocalizedChangelog {
     /** The chapters for a locale when they need no wait: English for `en` or a language with no
-     *  translation, the merge once that language has loaded; undefined while it still has to load. */
+     *  translation, the merge once that language has loaded; undefined while it still has to load.
+     *  Reactive: read in a `$derived` or an effect, it follows the load that fills it, whoever started it. */
     peek(locale: string | null | undefined): DisplayedChapter[] | undefined;
     /** Loads the language's translation once, merges and caches it. Never rejects: a failed load
      *  resolves to English and is not cached, so the next call tries again. */
@@ -399,7 +401,8 @@ export interface LocalizedChangelog {
 
 export function createLocalizedChangelog(english: readonly ChangelogChapter[], loaders: ReadonlyMap<string, () => Promise<string>>): LocalizedChangelog {
     const englishOnly = english.map(inEnglish);
-    const merged = new Map<string, DisplayedChapter[]>();
+    // A SvelteMap, so a window waiting for a language sees the load that fills it, its own or another's (A-CL1).
+    const merged = new SvelteMap<string, DisplayedChapter[]>();
     const pending = new Map<string, Promise<DisplayedChapter[]>>();
 
     function peek(locale: string | null | undefined): DisplayedChapter[] | undefined {

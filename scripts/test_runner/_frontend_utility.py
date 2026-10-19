@@ -1128,7 +1128,7 @@ def populate_registry(registry: dict) -> None:
         "changelog-locale",
         front_changelog_locale,
         name="Changelog Locale Tests",
-        desc="The changelog modal opened from the sidebar version: in the Italian UI each chapter is Italian when the repository's CHANGELOG.it.md translates it and English with the Italian not-translated pill otherwise; in the English UI every chapter is English with no pill (content-agnostic, desktop, lot CL)",
+        desc="The changelog modal opened from the sidebar version: in the Italian UI each chapter is Italian when the repository's CHANGELOG.it.md translates it and English with the Italian not-translated pill otherwise; in the English UI every chapter is English with no pill (content-agnostic, desktop, lot CL). One window for every entry point (A-CL1): the version in Settings → About opens the sidebar's window, in the same element, never one inside the tab (E2); in the Italian UI, the window closed while its translation chunk is held at the network shows the translated chapters, not «loading», when reopened from About once the chunk has loaded (E1)",
         prereq="Test users created",
         tests="layout/changelog-locale.spec.ts",
     )
