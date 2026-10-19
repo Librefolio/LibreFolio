@@ -477,7 +477,12 @@ export interface RefreshSummary {
     unchanged: number;
     /** Labels of facts the source no longer publishes: they keep the copied value. */
     missing: string[];
+    /** What the re-read said (X-R45b): a saved FX rate skipped for an older one, for one; the Brokers' structural note left out, as `CopyNotice` does. */
+    issues: SourceIssue[];
 }
+
+/** Structural, one per Broker (LibreFolio stores no fees or order modes): the Broker step says it once. */
+const EXECUTION_PROFILE_CODE = 'allocation.broker_execution_profile_unsupported';
 
 const ascending = (a: number, b: number) => a - b;
 
@@ -550,7 +555,15 @@ function sameQuote(left: DraftPrice, right: DraftPrice): boolean {
  * available amount) follows the new balance, any other amount is never touched.
  */
 export function refreshCopiedFacts(draft: PlannerDraft, source: PlannerSource, plan: RefreshPlan): RefreshSummary {
-    const summary: RefreshSummary = {readAt: source.generatedAt, prices: 0, fx: 0, cash: 0, unchanged: 0, missing: []};
+    const summary: RefreshSummary = {
+        readAt: source.generatedAt,
+        prices: 0,
+        fx: 0,
+        cash: 0,
+        unchanged: 0,
+        missing: [],
+        issues: source.issues.filter((issue) => issue.code !== EXECUTION_PROFILE_CODE),
+    };
     const records = new Map<CopyKind, CopyRecord>();
     const record = (kind: CopyKind): CopyRecord => {
         let copy = records.get(kind);
