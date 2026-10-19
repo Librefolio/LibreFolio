@@ -8,6 +8,7 @@ database row or process cache is mutated.
 from __future__ import annotations
 
 import dataclasses
+import inspect
 import json
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -1608,14 +1609,21 @@ async def test_saved_fx_prefill_returns_the_direct_saved_rate_for_a_canonical_pa
     assert issues == []
 
 
+#: X-R45b's look-back, ``fx_quotes._previous_usable_row(session, base, quote, before)``: its parameters, to read a call
+#: whether its arguments were passed by position or by name.
+PREVIOUS_USABLE_ROW_SIGNATURE = inspect.Signature([inspect.Parameter(name, inspect.Parameter.POSITIONAL_OR_KEYWORD) for name in ("session", "base", "quote", "before")])
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("saved_rows", "expected_code"),
+    ("saved_rows", "expected_code", "looks_back"),
     [
-        pytest.param({}, "allocation.saved_fx_missing", id="missing"),
+        pytest.param({}, "allocation.saved_fx_missing", False, id="missing"),
+        # RED until X-R45b (the look-back): fx_quotes has no _previous_usable_row to replace yet.
         pytest.param(
             {("EUR", "JPY"): _fx(quote="JPY", rate="0")},
             "allocation.saved_fx_invalid",
+            True,
             id="invalid-nonpositive",
         ),
         pytest.param(
@@ -1624,6 +1632,7 @@ async def test_saved_fx_prefill_returns_the_direct_saved_rate_for_a_canonical_pa
                 ("JPY", "USD"): _fx(base="JPY", quote="USD"),
             },
             "allocation.saved_fx_missing",
+            False,
             id="no-chaining",
         ),
     ],
@@ -1632,16 +1641,31 @@ async def test_saved_fx_missing_invalid_and_no_chaining_are_explicit(
     monkeypatch,
     saved_rows,
     expected_code,
+    looks_back,
 ):
+    """A pair with no saved row, or with rows of other pairs only (no chaining), is ``allocation.saved_fx_missing``; a
+    saved row whose rate is not usable, with no usable row before it, is ``allocation.saved_fx_invalid``. Either way the
+    quote has no rate and the one issue names the pair.
+
+    ``invalid-nonpositive`` — RED until X-R45b (the look-back). A saved rate that is not usable — 0 here; a negative or a
+    non-finite one alike, ``_usable_rate`` being finite and > 0 — sends the builder back to the pair's previous usable
+    row, ``fx_quotes._previous_usable_row``, which does not exist before the cure, so ``monkeypatch`` cannot replace it.
+    Replaced to find nothing, it is awaited once, on the builder's session, with the pair's base and quote and the 0
+    row's date; finding nothing, the error stands. The other two cases never look back: they have no row of the pair.
+    """
     monkeypatch.setattr(
         source_fx_quotes,
         "_load_latest_planner_fx_rows",
         AsyncMock(return_value=saved_rows),
     )
+    look_back = AsyncMock(return_value=None)
+    if looks_back:
+        monkeypatch.setattr(source_fx_quotes, "_previous_usable_row", look_back)
+    session = object()
     issues = []
 
     rows = await source_fx_quotes.build_planner_fx_quotes(
-        object(),
+        session,
         request_pairs=["EUR/JPY"],
         as_of=AS_OF,
         issues=issues,
@@ -1658,6 +1682,11 @@ async def test_saved_fx_missing_invalid_and_no_chaining_are_explicit(
         "name": "pair",
         "value": "EUR/JPY",
     }
+    if looks_back:
+        look_back.assert_awaited_once()
+        passed = PREVIOUS_USABLE_ROW_SIGNATURE.bind(*look_back.await_args.args, **look_back.await_args.kwargs).arguments
+        expected = {"session": session, "base": "EUR", "quote": "JPY", "before": saved_rows[("EUR", "JPY")].date}
+        assert passed == expected, f"the look-back was awaited with {passed}: expected {expected}, the pair and the 0 row's date (X-R45b)"
 
 
 @pytest.mark.asyncio

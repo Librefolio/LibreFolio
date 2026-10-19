@@ -2,8 +2,8 @@
 
 What it guards. A guard, no product change (green on HEAD 5d87dec28). Two readers value a portfolio day in the report
 currency, and both get their rates from ONE ``convert_bulk`` rule (``backend/app/services/fx/conversion.py``): the
-latest usable rate on or before the day, with no limit on how far back, a row ``usable_fx_rate_clause``
-(``backend/app/db/precision.py``) rejects (a stored 0, ``inf``, anything at or above ``usable_fx_rate_bounds()[1]``) being
+latest usable rate on or before the day, with no limit on how far back, a row ``convert_bulk``'s inline bounds,
+``usable_fx_rate_bounds()`` (X-R38), reject (a stored 0, ``inf``, anything at or above ``usable_fx_rate_bounds()[1]``) being
 a missing rate, filled over like a day without a row.
 
 - The engine (``financial_math/portfolio/engine.py::_preload_fx_rates``) asks ``convert_bulk`` for one unit of every
@@ -55,7 +55,7 @@ Teeth — product mutations that turn it red, each applied at runtime in a priva
 - (b) ``NativeCash._rate_at`` reading the exact day only: masked end to end (``compute_native_cash`` asks every day and
   ``convert_bulk`` has filled each), so ``TestOneReadingOfTheGap`` stays green; ``TestTheNativeCashFillsOnItsOwn`` is
   red (the rebuilt cash raises ``ValueError`` from the first gap day);
-- (c) ``usable_fx_rate_clause`` dropped from ``convert_bulk``: on 03-08..03-12 the 0 row divides by zero, so neither map
+- (c) ``convert_bulk``'s inline bounds (X-R38) dropped: on 03-08..03-12 the 0 row divides by zero, so neither map
   has a rate, the native valuation bisects back to 03-07 while the engine's securities are missing, and the BUY of 03-11
   is converted by neither; on 03-13..03-17 both maps read 1E-19 (the same in both: only the «last usable rate» check
   sees it) — all five tests red;

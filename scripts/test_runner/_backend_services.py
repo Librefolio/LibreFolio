@@ -1029,10 +1029,12 @@ def services_probe_rate_limit(verbose: bool = False, test_names: list = None) ->
 
 def services_bulk_reads_chunked(verbose: bool = False, test_names: list = None) -> bool:
     """MF-SEC9a (rest): bulk reads of the BRIM candidate search and of the WAC FX evidence in statements SQLite can parse (private in-memory DB)."""
-    print_section("Services: Bulk Reads Chunked (MF-SEC9a)")
-    print_info("Testing: services/brim/brim_provider.py (search_asset_candidates_bulk, _classify_candidates, _contains_matcher vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows)")
+    print_section("Services: Bulk Reads Chunked (MF-SEC9a, X-R45 reverted, X-R45b)")
     print_info(
-        "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term; MF-SEC9g: classification off the loop (thread + loop handshake), compiles ≤ needles and dumps ≤ assets, 300×1 011 parity guard, exact-hit order guard"
+        "Testing: services/brim/brim_provider.py (search_asset_candidates_bulk, _classify_candidates, _contains_matcher vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows), services/pac_allocator/source/fx_quotes.py (_load_latest_planner_fx_rows, build_planner_fx_quotes), services/fx/conversion.py (convert_bulk), services/fx/period_changes.py (_first_rate_days_inside), schemas/portfolio.py (PortfolioPlannerSourceIssueCode), schemas/pac_allocator/base.py (PlannerIssueCode)"
+    )
+    print_info(
+        "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term; MF-SEC9g: classification off the loop (thread + loop handshake), compiles ≤ needles and dumps ≤ assets, 300×1 011 parity guard, exact-hit order guard; X-R45 reverted: the planner's latest saved FX row and the WAC row of its exact date are read as stored (a legacy 0, inf or 1E+14); X-R45b: a latest saved rate of 0 or inf falls back to the previous valid one with one allocation.saved_fx_skipped warning (pair, skipped_date, used_date), over a run of two too; no valid rate before → the latest row's quote with no rate and allocation.saved_fx_invalid; 1E+14 quoted as read back; the code a source issue code, not a tool one; guards: the latest usable rate wins, convert_bulk and _first_rate_days_inside still skip unusable rates"
     )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_reads_chunked.py", test_names)
     return run_command(cmd, "Bulk reads chunked tests", verbose=verbose)
@@ -1704,10 +1706,10 @@ def services_scheduler_jobs(verbose: bool = False, test_names: list = None) -> b
 
 
 def services_scheduler_last_fx_dates(verbose: bool = False, test_names: list = None) -> bool:
-    """Test X-R45 on the history sync's lookup: the real _last_fx_dates skips a stored rate no read may use (lane DB)."""
-    print_section("Services: Scheduler Last FX Dates (X-R45)")
+    """Test the X-R45 revert on the history sync's lookup: the real _last_fx_dates answers the latest stored rate's date, whatever its value (lane DB)."""
+    print_section("Services: Scheduler Last FX Dates (X-R45 reverted)")
     print_info("Testing: backend/app/services/platform/scheduler/jobs.py (_last_fx_dates, _history_sync_start) on the lane database")
-    print_info("Tests: 1.5 on D1 and a legacy 0 / inf / 1E+14 on D2 → D1 for both slugs, the sync starting the day after D1; a legacy rate alone → nothing; guard: a usable latest rate (2, 1E-10, 99999999999999) → D2")
+    print_info("Tests: 1.5 on D1 and a legacy 0 / inf / 1E+14 on D2 → D2 for both slugs, the sync starting the day after D2 (not fetched again); a legacy rate alone → its date, D2; guard: a usable latest rate (2, 1E-10, 99999999999999) → D2")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_last_fx_dates.py", test_names)
     return run_command(cmd, "Scheduler last FX dates tests", verbose=verbose)
 
@@ -2458,8 +2460,8 @@ Note: No backend server required.
         cat,
         "bulk-reads-chunked",
         services_bulk_reads_chunked,
-        name="Bulk Reads Chunked (MF-SEC9a)",
-        desc="search_asset_candidates_bulk over 100 (first size past HEAD's 91) and 300 isin+symbol+name and 150 name-only triples (1 100 / 3 300 / 1 200 OR terms) == search_asset_candidates per triple, 50/90-triple guards; _load_wac_fx_rows with 500, 501 and 1 510 keys exact; barriers: one OR of 1 500 refused, a nested OR's terms counted; MF-SEC9g: the candidate classification's LIKE matching runs off the event loop's thread and the loop answers a coroutine mid-classification (100 generic names × 300 funds); ≤ 1 LIKE compile per needle and ≤ 1 identifier_other dump per stored asset (counted, not timed); 300 extractions over 1 011 assets == search_asset_candidates (wildcard bond names, codes stored in either case, duplicate holders); exact ISIN/ticker hits in display-name order",
+        name="Bulk Reads Chunked (MF-SEC9a, X-R45 reverted, X-R45b)",
+        desc="search_asset_candidates_bulk over 100 (first size past HEAD's 91) and 300 isin+symbol+name and 150 name-only triples (1 100 / 3 300 / 1 200 OR terms) == search_asset_candidates per triple, 50/90-triple guards; _load_wac_fx_rows with 500, 501 and 1 510 keys exact; barriers: one OR of 1 500 refused, a nested OR's terms counted; MF-SEC9g: the candidate classification's LIKE matching runs off the event loop's thread and the loop answers a coroutine mid-classification (100 generic names × 300 funds); ≤ 1 LIKE compile per needle and ≤ 1 identifier_other dump per stored asset (counted, not timed); 300 extractions over 1 011 assets == search_asset_candidates (wildcard bond names, codes stored in either case, duplicate holders); exact ISIN/ticker hits in display-name order; X-R45 reverted: _load_latest_planner_fx_rows answers the latest stored row (a legacy 0, inf or 1E+14 on D2 over 2.5 on D1, as of D2 and later, and alone), _load_wac_fx_rows reads the exact key's stored row whatever its rate; X-R45b: build_planner_fx_quotes skips a latest saved rate of 0 or inf for the pair's previous valid one (finite, > 0), with one warning allocation.saved_fx_skipped about the used row's quote (params pair, skipped_date = the most recent skipped, used_date): 0 or inf on D2 over 2.5 on D1 (as of D2 and later) and a run of two on D2 and D3 (0 then inf, inf then 0; as of D3 and later) quoted from D1, never from the valid ERN/SZL and BBD/STN rates planted between; no valid rate before (inf alone, 0 then inf; guards: 0 alone, inf then 0) → the latest row's quote with no rate and allocation.saved_fx_invalid, no warning; guard: 1E+14 on D2, over 2.5 and alone, quoted as read back, no issue; allocation.saved_fx_skipped in PortfolioPlannerSourceIssueCode, not in PlannerIssueCode; guards: the latest usable rate wins (4, 1E-10, 99999999999999), a usable WAC rate on its exact date, convert_bulk (backward-fill anchor and window) and _first_rate_days_inside read 1E-10, 1.5, 99999999999999 and skip 0, 1E-11, -1.5, inf, 1E+14, 1E+19",
         # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no service replaced.
         isolation="pure",
     )
@@ -2718,8 +2720,8 @@ Note: No backend server required.
         cat,
         "scheduler-last-fx-dates",
         services_scheduler_last_fx_dates,
-        name="Scheduler Last FX Dates (X-R45)",
-        desc="jobs._last_fx_dates, the real one on the lane database: a usable rate on D1 and a legacy 0, inf or 1E+14 on D2 answer D1 for both slugs of the pair, and the history sync (horizon a week) starts the day after D1, so D2 is fetched again; a pair whose only rate is unusable answers nothing; guard: a usable latest rate (2, 1E-10, 99999999999999) answers D2",
+        name="Scheduler Last FX Dates (X-R45 reverted)",
+        desc="jobs._last_fx_dates, the real one on the lane database, after the X-R45 revert: a usable rate on D1 and a legacy 0, inf or 1E+14 on D2 answer D2 for both slugs of the pair, and the history sync (horizon a week) starts the day after D2, so D2 is not fetched again; a pair whose only rate is a legacy one answers that rate's date; guard: a usable latest rate (2, 1E-10, 99999999999999) answers D2",
         # WRITE_SCOPED: each test writes rows of its own pair XQD/XQE (used by no other test, checked free before writing)
         # with raw SQL in its own session and never commits: the session rolls them back, no other connection sees them.
         isolation="write-scoped",
