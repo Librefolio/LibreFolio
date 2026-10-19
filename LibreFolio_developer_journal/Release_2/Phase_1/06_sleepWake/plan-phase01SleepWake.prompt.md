@@ -6318,3 +6318,70 @@ e i modelli provati in Python (nessun server, nessun file del repo toccato); ric
 - MF rivede la semantica.
 - Chi possiede AI Export rivede lo spostamento.
 - La casa neutra: `services/signals/aggregation.py`, oppure `services/temporal/`; decide il coordinatore.
+
+### Z-29 — il contratto rivisto: niente secondo giro, una lettura per asset (19/10 ~15:25, via del developer)
+
+> **Via al lotto** (developer, dal coordinatore, 19/10 ~15:10); i tre effetti visibili accettati. Sul primo, testuale:
+> «non ho giusto capito perchè il confronto compare appena dopo, nella bulk di asset global non ci sono sia gli asset
+> che i segnali in un'unica soluzione? questo permette se lo stesso asset è da confrontare con più di uno di
+> ottimizzare e fare 1 solo caricamento dal DB e poi in base all'asset si campiona, e come vale per quel segnale, vale
+> per tutti quelli che possono beneficiarne». Quindi niente secondo giro: nella stessa richiesta una voce di confronto
+> dice «campionami come la voce X»; il backend sceglie prima il passo della scheda, poi campiona il bersaglio sugli
+> stessi secchi; ogni asset si legge una volta per richiesta e si campiona per ogni consumatore; lo stesso per ogni
+> segnale che legge un'altra serie; `resolution` esplicito per voce resta.
+>
+> **Decisioni del coordinatore**: la casa neutra è `services/signals/aggregation.py`; Z-29r è mio, lo rivede J; ordine
+> e revisori come nel piano breve. La base la aggiorna lui dopo il gate della fusione (con Z-33r e Z-32cr); fino ad
+> allora i rossi si scrivono senza lanciare nulla; poi la corsia 6186 si ripopola con `--force --clean`.
+
+**Il riferimento: una chiave, non un indice.** Il web app divide le voci in lotti consecutivi e divide di nuovo un lotto
+rifiutato per i giorni (Z-27, `bulkBatches.ts`): un indice cambierebbe a ogni taglio. Una chiave scelta dal client non
+cambia, e il pianificatore dei lotti tiene insieme la scheda e i suoi bersagli come un gruppo solo.
+
+**Contratto (sostituisce quello del piano breve dove diverso).**
+- `FAPriceQueryItem`:
+  - `key`: facoltativa, 1–64 caratteri (`A–Z a–z 0–9 _ . : -`), unica nella richiesta;
+  - al più uno fra `max_points` (il backend sceglie il passo), `resolution` (il passo chiesto) e `sample_like`
+    (la `key` di un'altra voce della stessa richiesta): due insieme, 422;
+  - `sample_like`: la voce indicata non ha a sua volta `sample_like` (un livello solo, niente cicli) e ha lo stesso
+    `date_range`; una chiave sconosciuta o ripetuta, 422. La voce prende il passo della voce indicata e i suoi secchi;
+    il suo `first` cade nel più tardo fra il giorno F della voce indicata e il proprio primo giorno, cioè dove il
+    confronto parte oggi. Se la voce indicata non ha nulla da riempire, la voce si campiona da sé con il
+    `max_points` o la `resolution` della voce indicata (giornaliera se quella non ne ha). Gli errori di riferimento
+    (chiave sconosciuta o ripetuta, catena, intervallo diverso) sono un 422 `sample_reference` con il motivo,
+    prima di ogni lettura.
+  - Con `max_points`, `resolution` o `sample_like`: `signals` accettati da Z-29s (fino ad allora 422);
+    `include_events` e `annotation_requests` 422.
+- `FAPriceQueryResult`: come nel piano breve (`resolution` sempre, `prices` ridotti, `sample_bounds` solo se ridotta,
+  i segnali ridotti dal profilo).
+- **Una lettura per asset** in ogni richiesta:
+  - un asset che una voce chiede intero (una voce giornaliera, una con segnali, una dipendenza di un segnale del
+    backend) si legge nella lettura giornaliera unica di oggi, e ogni altra sua voce sullo stesso intervallo si
+    campiona in memoria da quelle righe, senza altre letture;
+  - gli altri si leggono ridotti: una sola istruzione per intervallo e passo, per tutti gli asset di quel gruppo (al
+    più tre per intervallo: giornaliero, settimanale, mensile), e da lì ogni voce;
+  - i segnali che leggono un'altra serie la prendono dalla stessa lettura giornaliera, come oggi.
+- Budget: una voce ridotta conta i suoi punti più i due estremi; una voce con segnali, i giorni del riempimento.
+- Frontend: la scheda manda `key` (per esempio `asset:42`); ogni bersaglio dei suoi confronti è una voce con
+  `sample_like` = quella chiave, nello stesso lotto. Il confronto prende la base dal `first` del bersaglio
+  (`_baseValue`). Il dialogo, scegliendo un bersaglio, manda la voce della scheda (`include_price: false`) e quella del
+  bersaglio in una richiesta sola.
+
+**Costo rivisto.**
+- Z-29a: **2 giorni** (era 1,25): più la chiave e `sample_like` con i loro 422, e la regola della lettura unica.
+- Z-29b: **2 giorni** (invariato): via il secondo giro, dentro i gruppi nei lotti (`bulkBatches.ts`).
+- Z-29r 0,5 (mio, revisore J), Z-29s 1,5, Z-29d 0,5, doc 0,5.
+- **Totale: circa 7 giorni** (era 6,25).
+
+**Rossi di Z-29a** (scritti senza lanciarli, fino alla base nuova):
+- il modulo puro: `sample_dates` dà i rappresentanti dei secchi (F solo quando chiude il suo secchio);
+- `prices` ridotti, `sample_bounds` (solo sulle voci ridotte; `first` = il punto giornaliero in F; `last` = quello
+  alla fine = l'ultimo di `prices`);
+- `resolution` chiesto (settimanale e mensile su ogni intervallo; giornaliero = la risposta di oggi);
+- `key` e `sample_like`: il bersaglio sul passo e sulle date della scheda, il suo `first` dove parte il confronto,
+  più bersagli e più schede sullo stesso asset; i 422 (due campi insieme, chiave sconosciuta o ripetuta, catena,
+  intervallo diverso);
+- la lettura unica: un asset letto intero serve le sue voci ridotte senza altre letture; per gli altri, una sola
+  istruzione per intervallo e passo;
+- il budget con gli estremi; PQS-Q14 (rifiutata prima di leggere i secchi) resta;
+- API: OpenAPI con `key`, `resolution`, `sample_like`, `sample_bounds`; una richiesta con scheda e bersaglio.
