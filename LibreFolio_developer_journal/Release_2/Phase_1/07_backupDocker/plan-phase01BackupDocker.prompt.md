@@ -7124,3 +7124,155 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > - ✅ **Checkpoint** (17:15), 🧊 FROZEN. Commit proposti:
 >   - `fix(backup): busy card stays silent, console names job`: `backupJob.svelte.ts`, i due test, le due doc;
 >   - `docs(journal): B-8 busy console, developer decision`: questo piano e il backlog.
+
+### B-50 + B-51 — analisi (2026-10-19, 17:17-17:22) — 🧊 inviata al coordinatore, prima del codice
+
+> **Richiesta** (coordinatore, 17:17, dopo il commit di B-8 `a3e0f4c8e` + `ae59f158a`): niente in coda per B, quindi
+> un'analisi breve di B-50 (il 500 vicino) e di B-51 (la colonna «⚠️» conta anche le note blu). Sola lettura.
+>
+> **B-50, misurato** con due sonde pure in una cartella temporanea, tolta alla fine (`files/b50-analysis/`):
+>
+> | `state.json` di un job | `get_job` | `remove_expired_jobs` | `end_interrupted_jobs` | una partenza (`_prepare`) |
+> |---|---|---|---|---|
+> | `[]`, `null`, `5`, `"x"` | `AttributeError` | `AttributeError` | `AttributeError` | `AttributeError` |
+> | vuoto, JSON non valido | `JSONDecodeError` | ok | ok | ok |
+> | `{}`, `created_at` numerico o non data | `KeyError`, `TypeError`, `ValueError` | ok | ok | ok |
+>
+> - Un JSON che non è un oggetto blocca ogni nuova partenza: scheda e pannello ricevono un 500 senza codice
+>   (`start_job` prende solo `BackupBusyError`, `BackupPathError`, `OSError`), la CLI un traceback. Dura finché
+>   qualcuno toglie la cartella a mano. All'avvio la pulizia dei job si ferma lì; `sweep_backup_leftovers` lo
+>   registra e prosegue.
+> - **Lo stesso buco c'è nel ripristino**: `restore_jobs._read_state` fa `record.get(...)` su un JSON non oggetto.
+>   L'`AttributeError` non è preso (`OSError, ValueError, TypeError`), quindi `_checks()` e `prune()` falliscono, e
+>   con loro ogni nuova verifica (`start_check` → `prune`) e ogni fine di caricamento (`_remove_replaced_uploads`).
+>   Un file vuoto o `{}` invece è ignorato. I lettori basati su pydantic (`apply`, `outcome`, `staging`,
+>   `manifest`) sono sani.
+> - Gli altri stati rovinati rompono solo `get_job`: GET, file e DELETE di quel job rispondono 500. La cartella
+>   scade dopo un'ora (mtime), quindi la cosa si risolve da sola.
+> - Come ci si arriva: a mano, o con un disco rovinato. Un file vuoto anche da un'interruzione di corrente:
+>   `_write_state` non fa `fsync`, e durante un job scrive ogni 0,5 s.
+> - **Cura proposta**, piccola (circa 10 righe in 2 file, nessuna migrazione né i18n):
+>   1. `BackupJob.from_json` e `restore_jobs._read_state`: un documento che non è un oggetto diventa l'errore che i
+>      chiamanti già prendono (`ValueError`, `None`);
+>   2. `get_job`: uno stato illeggibile è «non trovato» (404 `backup_job_not_found`, che scheda e pannello sanno già
+>      trattare), con un log dell'id e della classe dell'errore. La cartella resta fino alla scadenza. È quello che fa
+>      già il ripristino con un controllo illeggibile.
+>
+>   Niente `fsync`: costerebbe a ogni progresso.
+> - **Domanda** (non decido io): va bene il 404 per uno stato illeggibile? L'alternativa è un 500 con un codice suo,
+>   che la scheda mostrerebbe come errore inatteso e che «Check again» ripeterebbe.
+> - Test: righe pure nelle suite dei job e del ripristino; un caso API (GET → 404) nello slot.
+>
+> **B-51, lettura su dev** (area di W):
+>
+> - `ImportWizardModal.svelte`, colonna `warningCount`: intestazione «⚠️», tooltip «Parser warnings (skipped rows,
+>   ambiguous data)», cella `row.response.warnings.length`. Conta ogni nota, anche le `info`.
+> - Note `info` su dev: Scalable e Scalable deposit (5 codici), Danske (4), Fineco (2), Crédit Agricole (2). Non
+>   riguarda solo Fineco: un file Scalable con dividendi netti mostra «⚠️ 1».
+> - Il dettaglio di una lettura (`ParseDetailModal`) mette le note sotto «Warnings» («No warnings» quando non ce ne
+>   sono), ognuna col suo colore. La conferma del passo 3 invece separa già «Informational notes» e «Needs your
+>   attention».
+> - C'è un precedente: `DataQualityBanner` e `LotDataQualityBanner` contano gli avvisi a parte e hanno un titolo per
+>   le sole note (`dataQuality.headerInfoOnly`).
+> - **Opzioni** (UI, per W o il developer):
+>   - (a) la colonna conta solo gli avvisi;
+>   - (b) due numeri nella cella, ⚠️ ambra per gli avvisi e ℹ️ blu per le note, quando ci sono;
+>   - (c) l'icona del livello più grave, con il totale.
+>
+>   Consiglio (b), e nel dettaglio due sottosezioni come nella conferma del passo 3.
+> - Costo piccolo, solo frontend: la cella, il tooltip e il titolo in 4 lingue. Oggi nessun test tocca la colonna né
+>   la sezione: conviene estrarre il conteggio in una funzione pura con un suo test Vitest. Il file è di W.
+
+### B-8, difetto della revisione automatica — una richiesta sicura che segue il backup in chiaro di un altro (2026-10-19, 17:22-18:10) — ✅ 🧊 FROZEN (checkpoint delle 18:10)
+
+> **Il difetto** (revisione automatica prima dell'ingresso di B-15 + B-8, girata dal coordinatore):
+>
+> - Se `start(password)` riceve un 409 che nomina un job `ui` in corso, la scheda lo segue senza guardare la
+>   modalità (`backupJob.svelte.ts:151-157`). Il job può essere di un'altra scheda o di un altro admin, in chiaro.
+> - `create()` ha già svuotato i campi della password (`BackupDownloadCard.svelte:100-102`). Alla fine la scheda
+>   mostra «Archive ready» per uno `.zip` in chiaro, e `onDone` lancia `backup.created` come se fosse il backup di B.
+> - L'avviso di privacy compare solo con `mode === 'clear'` (`:127`): B può salvarlo credendolo cifrato. Al
+>   contrario, chi chiede in chiaro riceve un `.lfbk` con la password di A.
+> - Il client non può controllare prima: `encrypted` resta `False` fino alla fine (`jobs.py:291`). Nessun test di
+>   B-8 partiva con una password.
+>
+> **Cura del coordinatore**: alla fine del job seguito, confrontare `job.encrypted` con la modalità richiesta; se non
+> coincidono, niente presentazione e niente `onDone`, e «occupato». Chiede se preferisco non seguire affatto da un 409
+> quando c'è una password, e perché.
+>
+> **Verificato** (17:23): i campi di `BackupJob` non hanno né utente né sessione, quindi il server non sa chi ha
+> avviato un job. `encrypted` (righe 291 e 297) dice la modalità, non la chiave; la fase `encrypting` c'è solo per un
+> sicuro. La card mostra `backup-encrypted-note` quando `job.encrypted`.
+>
+> **La mia risposta** (17:24): non seguire con una password; per le richieste in chiaro, il controllo alla fine.
+>
+> - Il controllo da solo lascia aperto «sicuro → sicuro» di un altro admin: offerto a B come suo, ma la password di
+>   B non lo apre. Per una richiesta sicura va bene solo il suo job, e nulla prova che quello del 409 lo sia.
+> - Il costo: un backup sicuro la cui risposta si è persa resta «occupato» finché il job non finisce, come prima di
+>   B-8; il suo archivio scade dopo un'ora.
+> - Proposta:
+>   - `start(password)` con un 409 che nomina un job `ui`: niente seguito, `failed` con `backup_busy`;
+>   - `start()` in chiaro: seguito, ma un job che finisce con `encrypted: true` (sondaggio, prima lettura già finita,
+>     «Check again») non viene presentato. Niente `onDone`, l'id adottato si dimentica, `failed` con `backup_busy` e
+>     `onFailed` una volta.
+> - Cura esatta, dopo la 1.3: un id di richiesta salvato nel job e confrontato nel 409.
+> - I rossi aspettano la decisione: i casi «sicuro» cambiano fra le due cure.
+> - ✅ **Decisione** (coordinatore, 17:37): «confermo la tabella di destra. Con una password, dal 409 nessun seguito;
+>   in chiaro, il controllo alla fine (`encrypted: true`, quindi non presentato, id dimenticato, `backup_busy`)».
+>   Via ai rossi e alla cura, commit a parte. L'id di richiesta generato dal client va in `PROSSIMI_LAVORI.md`, dopo
+>   la 1.3. Nello stesso messaggio: B-50 sì (404 `backup_job_not_found` per uno stato illeggibile, nel backup e nel
+>   ripristino), dopo B-8; B-51 a W, con la proposta dei due numeri.
+> - ✅ **Contratto** (`files/b8-mode-contract.md`, 17:40). Un dettaglio mio, di completezza e non di prodotto:
+>   l'adozione (un job seguito da un 409 per una richiesta in chiaro) si ricorda anche in `sessionStorage`, chiave
+>   nuova `librefolio.backup.adopted`. Senza, un ricaricamento durante il seguito la perde: `resume()` riprende l'id
+>   (la scelta 3 lo salva proprio per questo) e alla fine offrirebbe un `.lfbk` altrui. I percorsi che non adottano
+>   non toccano lo storage più di oggi. Rossi a TA-B8-MODE (`backupJob.test.ts`, `BackupDownloadCard.test.ts`, sola
+>   scrittura).
+> - **Cura pronta, non applicata**: `apply_b8_mode.py`, 8 operazioni in `backupJob.svelte.ts` (`--check` OK):
+>   - la condizione del seguito più `password === undefined`;
+>   - `#adopted`, con `#adopt()`, `#unadopt()` e la lettura del segno nel costruttore (un segno che nomina un altro
+>     id si scarta); `#forget()` toglie anche l'adozione;
+>   - in `#settle()`, un `done` adottato e `encrypted` → `#forget()` e `#fail('backup_busy', 'start', null, news)`;
+>   - un avvio riuscito toglie un'adozione rimasta;
+>   - il commento del modulo.
+> - ✅ **Doc** (17:42):
+>   - `security.md`: nella frase di B-8, il seguito solo per una richiesta in chiaro e solo se finisce in chiaro,
+>     l'adozione tenuta fra i ricaricamenti, una richiesta sicura mai. Riavvolte solo le righe cambiate (5 → 8);
+>   - `backup_restore.en.md`, la riga 🚦: vale solo per un backup in chiaro, e negli altri casi la card dice che un
+>     altro backup gira.
+> - ✅ **Rossi** (TA-B8-MODE, 17:43-18:04, sola scrittura):
+>   - `backupJob.test.ts`, 5 gruppi, 25 rossi e 16 guardie:
+>     - una richiesta sicura non segue mai, ed è rossa anche quando il job nominato è il suo, che resta da rileggere
+>       con «Check again»;
+>     - l'adozione si ricorda dal primo momento;
+>     - la fine di un job adottato: cifrata → non presentata; fallita o sparita → come oggi, con la chiave tolta;
+>     - il ricaricamento (`resume()` fa lo stesso controllo);
+>     - la pulizia: un avvio riuscito toglie un'adozione rimasta, un segno che non nomina il job seguito si scarta;
+>   - le guardie: un sicuro avviato qui che finisce cifrato è offerto come oggi; nei percorsi senza adozione
+>     nessuna chiamata in più allo storage;
+>   - `BackupDownloadCard.test.ts`: 2 rossi (sicuro → «occupato» senza seguito; chiaro → fine cifrata non
+>     presentata) e una guardia (chiaro → fine in chiaro offerta, con l'avviso di privacy);
+>   - la chiave nuova si legge come stringa, più un solo test sull'export per `Reflect.get`: nessun rosso cade su un
+>     import.
+> - ✅ **Rosso** (18:05, carico 15): **27 falliti**, 302 passati. Le ragioni sono quelle attese: la richiesta sicura
+>   seguita (`api.get` chiamato), la chiave di adozione assente, l'archivio cifrato offerto (`done` al posto di
+>   `failed`). Nessun errore di import o di sintassi.
+> - ✅ **Cura** (18:06): `apply_b8_mode.py`, 8 operazioni in `backupJob.svelte.ts` (+56/−1).
+> - ✅ **Verdi** (18:06-18:08):
+>   - Vitest dell'intera feature `backup`: 9 file, **1072 passati**;
+>   - prettier pulito sui 3 file; `front check` 0 errori e 0 avvisi;
+>   - `mkdocs build` stretta, `check-links`, `utils gate-docs-links` 63.
+> - **Le domande di test-author**, risolte dalle regole che ci sono già, senza decisioni nuove:
+>   - un archivio adottato e offerto in chiaro tiene il segno, che si toglie con il job (o con un avvio nuovo);
+>   - dopo un ricaricamento, una prima lettura senza risposta e poi «Check again» che trova il job cifrato: non
+>     presentato e non annunciato, perché il job non era stato visto girare (la regola di sempre).
+> - **Caso limite, da sapere (una domanda per il coordinatore):** una richiesta in chiaro rifiutata dal backup
+>   sicuro della scheda stessa (avviato qui, con il sondaggio che si era arreso) lo adotta. Alla fine è cifrato,
+>   quindi non presentato e dimenticato, anche se è il suo. Con «Check again» al posto di «Create» lo si ritrova.
+>   Rifinitura possibile: non adottare il job che la scheda segue già senza averlo adottato. Cambia la tabella
+>   decisa, quindi non l'ho fatta.
+> - **Fuori dal lotto**: il backend non cambia, quindi niente API ed E2E. Nessuna riga di CHANGELOG (backup nuovo
+>   nella 1.3).
+> - ✅ **Checkpoint** (18:10), 🧊 FROZEN. Commit proposti:
+>   - `fix(backup): secure start never follows another backup`: `backupJob.svelte.ts`, i due test, le due doc;
+>   - `docs(journal): B-8 mode defect, B-50/B-51 analysis`: questo piano e il backlog.

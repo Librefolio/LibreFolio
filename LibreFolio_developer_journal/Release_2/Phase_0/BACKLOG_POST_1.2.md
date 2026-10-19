@@ -7931,7 +7931,10 @@ sulla base `23f6578f3`.
   - la risposta resta com'è;
   - a schermo la scheda dice solo «occupato», e segue il proprio backup `ui` come prima;
   - id, origine e stato vanno in console, con un `console.warn` per rifiuto. Fatto lo stesso giorno.
-  Dettagli: piano 07, «B-15 + B-8 — la ripresa».
+  Difetto trovato dalla revisione automatica prima dell'ingresso (19/10) e curato lo stesso giorno: una richiesta
+  sicura poteva seguire il backup in chiaro di un altro. Ora una richiesta sicura non segue mai da un 409; una in
+  chiaro non presenta un job adottato che finisce cifrato (decisione del coordinatore).
+  Dettagli: piano 07, «B-15 + B-8 — la ripresa» e «B-8, difetto della revisione automatica».
 - ✅ **B-9 · Il token del pannello non è fra i controlli della configurazione** — piccolo; B, 15/10 (B8).
   - Oggi un `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` inutilizzabile (corto, non ASCII visibile, `_FILE` illeggibile) si vede
     solo alla prima richiesta del pannello: 503 `backup_panel_unavailable` e una riga d'errore nel log.
