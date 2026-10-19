@@ -8056,6 +8056,13 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     quattro posti) e poi, con ogni probabilità, fa fallire le letture del server di quelle righe (pysqlite alza al
     `fetch`, come prova la barriera di SCA-036; non misurato sul server). Segnalato al coordinatore.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19b1.3».
+- **E-21 · Le frasi `BRIMParseError` dei plugin arrivano in inglese, dentro la cornice tradotta** — medio, chiarezza;
+  coordinatore, 17/10 (decisione (c) di C-70b). Da C-70b il 400 del parse è `parse_failed`, con una cornice tradotta
+  («Il plugin X non ha potuto leggere Y: …»), ma il motivo resta la frase inglese del plugin: circa 60 `raise
+  BRIMParseError(...)` in più di 30 plugin (`backend/app/services/brim_providers/*/plugin.py`). La cura, nello stile di
+  K2a: un codice e un contesto per ogni causa che l'utente può correggere (`BRIMParseError(message, details={"code": …,
+  "context": …})`, o un campo dedicato), tradotti in `importWizard.parseRefusal.<code>` dove lo dice la regola R1, e il
+  risolutore di C-70b che li preferisce alla frase. Dopo la 1.3; W rivede. Dettagli: piano 08, «C-70b».
 
 ## Y · Cruscotto e grafici (fase 01)
 
