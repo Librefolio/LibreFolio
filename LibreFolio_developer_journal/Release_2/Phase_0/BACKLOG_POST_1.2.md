@@ -8726,6 +8726,15 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - L'idea di H: un piccolo segno nella cartella dei dati, legato alla versione dell'app e alla testa di alembic e
     cancellato dal commit di un ripristino, con cui i risvegli normali saltano la scansione.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19a.4».
+- **E-23 · AI Export: un asset con prezzi solo prima del periodo risulta coperto con una serie vuota** — piccolo,
+  chiarezza; E, 19/10 (analisi di E-AI503). Preesistente, fuori da E-AI503: aperta, nessuna decisione (per J e lo
+  sviluppatore).
+  - Se l'ultimo prezzo salvato è anteriore al periodo, i punti del periodo sono solo riportati in avanti.
+    `portfolio.technical_prices` tiene l'asset in `assets` con la valuta, i bucket tutti vuoti e `latest_close` nullo,
+    e lo conta coperto. `portfolio.technical_coverage` lo dà invece non coperto (0 osservazioni).
+  - Con la regola dello sviluppatore («il calcolo … sul ritorno di punti che il db dà») potrebbe passare fra gli
+    `uncovered_assets` con un motivo suo; oggi il prompt non dice perché la serie è vuota.
+  - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-AI503.0» e «E-AI503.5».
 
 ## Y · Cruscotto e grafici (fase 01)
 

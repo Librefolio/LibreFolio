@@ -8275,3 +8275,250 @@ non sposti il registro.
 > - **I selettori**: `services ai-export`, `services ai-export-pure`, `api ai-export`, `api ai-export-unpriced-asset`,
 >   e il Vitest del renderer. Facoltativa, per J: una sonda mirata sulla copia di riferimento (lo stesso export dello
 >   sviluppatore), con l'equivalenza UI/sonda.
+
+#### E-AI503.5 — Il via, le decisioni dello sviluppatore, il contratto (2026-10-19, 15:54; base `70ad4cec1`)
+> **Il via** (coordinatore, 15:54), con le decisioni dello sviluppatore. Testuale: «si deve scriverlo anche lì,
+> ovviamente, specifico che non è che gli mancano i prezzi perché è un crowdfunding, è solo un caso, un qualunque asset
+> potrebbe non avere prezzi, sia chiaro, il calcolo non va fatto sul tipo, ma sul ritorno di punti che il db dà».
+> 1. **Portafoglio e broker**: l'asset senza serie (vuota, o con valute miste) esce da `assets` e resta fuori da
+>    `covered_asset_count`. Il prompt dice perché, asset per asset: «nessun prezzo salvato»; le valute miste hanno un
+>    motivo loro.
+> 2. **Asset singolo**: `currency` nullo, e una frase esplicita nel prompt (nessun prezzo salvato per questo asset). La
+>    colonna omessa non basta.
+> 3. **Il criterio** è sempre sui punti che il DB restituisce, mai sul tipo dell'asset. I test usano anche un asset di
+>    tipo qualunque (un ETF senza prezzi), non solo il CROWDFUND.
+>
+> Così il `reason_code` dell'asset non coperto entra nel lotto. Nel checkpoint va la forma esatta delle frasi del
+> prompt: il coordinatore la porta allo sviluppatore prima dell'ingresso.
+>
+> **Le risposte del coordinatore**:
+> - il bump 1→2 dei tre componenti, sì (J lo rivede);
+> - `npm ci` sì, solo dal lock;
+> - nessuno ha aperto quei file;
+> - la riga della nuova azione `api ai-export-unpriced-asset` nel runner la scrivo io (ok di scrittura su quella sola).
+>
+> Prima i rossi; corsia 6188, carico sotto 50.
+>
+> **Il disco pieno delle 15:45**: niente di mio è fallito. Le prove erano finite alle 15:44, tutte verdi, e il piano è
+> integro: 8277 righe, committato in `70ad4cec1`. Ora restano 18 GiB liberi.
+>
+> **Il contratto** (mio, dentro il via; le frasi le approva lo sviluppatore):
+> - **Il motivo**, `technical_payloads.py`: `PriceSeriesGapReason = Literal["no_stored_price",
+>   "mixed_price_currencies"]`.
+> - **Chi lo decide**, `technical_shared.py`: `price_series_gap(result)`, accanto a `coherent_price_currency`. Guarda
+>   solo i punti che la storia dei prezzi restituisce:
+>   - nessun risultato, o nessun punto → `no_stored_price`. `result.prices` è già tagliato al periodo, con i punti
+>     riempiti all'indietro: è vuoto esattamente quando non c'è un prezzo salvato con data fino alla fine del periodo;
+>   - punti che non condividono una valuta → `mixed_price_currencies`. Copre anche punti senza valuta, impossibili:
+>     `price_history.currency` è `NOT NULL`;
+>   - altrimenti `None`.
+> - **Portafoglio e broker**:
+>   - `AssetPriceSeriesGapPayload(asset_id, portfolio_weight_ratio, reason_code)`;
+>   - `PortfolioTechnicalPricesPayload.uncovered_assets`, obbligatorio e ordinato per id;
+>   - un validatore: `covered_asset_count == len(assets)`, `eligible_asset_count == len(assets) +
+>     len(uncovered_assets)`, nessun id ripetuto né presente nelle due liste.
+> - **Asset singolo**: `AssetOhlcReturnsPayload.currency: CurrencyCode | None`, obbligatorio ma nullabile, e
+>   `reason_code: PriceSeriesGapReason | None`. Un validatore:
+>   - la valuta è nulla esattamente quando c'è un `reason_code`;
+>   - con la valuta nulla, nessun bucket popolato e nessun `latest_close`/`latest_date`.
+> - **Le versioni**: 1→2 per `portfolio.technical_prices`, `broker.technical_prices` e `asset.ohlc_returns`, in tre
+>   posti: lo spec, il segnaposto in `components/catalog.py`, `COMPACT_COMPONENT_VERSIONS` `{1, 2}`. Lo
+>   `schema_version` resta 1, come per i bump J-12 e B3b, che aggiungevano campi.
+> - **Il renderer** (`snapshotDataRenderer.ts`):
+>   - le frasi stanno in una mappa locale e chiusa per `reason_code` (`PRICE_SERIES_GAP_MEANINGS`, esportata per i
+>     test): il frontend non prende testi di presentazione dal backend (`frontend-ai-export.instructions.md`);
+>   - portafoglio e broker: dopo SERIES, una tabella `ASSETS WITHOUT PRICE SERIES` (`entity`,
+>     `portfolio_weight_percent`, `reason_code`), con una riga `<codice>=<frase>` per ogni codice presente;
+>   - asset singolo: una riga `reason_code` nel SUMMARY, poi la riga `<codice>=<frase>`;
+>   - un codice sconosciuto, o una lista malformata: la sezione esce col renderer generico, senza frasi inventate;
+>   - le sezioni senza buchi restano identiche byte per byte alla v1.
+> - **Fuori dal contratto, da chiedere e non decidere**: la serie stantia (prezzi solo prima del periodo) resta in
+>   `assets` come oggi.
+
+1. ✅ **Il via e lo stato** (16:0x): HEAD `70ad4cec1`, albero pulito, la porta 6188 libera.
+2. ✅ **`npm ci`: non serve, non eseguito** (16:0x)
+   > **Note implementazione**: `frontend/node_modules` c'è dal 15/10, 13:41 (le prove di E-19b1 lo usavano). Il lock è
+   > cambiato l'ultima volta il 15/10 alle 08:44 (`87be1e2d8`). Confronto fra `node_modules/.package-lock.json` e
+   > `package-lock.json`:
+   > - nessuna versione cambiata, nessun pacchetto in più;
+   > - 134 pacchetti mancanti, tutti opzionali o legati a un'altra piattaforma (`@esbuild/*`, `@emnapi/*`), che npm non
+   >   installa su darwin-arm64.
+   >
+   > `vitest`, `svelte-check` e `prettier` sono in `.bin`.
+   >
+   > **⚠️ Fuori pista**: nell'analisi avevo scritto «`node_modules` manca nel worktree» ripetendo la nota del primo
+   > giorno, senza guardare. Era falso, e il coordinatore ha approvato `npm ci` su quella premessa. Va corretto nel
+   > checkpoint.
+3. ✅ **I rossi** (`test-author`): i componenti, il payload, l'API e il Vitest; la riga del runner la scrivo io.
+   > **Frontend, fatto** (`test-author` `ai503-frontend-reds`, 16:0x–16:3x): il file nuovo
+   > `frontend/src/lib/features/ai-export/__tests__/snapshotDataRenderer.priceSeriesGap.test.ts`, 22 casi:
+   > - **PSG-01**: v1 e v2 identiche senza buchi, per i 3 componenti;
+   > - **PSG-02/03**: la tabella `ASSETS WITHOUT PRICE SERIES` dopo SERIES, per riferimento, peso e codice, e una riga
+   >   di significato per codice;
+   > - **PSG-04**: tutti gli asset scoperti;
+   > - **PSG-05/06**: l'asset singolo, col codice nel SUMMARY e la frase subito sotto;
+   > - **PSG-07**: codice sconosciuto o lista malformata → renderer generico, in 4 casi;
+   > - **PSG-08**: la mappa ha due frasi distinte, su una riga, senza `|`;
+   > - **PSG-09**: le guardie sul ripiego YAML (v3, schema 2, FX).
+   >
+   > Le frasi non sono fissate nei test: si leggono dalla mappa. Nel file esistente `snapshotDataRenderer.test.ts` solo
+   > l'esempio della «versione sconosciuta» passa da `component_version` 2 a 3.
+   >
+   > **Le registrazioni**:
+   > - `api ai-export-unpriced-asset` in `scripts/test_runner/_backend_api.py`: una funzione più l'`add_test`, `pure`;
+   > - il file Vitest in `AI_EXPORT_UNIT_TEST_PATHS` di `scripts/test_runner/_frontend_ai_export.py`: una riga, con l'ok
+   >   del coordinatore (16:3x), che vuole il file separato.
+   >
+   > **⚠️ Fuori pista**: il registro del Vitest è un secondo file condiviso del runner, non previsto: ho chiesto prima di
+   > scriverlo.
+   >
+   > **Backend, fatto** (`test-author` `ai503-backend-reds`, 16:0x–16:3x; ha eseguito solo il controllo `ast`):
+   > - **`test_ai_export_components_technical.py`**, sezione 13: l'aiuto `_patch_get_prices_bulk_with_gaps` (preso dalla
+   >   mia sonda) e la classe `TestPriceSeriesGaps`, coi casi C01–C11.
+   >   - C09 è la barriera della serie stantia, verde oggi.
+   >   - C04 usa un broker con un asset prezzato e uno senza prezzi.
+   > - **`test_ai_export_technical_shared_pure.py`**: S01 (sei casi di `price_series_gap`, anche i punti senza valuta) e
+   >   S02 (decide sui punti, mai sull'asset: un solo parametro, `result`).
+   > - **`test_ai_export_technical_payload_invariants.py`**: P01–P11, più P12 e P13 (`currency` e `uncovered_assets`
+   >   obbligatori). Ogni rifiuto costruisce prima il fratello valido e controlla il frammento nel messaggio del
+   >   validatore (`_rejected_by`), non solo `match=`: pydantic ripete i nomi dei campi anche nei suoi errori.
+   > - **`test_api/test_ai_export_unpriced_asset.py`** (nuovo, puro):
+   >   - il router vero in-process su un SQLite privato, servizio, report e query dei prezzi veri, le cache del
+   >     portafoglio svuotate e la tabella delle festività vuota;
+   >   - il libro ha 2 broker e 4 EUR: ETF e CROWDFUND prezzati sul broker 1, ETF e CROWDFUND senza prezzi sul broker 2;
+   >   - UPA-01 (precondizione) e UPA-02 (barriera, solo il broker 1) sono verdi oggi; UPA-03, UPA-04 e UPA-05 (ETF e
+   >     CROWDFUND) sono rossi;
+   >   - le richieste vanno con `exclude_unset=True`, perché il `broker_ids` vuoto della richiesta asset darebbe 422.
+4. ✅ **I rossi nella corsia** (16:16–16:35; HEAD `70ad4cec1` più i test)
+   > **Note implementazione**: `files/tools/ai503_suites.sh red` (cioè `dev.py test --test-port 6188 --data-dir
+   > /tmp/librefolio-r13-e …`, l'API con `--no-shared-server`) e `files/tools/ai503_front.sh red` (il Vitest del lock,
+   > più Prettier). Col carico sotto 50.
+   > - `services ai-export test_ai_export_components_technical`: **10 rossi**, 109 verdi; il C09 è fra i verdi.
+   > - `services ai-export-pure`: **21 rossi**, cioè P01–P13 (14 casi) e S01–S02 (7); 323 verdi.
+   > - `api ai-export-unpriced-asset`: **4 rossi**, 2 verdi (UPA-01, UPA-02).
+   > - Vitest: **14 rossi**, 178 verdi (PSG-09 e il file esistente); Prettier pulito.
+   >
+   > **I motivi sono quelli giusti**:
+   > - i componenti cadono con `RequiredComponentBuildError` su `portfolio.technical_prices`, `broker.technical_prices`
+   >   e `asset.ohlc_returns`, e così gli indicatori che ne dipendono;
+   > - C10 e C11 falliscono su `None == []`, il campo che manca; C08 sulle versioni ancora a 1;
+   > - l'API risponde **503** `snapshot_source_failure` su `portfolio.technical_prices` (UPA-03), `broker.technical_prices`
+   >   (UPA-04) e `asset.ohlc_returns` (UPA-05, sia per l'ETF sia per il CROWDFUND): il difetto dello sviluppatore,
+   >   riprodotto da capo a fondo e senza dipendere dal tipo;
+   > - nel Vitest, v2 ricade in `PAYLOAD YAML FALLBACK` e la mappa manca.
+5. ✅ **Il codice del backend** (16:3x–16:4x)
+   > **Note implementazione**:
+   > - **`technical_payloads.py`**:
+   >   - `PriceSeriesGapReason` e `AssetPriceSeriesGapPayload`;
+   >   - `PortfolioTechnicalPricesPayload.uncovered_assets`, obbligatorio, col validatore `validate_universe`: coperti =
+   >     `len(assets)`, idonei = coperti + scoperti, nessun id due volte;
+   >   - `AssetOhlcReturnsPayload`: `currency` nullabile ma obbligatorio, `reason_code`, e il validatore
+   >     `validate_series_gap`.
+   > - **`technical_shared.py`**: `NO_STORED_PRICE`, `MIXED_PRICE_CURRENCIES` e `price_series_gap(result)`, accanto a
+   >   `coherent_price_currency`, anche in `__all__`.
+   > - **I builder**:
+   >   - `portfolio_broker_technical.py`: l'asset con un buco va in `uncovered_assets` col suo peso, ordinati per id;
+   >   - `asset_fx_technical.py`: `currency=coherent_price_currency(result)`, `reason_code=price_series_gap(result)`.
+   > - **Versioni 1→2**: i due spec dei prezzi, quello di `asset.ohlc_returns` e i 3 segnaposto in
+   >   `components/catalog.py`.
+   > - Un controllo rapido: il registro dà 2, e un payload asset con la valuta nulla valida. ruff e black puliti sugli 11
+   >   file.
+   >
+   > **⚠️ Fuori pista**: alla prima stesura avevo lasciato nel builder una guardia ridondante (`result is None or …`, con
+   > `gap or "no_stored_price"`): `price_series_gap(None)` dà già `no_stored_price`. Tolta prima delle prove.
+6. ✅ **Il codice del frontend** (16:4x)
+   > **Note implementazione** (`snapshotDataRenderer.ts`):
+   > - **La mappa**: `PRICE_SERIES_GAP_MEANINGS`, esportata, `as const`, con `isPriceSeriesGapCode`,
+   >   `priceSeriesGapMeaningLines` (una riga per codice distinto, in ordine) e `priceSeriesGaps(payload)`. Quest'ultima
+   >   rifiuta un codice sconosciuto o una lista malformata, e la sezione passa al renderer generico.
+   > - **`renderContinuousSeries`**:
+   >   - la riga `reason_code` nel SUMMARY dopo `price_basis`, con la frase sotto la tabella;
+   >   - dopo SERIES, `ASSETS WITHOUT PRICE SERIES` con `entity`, `portfolio_weight_percent`, `reason_code` e le frasi;
+   >   - la decisione di rifiutare viene prima di toccare la diagnostica.
+   > - **`COMPACT_COMPONENT_VERSIONS`**: `{1, 2}` per i tre componenti, col commento aggiornato.
+   > - Prettier ha riformattato solo il mio blocco: a HEAD il file era pulito.
+7. ✅ **I verdi e i controlli statici** (16:40–17:0x; HEAD `70ad4cec1` più il lotto, col carico sotto 50)
+   > **Note implementazione** (`files/tools/ai503_suites.sh green1`, `ai503_front.sh`):
+   >
+   > | Suite | Risultato |
+   > |---|---|
+   > | `services ai-export` (anche il file d'integrazione asset/FX sul DB vero della corsia) | **1104 passati** |
+   > | `services ai-export-pure` | **344** |
+   > | `services ai-export-period-bounds` | **8** |
+   > | `api ai-export` | **15** |
+   > | `api ai-export-unpriced-asset` | **6** |
+   > | `utils ai-export-probe-helpers` | **73** |
+   > | `services roi-fifo-utils test_portfolio_l2_report_shared` (ogni componente di ogni dominio, ogni dataset pubblico) | **4** |
+   > | Vitest, i 25 file di `AI_EXPORT_UNIT_TEST_PATHS` (col file nuovo) | **696 passati** |
+   >
+   > - Prettier pulito sui tre file del frontend; ruff e black puliti.
+   > - `front check`: **0 errori, 0 avvisi**.
+   > - `dev.py test check-orphans`: ogni test è raggiungibile (e2e 144, unit 566, backend 491).
+   >
+   > **⚠️ Fuori pista**: il primo `front check` dava 9 errori, tutti in `features/brokers/lots/*` (`scope_boundary`,
+   > `market_price_history`). Il client generato del worktree (`openapi.json` e `generated.ts`, ignorati da git) era del
+   > 17/10, più vecchio del backend portato dalle fusioni di dev. Il mio lotto non tocca l'OpenAPI: i payload sono
+   > `dict[str, JsonValue]`. `dev.py api sync` ha rigenerato solo file ignorati; dopo, 0 errori.
+8. ✅ **I documenti** (`docs-writer` `ai503-docs`, 16:5x–17:0x)
+   > **Note implementazione**: `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md`, una pagina di
+   > sviluppo senza traduzioni, +29 righe:
+   > - in «🔢 Universe Coverage Counts», un paragrafo: `covered_asset_count` dei prezzi, `uncovered_assets` col motivo
+   >   deciso sui punti e mai sul tipo, e l'asset singolo;
+   > - in «🗂️ Snapshot Data Tables», un paragrafo: la tabella `ASSETS WITHOUT PRICE SERIES`, le righe
+   >   `<codice>=<frase>`, la mappa `PRICE_SERIES_GAP_MEANINGS`, il ripiego generico. Le frasi non sono citate:
+   >   aspettano lo sviluppatore;
+   > - in «🚨 Failure and Partial-Success Semantics», una riga.
+   >
+   > Le prove: `dev.py mkdocs check-links` (97 link validi) e `dev.py mkdocs build`, rigoroso (rc 0, 190 s).
+   >
+   > **⚠️ Fuori pista**: il `docs-writer` aveva riallineato con gli spazi tutte le 14 righe della tabella dei fallimenti,
+   > per la cella nuova più larga: 13 righe cambiate solo negli spazi, un conflitto sicuro con chiunque tocchi quella
+   > tabella. Ho rimesso le righe originali byte per byte (prese da HEAD) e tenuto solo la riga nuova: il diff della
+   > pagina è ora di sole aggiunte.
+9. ✅ **Le frasi esatte, dal render vero** (16:5x–17:0x)
+   > **Note implementazione**: `files/tools/ai503_dump_snapshots.py` costruisce il libro del test API su un SQLite della
+   > cartella della sessione e chiede, col router e il servizio veri, tre snapshot. Tutti danno **200**, dove HEAD dava
+   > 503: `portfolio.asset_history` coi broker [B1, B2], `broker.asset_history` su B2, `asset.market_history`
+   > sull'ETF senza prezzi. Poi `files/tools/ai503_render.sh` li passa al renderer ufficiale (`renderSnapshotDataText`)
+   > con un file Vitest usa e getta, creato e cancellato dallo stesso script: dopo, il worktree non lo contiene. I testi
+   > sono in `files/ai503_render/`.
+   >
+   > **Le due frasi**, testuali da `PRICE_SERIES_GAP_MEANINGS`:
+   > - `no_stored_price=no price is stored for this asset up to the end of the period, so it has no price series here:
+   >   no price, return or price-based indicator can be read for it; missing data, not a zero`
+   > - `mixed_price_currencies=the prices stored for this asset are not all in one currency, so they do not form a price
+   >   series here: no price, return or price-based indicator can be read for it; missing data, not a zero`
+   >
+   > **Portafoglio** (`portfolio.technical_prices`; A3 è l'ETF senza prezzi, A4 il CROWDFUND senza prezzi):
+   > ```text
+   > SERIES
+   > |entity|portfolio_weight_percent|currency|latest_value|latest_date|
+   > |A1|10.01749%|EUR|100.25|2024-06-28|
+   > |A2|20.03497%|EUR|100.25|2024-06-28|
+   > ASSETS WITHOUT PRICE SERIES
+   > |entity|portfolio_weight_percent|reason_code|
+   > |A3|29.9775%|no_stored_price|
+   > |A4|39.97%|no_stored_price|
+   > no_stored_price=no price is stored for this asset up to the end of the period, so it has no price series here: …
+   > ```
+   >
+   > **Asset singolo** (`asset.ohlc_returns`):
+   > ```text
+   > SUMMARY
+   > |field|value|
+   > |price_basis|observed_close|
+   > |reason_code|no_stored_price|
+   > no_stored_price=no price is stored for this asset up to the end of the period, so it has no price series here: …
+   > SERIES
+   > |entity|
+   > |A1|
+   > omitted_null_columns=currency,latest_value,latest_date
+   > ```
+10. ✅ **Il checkpoint** al coordinatore (2026-10-19, 17:1x), poi FROZEN.
+   > **Note implementazione**:
+   > - HEAD `70ad4cec1`; 15 file tracciati modificati e 2 nuovi (i due file di test). `git diff --check` pulito; la
+   >   porta 6188 è libera.
+   > - Esclusi i file ignorati rigenerati da `api sync` (`openapi.json`, `generated.ts`, `generated-tools.ts`, i
+   >   contratti dei tool), `.testLog`, `site/`, i dati della corsia e la cartella della sessione.
+   > - Nel backlog, sezione E: **E-23** (la serie stantia), aperta e senza decisione.
+   > - Il CHANGELOG non è toccato: nel messaggio c'è la riga 🐛 proposta.
