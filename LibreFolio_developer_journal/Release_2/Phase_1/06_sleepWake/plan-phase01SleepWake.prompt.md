@@ -32,6 +32,31 @@
 | Z5 | «Aggiornamento prezzi…» | ✅ entrato con Z-13 (merge in dev `12cd3c2e0`, 16/10): commit `3b016dd4e` (journal `ac52425bc`, `09e490057`), Z-13 `9d19c2093` (journal `9d95afc85`), base aggiornata `41b44fb64`; Z-13b per Y11 nel checkpoint successivo; N-Z5-1…5 «da rivedere» |
 | Z6b | C-49: la cura | ✅ entrato tutto in `967094d81` (parte 1 `000090aaf`, parte 2 `fb3f98a0c`; CHANGELOG `4294ba12a`); C-49 chiusa; sezione «Z6b — spegnimento con un tempo massimo» |
 | Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | Z7a ✅ entrato; X1–X8 entrati (`da21c48c4`); **Z7b ✅ entrato** (treno 85, `e5e2595e7`; N-Z7b-1…7 «da rivedere»); **Z7c-2 ✅ entrato** (treno 97, `0dfc7cbbe`); **Z7c-1 ✅ entrato** (treno 105, `dd4a97e01`, con Z-9; N-Z7c1-1…5 «da rivedere») |
+| Z-9 | Doc delle pause dei fornitori | ✅ 16/10: `467fbac05`, entrato in `dd4a97e01` (treno 105) |
+| Z-5, Z-12 | La sync storica dall'ultima data salvata; il commento di `scheduler_state.json` | ✅ 16/10: `b36542f81` e `f561aec07`, entrati in `ebe9eb346`; CHANGELOG `7344dda47` |
+| Z-13b | La ricarica dopo un recupero salta l'«Aggiorna» dell'utente (Y11) | ✅ 16/10: `f83ab0c5b`, entrato in `26dda1a26` |
+| Z-17 | Una frase falsa in `scheduler.md`; chiusura del piano (prova su Fly) | ✅ 16/10: `e6f152622` e `b93fddb06`, entrati in `4f0a5d323` |
+| Lotto B (Z-18) | Il Dashboard non si dice «occupato» per una ricarica in background | ✅ 16/10: `1b46178bd`, entrato in `30483ec38`; CHANGELOG `4e233fe5b` |
+| Lotto A (Z-3, Z-8, Z-19) | Il «oggi» dell'utente, niente polling senza fornitore, N58 | ✅ 16/10: `a43502298`, entrato in `0f55265a1`; CHANGELOG `ac9671fd3` |
+| Z-14 | I negozi dei prezzi e dei cambi stale dopo un recupero | ✅ 17/10: `1f4986c70`, entrato in `2765773f5`; CHANGELOG `6e02e56ec` |
+| Z-14b + Z-15 | Pagine aperte e pannelli di rischio e lotti dopo un recupero | ⏸ piano pronto (sezione «Z-14b + Z-15 — piano per il mattino»), **non partito**: aspetta il sì del developer (al 19/10 nessuna risposta) |
+| Z-21, Z-20 | N58: quattro funzioni solo dei test; `zodios-client` senza moduli con le rune | ✅ 17/10: `e05b231ff` (entrato in `ffd58ffbd`), `3235837ad` (entrato in `3f654c4da`) |
+| Z-22 | Un ascoltatore in più a ogni aggiornamento a caldo | ✅ 17/10: `d49263b0e`, entrato in `22d46da6e` |
+| Z-10 | Ctrl+C su `dev.py server` | ✅ 17/10: `1bd8dc332`, entrato in `a38d6bdfe`; CHANGELOG `75a1107a7` |
+| Z-16 | L'albero tradotto di `admin/filesystem` | ✅ 17/10: `3d9b30433`, entrato in `737972ef5` |
+| Z-11 | Lock dei job tra processi | ✅ 17/10: `2db7edd68`, entrato in `c5e3c199d`; CHANGELOG `47405701f` |
+| X-R55 | Tetto agli intervalli di date di prezzi e cambi (lotto di X) | ✅ 17/10: `a71d23e7e`, entrato in `ab7711f04`; CHANGELOG `eed325d99` |
+| Z-25 | Tetti alle richieste di massa | ✅ 17/10: `4b711e803`, entrato in `d0bc7a547`; CHANGELOG `282c583b5` |
+| Z-26 | L'attesa del lock con un tempo massimo | ✅ 17/10: `e9999a11a`, entrato in `8c362c1f3`; CHANGELOG `8850fe814` |
+| Z-28 | I file di lock non seguono un symlink | ✅ 17/10: `3a3d5ab1c`, entrato in `2b9786ae5`; CHANGELOG `11a6f4ea1` |
+| Z-27 (+ SEC9-2) | Le richieste di massa del web app a lotti; budget 1 M | ✅ 17/10: `8d236fa11`, entrato in `726d90d72`; CHANGELOG `f1786a883` |
+| X-R65 | Date fra il 1900 e domani nelle scritture di prezzi e cambi (lotto di X) | ✅ 17/10: `30e19b9d9`, entrato in `c726b9d89`; CHANGELOG `8df7164c8`; seguito `9539de9d4` |
+| Z-30 | Il caricamento della storia intera parte al più dal 1900 | ✅ 17/10: `501375cdc`, entrato in `fb514073b`; CHANGELOG `93065bc7c`; seguito `06ec7d443` in `80cef0e43` |
+| Z-32 (c) | L'avviso dei titoli quotati in pence (migrazione 010) | ✅ 17/10: `aa9e07544`, entrato in `46ea09b02`; CHANGELOG `22b9b90ce`. 19/10: la 010 è in discussione (sezione «Z-33 ridotta») |
+| Z-33 | Le date Yahoo sul giorno della borsa (migrazione 011, riparazione D″) | ✅ 17/10: `60170aae5`, entrato in `51b5c8db1`; CHANGELOG `b8bcc8cd2`; seguiti `79265b1a0` (`e20055213`) e `b5da2277d` (`d01a13b10`); devWiki `f74229303`. **19/10: riduzione decisa dal developer**, analisi «Z-33 ridotta» |
+| Z-29 | La lista asset su «All»: una serie ridotta per le schede | Analisi ✅ 17/10 (N90 approvata); **Z-29a sospesa il 19/10** con gli ampliamenti che il developer sta leggendo: i rossi sono parcheggiati come patch nella cartella di sessione (`files/parked/`) |
+
+Contabilità rimessa in pari il 19/10 (base `ede7adf75`), con i commit come prova (`git log 459131eb8..HEAD`).
 
 Checkpoint FROZEN a fine Z6a; poi un checkpoint per lotto.
 
@@ -3658,7 +3683,10 @@ Stima: mezza giornata, più gli slot.
 - File aperti da altre sessioni (Y, X, i colori): solo `<script>`, ma ogni via va annunciato.
 
 **Fatto quando**: i rossi sono verdi; i 7 E2E sono verdi nello slot, con i loro controlli; la ricarica non accende
-mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 sono ✅ nel backlog.
+mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 passano a ✅ nel backlog.
+
+> **Stato (19/10)**: questo piano non è partito. Il developer non ha ancora risposto alla domanda di UX; Z-14b e Z-15
+> restano aperte nel backlog. La frase qui sopra era la definizione di fatto, non uno stato.
 
 ### Z-16 — l'albero tradotto di `admin/filesystem`, a mano (17/10)
 
@@ -5549,3 +5577,156 @@ raccomandazione. Nessun codice.
 **Raccomandazione.** (A), nella 1.3: il rischio è un OOM con 30 asset su «All» in una macchina piccola, il caso normale
 di un cliente del cloud, e la cura è additiva e piccola. Ordine: Z-29a, poi Z-29b. (C) solo come tampone, se la 1.3 non
 ha posto per Z-29b. In attesa della decisione.
+
+### Z-33 ridotta — via la riparazione, resta la correzione del plugin: analisi (19/10 ~11:45, sola lettura, `ede7adf75`)
+
+> **Decisione del developer** (19/10, inoltrata dal coordinatore, testuale): «fai solo la correzione, se servirà gli
+> utenti apriranno una issue e gli diremo di cancellare entrambi e rifare il sinc». Prima ancora: niente bonifica dei
+> dati né colonne nel DB, perché il sistema deve restare generico; niente regola dei ±1 giorno. Z-33 è su
+> `origin/dev_release2`: niente riscrittura, solo commit nuovi. Regole nuove: nessuna decisione di prodotto mia (le
+> scelte sono le domande in fondo), il codice solo dopo il via, i carichi pesanti solo negli slot.
+
+**1. I commit** (tutti antenati di `ede7adf75`):
+- `60170aae5` `fix(yahoo): date bars on the exchange's own day`, 22 file (+2 825/−51): plugin, `schemas/prices.py`,
+  `db/models.py`, `refresh.py`, `price_store.py`, `event_store.py`, `utils/exchange_dates.py` (nuovo), migrazione 011
+  (nuova), quattro file di test (uno nuovo), otto pagine di doc, `_backend_db.py`. Entrato in `51b5c8db1`; CHANGELOG
+  🐛 `b8bcc8cd2`; journal `4fc738106`.
+- `f74229303` la pagina devWiki, la riga dell'indice e la voce del log (journal `13b3d3928`).
+- `79265b1a0` (MF) `redate_provider_rows` solo in avanti: `price_store.py`, quattro test, pagina devWiki (dev
+  `e20055213`).
+- `b5da2277d` (H, X, W) la presa del segno, la guardia degli eventi, la precedenza del fuso, l'avviso del fuso
+  sconosciuto: `refresh.py`, `event_store.py`, il plugin, `exchange_dates.py`, due file di test, due pagine di doc,
+  pagina devWiki (journal `7fb23a879`, dev `d01a13b10`).
+
+**2. Cosa resta: la correzione del plugin** (`yahoo_finance/plugin.py`).
+- `_normalize_yahoo_date` → `index_value.date()`: la data della barra, del dividendo o dello split nel fuso in cui
+  yfinance la stampa, quello della borsa.
+- Il valore corrente: `as_of_date` nel fuso di `info["exchangeTimezoneName"]` (UTC se manca o il server non lo
+  conosce). Gli serve `exchange_zone()`: resta dov'è o va nel plugin, unico utente (D3).
+- Il fuso **dichiarato** (`FAHistoricalData.exchange_timezone`, `FACurrentValue.exchange_timezone`): senza colonna e
+  senza riparazione nessuno lo legge (D2). Se esce, escono anche `_YahooHistoryAcquisition.exchange_timezone` e la
+  precedenza indice/metadati (il nit di X). I due campi non sono in OpenAPI: niente `api sync`.
+- Test che restano (`test_yahoo_finance_errors.py`): `test_z33_history_dates_each_bar_and_event_on_its_exchange_day`
+  (11 casi: Milano, Londra coi cambi d'ora, Tokyo, Beirut, New York e UTC di guardia),
+  `test_z33_current_value_is_dated_in_the_exchange_timezone` e il test più vecchio riscritto da Z-33
+  (`…_inclusive_exchange_dates`).
+
+**3. Cosa esce, file per file.**
+- `refresh.py`: il passo 0 (la storia intera per il controllo); `legacy_check` e `last_fetch_at` della preparazione
+  (la scrittura di `last_fetch_at` sull'assegnazione resta: è di prima); `exchange_timezone`, `session_dates` e
+  `fresh_events` dei dati scaricati; la voce `"exchange_timezone"` della cache della storia; la cattura del fuso;
+  `_server_date`, `_redate_legacy_rows`, `_settle_exchange_timezone` e la sua chiamata (col `try`) in
+  `_persist_refresh_item`.
+- `price_store.py`: `redate_provider_rows` (con la guardia di MF). `event_store.py`: `redate_provider_events` (con la
+  guardia, lo spostamento delle ADJUSTMENT degli split e le unioni).
+- `db/models.py`: `AssetProviderAssignment.exchange_timezone`. `utils/exchange_dates.py`: `LEGACY_UTC_DATES`,
+  `LEGACY_UTC_PROVIDER`, `local_date_of_legacy_utc_date` (resta `exchange_zone`, D3).
+- La migrazione 011, `test_migration_011_exchange_timezone.py` (14 test) e l'azione `db migration-011` di
+  `_backend_db.py`.
+- Test: i 37 `test_z33_*` di `test_asset_source_refresh.py`, con gli aiuti e la fixture `z33_lane`; i 2 di
+  `test_assets_provider.py` (con `_z33_column`); in `test_yahoo_finance_errors.py` la dichiarazione del fuso (2 test,
+  9 casi), la regola (2 test) e l'avviso (2 test, se esce: D4). `test_migration_010` (MIG010-002/003 costruiti alla
+  010) resta valido così.
+- Doc developer: `assets/architecture.md` `#exchange-timezone` (circa 100 righe, i limiti, la presa) si riduce a poche
+  righe sulla data del plugin; via `events.md#yahoo-redate`, le righe della 011 in `database/assets_pricing.md` e
+  `database/index.md`, la frase del controllo in `scheduler.md`, il campo facoltativo in `asset_plugin_guide.md` (resta
+  la regola «le date nel fuso della borsa»), la precedenza in `provider_yahoo_finance.md`. A docs-writer.
+- Doc utente: la nota di `providers/yahoo-finance.en.md` (le righe spostate al primo giro) va tolta o riscritta (D5).
+  Z-33 ha cambiato solo l'EN: se torna esattamente com'era, il debito di traduzione sparisce.
+- CHANGELOG: la riga 🐛 (`b8bcc8cd2`, oggi riga 170) dice che le righe vecchie vengono spostate: va riscritta (D5).
+- devWiki: la pagina `problems/yahoo-bars-dated-one-day-early-east-of-utc.md` e la sua riga d'indice; il log si scrive
+  solo in aggiunta, quindi una voce nuova (D6).
+
+**4. La migrazione 010** (Z-32 (c), `reported_currency`, l'avviso dei pence), le due varianti.
+- **Resta**: costo zero, l'avviso continua. Contro: è una colonna nata da un caso di Yahoo, come la 011. A favore: il
+  dato è generico (la valuta che il fornitore dichiara nella storia, `FAHistoricalData.currency`, qualsiasi plugin).
+- **Esce** (circa mezza giornata con test e doc):
+  - codice: la migrazione 010; `models.reported_currency`; in `refresh.py` la scrittura e la voce `"currency"` della
+    cache; la pulizia al cambio di fornitore in `provider_management.py`; `utils/currency_units.py`; il blocco e il
+    parametro `quote_in_minor_unit_assets` di `data_quality.py`; in `portfolio_service.py`
+    `_quote_in_minor_unit_assets` e il campo `reported_currency` di `HeldAssetQuoteFacts`;
+  - **resta l'aiuto `_held_asset_quote_facts`**: lo usa E-19b2 per `NON_ISO_CURRENCY`, già in dev;
+  - `IssueCode.QUOTE_IN_MINOR_UNIT` è in OpenAPI (`api sync`); la chiave `dataQuality.quoteInMinorUnit` in quattro
+    lingue;
+  - test: il file della 010 (629 righe) e l'azione `db migration-010`; i casi in `test_portfolio_api.py`,
+    `test_data_quality_report.py`, `test_asset_source_refresh.py`, `test_assets_provider.py` (la guardia sul codice
+    grezzo in `test_yahoo_finance_errors.py` può restare);
+  - doc: `database/assets_pricing.md` e `index.md`, `architecture.md#reported-currency`,
+    `provider_yahoo_finance.md`, `frontend/data-quality-banner.md`; tre pagine utente cambiate solo in EN
+    (`assets/create-edit`, `providers/yahoo-finance`, `dashboard/index`); la riga ✨ del CHANGELOG (`22b9b90ce`).
+  - Z-32 (c) torna aperta, con (a) e (b), dopo la 1.3.
+
+**5. Come togliere la 011 (e la 010).** I fatti:
+- v1.2.1 si ferma alla 004: dalla 005 alla 011 nessuna migrazione è uscita in un rilascio.
+- In dev la testa è la 011 e nessuna migrazione la segue.
+- Un DB a una revisione che il codice non conosce fa fallire `alembic upgrade head` all'avvio
+  (`database_bootstrap.py`: `sys.exit(1)`). Un backup a quella revisione è rifiutato (`revision_unknown`).
+
+Le opzioni:
+- **(A) Togliere i file, più una guida.** La catena della 1.3 resta pulita. Costo: ogni DB a 011 va sistemato una
+  volta, altrimenti il server non parte.
+  - Le corsie di test: `db populate --force --clean`.
+  - Un DB da tenere: `alembic downgrade 010_provider_reported_currency` (o `009_…`) prima di prendere la rimozione;
+    oppure dopo, due righe SQL: `ALTER TABLE asset_provider_assignments DROP COLUMN exchange_timezone` (e
+    `reported_currency`) e `UPDATE alembic_version SET version_num = '…'`.
+  - I backup di sviluppo fatti dopo il 17/10 sera non si ripristinano più.
+- **(B) Una 012 che toglie le colonne.** Nessuna guida: ogni DB arriva da solo allo stesso schema. Costo: nella 1.3
+  tre migrazioni che si annullano (la 010 e la 011 restano coi loro test, e la 011 scrive ancora il segno che la 012
+  butta), più la 012 e i suoi test su un DB popolato.
+- **(C) Svuotare la 010 e la 011 sul posto: no.** I DB già a 011 terrebbero la colonna, con uno schema diverso dai
+  modelli.
+- **Consiglio**: (A), se nessun DB che conta è a 011; altrimenti (B) (D1).
+
+**6. Cosa resta di Z-36.**
+- Solo il valore corrente: su un host senza fusi è datato in UTC (per Tokyo o Sydney, prima della mezzanotte UTC, il
+  giorno prima).
+- L'avviso nel log parla delle «date in attesa del controllo una tantum»: va riscritto o tolto (D4).
+- L'immagine Docker installa già `tzdata` (`Dockerfile`, riga 92, verificato da docs-writer il 17/10).
+- Z-36 scende a minimo; la P-4 del coordinatore la copre.
+
+**7. Z-34 e Z-35.**
+- Z-34 (il rapporto delle righe rimaste spostate) perde il suo oggetto: senza riparazione tutte le righe vecchie
+  restano spostate per scelta (D7).
+- Z-35 (le chiusure salvate già rettificate) non c'entra e resta.
+
+**8. Cosa vedrà l'utente con la sola correzione** (per rispondere alle issue).
+- Prezzi: dopo l'aggiornamento il primo giro dello scheduler riscrive gli ultimi 14 giorni con le date giuste. Più
+  indietro le righe restano un giorno prima. Nella finestra, una domenica o una vigilia di festivo tiene la chiusura
+  del giorno di borsa dopo.
+- Eventi: un dividendo o uno split che cade nella finestra compare due volte, il vecchio un giorno prima e il nuovo sul
+  giorno giusto. Uno split conta solo con le righe ADJUSTMENT collegate: le cifre cambiano solo se l'utente collega
+  anche il nuovo.
+- Il rimedio del developer, «cancellare entrambi e rifare il sync», vale per gli eventi. Per una storia dei prezzi
+  pulita serve anche «cancella i dati di mercato» (`POST /assets/{id}/market-data/wipe`) e poi una sincronizzazione
+  completa. Il wipe si ferma (X-R48, 409) se uno split dell'asset ha righe collegate senza costo d'acquisto.
+
+**9. Domande, con il mio consiglio in grassetto.**
+- **D1** — Come togliere la 011, e la 010 se esce: **(A) togliere i file con la guida**, oppure (B) una 012. Va bene
+  (A) se nessun DB che conta è a 011. Quindi: l'istanza del developer, o una prova cloud, gira su `dev_release2` dal
+  17/10 sera?
+- **D2** — Il fuso dichiarato dal plugin (`FAHistoricalData`/`FACurrentValue.exchange_timezone`): **esce**, perché
+  nessuno lo legge, oppure resta per un uso futuro.
+- **D3** — `exchange_zone()`: **va nel plugin come aiuto privato** e `utils/exchange_dates.py` sparisce, oppure il
+  modulo resta con la sola funzione.
+- **D4** — L'avviso del fuso sconosciuto: **resta, riscritto** («il valore corrente è datato in UTC»), oppure esce.
+- **D5** — Testo per l'utente.
+  - CHANGELOG: **«Yahoo Finance prices, dividends and splits of exchanges east of UTC (e.g. Milan, London in summer,
+    Tokyo) were stored one day early: new ones are dated on the exchange's own day. Rows saved by earlier versions
+    stay as they are.»**
+  - Pagina utente: **la nota tolta** (l'EN torna com'era, nessun debito di traduzione), oppure una nota con il rimedio.
+- **D6** — La pagina devWiki: tolta come chiede la decisione, oppure **riscritta in breve** (la causa, la correzione
+  tenuta, la riparazione tolta e perché). Consiglio la seconda: la causa resta utile a chi tocca un altro plugin.
+- **D7** — Z-34: **chiusa come superata dalla decisione del 19/10**, oppure tenuta per dopo la 1.3.
+- **D8** — La 010: esce o resta? È la domanda del coordinatore al developer: qui sopra ci sono il costo e le parti.
+
+**10. Lavoro, dopo il via** (un lotto, «Z-33r»).
+- Il codice in uno script di sostituzioni esatte, provato su una copia: niente `git revert`, perché i seguiti e i merge
+  toccano gli stessi file.
+- I test che restano verdi, e quelli che escono tolti con test-author.
+- Con (B): prima i rossi della 012, con salita e discesa su un DB popolato.
+- La doc a docs-writer; il CHANGELOG con il testo deciso; la pagina devWiki.
+- Controlli leggeri nella corsia 6186, uno alla volta: `services provider-errors`, `services asset-source-refresh`,
+  `services asset-source`, `services asset-event-store`, `api assets-provider`, `api assets-price`, `db validate`.
+  Se la 010 esce, anche `api portfolio`, il resoconto della qualità dei dati, `api sync`, `front check` e il controllo
+  i18n. Poi `mkdocs build` stretto e `check-links`.
+- Stima: mezza giornata la sola 011, circa un giorno con la 010.
