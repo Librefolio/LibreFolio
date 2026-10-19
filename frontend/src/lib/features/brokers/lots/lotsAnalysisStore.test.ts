@@ -67,7 +67,7 @@ const MAIN: LotsBody = {
     asset_id: 6,
     broker_ids: [1, 5],
     target_currency: 'EUR',
-    requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'INCOME_EVENTS'],
+    requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'MARKET_PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'INCOME_EVENTS'],
 };
 
 /** What `LotsAnalysisPanel.loadSelectionHistories` asks. */

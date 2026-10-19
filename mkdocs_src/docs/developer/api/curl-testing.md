@@ -92,11 +92,14 @@ The codes of `/system/ready` are listed in [System Information and Readiness](..
 # Get current user
 curl -b /tmp/cookies.txt http://localhost:6040/api/v1/auth/me
 
-# Update preferences
-curl -X PATCH -b /tmp/cookies.txt \
+# Read your settings (language, base currency, theme, avatar)
+curl -b /tmp/cookies.txt http://localhost:6040/api/v1/settings/user
+
+# Update them: every field is optional (language, base_currency, theme, avatar_url), an omitted one stays as it is
+curl -X PUT -b /tmp/cookies.txt \
   -H "Content-Type: application/json" \
-  -d '{"language":"it","currency":"EUR"}' \
-  http://localhost:6040/api/v1/auth/users/me/preferences
+  -d '{"language":"it","base_currency":"EUR"}' \
+  http://localhost:6040/api/v1/settings/user
 ```
 
 ### 🏦 Brokers
