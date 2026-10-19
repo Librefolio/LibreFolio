@@ -96,11 +96,11 @@ const FLAG_FACE = 'LF Flags';
 const REGIONAL_INDICATOR_FIRST = 0x1f1e6;
 const REGIONAL_INDICATOR_LAST = 0x1f1ff;
 
-/** Three owners, no avatar — an image never loads in jsdom — and the label of the share still available: the donut's smallest real draw. */
+/** Three owners, no avatar — an image never loads in jsdom — and the label of the share still available: the donut's smallest real draw. Each with its key, the user id its colour follows. */
 const OWNERS = [
-    {name: 'Alba', percentage: 40, avatarUrl: null},
-    {name: 'Bruno', percentage: 30, avatarUrl: null},
-    {name: 'Carla', percentage: 20, avatarUrl: null},
+    {key: 1, name: 'Alba', percentage: 40, avatarUrl: null},
+    {key: 2, name: 'Bruno', percentage: 30, avatarUrl: null},
+    {key: 3, name: 'Carla', percentage: 20, avatarUrl: null},
 ];
 const AVAILABLE = 'Still available';
 

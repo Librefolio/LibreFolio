@@ -218,8 +218,8 @@ function errorText(): string | null {
     return screen.queryByTestId('info-banner-error')?.textContent?.trim() ?? null;
 }
 
-/** The `data` array handed to SemiDonutChart, via the stub. */
-function slices(): {name: string; percentage: number; avatarUrl: string | null}[] {
+/** The `data` array handed to SemiDonutChart, via the stub: each owner with its key, the user id its colour follows. */
+function slices(): {key: number; name: string; percentage: number; avatarUrl: string | null}[] {
     return JSON.parse(screen.getByTestId('semi-donut-stub').getAttribute('data-slices') ?? '[]');
 }
 
@@ -382,8 +382,24 @@ describe('BrokerSharingPanel — loading', () => {
         // chart drops zero-share owners. Her avatar is passed with the preview
         // suffix; bob's non-string avatar was coerced to null, so no initial-only
         // slice carries a bogus URL.
-        expect(slices()).toEqual([{name: 'alice', percentage: 25, avatarUrl: 'http://img/a.png?img_preview=64x64'}]);
+        expect(slices()).toEqual([{key: 1, name: 'alice', percentage: 25, avatarUrl: 'http://img/a.png?img_preview=64x64'}]);
         expect(columnOf(2)).toBe('OWNER');
+    });
+
+    it('hands the chart each owner’s user id as its key, the one its colour follows (§1.5), whatever the order of the list', async () => {
+        await setupI18n();
+        // Owners listed out of the order of their ids, and a viewer among them, who has no share and no slice.
+        await mountPanel({
+            accesses: [access(7, 'gina', 'OWNER', 0.3), access(2, 'bob', 'OWNER', 0.5), access(5, 'eve', 'VIEWER'), access(4, 'dora', 'OWNER', 0.2)],
+        });
+
+        expect(
+            slices()
+                .map((slice) => slice.name)
+                .sort(),
+            'barrier: the three owners reach the chart, the viewer does not',
+        ).toEqual(['bob', 'dora', 'gina']);
+        expect(Object.fromEntries(slices().map((slice) => [slice.name, slice.key]))).toEqual({gina: 7, bob: 2, dora: 4});
     });
 
     it('falls back to the initial of the name when a user has no picture, in every column', async () => {
@@ -785,8 +801,8 @@ describe('BrokerSharingPanel — add user', () => {
         await waitFor(() => expect(columnOf(9)).toBe('OWNER'));
         // 90 asked, 60 granted — `Math.min(newSharePercent, maxNewShare)`.
         expect(slices()).toEqual([
-            {name: 'alice', percentage: 40, avatarUrl: null},
-            {name: 'zoe', percentage: 60, avatarUrl: null},
+            {key: 1, name: 'alice', percentage: 40, avatarUrl: null},
+            {key: 9, name: 'zoe', percentage: 60, avatarUrl: null},
         ]);
         await fireEvent.click(saveBtn());
         await waitFor(() => expect(api[PUT]).toHaveBeenCalled());
@@ -898,7 +914,7 @@ describe('BrokerSharingPanel — edit and remove', () => {
 
         await waitFor(() => expect(columnOf(2)).toBe('VIEWER'));
         expect(screen.queryByTestId('sharing-edit-user-modal')).not.toBeInTheDocument();
-        expect(slices()).toEqual([{name: 'alice', percentage: 70, avatarUrl: null}]);
+        expect(slices()).toEqual([{key: 1, name: 'alice', percentage: 70, avatarUrl: null}]);
         await fireEvent.click(saveBtn());
         await waitFor(() => expect(api[PUT]).toHaveBeenCalled());
         expect(lastPutBody()).toContainEqual({user_id: 2, role: 'VIEWER', share_percentage: 0});
@@ -1244,7 +1260,7 @@ describe('BrokerSharingPanel — Runes read and binding boundaries', () => {
         await typeShare(owner, '40');
         expectOneRead();
         await fireEvent.click(screen.getByTestId('sharing-confirm-edit'));
-        await waitFor(() => expect(slices()).toEqual([{name: 'alice', percentage: 40, avatarUrl: null}]));
+        await waitFor(() => expect(slices()).toEqual([{key: 1, name: 'alice', percentage: 40, avatarUrl: null}]));
         expectOneRead();
 
         const add = await openAdd();
@@ -1256,8 +1272,8 @@ describe('BrokerSharingPanel — Runes read and binding boundaries', () => {
         await fireEvent.click(screen.getByTestId('sharing-confirm-add'));
         await waitFor(() => expect(columnOf(9)).toBe('OWNER'));
         expect(slices()).toEqual([
-            {name: 'alice', percentage: 40, avatarUrl: null},
-            {name: 'zoe', percentage: 30, avatarUrl: null},
+            {key: 1, name: 'alice', percentage: 40, avatarUrl: null},
+            {key: 9, name: 'zoe', percentage: 30, avatarUrl: null},
         ]);
         expectOneRead();
 
@@ -1293,8 +1309,8 @@ describe('BrokerSharingPanel — Runes read and binding boundaries', () => {
             expect(saveBtn()).toBeEnabled();
             expect(boundDirty()).toHaveAttribute('data-value', 'true');
             expect(slices()).toEqual([
-                {name: 'alice', percentage: 40, avatarUrl: null},
-                {name: 'zoe', percentage: 30, avatarUrl: null},
+                {key: 1, name: 'alice', percentage: 40, avatarUrl: null},
+                {key: 9, name: 'zoe', percentage: 30, avatarUrl: null},
             ]);
             expectOneRead();
         } finally {

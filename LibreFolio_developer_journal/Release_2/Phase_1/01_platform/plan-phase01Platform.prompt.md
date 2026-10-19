@@ -7661,3 +7661,117 @@ controllo d'integrità; «such as `regexp`» va cambiato.
      (le registrazioni degli altri sono aggiunte);
    - backlog: H-52 ✅, e una riga nuova, H-54 (un file tolto da `src/` o da `static/` non si vede);
    - CHANGELOG: proposta una clausola nella voce esistente della policy report-only (r. 361).
+
+### H-52 entrato; review di W-B77 e Z-33; proposta «CSP applicata» (2026-10-17, 21:10–21:40)
+
+- **H-52 entrato**: dev `ca7ba117c` (`aaea0824b`, `cfb59de97`, `70da097fb`), CHANGELOG `1ec74c8e5` con la mia
+  clausola. HEAD `1ec74c8e5`, pulito.
+- **Review di W-B77** (`utils/pydantic_errors.py`): ✅ OK. Solo una nota: un vincolo scritto con un limite `Decimal`
+  porterebbe `params=None`, ma oggi nessuno schema lo fa.
+- **Review di Z-33** (migrazione 011 e il passo che sistema le date): la migrazione va bene, con un reperto MEDIO e uno
+  BASSO per Z.
+  - MEDIO: `_settle_exchange_timezone` si fida di `prep.legacy_check`, letto prima del fetch. Due aggiornamenti dello
+    stesso asset (scheduler e sync manuale, nessun lock per asset) fanno rigirare la regola su righe già giuste: con
+    `redate_provider_rows` le righe vengono tolte o spostate di un giorno. Cura: ricontrollare il segno sulla riga
+    riletta nella transazione.
+  - BASSO: un fuso che non si risolve blocca per sempre un asset segnato.
+- **Proposta «CSP applicata»** (sola analisi, da portare al developer): sotto.
+
+#### Proposta: la CSP applicata (dopo H-52)
+
+**Cosa blocca oggi una `script-src` applicata** (scansione della build, `files/h52/enforce-scan.txt`, e cloud smoke):
+- solo due siti di eval in tutto il bundle:
+  - F1, la sonda globale di cheetah-grid, dentro un try/catch: con la policy applicata ripiega su `window`, funziona ma
+    segnala ogni volta;
+  - il `parseInput` di ECharts, che fa `new Function` solo senza `JSON.parse`: mai nei browser di oggi.
+- Nessun timer con stringa, nessun URL `javascript:`, nessun import da `data:`/`blob:`. Script inline: tutti per hash
+  (H-52). `wasm-unsafe-eval` resta per PDFium.
+- **`connect-src`**:
+  - F3, la sonda dell'indirizzo, la sola fetch su un'altra origine in managed. L'endpoint risponde già con CORS `*`;
+  - il controllo degli aggiornamenti (`api.github.com`) gira solo in self-hosted.
+- **Le build con copertura** (istanbul, `new Function('return this')` in ogni modulo, senza try/catch) si rompono con
+  una policy applicata: le corsie con la CSP applicata girano senza `--coverage`.
+- **Una build nuova senza riavvio** darebbe pagina bianca (hash vecchi). In managed non succede, l'immagine non cambia;
+  in self-hosted da sorgente sì.
+
+**Opzioni e raccomandazioni**:
+- E1, l'interruttore: `LIBREFOLIO_CSP_ENFORCE` (bool, default spento; self-hosted invariato).
+  - Acceso: le pagine HTML della web app ricevono `Content-Security-Policy` con la policy intera più gli hash (contiene
+    le quattro direttive di `PAGE_POLICY`); doc e API HTML tengono `PAGE_POLICY`.
+  - Report-only: non più mandato quando si applica (le violazioni non vanno segnalate due volte). In seguito potrà
+    portare la prossima policy candidata, più stretta.
+  - **Default in managed: decisione del developer** (proposta: acceso nel profilo managed, dopo un cloud smoke verde
+    con la policy applicata).
+- E2, F1: (a) una trasformazione di Vite limitata a cheetah-grid, `new Function("return this")()` → `globalThis`, così
+  zero violazioni (consigliata; `vite.config.ts` è condiviso); oppure (b) un'eccezione documentata (la voce della
+  baseline resta).
+- E3, F3: (a) l'origine di `LIBREFOLIO_PUBLIC_URL` in `connect-src` (consigliata; un indirizzo diverso risulta «non
+  verificabile», decide A per l'esperienza); (b) `connect-src 'self' https:`. Già oggi `img-src https:` permette di far
+  uscire dati, e da una pagina https il mixed content blocca comunque `http:`. (c) Una sonda dal server: scartata,
+  sarebbe SSRF da un admin-inquilino nel cloud.
+- E4, gli hash con la policy applicata: un controllo di (mtime, size) dei file della build per ogni risposta HTML, in
+  un thread, che li ricalcola se cambiano (consigliato); oppure solo all'avvio, con il riavvio documentato.
+- E5, un endpoint per i report: nessuno (consigliato). Con `'report-sample'` i primi 40 caratteri uscirebbero.
+- E6, self-hosted che accende la policy: `connect-src` aggiunge `https://api.github.com` quando il controllo degli
+  aggiornamenti è attivo.
+
+**Cosa deve provare l'E2E**:
+- `TEST_LANE_SETTABLE` aggiunge `LIBREFOLIO_CSP_ENFORCE`;
+- il cloud smoke con `--lane-setting LIBREFOLIO_PROFILE=managed --lane-setting LIBREFOLIO_CSP_ENFORCE=true`, senza
+  copertura: verde, nessuna violazione ignota, F1 sparito se E2-a;
+- AUSR-E-07 (A) prova di proposito altre origini http: su una corsia con la policy applicata le sue attese cambiano
+  (lavoro di A);
+- la fase 2 (`all-frontend` managed) nel cancello RC con la policy applicata.
+
+**Dimensione**:
+- H: impostazione, middleware, controllo nell'audit, nome di corsia, test, doc; ~3–4 h più uno slot.
+- E2-a: ~1 h (Vite, più una scansione della build come guardia).
+- E3: H per la policy, A per esperienza e test, ~1–2 h.
+
+**Decisioni del coordinatore sulla CSP applicata** (21:45): GO per l'implementazione, con l'interruttore **spento ovunque**
+(il default in managed va nella lista del developer, con la mia proposta).
+- E1: `LIBREFOLIO_CSP_ENFORCE`; con la policy applicata niente report-only.
+- E2 (b): eccezione documentata per F1; la trasformazione di Vite (a) dopo la 1.3.
+- E3 (a): l'origine di `LIBREFOLIO_PUBLIC_URL` in `connect-src`, con A per l'esperienza e AUSR-E-07 (dopo A-57).
+- E4: solo all'avvio, con il riavvio documentato. E5: nessun endpoint. E6: `api.github.com` mentre il controllo degli
+  aggiornamenti è acceso.
+- E2E: il nome in `TEST_LANE_SETTABLE`; un cloud smoke managed con la policy applicata, senza copertura; la fase 2
+  applicata nel cancello RC.
+- Ordine: prima H-54, poi la CSP applicata.
+
+### Lotto «H-54: un file tolto da `src/` o da `static/` non si vede» (2026-10-17, 21:50) — analisi e passi
+
+**Stato vero**: `check_frontend_needs_build()` confronta solo le date dei file che esistono. Gli input dei contratti
+dei Tool hanno già l'impronta del loro elenco: `tool_contract_fingerprint()` è calcolata in `cmd_fe_build` **prima**
+della build (`dev.py:712`) e registrata dopo una build riuscita (`record_tool_contract_inputs`, `:750`, nel marcatore
+`frontend/build/.tool-contract-inputs`); `_tool_contracts_changed()` la confronta.
+
+**Disegno** (niente `dev.py`, niente imbracatura dei test):
+- l'elenco dell'impronta si allarga ai file di `frontend/src` e `frontend/static` che `_counts_for_the_build` conta, tolti i
+  cataloghi generati (`generated_catalogs()`): `cmd_fe_build` li scrive dopo l'impronta, e su un clone nuovo
+  costerebbero una ricostruzione in più. La loro presenza ha già un controllo suo;
+- i file dell'API generati sono già fuori per nome (`_BUILD_GENERATED_SOURCES`); il font scaricato da
+  `update_js_cache()` è prima dell'impronta;
+- l'etichetta del formato passa a `tool-contract-inputs/2`: un marcatore del formato vecchio non corrisponde più,
+  quindi una ricostruzione una volta dopo l'aggiornamento (la regola già scritta);
+- i nomi delle funzioni restano (meno rimescolamento); docstring e doc dicono cosa copre l'elenco;
+- senza marcatore (una build fatta da `npm run build` da solo) resta il ripiego di oggi.
+
+**Passi**:
+1. ✅ (21:34) Rossi (test-author, `files/runs/h54-reds.sh`): +67 test (`TestFrontendInputsListing`,
+   `TestFrontendInputsRecorded`), `utils runtime-isolation` **29 failed / 425**, come previsto; ruff e black puliti.
+   - Vincolo trovato da test-author: `_tool_contract_sources` deve restare dei soli Tool, perché alimenta anche il
+     controllo delle date; quindi una visita a parte dentro `tool_contract_fingerprint`.
+   - Caso limite non coperto: `favicon.png` (tracciato) cancellato a mano. La build lo ricrea dopo l'impronta: una
+     ricostruzione in più.
+2. ✅ (21:34) Cura `files/h54/apply_h54.py` (a secco, `--apply`, `cmp` OK): `_frontend_input_names()` e l'etichetta
+   `/2`, più docstring e commento.
+3. ✅ (21:38) Verdi: `utils runtime-isolation` **454/454**, `test-server-preparation` 91, `test-runner-cli` 766; ruff
+   pulito. L'impronta sul checkout vero: 80 ms per 1014 file.
+   - **Prova dal vivo** (`files/runs/h54-live.sh`): `dev.py server --test --build-only` ha ricostruito una volta (il
+     marcatore era del formato vecchio). Poi il marcatore è uguale all'impronta attuale e la sonda risponde «fresca»;
+     un secondo passaggio non ricostruisce. Niente ciclo.
+4. ✅ (21:40) Doc (docs-writer): `test-walkthrough/front-overview.md` («Automated Setup»: l'elenco registrato copre
+   anche `src/` e `static/`; senza marcatore, solo le date) e `dev_workflow.en.md` (passo 3). `i18n.md` era già giusta.
+   `mkdocs build` stretto 0 avvisi, `check-links` 97 validi, `git diff --check` pulito.
+5. ✅ (21:41) Checkpoint inviato (sotto).

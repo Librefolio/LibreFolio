@@ -116,6 +116,7 @@ ITEM_METRICS_KEYS = {
     "cleanup_ms",
     "total_ms",
     "resources",
+    "worker_exit_code",
 }
 DIAGNOSTICS_KEYS = {
     "scope",
