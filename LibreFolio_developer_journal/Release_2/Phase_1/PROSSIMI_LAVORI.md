@@ -148,6 +148,19 @@ Quattro lotti del riordino pianificato in testa alla 1.3 non sono mai partiti. A
   doc per sviluppatori [`credit_agricole.md`](../../../mkdocs_src/docs/developer/backend/brim/credit_agricole.md) e
   [`danske_bank.md`](../../../mkdocs_src/docs/developer/backend/brim/danske_bank.md).
 
+#### W-B88 · Quale data registra ogni plugin, contro il principio di B-52
+
+- **Chi**: W.
+- **Cos'è**: il principio del developer del 19/10 (B-52): si registra sempre la **data dell'operazione**; le altre
+  colonne servono solo a capire se la riga è stabile e contabilizzata (lo stato, se c'è, altrimenti una data valuta non
+  successiva a oggi). Fineco e Danske lo applicano nello sprint. Altri 10 plugin nominano una data valuta o di
+  regolamento: Avanza, Crédit Agricole, DEGIRO, Directa, Disnat, Intesa, InvestEngine, Rabobank, Saxo, Schwab. Va fatto
+  l'inventario di quale data registra ciascuno, e le correzioni dove serve. **Eccezione**: il CSV generico, dove la data
+  la sceglie l'utente.
+- **Stato**: ❌ non iniziato (analisi di W, 19/10).
+- **Dove**: [piano 04, «B-52 · La data dell'operazione: analisi»](04_importTransactions/plan-phase01ImportTransactions.prompt.md);
+  nel backlog [«W-B88»](../Phase_0/BACKLOG_POST_1.2.md).
+
 ### X · Plugin, asset e ricerca
 
 Proposta di X (19/10) per tutti e quattro: dopo la 1.3. CP6 (F05) e K-20 sono già nello sprint.
