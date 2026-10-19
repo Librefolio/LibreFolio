@@ -49,11 +49,10 @@ The public method now delegates its local work to focused helpers without changi
      LibreFolio's inclusive end date over yfinance's exclusive `end`.
    - Currency metadata falls back to `USD`.
    - Otherwise the currency is Yahoo's own code (`ticker.info["currency"]`), passed on unchanged
-     as `FAHistoricalData.currency`: `GBp` for a London line quoted in pence. The price points and
-     the dividends carry `GBP` (their schemas upper-case the code) with the numbers in pence, and
-     the refresh keeps the raw code on the assignment
-     ([The Provider's Own Quote Currency](architecture.md#reported-currency)). Two guards in
-     `test_yahoo_finance_errors.py` pin both: no validator on that field, no conversion here.
+     as `FAHistoricalData.currency`: `GBp` for a London line quoted in pence, whose price points
+     and dividends carry `GBP` (their schemas upper-case the code) with the numbers in pence. Two
+     guards in `test_yahoo_finance_errors.py` pin it: no validator may fold that field, and the
+     plugin converts nothing.
    - Dividend and split series are acquired independently and best-effort; one failing does not
      suppress the other or the prices.
 2. **Map — `_map_history_prices()`**
@@ -123,7 +122,7 @@ version stored a day early stays, beside the one a sync fetches again
 | Owner / Cache | Key | TTL | Max Size | Purpose |
 |---|---|---|---|---|
 | **Core current value** | Provider code + identifier + identifier type (refresh also includes the provider-parameter hash) | 120 sec | 300 | Avoid repeated `ticker.info` calls during current-price polling and refresh. |
-| **Core history** | Provider code + identifier + identifier type + provider-parameter hash | 15 min | 500 | Reuse fetched date ranges during provider-driven refresh; the entry also keeps the reported currency. |
+| **Core history** | Provider code + identifier + identifier type + provider-parameter hash | 15 min | 500 | Reuse fetched date ranges during provider-driven refresh. |
 | **Core search query** | Provider code + normalized query | 15 min | 500 | Avoid repeating the same provider search. |
 | **Yahoo currency lookup** | `symbol` | 24 hours | 2000 | Cache the provider's `fast_info` currency sub-operation used by `search()`. |
 
@@ -159,10 +158,6 @@ are owned by `assets/core.py`; Yahoo owns only its currency sub-operation cache.
   Other transient errors (timeouts, reset connections, `503`…) are still retried: at most three
   attempts, 1.5 s and then 3 s apart.
 - **ISIN resolution**: Not all ISINs are resolvable by yfinance (depends on market coverage).
-- **Prices in pence**: a London line quoted in pence (`GBp`) is stored in pence as `GBP`. Its
-  holdings are right once the asset's quote base is 100, and the Dashboard warns until then
-  (`QUOTE_IN_MINOR_UNIT`, see [Data Quality Banner](../../frontend/data-quality-banner.md)); its
-  dividends stay in pence whatever the base.
 - **Data gaps**: Some tickers may have missing days or delayed data.
 - **Rows dated a day early by 1.2.1 or earlier** stay as they are: a sync rewrites only the session
   days it fetches, and an event it fetches again is stored beside the old one
