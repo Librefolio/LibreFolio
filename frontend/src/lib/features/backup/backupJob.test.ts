@@ -8,7 +8,9 @@
  *     (`backup_busy`, `backup_folder_unusable`, `backup_failed`, `backup_no_space` — B-30's 507 on a full disk —,
  *     `network`, `unexpected`) is announced once as
  *     `onFailed(code, 'start', null)` and leaves the storage as it was — `failed` with no job, or, when an archive was on
- *     offer (`done`), `done` with that same archive still on offer and the error beside it (decision 1);
+ *     offer (`done`), `done` with that same archive still on offer and the error beside it (decision 1) — except, since
+ *     B-8 (the last groups), a `backup_busy` naming a running `ui` job with nothing on offer: that job is followed, its
+ *     id remembered before its first read;
  *   - polling: a read that fails while the job runs is retried after `pollMs × (1 + failures in a row)`, capped at five
  *     times `pollMs`, and one good read resets the count; `maxPollFailures` failures in a row stop it — `failed`,
  *     `network`, failure `read`, the last job kept, announced once, no timer left; a job the server no longer has (404
@@ -1748,5 +1750,382 @@ describe('B4 — start(password): the password of a secure backup goes to the re
         expect(zodios.start_instance_backup_api_v1_backup_instance_post).toHaveBeenCalledTimes(1);
         expect(zodios.start_instance_backup_api_v1_backup_instance_post.mock.calls[0][0], 'the body of POST /backup/instance').toStrictEqual(body);
         expect(controller.state).toBe('running');
+    });
+});
+
+// --- B-8: a backup whose start answer was lost ----------------------------------------------------------------------
+
+/*
+ * B-8 (the B-15 + B-8 contract): when the answer of `POST /backup/instance` is lost (no answer, a timeout), the backup
+ * runs on the server but the tab never learns its id, and the next start is refused `409 backup_busy`. The refusal now
+ * names the running job when the caller may read it — `detail.job_id` and `detail.origin`, beside the code — and
+ * `backupBusyJob` of backupApi.ts reads them. The contract under test:
+ *   - nothing on offer, `start()` refused `backup_busy` naming a running job of origin `ui` (started from a Backup tab):
+ *     the controller follows that job as if it had started it — `loading` while it reads the job the refusal names
+ *     (that one, never a job followed before), then, the job read `running`, `running`: remembered in the storage (from
+ *     before its first read: B-8 decision 3, below), read again every `pollMs`. Its end is news here: read `done`,
+ *     `done` and `onDone` once with it; read `failed`, `onFailed(code, 'job', job)` once and the job forgotten, as for
+ *     a job started here. The refused start itself is announced to no one: the backup asked for runs;
+ *   - refused `backup_busy` naming a job of origin `cli` or `panel`, no job (the refusal of before), or an id that is
+ *     not a job id: exactly as today — `failed`, `backup_busy`, failure `start`, no job,
+ *     `onFailed('backup_busy', 'start', null)` once, `canRecheck` as before (only while another job is followed), the
+ *     storage untouched —, and that job is never read: the command line moves its archive away at the end, and the
+ *     panel's archive is the panel's.
+ *
+ * Where the contract was silent, the developer decided (19/10; B-8's own numbering, apart from the decisions 1 to 3 of
+ * the groups above):
+ *   - B-8 decision 1: with an archive on offer (`done`), a start refused `backup_busy` naming a running job — whatever
+ *     its origin, `ui` included — keeps the archive on offer, `backup_busy` beside it, and the running job is not read,
+ *     as decision 1 above keeps an archive on offer when a new start cannot start (the third B-8 group);
+ *   - B-8 decision 2: a job of origin `ui` found already ended by its first read has its end announced, as the end of a
+ *     start answered with an ended job is: «as if it had started it» (the first B-8 group);
+ *   - B-8 decision 3: the id of the job the refusal names is remembered before its first read — in `followedJobId` and
+ *     in the storage, in place of an id followed before —, so that when that read fails, «Check again» (`recheck()`)
+ *     reads that job (the last B-8 group).
+ *
+ * Where it is still silent, the choice of this file, one place to change: no case awaits a start that follows a job —
+ * the contract does not say whether `start()` settles before the job is read or after —, so every answer given so far
+ * is let in instead (`settle()`).
+ *
+ * Red today: the first B-8 group and the last (B-8 decision 3). A refusal naming a `ui` job fails the start like any
+ * `backup_busy` — `failed`, announced —, the job is never read, and its id never remembered. Green today, and to stay
+ * so: a job of origin `cli` or `panel`, no job, an id that is not a job id (the second group), and the archive on offer
+ * (the third, B-8 decision 1).
+ */
+
+/** The 409 of a start while a backup runs, raised by axios: `detail: {code: 'backup_busy', message}`, and the running job when the caller may read it. */
+function busyRefusal(job: Record<string, unknown> = {}) {
+    return {isAxiosError: true, message: 'Request failed with status code 409', response: {status: 409, data: {detail: {code: 'backup_busy', message: 'refused: backup_busy', ...job}}}};
+}
+
+/** Let every answer already given reach the controller; no time passes. */
+const settle = () => vi.advanceTimersByTimeAsync(0);
+
+describe('B-8 — start() refused backup_busy naming a running job of origin ui, nothing on offer: the job followed as if started here', () => {
+    it.each<[string, () => Promise<ReturnType<typeof setup>>]>([
+        ['nothing followed', async () => setup()],
+        [
+            'the answer of a first start lost',
+            async () => {
+                const context = setup();
+                context.api.start.mockRejectedValueOnce(noAnswer());
+                await context.controller.start();
+                expect(context.onFailed.mock.calls, 'precondition: the start that got no answer was announced').toEqual([['network', 'start', null]]);
+                context.onFailed.mockClear();
+                return context;
+            },
+        ],
+        ['another job followed, whose id a previous page left', async () => setup({stored: OTHER_JOB_ID})],
+        [
+            'this very job followed until its reads failed and the polling gave up',
+            async () => {
+                const context = setup();
+                context.api.start.mockResolvedValueOnce(running());
+                context.api.get.mockRejectedValue(noAnswer());
+                await context.controller.start();
+                await vi.advanceTimersByTimeAsync((1 + 2 + 3) * POLL_MS);
+                expect(context.controller.failure, 'precondition: the polling gave up').toBe('read');
+                context.api.get.mockReset();
+                context.onFailed.mockClear();
+                return context;
+            },
+        ],
+    ])('%s: loading while the job named is read; running, remembered, read every pollMs; done announced once, the refused start to no one', async (_case, arrive) => {
+        const {controller, api, storage, onDone, onFailed} = await arrive();
+        const read = deferred<InstanceBackupJob>();
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+        answerReads(api, [() => read.promise, ok(running({phase: 'files', done_bytes: 512, total_bytes: 2048})), ok(done())]);
+
+        void controller.start();
+        await settle();
+
+        expect(api.get.mock.calls, 'the job the refusal names must be read, and no other').toEqual([[JOB_ID]]);
+        expect(controller.state).toBe('loading');
+        expect(controller.busy).toBe(true);
+
+        read.resolve(running());
+        await settle();
+
+        expect(controller.state).toBe('running');
+        expect(controller.busy).toBe(true);
+        expect(controller.job).toEqual(running());
+        expect(controller.errorCode).toBeNull();
+        expect(controller.failure).toBeNull();
+        expect(controller.followedJobId).toBe(JOB_ID);
+        expect(storage.items.get(KEY), 'a reload must find the job again').toBe(JOB_ID);
+        expect(onFailed, 'the backup asked for runs: the refused start is no failure').not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(POLL_MS - 1);
+        expect(api.get, 'the job was read again before pollMs').toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(api.get).toHaveBeenCalledTimes(2);
+        expect(controller.state).toBe('running');
+        expect(controller.progress).toBe(0.25);
+
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+        expect(api.get.mock.calls, 'only the job named was read').toEqual([[JOB_ID], [JOB_ID], [JOB_ID]]);
+        expect(controller.state).toBe('done');
+        expect(controller.busy).toBe(false);
+        expect(controller.job).toEqual(done());
+        expect(controller.errorCode).toBeNull();
+        expect(controller.failure).toBeNull();
+        expect(storage.items.get(KEY), 'the archive must stay downloadable after a reload').toBe(JOB_ID);
+        expect(onDone.mock.calls, 'its end is news here: once').toEqual([[done()]]);
+        expect(onFailed).not.toHaveBeenCalled();
+        expect(vi.getTimerCount(), 'a timer outlived the job').toBe(0);
+
+        await vi.advanceTimersByTimeAsync(100 * POLL_MS);
+        expect(api.get, 'a finished job was read again').toHaveBeenCalledTimes(3);
+        expect(onDone).toHaveBeenCalledTimes(1);
+    });
+
+    it('the job named, followed running, then read failed: failed (job) with its error_code, forgotten, announced once as for a job started here', async () => {
+        const {controller, api, storage, onDone, onFailed} = setup();
+        const ended = failedJob('backup_no_space');
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+        answerReads(api, [ok(running()), ok(ended)]);
+
+        void controller.start();
+        await settle();
+
+        expect(api.get.mock.calls, 'the job the refusal names must be read').toEqual([[JOB_ID]]);
+        expect(controller.state, 'the job named is followed').toBe('running');
+        expect(storage.items.get(KEY), 'the job named is remembered').toBe(JOB_ID);
+
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(api.get).toHaveBeenCalledTimes(2);
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe('backup_no_space');
+        expect(controller.failure).toBe('job');
+        expect(controller.job).toEqual(ended);
+        expect(controller.canRecheck, 'a job that failed has nothing left to tell').toBe(false);
+        expect(controller.followedJobId).toBeNull();
+        expect(storage.items.has(KEY), 'a failed job has no archive to pick up after a reload').toBe(false);
+        expect(onFailed.mock.calls, 'its end is news here, once; the refused start never').toEqual([['backup_no_space', 'job', ended]]);
+        expect(onDone).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it.each<[string, InstanceBackupJob, 'onDone' | 'onFailed', unknown[]]>([
+        ['done', done(), 'onDone', [done()]],
+        ['failed', failedJob('backup_interrupted'), 'onFailed', ['backup_interrupted', 'job', failedJob('backup_interrupted')]],
+    ])('the job named found already %s by its first read: as for a start answered with an ended job, its end announced once', async (status, ended, callback, args) => {
+        const context = setup();
+        context.api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+        context.api.get.mockResolvedValueOnce(ended);
+
+        void context.controller.start();
+        await settle();
+
+        expect(context.api.get.mock.calls, 'the job the refusal names must be read').toEqual([[JOB_ID]]);
+        expect(context.controller.state).toBe(status);
+        expect(context.controller.job).toEqual(ended);
+        expect(context.storage.items.get(KEY), 'an archive on offer is remembered, a failed job is not').toBe(status === 'done' ? JOB_ID : undefined);
+        expect(context[callback].mock.calls, 'its end is news here: once').toEqual([args]);
+        expect(context[callback === 'onDone' ? 'onFailed' : 'onDone']).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+});
+
+describe('B-8 — start() refused backup_busy naming no job this tab may follow: exactly as today, and no job read', () => {
+    it.each<[string, string, Record<string, unknown>, string | undefined, boolean]>([
+        ['a running job started from the command line (origin cli)', 'nothing followed', {job_id: JOB_ID, origin: 'cli'}, undefined, false],
+        ['a running job started from the command line (origin cli)', 'another job followed', {job_id: JOB_ID, origin: 'cli'}, OTHER_JOB_ID, true],
+        ['a running job started from the hosting panel (origin panel)', 'nothing followed', {job_id: JOB_ID, origin: 'panel'}, undefined, false],
+        ['a running job started from the hosting panel (origin panel)', 'another job followed', {job_id: JOB_ID, origin: 'panel'}, OTHER_JOB_ID, true],
+        ['no job: {code, message}, the refusal of before', 'nothing followed', {}, undefined, false],
+        ['no job: {code, message}, the refusal of before', 'another job followed', {}, OTHER_JOB_ID, true],
+        ['a job of origin ui whose id is not 32 lowercase hex digits', 'nothing followed', {job_id: `../${JOB_ID}`, origin: 'ui'}, undefined, false],
+        ['a job of origin ui whose id is not 32 lowercase hex digits', 'another job followed', {job_id: `../${JOB_ID}`, origin: 'ui'}, OTHER_JOB_ID, true],
+        ['a job id without an origin', 'nothing followed', {job_id: JOB_ID}, undefined, false],
+        ['a job id without an origin', 'another job followed', {job_id: JOB_ID}, OTHER_JOB_ID, true],
+    ])('%s, %s: failed (start) with backup_busy and no job, announced once, canRecheck as before, the storage untouched, no job read (green today: the guard)', async (_refusal, _followed, job, stored, canRecheck) => {
+        const {controller, api, storage, onDone, onFailed} = setup({stored});
+        api.start.mockRejectedValueOnce(busyRefusal(job));
+        // A job read would be found running, and followed: the assertions below would say so.
+        api.get.mockResolvedValue(running());
+
+        await controller.start();
+        await settle();
+
+        expect(api.get, 'a job this tab may not follow was read').not.toHaveBeenCalled();
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe('backup_busy');
+        expect(controller.failure).toBe('start');
+        expect(controller.job).toBeNull();
+        expect(controller.busy).toBe(false);
+        expect(controller.followedJobId).toBe(stored ?? null);
+        expect(controller.canRecheck).toBe(canRecheck);
+        expect(onFailed.mock.calls).toEqual([['backup_busy', 'start', null]]);
+        expect(onDone).not.toHaveBeenCalled();
+        expect(storage.setItem).not.toHaveBeenCalled();
+        expect(storage.removeItem).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+});
+
+describe('B-8 — start() from done refused backup_busy naming a running job: the archive stays on offer (B-8 decision 1, decided by the developer on 19/10)', () => {
+    it.each(['ui', 'cli', 'panel'])('a running job of origin %s: done, the same archive on offer, backup_busy beside it, announced once, the running job not read (green today: pinned)', async (origin) => {
+        const {controller, api, storage, onDone, onFailed} = setup();
+        api.start.mockResolvedValueOnce(done());
+        await controller.start();
+        expect(controller.state, 'precondition: an archive is on offer').toBe('done');
+        const archive = controller.job;
+        onDone.mockClear();
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: OTHER_JOB_ID, origin}));
+        // A job read would be found running, and followed: the assertions below would say so.
+        api.get.mockResolvedValue(running({job_id: OTHER_JOB_ID}));
+
+        await controller.start();
+        await settle();
+
+        expect(api.get, 'the running job was read: with an archive on offer, the archive stays on offer and the running job is not followed (B-8 decision 1, decided by the developer on 19/10)').not.toHaveBeenCalled();
+        expect(controller.state).toBe('done');
+        expect(controller.job, 'the archive on offer must be the one offered before').toBe(archive);
+        expect(controller.errorCode).toBe('backup_busy');
+        expect(controller.failure).toBe('start');
+        expect(controller.canRecheck).toBe(false);
+        expect(controller.followedJobId).toBe(JOB_ID);
+        expect(storage.items.get(KEY), 'a reload must still find the archive').toBe(JOB_ID);
+        expect(onFailed.mock.calls).toEqual([['backup_busy', 'start', null]]);
+        expect(onDone).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+});
+
+/*
+ * B-8 decision 3 (the developer, 19/10): nothing on offer, a start refused `backup_busy` naming a running job of origin
+ * `ui`: the tab remembers that job's id before its first read — in `followedJobId` and in the storage, in place of an
+ * id followed before —, so that when the first read fails, «Check again» (`recheck()`) reads that job. The first read
+ * then fails as a read does: no usable answer (`network`, `unexpected`) → `failed`, failure `read`, no job, the job
+ * named still followed and offered to recheck, announced once (the failed read; the refused start never), nothing
+ * scheduled; the job found gone (404 `backup_job_not_found`) → forgotten by the rule of `#read`, as any job found gone
+ * is: no new decision, only that rule meeting an id remembered first.
+ *
+ * Red today: the refusal fails the start like any `backup_busy` and no job is read, so each case fails at its first
+ * expectation, the read of the job named. With the job named followed but its id remembered only once read `running`
+ * (the first B-8 group green, this decision not applied), each case fails where it names decision 3.
+ */
+describe('B-8 — decision 3: the job the refusal names is remembered before its first read, so «Check again» reads it', () => {
+    it.each<[string, () => Promise<ReturnType<typeof setup>>]>([
+        ['nothing followed', async () => setup()],
+        [
+            'the answer of a first start lost',
+            async () => {
+                const context = setup();
+                context.api.start.mockRejectedValueOnce(noAnswer());
+                await context.controller.start();
+                expect(context.onFailed.mock.calls, 'precondition: the start that got no answer was announced').toEqual([['network', 'start', null]]);
+                context.onFailed.mockClear();
+                return context;
+            },
+        ],
+        ['another job followed, whose id a previous page left', async () => setup({stored: OTHER_JOB_ID})],
+    ])('%s: while its first read is out, the job named is already followed and in the storage, in place of any id followed before; read running, it stays so', async (_case, arrive) => {
+        const {controller, api, storage} = await arrive();
+        const read = deferred<InstanceBackupJob>();
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+        answerReads(api, [() => read.promise]);
+
+        void controller.start();
+        await settle();
+
+        expect(api.get.mock.calls, 'the job the refusal names must be read').toEqual([[JOB_ID]]);
+        expect(controller.state, 'its first read is out').toBe('loading');
+        expect(controller.followedJobId, 'decision 3: the job named is followed before its first read, in place of any job followed before').toBe(JOB_ID);
+        expect(storage.items.get(KEY), 'decision 3: the job named is in the storage before its first read, in place of any id left there').toBe(JOB_ID);
+        expect(controller.job, 'no job is drawn until the first read of the job named answers').toBeNull();
+        expect(controller.errorCode, 'the refused start leaves no error on screen while the job named is read').toBeNull();
+        expect(controller.failure, 'the refused start leaves no failure on screen while the job named is read').toBeNull();
+
+        read.resolve(running());
+        await settle();
+
+        expect(controller.state).toBe('running');
+        expect(controller.followedJobId).toBe(JOB_ID);
+        expect(storage.items.get(KEY)).toBe(JOB_ID);
+    });
+
+    it.each<[string, string, () => unknown, string | undefined]>([
+        ['nothing followed', 'network', noAnswer, undefined],
+        ['nothing followed', 'unexpected', codelessAnswer, undefined],
+        ['another job followed, whose id a previous page left', 'network', noAnswer, OTHER_JOB_ID],
+        ['another job followed, whose id a previous page left', 'unexpected', codelessAnswer, OTHER_JOB_ID],
+    ])('%s, the first read of the job named fails with %s: failed (read), the job still followed, announced once; «Check again» reads that job, never the one followed before, and follows it to its end', async (_followed, code, readError, stored) => {
+        const {controller, api, storage, onDone, onFailed} = setup({stored});
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+        answerReads(api, [ko(readError()), ok(running({phase: 'finalizing'})), ok(done())]);
+
+        void controller.start();
+        await settle();
+
+        expect(api.get.mock.calls, 'the job the refusal names must be read').toEqual([[JOB_ID]]);
+        expect(controller.state).toBe('failed');
+        expect(controller.failure, 'the read of the job named failed, not the start').toBe('read');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.job, 'nothing of the job named was read').toBeNull();
+        expect(controller.busy).toBe(false);
+        expect(controller.followedJobId, 'decision 3: the job named stays followed when its first read fails').toBe(JOB_ID);
+        expect(storage.items.get(KEY), 'decision 3: the job named stays in the storage, in place of any id left there').toBe(JOB_ID);
+        expect(controller.canRecheck, 'only the id of the job named is known, and that is enough to read it again').toBe(true);
+        expect(onFailed.mock.calls, 'the failed read announced once; the refused start never').toEqual([[code, 'read', null]]);
+        expect(onDone).not.toHaveBeenCalled();
+        expect(vi.getTimerCount(), 'only a job read running is read again on its own').toBe(0);
+
+        const rechecked = controller.recheck();
+        expect(controller.state).toBe('loading');
+        expect(api.get.mock.calls, '«Check again» must read the job the refusal named, never the one followed before').toEqual([[JOB_ID], [JOB_ID]]);
+        await rechecked;
+        expect(controller.state, 'the job named, read running, is followed').toBe('running');
+        expect(controller.job?.phase).toBe('finalizing');
+        expect(onDone).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(api.get.mock.calls, 'only the job named was ever read').toEqual([[JOB_ID], [JOB_ID], [JOB_ID]]);
+        expect(controller.state).toBe('done');
+        expect(controller.job).toEqual(done());
+        expect(onDone.mock.calls, 'the job named was seen running here: its end is news, once').toEqual([[done()]]);
+        expect(onFailed, 'nothing failed after the first read').toHaveBeenCalledTimes(1);
+        expect(storage.items.get(KEY), 'the archive must stay downloadable after a reload').toBe(JOB_ID);
+        expect(vi.getTimerCount(), 'a timer outlived the job').toBe(0);
+    });
+
+    it.each<[string, string | undefined]>([
+        ['nothing followed', undefined],
+        ['another job followed, whose id a previous page left', OTHER_JOB_ID],
+    ])('%s, the job named found gone by its first read: remembered first, then forgotten by the rule of every read (no new decision) — failed (read) with backup_job_not_found, no recheck, announced once', async (_case, stored) => {
+        const {controller, api, storage, onDone, onFailed} = setup({stored});
+        const read = deferred<InstanceBackupJob>();
+        api.start.mockRejectedValueOnce(busyRefusal({job_id: JOB_ID, origin: 'ui'}));
+        answerReads(api, [() => read.promise]);
+
+        void controller.start();
+        await settle();
+        expect(api.get.mock.calls, 'the job the refusal names must be read').toEqual([[JOB_ID]]);
+        // The presence barrier: «forgotten», below, would also hold of an id never remembered.
+        expect(storage.items.get(KEY), 'precondition, decision 3: the job named is in the storage before its first read').toBe(JOB_ID);
+
+        // The job vanished between the refusal and the read.
+        read.reject(refusal(404, 'backup_job_not_found'));
+        await settle();
+
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe('backup_job_not_found');
+        expect(controller.failure).toBe('read');
+        expect(controller.job).toBeNull();
+        expect(controller.busy).toBe(false);
+        // No new decision: a job found gone is forgotten, whatever read finds it (`#read`); the id followed before was
+        // replaced by the job named (decision 3), so nothing is left to follow.
+        expect(controller.followedJobId, 'a job found gone is forgotten, and the id it replaced is not taken back').toBeNull();
+        expect(storage.items.has(KEY), 'a job found gone is forgotten in the storage too').toBe(false);
+        expect(controller.canRecheck, 'a job found gone has nothing left to tell').toBe(false);
+        expect(onFailed.mock.calls, 'the job found gone announced once; the refused start never').toEqual([['backup_job_not_found', 'read', null]]);
+        expect(onDone).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+
+        await controller.recheck();
+        expect(api.get, '«Check again» is not offered: no job is read, not the one followed before either').toHaveBeenCalledTimes(1);
     });
 });
