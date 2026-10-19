@@ -131,7 +131,7 @@
       "unknown": "{value} n'est pas un code de devise ISO"
     },
     "writeRefusal": {
-      "dateOutOfRange": "{count, plural, one {# date est} many {# dates sont} other {# dates sont}} hors de l'intervalle {min} – {max} : {dates}. Rien n'a été enregistré.",
+      "dateOutOfRange": "{count, plural, one {# date est postérieure} many {# dates sont postérieures} other {# dates sont postérieures}} au {max} : {dates}. Rien n'a été enregistré.",
       "currencyMismatch": "{count, plural, one {# prix est} many {# prix sont} other {# prix sont}} en {found}, pas dans la devise de l'actif {expected} : {dates}. Rien n'a été enregistré.",
       "notSaved": "{count, plural, one {# valeur n'a pas été enregistrée} many {# valeurs n'ont pas été enregistrées} other {# valeurs n'ont pas été enregistrées}} : {items}",
       "more": "et {n} de plus",
