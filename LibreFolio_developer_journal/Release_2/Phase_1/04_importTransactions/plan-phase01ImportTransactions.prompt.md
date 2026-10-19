@@ -7504,3 +7504,78 @@ io la skill); 5. backlog (W-B83 ✅, N74); 6. simulazione e checkpoint.
     commit di giornale.
 - ✅ 6. Backlog: W-B83 ✅ nella forma decisa; W-B84 (il link GitHub sulle istanze gestite) e W-B85 (Danske, `excluded_status` misto)
   aperte come domande.
+
+### N74 — il merge di `dev_release2` e le risposte del developer (D1–D4) (2026-10-19)
+
+**Commit e merge.**
+- Il coordinatore ha committato il lotto: `8a86011ce` (codice) e `80059e18b` (giornale).
+- Ha poi fuso `dev_release2` (`1fa64ceae`) nel ramo: `a68a26a75`, genitori `80059e18b` e `1fa64ceae`, albero pulito.
+- Conflitto, quello previsto: `developer/backend/assets/architecture.md`, contro N83. Risolto tenendo il paragrafo di dev e
+  cambiando solo «with an end a year ahead» in «and the same last date».
+- Verifiche sulla revisione combinata (15:56-16:01, carico 19-44, log `files/logs/n74/merge_*.log`):
+  - `db populate --force --clean` (dev ha la `005` unica);
+  - J-49 11; `services range-ceiling` 74; `services transaction-decimal-places` 202; Fineco 27;
+  - `mkdocs build` strict verde; `api sync`.
+  - Porta 6184 libera.
+- N74 entra in dev dopo la revisione di B.
+
+**Le risposte del developer** (via il coordinatore, 16:01):
+- **D1 · W-B84.** Testuale: «essendo una cosa generica che tocca sia le istanze self-hosted che quelle hostate, facciamo aprire il
+  link sempre su github». I link restano come sono.
+- **D2 · W-B85.** Testuale: «per danske abbiamo gli export veri, se siamo in grado di scartarli con certezza non serve neanche il
+  banner, possiamo scartarle in silenzio, metterlo al massimo nel log del backend». Prima l'analisi (sotto), niente codice.
+- **D3.** Danske 1.0.1 resta: è il contratto del plugin (decisione del coordinatore).
+- **D4 · (b).** IT, FR ed ES di `form`, `import/index` e `import/how-to` corretti a mano. Le due voci nuove di `fineco` restano ad
+  Aphra. `translate-stamp` solo sui file sistemati per intero.
+- **CHANGELOG.** Lo scrive il coordinatore all'ingresso: le mie tre righe più la ⚠️ Breaking sulla data dopo domani.
+
+**D4 ✅ (19/10 ~16:10).**
+- 9 file, con `files/scripts/d4_translations.py`, ogni sostituzione contata:
+  - IT «a un anno da oggi» → «a domani»;
+  - FR «à un an après aujourd'hui» → «à demain»;
+  - ES «a un año a partir de hoy» → «hasta mañana»;
+  - la data d'esempio 2027-10-17 → 2026-10-18 (oggi il 17 ottobre 2026).
+- Nessun'altra traduzione portava il vecchio limite.
+- **Lo stamp.** Per ogni pagina ho trovato la versione inglese timbrata confrontando l'MD5 di `.translate-hashes.json` con la storia
+  git del file.
+  - `import/index.en.md` e `import/how-to.en.md`: timbrate l'ultima volta a `4bd1d28f6` (17/10); da allora l'unica deriva inglese è
+    N74 (`8a86011ce`), ora pareggiata. Timbrate (`translate-stamp`, it/fr/es); `translate --dry-run`: «up-to-date».
+  - `form.en.md` **non** timbrata: l'ultima timbratura è `532a1fd9c` (15/10), e da allora derivano anche `0ffaa9127` (la voce
+    «Missing event?»), `54880598b` (il costo manuale svuotato) e `4bd1d28f6`. Il resto del debito resta ad Aphra.
+
+**D2 — Danske Bank: quali stati si scartano con certezza (analisi, sola lettura)**
+
+Le fonti:
+- **Gli export veri della issue #26** (Danske Bank Finlandia, conto OST): `Transactions.xlsx` (custodia) e
+  `Osakesäästötili-<IBAN>-<data>.csv` (cassa). Analizzati il 28/09 senza valori
+  (`Release_2/phases/26_brimDanskeBank/analysis-phase00BrimDanskeBank.md`, §2-§4). `Tila` vi è **costante**: `Toteutunut` nel CSV,
+  `Toteutettu` nell'XLSX.
+- **Le risposte dell'autore** (28/09, piano 26 §3): «`Tila`: nessun ordine annullato visto; valori alternativi sconosciuti»; e degli
+  altri `Toimeksiantotyyppi`, «probabilmente molti che non conosco».
+- **I 5 campioni del repo** (`sample_reports/danske_bank-*`) sono sintetici (permesso del developer del 28/09) e hanno solo
+  `Toteutettu` (22 righe) e `Toteutunut` (46): nessuno stato in più. Le parole dei test (`Peruttu`, `Hylätty`, `Odottaa`) sono state
+  inventate per i test.
+- **F4** (`trahkoi/ynab-danske-csv`, convertitore open source del 2017, formato FI). Il suo `DanskeRecordFilterProcessor` scarta la
+  riga di cassa il cui `Saaja/Maksaja` è esattamente `Varaus` (prenotazione), senza guardare `Tila`.
+
+Il codice oggi:
+- `_classify_custody()` mette sotto `status` ogni `Tila` diverso da `Toteutettu`.
+- `_classify_cash()` mette sotto `status` ogni `Tila` diverso da `Toteutunut`, e l'etichetta `Varaus` (`_RESERVATION`).
+- `excluded_status` è un avviso, con le righe come evidenza. Nel dettaglio del set (`ParseDetailModal`) ogni riga ha un esito, e una
+  esclusa porta il motivo.
+- Le prove E1-E3 contano solo le righe di custodia escluse (`_excluded_between`). Una prenotazione di cassa non tocca le posizioni.
+- La riga esclusa resta già oggi fuori dai saldi: dire o non dire lo scarto non cambia nessun numero.
+
+| Stato | Certezza | Proposta |
+|---|---|---|
+| `Toteutettu` (custodia), `Toteutunut` (cassa) | certa: sono gli unici negli export veri | si importano, come oggi |
+| `Varaus`, etichetta di cassa | certo il significato (la parola è «prenotazione»; F4 la scarta); mai vista negli export OST | scarto in silenzio, una riga di log nel backend; la riga resta nel conto del set, col motivo nuovo `reservation`; nessuna nota |
+| ogni altro `Tila` (annullato, in attesa, rifiutato…) | ignota: mai visto, l'autore non li conosce | resta l'avviso `excluded_status`: uno stato mai visto potrebbe essere un movimento vero scritto con un'altra parola, e uno scarto in silenzio lo perderebbe senza dirlo |
+
+Le opzioni per il developer:
+- **(a)** Tutto come oggi: un avviso per ogni riga non contabilizzata, `Varaus` compresa.
+- **(b)** `Varaus` in silenzio, con il log; gli stati sconosciuti restano avviso. *(consiglio)*
+- **(c)** Tutto in silenzio, con il log. Sconsigliata: se la banca cambia parola, una riga vera sparirebbe.
+
+In (b) e in (c): un rosso prima della cura; `plugin_version` 1.0.2; il motivo `reservation` tradotto nelle quattro lingue in
+`importWizard.reportSet.reason`, perché il dettaglio del set lo mostra.
