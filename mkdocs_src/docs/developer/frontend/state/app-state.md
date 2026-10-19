@@ -182,6 +182,10 @@ and readable without a session (backend side:
   ([Settings Components](../components/features/settings.md#legal-notice)), draw each link only
   while its address is set. The default has no `legal`: until the answer, the notice shows without
   links.
+- **Reader of `client_log_level`** (H-60): the store itself. Each answer that lands sets how much the
+  browser console says about failed API calls, `setApiConsoleLevel(client_log_level ?? 'error')`
+  (`lib/api/apiErrorConsole.ts`); a failed or superseded request sets nothing, so the level is `error`
+  until the first answer ([The Browser Console](../../architecture/security.md#browser-console)).
 
 ```ts
 import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
@@ -196,6 +200,7 @@ instanceConfig.config.accounts.registration_locked; // true while LIBREFOLIO_REG
 instanceConfig.config.accounts.first_account_open; // true while the instance has no account (optional: absent reads as false)
 instanceConfig.config.accounts.password_rules; // [{code, value}]: the password rules (optional: absent or empty, PasswordStrength assumes DEFAULT_PASSWORD_RULES)
 instanceConfig.config.legal?.terms_url; // the terms of service of the instance, or null (optional: absent until the answer)
+instanceConfig.config.client_log_level; // 'error' | 'debug': how much the console says about failed API calls (optional: absent reads as 'error')
 ```
 
 ## 📢 Instance notices {: #instance-notices }

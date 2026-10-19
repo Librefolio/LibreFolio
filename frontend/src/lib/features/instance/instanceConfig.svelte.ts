@@ -19,6 +19,7 @@
 import type {z} from 'zod';
 import {zodiosApi} from '$lib/api';
 import type {schemas} from '$lib/api/generated';
+import {setApiConsoleLevel} from '$lib/api/apiErrorConsole';
 import {debug} from '$lib/debug';
 
 export type InstanceConfig = z.infer<typeof schemas.InstanceConfigResponse>;
@@ -63,6 +64,8 @@ function load(options: LoadInstanceConfigOptions = {}): Promise<void> {
             config = next;
             loaded = true;
             failed = false;
+            // How much the console says about failed API calls follows the instance (H-60, D4)
+            setApiConsoleLevel(next.client_log_level ?? 'error');
         },
         (error: unknown) => {
             if (request !== generation) return;

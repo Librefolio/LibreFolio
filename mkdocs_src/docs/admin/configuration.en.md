@@ -34,7 +34,7 @@ the same sample as `.env`.
 | `PORT` | `6040` | Port of the web server. With Docker Compose, the port opened on the host (the container always listens on `6040`). |
 | `TEST_PORT` | `6041` | Port of the test server (`./dev.py server --test`). |
 | `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Folder of the database, uploads, broker reports and logs; a relative path starts from the project folder. Docker fixes it to `/app/backend/data/prod-docker`: to move the data on the host, change the left side of the `./LibreFolio-data` volume in `docker-compose.yml`. |
-| `LOG_LEVEL` | `INFO` | How much the server logs: `TRACE`, `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. |
+| `LOG_LEVEL` | `INFO` | How much the server logs: `TRACE`, `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. At `DEBUG` or `TRACE`, the web app also writes every failed call to the server to the browser's console, a refused one (a `4xx` answer) included; at the other levels, only the server errors, the calls that got no answer and the answers it cannot read. |
 | `JWT_SECRET` | _not set_ | Key that signs login sessions. Not set, empty or only spaces: a new key at every start, so everyone logs in again after a restart. `JWT_SECRET_FILE` reads it from a file instead: see [Secrets](#secrets). See [Keep users signed in](index.md#session-persistence). |
 | `SESSION_COOKIE_SECURE` | `auto` | When the login session cookie is sent over HTTPS only: `auto` (if the browser uses HTTPS), `always` or `never`. See [HTTPS and reverse proxies](#session-cookie-secure). |
 | `LIBREFOLIO_CLIENT_IP_HEADER` | _not set_ | Behind a reverse proxy, the header in which it passes the visitor's address, such as `Fly-Client-IP` on Fly.io: set it only if every request crosses that proxy. See [The Visitor's Address](connection_checks.md#client-address). |
@@ -478,7 +478,7 @@ for this stop, then ends the server ([Start the Server](cli_tools.md#start-the-s
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `HOST` | `0.0.0.0` | Address `./dev.py server` listens on; `127.0.0.1` accepts local connections only. Docker Compose always uses `0.0.0.0`. |
-| `LIBREFOLIO_LOG_LEVEL` | — | Replaces `LOG_LEVEL` when set; `./dev.py server --debug` sets it to `DEBUG`. |
+| `LIBREFOLIO_LOG_LEVEL` | — | Replaces `LOG_LEVEL` when set; `./dev.py server --debug` and `./dev.py server --test` set it to `DEBUG`. |
 | `LIBREFOLIO_NO_SCHEDULER` | — | Any non-empty value, `0` included, turns the scheduled price and FX syncs off. Set by `./dev.py server --no-scheduler`. |
 | `LIBREFOLIO_TEST_MODE` | — | `1`, `true` or `yes`, in any case, switches to the test data folder. For LibreFolio's own test runs only: `./dev.py server --test` and the test runners set it, and `./dev.py server` turns it off. A server started without `./dev.py`, such as with `uvicorn` directly or from a service unit, takes it from its environment. On an instance in use, outside the test runner, the [startup checks](#startup-checks) report it as an error, and in the `managed` profile the server does not start. |
 | `LIBREFOLIO_TEST_DATA_DIR` | `./backend/data/test` | Folder of the test data; it may not overlap the production one. |
