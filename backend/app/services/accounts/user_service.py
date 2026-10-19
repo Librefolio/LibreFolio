@@ -138,7 +138,7 @@ def email_fold(address: str) -> str:
     """``address`` with A–Z folded to a–z and nothing else, as SQLite's ``lower()`` folds it (decision P18).
 
     Email addresses are unique regardless of case: the database holds a unique index on ``lower(email)``
-    (``ux_users_email_lower``, migration 009). Letters outside ASCII compare as written: a documented limit.
+    (``ux_users_email_lower``, migration 005, step 6). Letters outside ASCII compare as written: a documented limit.
     """
     return address.translate(_ASCII_FOLD)
 

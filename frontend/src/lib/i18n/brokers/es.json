@@ -146,7 +146,9 @@
           "ADJUSTMENT_OUT": "Ajuste de salida",
           "TRANSFER_DEPART": "Transferencia",
           "TRANSFER_ARRIVE": "Transferencia",
-          "SPLIT": "Desdoblamiento"
+          "SPLIT": "Desdoblamiento",
+          "TRANSFER_IN": "Transferencia de entrada",
+          "TRANSFER_OUT": "Transferencia de salida"
         },
         "unitPrice": "Precio unitario",
         "transitInterval": "Intervalo de tránsito",
@@ -224,7 +226,9 @@
           "ADJUSTMENT_OUT": "AJUSTE-",
           "TRANSFER_DEPART": "TRANSFERENCIA",
           "TRANSFER_ARRIVE": "TRANSFERENCIA",
-          "SPLIT": "SPLIT"
+          "SPLIT": "SPLIT",
+          "TRANSFER_IN": "TRANSFERENCIA+",
+          "TRANSFER_OUT": "TRANSFERENCIA-"
         },
         "historyDetail": {
           "openPrice": "Precio de apertura",

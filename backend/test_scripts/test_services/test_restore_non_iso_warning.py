@@ -35,9 +35,10 @@ Under test, the four places a warning code lives:
    stored currency ``EUR``, checked in the same data directory) followed by ``non_iso_currencies``, once; ``blockers``
    and ``restorable`` are the twin's (RNW-101), without an active administrator too (RNW-104). The twin alone is not
    warned (RNW-102, GUARD). ``report.json``, which the API reads back (``read_report``), carries the same warnings, and
-   the API schema takes them (RNW-103). An archive at an older revision (``OLDER`` of ``test_backup_staging.py``,
-   ``005_accounts_invites``) is checked on its copy after the upgrade (simulated, as that module does: the head stamped,
-   no ``alembic`` process): a value the upgrade keeps is warned (RNW-105), a value it corrects is not (RNW-106, GUARD).
+   the API schema takes them (RNW-103). An archive at an older revision (``OLDER`` of ``test_backup_staging.py``, the
+   released ``004_release_1_2_0_schema``) is checked on its copy after the upgrade (simulated, as that module does: the
+   head stamped, no ``alembic`` process): a value the upgrade keeps is warned (RNW-105), a value it corrects is not
+   (RNW-106, GUARD).
    A read of the copy's stored currencies that fails never ends the check (B-29's precedent): the copy holds ``978``,
    ``staging.find_stored_currency_findings`` raises ``sqlite3.OperationalError``, and the check returns the warnings,
    blockers and verdict of its twin, without the code, ``report.json`` written; the log has one warning on the stored

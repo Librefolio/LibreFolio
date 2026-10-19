@@ -1926,6 +1926,19 @@ evento compatibile in un intervallo di date configurabile (7 giorni per default)
 - Riusare il backend già pronto della sezione «🔗 Suggerimento eventi collegabili nella bulk modal
   (da P2-6)».
 
+### Ricollegamento automatico dopo il sync (19/10/2026, decisione N68, punto 4) — 🔍 da analizzare
+Nella 1.3 arrivano i primi tre punti di N68:
+- il cambio di valuta di un asset non è più bloccato dagli split;
+- gli split sopravvivono al cambio di valuta;
+- un bottone **«Ricollega eventi»** in Transazioni elenca le transazioni senza evento, con l'evento candidato.
+
+Il quarto resta qui, **da analizzare in un momento futuro**: dopo un sync, ricollegare **da soli** i casi certi (stesso
+asset, tipo e data, un solo candidato), con un riepilogo per l'utente. La regola deve stare nel backend, non in dati
+tenuti dal frontend, che si perderebbero a una ricarica o con un sync notturno.
+
+Prima di farlo va verificato che serva davvero (developer, 19/10: «prima facciamolo funzionare, magari scopriamo che
+non serve e i primi 3 sono sufficienti»). Si lega al task notturno qui sopra: potrebbero diventare la stessa cosa.
+
 ## 🔥 Strumenti — calcolatore FIRE e riuso del motore matematico
 
 **Data aggiunta**: 30 Settembre 2026 (appunto del 22/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa

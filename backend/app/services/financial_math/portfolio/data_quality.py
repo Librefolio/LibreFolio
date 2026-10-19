@@ -79,7 +79,6 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     transaction_implied_assets_dto: list | None = None,
     missing_cost_basis_assets: list[tuple[int, str]] | None = None,
     invalid_split_assets: list[tuple[int, str]] | None = None,
-    quote_in_minor_unit_assets: list[tuple[int, str]] | None = None,
     non_iso_currency_assets: list[tuple[int, str, str]] | None = None,
     report_currency: str | None = None,
     rows_before_floor: RowsBeforeFloor | None = None,
@@ -104,9 +103,6 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     invalid_split_assets (MF-D4): (asset_id, name) of the assets with a SPLIT event whose stored ratio is unusable: it
     counts as missing (no ratio restates a trade price observed before it), so a valuation that rests on such a price may
     be wrong until the ratio is fixed on the asset's events.
-    quote_in_minor_unit_assets (Z-32): (asset_id, name) of the held assets whose provider quotes them in a minor unit
-    (Yahoo's ``GBp``: pence) while their quote base does not divide the prices back: pence counted as pounds, so the
-    holding is worth 100 times too much until "Units per single price" is 100.
     non_iso_currency_assets (E-19b): (asset_id, name, stored currency) of the held assets whose currency is not an ISO 4217
     code as stored (``978``, ``EURO``, ``eur``: what an earlier version saved as written). report_currency: the currency
     the report converts to. With the sides of the missing pairs, they make one NON_ISO_CURRENCY warning per stored value
@@ -274,25 +270,6 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
                 cta_action="navigate_asset",
                 cta_target=str(invalid_split_assets[0][0]),
                 group_key="invalid_split_ratio",
-            )
-        )
-
-    # QUOTE_IN_MINOR_UNIT — warning (Z-32): the provider quotes the asset in a minor unit (Yahoo's GBp), the prices are
-    # stored as the major unit, and the asset's quote base does not divide them back
-    if quote_in_minor_unit_assets:
-        issues.append(
-            DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.QUOTE_IN_MINOR_UNIT,
-                severity=IssueSeverity.WARNING,
-                message_i18n_key="dataQuality.quoteInMinorUnit",
-                message_params={"count": len(quote_in_minor_unit_assets)},
-                count=len(quote_in_minor_unit_assets),
-                affected_asset_ids=[asset_id for asset_id, _ in quote_in_minor_unit_assets],
-                affected_asset_names=[name for _, name in quote_in_minor_unit_assets],
-                cta_action="navigate_asset",
-                cta_target=str(quote_in_minor_unit_assets[0][0]),
-                group_key="quote_in_minor_unit",
             )
         )
 
