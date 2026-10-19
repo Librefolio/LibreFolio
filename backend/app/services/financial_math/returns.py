@@ -286,8 +286,13 @@ def float_price_return(start: Decimal, end: Decimal) -> float:
     return float(change)
 
 
+#: The calendar days of a year the observed annualization counts: one constant for the factor of a series and for both
+#: conversions between calendar days and observations (J-1).
+DAYS_PER_YEAR = 365
+
+
 def observations_per_year(n_observations: int, calendar_days: int) -> float:
-    """The observed annualization factor of a return series: ``n_observations × 365 / calendar_days``.
+    """The observed annualization factor of a return series: ``n_observations × DAYS_PER_YEAR / calendar_days``.
 
     The one home of the formula (MF-D3): ``observed_annualization`` computes it, and the risk schemas' validators check a
     contract's factor against it (``schemas/risk.py``, which may import this pure module). ValueError for a span that is
@@ -295,7 +300,37 @@ def observations_per_year(n_observations: int, calendar_days: int) -> float:
     """
     if calendar_days <= 0:
         raise ValueError("calendar_days must be positive")
-    return n_observations * 365 / calendar_days
+    return n_observations * DAYS_PER_YEAR / calendar_days
+
+
+def positive_annualization_factor(annualization_factor: float) -> float:
+    """An annualization factor as a float, refused unless finite and positive (ValueError): zero, negative, ``inf`` and
+    ``nan`` come from an empty or malformed observation calendar and would yield finite-looking figures."""
+    normalized = float(annualization_factor)
+    if normalized <= 0 or not math.isfinite(normalized):
+        raise ValueError("annualization_factor must be finite and positive")
+    return normalized
+
+
+def calendar_days_to_observations(calendar_days: int, per_year: float) -> int:
+    """Return how many observations a span of calendar days holds at an observed frequency.
+
+    The inverse of observed annualization: a series observed ``per_year`` times a year holds ``calendar_days × per_year /
+    DAYS_PER_YEAR`` observations over the span, and never fewer than one. So a month is 30 calendar days on every series —
+    21 observations of one quoted on trading days, 30 of one quoted every day.
+    """
+    if isinstance(calendar_days, bool) or calendar_days <= 0:
+        raise ValueError("calendar_days must be a positive integer")
+    return max(1, round(calendar_days * positive_annualization_factor(per_year) / DAYS_PER_YEAR))
+
+
+def observations_to_calendar_days(observations: int, per_year: float) -> int:
+    """The calendar days a run of ``observations`` spans at an observed frequency: ``observations × DAYS_PER_YEAR /
+    per_year``, rounded, never fewer than one — the inverse of :func:`calendar_days_to_observations` (J-1), with which
+    the simulation discloses its block length in days."""
+    if isinstance(observations, bool) or observations <= 0:
+        raise ValueError("observations must be a positive integer")
+    return max(1, round(observations * DAYS_PER_YEAR / positive_annualization_factor(per_year)))
 
 
 def observed_annualization(n_observations: int, baseline_date: date | None, final_date: date | None) -> tuple[int, float | None]:

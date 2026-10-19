@@ -49,7 +49,7 @@ import time
 import numpy as np
 
 from backend.app.schemas.risk import RiskSimulationRegime
-from backend.app.services.risk.metrics import calendar_days_to_observations
+from backend.app.services.financial_math.returns import calendar_days_to_observations, observations_to_calendar_days
 from backend.app.services.risk.quant.models import (
     SimulationEngineRequest,
     historical_returns_digest,
@@ -232,7 +232,7 @@ def run_block_bootstrap(
     np.maximum(portfolio_returns, _MINIMUM_PORTFOLIO_RETURN, out=portfolio_returns)
 
     disclosure: dict[str, int | None] = {
-        "block_length_days": max(1, round(block_length * 365 / steps_per_year)),
+        "block_length_days": observations_to_calendar_days(block_length, steps_per_year),
         "regime_declared_days": declared_days,
         "regime_applied_days": applied_days,
     }

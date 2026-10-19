@@ -6,6 +6,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 
+from backend.app.services.financial_math.fx_rates import oriented_rate
 from backend.app.services.pac_allocator.evaluation.errors import ExactScenarioContractError
 from backend.app.services.pac_allocator.evaluation.keys import fx_pair_key
 from backend.app.services.pac_allocator.models import (
@@ -87,7 +88,7 @@ def fx_rate(
     rate = fx_rate_by_pair.get(fx_pair_key(source_currency, destination_currency))
     if rate is None:
         raise ExactScenarioContractError(f"missing direct FX rate for {source_currency}/{destination_currency}")
-    return rate if source_currency < destination_currency else _EXACT_ONE / rate
+    return oriented_rate(rate, source_currency, destination_currency)
 
 
 def _valuation_rate_map(

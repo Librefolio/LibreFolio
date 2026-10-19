@@ -38,6 +38,7 @@ from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.portfolio import DataQualityReport
 from backend.app.schemas.risk import RiskKpiOutput, RiskMode, RiskReturnBasis, RiskScopeKind
 from backend.app.schemas.signals import SignalWarningCode
+from backend.app.services.financial_math.returns import calendar_days_to_observations
 from backend.app.services.risk.base import RiskExecutionContext
 from backend.app.services.risk.metrics import (
     ZERO_TOLERANCE,
@@ -46,7 +47,6 @@ from backend.app.services.risk.metrics import (
     annualized_sortino,
     annualized_volatility,
     beta,
-    calendar_days_to_observations,
     compounded_return,
     correlation_matrix,
     covariance_matrix,
@@ -3538,7 +3538,7 @@ def test_a_period_count_that_cannot_annualize_is_rejected_instead_of_quietly_ign
     perfectly presentable ``0.0``) and publish a ratio nobody could distinguish from a
     real one.
 
-    This also pins that the parameter reaches ``_positive_annualization_factor`` at all: a
+    This also pins that the parameter reaches ``financial_math.returns.positive_annualization_factor`` at all: a
     body that ignored it in favour of a constant would have nothing to validate, and these
     five inputs would sail through.
     """
