@@ -9138,9 +9138,9 @@ punto di partenza, l'audit dello stesso giorno:
 - **MF-A…MF-P · I 16 lotti dell'audit** — tutti nella 1.3 per decisione del developer (16/10). Voci per lotto
   scritte da MF nell'analisi del 16/10 (base `f77743d47`); la ripartizione con J (CP-3, CP-5, U3/U7, CP-12, CP-13) è
   la domanda Q1 al coordinatore. Ordine e ondate: piano MF, §4.
-  **Stato al 19/10**: 14 lotti su 16 ✅ (A, B, C, D, F, G, H, I, J, K, M, N, O, P); aperti **E** (E2, domanda al
-  developer: gli short nello storico, opzione (b)) e **L** (D-MF1, domanda al developer). Tabella: piano MF, «Stato dei
-  lotti (19/10)».
+  **Stato al 19/10**: 14 lotti su 16 ✅ (A, B, C, D, F, G, H, I, J, K, M, N, O, P); aperti **E** (E2, gli short nello
+  storico: esposizione lorda approvata il 19/10, in coda dopo P2 e MF-P1b) e **L** (D-MF1, domanda al developer).
+  Tabella: piano MF, «Stato dei lotti (19/10)».
 - ✅ **MF-A · Contributo per posizione dal motore** (CP-3 di J: B8, V2/P2, R4, B19; TRANSFER per broker secondo P22) —
   grande, numeri; audit 16/10. Dettagli: [piano MF](../Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md),
   sezione «MF-A».
@@ -9157,8 +9157,9 @@ punto di partenza, l'audit dello stesso giorno:
   `c2feaf3e4`.
 - **MF-E · Sintesi del lotto nella casa, segno dei corti nella storia di performance, T-B8** — medio, numeri (corti
   aperti); audit 16/10, riverifica MF (`histories.py:63-72`). Dettagli: piano MF, sezione «MF-E».
-  **E1 entrato** il 17/10: dev `e43dfae68`. **E2** (corti nella storia di performance) attende la decisione del
-  developer.
+  **E1 entrato** il 17/10: dev `e43dfae68`. **E2** (corti nella storia di performance): il 19/10 il developer approva
+  l'esposizione lorda con le D1–D3 di MF; in coda dopo P2 e MF-P1b, prima il piano breve (`lots/histories.py` è aperto da
+  J con L1a: ordine e merge dal coordinatore), poi il via.
 - ✅ **MF-F · Segno del reddito nei lotti e nella timeline dei redditi dell'AI Export** (O3, B9) — piccolo, numeri; audit
   16/10. Decisione D-MF3. Dettagli: piano MF, sezione «MF-F».
   **Entrato** il 16/10: F1 e F2 in dev `8d244d1c6`.
@@ -9434,3 +9435,13 @@ punto di partenza, l'audit dello stesso giorno:
   con `asyncio.gather`, e i ripieghi sul prezzo salvato interrogano la stessa `AsyncSession`, che SQLAlchemy non
   ammette fra task concorrenti. La deduplica degli id (SEC9-1) lo rende più raro, non lo toglie. Cura: le letture del
   ripiego in una query sola dopo il `gather`. Dettagli: piano MF, sezione «R13-SEC9».
+- **MF-FV · Piano «formule veloci»: togliere i pavimenti all'indietro senza pagarli** — grande, nessun valore (parità al
+  bit); developer, 19/10 (D1 un punto al giorno, D2 i pavimenti alla fine, uno per lotto, tutto nella 1.3). Lotti di MF:
+  P1 ✅ (la linea del MWRR a partenza calda, codice `af479abe7`, giornale `bbbc085d2`), P2 in corso (storia e viste solo
+  per la finestra), P3 (i cambi a gradini, con la funzione di X), P4 (il motore a segmenti); poi i pavimenti. Dettagli:
+  piano MF, «Piano «formule veloci»» e le voci P1, P2.
+- **MF-P1b · Le due debolezze del MWRR già presenti** — piccolo, valori da dichiarare; MF, 19/10 (test di P1), via del
+  developer il 19/10 come lotto a parte, dopo P2. (1) Il test del segno moltiplica i VAN e il prodotto va in underflow
+  a zero; (2) `_is_xirr_root` scarta radici vere quando il VAN è mal condizionato (termini enormi che si annullano). P1
+  le ha conservate al bit, fissate nei test con un commento. I valori che cambiano si dichiarano prima, come domanda se
+  toccano numeri mostrati. Dettagli: piano MF, voce P1.
