@@ -52,6 +52,29 @@ provider». The cure's contract: the result names the refused value (1E+60) and 
 the decimal point) — PARTIAL with the history, its message the first of its errors; FAILED without, in its one
 error — and the rest stays as X-R40 left it (the history stored, today absent from ``changed_points``).
 
+N92 (i) (developer's decisions of 19/10): a negative price is not accepted, and a provider's negative day no longer fails
+its whole history. Measured before the cure: a plugin builds each of a provider's points as ``FAPricePoint``, which
+refuses a close not above 0 and a negative open/high/low/volume — except exactly ``-1``, the sentinel «set NULL», which
+the history stores as an erased field — so one negative day raises inside the plugin, and the refresh fails with «No
+price data available from provider», nothing stored. A current value is never checked for its sign: a quote of -5 is
+served, cached and written as today's row, and a refresh that reaches today raises (``FAPricePoint(close=-5)`` in
+``_persist_refresh_item``); a quote of 0.00 is served, cached and written, and a refresh drops it in silence. The cure's
+contract:
+
+* a provider's point with a finite close not above 0, or a finite negative open, high, low or volume (``-1`` included),
+  is discarded before the upsert and not counted in ``points_fetched``; the result carries one error, its message, saying
+  how many points were discarded and naming their dates, and no other («N points discarded: …»): PARTIAL with the other
+  days stored and announced; FAILED with that note when every point is discarded, nothing stored. A WARNING names the
+  discarded day. 0 stays a value for open and volume: stored, nothing discarded;
+* a current value not above 0 is refused by ``storable_current_value`` (None), as an unstorable one: never served, cached
+  or written — the item falls back to the database, a second call asks the provider again —; ``unstorable_quote_reason``
+  names the value, and a refresh reports it as X-R51 does: PARTIAL with the history, FAILED with one error without, the
+  value named as written (``-5``, ``0.00``).
+
+The double builds the points of a ``raw_history`` inside the provider call (``FAPricePoint(**raw)``), as a plugin builds
+its own, so a point the schema refuses raises where a plugin's would. The N92 tests carry ``n92`` in their names
+(``-k n92``); every one is RED until N92 but the GUARD of a zero open and volume, green before and after.
+
 The doubles and fixtures are W-B58's and W-B62's, copied from ``test_asset_digit_limits.py`` (workstream W): the two
 assets of the unit (``owned``), ``_QuoteDouble`` and the ``assigned`` fixture, ``_current_price``, ``_falling_back``,
 ``_seed_closes`` and ``_record_current_cache``. W-B62's tests are W's, unchanged; the X-R40 tests follow them.
@@ -96,9 +119,10 @@ from backend.app.db.models import Asset, AssetEvent, AssetProviderAssignment, As
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPricePoint, FAUpsert
 from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncStatus
-from backend.app.services.assets import core, price_query
+from backend.app.services.assets import core, price_query, refresh
 from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets.price_store import storable_current_value, unstorable_quote_reason
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import unique_id
 
@@ -200,13 +224,15 @@ async def _stored(owned: _Owned) -> dict[tuple[int, date], PriceHistory]:
 class _Assigned:
     """The PEPE asset assigned, for one test, to a provider double of the test's own: its code, the assignment's id, the
     current value the double answers (a ``float`` is built without validation, as a plugin that skips the schema; an
-    exception is raised, as a provider that fails), the history it serves (None: it is never asked for one), and how many
-    times it was asked for each."""
+    exception is raised, as a provider that fails), the history it serves (None: it is never asked for one), or the raw
+    values of one it builds inside the call as a plugin does (``raw_history``, N92), and how many times it was asked for
+    each."""
 
     code: str
     assignment_id: int
     quote: object = Decimal("1")
     history: list[FAPricePoint] | None = None
+    raw_history: list[dict] | None = None
     current_calls: int = 0
     history_calls: int = 0
 
@@ -249,9 +275,13 @@ class _QuoteDouble(AssetSourceProvider):
         return FACurrentValue(value=quote, currency="EUR", as_of_date=date.today(), source=self.provider_code)
 
     async def get_history_value(self, identifier, identifier_type, provider_params, start_date, end_date) -> FAHistoricalData:
-        if self.assigned.history is None:
+        if self.assigned.history is None and self.assigned.raw_history is None:
             raise AssertionError("the R13-SEC2 current-price double is never asked for a history")
         self.assigned.history_calls += 1
+        if self.assigned.raw_history is not None:
+            # N92: the points built here, inside the provider call, as a plugin builds them from what its source answered:
+            # a point the schema refuses raises in the plugin, as Yahoo's or justETF's would
+            return FAHistoricalData(prices=[FAPricePoint(**raw) for raw in self.assigned.raw_history], currency="EUR", source=self.provider_code)
         return FAHistoricalData(prices=list(self.assigned.history), currency="EUR", source=self.provider_code)
 
 
@@ -787,3 +817,233 @@ async def test_guard_a_quote_that_fits_is_served_in_its_own_form(owned, assigned
     served = [(item.source, item.value.as_tuple() if item.value is not None else None) for item in (first, second)]
     expected = [(f"provider:{assigned.code}", quote.as_tuple())] * 2
     assert served == expected, f"a current quote of {quote} EUR, which fits, was served as {first.value!r} then {second.value!r} from the cache ({first.source}, {second.source}): expected {quote!r} in its own form both times"
+
+
+# --------------------------------------------------------------------------- #
+# N92 (i): a provider's day not above 0 is discarded and named; a current value not above 0 is refused
+# --------------------------------------------------------------------------- #
+
+#: An event sent through refresh.py's own logger inside every capture of this block, then looked for.
+_N92_BARRIER = "N92 capture barrier"
+
+#: Day 1 of a history whose days 0 and 2 are sound: a close not above 0, or a negative open, high, low or volume — the
+#: old sentinel -1 among them, which the history stored before N92 as an erased open.
+_N92_BAD_DAYS = [
+    pytest.param({"close": "-5"}, id="close-minus-5"),
+    pytest.param({"close": "0"}, id="close-zero"),
+    pytest.param({"close": "1.5", "open": "-1"}, id="open-minus-1-the-old-sentinel"),
+    pytest.param({"close": "1.5", "low": "-2"}, id="low-minus-2"),
+    pytest.param({"close": "1.5", "high": "-0.5"}, id="high-minus-0.5"),
+    pytest.param({"close": "1.5", "volume": "-10"}, id="volume-minus-10"),
+]
+
+#: Current values not above 0, a negative one and a zero written with its decimals: each is named as written.
+_N92_QUOTES = [pytest.param(Decimal("-5"), id="-5"), pytest.param(Decimal("0.00"), id="0.00")]
+
+
+def _n92_names_value(text: str | None, value: str) -> bool:
+    """Whether ``text`` names the value ``value`` as written: the token itself, not a part of a longer number or a date."""
+    return text is not None and re.search(rf"(?<![\w.]){re.escape(value)}(?!\w|\.\d)", text) is not None
+
+
+def _n92_discard_notes(errors: list[str], count: int, discarded: list[date], kept: list[date]) -> list[str]:
+    """The entries of ``errors`` saying that ``count`` points were discarded («1 point discarded», «2 points discarded»,
+    «2 point(s) discarded»), naming every day of ``discarded`` (ISO) and none of ``kept``."""
+    said = re.compile(rf"(?<![\w.]){count} point(?:s|\(s\))? discarded")
+    return [error for error in errors if said.search(error) and all(day.isoformat() in error for day in discarded) and not any(day.isoformat() in error for day in kept)]
+
+
+def _n92_warnings_naming(events: list[dict], day: date) -> list[dict]:
+    """The warnings, and worse, among ``events`` that name ``day`` (ISO, or the date object as a field holds it), whichever
+    module logs them and whatever their text; the barrier left out."""
+    names = (day.isoformat(), repr(day))
+    return [event for event in events if event.get("log_level") in ("warning", "error", "critical") and event.get("event") != _N92_BARRIER and any(name in str(event) for name in names)]
+
+
+async def _n92_refresh_history(owned: _Owned, assigned: _Assigned, story: str):
+    """``bulk_refresh_prices`` of the PEPE asset from day 0 to day 2, a range long past: a history, no current value. Its
+    one result; an exception fails the test, naming it. Barrier: one result, from the double, which was asked once for the
+    history (counted before it builds its points) and never for the current value."""
+    request = FARefreshItem(asset_id=owned.asset_id, date_range=SyncDateRangeModel(start=_day(0), end=_day(2)))
+    try:
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            response = await AssetSourceManager.bulk_refresh_prices([request], session)
+    except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+        pytest.fail(f"{story}: bulk_refresh_prices raised {exc!r}")
+    results = response.results
+    fetched = (len(results), results[0].provider_used if results else None, assigned.history_calls, assigned.current_calls)
+    assert fetched == (1, assigned.code, 1, 0), f"barrier: {story} answered (results, provider, history calls, current-value calls) = {fetched}, not (1, {assigned.code}, 1, 0): {results!r}"
+    return results[0]
+
+
+def _n92_answered(result) -> dict:
+    """What a refresh result says, for a failure message."""
+    return {"status": result.status, "points_fetched": result.points_fetched, "message": result.message, "errors": result.errors}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad", _N92_BAD_DAYS)
+async def test_n92_a_providers_day_not_above_zero_is_discarded_named_and_logged(owned, assigned, bad):
+    """RED until N92: the plugin builds day 1 as ``FAPricePoint``, which refuses it («close price must be positive (> 0)»,
+    «price/volume fields must be >= 0»): the whole history fails, the result is FAILED «No price data available from
+    provider», nothing is stored. An open of exactly -1 passes instead, as the sentinel: day 1 is stored with its open
+    erased, and nothing says so.
+
+    Contract (N92): day 1 is discarded before the upsert, days 0 and 2 stored and announced in ``changed_points``; the
+    result PARTIAL, ``points_fetched`` 2 (the discarded point not counted), one error, its message, saying that 1 point
+    was discarded and naming day 1 alone; a WARNING (or worse) names day 1. The capture is proved live by a barrier event
+    of ``refresh``'s logger.
+    """
+    assigned.raw_history = [{"date": _day(0), "close": "1.5"}, {"date": _day(1), **bad}, {"date": _day(2), "close": "2.5"}]
+    story = f"a refresh whose provider delivers days 0 and 2 sound and day 1 ({_day(1)}) with {bad}"
+
+    with capture_logs() as events:
+        refresh.logger.warning(_N92_BARRIER)
+        result = await _n92_refresh_history(owned, assigned, story)
+    assert any(event.get("event") == _N92_BARRIER for event in events), f"barrier: the log capture saw no event of refresh.py's logger: {events}"
+
+    answered = _n92_answered(result)
+    stored = sorted(day for (_asset_id, day) in await _stored(owned))
+    assert stored == [_day(0), _day(2)], f"N92: {story} stored the days {stored} and answered {answered}: expected days 0 and 2, day 1 discarded — one bad day must not fail, nor enter, the history"
+    assert (result.status, result.points_fetched) == (SyncStatus.PARTIAL, 2), f"N92: {story} answered {answered}: expected PARTIAL, 2 points fetched (the discarded one not counted)"
+    notes = _n92_discard_notes(result.errors, 1, [_day(1)], [_day(0), _day(2)])
+    assert len(result.errors) == 1 and notes == result.errors and result.message == notes[0], f"N92: {story} answered {answered}: expected one error, its message, saying that 1 point was discarded and naming {_day(1)} alone"
+    delta = sorted(point.date for point in result.changed_points or [])
+    assert delta == [_day(0), _day(2)], f"N92: {story} announces {delta} in changed_points: expected days 0 and 2"
+    assert _n92_warnings_naming(events, _day(1)), f"N92: {story} logged no warning naming {_day(1)}, the discarded day: {[event for event in events if event.get('event') != _N92_BARRIER]}"
+
+
+@pytest.mark.asyncio
+async def test_n92_a_history_whose_every_day_is_not_above_zero_fails_naming_them(owned, assigned):
+    """RED until N92: the plugin raises on the first point; the result is FAILED «No price data available from provider»,
+    which names neither the reason nor the days.
+
+    Contract (N92, as the currency-mismatch short-circuit): every point discarded, nothing stored; FAILED,
+    ``points_fetched`` 0, one error, its message, saying that 2 points were discarded and naming both days.
+    """
+    assigned.raw_history = [{"date": _day(0), "close": "-5"}, {"date": _day(1), "close": "0"}]
+    story = f"a refresh whose provider delivers a close of -5 on {_day(0)} and of 0 on {_day(1)}"
+
+    result = await _n92_refresh_history(owned, assigned, story)
+
+    answered = _n92_answered(result)
+    stored = await _stored(owned)
+    assert stored == {}, f"N92: {story} stored {sorted(day for (_asset_id, day) in stored)}: expected nothing"
+    notes = _n92_discard_notes(result.errors, 2, [_day(0), _day(1)], [])
+    failed = (result.status, result.points_fetched) == (SyncStatus.FAILED, 0)
+    assert failed and len(result.errors) == 1 and notes == result.errors and result.message == notes[0], f"N92: {story} answered {answered}: expected FAILED, 0 points fetched, one error, its message, saying that 2 points were discarded and naming both days"
+
+
+@pytest.mark.asyncio
+async def test_n92_guard_a_providers_zero_open_and_volume_are_stored(owned, assigned):
+    """GUARD (green before and after): 0 is a value for an open and a volume, not a price «not above 0»: a history whose
+    day 1 has an open and a volume of 0 is stored whole, day 1 with its open and volume 0; the result OK, no error."""
+    assigned.raw_history = [{"date": _day(0), "close": "1.5"}, {"date": _day(1), "close": "2", "open": "0", "volume": "0"}, {"date": _day(2), "close": "2.5"}]
+    story = f"a refresh whose provider delivers day 1 ({_day(1)}) with an open and a volume of 0"
+
+    result = await _n92_refresh_history(owned, assigned, story)
+
+    stored = await _stored(owned)
+    assert sorted(day for (_asset_id, day) in stored) == [_day(0), _day(1), _day(2)], f"{story} stored {sorted(stored)}: {_n92_answered(result)}"
+    day_one = stored[(owned.asset_id, _day(1))]
+    assert (day_one.open, day_one.volume) == (Decimal("0"), Decimal("0")), f"{story} stored open {day_one.open}, volume {day_one.volume}"
+    assert (result.status, result.errors) == (SyncStatus.OK, []), f"{story} answered {_n92_answered(result)}"
+
+
+@pytest.mark.parametrize("quote", [*_N92_QUOTES, pytest.param(Decimal("0"), id="0"), pytest.param(Decimal("-0.000001"), id="-0.000001")])
+def test_n92_storable_current_value_refuses_a_value_not_above_zero(quote):
+    """RED until N92: ``storable_price`` refuses a value by its digits only, so a current value of -5 or 0 comes back as
+    it came: served, cached, and written as today's row.
+
+    Contract (N92): ``storable_current_value`` answers None for a value not above 0, as for one no price column keeps;
+    ``unstorable_quote_reason`` names the value as written. Pure: no database, the provider code the test's own.
+    """
+    current = FACurrentValue(value=quote, currency="EUR", as_of_date=date.today(), source="n92")
+
+    kept = storable_current_value(current, 0, f"n92_{uuid.uuid4().hex[:12]}")
+
+    assert kept is None, f"N92: storable_current_value kept a current value of {quote} as {kept!r}: a price not above 0 must be refused, never served, cached or written"
+    reason = unstorable_quote_reason(quote)
+    assert _n92_names_value(reason, str(quote)), f"N92: unstorable_quote_reason({quote!r}) does not name the value: {reason!r}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stored", [pytest.param(True, id="a-stored-close"), pytest.param(False, id="no-stored-close")])
+@pytest.mark.parametrize("quote", _N92_QUOTES)
+async def test_n92_a_current_quote_not_above_zero_is_never_served_cached_or_written(owned, assigned, monkeypatch, quote, stored):
+    """RED until N92: the quote is served as it comes (``source`` the provider's), stored in the current-value cache, and
+    written as today's row (open, high, low and close the quote).
+
+    Contract (N92): refused as an unstorable quote (W-B62): never served — the item falls back to the database: the
+    stored close of the latest day, ``source`` ``db:last_known``, when a row exists (a close of 10 on day 0, seeded by the
+    ORM); otherwise ``error`` set and no value —, never cached, never written (no row for today); a second call asks the
+    provider again.
+    """
+    if stored:
+        await _seed_closes(owned, {0: "10"})
+    written = _record_current_cache(monkeypatch)
+    assigned.quote = quote
+    story = f"a current quote of {quote} EUR"
+
+    item = await _current_price(owned.asset_id, story)
+
+    assert assigned.current_calls == 1, f"barrier: the provider double was asked {assigned.current_calls} times for the current value, not once"
+    served = {"source": item.source, "value": item.value, "as_of_date": item.as_of_date, "error": item.error}
+    if stored:
+        expected = {"source": "db:last_known", "value": Decimal("10"), "as_of_date": _day(0), "error": None}
+        assert served == expected, f"N92: {story}, not above 0, was served as {served}: expected the stored close, {expected}"
+    else:
+        assert not (item.source or "").startswith("provider:") and item.value is None and item.error, f"N92: {story}, not above 0, was served as {served}: expected no value and an error, as when the provider fails and nothing is stored"
+    cached = [value for value in _cached_quotes(written) if value is quote or value == quote]
+    assert cached == [], f"N92: {story}, not above 0, was stored in the current-value cache ({len(cached)} time(s))"
+    today_row = (await _stored(owned)).get((owned.asset_id, date.today()))
+    assert today_row is None, f"N92: {story}, not above 0, was written as today's row (close {today_row.close if today_row else None})"
+
+    await _current_price(owned.asset_id, f"a second call after {story}")
+
+    assert assigned.current_calls == 2, f"N92: a second call did not ask the provider again ({assigned.current_calls} call(s) in all): something held {story}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("quote", _N92_QUOTES)
+async def test_n92_a_refresh_with_history_names_a_current_value_not_above_zero(owned, assigned, quote):
+    """RED until N92: a current value of -5 becomes today's point, and ``FAPricePoint(close=-5)`` raises in
+    ``_persist_refresh_item``: the whole bulk refresh raises. One of 0.00 is dropped in silence (a zero is falsy): OK, no
+    message.
+
+    Contract (N92, the way of X-R51): the current value is refused before it becomes today's point; the result PARTIAL,
+    its message the first of its errors, naming the value as written; days 0, 1 and 2 stored and announced, today
+    neither.
+    """
+    assigned.history = [_point(0, "1.5"), _point(1, "2"), _point(2, "2.5")]
+    assigned.quote = quote
+    story = f"a refresh up to today whose provider answers a history of days 0 to 2 and a current value of {quote} EUR"
+
+    result = await _xr51_refresh(owned, assigned, _day(0), story)
+
+    answered = _n92_answered(result)
+    assert result.status == SyncStatus.PARTIAL and result.errors and result.message == result.errors[0] and _n92_names_value(result.message, str(quote)), f"N92: {story} answered {answered}: expected PARTIAL, its message the first of its errors, naming the refused current value {quote}"
+    stored = sorted(day for (_asset_id, day) in await _stored(owned))
+    assert stored == [_day(0), _day(1), _day(2)], f"N92: {story} stored the days {stored}: expected days 0, 1 and 2, and not today"
+    delta = sorted(point.date for point in result.changed_points or [])
+    assert date.today() not in delta and {_day(0), _day(1), _day(2)} <= set(delta), f"N92: {story} announces {delta} in changed_points: expected days 0, 1 and 2, and not today"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("quote", _N92_QUOTES)
+async def test_n92_a_refresh_of_the_current_value_alone_names_one_not_above_zero(owned, assigned, quote):
+    """RED until N92: a current value of -5 raises in ``_persist_refresh_item`` (the whole bulk refresh raises); one of
+    0.00 is dropped in silence, and the result is FAILED «No price data available from provider».
+
+    Contract (N92, the way of X-R51): FAILED, with one error naming the value as written; nothing stored. No history is
+    asked, the range starting today.
+    """
+    assigned.history = []
+    assigned.quote = quote
+    story = f"a refresh of today alone whose provider answers a current value of {quote} EUR"
+
+    result = await _xr51_refresh(owned, assigned, date.today(), story)
+
+    answered = _n92_answered(result)
+    assert result.status == SyncStatus.FAILED and len(result.errors) == 1 and _n92_names_value(result.errors[0], str(quote)), f"N92: {story} answered {answered}: expected FAILED, with one error naming the refused current value {quote}"
+    assert await _stored(owned) == {}, f"N92: {story} stored a row"

@@ -11,7 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
-- The Dashboard's data-quality banner now warns when Yahoo quotes a London asset you hold in pence (GBp) while LibreFolio values it as pounds: set its «Units per single price» to 100 (the dividends it shows stay in pence for now).
 - After an update, each user sees once what changed since their last version: the new changelog chapters, in their language where translated. New accounts never see it, and it never opens over a guide or another window. Same on self-hosted and managed instances.
 - `./dev.py db currencies` lists stored currency codes that are not ISO codes (names or numbers saved by earlier versions), and the server warns about them at every start.
 - **Currency fields show what a non-ISO stored code stands for.** A currency saved as `978` or `EURO` by an earlier version stays visible in the picker, next to the ISO code it stands for (`EUR`), so you can pick the right one. Restoring a backup also warns about such codes before you confirm.
@@ -90,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- **Leaner database indexes.** The upgrade to 1.3 removes 13 database indexes no query used: copies of the indexes unique constraints already have, and shorter versions of other indexes. Every new price now updates one index fewer, and price history takes about a fifth less space with its indexes. An existing database file keeps its size: the freed space is reused as new data arrives. Backups are written compact.
 - The same portfolio report requested twice at once (two tabs, a refresh during a slow load) is computed once.
 - **One change over the range, from the server.** The change over the selected range on the Assets cards, in the FX table and cards, on an FX pair's page and on an asset's page is now computed by the server, so the same figure appears everywhere; beside a live price it is the change up to that price. A price written down to 0 shows −100 %, and a change that cannot be computed in the display currency is left out instead of mixing currencies.
 - AI Export: when a value is unavailable in every row of a table, the prompt now names that column right after the table instead of leaving it out silently (unless a null there only means "none", such as an open lot's closing date or a single asset's portfolio weight), so the AI can tell missing data from data that isn't part of the export.
@@ -168,7 +168,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
-- **Yahoo Finance prices, dividends and splits of exchanges east of UTC (e.g. Milan, London in summer, Tokyo) were stored one day early.** They are now dated on the exchange's own day, and the rows saved by earlier versions are moved to it once, at each asset's first sync after the update: that sync reads the full history and may take a little longer.
+- **Yahoo Finance prices, dividends and splits of exchanges east of UTC (e.g. Milan, London in summer, Tokyo) were stored one day early.** New ones are dated on the exchange's own day; rows saved by earlier versions stay as they are.
 - The asset page now names the data provider (for example "Yahoo Finance") instead of its internal code when the provider list arrives after the asset.
 - **The bulk editor names a broker you can only view, and flags the row it refuses.** Copying a transfer whose receiving broker is shared with you as a viewer showed that side as "—" and reported the refusal on the sending row as "Broker #N". The grid and the message now name the broker, and the refusal sits on the row that caused it; refused edits, deletions and splits are flagged on their own rows too.
 - **Deleting a broker also removes its leftover import folders and lock file**, which used to pile up in the broker reports storage.
@@ -342,6 +342,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: converting an amount of 0 (`POST /api/v1/fx/currencies/convert`) answers 0 with the day's rate instead of a server error.
 - Exchange rates an older version could save but not use (0, infinite, or more than 14 digits) no longer reach the PAC planner's quotes and costs, where they gave absurd amounts; the scheduler fetches those days again from the provider.
 - An invalid technical signal no longer breaks the chart of an asset or an exchange rate: the prices and rates stay on the chart and in the page's cache, and **All** resolves the start of the range; only the signals are reported as unavailable.
+- A provider that delivers a day with a price of 0 or less no longer makes the whole price download of the asset fail: that day is skipped and the sync says so. A current price of 0 or less from a provider is refused like an unusable one: the last stored price stays.
 
 #### 🔒 Security
 
@@ -402,6 +403,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⚠️ Breaking changes
 
+- **`POST /api/v1/assets/prices`: `-1` no longer empties a field.** Open, high, low and volume take a number of 0 or more, `null` (or no field) to leave the stored value as it is, or the string `"clear"` to empty it; `-1` is now a negative number, refused with 422 like any other. A close must be above 0.
 - `POST /api/v1/fx/currencies/rate`: when every rate in a request is refused, the 400 answer's `detail` is now an object `{code: "fx_rates_refused", message, rejected}` instead of a plain string (the `message` keeps the old text). API clients that read `detail` as a string should read `detail.message`.
 - The global setting `enable_registration` becomes `registration_mode` (`open`, `invite`, `disabled`): an API client that read the old key must read the new one.
 - **`DELETE /api/v1/assets/events` requires `asset_id`.** Only that asset's events are deleted, so a wrong or crafted request can no longer delete another asset's events. A request with `ids` alone is refused (422), and an id of another asset answers `not_found`, its event untouched. A client deleting events must send their asset.
