@@ -12,11 +12,12 @@
     import {resolveBrimTodoMessage} from '$lib/features/transactions/resolveBrimNotice';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import TransactionResultBanner from './TransactionResultBanner.svelte';
-    import {getTransactionTypeIconUrl} from '$lib/features/transactions/transactionTypeStore';
+    import {getTransactionTypeIconUrl, getTypeRule} from '$lib/features/transactions/transactionTypeStore';
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
+    import {promotePairOrder} from './promoteHelpers';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import type {ValidationIssue} from '../types';
@@ -268,8 +269,8 @@
                 {#each bannerSuggestions.slice(0, 5) as sug, idx}
                     {@const rawA = ops.find((o) => o.tempId === sug.tempIdA)}
                     {@const rawB = ops.find((o) => o.tempId === sug.tempIdB)}
-                    <!-- Semantic order: "from" (negative cash) first, "to" (positive) second -->
-                    {@const needSwap = rawA && rawB && rawA.fields.cash && rawB.fields.cash && Number(rawA.fields.cash.amount) > 0 && Number(rawB.fields.cash.amount) < 0}
+                    <!-- Semantic order: the paying row ("from") first, the other ("to") second (promotePairOrder) -->
+                    {@const needSwap = rawA && rawB ? promotePairOrder(rawA, rawB, getTypeRule).swapped : false}
                     {@const opA = needSwap ? rawB : rawA}
                     {@const opB = needSwap ? rawA : rawB}
                     {@const rowIdxA = opA ? ops.indexOf(opA) : -1}
@@ -327,9 +328,9 @@
                             <span class="text-lf-muted">(Δ{deltaDays > 0 ? '+' : ''}{deltaDays}d)</span>
                         {/if}
                         {#if sug.targetType === 'FX_CONVERSION' && opA?.fields.cash && opB?.fields.cash}
-                            {@const aAmtFx = Number(opA.fields.cash.amount)}
-                            {@const fromOpFx = aAmtFx < 0 ? opA : opB}
-                            {@const toOpFx = aAmtFx < 0 ? opB : opA}
+                            {@const fxSides = promotePairOrder(opA, opB, getTypeRule)}
+                            {@const fromOpFx = fxSides.from}
+                            {@const toOpFx = fxSides.to}
                             {#if fromOpFx.fields.cash && toOpFx.fields.cash && fromOpFx.fields.cash.code !== toOpFx.fields.cash.code}
                                 {@const fxInfo = computeFxConversionInfo(Number(fromOpFx.fields.cash.amount), fromOpFx.fields.cash.code, Number(toOpFx.fields.cash.amount), toOpFx.fields.cash.code)}
                                 {#if fxInfo}
