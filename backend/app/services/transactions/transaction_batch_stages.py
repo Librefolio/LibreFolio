@@ -164,6 +164,40 @@ def _check_limit(context: TransactionBatchContext, operation: str, index: int, r
     return integer_digits_issue(value, Transaction, column) is not None
 
 
+def check_cost_basis_sign(context: TransactionBatchContext) -> None:
+    """Refuse a manual cost basis below 0 (J-60); 0 stays allowed — a gift, the new shares of a split.
+
+    The cost is read where ``check_decimal_limits`` reads it: the manual cost of a create, or of an update that sends
+    one (an Auto cost — ``cost_basis_mode`` "auto" or "auto-detail" — is the batch's own average, never the user's),
+    and the cost a promotion resolves. An update that leaves the stored cost alone is not refused for it: a row an older
+    version stored with a negative cost stays editable until its cost is touched. Below 0 the row gets
+    ``costBasisNegative`` on ``cost_basis_override``, no params, and the batch is not saved (``finalize_response``: any
+    issue). The batch goes on: a negative cost overflows nothing the later stages compute, so the user gets the row's
+    other refusals in the same answer.
+    """
+    for operation, parsed in (("create", context.parsed_creates), ("update", context.parsed_updates)):
+        for index, item in parsed:
+            for field, _column, value in _decimal_limit_values(item):
+                if field == "cost_basis_override" and value < 0:
+                    context.issues.append(_cost_basis_negative(operation, index, item.id if operation == "update" else None))
+    for index, item in context.parsed_promotes:
+        amount = _promote_cost_amount(item)
+        if amount is not None and amount < 0:
+            context.issues.append(_cost_basis_negative("promote", index, None))
+
+
+def _cost_basis_negative(operation: str, index: int, ref_id: Optional[int]) -> TXValidationIssue:
+    """The issue of a manual cost basis below 0 (``check_cost_basis_sign``)."""
+    return TXValidationIssue(
+        operation=operation,
+        index=index,
+        ref_id=ref_id,
+        error="Cost basis override: cannot be negative, 0 or more",
+        code=TXValidationCode.COST_BASIS_NEGATIVE.value,
+        field="cost_basis_override",
+    )
+
+
 def transaction_date_bounds() -> tuple[date, date]:
     """The first and the last date a transaction may carry (N74, R13-SEC7-3): ``EARLIEST_RANGE_START`` (1900-01-01, the
     floor of every replay and history walk too: MF-SEC8-2) and ``latest_range_end()``, tomorrow by the server's calendar —

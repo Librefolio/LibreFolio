@@ -14,7 +14,7 @@ Transaction batch execution is split across these source modules, in `backend/ap
 | `backend/app/services/transactions/auto_cost.py` | `TransactionAutoCostMixin`: WAC dispatch for the Auto cost basis |
 | `backend/app/services/transactions/unreadable_rows.py` | `count_unreadable_rows()` and `UnreadableLedgerError`: the transactions whose stored value cannot be read, counted before the Auto cost's pool (W-B69) and a broker's balances (W-B74) |
 | `backend/app/services/transactions/transaction_batch_context.py` | `TransactionBatchContext` and the balance-replay exception shared across stages |
-| `backend/app/services/transactions/transaction_batch_stages.py` | The stages that open and close a batch: parse, the decimal-limit and date checks, preload/access, balance replay, response |
+| `backend/app/services/transactions/transaction_batch_stages.py` | The stages that open and close a batch: parse, the decimal-limit, date and cost-basis-sign checks, preload/access, balance replay, response |
 | `backend/app/services/transactions/batch_edits.py` | Deletes, splits, updates, and the check of updated linked pairs |
 | `backend/app/services/transactions/batch_creates.py` | Creates, promotes, and the links between the legs of new pairs |
 | `backend/app/services/transactions/batch_costs.py` | WAC and FX issues, and the required cost basis |
@@ -60,7 +60,7 @@ Its order is contractual:
 
 | # | Stage call | Purpose |
 |---|------------|---------|
-| 1 | `parse_inputs()`, then `check_decimal_limits()` and `check_dates()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount, manual cost basis or the cost basis a promote resolves over its column's limit (C-97, see [Decimal limits](#decimal-limits)), and a date outside 1900-01-01 … tomorrow by the server's calendar (N74, see [Transaction dates](#transaction-dates)) |
+| 1 | `parse_inputs()`, then `check_decimal_limits()`, `check_dates()` and `check_cost_basis_sign()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount, manual cost basis or the cost basis a promote resolves over its column's limit (C-97, see [Decimal limits](#decimal-limits)), a date outside 1900-01-01 … tomorrow by the server's calendar (N74, see [Transaction dates](#transaction-dates)), and either cost basis below 0 (J-60, see [Cost basis sign](#cost-basis-sign)) |
 | 2 | `preload_and_authorize()` | Load referenced rows, collect touched brokers, and require `EDITOR` access |
 | 3 | `apply_deletes()` | Stage valid deletions |
 | 4 | `apply_splits()` | Split linked pairs before any dependent update |
@@ -249,6 +249,37 @@ and nothing is committed. A quantity is no `Currency`: `1E+1000000` units still 
 `integerDigitsExceeded`. Before R13-SEC7-3, a promote's resolved cost basis that the
 currency schema refused, such as an amount that is no number, reached the promotion,
 whose `Currency.model_validate()` raised out of the batch: a 500.
+
+### ➖ Cost basis sign {: #cost-basis-sign }
+
+`check_cost_basis_sign()` (`transaction_batch_stages.py`; J-60) runs after
+`check_decimal_limits()` and `check_dates()`, and refuses a manual cost basis below 0;
+0 stays allowed, `-0` included (a gift, the new shares of a split). It reads the cost
+where `check_decimal_limits()` reads it (`_decimal_limit_values()`,
+`_promote_cost_amount()`): the manual `cost_basis_override` of a create, or of an update
+that sends one, and the cost basis a promote resolves
+(`resolved_fields.cost_basis_override`). An Auto cost basis (`cost_basis_mode` `auto` or
+`auto-detail`) is not checked: it is the batch's own average, not a value of the user's.
+Below 0, the row gets one issue: code `costBasisNegative`
+(`TXValidationCode.COST_BASIS_NEGATIVE`, listed by `GET /transactions/types` →
+`validation_codes`), `field` `cost_basis_override`, the row's `operation` and `index`, an
+update's id as `ref_id`, no `params`, and the English `error` *Cost basis override: cannot
+be negative, 0 or more*. The frontend reads the code as
+`transactions.errors.costBasisNegative`, *The cost basis can't be negative: enter 0 or
+more.*, without the field label in front (it is not in `FIELD_PREFIXED_CODES`).
+
+The issue keeps the batch from being committed (`finalize_response()`: any issue means
+`committed=False`), but, unlike the integer digits and the dates, the check does not stop
+the batch: a negative cost overflows nothing the later stages compute. The row stays in
+the batch, so a linked pair is not broken by it, and the row's other refusals come in the
+same answer: its decimal places, or a balance it takes below zero, which only the replay
+of step 12 finds; the inline WAC is skipped, as for any non-balance issue. An update that
+does not send the cost is not checked: a row an older version stored at a negative cost
+stays editable (notes, tags) until its cost is touched. An update that sends that cost
+back, even unchanged, is refused; the app sends only the fields that change
+(`buildUpdateDiff()`). A broker import confirms through this batch, so a negative cost
+read from a file is refused when the bulk workspace validates or saves its rows (decision
+D2). Tests: `./dev.py test services transaction-cost-basis-rule J60` (`TestJ60*`).
 
 ### 📅 Transaction dates {: #transaction-dates }
 
